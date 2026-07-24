@@ -28,6 +28,7 @@
   <a href="#-emulator-profiles--command-tokens">Emulator Profiles</a> •
   <a href="#-plugin-system-api">Plugins</a> •
   <a href="#-launchbox-parity-matrix">Parity Matrix</a> •
+  <a href="#-legal-disclaimer">Disclaimer</a> •
   <a href="#-contributing">Contributing</a>
 </p>
 
@@ -284,6 +285,16 @@ Contributions from the community are warmly welcomed!
 4. **Ensure All Tests Pass** (`python3 test_*.py`).
 5. **Push to the Branch** (`git push origin feature/amazing-feature`).
 6. **Open a Pull Request**.
+
+---
+
+## ⚖️ Legal Disclaimer
+
+**OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox, Unbroken Software, LLC, or any of their subsidiaries or affiliates.**
+
+- The official LaunchBox website is located at [https://www.launchbox-app.com](https://www.launchbox-app.com).
+- All product names, logos, brands, trademarks, and registered trademarks mentioned in this repository are property of their respective owners.
+- References to LaunchBox, Big Box, or other third-party products are made strictly for compatibility tracking, feature-parity comparison, and descriptive purposes.
 
 ---
 

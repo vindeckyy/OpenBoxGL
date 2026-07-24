@@ -1,4 +1,6 @@
-# OpenBox parity matrix
+# OpenBox Parity Matrix
+
+> **Legal Disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
 Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/about), [Windows changelog](https://www.launchbox-app.com/about/changelog), and [plugin overview](https://feedback.launchbox-app.com/help/articles/1605395-plugins-overview).
 
