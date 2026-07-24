@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-07-24
+
+### Fixed
+
+- Settings persistence on partial saves, storefront-only POSTs, JSON error responses on catalog routes, Gameyfin install recovery, premium route auth, and session polling guards
+
 ## [0.4.3] - 2026-07-24
 
 ### Fixed
@@ -23,10 +29,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Gameyfin installs run in a background worker; the UI polls `/api/gameyfin/install/status` instead of blocking the server
 - Storefront Gameyfin settings use dedicated `storefront*` form fields; saving Settings no longer touches Gameyfin credentials
-
-### Changed
-
-- IDE rule sources moved to `.agent/ide-rules/`; run `make ide-rules` locally (local rules install is gitignored)
 
 ## [0.4.1] - 2026-07-24
 
@@ -97,7 +99,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.4
 [0.4.3]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.3
 [0.4.2]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.2
 [0.4.1]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.1

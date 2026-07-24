@@ -21,17 +21,12 @@ build/
 *.AppImage.sha256
 *.AppImage.zsync
 
-# Local scratch notes
-.agent/scratch/*
-!.agent/scratch/.gitkeep
-
-# Editor workspace files
+# Local development files
+.agent/
+BUILD.md
+scripts/unpack_manual.py
+scripts/sync-ide-rules.sh
 .cursor/
-
-# Editor workspace files
-.agent/OPERATING.md
-.agent/ENTRY.md
-.agent/ENTRY.source.md
 
 # Puppeteer dependency for README screenshot capture
 scripts/node_modules/

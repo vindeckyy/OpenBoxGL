@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v0.4.3**, which fixes settings data loss on partial saves, HTTP handler reliability, and Gameyfin install recovery.
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v0.4.4**, a bug-fix release for settings persistence, HTTP handler reliability, and Gameyfin install recovery.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
