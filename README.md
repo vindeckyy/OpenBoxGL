@@ -84,9 +84,15 @@ Featuring both a feature-packed **Modern Browser Web UI** (with REST API) and a 
 ## 🖼️ Screenshots
 
 <p align="center">
-  <img src="assets/openbox-screenshot.png" alt="OpenBox Library Interface" width="92%">
+  <img src="assets/openbox-screenshot.png" alt="OpenBox Library View" width="92%">
   <br>
-  <em>OpenBox Web Interface displaying game grid view, custom metadata, and launcher options.</em>
+  <em>OpenBox Web Interface — unified library grid with multi-source game aggregation and platform filtering.</em>
+</p>
+
+<p align="center">
+  <img src="assets/openbox-game-detail.png" alt="OpenBox Game Detail" width="92%">
+  <br>
+  <em>Game detail panel with metadata, launch controls, related games, and save management.</em>
 </p>
 
 ---
