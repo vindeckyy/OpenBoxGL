@@ -13,7 +13,8 @@ def main():
         session = start_game(0)
         control_game_session(session["launch_id"], "pause")
         time.sleep(.03)
-        assert "\nState:\tT" in open(f"/proc/{session['pid']}/status").read()
+        with open(f"/proc/{session['pid']}/status", encoding="utf-8") as status_file:
+            assert "\nState:\tT" in status_file.read()
         control_game_session(session["launch_id"], "resume")
         control_game_session(session["launch_id"], "stop")
         for _ in range(100):

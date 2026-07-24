@@ -118,7 +118,172 @@ class ParityApiTests(unittest.TestCase):
                 self.assertTrue(status["game"]["store_installed"])
         finally:
             server.shutdown()
+            server.server_close()
             web_app.INSTALLS.clear()
+
+    def test_settings_save_preserves_storefront_auto_import_when_omitted(self):
+        from openbox import load_state, save_state
+        from web_app import Handler
+
+        save_state({
+            "games": [],
+            "profiles": {},
+            "history": [],
+            "settings": {
+                "storefront_auto_import": {"steam": True, "heroic": False, "lutris": True, "gameyfin": False},
+            },
+            "playlists": [],
+        })
+        handler = object.__new__(Handler)
+        handler.send_json = mock.Mock()
+        Handler.save_settings(handler, {"watch_folders": []})
+        settings = load_state()["settings"]
+        self.assertTrue(settings["storefront_auto_import"]["steam"])
+        self.assertTrue(settings["storefront_auto_import"]["lutris"])
+        self.assertFalse(settings["storefront_auto_import"]["gameyfin"])
+
+    def test_settings_save_preserves_unrelated_fields_on_partial_post(self):
+        from openbox import load_state, save_state
+        from web_app import Handler
+
+        save_state({
+            "games": [],
+            "profiles": {},
+            "history": [],
+            "settings": {
+                "watch_folders": ["/tmp"],
+                "screensaver_seconds": 120,
+                "storefront_auto_import": {"steam": True, "heroic": False, "lutris": False, "gameyfin": False},
+            },
+            "playlists": [],
+        })
+        handler = object.__new__(Handler)
+        handler.send_json = mock.Mock()
+        Handler.save_settings(handler, {
+            "storefront_auto_import": {"steam": False, "heroic": True, "lutris": False, "gameyfin": False},
+            "gameyfin_url": "http://gameyfin.local",
+        })
+        settings = load_state()["settings"]
+        self.assertEqual(settings["watch_folders"], ["/tmp"])
+        self.assertEqual(settings["screensaver_seconds"], 120)
+        self.assertTrue(settings["storefront_auto_import"]["heroic"])
+        self.assertFalse(settings["storefront_auto_import"]["steam"])
+
+    def test_storefront_catalog_route_returns_json_error(self):
+        from web_app import Handler
+
+        handler = object.__new__(Handler)
+        handler.authorized = mock.Mock(return_value=True)
+        handler.send_json = mock.Mock()
+        handler.do_GET = Handler.do_GET.__get__(handler, Handler)
+        handler.path = "/api/storefront/catalog?source=heroic"
+        handler.headers = {}
+        with mock.patch("web_app.storefront_catalog", side_effect=FileNotFoundError("xdg-open missing")):
+            handler.do_GET()
+        status, payload = handler.send_json.call_args[0]
+        self.assertEqual(status, 400)
+        self.assertIn("error", payload)
+
+    def test_gameyfin_providers_route_returns_json_error(self):
+        from parity_gameyfin import GameyfinError
+        from web_app import Handler
+
+        handler = object.__new__(Handler)
+        handler.authorized = mock.Mock(return_value=True)
+        handler.send_json = mock.Mock()
+        handler.do_GET = Handler.do_GET.__get__(handler, Handler)
+        handler.path = "/api/gameyfin/providers"
+        handler.headers = {}
+        with mock.patch("web_app.catalog_gameyfin", side_effect=GameyfinError("Gameyfin URL is not configured.")):
+            handler.do_GET()
+        status, payload = handler.send_json.call_args[0]
+        self.assertEqual(status, 400)
+        self.assertIn("error", payload)
+
+    def test_gameyfin_install_invalid_library_id_reports_error(self):
+        import threading
+        import time
+        from http.server import ThreadingHTTPServer
+        import urllib.request
+
+        import web_app
+        from openbox import save_state
+
+        save_state({
+            "games": [],
+            "profiles": {},
+            "history": [],
+            "settings": {"gameyfin_url": "http://gameyfin.local"},
+            "playlists": [],
+        })
+        web_app.TOKEN = "testtoken"
+        web_app.INSTALLS.clear()
+
+        def fast_install(settings, game_id, client=None):
+            return {"gameyfin_id": str(game_id), "store_installed": True, "path": "/tmp/fake", "launch": "/tmp/fake"}
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), web_app.Handler)
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/gameyfin/install",
+                data=json.dumps({"gameyfin_id": "9", "library_id": 0}).encode(),
+                headers={"Content-Type": "application/json", "X-OpenBox-Token": "testtoken"},
+                method="POST",
+            )
+            with mock.patch("web_app.install_gameyfin_game", side_effect=fast_install):
+                with urllib.request.urlopen(request, timeout=5) as response:
+                    self.assertEqual(response.status, 202)
+            status_request = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/gameyfin/install/status?gameyfin_id=9",
+                headers={"X-OpenBox-Token": "testtoken"},
+            )
+            deadline = time.time() + 5
+            while time.time() < deadline:
+                with urllib.request.urlopen(status_request, timeout=5) as response:
+                    status = json.loads(response.read())
+                if status.get("state") in {"error", "done"}:
+                    break
+                time.sleep(0.05)
+            else:
+                self.fail("Gameyfin install job did not reach a terminal state")
+            self.assertEqual(status["state"], "error")
+        finally:
+            server.shutdown()
+            server.server_close()
+            web_app.INSTALLS.clear()
+
+    def test_premium_routes_require_auth(self):
+        from web_app import Handler
+
+        handler = object.__new__(Handler)
+        handler.authorized = mock.Mock(return_value=False)
+        handler.send_json = mock.Mock()
+        handler.do_GET = Handler.do_GET.__get__(handler, Handler)
+        handler.headers = {}
+        for path in ("/api/premium/strings", "/api/premium/media-packs", "/api/premium/platform-categories"):
+            handler.send_json.reset_mock()
+            handler.path = path
+            handler.do_GET()
+            status, payload = handler.send_json.call_args[0]
+            self.assertEqual(status, 403, path)
+
+    def test_update_route_returns_json_error_for_malformed_release(self):
+        from web_app import Handler
+
+        handler = object.__new__(Handler)
+        handler.authorized = mock.Mock(return_value=True)
+        handler.send_json = mock.Mock()
+        handler.do_GET = Handler.do_GET.__get__(handler, Handler)
+        handler.path = "/api/update"
+        handler.headers = {}
+        with mock.patch("web_app.check_update", side_effect=AttributeError("release missing tag_name")):
+            handler.do_GET()
+        status, payload = handler.send_json.call_args[0]
+        self.assertEqual(status, 400)
+        self.assertIn("error", payload)
 
     def test_settings_save_preserves_gameyfin_when_omitted(self):
         from openbox import load_state, save_state

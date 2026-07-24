@@ -873,6 +873,7 @@
     }
     function openReader(game, index, customUrl) {
       const doc = game.documents[index];
+      if (!doc) return;
       readerPage = 1;
       readerUrl = customUrl || `/api/document?id=${game.id}&index=${index}&token=${encodeURIComponent(token)}`;
       $('readerTitle').textContent = doc.name;
@@ -902,7 +903,13 @@
       clearTimeout(showLifecycle.timer);
       showLifecycle.timer = setTimeout(() => $('lifecycle').hidden = true, milliseconds);
     }
+    let sessionPollBusy = false;
     async function pollSessions() {
+      if (sessionPollBusy) {
+        setTimeout(pollSessions, 1000);
+        return;
+      }
+      sessionPollBusy = true;
       try {
         const result = await api(`/api/running?after=${lastSessionEvent}`);
         lastSessionEvent = result.last_event;
@@ -917,6 +924,7 @@
         if (result.running.length) $('status').textContent = `${result.running.length} game${result.running.length === 1 ? '' : 's'} running`;
         if ($('sessionsDialog').open) renderSessions();
       } catch(error) { notify(error.message); }
+      finally { sessionPollBusy = false; }
       setTimeout(pollSessions, 1000);
     }
     async function openHistory() {
@@ -1816,17 +1824,15 @@
       $('storefrontDialog').showModal();
     }
     async function saveStorefrontSettings() {
-      appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify({
-        ...collectSettings(),
-        ...collectStorefrontSettings(),
-      })});
+      appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectStorefrontSettings())});
       notify('Storefront settings saved');
     }
-    async function watchGameyfinInstall(gameyfinId) {
+    async function watchGameyfinInstall(gameyfinId, attempts = 40) {
       const job = await api(`/api/gameyfin/install/status?gameyfin_id=${encodeURIComponent(gameyfinId)}`);
       if (job.state === 'installing') {
+        if (attempts <= 0) throw new Error('Gameyfin install timed out');
         await new Promise(resolve => setTimeout(resolve, 1500));
-        return watchGameyfinInstall(gameyfinId);
+        return watchGameyfinInstall(gameyfinId, attempts - 1);
       }
       if (job.state === 'error') throw new Error(job.error || 'Gameyfin install failed');
       if (job.state !== 'done') throw new Error('Gameyfin install did not complete');

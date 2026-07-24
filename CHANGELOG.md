@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-07-24
+
+### Fixed
+
+- Settings save merges omitted keys from existing state — partial storefront POSTs no longer wipe watch folders or storefront auto-import flags
+- Storefront save posts only storefront fields instead of spreading empty Settings form values
+- GET `/api/storefront/catalog` and `/api/gameyfin/providers` return JSON errors instead of dropping the connection
+- Gameyfin install worker reports error state on invalid `library_id`; UI times out after ~60s instead of polling forever
+- Premium GET routes require authorization; `/api/update` catches malformed release JSON
+- Session poll no longer overlaps `refresh()`; `openReader` guards missing documents
+
 ## [0.4.2] - 2026-07-24
 
 ### Fixed
@@ -86,7 +97,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.3
 [0.4.2]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.2
 [0.4.1]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.1
 [0.4.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.0

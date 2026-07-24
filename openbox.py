@@ -66,9 +66,11 @@ def load_state():
         raw.setdefault("games", [])
         raw.setdefault("profiles", {})
         raw.setdefault("history", [])
+        raw.setdefault("settings", {})
+        raw.setdefault("playlists", [])
         return raw
     except (FileNotFoundError, json.JSONDecodeError, AttributeError):
-        return {"games": [], "profiles": {}, "history": []}
+        return {"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []}
 
 
 def save_state(state):

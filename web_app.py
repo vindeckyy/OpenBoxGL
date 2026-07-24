@@ -624,7 +624,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 self.send_json(200, check_update())
-            except ValueError as error:
+            except (ValueError, OSError, TypeError, AttributeError) as error:
                 self.send_json(400, {"error": str(error)})
             return
         if parsed.path == "/api/related":
@@ -972,7 +972,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(403, {"error": "Unauthorized"})
                 return
             source = parse_qs(parsed.query).get("source", [""])[0]
-            self.send_json(200, {"catalog": storefront_catalog(source, settings=load_state().get("settings", {}))})
+            try:
+                self.send_json(200, {"catalog": storefront_catalog(source, settings=load_state().get("settings", {}))})
+            except (ValueError, OSError, FileNotFoundError, subprocess.CalledProcessError) as error:
+                self.send_json(400, {"error": str(error)})
             return
         if parsed.path == "/api/gameyfin/install/status":
             if not self.authorized():
@@ -991,8 +994,11 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
                 return
-            _catalog, providers = catalog_gameyfin(load_state().get("settings", {}))
-            self.send_json(200, {"providers": providers})
+            try:
+                _catalog, providers = catalog_gameyfin(load_state().get("settings", {}))
+                self.send_json(200, {"providers": providers})
+            except (ValueError, OSError) as error:
+                self.send_json(400, {"error": str(error)})
             return
         if parsed.path == "/api/save-tools/status":
             if not self.authorized():
@@ -1007,13 +1013,22 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200, {"catalog": fetch_plugin_catalog()})
             return
         if parsed.path == "/api/premium/strings":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
             locale = parse_qs(parsed.query).get("locale", ["en"])[0]
             self.send_json(200, {"locale": locale, "strings": strings_for(locale)})
             return
         if parsed.path == "/api/premium/media-packs":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
             self.send_json(200, {"packs": list_media_packs(load_state().get("settings", {}))})
             return
         if parsed.path == "/api/premium/platform-categories":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
             self.send_json(200, {"categories": platform_categories(load_state().get("settings", {}))})
             return
         self.send_json(404, {"error": "Not found"})
@@ -1518,7 +1533,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, {"saved": len(clean)})
 
     def save_settings(self, payload):
-        folders = payload.get("watch_folders", [])
+        with STATE_LOCK:
+            existing_settings = dict(load_state().get("settings", {}))
+        merged = dict(existing_settings)
+        for key, value in payload.items():
+            if key == "gameyfin_password" and not str(value).strip():
+                continue
+            merged[key] = value
+        folders = merged.get("watch_folders", [])
         if not isinstance(folders, list) or len(folders) > 50:
             raise ValueError("Watch folders must be a list of at most 50 paths.")
         clean_folders = []
@@ -1528,10 +1550,10 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError(f"Watch folder does not exist: {path}")
             if str(path) not in clean_folders:
                 clean_folders.append(str(path))
-        seconds = int(payload.get("screensaver_seconds", 90))
+        seconds = int(merged.get("screensaver_seconds", 90))
         if seconds and not 30 <= seconds <= 3600:
             raise ValueError("Screensaver delay must be 0 or between 30 and 3600 seconds.")
-        mapping = payload.get("controller_map", {})
+        mapping = merged.get("controller_map", {})
         if not isinstance(mapping, dict):
             raise ValueError("Controller mapping must be an object.")
         allowed = {"play", "back", "favorite", "random", "page_left", "page_right", "pause", "menu"}
@@ -1540,86 +1562,84 @@ class Handler(BaseHTTPRequestHandler):
             if action not in allowed or not isinstance(button, int) or not 0 <= button <= 31:
                 raise ValueError("Controller button mappings must use buttons 0 through 31.")
             clean_mapping[action] = button
-        cloud_folder = str(payload.get("cloud_folder", "")).strip()
+        cloud_folder = str(merged.get("cloud_folder", "")).strip()
         if cloud_folder:
             cloud_path = Path(cloud_folder).expanduser()
             if not cloud_path.is_absolute() or not cloud_path.is_dir():
                 raise ValueError(f"Cloud sync folder does not exist: {cloud_path}")
             cloud_folder = str(cloud_path)
-        startup_commands = clean_commands(payload.get("startup_commands", []))
-        shutdown_commands = clean_commands(payload.get("shutdown_commands", []))
-        track_session_history = bool(payload.get("track_session_history", True))
-        backup_on_close = bool(payload.get("backup_on_close", False))
-        progress_automation_enabled = bool(payload.get("progress_automation_enabled", False))
-        play_minutes = int(payload.get("progress_automation_play_minutes", 30))
-        idle_days = int(payload.get("progress_automation_idle_days", 30))
+        startup_commands = clean_commands(merged.get("startup_commands", []))
+        shutdown_commands = clean_commands(merged.get("shutdown_commands", []))
+        track_session_history = bool(merged.get("track_session_history", True))
+        backup_on_close = bool(merged.get("backup_on_close", False))
+        progress_automation_enabled = bool(merged.get("progress_automation_enabled", False))
+        play_minutes = int(merged.get("progress_automation_play_minutes", 30))
+        idle_days = int(merged.get("progress_automation_idle_days", 30))
         if not 0 <= play_minutes <= 100000:
             raise ValueError("Progress automation play minutes must be between 0 and 100000.")
         if not 0 <= idle_days <= 3650:
             raise ValueError("Progress automation idle days must be between 0 and 3650.")
-        welcome_completed = bool(payload.get("welcome_completed", load_state().get("settings", {}).get("welcome_completed", False)))
-        image_group = str(payload.get("image_group", load_state().get("settings", {}).get("image_group", "cover")))
+        welcome_completed = bool(merged.get("welcome_completed", False))
+        image_group = str(merged.get("image_group", "cover"))
         if image_group not in {"cover", "background", "screenshot"}:
             raise ValueError("Unknown default image group.")
-        save_backup_limit = int(payload.get("save_backup_limit", load_state().get("settings", {}).get("save_backup_limit", 10)))
+        save_backup_limit = int(merged.get("save_backup_limit", 10))
         if not 0 <= save_backup_limit <= 500:
             raise ValueError("Save backup limit must be between 0 and 500.")
-        media_download_limit = int(payload.get("media_download_limit", 0))
+        media_download_limit = int(merged.get("media_download_limit", 0))
         if media_download_limit < 0 or media_download_limit > 10000:
             raise ValueError("Media download limit must be between 0 and 10000.")
-        auto_import_media_types = payload.get("auto_import_media_types", [])
+        auto_import_media_types = merged.get("auto_import_media_types", [])
         if not isinstance(auto_import_media_types, list) or not set(auto_import_media_types) <= {"cover", "background", "screenshots"}:
             raise ValueError("Auto-import media types must be cover, background, and/or screenshots.")
-        region_priority = payload.get("region_priority", list(REGION_PRIORITY_DEFAULT))
+        region_priority = merged.get("region_priority", list(REGION_PRIORITY_DEFAULT))
         if not isinstance(region_priority, list) or not region_priority:
             raise ValueError("Region priority must be a non-empty list.")
-        video_priority = payload.get("video_priority", ["video_snap", "video_theme", "video_trailer", "video_recording"])
+        video_priority = merged.get("video_priority", ["video_snap", "video_theme", "video_trailer", "video_recording"])
         if not isinstance(video_priority, list) or not set(video_priority) <= set(["video_snap", "video_theme", "video_trailer", "video_recording", "video"]):
             raise ValueError("Invalid video priority list.")
-        library_music = str(payload.get("library_music", "")).strip()
+        library_music = str(merged.get("library_music", "")).strip()
         if library_music and not Path(library_music).expanduser().is_file():
             raise ValueError("Library music path must point to an existing audio file.")
-        bigbox_mode = str(payload.get("bigbox_mode", "stage"))
+        bigbox_mode = str(merged.get("bigbox_mode", "stage"))
         if bigbox_mode not in {"stage", "hybrid", "coverflow"}:
             raise ValueError("Big Box mode must be stage, hybrid, or coverflow.")
-        storefront_auto_import = payload.get("storefront_auto_import", {})
+        storefront_auto_import = merged.get("storefront_auto_import", {})
         if not isinstance(storefront_auto_import, dict):
             raise ValueError("Storefront auto-import settings must be an object.")
         clean_storefront = {
             key: bool(storefront_auto_import.get(key))
             for key in ("steam", "heroic", "lutris", "gameyfin")
         }
-        obs_auto_attach = bool(payload.get("obs_auto_attach", load_state().get("settings", {}).get("obs_auto_attach", True)))
-        obs_recording_path = str(payload.get("obs_recording_path", "")).strip()
+        obs_auto_attach = bool(merged.get("obs_auto_attach", True))
+        obs_recording_path = str(merged.get("obs_recording_path", "")).strip()
         if obs_recording_path:
             recording_path = Path(obs_recording_path).expanduser()
             if not recording_path.is_absolute() or not recording_path.is_dir():
                 raise ValueError(f"OBS recording folder does not exist: {recording_path}")
             obs_recording_path = str(recording_path)
-        gameyfin_url = str(payload.get("gameyfin_url", load_state().get("settings", {}).get("gameyfin_url", ""))).strip()
+        gameyfin_url = str(merged.get("gameyfin_url", "")).strip()
         if gameyfin_url and not gameyfin_url.startswith(("http://", "https://")):
             gameyfin_url = "http://" + gameyfin_url
-        gameyfin_install_dir = str(payload.get("gameyfin_install_dir", load_state().get("settings", {}).get("gameyfin_install_dir", ""))).strip()
+        gameyfin_install_dir = str(merged.get("gameyfin_install_dir", "")).strip()
         if gameyfin_install_dir:
             install_path = Path(gameyfin_install_dir).expanduser()
             install_path.mkdir(parents=True, exist_ok=True)
             if not install_path.is_absolute() or not install_path.is_dir():
                 raise ValueError(f"Gameyfin install folder is invalid: {install_path}")
             gameyfin_install_dir = str(install_path)
-        ludusavi_backup_path = str(payload.get("ludusavi_backup_path", load_state().get("settings", {}).get("ludusavi_backup_path", ""))).strip()
+        ludusavi_backup_path = str(merged.get("ludusavi_backup_path", "")).strip()
         if ludusavi_backup_path:
             backup_path = Path(ludusavi_backup_path).expanduser()
             backup_path.mkdir(parents=True, exist_ok=True)
             ludusavi_backup_path = str(backup_path)
-        hidden_sidebar_sections = payload.get("hidden_sidebar_sections", [])
+        hidden_sidebar_sections = merged.get("hidden_sidebar_sections", [])
         if not isinstance(hidden_sidebar_sections, list):
             raise ValueError("Hidden sidebar sections must be a list.")
         with STATE_LOCK:
             state = load_state()
             settings = state.setdefault("settings", {})
-            gameyfin_password = str(payload.get("gameyfin_password", "")).strip()
-            if not gameyfin_password:
-                gameyfin_password = settings.get("gameyfin_password", "")
+            gameyfin_password = str(merged.get("gameyfin_password", "")).strip()
             settings.update({
                 "watch_folders": clean_folders,
                 "screensaver_seconds": seconds,
@@ -1640,29 +1660,29 @@ class Handler(BaseHTTPRequestHandler):
                 "region_priority": [str(item) for item in region_priority],
                 "video_priority": [str(item) for item in video_priority],
                 "library_music": library_music,
-                "video_bgm_mix": bool(payload.get("video_bgm_mix")),
+                "video_bgm_mix": bool(merged.get("video_bgm_mix", False)),
                 "bigbox_mode": bigbox_mode,
-                "show_playlist_actions": bool(payload.get("show_playlist_actions", True)),
+                "show_playlist_actions": bool(merged.get("show_playlist_actions", True)),
                 "hidden_sidebar_sections": [str(item) for item in hidden_sidebar_sections][:20],
                 "storefront_auto_import": clean_storefront,
                 "obs_auto_attach": obs_auto_attach,
                 "obs_recording_path": obs_recording_path,
-                "dynamic_play_button": bool(payload.get("dynamic_play_button", True)),
-                "custom_field_defs": custom_field_defs({"custom_field_defs": payload.get("custom_field_defs", settings.get("custom_field_defs", []))}),
-                "platform_categories": platform_categories({"platform_categories": payload.get("platform_categories", settings.get("platform_categories", {}))}),
-                "list_columns": [str(item) for item in payload.get("list_columns", settings.get("list_columns", list(LIST_COLUMNS_DEFAULT)))][:12],
-                "library_view": str(payload.get("library_view", settings.get("library_view", "grid"))),
-                "locale": str(payload.get("locale", settings.get("locale", "en")))[:5],
-                "attract_mode_seconds": int(payload.get("attract_mode_seconds", settings.get("attract_mode_seconds", seconds or 90))),
-                "bigbox_startup_video": str(payload.get("bigbox_startup_video", settings.get("bigbox_startup_video", ""))).strip(),
-                "bigbox_shutdown_commands": clean_commands(payload.get("bigbox_shutdown_commands", settings.get("bigbox_shutdown_commands", []))),
-                "tray_enabled": bool(payload.get("tray_enabled", settings.get("tray_enabled", False))),
-                "minimize_to_tray": bool(payload.get("minimize_to_tray", settings.get("minimize_to_tray", False))),
+                "dynamic_play_button": bool(merged.get("dynamic_play_button", True)),
+                "custom_field_defs": custom_field_defs({"custom_field_defs": merged.get("custom_field_defs", [])}),
+                "platform_categories": platform_categories({"platform_categories": merged.get("platform_categories", {})}),
+                "list_columns": [str(item) for item in merged.get("list_columns", list(LIST_COLUMNS_DEFAULT))][:12],
+                "library_view": str(merged.get("library_view", "grid")),
+                "locale": str(merged.get("locale", "en"))[:5],
+                "attract_mode_seconds": int(merged.get("attract_mode_seconds", seconds or 90)),
+                "bigbox_startup_video": str(merged.get("bigbox_startup_video", "")).strip(),
+                "bigbox_shutdown_commands": clean_commands(merged.get("bigbox_shutdown_commands", [])),
+                "tray_enabled": bool(merged.get("tray_enabled", False)),
+                "minimize_to_tray": bool(merged.get("minimize_to_tray", False)),
                 "gameyfin_url": gameyfin_url,
-                "gameyfin_username": str(payload.get("gameyfin_username", settings.get("gameyfin_username", ""))).strip(),
+                "gameyfin_username": str(merged.get("gameyfin_username", "")).strip(),
                 "gameyfin_password": gameyfin_password,
                 "gameyfin_install_dir": gameyfin_install_dir,
-                "gameyfin_provider": str(payload.get("gameyfin_provider", settings.get("gameyfin_provider", ""))).strip(),
+                "gameyfin_provider": str(merged.get("gameyfin_provider", "")).strip(),
                 "ludusavi_backup_path": ludusavi_backup_path,
             })
             save_state(state)
@@ -2181,6 +2201,7 @@ class Handler(BaseHTTPRequestHandler):
             INSTALLS[job_key] = {"state": "installing", "gameyfin_id": game_id}
 
         def worker():
+            result = {"state": "error", "gameyfin_id": game_id, "error": "Install failed"}
             try:
                 with STATE_LOCK:
                     settings = dict(load_state().get("settings", {}))
@@ -2202,7 +2223,7 @@ class Handler(BaseHTTPRequestHandler):
                             state["games"].append(installed)
                     save_state(state)
                 result = {"state": "done", "gameyfin_id": game_id, "game": installed}
-            except (GameyfinError, OSError, ValueError) as error:
+            except (GameyfinError, OSError, ValueError, IndexError, KeyError) as error:
                 result = {"state": "error", "gameyfin_id": game_id, "error": str(error)}
             with PROCESS_LOCK:
                 INSTALLS[job_key] = result

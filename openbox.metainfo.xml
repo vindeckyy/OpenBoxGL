@@ -14,6 +14,11 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBox/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBox</url>
   <releases>
+    <release version="0.4.3" date="2026-07-24">
+      <description>
+        <p>Bug-fix release: settings partial-POST merge, storefront-only save, GET error JSON responses, Gameyfin install recovery, premium route auth, and session poll guard.</p>
+      </description>
+    </release>
     <release version="0.4.2" date="2026-07-24">
       <description>
         <p>Background Gameyfin installs with status polling, isolated storefront settings fields, and IDE rule sources under the agent harness.</p>
