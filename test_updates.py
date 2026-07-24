@@ -20,11 +20,11 @@ def main():
     payload = b"new appimage"
     digest = hashlib.sha256(payload).hexdigest()
     release = {
-        "tag_name":"v0.2.0",
-        "html_url":"https://github.com/vindeckyy/OpenBox/releases/tag/v0.2.0",
+        "tag_name":"v0.3.0",
+        "html_url":"https://github.com/vindeckyy/OpenBox/releases/tag/v0.3.0",
         "assets":[
-            {"name":ASSET, "browser_download_url":f"https://github.com/vindeckyy/OpenBox/releases/download/v0.2.0/{ASSET}"},
-            {"name":f"{ASSET}.sha256", "browser_download_url":f"https://github.com/vindeckyy/OpenBox/releases/download/v0.2.0/{ASSET}.sha256"},
+            {"name":ASSET, "browser_download_url":f"https://github.com/vindeckyy/OpenBox/releases/download/v0.3.0/{ASSET}"},
+            {"name":f"{ASSET}.sha256", "browser_download_url":f"https://github.com/vindeckyy/OpenBox/releases/download/v0.3.0/{ASSET}.sha256"},
         ],
     }
     def opener(request, timeout=0):
@@ -35,7 +35,7 @@ def main():
             return Response(payload)
         return Response(json.dumps(release).encode())
     update = check_update(opener)
-    assert update["available"] and update["latest"] == "0.2.0"
+    assert update["available"] and update["latest"] == "0.3.0"
     with tempfile.TemporaryDirectory() as directory:
         destination = Path(directory) / ASSET
         destination.write_bytes(b"old appimage")
