@@ -17,6 +17,7 @@
 
 <p align="center">
   <a href="#overview">Overview</a> |
+  <a href="#screenshots">Screenshots</a> |
   <a href="#why-openbox-on-linux">Why OpenBox on Linux</a> |
   <a href="#comparison-with-launchbox">Comparison</a> |
   <a href="#features">Features</a> |
@@ -24,6 +25,19 @@
   <a href="#documentation">Documentation</a> |
   <a href="#development">Development</a> |
   <a href="#legal">Legal</a>
+</p>
+
+<p align="center">
+  <a href="#screenshots">
+    <img
+      src="assets/openbox-screenshot.png"
+      alt="OpenBox library grid showing PC and console games with box art, platform filters, and search"
+      width="96%"
+      style="border-radius: 10px; border: 1px solid #1e293b;"
+    >
+  </a>
+  <br>
+  <sub>One library for Steam, ROMs, and emulators — click for more screenshots</sub>
 </p>
 
 ---
@@ -266,15 +280,37 @@ Optional local configuration can be loaded from `~/.env` or a project `.env` fil
 ## Screenshots
 
 <p align="center">
-  <img src="assets/openbox-screenshot.png" alt="OpenBox library view" width="92%">
-  <br>
-  <sub>Library grid with multi-source aggregation and platform filtering</sub>
+  <strong>Library</strong> — grid and list views, platform filters, playlists, drag-and-drop import
 </p>
 
 <p align="center">
-  <img src="assets/openbox-game-detail.png" alt="OpenBox game detail view" width="92%">
-  <br>
-  <sub>Game detail panel with metadata, launch controls, and save management</sub>
+  <a href="assets/openbox-screenshot.png">
+    <img
+      src="assets/openbox-screenshot.png"
+      alt="OpenBox library view with twelve games across Windows, Nintendo, PlayStation, and Sega platforms"
+      width="96%"
+      style="border-radius: 10px; border: 1px solid #1e293b;"
+    >
+  </a>
+</p>
+
+<p align="center">
+  <strong>Game detail</strong> — metadata, ratings, play history, hero art, and one-click launch
+</p>
+
+<p align="center">
+  <a href="assets/openbox-game-detail.png">
+    <img
+      src="assets/openbox-game-detail.png"
+      alt="OpenBox game detail panel for Elden Ring with cover art, description, and Play button"
+      width="96%"
+      style="border-radius: 10px; border: 1px solid #1e293b;"
+    >
+  </a>
+</p>
+
+<p align="center">
+  <sub>Screenshots use real LaunchBox metadata and cover art. Regenerate with <code>python3 scripts/capture_readme_screenshots.py</code> (see <code>scripts/package.json</code>).</sub>
 </p>
 
 ---

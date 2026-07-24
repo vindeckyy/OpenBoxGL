@@ -27,3 +27,6 @@ build/
 
 # Editor workspace files
 .cursor/
+
+# Puppeteer dependency for README screenshot capture
+scripts/node_modules/
