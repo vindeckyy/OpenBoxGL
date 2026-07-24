@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from updates import ASSET, check_update, install_update, version_tuple
+from updates import ASSET, VERSION, check_update, install_update, version_tuple
 
 
 class Response(io.BytesIO):
@@ -15,16 +15,23 @@ class Response(io.BytesIO):
         self.close()
 
 
+def next_patch_version(value):
+    major, minor, patch = version_tuple(value)
+    return f"{major}.{minor}.{patch + 1}"
+
+
 def main():
     assert version_tuple("v1.2.3") > version_tuple("1.2.2")
+    latest = next_patch_version(VERSION)
+    tag = f"v{latest}"
     payload = b"new appimage"
     digest = hashlib.sha256(payload).hexdigest()
     release = {
-        "tag_name":"v0.3.0",
-        "html_url":"https://github.com/vindeckyy/OpenBox/releases/tag/v0.3.0",
-        "assets":[
-            {"name":ASSET, "browser_download_url":f"https://github.com/vindeckyy/OpenBox/releases/download/v0.3.0/{ASSET}"},
-            {"name":f"{ASSET}.sha256", "browser_download_url":f"https://github.com/vindeckyy/OpenBox/releases/download/v0.3.0/{ASSET}.sha256"},
+        "tag_name": tag,
+        "html_url": f"https://github.com/vindeckyy/OpenBox/releases/tag/{tag}",
+        "assets": [
+            {"name": ASSET, "browser_download_url": f"https://github.com/vindeckyy/OpenBox/releases/download/{tag}/{ASSET}"},
+            {"name": f"{ASSET}.sha256", "browser_download_url": f"https://github.com/vindeckyy/OpenBox/releases/download/{tag}/{ASSET}.sha256"},
         ],
     }
     def opener(request, timeout=0):
@@ -35,7 +42,7 @@ def main():
             return Response(payload)
         return Response(json.dumps(release).encode())
     update = check_update(opener)
-    assert update["available"] and update["latest"] == "0.3.0"
+    assert update["available"] and update["latest"] == latest
     with tempfile.TemporaryDirectory() as directory:
         destination = Path(directory) / ASSET
         destination.write_bytes(b"old appimage")
