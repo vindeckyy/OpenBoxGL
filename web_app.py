@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local browser UI for OpenBox."""
+"""Local browser UI for OpenBox. Independent open-source software not affiliated with LaunchBox or Unbroken Software, LLC."""
 
 import json
 import html

@@ -17,6 +17,7 @@
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+"></a>
   <a href="https://github.com/vindeckyy/OpenBox"><img src="https://img.shields.io/badge/Platform-Linux-FCC624.svg?style=for-the-badge&logo=linux&logoColor=black" alt="Platform: Linux"></a>
   <a href="PARITY.md"><img src="https://img.shields.io/badge/Parity-LaunchBox-0052CC.svg?style=for-the-badge&logo=gamepad" alt="LaunchBox Parity"></a>
+  <a href="DISCLAIMER.md"><img src="https://img.shields.io/badge/Disclaimer-Independent-green.svg?style=for-the-badge&logo=shield" alt="Legal Disclaimer"></a>
 </p>
 
 <p align="center">
@@ -295,6 +296,7 @@ Contributions from the community are warmly welcomed!
 - The official LaunchBox website is located at [https://www.launchbox-app.com](https://www.launchbox-app.com).
 - All product names, logos, brands, trademarks, and registered trademarks mentioned in this repository are property of their respective owners.
 - References to LaunchBox, Big Box, or other third-party products are made strictly for compatibility tracking, feature-parity comparison, and descriptive purposes.
+- For complete trademark acknowledgments and legal terms, see [DISCLAIMER.md](DISCLAIMER.md).
 
 ---
 

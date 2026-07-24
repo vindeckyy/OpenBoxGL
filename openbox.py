@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local-first Linux game library and launcher."""
+"""Local-first Linux game library and launcher. Independent open-source software not affiliated with LaunchBox or Unbroken Software, LLC."""
 
 import json
 import os
