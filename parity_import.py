@@ -151,7 +151,30 @@ def import_multi_platform(folder, extensions_set, platform_map):
             "added_at": now,
             "discs": [str(item) for item in group] if len(group) > 1 else [],
         })
-    return additions
+    return dedupe_ranked_imports(additions)
+
+
+def dedupe_ranked_imports(additions):
+    from parity_premium import pick_best_rom, rank_rom_group
+
+    buckets = {}
+    for item in additions:
+        key = (
+            item.get("platform", ""),
+            re.sub(r"[^a-z0-9]+", " ", str(item.get("name", "")).casefold()).strip(),
+        )
+        buckets.setdefault(key, []).append(item)
+    result = []
+    for items in buckets.values():
+        if len(items) == 1:
+            result.append(items[0])
+            continue
+        paths = [entry["path"] for entry in items]
+        best = pick_best_rom(paths)
+        winner = next(entry for entry in items if entry["path"] == best)
+        winner["version_candidates"] = rank_rom_group(paths)
+        result.append(winner)
+    return result
 
 
 def import_scummvm(home=None):
@@ -249,7 +272,13 @@ def import_vita3k(home=None):
             if not folder.is_dir():
                 continue
             sfo = folder / "sce_sys" / "param.sfo"
-            title = _read_sfo_title(sfo) if sfo.is_file() else folder.name
+            entry = {
+                "title": _read_sfo_title(sfo) if sfo.is_file() else folder.name,
+                "title_id": folder.name,
+                "metadata": {"Title": _read_sfo_title(sfo) if sfo.is_file() else folder.name},
+            }
+            from parity_premium import resolve_vita_title
+            title = resolve_vita_title(entry)
             games.append({
                 "name": title,
                 "platform": "PlayStation Vita",

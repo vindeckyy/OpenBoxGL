@@ -139,6 +139,9 @@ def apply_game_metadata(game, database_path, database_id, media_types, media_roo
     for target, source in fields.items():
         if record[source] and (overwrite or not game.get(target)):
             game[target] = record[source]
+    from parity_premium import apply_esrb_from_record
+    if overwrite or not game.get("esrb"):
+        apply_esrb_from_record(game, record)
     if record.get("max_players") and (overwrite or not game.get("max_players")):
         game["max_players"] = record["max_players"]
     game["launchbox_db_id"] = str(database_id)

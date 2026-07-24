@@ -13,7 +13,7 @@ PYTHON_MODULES = [
     "cloud_sync.py", "emulators.py", "retroachievements.py", "plugins.py",
     "plugin_runner.py", "metadata.py", "archives.py", "saves.py", "updates.py",
     "env_config.py", "parity_discovery.py", "parity_import.py", "parity_integrations.py",
-    "parity_media.py", "parity_saves.py", "parity_storefront.py", "plugin_catalog.py",
+    "parity_media.py", "parity_saves.py", "parity_storefront.py", "plugin_catalog.py", "parity_premium.py",
 ]
 DATA_FILES = ["index.html"]
 

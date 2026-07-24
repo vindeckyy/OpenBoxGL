@@ -28,7 +28,7 @@ def related_game_ids(games, selected, limit=8):
 
 
 def bulk_update(games, ids, changes):
-    allowed = {"platform", "genre", "progress", "rating", "favorite", "hidden"}
+    allowed = {"platform", "genre", "progress", "rating", "favorite", "hidden", "esrb", "custom_fields"}
     if not isinstance(ids, list) or not ids:
         raise ValueError("Select at least one game.")
     if not isinstance(changes, dict) or not changes or not set(changes) <= allowed:
@@ -48,13 +48,26 @@ def bulk_update(games, ids, changes):
             if not 0 <= rating <= 5:
                 raise ValueError("Rating must be between 0 and 5.")
             clean[field] = rating
+        elif field == "esrb":
+            clean[field] = str(value).strip()
+        elif field == "custom_fields":
+            if not isinstance(value, dict):
+                raise ValueError("Custom fields must be an object.")
+            clean[field] = {str(key).strip(): str(val).strip() for key, val in value.items() if str(key).strip()}
         else:
             clean[field] = str(value).strip()
     selected = sorted(set(int(index) for index in ids))
     if selected[0] < 0 or selected[-1] >= len(games):
         raise IndexError("A selected game no longer exists.")
     for index in selected:
-        games[index].update(clean)
+        patch = dict(clean)
+        if "custom_fields" in patch:
+            merged = games[index].get("custom_fields", {})
+            if not isinstance(merged, dict):
+                merged = {}
+            merged.update(patch.pop("custom_fields"))
+            games[index]["custom_fields"] = merged
+        games[index].update(patch)
     return len(selected)
 
 

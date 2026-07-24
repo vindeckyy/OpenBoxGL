@@ -32,6 +32,29 @@ PLATFORM_BY_EXTENSION = {
     **PLATFORM_BY_EXTENSION_EXTRA,
 }
 
+# Development-only screenshot fixtures must never ship in user libraries.
+DEMO_PATH_MARKERS = ("/tmp/openbox-screenshots/",)
+
+
+def is_demo_game(game):
+    if not isinstance(game, dict):
+        return False
+    if game.get("demo"):
+        return True
+    path = str(game.get("path", ""))
+    return any(marker in path for marker in DEMO_PATH_MARKERS)
+
+
+def purge_demo_games(state):
+    games = state.get("games", [])
+    if not isinstance(games, list):
+        return 0
+    kept = [game for game in games if not is_demo_game(game)]
+    removed = len(games) - len(kept)
+    if removed:
+        state["games"] = kept
+    return removed
+
 
 def load_state():
     try:
@@ -120,6 +143,8 @@ class OpenBox(tk.Tk):
         self.geometry("1280x780")
         self.minsize(900, 580)
         self.state = load_state()
+        if purge_demo_games(self.state):
+            save_state(self.state)
         self.games = self.state["games"]
         self.profiles = self.state["profiles"]
         self.history = self.state["history"]

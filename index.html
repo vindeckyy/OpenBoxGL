@@ -104,6 +104,9 @@
     .reader-dialog iframe { width:100%; height:calc(92vh - 48px); border:0; background:#fff; }
     dialog { width:min(680px,90vw); border:1px solid #41485d; border-radius:8px; padding:0; color:#fff; background:#171b28; box-shadow:0 30px 80px #000c; }
     dialog::backdrop { background:#05070bc7; backdrop-filter:blur(4px); }
+    .profiles-dialog { width:min(920px,94vw); max-height:90vh; }
+    .profiles-dialog .form-grid { max-height:calc(90vh - 110px); overflow:auto; }
+    .profiles-dialog .emulator-list { grid-template-columns:1fr; }
     .dialog-head { display:flex; align-items:center; padding:13px 16px; border-bottom:1px solid #30364a; }
     .dialog-head h2 { margin:0; font-size:15px; }
     .dialog-head button { margin-left:auto; border:0; background:transparent; color:#c9cfdb; font-size:18px; }
@@ -113,11 +116,21 @@
     .check { display:flex; align-items:center; gap:8px; color:#c6ccda; }
     .check input { width:auto; }
     .emulator-list { display:grid; grid-template-columns:repeat(2,1fr); gap:7px; margin-top:8px; }
-    .emulator-item { display:flex; align-items:center; gap:8px; padding:9px; border:1px solid #30374a; border-radius:6px; background:#1c2131; }
+    .emulator-item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; padding:9px; border:1px solid #30374a; border-radius:6px; background:#1c2131; }
     .emulator-item div { min-width:0; }
+    .list-view { display:block; padding-bottom:25px; }
+    .list-row { display:grid; grid-template-columns:2fr 1fr 1fr 90px 90px 70px 70px; gap:8px; align-items:center; padding:8px 10px; border-bottom:1px solid #2a3144; cursor:pointer; }
+    .list-row:hover,.list-row.selected { background:#2a3144; }
+    .list-head { display:grid; grid-template-columns:2fr 1fr 1fr 90px 90px 70px 70px; gap:8px; padding:6px 10px; color:#7f899f; font-size:9px; text-transform:uppercase; border-bottom:1px solid #30364a; }
+    .drop-zone { margin:0 0 12px; padding:18px; border:1px dashed #3f4a63; border-radius:8px; color:#9aa3b6; text-align:center; background:#15192588; }
+    .drop-zone.active { border-color:#45c4ef; color:#dbe0ea; background:#1b284088; }
+    .jewel-3d { transform:perspective(900px) rotateY(-18deg); box-shadow:12px 8px 24px #0009; }
+    .bigbox-startup-video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:.35; pointer-events:none; }
+    .hybrid-search { margin-left:12px; width:180px; }
     .emulator-item strong,.emulator-item small { display:block; }
     .emulator-item small { overflow:hidden; color:#7f899f; text-overflow:ellipsis; white-space:nowrap; }
-    .emulator-item button { margin-left:auto; white-space:nowrap; }
+    .emulator-actions { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
+    .emulator-actions button { white-space:nowrap; }
     .achievement { display:grid; grid-template-columns:44px 1fr auto; gap:9px; align-items:center; margin-top:7px; padding:7px; border:1px solid #30374a; border-radius:6px; background:#171b29; }
     .achievement img { width:44px; height:44px; border-radius:5px; }
     .achievement small,.achievement span { display:block; }
@@ -237,6 +250,9 @@
     <aside class="sidebar">
       <label class="field" data-sidebar-section="search"><span>Search</span><input id="sidebarSearch" type="search" aria-label="Search library"></label>
       <label class="field" data-sidebar-section="view"><span>View</span><select id="view"><option value="all">All games</option><option value="favorites">Favorites</option><option value="recent">Recently played</option><option value="never">Never played</option><option value="playing">In progress</option><option value="completed">Completed</option><option value="saves">Has saves</option><option value="hidden">Hidden</option><option value="missing">Missing files</option></select></label>
+      <label class="field" data-sidebar-section="filters"><span>ESRB</span><select id="esrbFilter"><option value="">Any rating</option><option>E</option><option>E10+</option><option>T</option><option>M</option><option>AO</option><option>RP</option><option>Unrated</option></select></label>
+      <div class="section-title" data-sidebar-section="filters">Categories</div>
+      <nav class="platforms" id="platformCategories" data-sidebar-section="filters"></nav>
       <div class="section-title" data-sidebar-section="platforms">Platforms</div>
       <nav class="platforms" id="platforms" data-sidebar-section="platforms"></nav>
       <div class="section-title" data-sidebar-section="playlists">Playlists</div>
@@ -248,8 +264,10 @@
         <div><h1 id="libraryTitle">All Games</h1><p id="libraryMeta">0 games</p></div>
         <select class="search" id="sort" aria-label="Sort games"><option value="title">Title</option><option value="rating">Rating</option><option value="recent">Recently played</option><option value="playtime">Play time</option><option value="added">Date added</option><option value="platform">Platform</option><option value="genre">Genre</option></select>
         <select class="search" id="imageGroup" aria-label="Image group"><option value="default">Use default</option><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option></select>
+        <button class="icon-button" id="viewToggleButton">List view</button>
         <button class="icon-button" id="surpriseButton">Surprise me</button>
       </div>
+      <div class="drop-zone" id="dropZone">Drop ROM folders or game files here to import</div>
       <div class="arrange-wrap">
         <section class="grid" id="grid"></section>
         <div class="arrange-bar" id="arrangeBar" hidden title="Jump through the current view"></div>
@@ -274,6 +292,7 @@
         <label class="field"><span>Play mode</span><input name="play_mode"></label>
         <label class="field"><span>Sort title</span><input name="sort_title"></label>
         <label class="field"><span>Progress</span><select name="progress"><option value="">Not set</option><option>Playing</option><option>Paused</option><option>Beaten</option><option>Completed</option><option>Mastered</option><option>Abandoned</option></select></label>
+        <label class="field"><span>ESRB</span><select name="esrb"><option value="">Not set</option><option>E</option><option>E10+</option><option>T</option><option>M</option><option>AO</option><option>RP</option><option>EC</option><option>Unrated</option></select></label>
         <label class="field"><span>Rating, 0 to 5</span><input name="rating" type="number" min="0" max="5" step="0.5"></label>
         <label class="field"><span>Max players</span><input name="max_players"></label>
         <label class="field"><span>Wikipedia URL</span><input name="wikipedia_url"></label>
@@ -301,11 +320,12 @@
         <label class="field wide"><span>Save paths, one per line</span><textarea name="save_paths"></textarea></label>
         <label class="field wide"><span>Description</span><textarea name="description"></textarea></label>
         <label class="field wide"><span>Private notes</span><textarea name="notes"></textarea></label>
+        <div class="wide form-grid" id="customFieldInputs"></div>
       </div>
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelDialog">Cancel</button><button class="primary">Save</button></div>
     </form>
   </dialog>
-  <dialog id="profilesDialog">
+  <dialog id="profilesDialog" class="profiles-dialog">
     <form id="profilesForm">
       <div class="dialog-head"><h2>Emulator profiles</h2><button type="button" id="closeProfiles">×</button></div>
       <div class="form-grid">
@@ -401,6 +421,7 @@
         <label class="field"><span>Rating</span><select name="rating"><option value="">Keep current</option><option value="0">0</option><option value="0.5">0.5</option><option value="1">1</option><option value="1.5">1.5</option><option value="2">2</option><option value="2.5">2.5</option><option value="3">3</option><option value="3.5">3.5</option><option value="4">4</option><option value="4.5">4.5</option><option value="5">5</option></select></label>
         <label class="field"><span>Favorite</span><select name="favorite"><option value="">Keep current</option><option value="true">Yes</option><option value="false">No</option></select></label>
         <label class="field"><span>Hidden</span><select name="hidden"><option value="">Keep current</option><option value="true">Yes</option><option value="false">No</option></select></label>
+        <label class="field"><span>ESRB</span><select name="esrb"><option value="">Keep current</option><option>E</option><option>E10+</option><option>T</option><option>M</option><option>AO</option><option>RP</option><option>Unrated</option></select></label>
       </div>
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelBulk">Cancel</button><button class="primary">Apply</button></div>
     </form>
@@ -464,6 +485,15 @@
         <label class="check settings-field" data-setting="progress automation playing paused idle days minutes"><input type="checkbox" id="progressAutomationEnabled"> Enable game progress automation</label>
         <label class="field settings-field" data-setting="progress automation playing minutes"><span>Mark as Playing after minutes played</span><input id="progressAutomationMinutes" type="number" min="0" max="100000"></label>
         <label class="field settings-field" data-setting="progress automation paused idle days"><span>Mark as Paused after days without play</span><input id="progressAutomationIdleDays" type="number" min="0" max="3650"></label>
+        <label class="field settings-field" data-setting="locale language translation ui"><span>Interface language</span><select id="localeSetting"><option value="en">English</option><option value="es">Español</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="pt">Português</option></select></label>
+        <label class="field settings-field" data-setting="library view list grid columns"><span>Default library view</span><select id="libraryViewSetting"><option value="grid">Grid</option><option value="list">List</option></select></label>
+        <label class="field wide settings-field" data-setting="custom fields metadata premium"><span>Custom fields, one per line: Name|Option1,Option2</span><textarea id="customFieldDefs" placeholder="Cabinet|Upright,Cocktail"></textarea></label>
+        <label class="field wide settings-field" data-setting="big box startup video attract"><span>Big Box startup video path</span><input id="bigboxStartupVideo"></label>
+        <label class="field wide settings-field" data-setting="big box shutdown applications switch"><span>Applications to run when switching into Big Box, one command per line</span><textarea id="bigboxShutdownCommands"></textarea></label>
+        <label class="field settings-field" data-setting="attract mode screensaver big box"><span>Attract mode delay in seconds</span><input id="attractModeSeconds" type="number" min="0" max="3600"></label>
+        <label class="check settings-field" data-setting="system tray minimize close"><input type="checkbox" id="trayEnabled"> Enable desktop tray integration</label>
+        <label class="check settings-field" data-setting="system tray minimize close"><input type="checkbox" id="minimizeToTray"> Minimize to tray when window closes</label>
+        <div class="wide settings-field" data-setting="media packs themes badges controller"><button type="button" class="icon-button" id="applyMediaPack">Apply bundled media pack</button><span class="description" id="mediaPackStatus"></span></div>
         <div class="wide section-title settings-field" data-setting="controller gamepad mapping">Standard Gamepad Button Mapping</div>
         <label class="field"><span>Play</span><input data-controller="play" class="settings-field" data-setting="controller gamepad play" type="number" min="0" max="31"></label>
         <label class="field"><span>Back</span><input data-controller="back" class="settings-field" data-setting="controller gamepad back" type="number" min="0" max="31"></label>
@@ -509,7 +539,8 @@
   <div class="toast" id="toast"></div>
   <section class="lifecycle" id="lifecycle" hidden><div><small id="lifecycleKind"></small><h2 id="lifecycleGame"></h2><p id="lifecycleMessage"></p></div></section>
   <section class="bigbox" id="bigBox" hidden tabindex="0">
-    <div class="bigbox-head"><strong>OpenBox</strong><span class="bigbox-status" id="bigBoxStatus"></span><span id="bigBoxCounter"></span></div>
+    <video class="bigbox-startup-video" id="bigBoxStartupVideo" muted loop playsinline hidden></video>
+    <div class="bigbox-head"><strong>OpenBox</strong><input class="hybrid-search" id="bigBoxHybridSearch" type="search" placeholder="Search this platform" hidden><span class="bigbox-status" id="bigBoxStatus"></span><span id="bigBoxCounter"></span></div>
     <div class="bigbox-stage" id="bigBoxStage"></div>
     <div class="bigbox-foot"><span>← → Browse</span><span>Enter / A Play</span><span>P Pause</span><span>M Filters</span><span>F / X Favorite</span><span>Esc / B Back</span></div>
     <div class="bigbox-menu" id="bigBoxMenu" hidden>
@@ -528,7 +559,7 @@
   <script>
     const token = new URLSearchParams(location.search).get('token') || '';
     let games = [], playlists = [], bigBoxGames = [], runningGames = [], raConfigured = false, selectedId = null, platform = 'all', activePlaylist = '', editingId = null, metadataGameId = null, bigBoxIndex = 0, gamepadState = {}, lastSessionEvent = 0, bulkMode = false, bigBoxLastInput = performance.now(), screenSaverGame = null;
-    let appSettings = {watch_folders:[],screensaver_seconds:90,controller_map:{}}, bigBoxFilter = 'all', bigBoxSort = 'title', bigBoxRaFilter = 'all', bigBoxPlatform = 'all', pendingUpdate = null, duplicateMediaGroups = 0, libraryBgm = null, readerPage = 1, readerUrl = '';
+    let appSettings = {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',locale:'en'}, bigBoxFilter = 'all', bigBoxSort = 'title', bigBoxRaFilter = 'all', bigBoxPlatform = 'all', platformCategory = 'all', pendingUpdate = null, duplicateMediaGroups = 0, libraryBgm = null, readerPage = 1, readerUrl = '', bigBoxHybridQuery = '';
     const defaultControllerMap = {play:0,back:1,favorite:2,random:3,page_left:4,page_right:5,pause:8,menu:9};
     const selectedIds = new Set();
     const $ = id => document.getElementById(id);
@@ -554,7 +585,20 @@
       for (const id of selectedIds) if (!games.some(game => game.id === id)) selectedIds.delete(id);
       render();
       applySidebarVisibility();
+      applyLocaleStrings();
       maybeShowWelcome();
+    }
+    function applyLocaleStrings() {
+      const strings = appSettings.strings || {};
+      if (strings.drop_import && $('dropZone')) $('dropZone').textContent = strings.drop_import;
+      if ($('viewToggleButton')) {
+        const listView = (appSettings.library_view || 'grid') === 'list';
+        $('viewToggleButton').textContent = listView ? (strings.grid_view || 'Grid view') : (strings.list_view || 'List view');
+      }
+    }
+    function platformCategoryFor(game) {
+      const categories = appSettings.platform_categories || {};
+      return categories[game.platform] || 'Other';
     }
     function applySidebarVisibility() {
       const hidden = new Set((appSettings.hidden_sidebar_sections || []).map(value => value.trim().toLowerCase()).filter(Boolean));
@@ -569,8 +613,11 @@
         const completed = ['Beaten','Completed','Mastered'].includes(game.progress);
         const viewMatch = (view === 'all' && !game.hidden) || (view === 'favorites' && game.favorite && !game.hidden) || (view === 'recent' && game.last_played && !game.hidden) || (view === 'never' && !game.play_count && !game.hidden) || (view === 'playing' && ['Playing','Paused'].includes(game.progress) && !game.hidden) || (view === 'completed' && completed && !game.hidden) || (view === 'saves' && game.has_saves && !game.hidden) || (view === 'hidden' && game.hidden) || (view === 'missing' && !game.path_exists && !game.hidden);
         const platformMatch = platform === 'all' || game.platform === platform;
-        const queryMatch = !query || [game.name,game.sort_title,game.platform,game.genre,game.developer,game.publisher,game.series,game.region,game.notes,...(game.alternate_names || [])].join(' ').toLowerCase().includes(query);
-        return viewMatch && platformMatch && queryMatch;
+        const categoryMatch = platformCategory === 'all' || platformCategoryFor(game) === platformCategory;
+        const esrb = $('esrbFilter')?.value || '';
+        const esrbMatch = !esrb || (game.esrb || 'Unrated') === esrb;
+        const queryMatch = !query || [game.name,game.sort_title,game.platform,game.genre,game.developer,game.publisher,game.series,game.region,game.notes,...(game.alternate_names || []),...(Object.values(game.custom_fields || {}))].join(' ').toLowerCase().includes(query);
+        return viewMatch && platformMatch && categoryMatch && esrbMatch && queryMatch;
       });
       const sort = $('sort').value;
       return visible.sort((a,b) => sort === 'rating' ? Number(b.rating || 0) - Number(a.rating || 0) || a.name.localeCompare(b.name) : sort === 'recent' ? String(b.last_played).localeCompare(String(a.last_played)) : sort === 'playtime' ? Number(b.playtime_seconds || 0) - Number(a.playtime_seconds || 0) : sort === 'added' ? String(b.added_at || '').localeCompare(String(a.added_at || '')) : sort === 'platform' ? String(a.platform || '').localeCompare(String(b.platform || '')) || String(a.sort_title || a.name).localeCompare(String(b.sort_title || b.name)) : sort === 'genre' ? String(a.genre || '').localeCompare(String(b.genre || '')) || String(a.sort_title || a.name).localeCompare(String(b.sort_title || b.name)) : String(a.sort_title || a.name).localeCompare(String(b.sort_title || b.name)));
@@ -606,6 +653,17 @@
         if (card) card.scrollIntoView({block:'nearest'});
       };
     }
+    function renderPlatformCategories() {
+      const counts = new Map();
+      games.forEach(game => {
+        const name = platformCategoryFor(game);
+        counts.set(name, (counts.get(name) || 0) + 1);
+      });
+      const items = [['all',`All (${games.length})`], ...[...counts].sort((a,b) => a[0].localeCompare(b[0])).map(([name,count]) => [name,`${name} (${count})`])];
+      if (!$('platformCategories')) return;
+      $('platformCategories').innerHTML = items.map(([value,label]) => `<button class="platform ${platformCategory === value ? 'active' : ''}" data-platform-category="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join('');
+      document.querySelectorAll('[data-platform-category]').forEach(button => button.onclick = () => { activePlaylist = ''; platformCategory = button.dataset.platformCategory; selectedId = null; render(); loadTheme(); });
+    }
     function renderPlatforms() {
       const counts = new Map();
       games.forEach(game => counts.set(game.platform || 'Unspecified', (counts.get(game.platform || 'Unspecified') || 0) + 1));
@@ -637,15 +695,23 @@
       $('libraryMeta').textContent = bulkMode ? `${selectedIds.size} selected · ${visible.length} shown` : `${visible.length} game${visible.length === 1 ? '' : 's'}`;
       $('surpriseButton').disabled = !visible.length;
       if (!visible.length) {
+        $('grid').className = 'grid';
         $('grid').innerHTML = `<div class="empty"><div><h2>${games.length ? 'No games match this view' : 'Your library is empty'}</h2><p>${games.length ? 'Change the active filters.' : 'Add a real game or import a folder to begin.'}</p>${games.length ? '' : '<button id="emptyAdd">Add game</button>'}</div></div>`;
         if ($('emptyAdd')) $('emptyAdd').onclick = () => openGameDialog();
+        renderArrangeBar(visible);
         return;
       }
-      $('grid').innerHTML = visible.map(game => `<article class="card ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" data-game="${game.id}">
-        <div class="cover">${bulkMode ? `<input class="card-picker" type="checkbox" ${selectedIds.has(game.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(game.name)}">` : ''}${imageGroup === 'background' && game.has_background ? `<img src="${media(game,'background')}" alt="">` : imageGroup === 'screenshot' && game.available_screenshots.length ? `<img src="${media(game,'screenshot',game.available_screenshots[0])}" alt="">` : game.has_cover ? `<img src="${media(game,'cover')}" alt="">` : `<div class="cover-title">${escapeHtml(game.name)}</div>`}</div>
+      if ((appSettings.library_view || 'grid') === 'list') {
+        $('grid').className = 'list-view';
+        $('grid').innerHTML = `<div class="list-head"><span>Title</span><span>Platform</span><span>Genre</span><span>ESRB</span><span>Progress</span><span>Plays</span><span>Rating</span></div>${visible.map(game => `<div class="list-row ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" data-game="${game.id}"><strong>${escapeHtml(game.name)}</strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></div>`).join('')}`;
+      } else {
+        $('grid').className = 'grid';
+        $('grid').innerHTML = visible.map(game => `<article class="card ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" data-game="${game.id}">
+        <div class="cover ${appSettings.bigbox_mode === 'coverflow' ? 'jewel-3d' : ''}">${bulkMode ? `<input class="card-picker" type="checkbox" ${selectedIds.has(game.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(game.name)}">` : ''}${imageGroup === 'background' && game.has_background ? `<img src="${media(game,'background')}" alt="">` : imageGroup === 'screenshot' && game.available_screenshots.length ? `<img src="${media(game,'screenshot',game.available_screenshots[0])}" alt="">` : game.has_cover ? `<img src="${media(game,'cover')}" alt="">` : `<div class="cover-title">${escapeHtml(game.name)}</div>`}</div>
         <h3>${escapeHtml(game.name)}</h3><p>${escapeHtml(game.developer || game.platform || '')}</p>
         <div class="badges">${game.favorite ? '★ ' : ''}${game.has_saves ? '💾 ' : ''}${game.has_documents ? '📄 ' : ''}${game.rating ? `${'★'.repeat(Math.round(game.rating))} ` : ''}${game.progress ? escapeHtml(game.progress) : game.play_count ? `${game.play_count}×` : ''}</div>
       </article>`).join('');
+      }
       document.querySelectorAll('[data-game]').forEach(card => card.onclick = event => {
         const id = Number(card.dataset.game);
         if (bulkMode) {
@@ -672,7 +738,7 @@
           <button class="play" id="playButton" ${game.path_exists ? '' : 'disabled'}>▶ PLAY</button>
           <div class="detail-actions"><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">Edit metadata</button><button class="icon-button" id="databaseMetadataButton">Find metadata</button>${game.steam_app_id ? '<button class="icon-button" id="steamMetadataButton">Use Steam data</button>' : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button><button class="icon-button" id="removeGameButton">Remove game</button></div>
           <div class="detail-card"><h3>Information</h3><div class="facts">
-            ${fact('Release date',game.year)}${fact('Developer',game.developer)}${fact('Publisher',game.publisher)}${fact('Max players',game.max_players)}${fact('Play time',duration(game.playtime_seconds))}
+            ${fact('Release date',game.year)}${fact('Developer',game.developer)}${fact('Publisher',game.publisher)}${fact('ESRB',game.esrb)}${fact('Category',platformCategoryFor(game))}${Object.entries(game.custom_fields || {}).map(([key,value]) => fact(key,value)).join('')}${fact('Max players',game.max_players)}${fact('Play time',duration(game.playtime_seconds))}
             ${fact('Launches',game.play_count)}${fact('Last played',game.last_played ? game.last_played.replace('T',' ') : '')}${fact('Progress',game.progress)}${fact('Rating',game.rating ? `${game.rating} / 5` : '')}${fact('Region',game.region)}${fact('Play mode',game.play_mode)}${fact('Wikipedia',game.wikipedia_url)}${fact('Video URL',game.video_url)}
           </div>${game.description ? `<p class="description">${escapeHtml(game.description)}</p>` : ''}${game.notes ? `<p class="description"><strong>Notes</strong><br>${escapeHtml(game.notes)}</p>` : ''}
           ${game.applications.length || game.versions.length || game.documents.length ? `<div class="extras">${game.applications.map((item,index) => `<button class="icon-button" data-extra="applications:${index}">App · ${escapeHtml(item.name)}</button>`).join('')}${game.versions.map((item,index) => `<button class="icon-button" data-extra="versions:${index}">Version · ${escapeHtml(item.name)}</button>`).join('')}${game.documents.map((item,index) => `<button class="icon-button" data-document="${index}">Read ${escapeHtml(item.name)}</button><button class="icon-button" data-extra="documents:${index}" aria-label="Open ${escapeHtml(item.name)} externally">↗</button>`).join('')}</div>` : ''}</div>
@@ -680,7 +746,7 @@
           ${game.has_music ? `<div class="detail-card"><h3>Music</h3><audio class="media-player" controls preload="metadata" src="${media(game,'music')}"></audio></div>` : ''}
           ${game.available_screenshots.length ? `<div class="detail-card"><h3>Screenshots</h3><div class="screenshot-grid">${game.available_screenshots.map(index => `<button data-screenshot="${index}" aria-label="Open screenshot ${index + 1}"><img src="${media(game,'screenshot',index)}" alt=""></button>`).join('')}</div></div>` : ''}
           <div class="detail-card"><h3>Related Games</h3><div class="related-grid" id="relatedGames"><span class="description">Finding matches…</span></div></div>
-          ${raConfigured ? `<div class="detail-card"><h3>RetroAchievements</h3><div id="achievementContent"><p class="description">${game.ra_game_id ? `Matched to game ${escapeHtml(game.ra_game_id)}.` : 'Match this ROM to load achievements.'}</p><button class="icon-button" id="loadAchievements">Load achievements</button></div></div>` : ''}
+          ${raConfigured ? `<div class="detail-card"><h3>RetroAchievements</h3><div id="achievementContent"><p class="description">${game.ra_game_id ? `Matched to game ${escapeHtml(game.ra_game_id)}.` : 'Match this ROM to load achievements.'}</p><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}<button class="icon-button" id="openBrowser">Open Wikipedia</button></div><button class="icon-button" id="loadAchievements">Load achievements</button><div id="achievementStats"></div></div></div>` : ''}
           <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${game.save_paths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}${game.platform === 'Arcade' || game.rom_name ? '<button class="icon-button" id="exportHighscores">Export high scores</button>' : ''}</div><div class="description" id="saveDiscovery">${game.save_paths.length ? `${game.save_paths.length} configured location${game.save_paths.length === 1 ? '' : 's'}` : 'No save location configured.'}</div><div class="extras" id="saveBackups"></div></div>
         </div>`;
       $('playButton').onclick = () => launch(game.id);
@@ -702,6 +768,9 @@
       });
       document.querySelectorAll('[data-document]').forEach(button => button.onclick = () => openReader(game, Number(button.dataset.document)));
       if ($('loadAchievements')) $('loadAchievements').onclick = () => loadAchievements(game.id);
+      if ($('downloadTrailer')) $('downloadTrailer').onclick = async () => { try { await api('/api/metadata/trailer',{method:'POST',body:JSON.stringify({id:game.id})}); await refresh(); renderDetails(); notify('Steam trailer downloaded'); } catch(error) { notify(error.message); } };
+      if ($('downloadGogMedia')) $('downloadGogMedia').onclick = async () => { try { await api('/api/metadata/gog',{method:'POST',body:JSON.stringify({id:game.id})}); await refresh(); renderDetails(); notify('GOG media downloaded'); } catch(error) { notify(error.message); } };
+      if ($('openBrowser')) $('openBrowser').onclick = () => { const url = game.wikipedia_url || `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(game.name)}`; window.open(url, '_blank'); };
       if ($('backupSaves')) {
         $('backupSaves').onclick = () => backupSaves(game.id);
         loadBackups(game.id);
@@ -718,8 +787,8 @@
         document.querySelectorAll('[data-related]').forEach(button => button.onclick = () => { selectedId = Number(button.dataset.related); render(); });
       } catch(error) { if ($('relatedGames')) $('relatedGames').textContent = error.message; }
     }
-    const fact = (label,value) => `<div class="fact"><small>${label}</small><span>${escapeHtml(value || '—')}</span></div>`;
-    function render() { renderPlatforms(); renderPlaylists(); renderGrid(); renderDetails(); applySidebarVisibility(); $('status').textContent = `${games.length} games · local library`; }
+    const fact = (label,value) => `<div class="fact"><small>${label}</small><span>${escapeHtml(value || '-')}</span></div>`;
+    function render() { renderPlatformCategories(); renderPlatforms(); renderPlaylists(); renderGrid(); renderDetails(); applySidebarVisibility(); $('status').textContent = `${games.length} games · local library`; }
     async function renderPlatformDetails(platformName) {
       const count = games.filter(game => (game.platform || 'Unspecified') === platformName).length;
       let documents = [];
@@ -848,6 +917,14 @@
         image_group:$('defaultImageGroup').value,
         controller_map:Object.fromEntries([...document.querySelectorAll('[data-controller]')].map(input => [input.dataset.controller,Number(input.value)])),
         welcome_completed:appSettings.welcome_completed,
+        locale:$('localeSetting').value,
+        library_view:$('libraryViewSetting').value,
+        custom_field_defs:($('customFieldDefs').value || '').split('\n').map(line => line.trim()).filter(Boolean).map(line => { const [name,...rest] = line.split('|'); return {name:(name || '').trim(), options:rest.join('|').split(',').map(value => value.trim()).filter(Boolean)}; }).filter(item => item.name),
+        bigbox_startup_video:$('bigboxStartupVideo').value.trim(),
+        bigbox_shutdown_commands:$('bigboxShutdownCommands').value.split('\n').map(value => value.trim()).filter(Boolean),
+        attract_mode_seconds:Number($('attractModeSeconds').value || $('screensaverSeconds').value || 90),
+        tray_enabled:$('trayEnabled').checked,
+        minimize_to_tray:$('minimizeToTray').checked,
       };
     }
     async function saveEmumoviesSettings() {
@@ -980,7 +1057,9 @@
         $('achievementContent').innerHTML = '<p class="description">Matching ROM and loading progress…</p>';
         const result = await api('/api/ra/game',{method:'POST',body:JSON.stringify({id})});
         await refresh();
-        if ($('achievementContent')) $('achievementContent').innerHTML = `<p class="description">${result.earned} of ${result.total} earned · ${escapeHtml(result.completion)}${result.earned_hardcore ? ` · ${result.earned_hardcore} hardcore` : ''}</p>${result.achievements.map(item => `<div class="achievement"><img src="/api/ra/badge?name=${encodeURIComponent(item.badge)}&locked=${item.earned ? 0 : 1}&token=${encodeURIComponent(token)}" alt=""><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.description)}</small></div><span>${item.points} pts${item.hardcore ? ' ★' : ''}</span></div>`).join('')}`;
+        if ($('achievementContent')) {
+          $('achievementContent').innerHTML = `<p class="description">${result.earned} of ${result.total} earned · ${escapeHtml(result.completion)}${result.earned_hardcore ? ` · ${result.earned_hardcore} hardcore` : ''}${result.beaten ? ` · beaten ${result.beaten}` : ''}${result.mastered ? ` · mastered ${result.mastered}` : ''}${result.motivation ? ` · ${escapeHtml(result.motivation)}` : ''}</p>${(result.achievements || []).map(item => `<div class="achievement"><img src="/api/ra/badge?name=${encodeURIComponent(item.badge)}&locked=${item.earned ? 0 : 1}&token=${encodeURIComponent(token)}" alt=""><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.description)}</small></div><span>${item.points} pts${item.hardcore ? ' ★' : ''}</span></div>`).join('')}`;
+        }
       } catch(error) { notify(error.message); renderDetails(); }
     }
     function openGameDialog(game = null) {
@@ -997,6 +1076,15 @@
         else if (element.name === 'alternate_names') element.value = Array.isArray(game?.alternate_names) ? game.alternate_names.join('; ') : (game?.alternate_names || '');
         else element.value = game?.[element.name] || '';
       });
+      const container = $('customFieldInputs');
+      const defs = appSettings.custom_field_defs || [];
+      container.innerHTML = defs.length ? defs.map(def => {
+        const value = game?.custom_fields?.[def.name] || '';
+        if (def.options?.length) {
+          return `<label class="field"><span>${escapeHtml(def.name)}</span><select data-custom-field="${escapeHtml(def.name)}">${['', ...def.options].map(option => `<option value="${escapeHtml(option)}" ${option === value ? 'selected' : ''}>${escapeHtml(option || 'Not set')}</option>`).join('')}</select></label>`;
+        }
+        return `<label class="field"><span>${escapeHtml(def.name)}</span><input data-custom-field="${escapeHtml(def.name)}" value="${escapeHtml(value)}"></label>`;
+      }).join('') : '';
       $('gameDialog').showModal();
     }
     $('gameForm').onsubmit = async event => {
@@ -1011,20 +1099,28 @@
       game.documents = game.documents.split('\n').filter(Boolean).map(line => { const [name,path] = line.split('|').map(value => value.trim()); return {name,path}; });
       game.save_paths = game.save_paths.split('\n').map(value => value.trim()).filter(Boolean);
       game.screenshots = game.screenshots.split('\n').map(value => value.trim()).filter(Boolean);
+      game.custom_fields = Object.fromEntries([...document.querySelectorAll('[data-custom-field]')].map(input => [input.dataset.customField, input.value.trim()]).filter(([, value]) => value));
       try { await api('/api/game',{method:'POST',body:JSON.stringify({id:editingId,game})}); $('gameDialog').close(); await refresh(); notify('Library saved'); } catch(error) { notify(error.message); }
     };
     async function importFolder() {
       const folder = prompt('Enter the absolute path of the folder to import.');
       if (!folder) return;
       try {
-        const result = await api('/api/import',{method:'POST',body:JSON.stringify({folder})});
-        await refresh();
-        notify(`${result.added} games imported`);
-        const platforms = Object.keys(result.recommendations || {});
-        if (platforms.length) {
-          const lines = platforms.flatMap(platform => (result.recommendations[platform] || []).map(item => `${platform}: ${item.name}`)).slice(0, 8);
-          if (lines.length && confirm(`Recommended emulators were detected:\n${lines.join('\n')}\n\nOpen Emulators to install them?`)) openProfiles();
+        const preview = await api('/api/import',{method:'POST',body:JSON.stringify({folder,recommend:true})});
+        const chosen = {};
+        for (const [platform, items] of Object.entries(preview.recommendations || {})) {
+          if (!items?.length) continue;
+          if (items.length === 1) { chosen[platform] = items[0].app_id; continue; }
+          const labels = items.map((item,index) => `${index + 1}. ${item.name}`).join('\n');
+          const pick = prompt(`Multiple emulators for ${platform}:\n${labels}\nEnter number to install, or leave blank to skip`, '1');
+          const index = Number(pick) - 1;
+          if (pick && items[index]) chosen[platform] = items[index].app_id;
         }
+        const result = Object.keys(chosen).length
+          ? await api('/api/import/wizard',{method:'POST',body:JSON.stringify({folder,chosen_emulators:chosen})})
+          : preview;
+        await refresh();
+        notify(`${result.added} games imported${result.installed?.length ? ` · installed ${result.installed.length} emulator(s)` : ''}`);
       } catch(error) { notify(error.message); }
     }
     async function importSteam() {
@@ -1088,6 +1184,16 @@
         $('hiddenSidebarSections').value = (appSettings.hidden_sidebar_sections || []).join(', ');
         $('obsAutoAttach').checked = appSettings.obs_auto_attach !== false;
         $('obsRecordingPath').value = appSettings.obs_recording_path || '';
+        $('localeSetting').value = appSettings.locale || 'en';
+        $('libraryViewSetting').value = appSettings.library_view || 'grid';
+        $('customFieldDefs').value = (appSettings.custom_field_defs || []).map(item => `${item.name}|${(item.options || []).join(',')}`).join('\n');
+        $('bigboxStartupVideo').value = appSettings.bigbox_startup_video || '';
+        $('bigboxShutdownCommands').value = (appSettings.bigbox_shutdown_commands || []).join('\n');
+        $('attractModeSeconds').value = appSettings.attract_mode_seconds ?? appSettings.screensaver_seconds ?? 90;
+        $('trayEnabled').checked = Boolean(appSettings.tray_enabled);
+        $('minimizeToTray').checked = Boolean(appSettings.minimize_to_tray);
+        $('mediaPackStatus').textContent = (appSettings.media_packs || []).filter(item => item.active).map(item => item.name).join(', ');
+        $('viewToggleButton').textContent = (appSettings.library_view || 'grid') === 'list' ? 'Grid view' : 'List view';
         $('settingsSearch').value = '';
         filterSettings();
         const mapping = {...defaultControllerMap,...appSettings.controller_map};
@@ -1170,7 +1276,7 @@
         const label = state === 'installing' ? 'Installing…' : emulator.installed ? 'Add profiles' : state === 'error' ? 'Retry' : 'Install';
         const openButton = emulator.installed ? `<button type="button" class="icon-button" data-open-emulator="${escapeHtml(emulator.app_id)}">Open</button>` : '';
         const updateButton = emulator.installed && emulator.mode === 'flatpak' ? `<button type="button" class="icon-button" data-update-emulator="${escapeHtml(emulator.app_id)}">Update</button>` : '';
-        return `<div class="emulator-item" title="${escapeHtml(emulator.job.error || '')}"><div><strong>${escapeHtml(emulator.name)}</strong><small>${escapeHtml(emulator.platforms.join(' · '))} · ${escapeHtml(state)}</small></div>${openButton}${updateButton}<button type="button" class="icon-button" ${state === 'installing' || (!emulator.installed && !emulator.can_install) ? 'disabled' : ''} data-emulator="${escapeHtml(emulator.app_id)}" data-installed="${emulator.installed}">${label}</button></div>`;
+        return `<div class="emulator-item" title="${escapeHtml(emulator.job.error || '')}"><div><strong>${escapeHtml(emulator.name)}</strong><small>${escapeHtml(emulator.platforms.join(' · '))} · ${escapeHtml(state)}</small></div><div class="emulator-actions">${openButton}${updateButton}<button type="button" class="icon-button" ${state === 'installing' || (!emulator.installed && !emulator.can_install) ? 'disabled' : ''} data-emulator="${escapeHtml(emulator.app_id)}" data-installed="${emulator.installed}">${label}</button></div></div>`;
       }).join('');
       $('installAllEmulators').onclick = async () => {
         try {
@@ -1421,8 +1527,9 @@
       if (values.progress) changes.progress = values.progress === '__clear' ? '' : values.progress;
       if (values.rating !== '') changes.rating = Number(values.rating);
       for (const field of ['favorite','hidden']) if (values[field]) changes[field] = values[field] === 'true';
+      if (values.esrb) changes.esrb = values.esrb;
       try {
-        const result = await api('/api/games/bulk',{method:'POST',body:JSON.stringify({ids:[...selectedIds],changes})});
+        const result = await api('/api/games/bulk-wizard',{method:'POST',body:JSON.stringify({ids:[...selectedIds],changes})});
         $('bulkDialog').close();
         selectedIds.clear();
         bulkMode = false;
@@ -1433,6 +1540,8 @@
     function openBigBox() {
       bigBoxFilter = 'all';
       bigBoxSort = 'title';
+      bigBoxHybridQuery = '';
+      if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').value = '';
       bigBoxGames = filteredBigBoxGames();
       if (!bigBoxGames.length) { notify('No games are available in the current view'); return; }
       bigBoxIndex = Math.max(0,bigBoxGames.findIndex(game => game.id === selectedId));
@@ -1440,7 +1549,18 @@
       gamepadState = {};
       $('bigBox').hidden = false;
       $('bigBox').focus();
+      const startup = $('bigBoxStartupVideo');
+      if (startup && appSettings.bigbox_startup_video) {
+        startup.src = appSettings.bigbox_startup_video;
+        startup.hidden = false;
+        startup.play().catch(() => {});
+      } else if (startup) {
+        startup.hidden = true;
+        startup.pause();
+        startup.removeAttribute('src');
+      }
       renderBigBox();
+      api('/api/bigbox/mode',{method:'POST',body:JSON.stringify({entering:true})}).catch(() => {});
       document.documentElement.requestFullscreen?.().catch(() => {});
       requestAnimationFrame(pollGamepads);
     }
@@ -1448,11 +1568,17 @@
       stopScreenSaver();
       $('bigBoxMenu').hidden = true;
       $('bigBox').hidden = true;
+      if ($('bigBoxStartupVideo')) { $('bigBoxStartupVideo').pause(); $('bigBoxStartupVideo').hidden = true; }
+      api('/api/bigbox/mode',{method:'POST',body:JSON.stringify({entering:false})}).catch(() => {});
       if (document.fullscreenElement) document.exitFullscreen?.();
     }
     function filteredBigBoxGames() {
       let result = filteredGames().filter(game => !game.hide_in_bigbox);
       if (bigBoxPlatform !== 'all') result = result.filter(game => game.platform === bigBoxPlatform);
+      if (bigBoxHybridQuery) {
+        const query = bigBoxHybridQuery.toLowerCase();
+        result = result.filter(game => [game.name,game.sort_title,game.genre,game.developer].join(' ').toLowerCase().includes(query));
+      }
       if (bigBoxFilter === 'favorites') result = result.filter(game => game.favorite);
       if (bigBoxFilter === 'playing') result = result.filter(game => ['Playing','Paused'].includes(game.progress));
       if (bigBoxFilter === 'completed') result = result.filter(game => ['Beaten','Completed','Mastered'].includes(game.progress));
@@ -1503,12 +1629,13 @@
       const game = bigBoxGames[bigBoxIndex];
       if (!game) return;
       $('bigBoxCounter').textContent = `${bigBoxIndex + 1} / ${bigBoxGames.length}`;
-      const battery = navigator.getBattery ? '' : '';
+      const hint = appSettings.controller_prompt_hint || 'A Play · B Back · M Menu';
       navigator.getBattery?.().then(status => {
         if (!$('bigBoxStatus')) return;
-        $('bigBoxStatus').innerHTML = status ? `<strong>${Math.round(status.level * 100)}%</strong> battery · A Play · B Back · M Menu` : '';
-      }).catch(() => {});
+        $('bigBoxStatus').innerHTML = status ? `<strong>${Math.round(status.level * 100)}%</strong> battery · ${escapeHtml(hint)}` : escapeHtml(hint);
+      }).catch(() => { if ($('bigBoxStatus')) $('bigBoxStatus').textContent = hint; });
       const mode = appSettings.bigbox_mode || 'stage';
+      if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').hidden = mode !== 'hybrid';
       const playLabel = appSettings.dynamic_play_button === false ? '▶ PLAY' : game.versions.length ? '▶ PLAY DEFAULT' : game.applications.length ? '▶ PLAY GAME' : '▶ PLAY';
       if (mode === 'hybrid') {
         const platforms = [...new Set(bigBoxGames.map(item => item.platform || 'Unspecified'))].sort();
@@ -1688,10 +1815,75 @@
         if (Object.keys(current).some(edge)) bigBoxLastInput = performance.now();
         gamepadState = current;
       }
-      if ($('screenSaver').hidden && $('bigBoxMenu').hidden && appSettings.screensaver_seconds && performance.now() - bigBoxLastInput >= appSettings.screensaver_seconds * 1000) startScreenSaver();
+      if ($('screenSaver').hidden && $('bigBoxMenu').hidden && (() => {
+        const delay = Number(appSettings.attract_mode_seconds ?? appSettings.screensaver_seconds ?? 0);
+        return delay && performance.now() - bigBoxLastInput >= delay * 1000;
+      })()) startScreenSaver();
       requestAnimationFrame(pollGamepads);
     }
     $('sidebarSearch').oninput = () => { activePlaylist = ''; render(); }; $('view').onchange = () => { activePlaylist = ''; render(); }; $('sort').onchange = renderGrid;
+    if ($('esrbFilter')) $('esrbFilter').onchange = render;
+    $('viewToggleButton').onclick = () => {
+      appSettings.library_view = (appSettings.library_view || 'grid') === 'list' ? 'grid' : 'list';
+      if ($('libraryViewSetting')) $('libraryViewSetting').value = appSettings.library_view;
+      applyLocaleStrings();
+      renderGrid();
+    };
+    async function importDroppedFolder(folder) {
+      try {
+        const preview = await api('/api/import',{method:'POST',body:JSON.stringify({folder,recommend:true})});
+        const chosen = {};
+        for (const [platformName, items] of Object.entries(preview.recommendations || {})) {
+          if (!items?.length) continue;
+          if (items.length === 1) { chosen[platformName] = items[0].app_id; continue; }
+          const labels = items.map((item,index) => `${index + 1}. ${item.name}`).join('\n');
+          const pick = prompt(`Multiple emulators for ${platformName}:\n${labels}\nEnter number to install, or leave blank to skip`, '1');
+          const index = Number(pick) - 1;
+          if (pick && items[index]) chosen[platformName] = items[index].app_id;
+        }
+        const result = Object.keys(chosen).length
+          ? await api('/api/import/wizard',{method:'POST',body:JSON.stringify({folder,chosen_emulators:chosen})})
+          : preview;
+        await refresh();
+        notify(`${result.added} games imported${result.installed?.length ? ` · installed ${result.installed.length} emulator(s)` : ''}`);
+      } catch(error) { notify(error.message); }
+    }
+    if ($('dropZone')) {
+      ['dragenter','dragover'].forEach(name => $('dropZone').addEventListener(name, event => { event.preventDefault(); $('dropZone').classList.add('active'); }));
+      $('dropZone').addEventListener('dragleave', () => $('dropZone').classList.remove('active'));
+      $('dropZone').addEventListener('drop', event => {
+        event.preventDefault();
+        $('dropZone').classList.remove('active');
+        const names = [...event.dataTransfer.items].map(item => item.getAsFile?.()?.name).filter(Boolean);
+        const hint = names.length ? `\n\nDropped: ${names.slice(0, 3).join(', ')}` : '';
+        const folder = prompt(`Enter the absolute path of the folder to import.${hint}`);
+        if (folder) importDroppedFolder(folder.trim());
+      });
+      $('dropZone').onclick = () => importFolder();
+    }
+    if ($('bigBoxHybridSearch')) {
+      $('bigBoxHybridSearch').oninput = () => {
+        bigBoxHybridQuery = $('bigBoxHybridSearch').value.trim();
+        bigBoxIndex = 0;
+        bigBoxGames = filteredBigBoxGames();
+        renderBigBox();
+      };
+    }
+    if ($('applyMediaPack')) $('applyMediaPack').onclick = async () => {
+      try {
+        const catalog = await api('/api/premium/media-packs');
+        const packs = catalog.packs || [];
+        if (!packs.length) return notify('No bundled media packs are available');
+        const labels = packs.map((pack,index) => `${index + 1}. ${pack.name}${pack.active ? ' (active)' : ''}`).join('\n');
+        const pick = prompt(`Choose a bundled media pack:\n${labels}`, '1');
+        const pack = packs[Number(pick) - 1];
+        if (!pack) return;
+        const result = await api('/api/premium/media-packs/apply',{method:'POST',body:JSON.stringify({id:pack.id})});
+        appSettings = result.settings || appSettings;
+        $('mediaPackStatus').textContent = (appSettings.media_packs || []).filter(item => item.active).map(item => item.name).join(', ');
+        notify(`Applied ${pack.name}`);
+      } catch(error) { notify(error.message); }
+    };
     $('libraryButton').onclick = () => { activePlaylist = ''; platform = 'all'; $('view').value = 'all'; $('sidebarSearch').value = ''; selectedId = null; render(); loadTheme(); };
     $('discoveryButton').onclick = openDiscovery;
     $('storefrontButton').onclick = openStorefronts;
@@ -1792,6 +1984,32 @@
       if (event.key.toLowerCase() === 'f') favoriteBigBox();
       if (event.key === 'Escape' || event.key === 'Backspace') closeBigBox();
     };
+    document.addEventListener('mousedown', event => {
+      document.querySelectorAll('dialog[open]').forEach(dialog => {
+        const rect = dialog.getBoundingClientRect();
+        const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+        if (!inside) dialog.close();
+      });
+      [
+        [$('bigBoxMenu'), '.bigbox-menu-panel', closeBigBoxMenu],
+        [$('bigBoxPause'), '.bigbox-pause-panel', () => { $('bigBoxPause').hidden = true; }],
+      ].forEach(([overlay, panelSelector, close]) => {
+        if (!overlay || overlay.hidden) return;
+        if (event.target.closest(panelSelector)) return;
+        if (overlay.contains(event.target)) close();
+      });
+    });
+    document.querySelectorAll('dialog').forEach(dialog => {
+      dialog.setAttribute('closedby', 'any');
+      dialog.addEventListener('close', () => {
+        if (dialog.id === 'readerDialog') {
+          $('readerFrame').removeAttribute('src');
+          readerUrl = '';
+          readerPage = 1;
+        }
+        if (dialog.id === 'mediaDialog') $('fullScreenshot').removeAttribute('src');
+      });
+    });
     Promise.all([refresh(),loadTheme()]).then(async () => { pollSessions(); maybeShowWelcome(); await runStartupStorefrontImports().catch(() => {}); }).catch(error => notify(error.message));
   </script>
 </body>

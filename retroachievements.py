@@ -75,16 +75,12 @@ def save_credentials(directory, username, api_key, fetch=api_get):
 
 
 def rom_data(path):
-    if path.suffix.casefold() != ".zip":
-        return path.read_bytes()
-    with zipfile.ZipFile(path) as archive:
-        files = [
-            info for info in archive.infolist()
-            if not info.is_dir() and Path(info.filename).suffix.casefold() not in {".txt", ".nfo", ".jpg", ".png"}
-        ]
-        if not files:
-            raise ValueError("The ROM archive contains no hashable game file.")
-        return archive.read(max(files, key=lambda info: info.file_size))
+    from parity_premium import archive_rom_bytes
+
+    path = Path(path)
+    if path.suffix.casefold() in {".zip", ".7z"}:
+        return archive_rom_bytes(path)
+    return path.read_bytes()
 
 
 def game_hash(game):

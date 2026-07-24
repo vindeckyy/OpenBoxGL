@@ -29,7 +29,7 @@ from cloud_sync import sync_statistics
 from emulators import emulator_status, install_all_emulators, install_emulator, launch_emulator, recommendations_for_platform, update_all_emulators, update_emulator
 from importers import import_heroic, import_lutris, import_steam
 from metadata import apply_game_metadata, search_games, sync_database
-from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, build_launch, discover_profiles, load_state, save_state
+from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, build_launch, discover_profiles, load_state, purge_demo_games, save_state
 from env_config import bootstrap_env
 from parity_discovery import discovery_lists, related_with_reasons
 from parity_import import detect_dependencies, import_multi_platform, import_rpcs3_hdd, import_scummvm, import_vita3k, recommend_emulators
@@ -45,6 +45,24 @@ from parity_media import (
 )
 from parity_saves import enforce_backup_limit, extra_save_candidates, games_with_saves, scan_all_saves
 from parity_storefront import catalog_entries_to_games, storefront_catalog
+from parity_premium import (
+    BULK_WIZARD_FIELDS,
+    LIST_COLUMNS_DEFAULT,
+    apply_media_pack,
+    bulk_wizard_changes,
+    category_for_platform,
+    custom_field_defs,
+    download_gog_media,
+    download_steam_trailer,
+    enhanced_ra_profile,
+    import_loose_arcade,
+    import_with_emulator_choice,
+    import_xbox360_folder,
+    list_media_packs,
+    normalize_custom_fields,
+    platform_categories,
+    strings_for,
+)
 from plugin_catalog import download_plugin_package, fetch_plugin_catalog
 from plugins import install_plugin, list_plugins, remove_plugin, run_plugins, set_plugin_enabled
 from retroachievements import api_get as ra_api_get, game_progress as ra_game_progress, load_credentials as load_ra_credentials, match_game as match_ra_game, save_credentials as save_ra_credentials
@@ -71,7 +89,7 @@ FIELDS = {
     "heroic_app_id", "rom_name", "clone_of", "set_type", "ra_game_id", "ra_hash", "launchbox_db_id", "archive_member", "video", "music",
     "video_snap", "video_theme", "video_trailer", "video_recording",
     "progress", "rating", "notes", "region", "play_mode", "sort_title", "added_at",
-    "alternate_names", "max_players", "wikipedia_url", "video_url", "hide_in_bigbox",
+    "alternate_names", "max_players", "wikipedia_url", "video_url", "hide_in_bigbox", "esrb",
 }
 
 
@@ -87,17 +105,27 @@ def game_identity(game):
     return "path", str(Path(game.get("path", "")).expanduser())
 
 
-def import_folder_path(folder, recommend=True):
+def import_folder_path(folder, recommend=True, chosen_emulators=None):
     folder = Path(folder).expanduser()
     if not folder.is_dir():
         raise ValueError(f"Folder does not exist: {folder}")
-    candidates = import_multi_platform(folder, EXTENSIONS, PLATFORM_BY_EXTENSION)
+    if chosen_emulators:
+        candidates, recommendations = import_with_emulator_choice(
+            folder, EXTENSIONS, PLATFORM_BY_EXTENSION, chosen_emulators
+        )
+    else:
+        candidates = import_multi_platform(folder, EXTENSIONS, PLATFORM_BY_EXTENSION)
+        recommendations = {}
+        for item in candidates:
+            platform = item.get("platform", "")
+            recommendations.setdefault(platform, recommend_emulators(platform))
     with STATE_LOCK:
         state = load_state()
         existing = {game.get("path") for game in state["games"]}
         settings = state.get("settings", {})
         additions = []
-        recommendations = {}
+        if not recommend:
+            recommendations = {}
         for item in candidates:
             if item["path"] in existing:
                 continue
@@ -229,6 +257,20 @@ def public_settings(state=None):
         "obs_recording_path": settings.get("obs_recording_path", ""),
         "dynamic_play_button": settings.get("dynamic_play_button", True),
         "platform_documents": settings.get("platform_documents", {}),
+        "custom_field_defs": custom_field_defs(settings),
+        "platform_categories": platform_categories(settings),
+        "list_columns": settings.get("list_columns", list(LIST_COLUMNS_DEFAULT)),
+        "library_view": settings.get("library_view", "grid"),
+        "locale": settings.get("locale", "en"),
+        "strings": strings_for(settings.get("locale", "en")),
+        "attract_mode_seconds": settings.get("attract_mode_seconds", settings.get("screensaver_seconds", 90)),
+        "bigbox_startup_video": settings.get("bigbox_startup_video", ""),
+        "bigbox_shutdown_commands": settings.get("bigbox_shutdown_commands", []),
+        "tray_enabled": settings.get("tray_enabled", False),
+        "minimize_to_tray": settings.get("minimize_to_tray", False),
+        "media_packs": list_media_packs(settings),
+        "controller_prompt_hint": settings.get("controller_prompt_hint", ""),
+        "premium_features_free": True,
         "emumovies_configured": bool(load_emumovies_credentials(DATA.parent).get("username")),
         "version": VERSION,
         "appimage": bool(os.environ.get("APPIMAGE")),
@@ -271,6 +313,9 @@ def public_state():
                 index for index, path in enumerate(game.get("screenshots", []))
                 if Path(path).is_file()
             ],
+            "esrb": game.get("esrb", ""),
+            "custom_fields": game.get("custom_fields", {}) if isinstance(game.get("custom_fields"), dict) else {},
+            "platform_category": category_for_platform(game.get("platform", ""), state.get("settings", {})),
         })
         games.append(visible)
     decorated = run_plugins(DATA.parent / "plugins", "library", {"games": games}).get("games", games)
@@ -900,6 +945,16 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.send_json(200, {"catalog": fetch_plugin_catalog()})
             return
+        if parsed.path == "/api/premium/strings":
+            locale = parse_qs(parsed.query).get("locale", ["en"])[0]
+            self.send_json(200, {"locale": locale, "strings": strings_for(locale)})
+            return
+        if parsed.path == "/api/premium/media-packs":
+            self.send_json(200, {"packs": list_media_packs(load_state().get("settings", {}))})
+            return
+        if parsed.path == "/api/premium/platform-categories":
+            self.send_json(200, {"categories": platform_categories(load_state().get("settings", {}))})
+            return
         self.send_json(404, {"error": "Not found"})
 
     def do_POST(self):
@@ -921,8 +976,24 @@ class Handler(BaseHTTPRequestHandler):
                 self.delete_game(payload)
             elif route == "/api/games/bulk":
                 self.bulk_edit(payload)
+            elif route == "/api/games/bulk-wizard":
+                self.bulk_wizard(payload)
+            elif route == "/api/premium/media-packs/apply":
+                self.apply_media_pack_route(payload)
+            elif route == "/api/metadata/trailer":
+                self.download_trailer(payload)
+            elif route == "/api/metadata/gog":
+                self.download_gog_route(payload)
+            elif route == "/api/bigbox/mode":
+                self.bigbox_mode_switch(payload)
             elif route == "/api/import":
                 self.import_folder(payload)
+            elif route == "/api/import/wizard":
+                self.import_wizard(payload)
+            elif route == "/api/import/xbox360":
+                self.import_xbox360(payload)
+            elif route == "/api/import/loose-arcade":
+                self.import_loose_arcade_route(payload)
             elif route == "/api/import/watch":
                 self.scan_watch_folders()
             elif route == "/api/import/steam":
@@ -1083,6 +1154,17 @@ class Handler(BaseHTTPRequestHandler):
                 game["alternate_names"] = [str(name).strip() for name in names if str(name).strip()][:20]
         normalize_video_fields(game)
         game["hide_in_bigbox"] = bool(source.get("hide_in_bigbox"))
+        esrb = str(source.get("esrb", game.get("esrb", ""))).strip()
+        if esrb:
+            game["esrb"] = esrb
+        defs = custom_field_defs(load_state().get("settings", {}))
+        if "custom_fields" in source and isinstance(source.get("custom_fields"), dict):
+            game["custom_fields"] = {
+                str(key).strip(): str(value).strip()
+                for key, value in source["custom_fields"].items()
+                if str(key).strip()
+            }
+            normalize_custom_fields(game, defs)
         if not game.get("name"):
             raise ValueError("Name is required.")
         if not game.get("path") or not Path(game["path"]).exists():
@@ -1139,8 +1221,38 @@ class Handler(BaseHTTPRequestHandler):
         return clean
 
     def import_folder(self, payload):
-        added, found, recommendations = import_folder_path(str(payload.get("folder", "")))
+        added, found, recommendations = import_folder_path(
+            str(payload.get("folder", "")),
+            chosen_emulators=payload.get("chosen_emulators"),
+        )
         self.send_json(200, {"added": added, "found": found, "recommendations": recommendations})
+
+    def import_wizard(self, payload):
+        folder = str(payload.get("folder", "")).strip()
+        chosen = payload.get("chosen_emulators", {})
+        if not isinstance(chosen, dict):
+            raise ValueError("chosen_emulators must be an object.")
+        added, found, recommendations = import_folder_path(folder, chosen_emulators=chosen)
+        installs = []
+        for platform, app_id in chosen.items():
+            if not app_id:
+                continue
+            try:
+                install_emulator(str(app_id))
+                installs.append(str(app_id))
+            except (OSError, ValueError):
+                pass
+        self.send_json(200, {"added": added, "found": found, "recommendations": recommendations, "installed": installs})
+
+    def import_xbox360(self, payload):
+        imported = import_xbox360_folder(str(payload.get("folder", "")), str(payload.get("command", "")))
+        added, found = merge_imported_games(imported, lambda game: ("path", game.get("path", "")))
+        self.send_json(200, {"added": added, "found": found})
+
+    def import_loose_arcade_route(self, payload):
+        imported = import_loose_arcade(str(payload.get("folder", "")), str(payload.get("command", "")))
+        added, found = merge_imported_games(imported, lambda game: ("path", game.get("path", "")))
+        self.send_json(200, {"added": added, "found": found})
 
     def scan_watch_folders(self):
         folders = load_state().get("settings", {}).get("watch_folders", [])
@@ -1447,6 +1559,16 @@ class Handler(BaseHTTPRequestHandler):
                 "obs_auto_attach": obs_auto_attach,
                 "obs_recording_path": obs_recording_path,
                 "dynamic_play_button": bool(payload.get("dynamic_play_button", True)),
+                "custom_field_defs": custom_field_defs({"custom_field_defs": payload.get("custom_field_defs", settings.get("custom_field_defs", []))}),
+                "platform_categories": platform_categories({"platform_categories": payload.get("platform_categories", settings.get("platform_categories", {}))}),
+                "list_columns": [str(item) for item in payload.get("list_columns", settings.get("list_columns", list(LIST_COLUMNS_DEFAULT)))][:12],
+                "library_view": str(payload.get("library_view", settings.get("library_view", "grid"))),
+                "locale": str(payload.get("locale", settings.get("locale", "en")))[:5],
+                "attract_mode_seconds": int(payload.get("attract_mode_seconds", settings.get("attract_mode_seconds", seconds or 90))),
+                "bigbox_startup_video": str(payload.get("bigbox_startup_video", settings.get("bigbox_startup_video", ""))).strip(),
+                "bigbox_shutdown_commands": clean_commands(payload.get("bigbox_shutdown_commands", settings.get("bigbox_shutdown_commands", []))),
+                "tray_enabled": bool(payload.get("tray_enabled", settings.get("tray_enabled", False))),
+                "minimize_to_tray": bool(payload.get("minimize_to_tray", settings.get("minimize_to_tray", False))),
             })
             save_state(state)
         self.send_json(200, public_settings(state))
@@ -1558,7 +1680,54 @@ class Handler(BaseHTTPRequestHandler):
             save_state(state)
         progress = ra_game_progress(game_id, credentials)
         progress["game_id"] = game_id
+        progress = enhanced_ra_profile(progress, credentials)
         self.send_json(200, progress)
+
+    def bulk_wizard(self, payload):
+        changes = bulk_wizard_changes(payload.get("changes", {}))
+        with STATE_LOCK:
+            state = load_state()
+            changed = bulk_update(state["games"], payload.get("ids"), changes)
+            save_state(state)
+        self.send_json(200, {"updated": changed, "fields": list(changes.keys())})
+
+    def apply_media_pack_route(self, payload):
+        pack_id = str(payload.get("id", "")).strip()
+        with STATE_LOCK:
+            state = load_state()
+            pack = apply_media_pack(state, pack_id)
+            save_state(state)
+        self.send_json(200, {"pack": pack, "settings": public_settings(state)})
+
+    def download_trailer(self, payload):
+        index = int(payload["id"])
+        with STATE_LOCK:
+            state = load_state()
+            game = state["games"][index]
+            path = download_steam_trailer(game, DATA.parent / "media")
+            save_state(state)
+        self.send_json(200, {"video_trailer": path})
+
+    def download_gog_route(self, payload):
+        index = int(payload["id"])
+        with STATE_LOCK:
+            state = load_state()
+            game = state["games"][index]
+            download_gog_media(game, DATA.parent / "media")
+            save_state(state)
+        self.send_json(200, {"cover": game.get("cover", ""), "background": game.get("background", "")})
+
+    def bigbox_mode_switch(self, payload):
+        entering = bool(payload.get("entering"))
+        key = "bigbox_shutdown_commands" if entering else "shutdown_commands"
+        for command in load_state().get("settings", {}).get(key, []):
+            try:
+                args = shlex.split(str(command))
+                args[0] = str(Path(args[0]).expanduser())
+                subprocess.Popen(args, start_new_session=True)
+            except (OSError, ValueError, IndexError):
+                pass
+        self.send_json(200, {"ok": True})
 
     def install_plugin(self, payload):
         manifest = install_plugin(str(payload.get("path", "")), DATA.parent / "plugins")
@@ -1936,6 +2105,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     bootstrap_env(DATA.parent)
+    with STATE_LOCK:
+        state = load_state()
+        if purge_demo_games(state):
+            save_state(state)
     WATCH_STOP.clear()
     threading.Thread(target=auto_import_worker, daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
