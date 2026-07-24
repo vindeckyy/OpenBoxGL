@@ -7,5 +7,5 @@
   <project_license>AGPL-3.0-only</project_license>
   <description><p>Browse, organize, enrich, and launch local games and ROMs on Linux.</p></description>
   <launchable type="desktop-id">openbox.desktop</launchable>
-  <releases><release version="0.1.0" date="2026-07-23"/></releases>
+  <releases><release version="0.2.0" date="2026-07-24"><description><p>LaunchBox-depth parity release: storefront catalogs, Big Box polish, integrations, and Linux-first equivalents for remaining premium workflows.</p></description></release><release version="0.1.0" date="2026-07-23"/></releases>
 </component>

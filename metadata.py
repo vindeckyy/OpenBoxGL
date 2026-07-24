@@ -122,7 +122,9 @@ def download_image(filename, destination, opener=urlopen):
     return str(destination)
 
 
-def apply_game_metadata(game, database_path, database_id, media_types, media_root, overwrite=False, opener=urlopen):
+def apply_game_metadata(game, database_path, database_id, media_types, media_root, overwrite=False, opener=urlopen, region_priority=None):
+    from parity_media import REGION_PRIORITY_DEFAULT, sort_images_by_region
+
     database = sqlite3.connect(database_path)
     database.row_factory = sqlite3.Row
     record = database.execute("SELECT * FROM games WHERE database_id = ?", (int(database_id),)).fetchone()
@@ -131,18 +133,19 @@ def apply_game_metadata(game, database_path, database_id, media_types, media_roo
         raise ValueError("Metadata game not found.")
     record = dict(record)
     fields = {
-        "name":"name", "platform":"platform", "year":"release_date", "developer":"developer",
-        "publisher":"publisher", "genre":"genre", "description":"overview", "series":"series",
+        "name": "name", "platform": "platform", "year": "release_date", "developer": "developer",
+        "publisher": "publisher", "genre": "genre", "description": "overview", "series": "series",
     }
     for target, source in fields.items():
         if record[source] and (overwrite or not game.get(target)):
             game[target] = record[source]
+    if record.get("max_players") and (overwrite or not game.get("max_players")):
+        game["max_players"] = record["max_players"]
     game["launchbox_db_id"] = str(database_id)
-    images = [dict(row) for row in database.execute(
-        """SELECT * FROM images WHERE database_id = ?
-           ORDER BY CASE region WHEN 'North America' THEN 0 WHEN 'World' THEN 1 ELSE 2 END, filename""",
-        (int(database_id),),
-    )]
+    images = sort_images_by_region(
+        [dict(row) for row in database.execute("SELECT * FROM images WHERE database_id = ?", (int(database_id),))],
+        region_priority or REGION_PRIORITY_DEFAULT,
+    )
     database.close()
     root = Path(media_root) / str(database_id)
     if "cover" in media_types and (overwrite or not game.get("cover")):

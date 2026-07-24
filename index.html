@@ -158,6 +158,48 @@
     .screensaver-copy { position:relative; z-index:2; }
     .screensaver-copy h2 { max-width:70vw; margin:4px 0; font-size:clamp(44px,8vw,110px); line-height:.9; text-transform:uppercase; }
     .screensaver-copy p { color:#c4ccda; font-size:18px; }
+    .arrange-wrap { display:grid; grid-template-columns:1fr 18px; gap:8px; align-items:stretch; }
+    .arrange-bar { position:relative; border-radius:4px; background:#1a1f2d; border:1px solid #30374a; cursor:pointer; }
+    .arrange-marker { position:absolute; left:2px; right:2px; height:2px; background:#35a9d5; border-radius:2px; }
+    .arrange-marker span { position:absolute; right:20px; transform:translateY(-50%); padding:1px 4px; border-radius:3px; background:#242a3a; color:#9aa3b6; font-size:8px; white-space:nowrap; opacity:0; pointer-events:none; }
+    .arrange-bar:hover .arrange-marker span { opacity:1; }
+    .settings-search { margin-bottom:10px; }
+    .settings-field[hidden] { display:none !important; }
+    .shutdown-overlay { position:fixed; z-index:40; inset:0; display:grid; place-items:center; background:#05070bcc; }
+    .shutdown-overlay[hidden] { display:none; }
+    .shutdown-panel { width:min(420px,92vw); padding:18px; border:1px solid #30374a; border-radius:10px; background:#171b29; }
+    .shutdown-panel h2 { margin:0 0 8px; font-size:16px; }
+    .shutdown-panel p { margin:0 0 12px; color:#9aa3b6; font-size:11px; }
+    .history-list { max-height:50vh; overflow:auto; display:grid; gap:6px; }
+    .history-item { padding:8px 10px; border:1px solid #30374a; border-radius:6px; background:#1c2131; font-size:10px; }
+    .welcome-steps { display:grid; gap:10px; }
+    .welcome-steps button { justify-self:start; }
+    .reader-toolbar { display:flex; flex-wrap:wrap; gap:6px; padding:0 16px 10px; border-bottom:1px solid #30364a; }
+    .discovery-grid { display:grid; gap:12px; max-height:55vh; overflow:auto; }
+    .discovery-section h3 { margin:0 0 6px; color:#8e9ab1; font-size:10px; text-transform:uppercase; letter-spacing:.08em; }
+    .discovery-row { display:flex; flex-wrap:wrap; gap:6px; }
+    .bigbox-hybrid { grid-template-columns:220px 1fr; gap:28px; }
+    .bigbox-platforms { display:grid; gap:4px; max-height:58vh; overflow:auto; padding-right:6px; }
+    .bigbox-platform { width:100%; border:1px solid #30374a; border-radius:6px; padding:8px 10px; text-align:left; color:#c4c9d5; background:#1c2131; }
+    .bigbox-platform.active { border-color:#45c4ef; box-shadow:0 0 0 1px #28b9e544; color:#fff; }
+    .coverflow-strip { display:flex; gap:14px; overflow:auto; padding:10px 0 18px; scroll-snap-type:x mandatory; }
+    .coverflow-card { flex:0 0 min(18vw,170px); scroll-snap-align:center; border:1px solid #3b4256; border-radius:8px; overflow:visible; background:#1d263a; transform:perspective(900px) rotateY(-8deg); transition:.15s ease; position:relative; }
+    .coverflow-card.jewel-case::before { content:''; position:absolute; left:-10px; top:4%; width:10px; height:92%; background:linear-gradient(180deg,#566078,#2a3144); transform:rotateY(78deg); transform-origin:right center; border-radius:2px 0 0 2px; box-shadow:inset 0 0 0 1px #667089; }
+    .coverflow-card.jewel-case::after { content:''; position:absolute; inset:0; border-radius:8px; box-shadow:inset 0 0 0 1px #ffffff18, 0 12px 24px #0006; pointer-events:none; }
+    .coverflow-card.active { transform:perspective(900px) rotateY(0deg) scale(1.04); border-color:#45c4ef; box-shadow:0 0 0 2px #28b9e544; }
+    .coverflow-card img { width:100%; aspect-ratio:.72; object-fit:cover; display:block; border-radius:8px; }
+    .reader-viewport { overflow:hidden; height:calc(92vh - 92px); background:#fff; }
+    .reader-viewport.spread iframe { width:200%; max-width:none; }
+    .reader-viewport iframe { width:100%; height:100%; border:0; background:#fff; }
+    .platform-panel { padding:16px; }
+    .storefront-catalog { max-height:40vh; overflow:auto; display:grid; gap:6px; }
+    .storefront-row { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:8px 10px; border:1px solid #30374a; border-radius:6px; background:#1c2131; font-size:11px; }
+    .bigbox-pause { position:fixed; z-index:36; inset:0; display:grid; place-items:center; background:#05070bd9; cursor:auto; }
+    .bigbox-pause[hidden] { display:none; }
+    .bigbox-pause-panel { width:min(760px,92vw); padding:24px; border:1px solid #45516b; border-radius:12px; background:#171d2c; box-shadow:0 30px 90px #000; }
+    .bigbox-pause-panel h2 { margin:0 0 12px; font-size:28px; }
+    .bigbox-status { margin-left:16px; color:#7f899f; font-size:11px; }
+    .bigbox-status strong { color:#43bce5; }
     @media(max-width:1100px) { .workspace { grid-template-columns:150px 1fr 340px; } .grid { grid-template-columns:repeat(auto-fill,minmax(105px,1fr)); } }
   </style>
   <link id="themeStylesheet" rel="stylesheet">
@@ -176,10 +218,13 @@
     <button class="menu-button" id="settingsButton">Settings</button>
     <button class="menu-button" id="bigBoxButton">Big Box</button>
     <button class="menu-button" id="sessionsButton">Running</button>
+    <button class="menu-button" id="historyButton">History</button>
     <button class="menu-button" id="themesButton">Themes</button>
     <button class="menu-button" id="saveFilterButton">Save Filter</button>
     <button class="menu-button" id="achievementsButton">Achievements</button>
     <button class="menu-button" id="pluginsButton">Plugins</button>
+    <button class="menu-button" id="discoveryButton">Discovery</button>
+    <button class="menu-button" id="storefrontButton">Storefronts</button>
     <button class="menu-button" id="mediaButton">Media</button>
     <button class="menu-button" id="healthButton">Health</button>
     <button class="menu-button" id="bulkButton">Bulk Edit</button>
@@ -190,22 +235,25 @@
 
   <div class="workspace">
     <aside class="sidebar">
-      <label class="field"><span>Search</span><input id="sidebarSearch" type="search" aria-label="Search library"></label>
-      <label class="field"><span>View</span><select id="view"><option value="all">All games</option><option value="favorites">Favorites</option><option value="recent">Recently played</option><option value="never">Never played</option><option value="playing">In progress</option><option value="completed">Completed</option><option value="hidden">Hidden</option><option value="missing">Missing files</option></select></label>
-      <div class="section-title">Platforms</div>
-      <nav class="platforms" id="platforms"></nav>
-      <div class="section-title">Playlists</div>
-      <nav class="platforms" id="playlists"></nav>
+      <label class="field" data-sidebar-section="search"><span>Search</span><input id="sidebarSearch" type="search" aria-label="Search library"></label>
+      <label class="field" data-sidebar-section="view"><span>View</span><select id="view"><option value="all">All games</option><option value="favorites">Favorites</option><option value="recent">Recently played</option><option value="never">Never played</option><option value="playing">In progress</option><option value="completed">Completed</option><option value="saves">Has saves</option><option value="hidden">Hidden</option><option value="missing">Missing files</option></select></label>
+      <div class="section-title" data-sidebar-section="platforms">Platforms</div>
+      <nav class="platforms" id="platforms" data-sidebar-section="platforms"></nav>
+      <div class="section-title" data-sidebar-section="playlists">Playlists</div>
+      <nav class="platforms" id="playlists" data-sidebar-section="playlists"></nav>
     </aside>
 
     <main class="library">
       <div class="library-head">
         <div><h1 id="libraryTitle">All Games</h1><p id="libraryMeta">0 games</p></div>
-        <select class="search" id="sort" aria-label="Sort games"><option value="title">Title</option><option value="rating">Rating</option><option value="recent">Recently played</option><option value="playtime">Play time</option><option value="added">Date added</option></select>
+        <select class="search" id="sort" aria-label="Sort games"><option value="title">Title</option><option value="rating">Rating</option><option value="recent">Recently played</option><option value="playtime">Play time</option><option value="added">Date added</option><option value="platform">Platform</option><option value="genre">Genre</option></select>
         <select class="search" id="imageGroup" aria-label="Image group"><option value="default">Use default</option><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option></select>
         <button class="icon-button" id="surpriseButton">Surprise me</button>
       </div>
-      <section class="grid" id="grid"></section>
+      <div class="arrange-wrap">
+        <section class="grid" id="grid"></section>
+        <div class="arrange-bar" id="arrangeBar" hidden title="Jump through the current view"></div>
+      </div>
     </main>
 
     <aside class="details" id="details"><div class="detail-empty">Select a game to inspect its real metadata and artwork.</div></aside>
@@ -227,6 +275,14 @@
         <label class="field"><span>Sort title</span><input name="sort_title"></label>
         <label class="field"><span>Progress</span><select name="progress"><option value="">Not set</option><option>Playing</option><option>Paused</option><option>Beaten</option><option>Completed</option><option>Mastered</option><option>Abandoned</option></select></label>
         <label class="field"><span>Rating, 0 to 5</span><input name="rating" type="number" min="0" max="5" step="0.5"></label>
+        <label class="field"><span>Max players</span><input name="max_players"></label>
+        <label class="field"><span>Wikipedia URL</span><input name="wikipedia_url"></label>
+        <label class="field"><span>Video URL</span><input name="video_url"></label>
+        <label class="field wide"><span>Alternate names, semicolon separated</span><input name="alternate_names"></label>
+        <label class="field wide"><span>Video snap path</span><input name="video_snap"></label>
+        <label class="field wide"><span>Theme video path</span><input name="video_theme"></label>
+        <label class="field wide"><span>Trailer path</span><input name="video_trailer"></label>
+        <label class="field wide"><span>Recording path</span><input name="video_recording"></label>
         <label class="field wide"><span>Game or ROM path</span><input name="path" required></label>
         <label class="field wide"><span>Cover image path</span><input name="cover"></label>
         <label class="field wide"><span>Background image path</span><input name="background"></label>
@@ -236,6 +292,7 @@
         <label class="field wide"><span>RetroAchievements Game ID, optional manual match</span><input name="ra_game_id" inputmode="numeric"></label>
         <label class="field wide"><span>Launch command</span><input name="launch"></label>
         <label class="check"><input type="checkbox" name="extract_archive">Extract archive before launch</label>
+        <label class="check"><input type="checkbox" name="hide_in_bigbox"> Hide in Big Box</label>
         <label class="check"><input type="checkbox" name="hidden">Hide from normal views</label>
         <label class="field"><span>Archive member</span><input name="archive_member"></label>
         <label class="field wide"><span>Additional applications, one per line: Name | Path | Command</span><textarea name="applications"></textarea></label>
@@ -266,6 +323,7 @@
         <label class="field wide"><span>Apply to</span><select id="themeScope"><option value="">All platforms</option></select></label>
         <label class="field wide"><span>Active theme</span><select id="themeSelect"><option value="">Default</option></select></label>
         <button type="button" class="icon-button" id="importTheme">Import CSS theme</button>
+        <button type="button" class="icon-button" id="openThemeFolder">Open themes folder</button>
       </div>
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelThemes">Cancel</button><button class="primary">Apply</button></div>
     </form>
@@ -277,6 +335,7 @@
         <label class="field"><span>Username</span><input id="raUsername" required></label>
         <label class="field"><span>Web API key</span><input id="raApiKey" type="password" autocomplete="off"></label>
         <div class="wide description" id="raProfile">Get your web API key from your RetroAchievements settings.</div>
+        <button type="button" class="icon-button" id="injectRa">Inject credentials into emulators</button>
       </div>
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelAchievements">Cancel</button><button class="primary">Connect account</button></div>
     </form>
@@ -286,6 +345,7 @@
     <div class="form-grid">
       <div class="wide description">Plugins are trusted local Python code. Install only packages you trust.</div>
       <div class="wide emulator-list" id="pluginList"></div>
+      <button type="button" class="icon-button" id="browsePluginCatalog">Browse community catalog</button>
       <button type="button" class="icon-button" id="installPlugin">Install or update package</button>
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="donePlugins">Done</button></div>
@@ -314,6 +374,8 @@
       <label class="check"><input type="checkbox" id="bulkScreenshots" checked> Screenshots</label>
       <label class="check"><input type="checkbox" id="bulkOverwrite"> Replace existing media</label>
       <button type="button" class="primary" id="startBulkMedia">Download for matched games</button>
+      <button type="button" class="icon-button" id="cleanupMedia">Find duplicate media</button>
+      <button type="button" class="icon-button" id="applyCleanupMedia" hidden>Delete duplicate media</button>
       <div class="wide description" id="bulkMediaStatus"></div>
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneMediaManager">Done</button></div>
@@ -323,6 +385,7 @@
     <div class="form-grid">
       <div class="wide detail-card" id="healthSummary"></div>
       <div class="wide metadata-results" id="healthIssues"></div>
+      <button type="button" class="icon-button" id="scanAllSaves">Scan library for saves</button>
       <button type="button" class="icon-button" id="dedupeButton">Remove duplicate entries</button>
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneHealth">Done</button></div>
@@ -347,37 +410,106 @@
     <div class="form-grid"><div class="wide emulator-list" id="sessionList"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneSessions">Done</button></div>
   </dialog>
+  <dialog id="historyDialog">
+    <div class="dialog-head"><h2>Play Session History</h2><button type="button" id="closeHistory">×</button></div>
+    <div class="form-grid"><div class="wide history-list" id="historyList"></div></div>
+    <div class="dialog-actions"><button type="button" class="primary" id="doneHistory">Done</button></div>
+  </dialog>
+  <dialog id="welcomeDialog">
+    <div class="dialog-head"><h2>Welcome to OpenBox</h2><button type="button" id="closeWelcome">×</button></div>
+    <div class="form-grid welcome-steps">
+      <p class="wide description">Set up your library in a few quick steps. You can reopen this wizard from Settings.</p>
+      <button type="button" class="primary" id="welcomeImportFolder">Import a ROM or game folder</button>
+      <button type="button" class="icon-button" id="welcomeImportSteam">Import Steam games</button>
+      <button type="button" class="icon-button" id="welcomeSyncMetadata">Sync LaunchBox metadata database</button>
+      <button type="button" class="icon-button" id="welcomeOpenSettings">Configure watched folders and startup apps</button>
+      <button type="button" class="primary" id="welcomeDone">Finish setup</button>
+    </div>
+  </dialog>
+  <div class="shutdown-overlay" id="shutdownOverlay" hidden>
+    <div class="shutdown-panel">
+      <h2>Shutting down OpenBox</h2>
+      <p id="shutdownMessage">Closing running games and startup applications…</p>
+      <div class="dialog-actions"><button type="button" class="icon-button" id="forceShutdown">Force close</button></div>
+    </div>
+  </div>
   <dialog id="settingsDialog">
     <form id="settingsForm">
       <div class="dialog-head"><h2>OpenBox Settings</h2><button type="button" id="closeSettings">×</button></div>
       <div class="form-grid">
-        <label class="field wide"><span>Automatically watched game folders, one absolute path per line</span><textarea id="watchFolders"></textarea></label>
-        <label class="field wide"><span>Mounted Nextcloud, Syncthing, Dropbox, or other cloud folder for game-stat syncing</span><input id="cloudFolder"></label>
-        <div class="wide"><button type="button" class="icon-button" id="syncCloud">Sync statistics now</button><span class="description" id="cloudStatus"></span></div>
-        <label class="field wide"><span>Big Box screensaver delay in seconds, 0 disables it</span><input id="screensaverSeconds" type="number" min="0" max="3600"></label>
-        <label class="field wide"><span>Applications to start with OpenBox, one shell-free command per line</span><textarea id="startupCommands"></textarea></label>
-        <label class="field wide"><span>Applications to start when OpenBox exits, one shell-free command per line</span><textarea id="shutdownCommands"></textarea></label>
-        <div class="wide section-title">Standard Gamepad Button Mapping</div>
-        <label class="field"><span>Play</span><input data-controller="play" type="number" min="0" max="31"></label>
-        <label class="field"><span>Back</span><input data-controller="back" type="number" min="0" max="31"></label>
-        <label class="field"><span>Favorite</span><input data-controller="favorite" type="number" min="0" max="31"></label>
-        <label class="field"><span>Random game</span><input data-controller="random" type="number" min="0" max="31"></label>
-        <label class="field"><span>Previous page</span><input data-controller="page_left" type="number" min="0" max="31"></label>
-        <label class="field"><span>Next page</span><input data-controller="page_right" type="number" min="0" max="31"></label>
-        <label class="field"><span>Running-game menu</span><input data-controller="pause" type="number" min="0" max="31"></label>
-        <label class="field"><span>Filter and sort menu</span><input data-controller="menu" type="number" min="0" max="31"></label>
-        <button type="button" class="icon-button" id="scanWatched">Scan watched folders now</button>
+        <label class="field wide settings-field" data-setting="search watched folders cloud screensaver startup shutdown session history backup progress automation image group controller gamepad"><span>Search settings</span><input id="settingsSearch" class="settings-search" type="search" placeholder="Type to filter settings"></label>
+        <label class="field wide settings-field" data-setting="watched folders import auto"><span>Automatically watched game folders, one absolute path per line</span><textarea id="watchFolders"></textarea></label>
+        <label class="field wide settings-field" data-setting="cloud sync syncthing dropbox nextcloud"><span>Mounted Nextcloud, Syncthing, Dropbox, or other cloud folder for game-stat syncing</span><input id="cloudFolder"></label>
+        <div class="wide settings-field" data-setting="cloud sync"><button type="button" class="icon-button" id="syncCloud">Sync statistics now</button><span class="description" id="cloudStatus"></span></div>
+        <label class="field wide settings-field" data-setting="default image group viewing cover background screenshot"><span>Default image group</span><select id="defaultImageGroup"><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option></select></label>
+        <label class="field wide settings-field" data-setting="screensaver big box attract"><span>Big Box screensaver delay in seconds, 0 disables it</span><input id="screensaverSeconds" type="number" min="0" max="3600"></label>
+        <label class="field wide settings-field" data-setting="startup applications commands"><span>Applications to start with OpenBox, one shell-free command per line</span><textarea id="startupCommands"></textarea></label>
+        <label class="field wide settings-field" data-setting="shutdown applications commands exit"><span>Applications to start when OpenBox exits, one shell-free command per line</span><textarea id="shutdownCommands"></textarea></label>
+        <label class="check settings-field" data-setting="session history tracking data play time"><input type="checkbox" id="trackSessionHistory" checked> Track play session history</label>
+        <label class="check settings-field" data-setting="backup on close saves"><input type="checkbox" id="backupOnClose"> Back up saves when a game session ends</label>
+        <label class="check settings-field" data-setting="obs recording attach auto"><input type="checkbox" id="obsAutoAttach" checked> Auto-attach latest OBS recording when a session ends</label>
+        <label class="field wide settings-field" data-setting="obs recording folder path"><span>OBS recording folder, optional override</span><input id="obsRecordingPath" placeholder="~/Videos"></label>
+        <label class="field settings-field" data-setting="save backup limit retention"><span>Save backup retention limit, 0 keeps all</span><input id="saveBackupLimit" type="number" min="0" max="500"></label>
+        <label class="field settings-field" data-setting="media download limit queue welcome wizard"><span>Media download limit during imports, 0 unlimited</span><input id="mediaDownloadLimit" type="number" min="0" max="10000"></label>
+        <label class="field wide settings-field" data-setting="auto import media types cover background screenshots"><span>Auto-import media types, comma separated</span><input id="autoImportMediaTypes" placeholder="cover, background, screenshots"></label>
+        <label class="field wide settings-field" data-setting="region priority metadata images"><span>Region priority, comma separated</span><input id="regionPriority"></label>
+        <label class="field wide settings-field" data-setting="library music background big box"><span>Library background music path</span><input id="libraryMusic"></label>
+        <label class="check settings-field" data-setting="video bgm mix background music"><input type="checkbox" id="videoBgmMix"> Mix video audio with background music</label>
+        <label class="field settings-field" data-setting="big box mode hybrid coverflow stage"><span>Big Box layout</span><select id="bigBoxMode"><option value="stage">Stage</option><option value="hybrid">Hybrid</option><option value="coverflow">CoverFlow</option></select></label>
+        <label class="check settings-field" data-setting="show playlist actions big box menu"><input type="checkbox" id="showPlaylistActions" checked> Show playlist actions in Big Box</label>
+        <label class="check settings-field" data-setting="dynamic play button launch"><input type="checkbox" id="dynamicPlayButton" checked> Use dynamic Play button labels</label>
+        <label class="field wide settings-field" data-setting="hidden sidebar sections filters platforms playlists"><span>Hidden sidebar sections, comma separated</span><input id="hiddenSidebarSections" placeholder="platforms, playlists"></label>
+        <label class="field wide settings-field" data-setting="emumovies credentials media"><span>EmuMovies username</span><input id="emumoviesUsername"></label>
+        <label class="field settings-field" data-setting="emumovies credentials media"><span>EmuMovies password</span><input id="emumoviesPassword" type="password" autocomplete="off"></label>
+        <label class="check settings-field" data-setting="progress automation playing paused idle days minutes"><input type="checkbox" id="progressAutomationEnabled"> Enable game progress automation</label>
+        <label class="field settings-field" data-setting="progress automation playing minutes"><span>Mark as Playing after minutes played</span><input id="progressAutomationMinutes" type="number" min="0" max="100000"></label>
+        <label class="field settings-field" data-setting="progress automation paused idle days"><span>Mark as Paused after days without play</span><input id="progressAutomationIdleDays" type="number" min="0" max="3650"></label>
+        <div class="wide section-title settings-field" data-setting="controller gamepad mapping">Standard Gamepad Button Mapping</div>
+        <label class="field"><span>Play</span><input data-controller="play" class="settings-field" data-setting="controller gamepad play" type="number" min="0" max="31"></label>
+        <label class="field"><span>Back</span><input data-controller="back" class="settings-field" data-setting="controller gamepad back" type="number" min="0" max="31"></label>
+        <label class="field"><span>Favorite</span><input data-controller="favorite" class="settings-field" data-setting="controller gamepad favorite" type="number" min="0" max="31"></label>
+        <label class="field"><span>Random game</span><input data-controller="random" class="settings-field" data-setting="controller gamepad random" type="number" min="0" max="31"></label>
+        <label class="field"><span>Previous page</span><input data-controller="page_left" class="settings-field" data-setting="controller gamepad page" type="number" min="0" max="31"></label>
+        <label class="field"><span>Next page</span><input data-controller="page_right" class="settings-field" data-setting="controller gamepad page" type="number" min="0" max="31"></label>
+        <label class="field"><span>Running-game menu</span><input data-controller="pause" class="settings-field" data-setting="controller gamepad pause" type="number" min="0" max="31"></label>
+        <label class="field"><span>Filter and sort menu</span><input data-controller="menu" class="settings-field" data-setting="controller gamepad menu filter sort" type="number" min="0" max="31"></label>
+        <button type="button" class="icon-button settings-field" data-setting="watched folders import scan" id="scanWatched">Scan watched folders now</button>
+        <button type="button" class="icon-button settings-field" data-setting="welcome wizard setup" id="reopenWelcome">Reopen welcome wizard</button>
         <div class="wide detail-card"><h3>Application</h3><p class="description" id="updateStatus"></p><div class="extras"><button type="button" class="icon-button" id="checkUpdate">Check for updates</button><button type="button" class="primary" id="installUpdate" hidden>Install verified update</button><button type="button" class="icon-button" id="installDesktop">Install desktop shortcut</button></div></div>
       </div>
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelSettings">Cancel</button><button class="primary">Save</button></div>
     </form>
   </dialog>
+  <dialog id="discoveryDialog">
+    <div class="dialog-head"><h2>Game Discovery Center</h2><button type="button" id="closeDiscovery">×</button></div>
+    <div class="form-grid"><div class="wide discovery-grid" id="discoveryContent"></div></div>
+    <div class="dialog-actions"><button type="button" class="primary" id="doneDiscovery">Done</button></div>
+  </dialog>
+  <dialog id="storefrontDialog">
+    <div class="dialog-head"><h2>Storefront Manager</h2><button type="button" id="closeStorefront">×</button></div>
+    <div class="form-grid">
+      <p class="wide description">Import installed games and configure startup auto-import per storefront.</p>
+      <div class="wide extras"><button type="button" class="primary" id="importSteamStore">Import Steam</button><button type="button" class="icon-button" id="importHeroicStore">Import Heroic</button><button type="button" class="icon-button" id="importLutrisStore">Import Lutris</button><button type="button" class="icon-button" id="importScummvmStore">Import ScummVM</button><button type="button" class="icon-button" id="importRpcs3Store">Import RPCS3</button><button type="button" class="icon-button" id="importVita3kStore">Import Vita3K</button></div>
+      <label class="check"><input type="checkbox" id="autoImportSteam"> Auto-import Steam on startup</label>
+      <label class="check"><input type="checkbox" id="autoImportHeroic"> Auto-import Heroic on startup</label>
+      <label class="check"><input type="checkbox" id="autoImportLutris"> Auto-import Lutris on startup</label>
+      <div class="wide section-title">Browse storefront catalogs</div>
+      <label class="field"><span>Source</span><select id="storefrontSource"><option value="steam">Steam</option><option value="heroic">Heroic</option><option value="lutris">Lutris</option></select></label>
+      <div class="wide extras"><button type="button" class="icon-button" id="loadStorefrontCatalog">Load catalog</button><button type="button" class="icon-button" id="importStorefrontInstalled">Import installed</button><button type="button" class="primary" id="importStorefrontUninstalled">Import uninstalled</button></div>
+      <div class="wide storefront-catalog" id="storefrontCatalog"></div>
+    </div>
+    <div class="dialog-actions"><button type="button" class="primary" id="saveStorefront">Save storefront settings</button></div>
+  </dialog>
   <dialog class="media-dialog" id="mediaDialog"><button type="button" id="closeMedia" aria-label="Close">×</button><img id="fullScreenshot" alt=""></dialog>
-  <dialog class="reader-dialog" id="readerDialog"><div class="dialog-head"><h2 id="readerTitle">Document</h2><button type="button" id="closeReader">×</button></div><iframe id="readerFrame" title="Document reader"></iframe></dialog>
+  <dialog class="reader-dialog" id="readerDialog">
+    <div class="dialog-head"><h2 id="readerTitle">Document</h2><button type="button" id="closeReader">×</button></div>
+    <div class="reader-toolbar"><button type="button" class="icon-button" id="readerPrev">Previous page</button><button type="button" class="icon-button" id="readerNext">Next page</button><span class="description" id="readerPageLabel">Page 1</span><button type="button" class="icon-button" data-reader-layout="single">Single page</button><button type="button" class="icon-button" data-reader-layout="spread">Two-page spread</button><button type="button" class="icon-button" data-reader-theme="light">Light</button><button type="button" class="icon-button" data-reader-theme="dark">Dark</button></div>
+    <div class="reader-viewport" id="readerViewport"><iframe id="readerFrame" title="Document reader"></iframe></div>
+  </dialog>
   <div class="toast" id="toast"></div>
   <section class="lifecycle" id="lifecycle" hidden><div><small id="lifecycleKind"></small><h2 id="lifecycleGame"></h2><p id="lifecycleMessage"></p></div></section>
   <section class="bigbox" id="bigBox" hidden tabindex="0">
-    <div class="bigbox-head"><strong>OpenBox</strong><span id="bigBoxCounter"></span></div>
+    <div class="bigbox-head"><strong>OpenBox</strong><span class="bigbox-status" id="bigBoxStatus"></span><span id="bigBoxCounter"></span></div>
     <div class="bigbox-stage" id="bigBoxStage"></div>
     <div class="bigbox-foot"><span>← → Browse</span><span>Enter / A Play</span><span>P Pause</span><span>M Filters</span><span>F / X Favorite</span><span>Esc / B Back</span></div>
     <div class="bigbox-menu" id="bigBoxMenu" hidden>
@@ -385,16 +517,18 @@
         <h2>Filter and Sort</h2>
         <label class="field"><span>Show</span><select id="bigBoxFilter"><option value="all">Current library view</option><option value="favorites">Favorites</option><option value="playing">In progress</option><option value="completed">Completed</option></select></label>
         <label class="field"><span>Sort</span><select id="bigBoxSort"><option value="title">Title</option><option value="rating">Rating</option><option value="recent">Recently played</option><option value="playtime">Play time</option><option value="random">Shuffle</option></select></label>
+        <label class="field"><span>Achievements</span><select id="bigBoxRaFilter"><option value="all">All games</option><option value="matched">RetroAchievements matched</option><option value="unmatched">Not matched</option></select></label>
         <div class="dialog-actions"><button class="icon-button" id="closeBigBoxMenu" type="button">Cancel</button><button class="primary" id="applyBigBoxMenu" type="button">Apply</button></div>
       </div>
     </div>
     <div class="screensaver" id="screenSaver" hidden><video id="screenSaverVideo" muted autoplay loop></video><div class="screensaver-copy"><div class="hero-kicker" id="screenSaverPlatform"></div><h2 id="screenSaverTitle"></h2><p>Press Play to launch, or any other control to return.</p></div></div>
+    <div class="bigbox-pause" id="bigBoxPause" hidden><div class="bigbox-pause-panel"><h2 id="bigBoxPauseTitle">Running game</h2><p class="description" id="bigBoxPauseMeta"></p><div class="extras" id="bigBoxPauseActions"></div></div></div>
   </section>
 
   <script>
     const token = new URLSearchParams(location.search).get('token') || '';
     let games = [], playlists = [], bigBoxGames = [], runningGames = [], raConfigured = false, selectedId = null, platform = 'all', activePlaylist = '', editingId = null, metadataGameId = null, bigBoxIndex = 0, gamepadState = {}, lastSessionEvent = 0, bulkMode = false, bigBoxLastInput = performance.now(), screenSaverGame = null;
-    let appSettings = {watch_folders:[],screensaver_seconds:90,controller_map:{}}, bigBoxFilter = 'all', bigBoxSort = 'title', pendingUpdate = null;
+    let appSettings = {watch_folders:[],screensaver_seconds:90,controller_map:{}}, bigBoxFilter = 'all', bigBoxSort = 'title', bigBoxRaFilter = 'all', bigBoxPlatform = 'all', pendingUpdate = null, duplicateMediaGroups = 0, libraryBgm = null, readerPage = 1, readerUrl = '';
     const defaultControllerMap = {play:0,back:1,favorite:2,random:3,page_left:4,page_right:5,pause:8,menu:9};
     const selectedIds = new Set();
     const $ = id => document.getElementById(id);
@@ -419,26 +553,65 @@
       if (selectedId !== null && !games.some(game => game.id === selectedId)) selectedId = null;
       for (const id of selectedIds) if (!games.some(game => game.id === id)) selectedIds.delete(id);
       render();
+      applySidebarVisibility();
+      maybeShowWelcome();
+    }
+    function applySidebarVisibility() {
+      const hidden = new Set((appSettings.hidden_sidebar_sections || []).map(value => value.trim().toLowerCase()).filter(Boolean));
+      document.querySelectorAll('[data-sidebar-section]').forEach(element => {
+        element.hidden = hidden.has(element.dataset.sidebarSection);
+      });
     }
     function filteredGames() {
       const query = $('sidebarSearch').value.toLowerCase().trim();
       const view = $('view').value;
       const visible = games.filter(game => {
         const completed = ['Beaten','Completed','Mastered'].includes(game.progress);
-        const viewMatch = (view === 'all' && !game.hidden) || (view === 'favorites' && game.favorite && !game.hidden) || (view === 'recent' && game.last_played && !game.hidden) || (view === 'never' && !game.play_count && !game.hidden) || (view === 'playing' && ['Playing','Paused'].includes(game.progress) && !game.hidden) || (view === 'completed' && completed && !game.hidden) || (view === 'hidden' && game.hidden) || (view === 'missing' && !game.path_exists && !game.hidden);
+        const viewMatch = (view === 'all' && !game.hidden) || (view === 'favorites' && game.favorite && !game.hidden) || (view === 'recent' && game.last_played && !game.hidden) || (view === 'never' && !game.play_count && !game.hidden) || (view === 'playing' && ['Playing','Paused'].includes(game.progress) && !game.hidden) || (view === 'completed' && completed && !game.hidden) || (view === 'saves' && game.has_saves && !game.hidden) || (view === 'hidden' && game.hidden) || (view === 'missing' && !game.path_exists && !game.hidden);
         const platformMatch = platform === 'all' || game.platform === platform;
-        const queryMatch = !query || [game.name,game.sort_title,game.platform,game.genre,game.developer,game.publisher,game.series,game.region,game.notes].join(' ').toLowerCase().includes(query);
+        const queryMatch = !query || [game.name,game.sort_title,game.platform,game.genre,game.developer,game.publisher,game.series,game.region,game.notes,...(game.alternate_names || [])].join(' ').toLowerCase().includes(query);
         return viewMatch && platformMatch && queryMatch;
       });
       const sort = $('sort').value;
-      return visible.sort((a,b) => sort === 'rating' ? Number(b.rating || 0) - Number(a.rating || 0) || a.name.localeCompare(b.name) : sort === 'recent' ? String(b.last_played).localeCompare(String(a.last_played)) : sort === 'playtime' ? Number(b.playtime_seconds || 0) - Number(a.playtime_seconds || 0) : sort === 'added' ? String(b.added_at || '').localeCompare(String(a.added_at || '')) : String(a.sort_title || a.name).localeCompare(String(b.sort_title || b.name)));
+      return visible.sort((a,b) => sort === 'rating' ? Number(b.rating || 0) - Number(a.rating || 0) || a.name.localeCompare(b.name) : sort === 'recent' ? String(b.last_played).localeCompare(String(a.last_played)) : sort === 'playtime' ? Number(b.playtime_seconds || 0) - Number(a.playtime_seconds || 0) : sort === 'added' ? String(b.added_at || '').localeCompare(String(a.added_at || '')) : sort === 'platform' ? String(a.platform || '').localeCompare(String(b.platform || '')) || String(a.sort_title || a.name).localeCompare(String(b.sort_title || b.name)) : sort === 'genre' ? String(a.genre || '').localeCompare(String(b.genre || '')) || String(a.sort_title || a.name).localeCompare(String(b.sort_title || b.name)) : String(a.sort_title || a.name).localeCompare(String(b.sort_title || b.name)));
+    }
+    function arrangeGroups(visible) {
+      const sort = $('sort').value;
+      const groups = [];
+      let current = '';
+      visible.forEach((game, index) => {
+        const label = sort === 'platform' ? (game.platform || '#') : sort === 'genre' ? (game.genre || '#') : (String(game.sort_title || game.name || '#').trim()[0] || '#').toUpperCase();
+        if (label !== current) {
+          current = label;
+          groups.push({label, index});
+        }
+      });
+      return groups;
+    }
+    function renderArrangeBar(visible) {
+      const groups = arrangeGroups(visible);
+      const bar = $('arrangeBar');
+      if (!visible.length || groups.length < 4) {
+        bar.hidden = true;
+        bar.innerHTML = '';
+        return;
+      }
+      bar.hidden = false;
+      bar.innerHTML = groups.map(group => `<div class="arrange-marker" style="top:${(group.index / Math.max(visible.length - 1, 1)) * 100}%"><span>${escapeHtml(group.label)}</span></div>`).join('');
+      bar.onclick = event => {
+        const rect = bar.getBoundingClientRect();
+        const ratio = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
+        const target = groups.reduce((best, group) => Math.abs(group.index / Math.max(visible.length - 1, 1) - ratio) < Math.abs(best.index / Math.max(visible.length - 1, 1) - ratio) ? group : best, groups[0]);
+        const card = document.querySelector(`[data-game="${visible[target.index].id}"]`);
+        if (card) card.scrollIntoView({block:'nearest'});
+      };
     }
     function renderPlatforms() {
       const counts = new Map();
       games.forEach(game => counts.set(game.platform || 'Unspecified', (counts.get(game.platform || 'Unspecified') || 0) + 1));
       const items = [['all',`All (${games.length})`], ...[...counts].sort((a,b) => a[0].localeCompare(b[0])).map(([name,count]) => [name,`${name} (${count})`])];
       $('platforms').innerHTML = items.map(([value,label]) => `<button class="platform ${platform === value ? 'active' : ''}" data-platform="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join('');
-      document.querySelectorAll('[data-platform]').forEach(button => button.onclick = () => { activePlaylist = ''; platform = button.dataset.platform; render(); loadTheme(); });
+      document.querySelectorAll('[data-platform]').forEach(button => button.onclick = () => { activePlaylist = ''; platform = button.dataset.platform; selectedId = null; render(); loadTheme(); });
     }
     function renderPlaylists() {
       $('playlists').innerHTML = playlists.length ? playlists.map(item => `<div class="playlist-row"><button class="platform ${activePlaylist === item.name ? 'active' : ''}" data-playlist="${escapeHtml(item.name)}">${escapeHtml(item.name)}</button><button class="playlist-delete" data-delete-playlist="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '<span class="description">Save a filter to create one.</span>';
@@ -471,7 +644,7 @@
       $('grid').innerHTML = visible.map(game => `<article class="card ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" data-game="${game.id}">
         <div class="cover">${bulkMode ? `<input class="card-picker" type="checkbox" ${selectedIds.has(game.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(game.name)}">` : ''}${imageGroup === 'background' && game.has_background ? `<img src="${media(game,'background')}" alt="">` : imageGroup === 'screenshot' && game.available_screenshots.length ? `<img src="${media(game,'screenshot',game.available_screenshots[0])}" alt="">` : game.has_cover ? `<img src="${media(game,'cover')}" alt="">` : `<div class="cover-title">${escapeHtml(game.name)}</div>`}</div>
         <h3>${escapeHtml(game.name)}</h3><p>${escapeHtml(game.developer || game.platform || '')}</p>
-        <div class="badges">${game.favorite ? '★ ' : ''}${game.rating ? `${'★'.repeat(Math.round(game.rating))} ` : ''}${game.progress ? escapeHtml(game.progress) : game.play_count ? `${game.play_count}×` : ''}</div>
+        <div class="badges">${game.favorite ? '★ ' : ''}${game.has_saves ? '💾 ' : ''}${game.has_documents ? '📄 ' : ''}${game.rating ? `${'★'.repeat(Math.round(game.rating))} ` : ''}${game.progress ? escapeHtml(game.progress) : game.play_count ? `${game.play_count}×` : ''}</div>
       </article>`).join('');
       document.querySelectorAll('[data-game]').forEach(card => card.onclick = event => {
         const id = Number(card.dataset.game);
@@ -483,19 +656,24 @@
           render();
         }
       });
+      renderArrangeBar(visible);
     }
     function renderDetails() {
       const game = games.find(item => item.id === selectedId);
+      if (!game && platform !== 'all') {
+        renderPlatformDetails(platform);
+        return;
+      }
       if (!game) { $('details').innerHTML = '<div class="detail-empty">Select a game to inspect its real metadata and artwork.</div>'; return; }
       const heroStyle = game.has_background ? `style="background-image:url('${media(game,'background')}')"` : '';
       $('details').innerHTML = `<div class="hero" ${heroStyle}><div class="hero-copy"><div class="hero-kicker">${escapeHtml(game.platform || 'Unspecified platform')}</div><h2>${escapeHtml(game.name)}</h2></div></div>
         <div class="detail-body">
           <div class="rating"><strong>${game.favorite ? '★ Favorite' : game.rating ? `${game.rating} ★` : 'Library'}</strong><span>${escapeHtml(game.progress || game.genre || '')}</span></div>
           <button class="play" id="playButton" ${game.path_exists ? '' : 'disabled'}>▶ PLAY</button>
-          <div class="detail-actions"><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">Edit metadata</button><button class="icon-button" id="databaseMetadataButton">Find metadata</button>${game.steam_app_id ? '<button class="icon-button" id="steamMetadataButton">Use Steam data</button>' : ''}<button class="icon-button" id="removeGameButton">Remove game</button></div>
+          <div class="detail-actions"><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">Edit metadata</button><button class="icon-button" id="databaseMetadataButton">Find metadata</button>${game.steam_app_id ? '<button class="icon-button" id="steamMetadataButton">Use Steam data</button>' : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button><button class="icon-button" id="removeGameButton">Remove game</button></div>
           <div class="detail-card"><h3>Information</h3><div class="facts">
-            ${fact('Release date',game.year)}${fact('Developer',game.developer)}${fact('Publisher',game.publisher)}${fact('Play time',duration(game.playtime_seconds))}
-            ${fact('Launches',game.play_count)}${fact('Last played',game.last_played ? game.last_played.replace('T',' ') : '')}${fact('Progress',game.progress)}${fact('Rating',game.rating ? `${game.rating} / 5` : '')}${fact('Region',game.region)}${fact('Play mode',game.play_mode)}
+            ${fact('Release date',game.year)}${fact('Developer',game.developer)}${fact('Publisher',game.publisher)}${fact('Max players',game.max_players)}${fact('Play time',duration(game.playtime_seconds))}
+            ${fact('Launches',game.play_count)}${fact('Last played',game.last_played ? game.last_played.replace('T',' ') : '')}${fact('Progress',game.progress)}${fact('Rating',game.rating ? `${game.rating} / 5` : '')}${fact('Region',game.region)}${fact('Play mode',game.play_mode)}${fact('Wikipedia',game.wikipedia_url)}${fact('Video URL',game.video_url)}
           </div>${game.description ? `<p class="description">${escapeHtml(game.description)}</p>` : ''}${game.notes ? `<p class="description"><strong>Notes</strong><br>${escapeHtml(game.notes)}</p>` : ''}
           ${game.applications.length || game.versions.length || game.documents.length ? `<div class="extras">${game.applications.map((item,index) => `<button class="icon-button" data-extra="applications:${index}">App · ${escapeHtml(item.name)}</button>`).join('')}${game.versions.map((item,index) => `<button class="icon-button" data-extra="versions:${index}">Version · ${escapeHtml(item.name)}</button>`).join('')}${game.documents.map((item,index) => `<button class="icon-button" data-document="${index}">Read ${escapeHtml(item.name)}</button><button class="icon-button" data-extra="documents:${index}" aria-label="Open ${escapeHtml(item.name)} externally">↗</button>`).join('')}</div>` : ''}</div>
           ${game.has_video ? `<div class="detail-card"><h3>Video</h3><video class="media-player" controls preload="metadata" src="${media(game,'video')}"></video></div>` : ''}
@@ -503,13 +681,16 @@
           ${game.available_screenshots.length ? `<div class="detail-card"><h3>Screenshots</h3><div class="screenshot-grid">${game.available_screenshots.map(index => `<button data-screenshot="${index}" aria-label="Open screenshot ${index + 1}"><img src="${media(game,'screenshot',index)}" alt=""></button>`).join('')}</div></div>` : ''}
           <div class="detail-card"><h3>Related Games</h3><div class="related-grid" id="relatedGames"><span class="description">Finding matches…</span></div></div>
           ${raConfigured ? `<div class="detail-card"><h3>RetroAchievements</h3><div id="achievementContent"><p class="description">${game.ra_game_id ? `Matched to game ${escapeHtml(game.ra_game_id)}.` : 'Match this ROM to load achievements.'}</p><button class="icon-button" id="loadAchievements">Load achievements</button></div></div>` : ''}
-          <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${game.save_paths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}</div><div class="description" id="saveDiscovery">${game.save_paths.length ? `${game.save_paths.length} configured location${game.save_paths.length === 1 ? '' : 's'}` : 'No save location configured.'}</div><div class="extras" id="saveBackups"></div></div>
+          <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${game.save_paths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}${game.platform === 'Arcade' || game.rom_name ? '<button class="icon-button" id="exportHighscores">Export high scores</button>' : ''}</div><div class="description" id="saveDiscovery">${game.save_paths.length ? `${game.save_paths.length} configured location${game.save_paths.length === 1 ? '' : 's'}` : 'No save location configured.'}</div><div class="extras" id="saveBackups"></div></div>
         </div>`;
       $('playButton').onclick = () => launch(game.id);
       $('favoriteButton').onclick = () => favorite(game.id);
       $('editButton').onclick = () => openGameDialog(game);
       $('databaseMetadataButton').onclick = () => openMetadata(game);
       if ($('steamMetadataButton')) $('steamMetadataButton').onclick = () => steamMetadata(game.id);
+      if ($('captureScreenshot')) $('captureScreenshot').onclick = () => captureScreenshot(game.id);
+      if ($('downloadBezel')) $('downloadBezel').onclick = () => downloadBezel(game.platform);
+      if ($('exportHighscores')) $('exportHighscores').onclick = async () => { try { const result = await api('/api/highscores/export',{method:'POST',body:JSON.stringify({id:game.id})}); notify(`Exported ${result.files.length} high score file${result.files.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
       $('removeGameButton').onclick = () => removeGame(game.id,game.name);
       document.querySelectorAll('[data-extra]').forEach(button => button.onclick = () => {
         const [kind,index] = button.dataset.extra.split(':');
@@ -519,12 +700,7 @@
         $('fullScreenshot').src = media(game,'screenshot',button.dataset.screenshot);
         $('mediaDialog').showModal();
       });
-      document.querySelectorAll('[data-document]').forEach(button => button.onclick = () => {
-        const index = Number(button.dataset.document);
-        $('readerTitle').textContent = game.documents[index].name;
-        $('readerFrame').src = `/api/document?id=${game.id}&index=${index}&token=${encodeURIComponent(token)}`;
-        $('readerDialog').showModal();
-      });
+      document.querySelectorAll('[data-document]').forEach(button => button.onclick = () => openReader(game, Number(button.dataset.document)));
       if ($('loadAchievements')) $('loadAchievements').onclick = () => loadAchievements(game.id);
       if ($('backupSaves')) {
         $('backupSaves').onclick = () => backupSaves(game.id);
@@ -543,7 +719,51 @@
       } catch(error) { if ($('relatedGames')) $('relatedGames').textContent = error.message; }
     }
     const fact = (label,value) => `<div class="fact"><small>${label}</small><span>${escapeHtml(value || '—')}</span></div>`;
-    function render() { renderPlatforms(); renderPlaylists(); renderGrid(); renderDetails(); $('status').textContent = `${games.length} games · local library`; }
+    function render() { renderPlatforms(); renderPlaylists(); renderGrid(); renderDetails(); applySidebarVisibility(); $('status').textContent = `${games.length} games · local library`; }
+    async function renderPlatformDetails(platformName) {
+      const count = games.filter(game => (game.platform || 'Unspecified') === platformName).length;
+      let documents = [];
+      try {
+        const result = await api(`/api/platform/documents?platform=${encodeURIComponent(platformName)}`);
+        documents = result.documents || [];
+      } catch(error) {
+        documents = appSettings.platform_documents?.[platformName] || [];
+      }
+      $('details').innerHTML = `<div class="platform-panel"><div class="hero-kicker">Platform</div><h2>${escapeHtml(platformName)}</h2><p class="description">${count} game${count === 1 ? '' : 's'} in this platform view.</p><div class="detail-card"><h3>Platform documents</h3>${documents.length ? `<div class="extras">${documents.map((item,index) => `<button class="icon-button" data-platform-doc="${index}">${escapeHtml(item.name)}</button>`).join('')}</div>` : '<p class="description">No platform documents configured yet.</p>'}<div class="extras"><button class="icon-button" id="editPlatformDocuments">Edit platform documents</button></div></div></div>`;
+      $('editPlatformDocuments').onclick = async () => {
+        const current = (appSettings.platform_documents?.[platformName] || documents).map(item => `${item.name} | ${item.path}`).join('\n');
+        const value = prompt(`Platform documents for ${platformName}, one per line: Name | Path`, current);
+        if (value === null) return;
+        const rows = value.split('\n').map(line => line.trim()).filter(Boolean).map(line => { const [name,...rest] = line.split('|'); return {name:(name || '').trim(), path:rest.join('|').trim()}; }).filter(item => item.name && item.path);
+        try {
+          await api('/api/platform/documents',{method:'POST',body:JSON.stringify({platform:platformName,documents:rows})});
+          appSettings.platform_documents = {...(appSettings.platform_documents || {}), [platformName]: rows};
+          renderPlatformDetails(platformName);
+          notify('Platform documents saved');
+        } catch(error) { notify(error.message); }
+      };
+      document.querySelectorAll('[data-platform-doc]').forEach(button => button.onclick = () => {
+        const doc = documents[Number(button.dataset.platformDoc)];
+        if (!doc) return;
+        openReader({id:'platform', documents:[doc], name:platformName}, 0, `/api/platform/document?platform=${encodeURIComponent(platformName)}&index=${button.dataset.platformDoc}&token=${encodeURIComponent(token)}`);
+      });
+    }
+    function openReader(game, index, customUrl) {
+      const doc = game.documents[index];
+      readerPage = 1;
+      readerUrl = customUrl || `/api/document?id=${game.id}&index=${index}&token=${encodeURIComponent(token)}`;
+      $('readerTitle').textContent = doc.name;
+      $('readerViewport').classList.remove('spread');
+      $('readerFrame').style.filter = '';
+      setReaderPage(1);
+      $('readerDialog').showModal();
+    }
+    function setReaderPage(page) {
+      readerPage = Math.max(1, page);
+      const suffix = readerUrl.toLowerCase().includes('.pdf') || readerUrl.includes('/api/document') ? `#page=${readerPage}` : '';
+      $('readerFrame').src = `${readerUrl}${suffix}`;
+      $('readerPageLabel').textContent = `Page ${readerPage}`;
+    }
     async function launch(id) {
       try {
         const result = await api('/api/launch',{method:'POST',body:JSON.stringify({id})});
@@ -576,10 +796,81 @@
       } catch(error) { notify(error.message); }
       setTimeout(pollSessions, 1000);
     }
+    async function openHistory() {
+      try {
+        const result = await api('/api/history');
+        $('historyList').innerHTML = result.enabled
+          ? (result.history.length ? result.history.map(session => `<div class="history-item"><strong>${escapeHtml(session.game)}</strong><br>${escapeHtml(session.started.replace('T',' '))} · ${duration(session.seconds)} · exit ${session.exit_code}</div>`).join('') : '<p class="description">No sessions recorded yet.</p>')
+          : '<p class="description">Session history tracking is disabled in Settings.</p>';
+        if (!$('historyDialog').open) $('historyDialog').showModal();
+      } catch(error) { notify(error.message); }
+    }
+    function filterSettings() {
+      const query = $('settingsSearch').value.toLowerCase().trim();
+      document.querySelectorAll('.settings-field').forEach(field => {
+        const haystack = `${field.dataset.setting || ''} ${field.textContent || ''}`.toLowerCase();
+        field.hidden = query && !haystack.includes(query);
+      });
+    }
+    async function completeWelcome() {
+      try {
+        appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify({...collectSettings(),welcome_completed:true})});
+        $('welcomeDialog').close();
+      } catch(error) { notify(error.message); }
+    }
+    function maybeShowWelcome() {
+      if (!appSettings.welcome_completed && !games.length) $('welcomeDialog').showModal();
+    }
+    function collectSettings() {
+      return {
+        watch_folders:$('watchFolders').value.split('\n').map(value => value.trim()).filter(Boolean),
+        cloud_folder:$('cloudFolder').value.trim(),
+        screensaver_seconds:Number($('screensaverSeconds').value),
+        startup_commands:$('startupCommands').value.split('\n').map(value => value.trim()).filter(Boolean),
+        shutdown_commands:$('shutdownCommands').value.split('\n').map(value => value.trim()).filter(Boolean),
+        track_session_history:$('trackSessionHistory').checked,
+        backup_on_close:$('backupOnClose').checked,
+        save_backup_limit:Number($('saveBackupLimit').value),
+        media_download_limit:Number($('mediaDownloadLimit').value),
+        auto_import_media_types:$('autoImportMediaTypes').value.split(',').map(value => value.trim()).filter(Boolean),
+        region_priority:$('regionPriority').value.split(',').map(value => value.trim()).filter(Boolean),
+        library_music:$('libraryMusic').value.trim(),
+        video_bgm_mix:$('videoBgmMix').checked,
+        bigbox_mode:$('bigBoxMode').value,
+        show_playlist_actions:$('showPlaylistActions').checked,
+        dynamic_play_button:$('dynamicPlayButton').checked,
+        hidden_sidebar_sections:$('hiddenSidebarSections').value.split(',').map(value => value.trim()).filter(Boolean),
+        obs_auto_attach:$('obsAutoAttach').checked,
+        obs_recording_path:$('obsRecordingPath').value.trim(),
+        progress_automation_enabled:$('progressAutomationEnabled').checked,
+        progress_automation_play_minutes:Number($('progressAutomationMinutes').value),
+        progress_automation_idle_days:Number($('progressAutomationIdleDays').value),
+        image_group:$('defaultImageGroup').value,
+        controller_map:Object.fromEntries([...document.querySelectorAll('[data-controller]')].map(input => [input.dataset.controller,Number(input.value)])),
+        welcome_completed:appSettings.welcome_completed,
+      };
+    }
+    async function saveEmumoviesSettings() {
+      const username = $('emumoviesUsername').value.trim();
+      const password = $('emumoviesPassword').value;
+      if (!username || !password) return;
+      await api('/api/emumovies/settings',{method:'POST',body:JSON.stringify({username,password})});
+    }
+    let shuttingDown = false;
+    async function gracefulShutdown(force = false) {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      $('shutdownOverlay').hidden = false;
+      $('shutdownMessage').textContent = force ? 'Force closing running games…' : 'Closing running games before exit…';
+      try { await api('/api/shutdown',{method:'POST',body:JSON.stringify({force})}); } catch(error) {}
+      $('shutdownMessage').textContent = 'Running shutdown applications…';
+      window.close();
+    }
     async function favorite(id) { try { await api('/api/favorite',{method:'POST',body:JSON.stringify({id})}); await refresh(); } catch(error) { notify(error.message); } }
     async function removeGame(id,name) {
       if (!confirm(`Remove "${name}" from OpenBox? Game files will not be deleted.`)) return;
-      try { await api('/api/game/delete',{method:'POST',body:JSON.stringify({id})}); selectedId = null; await refresh(); notify('Game removed from library'); } catch(error) { notify(error.message); }
+      const alsoDeleteMedia = confirm('Also delete associated media files listed in this game entry?');
+      try { await api('/api/game/delete',{method:'POST',body:JSON.stringify({id,delete_media:alsoDeleteMedia})}); selectedId = null; await refresh(); notify('Game removed from library'); } catch(error) { notify(error.message); }
     }
     async function launchExtra(id,kind,index) { try { await api('/api/extra/launch',{method:'POST',body:JSON.stringify({id,kind,index})}); notify('Opened'); } catch(error) { notify(error.message); } }
     async function openSessions() {
@@ -703,6 +994,7 @@
         else if (element.name === 'documents') element.value = (game?.documents || []).map(item => [item.name,item.path].join(' | ')).join('\n');
         else if (element.name === 'save_paths') element.value = (game?.save_paths || []).join('\n');
         else if (element.name === 'screenshots') element.value = (game?.screenshots || []).join('\n');
+        else if (element.name === 'alternate_names') element.value = Array.isArray(game?.alternate_names) ? game.alternate_names.join('; ') : (game?.alternate_names || '');
         else element.value = game?.[element.name] || '';
       });
       $('gameDialog').showModal();
@@ -712,6 +1004,8 @@
       const game = Object.fromEntries(new FormData(event.currentTarget));
       game.extract_archive = event.currentTarget.elements.extract_archive.checked;
       game.hidden = event.currentTarget.elements.hidden.checked;
+      game.hide_in_bigbox = event.currentTarget.elements.hide_in_bigbox.checked;
+      game.alternate_names = game.alternate_names.split(';').map(value => value.trim()).filter(Boolean);
       game.applications = game.applications.split('\n').filter(Boolean).map(line => { const [name,path,command=''] = line.split('|').map(value => value.trim()); return {name,path,command}; });
       game.versions = game.versions.split('\n').filter(Boolean).map(line => { const [name,path,command=''] = line.split('|').map(value => value.trim()); return {name,path,command}; });
       game.documents = game.documents.split('\n').filter(Boolean).map(line => { const [name,path] = line.split('|').map(value => value.trim()); return {name,path}; });
@@ -722,7 +1016,16 @@
     async function importFolder() {
       const folder = prompt('Enter the absolute path of the folder to import.');
       if (!folder) return;
-      try { const result = await api('/api/import',{method:'POST',body:JSON.stringify({folder})}); await refresh(); notify(`${result.added} games imported`); } catch(error) { notify(error.message); }
+      try {
+        const result = await api('/api/import',{method:'POST',body:JSON.stringify({folder})});
+        await refresh();
+        notify(`${result.added} games imported`);
+        const platforms = Object.keys(result.recommendations || {});
+        if (platforms.length) {
+          const lines = platforms.flatMap(platform => (result.recommendations[platform] || []).map(item => `${platform}: ${item.name}`)).slice(0, 8);
+          if (lines.length && confirm(`Recommended emulators were detected:\n${lines.join('\n')}\n\nOpen Emulators to install them?`)) openProfiles();
+        }
+      } catch(error) { notify(error.message); }
     }
     async function importSteam() {
       try {
@@ -767,6 +1070,26 @@
         $('screensaverSeconds').value = appSettings.screensaver_seconds;
         $('startupCommands').value = (appSettings.startup_commands || []).join('\n');
         $('shutdownCommands').value = (appSettings.shutdown_commands || []).join('\n');
+        $('defaultImageGroup').value = appSettings.image_group || 'cover';
+        $('trackSessionHistory').checked = appSettings.track_session_history !== false;
+        $('backupOnClose').checked = Boolean(appSettings.backup_on_close);
+        $('progressAutomationEnabled').checked = Boolean(appSettings.progress_automation_enabled);
+        $('progressAutomationMinutes').value = appSettings.progress_automation_play_minutes ?? 30;
+        $('progressAutomationIdleDays').value = appSettings.progress_automation_idle_days ?? 30;
+        $('saveBackupLimit').value = appSettings.save_backup_limit ?? 10;
+        $('mediaDownloadLimit').value = appSettings.media_download_limit ?? 0;
+        $('autoImportMediaTypes').value = (appSettings.auto_import_media_types || ['cover','background','screenshots']).join(', ');
+        $('regionPriority').value = (appSettings.region_priority || ['North America','World','Europe','Japan']).join(', ');
+        $('libraryMusic').value = appSettings.library_music || '';
+        $('videoBgmMix').checked = Boolean(appSettings.video_bgm_mix);
+        $('bigBoxMode').value = appSettings.bigbox_mode || 'stage';
+        $('showPlaylistActions').checked = appSettings.show_playlist_actions !== false;
+        $('dynamicPlayButton').checked = appSettings.dynamic_play_button !== false;
+        $('hiddenSidebarSections').value = (appSettings.hidden_sidebar_sections || []).join(', ');
+        $('obsAutoAttach').checked = appSettings.obs_auto_attach !== false;
+        $('obsRecordingPath').value = appSettings.obs_recording_path || '';
+        $('settingsSearch').value = '';
+        filterSettings();
         const mapping = {...defaultControllerMap,...appSettings.controller_map};
         document.querySelectorAll('[data-controller]').forEach(input => input.value = mapping[input.dataset.controller]);
         $('updateStatus').textContent = `OpenBox ${appSettings.version}${appSettings.appimage ? ' · AppImage' : ' · source checkout'}`;
@@ -778,26 +1101,18 @@
     $('settingsForm').onsubmit = async event => {
       event.preventDefault();
       try {
-        appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(readSettingsForm())});
+        await saveEmumoviesSettings().catch(() => {});
+        appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
         $('settingsDialog').close();
         notify('Settings saved');
+        applyLibraryMusic();
+        applySidebarVisibility();
+        renderGrid();
       } catch(error) { notify(error.message); }
     };
-    function readSettingsForm() {
-      const controller_map = {};
-      document.querySelectorAll('[data-controller]').forEach(input => controller_map[input.dataset.controller] = Number(input.value));
-      return {
-        watch_folders:$('watchFolders').value.split('\n').map(value => value.trim()).filter(Boolean),
-        cloud_folder:$('cloudFolder').value.trim(),
-        screensaver_seconds:Number($('screensaverSeconds').value),
-        startup_commands:$('startupCommands').value.split('\n').map(value => value.trim()).filter(Boolean),
-        shutdown_commands:$('shutdownCommands').value.split('\n').map(value => value.trim()).filter(Boolean),
-        controller_map,
-      };
-    }
     $('scanWatched').onclick = async () => {
       try {
-        appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(readSettingsForm())});
+        appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
         const result = await api('/api/import/watch',{method:'POST',body:'{}'});
         await refresh();
         notify(`${result.added} games imported from watched folders${result.errors.length ? ` · ${result.errors.length} errors` : ''}`);
@@ -805,7 +1120,7 @@
     };
     $('syncCloud').onclick = async () => {
       try {
-        appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(readSettingsForm())});
+        appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
         const result = await api('/api/cloud/sync',{method:'POST',body:'{}'});
         $('cloudStatus').textContent = ` Synced ${result.games} games, merged ${result.merged} remote changes`;
         await refresh();
@@ -850,11 +1165,33 @@
       } catch(error) { notify(error.message); }
     }
     function renderEmulators(emulators) {
-      $('emulatorCatalog').innerHTML = emulators.map(emulator => {
+      $('emulatorCatalog').innerHTML = `<div class="extras"><button type="button" class="primary" id="installAllEmulators">Install all available emulators</button><button type="button" class="icon-button" id="updateAllEmulators">Update installed emulators</button></div>` + emulators.map(emulator => {
         const state = emulator.job.state || (emulator.installed ? 'installed' : 'available');
         const label = state === 'installing' ? 'Installing…' : emulator.installed ? 'Add profiles' : state === 'error' ? 'Retry' : 'Install';
-        return `<div class="emulator-item" title="${escapeHtml(emulator.job.error || '')}"><div><strong>${escapeHtml(emulator.name)}</strong><small>${escapeHtml(emulator.platforms.join(' · '))} · ${escapeHtml(state)}</small></div><button type="button" class="icon-button" ${state === 'installing' || (!emulator.installed && !emulator.can_install) ? 'disabled' : ''} data-emulator="${escapeHtml(emulator.app_id)}" data-installed="${emulator.installed}">${label}</button></div>`;
+        const openButton = emulator.installed ? `<button type="button" class="icon-button" data-open-emulator="${escapeHtml(emulator.app_id)}">Open</button>` : '';
+        const updateButton = emulator.installed && emulator.mode === 'flatpak' ? `<button type="button" class="icon-button" data-update-emulator="${escapeHtml(emulator.app_id)}">Update</button>` : '';
+        return `<div class="emulator-item" title="${escapeHtml(emulator.job.error || '')}"><div><strong>${escapeHtml(emulator.name)}</strong><small>${escapeHtml(emulator.platforms.join(' · '))} · ${escapeHtml(state)}</small></div>${openButton}${updateButton}<button type="button" class="icon-button" ${state === 'installing' || (!emulator.installed && !emulator.can_install) ? 'disabled' : ''} data-emulator="${escapeHtml(emulator.app_id)}" data-installed="${emulator.installed}">${label}</button></div>`;
       }).join('');
+      $('installAllEmulators').onclick = async () => {
+        try {
+          await api('/api/emulators/install-all',{method:'POST',body:'{}'});
+          notify('Installing all available emulators');
+          watchInstallAll();
+        } catch(error) { notify(error.message); }
+      };
+      $('updateAllEmulators').onclick = async () => {
+        try {
+          await api('/api/emulators/update-all',{method:'POST',body:'{}'});
+          notify('Updating installed emulators');
+          watchInstallAll();
+        } catch(error) { notify(error.message); }
+      };
+      document.querySelectorAll('[data-update-emulator]').forEach(button => button.onclick = async () => {
+        try { await api('/api/emulators/update',{method:'POST',body:JSON.stringify({app_id:button.dataset.updateEmulator})}); notify('Updating emulator'); watchEmulator(button.dataset.updateEmulator); } catch(error) { notify(error.message); }
+      });
+      document.querySelectorAll('[data-open-emulator]').forEach(button => button.onclick = async () => {
+        try { await api('/api/emulators/open',{method:'POST',body:JSON.stringify({app_id:button.dataset.openEmulator})}); notify('Emulator launched'); } catch(error) { notify(error.message); }
+      });
       document.querySelectorAll('[data-emulator]').forEach(button => button.onclick = async () => {
         const emulator = emulators.find(item => item.app_id === button.dataset.emulator);
         if (emulator.installed) {
@@ -882,6 +1219,18 @@
           $('profilesText').value = Object.entries(profiles.profiles).sort().map(([platform,command]) => `${platform} = ${command}`).join('\n');
           notify(`${emulator.name} installed and configured`);
         } else if (emulator?.job.state === 'error') notify(emulator.job.error);
+      } catch(error) { notify(error.message); }
+    }
+    async function watchInstallAll() {
+      try {
+        const result = await api('/api/emulators');
+        renderEmulators(result.emulators);
+        if (result.install_all?.state === 'installing') return setTimeout(watchInstallAll, 2000);
+        if (result.install_all?.state === 'done') {
+          const profiles = await api('/api/profiles');
+          $('profilesText').value = Object.entries(profiles.profiles).sort().map(([platform,command]) => `${platform} = ${command}`).join('\n');
+          notify(`Installed ${result.install_all.installed?.length || 0} emulator${result.install_all.installed?.length === 1 ? '' : 's'}`);
+        } else if (result.install_all?.state === 'error') notify(result.install_all.error || 'Install all failed');
       } catch(error) { notify(error.message); }
     }
     $('profilesForm').onsubmit = async event => {
@@ -953,6 +1302,17 @@
         if (!$('pluginsDialog').open) $('pluginsDialog').showModal();
       } catch(error) { notify(error.message); }
     }
+    $('browsePluginCatalog').onclick = async () => {
+      try {
+        const result = await api('/api/plugins/catalog');
+        const entry = result.catalog?.[0];
+        if (!entry) return notify('No community plugins are listed yet.');
+        if (entry.local_only) return notify(`${entry.name}: install local plugin packages manually.`);
+        await api('/api/plugins/catalog/install',{method:'POST',body:JSON.stringify({id:entry.id})});
+        await openPlugins();
+        notify(`${entry.name} installed from catalog`);
+      } catch(error) { notify(error.message); }
+    };
     $('installPlugin').onclick = async () => {
       const path = prompt('Absolute path of the plugin directory or ZIP package');
       if (!path) return;
@@ -1091,10 +1451,13 @@
       if (document.fullscreenElement) document.exitFullscreen?.();
     }
     function filteredBigBoxGames() {
-      let result = filteredGames();
+      let result = filteredGames().filter(game => !game.hide_in_bigbox);
+      if (bigBoxPlatform !== 'all') result = result.filter(game => game.platform === bigBoxPlatform);
       if (bigBoxFilter === 'favorites') result = result.filter(game => game.favorite);
       if (bigBoxFilter === 'playing') result = result.filter(game => ['Playing','Paused'].includes(game.progress));
       if (bigBoxFilter === 'completed') result = result.filter(game => ['Beaten','Completed','Mastered'].includes(game.progress));
+      if (bigBoxRaFilter === 'matched') result = result.filter(game => game.ra_game_id);
+      if (bigBoxRaFilter === 'unmatched') result = result.filter(game => !game.ra_game_id);
       result = [...result];
       if (bigBoxSort === 'rating') result.sort((a,b) => Number(b.rating || 0) - Number(a.rating || 0) || a.name.localeCompare(b.name));
       else if (bigBoxSort === 'recent') result.sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)));
@@ -1110,6 +1473,7 @@
     function openBigBoxMenu() {
       $('bigBoxFilter').value = bigBoxFilter;
       $('bigBoxSort').value = bigBoxSort;
+      $('bigBoxRaFilter').value = bigBoxRaFilter;
       $('bigBoxMenu').hidden = false;
       $('bigBoxFilter').focus();
     }
@@ -1122,6 +1486,7 @@
       const currentId = bigBoxGames[bigBoxIndex]?.id;
       bigBoxFilter = $('bigBoxFilter').value;
       bigBoxSort = $('bigBoxSort').value;
+      bigBoxRaFilter = $('bigBoxRaFilter').value;
       bigBoxGames = filteredBigBoxGames();
       if (!bigBoxGames.length) { notify('No games match those Big Box filters'); return; }
       bigBoxIndex = Math.max(0,bigBoxGames.findIndex(game => game.id === currentId));
@@ -1138,8 +1503,112 @@
       const game = bigBoxGames[bigBoxIndex];
       if (!game) return;
       $('bigBoxCounter').textContent = `${bigBoxIndex + 1} / ${bigBoxGames.length}`;
-      $('bigBoxStage').innerHTML = `<div class="bigbox-cover">${game.has_cover ? `<img src="${media(game,'cover')}" alt="">` : escapeHtml(game.name)}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${game.path_exists ? '' : 'disabled'}>▶ PLAY</button></div>`;
+      const battery = navigator.getBattery ? '' : '';
+      navigator.getBattery?.().then(status => {
+        if (!$('bigBoxStatus')) return;
+        $('bigBoxStatus').innerHTML = status ? `<strong>${Math.round(status.level * 100)}%</strong> battery · A Play · B Back · M Menu` : '';
+      }).catch(() => {});
+      const mode = appSettings.bigbox_mode || 'stage';
+      const playLabel = appSettings.dynamic_play_button === false ? '▶ PLAY' : game.versions.length ? '▶ PLAY DEFAULT' : game.applications.length ? '▶ PLAY GAME' : '▶ PLAY';
+      if (mode === 'hybrid') {
+        const platforms = [...new Set(bigBoxGames.map(item => item.platform || 'Unspecified'))].sort();
+        if (bigBoxPlatform === 'all' && platforms.length) bigBoxPlatform = platforms[0];
+        const platformGames = bigBoxGames.filter(item => (item.platform || 'Unspecified') === bigBoxPlatform);
+        if (platformGames.length && !platformGames.some(item => item.id === game.id)) {
+          bigBoxIndex = bigBoxGames.findIndex(item => item.id === platformGames[0].id);
+          return renderBigBox();
+        }
+        $('bigBoxStage').className = 'bigbox-stage bigbox-hybrid';
+        $('bigBoxStage').innerHTML = `<div class="bigbox-platforms">${platforms.map(name => `<button class="bigbox-platform ${bigBoxPlatform === name ? 'active' : ''}" data-bigbox-platform="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${game.path_exists ? '' : 'disabled'}>${playLabel}</button></div>`;
+        document.querySelectorAll('[data-bigbox-platform]').forEach(button => button.onclick = () => { bigBoxPlatform = button.dataset.bigboxPlatform; bigBoxIndex = 0; renderBigBox(); });
+      } else if (mode === 'coverflow') {
+        $('bigBoxStage').className = 'bigbox-stage';
+        $('bigBoxStage').innerHTML = `<div class="coverflow-strip">${bigBoxGames.map((item,index) => `<button class="coverflow-card jewel-case ${index === bigBoxIndex ? 'active' : ''}" data-coverflow="${index}">${item.has_cover ? `<img src="${media(item,'cover')}" alt="">` : `<div class="cover-title">${escapeHtml(item.name)}</div>`}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${game.path_exists ? '' : 'disabled'}>${playLabel}</button></div>`;
+        document.querySelectorAll('[data-coverflow]').forEach(button => button.onclick = () => { bigBoxIndex = Number(button.dataset.coverflow); selectedId = bigBoxGames[bigBoxIndex].id; renderBigBox(); });
+      } else {
+        $('bigBoxStage').className = 'bigbox-stage';
+        $('bigBoxStage').innerHTML = `<div class="bigbox-cover">${game.has_cover ? `<img src="${media(game,'cover')}" alt="">` : escapeHtml(game.name)}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${game.path_exists ? '' : 'disabled'}>${playLabel}</button></div>`;
+      }
       $('bigBoxPlay').onclick = () => launch(game.id);
+      applyLibraryMusic();
+    }
+    function applyLibraryMusic() {
+      const path = appSettings.library_music;
+      if (!path) { if (libraryBgm) { libraryBgm.pause(); libraryBgm = null; } return; }
+      if (!libraryBgm) { libraryBgm = new Audio(); libraryBgm.loop = true; libraryBgm.volume = appSettings.video_bgm_mix ? 0.35 : 0.6; }
+      if (libraryBgm.src !== location.origin + path && !libraryBgm.src.endsWith(path)) libraryBgm.src = path;
+      if ($('bigBox').hidden) { libraryBgm.pause(); return; }
+      libraryBgm.play().catch(() => {});
+    }
+    function openBigBoxPause() {
+      const session = runningGames[0];
+      if (!session) return openSessions();
+      const game = games.find(item => item.id === session.game_id);
+      $('bigBoxPauseTitle').textContent = session.game;
+      $('bigBoxPauseMeta').textContent = `${session.paused ? 'Paused' : 'Running'} · started ${session.started.replace('T',' ')}`;
+      $('bigBoxPauseActions').innerHTML = `<button class="primary" data-pause-action="${session.launch_id}:${session.paused ? 'resume' : 'pause'}">${session.paused ? 'Resume' : 'Pause'}</button><button class="icon-button" data-pause-action="${session.launch_id}:stop">Exit game</button>${game?.documents.map((item,index) => `<button class="icon-button" data-pause-doc="${game.id}:${index}">Read ${escapeHtml(item.name)}</button>`).join('') || ''}${raConfigured ? `<button class="icon-button" id="pauseAchievements">Achievements</button>` : ''}`;
+      document.querySelectorAll('[data-pause-action]').forEach(button => button.onclick = async () => {
+        const [launch_id,action] = button.dataset.pauseAction.split(':');
+        await api('/api/session/control',{method:'POST',body:JSON.stringify({launch_id,action})});
+        $('bigBoxPause').hidden = true;
+        openBigBoxPause();
+      });
+      document.querySelectorAll('[data-pause-doc]').forEach(button => button.onclick = () => {
+        const [id,index] = button.dataset.pauseDoc.split(':');
+        const docGame = games.find(item => item.id === Number(id));
+        if (!docGame) return;
+        openReader(docGame, Number(index));
+      });
+      if ($('pauseAchievements')) $('pauseAchievements').onclick = () => { if (game) loadAchievements(game.id); };
+      $('bigBoxPause').hidden = false;
+    }
+    async function openDiscovery() {
+      try {
+        const result = await api('/api/discovery');
+        const labels = {recently_added:'Recently added',never_played:'Never played',continue_playing:'Continue playing',highly_rated:'Highly rated',random_picks:'Random picks',short_sessions:'Short sessions'};
+        $('discoveryContent').innerHTML = Object.entries(labels).map(([key,label]) => {
+          const ids = result[key] || [];
+          const items = ids.map(id => games.find(game => game.id === id)).filter(Boolean);
+          return `<div class="discovery-section"><h3>${label}</h3><div class="discovery-row">${items.length ? items.map(game => `<button class="related-game" data-discovery="${game.id}">${escapeHtml(game.name)}</button>`).join('') : '<span class="description">No matches yet.</span>'}</div></div>`;
+        }).join('');
+        document.querySelectorAll('[data-discovery]').forEach(button => button.onclick = () => { selectedId = Number(button.dataset.discovery); $('discoveryDialog').close(); render(); });
+        $('discoveryDialog').showModal();
+      } catch(error) { notify(error.message); }
+    }
+    async function loadStorefrontCatalog() {
+      const source = $('storefrontSource').value;
+      try {
+        const result = await api(`/api/storefront/catalog?source=${encodeURIComponent(source)}`);
+        $('storefrontCatalog').innerHTML = result.catalog.length ? result.catalog.slice(0, 200).map(item => `<div class="storefront-row"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.source)} · ${item.installed ? 'Installed' : 'Not installed'}</small></div><span>${escapeHtml(item.id)}</span></div>`).join('') : '<p class="description">No storefront entries were found.</p>';
+      } catch(error) { notify(error.message); }
+    }
+    async function importStorefrontCatalog(uninstalledOnly) {
+      const source = $('storefrontSource').value;
+      try {
+        const result = await api('/api/storefront/import',{method:'POST',body:JSON.stringify({source,uninstalled_only:uninstalledOnly,installed_only:!uninstalledOnly})});
+        await refresh();
+        notify(`${result.added} ${uninstalledOnly ? 'uninstalled catalog' : 'installed'} entr${result.added === 1 ? 'y' : 'ies'} added`);
+      } catch(error) { notify(error.message); }
+    }
+    function openStorefronts() {
+      const settings = appSettings.storefront_auto_import || {};
+      $('autoImportSteam').checked = Boolean(settings.steam);
+      $('autoImportHeroic').checked = Boolean(settings.heroic);
+      $('autoImportLutris').checked = Boolean(settings.lutris);
+      $('storefrontCatalog').innerHTML = '';
+      $('storefrontDialog').showModal();
+    }
+    async function saveStorefrontSettings() {
+      appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify({...collectSettings(),storefront_auto_import:{steam:$('autoImportSteam').checked,heroic:$('autoImportHeroic').checked,lutris:$('autoImportLutris').checked}})});
+      notify('Storefront settings saved');
+    }
+    async function captureScreenshot(id) { try { const result = await api('/api/screenshot',{method:'POST',body:JSON.stringify({id})}); await refresh(); notify(`Screenshot saved to ${result.path}`); } catch(error) { notify(error.message); } }
+    async function downloadBezel(platform) { if (!platform) return notify('Select a game with a platform first'); try { const result = await api('/api/bezels/download',{method:'POST',body:JSON.stringify({platform})}); notify(`Bezels downloaded to ${result.path}`); } catch(error) { notify(error.message); } }
+    async function runStartupStorefrontImports() {
+      const settings = appSettings.storefront_auto_import || {};
+      if (settings.steam) await api('/api/import/steam',{method:'POST',body:'{}'}).catch(() => {});
+      if (settings.heroic) await api('/api/import/heroic',{method:'POST',body:'{}'}).catch(() => {});
+      if (settings.lutris) await api('/api/import/lutris',{method:'POST',body:'{}'}).catch(() => {});
     }
     function startScreenSaver() {
       if (!bigBoxGames.length || $('bigBox').hidden) return;
@@ -1213,7 +1682,7 @@
           if (edge('random')) { bigBoxIndex = Math.floor(Math.random() * bigBoxGames.length); renderBigBox(); }
           if (edge('pageLeft')) moveBigBox(-10);
           if (edge('pageRight')) moveBigBox(10);
-          if (edge('pause') && runningGames.length) openSessions();
+          if (edge('pause') && runningGames.length) openBigBoxPause();
           if (edge('menu')) openBigBoxMenu();
         }
         if (Object.keys(current).some(edge)) bigBoxLastInput = performance.now();
@@ -1224,7 +1693,35 @@
     }
     $('sidebarSearch').oninput = () => { activePlaylist = ''; render(); }; $('view').onchange = () => { activePlaylist = ''; render(); }; $('sort').onchange = renderGrid;
     $('libraryButton').onclick = () => { activePlaylist = ''; platform = 'all'; $('view').value = 'all'; $('sidebarSearch').value = ''; selectedId = null; render(); loadTheme(); };
-    $('addButton').onclick = () => openGameDialog(); $('importButton').onclick = importFolder; $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = backup;
+    $('discoveryButton').onclick = openDiscovery;
+    $('storefrontButton').onclick = openStorefronts;
+    $('closeDiscovery').onclick = $('doneDiscovery').onclick = () => $('discoveryDialog').close();
+    $('closeStorefront').onclick = () => $('storefrontDialog').close();
+    $('saveStorefront').onclick = saveStorefrontSettings;
+    $('importSteamStore').onclick = () => { $('storefrontDialog').close(); importSteam(); };
+    $('importHeroicStore').onclick = () => { $('storefrontDialog').close(); importHeroic(); };
+    $('importLutrisStore').onclick = () => { $('storefrontDialog').close(); importLutris(); };
+    $('importScummvmStore').onclick = async () => { try { const result = await api('/api/import/scummvm',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} ScummVM games imported`); } catch(error) { notify(error.message); } };
+    $('importRpcs3Store').onclick = async () => { try { const result = await api('/api/import/rpcs3',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} RPCS3 games imported`); } catch(error) { notify(error.message); } };
+    $('importVita3kStore').onclick = async () => { try { const result = await api('/api/import/vita3k',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} Vita3K games imported`); } catch(error) { notify(error.message); } };
+    $('openThemeFolder').onclick = async () => { try { const result = await api('/api/themes/open-folder',{method:'POST',body:'{}'}); notify(`Opened ${result.path}`); } catch(error) { notify(error.message); } };
+    $('injectRa').onclick = async () => { try { const result = await api('/api/ra/inject',{method:'POST',body:'{}'}); notify(`Updated ${result.updated.length} emulator config file${result.updated.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
+    $('cleanupMedia').onclick = async () => { try { const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({apply:false})}); duplicateMediaGroups = result.groups; $('applyCleanupMedia').hidden = !duplicateMediaGroups; notify(`${duplicateMediaGroups} duplicate media group${duplicateMediaGroups === 1 ? '' : 's'} found`); } catch(error) { notify(error.message); } };
+    $('applyCleanupMedia').onclick = async () => { if (!confirm('Delete duplicate media files listed by the cleanup scan?')) return; try { const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({apply:true})}); $('applyCleanupMedia').hidden = true; notify(`Removed ${result.paths.length} duplicate file${result.paths.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
+    $('scanAllSaves').onclick = async () => { try { const result = await api('/api/saves/scan/apply',{method:'POST',body:'{}'}); await refresh(); notify(`Added save paths on ${result.updated} location${result.updated === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
+    $('bigBoxPause').onclick = event => { if (event.target === $('bigBoxPause')) $('bigBoxPause').hidden = true; };
+    $('loadStorefrontCatalog').onclick = loadStorefrontCatalog;
+    $('importStorefrontInstalled').onclick = () => importStorefrontCatalog(false);
+    $('importStorefrontUninstalled').onclick = () => importStorefrontCatalog(true);
+    document.querySelectorAll('[data-reader-layout]').forEach(button => button.onclick = () => {
+      $('readerViewport').classList.toggle('spread', button.dataset.readerLayout === 'spread');
+    });
+    document.querySelectorAll('[data-reader-theme]').forEach(button => button.onclick = () => {
+      $('readerFrame').style.filter = button.dataset.readerTheme === 'dark' ? 'invert(1) hue-rotate(180deg)' : '';
+    });
+    $('readerPrev').onclick = () => setReaderPage(readerPage - 1);
+    $('readerNext').onclick = () => setReaderPage(readerPage + 1);
+    $('addButton').onclick = () => openGameDialog(); $('importButton').onclick = importFolder; $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = backup;
     $('fullscreenButton').onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
     $('surpriseButton').onclick = () => { const visible = filteredGames(); if (visible.length) { selectedId = visible[Math.floor(Math.random() * visible.length)].id; render(); } };
     $('imageGroup').onchange = async () => {
@@ -1245,12 +1742,33 @@
     $('closeHealth').onclick = $('doneHealth').onclick = () => $('healthDialog').close();
     $('closeBulk').onclick = $('cancelBulk').onclick = () => $('bulkDialog').close();
     $('closeSessions').onclick = $('doneSessions').onclick = () => $('sessionsDialog').close();
+    $('closeHistory').onclick = $('doneHistory').onclick = () => $('historyDialog').close();
+    $('closeWelcome').onclick = () => $('welcomeDialog').close();
+    $('welcomeImportFolder').onclick = () => { $('welcomeDialog').close(); importFolder(); };
+    $('welcomeImportSteam').onclick = () => { $('welcomeDialog').close(); importSteam(); };
+    $('welcomeSyncMetadata').onclick = async () => {
+      $('welcomeDialog').close();
+      try {
+        await api('/api/metadata/sync',{method:'POST',body:'{}'});
+        notify('Metadata sync started');
+        watchMetadata();
+      } catch(error) { notify(error.message); }
+    };
+    $('welcomeOpenSettings').onclick = () => { $('welcomeDialog').close(); openSettings(); };
+    $('welcomeDone').onclick = completeWelcome;
+    $('reopenWelcome').onclick = () => $('welcomeDialog').showModal();
+    $('settingsSearch').oninput = filterSettings;
+    $('forceShutdown').onclick = () => gracefulShutdown(true);
+    window.addEventListener('beforeunload', event => { if (runningGames.length) { event.preventDefault(); gracefulShutdown(); } });
+    document.addEventListener('keydown', event => {
+      if ((event.ctrlKey || event.metaKey) && event.key === ',') { event.preventDefault(); openSettings(); }
+    });
     $('closeSettings').onclick = $('cancelSettings').onclick = () => $('settingsDialog').close();
     $('closeBigBoxMenu').onclick = closeBigBoxMenu;
     $('applyBigBoxMenu').onclick = applyBigBoxMenu;
     $('screenSaver').onclick = stopScreenSaver;
     $('closeMedia').onclick = () => { $('mediaDialog').close(); $('fullScreenshot').removeAttribute('src'); };
-    $('closeReader').onclick = () => { $('readerDialog').close(); $('readerFrame').removeAttribute('src'); };
+    $('closeReader').onclick = () => { $('readerDialog').close(); $('readerFrame').removeAttribute('src'); readerUrl = ''; readerPage = 1; };
     $('bigBox').onkeydown = event => {
       if (!$('screenSaver').hidden) {
         const game = screenSaverGame;
@@ -1268,13 +1786,13 @@
       if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') moveBigBox(-1);
       if (event.key === 'ArrowRight' || event.key === 'ArrowDown') moveBigBox(1);
       if (event.key === 'Enter') launch(bigBoxGames[bigBoxIndex].id);
-      if (event.key.toLowerCase() === 'p' && runningGames.length) openSessions();
+      if (event.key.toLowerCase() === 'p' && runningGames.length) openBigBoxPause();
       if (event.key.toLowerCase() === 'm') openBigBoxMenu();
       if (event.key.toLowerCase() === 'r') { bigBoxIndex = Math.floor(Math.random() * bigBoxGames.length); renderBigBox(); }
       if (event.key.toLowerCase() === 'f') favoriteBigBox();
       if (event.key === 'Escape' || event.key === 'Backspace') closeBigBox();
     };
-    Promise.all([refresh(),loadTheme()]).then(pollSessions).catch(error => notify(error.message));
+    Promise.all([refresh(),loadTheme()]).then(async () => { pollSessions(); maybeShowWelcome(); await runStartupStorefrontImports().catch(() => {}); }).catch(error => notify(error.message));
   </script>
 </body>
 </html>

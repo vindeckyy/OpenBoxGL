@@ -1,0 +1,11 @@
+[
+  {
+    "id": "openbox.library-stats",
+    "name": "Library Stats Hook",
+    "version": "1.0.0",
+    "description": "Example after_session hook that keeps library statistics compatible with plugin workflows.",
+    "url": "",
+    "hooks": ["after_session"],
+    "local_only": true
+  }
+]

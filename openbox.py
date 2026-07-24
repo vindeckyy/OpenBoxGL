@@ -23,8 +23,14 @@ LEGACY_DATA = Path.home() / ".local" / "share" / "launchbox-linux" / "library.js
 if not CUSTOM_DATA_DIR and not DATA.exists() and LEGACY_DATA.is_file():
     APP_DIR.mkdir(parents=True, exist_ok=True)
     shutil.copy2(LEGACY_DATA, DATA)
-EXTENSIONS = {".sh", ".appimage", ".exe", ".iso", ".rom", ".nes", ".sfc", ".smc", ".gba", ".gb", ".gbc", ".zip", ".7z", ".rar"}
-PLATFORM_BY_EXTENSION = {".nes": "NES", ".sfc": "SNES", ".smc": "SNES", ".gba": "Game Boy Advance", ".gb": "Game Boy", ".gbc": "Game Boy Color", ".iso": "Disc image"}
+from parity_import import EXTENSIONS_EXTRA, PLATFORM_BY_EXTENSION_EXTRA
+
+EXTENSIONS = {".sh", ".appimage", ".exe", ".iso", ".rom", ".nes", ".sfc", ".smc", ".gba", ".gb", ".gbc", ".zip", ".7z", ".rar"} | EXTENSIONS_EXTRA
+PLATFORM_BY_EXTENSION = {
+    ".nes": "NES", ".sfc": "SNES", ".smc": "SNES", ".gba": "Game Boy Advance",
+    ".gb": "Game Boy", ".gbc": "Game Boy Color", ".iso": "Disc image",
+    **PLATFORM_BY_EXTENSION_EXTRA,
+}
 
 
 def load_state():

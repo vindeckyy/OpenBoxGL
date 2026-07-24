@@ -14,8 +14,10 @@ def main():
         from openbox import load_state
         from web_app import import_folder_path
 
-        assert import_folder_path(games) == (1, 1)
-        assert import_folder_path(games) == (0, 1)
+        added, found, _ = import_folder_path(games)
+        assert (added, found) == (1, 1)
+        added, found, _ = import_folder_path(games)
+        assert (added, found) == (0, 1)
         imported = load_state()["games"][0]
         assert imported["platform"] == "NES" and imported["name"] == "one"
     print("auto-import self-test: ok")

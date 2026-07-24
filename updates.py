@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBox/releases/latest"
 ASSET = "OpenBox-x86_64.AppImage"
 
@@ -19,9 +19,21 @@ def version_tuple(value):
     return tuple(map(int, match.groups()))
 
 
+def github_request(url, opener=urlopen):
+    from env_config import github_token_from_env
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": f"OpenBox/{VERSION}",
+    }
+    token = github_token_from_env()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return opener(Request(url, headers=headers), timeout=30)
+
+
 def check_update(opener=urlopen):
-    request = Request(RELEASE_API, headers={"Accept":"application/vnd.github+json", "User-Agent":f"OpenBox/{VERSION}"})
-    with opener(request, timeout=15) as response:
+    with github_request(RELEASE_API, opener=opener) as response:
         release = json.load(response)
     version = str(release.get("tag_name", ""))
     assets = {asset.get("name"):asset.get("browser_download_url") for asset in release.get("assets", []) if isinstance(asset, dict)}
@@ -49,14 +61,14 @@ def install_update(update, destination=None, opener=urlopen):
     expected_url = "https://github.com/vindeckyy/OpenBox/releases/download/"
     if not str(update.get("appimage", "")).startswith(expected_url) or not str(update.get("checksum", "")).startswith(expected_url):
         raise ValueError("The update URLs are not trusted OpenBox release assets.")
-    with opener(Request(update["checksum"], headers={"User-Agent":f"OpenBox/{VERSION}"}), timeout=30) as response:
+    with github_request(update["checksum"], opener=opener) as response:
         expected = response.read(4096).decode().split()[0].lower()
     if not re.fullmatch(r"[0-9a-f]{64}", expected):
         raise ValueError("The release checksum is invalid.")
     temporary = destination.with_name(f".{destination.name}.update")
     digest = hashlib.sha256()
     try:
-        with opener(Request(update["appimage"], headers={"User-Agent":f"OpenBox/{VERSION}"}), timeout=120) as response, temporary.open("wb") as output:
+        with github_request(update["appimage"], opener=opener) as response, temporary.open("wb") as output:
             while chunk := response.read(1024 * 1024):
                 digest.update(chunk)
                 output.write(chunk)

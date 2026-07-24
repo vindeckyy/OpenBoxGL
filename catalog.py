@@ -1,8 +1,10 @@
 """Library-level operations shared by the OpenBox interfaces."""
 
 import re
+from datetime import datetime
 
 PROGRESS = {"", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned"}
+MEDIA_FIELDS = ("cover", "background", "video", "music")
 
 
 def related_game_ids(games, selected, limit=8):
@@ -54,3 +56,32 @@ def bulk_update(games, ids, changes):
     for index in selected:
         games[index].update(clean)
     return len(selected)
+
+
+def apply_progress_automation(game, settings, now=None):
+    """Apply LaunchBox-style progress automation after a session ends."""
+    if not settings.get("progress_automation_enabled"):
+        return
+    now = now or datetime.now()
+    play_minutes = int(settings.get("progress_automation_play_minutes", 0) or 0)
+    idle_days = int(settings.get("progress_automation_idle_days", 0) or 0)
+    if play_minutes and game.get("playtime_seconds", 0) >= play_minutes * 60:
+        if not game.get("progress") or game["progress"] == "Paused":
+            game["progress"] = "Playing"
+    if idle_days and game.get("last_played"):
+        try:
+            last = datetime.fromisoformat(str(game["last_played"]))
+            if (now - last).days >= idle_days and game.get("progress") == "Playing":
+                game["progress"] = "Paused"
+        except ValueError:
+            pass
+
+
+def game_media_paths(game):
+    paths = []
+    for field in MEDIA_FIELDS:
+        path = str(game.get(field, "")).strip()
+        if path:
+            paths.append(path)
+    paths.extend(str(path).strip() for path in game.get("screenshots", []) if str(path).strip())
+    return paths

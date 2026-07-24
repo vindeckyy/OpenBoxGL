@@ -54,7 +54,8 @@ def load_credentials(directory):
             return data
     except (OSError, json.JSONDecodeError, AttributeError):
         pass
-    return {}
+    from env_config import retroachievements_from_env
+    return retroachievements_from_env()
 
 
 def save_credentials(directory, username, api_key, fetch=api_get):

@@ -2,8 +2,19 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Local secrets — NEVER commit these
 .env
 .env.*
+!.env.example
+*.pem
+*.key
+*.credentials
+retroachievements.json
+emumovies.json
+**/retroachievements.json
+**/emumovies.json
+
 build/
 *.AppImage
 *.AppImage.sha256

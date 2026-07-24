@@ -54,6 +54,15 @@ def discover_save_paths(game, home=Path.home()):
             home / ".local/share/dolphin-emu/Wii/title",
             home / ".var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/Wii/title",
         ],
+        "WiiWare": [
+            home / ".local/share/dolphin-emu/Wii/title",
+            home / ".var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/Wii/title",
+        ],
+        "Sega Saturn": [
+            home / ".config/retroarch/saves",
+            home / ".var/app/org.libretro.RetroArch/config/retroarch/saves",
+            home / ".mednafen",
+        ],
         "Wii U": [home / ".local/share/Cemu/mlc01/usr/save"],
     }
     candidates.extend(

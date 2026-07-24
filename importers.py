@@ -150,7 +150,14 @@ def import_lutris(home=Path.home(), run=subprocess.run, which=shutil.which):
         if not game_id.isdigit() or not name:
             continue
         origin = " ".join(str(record.get(key, "")) for key in ("service", "source")).lower()
-        source = "EA" if "origin" in origin or "ea app" in origin else "Ubisoft" if "ubisoft" in origin or "uplay" in origin else "Lutris"
+        if "xbox" in origin or "game pass" in origin:
+            source = "Xbox"
+        elif "origin" in origin or "ea app" in origin:
+            source = "EA"
+        elif "ubisoft" in origin or "uplay" in origin:
+            source = "Ubisoft"
+        else:
+            source = "Lutris"
         runner = str(record.get("runner", "")).strip()
         slug = str(record.get("slug") or record.get("game_slug") or "").strip()
         cover = next((
