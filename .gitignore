@@ -21,12 +21,17 @@ build/
 *.AppImage.sha256
 *.AppImage.zsync
 
-# Local scratch notes — never committed
+# Local scratch notes
 .agent/scratch/*
 !.agent/scratch/.gitkeep
 
 # Editor workspace files
 .cursor/
+
+# Editor workspace files
+.agent/OPERATING.md
+.agent/ENTRY.md
+.agent/ENTRY.source.md
 
 # Puppeteer dependency for README screenshot capture
 scripts/node_modules/

@@ -16,6 +16,12 @@
 </p>
 
 <p align="center">
+  <a href="https://donate.stripe.com/5kQ14o4uP43OeM17M8dnW00" title="Voluntary donation to support OpenBox development">
+    <img src="https://img.shields.io/badge/☕_Buy_me_a_coffee-Support_OpenBox-FFDD00?style=for-the-badge" alt="Buy me a coffee — support OpenBox">
+  </a>
+</p>
+
+<p align="center">
   <a href="#overview">Overview</a> |
   <a href="#screenshots">Screenshots</a> |
   <a href="#why-openbox-on-linux">Why OpenBox on Linux</a> |
@@ -239,7 +245,7 @@ LaunchBox Premium workflows are included in OpenBox at no cost:
 
 ### AppImage (recommended)
 
-Download the latest release from [GitHub Releases](https://github.com/vindeckyy/OpenBox/releases).
+Download the latest release from [GitHub Releases](https://github.com/vindeckyy/OpenBox/releases/latest).
 
 ```bash
 chmod +x OpenBox-x86_64.AppImage
@@ -413,6 +419,16 @@ For the full legal policy, see [DISCLAIMER.md](DISCLAIMER.md).
 ---
 
 ## Support
+
+OpenBox is free and open source (AGPL-3.0). If it saves you time, a voluntary donation helps cover hosting and development:
+
+<p align="center">
+  <a href="https://donate.stripe.com/5kQ14o4uP43OeM17M8dnW00">
+    <img src="https://img.shields.io/badge/☕_Buy_me_a_coffee-Support_OpenBox-FFDD00?style=for-the-badge" alt="Buy me a coffee — support OpenBox">
+  </a>
+</p>
+
+Payments are processed by [Stripe](https://stripe.com). No account or subscription is required.
 
 - [Report a bug](https://github.com/vindeckyy/OpenBox/issues/new?template=bug_report.yml)
 - [Request a feature](https://github.com/vindeckyy/OpenBox/issues/new?template=feature_request.yml)

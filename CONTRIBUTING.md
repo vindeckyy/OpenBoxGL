@@ -25,6 +25,7 @@ Participation in this project is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUC
 ```bash
 git clone https://github.com/vindeckyy/OpenBox.git
 cd OpenBox
+## Security issues
 python3 web_app.py
 ```
 
