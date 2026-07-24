@@ -289,14 +289,14 @@ Contributions from the community are warmly welcomed!
 
 ---
 
-## ⚖️ Legal Disclaimer
+## ⚖️ Legal & DMCA Disclaimer
 
-**OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox, Unbroken Software, LLC, or any of their subsidiaries or affiliates.**
+**OpenBox is an independent open-source project developed from scratch and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox, Unbroken Software, LLC, or any of their subsidiaries or affiliates.**
 
-- The official LaunchBox website is located at [https://www.launchbox-app.com](https://www.launchbox-app.com).
-- All product names, logos, brands, trademarks, and registered trademarks mentioned in this repository are property of their respective owners.
-- References to LaunchBox, Big Box, or other third-party products are made strictly for compatibility tracking, feature-parity comparison, and descriptive purposes.
-- For complete trademark acknowledgments and legal terms, see [DISCLAIMER.md](DISCLAIMER.md).
+- **Clean-Room Open Source**: OpenBox is a ground-up open-source implementation developed independently without proprietary code or trade secrets.
+- **Zero Proprietary Assets**: OpenBox contains **no copyrighted ROMs, no emulator firmware/BIOS images, no encryption keys, and no DRM-bypassing tools**.
+- **Nominative Fair Use**: Product names, logos, and trademarks (LaunchBox, Steam, Heroic, Lutris, RetroArch, Nintendo, Sony, Microsoft, etc.) belong to their respective owners and are referenced strictly under 15 U.S.C. § 1125(c)(3)(A) for software compatibility and feature-parity comparison.
+- **DMCA Compliance**: For complete trademark attributions, clean-room declarations, and DMCA takedown notice policy, see [DISCLAIMER.md](DISCLAIMER.md).
 
 ---
 

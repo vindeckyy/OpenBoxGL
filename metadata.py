@@ -1,4 +1,4 @@
-"""LaunchBox Games Database sync, search, and media download."""
+"""LaunchBox Games Database sync, search, and media download. Independent open-source implementation not affiliated with LaunchBox or Unbroken Software, LLC."""
 
 import re
 import shutil
