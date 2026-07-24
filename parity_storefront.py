@@ -190,7 +190,7 @@ def catalog_lutris(home=Path.home(), run=None, which=shutil.which):
     return catalog
 
 
-def storefront_catalog(source, home=Path.home(), run=None, which=shutil.which):
+def storefront_catalog(source, home=Path.home(), run=None, which=shutil.which, settings=None):
     source = str(source or "").strip().casefold()
     if source == "steam":
         return catalog_steam(home)
@@ -198,7 +198,11 @@ def storefront_catalog(source, home=Path.home(), run=None, which=shutil.which):
         return catalog_heroic(home)
     if source == "lutris":
         return catalog_lutris(home, run=run, which=which)
-    raise ValueError("Storefront source must be steam, heroic, or lutris.")
+    if source == "gameyfin":
+        from parity_gameyfin import catalog_gameyfin
+        catalog, _providers = catalog_gameyfin(settings or {})
+        return catalog
+    raise ValueError("Storefront source must be steam, heroic, lutris, or gameyfin.")
 
 
 def catalog_entries_to_games(entries, *, uninstalled_only=False, installed_only=False):
@@ -209,16 +213,22 @@ def catalog_entries_to_games(entries, *, uninstalled_only=False, installed_only=
             continue
         if installed_only and not installed:
             continue
+        source = entry.get("source", "")
+        platform = entry.get("platform") or (
+            "PC" if source in {"Steam", "Epic", "GOG", "Amazon", "EA", "Ubisoft", "Xbox", "Lutris", "Gameyfin"} else "Windows"
+        )
         game = {
             "name": entry["name"],
-            "platform": "PC" if entry.get("source") in {"Steam", "Epic", "GOG", "Amazon", "EA", "Ubisoft", "Xbox", "Lutris"} else "Windows",
-            "source": entry["source"],
-            "collection": entry["source"],
+            "platform": platform,
+            "source": source,
+            "collection": source,
             "path": entry["path"],
             "launch": entry["launch"],
             "install_dir": entry.get("install_dir", ""),
             "store_catalog": True,
             "store_installed": installed,
+            "owned": True,
+            "description": entry.get("description", ""),
         }
         if entry.get("steam_app_id"):
             game["steam_app_id"] = entry["steam_app_id"]
@@ -226,7 +236,10 @@ def catalog_entries_to_games(entries, *, uninstalled_only=False, installed_only=
             game["heroic_app_id"] = entry["heroic_app_id"]
         if entry.get("lutris_id"):
             game["lutris_id"] = entry["lutris_id"]
+        if entry.get("gameyfin_id"):
+            game["gameyfin_id"] = entry["gameyfin_id"]
+            game["gameyfin_provider"] = entry.get("gameyfin_provider", "")
         if not installed:
-            game["notes"] = f"Storefront entry opens the {entry['source']} install page."
+            game["notes"] = entry.get("notes") or f"Owned via {source}. Install or open the storefront page to get files locally."
         games.append(game)
     return games

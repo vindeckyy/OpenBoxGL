@@ -8,11 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Five stock Web UI themes: Midnight Circuit, Phosphor Terminal, Harbor Light, Cinema Marquee, and Nordic Mist
-
-### Fixed
-
-- Update self-test derives the mock GitHub release from the current `VERSION` so CI stays green after release bumps
+- Gameyfin storefront integration: browse owned library, import, install/uninstall on demand in desktop and Big Box
+- Library and Big Box filters for installed-only vs all owned games
+- Ludusavi and Hoard save-tool hooks from the game detail pane (when installed on PATH)
 
 ## [0.3.0] - 2026-07-24
 

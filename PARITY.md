@@ -56,6 +56,8 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Game Discovery Center | done | Curated local discovery lists launch from the Discovery menu |
 | EmuMovies / Bezel Project | done | Bezel downloads and EmuMovies credential/download hooks work with licensed accounts |
 | Storefront Manager / uninstalled auto-import | done | Unified storefront dialog, catalog browse, uninstalled import, and startup auto-import work |
+| Gameyfin self-hosted library | done | Catalog import, install/uninstall on demand, desktop + Big Box owned/installed filters |
+| Ludusavi / Hoard save tools | done | Optional CLI hooks from game detail when binaries are on PATH |
 | ScummVM / RPCS3 / Vita3K library import | done | Dedicated import endpoints scan common emulator libraries |
 | MAME community high scores | done | Local high-score discovery plus export/import bundles for sharing |
 | OBS recording attach | done | Latest OBS recording auto-attaches on session close; manual attach remains available |

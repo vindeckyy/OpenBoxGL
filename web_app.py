@@ -45,6 +45,14 @@ from parity_media import (
 )
 from parity_saves import enforce_backup_limit, extra_save_candidates, games_with_saves, scan_all_saves
 from parity_storefront import catalog_entries_to_games, storefront_catalog
+from parity_gameyfin import (
+    GameyfinError,
+    catalog_gameyfin,
+    install_gameyfin_game,
+    test_gameyfin_connection,
+    uninstall_gameyfin_game,
+)
+from parity_save_tools import run_hoard, run_ludusavi, save_tool_status
 from stock_themes import ensure_stock_themes
 from parity_premium import (
     BULK_WIZARD_FIELDS,
@@ -91,6 +99,7 @@ FIELDS = {
     "video_snap", "video_theme", "video_trailer", "video_recording",
     "progress", "rating", "notes", "region", "play_mode", "sort_title", "added_at",
     "alternate_names", "max_players", "wikipedia_url", "video_url", "hide_in_bigbox", "esrb",
+    "gameyfin_id", "gameyfin_provider", "store_catalog", "store_installed", "owned",
 }
 
 
@@ -198,6 +207,13 @@ def auto_import_worker():
                 merge_imported_games(import_lutris(), lambda game: ("lutris", str(game.get("lutris_id", ""))))
             except (OSError, ValueError):
                 pass
+        if storefront.get("gameyfin"):
+            try:
+                catalog, _providers = catalog_gameyfin(settings)
+                imported = catalog_entries_to_games(catalog)
+                merge_imported_games(imported, lambda game: ("gameyfin", str(game.get("gameyfin_id", ""))))
+            except (OSError, ValueError, GameyfinError):
+                pass
 
 
 def clean_commands(commands):
@@ -253,10 +269,17 @@ def public_settings(state=None):
         "show_playlist_actions": settings.get("show_playlist_actions", True),
         "sidebar_sections": settings.get("sidebar_sections", ["search", "view", "platforms", "playlists", "filters"]),
         "hidden_sidebar_sections": settings.get("hidden_sidebar_sections", []),
-        "storefront_auto_import": settings.get("storefront_auto_import", {"steam": False, "heroic": False, "lutris": False}),
+        "storefront_auto_import": settings.get("storefront_auto_import", {"steam": False, "heroic": False, "lutris": False, "gameyfin": False}),
         "obs_auto_attach": settings.get("obs_auto_attach", True),
         "obs_recording_path": settings.get("obs_recording_path", ""),
         "dynamic_play_button": settings.get("dynamic_play_button", True),
+        "gameyfin_url": settings.get("gameyfin_url", ""),
+        "gameyfin_username": settings.get("gameyfin_username", ""),
+        "gameyfin_password_set": bool(settings.get("gameyfin_password")),
+        "gameyfin_install_dir": settings.get("gameyfin_install_dir", ""),
+        "gameyfin_provider": settings.get("gameyfin_provider", ""),
+        "ludusavi_backup_path": settings.get("ludusavi_backup_path", ""),
+        "save_tools": save_tool_status(),
         "platform_documents": settings.get("platform_documents", {}),
         "custom_field_defs": custom_field_defs(settings),
         "platform_categories": platform_categories(settings),
@@ -287,6 +310,8 @@ def public_state():
         normalize_video_fields(game)
         visible = {key: game.get(key, "") for key in FIELDS}
         video_field, video_path = active_video(game, state.get("settings", {}).get("video_priority"))
+        path_exists = bool(game.get("path")) and Path(game["path"]).exists()
+        store_installed = bool(game["store_installed"]) if "store_installed" in game else path_exists
         visible.update({
             "id": index,
             "favorite": bool(game.get("favorite")),
@@ -295,7 +320,7 @@ def public_state():
             "last_played": game.get("last_played", ""),
             "play_count": game.get("play_count", 0),
             "playtime_seconds": game.get("playtime_seconds", 0),
-            "path_exists": bool(game.get("path")) and Path(game["path"]).exists(),
+            "path_exists": path_exists,
             "has_cover": bool(game.get("cover")) and Path(game["cover"]).is_file(),
             "has_background": bool(game.get("background")) and Path(game["background"]).is_file(),
             "has_video": bool(video_path),
@@ -317,6 +342,11 @@ def public_state():
             "esrb": game.get("esrb", ""),
             "custom_fields": game.get("custom_fields", {}) if isinstance(game.get("custom_fields"), dict) else {},
             "platform_category": category_for_platform(game.get("platform", ""), state.get("settings", {})),
+            "store_catalog": bool(game.get("store_catalog")),
+            "store_installed": store_installed,
+            "owned": bool(game.get("owned") or game.get("store_catalog") or game.get("steam_app_id") or game.get("heroic_app_id") or game.get("lutris_id") or game.get("gameyfin_id")),
+            "installable": bool(game.get("gameyfin_id")) and not store_installed,
+            "gameyfin_id": game.get("gameyfin_id", ""),
         })
         games.append(visible)
     decorated = run_plugins(DATA.parent / "plugins", "library", {"games": games}).get("games", games)
@@ -939,7 +969,20 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(403, {"error": "Unauthorized"})
                 return
             source = parse_qs(parsed.query).get("source", [""])[0]
-            self.send_json(200, {"catalog": storefront_catalog(source)})
+            self.send_json(200, {"catalog": storefront_catalog(source, settings=load_state().get("settings", {}))})
+            return
+        if parsed.path == "/api/gameyfin/providers":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            _catalog, providers = catalog_gameyfin(load_state().get("settings", {}))
+            self.send_json(200, {"providers": providers})
+            return
+        if parsed.path == "/api/save-tools/status":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            self.send_json(200, save_tool_status())
             return
         if parsed.path == "/api/plugins/catalog":
             if not self.authorized():
@@ -1063,6 +1106,16 @@ class Handler(BaseHTTPRequestHandler):
                 self.save_platform_documents(payload)
             elif route == "/api/storefront/import":
                 self.import_storefront_catalog(payload)
+            elif route == "/api/gameyfin/test":
+                self.test_gameyfin(payload)
+            elif route == "/api/gameyfin/install":
+                self.install_gameyfin(payload)
+            elif route == "/api/gameyfin/uninstall":
+                self.uninstall_gameyfin(payload)
+            elif route == "/api/save-tools/ludusavi":
+                self.run_ludusavi_tool(payload)
+            elif route == "/api/save-tools/hoard":
+                self.run_hoard_tool(payload)
             elif route == "/api/highscores/export":
                 self.export_game_highscores(payload)
             elif route == "/api/highscores/import":
@@ -1105,7 +1158,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.dedupe()
             else:
                 self.send_json(404, {"error": "Not found"})
-        except (OSError, ValueError, KeyError, IndexError, json.JSONDecodeError) as error:
+        except (OSError, ValueError, KeyError, IndexError, json.JSONDecodeError, GameyfinError, FileNotFoundError, RuntimeError) as error:
             self.send_json(400, {"error": str(error)})
 
     def launch(self, payload):
@@ -1518,7 +1571,7 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Storefront auto-import settings must be an object.")
         clean_storefront = {
             key: bool(storefront_auto_import.get(key))
-            for key in ("steam", "heroic", "lutris")
+            for key in ("steam", "heroic", "lutris", "gameyfin")
         }
         obs_auto_attach = bool(payload.get("obs_auto_attach", load_state().get("settings", {}).get("obs_auto_attach", True)))
         obs_recording_path = str(payload.get("obs_recording_path", "")).strip()
@@ -1527,12 +1580,30 @@ class Handler(BaseHTTPRequestHandler):
             if not recording_path.is_absolute() or not recording_path.is_dir():
                 raise ValueError(f"OBS recording folder does not exist: {recording_path}")
             obs_recording_path = str(recording_path)
+        gameyfin_url = str(payload.get("gameyfin_url", load_state().get("settings", {}).get("gameyfin_url", ""))).strip()
+        if gameyfin_url and not gameyfin_url.startswith(("http://", "https://")):
+            gameyfin_url = "http://" + gameyfin_url
+        gameyfin_install_dir = str(payload.get("gameyfin_install_dir", load_state().get("settings", {}).get("gameyfin_install_dir", ""))).strip()
+        if gameyfin_install_dir:
+            install_path = Path(gameyfin_install_dir).expanduser()
+            install_path.mkdir(parents=True, exist_ok=True)
+            if not install_path.is_absolute() or not install_path.is_dir():
+                raise ValueError(f"Gameyfin install folder is invalid: {install_path}")
+            gameyfin_install_dir = str(install_path)
+        ludusavi_backup_path = str(payload.get("ludusavi_backup_path", load_state().get("settings", {}).get("ludusavi_backup_path", ""))).strip()
+        if ludusavi_backup_path:
+            backup_path = Path(ludusavi_backup_path).expanduser()
+            backup_path.mkdir(parents=True, exist_ok=True)
+            ludusavi_backup_path = str(backup_path)
         hidden_sidebar_sections = payload.get("hidden_sidebar_sections", [])
         if not isinstance(hidden_sidebar_sections, list):
             raise ValueError("Hidden sidebar sections must be a list.")
         with STATE_LOCK:
             state = load_state()
             settings = state.setdefault("settings", {})
+            gameyfin_password = str(payload.get("gameyfin_password", "")).strip()
+            if not gameyfin_password:
+                gameyfin_password = settings.get("gameyfin_password", "")
             settings.update({
                 "watch_folders": clean_folders,
                 "screensaver_seconds": seconds,
@@ -1571,6 +1642,12 @@ class Handler(BaseHTTPRequestHandler):
                 "bigbox_shutdown_commands": clean_commands(payload.get("bigbox_shutdown_commands", settings.get("bigbox_shutdown_commands", []))),
                 "tray_enabled": bool(payload.get("tray_enabled", settings.get("tray_enabled", False))),
                 "minimize_to_tray": bool(payload.get("minimize_to_tray", settings.get("minimize_to_tray", False))),
+                "gameyfin_url": gameyfin_url,
+                "gameyfin_username": str(payload.get("gameyfin_username", settings.get("gameyfin_username", ""))).strip(),
+                "gameyfin_password": gameyfin_password,
+                "gameyfin_install_dir": gameyfin_install_dir,
+                "gameyfin_provider": str(payload.get("gameyfin_provider", settings.get("gameyfin_provider", ""))).strip(),
+                "ludusavi_backup_path": ludusavi_backup_path,
             })
             save_state(state)
         self.send_json(200, public_settings(state))
@@ -2049,7 +2126,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def import_storefront_catalog(self, payload):
         source = str(payload.get("source", "")).strip()
-        catalog = storefront_catalog(source)
+        settings = load_state().get("settings", {})
+        catalog = storefront_catalog(source, settings=settings)
         imported = catalog_entries_to_games(
             catalog,
             uninstalled_only=bool(payload.get("uninstalled_only")),
@@ -2061,10 +2139,70 @@ class Handler(BaseHTTPRequestHandler):
             identity = lambda game: ("heroic", str(game.get("source", "")), str(game.get("heroic_app_id", "")))
         elif source.casefold() == "lutris":
             identity = lambda game: ("lutris", str(game.get("lutris_id", "")))
+        elif source.casefold() == "gameyfin":
+            identity = lambda game: ("gameyfin", str(game.get("gameyfin_id", "")))
         else:
-            raise ValueError("Storefront source must be steam, heroic, or lutris.")
+            raise ValueError("Storefront source must be steam, heroic, lutris, or gameyfin.")
         added, found = merge_imported_games(imported, identity)
         self.send_json(200, {"added": added, "found": found, "imported": len(imported)})
+
+    def test_gameyfin(self, payload):
+        settings = {**load_state().get("settings", {}), **payload}
+        result = test_gameyfin_connection(settings)
+        self.send_json(200, result)
+
+    def install_gameyfin(self, payload):
+        game_id = payload.get("gameyfin_id") or payload.get("id")
+        index = payload.get("library_id")
+        with STATE_LOCK:
+            state = load_state()
+            installed = install_gameyfin_game(state.get("settings", {}), game_id)
+            if index is not None:
+                game = state["games"][int(index)]
+                game.update(installed)
+            else:
+                identity = ("gameyfin", str(installed.get("gameyfin_id", "")))
+                existing = {
+                    ("gameyfin", str(game.get("gameyfin_id", ""))): game
+                    for game in state["games"]
+                    if game.get("gameyfin_id")
+                }
+                if identity in existing:
+                    existing[identity].update(installed)
+                else:
+                    state["games"].append(installed)
+            save_state(state)
+        self.send_json(200, {"installed": True, "game": installed})
+
+    def uninstall_gameyfin(self, payload):
+        index = int(payload["id"])
+        with STATE_LOCK:
+            state = load_state()
+            game = state["games"][index]
+            if not game.get("gameyfin_id"):
+                raise ValueError("This game is not a Gameyfin entry.")
+            result = uninstall_gameyfin_game(game)
+            save_state(state)
+        self.send_json(200, result)
+
+    def run_ludusavi_tool(self, payload):
+        settings = load_state().get("settings", {})
+        game_name = str(payload.get("name", ""))
+        if "id" in payload and not game_name:
+            game_name = load_state()["games"][int(payload["id"])].get("name", "")
+        result = run_ludusavi(
+            str(payload.get("action", "backup")),
+            game_name=game_name,
+            path=str(payload.get("path") or settings.get("ludusavi_backup_path", "")),
+        )
+        self.send_json(200, result)
+
+    def run_hoard_tool(self, payload):
+        game_name = str(payload.get("name", ""))
+        if "id" in payload and not game_name:
+            game_name = load_state()["games"][int(payload["id"])].get("name", "")
+        result = run_hoard(str(payload.get("action", "backup")), game_name=game_name)
+        self.send_json(200, result)
 
     def export_game_highscores(self, payload):
         index = int(payload["id"])

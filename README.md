@@ -55,7 +55,7 @@ So here we are.
 
 Honestly, OpenBox probably never gets written if LaunchBox ships a real Linux version and stops metering everyday library features behind a paywall. The community asked. The gap stayed. OpenBox exists because someone finally got tired of waiting and built the Linux front end themselves, with the Premium-shaped workflows included for free.
 
-OpenBox is designed around how Linux gamers actually run software: Steam, Heroic, Lutris, Flatpak emulators, RetroArch, and local ROM folders. No Windows tax. No Premium gate for custom fields, ESRB filters, list view, media packs, or the rest of the checklist people already paid for once by owning their games.
+OpenBox is designed around how Linux gamers actually run software: Steam, Heroic, Lutris, Gameyfin, Flatpak emulators, RetroArch, and local ROM folders. No Windows tax. No Premium gate for custom fields, ESRB filters, list view, media packs, or the rest of the checklist people already paid for once by owning their games.
 
 ### What that means in practice
 
@@ -81,7 +81,7 @@ OpenBox is designed around how Linux gamers actually run software: Steam, Heroic
 OpenBox is a strong fit if you:
 
 - Run Linux on a desktop, laptop, Steam Deck, or handheld PC
-- Want one library for Steam, Heroic, Lutris, ROMs, and standalone emulators
+- Want one library for Steam, Heroic, Lutris, Gameyfin, ROMs, and standalone emulators
 - Prefer local JSON library state over vendor cloud lock-in
 - Need Flathub-aware emulator install/update flows
 - Want RetroAchievements, save backups, session history, and Big Box in one app
@@ -112,6 +112,11 @@ OpenBox imports from:
 - Installed Steam libraries across standard Steam root layouts
 - Heroic for Epic, GOG, and Amazon titles
 - Lutris for EA, Ubisoft, Xbox, and Game Pass tagged entries
+- Gameyfin self-hosted libraries with on-demand install and uninstall
+- ScummVM, RPCS3, and Vita3K library scans
+- Local ROM folders with recursive discovery
+- Arcade (MAME/FinalBurn Neo) set classification
+- Storefront Manager for owned vs. installed catalog browsing and optional startup auto-import
 - Local ROM folders with extension-aware scanning and drag-and-drop import
 - Multi-platform folder import, multi-emulator install chooser, ROM version ranking, and multi-disc M3U generation
 - MAME and FinalBurn DAT/XML full-set classification
@@ -126,7 +131,7 @@ OpenBox syncs with the official LaunchBox Games Database, matches games locally,
 
 ### Launching, sessions, and saves
 
-OpenBox launches through safe tokenized emulator commands without shell interpolation, extracts archives before launch when needed, tracks sessions with play counts and play time, shows startup/shutdown overlays, supports force-close on exit, and can back up saves on session close with retention limits and guarded restore.
+OpenBox launches through safe tokenized emulator commands without shell interpolation, extracts archives before launch when needed, tracks sessions with play counts and play time, shows startup/shutdown overlays, supports force-close on exit, and can back up saves on session close with retention limits and guarded restore. Optional Ludusavi and Hoard CLI hooks are available from the game detail pane when those tools are on PATH.
 
 RetroAchievements support includes account login, ROM hash matching for ZIP and 7z archives, badge display, hardcore status, beaten/mastered stats, Big Box filters, pause-menu access, and emulator launch injection.
 
@@ -150,8 +155,9 @@ The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md
 
 ### Unified library and discovery
 
-- One catalog for Steam, Heroic, Lutris, ROM folders, ScummVM, RPCS3, Vita3K, and local executables
-- Storefront Manager for catalog browse, uninstalled import, and startup auto-import
+- One catalog for Steam, Heroic, Lutris, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and local executables
+- Storefront Manager for catalog browse, uninstalled import, and startup auto-import (including Gameyfin install/uninstall)
+- Installed-only and owned-library filters in desktop and Big Box views
 - Game Discovery Center with recently added, never played, continue playing, highly rated, random picks, and short-session lists
 - Collections, saved filters, favorites, bulk edits, custom fields, ESRB filters, list view, platform categories, and Surprise Me random selection
 - Platform documents pane for manuals and reference files per platform
@@ -324,6 +330,8 @@ OpenBox/
 ├── parity_import.py        M3U, multi-platform import, emulator recommendations, ROM ranking
 ├── parity_premium.py       Premium-equivalent features (custom fields, ESRB, media packs, localization)
 ├── parity_storefront.py    Storefront Manager catalog and uninstalled import
+├── parity_gameyfin.py      Gameyfin library client, install, and uninstall
+├── parity_save_tools.py    Ludusavi and Hoard CLI wrappers
 ├── parity_discovery.py     Game Discovery Center lists
 ├── parity_media.py         Media queues, duplicates, region priority, limits
 ├── parity_saves.py         Save retention and backup-on-close helpers

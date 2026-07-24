@@ -249,7 +249,7 @@
   <div class="workspace">
     <aside class="sidebar">
       <label class="field" data-sidebar-section="search"><span>Search</span><input id="sidebarSearch" type="search" aria-label="Search library"></label>
-      <label class="field" data-sidebar-section="view"><span>View</span><select id="view"><option value="all">All games</option><option value="favorites">Favorites</option><option value="recent">Recently played</option><option value="never">Never played</option><option value="playing">In progress</option><option value="completed">Completed</option><option value="saves">Has saves</option><option value="hidden">Hidden</option><option value="missing">Missing files</option></select></label>
+      <label class="field" data-sidebar-section="view"><span>View</span><select id="view"><option value="all">All games</option><option value="favorites">Favorites</option><option value="recent">Recently played</option><option value="never">Never played</option><option value="playing">In progress</option><option value="completed">Completed</option><option value="installed">Installed only</option><option value="owned">Owned / not installed</option><option value="saves">Has saves</option><option value="hidden">Hidden</option><option value="missing">Missing files</option></select></label>
       <label class="field" data-sidebar-section="filters"><span>ESRB</span><select id="esrbFilter"><option value="">Any rating</option><option>E</option><option>E10+</option><option>T</option><option>M</option><option>AO</option><option>RP</option><option>Unrated</option></select></label>
       <div class="section-title" data-sidebar-section="filters">Categories</div>
       <nav class="platforms" id="platformCategories" data-sidebar-section="filters"></nav>
@@ -494,6 +494,7 @@
         <label class="field settings-field" data-setting="attract mode screensaver big box"><span>Attract mode delay in seconds</span><input id="attractModeSeconds" type="number" min="0" max="3600"></label>
         <label class="check settings-field" data-setting="system tray minimize close"><input type="checkbox" id="trayEnabled"> Enable desktop tray integration</label>
         <label class="check settings-field" data-setting="system tray minimize close"><input type="checkbox" id="minimizeToTray"> Minimize to tray when window closes</label>
+        <label class="field wide settings-field" data-setting="ludusavi hoard saves backup"><span>Ludusavi backup path, optional</span><input id="ludusaviBackupPath" placeholder="Leave blank for Ludusavi default"></label>
         <div class="wide settings-field" data-setting="media packs themes badges controller"><button type="button" class="icon-button" id="applyMediaPack">Apply bundled media pack</button><span class="description" id="mediaPackStatus"></span></div>
         <div class="wide section-title settings-field" data-setting="controller gamepad mapping">Standard Gamepad Button Mapping</div>
         <label class="field"><span>Play</span><input data-controller="play" class="settings-field" data-setting="controller gamepad play" type="number" min="0" max="31"></label>
@@ -519,14 +520,21 @@
   <dialog id="storefrontDialog">
     <div class="dialog-head"><h2>Storefront Manager</h2><button type="button" id="closeStorefront">×</button></div>
     <div class="form-grid">
-      <p class="wide description">Import installed games and configure startup auto-import per storefront.</p>
-      <div class="wide extras"><button type="button" class="primary" id="importSteamStore">Import Steam</button><button type="button" class="icon-button" id="importHeroicStore">Import Heroic</button><button type="button" class="icon-button" id="importLutrisStore">Import Lutris</button><button type="button" class="icon-button" id="importScummvmStore">Import ScummVM</button><button type="button" class="icon-button" id="importRpcs3Store">Import RPCS3</button><button type="button" class="icon-button" id="importVita3kStore">Import Vita3K</button></div>
+      <p class="wide description">Import owned and installed games from Steam, Heroic, Lutris, and Gameyfin. Install or uninstall Gameyfin titles on demand from the library or Big Box.</p>
+      <div class="wide extras"><button type="button" class="primary" id="importSteamStore">Import Steam</button><button type="button" class="icon-button" id="importHeroicStore">Import Heroic</button><button type="button" class="icon-button" id="importLutrisStore">Import Lutris</button><button type="button" class="icon-button" id="importGameyfinStore">Import Gameyfin</button><button type="button" class="icon-button" id="importScummvmStore">Import ScummVM</button><button type="button" class="icon-button" id="importRpcs3Store">Import RPCS3</button><button type="button" class="icon-button" id="importVita3kStore">Import Vita3K</button></div>
       <label class="check"><input type="checkbox" id="autoImportSteam"> Auto-import Steam on startup</label>
       <label class="check"><input type="checkbox" id="autoImportHeroic"> Auto-import Heroic on startup</label>
       <label class="check"><input type="checkbox" id="autoImportLutris"> Auto-import Lutris on startup</label>
+      <label class="check"><input type="checkbox" id="autoImportGameyfin"> Auto-import Gameyfin on startup</label>
+      <div class="wide section-title">Gameyfin server</div>
+      <label class="field wide"><span>Gameyfin URL</span><input id="gameyfinUrl" placeholder="http://192.168.1.10:8080"></label>
+      <label class="field"><span>Username</span><input id="gameyfinUsername" autocomplete="username"></label>
+      <label class="field"><span>Password</span><input id="gameyfinPassword" type="password" autocomplete="current-password" placeholder="Leave blank to keep current"></label>
+      <label class="field wide"><span>Local install folder</span><input id="gameyfinInstallDir" placeholder="~/Games/Gameyfin"></label>
+      <div class="wide extras"><button type="button" class="icon-button" id="testGameyfin">Test Gameyfin connection</button><span class="description" id="gameyfinStatus"></span></div>
       <div class="wide section-title">Browse storefront catalogs</div>
-      <label class="field"><span>Source</span><select id="storefrontSource"><option value="steam">Steam</option><option value="heroic">Heroic</option><option value="lutris">Lutris</option></select></label>
-      <div class="wide extras"><button type="button" class="icon-button" id="loadStorefrontCatalog">Load catalog</button><button type="button" class="icon-button" id="importStorefrontInstalled">Import installed</button><button type="button" class="primary" id="importStorefrontUninstalled">Import uninstalled</button></div>
+      <label class="field"><span>Source</span><select id="storefrontSource"><option value="steam">Steam</option><option value="heroic">Heroic</option><option value="lutris">Lutris</option><option value="gameyfin">Gameyfin</option></select></label>
+      <div class="wide extras"><button type="button" class="icon-button" id="loadStorefrontCatalog">Load catalog</button><button type="button" class="icon-button" id="importStorefrontInstalled">Import installed</button><button type="button" class="primary" id="importStorefrontUninstalled">Import owned / uninstalled</button></div>
       <div class="wide storefront-catalog" id="storefrontCatalog"></div>
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="saveStorefront">Save storefront settings</button></div>
@@ -547,7 +555,7 @@
     <div class="bigbox-menu" id="bigBoxMenu" hidden>
       <div class="bigbox-menu-panel">
         <h2>Filter and Sort</h2>
-        <label class="field"><span>Show</span><select id="bigBoxFilter"><option value="all">Current library view</option><option value="favorites">Favorites</option><option value="playing">In progress</option><option value="completed">Completed</option></select></label>
+        <label class="field"><span>Show</span><select id="bigBoxFilter"><option value="all">Current library view</option><option value="installed">Installed games</option><option value="owned">All owned games</option><option value="favorites">Favorites</option><option value="playing">In progress</option><option value="completed">Completed</option></select></label>
         <label class="field"><span>Sort</span><select id="bigBoxSort"><option value="title">Title</option><option value="rating">Rating</option><option value="recent">Recently played</option><option value="playtime">Play time</option><option value="random">Shuffle</option></select></label>
         <label class="field"><span>Achievements</span><select id="bigBoxRaFilter"><option value="all">All games</option><option value="matched">RetroAchievements matched</option><option value="unmatched">Not matched</option></select></label>
         <div class="dialog-actions"><button class="icon-button" id="closeBigBoxMenu" type="button">Cancel</button><button class="primary" id="applyBigBoxMenu" type="button">Apply</button></div>
@@ -612,7 +620,9 @@
       const view = $('view').value;
       const visible = games.filter(game => {
         const completed = ['Beaten','Completed','Mastered'].includes(game.progress);
-        const viewMatch = (view === 'all' && !game.hidden) || (view === 'favorites' && game.favorite && !game.hidden) || (view === 'recent' && game.last_played && !game.hidden) || (view === 'never' && !game.play_count && !game.hidden) || (view === 'playing' && ['Playing','Paused'].includes(game.progress) && !game.hidden) || (view === 'completed' && completed && !game.hidden) || (view === 'saves' && game.has_saves && !game.hidden) || (view === 'hidden' && game.hidden) || (view === 'missing' && !game.path_exists && !game.hidden);
+        const installed = game.store_installed !== false && (game.path_exists || game.store_installed);
+        const ownedUninstalled = Boolean(game.owned || game.store_catalog || game.gameyfin_id) && !installed;
+        const viewMatch = (view === 'all' && !game.hidden) || (view === 'favorites' && game.favorite && !game.hidden) || (view === 'recent' && game.last_played && !game.hidden) || (view === 'never' && !game.play_count && !game.hidden) || (view === 'playing' && ['Playing','Paused'].includes(game.progress) && !game.hidden) || (view === 'completed' && completed && !game.hidden) || (view === 'installed' && installed && !game.hidden) || (view === 'owned' && ownedUninstalled && !game.hidden) || (view === 'saves' && game.has_saves && !game.hidden) || (view === 'hidden' && game.hidden) || (view === 'missing' && !game.path_exists && !game.hidden);
         const platformMatch = platform === 'all' || game.platform === platform;
         const categoryMatch = platformCategory === 'all' || platformCategoryFor(game) === platformCategory;
         const esrb = $('esrbFilter')?.value || '';
@@ -736,8 +746,8 @@
       $('details').innerHTML = `<div class="hero" ${heroStyle}><div class="hero-copy"><div class="hero-kicker">${escapeHtml(game.platform || 'Unspecified platform')}</div><h2>${escapeHtml(game.name)}</h2></div></div>
         <div class="detail-body">
           <div class="rating"><strong>${game.favorite ? '★ Favorite' : game.rating ? `${game.rating} ★` : 'Library'}</strong><span>${escapeHtml(game.progress || game.genre || '')}</span></div>
-          <button class="play" id="playButton" ${game.path_exists ? '' : 'disabled'}>▶ PLAY</button>
-          <div class="detail-actions"><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">Edit metadata</button><button class="icon-button" id="databaseMetadataButton">Find metadata</button>${game.steam_app_id ? '<button class="icon-button" id="steamMetadataButton">Use Steam data</button>' : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button><button class="icon-button" id="removeGameButton">Remove game</button></div>
+          <button class="play" id="playButton" ${game.path_exists && game.store_installed !== false ? '' : game.gameyfin_id && !game.store_installed ? '' : 'disabled'}>${game.gameyfin_id && !game.store_installed ? '⬇ INSTALL' : '▶ PLAY'}</button>
+          <div class="detail-actions"><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">Edit metadata</button><button class="icon-button" id="databaseMetadataButton">Find metadata</button>${game.steam_app_id ? '<button class="icon-button" id="steamMetadataButton">Use Steam data</button>' : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="uninstallGameyfin">Uninstall Gameyfin copy</button>' : ''}<button class="icon-button" id="removeGameButton">Remove game</button></div>
           <div class="detail-card"><h3>Information</h3><div class="facts">
             ${fact('Release date',game.year)}${fact('Developer',game.developer)}${fact('Publisher',game.publisher)}${fact('ESRB',game.esrb)}${fact('Category',platformCategoryFor(game))}${Object.entries(game.custom_fields || {}).map(([key,value]) => fact(key,value)).join('')}${fact('Max players',game.max_players)}${fact('Play time',duration(game.playtime_seconds))}
             ${fact('Launches',game.play_count)}${fact('Last played',game.last_played ? game.last_played.replace('T',' ') : '')}${fact('Progress',game.progress)}${fact('Rating',game.rating ? `${game.rating} / 5` : '')}${fact('Region',game.region)}${fact('Play mode',game.play_mode)}${fact('Wikipedia',game.wikipedia_url)}${fact('Video URL',game.video_url)}
@@ -748,15 +758,19 @@
           ${game.available_screenshots.length ? `<div class="detail-card"><h3>Screenshots</h3><div class="screenshot-grid">${game.available_screenshots.map(index => `<button data-screenshot="${index}" aria-label="Open screenshot ${index + 1}"><img src="${media(game,'screenshot',index)}" alt=""></button>`).join('')}</div></div>` : ''}
           <div class="detail-card"><h3>Related Games</h3><div class="related-grid" id="relatedGames"><span class="description">Finding matches…</span></div></div>
           ${raConfigured ? `<div class="detail-card"><h3>RetroAchievements</h3><div id="achievementContent"><p class="description">${game.ra_game_id ? `Matched to game ${escapeHtml(game.ra_game_id)}.` : 'Match this ROM to load achievements.'}</p><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}<button class="icon-button" id="openBrowser">Open Wikipedia</button></div><button class="icon-button" id="loadAchievements">Load achievements</button><div id="achievementStats"></div></div></div>` : ''}
-          <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${game.save_paths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}${game.platform === 'Arcade' || game.rom_name ? '<button class="icon-button" id="exportHighscores">Export high scores</button>' : ''}</div><div class="description" id="saveDiscovery">${game.save_paths.length ? `${game.save_paths.length} configured location${game.save_paths.length === 1 ? '' : 's'}` : 'No save location configured.'}</div><div class="extras" id="saveBackups"></div></div>
+          <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${game.save_paths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}${game.platform === 'Arcade' || game.rom_name ? '<button class="icon-button" id="exportHighscores">Export high scores</button>' : ''}</div><div class="description" id="saveDiscovery">${game.save_paths.length ? `${game.save_paths.length} configured location${game.save_paths.length === 1 ? '' : 's'}` : 'No save location configured.'}${appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
         </div>`;
-      $('playButton').onclick = () => launch(game.id);
+      $('playButton').onclick = () => {
+        if (game.gameyfin_id && !game.store_installed) installGameyfin(game);
+        else launch(game.id);
+      };
       $('favoriteButton').onclick = () => favorite(game.id);
       $('editButton').onclick = () => openGameDialog(game);
       $('databaseMetadataButton').onclick = () => openMetadata(game);
       if ($('steamMetadataButton')) $('steamMetadataButton').onclick = () => steamMetadata(game.id);
       if ($('captureScreenshot')) $('captureScreenshot').onclick = () => captureScreenshot(game.id);
       if ($('downloadBezel')) $('downloadBezel').onclick = () => downloadBezel(game.platform);
+      if ($('uninstallGameyfin')) $('uninstallGameyfin').onclick = () => uninstallGameyfin(game);
       if ($('exportHighscores')) $('exportHighscores').onclick = async () => { try { const result = await api('/api/highscores/export',{method:'POST',body:JSON.stringify({id:game.id})}); notify(`Exported ${result.files.length} high score file${result.files.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
       $('removeGameButton').onclick = () => removeGame(game.id,game.name);
       document.querySelectorAll('[data-extra]').forEach(button => button.onclick = () => {
@@ -776,6 +790,9 @@
         $('backupSaves').onclick = () => backupSaves(game.id);
         loadBackups(game.id);
       }
+      if ($('ludusaviBackup')) $('ludusaviBackup').onclick = () => ludusaviAction(game.id, 'backup');
+      if ($('ludusaviRestore')) $('ludusaviRestore').onclick = () => ludusaviAction(game.id, 'restore');
+      if ($('hoardBackup')) $('hoardBackup').onclick = () => hoardAction(game.id, 'backup');
       $('discoverSaves').onclick = () => discoverSaves(game.id);
       loadRelated(game.id);
     }
@@ -926,6 +943,11 @@
         attract_mode_seconds:Number($('attractModeSeconds').value || $('screensaverSeconds').value || 90),
         tray_enabled:$('trayEnabled').checked,
         minimize_to_tray:$('minimizeToTray').checked,
+        ludusavi_backup_path:$('ludusaviBackupPath')?.value.trim() || '',
+        gameyfin_url:$('gameyfinUrl')?.value.trim() || appSettings.gameyfin_url || '',
+        gameyfin_username:$('gameyfinUsername')?.value.trim() || appSettings.gameyfin_username || '',
+        gameyfin_password:$('gameyfinPassword')?.value || '',
+        gameyfin_install_dir:$('gameyfinInstallDir')?.value.trim() || appSettings.gameyfin_install_dir || '',
       };
     }
     async function saveEmumoviesSettings() {
@@ -1193,6 +1215,7 @@
         $('attractModeSeconds').value = appSettings.attract_mode_seconds ?? appSettings.screensaver_seconds ?? 90;
         $('trayEnabled').checked = Boolean(appSettings.tray_enabled);
         $('minimizeToTray').checked = Boolean(appSettings.minimize_to_tray);
+        if ($('ludusaviBackupPath')) $('ludusaviBackupPath').value = appSettings.ludusavi_backup_path || '';
         $('mediaPackStatus').textContent = (appSettings.media_packs || []).filter(item => item.active).map(item => item.name).join(', ');
         $('viewToggleButton').textContent = (appSettings.library_view || 'grid') === 'list' ? 'Grid view' : 'List view';
         $('settingsSearch').value = '';
@@ -1580,6 +1603,8 @@
         const query = bigBoxHybridQuery.toLowerCase();
         result = result.filter(game => [game.name,game.sort_title,game.genre,game.developer].join(' ').toLowerCase().includes(query));
       }
+      if (bigBoxFilter === 'installed') result = result.filter(game => game.store_installed !== false && (game.path_exists || game.store_installed));
+      if (bigBoxFilter === 'owned') result = result.filter(game => game.owned || game.store_catalog || game.gameyfin_id || game.steam_app_id || game.heroic_app_id || game.lutris_id);
       if (bigBoxFilter === 'favorites') result = result.filter(game => game.favorite);
       if (bigBoxFilter === 'playing') result = result.filter(game => ['Playing','Paused'].includes(game.progress));
       if (bigBoxFilter === 'completed') result = result.filter(game => ['Beaten','Completed','Mastered'].includes(game.progress));
@@ -1637,7 +1662,9 @@
       }).catch(() => { if ($('bigBoxStatus')) $('bigBoxStatus').textContent = hint; });
       const mode = appSettings.bigbox_mode || 'stage';
       if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').hidden = mode !== 'hybrid';
-      const playLabel = appSettings.dynamic_play_button === false ? '▶ PLAY' : game.versions.length ? '▶ PLAY DEFAULT' : game.applications.length ? '▶ PLAY GAME' : '▶ PLAY';
+      const playLabel = game.gameyfin_id && !game.store_installed
+        ? '⬇ INSTALL'
+        : (appSettings.dynamic_play_button === false ? '▶ PLAY' : game.versions.length ? '▶ PLAY DEFAULT' : game.applications.length ? '▶ PLAY GAME' : '▶ PLAY');
       if (mode === 'hybrid') {
         const platforms = [...new Set(bigBoxGames.map(item => item.platform || 'Unspecified'))].sort();
         if (bigBoxPlatform === 'all' && platforms.length) bigBoxPlatform = platforms[0];
@@ -1647,17 +1674,27 @@
           return renderBigBox();
         }
         $('bigBoxStage').className = 'bigbox-stage bigbox-hybrid';
-        $('bigBoxStage').innerHTML = `<div class="bigbox-platforms">${platforms.map(name => `<button class="bigbox-platform ${bigBoxPlatform === name ? 'active' : ''}" data-bigbox-platform="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${game.path_exists ? '' : 'disabled'}>${playLabel}</button></div>`;
+        const canAct = (game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed);
+        const ownedLabel = game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : '';
+        const uninstallBtn = game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:10px">Uninstall</button>' : '';
+        $('bigBoxStage').innerHTML = `<div class="bigbox-platforms">${platforms.map(name => `<button class="bigbox-platform ${bigBoxPlatform === name ? 'active' : ''}" data-bigbox-platform="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}</div>`;
         document.querySelectorAll('[data-bigbox-platform]').forEach(button => button.onclick = () => { bigBoxPlatform = button.dataset.bigboxPlatform; bigBoxIndex = 0; renderBigBox(); });
       } else if (mode === 'coverflow') {
         $('bigBoxStage').className = 'bigbox-stage';
-        $('bigBoxStage').innerHTML = `<div class="coverflow-strip">${bigBoxGames.map((item,index) => `<button class="coverflow-card jewel-case ${index === bigBoxIndex ? 'active' : ''}" data-coverflow="${index}">${item.has_cover ? `<img src="${media(item,'cover')}" alt="">` : `<div class="cover-title">${escapeHtml(item.name)}</div>`}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${game.path_exists ? '' : 'disabled'}>${playLabel}</button></div>`;
+        const canAct = (game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed);
+        const ownedLabel = game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : '';
+        const uninstallBtn = game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:10px">Uninstall</button>' : '';
+        $('bigBoxStage').innerHTML = `<div class="coverflow-strip">${bigBoxGames.map((item,index) => `<button class="coverflow-card jewel-case ${index === bigBoxIndex ? 'active' : ''}" data-coverflow="${index}">${item.has_cover ? `<img src="${media(item,'cover')}" alt="">` : `<div class="cover-title">${escapeHtml(item.name)}</div>`}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}</div>`;
         document.querySelectorAll('[data-coverflow]').forEach(button => button.onclick = () => { bigBoxIndex = Number(button.dataset.coverflow); selectedId = bigBoxGames[bigBoxIndex].id; renderBigBox(); });
       } else {
         $('bigBoxStage').className = 'bigbox-stage';
-        $('bigBoxStage').innerHTML = `<div class="bigbox-cover">${game.has_cover ? `<img src="${media(game,'cover')}" alt="">` : escapeHtml(game.name)}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${game.path_exists ? '' : 'disabled'}>${playLabel}</button></div>`;
+        $('bigBoxStage').innerHTML = `<div class="bigbox-cover">${game.has_cover ? `<img src="${media(game,'cover')}" alt="">` : escapeHtml(game.name)}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : ''}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${(game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed) ? '' : 'disabled'}>${playLabel}</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:10px">Uninstall</button>' : ''}</div>`;
       }
-      $('bigBoxPlay').onclick = () => launch(game.id);
+      $('bigBoxPlay').onclick = () => {
+        if (game.gameyfin_id && !game.store_installed) installGameyfin(game);
+        else launch(game.id);
+      };
+      if ($('bigBoxUninstall')) $('bigBoxUninstall').onclick = () => uninstallGameyfin(game);
       applyLibraryMusic();
     }
     function applyLibraryMusic() {
@@ -1723,12 +1760,59 @@
       $('autoImportSteam').checked = Boolean(settings.steam);
       $('autoImportHeroic').checked = Boolean(settings.heroic);
       $('autoImportLutris').checked = Boolean(settings.lutris);
+      if ($('autoImportGameyfin')) $('autoImportGameyfin').checked = Boolean(settings.gameyfin);
+      if ($('gameyfinUrl')) $('gameyfinUrl').value = appSettings.gameyfin_url || '';
+      if ($('gameyfinUsername')) $('gameyfinUsername').value = appSettings.gameyfin_username || '';
+      if ($('gameyfinPassword')) $('gameyfinPassword').value = '';
+      if ($('gameyfinInstallDir')) $('gameyfinInstallDir').value = appSettings.gameyfin_install_dir || '';
+      if ($('gameyfinStatus')) $('gameyfinStatus').textContent = appSettings.gameyfin_url ? `Configured · ${appSettings.gameyfin_url}` : '';
       $('storefrontCatalog').innerHTML = '';
       $('storefrontDialog').showModal();
     }
     async function saveStorefrontSettings() {
-      appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify({...collectSettings(),storefront_auto_import:{steam:$('autoImportSteam').checked,heroic:$('autoImportHeroic').checked,lutris:$('autoImportLutris').checked}})});
+      appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify({
+        ...collectSettings(),
+        storefront_auto_import:{steam:$('autoImportSteam').checked,heroic:$('autoImportHeroic').checked,lutris:$('autoImportLutris').checked,gameyfin:Boolean($('autoImportGameyfin')?.checked)},
+        gameyfin_url:$('gameyfinUrl')?.value.trim() || '',
+        gameyfin_username:$('gameyfinUsername')?.value.trim() || '',
+        gameyfin_password:$('gameyfinPassword')?.value || '',
+        gameyfin_install_dir:$('gameyfinInstallDir')?.value.trim() || '',
+      })});
       notify('Storefront settings saved');
+    }
+    async function installGameyfin(game) {
+      try {
+        notify(`Installing ${game.name} from Gameyfin…`);
+        await api('/api/gameyfin/install',{method:'POST',body:JSON.stringify({gameyfin_id:game.gameyfin_id,library_id:game.id})});
+        await refresh();
+        bigBoxGames = filteredBigBoxGames();
+        if (!$('bigBox').hidden) renderBigBox();
+        else renderDetails();
+        notify(`${game.name} installed`);
+      } catch(error) { notify(error.message); }
+    }
+    async function uninstallGameyfin(game) {
+      if (!confirm(`Remove the local Gameyfin install for ${game.name}? The server copy stays intact.`)) return;
+      try {
+        await api('/api/gameyfin/uninstall',{method:'POST',body:JSON.stringify({id:game.id})});
+        await refresh();
+        bigBoxGames = filteredBigBoxGames();
+        if (!$('bigBox').hidden) renderBigBox();
+        else renderDetails();
+        notify(`${game.name} uninstalled locally`);
+      } catch(error) { notify(error.message); }
+    }
+    async function ludusaviAction(id, action) {
+      try {
+        const result = await api('/api/save-tools/ludusavi',{method:'POST',body:JSON.stringify({id,action})});
+        notify(`Ludusavi ${action} ${result.ok ? 'finished' : 'reported issues'}`);
+      } catch(error) { notify(error.message); }
+    }
+    async function hoardAction(id, action) {
+      try {
+        await api('/api/save-tools/hoard',{method:'POST',body:JSON.stringify({id,action})});
+        notify(`Hoard ${action} finished`);
+      } catch(error) { notify(error.message); }
     }
     async function captureScreenshot(id) { try { const result = await api('/api/screenshot',{method:'POST',body:JSON.stringify({id})}); await refresh(); notify(`Screenshot saved to ${result.path}`); } catch(error) { notify(error.message); } }
     async function downloadBezel(platform) { if (!platform) return notify('Select a game with a platform first'); try { const result = await api('/api/bezels/download',{method:'POST',body:JSON.stringify({platform})}); notify(`Bezels downloaded to ${result.path}`); } catch(error) { notify(error.message); } }
@@ -1737,6 +1821,7 @@
       if (settings.steam) await api('/api/import/steam',{method:'POST',body:'{}'}).catch(() => {});
       if (settings.heroic) await api('/api/import/heroic',{method:'POST',body:'{}'}).catch(() => {});
       if (settings.lutris) await api('/api/import/lutris',{method:'POST',body:'{}'}).catch(() => {});
+      if (settings.gameyfin) await api('/api/storefront/import',{method:'POST',body:JSON.stringify({source:'gameyfin'})}).catch(() => {});
     }
     function startScreenSaver() {
       if (!bigBoxGames.length || $('bigBox').hidden) return;
@@ -1894,6 +1979,25 @@
     $('importSteamStore').onclick = () => { $('storefrontDialog').close(); importSteam(); };
     $('importHeroicStore').onclick = () => { $('storefrontDialog').close(); importHeroic(); };
     $('importLutrisStore').onclick = () => { $('storefrontDialog').close(); importLutris(); };
+    if ($('importGameyfinStore')) $('importGameyfinStore').onclick = async () => {
+      try {
+        await saveStorefrontSettings();
+        const result = await api('/api/storefront/import',{method:'POST',body:JSON.stringify({source:'gameyfin'})});
+        await refresh();
+        notify(`${result.added} Gameyfin games imported · ${result.found} owned`);
+      } catch(error) { notify(error.message); }
+    };
+    if ($('testGameyfin')) $('testGameyfin').onclick = async () => {
+      try {
+        const result = await api('/api/gameyfin/test',{method:'POST',body:JSON.stringify({
+          gameyfin_url:$('gameyfinUrl').value.trim(),
+          gameyfin_username:$('gameyfinUsername').value.trim(),
+          gameyfin_password:$('gameyfinPassword').value,
+        })});
+        $('gameyfinStatus').textContent = `Connected · ${result.games} games · ${result.providers.length} download provider${result.providers.length === 1 ? '' : 's'}`;
+        notify('Gameyfin connection ok');
+      } catch(error) { $('gameyfinStatus').textContent = error.message; notify(error.message); }
+    };
     $('importScummvmStore').onclick = async () => { try { const result = await api('/api/import/scummvm',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} ScummVM games imported`); } catch(error) { notify(error.message); } };
     $('importRpcs3Store').onclick = async () => { try { const result = await api('/api/import/rpcs3',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} RPCS3 games imported`); } catch(error) { notify(error.message); } };
     $('importVita3kStore').onclick = async () => { try { const result = await api('/api/import/vita3k',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} Vita3K games imported`); } catch(error) { notify(error.message); } };
