@@ -7,7 +7,7 @@
   <project_license>AGPL-3.0-only</project_license>
   <description>
     <p>OpenBox is an open-source game library manager and launcher for Linux. It unifies Steam, Heroic, Lutris, ROM collections, and emulator workflows in one local catalog with metadata, artwork, session tracking, and launch orchestration.</p>
-    <p>Features include Big Box fullscreen browsing, LaunchBox Games Database sync, RetroAchievements integration, save backups, plugin hooks, and storefront import tools.</p>
+    <p>Features include Big Box fullscreen browsing, LaunchBox Games Database sync, RetroAchievements integration, save backups, plugin hooks, storefront import tools, custom fields, ESRB filters, list view, drag-and-drop import, bundled media packs, and localized UI strings. LaunchBox Premium-equivalent workflows are included at no cost.</p>
   </description>
   <launchable type="desktop-id">openbox.desktop</launchable>
   <url type="homepage">https://github.com/vindeckyy/OpenBox</url>
@@ -21,7 +21,7 @@
     </release>
     <release version="0.2.0" date="2026-07-24">
       <description>
-        <p>LaunchBox-depth parity release with storefront catalogs, Big Box polish, integrations, and Linux-first equivalents for remaining premium workflows.</p>
+        <p>LaunchBox-depth parity release with storefront catalogs, Big Box polish, integrations, and Linux-first equivalents for storefront and integration workflows.</p>
       </description>
     </release>
     <release version="0.1.0" date="2026-07-23"/>

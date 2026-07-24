@@ -32,7 +32,7 @@
 
 OpenBox is an open-source game library manager and launcher built for Linux. It brings PC games, storefront libraries, ROM collections, arcade sets, and emulator workflows into one searchable catalog with artwork, metadata, session tracking, save management, and launch orchestration.
 
-If you already know LaunchBox, OpenBox targets the same core job on Linux: organize a large library, enrich it with metadata and media, and launch games reliably from one front end. The difference is that OpenBox is designed around how Linux gamers actually install and run software today, through Steam, Heroic, Lutris, Flatpak emulators, RetroArch, and local ROM folders, without requiring Windows or a paid premium tier to unlock basic library workflows.
+If you already know LaunchBox, OpenBox targets the same core job on Linux: organize a large library, enrich it with metadata and media, and launch games reliably from one front end. The difference is that OpenBox is designed around how Linux gamers actually install and run software today, through Steam, Heroic, Lutris, Flatpak emulators, RetroArch, and local ROM folders, without requiring Windows or a paid premium tier to unlock advanced library workflows.
 
 OpenBox provides two interfaces:
 
@@ -58,8 +58,9 @@ OpenBox exists to give Linux users a front end that fits the platform.
 | Topic | OpenBox on Linux | Typical LaunchBox experience on Linux |
 | --- | --- | --- |
 | Platform support | Native Linux application | Windows-first; Linux use often depends on compatibility layers |
-| License and cost | Open source under AGPL-3.0 | Free tier plus paid Premium for several advanced workflows |
+| License and cost | Open source under AGPL-3.0; Premium-equivalent features included free | Free tier plus paid Premium for several advanced workflows |
 | Account requirement | No OpenBox account required | LaunchBox account and Premium features for parts of the ecosystem |
+| Premium workflows | Custom fields, ESRB, list view, media packs, import wizard, and Big Box polish included | Custom fields, ESRB, media packs, and several Big Box features require Premium |
 | Steam integration | Reads installed Steam libraries and launches through Steam | Supported, but not centered on Linux-native install layouts |
 | Heroic / Epic / GOG / Amazon | First-class import through Heroic manifests | Possible, but not the primary Linux workflow |
 | Lutris / EA / Ubisoft / Game Pass tagging | Built around Lutris and Heroic catalog import | Less direct on Linux |
@@ -97,7 +98,7 @@ OpenBox was built as a clean-room open-source project for Linux parity, not as a
 
 ### Library management
 
-Both projects handle large local libraries, metadata editing, favorites, collections, filters, playlists, and bulk operations. OpenBox adds Linux-native quality-of-life pieces such as searchable settings, sidebar section hiding, arrange-by jump bars, provider-aware duplicate detection, and a library health audit for missing files, media, saves, and emulator configuration.
+Both projects handle large local libraries, metadata editing, favorites, collections, filters, playlists, and bulk operations. OpenBox adds Linux-native quality-of-life pieces such as searchable settings, sidebar section hiding, arrange-by jump bars, provider-aware duplicate detection, ESRB filtering, custom fields, list view, platform categories, and a library health audit for missing files, media, saves, and emulator configuration.
 
 ### Imports and storefronts
 
@@ -106,27 +107,27 @@ OpenBox imports from:
 - Installed Steam libraries across standard Steam root layouts
 - Heroic for Epic, GOG, and Amazon titles
 - Lutris for EA, Ubisoft, Xbox, and Game Pass tagged entries
-- Local ROM folders with extension-aware scanning
-- Multi-platform folder import and multi-disc M3U generation
+- Local ROM folders with extension-aware scanning and drag-and-drop import
+- Multi-platform folder import, multi-emulator install chooser, ROM version ranking, and multi-disc M3U generation
 - MAME and FinalBurn DAT/XML full-set classification
-- ScummVM, RPCS3, and Vita3K library scans
+- ScummVM, RPCS3, Vita3K, Xbox 360, and loose arcade import helpers
 - Storefront Manager for owned vs. installed catalog browsing and optional startup auto-import
 
 LaunchBox covers many of the same sources on Windows. On Linux, OpenBox's advantage is that these importers are written against the paths, manifests, and launchers Linux users already have installed.
 
 ### Metadata and artwork
 
-OpenBox syncs with the official LaunchBox Games Database, matches games locally, downloads artwork and metadata, supports image groups, duplicate cleanup, region priority, download limits, and bulk media jobs. Licensed EmuMovies and Bezel Project hooks are available when you provide your own credentials.
+OpenBox syncs with the official LaunchBox Games Database, matches games locally, downloads artwork and metadata (including ESRB), supports image groups, duplicate cleanup, region priority, download limits, bulk media jobs, Steam trailer download, and Heroic GOG media download. Licensed EmuMovies and Bezel Project hooks are available when you provide your own credentials. Bundled media packs for platform logos, controller prompts, and badges are included at no cost.
 
 ### Launching, sessions, and saves
 
 OpenBox launches through safe tokenized emulator commands without shell interpolation, extracts archives before launch when needed, tracks sessions with play counts and play time, shows startup/shutdown overlays, supports force-close on exit, and can back up saves on session close with retention limits and guarded restore.
 
-RetroAchievements support includes account login, ROM hash matching, badge display, hardcore status, Big Box filters, pause-menu access, and emulator launch injection.
+RetroAchievements support includes account login, ROM hash matching for ZIP and 7z archives, badge display, hardcore status, beaten/mastered stats, Big Box filters, pause-menu access, and emulator launch injection.
 
 ### Big Box and themes
 
-OpenBox includes fullscreen Big Box mode with Stage, Hybrid, and CoverFlow layouts, jewel-case styling, filter/sort/RetroAchievements menus, configurable gamepad button mapping, pause overlay for running games, screensaver support, and library background music.
+OpenBox includes fullscreen Big Box mode with Stage, Hybrid, and CoverFlow layouts, jewel-case styling, hybrid scoped search, filter/sort/RetroAchievements menus, configurable gamepad button mapping, bundled controller prompt packs, pause overlay for running games, attract mode and screensaver support, optional startup video, library background music, and localized UI strings (English, Spanish, German, French, Portuguese).
 
 Themes are plain CSS files with live reload, global or per-platform assignment, and a local import workflow instead of a proprietary online theme store.
 
@@ -136,7 +137,7 @@ OpenBox provides sandboxed Python plugins with `library`, `before_launch`, and `
 
 ### Parity status
 
-The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md). At a high level, the major Linux-usable LaunchBox workflows are implemented. Windows-only arcade, shell, LED, and native Xbox package features are intentionally replaced with documented Linux equivalents or external tools.
+The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md). At a high level, the major Linux-usable LaunchBox workflows are implemented, including Premium-equivalent features at no cost. Windows-only arcade, shell, LED, and native Xbox package features are intentionally replaced with documented Linux equivalents or external tools.
 
 ---
 
@@ -147,14 +148,15 @@ The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md
 - One catalog for Steam, Heroic, Lutris, ROM folders, ScummVM, RPCS3, Vita3K, and local executables
 - Storefront Manager for catalog browse, uninstalled import, and startup auto-import
 - Game Discovery Center with recently added, never played, continue playing, highly rated, random picks, and short-session lists
-- Collections, saved filters, favorites, bulk edits, and Surprise Me random selection
+- Collections, saved filters, favorites, bulk edits, custom fields, ESRB filters, list view, platform categories, and Surprise Me random selection
 - Platform documents pane for manuals and reference files per platform
 - MAME and FinalBurn merged/split/non-merged set classification with BIOS awareness
 
 ### Metadata, media, and playback
 
-- LaunchBox Games Database daily sync, local matching, and artwork download
-- Media manager with image groups, audits, duplicate cleanup, region priority, and download limits
+- LaunchBox Games Database daily sync, local matching, ESRB metadata, and artwork download
+- Media manager with image groups, audits, duplicate cleanup, region priority, download limits, and bundled media packs
+- Steam trailer and Heroic GOG media download from the game detail pane
 - In-app PDF/document reader with page navigation, spread layout, and light/dark themes
 - Multi-category video playback, screenshot capture, gallery lightbox, and library BGM in Big Box
 
@@ -178,15 +180,26 @@ The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md
 ### Big Box, controller use, and couch play
 
 - Fullscreen browsing optimized for gamepads and handhelds
-- Stage, Hybrid, and CoverFlow layouts
+- Stage, Hybrid, and CoverFlow layouts with hybrid scoped search
 - Filter, sort, and RetroAchievements menus
-- Configurable gamepad button mapping
+- Configurable gamepad button mapping and bundled controller prompt packs
 - Pause overlay for running games
-- Screensaver with controller wake and launch
+- Attract mode, screensaver with controller wake and launch, and optional startup video
+- UI localization for English, Spanish, German, French, and Portuguese
+
+### Premium-equivalent features (free)
+
+LaunchBox Premium workflows are included in OpenBox at no cost:
+
+- Custom fields with per-game values and bulk edit support
+- ESRB ratings from database imports, sidebar filtering, and list columns
+- Drag-and-drop import with multi-emulator install chooser and ROM version ranking
+- Bundled media packs for platform logos, controller prompts, and status badges
+- Big Box shutdown commands when entering or leaving fullscreen mode
 
 ### Integrations and sync
 
-- RetroAchievements matching, badges, hardcore tracking, and launch injection
+- RetroAchievements matching, badges, hardcore tracking, 7z ROM scanning, and launch injection
 - EmuMovies and Bezel Project downloads with user-provided credentials
 - OBS recording auto-attach on session close
 - MAME community high score export and import
@@ -303,7 +316,8 @@ OpenBox/
 ├── web_app.py              Web UI server and REST API
 ├── openbox.py              Native Tk UI
 ├── importers.py            Steam, Heroic, and Lutris import
-├── parity_import.py        M3U, multi-platform import, emulator recommendations
+├── parity_import.py        M3U, multi-platform import, emulator recommendations, ROM ranking
+├── parity_premium.py       Premium-equivalent features (custom fields, ESRB, media packs, localization)
 ├── parity_storefront.py    Storefront Manager catalog and uninstalled import
 ├── parity_discovery.py     Game Discovery Center lists
 ├── parity_media.py         Media queues, duplicates, region priority, limits
@@ -313,6 +327,8 @@ OpenBox/
 ├── emulators.py            Emulator profiles and Flathub management
 ├── retroachievements.py    RetroAchievements integration
 ├── saves.py                Save discovery and backup engine
+├── updates.py              Verified GitHub release updater
+├── env_config.py           Local environment and token loading
 ├── plugins.py              Plugin lifecycle and hooks
 ├── plugin_catalog.py       Bundled community plugin catalog
 ├── catalog.py              Search, filters, and bulk edits

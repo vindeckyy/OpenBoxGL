@@ -133,6 +133,9 @@ Update relevant docs when behavior changes:
 - [README.md](README.md) for user-facing overview changes
 - [PARITY.md](PARITY.md) for capability status changes
 - [CHANGELOG.md](CHANGELOG.md) for release-visible changes
+- [openbox.metainfo.xml](openbox.metainfo.xml) and [SECURITY.md](SECURITY.md) when releases or support policy change
+
+Parity-related modules include `parity_import.py`, `parity_premium.py`, `parity_storefront.py`, `parity_discovery.py`, `parity_media.py`, `parity_saves.py`, and `parity_integrations.py`.
 
 ## Security issues
 
