@@ -82,7 +82,7 @@ Featuring both a feature-packed **Modern Browser Web UI** (with REST API) and a 
 ## 🖼️ Screenshots
 
 <p align="center">
-  <img src="assets/openbox-library.png" alt="OpenBox Library Interface" width="92%">
+  <img src="assets/openbox-screenshot.png" alt="OpenBox Library Interface" width="92%">
   <br>
   <em>OpenBox Web Interface displaying game grid view, custom metadata, and launcher options.</em>
 </p>
