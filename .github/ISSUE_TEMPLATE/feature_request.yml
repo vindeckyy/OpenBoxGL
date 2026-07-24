@@ -1,0 +1,54 @@
+name: Feature request
+description: Suggest a new capability or improvement
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature requests help prioritize work. Please describe the user problem, not only a proposed implementation.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What workflow is difficult, missing, or inconsistent today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How should OpenBox address the problem?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches, tools, or workarounds you evaluated
+    validations:
+      required: false
+
+  - type: dropdown
+    id: parity
+    attributes:
+      label: LaunchBox parity relevance
+      options:
+        - Not related to LaunchBox parity
+        - Matches an existing LaunchBox feature
+        - Linux-first equivalent for a LaunchBox workflow
+        - Unsure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to submit a pull request for this feature
+          required: false

@@ -1,4 +1,4 @@
-"""Curated community plugin catalog — best Linux equivalent to LaunchBox plugin storefront."""
+"""Curated community plugin catalog, the best Linux equivalent to LaunchBox plugin storefront."""
 
 from __future__ import annotations
 

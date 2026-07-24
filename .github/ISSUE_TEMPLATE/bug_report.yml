@@ -1,0 +1,75 @@
+name: Bug report
+description: Report a reproducible defect in OpenBox
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report an issue. Please search [existing issues](https://github.com/vindeckyy/OpenBox/issues) first.
+
+  - type: input
+    id: version
+    attributes:
+      label: OpenBox version
+      description: Release tag, AppImage version, or git commit hash
+      placeholder: v0.2.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: interface
+    attributes:
+      label: Interface
+      options:
+        - Web UI
+        - Native Tk UI
+        - AppImage
+        - Flatpak
+        - Source install
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Distro, desktop environment, and Python version if running from source
+      placeholder: Fedora 42, KDE Plasma, Python 3.12
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps that consistently trigger the issue
+      placeholder: |
+        1. Launch OpenBox
+        2. Open Settings
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Redact tokens, paths, or credentials before posting
+    validations:
+      required: false

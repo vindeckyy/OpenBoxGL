@@ -1,4 +1,4 @@
-"""Storefront catalog browsing — best Linux equivalent to LaunchBox Storefront Manager."""
+"""Storefront catalog browsing, the best Linux equivalent to LaunchBox Storefront Manager."""
 
 from __future__ import annotations
 

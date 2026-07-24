@@ -2,8 +2,9 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.atl/
 
-# Local secrets — NEVER commit these
+# Local secrets - NEVER commit these
 .env
 .env.*
 !.env.example
