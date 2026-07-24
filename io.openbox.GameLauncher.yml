@@ -20,7 +20,9 @@ modules:
     buildsystem: simple
     build-commands:
       - mkdir -p /app/share/openbox
-      - for f in openbox.py web_app.py importers.py arcade.py catalog.py cloud_sync.py emulators.py retroachievements.py plugins.py plugin_runner.py metadata.py archives.py saves.py updates.py env_config.py parity_discovery.py parity_import.py parity_integrations.py parity_media.py parity_saves.py parity_storefront.py plugin_catalog.py parity_premium.py index.html; do install -Dm644 "$f" "/app/share/openbox/$f"; done
+      - for f in openbox.py web_app.py importers.py arcade.py catalog.py cloud_sync.py emulators.py retroachievements.py plugins.py plugin_runner.py metadata.py archives.py saves.py updates.py env_config.py parity_discovery.py parity_import.py parity_integrations.py parity_media.py parity_saves.py parity_storefront.py plugin_catalog.py parity_premium.py stock_themes.py index.html; do install -Dm644 "$f" "/app/share/openbox/$f"; done
+      - mkdir -p /app/share/openbox/themes
+      - for f in themes/*.css; do install -Dm644 "$f" "/app/share/openbox/$f"; done
       - install -Dm755 openbox.sh /app/bin/openbox
       - install -Dm755 openbox-native.sh /app/bin/openbox-native
       - install -Dm644 openbox.desktop /app/share/applications/io.openbox.GameLauncher.desktop

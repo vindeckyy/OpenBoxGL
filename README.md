@@ -32,7 +32,7 @@
 
 OpenBox is an open-source game library manager and launcher built for Linux. It brings PC games, storefront libraries, ROM collections, arcade sets, and emulator workflows into one searchable catalog with artwork, metadata, session tracking, save management, and launch orchestration.
 
-If you already know LaunchBox, OpenBox targets the same core job on Linux: organize a large library, enrich it with metadata and media, and launch games reliably from one front end. The difference is that OpenBox is designed around how Linux gamers actually install and run software today, through Steam, Heroic, Lutris, Flatpak emulators, RetroArch, and local ROM folders, without requiring Windows or a paid premium tier to unlock advanced library workflows.
+If you already know LaunchBox, OpenBox targets the same core job on Linux: organize a large library, enrich it with metadata and media, and launch games reliably from one front end. The difference is the packaging. OpenBox is built for Steam, Heroic, Lutris, Flatpak emulators, RetroArch, and local ROM folders on Linux, and it does not put advanced library workflows behind a Premium subscription.
 
 OpenBox provides two interfaces:
 
@@ -49,9 +49,13 @@ Library data is stored locally at `~/.local/share/openbox-game-launcher/library.
 
 ## Why OpenBox on Linux
 
-LaunchBox is a mature Windows launcher with a large feature set and a strong community. On Linux, most people still want that experience: one polished library, good artwork, emulator profiles, Big Box browsing, and session tracking. The problem is that running a Windows-first launcher on Linux usually means extra friction, weaker integration with native Linux tools, and premium paywalls for workflows that Linux users often solve with local files and open tooling anyway.
+LaunchBox built something a lot of people love on Windows: a big library, nice artwork, emulator profiles, Big Box browsing, the whole couch setup. Then a chunk of that experience got moved behind a Premium subscription, while Linux users kept asking for a native build and kept getting the same shrug.
 
-OpenBox exists to give Linux users a front end that fits the platform.
+So here we are.
+
+Honestly, OpenBox probably never gets written if LaunchBox ships a real Linux version and stops metering everyday library features behind a paywall. The community asked. The gap stayed. OpenBox exists because someone finally got tired of waiting and built the Linux front end themselves, with the Premium-shaped workflows included for free.
+
+OpenBox is designed around how Linux gamers actually run software: Steam, Heroic, Lutris, Flatpak emulators, RetroArch, and local ROM folders. No Windows tax. No Premium gate for custom fields, ESRB filters, list view, media packs, or the rest of the checklist people already paid for once by owning their games.
 
 ### What that means in practice
 
@@ -61,6 +65,7 @@ OpenBox exists to give Linux users a front end that fits the platform.
 | License and cost | Open source under AGPL-3.0; Premium-equivalent features included free | Free tier plus paid Premium for several advanced workflows |
 | Account requirement | No OpenBox account required | LaunchBox account and Premium features for parts of the ecosystem |
 | Premium workflows | Custom fields, ESRB, list view, media packs, import wizard, and Big Box polish included | Custom fields, ESRB, media packs, and several Big Box features require Premium |
+| Listening to Linux users | This whole repository | Still waiting for that official Linux build |
 | Steam integration | Reads installed Steam libraries and launches through Steam | Supported, but not centered on Linux-native install layouts |
 | Heroic / Epic / GOG / Amazon | First-class import through Heroic manifests | Possible, but not the primary Linux workflow |
 | Lutris / EA / Ubisoft / Game Pass tagging | Built around Lutris and Heroic catalog import | Less direct on Linux |
@@ -129,7 +134,7 @@ RetroAchievements support includes account login, ROM hash matching for ZIP and 
 
 OpenBox includes fullscreen Big Box mode with Stage, Hybrid, and CoverFlow layouts, jewel-case styling, hybrid scoped search, filter/sort/RetroAchievements menus, configurable gamepad button mapping, bundled controller prompt packs, pause overlay for running games, attract mode and screensaver support, optional startup video, library background music, and localized UI strings (English, Spanish, German, French, Portuguese).
 
-Themes are plain CSS files with live reload, global or per-platform assignment, and a local import workflow instead of a proprietary online theme store.
+Themes are plain CSS files with live reload, global or per-platform assignment, and a local import workflow instead of a proprietary online theme store. OpenBox ships five stock themes that show what CSS can do: Midnight Circuit, Phosphor Terminal, Harbor Light, Cinema Marquee, and Nordic Mist.
 
 ### Extensibility
 
@@ -323,6 +328,8 @@ OpenBox/
 ├── parity_media.py         Media queues, duplicates, region priority, limits
 ├── parity_saves.py         Save retention and backup-on-close helpers
 ├── parity_integrations.py  RA inject, bezels, EmuMovies, OBS, MAME scores
+├── stock_themes.py         Bundled stock CSS theme installer
+├── themes/                 Stock Web UI themes (Midnight Circuit, Phosphor Terminal, Harbor Light, Cinema Marquee, Nordic Mist)
 ├── metadata.py             LaunchBox database sync and media scraping
 ├── emulators.py            Emulator profiles and Flathub management
 ├── retroachievements.py    RetroAchievements integration

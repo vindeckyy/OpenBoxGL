@@ -340,6 +340,7 @@
     <form id="themesForm">
       <div class="dialog-head"><h2>Themes</h2><button type="button" id="closeThemes">×</button></div>
       <div class="form-grid">
+        <p class="wide description">Stock themes ship with OpenBox. Import your own CSS to restyle the library, detail pane, dialogs, and Big Box.</p>
         <label class="field wide"><span>Apply to</span><select id="themeScope"><option value="">All platforms</option></select></label>
         <label class="field wide"><span>Active theme</span><select id="themeSelect"><option value="">Default</option></select></label>
         <button type="button" class="icon-button" id="importTheme">Import CSS theme</button>
@@ -1985,7 +1986,11 @@
       if (event.key === 'Escape' || event.key === 'Backspace') closeBigBox();
     };
     document.addEventListener('mousedown', event => {
+      // Native <select> menus paint outside the dialog rectangle; ignore those clicks.
+      if (document.activeElement?.tagName === 'SELECT') return;
+      if (event.target.closest?.('select, option')) return;
       document.querySelectorAll('dialog[open]').forEach(dialog => {
+        if (dialog.contains(event.target)) return;
         const rect = dialog.getBoundingClientRect();
         const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
         if (!inside) dialog.close();
@@ -2000,7 +2005,7 @@
       });
     });
     document.querySelectorAll('dialog').forEach(dialog => {
-      dialog.setAttribute('closedby', 'any');
+      dialog.setAttribute('closedby', 'closerequest');
       dialog.addEventListener('close', () => {
         if (dialog.id === 'readerDialog') {
           $('readerFrame').removeAttribute('src');

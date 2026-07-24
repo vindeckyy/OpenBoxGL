@@ -1,0 +1,336 @@
+/* OpenBox Stock Theme: Cinema Marquee */
+@import url("https://fonts.bunny.net/css?family=bebas-neue:400|source-sans-3:400,500,600,700");
+
+:root {
+  color-scheme: dark;
+  --bg: #0a0808;
+  --panel: #141010;
+  --panel2: #1c1614;
+  --line: #3a2e24;
+  --text: #f6efe4;
+  --muted: #a8947e;
+  --cyan: #e8c46a;
+  --green: #d4a017;
+  --accent: #e8c46a;
+  --danger: #c44b3c;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  font: 12.5px/1.45 "Source Sans 3", "Source Sans Pro", ui-sans-serif, system-ui, sans-serif;
+  background:
+    radial-gradient(ellipse 90% 55% at 50% -15%, #4a2a18aa 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 0% 100%, #2a120c66 0%, transparent 50%),
+    linear-gradient(180deg, #100c0a 0%, #080606 100%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.topbar, .workspace { position: relative; z-index: 1; }
+
+.topbar {
+  height: 34px;
+  background: linear-gradient(180deg, #1a1410, #100c0a);
+  border-bottom: 1px solid #4a3828;
+  box-shadow: 0 1px 0 #e8c46a33, 0 12px 28px #000a;
+}
+
+.brand {
+  font-family: "Bebas Neue", Impact, sans-serif;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  color: #f3e6c8;
+}
+
+.mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  background: linear-gradient(145deg, #f0d078, #c4922a);
+  color: #1a1008;
+  box-shadow: 0 0 14px #e8c46a55;
+}
+
+.menu-button {
+  color: #b9a48c;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+}
+
+.menu-button:hover {
+  color: #f3e6c8;
+  background: #241c16;
+  box-shadow: inset 0 -2px 0 #e8c46a;
+}
+
+.top-status { color: #8a7460; }
+
+.sidebar, .details {
+  background: linear-gradient(180deg, #161210f5, #100c0af8);
+  border-color: #3a2e24;
+  backdrop-filter: blur(12px);
+}
+
+.sidebar { border-right: 1px solid #3a2e24; }
+.details { border-left: 1px solid #3a2e24; box-shadow: -16px 0 36px #0008; }
+
+.field span, .section-title, .fact small, .detail-card h3 {
+  color: #9a8168;
+  letter-spacing: 0.14em;
+}
+
+input, select, textarea {
+  border: 1px solid #4a3828;
+  border-radius: 4px;
+  background: #100c0a;
+  color: #f6efe4;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #e8c46a;
+  box-shadow: 0 0 0 2px #e8c46a33;
+}
+
+.platform {
+  border-radius: 4px;
+  color: #d4c4b0;
+}
+
+.platform::before { background: #5a4634; border-radius: 1px; }
+
+.platform:hover, .platform.active {
+  background: #241c16;
+  color: #f6efe4;
+}
+
+.platform.active::before {
+  background: #e8c46a;
+  box-shadow: 0 0 10px #e8c46a88;
+}
+
+.library {
+  background:
+    radial-gradient(ellipse at 80% 0%, #3a221855, transparent 40%),
+    linear-gradient(180deg, #100c0acc, #0a0808d9);
+}
+
+.library-head {
+  background: #100c0af2;
+  border-bottom: 1px solid #3a2e2444;
+}
+
+.library-head h1 {
+  font-family: "Bebas Neue", Impact, sans-serif;
+  font-size: 28px;
+  letter-spacing: 0.06em;
+  font-weight: 400;
+  color: #f3e6c8;
+}
+
+.library-head p { color: #a8947e; }
+
+.icon-button {
+  border: 1px solid #4a3828;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #1c1614, #141010);
+  color: #e8dcc8;
+}
+
+.icon-button:hover {
+  border-color: #e8c46a;
+  color: #e8c46a;
+  background: #241c16;
+}
+
+.cover {
+  border: 1px solid #4a3828;
+  border-radius: 4px;
+  background: linear-gradient(160deg, #2a2018, #120e0c);
+  box-shadow: 0 14px 32px #000a;
+}
+
+.card:hover .cover, .card.selected .cover {
+  transform: translateY(-3px);
+  border-color: #e8c46a;
+  box-shadow: 0 0 0 1px #e8c46a66, 0 18px 40px #000c;
+}
+
+.card h3 {
+  font-family: "Bebas Neue", Impact, sans-serif;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  font-weight: 400;
+}
+
+.card p { color: #a8947e; }
+.badges { color: #e8c46a; }
+
+.play, .primary, .bigbox-play {
+  border: 0;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #f0d078, #c4922a);
+  color: #1a1008;
+  font-family: "Bebas Neue", Impact, sans-serif;
+  font-size: 18px;
+  letter-spacing: 0.12em;
+  font-weight: 400;
+  box-shadow: 0 8px 24px #c4922a55, inset 0 1px 0 #ffe9a8;
+}
+
+.play { padding: 10px; }
+
+.hero {
+  background: linear-gradient(135deg, #3a2418, #120e0c);
+  min-height: 210px;
+}
+
+.hero::after {
+  background: linear-gradient(180deg, transparent 20%, #141010 100%);
+}
+
+.hero-kicker {
+  color: #e8c46a;
+  letter-spacing: 0.22em;
+  font-weight: 700;
+}
+
+.hero h2 {
+  font-family: "Bebas Neue", Impact, sans-serif;
+  font-size: 36px;
+  letter-spacing: 0.04em;
+  font-weight: 400;
+  text-shadow: 0 4px 18px #000;
+}
+
+.detail-card, .emulator-item, .metadata-result, .history-item, .storefront-row {
+  border: 1px solid #3a2e24;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #1a1410, #120e0c);
+}
+
+.rating { color: #e8c46a; }
+.rating strong {
+  background: #2a2018;
+  color: #f3e6c8;
+  border: 1px solid #4a3828;
+  border-radius: 3px;
+}
+
+dialog {
+  border: 1px solid #4a3828;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #1a1410, #100c0a);
+  box-shadow: 0 40px 100px #000d, 0 0 0 1px #e8c46a22;
+}
+
+dialog::backdrop {
+  background: #050303cc;
+  backdrop-filter: blur(6px);
+}
+
+.dialog-head { border-bottom: 1px solid #3a2e24; }
+.dialog-head h2 {
+  font-family: "Bebas Neue", Impact, sans-serif;
+  font-size: 24px;
+  letter-spacing: 0.08em;
+  font-weight: 400;
+  color: #f3e6c8;
+}
+
+.toast {
+  border: 1px solid #4a3828;
+  border-radius: 6px;
+  background: #1a1410;
+  box-shadow: 0 16px 40px #000a, 0 0 20px #e8c46a22;
+}
+
+.bigbox {
+  background:
+    radial-gradient(ellipse at 50% 0%, #5a3018aa, transparent 50%),
+    linear-gradient(180deg, #140e0c, #080606);
+}
+
+.bigbox-head strong {
+  font-family: "Bebas Neue", Impact, sans-serif;
+  font-size: 24px;
+  letter-spacing: 0.16em;
+  color: #f3e6c8;
+}
+
+.bigbox-cover {
+  border: 3px solid #e8c46a;
+  border-radius: 6px;
+  background: #1a1410;
+  box-shadow: 0 0 0 6px #e8c46a22, 0 40px 90px #000c;
+}
+
+.bigbox-copy h2 {
+  font-family: "Bebas Neue", Impact, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  line-height: 0.92;
+}
+
+.bigbox-copy p { color: #c4b09a; font-size: 17px; }
+.bigbox-play { border-radius: 4px; min-width: 280px; font-size: 24px; }
+
+.bigbox-menu-panel, .bigbox-pause-panel, .shutdown-panel {
+  border: 1px solid #4a3828;
+  border-radius: 8px;
+  background: #141010;
+  box-shadow: 0 30px 90px #000, 0 0 40px #e8c46a18;
+}
+
+.bigbox-menu-panel h2, .bigbox-pause-panel h2 {
+  font-family: "Bebas Neue", Impact, sans-serif;
+  letter-spacing: 0.08em;
+  font-weight: 400;
+}
+
+.drop-zone {
+  border: 1px dashed #5a4634;
+  border-radius: 6px;
+  background: #1a141088;
+  color: #a8947e;
+}
+
+.drop-zone.active {
+  border-color: #e8c46a;
+  color: #f3e6c8;
+  background: #2a201888;
+}
+
+.list-row:hover, .list-row.selected { background: #241c16; }
+
+.lifecycle {
+  background: radial-gradient(circle at 50% 40%, #3a2418, #080606 70%);
+}
+
+.lifecycle small {
+  color: #e8c46a;
+  letter-spacing: 0.28em;
+}
+
+.lifecycle h2 {
+  font-family: "Bebas Neue", Impact, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+.screensaver::after {
+  background: linear-gradient(90deg, #080606cf, #0806061f 70%), linear-gradient(0deg, #080606cf, transparent 60%);
+}
+
+.coverflow-card.active {
+  border-color: #e8c46a;
+  box-shadow: 0 0 0 2px #e8c46a55;
+}

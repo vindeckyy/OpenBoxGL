@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Five stock Web UI themes: Midnight Circuit, Phosphor Terminal, Harbor Light, Cinema Marquee, and Nordic Mist
+
 ### Fixed
 
 - Update self-test derives the mock GitHub release from the current `VERSION` so CI stays green after release bumps

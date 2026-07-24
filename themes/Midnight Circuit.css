@@ -1,0 +1,292 @@
+/* OpenBox Stock Theme: Midnight Circuit */
+@import url("https://fonts.bunny.net/css?family=syne:600,700,800|manrope:400,500,600,700");
+
+:root {
+  color-scheme: dark;
+  --bg: #070b14;
+  --panel: #0e1524;
+  --panel2: #152038;
+  --line: #24324d;
+  --text: #eef3ff;
+  --muted: #8490ab;
+  --cyan: #3de0ff;
+  --green: #2dff9a;
+  --accent: #3de0ff;
+  --accent-2: #6b8cff;
+  --danger: #ff5d7a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  color: var(--text);
+  font: 12.5px/1.45 "Manrope", ui-sans-serif, system-ui, sans-serif;
+  background:
+    radial-gradient(ellipse 80% 50% at 15% -10%, #1b3a6e55 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 90% 10%, #0f6b7a33 0%, transparent 50%),
+    linear-gradient(160deg, #05080f 0%, #0a1220 45%, #060910 100%);
+  background-attachment: fixed;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+  background-image:
+    linear-gradient(#3de0ff0a 1px, transparent 1px),
+    linear-gradient(90deg, #3de0ff0a 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at 50% 30%, #000 20%, transparent 75%);
+}
+
+.topbar, .workspace, .toast, .lifecycle, .bigbox, dialog {
+  position: relative;
+  z-index: 1;
+}
+
+.topbar {
+  height: 34px;
+  background: linear-gradient(180deg, #10182aee, #0a101cee);
+  border-bottom: 1px solid #2a3d63;
+  box-shadow: 0 1px 0 #3de0ff22, 0 10px 30px #0008;
+  backdrop-filter: blur(16px);
+}
+
+.brand {
+  font-family: "Syne", sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 13px;
+}
+
+.mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, #3de0ff, #6b8cff);
+  color: #041018;
+  box-shadow: 0 0 16px #3de0ff55;
+}
+
+.menu-button {
+  color: #93a0bc;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+.menu-button:hover {
+  color: #fff;
+  background: linear-gradient(180deg, #1c2b48, #152238);
+  box-shadow: inset 0 -1px 0 #3de0ff66;
+}
+
+.top-status { color: #6d7c9a; }
+
+.sidebar, .details {
+  background: linear-gradient(180deg, #0e1628f2, #0a1120f8);
+  backdrop-filter: blur(22px);
+  border-color: #24324d;
+}
+
+.sidebar { border-right: 1px solid #24324d; }
+.details { border-left: 1px solid #24324d; box-shadow: -18px 0 40px #0006; }
+
+.field span, .section-title, .fact small, .detail-card h3 {
+  color: #6f7f9e;
+  letter-spacing: 0.12em;
+}
+
+input, select, textarea {
+  border: 1px solid #2a3c5c;
+  border-radius: 6px;
+  background: #0c1424;
+  color: #eef3ff;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #3de0ff;
+  box-shadow: 0 0 0 2px #3de0ff33;
+}
+
+.platform {
+  border-radius: 6px;
+  color: #b7c2d8;
+}
+
+.platform:hover, .platform.active {
+  background: linear-gradient(90deg, #16304f, #122640);
+  color: #fff;
+}
+
+.platform.active::before {
+  background: var(--cyan);
+  box-shadow: 0 0 10px #3de0ffaa;
+}
+
+.library {
+  background:
+    radial-gradient(circle at 70% 0%, #16345a33, transparent 40%),
+    linear-gradient(180deg, #0a1220cc, #080e18d9);
+}
+
+.library-head {
+  background: #0a1220f0;
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid #1e2d4a55;
+}
+
+.library-head h1 {
+  font-family: "Syne", sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-size: 20px;
+}
+
+.icon-button {
+  border: 1px solid #2f4568;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #16233a, #101a2d);
+  color: #d7e0f2;
+}
+
+.icon-button:hover {
+  border-color: #3de0ff88;
+  background: #1a2d4a;
+}
+
+.cover {
+  border: 1px solid #314868;
+  border-radius: 8px;
+  background: linear-gradient(160deg, #1a2d4c, #0b1322);
+  box-shadow: 0 12px 28px #0009;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.card:hover .cover, .card.selected .cover {
+  transform: translateY(-4px) scale(1.01);
+  border-color: #3de0ff;
+  box-shadow: 0 0 0 1px #3de0ff66, 0 16px 36px #000c;
+}
+
+.card h3 {
+  font-family: "Syne", sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.play, .primary, .bigbox-play {
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2dff9a, #1ad4c4);
+  color: #041510;
+  font-family: "Syne", sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  box-shadow: 0 8px 24px #1ad4c455;
+}
+
+.play { border-radius: 10px; }
+
+.hero {
+  background: linear-gradient(135deg, #1a3358, #0b1424);
+}
+
+.hero::after {
+  background: linear-gradient(180deg, #080b1110 20%, #0e1628 100%);
+}
+
+.hero h2 {
+  font-family: "Syne", sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.detail-card, .emulator-item, .metadata-result, .history-item, .storefront-row {
+  border: 1px solid #24324d;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #121c30, #0e1626);
+}
+
+.rating { color: var(--cyan); }
+.rating strong { background: #243552; border-radius: 5px; }
+
+dialog {
+  border: 1px solid #314868;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #121c31, #0c1424);
+  box-shadow: 0 40px 100px #000d;
+}
+
+dialog::backdrop {
+  background: #03060ecc;
+  backdrop-filter: blur(8px);
+}
+
+.dialog-head { border-bottom: 1px solid #24324d; }
+.dialog-head h2 { font-family: "Syne", sans-serif; font-weight: 800; }
+
+.toast {
+  border: 1px solid #314868;
+  border-radius: 10px;
+  background: #121c31;
+  box-shadow: 0 16px 40px #000a, 0 0 0 1px #3de0ff22;
+}
+
+.bigbox {
+  background:
+    radial-gradient(ellipse at 75% 20%, #1a3d6e66, transparent 45%),
+    radial-gradient(ellipse at 20% 80%, #0d5a6844, transparent 40%),
+    #050912;
+}
+
+.bigbox-cover {
+  border: 2px solid #3de0ff;
+  border-radius: 14px;
+  box-shadow: 0 0 0 6px #3de0ff22, 0 40px 90px #000c;
+}
+
+.bigbox-copy h2 {
+  font-family: "Syne", sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.bigbox-play { border-radius: 12px; min-width: 260px; }
+
+.bigbox-menu-panel, .bigbox-pause-panel, .shutdown-panel {
+  border: 1px solid #314868;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #121c31, #0c1424);
+}
+
+.drop-zone {
+  border: 1px dashed #3a5278;
+  border-radius: 10px;
+  background: #0e1a2e88;
+}
+
+.drop-zone.active {
+  border-color: #3de0ff;
+  background: #12304e88;
+  color: #eef6ff;
+}
+
+.list-row:hover, .list-row.selected {
+  background: #152844;
+}
+
+.coverflow-card.active {
+  border-color: #3de0ff;
+  box-shadow: 0 0 0 2px #3de0ff55;
+}
+
+.lifecycle {
+  background: radial-gradient(circle at 50% 40%, #1a3558, #050912 70%);
+}
+
+.lifecycle small { color: #3de0ff; }
+.lifecycle h2 { font-family: "Syne", sans-serif; font-weight: 800; }

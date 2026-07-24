@@ -14,8 +14,16 @@ PYTHON_MODULES = [
     "plugin_runner.py", "metadata.py", "archives.py", "saves.py", "updates.py",
     "env_config.py", "parity_discovery.py", "parity_import.py", "parity_integrations.py",
     "parity_media.py", "parity_saves.py", "parity_storefront.py", "plugin_catalog.py", "parity_premium.py",
+    "stock_themes.py",
 ]
 DATA_FILES = ["index.html"]
+STOCK_THEMES = [
+    "Midnight Circuit.css",
+    "Phosphor Terminal.css",
+    "Harbor Light.css",
+    "Cinema Marquee.css",
+    "Nordic Mist.css",
+]
 
 
 def test_appdir_structure():
@@ -38,6 +46,10 @@ def test_appdir_structure():
             assert (share / module).is_file(), f"missing {module} in AppImage"
         for data in DATA_FILES:
             assert (share / data).is_file(), f"missing {data} in AppImage"
+        themes = share / "themes"
+        assert themes.is_dir(), "missing themes dir in AppImage"
+        for name in STOCK_THEMES:
+            assert (themes / name).is_file(), f"missing stock theme {name}"
         desktop = appdir / "usr" / "share" / "applications" / "openbox.desktop"
         assert desktop.is_file(), "missing desktop file"
         svg = appdir / "usr" / "share" / "icons" / "hicolor" / "scalable" / "apps" / "openbox.svg"

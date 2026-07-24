@@ -17,11 +17,13 @@ cp "$python_binary" "$appdir/usr/bin/python3"
 cp -a "$stdlib" "$appdir/usr/lib/python$python_version"
 find "$appdir/usr/lib/python$python_version" -type d -name __pycache__ -prune -exec rm -rf -- {} +
 
-for file in openbox.py web_app.py importers.py arcade.py catalog.py cloud_sync.py emulators.py retroachievements.py plugins.py plugin_runner.py metadata.py archives.py saves.py updates.py env_config.py parity_discovery.py parity_import.py parity_integrations.py parity_media.py parity_saves.py parity_storefront.py plugin_catalog.py parity_premium.py index.html; do
+for file in openbox.py web_app.py importers.py arcade.py catalog.py cloud_sync.py emulators.py retroachievements.py plugins.py plugin_runner.py metadata.py archives.py saves.py updates.py env_config.py parity_discovery.py parity_import.py parity_integrations.py parity_media.py parity_saves.py parity_storefront.py plugin_catalog.py parity_premium.py stock_themes.py index.html; do
   cp "$source_root/$file" "$appdir/usr/share/openbox/$file"
 done
 mkdir -p "$appdir/usr/share/openbox/plugins"
 cp "$source_root/plugins/catalog.json" "$appdir/usr/share/openbox/plugins/catalog.json"
+mkdir -p "$appdir/usr/share/openbox/themes"
+cp "$source_root"/themes/*.css "$appdir/usr/share/openbox/themes/"
 cp "$source_root/openbox.desktop" "$appdir/usr/share/applications/openbox.desktop"
 cp "$source_root/openbox.svg" "$appdir/usr/share/icons/hicolor/scalable/apps/openbox.svg"
 cp "$source_root/openbox.metainfo.xml" "$appdir/usr/share/metainfo/openbox.appdata.xml"

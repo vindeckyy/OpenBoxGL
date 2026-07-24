@@ -45,6 +45,7 @@ from parity_media import (
 )
 from parity_saves import enforce_backup_limit, extra_save_candidates, games_with_saves, scan_all_saves
 from parity_storefront import catalog_entries_to_games, storefront_catalog
+from stock_themes import ensure_stock_themes
 from parity_premium import (
     BULK_WIZARD_FIELDS,
     LIST_COLUMNS_DEFAULT,
@@ -646,6 +647,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
                 return
+            ensure_stock_themes(DATA.parent / "themes", ROOT)
             themes = sorted(path.stem for path in (DATA.parent / "themes").glob("*.css"))
             settings = load_state().get("settings", {})
             platform = parse_qs(parsed.query).get("platform", [""])[0]
@@ -2095,6 +2097,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def open_themes_folder(self):
         folder = DATA.parent / "themes"
+        ensure_stock_themes(folder, ROOT)
         folder.mkdir(parents=True, exist_ok=True)
         opener = shutil.which("xdg-open")
         if not opener:
@@ -2105,6 +2108,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     bootstrap_env(DATA.parent)
+    ensure_stock_themes(DATA.parent / "themes", ROOT)
     with STATE_LOCK:
         state = load_state()
         if purge_demo_games(state):
