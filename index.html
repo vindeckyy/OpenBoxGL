@@ -549,16 +549,16 @@
     <div class="form-grid">
       <p class="wide description">Import owned and installed games from Steam, Heroic, Lutris, and Gameyfin. Install or uninstall Gameyfin titles on demand from the library or Big Box.</p>
       <div class="wide extras"><button type="button" class="primary" id="importSteamStore">Import Steam</button><button type="button" class="icon-button" id="importHeroicStore">Import Heroic</button><button type="button" class="icon-button" id="importLutrisStore">Import Lutris</button><button type="button" class="icon-button" id="importGameyfinStore">Import Gameyfin</button><button type="button" class="icon-button" id="importScummvmStore">Import ScummVM</button><button type="button" class="icon-button" id="importRpcs3Store">Import RPCS3</button><button type="button" class="icon-button" id="importVita3kStore">Import Vita3K</button></div>
-      <label class="check"><input type="checkbox" id="autoImportSteam"> Auto-import Steam on startup</label>
-      <label class="check"><input type="checkbox" id="autoImportHeroic"> Auto-import Heroic on startup</label>
-      <label class="check"><input type="checkbox" id="autoImportLutris"> Auto-import Lutris on startup</label>
-      <label class="check"><input type="checkbox" id="autoImportGameyfin"> Auto-import Gameyfin on startup</label>
+      <label class="check"><input type="checkbox" id="storefrontAutoImportSteam"> Auto-import Steam on startup</label>
+      <label class="check"><input type="checkbox" id="storefrontAutoImportHeroic"> Auto-import Heroic on startup</label>
+      <label class="check"><input type="checkbox" id="storefrontAutoImportLutris"> Auto-import Lutris on startup</label>
+      <label class="check"><input type="checkbox" id="storefrontAutoImportGameyfin"> Auto-import Gameyfin on startup</label>
       <div class="wide section-title">Gameyfin server</div>
-      <label class="field wide"><span>Gameyfin URL</span><input id="gameyfinUrl" placeholder="http://192.168.1.10:8080"></label>
-      <label class="field"><span>Username</span><input id="gameyfinUsername" autocomplete="username"></label>
-      <label class="field"><span>Password</span><input id="gameyfinPassword" type="password" autocomplete="current-password" placeholder="Leave blank to keep current"></label>
-      <label class="field wide"><span>Local install folder</span><input id="gameyfinInstallDir" placeholder="~/Games/Gameyfin"></label>
-      <div class="wide extras"><button type="button" class="icon-button" id="testGameyfin">Test Gameyfin connection</button><span class="description" id="gameyfinStatus"></span></div>
+      <label class="field wide"><span>Gameyfin URL</span><input id="storefrontGameyfinUrl" placeholder="http://192.168.1.10:8080"></label>
+      <label class="field"><span>Username</span><input id="storefrontGameyfinUsername" autocomplete="username"></label>
+      <label class="field"><span>Password</span><input id="storefrontGameyfinPassword" type="password" autocomplete="current-password" placeholder="Leave blank to keep current"></label>
+      <label class="field wide"><span>Local install folder</span><input id="storefrontGameyfinInstallDir" placeholder="~/Games/Gameyfin"></label>
+      <div class="wide extras"><button type="button" class="icon-button" id="testGameyfin">Test Gameyfin connection</button><span class="description" id="storefrontGameyfinStatus"></span></div>
       <div class="wide section-title">Browse storefront catalogs</div>
       <label class="field"><span>Source</span><select id="storefrontSource"><option value="steam">Steam</option><option value="heroic">Heroic</option><option value="lutris">Lutris</option><option value="gameyfin">Gameyfin</option></select></label>
       <div class="wide extras"><button type="button" class="icon-button" id="loadStorefrontCatalog">Load catalog</button><button type="button" class="icon-button" id="importStorefrontInstalled">Import installed</button><button type="button" class="primary" id="importStorefrontUninstalled">Import owned / uninstalled</button></div>
@@ -980,10 +980,20 @@
         tray_enabled:$('trayEnabled').checked,
         minimize_to_tray:$('minimizeToTray').checked,
         ludusavi_backup_path:$('ludusaviBackupPath')?.value.trim() || '',
-        gameyfin_url:$('gameyfinUrl')?.value.trim() || appSettings.gameyfin_url || '',
-        gameyfin_username:$('gameyfinUsername')?.value.trim() || appSettings.gameyfin_username || '',
-        gameyfin_password:$('gameyfinPassword')?.value || '',
-        gameyfin_install_dir:$('gameyfinInstallDir')?.value.trim() || appSettings.gameyfin_install_dir || '',
+      };
+    }
+    function collectStorefrontSettings() {
+      return {
+        storefront_auto_import:{
+          steam:$('storefrontAutoImportSteam').checked,
+          heroic:$('storefrontAutoImportHeroic').checked,
+          lutris:$('storefrontAutoImportLutris').checked,
+          gameyfin:Boolean($('storefrontAutoImportGameyfin')?.checked),
+        },
+        gameyfin_url:$('storefrontGameyfinUrl')?.value.trim() || '',
+        gameyfin_username:$('storefrontGameyfinUsername')?.value.trim() || '',
+        gameyfin_password:$('storefrontGameyfinPassword')?.value || '',
+        gameyfin_install_dir:$('storefrontGameyfinInstallDir')?.value.trim() || '',
       };
     }
     async function saveEmumoviesSettings() {
@@ -1793,33 +1803,39 @@
     }
     function openStorefronts() {
       const settings = appSettings.storefront_auto_import || {};
-      $('autoImportSteam').checked = Boolean(settings.steam);
-      $('autoImportHeroic').checked = Boolean(settings.heroic);
-      $('autoImportLutris').checked = Boolean(settings.lutris);
-      if ($('autoImportGameyfin')) $('autoImportGameyfin').checked = Boolean(settings.gameyfin);
-      if ($('gameyfinUrl')) $('gameyfinUrl').value = appSettings.gameyfin_url || '';
-      if ($('gameyfinUsername')) $('gameyfinUsername').value = appSettings.gameyfin_username || '';
-      if ($('gameyfinPassword')) $('gameyfinPassword').value = '';
-      if ($('gameyfinInstallDir')) $('gameyfinInstallDir').value = appSettings.gameyfin_install_dir || '';
-      if ($('gameyfinStatus')) $('gameyfinStatus').textContent = appSettings.gameyfin_url ? `Configured · ${appSettings.gameyfin_url}` : '';
+      $('storefrontAutoImportSteam').checked = Boolean(settings.steam);
+      $('storefrontAutoImportHeroic').checked = Boolean(settings.heroic);
+      $('storefrontAutoImportLutris').checked = Boolean(settings.lutris);
+      if ($('storefrontAutoImportGameyfin')) $('storefrontAutoImportGameyfin').checked = Boolean(settings.gameyfin);
+      if ($('storefrontGameyfinUrl')) $('storefrontGameyfinUrl').value = appSettings.gameyfin_url || '';
+      if ($('storefrontGameyfinUsername')) $('storefrontGameyfinUsername').value = appSettings.gameyfin_username || '';
+      if ($('storefrontGameyfinPassword')) $('storefrontGameyfinPassword').value = '';
+      if ($('storefrontGameyfinInstallDir')) $('storefrontGameyfinInstallDir').value = appSettings.gameyfin_install_dir || '';
+      if ($('storefrontGameyfinStatus')) $('storefrontGameyfinStatus').textContent = appSettings.gameyfin_url ? `Configured · ${appSettings.gameyfin_url}` : '';
       $('storefrontCatalog').innerHTML = '';
       $('storefrontDialog').showModal();
     }
     async function saveStorefrontSettings() {
       appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify({
         ...collectSettings(),
-        storefront_auto_import:{steam:$('autoImportSteam').checked,heroic:$('autoImportHeroic').checked,lutris:$('autoImportLutris').checked,gameyfin:Boolean($('autoImportGameyfin')?.checked)},
-        gameyfin_url:$('gameyfinUrl')?.value.trim() || '',
-        gameyfin_username:$('gameyfinUsername')?.value.trim() || '',
-        gameyfin_password:$('gameyfinPassword')?.value || '',
-        gameyfin_install_dir:$('gameyfinInstallDir')?.value.trim() || '',
+        ...collectStorefrontSettings(),
       })});
       notify('Storefront settings saved');
+    }
+    async function watchGameyfinInstall(gameyfinId) {
+      const job = await api(`/api/gameyfin/install/status?gameyfin_id=${encodeURIComponent(gameyfinId)}`);
+      if (job.state === 'installing') {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        return watchGameyfinInstall(gameyfinId);
+      }
+      if (job.state === 'error') throw new Error(job.error || 'Gameyfin install failed');
+      if (job.state !== 'done') throw new Error('Gameyfin install did not complete');
     }
     async function installGameyfin(game) {
       try {
         notify(`Installing ${game.name} from Gameyfin…`);
         await api('/api/gameyfin/install',{method:'POST',body:JSON.stringify({gameyfin_id:game.gameyfin_id,library_id:game.id})});
+        await watchGameyfinInstall(game.gameyfin_id);
         await refresh();
         bigBoxGames = filteredBigBoxGames();
         if (!$('bigBox').hidden) renderBigBox();
@@ -2026,13 +2042,13 @@
     if ($('testGameyfin')) $('testGameyfin').onclick = async () => {
       try {
         const result = await api('/api/gameyfin/test',{method:'POST',body:JSON.stringify({
-          gameyfin_url:$('gameyfinUrl').value.trim(),
-          gameyfin_username:$('gameyfinUsername').value.trim(),
-          gameyfin_password:$('gameyfinPassword').value,
+          gameyfin_url:$('storefrontGameyfinUrl').value.trim(),
+          gameyfin_username:$('storefrontGameyfinUsername').value.trim(),
+          gameyfin_password:$('storefrontGameyfinPassword').value,
         })});
-        $('gameyfinStatus').textContent = `Connected · ${result.games} games · ${result.providers.length} download provider${result.providers.length === 1 ? '' : 's'}`;
+        $('storefrontGameyfinStatus').textContent = `Connected · ${result.games} games · ${result.providers.length} download provider${result.providers.length === 1 ? '' : 's'}`;
         notify('Gameyfin connection ok');
-      } catch(error) { $('gameyfinStatus').textContent = error.message; notify(error.message); }
+      } catch(error) { $('storefrontGameyfinStatus').textContent = error.message; notify(error.message); }
     };
     $('importScummvmStore').onclick = async () => { try { const result = await api('/api/import/scummvm',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} ScummVM games imported`); } catch(error) { notify(error.message); } };
     $('importRpcs3Store').onclick = async () => { try { const result = await api('/api/import/rpcs3',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} RPCS3 games imported`); } catch(error) { notify(error.message); } };

@@ -974,6 +974,19 @@ class Handler(BaseHTTPRequestHandler):
             source = parse_qs(parsed.query).get("source", [""])[0]
             self.send_json(200, {"catalog": storefront_catalog(source, settings=load_state().get("settings", {}))})
             return
+        if parsed.path == "/api/gameyfin/install/status":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            query = parse_qs(parsed.query)
+            gameyfin_id = str(query.get("gameyfin_id", [""])[0]).strip()
+            if not gameyfin_id:
+                self.send_json(400, {"error": "gameyfin_id is required."})
+                return
+            with PROCESS_LOCK:
+                job = dict(INSTALLS.get(f"gameyfin:{gameyfin_id}", {"state": "idle"}))
+            self.send_json(200, job)
+            return
         if parsed.path == "/api/gameyfin/providers":
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
@@ -2155,27 +2168,47 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, result)
 
     def install_gameyfin(self, payload):
-        game_id = payload.get("gameyfin_id") or payload.get("id")
-        index = payload.get("library_id")
-        with STATE_LOCK:
-            state = load_state()
-            installed = install_gameyfin_game(state.get("settings", {}), game_id)
-            if index is not None:
-                game = state["games"][int(index)]
-                game.update(installed)
-            else:
-                identity = ("gameyfin", str(installed.get("gameyfin_id", "")))
-                existing = {
-                    ("gameyfin", str(game.get("gameyfin_id", ""))): game
-                    for game in state["games"]
-                    if game.get("gameyfin_id")
-                }
-                if identity in existing:
-                    existing[identity].update(installed)
-                else:
-                    state["games"].append(installed)
-            save_state(state)
-        self.send_json(200, {"installed": True, "game": installed})
+        game_id = str(payload.get("gameyfin_id") or payload.get("id") or "").strip()
+        if not game_id:
+            raise ValueError("gameyfin_id is required.")
+        library_id = payload.get("library_id")
+        job_key = f"gameyfin:{game_id}"
+        with PROCESS_LOCK:
+            job = INSTALLS.get(job_key, {})
+            if job.get("state") == "installing":
+                self.send_json(200, {"state": "installing", "gameyfin_id": game_id})
+                return
+            INSTALLS[job_key] = {"state": "installing", "gameyfin_id": game_id}
+
+        def worker():
+            try:
+                with STATE_LOCK:
+                    settings = dict(load_state().get("settings", {}))
+                installed = install_gameyfin_game(settings, game_id)
+                with STATE_LOCK:
+                    state = load_state()
+                    if library_id is not None:
+                        state["games"][int(library_id)].update(installed)
+                    else:
+                        identity = ("gameyfin", str(installed.get("gameyfin_id", "")))
+                        existing = {
+                            ("gameyfin", str(game.get("gameyfin_id", ""))): game
+                            for game in state["games"]
+                            if game.get("gameyfin_id")
+                        }
+                        if identity in existing:
+                            existing[identity].update(installed)
+                        else:
+                            state["games"].append(installed)
+                    save_state(state)
+                result = {"state": "done", "gameyfin_id": game_id, "game": installed}
+            except (GameyfinError, OSError, ValueError) as error:
+                result = {"state": "error", "gameyfin_id": game_id, "error": str(error)}
+            with PROCESS_LOCK:
+                INSTALLS[job_key] = result
+
+        threading.Thread(target=worker, daemon=True).start()
+        self.send_json(202, {"state": "installing", "gameyfin_id": game_id})
 
     def uninstall_gameyfin(self, payload):
         index = int(payload["id"])
