@@ -4,3 +4,7 @@ __pycache__/
 *.pyd
 .env
 .env.*
+build/
+*.AppImage
+*.AppImage.sha256
+*.AppImage.zsync
