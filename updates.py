@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBox/releases/latest"
 ASSET = "OpenBox-x86_64.AppImage"
 

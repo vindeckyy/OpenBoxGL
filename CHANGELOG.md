@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-24
+
 ### Added
 
 - Gameyfin storefront integration: browse owned library, import, install/uninstall on demand in desktop and Big Box
@@ -65,7 +67,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.0
 [0.3.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.3.0
 [0.2.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.2.0
 [0.1.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.1.0

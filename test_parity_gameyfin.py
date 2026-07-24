@@ -52,7 +52,7 @@ class GameyfinTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             settings = {
                 "gameyfin_url": "http://gameyfin.local",
-                "gameyfin_username": "tom",
+                "gameyfin_username": "testuser",
                 "gameyfin_password": "secret",
                 "gameyfin_install_dir": directory,
                 "gameyfin_provider": DEFAULT_PROVIDER,
