@@ -30,7 +30,11 @@ def main():
         "tag_name": tag,
         "html_url": f"https://github.com/vindeckyy/OpenBox/releases/tag/{tag}",
         "assets": [
-            {"name": ASSET, "browser_download_url": f"https://github.com/vindeckyy/OpenBox/releases/download/{tag}/{ASSET}"},
+            {
+                "name": ASSET,
+                "browser_download_url": f"https://github.com/vindeckyy/OpenBox/releases/download/{tag}/{ASSET}",
+                "digest": f"sha256:{digest}",
+            },
             {"name": f"{ASSET}.sha256", "browser_download_url": f"https://github.com/vindeckyy/OpenBox/releases/download/{tag}/{ASSET}.sha256"},
         ],
     }
@@ -43,6 +47,7 @@ def main():
         return Response(json.dumps(release).encode())
     update = check_update(opener)
     assert update["available"] and update["latest"] == latest
+    assert update["checksum"] == digest
     with tempfile.TemporaryDirectory() as directory:
         destination = Path(directory) / ASSET
         destination.write_bytes(b"old appimage")

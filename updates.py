@@ -5,11 +5,13 @@ import json
 import os
 import re
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 VERSION = "0.4.0"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBox/releases/latest"
 ASSET = "OpenBox-x86_64.AppImage"
+TRUSTED_RELEASE_PREFIX = "https://github.com/vindeckyy/OpenBox/releases/download/"
 
 
 def version_tuple(value):
@@ -32,15 +34,70 @@ def github_request(url, opener=urlopen):
     return opener(Request(url, headers=headers), timeout=30)
 
 
+def asset_digest(asset):
+    digest = str(asset.get("digest", "")).strip()
+    if digest.startswith("sha256:"):
+        value = digest.split(":", 1)[1].lower()
+        if re.fullmatch(r"[0-9a-f]{64}", value):
+            return value
+    return ""
+
+
+def parse_release_assets(release):
+    urls = {}
+    digests = {}
+    for asset in release.get("assets", []):
+        if not isinstance(asset, dict):
+            continue
+        name = str(asset.get("name", "")).strip()
+        if not name:
+            continue
+        url = str(asset.get("browser_download_url", "")).strip()
+        if url:
+            urls[name] = url
+        digest = asset_digest(asset)
+        if digest:
+            digests[name] = digest
+    return urls, digests
+
+
+def load_checksum_file(url, opener=urlopen):
+    with github_request(url, opener=opener) as response:
+        expected = response.read(4096).decode().split()[0].lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise ValueError("The release checksum is invalid.")
+    return expected
+
+
+def resolve_update_checksum(update, opener=urlopen):
+    checksum = str(update.get("checksum", "")).strip().lower()
+    if re.fullmatch(r"[0-9a-f]{64}", checksum):
+        return checksum
+    checksum_url = str(update.get("checksum_url", "")).strip()
+    if checksum_url.startswith(TRUSTED_RELEASE_PREFIX):
+        return load_checksum_file(checksum_url, opener=opener)
+    raise ValueError("The release checksum is unavailable.")
+
+
 def check_update(opener=urlopen):
-    with github_request(RELEASE_API, opener=opener) as response:
-        release = json.load(response)
+    try:
+        with github_request(RELEASE_API, opener=opener) as response:
+            release = json.load(response)
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")[:200]
+        raise ValueError(f"GitHub releases request failed ({error.code}): {detail or error.reason}") from error
+    except URLError as error:
+        raise ValueError(f"Could not reach GitHub releases: {error.reason}") from error
+
     version = str(release.get("tag_name", ""))
-    assets = {asset.get("name"):asset.get("browser_download_url") for asset in release.get("assets", []) if isinstance(asset, dict)}
-    expected = f"https://github.com/vindeckyy/OpenBox/releases/download/"
-    appimage, checksum = assets.get(ASSET, ""), assets.get(f"{ASSET}.sha256", "")
-    if version_tuple(version) > version_tuple(VERSION) and (not appimage.startswith(expected) or not checksum.startswith(expected)):
+    urls, digests = parse_release_assets(release)
+    appimage = urls.get(ASSET, "")
+    checksum = digests.get(ASSET, "")
+    checksum_url = urls.get(f"{ASSET}.sha256", "")
+    if version_tuple(version) > version_tuple(VERSION) and not appimage.startswith(TRUSTED_RELEASE_PREFIX):
         raise ValueError("The release is missing verified OpenBox update assets.")
+    if version_tuple(version) > version_tuple(VERSION) and not checksum and not checksum_url:
+        raise ValueError("The release is missing a SHA-256 checksum for the AppImage.")
     return {
         "current": VERSION,
         "latest": version.lstrip("v"),
@@ -48,6 +105,7 @@ def check_update(opener=urlopen):
         "notes": str(release.get("body", ""))[:4000],
         "appimage": appimage,
         "checksum": checksum,
+        "checksum_url": checksum_url,
         "page": str(release.get("html_url", "")),
     }
 
@@ -58,13 +116,10 @@ def install_update(update, destination=None, opener=urlopen):
         raise ValueError("Automatic updates require the OpenBox AppImage.")
     if not update.get("available"):
         raise ValueError("OpenBox is already up to date.")
-    expected_url = "https://github.com/vindeckyy/OpenBox/releases/download/"
-    if not str(update.get("appimage", "")).startswith(expected_url) or not str(update.get("checksum", "")).startswith(expected_url):
+    appimage = str(update.get("appimage", "")).strip()
+    if not appimage.startswith(TRUSTED_RELEASE_PREFIX):
         raise ValueError("The update URLs are not trusted OpenBox release assets.")
-    with github_request(update["checksum"], opener=opener) as response:
-        expected = response.read(4096).decode().split()[0].lower()
-    if not re.fullmatch(r"[0-9a-f]{64}", expected):
-        raise ValueError("The release checksum is invalid.")
+    expected = resolve_update_checksum(update, opener=opener)
     temporary = destination.with_name(f".{destination.name}.update")
     digest = hashlib.sha256()
     try:

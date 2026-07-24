@@ -622,7 +622,10 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
                 return
-            self.send_json(200, check_update())
+            try:
+                self.send_json(200, check_update())
+            except ValueError as error:
+                self.send_json(400, {"error": str(error)})
             return
         if parsed.path == "/api/related":
             if not self.authorized():
