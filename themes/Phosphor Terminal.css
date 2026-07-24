@@ -42,7 +42,7 @@ body::after {
 }
 
 .topbar {
-  height: 32px;
+  min-height: 32px;
   background: #040a06;
   border-bottom: 1px solid #1f4a2c;
   box-shadow: 0 0 24px #49ff7a22;

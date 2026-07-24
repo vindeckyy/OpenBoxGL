@@ -38,7 +38,7 @@ body::before {
 .topbar, .workspace { position: relative; z-index: 1; }
 
 .topbar {
-  height: 34px;
+  min-height: 34px;
   background: linear-gradient(180deg, #1a1410, #100c0a);
   border-bottom: 1px solid #4a3828;
   box-shadow: 0 1px 0 #e8c46a33, 0 12px 28px #000a;

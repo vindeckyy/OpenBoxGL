@@ -27,7 +27,7 @@ body {
 }
 
 .topbar {
-  height: 34px;
+  min-height: 34px;
   background: rgba(255, 255, 255, 0.86);
   border-bottom: 1px solid #d5dde8;
   box-shadow: 0 8px 24px #1520330d;

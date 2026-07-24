@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-07-24
+
+### Fixed
+
+- Update check no longer fails when a release omits a separate `.sha256` file; GitHub asset digests are used instead
+- Settings update check returns readable errors instead of a browser network failure
+- Top bar and library header scale cleanly at any browser zoom level
+
 ## [0.4.0] - 2026-07-24
 
 ### Added
@@ -67,7 +75,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.1
 [0.4.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.0
 [0.3.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.3.0
 [0.2.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.2.0

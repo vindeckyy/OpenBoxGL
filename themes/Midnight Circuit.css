@@ -49,7 +49,7 @@ body::before {
 }
 
 .topbar {
-  height: 34px;
+  min-height: 34px;
   background: linear-gradient(180deg, #10182aee, #0a101cee);
   border-bottom: 1px solid #2a3d63;
   box-shadow: 0 1px 0 #3de0ff22, 0 10px 30px #0008;
