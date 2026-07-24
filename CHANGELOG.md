@@ -11,6 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Gameyfin installs run in a background worker; the UI polls `/api/gameyfin/install/status` instead of blocking the server
 - Storefront Gameyfin settings use dedicated `storefront*` form fields; saving Settings no longer touches Gameyfin credentials
 
+### Changed
+
+- IDE rule sources moved to `.agent/ide-rules/`; run `make ide-rules` locally (local rules install is gitignored)
+
 ## [0.4.1] - 2026-07-24
 
 ### Fixed

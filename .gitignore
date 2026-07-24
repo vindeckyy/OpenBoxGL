@@ -24,3 +24,6 @@ build/
 # Local scratch notes — never committed
 .agent/scratch/*
 !.agent/scratch/.gitkeep
+
+# Editor workspace files
+.cursor/
