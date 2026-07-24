@@ -40,7 +40,7 @@ body:
       options:
         - Not related to LaunchBox parity
         - Matches an existing LaunchBox feature
-        - Linux-first equivalent for a LaunchBox workflow
+        - Linux equivalent for a LaunchBox workflow
         - Unsure
     validations:
       required: true

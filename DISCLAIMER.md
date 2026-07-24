@@ -5,7 +5,7 @@
 **OpenBox is an independent, original, open-source software project developed from scratch. OpenBox is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox, Unbroken Software, LLC, or any of their subsidiaries or affiliates.**
 
 - The official LaunchBox application and website are located at [https://www.launchbox-app.com](https://www.launchbox-app.com).
-- OpenBox was developed using a clean-room approach with standard Python, HTML, and JavaScript without utilizing proprietary source code, internal APIs, or trade secrets belonging to Unbroken Software, LLC or any third party.
+- OpenBox was developed using a clean-room approach with standard Python, HTML, and JavaScript without using proprietary source code, internal APIs, or trade secrets belonging to Unbroken Software, LLC or any third party.
 
 ---
 

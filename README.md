@@ -17,7 +17,7 @@
 
 <p align="center">
   <a href="https://donate.stripe.com/5kQ14o4uP43OeM17M8dnW00" title="Voluntary donation to support OpenBox development">
-    <img src="https://img.shields.io/badge/☕_Buy_me_a_coffee-Support_OpenBox-FFDD00?style=for-the-badge" alt="Buy me a coffee — support OpenBox">
+    <img src="https://img.shields.io/badge/☕_Buy_me_a_coffee-Support_OpenBox-FFDD00?style=for-the-badge" alt="Buy me a coffee - support OpenBox">
   </a>
 </p>
 
@@ -43,14 +43,14 @@
     >
   </a>
   <br>
-  <sub>One library for Steam, ROMs, and emulators — click for more screenshots</sub>
+  <sub>One library for Steam, ROMs, and emulators. Click for more screenshots.</sub>
 </p>
 
 ---
 
 ## Overview
 
-OpenBox is an open-source game library manager and launcher built for Linux. It brings PC games, storefront libraries, ROM collections, arcade sets, and emulator workflows into one searchable catalog with artwork, metadata, session tracking, save management, and launch orchestration.
+OpenBox is an open-source game library manager and launcher built for Linux. It puts PC games, storefront libraries, ROM collections, arcade sets, and emulator workflows in one searchable catalog with artwork, metadata, session tracking, save management, and launch profiles.
 
 If you already know LaunchBox, OpenBox targets the same core job on Linux: organize a large library, enrich it with metadata and media, and launch games reliably from one front end. The difference is the packaging. OpenBox is built for Steam, Heroic, Lutris, Flatpak emulators, RetroArch, and local ROM folders on Linux, and it does not put advanced library workflows behind a Premium subscription.
 
@@ -69,26 +69,23 @@ Library data is stored locally at `~/.local/share/openbox-game-launcher/library.
 
 ## Why OpenBox on Linux
 
-LaunchBox built something a lot of people love on Windows: a big library, nice artwork, emulator profiles, Big Box browsing, the whole couch setup. Then a chunk of that experience got moved behind a Premium subscription, while Linux users kept asking for a native build and kept getting the same shrug.
+LaunchBox is a capable Windows library launcher with artwork, emulator profiles, and Big Box couch browsing. Several advanced library workflows require LaunchBox Premium, and there is still no native Linux build.
 
-So here we are.
+OpenBox is a Linux-native alternative with no subscription for custom fields, ESRB filters, list view, media packs, or similar library workflows.
 
-Honestly, OpenBox probably never gets written if LaunchBox ships a real Linux version and stops metering everyday library features behind a paywall. The community asked. The gap stayed. OpenBox exists because someone finally got tired of waiting and built the Linux front end themselves, with the Premium-shaped workflows included for free.
-
-OpenBox is designed around how Linux gamers actually run software: Steam, Heroic, Lutris, Gameyfin, Flatpak emulators, RetroArch, and local ROM folders. No Windows tax. No Premium gate for custom fields, ESRB filters, list view, media packs, or the rest of the checklist people already paid for once by owning their games.
+OpenBox targets the launchers and paths Linux users already run: Steam, Heroic, Lutris, Gameyfin, Flatpak emulators, RetroArch, and local ROM folders.
 
 ### What that means in practice
 
 | Topic | OpenBox on Linux | Typical LaunchBox experience on Linux |
 | --- | --- | --- |
 | Platform support | Native Linux application | Windows-first; Linux use often depends on compatibility layers |
-| License and cost | Open source under AGPL-3.0; Premium-equivalent features included free | Free tier plus paid Premium for several advanced workflows |
+| License and cost | Open source under AGPL-3.0; Premium workflows included without a subscription | Free tier plus paid Premium for several advanced workflows |
 | Account requirement | No OpenBox account required | LaunchBox account and Premium features for parts of the ecosystem |
-| Premium workflows | Custom fields, ESRB, list view, media packs, import wizard, and Big Box polish included | Custom fields, ESRB, media packs, and several Big Box features require Premium |
-| Listening to Linux users | This whole repository | Still waiting for that official Linux build |
+| Premium workflows | Custom fields, ESRB, list view, media packs, import wizard, and Big Box features included | Custom fields, ESRB, media packs, and several Big Box features require Premium |
 | Steam integration | Reads installed Steam libraries and launches through Steam | Supported, but not centered on Linux-native install layouts |
-| Heroic / Epic / GOG / Amazon | First-class import through Heroic manifests | Possible, but not the primary Linux workflow |
-| Lutris / EA / Ubisoft / Game Pass tagging | Built around Lutris and Heroic catalog import | Less direct on Linux |
+| Heroic / Epic / GOG / Amazon | Import through Heroic manifests | Possible, but not the primary Linux workflow |
+| Lutris / EA / Ubisoft / Game Pass tagging | Uses Lutris and Heroic catalog import | Less direct on Linux |
 | Emulator setup | Detects local binaries and installs from Flathub with Update All | Strong on Windows; Linux emulator install paths vary more |
 | Updates | GitHub releases, AppImage, zsync, Flatpak, Makefile install | Windows installer/updater focused |
 | Cloud sync | Mounted-folder sync with Syncthing, Dropbox, Drive, or any path | LaunchBox Premium cloud library |
@@ -98,7 +95,7 @@ OpenBox is designed around how Linux gamers actually run software: Steam, Heroic
 
 ### Who OpenBox is for
 
-OpenBox is a strong fit if you:
+Consider OpenBox if you:
 
 - Run Linux on a desktop, laptop, Steam Deck, or handheld PC
 - Want one library for Steam, Heroic, Lutris, Gameyfin, ROMs, and standalone emulators
@@ -113,17 +110,17 @@ LaunchBox remains the better choice if you:
 - Need Windows-only integrations such as shell replacement, LEDBlinky, or Teknoparrot-native workflows
 - Already rely on LaunchBox Premium cloud library hosting and want that exact service model
 
-OpenBox does not try to clone every Windows-only LaunchBox feature. It implements the Linux-usable parts of the LaunchBox workflow and documents the rest in [PARITY.md](PARITY.md).
+OpenBox covers the LaunchBox workflows that work on Linux and documents the rest in [PARITY.md](PARITY.md).
 
 ---
 
 ## Comparison with LaunchBox
 
-OpenBox was built as a clean-room open-source project for Linux parity, not as a fork or derivative of LaunchBox. The comparison below focuses on practical outcomes for Linux users.
+OpenBox is an independent open-source project aimed at Linux parity with LaunchBox. The comparison below covers practical outcomes for Linux users.
 
 ### Library management
 
-Both projects handle large local libraries, metadata editing, favorites, collections, filters, playlists, and bulk operations. OpenBox adds Linux-native quality-of-life pieces such as searchable settings, sidebar section hiding, arrange-by jump bars, provider-aware duplicate detection, ESRB filtering, custom fields, list view, platform categories, and a library health audit for missing files, media, saves, and emulator configuration.
+Both projects handle large local libraries, metadata editing, favorites, collections, filters, playlists, and bulk operations. OpenBox also has searchable settings, sidebar section hiding, arrange-by jump bars, provider-aware duplicate detection, ESRB filtering, custom fields, list view, platform categories, and a library health audit for missing files, media, saves, and emulator configuration.
 
 ### Imports and storefronts
 
@@ -133,21 +130,17 @@ OpenBox imports from:
 - Heroic for Epic, GOG, and Amazon titles
 - Lutris for EA, Ubisoft, Xbox, and Game Pass tagged entries
 - Gameyfin self-hosted libraries with on-demand install and uninstall
-- ScummVM, RPCS3, and Vita3K library scans
-- Local ROM folders with recursive discovery
-- Arcade (MAME/FinalBurn Neo) set classification
-- Storefront Manager for owned vs. installed catalog browsing and optional startup auto-import
-- Local ROM folders with extension-aware scanning and drag-and-drop import
-- Multi-platform folder import, multi-emulator install chooser, ROM version ranking, and multi-disc M3U generation
-- MAME and FinalBurn DAT/XML full-set classification
 - ScummVM, RPCS3, Vita3K, Xbox 360, and loose arcade import helpers
+- Local ROM folders with extension-aware scanning and drag-and-drop import
+- MAME and FinalBurn DAT/XML full-set classification
+- Multi-platform folder import, multi-emulator install chooser, ROM version ranking, and multi-disc M3U generation
 - Storefront Manager for owned vs. installed catalog browsing and optional startup auto-import
 
-LaunchBox covers many of the same sources on Windows. On Linux, OpenBox's advantage is that these importers are written against the paths, manifests, and launchers Linux users already have installed.
+LaunchBox covers many of the same sources on Windows. On Linux, these importers target the paths, manifests, and launchers users already have installed.
 
 ### Metadata and artwork
 
-OpenBox syncs with the official LaunchBox Games Database, matches games locally, downloads artwork and metadata (including ESRB), supports image groups, duplicate cleanup, region priority, download limits, bulk media jobs, Steam trailer download, and Heroic GOG media download. Licensed EmuMovies and Bezel Project hooks are available when you provide your own credentials. Bundled media packs for platform logos, controller prompts, and badges are included at no cost.
+OpenBox syncs with the official LaunchBox Games Database, matches games locally, downloads artwork and metadata (including ESRB), supports image groups, duplicate cleanup, region priority, download limits, bulk media jobs, Steam trailer download, and Heroic GOG media download. Licensed EmuMovies and Bezel Project hooks are available when you provide your own credentials. Bundled media packs for platform logos, controller prompts, and badges are included without a subscription.
 
 ### Launching, sessions, and saves
 
@@ -159,21 +152,21 @@ RetroAchievements support includes account login, ROM hash matching for ZIP and 
 
 OpenBox includes fullscreen Big Box mode with Stage, Hybrid, and CoverFlow layouts, jewel-case styling, hybrid scoped search, filter/sort/RetroAchievements menus, configurable gamepad button mapping, bundled controller prompt packs, pause overlay for running games, attract mode and screensaver support, optional startup video, library background music, and localized UI strings (English, Spanish, German, French, Portuguese).
 
-Themes are plain CSS files with live reload, global or per-platform assignment, and a local import workflow instead of a proprietary online theme store. OpenBox ships five stock themes that show what CSS can do: Midnight Circuit, Phosphor Terminal, Harbor Light, Cinema Marquee, and Nordic Mist.
+Themes are plain CSS files with live reload, global or per-platform assignment, and a local import workflow instead of a proprietary online theme store. Five stock themes ship with the web UI: Midnight Circuit, Phosphor Terminal, Harbor Light, Cinema Marquee, and Nordic Mist.
 
 ### Extensibility
 
-OpenBox provides sandboxed Python plugins with `library`, `before_launch`, and `after_session` hooks, plus a bundled community plugin catalog. LaunchBox has its own plugin ecosystem on Windows; OpenBox's model is smaller but fully local and inspectable.
+OpenBox provides sandboxed Python plugins with `library`, `before_launch`, and `after_session` hooks, plus a bundled community plugin catalog. LaunchBox has its own plugin ecosystem on Windows; OpenBox plugins are local and inspectable.
 
 ### Parity status
 
-The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md). At a high level, the major Linux-usable LaunchBox workflows are implemented, including Premium-equivalent features at no cost. Windows-only arcade, shell, LED, and native Xbox package features are intentionally replaced with documented Linux equivalents or external tools.
+The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md). Major LaunchBox workflows that apply on Linux are implemented, including Premium features without a subscription. Windows-only arcade, shell, LED, and native Xbox package features have documented Linux equivalents or external tools instead.
 
 ---
 
 ## Features
 
-### Unified library and discovery
+### Library and discovery
 
 - One catalog for Steam, Heroic, Lutris, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and local executables
 - Storefront Manager for catalog browse, uninstalled import, and startup auto-import (including Gameyfin install/uninstall)
@@ -191,7 +184,7 @@ The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md
 - In-app PDF/document reader with page navigation, spread layout, and light/dark themes
 - Multi-category video playback, screenshot capture, gallery lightbox, and library BGM in Big Box
 
-### Emulators and launch orchestration
+### Emulators and launching
 
 - Auto-detection of emulators on `$PATH`
 - Flathub install, Update All, Open Emulator, dependency checks, and recommend-on-import
@@ -218,9 +211,9 @@ The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md
 - Attract mode, screensaver with controller wake and launch, and optional startup video
 - UI localization for English, Spanish, German, French, and Portuguese
 
-### Premium-equivalent features (free)
+### Premium workflows (included)
 
-LaunchBox Premium workflows are included in OpenBox at no cost:
+LaunchBox Premium workflows are included in OpenBox without a subscription:
 
 - Custom fields with per-game values and bulk edit support
 - ESRB ratings from database imports, sidebar filtering, and list columns
@@ -286,7 +279,7 @@ Optional local configuration can be loaded from `~/.env` or a project `.env` fil
 ## Screenshots
 
 <p align="center">
-  <strong>Library</strong> — grid and list views, platform filters, playlists, drag-and-drop import
+  <strong>Library</strong>: grid and list views, platform filters, playlists, drag-and-drop import
 </p>
 
 <p align="center">
@@ -301,7 +294,7 @@ Optional local configuration can be loaded from `~/.env` or a project `.env` fil
 </p>
 
 <p align="center">
-  <strong>Game detail</strong> — metadata, ratings, play history, hero art, and one-click launch
+  <strong>Game detail</strong>: metadata, ratings, play history, hero art, and one-click launch
 </p>
 
 <p align="center">
@@ -370,7 +363,7 @@ OpenBox/
 ├── openbox.py              Native Tk UI
 ├── importers.py            Steam, Heroic, and Lutris import
 ├── parity_import.py        M3U, multi-platform import, emulator recommendations, ROM ranking
-├── parity_premium.py       Premium-equivalent features (custom fields, ESRB, media packs, localization)
+├── parity_premium.py       Premium workflows (custom fields, ESRB, media packs, localization)
 ├── parity_storefront.py    Storefront Manager catalog and uninstalled import
 ├── parity_gameyfin.py      Gameyfin library client, install, and uninstall
 ├── parity_save_tools.py    Ludusavi and Hoard CLI wrappers
@@ -424,7 +417,7 @@ OpenBox is free and open source (AGPL-3.0). If it saves you time, a voluntary do
 
 <p align="center">
   <a href="https://donate.stripe.com/5kQ14o4uP43OeM17M8dnW00">
-    <img src="https://img.shields.io/badge/☕_Buy_me_a_coffee-Support_OpenBox-FFDD00?style=for-the-badge" alt="Buy me a coffee — support OpenBox">
+    <img src="https://img.shields.io/badge/☕_Buy_me_a_coffee-Support_OpenBox-FFDD00?style=for-the-badge" alt="Buy me a coffee - support OpenBox">
   </a>
 </p>
 

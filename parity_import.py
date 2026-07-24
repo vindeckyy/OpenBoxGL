@@ -1,4 +1,4 @@
-"""Import and emulator-parity helpers for LaunchBox-depth workflows."""
+"""Import helpers for M3U, multi-platform folders, emulator recommendations, and ROM ranking."""
 
 from __future__ import annotations
 

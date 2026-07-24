@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for LaunchBox Premium-equivalent free features."""
+"""Tests for LaunchBox Premium parity helpers."""
 
 import tempfile
 import unittest

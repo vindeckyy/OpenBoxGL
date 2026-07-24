@@ -8,7 +8,7 @@ MEDIA_FIELDS = ("cover", "background", "video", "music")
 
 
 def related_game_ids(games, selected, limit=8):
-    """Return the strongest local-library relationships without an online service."""
+    """Return related game IDs scored from local metadata only."""
     base = games[selected]
     base_genres = set(re.findall(r"\w+", str(base.get("genre", "")).lower()))
     ranked = []

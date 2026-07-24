@@ -72,13 +72,13 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | RetroAchievements 7z scanning and rich profile | done | ZIP and 7z ROM hashing plus beaten/mastered stats in achievement pane |
 | Big Box hybrid scoped search | done | Hybrid mode exposes platform-scoped search while browsing |
 | Attract mode and startup video | done | Separate attract delay, optional Big Box startup video, and screensaver launch |
-| Bundled media packs (free) | done | Platform logos, controller prompts, and badge packs apply with no paywall |
+| Bundled media packs (free) | done | Platform logos, controller prompts, and badge packs apply without a subscription |
 | Localization (en/es/de/fr/pt) | done | Locale setting loads translated UI strings |
 | Big Box shutdown apps on mode switch | done | Configurable commands run when entering or leaving Big Box |
 | Xbox 360 and loose arcade import | done | default.xex folder scan and Hypseus/Singe loose file import |
 | Vita3K title resolution | done | Title IDs resolve to readable game names on import |
 
-All LaunchBox Premium-equivalent workflows above are included in OpenBox at no cost. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
+All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 
 ## Intentionally not replicated on Linux
 
@@ -90,6 +90,6 @@ These LaunchBox features have no practical Linux equivalent and are documented r
 | LEDBlinky / cabinet LED control | Use external Linux arcade I/O tools instead |
 | Teknoparrot arcade launcher | Use Lutris/Wine launch profiles for supported titles |
 | Native Xbox PC package scanning | Use Heroic/Lutris/Xbox Cloud entries instead |
-| Bundled proprietary media packs | Replaced by free bundled media packs in OpenBox (no paywall) |
+| Bundled proprietary media packs | Replaced by free bundled media packs in OpenBox |
 | LaunchBox Premium account cloud library | Replaced by mounted-folder sync plus local backups |
 | LaunchBox online theme storefront | Replaced by local CSS theme import and open-folder workflow |

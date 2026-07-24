@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- Settings save merges omitted keys from existing state — partial storefront POSTs no longer wipe watch folders or storefront auto-import flags
+- Settings save merges omitted keys from existing state. Partial storefront POSTs no longer wipe watch folders or storefront auto-import flags.
 - Storefront save posts only storefront fields instead of spreading empty Settings form values
 - GET `/api/storefront/catalog` and `/api/gameyfin/providers` return JSON errors instead of dropping the connection
 - Gameyfin install worker reports error state on invalid `library_id`; UI times out after ~60s instead of polling forever
@@ -50,7 +50,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- LaunchBox Premium-equivalent features with no paywall: custom fields, ESRB metadata and filters, list view, platform categories, and bulk edit wizard
+- LaunchBox Premium-equivalent features without a subscription: custom fields, ESRB metadata and filters, list view, platform categories, and bulk edit wizard
 - Drag-and-drop import zone with multi-emulator install chooser and ROM version ranking
 - Steam trailer and GOG media auto-download, RetroAchievements 7z scanning, and richer achievement stats
 - Big Box hybrid scoped search, attract mode, startup video, bundled media packs, and controller prompt packs
@@ -82,7 +82,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- Expanded LaunchBox parity matrix with Linux-first equivalents for premium workflows
+- Expanded LaunchBox parity matrix with Linux equivalents for premium workflows
 - AppImage and Makefile packaging updated for new modules
 
 ## [0.1.0] - 2026-07-23

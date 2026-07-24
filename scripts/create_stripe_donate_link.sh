@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Create (or recreate) a Stripe Payment Link for README donations.
-# Requires STRIPE_SECRET_KEY in the environment — never commit that key.
+# Requires STRIPE_SECRET_KEY in the environment. Never commit that key.
 # Optional: load from ~/.env if present (gitignored).
 set -euo pipefail
 
@@ -17,7 +17,7 @@ if [ -z "${STRIPE_SECRET_KEY:-}" ]; then
 fi
 
 amount_cents="${STRIPE_DONATE_AMOUNT_CENTS:-500}"
-product_name="${STRIPE_DONATE_PRODUCT_NAME:-Buy me a coffee — OpenBox}"
+product_name="${STRIPE_DONATE_PRODUCT_NAME:-Buy me a coffee - OpenBox}"
 
 response="$(curl -sS https://api.stripe.com/v1/payment_links \
   -H "Authorization: Bearer ${STRIPE_SECRET_KEY}" \

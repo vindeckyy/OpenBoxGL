@@ -1,4 +1,4 @@
-"""LaunchBox Premium-equivalent features for OpenBox (all free, no paywall)."""
+"""LaunchBox Premium parity: custom fields, ESRB, media packs, and related settings."""
 
 from __future__ import annotations
 
