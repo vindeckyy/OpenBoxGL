@@ -14,6 +14,11 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBox/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBox</url>
   <releases>
+    <release version="0.3.0" date="2026-07-24">
+      <description>
+        <p>Premium parity release with custom fields, ESRB filters, list view, import wizard, bundled media packs, and Big Box polish. All LaunchBox Premium-equivalent workflows are included at no cost.</p>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-07-24">
       <description>
         <p>LaunchBox-depth parity release with storefront catalogs, Big Box polish, integrations, and Linux-first equivalents for remaining premium workflows.</p>

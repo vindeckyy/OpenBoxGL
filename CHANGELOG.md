@@ -6,10 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-24
+
 ### Added
 
-- Repository documentation: contributing guide, security policy, code of conduct, and GitHub issue templates
-- Continuous integration workflow for the full Python test suite
+- LaunchBox Premium-equivalent features with no paywall: custom fields, ESRB metadata and filters, list view, platform categories, and bulk edit wizard
+- Drag-and-drop import zone with multi-emulator install chooser and ROM version ranking
+- Steam trailer and GOG media auto-download, RetroAchievements 7z scanning, and richer achievement stats
+- Big Box hybrid scoped search, attract mode, startup video, bundled media packs, and controller prompt packs
+- Localization for English, Spanish, German, French, and Portuguese
+- Xbox 360, loose arcade, and Vita3K title resolution import helpers
+- `parity_premium.py` module and premium API routes
+
+### Changed
+
+- Expanded PARITY.md to mark premium workflows as done and free
+- AppImage, Makefile, Flatpak manifest, and packaging tests include `parity_premium.py`
 
 ## [0.2.0] - 2026-07-24
 
@@ -47,6 +59,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.3.0
 [0.2.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.2.0
 [0.1.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.1.0
