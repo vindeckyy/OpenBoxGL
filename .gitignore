@@ -20,3 +20,7 @@ build/
 *.AppImage
 *.AppImage.sha256
 *.AppImage.zsync
+
+# Local scratch notes — never committed
+.agent/scratch/*
+!.agent/scratch/.gitkeep

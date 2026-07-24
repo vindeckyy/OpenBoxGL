@@ -137,7 +137,6 @@ Update relevant docs when behavior changes:
 
 Parity-related modules include `parity_import.py`, `parity_premium.py`, `parity_storefront.py`, `parity_discovery.py`, `parity_media.py`, `parity_saves.py`, and `parity_integrations.py`.
 
-## Security issues
 
 Do not open public issues for security vulnerabilities. Follow [SECURITY.md](SECURITY.md).
 
