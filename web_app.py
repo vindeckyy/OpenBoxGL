@@ -53,6 +53,26 @@ from parity_gameyfin import (
     uninstall_gameyfin_game,
 )
 from parity_save_tools import run_hoard, run_ludusavi, save_tool_status
+from parity_filter_presets import (
+    bigbox_quick_presets,
+    delete_preset,
+    explorer_facets,
+    list_presets,
+    preset_by_name,
+    save_preset,
+)
+from parity_deeplinks import handle_cli, launcher_menu_items, parse_uri
+from parity_backup import BACKUP_ITEMS, create_backup, restore_backup
+from parity_tracking import close_store_client, wait_for_exit, TRACKING_MODES
+from parity_igdb import apply_to_game as apply_igdb_metadata, fetch_game as fetch_igdb_game, search_games as search_igdb_games
+from parity_emulator_defs import (
+    load_definitions,
+    merge_profiles_from_definitions,
+    save_scan_config,
+    scan_folder as scan_emulator_folder,
+    list_scan_configs,
+)
+from parity_import_policy import add_exclusion, filter_imported, list_exclusions, remove_exclusion
 from stock_themes import ensure_stock_themes
 from parity_premium import (
     BULK_WIZARD_FIELDS,
@@ -100,6 +120,7 @@ FIELDS = {
     "progress", "rating", "notes", "region", "play_mode", "sort_title", "added_at",
     "alternate_names", "max_players", "wikipedia_url", "video_url", "hide_in_bigbox", "esrb",
     "gameyfin_id", "gameyfin_provider", "store_catalog", "store_installed", "owned",
+    "tracking_mode", "tracking_delay", "tracking_frequency", "tracking_process_name", "igdb_id",
 }
 
 
@@ -167,11 +188,15 @@ def import_folder_path(folder, recommend=True, chosen_emulators=None):
 def merge_imported_games(imported, identity_fn):
     with STATE_LOCK:
         state = load_state()
+        imported = filter_imported(imported, state)
         existing = {identity_fn(game) for game in state["games"]}
         new_games = [game for game in imported if identity_fn(game) not in existing]
         timestamp = datetime.now().isoformat(timespec="seconds")
+        default_progress = state.get("settings", {}).get("progress_on_first_play", "Playing")
         for game in new_games:
             game["added_at"] = timestamp
+            if default_progress and not game.get("progress"):
+                game["progress"] = default_progress
             normalize_video_fields(game)
         state["games"].extend(new_games)
         save_state(state)
@@ -240,7 +265,8 @@ def run_configured_commands(key):
 
 
 def public_settings(state=None):
-    settings = (state or load_state()).get("settings", {})
+    state = state or load_state()
+    settings = state.get("settings", {})
     return {
         "watch_folders": settings.get("watch_folders", []),
         "screensaver_seconds": settings.get("screensaver_seconds", 90),
@@ -295,6 +321,15 @@ def public_settings(state=None):
         "media_packs": list_media_packs(settings),
         "controller_prompt_hint": settings.get("controller_prompt_hint", ""),
         "premium_features_free": True,
+        "progress_on_first_play": settings.get("progress_on_first_play", "Playing"),
+        "tracking_mode": settings.get("tracking_mode", "default"),
+        "tracking_delay": settings.get("tracking_delay", 0),
+        "tracking_frequency": settings.get("tracking_frequency", 2),
+        "auto_close_store_clients": settings.get("auto_close_store_clients", False),
+        "filter_presets": list_presets(state),
+        "import_exclusions": list_exclusions(state),
+        "emulator_scan_configs": list_scan_configs(state),
+        "safe_mode": bool(os.environ.get("OPENBOX_SAFE_MODE")),
         "emumovies_configured": bool(load_emumovies_credentials(DATA.parent).get("username")),
         "version": VERSION,
         "appimage": bool(os.environ.get("APPIMAGE")),
@@ -349,7 +384,10 @@ def public_state():
             "gameyfin_id": game.get("gameyfin_id", ""),
         })
         games.append(visible)
-    decorated = run_plugins(DATA.parent / "plugins", "library", {"games": games}).get("games", games)
+    decorated = games
+    if not os.environ.get("OPENBOX_SAFE_MODE"):
+        result = run_plugins(DATA.parent / "plugins", "library", {"games": games})
+        decorated = result.get("games", games) if isinstance(result, dict) else games
     if isinstance(decorated, list) and len(decorated) == len(games) and all(isinstance(game, dict) for game in decorated):
         games = decorated
         for index, game in enumerate(games):
@@ -357,6 +395,7 @@ def public_state():
     return {
         "games": games,
         "playlists": state.get("playlists", []),
+        "filter_presets": list_presets(state),
         "ra_configured": bool(load_ra_credentials(DATA.parent)),
         "settings": public_settings(state),
         "discovery": discovery_lists(state["games"]),
@@ -377,14 +416,20 @@ def session_event(kind, launch_id, game_name):
         SESSION_EVENTS[:] = SESSION_EVENTS[-100:]
 
 
-def finish_session(launch_id, game_path, game_name, started, process):
-    exit_code = process.wait()
+def finish_session(launch_id, game_index, started, process):
+    with STATE_LOCK:
+        state = load_state()
+        settings = state.get("settings", {})
+        game = state["games"][game_index] if 0 <= game_index < len(state["games"]) else {}
+        game_path = str(game.get("path", ""))
+        original_game_name = str(game.get("name", "Untitled"))
+    exit_code = wait_for_exit(process, game, settings)
     seconds = max(1, int((datetime.now() - started).total_seconds()))
     with STATE_LOCK:
         state = load_state()
         settings = state.get("settings", {})
-        game = next((item for item in state["games"] if item.get("path") == game_path and item.get("name") == game_name), None)
-        if game:
+        if 0 <= game_index < len(state["games"]):
+            game = state["games"][game_index]
             game["playtime_seconds"] = game.get("playtime_seconds", 0) + seconds
             apply_progress_automation(game, settings)
             if settings.get("backup_on_close") and game.get("save_paths"):
@@ -397,6 +442,10 @@ def finish_session(launch_id, game_path, game_name, started, process):
                 auto_attach_obs_recording(game, started, settings)
             except (OSError, ValueError, FileNotFoundError):
                 pass
+            game_name = game.get("name", "Untitled")
+            close_store_client(game, settings)
+        else:
+            game_name = "Untitled"
         session = {
             "game": game_name,
             "started": started.isoformat(timespec="seconds"),
@@ -411,14 +460,21 @@ def finish_session(launch_id, game_path, game_name, started, process):
         running = RUNNING.pop(launch_id, {})
         PROCESSES.pop(launch_id, None)
     session_event("stopped", launch_id, game_name)
-    run_plugins(DATA.parent / "plugins", "after_session", session)
+    if not os.environ.get("OPENBOX_SAFE_MODE"):
+        run_plugins(DATA.parent / "plugins", "after_session", session)
     try:
         sync_cloud()
     except (OSError, ValueError):
         pass
     if running.get("restart"):
         state = load_state()
-        index = next((index for index, game in enumerate(state["games"]) if game.get("path") == game_path and game.get("name") == game_name), None)
+        index = next(
+            (
+                index for index, game in enumerate(state["games"])
+                if game.get("path") == game_path and game.get("name") == original_game_name
+            ),
+            None,
+        )
         if index is not None:
             try:
                 start_game(index)
@@ -478,8 +534,13 @@ def start_game(index):
         state = load_state()
         game = state["games"][index]
         args, cwd = build_launch(game, state["profiles"])
-        result = run_plugins(DATA.parent / "plugins", "before_launch", {"game":game, "args":args, "cwd":cwd})
-        args, cwd = result.get("args"), result.get("cwd")
+        if not os.environ.get("OPENBOX_SAFE_MODE"):
+            result = run_plugins(DATA.parent / "plugins", "before_launch", {"game": game, "args": args, "cwd": cwd})
+            if not isinstance(result, dict):
+                raise ValueError("A plugin returned an invalid launch response.")
+            if result.get("cancel"):
+                raise ValueError(str(result.get("error") or "Launch canceled by a plugin."))
+            args, cwd = result.get("args"), result.get("cwd")
         if not isinstance(args, list) or not args or not all(isinstance(part, str) and part for part in args):
             raise ValueError("A plugin returned an invalid launch command.")
         if not isinstance(cwd, str) or not Path(cwd).is_dir():
@@ -489,8 +550,8 @@ def start_game(index):
         launch_id = secrets.token_urlsafe(8)
         game["last_played"] = started.isoformat(timespec="seconds")
         game["play_count"] = game.get("play_count", 0) + 1
-        if not game.get("progress"):
-            game["progress"] = "Playing"
+        if not game.get("progress") and state.get("settings", {}).get("progress_on_first_play", "Playing"):
+            game["progress"] = state.get("settings", {}).get("progress_on_first_play", "Playing")
         save_state(state)
         entry = {
             "launch_id": launch_id,
@@ -506,7 +567,7 @@ def start_game(index):
     session_event("started", launch_id, entry["game"])
     threading.Thread(
         target=finish_session,
-        args=(launch_id, game.get("path", ""), entry["game"], started, process),
+        args=(launch_id, index, started, process),
         daemon=True,
     ).start()
     return dict(entry)
@@ -1031,6 +1092,68 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.send_json(200, {"categories": platform_categories(load_state().get("settings", {}))})
             return
+        if parsed.path == "/api/filter-presets":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            state = load_state()
+            self.send_json(200, {
+                "presets": list_presets(state),
+                "bigbox_quick": bigbox_quick_presets(state),
+            })
+            return
+        if parsed.path == "/api/explorer/facets":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            field = parse_qs(parsed.query).get("field", ["genre"])[0]
+            state = load_state()
+            self.send_json(200, {"field": field, "facets": explorer_facets(state["games"], field)})
+            return
+        if parsed.path == "/api/launcher/menu":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            payload = public_state()
+            self.send_json(200, {"items": launcher_menu_items(payload["games"])})
+            return
+        if parsed.path == "/api/import/exclusions":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            self.send_json(200, {"exclusions": list_exclusions(load_state())})
+            return
+        if parsed.path == "/api/emulators/definitions":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            self.send_json(200, {"definitions": load_definitions(ROOT / "emulator_defs")})
+            return
+        if parsed.path == "/api/emulators/scan-configs":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            self.send_json(200, {"configs": list_scan_configs(load_state())})
+            return
+        if parsed.path == "/api/metadata/igdb/search":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            query = parse_qs(parsed.query).get("q", [""])[0]
+            platform = parse_qs(parsed.query).get("platform", [""])[0]
+            try:
+                results = search_igdb_games(query, platform=platform)
+            except (OSError, ValueError) as error:
+                self.send_json(400, {"error": str(error)})
+                return
+            self.send_json(200, {"results": results})
+            return
+        if parsed.path == "/api/backup/manifest":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            self.send_json(200, {"items": sorted(BACKUP_ITEMS)})
+            return
         self.send_json(404, {"error": "Not found"})
 
     def do_POST(self):
@@ -1183,6 +1306,24 @@ class Handler(BaseHTTPRequestHandler):
                 self.save_playlist(payload)
             elif route == "/api/playlists/delete":
                 self.delete_playlist(payload)
+            elif route == "/api/filter-presets":
+                self.save_filter_preset(payload)
+            elif route == "/api/filter-presets/delete":
+                self.delete_filter_preset(payload)
+            elif route == "/api/import/exclusions":
+                self.add_import_exclusion(payload)
+            elif route == "/api/import/exclusions/delete":
+                self.remove_import_exclusion(payload)
+            elif route == "/api/backup/create":
+                self.create_library_backup(payload)
+            elif route == "/api/backup/restore":
+                self.restore_library_backup(payload)
+            elif route == "/api/emulators/scan":
+                self.scan_emulator_folder_route(payload)
+            elif route == "/api/emulators/scan-configs":
+                self.save_emulator_scan_config(payload)
+            elif route == "/api/metadata/igdb/apply":
+                self.apply_igdb_metadata(payload)
             elif route == "/api/health":
                 self.health()
             elif route == "/api/health/dedupe":
@@ -1636,6 +1777,18 @@ class Handler(BaseHTTPRequestHandler):
         hidden_sidebar_sections = merged.get("hidden_sidebar_sections", [])
         if not isinstance(hidden_sidebar_sections, list):
             raise ValueError("Hidden sidebar sections must be a list.")
+        tracking_mode = str(merged.get("tracking_mode", "default")).strip().casefold()
+        if tracking_mode not in TRACKING_MODES:
+            raise ValueError("Unknown tracking mode.")
+        tracking_delay = int(merged.get("tracking_delay", 0))
+        tracking_frequency = float(merged.get("tracking_frequency", 2))
+        if tracking_delay < 0 or tracking_delay > 600:
+            raise ValueError("Tracking delay must be between 0 and 600 seconds.")
+        if not 0.5 <= tracking_frequency <= 60:
+            raise ValueError("Tracking frequency must be between 0.5 and 60 seconds.")
+        progress_on_first_play = str(merged.get("progress_on_first_play", "Playing")).strip()
+        if progress_on_first_play and progress_on_first_play not in PROGRESS:
+            raise ValueError("Unknown progress value for first play.")
         with STATE_LOCK:
             state = load_state()
             settings = state.setdefault("settings", {})
@@ -1684,6 +1837,11 @@ class Handler(BaseHTTPRequestHandler):
                 "gameyfin_install_dir": gameyfin_install_dir,
                 "gameyfin_provider": str(merged.get("gameyfin_provider", "")).strip(),
                 "ludusavi_backup_path": ludusavi_backup_path,
+                "tracking_mode": tracking_mode,
+                "tracking_delay": tracking_delay,
+                "tracking_frequency": tracking_frequency,
+                "progress_on_first_play": progress_on_first_play,
+                "auto_close_store_clients": bool(merged.get("auto_close_store_clients", False)),
             })
             save_state(state)
         self.send_json(200, public_settings(state))
@@ -1961,6 +2119,88 @@ class Handler(BaseHTTPRequestHandler):
             state["playlists"] = [item for item in state.get("playlists", []) if item.get("name") != name]
             save_state(state)
         self.send_json(200, {"deleted": name})
+
+    def save_filter_preset(self, payload):
+        name = str(payload.get("name", "")).strip()
+        rules = payload.get("rules", {})
+        bigbox_quick = bool(payload.get("bigbox_quick", False))
+        with STATE_LOCK:
+            state = load_state()
+            save_preset(state, name, rules, bigbox_quick=bigbox_quick)
+            save_state(state)
+        self.send_json(200, {"saved": name})
+
+    def delete_filter_preset(self, payload):
+        name = str(payload.get("name", "")).strip()
+        with STATE_LOCK:
+            state = load_state()
+            if not delete_preset(state, name):
+                raise ValueError("Preset not found.")
+            save_state(state)
+        self.send_json(200, {"deleted": name})
+
+    def add_import_exclusion(self, payload):
+        source = str(payload.get("source", "")).strip()
+        external_id = str(payload.get("external_id", "")).strip()
+        heroic_source = str(payload.get("heroic_source", "")).strip()
+        with STATE_LOCK:
+            state = load_state()
+            entry = add_exclusion(state, source, external_id, heroic_source=heroic_source)
+            save_state(state)
+        self.send_json(200, {"exclusion": entry})
+
+    def remove_import_exclusion(self, payload):
+        source = str(payload.get("source", "")).strip()
+        external_id = str(payload.get("external_id", "")).strip()
+        with STATE_LOCK:
+            state = load_state()
+            remove_exclusion(state, source, external_id)
+            save_state(state)
+        self.send_json(200, {"removed": True})
+
+    def create_library_backup(self, payload):
+        items = payload.get("items", ["library", "settings"])
+        keep = int(payload.get("keep", 0))
+        with STATE_LOCK:
+            state = load_state()
+            archive = create_backup(DATA.parent, state, items, keep=keep, running_map=RUNNING)
+        self.send_json(200, {"archive": str(archive), "name": archive.name})
+
+    def restore_library_backup(self, payload):
+        archive = Path(str(payload.get("path", ""))).expanduser()
+        items = payload.get("items")
+        if not archive.is_file():
+            raise FileNotFoundError("Backup archive not found.")
+        with STATE_LOCK:
+            restored = restore_backup(archive, DATA.parent, items=items, running_map=RUNNING)
+        self.send_json(200, {"restored": restored})
+
+    def scan_emulator_folder_route(self, payload):
+        folder = str(payload.get("folder", "")).strip()
+        imported = scan_emulator_folder(folder)
+        added, found = merge_imported_games(imported, lambda game: ("path", str(game.get("path", ""))))
+        self.send_json(200, {"added": added, "found": found})
+
+    def save_emulator_scan_config(self, payload):
+        folder = str(payload.get("folder", "")).strip()
+        emulator_id = str(payload.get("emulator_id", "")).strip()
+        auto_update = bool(payload.get("auto_update", False))
+        with STATE_LOCK:
+            state = load_state()
+            entry = save_scan_config(state, folder, emulator_id, auto_update=auto_update)
+            save_state(state)
+        self.send_json(200, {"config": entry})
+
+    def apply_igdb_metadata(self, payload):
+        game_id = int(payload["id"])
+        igdb_id = int(payload["igdb_id"])
+        metadata = fetch_igdb_game(igdb_id)
+        with STATE_LOCK:
+            state = load_state()
+            game = state["games"][game_id]
+            apply_igdb_metadata(game, metadata)
+            save_state(state)
+        self.send_json(200, {"applied": True, "game": game.get("name", "")})
 
     def health(self):
         state = load_state()
@@ -2303,16 +2543,42 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     bootstrap_env(DATA.parent)
+    args = sys.argv[1:]
+    if "--backup" in args:
+        items = []
+        keep = 0
+        if "--items" in args:
+            items = args[args.index("--items") + 1].split(",")
+        if "--keep" in args:
+            keep = int(args[args.index("--keep") + 1])
+        state = load_state()
+        archive = create_backup(DATA.parent, state, items or ["library", "settings"], keep=keep, running_map=RUNNING)
+        print(archive)
+        return
+    if "--restore-backup" in args:
+        archive = Path(args[args.index("--restore-backup") + 1]).expanduser()
+        restored = restore_backup(archive, DATA.parent, running_map=RUNNING)
+        print(",".join(restored))
+        return
+    cli_code = handle_cli(args, DATA.parent)
+    if cli_code is not None:
+        raise SystemExit(cli_code)
     ensure_stock_themes(DATA.parent / "themes", ROOT)
     with STATE_LOCK:
         state = load_state()
         if purge_demo_games(state):
             save_state(state)
+        profiles = state.setdefault("profiles", {})
+        profiles.update(merge_profiles_from_definitions(profiles))
+        save_state(state)
     WATCH_STOP.clear()
     threading.Thread(target=auto_import_worker, daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     run_configured_commands("startup_commands")
-    url = f"http://127.0.0.1:{server.server_port}/?token={TOKEN}"
+    port = server.server_address[1]
+    (DATA.parent / "server.port").write_text(str(port))
+    (DATA.parent / "server.token").write_text(TOKEN)
+    url = f"http://127.0.0.1:{port}/?token={TOKEN}"
     print(url, flush=True)
     if "--no-browser" not in sys.argv:
         webbrowser.open(url)

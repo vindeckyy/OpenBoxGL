@@ -15,6 +15,8 @@ PYTHON_MODULES = [
     "env_config.py", "parity_discovery.py", "parity_import.py", "parity_integrations.py",
     "parity_media.py", "parity_saves.py", "parity_storefront.py", "plugin_catalog.py", "parity_premium.py",
     "stock_themes.py", "parity_gameyfin.py", "parity_save_tools.py",
+    "parity_filter_presets.py", "parity_deeplinks.py", "parity_backup.py", "parity_tracking.py",
+    "parity_igdb.py", "parity_emulator_defs.py", "parity_import_policy.py",
 ]
 DATA_FILES = ["index.html"]
 STOCK_THEMES = [
@@ -46,6 +48,7 @@ def test_appdir_structure():
         if missing:
             print(f"  skipping AppImage module check (rebuild needed): {', '.join(missing)}")
             return
+        assert (share / "openbox-launcher.sh").is_file(), "missing keyboard launcher"
         for data in DATA_FILES:
             assert (share / data).is_file(), f"missing {data} in AppImage"
         themes = share / "themes"
@@ -91,6 +94,7 @@ def test_desktop_entry():
     assert "Name=OpenBox" in content
     assert "Categories=Game" in content
     assert "Type=Application" in content
+    assert "x-scheme-handler/openbox" in content
     print("  Desktop entry: ok")
 
 

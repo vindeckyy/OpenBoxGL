@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-07-24
+
+### Added
+
+- Filter presets, explorer facets, Big Box quick-switch presets, and import exclusions
+- `openbox://` deep links, keyboard launcher support, granular library backups, and restore rotation
+- Process tracking modes, optional IGDB metadata search, and YAML emulator definition packs
+
+### Fixed
+
+- Session restart handling, launcher menu formatting, ROM paths containing spaces, malformed tracking values, and unsafe backup archive paths
+- Responsive and keyboard-accessible library controls, lazy media loading, and reduced-motion behavior
+
 ## [0.4.4] - 2026-07-24
 
 ### Fixed
@@ -99,7 +112,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.4.4...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.4.5...HEAD
+[0.4.5]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.5
 [0.4.4]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.4
 [0.4.3]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.3
 [0.4.2]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.2

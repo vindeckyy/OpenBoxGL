@@ -9,6 +9,21 @@
       color-scheme: dark;
       --bg:#0d1018; --panel:#171b29; --panel2:#202536; --line:#30364a;
       --text:#f3f5fb; --muted:#8e96aa; --cyan:#25b7e8; --green:#08bf20;
+      --topbar:#11141d; --surface-deep:#111722; --surface-header:#131925;
+      --surface-card:#1c2131; --surface-field:#24293a; --surface-hover:#30374a;
+      --border-control:#353c50; --border-card:#3b4256; --focus:#35a9d5;
+      --active:#45c4ef; --action:#21aeda; --action-ink:#07131a; --white:#fff;
+      --gold:#e5b940; --rating:#43bce5; --launch-shadow:#00a91c33; --danger:#743747;
+      --mark-start:#ffbf30; --mark-end:#f27022; --mark-ink:#18100a;
+      --cover-title-start:#313c5a; --empty-action:#2aaddb; --achievement:#e8ba41;
+      --lifecycle-bg:#283651; --lifecycle-kicker:#55c7ee; --bigbox-bg:#26334f;
+      --bigbox-copy:#aeb8ca;
+      --radius-hairline:2px; --radius-cover:5px; --radius-panel:12px; --radius-pill-large:28px;
+      --font-micro:8px; --font-label:9px; --font-meta:10px; --font-body-small:11px;
+      --font-body:12px; --font-action:14px; --font-dialog:15px; --font-title-large:16px;
+      --font-heading:22px; --font-brand:0.8125rem; --font-nav:0.6875rem;
+      --font-subtitle:18px; --font-bigbox:20px; --font-panel-title:28px;
+      --font-bigbox-display:clamp(38px,5vw,72px); --font-screensaver:clamp(44px,8vw,110px);
       --topbar-min-height:2rem;
     }
     * { box-sizing:border-box; }
@@ -19,35 +34,38 @@
       text-size-adjust:100%;
     }
     body {
-      margin:0; overflow:hidden; color:var(--text); font:0.75rem/1.4 Inter,ui-sans-serif,system-ui,sans-serif;
+      margin:0; overflow:hidden; color:var(--text); font:var(--font-body)/1.4 Inter,ui-sans-serif,system-ui,sans-serif;
       background:radial-gradient(circle at 52% 25%,#252c43 0,#111621 38%,#090c13 100%);
       display:flex; flex-direction:column; height:100%; min-height:100%;
     }
     button,input,select,textarea { font:inherit; }
     button { cursor:pointer; }
+    button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible {
+      outline:2px solid var(--focus); outline-offset:2px;
+    }
     .topbar {
       flex-shrink:0; min-height:var(--topbar-min-height); display:flex; align-items:center; gap:0.125rem;
       padding:0.3125rem 0.4375rem; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin;
-      background:#11141d; border-bottom:1px solid #252a39; box-shadow:0 2px 12px #0008;
+      background:var(--topbar); border-bottom:1px solid #252a39; box-shadow:0 2px 12px #0008;
     }
     .topbar::-webkit-scrollbar { height:0.375rem; }
     .topbar::-webkit-scrollbar-thumb { background:#3a4156; border-radius:0.1875rem; }
     .brand {
       display:flex; align-items:center; gap:0.4375rem; margin-right:0.5rem; flex-shrink:0; white-space:nowrap;
-      font-weight:800; font-size:0.8125rem; line-height:1.2;
+      font-weight:800; font-size:var(--font-brand); line-height:1.2;
     }
     .mark {
       width:1em; height:1em; min-width:1em; min-height:1em; display:grid; place-items:center; border-radius:0.25rem;
-      background:linear-gradient(135deg,#ffbf30,#f27022); color:#18100a; font-size:0.625rem; line-height:1;
+      background:linear-gradient(135deg,var(--mark-start),var(--mark-end)); color:var(--mark-ink); font-size:var(--font-meta); line-height:1;
     }
     .menu-button {
       flex-shrink:0; white-space:nowrap; border:0; padding:0.45em 0.7em; color:#aeb5c5; background:transparent;
-      text-transform:uppercase; font-size:0.6875rem; letter-spacing:0.05em; line-height:1.25;
+      text-transform:uppercase; font-size:var(--font-nav); letter-spacing:0.05em; line-height:1.25;
     }
     .menu-button:hover { color:#fff; background:#282e3e; }
     .top-status {
       flex-shrink:0; margin-left:auto; padding-left:0.5rem; white-space:nowrap; color:#778095;
-      font-size:0.6875rem; text-transform:uppercase; line-height:1.25;
+      font-size:var(--font-nav); text-transform:uppercase; line-height:1.25;
     }
     .workspace { flex:1; min-height:0; display:grid; grid-template-columns:170px minmax(520px,1fr) 410px; }
     .sidebar,.details { background:linear-gradient(180deg,#171b29ee,#111521f4); backdrop-filter:blur(18px); }
@@ -55,21 +73,21 @@
     .field { display:block; margin-bottom:8px; }
     .field span { display:block; color:#9ba3b6; font-size:9px; margin-bottom:3px; }
     input,select,textarea {
-      width:100%; border:1px solid #343a4d; border-radius:3px; background:#24293a; color:#fff; padding:7px 8px; outline:none;
+      width:100%; border:1px solid #343a4d; border-radius:3px; background:var(--surface-field); color:var(--white); padding:7px 8px; outline:none;
     }
-    input:focus,select:focus,textarea:focus { border-color:#35a9d5; box-shadow:0 0 0 1px #35a9d555; }
+    input:focus,select:focus,textarea:focus { border-color:var(--focus); box-shadow:0 0 0 1px #35a9d555; }
     .section-title { margin:15px 6px 6px; color:#7f899f; font-size:9px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
     .platforms { display:grid; gap:2px; }
     .playlist-row { display:grid; grid-template-columns:1fr 25px; gap:2px; }
     .playlist-row .platform { min-width:0; }
     .playlist-delete { border:0; border-radius:4px; color:#7f899f; background:transparent; }
-    .playlist-delete:hover { color:#fff; background:#743747; }
+    .playlist-delete:hover { color:var(--white); background:var(--danger); }
     .platform {
       width:100%; display:flex; gap:8px; align-items:center; border:0; border-radius:4px; padding:6px 8px; text-align:left; color:#c4c9d5; background:transparent;
     }
-    .platform::before { content:""; width:7px; height:7px; border-radius:2px; background:#4d5872; box-shadow:0 0 8px #0006; }
-    .platform:hover,.platform.active { background:#303649; color:#fff; }
-    .platform.active::before { background:var(--cyan); box-shadow:0 0 8px #25b7e8aa; }
+    .platform::before { content:""; width:7px; height:7px; border-radius:var(--radius-hairline); background:#4d5872; box-shadow:0 0 8px #0006; }
+    .platform:hover,.platform.active { background:#303649; color:var(--white); }
+    .platform.active::before { background:var(--cyan); box-shadow:0 2px 6px #0006; }
     .library { min-width:0; padding:12px 14px 0; overflow:auto; background:linear-gradient(135deg,#111722db,#1b2130cf); }
     .library-head {
       position:sticky; top:0; z-index:4; display:flex; align-items:center; flex-wrap:wrap; gap:0.5rem 0.75rem;
@@ -77,56 +95,63 @@
     }
     .library-head > div:first-child { flex:1 1 10rem; min-width:0; }
     .library-head h1 { margin:0; font-size:1.0625rem; line-height:1.2; }
-    .library-head p { margin:0.0625rem 0 0; color:var(--muted); font-size:0.6875rem; line-height:1.3; }
+    .library-head p { margin:0.0625rem 0 0; color:var(--muted); font-size:var(--font-nav); line-height:1.3; }
     .library-head .search { width:auto; min-width:8.75rem; max-width:14rem; flex:0 1 14rem; margin-left:auto; }
     .library-head .icon-button { flex-shrink:0; white-space:nowrap; }
-    .icon-button { border:1px solid #353c50; border-radius:4px; padding:7px 10px; background:#242a3a; color:#dbe0ea; }
-    .icon-button:hover { background:#30374a; }
+    .icon-button { border:1px solid var(--border-control); border-radius:4px; padding:7px 10px; background:#242a3a; color:#dbe0ea; }
+    .icon-button:hover { background:var(--surface-hover); }
     .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr)); gap:17px 14px; padding:4px 0 25px; }
-    .card { min-width:0; color:#fff; cursor:pointer; }
+    .card { position:relative; min-width:0; color:var(--white); }
+    .card-main {
+      display:block; width:100%; border:0; padding:0; color:inherit; background:transparent;
+      font:inherit; text-align:left; cursor:pointer;
+    }
+    .card-main:focus-visible { outline:2px solid var(--focus); outline-offset:3px; border-radius:var(--radius-cover); }
     .cover {
-      position:relative; aspect-ratio:.72; overflow:hidden; border:1px solid #3b4256; border-radius:5px;
+      position:relative; aspect-ratio:.72; overflow:hidden; border:1px solid var(--border-card); border-radius:var(--radius-cover);
       background:linear-gradient(145deg,#283149,#111722); box-shadow:0 8px 18px #0007; transition:.14s ease;
     }
     .cover img { width:100%; height:100%; display:block; object-fit:cover; }
-    .cover-title { position:absolute; inset:0; display:grid; place-items:center; padding:12px; text-align:center; font-weight:900; font-size:16px; letter-spacing:-.02em; background:linear-gradient(145deg,#313c5a,#151b29 70%); }
-    .card:hover .cover,.card.selected .cover { transform:translateY(-2px); border-color:#45c4ef; box-shadow:0 0 0 2px #28b9e544,0 10px 23px #000a; }
-    .card h3 { margin:7px 0 1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; font-weight:650; }
+    .cover-title { position:absolute; inset:0; display:grid; place-items:center; padding:12px; text-align:center; font-weight:900; font-size:var(--font-title-large); letter-spacing:-.02em; background:linear-gradient(145deg,var(--cover-title-start),#151b29 70%); }
+    .card-main:hover .cover,.card.selected .cover,.card-main:focus-visible .cover {
+      transform:translateY(-2px); border-color:var(--active); box-shadow:0 0 0 2px #28b9e544,0 10px 23px #000a;
+    }
+    .card h3 { margin:7px 0 1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--font-meta); font-weight:650; }
     .card p { margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#818a9f; font-size:9px; }
-    .badges { height:12px; margin-top:4px; color:#e5b940; font-size:8px; }
+    .badges { height:12px; margin-top:4px; color:var(--gold); font-size:var(--font-micro); }
     .card-picker { position:absolute; z-index:2; top:7px; left:7px; width:20px; height:20px; accent-color:var(--cyan); }
     .related-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; }
-    .related-game { min-width:0; border:1px solid #353c50; border-radius:5px; padding:7px; background:#242a3a; color:#dbe0ea; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .related-game { min-width:0; border:1px solid var(--border-control); border-radius:var(--radius-cover); padding:7px; background:#242a3a; color:#dbe0ea; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .empty { min-height:65vh; display:grid; place-items:center; text-align:center; color:#9aa3b6; }
     .empty h2 { margin:0 0 5px; color:#e8ecf5; }
-    .empty button { margin-top:13px; border:0; border-radius:5px; padding:9px 18px; background:#2aaddb; color:#071018; font-weight:800; }
+    .empty button { margin-top:13px; border:0; border-radius:var(--radius-cover); padding:9px 18px; background:var(--empty-action); color:#071018; font-weight:800; }
     .details { position:relative; border-left:1px solid var(--line); overflow:auto; box-shadow:-12px 0 30px #0005; }
     .detail-empty { height:100%; display:grid; place-items:center; padding:40px; text-align:center; color:#7f899e; }
     .hero { position:relative; min-height:190px; background:linear-gradient(135deg,#29344d,#121722); background-size:cover; background-position:center; }
     .hero::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg,#080b1115 35%,#171b29 100%); }
     .hero-copy { position:absolute; z-index:1; left:17px; right:17px; bottom:14px; }
     .hero-kicker { color:#c3c9d6; font-size:9px; text-transform:uppercase; }
-    .hero h2 { margin:2px 0 0; font-size:22px; line-height:1.05; text-transform:uppercase; text-shadow:0 2px 8px #000; }
+    .hero h2 { margin:2px 0 0; font-size:var(--font-heading); line-height:1.05; text-transform:uppercase; text-shadow:0 2px 8px #000; }
     .detail-body { padding:0 15px 20px; }
-    .rating { display:flex; align-items:center; gap:8px; margin:7px 0 12px; color:#43bce5; }
-    .rating strong { padding:3px 6px; border-radius:3px; background:#4b5264; color:#fff; font-size:10px; }
-    .play { width:100%; border:0; border-radius:18px; padding:9px; background:var(--green); color:#fff; font-size:14px; font-weight:900; box-shadow:0 5px 14px #00a91c33; }
+    .rating { display:flex; align-items:center; gap:8px; margin:7px 0 12px; color:var(--rating); }
+    .rating strong { padding:3px 6px; border-radius:3px; background:#4b5264; color:#fff; font-size:var(--font-meta); }
+    .play { width:100%; border:0; border-radius:18px; padding:9px; background:var(--green); color:var(--action-ink); font-size:var(--font-action); font-weight:900; box-shadow:0 5px 14px #0008; }
     .play:disabled { cursor:not-allowed; opacity:.4; }
     .detail-actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin:9px 0 13px; }
     .detail-card { margin-top:10px; padding:12px; border:1px solid #30374a; border-radius:8px; background:#1c2131; }
-    .detail-card h3 { margin:0 0 9px; color:#8e9ab1; font-size:10px; text-transform:uppercase; letter-spacing:.08em; }
+    .detail-card h3 { margin:0 0 9px; color:#8e9ab1; font-size:var(--font-meta); text-transform:uppercase; letter-spacing:.08em; }
     .facts { display:grid; grid-template-columns:1fr 1fr; gap:9px 16px; }
-    .fact small { display:block; color:#717b91; font-size:8px; text-transform:uppercase; }
-    .fact span { display:block; margin-top:2px; color:#dfe3ec; font-size:10px; overflow-wrap:anywhere; }
-    .description { margin:10px 0 0; color:#aeb5c5; font-size:10px; white-space:pre-wrap; }
+    .fact small { display:block; color:#717b91; font-size:var(--font-micro); text-transform:uppercase; }
+    .fact span { display:block; margin-top:2px; color:#dfe3ec; font-size:var(--font-meta); overflow-wrap:anywhere; }
+    .description { margin:10px 0 0; color:#aeb5c5; font-size:var(--font-meta); white-space:pre-wrap; }
     .extras { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
     .media-player { width:100%; display:block; border-radius:6px; background:#080a0f; }
     .screenshot-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
-    .screenshot-grid button { aspect-ratio:16/9; overflow:hidden; border:1px solid #3c4357; border-radius:5px; padding:0; background:#090c13; }
+    .screenshot-grid button { aspect-ratio:16/9; overflow:hidden; border:1px solid #3c4357; border-radius:var(--radius-cover); padding:0; background:#090c13; }
     .screenshot-grid img { width:100%; height:100%; display:block; object-fit:cover; }
     .media-dialog { width:min(1100px,94vw); background:#090c13; }
     .media-dialog img { display:block; width:100%; max-height:88vh; object-fit:contain; }
-    .media-dialog button { position:absolute; top:8px; right:8px; z-index:1; width:34px; height:34px; border:1px solid #ffffff55; border-radius:50%; background:#080b11cc; color:#fff; font-size:20px; }
+    .media-dialog button { position:absolute; top:8px; right:8px; z-index:1; width:34px; height:34px; border:1px solid #ffffff55; border-radius:50%; background:#080b11cc; color:#fff; font-size:var(--font-bigbox); }
     .reader-dialog { width:min(1100px,95vw); height:92vh; }
     .reader-dialog iframe { width:100%; height:calc(92vh - 48px); border:0; background:#fff; }
     dialog { width:min(680px,90vw); border:1px solid #41485d; border-radius:8px; padding:0; color:#fff; background:#171b28; box-shadow:0 30px 80px #000c; }
@@ -135,8 +160,8 @@
     .profiles-dialog .form-grid { max-height:calc(90vh - 110px); overflow:auto; }
     .profiles-dialog .emulator-list { grid-template-columns:1fr; }
     .dialog-head { display:flex; align-items:center; padding:13px 16px; border-bottom:1px solid #30364a; }
-    .dialog-head h2 { margin:0; font-size:15px; }
-    .dialog-head button { margin-left:auto; border:0; background:transparent; color:#c9cfdb; font-size:18px; }
+    .dialog-head h2 { margin:0; font-size:var(--font-dialog); }
+    .dialog-head button { min-width:34px; min-height:34px; margin-left:auto; border:0; background:transparent; color:#c9cfdb; font-size:var(--font-subtitle); }
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; padding:16px; }
     .form-grid .wide { grid-column:1/-1; }
     textarea { min-height:76px; resize:vertical; }
@@ -146,10 +171,15 @@
     .emulator-item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; padding:9px; border:1px solid #30374a; border-radius:6px; background:#1c2131; }
     .emulator-item div { min-width:0; }
     .list-view { display:block; padding-bottom:25px; }
-    .list-row { display:grid; grid-template-columns:2fr 1fr 1fr 90px 90px 70px 70px; gap:8px; align-items:center; padding:8px 10px; border-bottom:1px solid #2a3144; cursor:pointer; }
-    .list-row:hover,.list-row.selected { background:#2a3144; }
+    .list-row {
+      display:grid; width:100%; grid-template-columns:2fr 1fr 1fr 90px 90px 70px 70px; gap:8px; align-items:center;
+      padding:8px 10px; border:0; border-bottom:1px solid #2a3144; cursor:pointer; color:inherit; background:transparent;
+      font:inherit; text-align:left;
+    }
+    .list-row:hover,.list-row.selected,.list-row:focus-visible { background:#2a3144; }
+    .list-row:focus-visible { outline:2px solid var(--focus); outline-offset:-2px; }
     .list-head { display:grid; grid-template-columns:2fr 1fr 1fr 90px 90px 70px 70px; gap:8px; padding:6px 10px; color:#7f899f; font-size:9px; text-transform:uppercase; border-bottom:1px solid #30364a; }
-    .drop-zone { margin:0 0 12px; padding:18px; border:1px dashed #3f4a63; border-radius:8px; color:#9aa3b6; text-align:center; background:#15192588; }
+    .drop-zone { width:100%; margin:0 0 12px; padding:18px; border:1px dashed #3f4a63; border-radius:8px; color:#9aa3b6; text-align:center; background:#15192588; font:inherit; }
     .drop-zone.active { border-color:#45c4ef; color:#dbe0ea; background:#1b284088; }
     .jewel-3d { transform:perspective(900px) rotateY(-18deg); box-shadow:12px 8px 24px #0009; }
     .bigbox-startup-video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:.35; pointer-events:none; }
@@ -159,10 +189,10 @@
     .emulator-actions { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
     .emulator-actions button { white-space:nowrap; }
     .achievement { display:grid; grid-template-columns:44px 1fr auto; gap:9px; align-items:center; margin-top:7px; padding:7px; border:1px solid #30374a; border-radius:6px; background:#171b29; }
-    .achievement img { width:44px; height:44px; border-radius:5px; }
+    .achievement img { width:44px; height:44px; border-radius:var(--radius-cover); }
     .achievement small,.achievement span { display:block; }
     .achievement small { color:#7f899f; }
-    .achievement span { color:#e8ba41; }
+    .achievement span { color:var(--achievement); }
     .metadata-results { display:grid; gap:6px; max-height:45vh; overflow:auto; }
     .metadata-result { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; padding:9px; border:1px solid #30374a; border-radius:6px; background:#1c2131; }
     .metadata-result small { display:block; color:#7f899f; }
@@ -170,61 +200,62 @@
     .primary { border:0; border-radius:4px; padding:8px 16px; background:#21aeda; color:#07131a; font-weight:800; }
     .toast { position:fixed; z-index:20; right:18px; bottom:18px; max-width:360px; padding:11px 14px; border:1px solid #495169; border-radius:6px; background:#202638; color:#fff; box-shadow:0 12px 30px #0009; opacity:0; transform:translateY(8px); pointer-events:none; transition:.2s; }
     .toast.show { opacity:1; transform:none; }
-    .lifecycle { position:fixed; z-index:40; inset:0; display:grid; place-items:center; text-align:center; background:radial-gradient(circle at 50% 42%,#283651,#080b12 70%); }
+    .lifecycle { position:fixed; z-index:40; inset:0; display:grid; place-items:center; text-align:center; background:radial-gradient(circle at 50% 42%,var(--lifecycle-bg),#080b12 70%); }
     .lifecycle[hidden] { display:none; }
-    .lifecycle small { color:#55c7ee; font-size:12px; font-weight:800; letter-spacing:.2em; text-transform:uppercase; }
+    .lifecycle small { color:var(--lifecycle-kicker); font-size:12px; font-weight:800; letter-spacing:.2em; text-transform:uppercase; }
     .lifecycle h2 { max-width:80vw; margin:12px 0 6px; font-size:clamp(34px,6vw,78px); line-height:1; text-transform:uppercase; }
-    .lifecycle p { color:#98a4b8; font-size:14px; }
-    .bigbox { position:fixed; z-index:30; inset:0; display:grid; grid-template-rows:auto 1fr auto; padding:34px 46px; overflow:hidden; cursor:none; background:radial-gradient(circle at 70% 30%,#26334f,#080b12 68%); }
+    .lifecycle p { color:#98a4b8; font-size:var(--font-action); }
+    .bigbox { position:fixed; z-index:30; inset:0; display:grid; grid-template-rows:auto 1fr auto; padding:34px 46px; overflow:hidden; cursor:none; background:radial-gradient(circle at 70% 30%,var(--bigbox-bg),#080b12 68%); }
     .bigbox[hidden] { display:none; }
     .bigbox-head { display:flex; align-items:center; color:#aab3c6; text-transform:uppercase; letter-spacing:.15em; }
-    .bigbox-head strong { color:#fff; font-size:18px; }
+    .bigbox-head strong { color:#fff; font-size:var(--font-subtitle); }
     .bigbox-head span { margin-left:auto; }
     .bigbox-stage { display:grid; grid-template-columns:minmax(280px,42%) 1fr; gap:55px; align-items:center; min-height:0; }
     .bigbox-cover { justify-self:end; width:min(34vw,390px); aspect-ratio:.72; display:grid; place-items:center; overflow:hidden; border:2px solid #47c9f4; border-radius:10px; background:#1d263a; box-shadow:0 0 0 5px #2bbbe52e,0 30px 70px #000c; font-size:34px; font-weight:900; text-align:center; padding:25px; }
     .bigbox-cover img { width:100%; height:100%; object-fit:cover; }
-    .bigbox-copy h2 { margin:0; font-size:clamp(38px,5vw,72px); line-height:.95; text-transform:uppercase; }
-    .bigbox-copy p { max-width:700px; color:#aeb8ca; font-size:16px; }
-    .bigbox-play { display:inline-block; margin-top:20px; min-width:240px; border:0; border-radius:28px; padding:14px 25px; background:var(--green); color:#fff; font-size:20px; font-weight:900; }
-    .bigbox-foot { display:flex; justify-content:center; gap:28px; color:#98a2b5; font-size:14px; }
+    .bigbox-copy h2 { margin:0; font-size:var(--font-bigbox-display); line-height:.95; text-transform:uppercase; }
+    .bigbox-copy p { max-width:700px; color:var(--bigbox-copy); font-size:var(--font-title-large); }
+    .bigbox-play { display:inline-block; margin-top:20px; min-width:240px; border:0; border-radius:var(--radius-pill-large); padding:14px 25px; background:var(--green); color:var(--action-ink); font-size:var(--font-bigbox); font-weight:900; }
+    .bigbox-foot { display:flex; justify-content:center; gap:28px; color:#98a2b5; font-size:var(--font-action); }
     .bigbox-menu { position:fixed; z-index:32; inset:0; display:grid; place-items:center; cursor:auto; background:#05070bd9; }
     .bigbox-menu[hidden] { display:none; }
-    .bigbox-menu-panel { width:min(520px,90vw); padding:26px; border:1px solid #45516b; border-radius:12px; background:#171d2c; box-shadow:0 30px 90px #000; }
-    .bigbox-menu-panel h2 { margin:0 0 18px; font-size:28px; }
+    .bigbox-menu-panel { width:min(520px,90vw); padding:26px; border:1px solid #45516b; border-radius:var(--radius-panel); background:#171d2c; box-shadow:0 30px 90px #000; }
+    .bigbox-menu-panel h2 { margin:0 0 18px; font-size:var(--font-panel-title); }
     .screensaver { position:fixed; z-index:34; inset:0; display:grid; place-items:end start; padding:7vw; overflow:hidden; cursor:none; background:#080b12 center/cover no-repeat; }
     .screensaver[hidden] { display:none; }
     .screensaver video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
     .screensaver::after { content:""; position:absolute; z-index:1; inset:0; background:linear-gradient(90deg,#05070bcf,#05070b1f 70%),linear-gradient(0deg,#05070bcf,transparent 60%); }
     .screensaver-copy { position:relative; z-index:2; }
-    .screensaver-copy h2 { max-width:70vw; margin:4px 0; font-size:clamp(44px,8vw,110px); line-height:.9; text-transform:uppercase; }
-    .screensaver-copy p { color:#c4ccda; font-size:18px; }
+    .screensaver-copy h2 { max-width:70vw; margin:4px 0; font-size:var(--font-screensaver); line-height:.9; text-transform:uppercase; }
+    .screensaver-copy p { color:#c4ccda; font-size:var(--font-subtitle); }
     .arrange-wrap { display:grid; grid-template-columns:1fr 18px; gap:8px; align-items:stretch; }
     .arrange-bar { position:relative; border-radius:4px; background:#1a1f2d; border:1px solid #30374a; cursor:pointer; }
-    .arrange-marker { position:absolute; left:2px; right:2px; height:2px; background:#35a9d5; border-radius:2px; }
-    .arrange-marker span { position:absolute; right:20px; transform:translateY(-50%); padding:1px 4px; border-radius:3px; background:#242a3a; color:#9aa3b6; font-size:8px; white-space:nowrap; opacity:0; pointer-events:none; }
+    .arrange-bar:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+    .arrange-marker { position:absolute; left:2px; right:2px; height:2px; background:var(--focus); border-radius:var(--radius-hairline); }
+    .arrange-marker span { position:absolute; right:20px; transform:translateY(-50%); padding:1px 4px; border-radius:3px; background:#242a3a; color:#9aa3b6; font-size:var(--font-micro); white-space:nowrap; opacity:0; pointer-events:none; }
     .arrange-bar:hover .arrange-marker span { opacity:1; }
     .settings-search { margin-bottom:10px; }
     .settings-field[hidden] { display:none !important; }
     .shutdown-overlay { position:fixed; z-index:40; inset:0; display:grid; place-items:center; background:#05070bcc; }
     .shutdown-overlay[hidden] { display:none; }
     .shutdown-panel { width:min(420px,92vw); padding:18px; border:1px solid #30374a; border-radius:10px; background:#171b29; }
-    .shutdown-panel h2 { margin:0 0 8px; font-size:16px; }
-    .shutdown-panel p { margin:0 0 12px; color:#9aa3b6; font-size:11px; }
+    .shutdown-panel h2 { margin:0 0 8px; font-size:var(--font-title-large); }
+    .shutdown-panel p { margin:0 0 12px; color:#9aa3b6; font-size:var(--font-body-small); }
     .history-list { max-height:50vh; overflow:auto; display:grid; gap:6px; }
-    .history-item { padding:8px 10px; border:1px solid #30374a; border-radius:6px; background:#1c2131; font-size:10px; }
+    .history-item { padding:8px 10px; border:1px solid #30374a; border-radius:6px; background:#1c2131; font-size:var(--font-meta); }
     .welcome-steps { display:grid; gap:10px; }
     .welcome-steps button { justify-self:start; }
     .reader-toolbar { display:flex; flex-wrap:wrap; gap:6px; padding:0 16px 10px; border-bottom:1px solid #30364a; }
     .discovery-grid { display:grid; gap:12px; max-height:55vh; overflow:auto; }
-    .discovery-section h3 { margin:0 0 6px; color:#8e9ab1; font-size:10px; text-transform:uppercase; letter-spacing:.08em; }
+    .discovery-section h3 { margin:0 0 6px; color:#8e9ab1; font-size:var(--font-meta); text-transform:uppercase; letter-spacing:.08em; }
     .discovery-row { display:flex; flex-wrap:wrap; gap:6px; }
     .bigbox-hybrid { grid-template-columns:220px 1fr; gap:28px; }
     .bigbox-platforms { display:grid; gap:4px; max-height:58vh; overflow:auto; padding-right:6px; }
     .bigbox-platform { width:100%; border:1px solid #30374a; border-radius:6px; padding:8px 10px; text-align:left; color:#c4c9d5; background:#1c2131; }
-    .bigbox-platform.active { border-color:#45c4ef; box-shadow:0 0 0 1px #28b9e544; color:#fff; }
+    .bigbox-platform.active { border-color:var(--active); box-shadow:0 0 0 1px #28b9e544; color:var(--white); }
     .coverflow-strip { display:flex; gap:14px; overflow:auto; padding:10px 0 18px; scroll-snap-type:x mandatory; }
     .coverflow-card { flex:0 0 min(18vw,170px); scroll-snap-align:center; border:1px solid #3b4256; border-radius:8px; overflow:visible; background:#1d263a; transform:perspective(900px) rotateY(-8deg); transition:.15s ease; position:relative; }
-    .coverflow-card.jewel-case::before { content:''; position:absolute; left:-10px; top:4%; width:10px; height:92%; background:linear-gradient(180deg,#566078,#2a3144); transform:rotateY(78deg); transform-origin:right center; border-radius:2px 0 0 2px; box-shadow:inset 0 0 0 1px #667089; }
+    .coverflow-card.jewel-case::before { content:''; position:absolute; left:-10px; top:4%; width:10px; height:92%; background:linear-gradient(180deg,#566078,#2a3144); transform:rotateY(78deg); transform-origin:right center; border-radius:var(--radius-hairline) 0 0 var(--radius-hairline); box-shadow:inset 0 0 0 1px #667089; }
     .coverflow-card.jewel-case::after { content:''; position:absolute; inset:0; border-radius:8px; box-shadow:inset 0 0 0 1px #ffffff18, 0 12px 24px #0006; pointer-events:none; }
     .coverflow-card.active { transform:perspective(900px) rotateY(0deg) scale(1.04); border-color:#45c4ef; box-shadow:0 0 0 2px #28b9e544; }
     .coverflow-card img { width:100%; aspect-ratio:.72; object-fit:cover; display:block; border-radius:8px; }
@@ -233,14 +264,39 @@
     .reader-viewport iframe { width:100%; height:100%; border:0; background:#fff; }
     .platform-panel { padding:16px; }
     .storefront-catalog { max-height:40vh; overflow:auto; display:grid; gap:6px; }
-    .storefront-row { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:8px 10px; border:1px solid #30374a; border-radius:6px; background:#1c2131; font-size:11px; }
+    .storefront-row { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:8px 10px; border:1px solid #30374a; border-radius:6px; background:#1c2131; font-size:var(--font-body-small); }
     .bigbox-pause { position:fixed; z-index:36; inset:0; display:grid; place-items:center; background:#05070bd9; cursor:auto; }
     .bigbox-pause[hidden] { display:none; }
-    .bigbox-pause-panel { width:min(760px,92vw); padding:24px; border:1px solid #45516b; border-radius:12px; background:#171d2c; box-shadow:0 30px 90px #000; }
-    .bigbox-pause-panel h2 { margin:0 0 12px; font-size:28px; }
-    .bigbox-status { margin-left:16px; color:#7f899f; font-size:11px; }
-    .bigbox-status strong { color:#43bce5; }
-    @media(max-width:1100px) { .workspace { grid-template-columns:150px 1fr 340px; } .grid { grid-template-columns:repeat(auto-fill,minmax(105px,1fr)); } }
+    .bigbox-pause-panel { width:min(760px,92vw); padding:24px; border:1px solid #45516b; border-radius:var(--radius-panel); background:#171d2c; box-shadow:0 30px 90px #000; }
+    .bigbox-pause-panel h2 { margin:0 0 12px; font-size:var(--font-panel-title); }
+    .bigbox-status { margin-left:16px; color:#7f899f; font-size:var(--font-body-small); }
+    .bigbox-status strong { color:var(--rating); }
+    @media(max-width:1100px) {
+      .workspace { grid-template-columns:150px 1fr 340px; }
+      .grid { grid-template-columns:repeat(auto-fill,minmax(105px,1fr)); }
+    }
+    @media(max-width:760px) {
+      body { height:auto; min-height:100%; overflow:auto; }
+      .topbar { align-items:stretch; }
+      .menu-button { min-height:44px; padding:0.8em 0.9em; }
+      .workspace { display:flex; flex-direction:column; flex:0 0 auto; min-height:0; }
+      .sidebar { max-height:35vh; border-right:0; border-bottom:1px solid var(--line); }
+      .library { overflow:visible; padding:12px 10px 0; }
+      .library-head .search { min-width:0; max-width:none; flex:1 1 10rem; }
+      .details { min-height:400px; border-left:0; border-top:1px solid var(--line); overflow:visible; }
+      .grid { grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:12px 10px; }
+      .list-row,.list-head { grid-template-columns:minmax(0,2fr) minmax(80px,1fr); }
+      .list-row > :nth-child(n+3),.list-head > :nth-child(n+3) { display:none; }
+      button,select,input:not([type="checkbox"]),textarea { min-height:44px; }
+      .dialog-head button,.media-dialog button { min-width:44px; min-height:44px; }
+    }
+    @media(prefers-reduced-motion:reduce) {
+      .cover,.card-main .cover,.coverflow-card,.toast,.play,.bigbox-play,.icon-button,.menu-button { transition:none !important; }
+      .card-main:hover .cover,.card.selected .cover,.card-main:focus-visible .cover,
+      .coverflow-card.active { transform:none; }
+      .bigbox-startup-video,.screensaver video { display:none; }
+      html { scroll-behavior:auto; }
+    }
   </style>
   <link id="themeStylesheet" rel="stylesheet">
 </head>
@@ -261,6 +317,7 @@
     <button class="menu-button" id="historyButton">History</button>
     <button class="menu-button" id="themesButton">Themes</button>
     <button class="menu-button" id="saveFilterButton">Save Filter</button>
+    <button class="menu-button" id="savePresetButton">Save Preset</button>
     <button class="menu-button" id="achievementsButton">Achievements</button>
     <button class="menu-button" id="pluginsButton">Plugins</button>
     <button class="menu-button" id="discoveryButton">Discovery</button>
@@ -284,20 +341,24 @@
       <nav class="platforms" id="platforms" data-sidebar-section="platforms"></nav>
       <div class="section-title" data-sidebar-section="playlists">Playlists</div>
       <nav class="platforms" id="playlists" data-sidebar-section="playlists"></nav>
+      <div class="section-title" data-sidebar-section="filters">Filter presets</div>
+      <nav class="platforms" id="filterPresets" data-sidebar-section="filters"></nav>
+      <div class="section-title" data-sidebar-section="filters">Explorer</div>
+      <nav class="platforms" id="explorerFacets" data-sidebar-section="filters"></nav>
     </aside>
 
     <main class="library">
       <div class="library-head">
         <div><h1 id="libraryTitle">All Games</h1><p id="libraryMeta">0 games</p></div>
-        <select class="search" id="sort" aria-label="Sort games"><option value="title">Title</option><option value="rating">Rating</option><option value="recent">Recently played</option><option value="playtime">Play time</option><option value="added">Date added</option><option value="platform">Platform</option><option value="genre">Genre</option></select>
+        <select class="search" id="sort" aria-label="Sort games"><option value="title">Title</option><option value="rating">Rating</option><option value="recent">Recently played</option><option value="recent_activity">Recent activity</option><option value="playtime">Play time</option><option value="added">Date added</option><option value="platform">Platform</option><option value="genre">Genre</option></select>
         <select class="search" id="imageGroup" aria-label="Image group"><option value="default">Use default</option><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option></select>
         <button class="icon-button" id="viewToggleButton">List view</button>
         <button class="icon-button" id="surpriseButton">Surprise me</button>
       </div>
-      <div class="drop-zone" id="dropZone">Drop ROM folders or game files here to import</div>
+      <button type="button" class="drop-zone" id="dropZone">Drop ROM folders or game files here to import</button>
       <div class="arrange-wrap">
         <section class="grid" id="grid"></section>
-        <div class="arrange-bar" id="arrangeBar" hidden title="Jump through the current view"></div>
+        <div class="arrange-bar" id="arrangeBar" hidden role="button" tabindex="0" aria-label="Jump through the current view"></div>
       </div>
     </main>
 
@@ -306,7 +367,7 @@
 
   <dialog id="gameDialog">
     <form id="gameForm">
-      <div class="dialog-head"><h2 id="dialogTitle">Add game</h2><button type="button" id="closeDialog">×</button></div>
+      <div class="dialog-head"><h2 id="dialogTitle">Add game</h2><button type="button" id="closeDialog" aria-label="Close Add game dialog">×</button></div>
       <div class="form-grid">
         <label class="field"><span>Name</span><input name="name" required></label>
         <label class="field"><span>Platform</span><input name="platform"></label>
@@ -354,7 +415,7 @@
   </dialog>
   <dialog id="profilesDialog" class="profiles-dialog">
     <form id="profilesForm">
-      <div class="dialog-head"><h2>Emulator profiles</h2><button type="button" id="closeProfiles">×</button></div>
+      <div class="dialog-head"><h2>Emulator profiles</h2><button type="button" id="closeProfiles" aria-label="Close Emulator profiles dialog">×</button></div>
       <div class="form-grid">
         <label class="field wide"><span>One profile per line: Platform = command. Use {path} for the ROM.</span><textarea id="profilesText"></textarea></label>
         <div class="wide" id="detectedProfiles"></div>
@@ -365,7 +426,7 @@
   </dialog>
   <dialog id="themesDialog">
     <form id="themesForm">
-      <div class="dialog-head"><h2>Themes</h2><button type="button" id="closeThemes">×</button></div>
+      <div class="dialog-head"><h2>Themes</h2><button type="button" id="closeThemes" aria-label="Close Themes dialog">×</button></div>
       <div class="form-grid">
         <p class="wide description">Stock themes ship with OpenBox. Import your own CSS to restyle the library, detail pane, dialogs, and Big Box.</p>
         <label class="field wide"><span>Apply to</span><select id="themeScope"><option value="">All platforms</option></select></label>
@@ -378,7 +439,7 @@
   </dialog>
   <dialog id="achievementsDialog">
     <form id="achievementsForm">
-      <div class="dialog-head"><h2>RetroAchievements</h2><button type="button" id="closeAchievements">×</button></div>
+      <div class="dialog-head"><h2>RetroAchievements</h2><button type="button" id="closeAchievements" aria-label="Close RetroAchievements dialog">×</button></div>
       <div class="form-grid">
         <label class="field"><span>Username</span><input id="raUsername" required></label>
         <label class="field"><span>Web API key</span><input id="raApiKey" type="password" autocomplete="off"></label>
@@ -389,7 +450,7 @@
     </form>
   </dialog>
   <dialog id="pluginsDialog">
-    <div class="dialog-head"><h2>Plugins</h2><button type="button" id="closePlugins">×</button></div>
+    <div class="dialog-head"><h2>Plugins</h2><button type="button" id="closePlugins" aria-label="Close Plugins dialog">×</button></div>
     <div class="form-grid">
       <div class="wide description">Plugins are trusted local Python code. Install only packages you trust.</div>
       <div class="wide emulator-list" id="pluginList"></div>
@@ -399,10 +460,11 @@
     <div class="dialog-actions"><button type="button" class="primary" id="donePlugins">Done</button></div>
   </dialog>
   <dialog id="metadataDialog">
-    <div class="dialog-head"><h2>LaunchBox Games Database</h2><button type="button" id="closeMetadata">×</button></div>
+    <div class="dialog-head"><h2>LaunchBox Games Database</h2><button type="button" id="closeMetadata" aria-label="Close LaunchBox Games Database dialog">×</button></div>
     <form id="metadataSearchForm" class="form-grid">
       <label class="field wide"><span>Game title</span><input id="metadataQuery" required></label>
       <button class="icon-button" id="syncMetadata" type="button">Download database</button>
+      <button class="icon-button" id="searchIgdb" type="button">Search IGDB</button>
       <button class="primary" type="submit">Search</button>
       <div class="wide description" id="metadataStatus"></div>
       <div class="wide metadata-results" id="metadataResults"></div>
@@ -414,7 +476,7 @@
     <div class="dialog-actions"><button type="button" class="primary" id="doneMetadata">Done</button></div>
   </dialog>
   <dialog id="mediaManagerDialog">
-    <div class="dialog-head"><h2>Media Manager</h2><button type="button" id="closeMediaManager">×</button></div>
+    <div class="dialog-head"><h2>Media Manager</h2><button type="button" id="closeMediaManager" aria-label="Close Media Manager dialog">×</button></div>
     <div class="form-grid">
       <div class="wide detail-card" id="mediaAudit"></div>
       <label class="check"><input type="checkbox" id="bulkCover" checked> Box fronts</label>
@@ -429,7 +491,7 @@
     <div class="dialog-actions"><button type="button" class="primary" id="doneMediaManager">Done</button></div>
   </dialog>
   <dialog id="healthDialog">
-    <div class="dialog-head"><h2>Library Audit</h2><button type="button" id="closeHealth">×</button></div>
+    <div class="dialog-head"><h2>Library Audit</h2><button type="button" id="closeHealth" aria-label="Close Library Audit dialog">×</button></div>
     <div class="form-grid">
       <div class="wide detail-card" id="healthSummary"></div>
       <div class="wide metadata-results" id="healthIssues"></div>
@@ -440,7 +502,7 @@
   </dialog>
   <dialog id="bulkDialog">
     <form id="bulkForm">
-      <div class="dialog-head"><h2>Bulk Edit</h2><button type="button" id="closeBulk">×</button></div>
+      <div class="dialog-head"><h2>Bulk Edit</h2><button type="button" id="closeBulk" aria-label="Close Bulk Edit dialog">×</button></div>
       <div class="form-grid">
         <p class="wide description" id="bulkCount"></p>
         <label class="field"><span>Platform, blank keeps current</span><input name="platform"></label>
@@ -455,17 +517,17 @@
     </form>
   </dialog>
   <dialog id="sessionsDialog">
-    <div class="dialog-head"><h2>Running Games</h2><button type="button" id="closeSessions">×</button></div>
+    <div class="dialog-head"><h2>Running Games</h2><button type="button" id="closeSessions" aria-label="Close Running Games dialog">×</button></div>
     <div class="form-grid"><div class="wide emulator-list" id="sessionList"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneSessions">Done</button></div>
   </dialog>
   <dialog id="historyDialog">
-    <div class="dialog-head"><h2>Play Session History</h2><button type="button" id="closeHistory">×</button></div>
+    <div class="dialog-head"><h2>Play Session History</h2><button type="button" id="closeHistory" aria-label="Close Play Session History dialog">×</button></div>
     <div class="form-grid"><div class="wide history-list" id="historyList"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneHistory">Done</button></div>
   </dialog>
   <dialog id="welcomeDialog">
-    <div class="dialog-head"><h2>Welcome to OpenBox</h2><button type="button" id="closeWelcome">×</button></div>
+    <div class="dialog-head"><h2>Welcome to OpenBox</h2><button type="button" id="closeWelcome" aria-label="Close Welcome to OpenBox dialog">×</button></div>
     <div class="form-grid welcome-steps">
       <p class="wide description">Set up your library in a few quick steps. You can reopen this wizard from Settings.</p>
       <button type="button" class="primary" id="welcomeImportFolder">Import a ROM or game folder</button>
@@ -484,7 +546,7 @@
   </div>
   <dialog id="settingsDialog">
     <form id="settingsForm">
-      <div class="dialog-head"><h2>OpenBox Settings</h2><button type="button" id="closeSettings">×</button></div>
+      <div class="dialog-head"><h2>OpenBox Settings</h2><button type="button" id="closeSettings" aria-label="Close OpenBox Settings dialog">×</button></div>
       <div class="form-grid">
         <label class="field wide settings-field" data-setting="search watched folders cloud screensaver startup shutdown session history backup progress automation image group controller gamepad"><span>Search settings</span><input id="settingsSearch" class="settings-search" type="search" placeholder="Type to filter settings"></label>
         <label class="field wide settings-field" data-setting="watched folders import auto"><span>Automatically watched game folders, one absolute path per line</span><textarea id="watchFolders"></textarea></label>
@@ -513,6 +575,13 @@
         <label class="check settings-field" data-setting="progress automation playing paused idle days minutes"><input type="checkbox" id="progressAutomationEnabled"> Enable game progress automation</label>
         <label class="field settings-field" data-setting="progress automation playing minutes"><span>Mark as Playing after minutes played</span><input id="progressAutomationMinutes" type="number" min="0" max="100000"></label>
         <label class="field settings-field" data-setting="progress automation paused idle days"><span>Mark as Paused after days without play</span><input id="progressAutomationIdleDays" type="number" min="0" max="3650"></label>
+        <label class="field settings-field" data-setting="progress first play completion status"><span>Progress status on first play</span><select id="progressOnFirstPlay"><option value="">None</option><option value="Playing">Playing</option><option value="Paused">Paused</option><option value="Beaten">Beaten</option><option value="Completed">Completed</option><option value="Mastered">Mastered</option></select></label>
+        <label class="field settings-field" data-setting="tracking mode process folder wine proton"><span>Default session tracking mode</span><select id="trackingMode"><option value="default">Default</option><option value="process">Process</option><option value="original_process">Original process</option><option value="folder">Install folder</option><option value="process_name">Process name</option></select></label>
+        <label class="field settings-field" data-setting="tracking delay seconds launch"><span>Tracking start delay in seconds</span><input id="trackingDelay" type="number" min="0" max="600"></label>
+        <label class="field settings-field" data-setting="tracking frequency poll seconds"><span>Tracking poll frequency in seconds</span><input id="trackingFrequency" type="number" min="0.5" max="60" step="0.5"></label>
+        <label class="check settings-field" data-setting="auto close steam heroic lutris storefront"><input type="checkbox" id="autoCloseStoreClients"> Close storefront clients after a session ends</label>
+        <label class="field wide settings-field" data-setting="emulator scan folder rom wizard"><span>ROM scan folder for emulator definitions</span><input id="emulatorScanFolder" placeholder="/path/to/roms"></label>
+        <div class="wide settings-field" data-setting="emulator scan folder rom wizard"><button type="button" class="icon-button" id="scanEmulatorFolder">Scan ROM folder</button></div>
         <label class="field settings-field" data-setting="locale language translation ui"><span>Interface language</span><select id="localeSetting"><option value="en">English</option><option value="es">Español</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="pt">Português</option></select></label>
         <label class="field settings-field" data-setting="library view list grid columns"><span>Default library view</span><select id="libraryViewSetting"><option value="grid">Grid</option><option value="list">List</option></select></label>
         <label class="field wide settings-field" data-setting="custom fields metadata premium"><span>Custom fields, one per line: Name|Option1,Option2</span><textarea id="customFieldDefs" placeholder="Cabinet|Upright,Cocktail"></textarea></label>
@@ -540,12 +609,12 @@
     </form>
   </dialog>
   <dialog id="discoveryDialog">
-    <div class="dialog-head"><h2>Game Discovery Center</h2><button type="button" id="closeDiscovery">×</button></div>
+    <div class="dialog-head"><h2>Game Discovery Center</h2><button type="button" id="closeDiscovery" aria-label="Close Game Discovery Center dialog">×</button></div>
     <div class="form-grid"><div class="wide discovery-grid" id="discoveryContent"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneDiscovery">Done</button></div>
   </dialog>
   <dialog id="storefrontDialog">
-    <div class="dialog-head"><h2>Storefront Manager</h2><button type="button" id="closeStorefront">×</button></div>
+    <div class="dialog-head"><h2>Storefront Manager</h2><button type="button" id="closeStorefront" aria-label="Close Storefront Manager dialog">×</button></div>
     <div class="form-grid">
       <p class="wide description">Import owned and installed games from Steam, Heroic, Lutris, and Gameyfin. Install or uninstall Gameyfin titles on demand from the library or Big Box.</p>
       <div class="wide extras"><button type="button" class="primary" id="importSteamStore">Import Steam</button><button type="button" class="icon-button" id="importHeroicStore">Import Heroic</button><button type="button" class="icon-button" id="importLutrisStore">Import Lutris</button><button type="button" class="icon-button" id="importGameyfinStore">Import Gameyfin</button><button type="button" class="icon-button" id="importScummvmStore">Import ScummVM</button><button type="button" class="icon-button" id="importRpcs3Store">Import RPCS3</button><button type="button" class="icon-button" id="importVita3kStore">Import Vita3K</button></div>
@@ -566,9 +635,9 @@
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="saveStorefront">Save storefront settings</button></div>
   </dialog>
-  <dialog class="media-dialog" id="mediaDialog"><button type="button" id="closeMedia" aria-label="Close">×</button><img id="fullScreenshot" alt=""></dialog>
+  <dialog class="media-dialog" id="mediaDialog"><button type="button" id="closeMedia" aria-label="Close screenshot">×</button></dialog>
   <dialog class="reader-dialog" id="readerDialog">
-    <div class="dialog-head"><h2 id="readerTitle">Document</h2><button type="button" id="closeReader">×</button></div>
+    <div class="dialog-head"><h2 id="readerTitle">Document</h2><button type="button" id="closeReader" aria-label="Close Document reader">×</button></div>
     <div class="reader-toolbar"><button type="button" class="icon-button" id="readerPrev">Previous page</button><button type="button" class="icon-button" id="readerNext">Next page</button><span class="description" id="readerPageLabel">Page 1</span><button type="button" class="icon-button" data-reader-layout="single">Single page</button><button type="button" class="icon-button" data-reader-layout="spread">Two-page spread</button><button type="button" class="icon-button" data-reader-theme="light">Light</button><button type="button" class="icon-button" data-reader-theme="dark">Dark</button></div>
     <div class="reader-viewport" id="readerViewport"><iframe id="readerFrame" title="Document reader"></iframe></div>
   </dialog>
@@ -583,7 +652,8 @@
       <div class="bigbox-menu-panel">
         <h2>Filter and Sort</h2>
         <label class="field"><span>Show</span><select id="bigBoxFilter"><option value="all">Current library view</option><option value="installed">Installed games</option><option value="owned">All owned games</option><option value="favorites">Favorites</option><option value="playing">In progress</option><option value="completed">Completed</option></select></label>
-        <label class="field"><span>Sort</span><select id="bigBoxSort"><option value="title">Title</option><option value="rating">Rating</option><option value="recent">Recently played</option><option value="playtime">Play time</option><option value="random">Shuffle</option></select></label>
+        <label class="field"><span>Sort</span><select id="bigBoxSort"><option value="title">Title</option><option value="rating">Rating</option><option value="recent">Recently played</option><option value="recent_activity">Recent activity</option><option value="playtime">Play time</option><option value="random">Shuffle</option></select></label>
+        <label class="field"><span>Quick preset</span><select id="bigBoxQuickPreset"><option value="">None</option></select></label>
         <label class="field"><span>Achievements</span><select id="bigBoxRaFilter"><option value="all">All games</option><option value="matched">RetroAchievements matched</option><option value="unmatched">Not matched</option></select></label>
         <div class="dialog-actions"><button class="icon-button" id="closeBigBoxMenu" type="button">Cancel</button><button class="primary" id="applyBigBoxMenu" type="button">Apply</button></div>
       </div>
@@ -594,7 +664,7 @@
 
   <script>
     const token = new URLSearchParams(location.search).get('token') || '';
-    let games = [], playlists = [], bigBoxGames = [], runningGames = [], raConfigured = false, selectedId = null, platform = 'all', activePlaylist = '', editingId = null, metadataGameId = null, bigBoxIndex = 0, gamepadState = {}, lastSessionEvent = 0, bulkMode = false, bigBoxLastInput = performance.now(), screenSaverGame = null;
+    let games = [], playlists = [], filterPresets = [], explorerField = 'genre', explorerRules = {}, activeFilterPreset = '', bigBoxGames = [], runningGames = [], raConfigured = false, selectedId = null, platform = 'all', activePlaylist = '', editingId = null, metadataGameId = null, bigBoxIndex = 0, gamepadState = {}, lastSessionEvent = 0, bulkMode = false, bigBoxLastInput = performance.now(), screenSaverGame = null;
     let appSettings = {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',locale:'en'}, bigBoxFilter = 'all', bigBoxSort = 'title', bigBoxRaFilter = 'all', bigBoxPlatform = 'all', platformCategory = 'all', pendingUpdate = null, duplicateMediaGroups = 0, libraryBgm = null, readerPage = 1, readerUrl = '', bigBoxHybridQuery = '';
     const defaultControllerMap = {play:0,back:1,favorite:2,random:3,page_left:4,page_right:5,pause:8,menu:9};
     const selectedIds = new Set();
@@ -623,6 +693,7 @@
       const state = await api('/api/library');
       games = state.games;
       playlists = state.playlists || [];
+      filterPresets = state.filter_presets || state.settings?.filter_presets || appSettings.filter_presets || [];
       raConfigured = state.ra_configured;
       appSettings = state.settings || appSettings;
       if (activePlaylist && !playlists.some(item => item.name === activePlaylist)) activePlaylist = '';
@@ -632,6 +703,7 @@
       applySidebarVisibility();
       applyLocaleStrings();
       maybeShowWelcome();
+      loadExplorerFacets().catch(() => {});
     }
     function applyLocaleStrings() {
       const strings = appSettings.strings || {};
@@ -651,23 +723,54 @@
         element.hidden = hidden.has(element.dataset.sidebarSection);
       });
     }
+    function recentActivityValue(game) {
+      const played = Date.parse(game.last_played || '') || 0;
+      const added = Date.parse(game.added_at || '') || 0;
+      return Math.max(played, added);
+    }
+    function sortGames(list, sort) {
+      return list.sort((a, b) => sort === 'rating' ? Number(b.rating || 0) - Number(a.rating || 0) || a.name.localeCompare(b.name)
+        : sort === 'recent' ? String(b.last_played || '').localeCompare(String(a.last_played || ''))
+        : sort === 'recent_activity' ? recentActivityValue(b) - recentActivityValue(a) || a.name.localeCompare(b.name)
+        : sort === 'playtime' ? Number(b.playtime_seconds || 0) - Number(a.playtime_seconds || 0)
+        : sort === 'added' ? String(b.added_at || '').localeCompare(String(a.added_at || ''))
+        : sort === 'platform' ? String(a.platform || '').localeCompare(String(b.platform || '')) || String(a.sort_title || a.name).localeCompare(String(b.sort_title || b.name))
+        : sort === 'genre' ? String(a.genre || '').localeCompare(String(b.genre || '')) || String(a.sort_title || a.name).localeCompare(String(b.sort_title || b.name))
+        : String(a.sort_title || a.name).localeCompare(String(b.sort_title || b.name)));
+    }
     function filteredGames() {
       const query = $('sidebarSearch').value.toLowerCase().trim();
       const view = $('view').value;
+      const preset = filterPresets.find(item => item.name === activeFilterPreset);
+      const presetRules = preset?.rules || {};
       const visible = games.filter(game => {
         const completed = ['Beaten','Completed','Mastered'].includes(game.progress);
         const installed = game.store_installed !== false && (game.path_exists || game.store_installed);
         const ownedUninstalled = Boolean(game.owned || game.store_catalog || game.gameyfin_id) && !installed;
-        const viewMatch = (view === 'all' && !game.hidden) || (view === 'favorites' && game.favorite && !game.hidden) || (view === 'recent' && game.last_played && !game.hidden) || (view === 'never' && !game.play_count && !game.hidden) || (view === 'playing' && ['Playing','Paused'].includes(game.progress) && !game.hidden) || (view === 'completed' && completed && !game.hidden) || (view === 'installed' && installed && !game.hidden) || (view === 'owned' && ownedUninstalled && !game.hidden) || (view === 'saves' && game.has_saves && !game.hidden) || (view === 'hidden' && game.hidden) || (view === 'missing' && !game.path_exists && !game.hidden);
-        const platformMatch = platform === 'all' || game.platform === platform;
-        const categoryMatch = platformCategory === 'all' || platformCategoryFor(game) === platformCategory;
-        const esrb = $('esrbFilter')?.value || '';
+        const effectiveView = presetRules.view || view;
+        const viewMatch = (effectiveView === 'all' && !game.hidden) || (effectiveView === 'favorites' && game.favorite && !game.hidden) || (effectiveView === 'recent' && game.last_played && !game.hidden) || (effectiveView === 'never' && !game.play_count && !game.hidden) || (effectiveView === 'playing' && ['Playing','Paused'].includes(game.progress) && !game.hidden) || (effectiveView === 'completed' && completed && !game.hidden) || (effectiveView === 'installed' && installed && !game.hidden) || (effectiveView === 'owned' && ownedUninstalled && !game.hidden) || (effectiveView === 'saves' && game.has_saves && !game.hidden) || (effectiveView === 'hidden' && game.hidden) || (effectiveView === 'missing' && !game.path_exists && !game.hidden);
+        const effectivePlatform = presetRules.platform || platform;
+        const platformMatch = effectivePlatform === 'all' || game.platform === effectivePlatform;
+        const category = presetRules.platform_category || platformCategory;
+        const categoryMatch = category === 'all' || platformCategoryFor(game) === category;
+        const esrb = presetRules.esrb || $('esrbFilter')?.value || '';
         const esrbMatch = !esrb || (game.esrb || 'Unrated') === esrb;
-        const queryMatch = !query || [game.name,game.sort_title,game.platform,game.genre,game.developer,game.publisher,game.series,game.region,game.notes,...(game.alternate_names || []),...(Object.values(game.custom_fields || {}))].join(' ').toLowerCase().includes(query);
-        return viewMatch && platformMatch && categoryMatch && esrbMatch && queryMatch;
+        const effectiveQuery = (presetRules.query || query).toLowerCase().trim();
+        const queryMatch = !effectiveQuery || [game.name,game.sort_title,game.platform,game.genre,game.developer,game.publisher,game.series,game.region,game.notes,...(game.alternate_names || []),...(Object.values(game.custom_fields || {}))].join(' ').toLowerCase().includes(effectiveQuery);
+        const progressMatch = !presetRules.progress || game.progress === presetRules.progress;
+        const favoriteMatch = presetRules.favorite === undefined || Boolean(game.favorite) === Boolean(presetRules.favorite);
+        const genreMatch = !presetRules.genre || String(game.genre || '').toLowerCase().includes(String(presetRules.genre).toLowerCase());
+        const developerMatch = !presetRules.developer || String(game.developer || '').toLowerCase().includes(String(presetRules.developer).toLowerCase());
+        const publisherMatch = !presetRules.publisher || String(game.publisher || '').toLowerCase().includes(String(presetRules.publisher).toLowerCase());
+        const explorerProgressMatch = explorerRules.progress === '__unset' ? !game.progress : !explorerRules.progress || game.progress === explorerRules.progress;
+        const installedRule = presetRules.installed;
+        const installedMatch = installedRule !== 'installed' && installedRule !== 'uninstalled'
+          || installedRule === 'installed' && installed
+          || installedRule === 'uninstalled' && !installed;
+        const hiddenMatch = presetRules.hidden === undefined || Boolean(game.hidden) === Boolean(presetRules.hidden);
+        return viewMatch && platformMatch && categoryMatch && esrbMatch && queryMatch && progressMatch && explorerProgressMatch && favoriteMatch && genreMatch && developerMatch && publisherMatch && installedMatch && hiddenMatch;
       });
-      const sort = $('sort').value;
-      return visible.sort((a,b) => sort === 'rating' ? Number(b.rating || 0) - Number(a.rating || 0) || a.name.localeCompare(b.name) : sort === 'recent' ? String(b.last_played).localeCompare(String(a.last_played)) : sort === 'playtime' ? Number(b.playtime_seconds || 0) - Number(a.playtime_seconds || 0) : sort === 'added' ? String(b.added_at || '').localeCompare(String(a.added_at || '')) : sort === 'platform' ? String(a.platform || '').localeCompare(String(b.platform || '')) || String(a.sort_title || a.name).localeCompare(String(b.sort_title || b.name)) : sort === 'genre' ? String(a.genre || '').localeCompare(String(b.genre || '')) || String(a.sort_title || a.name).localeCompare(String(b.sort_title || b.name)) : String(a.sort_title || a.name).localeCompare(String(b.sort_title || b.name)));
+      return sortGames(visible, $('sort').value);
     }
     function arrangeGroups(visible) {
       const sort = $('sort').value;
@@ -692,12 +795,18 @@
       }
       bar.hidden = false;
       bar.innerHTML = groups.map(group => `<div class="arrange-marker" style="top:${(group.index / Math.max(visible.length - 1, 1)) * 100}%"><span>${escapeHtml(group.label)}</span></div>`).join('');
-      bar.onclick = event => {
+      const jumpToGroup = event => {
+        if (event.type === 'keydown' && !['Enter', ' '].includes(event.key)) return;
+        if (event.type === 'keydown') event.preventDefault();
         const rect = bar.getBoundingClientRect();
         const ratio = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
         const target = groups.reduce((best, group) => Math.abs(group.index / Math.max(visible.length - 1, 1) - ratio) < Math.abs(best.index / Math.max(visible.length - 1, 1) - ratio) ? group : best, groups[0]);
         const card = document.querySelector(`[data-game="${visible[target.index].id}"]`);
         if (card) card.scrollIntoView({block:'nearest'});
+      };
+      bar.onclick = jumpToGroup;
+      bar.onkeydown = event => {
+        if (event.key === 'Enter' || event.key === ' ') jumpToGroup({type:'keydown', key:event.key, preventDefault:() => {}, clientY:bar.getBoundingClientRect().top});
       };
     }
     function renderPlatformCategories() {
@@ -732,13 +841,85 @@
       });
       document.querySelectorAll('[data-delete-playlist]').forEach(button => button.onclick = () => deletePlaylist(button.dataset.deletePlaylist));
     }
+    function renderFilterPresets() {
+      const container = $('filterPresets');
+      if (!container) return;
+      container.innerHTML = filterPresets.length ? filterPresets.map(item => `<div class="playlist-row"><button class="platform ${activeFilterPreset === item.name ? 'active' : ''}" data-filter-preset="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.bigbox_quick ? ' ★' : ''}</button><button class="playlist-delete" data-delete-preset="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '<span class="description">Save a preset to pin filters.</span>';
+      document.querySelectorAll('[data-filter-preset]').forEach(button => button.onclick = () => {
+        const item = filterPresets.find(preset => preset.name === button.dataset.filterPreset);
+        if (!item) return;
+        activeFilterPreset = item.name;
+        activePlaylist = '';
+        explorerRules = {};
+        const rules = item.rules || {};
+        platform = rules.platform || 'all';
+        platformCategory = rules.platform_category || 'all';
+        if (rules.view) $('view').value = [...$('view').options].some(option => option.value === rules.view) ? rules.view : 'all';
+        if (rules.query !== undefined) $('sidebarSearch').value = rules.query || '';
+        if (rules.esrb !== undefined && $('esrbFilter')) $('esrbFilter').value = rules.esrb || '';
+        render();
+        loadTheme();
+      });
+      document.querySelectorAll('[data-delete-preset]').forEach(button => button.onclick = async () => {
+        if (!confirm(`Delete preset "${button.dataset.deletePreset}"?`)) return;
+        try {
+          await api('/api/filter-presets/delete',{method:'POST',body:JSON.stringify({name:button.dataset.deletePreset})});
+          if (activeFilterPreset === button.dataset.deletePreset) activeFilterPreset = '';
+          await refresh();
+          notify('Preset deleted');
+        } catch(error) { notify(error.message); }
+      });
+      const quick = $('bigBoxQuickPreset');
+      if (quick) {
+        const quickItems = filterPresets.filter(item => item.bigbox_quick);
+        quick.innerHTML = '<option value="">None</option>' + quickItems.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join('');
+      }
+    }
+    async function loadExplorerFacets(field = explorerField) {
+      explorerField = field;
+      const container = $('explorerFacets');
+      if (!container) return;
+      try {
+        const result = await api(`/api/explorer/facets?field=${encodeURIComponent(field)}`);
+        const tabs = ['genre','developer','platform','progress','esrb'].map(name => `<button type="button" class="platform ${explorerField === name ? 'active' : ''}" data-explorer-field="${name}">${name}</button>`).join('');
+        const facets = (result.facets || []).map(item => `<button type="button" class="platform" data-explorer-value="${escapeHtml(item.value)}" data-explorer-field="${explorerField}">${escapeHtml(item.value)} (${item.count})</button>`).join('');
+        container.innerHTML = `<div class="platforms">${tabs}</div><div class="platforms">${facets || '<span class="description">No values yet.</span>'}</div>`;
+        document.querySelectorAll('[data-explorer-field]').forEach(button => {
+          if (button.dataset.explorerValue) {
+            button.onclick = () => {
+              activeFilterPreset = '';
+              activePlaylist = '';
+              explorerRules = {};
+              if (button.dataset.explorerField === 'genre') $('sidebarSearch').value = button.dataset.explorerValue;
+              else if (button.dataset.explorerField === 'developer') $('sidebarSearch').value = button.dataset.explorerValue;
+              else if (button.dataset.explorerField === 'platform') platform = button.dataset.explorerValue;
+              else if (button.dataset.explorerField === 'progress') explorerRules = {progress:button.dataset.explorerValue === 'Unset' ? '__unset' : button.dataset.explorerValue};
+              else if (button.dataset.explorerField === 'esrb' && $('esrbFilter')) $('esrbFilter').value = button.dataset.explorerValue === 'Unrated' ? '' : button.dataset.explorerValue;
+              render();
+            };
+          } else {
+            button.onclick = () => loadExplorerFacets(button.dataset.explorerField);
+          }
+        });
+      } catch(error) {
+        container.innerHTML = `<span class="description">${escapeHtml(error.message)}</span>`;
+      }
+    }
+    function selectGame(id) {
+      selectedId = id;
+      document.querySelectorAll('[data-game]').forEach(item => {
+        const row = item.closest('.card,.list-row') || item;
+        row.classList.toggle('selected', Number(item.dataset.game) === id);
+      });
+      renderDetails();
+    }
     function renderGrid() {
       const visible = filteredGames();
       const explicitImageGroup = activePlaylist ? appSettings.image_group_by_playlist?.[activePlaylist] : platform !== 'all' ? appSettings.image_group_by_platform?.[platform] : appSettings.image_group;
       $('imageGroup').value = explicitImageGroup || (platform === 'all' && !activePlaylist ? 'cover' : 'default');
       const imageGroup = $('imageGroup').value === 'default' ? appSettings.image_group || 'cover' : $('imageGroup').value;
       $('bulkButton').textContent = bulkMode ? selectedIds.size ? `Edit ${selectedIds.size} Selected` : 'Cancel Bulk Edit' : 'Bulk Edit';
-      $('libraryTitle').textContent = activePlaylist || (platform === 'all' ? $('view').selectedOptions[0].text : platform);
+      $('libraryTitle').textContent = activeFilterPreset || activePlaylist || (platform === 'all' ? $('view').selectedOptions[0].text : platform);
       $('libraryMeta').textContent = bulkMode ? `${selectedIds.size} selected · ${visible.length} shown` : `${visible.length} game${visible.length === 1 ? '' : 's'}`;
       $('surpriseButton').disabled = !visible.length;
       if (!visible.length) {
@@ -750,13 +931,14 @@
       }
       if ((appSettings.library_view || 'grid') === 'list') {
         $('grid').className = 'list-view';
-        $('grid').innerHTML = `<div class="list-head"><span>Title</span><span>Platform</span><span>Genre</span><span>ESRB</span><span>Progress</span><span>Plays</span><span>Rating</span></div>${visible.map(game => `<div class="list-row ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" data-game="${game.id}"><strong>${escapeHtml(game.name)}</strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></div>`).join('')}`;
+        $('grid').innerHTML = `<div class="list-head"><span>Title</span><span>Platform</span><span>Genre</span><span>ESRB</span><span>Progress</span><span>Plays</span><span>Rating</span></div>${visible.map(game => `<button type="button" class="list-row ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}</strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`).join('')}`;
       } else {
         $('grid').className = 'grid';
-        $('grid').innerHTML = visible.map(game => `<article class="card ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" data-game="${game.id}">
-        <div class="cover ${appSettings.bigbox_mode === 'coverflow' ? 'jewel-3d' : ''}">${bulkMode ? `<input class="card-picker" type="checkbox" ${selectedIds.has(game.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(game.name)}">` : ''}${imageGroup === 'background' && game.has_background ? `<img src="${media(game,'background')}" alt="">` : imageGroup === 'screenshot' && game.available_screenshots.length ? `<img src="${media(game,'screenshot',game.available_screenshots[0])}" alt="">` : game.has_cover ? `<img src="${media(game,'cover')}" alt="">` : `<div class="cover-title">${escapeHtml(game.name)}</div>`}</div>
+        $('grid').innerHTML = visible.map(game => `<article class="card ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}">
+        ${bulkMode ? `<input class="card-picker" type="checkbox" data-game-picker="${game.id}" ${selectedIds.has(game.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(game.name)}">` : ''}
+        <button type="button" class="card-main" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><div class="cover ${appSettings.bigbox_mode === 'coverflow' ? 'jewel-3d' : ''}">${imageGroup === 'background' && game.has_background ? `<img src="${media(game,'background')}" alt="" loading="lazy" decoding="async">` : imageGroup === 'screenshot' && game.available_screenshots.length ? `<img src="${media(game,'screenshot',game.available_screenshots[0])}" alt="" loading="lazy" decoding="async">` : game.has_cover ? `<img src="${media(game,'cover')}" alt="" loading="lazy" decoding="async">` : `<div class="cover-title">${escapeHtml(game.name)}</div>`}</div>
         <h3>${escapeHtml(game.name)}</h3><p>${escapeHtml(game.developer || game.platform || '')}</p>
-        <div class="badges">${game.favorite ? '★ ' : ''}${game.has_saves ? '💾 ' : ''}${game.has_documents ? '📄 ' : ''}${game.rating ? `${'★'.repeat(Math.round(game.rating))} ` : ''}${game.progress ? escapeHtml(game.progress) : game.play_count ? `${game.play_count}×` : ''}</div>
+        <div class="badges">${game.favorite ? '★ ' : ''}${game.has_saves ? '💾 ' : ''}${game.has_documents ? '📄 ' : ''}${game.rating ? `${'★'.repeat(Math.round(game.rating))} ` : ''}${game.progress ? escapeHtml(game.progress) : game.play_count ? `${game.play_count}×` : ''}</div></button>
       </article>`).join('');
       }
       document.querySelectorAll('[data-game]').forEach(card => card.onclick = event => {
@@ -765,9 +947,13 @@
           selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id);
           renderGrid();
         } else {
-          selectedId = id;
-          render();
+          selectGame(id);
         }
+      });
+      document.querySelectorAll('[data-game-picker]').forEach(input => input.onchange = () => {
+        const id = Number(input.dataset.gamePicker);
+        input.checked ? selectedIds.add(id) : selectedIds.delete(id);
+        input.closest('.card')?.classList.toggle('selected', input.checked || selectedId === id);
       });
       renderArrangeBar(visible);
     }
@@ -791,7 +977,7 @@
           ${game.applications.length || game.versions.length || game.documents.length ? `<div class="extras">${game.applications.map((item,index) => `<button class="icon-button" data-extra="applications:${index}">App · ${escapeHtml(item.name)}</button>`).join('')}${game.versions.map((item,index) => `<button class="icon-button" data-extra="versions:${index}">Version · ${escapeHtml(item.name)}</button>`).join('')}${game.documents.map((item,index) => `<button class="icon-button" data-document="${index}">Read ${escapeHtml(item.name)}</button><button class="icon-button" data-extra="documents:${index}" aria-label="Open ${escapeHtml(item.name)} externally">↗</button>`).join('')}</div>` : ''}</div>
           ${game.has_video ? `<div class="detail-card"><h3>Video</h3><video class="media-player" controls preload="metadata" src="${media(game,'video')}"></video></div>` : ''}
           ${game.has_music ? `<div class="detail-card"><h3>Music</h3><audio class="media-player" controls preload="metadata" src="${media(game,'music')}"></audio></div>` : ''}
-          ${game.available_screenshots.length ? `<div class="detail-card"><h3>Screenshots</h3><div class="screenshot-grid">${game.available_screenshots.map(index => `<button data-screenshot="${index}" aria-label="Open screenshot ${index + 1}"><img src="${media(game,'screenshot',index)}" alt=""></button>`).join('')}</div></div>` : ''}
+          ${game.available_screenshots.length ? `<div class="detail-card"><h3>Screenshots</h3><div class="screenshot-grid">${game.available_screenshots.map(index => `<button data-screenshot="${index}" aria-label="Open screenshot ${index + 1}"><img src="${media(game,'screenshot',index)}" alt="" loading="lazy" decoding="async"></button>`).join('')}</div></div>` : ''}
           <div class="detail-card"><h3>Related Games</h3><div class="related-grid" id="relatedGames"><span class="description">Finding matches…</span></div></div>
           ${raConfigured ? `<div class="detail-card"><h3>RetroAchievements</h3><div id="achievementContent"><p class="description">${game.ra_game_id ? `Matched to game ${escapeHtml(game.ra_game_id)}.` : 'Match this ROM to load achievements.'}</p><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}<button class="icon-button" id="openBrowser">Open Wikipedia</button></div><button class="icon-button" id="loadAchievements">Load achievements</button><div id="achievementStats"></div></div></div>` : ''}
           <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${game.save_paths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}${game.platform === 'Arcade' || game.rom_name ? '<button class="icon-button" id="exportHighscores">Export high scores</button>' : ''}</div><div class="description" id="saveDiscovery">${game.save_paths.length ? `${game.save_paths.length} configured location${game.save_paths.length === 1 ? '' : 's'}` : 'No save location configured.'}${appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
@@ -814,7 +1000,12 @@
         launchExtra(game.id,kind,Number(index));
       });
       document.querySelectorAll('[data-screenshot]').forEach(button => button.onclick = () => {
-        $('fullScreenshot').src = media(game,'screenshot',button.dataset.screenshot);
+        const image = document.createElement('img');
+        image.id = 'fullScreenshot';
+        image.alt = 'Game screenshot';
+        image.decoding = 'async';
+        image.src = media(game,'screenshot',button.dataset.screenshot);
+        $('mediaDialog').append(image);
         $('mediaDialog').showModal();
       });
       document.querySelectorAll('[data-document]').forEach(button => button.onclick = () => openReader(game, Number(button.dataset.document)));
@@ -838,11 +1029,11 @@
         if (!$('relatedGames') || selectedId !== id) return;
         const related = result.ids.map(gameId => games.find(game => game.id === gameId)).filter(Boolean);
         $('relatedGames').innerHTML = related.length ? related.map(game => `<button class="related-game" data-related="${game.id}" title="${escapeHtml(game.name)}">${escapeHtml(game.name)}</button>`).join('') : '<span class="description">No related games are in this library yet.</span>';
-        document.querySelectorAll('[data-related]').forEach(button => button.onclick = () => { selectedId = Number(button.dataset.related); render(); });
+        document.querySelectorAll('[data-related]').forEach(button => button.onclick = () => selectGame(Number(button.dataset.related)));
       } catch(error) { if ($('relatedGames')) $('relatedGames').textContent = error.message; }
     }
     const fact = (label,value) => `<div class="fact"><small>${label}</small><span>${escapeHtml(value || '-')}</span></div>`;
-    function render() { renderPlatformCategories(); renderPlatforms(); renderPlaylists(); renderGrid(); renderDetails(); applySidebarVisibility(); $('status').textContent = `${games.length} games · local library`; }
+    function render() { renderPlatformCategories(); renderPlatforms(); renderPlaylists(); renderFilterPresets(); renderGrid(); renderDetails(); applySidebarVisibility(); $('status').textContent = `${games.length} games · local library`; }
     async function renderPlatformDetails(platformName) {
       const count = games.filter(game => (game.platform || 'Unspecified') === platformName).length;
       let documents = [];
@@ -976,6 +1167,11 @@
         progress_automation_enabled:$('progressAutomationEnabled').checked,
         progress_automation_play_minutes:Number($('progressAutomationMinutes').value),
         progress_automation_idle_days:Number($('progressAutomationIdleDays').value),
+        progress_on_first_play:$('progressOnFirstPlay').value,
+        tracking_mode:$('trackingMode').value,
+        tracking_delay:Number($('trackingDelay').value),
+        tracking_frequency:Number($('trackingFrequency').value),
+        auto_close_store_clients:$('autoCloseStoreClients').checked,
         image_group:$('defaultImageGroup').value,
         controller_map:Object.fromEntries([...document.querySelectorAll('[data-controller]')].map(input => [input.dataset.controller,Number(input.value)])),
         welcome_completed:appSettings.welcome_completed,
@@ -1121,6 +1317,21 @@
         watchMetadata();
       } catch(error) { notify(error.message); }
     };
+    $('searchIgdb').onclick = async () => {
+      const game = games.find(item => item.id === metadataGameId);
+      try {
+        const result = await api(`/api/metadata/igdb/search?q=${encodeURIComponent($('metadataQuery').value)}&platform=${encodeURIComponent(game?.platform || '')}`);
+        $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platforms || '')}${item.year ? ` · ${escapeHtml(item.year)}` : ''}</small><p class="description">${escapeHtml(item.summary || '')}</p></div><button type="button" class="primary" data-apply-igdb="${item.id}">Use</button></div>`).join('') : '<p class="description">No IGDB matches found.</p>';
+        document.querySelectorAll('[data-apply-igdb]').forEach(button => button.onclick = async () => {
+          try {
+            await api('/api/metadata/igdb/apply',{method:'POST',body:JSON.stringify({id:metadataGameId,igdb_id:Number(button.dataset.applyIgdb)})});
+            $('metadataDialog').close();
+            await refresh();
+            notify('IGDB metadata applied');
+          } catch(error) { notify(error.message); }
+        });
+      } catch(error) { notify(error.message); }
+    };
     async function watchMetadata() {
       try {
         const status = await api('/api/metadata/status');
@@ -1135,7 +1346,7 @@
         const result = await api('/api/ra/game',{method:'POST',body:JSON.stringify({id})});
         await refresh();
         if ($('achievementContent')) {
-          $('achievementContent').innerHTML = `<p class="description">${result.earned} of ${result.total} earned · ${escapeHtml(result.completion)}${result.earned_hardcore ? ` · ${result.earned_hardcore} hardcore` : ''}${result.beaten ? ` · beaten ${result.beaten}` : ''}${result.mastered ? ` · mastered ${result.mastered}` : ''}${result.motivation ? ` · ${escapeHtml(result.motivation)}` : ''}</p>${(result.achievements || []).map(item => `<div class="achievement"><img src="/api/ra/badge?name=${encodeURIComponent(item.badge)}&locked=${item.earned ? 0 : 1}&token=${encodeURIComponent(token)}" alt=""><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.description)}</small></div><span>${item.points} pts${item.hardcore ? ' ★' : ''}</span></div>`).join('')}`;
+          $('achievementContent').innerHTML = `<p class="description">${result.earned} of ${result.total} earned · ${escapeHtml(result.completion)}${result.earned_hardcore ? ` · ${result.earned_hardcore} hardcore` : ''}${result.beaten ? ` · beaten ${result.beaten}` : ''}${result.mastered ? ` · mastered ${result.mastered}` : ''}${result.motivation ? ` · ${escapeHtml(result.motivation)}` : ''}</p>${(result.achievements || []).map(item => `<div class="achievement"><img src="/api/ra/badge?name=${encodeURIComponent(item.badge)}&locked=${item.earned ? 0 : 1}&token=${encodeURIComponent(token)}" alt="" loading="lazy" decoding="async"><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.description)}</small></div><span>${item.points} pts${item.hardcore ? ' ★' : ''}</span></div>`).join('')}`;
         }
       } catch(error) { notify(error.message); renderDetails(); }
     }
@@ -1249,6 +1460,11 @@
         $('progressAutomationEnabled').checked = Boolean(appSettings.progress_automation_enabled);
         $('progressAutomationMinutes').value = appSettings.progress_automation_play_minutes ?? 30;
         $('progressAutomationIdleDays').value = appSettings.progress_automation_idle_days ?? 30;
+        if ($('progressOnFirstPlay')) $('progressOnFirstPlay').value = appSettings.progress_on_first_play ?? 'Playing';
+        if ($('trackingMode')) $('trackingMode').value = appSettings.tracking_mode || 'default';
+        if ($('trackingDelay')) $('trackingDelay').value = appSettings.tracking_delay ?? 0;
+        if ($('trackingFrequency')) $('trackingFrequency').value = appSettings.tracking_frequency ?? 2;
+        if ($('autoCloseStoreClients')) $('autoCloseStoreClients').checked = Boolean(appSettings.auto_close_store_clients);
         $('saveBackupLimit').value = appSettings.save_backup_limit ?? 10;
         $('mediaDownloadLimit').value = appSettings.media_download_limit ?? 0;
         $('autoImportMediaTypes').value = (appSettings.auto_import_media_types || ['cover','background','screenshots']).join(', ');
@@ -1555,6 +1771,26 @@
       if (!confirm('Remove duplicate library entries? Game files will not be deleted.')) return;
       try { const result = await api('/api/health/dedupe',{method:'POST',body:'{}'}); await refresh(); await health(); notify(`${result.removed.length} duplicate entries removed`); } catch(error) { notify(error.message); }
     };
+    async function savePreset() {
+      const name = prompt('Filter preset name', activeFilterPreset || activePlaylist);
+      if (!name?.trim()) return;
+      const bigbox_quick = confirm('Pin this preset to Big Box quick-switch?');
+      const rules = {
+        platform,
+        platform_category: platformCategory,
+        view: $('view').value,
+        query: $('sidebarSearch').value.trim(),
+        esrb: $('esrbFilter')?.value || '',
+        progress: explorerRules.progress || ($('view').value === 'playing' ? 'Playing' : ''),
+      };
+      try {
+        await api('/api/filter-presets',{method:'POST',body:JSON.stringify({name:name.trim(),rules,bigbox_quick})});
+        activeFilterPreset = name.trim();
+        activePlaylist = '';
+        await refresh();
+        notify('Filter preset saved');
+      } catch(error) { notify(error.message); }
+    }
     async function saveFilter() {
       const name = prompt('Playlist name', activePlaylist);
       if (!name?.trim()) return;
@@ -1577,9 +1813,8 @@
     }
     async function backup() {
       try {
-        const response = await fetch('/api/backup',{headers:{'X-OpenBox-Token':token}});
-        if (!response.ok) throw new Error('Backup failed');
-        const link = document.createElement('a'); link.href = URL.createObjectURL(await response.blob()); link.download = 'openbox-library.json'; link.click(); URL.revokeObjectURL(link.href);
+        const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7})});
+        notify(`Backup saved to ${result.name}`);
       } catch(error) { notify(error.message); }
     }
     function bulkAction() {
@@ -1666,7 +1901,8 @@
       if (bigBoxRaFilter === 'unmatched') result = result.filter(game => !game.ra_game_id);
       result = [...result];
       if (bigBoxSort === 'rating') result.sort((a,b) => Number(b.rating || 0) - Number(a.rating || 0) || a.name.localeCompare(b.name));
-      else if (bigBoxSort === 'recent') result.sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)));
+      else if (bigBoxSort === 'recent') result.sort((a,b) => String(b.last_played || '').localeCompare(String(a.last_played || '')));
+      else if (bigBoxSort === 'recent_activity') result.sort((a,b) => recentActivityValue(b) - recentActivityValue(a));
       else if (bigBoxSort === 'playtime') result.sort((a,b) => Number(b.playtime_seconds || 0) - Number(a.playtime_seconds || 0));
       else if (bigBoxSort === 'random') {
         for (let index = result.length - 1; index > 0; index--) {
@@ -1693,6 +1929,13 @@
       bigBoxFilter = $('bigBoxFilter').value;
       bigBoxSort = $('bigBoxSort').value;
       bigBoxRaFilter = $('bigBoxRaFilter').value;
+      const quickPreset = $('bigBoxQuickPreset')?.value;
+      if (quickPreset) {
+        const preset = filterPresets.find(item => item.name === quickPreset);
+        if (preset?.rules) {
+          bigBoxFilter = preset.rules.view === 'favorites' ? 'favorites' : preset.rules.view === 'installed' ? 'installed' : preset.rules.view === 'owned' ? 'owned' : preset.rules.view === 'playing' ? 'playing' : preset.rules.view === 'completed' ? 'completed' : bigBoxFilter;
+        }
+      }
       bigBoxGames = filteredBigBoxGames();
       if (!bigBoxGames.length) { notify('No games match those Big Box filters'); return; }
       bigBoxIndex = Math.max(0,bigBoxGames.findIndex(game => game.id === currentId));
@@ -1738,7 +1981,7 @@
         const canAct = (game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed);
         const ownedLabel = game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : '';
         const uninstallBtn = game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:10px">Uninstall</button>' : '';
-        $('bigBoxStage').innerHTML = `<div class="coverflow-strip">${bigBoxGames.map((item,index) => `<button class="coverflow-card jewel-case ${index === bigBoxIndex ? 'active' : ''}" data-coverflow="${index}">${item.has_cover ? `<img src="${media(item,'cover')}" alt="">` : `<div class="cover-title">${escapeHtml(item.name)}</div>`}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}</div>`;
+        $('bigBoxStage').innerHTML = `<div class="coverflow-strip">${bigBoxGames.map((item,index) => `<button class="coverflow-card jewel-case ${index === bigBoxIndex ? 'active' : ''}" data-coverflow="${index}" aria-label="Open ${escapeHtml(item.name)}">${item.has_cover ? `<img src="${media(item,'cover')}" alt="" loading="lazy" decoding="async">` : `<div class="cover-title">${escapeHtml(item.name)}</div>`}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}</div>`;
         document.querySelectorAll('[data-coverflow]').forEach(button => button.onclick = () => { bigBoxIndex = Number(button.dataset.coverflow); selectedId = bigBoxGames[bigBoxIndex].id; renderBigBox(); });
       } else {
         $('bigBoxStage').className = 'bigbox-stage';
@@ -2076,7 +2319,16 @@
     });
     $('readerPrev').onclick = () => setReaderPage(readerPage - 1);
     $('readerNext').onclick = () => setReaderPage(readerPage + 1);
-    $('addButton').onclick = () => openGameDialog(); $('importButton').onclick = importFolder; $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = backup;
+    $('addButton').onclick = () => openGameDialog(); $('importButton').onclick = importFolder; $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = backup;
+    if ($('scanEmulatorFolder')) $('scanEmulatorFolder').onclick = async () => {
+      const folder = $('emulatorScanFolder').value.trim();
+      if (!folder) return notify('Enter a ROM folder path first.');
+      try {
+        const result = await api('/api/emulators/scan',{method:'POST',body:JSON.stringify({folder})});
+        await refresh();
+        notify(`Added ${result.added} of ${result.found} scanned games`);
+      } catch(error) { notify(error.message); }
+    };
     $('fullscreenButton').onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
     $('surpriseButton').onclick = () => { const visible = filteredGames(); if (visible.length) { selectedId = visible[Math.floor(Math.random() * visible.length)].id; render(); } };
     $('imageGroup').onchange = async () => {
@@ -2122,7 +2374,7 @@
     $('closeBigBoxMenu').onclick = closeBigBoxMenu;
     $('applyBigBoxMenu').onclick = applyBigBoxMenu;
     $('screenSaver').onclick = stopScreenSaver;
-    $('closeMedia').onclick = () => { $('mediaDialog').close(); $('fullScreenshot').removeAttribute('src'); };
+    $('closeMedia').onclick = () => { $('mediaDialog').close(); $('fullScreenshot')?.remove(); };
     $('closeReader').onclick = () => { $('readerDialog').close(); $('readerFrame').removeAttribute('src'); readerUrl = ''; readerPage = 1; };
     $('bigBox').onkeydown = event => {
       if (!$('screenSaver').hidden) {
@@ -2168,16 +2420,31 @@
     });
     document.querySelectorAll('dialog').forEach(dialog => {
       dialog.setAttribute('closedby', 'closerequest');
+      const heading = dialog.querySelector('h2');
+      if (heading) {
+        if (!heading.id) heading.id = `${dialog.id}Title`;
+        dialog.setAttribute('aria-labelledby', heading.id);
+      }
       dialog.addEventListener('close', () => {
         if (dialog.id === 'readerDialog') {
           $('readerFrame').removeAttribute('src');
           readerUrl = '';
           readerPage = 1;
         }
-        if (dialog.id === 'mediaDialog') $('fullScreenshot').removeAttribute('src');
+        if (dialog.id === 'mediaDialog') $('fullScreenshot')?.remove();
       });
     });
-    Promise.all([refresh(),loadTheme()]).then(async () => { pollSessions(); maybeShowWelcome(); await runStartupStorefrontImports().catch(() => {}); }).catch(error => notify(error.message));
+    const deeplink = new URLSearchParams(location.search);
+    if (deeplink.get('deeplink') === 'search') $('sidebarSearch').value = deeplink.get('q') || '';
+    if (deeplink.get('deeplink') === 'showgame') selectedId = Number(deeplink.get('id'));
+    Promise.all([refresh(),loadTheme()]).then(async () => {
+      pollSessions();
+      maybeShowWelcome();
+      await runStartupStorefrontImports().catch(() => {});
+      if (deeplink.get('deeplink') === 'bigbox') openBigBox();
+      if (deeplink.get('deeplink') === 'settings') openSettings();
+      if (deeplink.get('deeplink') === 'showgame' && selectedId !== null) render();
+    }).catch(error => notify(error.message));
   </script>
 </body>
 </html>

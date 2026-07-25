@@ -1,0 +1,15 @@
+id: duckstation
+name: DuckStation
+native: duckstation-qt
+flatpak: org.duckstation.DuckStation
+extensions:
+  - bin
+  - cue
+  - img
+  - iso
+  - pbp
+platforms:
+  - PlayStation
+executable_patterns:
+  - duckstation-qt
+startup: "-batch {path}"

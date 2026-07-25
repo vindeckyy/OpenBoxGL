@@ -54,7 +54,7 @@ def main():
 
         process = mock.Mock()
         process.wait.return_value = 0
-        finish_session("launch", game["path"], game["name"], datetime.now(), process)
+        finish_session("launch", 0, datetime.now(), process)
         state = __import__("openbox").load_state()
         assert state["history"] == []
 

@@ -1,9 +1,10 @@
 [Desktop Entry]
 Name=OpenBox
 Comment=Local-first Linux game library and launcher
-Exec=OpenBox
+Exec=openbox %u
 Icon=openbox
 Terminal=false
 Type=Application
 Categories=Game;Emulator;
 Keywords=games;launcher;emulator;rom;
+MimeType=x-scheme-handler/openbox;

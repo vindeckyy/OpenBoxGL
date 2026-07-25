@@ -1,0 +1,15 @@
+id: dolphin
+name: Dolphin
+native: dolphin-emu
+flatpak: org.DolphinEmu.dolphin-emu
+extensions:
+  - iso
+  - gcm
+  - wbfs
+  - ciso
+platforms:
+  - GameCube
+  - Wii
+executable_patterns:
+  - dolphin-emu
+startup: "-b -e {path}"

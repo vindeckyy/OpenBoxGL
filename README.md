@@ -11,7 +11,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.4"><img src="https://img.shields.io/badge/Release-v0.4.4-0052CC" alt="Release v0.4.4"></a>
+  <a href="https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.5"><img src="https://img.shields.io/badge/Release-v0.4.5-0052CC" alt="Release v0.4.5"></a>
   <a href="PARITY.md"><img src="https://img.shields.io/badge/LaunchBox-Parity%20Matrix-555" alt="LaunchBox parity matrix"></a>
 </p>
 
@@ -172,7 +172,7 @@ The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md
 - Storefront Manager for catalog browse, uninstalled import, and startup auto-import (including Gameyfin install/uninstall)
 - Installed-only and owned-library filters in desktop and Big Box views
 - Game Discovery Center with recently added, never played, continue playing, highly rated, random picks, and short-session lists
-- Collections, saved filters, favorites, bulk edits, custom fields, ESRB filters, list view, platform categories, and Surprise Me random selection
+- Collections, saved filter presets with explorer facets, favorites, bulk edits, custom fields, ESRB filters, list view, platform categories, and Surprise Me random selection
 - Platform documents pane for manuals and reference files per platform
 - MAME and FinalBurn merged/split/non-merged set classification with BIOS awareness
 
@@ -188,14 +188,14 @@ The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md
 
 - Auto-detection of emulators on `$PATH`
 - Flathub install, Update All, Open Emulator, dependency checks, and recommend-on-import
-- Per-platform command profiles with `{path}`, `{name}`, `{rom_name}`, `{app_id}`, `{heroic_app_id}`, and `{lutris_id}` tokens
+- YAML emulator definition packs, extension-aware ROM scanning, and per-platform command profiles with `{path}`, `{name}`, `{rom_name}`, `{app_id}`, `{heroic_app_id}`, and `{lutris_id}` tokens
 - Archive extraction for ZIP plus 7z/RAR through installed `7z`
 - Additional apps, alternate versions, and bundled extras per game
 - Welcome wizard on first run with media limits and persistent import queues
 
 ### Sessions, progress, and saves
 
-- Session history with timestamps, duration, exit status, and optional history disable
+- Session history with timestamps, duration, exit status, optional history disable, and configurable process tracking modes
 - Startup and shutdown overlays with force-close support
 - Game progress automation from play time and idle days
 - Save discovery for Steam Cloud, RetroArch, PCSX2, PPSSPP, RPCS3, Dolphin, and Cemu
@@ -227,7 +227,8 @@ LaunchBox Premium workflows are included in OpenBox without a subscription:
 - EmuMovies and Bezel Project downloads with user-provided credentials
 - OBS recording auto-attach on session close
 - MAME community high score export and import
-- JSON library backup and restore with automatic pre-restore safety copy
+- Granular JSON library backups and restore with rotation, automatic pre-restore safety copy, and safe archive path handling
+- `openbox://` deep links, keyboard launcher support, and optional IGDB metadata lookup
 - Mounted-folder sync for Syncthing, Dropbox, Google Drive, or any local path
 - Plugin hooks and bundled plugin catalog
 - Local REST API for automation and third-party tooling

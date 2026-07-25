@@ -7,14 +7,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report an issue. Please search [existing issues](https://github.com/vindeckyy/OpenBox/issues) first. The current release is [v0.4.4](https://github.com/vindeckyy/OpenBox/releases/latest).
+        Thanks for taking the time to report an issue. Please search [existing issues](https://github.com/vindeckyy/OpenBox/issues) first. The current release is [v0.4.5](https://github.com/vindeckyy/OpenBox/releases/latest).
 
   - type: input
     id: version
     attributes:
       label: OpenBox version
       description: Release tag, AppImage version, or git commit hash
-      placeholder: v0.4.4
+      placeholder: v0.4.5
     validations:
       required: true
 

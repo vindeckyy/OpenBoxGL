@@ -236,19 +236,19 @@ class ParityApiTests(unittest.TestCase):
             with mock.patch("web_app.install_gameyfin_game", side_effect=fast_install):
                 with urllib.request.urlopen(request, timeout=5) as response:
                     self.assertEqual(response.status, 202)
-            status_request = urllib.request.Request(
-                f"http://127.0.0.1:{port}/api/gameyfin/install/status?gameyfin_id=9",
-                headers={"X-OpenBox-Token": "testtoken"},
-            )
-            deadline = time.time() + 5
-            while time.time() < deadline:
-                with urllib.request.urlopen(status_request, timeout=5) as response:
-                    status = json.loads(response.read())
-                if status.get("state") in {"error", "done"}:
-                    break
-                time.sleep(0.05)
-            else:
-                self.fail("Gameyfin install job did not reach a terminal state")
+                status_request = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/api/gameyfin/install/status?gameyfin_id=9",
+                    headers={"X-OpenBox-Token": "testtoken"},
+                )
+                deadline = time.time() + 5
+                while time.time() < deadline:
+                    with urllib.request.urlopen(status_request, timeout=5) as response:
+                        status = json.loads(response.read())
+                    if status.get("state") in {"error", "done"}:
+                        break
+                    time.sleep(0.05)
+                else:
+                    self.fail("Gameyfin install job did not reach a terminal state")
             self.assertEqual(status["state"], "error")
         finally:
             server.shutdown()

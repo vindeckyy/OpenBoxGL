@@ -1,0 +1,23 @@
+id: retroarch
+name: RetroArch
+native: retroarch
+flatpak: org.libretro.RetroArch
+extensions:
+  - nes
+  - sfc
+  - smc
+  - gba
+  - gb
+  - gbc
+  - n64
+  - z64
+platforms:
+  - NES
+  - SNES
+  - Nintendo 64
+  - Game Boy Advance
+  - Game Boy
+  - Game Boy Color
+executable_patterns:
+  - retroarch
+startup: "-L /usr/lib/libretro/snes9x_libretro.so {path}"

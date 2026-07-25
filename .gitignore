@@ -30,3 +30,7 @@ scripts/sync-ide-rules.sh
 
 # Puppeteer dependency for README screenshot capture
 scripts/node_modules/
+
+# Local design detector artifacts and IDE hooks
+.impeccable/
+.github/hooks/
