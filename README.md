@@ -2,7 +2,13 @@
   <img src="assets/OpenBoxGL.png" width="432" alt="OpenBoxGL logo">
 </p>
 
-<h1 align="center">OpenBox Game Launcher</h1>
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/openboxgl-title-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/openboxgl-title-light.png">
+    <img src="assets/openboxgl-title-light.png" width="488" alt="OpenBox Game Launcher">
+  </picture>
+</h1>
 
 <p align="center">
   Local-first game library and launcher for Linux
