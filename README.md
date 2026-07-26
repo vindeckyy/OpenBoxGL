@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/OpenBoxGL.png" width="384" alt="OpenBoxGL logo">
+  <img src="assets/OpenBoxGL.png" width="432" alt="OpenBoxGL logo">
 </p>
 
 <h1 align="center">OpenBox Game Launcher</h1>
