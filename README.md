@@ -1,4 +1,10 @@
 <p align="center">
+  <a href="https://www.buymeacoffee.com/haydenopenbox" target="_blank" rel="noopener noreferrer">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="50" width="217">
+  </a>
+</p>
+
+<p align="center">
   <img src="openbox.svg" width="128" alt="OpenBox logo">
 </p>
 
@@ -13,12 +19,6 @@
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python 3.10+"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.6"><img src="https://img.shields.io/badge/Release-v0.4.6-0052CC" alt="Release v0.4.6"></a>
   <a href="PARITY.md"><img src="https://img.shields.io/badge/LaunchBox-Parity%20Matrix-555" alt="LaunchBox parity matrix"></a>
-</p>
-
-<p align="center">
-  <a href="https://donate.stripe.com/5kQ14o4uP43OeM17M8dnW00" title="Voluntary donation to support OpenBox development">
-    <img src="https://img.shields.io/badge/☕_Buy_me_a_coffee-Support_OpenBox-FFDD00?style=for-the-badge" alt="Buy me a coffee - support OpenBox">
-  </a>
 </p>
 
 <p align="center">
@@ -417,15 +417,13 @@ For the full legal policy, see [DISCLAIMER.md](DISCLAIMER.md) and [TRADEMARKS.md
 
 ## Support
 
-OpenBox is free and open source (AGPL-3.0). If it saves you time, a voluntary donation helps cover hosting and development:
+OpenBox is free and open source (AGPL-3.0). If it saves you time, a coffee helps cover hosting and development:
 
 <p align="center">
-  <a href="https://donate.stripe.com/5kQ14o4uP43OeM17M8dnW00">
-    <img src="https://img.shields.io/badge/☕_Buy_me_a_coffee-Support_OpenBox-FFDD00?style=for-the-badge" alt="Buy me a coffee - support OpenBox">
+  <a href="https://www.buymeacoffee.com/haydenopenbox" target="_blank" rel="noopener noreferrer">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="50" width="217">
   </a>
 </p>
-
-Payments are processed by [Stripe](https://stripe.com). No account or subscription is required.
 
 - [Report a bug](https://github.com/vindeckyy/OpenBoxGL/issues/new?template=bug_report.yml)
 - [Request a feature](https://github.com/vindeckyy/OpenBoxGL/issues/new?template=feature_request.yml)
