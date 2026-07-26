@@ -36,7 +36,7 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project maintainers responsible for enforcement at the [GitHub issue tracker](https://github.com/vindeckyy/OpenBox/issues) with the subject prefix `[Conduct]`.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project maintainers responsible for enforcement at the [GitHub issue tracker](https://github.com/vindeckyy/OpenBoxGL/issues) with the subject prefix `[Conduct]`.
 
 All complaints will be reviewed and investigated promptly and fairly.
 

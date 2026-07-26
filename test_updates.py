@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from updates import ASSET, VERSION, check_update, install_update, version_tuple
+from updates import ASSET, RELEASE_API, TRUSTED_RELEASE_PREFIX, VERSION, check_update, install_update, version_tuple
 
 
 class Response(io.BytesIO):
@@ -22,20 +22,22 @@ def next_patch_version(value):
 
 def main():
     assert version_tuple("v1.2.3") > version_tuple("1.2.2")
+    assert RELEASE_API == "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
+    assert TRUSTED_RELEASE_PREFIX == "https://github.com/vindeckyy/OpenBoxGL/releases/download/"
     latest = next_patch_version(VERSION)
     tag = f"v{latest}"
     payload = b"new appimage"
     digest = hashlib.sha256(payload).hexdigest()
     release = {
         "tag_name": tag,
-        "html_url": f"https://github.com/vindeckyy/OpenBox/releases/tag/{tag}",
+        "html_url": f"https://github.com/vindeckyy/OpenBoxGL/releases/tag/{tag}",
         "assets": [
             {
                 "name": ASSET,
-                "browser_download_url": f"https://github.com/vindeckyy/OpenBox/releases/download/{tag}/{ASSET}",
+                "browser_download_url": f"https://github.com/vindeckyy/OpenBoxGL/releases/download/{tag}/{ASSET}",
                 "digest": f"sha256:{digest}",
             },
-            {"name": f"{ASSET}.sha256", "browser_download_url": f"https://github.com/vindeckyy/OpenBox/releases/download/{tag}/{ASSET}.sha256"},
+            {"name": f"{ASSET}.sha256", "browser_download_url": f"https://github.com/vindeckyy/OpenBoxGL/releases/download/{tag}/{ASSET}.sha256"},
         ],
     }
     def opener(request, timeout=0):

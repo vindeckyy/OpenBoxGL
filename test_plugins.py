@@ -3,10 +3,12 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from plugin_catalog import REMOTE_CATALOG
 from plugins import install_plugin, list_plugins, remove_plugin, run_plugins, set_plugin_enabled
 
 
 def test():
+    assert REMOTE_CATALOG == "https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/master/plugins/catalog.json"
     with TemporaryDirectory() as directory:
         root = Path(directory)
         package = root / "source"

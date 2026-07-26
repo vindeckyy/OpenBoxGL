@@ -11,7 +11,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.6"><img src="https://img.shields.io/badge/Release-v0.4.6-0052CC" alt="Release v0.4.6"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.6"><img src="https://img.shields.io/badge/Release-v0.4.6-0052CC" alt="Release v0.4.6"></a>
   <a href="PARITY.md"><img src="https://img.shields.io/badge/LaunchBox-Parity%20Matrix-555" alt="LaunchBox parity matrix"></a>
 </p>
 
@@ -241,7 +241,7 @@ LaunchBox Premium workflows are included in OpenBox without a subscription:
 
 ### AppImage (recommended)
 
-Download the latest release from [GitHub Releases](https://github.com/vindeckyy/OpenBox/releases/latest).
+Download the latest release from [GitHub Releases](https://github.com/vindeckyy/OpenBoxGL/releases/latest).
 
 ```bash
 chmod +x OpenBox-x86_64.AppImage
@@ -268,7 +268,7 @@ flatpak run io.openbox.GameLauncher
 ### From source
 
 ```bash
-git clone https://github.com/vindeckyy/OpenBox.git
+git clone https://github.com/vindeckyy/OpenBoxGL.git
 cd OpenBox
 python3 web_app.py
 ```
@@ -427,8 +427,8 @@ OpenBox is free and open source (AGPL-3.0). If it saves you time, a voluntary do
 
 Payments are processed by [Stripe](https://stripe.com). No account or subscription is required.
 
-- [Report a bug](https://github.com/vindeckyy/OpenBox/issues/new?template=bug_report.yml)
-- [Request a feature](https://github.com/vindeckyy/OpenBox/issues/new?template=feature_request.yml)
-- [Review open issues](https://github.com/vindeckyy/OpenBox/issues)
+- [Report a bug](https://github.com/vindeckyy/OpenBoxGL/issues/new?template=bug_report.yml)
+- [Request a feature](https://github.com/vindeckyy/OpenBoxGL/issues/new?template=feature_request.yml)
+- [Review open issues](https://github.com/vindeckyy/OpenBoxGL/issues)
 
 Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before opening a pull request.

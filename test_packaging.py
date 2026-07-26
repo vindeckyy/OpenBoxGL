@@ -146,7 +146,7 @@ def test_appimage_update_info():
     build_script = ROOT / "build_appimage.sh"
     content = build_script.read_text()
     assert "OPENBOX_UPDATE_INFORMATION" in content
-    assert "gh-releases-zsync" in content
+    assert "gh-releases-zsync|vindeckyy|OpenBoxGL|latest" in content
     print("  AppImage update info: ok")
 
 

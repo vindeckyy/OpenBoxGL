@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 CATALOG_PATH = Path(__file__).resolve().parent / "plugins" / "catalog.json"
-REMOTE_CATALOG = "https://raw.githubusercontent.com/vindeckyy/OpenBox/main/plugins/catalog.json"
+REMOTE_CATALOG = "https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/master/plugins/catalog.json"
 
 
 def load_local_catalog():

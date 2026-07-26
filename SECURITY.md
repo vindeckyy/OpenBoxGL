@@ -17,7 +17,7 @@ Please do **not** report security vulnerabilities through public GitHub issues.
 
 Instead, report them privately using one of the following methods:
 
-1. Open a **private security advisory** on GitHub: [Create a security advisory](https://github.com/vindeckyy/OpenBox/security/advisories/new)
+1. Open a **private security advisory** on GitHub: [Create a security advisory](https://github.com/vindeckyy/OpenBoxGL/security/advisories/new)
 2. If GitHub advisories are unavailable, open a minimal public issue asking for a private contact channel without disclosing exploit details
 
 Include as much of the following as possible:

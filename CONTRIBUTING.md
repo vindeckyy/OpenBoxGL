@@ -8,7 +8,7 @@ Participation in this project is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUC
 
 ## Before you start
 
-1. Search [existing issues](https://github.com/vindeckyy/OpenBox/issues) to avoid duplicate work.
+1. Search [existing issues](https://github.com/vindeckyy/OpenBoxGL/issues) to avoid duplicate work.
 2. For substantial changes, open an issue first so maintainers can confirm direction.
 3. Keep pull requests focused. One logical change per PR is easier to review.
 
@@ -23,7 +23,7 @@ Participation in this project is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUC
 ### Clone and run
 
 ```bash
-git clone https://github.com/vindeckyy/OpenBox.git
+git clone https://github.com/vindeckyy/OpenBoxGL.git
 cd OpenBox
 python3 web_app.py
 ```

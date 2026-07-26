@@ -51,7 +51,7 @@ Do not post legal notices or private contact information in a public GitHub issu
 
 - For copyright complaints about content hosted on GitHub, use GitHub's [copyright claims form](https://github.com/contact/dmca) and follow GitHub's published process.
 - For trademark complaints about misleading use of a name, logo, or brand on GitHub, use the [GitHub Trademark Policy](https://docs.github.com/en/site-policy/content-removal-policies/github-trademark-policy).
-- For security vulnerabilities, use the repository's [private security advisory form](https://github.com/vindeckyy/OpenBox/security/advisories/new) as described in [SECURITY.md](SECURITY.md).
+- For security vulnerabilities, use the repository's [private security advisory form](https://github.com/vindeckyy/OpenBoxGL/security/advisories/new) as described in [SECURITY.md](SECURITY.md).
 
 The project cannot determine the legal validity of a complaint. Formal notices should use the applicable GitHub process or qualified legal counsel.
 

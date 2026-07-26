@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security advisory
-    url: https://github.com/vindeckyy/OpenBox/security/advisories/new
+    url: https://github.com/vindeckyy/OpenBoxGL/security/advisories/new
     about: Report a security vulnerability privately
   - name: Documentation
-    url: https://github.com/vindeckyy/OpenBox/blob/master/README.md#documentation
+    url: https://github.com/vindeckyy/OpenBoxGL/blob/master/README.md#documentation
     about: Read project documentation before opening an issue

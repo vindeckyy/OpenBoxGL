@@ -72,7 +72,7 @@ if [ ! -x "$tool" ]; then
   curl -L --fail --output "$tool" "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
   chmod +x "$tool"
 fi
-update_information="${OPENBOX_UPDATE_INFORMATION:-gh-releases-zsync|vindeckyy|OpenBox|latest|OpenBox-x86_64.AppImage.zsync}"
+update_information="${OPENBOX_UPDATE_INFORMATION:-gh-releases-zsync|vindeckyy|OpenBoxGL|latest|OpenBox-x86_64.AppImage.zsync}"
 arguments=(-n -u "$update_information" "$appdir" "$output")
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$tool" "${arguments[@]}"
 chmod +x "$output"

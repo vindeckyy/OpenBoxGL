@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- GitHub update checks, plugin catalog downloads, AppImage zsync metadata, and repository links now use the canonical `vindeckyy/OpenBoxGL` location after the repository rename
+
 ## [0.4.6] - 2026-07-26
 
 ### Fixed
@@ -127,14 +131,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.4.6...HEAD
-[0.4.6]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.6
-[0.4.5]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.5
-[0.4.4]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.4
-[0.4.3]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.3
-[0.4.2]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.2
-[0.4.1]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.1
-[0.4.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.0
-[0.3.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.3.0
-[0.2.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.2.0
-[0.1.0]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.1.0
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.4.6...HEAD
+[0.4.6]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.6
+[0.4.5]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.5
+[0.4.4]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.4
+[0.4.3]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.3
+[0.4.2]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.2
+[0.4.1]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.1
+[0.4.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.0
+[0.3.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.3.0
+[0.2.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.2.0
+[0.1.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.1.0

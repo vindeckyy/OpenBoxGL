@@ -11,9 +11,9 @@
     <p>Features include Big Box fullscreen browsing, LaunchBox Games Database sync, RetroAchievements integration, save backups, plugin hooks, storefront import tools, custom fields, ESRB filters, list view, drag-and-drop import, bundled media packs, and localized UI strings. LaunchBox Premium-equivalent workflows are included without a subscription.</p>
   </description>
   <launchable type="desktop-id">openbox.desktop</launchable>
-  <url type="homepage">https://github.com/vindeckyy/OpenBox</url>
-  <url type="bugtracker">https://github.com/vindeckyy/OpenBox/issues</url>
-  <url type="vcs-browser">https://github.com/vindeckyy/OpenBox</url>
+  <url type="homepage">https://github.com/vindeckyy/OpenBoxGL</url>
+  <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
+  <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
     <release version="0.4.6" date="2026-07-26">
       <description>
