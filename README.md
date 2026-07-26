@@ -2,7 +2,7 @@
   <img src="openbox.svg" width="128" alt="OpenBox logo">
 </p>
 
-<h1 align="center">OpenBox</h1>
+<h1 align="center">OpenBox Game Launcher</h1>
 
 <p align="center">
   Local-first game library and launcher for Linux
@@ -50,9 +50,11 @@
 
 ## Overview
 
-OpenBox is an open-source game library manager and launcher built for Linux. It puts PC games, storefront libraries, ROM collections, arcade sets, and emulator workflows in one searchable catalog with artwork, metadata, session tracking, save management, and launch profiles.
+OpenBox Game Launcher is an open-source game library manager and launcher built for Linux. It puts PC games, storefront libraries, ROM collections, arcade sets, and emulator workflows in one searchable catalog with artwork, metadata, session tracking, save management, and launch profiles.
 
-If you already know LaunchBox, OpenBox targets the same core job on Linux: organize a large library, enrich it with metadata and media, and launch games reliably from one front end. The difference is the packaging. OpenBox is built for Steam, Heroic, Lutris, Flatpak emulators, RetroArch, and local ROM folders on Linux, and it does not put advanced library workflows behind a Premium subscription.
+OpenBox Game Launcher is unrelated to [Openbox](https://openbox.org/), the open-source Linux window manager. The projects have different maintainers, codebases, and purposes.
+
+If you already know LaunchBox, OpenBox Game Launcher targets the same core job on Linux: organize a large library, enrich it with metadata and media, and launch games reliably from one front end. The difference is the packaging. OpenBox Game Launcher is built for Steam, Heroic, Lutris, Flatpak emulators, RetroArch, and local ROM folders on Linux, and it does not put advanced library workflows behind a Premium subscription.
 
 OpenBox provides two interfaces:
 
@@ -63,7 +65,7 @@ OpenBox provides two interfaces:
 
 Library data is stored locally at `~/.local/share/openbox-game-launcher/library.json`.
 
-> **Independence notice:** OpenBox is an independent open-source project. It is not affiliated with LaunchBox or Unbroken Software, LLC. LaunchBox and Big Box are trademarks of Unbroken Software, LLC. See [DISCLAIMER.md](DISCLAIMER.md).
+> **Independence notice:** OpenBox Game Launcher is an independent open-source project. It is not affiliated with LaunchBox, Unbroken Software, LLC, or the Openbox window manager project. LaunchBox and Big Box are trademarks of Unbroken Software, LLC. See [DISCLAIMER.md](DISCLAIMER.md).
 
 ---
 
@@ -324,7 +326,8 @@ Optional local configuration can be loaded from `~/.env` or a project `.env` fil
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and contribution guidelines |
 | [SECURITY.md](SECURITY.md) | Security reporting process |
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community standards |
-| [DISCLAIMER.md](DISCLAIMER.md) | Trademark, fair use, and DMCA policy |
+| [DISCLAIMER.md](DISCLAIMER.md) | Legal, third-party reference, and formal notice policy |
+| [TRADEMARKS.md](TRADEMARKS.md) | Naming, branding, and third-party asset rules |
 
 ### Emulator command tokens
 
@@ -404,11 +407,11 @@ Pull requests should pass the full test suite. See [CONTRIBUTING.md](CONTRIBUTIN
 
 ## Legal
 
-OpenBox is released under the [GNU Affero General Public License v3.0](LICENSE).
+OpenBox Game Launcher is released under the [GNU Affero General Public License v3.0](LICENSE).
 
 Trademark references to LaunchBox, Steam, Heroic, Lutris, RetroArch, and other third-party products are used for compatibility description only. OpenBox does not distribute ROMs, BIOS files, firmware, or DRM circumvention tools.
 
-For the full legal policy, see [DISCLAIMER.md](DISCLAIMER.md).
+For the full legal policy, see [DISCLAIMER.md](DISCLAIMER.md) and [TRADEMARKS.md](TRADEMARKS.md).
 
 ---
 

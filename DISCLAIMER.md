@@ -1,15 +1,20 @@
-# Legal Disclaimer, Nominative Fair Use, and DMCA Compliance Policy
+# Legal and third-party reference policy
 
 ## 1. Non-affiliation and independent development
 
-**OpenBox is an independent, original, open-source software project developed from scratch. OpenBox is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox, Unbroken Software, LLC, or any of their subsidiaries or affiliates.**
+**OpenBox Game Launcher is an independent open-source project. It is not affiliated, associated, authorized, endorsed by, or officially connected with LaunchBox, Unbroken Software, LLC, the Openbox window manager project, or any of their subsidiaries or affiliates.**
 
 - The official LaunchBox application and website are located at [https://www.launchbox-app.com](https://www.launchbox-app.com).
-- OpenBox was developed using a clean-room approach with standard Python, HTML, and JavaScript without using proprietary source code, internal APIs, or trade secrets belonging to Unbroken Software, LLC or any third party.
+
+### Separate from the Openbox window manager
+
+OpenBox Game Launcher is unrelated to [Openbox](https://openbox.org/), the open-source Linux window manager. The projects have different maintainers, codebases, and purposes. OpenBox Game Launcher is a game library manager and launcher; it does not replace or modify the Openbox window manager.
+
+This policy describes project identity and project practice. It is not legal advice and does not determine whether a particular use is lawful. Consult qualified counsel for jurisdiction-specific questions.
 
 ---
 
-## 2. Nominative fair use and trademark attribution
+## 2. Third-party names and references
 
 All product names, logos, brands, service marks, trademarks, and registered trademarks cited within this project, repository, documentation, and software are the property of their respective owners.
 
@@ -19,17 +24,17 @@ All product names, logos, brands, service marks, trademarks, and registered trad
 - **Nintendo** (NES, SNES, N64, Game Boy, GBA, GameCube, Wii, Wii U), **Sony** (PlayStation, PCSX2, RPCS3, PSP), **Microsoft** (Xbox, xemu), and **Sega** are registered trademarks of their respective owners.
 - **RetroArch**, **Dolphin**, **PCSX2**, **RPCS3**, **PPSSPP**, **Cemu**, **MAME**, and other emulators belong to their respective open-source project maintainers and developers.
 
-References to LaunchBox, Big Box, Steam, Heroic, Lutris, RetroArch, or other third-party products, platforms, or services are made **strictly under the doctrine of nominative fair use (15 U.S.C. § 1125(c)(3)(A))** to describe software compatibility, feature-parity comparison, data format support, and interoperability. Such references do not constitute or imply endorsement, sponsorship, affiliation, or recommendation by OpenBox or its maintainers.
+References to third-party products, platforms, services, and compatibility targets are used to identify interoperability, supported workflows, or product comparisons. They do not constitute or imply endorsement, sponsorship, affiliation, or recommendation by OpenBox or its maintainers. See [TRADEMARKS.md](TRADEMARKS.md) for the project's usage rules.
 
 ---
 
-## 3. Zero proprietary content and anti-piracy policy
+## 3. Content and anti-piracy policy
 
-OpenBox strictly adheres to copyright law and open-source compliance standards:
+OpenBox does not distribute:
 
-1. **No bundled ROMs or games**: OpenBox contains zero copyrighted game files, ROMs, ISOs, or game binaries.
-2. **No bundled system firmware or BIOS**: OpenBox does not distribute or bundle proprietary console BIOS images, system firmware, or decryption keys (for example, prod.keys, title.keys, or system keys).
-3. **No DRM bypassing**: OpenBox does not bypass, tamper with, or circumvent digital rights management (DRM) or technical protection measures. OpenBox launches user-owned games through their native installed launchers (Steam, Heroic, Lutris, RetroArch, or standalone emulators installed by the user).
+1. **Bundled games or ROMs**: The repository and release artifacts contain no game files, ROMs, ISOs, or game binaries.
+2. **System firmware or BIOS**: The repository and release artifacts contain no proprietary console BIOS images, system firmware, or decryption keys.
+3. **DRM circumvention**: OpenBox does not bypass, tamper with, or circumvent digital rights management. It launches software through user-configured launchers and emulators.
 
 ---
 
@@ -40,17 +45,15 @@ OpenBox strictly adheres to copyright law and open-source compliance standards:
 
 ---
 
-## 5. DMCA and copyright infringement policy
+## 5. Formal notices
 
-OpenBox respects the intellectual property rights of others and complies with the **Digital Millennium Copyright Act (17 U.S.C. § 512)**:
+Do not post legal notices or private contact information in a public GitHub issue.
 
-- If you are a copyright or trademark owner (or an authorized agent thereof) and believe that any content residing on or accessible through this repository infringes upon your rights, please submit a notice to the project maintainers via a [GitHub Issue](https://github.com/vindeckyy/OpenBox/issues) specifying:
-  1. Identification of the copyrighted work or trademark claimed to have been infringed.
-  2. Identification of the specific material claimed to be infringing and its exact location (filepath or URL).
-  3. Your contact information (name, organization, email address).
-  4. A statement of good-faith belief that the use is unauthorized.
+- For copyright complaints about content hosted on GitHub, use GitHub's [copyright claims form](https://github.com/contact/dmca) and follow GitHub's published process.
+- For trademark complaints about misleading use of a name, logo, or brand on GitHub, use the [GitHub Trademark Policy](https://docs.github.com/en/site-policy/content-removal-policies/github-trademark-policy).
+- For security vulnerabilities, use the repository's [private security advisory form](https://github.com/vindeckyy/OpenBox/security/advisories/new) as described in [SECURITY.md](SECURITY.md).
 
-The project maintainers will investigate and promptly remove or modify any infringing material upon receipt of a valid notice.
+The project cannot determine the legal validity of a complaint. Formal notices should use the applicable GitHub process or qualified legal counsel.
 
 ---
 

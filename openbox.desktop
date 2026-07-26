@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=OpenBox
+Name=OpenBox Game Launcher
 Comment=Local-first Linux game library and launcher
 Exec=openbox %u
 Icon=openbox

@@ -91,7 +91,7 @@ def test_flatpak_manifest():
 def test_desktop_entry():
     desktop = ROOT / "openbox.desktop"
     content = desktop.read_text()
-    assert "Name=OpenBox" in content
+    assert "Name=OpenBox Game Launcher" in content
     assert "Categories=Game" in content
     assert "Type=Application" in content
     assert "x-scheme-handler/openbox" in content
@@ -102,9 +102,28 @@ def test_metainfo():
     xml = ROOT / "openbox.metainfo.xml"
     content = xml.read_text()
     assert "io.openbox.GameLauncher" in content
+    assert "<name>OpenBox Game Launcher</name>" in content
+    assert "unrelated to the Openbox Linux window manager" in content
     assert "AGPL-3.0" in content
     assert "release version" in content
     print("  Metainfo XML: ok")
+
+
+def test_legal_policy():
+    disclaimer = (ROOT / "DISCLAIMER.md").read_text()
+    trademarks = (ROOT / "TRADEMARKS.md").read_text()
+    readme = (ROOT / "README.md").read_text()
+    security = (ROOT / "SECURITY.md").read_text()
+    assert "https://github.com/contact/dmca" in disclaimer
+    assert "github-trademark-policy" in disclaimer
+    assert "security/advisories/new" in disclaimer
+    assert "TRADEMARKS.md" in disclaimer and "TRADEMARKS.md" in readme
+    assert "clean-room" not in disclaimer
+    assert "15 U.S.C." not in disclaimer
+    assert "Openbox window manager" in trademarks
+    assert "| 0.4.x | Yes |" in security
+    assert "| 0.2.x | No |" in security
+    print("  Legal policy: ok")
 
 
 def test_version_consistency():
@@ -135,6 +154,7 @@ def main():
     print("packaging self-test:")
     test_desktop_entry()
     test_metainfo()
+    test_legal_policy()
     test_flatpak_manifest()
     test_makefile_install()
     test_appdir_structure()

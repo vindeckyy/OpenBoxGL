@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>io.openbox.GameLauncher</id>
-  <name>OpenBox</name>
+  <name>OpenBox Game Launcher</name>
   <summary>Local-first Linux game library and launcher</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>AGPL-3.0-only</project_license>
   <description>
-    <p>OpenBox is an open-source game library manager and launcher for Linux. It combines Steam, Heroic, Lutris, ROM collections, and emulator workflows in one local catalog with metadata, artwork, session tracking, and launch profiles.</p>
+    <p>OpenBox Game Launcher is an open-source game library manager and launcher for Linux. It combines Steam, Heroic, Lutris, ROM collections, and emulator workflows in one local catalog with metadata, artwork, session tracking, and launch profiles.</p>
+    <p>OpenBox Game Launcher is unrelated to the Openbox Linux window manager. The projects have different maintainers, codebases, and purposes.</p>
     <p>Features include Big Box fullscreen browsing, LaunchBox Games Database sync, RetroAchievements integration, save backups, plugin hooks, storefront import tools, custom fields, ESRB filters, list view, drag-and-drop import, bundled media packs, and localized UI strings. LaunchBox Premium-equivalent workflows are included without a subscription.</p>
   </description>
   <launchable type="desktop-id">openbox.desktop</launchable>
