@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/vindeckyy/OpenBox/security/advisories/new
     about: Report a security vulnerability privately
   - name: Documentation
-    url: https://github.com/vindeckyy/OpenBox/blob/main/README.md#documentation
+    url: https://github.com/vindeckyy/OpenBox/blob/master/README.md#documentation
     about: Read project documentation before opening an issue

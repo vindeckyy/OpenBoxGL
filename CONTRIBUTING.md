@@ -80,7 +80,7 @@ All tests must pass on CI before a PR can be merged.
 
 ## Pull request process
 
-1. Fork the repository and create a feature branch from `main`.
+1. Fork the repository and create a feature branch from `master`.
 2. Make your changes with clear commits.
 3. Run `./run_all_tests.sh`.
 4. Open a pull request using the provided template.
