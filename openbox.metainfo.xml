@@ -15,6 +15,11 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBox/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBox</url>
   <releases>
+    <release version="0.4.6" date="2026-07-26">
+      <description>
+        <p>Reliability release: invalid POST request shapes now return bounded JSON errors, with expanded real-HTTP API boundary regression coverage and refreshed project identity and support documentation.</p>
+      </description>
+    </release>
     <release version="0.4.5" date="2026-07-24">
       <description>
         <p>Parity release: saved filter presets, deep links, granular backups, process tracking, IGDB lookup, YAML emulator definitions, and library UI reliability fixes.</p>

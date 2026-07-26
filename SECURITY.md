@@ -9,7 +9,7 @@
 | 0.2.x | No |
 | < 0.2.0 | No |
 
-Security fixes are provided for the latest release on the `main` branch.
+Security fixes are provided for the latest release on the `master` branch.
 
 ## Reporting a vulnerability
 

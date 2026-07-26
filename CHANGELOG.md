@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-07-26
+
+### Fixed
+
+- Authenticated POST API requests now reject non-object JSON and request-shape type errors with JSON `400` responses instead of dropping the connection
+
+### Changed
+
+- Public identity, support, trademark, and notice documentation consistently distinguishes OpenBox Game Launcher from the Openbox window manager
+- The repository default branch, CI triggers, issue links, and contributor documentation now use `master`
+
+### Tests
+
+- Added real-HTTP API boundary regressions for authorization, validation, exception mapping, partial settings updates, secret sanitization, and lifecycle errors
+
 ## [0.4.5] - 2026-07-24
 
 ### Added
@@ -112,7 +127,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.4.5...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBox/compare/v0.4.6...HEAD
+[0.4.6]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.6
 [0.4.5]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.5
 [0.4.4]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.4
 [0.4.3]: https://github.com/vindeckyy/OpenBox/releases/tag/v0.4.3
