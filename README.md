@@ -1,10 +1,4 @@
 <p align="center">
-  <a href="https://www.buymeacoffee.com/haydenopenbox" target="_blank" rel="noopener noreferrer">
-    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="50" width="217">
-  </a>
-</p>
-
-<p align="center">
   <img src="openbox.svg" width="128" alt="OpenBox logo">
 </p>
 
@@ -12,6 +6,12 @@
 
 <p align="center">
   Local-first game library and launcher for Linux
+</p>
+
+<p align="center">
+  <a href="https://www.buymeacoffee.com/haydenopenbox" target="_blank" rel="noopener noreferrer">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="50" width="217">
+  </a>
 </p>
 
 <p align="center">
