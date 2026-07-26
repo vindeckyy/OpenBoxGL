@@ -255,6 +255,35 @@ class ParityApiTests(unittest.TestCase):
             server.server_close()
             web_app.INSTALLS.clear()
 
+    def test_post_wrong_json_shapes_return_json_error(self):
+        import threading
+        from http.server import ThreadingHTTPServer
+        import urllib.error
+        import urllib.request
+
+        import web_app
+
+        web_app.TOKEN = "testtoken"
+        server = ThreadingHTTPServer(("127.0.0.1", 0), web_app.Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            for body in (b"[]", b"null", b'"text"'):
+                request = urllib.request.Request(
+                    f"http://127.0.0.1:{server.server_address[1]}/api/settings",
+                    data=body,
+                    headers={"Content-Type": "application/json", "X-OpenBox-Token": "testtoken"},
+                    method="POST",
+                )
+                with self.assertRaises(urllib.error.HTTPError) as caught:
+                    urllib.request.urlopen(request, timeout=5)
+                self.assertEqual(caught.exception.code, 400)
+                self.assertIn("error", json.loads(caught.exception.read()))
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
     def test_premium_routes_require_auth(self):
         from web_app import Handler
 

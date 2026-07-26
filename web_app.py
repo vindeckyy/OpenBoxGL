@@ -1162,6 +1162,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = self.body()
+            if not isinstance(payload, dict):
+                raise ValueError("Request body must be a JSON object.")
             route = urlparse(self.path).path
             if route == "/api/launch":
                 self.launch(payload)
@@ -1330,7 +1332,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.dedupe()
             else:
                 self.send_json(404, {"error": "Not found"})
-        except (OSError, ValueError, KeyError, IndexError, json.JSONDecodeError, GameyfinError, FileNotFoundError, RuntimeError) as error:
+        except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError, json.JSONDecodeError, GameyfinError, FileNotFoundError, RuntimeError) as error:
             self.send_json(400, {"error": str(error)})
 
     def launch(self, payload):

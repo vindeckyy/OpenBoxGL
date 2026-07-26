@@ -1,0 +1,39 @@
+release_id: bug-sweep-2026-07-26
+title: "OpenBox same-day reliability sweep"
+status: passing
+objective: "Discover, prove, and safely fix the highest-impact reproducible defects while leaving an auditable regression baseline."
+epics:
+  - id: e01
+    slug: bug-sweep
+    title: "Evidence-driven bug sweep"
+    status: passing
+    capsule: "specs/epics/e01-bug-sweep"
+    business_value: 10
+    time_criticality: 10
+    risk_reduction: 10
+    job_size: 8
+    wsjf: 3.75
+    bcps: 24
+    stories:
+      - e01s01
+      - e01s02
+      - e01s03
+      - e01s04
+      - e01s05
+execution_order:
+  - e01s01
+  - e01s02
+  - e01s03
+  - e01s04
+  - e01s05
+gates:
+  pre_implementation:
+    - "Baseline recorded"
+    - "Impact assessment reviewed"
+    - "Plan consistency check passes"
+  validation:
+    - "Every task ledger is passing or explicitly deferred by the stop condition"
+    - "Verification evidence exists under specs/verifications/"
+  release:
+    - "Full suite, compile check, and packaging tests pass"
+    - "Issue and state handoff reconciled"

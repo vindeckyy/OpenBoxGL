@@ -1,0 +1,31 @@
+project: OpenBox
+release_id: bug-sweep-2026-07-26
+active_epic: e01
+active_story: none
+phase: verified
+branch: master
+planning_gate: ready
+baseline:
+  command: "./run_all_tests.sh"
+  result: "passing before execution; 26 test modules completed"
+working_tree:
+  preexisting_changes:
+    - DISCLAIMER.md
+    - README.md
+    - SECURITY.md
+    - index.html
+    - openbox.desktop
+    - openbox.metainfo.xml
+    - test_packaging.py
+    - TRADEMARKS.md
+  protection: "Preserve unrelated user-owned hunks throughout the sweep."
+decisions:
+  - "Use combined automated, adversarial API, and browser discovery."
+  - "Fix confirmed bounded P1/P2 defects today; record P3 or redesign work."
+  - "No new dependencies; use stdlib and existing browser tooling."
+  - "All mutations use isolated temporary user-data roots."
+  - "Reserve the final hour for whole-product regression and handoff."
+handoff:
+  next_skill: audit-code
+  next_story: none
+  instruction: "Bug sweep and all final gates passed; review sweep-owned diff before commit/merge."
