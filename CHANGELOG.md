@@ -6,8 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-07-28
+
 ### Fixed
 
+- AppImage desktop integration now starts the bundled application through `AppRun`
 - GitHub update checks, plugin catalog downloads, AppImage zsync metadata, and repository links now use the canonical `vindeckyy/OpenBoxGL` location after the repository rename
 
 ## [0.4.6] - 2026-07-26
@@ -131,7 +134,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.4.6...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.4.7...HEAD
+[0.4.7]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.7
 [0.4.6]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.6
 [0.4.5]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.5
 [0.4.4]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.4

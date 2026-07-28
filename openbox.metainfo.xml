@@ -15,6 +15,11 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="0.4.7" date="2026-07-28">
+      <description>
+        <p>AppImage desktop integration launches the bundled application through AppRun.</p>
+      </description>
+    </release>
     <release version="0.4.6" date="2026-07-26">
       <description>
         <p>Reliability release: invalid POST request shapes now return bounded JSON errors, with expanded real-HTTP API boundary regression coverage and refreshed project identity and support documentation.</p>
