@@ -29,7 +29,8 @@ STOCK_THEMES = [
 
 
 def test_appdir_structure():
-    appimage = ROOT / "OpenBox-x86_64.AppImage"
+    appimage_path = os.environ.get("OPENBOX_APPIMAGE")
+    appimage = Path(appimage_path or ROOT / "OpenBox-x86_64.AppImage").expanduser()
     if not appimage.exists():
         print("  skipping AppImage test (not built)")
         return
@@ -57,6 +58,8 @@ def test_appdir_structure():
             assert (themes / name).is_file(), f"missing stock theme {name}"
         desktop = appdir / "usr" / "share" / "applications" / "openbox.desktop"
         assert desktop.is_file(), "missing desktop file"
+        if appimage_path:
+            assert "Exec=AppRun %u" in desktop.read_text(), "AppImage desktop entry must launch AppRun"
         svg = appdir / "usr" / "share" / "icons" / "hicolor" / "scalable" / "apps" / "openbox.svg"
         assert svg.is_file(), "missing icon"
         metainfo = appdir / "usr" / "share" / "metainfo" / "openbox.appdata.xml"
