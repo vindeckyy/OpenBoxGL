@@ -153,6 +153,21 @@ def test_appimage_update_info():
     print("  AppImage update info: ok")
 
 
+def test_release_appimage_workflow():
+    workflow = ROOT / ".github" / "workflows" / "release-appimage.yml"
+    assert workflow.is_file(), "missing release AppImage workflow"
+    content = workflow.read_text()
+    assert "tags:" in content and '"v*"' in content
+    assert "./build_appimage.sh" in content
+    assert "OpenBox-x86_64.AppImage" in content
+    assert "OpenBox-x86_64.AppImage.zsync" in content
+    assert "OpenBox-x86_64.AppImage.sha256" in content
+    assert "sha256sum OpenBox-x86_64.AppImage" in content
+    assert "softprops/action-gh-release@" in content
+    assert "contents: write" in content
+    print("  Release AppImage workflow: ok")
+
+
 def main():
     print("packaging self-test:")
     test_desktop_entry()
@@ -164,6 +179,7 @@ def main():
     test_version_consistency()
     test_update_verification()
     test_appimage_update_info()
+    test_release_appimage_workflow()
     print("packaging self-test: ok")
 
 

@@ -1,0 +1,55 @@
+name: Release AppImage
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  appimage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3 \
+            python3-tk \
+            tcl8.6 \
+            tk8.6 \
+            curl \
+            file \
+            binutils
+
+      - name: Run test suite
+        run: ./run_all_tests.sh
+
+      - name: Build AppImage
+        run: ./build_appimage.sh "$PWD/OpenBox-x86_64.AppImage"
+
+      - name: Write SHA-256 checksum
+        run: sha256sum OpenBox-x86_64.AppImage | tee OpenBox-x86_64.AppImage.sha256
+
+      - name: Verify zsync metadata
+        run: test -f OpenBox-x86_64.AppImage.zsync
+
+      - name: Create release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          overwrite_files: true
+          files: |
+            OpenBox-x86_64.AppImage
+            OpenBox-x86_64.AppImage.zsync
+            OpenBox-x86_64.AppImage.sha256
