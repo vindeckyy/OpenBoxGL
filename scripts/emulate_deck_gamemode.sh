@@ -18,8 +18,8 @@ trap cleanup EXIT
 echo "Starting nested gamescope Deck/Bazzite emulation..."
 # Deck LCD-ish nested size; SDL backend works on desktop NVIDIA/AMD hosts.
 # SteamDeck=1 and SCB_* mirror Bazzite Game Mode advertising / ScopeBuddy guest mode.
-set +e
-timeout 90 "$GAMESCOPE_BIN" \
+    set +e
+timeout -k 5 180 "$GAMESCOPE_BIN" \
   -W 1280 -H 800 -w 1280 -h 800 \
   --backend sdl \
   -- \

@@ -36,7 +36,11 @@ def _inside_gamescope():
 
 
 def _run_under_gamescope():
-    """Re-exec this file inside nested gamescope, Deck/Bazzite style."""
+    """Re-exec this file inside nested gamescope, Deck/Bazzite style.
+
+    gamescope hangs after the child exits on this host, so poll the rc file the
+    child writes and kill the gamescope tree once the result is in.
+    """
     env = os.environ.copy()
     env.update(
         {
@@ -48,9 +52,13 @@ def _run_under_gamescope():
     )
     rc_file = tempfile.NamedTemporaryFile(prefix="openbox-deck-emu-rc-", delete=False)
     rc_file.close()
+    log_file = tempfile.NamedTemporaryFile(
+        prefix="openbox-deck-emu-log-", delete=False, suffix=".log"
+    )
+    log_file.close()
     cmd = [
         "timeout",
-        "120",
+        "90",
         "gamescope",
         "-W",
         "1280",
@@ -69,23 +77,55 @@ def _run_under_gamescope():
         "SCB_NOSCOPE=1",
         "OPENBOX_DECK_EMU_NESTED=1",
         f"OPENBOX_DECK_EMU_RC={rc_file.name}",
+        f"OPENBOX_DECK_EMU_LOG={log_file.name}",
         sys.executable,
         str(Path(__file__).resolve()),
     ]
+    proc = subprocess.Popen(cmd, env=env, cwd=str(ROOT))
     try:
-        result = subprocess.run(cmd, env=env, cwd=str(ROOT), check=False)
+        deadline = time.time() + 95
+        code = None
+        while time.time() < deadline:
+            try:
+                text = Path(rc_file.name).read_text(encoding="utf-8", errors="replace").strip()
+            except OSError:
+                text = ""
+            if text:
+                code = int(text)
+                break
+            if proc.poll() is not None:
+                break
+            time.sleep(0.25)
+        if proc.poll() is None:
+            # gamescope does not exit after the child; tear the tree down.
+            try:
+                subprocess.run(
+                    ["pkill", "-TERM", "-P", str(proc.pid)],
+                    check=False,
+                    capture_output=True,
+                )
+            except OSError:
+                pass
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
         try:
-            text = Path(rc_file.name).read_text(encoding="utf-8", errors="replace").strip()
+            child_log = Path(log_file.name).read_text(encoding="utf-8", errors="replace")
         except OSError:
-            text = ""
-        if text:
-            return int(text)
-        return result.returncode
+            child_log = ""
+        if child_log.strip():
+            print(child_log, end="" if child_log.endswith("\n") else "\n")
+        if code is None:
+            return proc.returncode if proc.returncode is not None else 1
+        return code
     finally:
-        try:
-            Path(rc_file.name).unlink(missing_ok=True)
-        except OSError:
-            pass
+        for path in (rc_file.name, log_file.name):
+            try:
+                Path(path).unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def check(name, condition, detail=""):
@@ -174,6 +214,12 @@ def spawn_steam_owner_window():
 def main():
     os.chdir(ROOT)
     sys.path.insert(0, str(ROOT))
+
+    emu_log = os.environ.get("OPENBOX_DECK_EMU_LOG")
+    if emu_log:
+        # Keep a copy of stdout for the harness; gamescope can eat it on abort.
+        sys.stdout = open(emu_log, "w", encoding="utf-8", buffering=1)
+        sys.stderr = sys.stdout
 
     from parity_gamescope import (
         OPENBOX_STEAM_GAME_ID,
@@ -446,9 +492,4 @@ if __name__ == "__main__":
     if not _gamescope_available():
         print("gamescope not installed; skipping Deck/Bazzite emulation")
         raise SystemExit(0)
-    rc = subprocess.run(
-        ["bash", str(ROOT / "scripts" / "emulate_deck_gamemode.sh")],
-        cwd=str(ROOT),
-        check=False,
-    ).returncode
-    raise SystemExit(rc)
+    raise SystemExit(_run_under_gamescope())
