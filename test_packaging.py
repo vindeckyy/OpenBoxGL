@@ -134,6 +134,13 @@ def test_version_consistency():
     metainfo = ROOT / "openbox.metainfo.xml"
     content = metainfo.read_text()
     assert f'version="{VERSION}"' in content, f"Version mismatch: updates={VERSION}"
+    parity = (ROOT / "PARITY.md").read_text()
+    assert f"**v{VERSION}**" in parity, f"PARITY.md latest release should be v{VERSION}"
+    bug_report = (ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml").read_text()
+    assert f"v{VERSION}" in bug_report, f"bug_report.yml should mention v{VERSION}"
+    readme = (ROOT / "README.md").read_text()
+    assert f"Release-v{VERSION}" in readme, f"README release badge should be v{VERSION}"
+    assert "cd OpenBoxGL" in readme, "README clone steps should cd into OpenBoxGL"
     print("  Version consistency: ok")
 
 

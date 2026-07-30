@@ -98,7 +98,7 @@ OpenBox targets the launchers and paths Linux users already run: Steam, Heroic, 
 | Updates | GitHub releases, AppImage, zsync, Flatpak, Makefile install | Windows installer/updater focused |
 | Cloud sync | Mounted-folder sync with Syncthing, Dropbox, Drive, or any path | LaunchBox Premium cloud library |
 | Automation | Local REST API with token auth | Limited external automation surface |
-| Handheld / couch use | Big Box mode with controller navigation and AppImage portability | Big Box exists, but Linux handheld workflows are secondary |
+| Handheld / couch use | Big Box mode with controller navigation, AppImage portability, and Steam Game Mode guest (`--game-mode`) | Big Box exists, but Linux handheld workflows are secondary |
 | Source availability | Full source code in this repository | Proprietary application |
 
 ### Who OpenBox is for
@@ -295,7 +295,7 @@ flatpak run io.openbox.GameLauncher
 
 ```bash
 git clone https://github.com/vindeckyy/OpenBoxGL.git
-cd OpenBox
+cd OpenBoxGL
 python3 web_app.py
 ```
 
@@ -401,6 +401,7 @@ OpenBox/
 ├── parity_media.py         Media queues, duplicates, region priority, limits
 ├── parity_saves.py         Save retention and backup-on-close helpers
 ├── parity_integrations.py  RA inject, bezels, EmuMovies, OBS, MAME scores
+├── parity_gamescope.py     Steam gamescope guest detect, kiosk UI, STEAM_GAME props
 ├── stock_themes.py         Bundled stock CSS theme installer
 ├── themes/                 Stock Web UI themes (Midnight Circuit, Phosphor Terminal, Harbor Light, Cinema Marquee, Nordic Mist)
 ├── metadata.py             LaunchBox database sync and media scraping

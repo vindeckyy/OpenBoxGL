@@ -24,7 +24,7 @@ Participation in this project is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUC
 
 ```bash
 git clone https://github.com/vindeckyy/OpenBoxGL.git
-cd OpenBox
+cd OpenBoxGL
 python3 web_app.py
 ```
 
@@ -135,7 +135,7 @@ Update relevant docs when behavior changes:
 - [CHANGELOG.md](CHANGELOG.md) for release-visible changes
 - [openbox.metainfo.xml](openbox.metainfo.xml) and [SECURITY.md](SECURITY.md) when releases or support policy change
 
-Parity-related modules include `parity_import.py`, `parity_premium.py`, `parity_storefront.py`, `parity_discovery.py`, `parity_media.py`, `parity_saves.py`, and `parity_integrations.py`.
+Parity-related modules include `parity_import.py`, `parity_premium.py`, `parity_storefront.py`, `parity_discovery.py`, `parity_media.py`, `parity_saves.py`, `parity_integrations.py`, `parity_gamescope.py`, and the other `parity_*.py` helpers.
 
 ## Security issues
 
