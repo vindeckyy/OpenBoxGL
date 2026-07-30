@@ -4,7 +4,16 @@ import json
 import tempfile
 from pathlib import Path
 
-from updates import ASSET, RELEASE_API, TRUSTED_RELEASE_PREFIX, VERSION, check_update, install_update, version_tuple
+from updates import (
+    ASSET,
+    RELEASE_API,
+    TRUSTED_RELEASE_PREFIX,
+    VERSION,
+    check_update,
+    install_update,
+    load_checksum_file,
+    version_tuple,
+)
 
 
 class Response(io.BytesIO):
@@ -56,6 +65,14 @@ def main():
         result = install_update(update, destination, opener)
         assert destination.read_bytes() == payload
         assert Path(result["backup"]).read_bytes() == b"old appimage"
+    try:
+        load_checksum_file(
+            f"{TRUSTED_RELEASE_PREFIX}{tag}/{ASSET}.sha256",
+            opener=lambda request, timeout=0: Response(b" \n"),
+        )
+        raise AssertionError("empty checksum should fail")
+    except ValueError as error:
+        assert "checksum" in str(error).casefold()
     print("update self-test: ok")
 
 

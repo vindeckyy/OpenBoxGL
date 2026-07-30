@@ -15,6 +15,11 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="0.4.9" date="2026-07-30">
+      <description>
+        <p>Reliability release: session and Gameyfin installs update the correct library entry after deletes or reorders, Gameyfin downloads stage safely and stream to disk, Lutris CLI failures return JSON errors, and empty release checksum files are rejected cleanly.</p>
+      </description>
+    </release>
     <release version="0.4.8" date="2026-07-30">
       <description>
         <p>Steam Game Mode guest support for Steam Deck and other handhelds: run OpenBox inside Steam's gamescope session with --game-mode, Big Box opens fullscreen, Steam Input and Quick Access Menu controls stay with Steam, and non-Steam launches get window tags gamescope can track.</p>

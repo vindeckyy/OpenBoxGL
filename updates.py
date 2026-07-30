@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-VERSION = "0.4.8"
+VERSION = "0.4.9"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
 ASSET = "OpenBox-x86_64.AppImage"
 TRUSTED_RELEASE_PREFIX = "https://github.com/vindeckyy/OpenBoxGL/releases/download/"
@@ -63,7 +63,10 @@ def parse_release_assets(release):
 
 def load_checksum_file(url, opener=urlopen):
     with github_request(url, opener=opener) as response:
-        expected = response.read(4096).decode().split()[0].lower()
+        parts = response.read(4096).decode().split()
+    if not parts:
+        raise ValueError("The release checksum is invalid.")
+    expected = parts[0].lower()
     if not re.fullmatch(r"[0-9a-f]{64}", expected):
         raise ValueError("The release checksum is invalid.")
     return expected

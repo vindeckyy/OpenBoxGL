@@ -8,8 +8,8 @@ from unittest import mock
 def main():
     with tempfile.TemporaryDirectory() as directory:
         os.environ["OPENBOX_DATA_DIR"] = directory
-        from openbox import save_state
-        from web_app import RUNNING, control_game_session, finish_session, start_game
+        from openbox import load_state, save_state
+        from web_app import RUNNING, STATE_LOCK, control_game_session, finish_session, start_game
 
         save_state({"games":[{"name":"Session test", "path":"/bin/sleep", "launch":"sleep 30"}], "profiles":{}, "history":[]})
         session = start_game(0)
@@ -38,6 +38,31 @@ def main():
         with mock.patch("web_app.start_game") as restart:
             finish_session("restart-test", 0, datetime.now(), FinishedProcess())
         restart.assert_called_once_with(0)
+
+        # Deleting a game ahead of a running title must not credit the wrong entry.
+        save_state({
+            "games": [
+                {"name": "Keep me", "path": "/bin/true", "playtime_seconds": 0},
+                {"name": "Running", "path": "/bin/sleep", "launch": "sleep 1", "playtime_seconds": 0},
+            ],
+            "profiles": {},
+            "history": [],
+            "settings": {"track_session_history": True},
+        })
+        session = start_game(1)
+        with STATE_LOCK:
+            state = load_state()
+            del state["games"][0]
+            save_state(state)
+        for _ in range(200):
+            if session["launch_id"] not in RUNNING:
+                break
+            time.sleep(0.02)
+        state = load_state()
+        assert len(state["games"]) == 1
+        assert state["games"][0]["name"] == "Running"
+        assert state["games"][0]["playtime_seconds"] >= 1
+        assert state["history"] and state["history"][-1]["game"] == "Running"
     print("session self-test: ok")
 
 

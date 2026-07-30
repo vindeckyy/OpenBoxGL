@@ -11,6 +11,7 @@ from unittest import mock
 from parity_gameyfin import (
     DEFAULT_PROVIDER,
     GameyfinClient,
+    GameyfinError,
     catalog_gameyfin,
     game_from_gameyfin,
     install_gameyfin_game,
@@ -88,6 +89,49 @@ class GameyfinTests(unittest.TestCase):
             result = uninstall_gameyfin_game(installed)
             self.assertFalse(installed["store_installed"])
             self.assertTrue(result["removed"])
+
+    def test_list_providers_ignores_non_dicts(self):
+        class Client(GameyfinClient):
+            def __init__(self):
+                super().__init__("http://gameyfin.local")
+                self._logged_in = True
+
+            def connect(self, endpoint, method, payload=None):
+                if endpoint == "DownloadProviderEndpoint":
+                    return ["bad", 12, {"key": "ok-provider", "name": "OK"}]
+                return []
+
+        providers = Client().list_providers()
+        self.assertEqual(providers, [{"key": "ok-provider", "name": "OK"}])
+
+    def test_install_keeps_existing_files_on_download_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = {
+                "gameyfin_url": "http://gameyfin.local",
+                "gameyfin_install_dir": directory,
+                "gameyfin_provider": DEFAULT_PROVIDER,
+            }
+            records = [{"id": 9, "title": "Keep Saves", "platforms": ["PC"]}]
+            install_dir = Path(directory) / "keep-saves"
+            install_dir.mkdir()
+            save_file = install_dir / "save.dat"
+            save_file.write_text("precious")
+
+            class Client(GameyfinClient):
+                def __init__(self):
+                    super().__init__(settings["gameyfin_url"])
+                    self._logged_in = True
+
+                def list_games(self):
+                    return records
+
+                def download_game(self, game_id, provider, destination):
+                    raise GameyfinError("download failed")
+
+            with self.assertRaises(GameyfinError):
+                install_gameyfin_game(settings, 9, client=Client())
+            self.assertTrue(save_file.exists())
+            self.assertEqual(save_file.read_text(), "precious")
 
     def test_storefront_rejects_unknown(self):
         with self.assertRaises(ValueError):

@@ -200,14 +200,14 @@ class ParityApiTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("error", payload)
 
-    def test_gameyfin_install_invalid_library_id_reports_error(self):
+    def test_gameyfin_install_stale_library_id_appends_by_gameyfin_id(self):
         import threading
         import time
         from http.server import ThreadingHTTPServer
         import urllib.request
 
         import web_app
-        from openbox import save_state
+        from openbox import load_state, save_state
 
         save_state({
             "games": [],
@@ -249,7 +249,10 @@ class ParityApiTests(unittest.TestCase):
                     time.sleep(0.05)
                 else:
                     self.fail("Gameyfin install job did not reach a terminal state")
-            self.assertEqual(status["state"], "error")
+            self.assertEqual(status["state"], "done")
+            games = load_state()["games"]
+            self.assertEqual(len(games), 1)
+            self.assertEqual(games[0]["gameyfin_id"], "9")
         finally:
             server.shutdown()
             server.server_close()

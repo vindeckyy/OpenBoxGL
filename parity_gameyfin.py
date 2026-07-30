@@ -130,20 +130,30 @@ class GameyfinClient:
             result = self.connect("DownloadProviderEndpoint", "getProviders")
         except GameyfinError:
             return [{"key": DEFAULT_PROVIDER, "name": "Direct Download", "priority": 1}]
-        if not isinstance(result, list) or not result:
+        if not isinstance(result, list):
             return [{"key": DEFAULT_PROVIDER, "name": "Direct Download", "priority": 1}]
-        return result
+        providers = [item for item in result if isinstance(item, dict)]
+        if not providers:
+            return [{"key": DEFAULT_PROVIDER, "name": "Direct Download", "priority": 1}]
+        return providers
 
     def download_game(self, game_id, provider, destination):
         self.ensure_session()
         provider = provider or DEFAULT_PROVIDER
         query = urllib.parse.urlencode({"provider": provider})
-        response, payload = self.request(
-            "GET",
-            f"/download/{int(game_id)}?{query}",
-            headers={"Accept": "application/octet-stream,*/*"},
-            raw=True,
-        )
+        url = f"{self.base_url}/download/{int(game_id)}?{query}"
+        request_headers = {
+            "User-Agent": "OpenBox/Gameyfin",
+            "Accept": "application/octet-stream,*/*",
+        }
+        request = urllib.request.Request(url, headers=request_headers, method="GET")
+        try:
+            response = self.opener.open(request, timeout=60)
+        except urllib.error.HTTPError as error:
+            detail = error.read().decode("utf-8", errors="replace")[:400]
+            raise GameyfinError(f"Gameyfin request failed ({error.code}): {detail or error.reason}") from error
+        except urllib.error.URLError as error:
+            raise GameyfinError(f"Could not reach Gameyfin: {error.reason}") from error
         disposition = response.headers.get("Content-Disposition", "")
         match = re.search(r'filename\*?=(?:UTF-8\'\')?"?([^";]+)"?', disposition, re.I)
         filename = urllib.parse.unquote(match.group(1)) if match else f"gameyfin-{game_id}.bin"
@@ -151,7 +161,22 @@ class GameyfinClient:
         destination = Path(destination)
         destination.mkdir(parents=True, exist_ok=True)
         target = destination / filename
-        target.write_bytes(payload)
+        partial = destination / f".{filename}.partial"
+        try:
+            with partial.open("wb") as handle:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
+            partial.replace(target)
+        except Exception:
+            if partial.exists():
+                try:
+                    partial.unlink()
+                except OSError:
+                    pass
+            raise
         return target
 
 
@@ -245,12 +270,30 @@ def install_gameyfin_game(settings, game_id, client=None):
         raise GameyfinError(f"Gameyfin game {game_id} was not found.")
     entry = game_from_gameyfin(record, install_root, conf["provider"])
     destination = Path(entry["install_dir"])
-    if destination.exists():
-        shutil.rmtree(destination) if destination.is_dir() else destination.unlink()
-    destination.mkdir(parents=True, exist_ok=True)
-    downloaded = client.download_game(game_id, conf["provider"], destination)
+    staging = destination.with_name(f".{destination.name}.openbox-installing")
+    previous = destination.with_name(f".{destination.name}.openbox-previous")
+    if staging.exists():
+        shutil.rmtree(staging) if staging.is_dir() else staging.unlink()
+    if previous.exists():
+        shutil.rmtree(previous) if previous.is_dir() else previous.unlink()
+    staging.mkdir(parents=True, exist_ok=True)
+    try:
+        downloaded = client.download_game(game_id, conf["provider"], staging)
+        if destination.exists():
+            destination.rename(previous)
+        staging.rename(destination)
+        if previous.exists():
+            shutil.rmtree(previous) if previous.is_dir() else previous.unlink()
+    except Exception:
+        if staging.exists():
+            shutil.rmtree(staging) if staging.is_dir() else staging.unlink()
+        if not destination.exists() and previous.exists():
+            previous.rename(destination)
+        raise
     # Prefer launching a single downloaded file; otherwise point at the folder.
-    launch_path = downloaded if downloaded.is_file() else destination
+    downloaded_name = Path(downloaded).name
+    launch_candidate = destination / downloaded_name
+    launch_path = launch_candidate if launch_candidate.is_file() else destination
     return {
         **entry,
         "path": str(launch_path),

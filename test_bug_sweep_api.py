@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -119,6 +120,20 @@ class ApiSweep(unittest.TestCase):
             status, payload = self.request("/api/storefront/catalog?source=fixture")
         self.assertEqual(status, 400)
         self.assertIn("bad source", payload["error"])
+        with mock.patch(
+            "web_app.storefront_catalog",
+            side_effect=subprocess.TimeoutExpired(cmd=["lutris"], timeout=30),
+        ):
+            status, payload = self.request("/api/storefront/catalog?source=lutris")
+        self.assertEqual(status, 400)
+        self.assertIn("error", payload)
+        with mock.patch(
+            "web_app.import_lutris",
+            side_effect=subprocess.CalledProcessError(1, ["lutris"]),
+        ):
+            status, payload = self.request("/api/import/lutris", {})
+        self.assertEqual(status, 400)
+        self.assertIn("error", payload)
         self.assert_alive()
 
     def test_settings(self):

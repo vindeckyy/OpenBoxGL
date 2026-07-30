@@ -424,20 +424,67 @@ def session_event(kind, launch_id, game_name):
         SESSION_EVENTS[:] = SESSION_EVENTS[-100:]
 
 
+def resolve_library_game(state, identity, fallback_index=None):
+    """Find a library game by stable ids/path, not a stale array index."""
+    games = state.get("games") or []
+    if not isinstance(identity, dict):
+        identity = {}
+    for key in ("gameyfin_id", "steam_app_id", "heroic_app_id", "lutris_id"):
+        value = str(identity.get(key) or "").strip()
+        if not value:
+            continue
+        for game in games:
+            if str(game.get(key) or "") == value:
+                return game
+    path = str(identity.get("game_path") or identity.get("path") or "")
+    name = str(identity.get("game_name") or identity.get("game") or identity.get("name") or "")
+    if path:
+        matches = [game for game in games if str(game.get("path", "")) == path]
+        if name:
+            named = [game for game in matches if str(game.get("name", "")) == name]
+            if named:
+                return named[0]
+        if len(matches) == 1:
+            return matches[0]
+    if fallback_index is not None:
+        try:
+            index = int(fallback_index)
+        except (TypeError, ValueError):
+            index = -1
+        if 0 <= index < len(games):
+            candidate = games[index]
+            if name and str(candidate.get("name", "")) != name:
+                return None
+            if path and str(candidate.get("path", "")) != path:
+                return None
+            return candidate
+    return None
+
+
 def finish_session(launch_id, game_index, started, process):
+    with PROCESS_LOCK:
+        running_snapshot = dict(RUNNING.get(launch_id, {}))
+    identity = {
+        "game_path": running_snapshot.get("game_path", ""),
+        "game_name": running_snapshot.get("game") or running_snapshot.get("game_name", ""),
+        "steam_app_id": running_snapshot.get("steam_app_id", ""),
+        "heroic_app_id": running_snapshot.get("heroic_app_id", ""),
+        "lutris_id": running_snapshot.get("lutris_id", ""),
+        "gameyfin_id": running_snapshot.get("gameyfin_id", ""),
+    }
     with STATE_LOCK:
         state = load_state()
         settings = state.get("settings", {})
-        game = state["games"][game_index] if 0 <= game_index < len(state["games"]) else {}
-        game_path = str(game.get("path", ""))
-        original_game_name = str(game.get("name", "Untitled"))
+        game = resolve_library_game(state, identity, fallback_index=game_index) or {}
+        game_path = str(game.get("path", "") or identity.get("game_path", ""))
+        original_game_name = str(game.get("name", "") or identity.get("game_name") or "Untitled")
     exit_code = wait_for_exit(process, game, settings)
     seconds = max(1, int((datetime.now() - started).total_seconds()))
     with STATE_LOCK:
         state = load_state()
         settings = state.get("settings", {})
-        if 0 <= game_index < len(state["games"]):
-            game = state["games"][game_index]
+        game = resolve_library_game(state, identity, fallback_index=game_index)
+        if game is not None:
             game["playtime_seconds"] = game.get("playtime_seconds", 0) + seconds
             apply_progress_automation(game, settings)
             if settings.get("backup_on_close") and game.get("save_paths"):
@@ -453,7 +500,7 @@ def finish_session(launch_id, game_index, started, process):
             game_name = game.get("name", "Untitled")
             close_store_client(game, settings)
         else:
-            game_name = "Untitled"
+            game_name = original_game_name
         session = {
             "game": game_name,
             "started": started.isoformat(timespec="seconds"),
@@ -565,6 +612,11 @@ def start_game(index):
             "launch_id": launch_id,
             "game_id": index,
             "game": game.get("name", "Untitled"),
+            "game_path": str(game.get("path", "")),
+            "steam_app_id": str(game.get("steam_app_id") or ""),
+            "heroic_app_id": str(game.get("heroic_app_id") or ""),
+            "lutris_id": str(game.get("lutris_id") or ""),
+            "gameyfin_id": str(game.get("gameyfin_id") or ""),
             "started": started.isoformat(timespec="seconds"),
             "pid": process.pid,
             "paused": False,
@@ -1055,7 +1107,7 @@ class Handler(BaseHTTPRequestHandler):
             source = parse_qs(parsed.query).get("source", [""])[0]
             try:
                 self.send_json(200, {"catalog": storefront_catalog(source, settings=load_state().get("settings", {}))})
-            except (ValueError, OSError, FileNotFoundError, subprocess.CalledProcessError) as error:
+            except (ValueError, OSError, FileNotFoundError, subprocess.SubprocessError) as error:
                 self.send_json(400, {"error": str(error)})
             return
         if parsed.path == "/api/gameyfin/install/status":
@@ -1078,7 +1130,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 _catalog, providers = catalog_gameyfin(load_state().get("settings", {}))
                 self.send_json(200, {"providers": providers})
-            except (ValueError, OSError) as error:
+            except (ValueError, OSError, TypeError, AttributeError) as error:
                 self.send_json(400, {"error": str(error)})
             return
         if parsed.path == "/api/save-tools/status":
@@ -1352,7 +1404,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.dedupe()
             else:
                 self.send_json(404, {"error": "Not found"})
-        except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError, json.JSONDecodeError, GameyfinError, FileNotFoundError, RuntimeError) as error:
+        except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError, json.JSONDecodeError, GameyfinError, FileNotFoundError, RuntimeError, subprocess.SubprocessError) as error:
             self.send_json(400, {"error": str(error)})
 
     def launch(self, payload):
@@ -2445,7 +2497,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, {"added": added, "found": found, "imported": len(imported)})
 
     def test_gameyfin(self, payload):
-        settings = {**load_state().get("settings", {}), **payload}
+        settings = dict(load_state().get("settings", {}))
+        for key, value in (payload or {}).items():
+            if key == "gameyfin_password" and not str(value or "").strip():
+                continue
+            settings[key] = value
         result = test_gameyfin_connection(settings)
         self.send_json(200, result)
 
@@ -2470,19 +2526,25 @@ class Handler(BaseHTTPRequestHandler):
                 installed = install_gameyfin_game(settings, game_id)
                 with STATE_LOCK:
                     state = load_state()
-                    if library_id is not None:
-                        state["games"][int(library_id)].update(installed)
+                    target = None
+                    for game in state["games"]:
+                        if str(game.get("gameyfin_id") or "") == game_id:
+                            target = game
+                            break
+                    if target is None and library_id is not None:
+                        try:
+                            index = int(library_id)
+                        except (TypeError, ValueError):
+                            index = -1
+                        if 0 <= index < len(state["games"]):
+                            candidate = state["games"][index]
+                            existing_id = str(candidate.get("gameyfin_id") or "")
+                            if not existing_id or existing_id == game_id:
+                                target = candidate
+                    if target is not None:
+                        target.update(installed)
                     else:
-                        identity = ("gameyfin", str(installed.get("gameyfin_id", "")))
-                        existing = {
-                            ("gameyfin", str(game.get("gameyfin_id", ""))): game
-                            for game in state["games"]
-                            if game.get("gameyfin_id")
-                        }
-                        if identity in existing:
-                            existing[identity].update(installed)
-                        else:
-                            state["games"].append(installed)
+                        state["games"].append(installed)
                     save_state(state)
                 result = {"state": "done", "gameyfin_id": game_id, "game": installed}
             except (GameyfinError, OSError, ValueError, IndexError, KeyError) as error:

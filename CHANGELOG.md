@@ -4,6 +4,18 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.4.9] - 2026-07-30
+
+### Fixed
+
+- Session completion now credits playtime and history by stable game identity, so deleting another library entry while a game is running no longer updates the wrong title
+- Gameyfin installs resolve library updates by Gameyfin ID instead of a stale array index, keep existing installs until a download succeeds, and stream downloads to disk instead of buffering whole files in memory
+- Gameyfin provider lists ignore malformed non-object entries; empty passwords on connection tests no longer overwrite a stored credential for the probe
+- Lutris import and storefront catalog routes return JSON errors when the Lutris CLI fails or times out, instead of dropping the HTTP connection
+- Empty release checksum files raise a clear update error instead of an IndexError
+
 ## [0.4.8] - 2026-07-30
 
 ### Added
@@ -144,7 +156,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.4.8...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.4.9...HEAD
+[0.4.9]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.9
 [0.4.8]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.8
 [0.4.7]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.7
 [0.4.6]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.6
