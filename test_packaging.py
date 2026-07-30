@@ -56,11 +56,14 @@ def test_appdir_structure():
         assert themes.is_dir(), "missing themes dir in AppImage"
         for name in STOCK_THEMES:
             assert (themes / name).is_file(), f"missing stock theme {name}"
-        desktop = appdir / "usr" / "share" / "applications" / "openbox.desktop"
+        desktop = appdir / "usr" / "share" / "applications" / "io.openbox.GameLauncher.desktop"
         assert desktop.is_file(), "missing desktop file"
         if appimage_path:
-            assert "Exec=AppRun %u" in desktop.read_text(), "AppImage desktop entry must launch AppRun"
-        svg = appdir / "usr" / "share" / "icons" / "hicolor" / "scalable" / "apps" / "openbox.svg"
+            content = desktop.read_text()
+            assert "Exec=AppRun %u" in content, "AppImage desktop entry must launch AppRun"
+            assert "Icon=io.openbox.GameLauncher" in content, "AppImage desktop icon id must be unique"
+            assert "X-AppImage-Version=" in content, "AppImage desktop entry must expose version"
+        svg = appdir / "usr" / "share" / "icons" / "hicolor" / "scalable" / "apps" / "io.openbox.GameLauncher.svg"
         assert svg.is_file(), "missing icon"
         metainfo = appdir / "usr" / "share" / "metainfo" / "openbox.appdata.xml"
         assert metainfo.is_file(), "missing metainfo"
@@ -95,6 +98,7 @@ def test_desktop_entry():
     desktop = ROOT / "openbox.desktop"
     content = desktop.read_text()
     assert "Name=OpenBox Game Launcher" in content
+    assert "Icon=io.openbox.GameLauncher" in content
     assert "Categories=Game" in content
     assert "Type=Application" in content
     assert "x-scheme-handler/openbox" in content
@@ -105,6 +109,7 @@ def test_metainfo():
     xml = ROOT / "openbox.metainfo.xml"
     content = xml.read_text()
     assert "io.openbox.GameLauncher" in content
+    assert '<launchable type="desktop-id">io.openbox.GameLauncher.desktop</launchable>' in content
     assert "<name>OpenBox Game Launcher</name>" in content
     assert "unrelated to the Openbox Linux window manager" in content
     assert "AGPL-3.0" in content

@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.10] - 2026-07-30
+
+### Fixed
+
+- AppImage desktop launches via Gear Lever and similar integrators: stop leaking bundled `LD_LIBRARY_PATH` into host `xdg-open`/browsers, open the UI with a clean-env `xdg-open`, use a unique `io.openbox.GameLauncher` desktop/icon id, and let `openbox://` start fall through to a normal server boot when no instance is running
+
+### In case you missed it
+
+If you jumped from an older build and skipped the last two releases:
+
+- **0.4.8 — Steam Game Mode guest:** `--game-mode` opens Big Box fullscreen under gamescope on Steam Deck, Bazzite, and similar handheld images. Guest sessions are detected automatically, Big Box opens without a manual deeplink, and Steam keeps Input, QAM, and TDP while OpenBox tags its UI and non-Steam launches for Steam's overlay path.
+- **0.4.9 — library reliability:** session playtime and Gameyfin installs update the correct library entry after deletes or reorders, Gameyfin downloads stage then replace and stream to disk, Lutris CLI failures return JSON errors, and empty release checksum files fail cleanly.
+
 ## [0.4.9] - 2026-07-30
 
 ### Fixed
@@ -156,7 +169,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.4.9...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.4.10...HEAD
+[0.4.10]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.10
 [0.4.9]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.9
 [0.4.8]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.8
 [0.4.7]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.7

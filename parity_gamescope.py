@@ -109,21 +109,48 @@ def kiosk_command(browser_argv, url):
     return args
 
 
-def open_ui(url, *, guest=False, force_game_mode=False, popen=None, browser_open=None, which=None):
-    """Open the UI; use kiosk browser when guest/game-mode, else webbrowser."""
+def host_helper_env(environ=None):
+    """Env for xdg-open/host browsers without AppImage library overrides."""
+    env = dict(environ if environ is not None else os.environ)
+    for key in ("LD_LIBRARY_PATH", "PYTHONHOME", "PYTHONPATH", "TCL_LIBRARY", "TK_LIBRARY"):
+        env.pop(key, None)
+    return env
+
+
+def open_ui(url, *, guest=False, force_game_mode=False, popen=None, browser_open=None, which=None, environ=None):
+    """Open the UI; use kiosk browser when guest/game-mode, else xdg-open/webbrowser."""
     target = game_mode_url(url) if (guest or force_game_mode) else url
     opener = popen or subprocess.Popen
     browse = browser_open or webbrowser.open
+    helper_env = host_helper_env(environ)
     if guest or force_game_mode:
         browser = resolve_kiosk_browser(which=which)
         if browser:
             try:
-                process = opener(kiosk_command(browser, target), start_new_session=True)
+                process = opener(
+                    kiosk_command(browser, target),
+                    start_new_session=True,
+                    env=helper_env,
+                )
             except OSError:
                 browser = None
             else:
                 pid = getattr(process, "pid", None)
                 return {"url": target, "mode": "kiosk", "browser": browser[0], "pid": pid}
+    finder = which or shutil.which
+    xdg = finder("xdg-open")
+    if xdg:
+        try:
+            process = opener([xdg, target], start_new_session=True, env=helper_env)
+        except OSError:
+            process = None
+        else:
+            return {
+                "url": target,
+                "mode": "xdg-open",
+                "browser": xdg,
+                "pid": getattr(process, "pid", None),
+            }
     browse(target)
     return {"url": target, "mode": "webbrowser", "browser": "", "pid": None}
 

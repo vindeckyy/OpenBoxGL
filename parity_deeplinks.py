@@ -95,6 +95,17 @@ def dispatch_uri(uri, data_dir, host="127.0.0.1", port=None, token=None, open_br
     parsed = parse_uri(uri)
     action = parsed.get("action", "start")
     if action == "start":
+        # No running server yet: fall through so web_app.main() boots normally.
+        # A successful no-op exit here made Gear Lever / mime launches look dead.
+        if not token_path.is_file() or not read_port_file(data_dir):
+            return None
+        if open_browser:
+            try:
+                import webbrowser
+
+                webbrowser.open(build_launch_url(f"http://{host}:{port}/?token={token}", "start"))
+            except Exception:
+                pass
         return 0
     try:
         if action in {"showgame", "game", "launch"}:

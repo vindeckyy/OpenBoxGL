@@ -2,7 +2,7 @@
 Name=OpenBox Game Launcher
 Comment=Local-first Linux game library and launcher
 Exec=openbox %u
-Icon=openbox
+Icon=io.openbox.GameLauncher
 Terminal=false
 Type=Application
 Categories=Game;Emulator;

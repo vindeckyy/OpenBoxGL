@@ -27,10 +27,6 @@ mkdir -p "$appdir/usr/share/openbox/plugins"
 cp "$source_root/plugins/catalog.json" "$appdir/usr/share/openbox/plugins/catalog.json"
 mkdir -p "$appdir/usr/share/openbox/themes"
 cp "$source_root"/themes/*.css "$appdir/usr/share/openbox/themes/"
-sed 's/^Exec=.*/Exec=AppRun %u/' "$source_root/openbox.desktop" > "$appdir/usr/share/applications/openbox.desktop"
-cp "$source_root/openbox.svg" "$appdir/usr/share/icons/hicolor/scalable/apps/openbox.svg"
-cp "$source_root/openbox.metainfo.xml" "$appdir/usr/share/metainfo/openbox.appdata.xml"
-cp "$source_root/LICENSE" "$appdir/usr/share/openbox/LICENSE"
 
 while IFS= read -r library; do
   cp -L "$library" "$appdir/usr/lib/$(basename "$library")"
@@ -51,21 +47,52 @@ done
 
 install -m 755 /dev/stdin "$appdir/AppRun" <<'EOF'
 #!/bin/bash
-app_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# Keep bundled libs on the Python process only. A sticky LD_LIBRARY_PATH leaks into
+# xdg-open/host browsers and breaks Gear Lever / desktop-menu launches.
+set -euo pipefail
+if command -v readlink >/dev/null 2>&1; then
+  app_root="$(cd -- "$(dirname -- "$(readlink -f -- "$0" 2>/dev/null || echo "$0")")" && pwd)"
+else
+  app_root="$(cd -- "$(dirname -- "$0")" && pwd)"
+fi
+export APPDIR="$app_root"
+export PATH="$app_root/usr/bin:${PATH:-/usr/bin:/bin}"
 export PYTHONHOME="$app_root/usr"
-export PYTHONPATH="$app_root/usr/share/openbox"
-export LD_LIBRARY_PATH="$app_root/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PYTHONPATH="$app_root/usr/share/openbox${PYTHONPATH:+:$PYTHONPATH}"
 export TCL_LIBRARY="$app_root/usr/share/tcltk/tcl8.6"
 export TK_LIBRARY="$app_root/usr/share/tcltk/tk8.6"
+lib_path="$app_root/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+python="$app_root/usr/bin/python3"
 if [ "${1:-}" = "--native" ]; then
   shift
-  exec "$app_root/usr/bin/python3" "$app_root/usr/share/openbox/openbox.py" "$@"
+  exec env LD_LIBRARY_PATH="$lib_path" "$python" "$app_root/usr/share/openbox/openbox.py" "$@"
 fi
-exec "$app_root/usr/bin/python3" "$app_root/usr/share/openbox/web_app.py" "$@"
+exec env LD_LIBRARY_PATH="$lib_path" "$python" "$app_root/usr/share/openbox/web_app.py" "$@"
 EOF
-ln -s usr/share/applications/openbox.desktop "$appdir/openbox.desktop"
-ln -s usr/share/icons/hicolor/scalable/apps/openbox.svg "$appdir/openbox.svg"
-ln -s openbox.svg "$appdir/.DirIcon"
+
+# Unique desktop/icon names avoid colliding with the Openbox window manager.
+python3 - "$source_root/openbox.desktop" "$source_root/updates.py" > "$appdir/usr/share/applications/io.openbox.GameLauncher.desktop" <<'PY'
+import pathlib, re, sys
+desktop = pathlib.Path(sys.argv[1]).read_text()
+version = "0.0.0"
+for line in pathlib.Path(sys.argv[2]).read_text().splitlines():
+    if line.startswith("VERSION = "):
+        version = line.split("=", 1)[1].strip().strip('"').strip("'")
+        break
+desktop = re.sub(r"^Exec=.*$", "Exec=AppRun %u", desktop, count=1, flags=re.M)
+desktop = re.sub(r"^Icon=.*$", "Icon=io.openbox.GameLauncher", desktop, count=1, flags=re.M)
+if "StartupWMClass=" not in desktop:
+    desktop = desktop.rstrip() + "\nStartupWMClass=OpenBox\n"
+if "X-AppImage-Version=" not in desktop:
+    desktop = desktop.rstrip() + f"\nX-AppImage-Version={version}\n"
+sys.stdout.write(desktop if desktop.endswith("\n") else desktop + "\n")
+PY
+cp "$source_root/openbox.svg" "$appdir/usr/share/icons/hicolor/scalable/apps/io.openbox.GameLauncher.svg"
+cp "$source_root/openbox.metainfo.xml" "$appdir/usr/share/metainfo/openbox.appdata.xml"
+cp "$source_root/LICENSE" "$appdir/usr/share/openbox/LICENSE"
+ln -s usr/share/applications/io.openbox.GameLauncher.desktop "$appdir/io.openbox.GameLauncher.desktop"
+ln -s usr/share/icons/hicolor/scalable/apps/io.openbox.GameLauncher.svg "$appdir/io.openbox.GameLauncher.svg"
+ln -s io.openbox.GameLauncher.svg "$appdir/.DirIcon"
 
 tool="$build_root/tools/appimagetool-x86_64.AppImage"
 if [ ! -x "$tool" ]; then

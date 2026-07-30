@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-VERSION = "0.4.9"
+VERSION = "0.4.10"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
 ASSET = "OpenBox-x86_64.AppImage"
 TRUSTED_RELEASE_PREFIX = "https://github.com/vindeckyy/OpenBoxGL/releases/download/"

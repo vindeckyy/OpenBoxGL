@@ -10,11 +10,17 @@
     <p>OpenBox Game Launcher is unrelated to the Openbox Linux window manager. The projects have different maintainers, codebases, and purposes.</p>
     <p>Features include Big Box fullscreen browsing, Steam Game Mode guest support for handhelds, LaunchBox Games Database sync, RetroAchievements integration, save backups, plugin hooks, storefront import tools, custom fields, ESRB filters, list view, drag-and-drop import, bundled media packs, and localized UI strings. LaunchBox Premium-equivalent workflows are included without a subscription.</p>
   </description>
-  <launchable type="desktop-id">openbox.desktop</launchable>
+  <launchable type="desktop-id">io.openbox.GameLauncher.desktop</launchable>
   <url type="homepage">https://github.com/vindeckyy/OpenBoxGL</url>
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="0.4.10" date="2026-07-30">
+      <description>
+        <p>AppImage fix for Gear Lever and desktop-menu launches: bundled library paths no longer break host xdg-open/browsers, the desktop entry uses a unique io.openbox.GameLauncher id, and openbox:// start boots the server when no instance is running.</p>
+        <p>In case you missed 0.4.8 and 0.4.9: Steam Game Mode guest support (--game-mode Big Box under gamescope on Deck/Bazzite-style sessions), and session/Gameyfin reliability fixes so playtime and installs track the correct library entry.</p>
+      </description>
+    </release>
     <release version="0.4.9" date="2026-07-30">
       <description>
         <p>Reliability release: session and Gameyfin installs update the correct library entry after deletes or reorders, Gameyfin downloads stage safely and stream to disk, Lutris CLI failures return JSON errors, and empty release checksum files are rejected cleanly.</p>

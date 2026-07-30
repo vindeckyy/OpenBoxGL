@@ -17,7 +17,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.9"><img src="https://img.shields.io/badge/Release-v0.4.9-0052CC" alt="Release v0.4.9"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.10"><img src="https://img.shields.io/badge/Release-v0.4.10-0052CC" alt="Release v0.4.10"></a>
   <a href="PARITY.md"><img src="https://img.shields.io/badge/LaunchBox-Parity%20Matrix-555" alt="LaunchBox parity matrix"></a>
 </p>
 
@@ -275,6 +275,8 @@ chmod +x OpenBox-x86_64.AppImage
 ```
 
 Use `--native` to launch the Tk interface instead of the web UI.
+
+Desktop integrators such as Gear Lever work with the AppImage. If an older build opened then never showed a window after integration, install **v0.4.10 or newer**, remove the old menu entry, and re-add the AppImage.
 
 ### System install
 
