@@ -2442,6 +2442,7 @@
       maybeShowWelcome();
       await runStartupStorefrontImports().catch(() => {});
       if (deeplink.get('deeplink') === 'bigbox') openBigBox();
+      else if (appSettings.gamescope_guest) openBigBox();
       if (deeplink.get('deeplink') === 'settings') openSettings();
       if (deeplink.get('deeplink') === 'showgame' && selectedId !== null) render();
     }).catch(error => notify(error.message));

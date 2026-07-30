@@ -16,7 +16,7 @@ PYTHON_MODULES = [
     "parity_media.py", "parity_saves.py", "parity_storefront.py", "plugin_catalog.py", "parity_premium.py",
     "stock_themes.py", "parity_gameyfin.py", "parity_save_tools.py",
     "parity_filter_presets.py", "parity_deeplinks.py", "parity_backup.py", "parity_tracking.py",
-    "parity_igdb.py", "parity_emulator_defs.py", "parity_import_policy.py",
+    "parity_igdb.py", "parity_emulator_defs.py", "parity_import_policy.py", "parity_gamescope.py",
 ]
 DATA_FILES = ["index.html"]
 STOCK_THEMES = [

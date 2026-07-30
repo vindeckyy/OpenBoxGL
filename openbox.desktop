@@ -6,5 +6,5 @@ Icon=openbox
 Terminal=false
 Type=Application
 Categories=Game;Emulator;
-Keywords=games;launcher;emulator;rom;
+Keywords=games;launcher;emulator;rom;steam;gamescope;bigbox;
 MimeType=x-scheme-handler/openbox;

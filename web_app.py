@@ -15,7 +15,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-import webbrowser
 import zipfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -62,6 +61,14 @@ from parity_filter_presets import (
     save_preset,
 )
 from parity_deeplinks import handle_cli, launcher_menu_items, parse_uri
+from parity_gamescope import (
+    OPENBOX_STEAM_GAME_ID,
+    is_gamescope_guest,
+    is_steam_launch,
+    mark_process_windows,
+    open_ui,
+    steam_game_id_for,
+)
 from parity_backup import BACKUP_ITEMS, create_backup, restore_backup
 from parity_tracking import close_store_client, wait_for_exit, TRACKING_MODES
 from parity_igdb import apply_to_game as apply_igdb_metadata, fetch_game as fetch_igdb_game, search_games as search_igdb_games
@@ -333,6 +340,7 @@ def public_settings(state=None):
         "emumovies_configured": bool(load_emumovies_credentials(DATA.parent).get("username")),
         "version": VERSION,
         "appimage": bool(os.environ.get("APPIMAGE")),
+        "gamescope_guest": is_gamescope_guest(force="--game-mode" in sys.argv),
     }
 
 
@@ -564,6 +572,18 @@ def start_game(index):
     with PROCESS_LOCK:
         RUNNING[launch_id] = entry
         PROCESSES[launch_id] = process
+    if is_gamescope_guest(force="--game-mode" in sys.argv) and not is_steam_launch(args):
+        window_class = Path(str(args[0])).name if args else None
+        threading.Thread(
+            target=mark_process_windows,
+            kwargs={
+                "pid": process.pid,
+                "app_id": steam_game_id_for(game),
+                "window_name": game.get("name") or None,
+                "window_class": window_class,
+            },
+            daemon=True,
+        ).start()
     session_event("started", launch_id, entry["game"])
     threading.Thread(
         target=finish_session,
@@ -2581,9 +2601,24 @@ def main():
     (DATA.parent / "server.port").write_text(str(port))
     (DATA.parent / "server.token").write_text(TOKEN)
     url = f"http://127.0.0.1:{port}/?token={TOKEN}"
+    force_game_mode = "--game-mode" in sys.argv
+    guest = is_gamescope_guest(force=force_game_mode)
     print(url, flush=True)
     if "--no-browser" not in sys.argv:
-        webbrowser.open(url)
+        opened = open_ui(url, guest=guest, force_game_mode=force_game_mode)
+        browser_pid = opened.get("pid")
+        if opened.get("mode") == "kiosk" and guest and browser_pid:
+            browser_name = Path(str(opened.get("browser") or "")).name
+            class_hint = "google-chrome" if "chrome" in browser_name.casefold() else browser_name
+            threading.Thread(
+                target=mark_process_windows,
+                kwargs={
+                    "pid": browser_pid,
+                    "app_id": OPENBOX_STEAM_GAME_ID,
+                    "window_class": class_hint,
+                },
+                daemon=True,
+            ).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

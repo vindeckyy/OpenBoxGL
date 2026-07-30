@@ -17,7 +17,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.7"><img src="https://img.shields.io/badge/Release-v0.4.7-0052CC" alt="Release v0.4.7"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.8"><img src="https://img.shields.io/badge/Release-v0.4.8-0052CC" alt="Release v0.4.8"></a>
   <a href="PARITY.md"><img src="https://img.shields.io/badge/LaunchBox-Parity%20Matrix-555" alt="LaunchBox parity matrix"></a>
 </p>
 
@@ -218,6 +218,26 @@ The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md
 - Pause overlay for running games
 - Attract mode, screensaver with controller wake and launch, and optional startup video
 - UI localization for English, Spanish, German, French, and Portuguese
+- Steam Game Mode guest mode (`--game-mode`) for Deck and other handhelds under gamescope
+
+### Steam Game Mode (handhelds)
+
+OpenBox runs as a guest inside Steam's gamescope session so Steam Input, the Quick Access Menu (TDP/FPS), and MangoHud stay with Steam.
+
+1. Install the AppImage (preferred on SteamOS, Bazzite, and other immutable images).
+2. In Desktop Mode, add a non-Steam game pointing at the AppImage (or `openbox`) with launch options / target args including `--game-mode`.
+3. Enable Steam Input for that shortcut if you want controller profiles in Big Box.
+4. Return to Game Mode and launch OpenBox. It should open Big Box fullscreen.
+
+Do not wrap OpenBox in another `gamescope` while already in Game Mode. Steam titles launched from OpenBox still go through Steam (`steam -applaunch` / `steam://`) so Input and overlays keep working. OpenBox does not control TDP; use Steam's QAM or your image's handheld tools. OpenBox tags its own window with a dedicated `STEAM_GAME` id for visibility under gamescope; Steam Input profiles stay scoped to your shortcut.
+
+On a normal desktop (GNOME, KDE, and so on) without gamescope, behavior is unchanged unless you pass `--game-mode`. The Flatpak build relies on host tools for window tagging and kiosk mode, so prefer the AppImage for Game Mode.
+
+Developers can approximate Deck/Bazzite Game Mode on a desktop with nested gamescope:
+
+```bash
+./scripts/emulate_deck_gamemode.sh
+```
 
 ### Premium workflows (included)
 

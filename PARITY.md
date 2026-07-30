@@ -35,6 +35,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Video, music, and screenshot playback | done | Multi-category videos, library BGM, video/BGM mix, capture, and gallery work |
 | Playlists, auto-filters, and saved filters | done | Platform, view, and search rules save, apply, update, and delete |
 | Big Box controller-first navigation | done | Stage, hybrid, and CoverFlow layouts; filter/sort/RA filters; pause overlay; screensaver launch |
+| Steam Game Mode / gamescope guest | done | `--game-mode` opens Big Box; guest detection; Steam launches keep Input; non-Steam windows get best-effort STEAM_GAME props |
 | Themes and per-platform themes | done | Five stock CSS themes ship with the Web UI; import, persist, apply live, and open-folder access work |
 | Plugin manager and extension API | done | Local packages install and run hooks; curated community catalog is bundled |
 | Backups and restore | done | Restore creates a pre-restore safety copy |

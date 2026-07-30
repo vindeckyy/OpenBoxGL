@@ -4,7 +4,17 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.8] - 2026-07-30
+
+### Added
+
+- Steam Game Mode guest support: `--game-mode` opens Big Box fullscreen under gamescope on Steam Deck, Bazzite, and similar handheld images, detects guest sessions, and best-effort sets `STEAM_GAME` window props on the OpenBox UI and non-Steam launches while leaving Steam Input, QAM, and TDP controls with Steam
+- `parity_gamescope.py` module with portable gamescope detection, kiosk browser launching, and window tagging helpers
+- Deck/Bazzite nested gamescope emulation harness (`scripts/emulate_deck_gamemode.sh`, `test_gamescope_deck_emu.py`) for verifying guest behavior on desktop hosts
+
+### Changed
+
+- Big Box mode now opens automatically when running under a gamescope session, no manual deeplink needed
 
 ## [0.4.7] - 2026-07-28
 
@@ -134,7 +144,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.4.7...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.4.8...HEAD
+[0.4.8]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.8
 [0.4.7]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.7
 [0.4.6]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.6
 [0.4.5]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.5
