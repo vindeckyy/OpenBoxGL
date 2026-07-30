@@ -274,7 +274,11 @@ chmod +x OpenBox-x86_64.AppImage
 ./OpenBox-x86_64.AppImage
 ```
 
-Use `--native` to launch the Tk interface instead of the web UI.
+To launch the Tk interface from the AppImage, pass `--native`:
+
+```bash
+./OpenBox-x86_64.AppImage --native
+```
 
 Desktop integrators such as Gear Lever work with the AppImage. If an older build opened then never showed a window after integration, install **v0.4.10 or newer**, remove the old menu entry, and re-add the AppImage.
 

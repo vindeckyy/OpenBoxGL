@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Settings can remove all Steam-imported library entries at once. This keeps game files and media on disk.
+
+### Fixed
+
+- AppImage instructions now show the correct `--native` command for the Tk interface.
+
 ## [0.4.10] - 2026-07-30
 
 ### Fixed
