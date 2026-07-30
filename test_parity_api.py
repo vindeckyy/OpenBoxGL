@@ -54,6 +54,22 @@ class ParityApiTests(unittest.TestCase):
                 Handler.import_storefront_catalog(handler, handler.body())
         handler.send_json.assert_called_with(200, {"added": 0, "found": 0, "imported": 0})
 
+    def test_delete_steam_games_keeps_other_library_entries(self):
+        from openbox import load_state, save_state
+        from web_app import Handler
+
+        save_state({
+            "games": [
+                {"name": "Steam import", "source": "Steam", "steam_app_id": "42"},
+                {"name": "Manual Steam shortcut", "source": "Manual", "steam_app_id": "43"},
+                {"name": "ROM", "source": "Folder"},
+            ],
+            "profiles": {}, "history": [], "settings": {}, "playlists": [],
+        })
+        Handler.delete_steam_games(self.handler, {})
+        self.assertEqual(self.handler.send_json.call_args[0], (200, {"removed": 1}))
+        self.assertEqual([game["name"] for game in load_state()["games"]], ["Manual Steam shortcut", "ROM"])
+
     def test_gameyfin_install_returns_before_download_finishes(self):
         import threading
         import time

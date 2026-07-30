@@ -550,6 +550,7 @@
       <div class="form-grid">
         <label class="field wide settings-field" data-setting="search watched folders cloud screensaver startup shutdown session history backup progress automation image group controller gamepad"><span>Search settings</span><input id="settingsSearch" class="settings-search" type="search" placeholder="Type to filter settings"></label>
         <label class="field wide settings-field" data-setting="watched folders import auto"><span>Automatically watched game folders, one absolute path per line</span><textarea id="watchFolders"></textarea></label>
+        <div class="wide settings-field" data-setting="library cleanup remove steam imports"><button type="button" class="icon-button" id="removeSteamGames">Remove all imported Steam games</button><span class="description">Removes library entries only. Game files and media stay on disk.</span></div>
         <label class="field wide settings-field" data-setting="cloud sync syncthing dropbox nextcloud"><span>Mounted Nextcloud, Syncthing, Dropbox, or other cloud folder for game-stat syncing</span><input id="cloudFolder"></label>
         <div class="wide settings-field" data-setting="cloud sync"><button type="button" class="icon-button" id="syncCloud">Sync statistics now</button><span class="description" id="cloudStatus"></span></div>
         <label class="field wide settings-field" data-setting="default image group viewing cover background screenshot"><span>Default image group</span><select id="defaultImageGroup"><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option></select></label>
@@ -1516,6 +1517,15 @@
         const result = await api('/api/import/watch',{method:'POST',body:'{}'});
         await refresh();
         notify(`${result.added} games imported from watched folders${result.errors.length ? ` · ${result.errors.length} errors` : ''}`);
+      } catch(error) { notify(error.message); }
+    };
+    $('removeSteamGames').onclick = async () => {
+      if (!confirm('Remove every imported Steam game from OpenBox? Game files and media will stay on disk.')) return;
+      try {
+        const result = await api('/api/games/delete-steam',{method:'POST',body:'{}'});
+        selectedId = null;
+        await refresh();
+        notify(`${result.removed} imported Steam game${result.removed === 1 ? '' : 's'} removed from library`);
       } catch(error) { notify(error.message); }
     };
     $('syncCloud').onclick = async () => {

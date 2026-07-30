@@ -1247,6 +1247,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.save_game(payload)
             elif route == "/api/game/delete":
                 self.delete_game(payload)
+            elif route == "/api/games/delete-steam":
+                self.delete_steam_games(payload)
             elif route == "/api/games/bulk":
                 self.bulk_edit(payload)
             elif route == "/api/games/bulk-wizard":
@@ -1503,6 +1505,15 @@ class Handler(BaseHTTPRequestHandler):
                         pass
             save_state(state)
         self.send_json(200, {"removed": game.get("name", "")})
+
+    def delete_steam_games(self, payload):
+        with STATE_LOCK:
+            state = load_state()
+            games = state["games"]
+            state["games"] = [game for game in games if str(game.get("source", "")).casefold() != "steam"]
+            removed = len(games) - len(state["games"])
+            save_state(state)
+        self.send_json(200, {"removed": removed})
 
     @staticmethod
     def clean_extras(items, command):
