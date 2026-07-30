@@ -90,6 +90,7 @@ def test_flatpak_manifest():
     assert "runtime: org.freedesktop.Platform" in content
     assert "command: openbox" in content
     assert "openbox.sh" in content
+    assert "openbox_logging.py" in content
     assert "openbox.svg" in content
     print("  Flatpak manifest: ok")
 
@@ -129,8 +130,8 @@ def test_legal_policy():
     assert "clean-room" not in disclaimer
     assert "15 U.S.C." not in disclaimer
     assert "Openbox window manager" in trademarks
-    assert "| 0.4.x | Yes |" in security
-    assert "| 0.2.x | No |" in security
+    assert "| 0.5.x | Yes |" in security
+    assert "| < 0.4.0 | No |" in security
     print("  Legal policy: ok")
 
 

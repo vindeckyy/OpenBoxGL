@@ -4,10 +4,9 @@
 
 | Version | Supported |
 | --- | --- |
-| 0.4.x | Yes |
-| 0.3.x | Best effort |
-| 0.2.x | No |
-| < 0.2.0 | No |
+| 0.5.x | Yes |
+| 0.4.x | Best effort |
+| < 0.4.0 | No |
 
 Security fixes are provided for the latest release on the `master` branch.
 
