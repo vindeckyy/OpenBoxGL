@@ -6,13 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-30
+
 ### Added
 
+- Steam Game Mode guest support for Steam Deck, Bazzite, and similar gamescope sessions. Big Box opens fullscreen while Steam retains Input, Quick Access Menu, and TDP controls.
 - Settings can remove all Steam-imported library entries at once. This keeps game files and media on disk.
+- Local rotating diagnostic logs with a Settings copy button. Request and auto-import failures include timestamps, uncaught crashes include stack traces, and tokens and passwords are redacted.
 
 ### Fixed
 
-- AppImage instructions now show the correct `--native` command for the Tk interface.
+- Session playtime and Gameyfin installs now use stable library identities after deletes or reorders. Gameyfin downloads stage safely and stream to disk.
+- Storefront and update failures now return readable errors instead of dropped connections or uncaught errors.
+- AppImage desktop launches now work through Gear Lever and desktop menus, and the AppImage instructions show the correct `--native` command for the Tk interface.
+- Artwork downloads now use the active LaunchBox CDN instead of the retired image URL that returns a redirect loop.
 
 ## [0.4.10] - 2026-07-30
 
@@ -177,7 +184,8 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.4.10...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.5.0
 [0.4.10]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.10
 [0.4.9]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.9
 [0.4.8]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.8

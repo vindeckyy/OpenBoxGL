@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from metadata import apply_game_metadata, build_database, search_games
+from metadata import IMAGE_URL, apply_game_metadata, build_database, search_games
 
 
 class ImageResponse(io.BytesIO):
@@ -33,13 +33,18 @@ def test():
         database = root / "metadata.db"
         build_database(package, database)
         assert search_games(database, "Real Game", "NES")[0]["database_id"] == 42
+        requests = []
+        def opener(request, **_):
+            requests.append(request.full_url)
+            return ImageResponse()
         game = apply_game_metadata(
             {"name":"Real Game", "path":"/real.rom"},
             database, 42, ["cover","screenshots"], root / "media",
-            opener=lambda *args, **kwargs: ImageResponse(),
+            opener=opener,
         )
         assert game["developer"] == "Studio" and Path(game["cover"]).is_file()
         assert len(game["screenshots"]) == 1
+        assert requests == [IMAGE_URL + "cover.png", IMAGE_URL + "shot.png"]
     print("metadata self-test: ok")
 
 

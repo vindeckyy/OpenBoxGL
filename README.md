@@ -17,7 +17,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.10"><img src="https://img.shields.io/badge/Release-v0.4.10-0052CC" alt="Release v0.4.10"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.5.0"><img src="https://img.shields.io/badge/Release-v0.5.0-0052CC" alt="Release v0.5.0"></a>
   <a href="PARITY.md"><img src="https://img.shields.io/badge/LaunchBox-Parity%20Matrix-555" alt="LaunchBox parity matrix"></a>
 </p>
 
@@ -181,6 +181,7 @@ The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md
 - Installed-only and owned-library filters in desktop and Big Box views
 - Game Discovery Center with recently added, never played, continue playing, highly rated, random picks, and short-session lists
 - Collections, saved filter presets with explorer facets, favorites, bulk edits, custom fields, ESRB filters, list view, platform categories, and Surprise Me random selection
+- Rotating local diagnostic log with Settings copy support for troubleshooting. Logs redact tokens and passwords, but may include game names and file paths.
 - Platform documents pane for manuals and reference files per platform
 - MAME and FinalBurn merged/split/non-merged set classification with BIOS awareness
 
@@ -280,7 +281,7 @@ To launch the Tk interface from the AppImage, pass `--native`:
 ./OpenBox-x86_64.AppImage --native
 ```
 
-Desktop integrators such as Gear Lever work with the AppImage. If an older build opened then never showed a window after integration, install **v0.4.10 or newer**, remove the old menu entry, and re-add the AppImage.
+Desktop integrators such as Gear Lever work with the AppImage. If an older build opened then never showed a window after integration, install **v0.5.0 or newer**, remove the old menu entry, and re-add the AppImage.
 
 ### System install
 

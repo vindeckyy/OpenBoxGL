@@ -15,6 +15,13 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="0.5.0" date="2026-07-30">
+      <description>
+        <p>Steam Game Mode guest support runs Big Box inside gamescope on Steam Deck and similar handhelds, while Steam keeps Input and Quick Access Menu controls. Settings can now remove all Steam-imported library entries at once without deleting game files or media.</p>
+        <p>Session playtime and Gameyfin installs track stable library identities after deletes or reorders. Gameyfin downloads stage safely, storefront failures return readable errors, and AppImage launches work through Gear Lever and desktop menus.</p>
+        <p>Local diagnostic logs record requests, failures, and uncaught crashes with token and password redaction. Metadata artwork downloads now use the active LaunchBox image CDN.</p>
+      </description>
+    </release>
     <release version="0.4.10" date="2026-07-30">
       <description>
         <p>AppImage fix for Gear Lever and desktop-menu launches: bundled library paths no longer break host xdg-open/browsers, the desktop entry uses a unique io.openbox.GameLauncher id, and openbox:// start boots the server when no instance is running.</p>

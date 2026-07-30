@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v0.4.10**, fixing AppImage launches through Gear Lever and other desktop integrators. If you skipped 0.4.8/0.4.9, that line also includes Steam Game Mode guest support and session/Gameyfin reliability fixes (see the CHANGELOG).
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v0.5.0**, with Steam Game Mode, library and AppImage reliability fixes, local diagnostic logs, Steam-import cleanup, and repaired LaunchBox artwork downloads (see the CHANGELOG).
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 

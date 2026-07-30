@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent
 PYTHON_MODULES = [
-    "openbox.py", "web_app.py", "importers.py", "arcade.py", "catalog.py",
+    "openbox.py", "web_app.py", "openbox_logging.py", "importers.py", "arcade.py", "catalog.py",
     "cloud_sync.py", "emulators.py", "retroachievements.py", "plugins.py",
     "plugin_runner.py", "metadata.py", "archives.py", "saves.py", "updates.py",
     "env_config.py", "parity_discovery.py", "parity_import.py", "parity_integrations.py",

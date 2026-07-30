@@ -11,7 +11,7 @@ from xml.etree import ElementTree
 
 
 DATABASE_URL = "https://gamesdb.launchbox-app.com/Metadata.zip"
-IMAGE_URL = "https://gamesdb.launchbox-app.com/games/images/"
+IMAGE_URL = "https://images.launchbox-app.com/"
 
 
 def normalized(text):

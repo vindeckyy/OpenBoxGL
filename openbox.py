@@ -2,6 +2,7 @@
 """Local-first Linux game library and launcher. Independent open-source software not affiliated with LaunchBox or Unbroken Software, LLC."""
 
 import json
+import logging
 import os
 import random
 import shlex
@@ -15,6 +16,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from archives import extract_game
+from openbox_logging import configure_logging
 
 CUSTOM_DATA_DIR = os.environ.get("OPENBOX_DATA_DIR")
 APP_DIR = Path(CUSTOM_DATA_DIR or Path.home() / ".local/share/openbox-game-launcher").expanduser()
@@ -141,6 +143,9 @@ class OpenBox(tk.Tk):
 
     def __init__(self):
         super().__init__()
+        self.report_callback_exception = lambda exc_type, exc_value, traceback: logging.getLogger("openbox").error(
+            "Unhandled Tk callback", exc_info=(exc_type, exc_value, traceback)
+        )
         self.title("OpenBox")
         self.geometry("1280x780")
         self.minsize(900, 580)
@@ -589,4 +594,5 @@ if __name__ == "__main__":
             raise AssertionError("empty paths must not launch")
         print("openbox self-test: ok")
     else:
+        configure_logging(APP_DIR)
         OpenBox().mainloop()

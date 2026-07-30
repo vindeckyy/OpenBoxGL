@@ -3,6 +3,7 @@
 
 import json
 import html
+import logging
 import mimetypes
 import os
 import re
@@ -28,6 +29,7 @@ from cloud_sync import sync_statistics
 from emulators import emulator_status, install_all_emulators, install_emulator, launch_emulator, recommendations_for_platform, update_all_emulators, update_emulator
 from importers import import_heroic, import_lutris, import_steam
 from metadata import apply_game_metadata, search_games, sync_database
+from openbox_logging import configure_logging, read_diagnostic_log
 from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, build_launch, discover_profiles, load_state, purge_demo_games, save_state
 from env_config import bootstrap_env
 from parity_discovery import discovery_lists, related_with_reasons
@@ -107,6 +109,7 @@ from updates import VERSION, check_update, install_desktop_entry, install_update
 
 ROOT = Path(__file__).parent
 TOKEN = secrets.token_urlsafe(24)
+LOGGER = logging.getLogger("openbox")
 STATE_LOCK = threading.Lock()
 PROCESS_LOCK = threading.Lock()
 RUNNING = {}
@@ -218,34 +221,34 @@ def auto_import_worker():
         for folder in folders:
             try:
                 import_folder_path(folder)
-            except (OSError, ValueError):
-                pass
+            except (OSError, ValueError) as error:
+                LOGGER.warning("Watched-folder import failed for %s: %s", folder, error)
         storefront = settings.get("storefront_auto_import", {})
         if storefront.get("steam"):
             try:
                 merge_imported_games(import_steam(), lambda game: ("steam", str(game.get("steam_app_id", ""))))
-            except (OSError, ValueError):
-                pass
+            except (OSError, ValueError) as error:
+                LOGGER.warning("Steam auto-import failed: %s", error)
         if storefront.get("heroic"):
             try:
                 merge_imported_games(
                     import_heroic(),
                     lambda game: ("heroic", str(game.get("source", "")), str(game.get("heroic_app_id", ""))),
                 )
-            except (OSError, ValueError):
-                pass
+            except (OSError, ValueError) as error:
+                LOGGER.warning("Heroic auto-import failed: %s", error)
         if storefront.get("lutris"):
             try:
                 merge_imported_games(import_lutris(), lambda game: ("lutris", str(game.get("lutris_id", ""))))
-            except (OSError, ValueError):
-                pass
+            except (OSError, ValueError) as error:
+                LOGGER.warning("Lutris auto-import failed: %s", error)
         if storefront.get("gameyfin"):
             try:
                 catalog, _providers = catalog_gameyfin(settings)
                 imported = catalog_entries_to_games(catalog)
                 merge_imported_games(imported, lambda game: ("gameyfin", str(game.get("gameyfin_id", ""))))
-            except (OSError, ValueError, GameyfinError):
-                pass
+            except (OSError, ValueError, GameyfinError) as error:
+                LOGGER.warning("Gameyfin auto-import failed: %s", error)
 
 
 def clean_commands(commands):
@@ -687,6 +690,10 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass
 
+    def send_response(self, code, message=None):
+        LOGGER.debug("HTTP %s %s -> %s", getattr(self, "command", "?"), urlparse(getattr(self, "path", "")).path, code)
+        super().send_response(code, message)
+
     def headers_common(self, content_type):
         self.send_header("Content-Type", content_type)
         self.send_header("Cache-Control", "no-store")
@@ -715,7 +722,7 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Request is too large.")
         return json.loads(self.rfile.read(length) or b"{}")
 
-    def do_GET(self):
+    def _do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path in ("/", "/index.html"):
             html = (ROOT / "index.html").read_bytes()
@@ -750,6 +757,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(403, {"error": "Unauthorized"})
                 return
             self.send_json(200, public_settings())
+            return
+        if parsed.path == "/api/log":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            self.send_json(200, {"log": read_diagnostic_log(DATA.parent)})
             return
         if parsed.path == "/api/update":
             if not self.authorized():
@@ -1228,7 +1241,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_json(404, {"error": "Not found"})
 
-    def do_POST(self):
+    def _do_POST(self):
         if not self.authorized():
             self.send_json(403, {"error": "Unauthorized"})
             return
@@ -1407,7 +1420,23 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.send_json(404, {"error": "Not found"})
         except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError, json.JSONDecodeError, GameyfinError, FileNotFoundError, RuntimeError, subprocess.SubprocessError) as error:
+            LOGGER.warning("Request %s failed: %s", urlparse(self.path).path, error)
             self.send_json(400, {"error": str(error)})
+
+    def _handle_request(self, method):
+        path = urlparse(self.path).path
+        LOGGER.debug("HTTP %s %s started", method, path)
+        try:
+            getattr(self, f"_{method}")()
+        except Exception:
+            LOGGER.exception("Unhandled HTTP %s %s", method, path)
+            self.send_json(500, {"error": "Unexpected server error. Copy the diagnostic log from Settings and include it in your report."})
+
+    def do_GET(self):
+        self._handle_request("do_GET")
+
+    def do_POST(self):
+        self._handle_request("do_POST")
 
     def launch(self, payload):
         self.send_json(200, {"ok": True, **start_game(int(payload["id"]))})
@@ -2638,6 +2667,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     bootstrap_env(DATA.parent)
+    configure_logging(DATA.parent)
+    LOGGER.info("OpenBox web UI starting")
     args = sys.argv[1:]
     if "--backup" in args:
         items = []

@@ -551,6 +551,7 @@
         <label class="field wide settings-field" data-setting="search watched folders cloud screensaver startup shutdown session history backup progress automation image group controller gamepad"><span>Search settings</span><input id="settingsSearch" class="settings-search" type="search" placeholder="Type to filter settings"></label>
         <label class="field wide settings-field" data-setting="watched folders import auto"><span>Automatically watched game folders, one absolute path per line</span><textarea id="watchFolders"></textarea></label>
         <div class="wide settings-field" data-setting="library cleanup remove steam imports"><button type="button" class="icon-button" id="removeSteamGames">Remove all imported Steam games</button><span class="description">Removes library entries only. Game files and media stay on disk.</span></div>
+        <div class="wide settings-field" data-setting="diagnostic support troubleshooting logs"><button type="button" class="icon-button" id="copyDiagnosticLog">Copy diagnostic log</button><span class="description">Review it before sharing because it can include game names and local file paths.</span></div>
         <label class="field wide settings-field" data-setting="cloud sync syncthing dropbox nextcloud"><span>Mounted Nextcloud, Syncthing, Dropbox, or other cloud folder for game-stat syncing</span><input id="cloudFolder"></label>
         <div class="wide settings-field" data-setting="cloud sync"><button type="button" class="icon-button" id="syncCloud">Sync statistics now</button><span class="description" id="cloudStatus"></span></div>
         <label class="field wide settings-field" data-setting="default image group viewing cover background screenshot"><span>Default image group</span><select id="defaultImageGroup"><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option></select></label>
@@ -1526,6 +1527,18 @@
         selectedId = null;
         await refresh();
         notify(`${result.removed} imported Steam game${result.removed === 1 ? '' : 's'} removed from library`);
+      } catch(error) { notify(error.message); }
+    };
+    $('copyDiagnosticLog').onclick = async () => {
+      try {
+        const result = await api('/api/log');
+        const copy = document.createElement('textarea');
+        copy.value = result.log;
+        document.body.append(copy);
+        copy.select();
+        document.execCommand('copy');
+        copy.remove();
+        notify('Diagnostic log copied. Review it before sharing.');
       } catch(error) { notify(error.message); }
     };
     $('syncCloud').onclick = async () => {

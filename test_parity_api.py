@@ -70,6 +70,17 @@ class ParityApiTests(unittest.TestCase):
         self.assertEqual(self.handler.send_json.call_args[0], (200, {"removed": 1}))
         self.assertEqual([game["name"] for game in load_state()["games"]], ["Manual Steam shortcut", "ROM"])
 
+    def test_diagnostic_log_route_returns_local_log(self):
+        from web_app import Handler, TOKEN
+
+        handler = object.__new__(Handler)
+        handler.path = "/api/log"
+        handler.headers = {"X-OpenBox-Token": TOKEN}
+        handler.send_json = mock.Mock()
+        with mock.patch("web_app.read_diagnostic_log", return_value="2026-07-30 DEBUG test message"):
+            Handler._do_GET(handler)
+        handler.send_json.assert_called_once_with(200, {"log": "2026-07-30 DEBUG test message"})
+
     def test_gameyfin_install_returns_before_download_finishes(self):
         import threading
         import time
