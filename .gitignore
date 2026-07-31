@@ -27,6 +27,7 @@ BUILD.md
 scripts/unpack_manual.py
 scripts/sync-ide-rules.sh
 .cursor/
+.freebuff
 
 # Puppeteer dependency for README screenshot capture
 scripts/node_modules/

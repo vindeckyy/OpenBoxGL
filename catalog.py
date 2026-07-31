@@ -56,7 +56,15 @@ def bulk_update(games, ids, changes):
             clean[field] = {str(key).strip(): str(val).strip() for key, val in value.items() if str(key).strip()}
         else:
             clean[field] = str(value).strip()
-    stable_indexes = {str(game.get("game_id")): index for index, game in enumerate(games) if game.get("game_id")}
+    stable_indexes = {}
+    for index, game in enumerate(games):
+        if game.get("game_id"):
+            stable_indexes[str(game["game_id"])] = index
+        aliases = game.get("legacy_game_ids", [])
+        if isinstance(aliases, list):
+            for alias in aliases:
+                if str(alias).strip():
+                    stable_indexes[str(alias)] = index
     selected = sorted({
         stable_indexes[str(value)] if str(value) in stable_indexes else int(value)
         for value in ids

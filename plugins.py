@@ -7,10 +7,12 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import os
 from datetime import datetime
 from pathlib import Path
 
 from archives import safe_zip_extract
+from backend_io import atomic_write_text
 
 
 HOOKS = {"before_launch", "after_session", "library"}
@@ -34,10 +36,7 @@ def load_plugin_state(directory):
 
 def save_plugin_state(directory, state):
     path = state_file(directory)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(state, indent=2))
-    temporary.replace(path)
+    atomic_write_text(path, json.dumps(state, indent=2) + "\n")
 
 
 def read_manifest(path):
@@ -82,6 +81,8 @@ def install_plugin(source, directory):
     with tempfile.TemporaryDirectory(dir=root.parent) as temporary:
         staging = Path(temporary) / "package"
         if source.is_dir():
+            if any(path.is_symlink() for path in source.rglob("*")):
+                raise ValueError("Plugin directories may not contain symlinks.")
             shutil.copytree(source, staging)
         else:
             staging.mkdir()
@@ -132,23 +133,35 @@ def run_plugins(directory, hook, payload):
             LOGGER.warning("Skipping plugin %s for %s because the payload is too large", manifest["id"], hook)
             continue
         try:
-            completed = subprocess.run(
-                [sys.executable, str(RUNNER), str(entry), hook],
-                input=encoded, capture_output=True, text=True, timeout=5,
-            )
+            plugin_env = os.environ.copy()
+            for key in ("PYTHONPATH", "PYTHONHOME", "LD_PRELOAD", "LD_LIBRARY_PATH"):
+                plugin_env.pop(key, None)
+            plugin_env["PYTHONNOUSERSITE"] = "1"
+            with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+                completed = subprocess.run(
+                    [sys.executable, str(RUNNER), str(entry), hook],
+                    input=encoded.encode("utf-8"), stdout=stdout_file, stderr=stderr_file,
+                    timeout=5, env=plugin_env, start_new_session=True,
+                )
+                stdout_file.seek(0)
+                stdout = stdout_file.read(MAX_PLUGIN_PAYLOAD + 1)
+                stderr_file.seek(0, 2)
+                stderr_file.seek(max(0, stderr_file.tell() - 400))
+                stderr = stderr_file.read().decode("utf-8", errors="replace")
         except (OSError, subprocess.SubprocessError) as error:
             LOGGER.warning("Plugin %s failed for %s: %s", manifest["id"], hook, error)
             continue
-        if len(completed.stdout.encode("utf-8")) > MAX_PLUGIN_PAYLOAD:
+        if len(stdout) > MAX_PLUGIN_PAYLOAD:
             LOGGER.warning("Ignoring oversized output from plugin %s", manifest["id"])
             continue
-        if completed.returncode == 0 and completed.stdout.strip():
+        output = stdout.decode("utf-8", errors="replace")
+        if completed.returncode == 0 and output.strip():
             try:
-                candidate = json.loads(completed.stdout)
+                candidate = json.loads(output)
                 if isinstance(candidate, dict):
                     result = candidate
             except json.JSONDecodeError:
                 LOGGER.warning("Ignoring invalid JSON from plugin %s", manifest["id"])
         elif completed.returncode:
-            LOGGER.warning("Plugin %s exited with status %s: %s", manifest["id"], completed.returncode, completed.stderr[-400:])
+            LOGGER.warning("Plugin %s exited with status %s: %s", manifest["id"], completed.returncode, stderr)
     return result

@@ -1,10 +1,13 @@
 """Granular library backups with rotation."""
 
 import json
+import os
 import shutil
 import zipfile
 from datetime import datetime
 from pathlib import Path
+
+from backend_io import atomic_copy_stream, atomic_write_text, fsync_directory
 
 
 BACKUP_ITEMS = {
@@ -15,6 +18,9 @@ BACKUP_ITEMS = {
     "themes": "themes",
     "extension_data": "extension-data",
 }
+MAX_BACKUP_MEMBERS = 50_000
+MAX_BACKUP_MEMBER_BYTES = 4 * 1024 * 1024 * 1024
+MAX_BACKUP_TOTAL_BYTES = 32 * 1024 * 1024 * 1024
 
 
 def games_running(running_map):
@@ -27,8 +33,7 @@ def settings_snapshot(state):
 
 def write_settings_file(data_dir, settings):
     path = Path(data_dir) / "settings.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(settings, indent=2))
+    atomic_write_text(path, json.dumps(settings, indent=2) + "\n")
 
 
 def read_settings_file(data_dir):
@@ -69,22 +74,32 @@ def create_backup(data_dir, state, items, keep=0, running_map=None):
     root = Path(data_dir)
     archive = backup_path(root)
     archive.parent.mkdir(parents=True, exist_ok=True)
+    temporary = archive.with_name(f".{archive.name}.tmp")
     manifest = {"items": selected, "created": datetime.now().isoformat(timespec="seconds")}
-    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as package:
-        package.writestr("manifest.json", json.dumps(manifest, indent=2))
-        if "settings" in selected:
-            package.writestr("settings.json", json.dumps(settings_snapshot(state), indent=2))
-        if "library" in selected:
-            package.writestr("library.json", json.dumps(state, indent=2))
-        for key in ("media", "plugins", "themes", "extension_data"):
-            if key not in selected:
-                continue
-            folder = root / BACKUP_ITEMS[key]
-            if not folder.exists():
-                continue
-            for path in folder.rglob("*"):
-                if path.is_file():
-                    package.write(path, f"{BACKUP_ITEMS[key]}/{path.relative_to(folder).as_posix()}")
+    try:
+        with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as package:
+            package.writestr("manifest.json", json.dumps(manifest, indent=2))
+            if "settings" in selected:
+                package.writestr("settings.json", json.dumps(settings_snapshot(state), indent=2))
+            if "library" in selected:
+                package.writestr("library.json", json.dumps(state, indent=2))
+            for key in ("media", "plugins", "themes", "extension_data"):
+                if key not in selected:
+                    continue
+                folder = root / BACKUP_ITEMS[key]
+                if not folder.exists():
+                    continue
+                if folder.is_symlink():
+                    raise ValueError(f"Backup source is a symlink: {folder}")
+                for path in folder.rglob("*"):
+                    if path.is_symlink():
+                        raise ValueError(f"Backup source contains a symlink: {path}")
+                    if path.is_file():
+                        package.write(path, f"{BACKUP_ITEMS[key]}/{path.relative_to(folder).as_posix()}")
+        os.replace(temporary, archive)
+        fsync_directory(archive.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
     if keep and keep > 0:
         rotate_backups(root / "backups", keep)
     return archive
@@ -103,8 +118,32 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None):
         raise ValueError("Close running games before restoring a backup.")
     selected = normalize_items(items) if items else None
     root = Path(data_dir)
+    if root.is_symlink():
+        raise ValueError("OpenBox data directory may not be a symlink.")
     try:
         with zipfile.ZipFile(archive_path) as package:
+            infos = package.infolist()
+            if len(infos) > MAX_BACKUP_MEMBERS:
+                raise ValueError("Backup contains too many files.")
+            total_bytes = 0
+            seen_names = set()
+            for info in infos:
+                name = info.filename.replace("\\", "/")
+                relative = Path(name)
+                if not name or "\x00" in name or relative.is_absolute() or ".." in relative.parts:
+                    raise ValueError("Backup contains an unsafe path.")
+                normalized = "/".join(part for part in relative.parts if part not in {"."})
+                if normalized in seen_names:
+                    raise ValueError("Backup contains duplicate entries.")
+                seen_names.add(normalized)
+                mode = (info.external_attr >> 16) & 0o170000
+                if mode in {0o120000, 0o060000}:
+                    raise ValueError("Backup links are not supported.")
+                if info.file_size > MAX_BACKUP_MEMBER_BYTES:
+                    raise ValueError("Backup member is too large.")
+                total_bytes += info.file_size
+                if total_bytes > MAX_BACKUP_TOTAL_BYTES:
+                    raise ValueError("Backup expands beyond the allowed size.")
             manifest = {}
             if "manifest.json" in package.namelist():
                 try:
@@ -119,15 +158,20 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None):
                 library_file = root / "library.json"
                 if library_file.is_file():
                     shutil.copy2(library_file, library_file.with_name("library.before-restore.json"))
-                library_file.write_bytes(package.read("library.json"))
+                with package.open("library.json") as source:
+                    atomic_copy_stream(source, library_file, mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
             if "settings" in restore_items and "settings.json" in package.namelist():
-                (root / "settings.json").write_bytes(package.read("settings.json"))
+                with package.open("settings.json") as source:
+                    atomic_copy_stream(source, root / "settings.json", mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
             for key in ("media", "plugins", "themes", "extension_data"):
                 if key not in restore_items:
                     continue
                 prefix = f"{BACKUP_ITEMS[key]}/"
                 members = [name for name in package.namelist() if name.startswith(prefix) and not name.endswith("/")]
-                target_root = (root / BACKUP_ITEMS[key]).resolve()
+                raw_root = root / BACKUP_ITEMS[key]
+                if raw_root.is_symlink():
+                    raise ValueError("Backup destination contains a symlink.")
+                target_root = raw_root.resolve()
                 target_root.mkdir(parents=True, exist_ok=True)
                 for member in members:
                     relative = member[len(prefix) :]
@@ -136,8 +180,11 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None):
                         target.relative_to(target_root)
                     except ValueError as error:
                         raise ValueError("Backup contains an unsafe path.") from error
+                    if any(parent.is_symlink() for parent in [target, *target.parents] if parent != target_root and parent.exists()):
+                        raise ValueError("Backup destination contains a symlink.")
                     target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes(package.read(member))
+                    with package.open(member) as source:
+                        atomic_copy_stream(source, target, mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
     except zipfile.BadZipFile as error:
         raise ValueError("Backup archive is invalid.") from error
     return restore_items

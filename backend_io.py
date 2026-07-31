@@ -7,11 +7,104 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 
 DEFAULT_MAX_DOWNLOAD = 64 * 1024 * 1024
 CHUNK_SIZE = 1024 * 1024
+MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+
+
+def validate_http_url(url: str) -> str:
+    parsed = urlparse(str(url).strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("Only absolute HTTP(S) URLs are supported.")
+    if parsed.username or parsed.password:
+        raise ValueError("URLs with embedded credentials are not supported.")
+    return parsed.geturl()
+
+
+def read_limited(response, max_bytes=MAX_RESPONSE_BYTES) -> bytes:
+    """Read a response without allowing an unbounded API payload into memory."""
+    declared = 0
+    headers = getattr(response, "headers", None)
+    if headers:
+        try:
+            declared = int(headers.get("Content-Length", "0"))
+        except (TypeError, ValueError):
+            declared = 0
+    if declared > max_bytes:
+        raise ValueError("The remote response is too large.")
+    chunks = []
+    total = 0
+    while True:
+        chunk = response.read(min(CHUNK_SIZE, max_bytes - total + 1))
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise ValueError("The remote response is too large.")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def fsync_directory(path: Path) -> None:
+    directory_fd = os.open(Path(path), os.O_RDONLY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
+def atomic_write_bytes(path: Path, data: bytes, *, mode=0o600) -> Path:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(fd, "wb") as output:
+            output.write(data)
+            output.flush()
+            os.fsync(output.fileno())
+        os.chmod(temporary, mode)
+        os.replace(temporary, path)
+        os.chmod(path, mode)
+        fsync_directory(path.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return path
+
+
+def atomic_write_text(path: Path, value: str, *, mode=0o600) -> Path:
+    return atomic_write_bytes(Path(path), str(value).encode("utf-8"), mode=mode)
+
+
+def atomic_copy_stream(source, path: Path, *, mode=0o600, max_bytes=None) -> Path:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temporary = Path(temporary_name)
+    total = 0
+    try:
+        with os.fdopen(fd, "wb") as output:
+            while True:
+                chunk = source.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if max_bytes is not None and total > max_bytes:
+                    raise ValueError("The file is larger than the allowed limit.")
+                output.write(chunk)
+            output.flush()
+            os.fsync(output.fileno())
+        os.chmod(temporary, mode)
+        os.replace(temporary, path)
+        os.chmod(path, mode)
+        fsync_directory(path.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return path
 
 
 def contained_path(path: Path, roots, *, must_exist=False) -> Path:
@@ -29,6 +122,9 @@ def safe_media_path(path: Path, data_root: Path) -> Path:
 
 
 def remove_file_if_safe(path: Path, data_root: Path) -> bool:
+    path = Path(path).expanduser()
+    if path.is_symlink():
+        raise ValueError(f"Refusing to delete a symlink: {path}")
     target = safe_media_path(path, data_root)
     if not target.is_file():
         return False
@@ -47,6 +143,7 @@ def download_file(
     headers=None,
     sha256="",
 ) -> Path:
+    url = validate_http_url(url)
     request = Request(url, headers={"User-Agent": "OpenBox/1", **(headers or {})})
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -54,14 +151,18 @@ def download_file(
     digest = hashlib.sha256()
     try:
         with opener(request, timeout=timeout) as response:
-            if response.headers and hasattr(response.headers, "get_content_type"):
-                content_type = response.headers.get_content_type()
+            status = getattr(response, "status", 200)
+            if status and int(status) >= 400:
+                raise ValueError(f"The remote server returned HTTP {status}.")
+            headers = getattr(response, "headers", {}) or {}
+            if hasattr(headers, "get_content_type"):
+                content_type = headers.get_content_type()
             else:
-                content_type = str(response.headers.get("Content-Type", "")).split(";", 1)[0] if response.headers else ""
+                content_type = str(headers.get("Content-Type", "")).split(";", 1)[0] if headers else ""
             if expected_types and not any(content_type.startswith(item) for item in expected_types):
                 raise ValueError(f"The remote server returned an unsupported content type: {content_type or 'unknown'}")
             try:
-                declared = int(response.headers.get("Content-Length", "0"))
+                declared = int(headers.get("Content-Length", "0"))
             except (TypeError, ValueError):
                 declared = 0
             if declared > max_bytes:
@@ -83,6 +184,7 @@ def download_file(
         if sha256 and digest.hexdigest().casefold() != str(sha256).casefold():
             raise ValueError("The downloaded file failed checksum verification.")
         os.replace(temporary_name, destination)
+        fsync_directory(destination.parent)
         temporary_name = None
     finally:
         if temporary_name:

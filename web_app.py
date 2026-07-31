@@ -26,7 +26,7 @@ from urllib.request import Request, urlopen
 from urllib.parse import parse_qs, urlparse
 
 from arcade import import_arcade
-from backend_io import download_file, remove_file_if_safe
+from backend_io import contained_path, download_file, read_limited, remove_file_if_safe
 from catalog import PROGRESS, apply_progress_automation, bulk_update, game_media_paths, related_game_ids
 from cloud_sync import sync_statistics
 from emulators import emulator_status, install_all_emulators, install_emulator, launch_emulator, recommendations_for_platform, update_all_emulators, update_emulator
@@ -34,7 +34,7 @@ from importers import import_heroic, import_lutris, import_steam
 from metadata import apply_game_metadata, search_games, sync_database
 from job_manager import JobManager
 from openbox_logging import configure_logging, read_diagnostic_log
-from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, build_launch, discover_profiles, load_state, purge_demo_games, recover_state as recover_library_state, save_state
+from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, build_launch, discover_profiles, load_state, purge_demo_games, recover_state as recover_library_state, save_state, update_state, update_state_with_result
 from state_store import StateCorruptError, secure_text_write
 from env_config import bootstrap_env
 from parity_discovery import discovery_lists, related_with_reasons
@@ -165,6 +165,24 @@ def probe_path(path, *, file_only=False):
     return result
 
 
+def safe_document_file(path):
+    candidate = Path(str(path or "")).expanduser()
+    if candidate.is_symlink():
+        raise ValueError("Symlinked documents are not supported.")
+    if not candidate.is_file():
+        raise FileNotFoundError(str(candidate))
+    return candidate
+
+
+def approved_backup_file(path):
+    candidate = Path(str(path or "")).expanduser()
+    if candidate.suffix.casefold() != ".zip":
+        raise ValueError("Backups must be ZIP archives.")
+    if candidate.is_symlink():
+        raise ValueError("Backup path may not be a symlink.")
+    return contained_path(candidate, [DATA.parent, DATA.parent / "backups"], must_exist=True)
+
+
 def game_identity(game):
     if game.get("steam_app_id"):
         return "steam", str(game["steam_app_id"])
@@ -191,13 +209,13 @@ def import_folder_path(folder, recommend=True, chosen_emulators=None):
         for item in candidates:
             platform = item.get("platform", "")
             recommendations.setdefault(platform, recommend_emulators(platform))
-    with STATE_LOCK:
-        state = load_state()
+    result = {"additions": [], "settings": {}, "recommendations": recommendations}
+
+    def mutate(state):
         existing = {game.get("path") for game in state["games"]}
         settings = state.get("settings", {})
         additions = []
-        if not recommend:
-            recommendations = {}
+        selected_recommendations = recommendations if recommend else {}
         for item in candidates:
             if item["path"] in existing:
                 continue
@@ -205,33 +223,41 @@ def import_folder_path(folder, recommend=True, chosen_emulators=None):
             additions.append(item)
             if recommend:
                 platform = item.get("platform", "")
-                recommendations.setdefault(platform, recommend_emulators(platform))
+                selected_recommendations.setdefault(platform, recommend_emulators(platform))
         if additions:
             state["games"].extend(additions)
-            save_state(state)
-            media_types = media_types_from_settings(settings)
-            limit = int(settings.get("media_download_limit", 0) or 0)
-            queue_path = DATA.parent / "media-queue.json"
-            queued = 0
-            for game in additions:
-                if limit and queued >= limit:
-                    break
-                if game.get("launchbox_db_id"):
-                    enqueue_media_job(queue_path, {
-                        "name": game.get("name"),
-                        "path": game.get("path"),
-                        "media": sorted(media_types),
-                    })
-                    queued += 1
-    return len(additions), len(candidates), recommendations
+        result.update({"additions": additions, "settings": dict(settings), "recommendations": selected_recommendations})
+
+    committed = update_state(mutate)
+    added_paths = {str(game.get("path")) for game in result["additions"]}
+    result["additions"] = [
+        game for game in committed["games"] if str(game.get("path")) in added_paths
+    ]
+    media_types = media_types_from_settings(result["settings"])
+    limit = int(result["settings"].get("media_download_limit", 0) or 0)
+    queue_path = DATA.parent / "media-queue.json"
+    queued = 0
+    for game in result["additions"]:
+        if limit and queued >= limit:
+            break
+        if game.get("launchbox_db_id"):
+            enqueue_media_job(queue_path, {
+                "name": game.get("name"),
+                "path": game.get("path"),
+                "game_id": game.get("game_id"),
+                "media": sorted(media_types),
+            })
+            queued += 1
+    return len(result["additions"]), len(candidates), result["recommendations"]
 
 
 def merge_imported_games(imported, identity_fn):
-    with STATE_LOCK:
-        state = load_state()
-        imported = filter_imported(imported, state)
+    result = {"added": 0, "found": 0}
+
+    def mutate(state):
+        filtered = filter_imported(imported, state)
         existing = {identity_fn(game) for game in state["games"]}
-        new_games = [game for game in imported if identity_fn(game) not in existing]
+        new_games = [game for game in filtered if identity_fn(game) not in existing]
         timestamp = datetime.now().isoformat(timespec="seconds")
         default_progress = state.get("settings", {}).get("progress_on_first_play", "Playing")
         for game in new_games:
@@ -240,13 +266,17 @@ def merge_imported_games(imported, identity_fn):
                 game["progress"] = default_progress
             normalize_video_fields(game)
         state["games"].extend(new_games)
-        save_state(state)
-    return len(new_games), len(imported)
+        result.update({"added": len(new_games), "found": len(filtered)})
+
+    update_state(mutate)
+    return result["added"], result["found"]
 
 
-def auto_import_worker():
+def auto_import_worker(cancel_event=None):
     delay = 10
     while not WATCH_STOP.wait(delay):
+        if cancel_event and cancel_event.is_set():
+            return
         try:
             state = load_state()
         except Exception as error:
@@ -453,6 +483,12 @@ def public_state():
     }
 
 
+def transact_state(mutator):
+    """Run one read-modify-write transaction under the local and process lock."""
+    with STATE_LOCK:
+        return update_state_with_result(mutator)
+
+
 def session_event(kind, launch_id, game_name):
     global EVENT_SEQUENCE
     with PROCESS_LOCK:
@@ -475,7 +511,11 @@ def resolve_library_game(state, identity, fallback_index=None):
     stable_id = str(identity.get("stable_game_id") or identity.get("game_id") or "").strip()
     if stable_id:
         for game in games:
-            if str(game.get("game_id") or "") == stable_id:
+            aliases = game.get("legacy_game_ids", [])
+            if (
+                str(game.get("game_id") or "") == stable_id
+                or isinstance(aliases, list) and stable_id in {str(value) for value in aliases}
+            ):
                 return game
     for key in ("gameyfin_id", "steam_app_id", "heroic_app_id", "lutris_id"):
         value = str(identity.get(key) or "").strip()
@@ -517,7 +557,11 @@ def game_from_payload(state, payload):
     games = state.get("games") or []
     if stable_id:
         for game in games:
-            if str(game.get("game_id") or "") == stable_id:
+            aliases = game.get("legacy_game_ids", [])
+            if (
+                str(game.get("game_id") or "") == stable_id
+                or isinstance(aliases, list) and stable_id in {str(value) for value in aliases}
+            ):
                 return game
         raise IndexError("Game not found")
     if payload.get("id") is None:
@@ -550,8 +594,8 @@ def finish_session(launch_id, game_index, started, process):
         "lutris_id": running_snapshot.get("lutris_id", ""),
         "gameyfin_id": running_snapshot.get("gameyfin_id", ""),
     }
+    state = load_state()
     with STATE_LOCK:
-        state = load_state()
         settings = copy.deepcopy(state.get("settings", {}))
         game = resolve_library_game(state, identity, fallback_index=game_index) or {}
         game_snapshot = copy.deepcopy(game)
@@ -575,8 +619,9 @@ def finish_session(launch_id, game_index, started, process):
         except (OSError, ValueError):
             pass
 
-    with STATE_LOCK:
-        state = load_state()
+    session_result = {"game_name": original_game_name, "session": {}}
+
+    def mutate(state):
         settings = state.get("settings", {})
         game = resolve_library_game(state, identity, fallback_index=game_index)
         if game is not None:
@@ -597,7 +642,10 @@ def finish_session(launch_id, game_index, started, process):
         if settings.get("track_session_history", True):
             state["history"].append(session)
             state["history"][:] = state["history"][-500:]
-        save_state(state)
+        session_result.update({"game_name": game_name, "session": session})
+    update_state(mutate)
+    game_name = session_result["game_name"]
+    session = session_result["session"]
     with PROCESS_LOCK:
         running = RUNNING.pop(launch_id, {})
         PROCESSES.pop(launch_id, None)
@@ -614,7 +662,7 @@ def finish_session(launch_id, game_index, started, process):
         if target is not None:
             index = state["games"].index(target)
             try:
-                start_game(index)
+                start_game(index, stable_game_id=target.get("game_id", ""))
             except (OSError, ValueError, IndexError):
                 pass
 
@@ -639,7 +687,7 @@ def update_steam_metadata(game):
         headers={"User-Agent": "OpenBox/1"},
     )
     with urlopen(request, timeout=15) as response:
-        payload = json.load(response)
+        payload = json.loads(read_limited(response, 4 * 1024 * 1024))
     record = payload.get(app_id, {})
     if not record.get("success"):
         raise ValueError("Steam did not return metadata for this game.")
@@ -667,13 +715,18 @@ def update_steam_metadata(game):
             pass
 
 
-def start_game(index):
-    with STATE_LOCK:
-        state = load_state()
-        if index < 0 or index >= len(state["games"]):
+def start_game(index=None, stable_game_id=""):
+    state = load_state()
+    if stable_game_id:
+        selected = resolve_library_game(state, {"stable_game_id": stable_game_id}, fallback_index=index)
+        if selected is None:
             raise IndexError("Game not found")
-        game = copy.deepcopy(state["games"][index])
-        profiles = dict(state["profiles"])
+        index = state["games"].index(selected)
+    elif index is None or index < 0 or index >= len(state["games"]):
+        raise IndexError("Game not found")
+    game = copy.deepcopy(state["games"][index])
+    stable_game_id = str(game.get("game_id") or stable_game_id)
+    profiles = dict(state["profiles"])
     args, cwd = build_launch(game, profiles)
     if not os.environ.get("OPENBOX_SAFE_MODE"):
         result = run_plugins(DATA.parent / "plugins", "before_launch", {"game": game, "args": args, "cwd": cwd})
@@ -690,18 +743,19 @@ def start_game(index):
     started = datetime.now()
     launch_id = secrets.token_urlsafe(8)
     stable_game_id = str(game.get("game_id") or "")
-    with STATE_LOCK:
-        state = load_state()
+    entry = {}
+    missing = {"value": False}
+
+    def mutate(state):
         current = resolve_library_game(state, {"stable_game_id": stable_game_id}, fallback_index=index)
         if current is None:
-            process.terminate()
-            raise IndexError("Game was removed while it was launching")
+            missing["value"] = True
+            return
         current["last_played"] = started.isoformat(timespec="seconds")
         current["play_count"] = current.get("play_count", 0) + 1
         if not current.get("progress") and state.get("settings", {}).get("progress_on_first_play", "Playing"):
             current["progress"] = state.get("settings", {}).get("progress_on_first_play", "Playing")
-        save_state(state)
-        entry = {
+        entry.update({
             "launch_id": launch_id,
             "game_id": index,
             "stable_game_id": stable_game_id,
@@ -714,7 +768,14 @@ def start_game(index):
             "started": started.isoformat(timespec="seconds"),
             "pid": process.pid,
             "paused": False,
-        }
+        })
+    update_state(mutate)
+    if missing["value"]:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except (OSError, ProcessLookupError):
+            process.terminate()
+        raise IndexError("Game was removed while it was launching")
     with PROCESS_LOCK:
         RUNNING[launch_id] = entry
         PROCESSES[launch_id] = process
@@ -765,13 +826,25 @@ def control_game_session(launch_id, action):
 
 
 def sync_cloud():
-    with STATE_LOCK:
-        state = load_state()
-        folder = state.get("settings", {}).get("cloud_folder", "")
-        if not folder:
-            raise ValueError("Configure a mounted cloud sync folder first.")
-        result = sync_statistics(state, folder)
-        save_state(state)
+    state = load_state()
+    folder = state.get("settings", {}).get("cloud_folder", "")
+    if not folder:
+        raise ValueError("Configure a mounted cloud sync folder first.")
+    working_state = copy.deepcopy(state)
+    result = sync_statistics(working_state, folder)
+
+    def mutate(current):
+        source_by_id = {str(game.get("game_id")): game for game in working_state.get("games", [])}
+        for game in current.get("games", []):
+            source = source_by_id.get(str(game.get("game_id")))
+            if not source:
+                continue
+            for key in ("play_count", "playtime_seconds", "last_played", "progress", "rating", "favorite"):
+                if key in source:
+                    game[key] = source[key]
+        current.setdefault("settings", {})["last_cloud_sync"] = result["synced_at"]
+
+    update_state(mutate)
     return result
 
 
@@ -1143,9 +1216,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 game = game_from_query(load_state(), query)
                 document = game.get("documents", [])[int(query["index"][0])]
-                path = Path(document["path"])
-                if not path.is_file():
-                    raise FileNotFoundError
+                path = safe_document_file(document["path"])
                 self.send_response(200)
                 self.headers_common(mimetypes.guess_type(path.name)[0] or "application/octet-stream")
                 safe_name = re.sub(r'[\r\n"]', "_", path.name)
@@ -1251,9 +1322,7 @@ class Handler(BaseHTTPRequestHandler):
                 platform = query["platform"][0]
                 index = int(query["index"][0])
                 document = load_state().get("settings", {}).get("platform_documents", {}).get(platform, [])[index]
-                path = Path(document["path"])
-                if not path.is_file():
-                    raise FileNotFoundError
+                path = safe_document_file(document["path"])
                 self.send_response(200)
                 self.headers_common(mimetypes.guess_type(path.name)[0] or "application/octet-stream")
                 safe_name = re.sub(r'[\r\n"]', "_", path.name)
@@ -1599,11 +1668,12 @@ class Handler(BaseHTTPRequestHandler):
         if payload.get("id") is None and not payload.get("game_id"):
             raise ValueError("Game id is required.")
         legacy_id = int(payload["id"]) if payload.get("id") is not None else int(payload.get("legacy_id", 0))
-        if payload.get("game_id"):
+        stable_game_id = str(payload.get("game_id") or "").strip()
+        if stable_game_id:
             state = load_state()
             game = game_from_payload(state, payload)
             legacy_id = state["games"].index(game)
-        self.send_json(200, {"ok": True, **start_game(legacy_id)})
+        self.send_json(200, {"ok": True, **start_game(legacy_id, stable_game_id=stable_game_id)})
 
     def control_session(self, payload):
         launch_id = str(payload.get("launch_id", ""))
@@ -1611,12 +1681,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, control_game_session(launch_id, action))
 
     def favorite(self, payload):
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             game = game_from_payload(state, payload)
             game["favorite"] = not game.get("favorite", False)
-            save_state(state)
-        self.send_json(200, {"favorite": game["favorite"]})
+            return game["favorite"]
+        _, favorite = transact_state(mutate)
+        self.send_json(200, {"favorite": favorite})
 
     def save_game(self, payload):
         source = payload.get("game", {})
@@ -1665,8 +1735,7 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Name is required.")
         if not game.get("path") or not Path(game["path"]).exists():
             raise ValueError("Path must point to an existing local file.")
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             if payload.get("id") is None and not payload.get("game_id"):
                 game["added_at"] = datetime.now().isoformat(timespec="seconds")
                 state["games"].append(game)
@@ -1674,38 +1743,39 @@ class Handler(BaseHTTPRequestHandler):
                 existing = game_from_payload(state, payload)
                 game["game_id"] = existing.get("game_id", game.get("game_id", ""))
                 existing.update(game)
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"ok": True})
 
     def bulk_edit(self, payload):
-        with STATE_LOCK:
-            state = load_state()
-            changed = bulk_update(state["games"], payload.get("ids"), payload.get("changes"))
-            save_state(state)
+        def mutate(state):
+            return bulk_update(state["games"], payload.get("ids"), payload.get("changes"))
+        _, changed = transact_state(mutate)
         self.send_json(200, {"updated": changed})
 
     def delete_game(self, payload):
         delete_media = bool(payload.get("delete_media"))
-        with STATE_LOCK:
-            state = load_state()
+        media_paths = []
+        def mutate(state):
             game = game_from_payload(state, payload)
-            state["games"].remove(game)
             if delete_media:
-                for path in game_media_paths(game):
-                    try:
-                        remove_file_if_safe(Path(path), DATA.parent)
-                    except (OSError, ValueError):
-                        pass
-            save_state(state)
-        self.send_json(200, {"removed": game.get("name", "")})
+                media_paths.extend(game_media_paths(game))
+            state["games"].remove(game)
+            return game.get("name", "")
+        _, removed = transact_state(mutate)
+        if delete_media:
+            for path in media_paths:
+                try:
+                    remove_file_if_safe(Path(path), DATA.parent)
+                except (OSError, ValueError):
+                    pass
+        self.send_json(200, {"removed": removed})
 
     def delete_steam_games(self, payload):
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             games = state["games"]
             state["games"] = [game for game in games if str(game.get("source", "")).casefold() != "steam"]
-            removed = len(games) - len(state["games"])
-            save_state(state)
+            return len(games) - len(state["games"])
+        _, removed = transact_state(mutate)
         self.send_json(200, {"removed": removed})
 
     @staticmethod
@@ -1774,21 +1844,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def import_steam_games(self):
         imported = import_steam()
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             existing = {str(game.get("steam_app_id")) for game in state["games"] if game.get("steam_app_id")}
             new_games = [game for game in imported if game["steam_app_id"] not in existing]
             timestamp = datetime.now().isoformat(timespec="seconds")
             for game in new_games:
                 game["added_at"] = timestamp
             state["games"].extend(new_games)
-            save_state(state)
-        self.send_json(200, {"added": len(new_games), "found": len(imported)})
+            return len(new_games)
+        _, added = transact_state(mutate)
+        self.send_json(200, {"added": added, "found": len(imported)})
 
     def import_heroic_games(self):
         imported = import_heroic()
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             existing = {
                 (game.get("source"), str(game.get("heroic_app_id")))
                 for game in state["games"] if game.get("heroic_app_id")
@@ -1798,21 +1867,22 @@ class Handler(BaseHTTPRequestHandler):
             for game in new_games:
                 game["added_at"] = timestamp
             state["games"].extend(new_games)
-            save_state(state)
-        self.send_json(200, {"added": len(new_games), "found": len(imported)})
+            return len(new_games)
+        _, added = transact_state(mutate)
+        self.send_json(200, {"added": added, "found": len(imported)})
 
     def import_lutris_games(self):
         imported = import_lutris()
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             existing = {str(game.get("lutris_id")) for game in state["games"] if game.get("lutris_id")}
             new_games = [game for game in imported if game["lutris_id"] not in existing]
             timestamp = datetime.now().isoformat(timespec="seconds")
             for game in new_games:
                 game["added_at"] = timestamp
             state["games"].extend(new_games)
-            save_state(state)
-        self.send_json(200, {"added": len(new_games), "found": len(imported)})
+            return len(new_games)
+        _, added = transact_state(mutate)
+        self.send_json(200, {"added": added, "found": len(imported)})
 
     def import_arcade_games(self, payload):
         imported = import_arcade(
@@ -1821,8 +1891,7 @@ class Handler(BaseHTTPRequestHandler):
             str(payload.get("command", "")),
             str(payload.get("source", "MAME")),
         )
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             existing = {
                 (game.get("source"), str(game.get("rom_name")))
                 for game in state["games"] if game.get("rom_name")
@@ -1832,19 +1901,19 @@ class Handler(BaseHTTPRequestHandler):
             for game in new_games:
                 game["added_at"] = timestamp
             state["games"].extend(new_games)
-            save_state(state)
+            return len(new_games)
+        _, added = transact_state(mutate)
         counts = {kind: sum(game["set_type"] == kind for game in imported) for kind in ("parent", "merged", "split", "non-merged")}
-        self.send_json(200, {"added": len(new_games), "found": len(imported), "sets": counts})
+        self.send_json(200, {"added": added, "found": len(imported), "sets": counts})
 
     def steam_metadata(self, payload):
         state = load_state()
         target = copy.deepcopy(game_from_payload(state, payload))
         update_steam_metadata(target)
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             game = game_from_payload(state, {"game_id": target.get("game_id"), **payload})
             game.update(target)
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"ok": True})
 
     def sync_metadata(self):
@@ -1884,10 +1953,9 @@ class Handler(BaseHTTPRequestHandler):
             region_priority=load_state().get("settings", {}).get("region_priority"),
         )
         changes = {key:value for key,value in updated.items() if original.get(key) != value}
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             game_from_payload(state, {"game_id": stable_game_id}).update(changes)
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"updated":sorted(changes)})
 
     def bulk_media(self, payload):
@@ -1926,10 +1994,9 @@ class Handler(BaseHTTPRequestHandler):
                     )
                     changes = {key:value for key,value in updated.items() if original.get(key) != value}
                     if changes:
-                        with STATE_LOCK:
-                            state = load_state()
+                        def mutate(state):
                             game_from_payload(state, {"game_id": stable_id}).update(changes)
-                            save_state(state)
+                        transact_state(mutate)
                         updated_count += 1
                 except (OSError, ValueError, sqlite3.Error) as error:
                     errors.append(f"{original.get('name', stable_id)}: {error}")
@@ -1950,10 +2017,9 @@ class Handler(BaseHTTPRequestHandler):
             for platform, command in profiles.items()
             if str(platform).strip() and str(command).strip()
         }
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             state["profiles"] = clean
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"saved": len(clean)})
 
     def recover_state(self):
@@ -2127,8 +2193,7 @@ class Handler(BaseHTTPRequestHandler):
                 "progress_on_first_play": progress_on_first_play,
                 "auto_close_store_clients": bool(merged.get("auto_close_store_clients", False)),
         }
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             settings = state.setdefault("settings", {})
             incoming_keys = {
                 key for key, value in payload.items()
@@ -2137,7 +2202,7 @@ class Handler(BaseHTTPRequestHandler):
             for key, value in normalized_settings.items():
                 if key in incoming_keys or key not in settings:
                     settings[key] = value
-            save_state(state)
+        state = transact_state(mutate)[0]
         self.send_json(200, public_settings(state))
 
     def save_image_group(self, payload):
@@ -2148,8 +2213,7 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Unknown image group.")
         if scope != "global" and (not name or len(name) > 200):
             raise ValueError("A platform or playlist is required.")
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             settings = state.setdefault("settings", {})
             if scope == "global":
                 settings["image_group"] = "cover" if group == "default" else group
@@ -2159,7 +2223,7 @@ class Handler(BaseHTTPRequestHandler):
                     mappings.pop(name, None)
                 else:
                     mappings[name] = group
-            save_state(state)
+        state = transact_state(mutate)[0]
         self.send_json(200, public_settings(state))
 
     def install_emulator(self, payload):
@@ -2173,32 +2237,35 @@ class Handler(BaseHTTPRequestHandler):
         def worker():
             try:
                 profiles = install_emulator(app_id)
-                with STATE_LOCK:
-                    state = load_state()
+                def mutate(state):
                     for platform, command in profiles.items():
                         state["profiles"].setdefault(platform, command)
-                    save_state(state)
+                transact_state(mutate)
                 job = {"state": "done", "profiles": profiles}
             except (OSError, ValueError, subprocess.SubprocessError) as error:
                 job = {"state": "error", "error": str(error)}
             with PROCESS_LOCK:
                 INSTALLS[app_id] = job
 
-        threading.Thread(target=worker, daemon=True).start()
+        JOB_MANAGER.submit(f"emulator-install:{app_id}", worker)
         self.send_json(202, {"state": "installing"})
 
     def install_all_emulators(self):
         def worker():
-            result = install_all_emulators()
+            try:
+                result = install_all_emulators()
+                job = {"state": "done", **result}
+            except (OSError, ValueError, subprocess.SubprocessError) as error:
+                job = {"state": "error", "error": str(error)}
             with PROCESS_LOCK:
-                INSTALLS["__all__"] = {"state": "done", **result}
+                INSTALLS["__all__"] = job
 
         with PROCESS_LOCK:
             if INSTALLS.get("__all__", {}).get("state") == "installing":
                 self.send_json(200, {"state": "installing"})
                 return
             INSTALLS["__all__"] = {"state": "installing"}
-        threading.Thread(target=worker, daemon=True).start()
+        JOB_MANAGER.submit("emulator-install-all", worker)
         self.send_json(202, {"state": "installing"})
 
     def open_emulator(self, payload):
@@ -2240,12 +2307,11 @@ class Handler(BaseHTTPRequestHandler):
         game = copy.deepcopy(game_from_payload(state, payload))
         stable_game_id = game.get("game_id")
         game_id, digest = match_ra_game(game, credentials, DATA.parent / "cache/retroachievements")
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             target = game_from_payload(state, {"game_id": stable_game_id})
             target["ra_game_id"] = str(game_id)
             target["ra_hash"] = digest
-            save_state(state)
+        transact_state(mutate)
         progress = ra_game_progress(game_id, credentials)
         progress["game_id"] = game_id
         progress = enhanced_ra_profile(progress, credentials)
@@ -2253,41 +2319,37 @@ class Handler(BaseHTTPRequestHandler):
 
     def bulk_wizard(self, payload):
         changes = bulk_wizard_changes(payload.get("changes", {}))
-        with STATE_LOCK:
-            state = load_state()
-            changed = bulk_update(state["games"], payload.get("ids"), changes)
-            save_state(state)
+        def mutate(state):
+            return bulk_update(state["games"], payload.get("ids"), changes)
+        _, changed = transact_state(mutate)
         self.send_json(200, {"updated": changed, "fields": list(changes.keys())})
 
     def apply_media_pack_route(self, payload):
         pack_id = str(payload.get("id", "")).strip()
-        with STATE_LOCK:
-            state = load_state()
-            pack = apply_media_pack(state, pack_id)
-            save_state(state)
+        def mutate(state):
+            return apply_media_pack(state, pack_id)
+        state, pack = transact_state(mutate)
         self.send_json(200, {"pack": pack, "settings": public_settings(state)})
 
     def download_trailer(self, payload):
         state = load_state()
         target = copy.deepcopy(game_from_payload(state, payload))
         path = download_steam_trailer(target, DATA.parent / "media")
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"video_trailer": path})
 
     def download_gog_route(self, payload):
         state = load_state()
         target = copy.deepcopy(game_from_payload(state, payload))
         download_gog_media(target, DATA.parent / "media")
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)
-            save_state(state)
-        self.send_json(200, {"cover": game.get("cover", ""), "background": game.get("background", "")})
+        transact_state(mutate)
+        self.send_json(200, {"cover": target.get("cover", ""), "background": target.get("background", "")})
 
     def bigbox_mode_switch(self, payload):
         entering = bool(payload.get("entering"))
@@ -2354,12 +2416,11 @@ class Handler(BaseHTTPRequestHandler):
         path = Path(str(payload.get("path", ""))).expanduser()
         if not path.exists():
             raise FileNotFoundError("Save path does not exist.")
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             paths = game_from_payload(state, payload).setdefault("save_paths", [])
             if str(path) not in paths:
                 paths.append(str(path))
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"path":str(path)})
 
     def select_theme(self, payload):
@@ -2367,8 +2428,7 @@ class Handler(BaseHTTPRequestHandler):
         platform = str(payload.get("platform", "")).strip()
         if name and not (DATA.parent / "themes" / f"{Path(name).stem}.css").is_file():
             raise FileNotFoundError("Theme not found.")
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             settings = state.setdefault("settings", {})
             if platform:
                 mappings = settings.setdefault("theme_by_platform", {})
@@ -2378,7 +2438,7 @@ class Handler(BaseHTTPRequestHandler):
                     mappings.pop(platform, None)
             else:
                 settings["theme"] = name
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"selected":name, "platform":platform})
 
     def import_theme(self, payload):
@@ -2400,78 +2460,68 @@ class Handler(BaseHTTPRequestHandler):
             for key in ("platform", "view", "query")
             if str(rules.get(key, "")).strip()
         }
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             playlists = state.setdefault("playlists", [])
             existing = next((item for item in playlists if item.get("name") == name), None)
             if existing:
                 existing["rules"] = clean
             else:
                 playlists.append({"name": name, "rules": clean})
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"saved": name})
 
     def delete_playlist(self, payload):
         name = str(payload.get("name", "")).strip()
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             state["playlists"] = [item for item in state.get("playlists", []) if item.get("name") != name]
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"deleted": name})
 
     def save_filter_preset(self, payload):
         name = str(payload.get("name", "")).strip()
         rules = payload.get("rules", {})
         bigbox_quick = bool(payload.get("bigbox_quick", False))
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             save_preset(state, name, rules, bigbox_quick=bigbox_quick)
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"saved": name})
 
     def delete_filter_preset(self, payload):
         name = str(payload.get("name", "")).strip()
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             if not delete_preset(state, name):
                 raise ValueError("Preset not found.")
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"deleted": name})
 
     def add_import_exclusion(self, payload):
         source = str(payload.get("source", "")).strip()
         external_id = str(payload.get("external_id", "")).strip()
         heroic_source = str(payload.get("heroic_source", "")).strip()
-        with STATE_LOCK:
-            state = load_state()
-            entry = add_exclusion(state, source, external_id, heroic_source=heroic_source)
-            save_state(state)
+        def mutate(state):
+            return add_exclusion(state, source, external_id, heroic_source=heroic_source)
+        _, entry = transact_state(mutate)
         self.send_json(200, {"exclusion": entry})
 
     def remove_import_exclusion(self, payload):
         source = str(payload.get("source", "")).strip()
         external_id = str(payload.get("external_id", "")).strip()
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             remove_exclusion(state, source, external_id)
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"removed": True})
 
     def create_library_backup(self, payload):
         items = payload.get("items", ["library", "settings"])
         keep = int(payload.get("keep", 0))
-        with STATE_LOCK:
-            state = load_state()
-            archive = create_backup(DATA.parent, state, items, keep=keep, running_map=RUNNING)
+        state = load_state()
+        archive = create_backup(DATA.parent, state, items, keep=keep, running_map=RUNNING)
         self.send_json(200, {"archive": str(archive), "name": archive.name})
 
     def restore_library_backup(self, payload):
-        archive = Path(str(payload.get("path", ""))).expanduser()
+        archive = approved_backup_file(payload.get("path", ""))
         items = payload.get("items")
-        if not archive.is_file():
-            raise FileNotFoundError("Backup archive not found.")
-        with STATE_LOCK:
-            restored = restore_backup(archive, DATA.parent, items=items, running_map=RUNNING)
+        restored = restore_backup(archive, DATA.parent, items=items, running_map=RUNNING)
         self.send_json(200, {"restored": restored})
 
     def scan_emulator_folder_route(self, payload):
@@ -2484,22 +2534,23 @@ class Handler(BaseHTTPRequestHandler):
         folder = str(payload.get("folder", "")).strip()
         emulator_id = str(payload.get("emulator_id", "")).strip()
         auto_update = bool(payload.get("auto_update", False))
-        with STATE_LOCK:
-            state = load_state()
-            entry = save_scan_config(state, folder, emulator_id, auto_update=auto_update)
-            save_state(state)
+        def mutate(state):
+            return save_scan_config(state, folder, emulator_id, auto_update=auto_update)
+        _, entry = transact_state(mutate)
         self.send_json(200, {"config": entry})
 
     def apply_igdb_metadata(self, payload):
-        game_id = int(payload["id"])
         igdb_id = int(payload["igdb_id"])
+        state = load_state()
+        original = copy.deepcopy(game_from_payload(state, payload))
+        stable_game_id = str(original.get("game_id") or "")
         metadata = fetch_igdb_game(igdb_id)
-        with STATE_LOCK:
-            state = load_state()
-            game = state["games"][game_id]
+        def mutate(state):
+            game = game_from_payload(state, {"game_id": stable_game_id})
             apply_igdb_metadata(game, metadata)
-            save_state(state)
-        self.send_json(200, {"applied": True, "game": game.get("name", "")})
+            return game.get("name", "")
+        _, name = transact_state(mutate)
+        self.send_json(200, {"applied": True, "game": name})
 
     def health(self):
         state = load_state()
@@ -2536,8 +2587,7 @@ class Handler(BaseHTTPRequestHandler):
         })
 
     def dedupe(self):
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             seen, kept, removed = set(), [], []
             for game in state["games"]:
                 identity = game_identity(game)
@@ -2547,7 +2597,8 @@ class Handler(BaseHTTPRequestHandler):
                     seen.add(identity)
                     kept.append(game)
             state["games"] = kept
-            save_state(state)
+            return removed
+        _, removed = transact_state(mutate)
         self.send_json(200, {"removed": removed})
 
     def _merge_imported_games(self, imported, identity_fn):
@@ -2571,7 +2622,7 @@ class Handler(BaseHTTPRequestHandler):
             with PROCESS_LOCK:
                 INSTALLS[f"update:{app_id}"] = job
 
-        threading.Thread(target=worker, daemon=True).start()
+        JOB_MANAGER.submit(key, worker)
         self.send_json(202, {"state": "updating"})
 
     def update_all_emulators_route(self):
@@ -2582,11 +2633,15 @@ class Handler(BaseHTTPRequestHandler):
             INSTALLS["__update_all__"] = {"state": "updating"}
 
         def worker():
-            result = update_all_emulators()
+            try:
+                result = update_all_emulators()
+                job = {"state": "done", **result}
+            except (OSError, ValueError, subprocess.SubprocessError) as error:
+                job = {"state": "error", "error": str(error)}
             with PROCESS_LOCK:
-                INSTALLS["__update_all__"] = {"state": "done", **result}
+                INSTALLS["__update_all__"] = job
 
-        threading.Thread(target=worker, daemon=True).start()
+        JOB_MANAGER.submit("emulator-update-all", worker)
         self.send_json(202, {"state": "updating"})
 
     def import_scummvm_games(self):
@@ -2636,12 +2691,11 @@ class Handler(BaseHTTPRequestHandler):
         path = download_emumovies_media(
             target, credentials, DATA.parent / "media", str(payload.get("type", "box")),
         )
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)
             game["cover"] = path
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"path": path})
 
     def cleanup_media(self, payload):
@@ -2656,12 +2710,11 @@ class Handler(BaseHTTPRequestHandler):
         stable_game_id = game.get("game_id")
         destination = DATA.parent / "media" / "captures" / f"{Path(game.get('path', 'game')).stem}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
         path = capture_screenshot(destination)
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             screenshots = game_from_payload(state, {"game_id": stable_game_id}).setdefault("screenshots", [])
             if path not in screenshots:
                 screenshots.append(path)
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"path": path})
 
     def obs_attach(self, payload):
@@ -2669,11 +2722,10 @@ class Handler(BaseHTTPRequestHandler):
         state = load_state()
         target = copy.deepcopy(game_from_payload(state, payload))
         path = attach_recording(target, video_path)
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"path": path, "obs": obs_recording_status()})
 
     def apply_save_scan(self, payload):
@@ -2684,9 +2736,8 @@ class Handler(BaseHTTPRequestHandler):
             for index, paths in found.items()
             if 0 <= index < len(state["games"])
         }
-        updated = 0
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
+            updated = 0
             for stable_id, paths in found_by_id.items():
                 try:
                     game = game_from_payload(state, {"game_id": stable_id})
@@ -2697,7 +2748,8 @@ class Handler(BaseHTTPRequestHandler):
                     if path not in save_paths:
                         save_paths.append(path)
                         updated += 1
-            save_state(state)
+            return updated
+        _, updated = transact_state(mutate)
         self.send_json(200, {"updated": updated, "games": len(found)})
 
     def save_platform_documents(self, payload):
@@ -2705,11 +2757,10 @@ class Handler(BaseHTTPRequestHandler):
         if not platform:
             raise ValueError("Platform is required.")
         documents = self.clean_extras(payload.get("documents", []), command=False)
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             settings = state.setdefault("settings", {})
             settings.setdefault("platform_documents", {})[platform] = documents
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, {"saved": platform, "count": len(documents)})
 
     def import_storefront_catalog(self, payload):
@@ -2766,11 +2817,9 @@ class Handler(BaseHTTPRequestHandler):
         def worker():
             result = {"state": "error", "gameyfin_id": game_id, "error": "Install failed"}
             try:
-                with STATE_LOCK:
-                    settings = dict(load_state().get("settings", {}))
+                settings = dict(load_state().get("settings", {}))
                 installed = install_gameyfin_game(settings, game_id)
-                with STATE_LOCK:
-                    state = load_state()
+                def mutate(state):
                     target = None
                     for game in state["games"]:
                         if str(game.get("gameyfin_id") or "") == game_id:
@@ -2792,14 +2841,14 @@ class Handler(BaseHTTPRequestHandler):
                         target.update(installed)
                     else:
                         state["games"].append(installed)
-                    save_state(state)
+                transact_state(mutate)
                 result = {"state": "done", "gameyfin_id": game_id, "game": installed}
             except (GameyfinError, OSError, ValueError, IndexError, KeyError) as error:
                 result = {"state": "error", "gameyfin_id": game_id, "error": str(error)}
             with PROCESS_LOCK:
                 INSTALLS[job_key] = result
 
-        threading.Thread(target=worker, daemon=True).start()
+        JOB_MANAGER.submit(job_key, worker)
         self.send_json(202, {"state": "installing", "gameyfin_id": game_id})
 
     def uninstall_gameyfin(self, payload):
@@ -2809,11 +2858,10 @@ class Handler(BaseHTTPRequestHandler):
         if not target.get("gameyfin_id"):
             raise ValueError("This game is not a Gameyfin entry.")
         result = uninstall_gameyfin_game(target)
-        with STATE_LOCK:
-            state = load_state()
+        def mutate(state):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)
-            save_state(state)
+        transact_state(mutate)
         self.send_json(200, result)
 
     def run_ludusavi_tool(self, payload):
@@ -2890,7 +2938,7 @@ def main():
         print(archive)
         return
     if "--restore-backup" in args:
-        archive = Path(args[args.index("--restore-backup") + 1]).expanduser()
+        archive = approved_backup_file(args[args.index("--restore-backup") + 1])
         restored = restore_backup(archive, DATA.parent, running_map=RUNNING)
         print(",".join(restored))
         return
@@ -2898,15 +2946,13 @@ def main():
     if cli_code is not None:
         raise SystemExit(cli_code)
     ensure_stock_themes(DATA.parent / "themes", ROOT)
-    with STATE_LOCK:
-        state = load_state()
-        if purge_demo_games(state):
-            save_state(state)
+    def bootstrap_state(state):
+        purge_demo_games(state)
         profiles = state.setdefault("profiles", {})
         profiles.update(merge_profiles_from_definitions(profiles))
-        save_state(state)
+    update_state(bootstrap_state)
     WATCH_STOP.clear()
-    threading.Thread(target=auto_import_worker, daemon=True).start()
+    JOB_MANAGER.submit("auto-import", auto_import_worker)
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     run_configured_commands("startup_commands")
     port = server.server_address[1]
@@ -2937,6 +2983,8 @@ def main():
         pass
     finally:
         WATCH_STOP.set()
+        JOB_MANAGER.cancel("auto-import")
+        JOB_MANAGER.shutdown(wait=False, cancel_futures=True)
         server.server_close()
         (DATA.parent / "server.token").unlink(missing_ok=True)
         (DATA.parent / "server.port").unlink(missing_ok=True)

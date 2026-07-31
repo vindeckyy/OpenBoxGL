@@ -16,6 +16,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from archives import extract_game
+from backend_io import atomic_write_text
 from openbox_logging import configure_logging
 from state_store import JsonStateStore
 
@@ -72,6 +73,11 @@ def save_state(state):
 def update_state(mutator):
     """Apply one state mutation under the cross-process transaction lock."""
     return STATE_STORE.update(mutator)
+
+
+def update_state_with_result(mutator):
+    """Apply a mutation and return both the committed state and callback result."""
+    return STATE_STORE.update_with_result(mutator)
 
 
 def recover_state():
@@ -147,7 +153,7 @@ class OpenBox(tk.Tk):
         self.minsize(900, 580)
         self.state = load_state()
         if purge_demo_games(self.state):
-            save_state(self.state)
+            self.state = update_state(lambda state: (purge_demo_games(state), state)[1])
         self.games = self.state["games"]
         self.profiles = self.state["profiles"]
         self.history = self.state["history"]
@@ -158,6 +164,12 @@ class OpenBox(tk.Tk):
         self.collection = tk.StringVar(value="All collections")
         self._build()
         self.render()
+
+    def _commit(self, mutator):
+        self.state = update_state(mutator)
+        self.games = self.state["games"]
+        self.profiles = self.state["profiles"]
+        self.history = self.state["history"]
 
     def _build(self):
         self.configure(bg=self.BG)
@@ -346,12 +358,16 @@ class OpenBox(tk.Tk):
             return
         found = [path for path in Path(folder).rglob("*") if path.is_file() and path.suffix.lower() in EXTENSIONS]
         existing = {game.get("path") for game in self.games}
+        additions = []
         for path in found:
             if str(path) in existing:
                 continue
             suffix = path.suffix.lower()
-            self.games.append({"name": path.stem, "platform": PLATFORM_BY_EXTENSION.get(suffix, "Imported"), "genre": "Local file", "path": str(path), "collection": "Imported", "added_at": datetime.now().isoformat(timespec="seconds")})
-        save_state(self.state)
+            additions.append({"name": path.stem, "platform": PLATFORM_BY_EXTENSION.get(suffix, "Imported"), "genre": "Local file", "path": str(path), "collection": "Imported", "added_at": datetime.now().isoformat(timespec="seconds")})
+        def mutate(state):
+            paths = {game.get("path") for game in state["games"]}
+            state["games"].extend(game for game in additions if game.get("path") not in paths)
+        self._commit(mutate)
         self.render()
 
     def edit_selected(self):
@@ -390,9 +406,15 @@ class OpenBox(tk.Tk):
             for key, entry in entries.items():
                 game[key] = entry.get().strip()
             game["description"] = description.get("1.0", "end").strip()
-            if game not in self.games:
-                self.games.append(game)
-            save_state(self.state)
+            game_id = str(game.get("game_id") or "")
+            def mutate(state):
+                if game_id:
+                    current = next((item for item in state["games"] if item.get("game_id") == game_id), None)
+                    if current is not None:
+                        current.update(game)
+                        return
+                state["games"].append(dict(game))
+            self._commit(mutate)
             dialog.destroy()
             self.render()
 
@@ -412,10 +434,15 @@ class OpenBox(tk.Tk):
             args, cwd = build_launch(game, self.profiles)
             process = subprocess.Popen(args, cwd=cwd)
             started = datetime.now()
-            game["recent"] = True
-            game["last_played"] = started.isoformat(timespec="seconds")
-            game["play_count"] = game.get("play_count", 0) + 1
-            save_state(self.state)
+            game_id = str(game.get("game_id") or "")
+            def mutate(state):
+                current = next((item for item in state["games"] if item.get("game_id") == game_id), None)
+                if current is None:
+                    raise ValueError("Game was removed while it was launching.")
+                current["recent"] = True
+                current["last_played"] = started.isoformat(timespec="seconds")
+                current["play_count"] = current.get("play_count", 0) + 1
+            self._commit(mutate)
             self.render()
             threading.Thread(target=self.track_session, args=(process, game, started), daemon=True).start()
         except (OSError, ValueError) as error:
@@ -427,22 +454,33 @@ class OpenBox(tk.Tk):
         self.after(0, lambda: self.finish_session(game, started, seconds, exit_code))
 
     def finish_session(self, game, started, seconds, exit_code):
-        game["playtime_seconds"] = game.get("playtime_seconds", 0) + seconds
-        self.history.append({
-            "game": game.get("name", "Untitled"),
-            "started": started.isoformat(timespec="seconds"),
-            "seconds": seconds,
-            "exit_code": exit_code,
-        })
-        self.history[:] = self.history[-500:]
-        save_state(self.state)
+        game_id = str(game.get("game_id") or "")
+        def mutate(state):
+            current = next((item for item in state["games"] if item.get("game_id") == game_id), None)
+            if current is not None:
+                current["playtime_seconds"] = current.get("playtime_seconds", 0) + seconds
+                name = current.get("name", "Untitled")
+            else:
+                name = game.get("name", "Untitled")
+            state["history"].append({
+                "game": name,
+                "started": started.isoformat(timespec="seconds"),
+                "seconds": seconds,
+                "exit_code": exit_code,
+            })
+            state["history"][:] = state["history"][-500:]
+        self._commit(mutate)
         self.render()
 
     def toggle_favorite(self):
         game = self.selected()
         if game:
-            game["favorite"] = not game.get("favorite", False)
-            save_state(self.state)
+            game_id = str(game.get("game_id") or "")
+            def mutate(state):
+                current = next((item for item in state["games"] if item.get("game_id") == game_id), None)
+                if current is not None:
+                    current["favorite"] = not current.get("favorite", False)
+            self._commit(mutate)
             self.render()
 
     def surprise_me(self):
@@ -492,9 +530,11 @@ class OpenBox(tk.Tk):
 
     def find_emulators(self):
         found = discover_profiles()
-        added = {platform: command for platform, command in found.items() if platform not in self.profiles}
-        self.profiles.update(added)
-        save_state(self.state)
+        added = {}
+        def mutate(state):
+            added.update({platform: command for platform, command in found.items() if platform not in state["profiles"]})
+            state["profiles"].update(added)
+        self._commit(mutate)
         if added:
             messagebox.showinfo("Emulators found", "Added profiles for:\n" + "\n".join(sorted(added)))
         else:
@@ -539,14 +579,14 @@ class OpenBox(tk.Tk):
                         profiles[platform.strip()] = command.strip()
             self.profiles.clear()
             self.profiles.update(profiles)
-            save_state(self.state)
+            self._commit(lambda state: state.update({"profiles": dict(profiles)}))
             dialog.destroy()
         ttk.Button(dialog, text="Save", style="Accent.TButton", command=save).pack(anchor="e", padx=14, pady=14)
 
     def backup(self):
         path = filedialog.asksaveasfilename(title="Backup library", defaultextension=".json", filetypes=[("JSON library", "*.json")])
         if path:
-            Path(path).write_text(json.dumps(self.state, indent=2))
+            atomic_write_text(Path(path), json.dumps(self.state, indent=2), mode=0o600)
 
     def restore_backup(self):
         path = filedialog.askopenfilename(title="Restore library backup", filetypes=[("JSON library", "*.json")])
@@ -564,14 +604,22 @@ class OpenBox(tk.Tk):
         if not messagebox.askyesno("Restore backup", f"Replace the current library with {len(restored['games'])} games?"):
             return
         DATA.parent.mkdir(parents=True, exist_ok=True)
-        DATA.with_name("library.before-restore.json").write_text(json.dumps(self.state, indent=2))
+        atomic_write_text(
+            DATA.with_name("library.before-restore.json"),
+            json.dumps(load_state(), indent=2),
+            mode=0o600,
+        )
         restored.setdefault("profiles", {})
         restored.setdefault("history", [])
-        self.state = restored
+
+        def replace_state(state):
+            state.clear()
+            state.update(restored)
+
+        self.state = update_state(replace_state)
         self.games = self.state["games"]
         self.profiles = self.state["profiles"]
         self.history = self.state["history"]
-        save_state(self.state)
         self.set_view("all")
 
 

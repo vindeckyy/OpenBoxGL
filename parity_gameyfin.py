@@ -12,6 +12,7 @@ import urllib.request
 from http.cookiejar import CookieJar
 from pathlib import Path
 
+from backend_io import atomic_copy_stream, fsync_directory, read_limited
 
 DEFAULT_PROVIDER = "org.gameyfin.plugins.download.direct.DirectDownloadPlugin$DirectDownloadProvider"
 
@@ -75,10 +76,10 @@ class GameyfinClient:
         except urllib.error.URLError as error:
             raise GameyfinError(f"Could not reach Gameyfin: {error.reason}") from error
         with response:
-            payload = response.read()
+            content_type = response.headers.get("Content-Type", "")
+            payload = read_limited(response, 16 * 1024 * 1024)
         if raw:
             return response, payload
-        content_type = response.headers.get("Content-Type", "")
         if "json" in content_type or payload[:1] in (b"{", b"["):
             try:
                 return json.loads(payload.decode() or "null")
@@ -163,27 +164,14 @@ class GameyfinClient:
         destination = Path(destination)
         destination.mkdir(parents=True, exist_ok=True)
         target = destination / filename
-        partial = destination / f".{filename}.partial"
         try:
-            with response, partial.open("wb") as handle:
-                total = 0
-                while True:
-                    chunk = response.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    total += len(chunk)
-                    if total > 4 * 1024 * 1024 * 1024:
-                        raise GameyfinError("The Gameyfin download is too large.")
-                    handle.write(chunk)
-                handle.flush()
-                os.fsync(handle.fileno())
-            partial.replace(target)
+            with response:
+                atomic_copy_stream(
+                    response, target, mode=0o600,
+                    max_bytes=4 * 1024 * 1024 * 1024,
+                )
+            fsync_directory(destination)
         except Exception:
-            if partial.exists():
-                try:
-                    partial.unlink()
-                except OSError:
-                    pass
             raise
         return target
 
@@ -280,6 +268,8 @@ def install_gameyfin_game(settings, game_id, client=None):
     destination = Path(entry["install_dir"])
     staging = destination.with_name(f".{destination.name}.openbox-installing")
     previous = destination.with_name(f".{destination.name}.openbox-previous")
+    if any(path.is_symlink() for path in (install_root, destination, staging, previous)):
+        raise GameyfinError("Gameyfin install paths may not be symlinks.")
     if staging.exists():
         shutil.rmtree(staging) if staging.is_dir() else staging.unlink()
     if previous.exists():
@@ -316,9 +306,13 @@ def uninstall_gameyfin_game(game):
     path = Path(str(game.get("path") or "")).expanduser()
     if not str(game.get("install_dir") or "").strip():
         raise GameyfinError("Refusing to uninstall a Gameyfin game without an install directory.")
+    if install_dir.is_symlink() or path.is_symlink():
+        raise GameyfinError("Refusing to uninstall through a symlink.")
     root = install_dir.resolve(strict=False)
     removed = []
     for candidate in (install_dir, path):
+        if candidate.is_symlink():
+            raise GameyfinError("Refusing to uninstall through a symlink.")
         candidate = candidate.resolve(strict=False)
         if candidate != root and root not in candidate.parents:
             raise GameyfinError(f"Refusing to remove a path outside the Gameyfin install directory: {candidate}")

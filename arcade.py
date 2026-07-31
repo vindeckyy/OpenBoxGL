@@ -1,5 +1,6 @@
 """MAME and FinalBurn full-set import."""
 
+import io
 import shlex
 import shutil
 import subprocess
@@ -43,10 +44,18 @@ def load_catalog(dat_path="", source="MAME"):
     if source != "MAME" or not (binary := shutil.which("mame")):
         raise FileNotFoundError("Choose a DAT/XML file, or install MAME so OpenBox can run mame -listxml.")
     process = subprocess.Popen([binary, "-listxml"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    catalog = parse_catalog(process.stdout)
-    if process.wait() != 0:
+    try:
+        output, _ = process.communicate(timeout=300)
+    except subprocess.TimeoutExpired as error:
+        process.kill()
+        process.communicate()
+        raise RuntimeError("MAME catalog generation timed out.") from error
+    if len(output) > 256 * 1024 * 1024:
+        raise RuntimeError("MAME catalog is too large.")
+    return_code = process.returncode
+    if return_code != 0:
         raise RuntimeError("MAME could not produce its XML catalog.")
-    return catalog
+    return parse_catalog(io.BytesIO(output))
 
 
 def zip_members(path):

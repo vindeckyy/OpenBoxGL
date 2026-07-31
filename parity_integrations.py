@@ -14,7 +14,8 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 from archives import safe_zip_extract
-from backend_io import download_file
+from backend_io import atomic_copy_stream, atomic_write_text, download_file
+from state_store import secure_text_write
 
 
 PLATFORM_BEZEL_REPO = {
@@ -56,7 +57,7 @@ def inject_retroachievements(credentials, home=None):
         for key, value in mapping.items():
             if key not in seen:
                 out.append(f"{key}{separator}{value}")
-        path.write_text("\n".join(out) + ("\n" if out else ""))
+        atomic_write_text(path, "\n".join(out) + ("\n" if out else ""), mode=0o600)
         updated.append(str(path))
 
     retro_cfgs = [
@@ -127,6 +128,8 @@ def download_bezel(platform, dest_dir, opener=urlopen):
         opener=opener,
     )
     extract_to = dest / platform.replace(" ", "_")
+    if extract_to.is_symlink():
+        raise ValueError("Bezel extraction destination may not be a symlink.")
     if extract_to.exists():
         shutil.rmtree(extract_to)
     extract_to.mkdir(parents=True, exist_ok=True)
@@ -149,9 +152,7 @@ def load_emumovies_credentials(data_dir):
 
 def save_emumovies_credentials(data_dir, username, password):
     path = Path(data_dir) / "emumovies.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"username": username, "password": password}, indent=2))
-    os.chmod(path, 0o600)
+    secure_text_write(path, json.dumps({"username": username, "password": password}, indent=2))
     return {"configured": True}
 
 
@@ -339,13 +340,13 @@ def export_highscores(game, export_dir, home=None):
         shutil.copy2(source, destination)
         copied.append(str(destination))
     manifest = export / "highscores.json"
-    manifest.write_text(json.dumps({
+    atomic_write_text(manifest, json.dumps({
         "format": 1,
         "exported_at": datetime.now().isoformat(timespec="seconds"),
         "game": game.get("name"),
         "rom": game.get("rom_name") or Path(game.get("path", "")).stem,
         "files": copied,
-    }, indent=2))
+    }, indent=2) + "\n")
     return {"files": copied, "manifest": str(manifest)}
 
 
@@ -371,7 +372,8 @@ def import_highscores(game, import_dir, home=None):
         if not source.is_file():
             continue
         destination = target / (source.name if rom in source.name else f"{rom}-{source.name}")
-        shutil.copy2(source, destination)
+        with source.open("rb") as stream:
+            atomic_copy_stream(stream, destination, mode=0o600)
         restored.append(str(destination))
     if not restored:
         raise FileNotFoundError("No high score files were found in the import bundle.")

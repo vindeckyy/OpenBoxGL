@@ -2,6 +2,7 @@
 """Packaging acceptance tests for OpenBox Linux distribution."""
 
 import os
+import ast
 import subprocess
 import tempfile
 from pathlib import Path
@@ -23,11 +24,15 @@ def test_appdir_structure():
     appimage_path = os.environ.get("OPENBOX_APPIMAGE")
     appimage = Path(appimage_path or ROOT / "OpenBox-x86_64.AppImage").expanduser()
     if not appimage.exists():
+        if appimage_path or os.environ.get("OPENBOX_REQUIRE_ARTIFACTS"):
+            raise AssertionError(f"AppImage artifact not found: {appimage}")
         print("  skipping AppImage test (not built)")
         return
     if not appimage_path:
         source_mtime = max((ROOT / module).stat().st_mtime for module in PYTHON_MODULES)
         if appimage.stat().st_mtime < source_mtime:
+            if os.environ.get("OPENBOX_REQUIRE_ARTIFACTS"):
+                raise AssertionError("Bundled AppImage is older than the runtime source manifest")
             print("  skipping stale bundled AppImage; set OPENBOX_APPIMAGE to validate a rebuilt artifact")
             return
     appdir = ROOT / "squashfs-root"
@@ -87,6 +92,31 @@ def test_runtime_manifest():
     assert "runtime_modules.txt" in build_script
     assert "runtime_modules.txt" in flatpak
     print("  Runtime module manifest: ok")
+
+
+def test_runtime_import_closure():
+    manifest = {
+        line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+    local_modules = {path.stem: path.name for path in ROOT.glob("*.py")}
+    missing = set()
+    for filename in manifest:
+        if not filename.endswith(".py"):
+            continue
+        tree = ast.parse((ROOT / filename).read_text(encoding="utf-8"), filename=filename)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [alias.name.split(".", 1)[0] for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                names = [node.module.split(".", 1)[0]]
+            else:
+                continue
+            for name in names:
+                if name in local_modules and local_modules[name] not in manifest:
+                    missing.add(local_modules[name])
+    assert not missing, f"runtime import closure is missing: {sorted(missing)}"
+    print("  Runtime import closure: ok")
 
 
 def test_flatpak_manifest():
@@ -198,6 +228,7 @@ def main():
     test_flatpak_manifest()
     test_makefile_install()
     test_runtime_manifest()
+    test_runtime_import_closure()
     test_appdir_structure()
     test_version_consistency()
     test_update_verification()

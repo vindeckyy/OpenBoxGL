@@ -12,6 +12,8 @@ from pathlib import Path
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
+from backend_io import read_limited
+
 from backend_io import download_file
 
 try:
@@ -265,7 +267,7 @@ def download_steam_trailer(game, media_root, opener=urlopen):
         headers={"User-Agent": "OpenBox/1"},
     )
     with opener(request, timeout=20) as response:
-        payload = json.load(response)
+        payload = json.loads(read_limited(response, 4 * 1024 * 1024))
     record = payload.get(app_id, {})
     if not record.get("success"):
         raise ValueError("Steam did not return app details.")
@@ -291,7 +293,7 @@ def download_gog_media(game, media_root, opener=urlopen):
         headers={"User-Agent": "OpenBox/1"},
     )
     with opener(request, timeout=20) as response:
-        payload = json.load(response)
+        payload = json.loads(read_limited(response, 4 * 1024 * 1024))
     products = payload.get("products", []) if isinstance(payload, dict) else []
     product = next((item for item in products if str(item.get("id", "")) == slug or slug in str(item.get("slug", ""))), None)
     if not product:
@@ -314,7 +316,9 @@ def archive_rom_bytes(path: Path):
             return archive.read(max(files, key=lambda info: info.file_size))
     if suffix == ".7z":
         if py7zr is None:
-            process = subprocess.run(["7z", "e", "-so", str(path)], capture_output=True, check=False)
+            process = subprocess.run(
+                ["7z", "e", "-so", str(path)], capture_output=True, check=False, timeout=300,
+            )
             if process.returncode != 0 or not process.stdout:
                 raise ValueError("Install py7zr or 7z to hash ROMs inside .7z archives.")
             return process.stdout

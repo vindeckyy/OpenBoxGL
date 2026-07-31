@@ -1,12 +1,13 @@
 """Verified GitHub release updates for the OpenBox AppImage."""
 
-import hashlib
 import json
 import os
 import re
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+from backend_io import atomic_write_bytes, atomic_write_text, download_file, read_limited
 
 VERSION = "0.5.0"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
@@ -63,7 +64,7 @@ def parse_release_assets(release):
 
 def load_checksum_file(url, opener=urlopen):
     with github_request(url, opener=opener) as response:
-        parts = response.read(4096).decode().split()
+        parts = read_limited(response, 4096).decode().split()
     if not parts:
         raise ValueError("The release checksum is invalid.")
     expected = parts[0].lower()
@@ -85,7 +86,7 @@ def resolve_update_checksum(update, opener=urlopen):
 def check_update(opener=urlopen):
     try:
         with github_request(RELEASE_API, opener=opener) as response:
-            release = json.load(response)
+            release = json.loads(read_limited(response, 8 * 1024 * 1024))
     except HTTPError as error:
         detail = error.read().decode("utf-8", errors="replace")[:200]
         raise ValueError(f"GitHub releases request failed ({error.code}): {detail or error.reason}") from error
@@ -124,14 +125,11 @@ def install_update(update, destination=None, opener=urlopen):
         raise ValueError("The update URLs are not trusted OpenBox release assets.")
     expected = resolve_update_checksum(update, opener=opener)
     temporary = destination.with_name(f".{destination.name}.update")
-    digest = hashlib.sha256()
     try:
-        with github_request(update["appimage"], opener=opener) as response, temporary.open("wb") as output:
-            while chunk := response.read(1024 * 1024):
-                digest.update(chunk)
-                output.write(chunk)
-        if digest.hexdigest() != expected:
-            raise ValueError("The downloaded update failed SHA-256 verification.")
+        download_file(
+            update["appimage"], temporary, max_bytes=2 * 1024 * 1024 * 1024,
+            timeout=60, opener=opener, sha256=expected,
+        )
         temporary.chmod(destination.stat().st_mode)
         backup = destination.with_name(f"{destination.stem}.previous{destination.suffix}")
         if backup.exists():
@@ -160,9 +158,9 @@ def install_desktop_entry(appimage=None):
     applications.mkdir(parents=True, exist_ok=True)
     icons.mkdir(parents=True, exist_ok=True)
     icon = icons / "io.openbox.GameLauncher.svg"
-    icon.write_bytes((Path(__file__).parent / "openbox.svg").read_bytes())
+    atomic_write_bytes(icon, (Path(__file__).parent / "openbox.svg").read_bytes(), mode=0o644)
     desktop = applications / "io.openbox.GameLauncher.desktop"
-    desktop.write_text(
+    atomic_write_text(desktop, (
         "[Desktop Entry]\n"
         "Name=OpenBox\n"
         "Comment=Local-first Linux game library and launcher\n"
@@ -172,6 +170,6 @@ def install_desktop_entry(appimage=None):
         "Type=Application\n"
         "Categories=Game;Emulator;\n"
         "Keywords=games;launcher;emulator;rom;\n"
-    )
+    ), mode=0o755)
     desktop.chmod(0o755)
     return str(desktop)

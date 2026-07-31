@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import fcntl
+from contextlib import contextmanager
 from pathlib import Path
+
+from backend_io import atomic_write_text
 
 
 REGION_PRIORITY_DEFAULT = ["North America", "World", "Europe", "Japan", ""]
@@ -46,22 +50,37 @@ def load_media_queue(queue_path):
 
 def save_media_queue(queue_path, items):
     path = Path(queue_path)
+    atomic_write_text(path, json.dumps(items, indent=2), mode=0o600)
+
+
+@contextmanager
+def _queue_lock(queue_path):
+    path = Path(queue_path)
+    lock_path = path.with_name(f".{path.name}.lock")
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(items, indent=2))
-    temporary.replace(path)
+    with lock_path.open("a+", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def enqueue_media_job(queue_path, job_dict):
-    items = load_media_queue(queue_path)
-    items.append(dict(job_dict))
-    save_media_queue(queue_path, items)
-    return len(items)
+    with _queue_lock(queue_path):
+        items = load_media_queue(queue_path)
+        items.append(dict(job_dict))
+        save_media_queue(queue_path, items)
+        return len(items)
 
 
 def _fingerprint(path: Path):
     size = path.stat().st_size
-    digest = hashlib.sha256(path.read_bytes()[:65536]).hexdigest()
+    digest_builder = hashlib.sha256()
+    with path.open("rb") as source:
+        while chunk := source.read(1024 * 1024):
+            digest_builder.update(chunk)
+    digest = digest_builder.hexdigest()
     return f"{size}:{digest}"
 
 
@@ -76,7 +95,7 @@ def find_duplicate_media(games):
         paths.extend(str(path).strip() for path in game.get("screenshots", []) if str(path).strip())
         for raw in paths:
             path = Path(raw).expanduser()
-            if not path.is_file():
+            if path.is_symlink() or not path.is_file():
                 continue
             try:
                 key = _fingerprint(path)
@@ -101,6 +120,8 @@ def cleanup_duplicates(duplicate_groups, dry_run=True, allowed_roots=None):
                 deleted.append(str(target))
                 continue
             resolved = target.expanduser().resolve(strict=False)
+            if target.is_symlink() or not target.is_file():
+                continue
             if roots and not any(resolved == root or root in resolved.parents for root in roots):
                 continue
             try:

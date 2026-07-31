@@ -37,7 +37,7 @@ def main():
         RUNNING["restart-test"] = {"restart": True}
         with mock.patch("web_app.start_game") as restart:
             finish_session("restart-test", 0, datetime.now(), FinishedProcess())
-        restart.assert_called_once_with(0)
+        restart.assert_called_once_with(0, stable_game_id=load_state()["games"][0]["game_id"])
 
         # Deleting a game ahead of a running title must not credit the wrong entry.
         save_state({

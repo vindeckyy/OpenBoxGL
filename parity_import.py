@@ -8,6 +8,8 @@ import struct
 from datetime import datetime
 from pathlib import Path
 
+from backend_io import atomic_write_text
+
 
 EXTENSIONS_EXTRA = {
     ".m3u", ".cue", ".chd", ".wbfs", ".rvz", ".n64", ".z64", ".v64", ".nds",
@@ -91,7 +93,7 @@ def generate_m3u(disc_paths, output_path):
             lines.append(str(path.relative_to(output.parent)))
         except ValueError:
             lines.append(str(path))
-    output.write_text("\n".join(lines) + "\n")
+    atomic_write_text(output, "\n".join(lines) + "\n")
     return output
 
 

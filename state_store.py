@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import copy
 import fcntl
+import hashlib
 import json
 import os
+import re
 import shutil
 import tempfile
 import threading
@@ -14,7 +16,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 
-STATE_SCHEMA_VERSION = 2
+STATE_SCHEMA_VERSION = 3
+LEGACY_INDEXED_ID = re.compile(r"^game-[0-9a-f]{24}-\d+$")
 
 
 class StateCorruptError(RuntimeError):
@@ -32,65 +35,166 @@ def default_state() -> dict[str, Any]:
     }
 
 
-def _stable_game_id(game: dict[str, Any], index: int) -> str:
-    """Return a durable id for a game, including legacy records without one."""
-    for key in ("game_id", "id"):
-        value = str(game.get(key) or "").strip()
-        if value and key == "game_id":
-            return value
+def _identity_payload(game: dict[str, Any]) -> dict[str, str]:
     identity = {
         key: str(game.get(key) or "").strip()
         for key in (
-            "path", "name", "platform", "steam_app_id", "heroic_app_id",
+            "path", "platform", "steam_app_id", "heroic_app_id",
             "lutris_id", "gameyfin_id", "launchbox_db_id",
         )
     }
-    raw = json.dumps(identity, sort_keys=True, separators=(",", ":"))
-    import hashlib
+    if identity["path"]:
+        identity["path"] = os.path.normcase(os.path.normpath(os.path.expanduser(identity["path"])))
+    if not identity["path"] and not any(
+        identity[key] for key in ("steam_app_id", "heroic_app_id", "lutris_id", "gameyfin_id", "launchbox_db_id")
+    ):
+        identity["name"] = str(game.get("name") or "").strip()
+    return identity
 
+
+def _stable_game_id(game: dict[str, Any]) -> str:
+    """Return a durable id derived from game identity, never list position."""
+    raw = json.dumps(_identity_payload(game), sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
-    return f"game-{digest}-{index}"
+    return f"game-{digest}"
+
+
+def _is_legacy_indexed_id(value: str) -> bool:
+    return bool(LEGACY_INDEXED_ID.fullmatch(value))
+
+
+def _migrate_v1_to_v2(state: dict[str, Any]) -> None:
+    state.setdefault("profiles", {})
+    state.setdefault("history", [])
+    state.setdefault("settings", {})
+    state.setdefault("playlists", [])
+    state["schema_version"] = 2
+
+
+def _migrate_v2_to_v3(state: dict[str, Any]) -> None:
+    """Replace the old index-suffixed IDs while retaining aliases."""
+    used: set[str] = set()
+    for game in state.get("games", []):
+        if not isinstance(game, dict):
+            continue
+        old_id = str(game.get("game_id") or "").strip()
+        candidate = _stable_game_id(game)
+        if old_id and _is_legacy_indexed_id(old_id):
+            aliases = game.setdefault("legacy_game_ids", [])
+            if not isinstance(aliases, list):
+                aliases = []
+                game["legacy_game_ids"] = aliases
+            if old_id not in aliases:
+                aliases.append(old_id)
+        if candidate in used:
+            suffix = 2
+            while f"{candidate}-{suffix}" in used:
+                suffix += 1
+            candidate = f"{candidate}-{suffix}"
+        game["game_id"] = candidate
+        used.add(candidate)
+    state["schema_version"] = 3
+
+
+MIGRATIONS: dict[int, Callable[[dict[str, Any]], None]] = {
+    1: _migrate_v1_to_v2,
+    2: _migrate_v2_to_v3,
+}
+
+
+def _normalize_game_ids(games: list[dict[str, Any]]) -> bool:
+    changed = False
+    used: set[str] = set()
+    for game in games:
+        if "legacy_game_ids" in game and not isinstance(game.get("legacy_game_ids"), list):
+            game["legacy_game_ids"] = []
+            changed = True
+        existing = str(game.get("game_id") or "").strip()
+        if not existing or _is_legacy_indexed_id(existing):
+            candidate = _stable_game_id(game)
+            if existing:
+                aliases = game.setdefault("legacy_game_ids", [])
+                if not isinstance(aliases, list):
+                    aliases = []
+                    game["legacy_game_ids"] = aliases
+                if existing not in aliases:
+                    aliases.append(existing)
+                    changed = True
+        else:
+            candidate = existing
+        if candidate in used:
+            suffix = 2
+            base = candidate
+            while f"{base}-{suffix}" in used:
+                suffix += 1
+            candidate = f"{base}-{suffix}"
+        if game.get("game_id") != candidate:
+            game["game_id"] = candidate
+            changed = True
+        used.add(candidate)
+    return changed
+
+
+def _apply_migrations(state: dict[str, Any], version: int) -> bool:
+    changed = False
+    while version < STATE_SCHEMA_VERSION:
+        migration = MIGRATIONS.get(version)
+        if migration is None:
+            raise StateCorruptError(f"No migration is available for schema version {version}.")
+        migration(state)
+        version = int(state["schema_version"])
+        changed = True
+    return changed
+
+
+def _ensure_defaults(state: dict[str, Any]) -> bool:
+    changed = False
+    defaults = default_state()
+    for key, value in defaults.items():
+        if key not in state:
+            state[key] = copy.deepcopy(value)
+            changed = True
+    return changed
+
+
+def _validate_state(state: dict[str, Any]) -> None:
+    if not isinstance(state["games"], list):
+        raise StateCorruptError("OpenBox library.json has an invalid games collection.")
+    for index, game in enumerate(state["games"]):
+        if not isinstance(game, dict):
+            raise StateCorruptError(f"OpenBox library.json has an invalid game at index {index}.")
+        if not str(game.get("game_id") or "").strip():
+            raise StateCorruptError(f"OpenBox library.json has a game without an identity at index {index}.")
 
 
 def normalize_state(raw: Any) -> tuple[dict[str, Any], bool]:
-    """Normalize legacy state while retaining every unknown field."""
+    """Normalize legacy state through explicit migrations while retaining unknown fields."""
     changed = False
     if isinstance(raw, list):
-        state: dict[str, Any] = {"games": raw}
+        state: dict[str, Any] = {"games": raw, "schema_version": 1}
         changed = True
     elif isinstance(raw, dict):
         state = copy.deepcopy(raw)
     else:
         raise StateCorruptError("OpenBox library.json must contain an object or legacy game list.")
 
-    defaults = default_state()
-    for key, value in defaults.items():
-        if key not in state:
-            state[key] = copy.deepcopy(value)
-            changed = True
-
     try:
         version = int(state.get("schema_version", 1))
     except (TypeError, ValueError):
         version = 1
         changed = True
-    if version > STATE_SCHEMA_VERSION:
-        raise StateCorruptError(
-            f"OpenBox library.json uses unsupported schema version {version}."
-        )
-    if version != STATE_SCHEMA_VERSION:
-        state["schema_version"] = STATE_SCHEMA_VERSION
-        changed = True
-
-    if not isinstance(state["games"], list):
+    if version > STATE_SCHEMA_VERSION or version < 1:
+        raise StateCorruptError(f"OpenBox library.json uses unsupported schema version {version}.")
+    if "games" in state and not isinstance(state.get("games"), list):
         raise StateCorruptError("OpenBox library.json has an invalid games collection.")
-    for index, game in enumerate(state["games"]):
-        if not isinstance(game, dict):
-            raise StateCorruptError(f"OpenBox library.json has an invalid game at index {index}.")
-        game_id = _stable_game_id(game, index)
-        if game.get("game_id") != game_id:
-            game["game_id"] = game_id
-            changed = True
+    changed |= _apply_migrations(state, version)
+    changed |= _ensure_defaults(state)
+    state["schema_version"] = STATE_SCHEMA_VERSION
+    if not isinstance(state.get("games"), list):
+        raise StateCorruptError("OpenBox library.json has an invalid games collection.")
+    if _normalize_game_ids(state["games"]):
+        changed = True
+    _validate_state(state)
     return state, changed
 
 
@@ -102,6 +206,19 @@ class JsonStateStore:
         self.lock_path = self.path.with_name(f".{self.path.name}.lock")
         self.backup_path = self.path.with_name(f"{self.path.name}.bak")
         self._thread_lock = threading.RLock()
+        self._cached_state: dict[str, Any] | None = None
+        self._cached_signature: tuple[int, int, int] | None = None
+
+    def _signature(self) -> tuple[int, int, int] | None:
+        try:
+            stat = self.path.stat()
+        except FileNotFoundError:
+            return None
+        return (stat.st_mtime_ns, stat.st_size, stat.st_ino)
+
+    def _remember(self, state: dict[str, Any]) -> None:
+        self._cached_state = copy.deepcopy(state)
+        self._cached_signature = self._signature()
 
     @contextmanager
     def _file_lock(self, exclusive: bool):
@@ -129,11 +246,16 @@ class JsonStateStore:
         return normalize_state(raw)
 
     def load(self) -> dict[str, Any]:
-        with self._thread_lock, self._file_lock(True):
-            state, changed = self._load_unlocked()
-            if changed:
-                self._write_unlocked(state)
-            return state
+        with self._thread_lock:
+            signature = self._signature()
+            if self._cached_state is not None and signature == self._cached_signature:
+                return copy.deepcopy(self._cached_state)
+            with self._file_lock(True):
+                state, changed = self._load_unlocked()
+                if changed:
+                    self._write_unlocked(state)
+                self._remember(state)
+                return copy.deepcopy(state)
 
     def recover(self) -> dict[str, Any]:
         with self._thread_lock, self._file_lock(True):
@@ -144,7 +266,8 @@ class JsonStateStore:
             except (OSError, json.JSONDecodeError, UnicodeDecodeError, StateCorruptError) as error:
                 raise StateCorruptError(f"The last-known-good state is also unusable: {self.backup_path}") from error
             self._write_unlocked(state)
-            return state
+            self._remember(state)
+            return copy.deepcopy(state)
 
     def _write_unlocked(self, state: dict[str, Any]) -> None:
         normalized, _ = normalize_state(state)
@@ -172,6 +295,7 @@ class JsonStateStore:
                 os.fsync(directory_fd)
             finally:
                 os.close(directory_fd)
+            self._remember(normalized)
         finally:
             if temporary.exists():
                 temporary.unlink()
@@ -180,15 +304,19 @@ class JsonStateStore:
         with self._thread_lock, self._file_lock(True):
             normalized, _ = normalize_state(state)
             self._write_unlocked(normalized)
-            return normalized
+            return copy.deepcopy(normalized)
 
     def update(self, mutator: Callable[[dict[str, Any]], Any]) -> dict[str, Any]:
+        state, _ = self.update_with_result(mutator)
+        return state
+
+    def update_with_result(self, mutator: Callable[[dict[str, Any]], Any]) -> tuple[dict[str, Any], Any]:
         with self._thread_lock, self._file_lock(True):
             state, _ = self._load_unlocked()
-            mutator(state)
+            result = mutator(state)
             normalized, _ = normalize_state(state)
             self._write_unlocked(normalized)
-            return normalized
+            return copy.deepcopy(normalized), result
 
 
 def secure_text_write(path: Path, value: str) -> None:
@@ -205,6 +333,11 @@ def secure_text_write(path: Path, value: str) -> None:
             os.fsync(output.fileno())
         os.replace(temporary, path)
         os.chmod(path, 0o600)
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
     finally:
         if temporary.exists():
             temporary.unlink()

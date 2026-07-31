@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-from backend_io import download_file
+from backend_io import download_file, read_limited
 
 CATALOG_PATH = Path(__file__).resolve().parent / "plugins" / "catalog.json"
 REMOTE_CATALOG = "https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/master/plugins/catalog.json"
@@ -26,7 +26,7 @@ def fetch_plugin_catalog(opener=urlopen):
     try:
         request = Request(REMOTE_CATALOG, headers={"User-Agent": "OpenBox/1"})
         with opener(request, timeout=20) as response:
-            payload = json.load(response)
+            payload = json.loads(read_limited(response, 4 * 1024 * 1024))
         if isinstance(payload, list) and payload:
             return payload
     except (OSError, ValueError, json.JSONDecodeError):

@@ -10,6 +10,7 @@ from time import time
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from backend_io import atomic_write_text, read_limited
 from state_store import secure_text_write
 
 
@@ -46,7 +47,7 @@ def api_get(endpoint, params, credentials, opener=urlopen):
         headers={"User-Agent": "OpenBox/1"},
     )
     with opener(request, timeout=20) as response:
-        return json.load(response)
+        return json.loads(read_limited(response, 8 * 1024 * 1024))
 
 
 def load_credentials(directory):
@@ -119,9 +120,7 @@ def cached(path, getter, max_age=604800):
         pass
     data = getter()
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(data))
-    temporary.replace(path)
+    atomic_write_text(path, json.dumps(data), mode=0o600)
     return data
 
 

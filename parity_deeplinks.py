@@ -7,6 +7,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from backend_io import read_limited
+
 
 SCHEME = "openbox"
 
@@ -67,7 +69,7 @@ def api_request(host, port, token, path, method="GET", body=None):
         method=method,
     )
     with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode())
+        return json.loads(read_limited(response, 4 * 1024 * 1024).decode())
 
 
 def handle_cli(argv, data_dir):
@@ -176,8 +178,8 @@ def run_keyboard_launcher(data_dir):
     if script:
         import subprocess
         try:
-            return subprocess.call([str(script), picker])
-        except OSError as error:
+            return subprocess.call([str(script), picker], timeout=30)
+        except (OSError, subprocess.TimeoutExpired) as error:
             print(str(error), file=sys.stderr)
             return 1
     import subprocess
@@ -190,21 +192,21 @@ def run_keyboard_launcher(data_dir):
             selection = subprocess.check_output(
                 ["rofi", "-dmenu", "-i", "-p", "OpenBox", "-kb-custom-1", "Control-Return"],
                 input="\n".join(lines).encode(),
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, timeout=30,
             ).decode().strip()
         elif picker == "wofi":
             selection = subprocess.check_output(
                 ["wofi", "--dmenu", "--prompt", "OpenBox"],
                 input="\n".join(lines).encode(),
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, timeout=30,
             ).decode().strip()
         else:
             selection = subprocess.check_output(
                 ["dmenu", "-i", "-p", "OpenBox"],
                 input="\n".join(lines).encode(),
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, timeout=30,
             ).decode().strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return 0
     finally:
         Path(menu_file).unlink(missing_ok=True)

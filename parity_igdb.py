@@ -6,6 +6,7 @@ import time
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from backend_io import read_limited
 from env_config import ensure_env_loaded
 
 IGDB_ENDPOINT = "https://api.igdb.com/v4"
@@ -42,7 +43,7 @@ def access_token(client_id=None, client_secret=None):
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     with urlopen(request, timeout=30) as response:
-        payload = json.loads(response.read().decode())
+        payload = json.loads(read_limited(response, 2 * 1024 * 1024).decode())
     token = payload.get("access_token", "")
     if not token:
         raise ValueError("IGDB token request failed.")
@@ -66,7 +67,7 @@ def igdb_request(path, query, client_id=None, client_secret=None):
         method="POST",
     )
     with urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode())
+        return json.loads(read_limited(response, 8 * 1024 * 1024).decode())
 
 
 def search_games(name, platform="", limit=12):
