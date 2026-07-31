@@ -12,6 +12,8 @@ from pathlib import Path
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
+from backend_io import download_file
+
 try:
     import py7zr
 except ImportError:
@@ -245,11 +247,13 @@ def apply_esrb_from_record(game, record):
 
 
 def download_bytes(url, destination, opener=urlopen):
-    request = Request(url, headers={"User-Agent": "OpenBox/1"})
-    with opener(request, timeout=20) as response:
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(response.read())
-    return str(destination)
+    return str(download_file(
+        url,
+        destination,
+        max_bytes=512 * 1024 * 1024,
+        timeout=20,
+        opener=opener,
+    ))
 
 
 def download_steam_trailer(game, media_root, opener=urlopen):

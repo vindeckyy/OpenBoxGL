@@ -91,16 +91,20 @@ def find_duplicate_media(games):
     return groups
 
 
-def cleanup_duplicates(duplicate_groups, dry_run=True):
+def cleanup_duplicates(duplicate_groups, dry_run=True, allowed_roots=None):
     deleted = []
+    roots = [Path(root).expanduser().resolve(strict=False) for root in (allowed_roots or [])]
     for group in duplicate_groups:
         for path in group.get("duplicates", []):
             target = Path(path)
             if dry_run:
                 deleted.append(str(target))
                 continue
+            resolved = target.expanduser().resolve(strict=False)
+            if roots and not any(resolved == root or root in resolved.parents for root in roots):
+                continue
             try:
-                target.unlink(missing_ok=True)
+                resolved.unlink(missing_ok=True)
                 deleted.append(str(target))
             except OSError:
                 pass

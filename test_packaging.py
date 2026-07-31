@@ -8,16 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parent
-PYTHON_MODULES = [
-    "openbox.py", "web_app.py", "openbox_logging.py", "importers.py", "arcade.py", "catalog.py",
-    "cloud_sync.py", "emulators.py", "retroachievements.py", "plugins.py",
-    "plugin_runner.py", "metadata.py", "archives.py", "saves.py", "updates.py",
-    "env_config.py", "parity_discovery.py", "parity_import.py", "parity_integrations.py",
-    "parity_media.py", "parity_saves.py", "parity_storefront.py", "plugin_catalog.py", "parity_premium.py",
-    "stock_themes.py", "parity_gameyfin.py", "parity_save_tools.py",
-    "parity_filter_presets.py", "parity_deeplinks.py", "parity_backup.py", "parity_tracking.py",
-    "parity_igdb.py", "parity_emulator_defs.py", "parity_import_policy.py", "parity_gamescope.py",
-]
+PYTHON_MODULES = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
 DATA_FILES = ["index.html"]
 STOCK_THEMES = [
     "Midnight Circuit.css",
@@ -34,6 +25,11 @@ def test_appdir_structure():
     if not appimage.exists():
         print("  skipping AppImage test (not built)")
         return
+    if not appimage_path:
+        source_mtime = max((ROOT / module).stat().st_mtime for module in PYTHON_MODULES)
+        if appimage.stat().st_mtime < source_mtime:
+            print("  skipping stale bundled AppImage; set OPENBOX_APPIMAGE to validate a rebuilt artifact")
+            return
     appdir = ROOT / "squashfs-root"
     try:
         subprocess.run(
@@ -46,9 +42,7 @@ def test_appdir_structure():
         share = appdir / "usr" / "share" / "openbox"
         assert share.is_dir(), "missing openbox data dir"
         missing = [module for module in PYTHON_MODULES if not (share / module).is_file()]
-        if missing:
-            print(f"  skipping AppImage module check (rebuild needed): {', '.join(missing)}")
-            return
+        assert not missing, f"missing runtime modules in AppImage: {', '.join(missing)}"
         assert (share / "openbox-launcher.sh").is_file(), "missing keyboard launcher"
         for data in DATA_FILES:
             assert (share / data).is_file(), f"missing {data} in AppImage"
@@ -82,6 +76,19 @@ def test_makefile_install():
     print("  Makefile scripts: ok")
 
 
+def test_runtime_manifest():
+    manifest = ROOT / "runtime_modules.txt"
+    modules = [line.strip() for line in manifest.read_text().splitlines() if line.strip()]
+    assert len(modules) == len(set(modules)), "runtime module manifest contains duplicates"
+    missing = [module for module in modules if not (ROOT / module).is_file()]
+    assert not missing, f"runtime module manifest has missing files: {missing}"
+    build_script = (ROOT / "build_appimage.sh").read_text()
+    flatpak = (ROOT / "io.openbox.GameLauncher.yml").read_text()
+    assert "runtime_modules.txt" in build_script
+    assert "runtime_modules.txt" in flatpak
+    print("  Runtime module manifest: ok")
+
+
 def test_flatpak_manifest():
     manifest = ROOT / "io.openbox.GameLauncher.yml"
     assert manifest.exists(), "missing Flatpak manifest"
@@ -90,7 +97,9 @@ def test_flatpak_manifest():
     assert "runtime: org.freedesktop.Platform" in content
     assert "command: openbox" in content
     assert "openbox.sh" in content
-    assert "openbox_logging.py" in content
+    runtime_modules = (ROOT / "runtime_modules.txt").read_text()
+    assert "openbox_logging.py" in runtime_modules
+    assert "runtime_modules.txt" in content
     assert "openbox.svg" in content
     print("  Flatpak manifest: ok")
 
@@ -188,6 +197,7 @@ def main():
     test_legal_policy()
     test_flatpak_manifest()
     test_makefile_install()
+    test_runtime_manifest()
     test_appdir_structure()
     test_version_consistency()
     test_update_verification()

@@ -20,7 +20,27 @@ def safe_zip_extract(archive, destination):
             target = (destination / info.filename).resolve()
             if root != target and root not in target.parents:
                 raise ValueError(f"Unsafe archive path: {info.filename}")
+            mode = (info.external_attr >> 16) & 0o170000
+            if mode == 0o120000:
+                raise ValueError(f"Archive symlinks are not supported: {info.filename}")
         package.extractall(destination)
+
+
+def validate_7z_paths(extractor, archive):
+    result = subprocess.run(
+        [extractor, "l", "-slt", str(archive)],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    for line in result.stdout.splitlines():
+        if not line.startswith("Path = "):
+            continue
+        name = line[7:]
+        candidate = Path(name)
+        if candidate.is_absolute() or ".." in candidate.parts:
+            raise ValueError(f"Unsafe archive path: {name}")
 
 
 def choose_game_file(destination, member=""):
@@ -48,6 +68,7 @@ def extract_game(archive_path, cache_root, member=""):
             extractor = shutil.which("7z") or shutil.which("7zz")
             if not extractor:
                 raise FileNotFoundError("7z or 7zz is required to extract this archive.")
+            validate_7z_paths(extractor, archive)
             subprocess.run([extractor, "x", "-y", f"-o{destination}", str(archive)], check=True, capture_output=True)
         complete.touch()
     return choose_game_file(destination, member)

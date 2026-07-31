@@ -1,6 +1,7 @@
 """Local OpenBox plugin packages and hooks."""
 
 import json
+import logging
 import re
 import shutil
 import subprocess
@@ -15,6 +16,8 @@ from archives import safe_zip_extract
 HOOKS = {"before_launch", "after_session", "library"}
 PLUGIN_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 RUNNER = Path(__file__).with_name("plugin_runner.py")
+LOGGER = logging.getLogger("openbox.plugins")
+MAX_PLUGIN_PAYLOAD = 2 * 1024 * 1024
 
 
 def state_file(directory):
@@ -124,12 +127,20 @@ def run_plugins(directory, hook, payload):
         if not manifest["enabled"] or hook not in manifest["hooks"]:
             continue
         entry = Path(directory) / manifest["id"] / manifest["entry"]
+        encoded = json.dumps(result)
+        if len(encoded.encode("utf-8")) > MAX_PLUGIN_PAYLOAD:
+            LOGGER.warning("Skipping plugin %s for %s because the payload is too large", manifest["id"], hook)
+            continue
         try:
             completed = subprocess.run(
                 [sys.executable, str(RUNNER), str(entry), hook],
-                input=json.dumps(result), capture_output=True, text=True, timeout=5,
+                input=encoded, capture_output=True, text=True, timeout=5,
             )
-        except (OSError, subprocess.SubprocessError):
+        except (OSError, subprocess.SubprocessError) as error:
+            LOGGER.warning("Plugin %s failed for %s: %s", manifest["id"], hook, error)
+            continue
+        if len(completed.stdout.encode("utf-8")) > MAX_PLUGIN_PAYLOAD:
+            LOGGER.warning("Ignoring oversized output from plugin %s", manifest["id"])
             continue
         if completed.returncode == 0 and completed.stdout.strip():
             try:
@@ -137,5 +148,7 @@ def run_plugins(directory, hook, payload):
                 if isinstance(candidate, dict):
                     result = candidate
             except json.JSONDecodeError:
-                pass
+                LOGGER.warning("Ignoring invalid JSON from plugin %s", manifest["id"])
+        elif completed.returncode:
+            LOGGER.warning("Plugin %s exited with status %s: %s", manifest["id"], completed.returncode, completed.stderr[-400:])
     return result

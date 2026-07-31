@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from urllib.request import Request, urlopen
 
+from backend_io import download_file
+
 CATALOG_PATH = Path(__file__).resolve().parent / "plugins" / "catalog.json"
 REMOTE_CATALOG = "https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/master/plugins/catalog.json"
 
@@ -39,7 +41,12 @@ def download_plugin_package(entry, dest_dir, opener=urlopen):
     dest = Path(dest_dir)
     dest.mkdir(parents=True, exist_ok=True)
     archive = dest / f"{entry.get('id', 'plugin')}.zip"
-    request = Request(url, headers={"User-Agent": "OpenBox/1"})
-    with opener(request, timeout=120) as response, archive.open("wb") as output:
-        output.write(response.read())
+    download_file(
+        url,
+        archive,
+        max_bytes=128 * 1024 * 1024,
+        timeout=120,
+        opener=opener,
+        sha256=str(entry.get("sha256") or "").strip(),
+    )
     return archive

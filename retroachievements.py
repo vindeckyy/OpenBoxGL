@@ -10,6 +10,8 @@ from time import time
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from state_store import secure_text_write
+
 
 SYSTEM_NAMES = {
     "nes": ("Nintendo Entertainment System", "NES/Famicom"),
@@ -66,11 +68,7 @@ def save_credentials(directory, username, api_key, fetch=api_get):
     if not profile.get("User"):
         raise ValueError("RetroAchievements rejected those credentials.")
     path = Path(directory) / "retroachievements.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(credentials))
-    os.chmod(temporary, 0o600)
-    temporary.replace(path)
+    secure_text_write(path, json.dumps(credentials))
     return profile
 
 

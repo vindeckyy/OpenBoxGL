@@ -17,6 +17,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from archives import extract_game
 from openbox_logging import configure_logging
+from state_store import JsonStateStore
 
 CUSTOM_DATA_DIR = os.environ.get("OPENBOX_DATA_DIR")
 APP_DIR = Path(CUSTOM_DATA_DIR or Path.home() / ".local/share/openbox-game-launcher").expanduser()
@@ -26,6 +27,8 @@ if not CUSTOM_DATA_DIR and not DATA.exists() and LEGACY_DATA.is_file():
     APP_DIR.mkdir(parents=True, exist_ok=True)
     shutil.copy2(LEGACY_DATA, DATA)
 from parity_import import EXTENSIONS_EXTRA, PLATFORM_BY_EXTENSION_EXTRA
+
+STATE_STORE = JsonStateStore(DATA)
 
 EXTENSIONS = {".sh", ".appimage", ".exe", ".iso", ".rom", ".nes", ".sfc", ".smc", ".gba", ".gb", ".gbc", ".zip", ".7z", ".rar"} | EXTENSIONS_EXTRA
 PLATFORM_BY_EXTENSION = {
@@ -59,27 +62,20 @@ def purge_demo_games(state):
 
 
 def load_state():
-    try:
-        raw = json.loads(DATA.read_text())
-        if isinstance(raw, list):
-            return {"games": raw, "profiles": {}, "history": []}
-        if not isinstance(raw, dict):
-            raise AttributeError
-        raw.setdefault("games", [])
-        raw.setdefault("profiles", {})
-        raw.setdefault("history", [])
-        raw.setdefault("settings", {})
-        raw.setdefault("playlists", [])
-        return raw
-    except (FileNotFoundError, json.JSONDecodeError, AttributeError):
-        return {"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []}
+    return STATE_STORE.load()
 
 
 def save_state(state):
-    DATA.parent.mkdir(parents=True, exist_ok=True)
-    temporary = DATA.with_suffix(".tmp")
-    temporary.write_text(json.dumps(state, indent=2))
-    temporary.replace(DATA)
+    return STATE_STORE.save(state)
+
+
+def update_state(mutator):
+    """Apply one state mutation under the cross-process transaction lock."""
+    return STATE_STORE.update(mutator)
+
+
+def recover_state():
+    return STATE_STORE.recover()
 
 
 def format_duration(seconds):

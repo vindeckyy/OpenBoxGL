@@ -82,6 +82,7 @@ class ApiSweep(unittest.TestCase):
         status, payload = self.request("/api/library")
         self.assertEqual(status, 200)
         self.assertEqual(payload["games"][0]["name"], "Fixture")
+        self.assertTrue(payload["games"][0]["game_id"])
         self.assertTrue(str(self.web_app.DATA).startswith(self.tempdir.name))
         self.assert_alive()
 

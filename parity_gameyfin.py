@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import urllib.error
@@ -73,7 +74,8 @@ class GameyfinClient:
             raise GameyfinError(f"Gameyfin request failed ({error.code}): {detail or error.reason}") from error
         except urllib.error.URLError as error:
             raise GameyfinError(f"Could not reach Gameyfin: {error.reason}") from error
-        payload = response.read()
+        with response:
+            payload = response.read()
         if raw:
             return response, payload
         content_type = response.headers.get("Content-Type", "")
@@ -163,12 +165,18 @@ class GameyfinClient:
         target = destination / filename
         partial = destination / f".{filename}.partial"
         try:
-            with partial.open("wb") as handle:
+            with response, partial.open("wb") as handle:
+                total = 0
                 while True:
                     chunk = response.read(1024 * 1024)
                     if not chunk:
                         break
+                    total += len(chunk)
+                    if total > 4 * 1024 * 1024 * 1024:
+                        raise GameyfinError("The Gameyfin download is too large.")
                     handle.write(chunk)
+                handle.flush()
+                os.fsync(handle.fileno())
             partial.replace(target)
         except Exception:
             if partial.exists():
@@ -306,8 +314,14 @@ def install_gameyfin_game(settings, game_id, client=None):
 def uninstall_gameyfin_game(game):
     install_dir = Path(str(game.get("install_dir") or "")).expanduser()
     path = Path(str(game.get("path") or "")).expanduser()
+    if not str(game.get("install_dir") or "").strip():
+        raise GameyfinError("Refusing to uninstall a Gameyfin game without an install directory.")
+    root = install_dir.resolve(strict=False)
     removed = []
     for candidate in (install_dir, path):
+        candidate = candidate.resolve(strict=False)
+        if candidate != root and root not in candidate.parents:
+            raise GameyfinError(f"Refusing to remove a path outside the Gameyfin install directory: {candidate}")
         if not candidate.exists():
             continue
         if candidate.is_dir():

@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+
+import hashlib
+import io
+import json
+import os
+import stat
+import tempfile
+import unittest
+import zipfile
+from pathlib import Path
+
+from backend_io import download_file
+from catalog import bulk_update
+from parity_gameyfin import GameyfinError, uninstall_gameyfin_game
+from state_store import JsonStateStore, StateCorruptError, STATE_SCHEMA_VERSION
+
+
+class FakeResponse(io.BytesIO):
+    def __init__(self, payload, headers=None):
+        super().__init__(payload)
+        self.headers = headers or {"Content-Type": "application/octet-stream", "Content-Length": str(len(payload))}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
+
+
+class BackendHardeningTests(unittest.TestCase):
+    def test_state_migration_ids_and_recovery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "library.json"
+            store = JsonStateStore(path)
+            store.save({"games": [{"name": "Legacy", "path": "/tmp/legacy.rom"}], "profiles": {}, "history": []})
+            state = store.load()
+            self.assertEqual(state["schema_version"], STATE_SCHEMA_VERSION)
+            stable_id = state["games"][0]["game_id"]
+            self.assertTrue(stable_id)
+            store.save({**state, "games": [{**state["games"][0], "favorite": True}]})
+            path.write_text("{broken", encoding="utf-8")
+            with self.assertRaises(StateCorruptError):
+                store.load()
+            recovered = store.recover()
+            self.assertEqual(recovered["games"][0]["game_id"], stable_id)
+            self.assertTrue(recovered["games"][0]["favorite"])
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+    def test_stable_ids_are_accepted_by_bulk_updates(self):
+        games = [{"game_id": "game-a", "name": "A"}, {"game_id": "game-b", "name": "B"}]
+        self.assertEqual(bulk_update(games, ["game-b"], {"favorite": True}), 1)
+        self.assertTrue(games[1]["favorite"])
+
+    def test_bounded_atomic_download_and_checksum(self):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "payload.bin"
+            payload = b"safe payload"
+            digest = hashlib.sha256(payload).hexdigest()
+            result = download_file(
+                "https://example.invalid/payload",
+                destination,
+                opener=lambda *_args, **_kwargs: FakeResponse(payload),
+                sha256=digest,
+                max_bytes=1024,
+            )
+            self.assertEqual(result.read_bytes(), payload)
+            with self.assertRaises(ValueError):
+                download_file(
+                    "https://example.invalid/payload",
+                    destination,
+                    opener=lambda *_args, **_kwargs: FakeResponse(payload),
+                    sha256="0" * 64,
+                    max_bytes=1024,
+                )
+
+    def test_gameyfin_uninstall_rejects_outside_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "install"
+            root.mkdir()
+            outside = Path(directory) / "outside.dat"
+            outside.write_text("keep", encoding="utf-8")
+            with self.assertRaises(GameyfinError):
+                uninstall_gameyfin_game({"install_dir": str(root), "path": str(outside)})
+            self.assertTrue(outside.exists())
+
+    def test_archive_symlink_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / "link.zip"
+            info = zipfile.ZipInfo("link")
+            info.external_attr = (stat.S_IFLNK | 0o777) << 16
+            with zipfile.ZipFile(archive, "w") as package:
+                package.writestr(info, "/etc/passwd")
+            from archives import safe_zip_extract
+
+            with self.assertRaises(ValueError):
+                safe_zip_extract(archive, Path(directory) / "out")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -56,7 +56,11 @@ def bulk_update(games, ids, changes):
             clean[field] = {str(key).strip(): str(val).strip() for key, val in value.items() if str(key).strip()}
         else:
             clean[field] = str(value).strip()
-    selected = sorted(set(int(index) for index in ids))
+    stable_indexes = {str(game.get("game_id")): index for index, game in enumerate(games) if game.get("game_id")}
+    selected = sorted({
+        stable_indexes[str(value)] if str(value) in stable_indexes else int(value)
+        for value in ids
+    })
     if selected[0] < 0 or selected[-1] >= len(games):
         raise IndexError("A selected game no longer exists.")
     for index in selected:

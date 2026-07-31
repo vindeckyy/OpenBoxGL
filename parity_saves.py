@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from pathlib import Path
 
 from saves import discover_save_paths, list_backups
+
+
+_SAVE_CACHE_LOCK = threading.RLock()
+_SAVE_CACHE = {"at": 0.0, "signature": None, "indices": []}
 
 
 def extra_save_candidates(game, home=None):
@@ -54,9 +60,6 @@ def scan_all_saves(games, home=None):
         for item in extra_save_candidates(game, home=home):
             if item["path"] not in paths:
                 paths.append(item["path"])
-        for item in extra_save_candidates(game, home=home):
-            if item["path"] not in paths:
-                paths.append(item["path"])
         existing = [path for path in paths if Path(path).exists()]
         if existing:
             found[index] = existing
@@ -64,9 +67,24 @@ def scan_all_saves(games, home=None):
 
 
 def games_with_saves(games, home=None):
+    home_key = str(Path(home or Path.home()).expanduser())
+    signature = tuple(
+        (
+            str(game.get("game_id") or index),
+            str(game.get("path") or ""),
+            tuple(str(path) for path in game.get("save_paths", []) if str(path).strip()),
+        )
+        for index, game in enumerate(games)
+    ) + (home_key,)
+    with _SAVE_CACHE_LOCK:
+        if _SAVE_CACHE["signature"] == signature and time.monotonic() - _SAVE_CACHE["at"] < 2:
+            return list(_SAVE_CACHE["indices"])
     scanned = scan_all_saves(games, home=home)
     indices = set(scanned)
     for index, game in enumerate(games):
         if any(Path(path).expanduser().exists() for path in game.get("save_paths", []) if str(path).strip()):
             indices.add(index)
-    return sorted(indices)
+    result = sorted(indices)
+    with _SAVE_CACHE_LOCK:
+        _SAVE_CACHE.update({"at": time.monotonic(), "signature": signature, "indices": result})
+    return result

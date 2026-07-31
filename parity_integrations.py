@@ -13,6 +13,9 @@ from datetime import datetime
 from pathlib import Path
 from urllib.request import Request, urlopen
 
+from archives import safe_zip_extract
+from backend_io import download_file
+
 
 PLATFORM_BEZEL_REPO = {
     "NES": "thebezelproject/bezelproject-NintendoEntertainmentSystem",
@@ -117,14 +120,17 @@ def download_bezel(platform, dest_dir, opener=urlopen):
     dest.mkdir(parents=True, exist_ok=True)
     archive = dest / f"{platform.replace(' ', '_')}-bezels.zip"
     request = Request(urls[platform], headers={"User-Agent": "OpenBox/1"})
-    with opener(request, timeout=120) as response, archive.open("wb") as output:
-        shutil.copyfileobj(response, output)
+    download_file(
+        urls[platform], archive,
+        max_bytes=512 * 1024 * 1024,
+        timeout=120,
+        opener=opener,
+    )
     extract_to = dest / platform.replace(" ", "_")
     if extract_to.exists():
         shutil.rmtree(extract_to)
     extract_to.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(archive) as package:
-        package.extractall(extract_to)
+    safe_zip_extract(archive, extract_to)
     return str(extract_to)
 
 
@@ -158,22 +164,23 @@ def download_emumovies_media(game, credentials, media_root, media_type="box"):
     platform = str(game.get("platform") or "Arcade")
     name = str(game.get("name") or "")
     url = f"https://api.emumovies.com/v1/media/{media_type}?system={platform}&search={name}"
-    request = Request(url, headers={"User-Agent": "OpenBox/1"})
     import base64
     token = base64.b64encode(f"{username}:{password}".encode()).decode()
-    request.add_header("Authorization", f"Basic {token}")
-    try:
-        with urlopen(request, timeout=30) as response:
-            payload = response.read()
-            content_type = response.headers.get_content_type()
-    except Exception as error:  # noqa: BLE001 - surface remote/API failures cleanly
-        raise ValueError(f"EmuMovies request failed: {error}") from error
-    if not content_type.startswith("image/"):
-        raise ValueError("EmuMovies did not return image media for this title.")
     root = Path(media_root) / "emumovies" / re.sub(r"[^a-z0-9]+", "-", name.casefold()).strip("-")
     root.mkdir(parents=True, exist_ok=True)
     destination = root / f"{media_type}.jpg"
-    destination.write_bytes(payload)
+    try:
+        download_file(
+            url,
+            destination,
+            expected_types=("image/",),
+            max_bytes=32 * 1024 * 1024,
+            timeout=30,
+            opener=urlopen,
+            headers={"Authorization": f"Basic {token}"},
+        )
+    except Exception as error:  # noqa: BLE001 - surface remote/API failures cleanly
+        raise ValueError(f"EmuMovies request failed: {error}") from error
     return str(destination)
 
 

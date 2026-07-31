@@ -138,7 +138,10 @@ def restore_saves(game, root, backup_name):
             if index >= len(roots):
                 raise ValueError("Invalid save backup manifest.")
             root = roots[index]
-            destination = (root["path"].parent if root["file"] else root["path"]) / Path(*parts[2:])
+            base = (root["path"].parent if root["file"] else root["path"]).resolve()
+            destination = (base / Path(*parts[2:])).resolve()
+            if destination != base and base not in destination.parents:
+                raise ValueError("Save backup contains an unsafe path.")
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(package.read(info))
     return archive

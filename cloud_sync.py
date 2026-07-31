@@ -16,6 +16,12 @@ def nonnegative_int(value):
 
 
 def game_key(game):
+    if game.get("game_id"):
+        return f"id:{game['game_id']}"
+    return legacy_game_key(game)
+
+
+def legacy_game_key(game):
     if game.get("steam_app_id"):
         return f"steam:{game['steam_app_id']}"
     if game.get("heroic_app_id"):
@@ -42,6 +48,8 @@ def sync_statistics(state, folder, now=None):
     changed = 0
     for game in state["games"]:
         saved = remote_games.get(game_key(game), {})
+        if not saved:
+            saved = remote_games.get(legacy_game_key(game), {})
         if not isinstance(saved, dict):
             continue
         before = {field:game.get(field) for field in STAT_FIELDS}

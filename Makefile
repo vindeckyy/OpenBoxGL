@@ -6,11 +6,7 @@ DESKTOPDIR = $(PREFIX)/share/applications
 METAINFODIR = $(PREFIX)/share/metainfo
 LICENSEDIR = $(PREFIX)/share/licenses/openbox
 
-PYTHON_SOURCES = openbox.py web_app.py openbox_logging.py importers.py arcade.py catalog.py cloud_sync.py \
-	emulators.py retroachievements.py plugins.py plugin_runner.py metadata.py \
-	archives.py saves.py updates.py env_config.py parity_discovery.py parity_import.py \
-	parity_integrations.py parity_media.py parity_saves.py parity_storefront.py plugin_catalog.py parity_premium.py stock_themes.py parity_gameyfin.py parity_save_tools.py \
-	parity_filter_presets.py parity_deeplinks.py parity_backup.py parity_tracking.py parity_igdb.py parity_emulator_defs.py parity_import_policy.py parity_gamescope.py
+PYTHON_SOURCES = $(shell sed '/^[[:space:]]*#/d;/^[[:space:]]*$$/d' runtime_modules.txt)
 
 DATA_FILES = index.html openbox.svg openbox.metainfo.xml LICENSE
 

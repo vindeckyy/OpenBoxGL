@@ -9,6 +9,8 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 
+from backend_io import download_file
+
 
 DATABASE_URL = "https://gamesdb.launchbox-app.com/Metadata.zip"
 IMAGE_URL = "https://images.launchbox-app.com/"
@@ -82,11 +84,15 @@ def build_database(metadata_zip, destination):
 def sync_database(destination, opener=urlopen):
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    request = Request(DATABASE_URL, headers={"User-Agent":"OpenBox/1"})
     with tempfile.NamedTemporaryFile(dir=destination.parent, suffix=".zip", delete=False) as temporary:
         archive = Path(temporary.name)
-        with opener(request, timeout=120) as response:
-            shutil.copyfileobj(response, temporary)
+    download_file(
+        DATABASE_URL,
+        archive,
+        max_bytes=2 * 1024 * 1024 * 1024,
+        timeout=120,
+        opener=opener,
+    )
     try:
         build_database(archive, destination)
     finally:
@@ -110,16 +116,14 @@ def search_games(database_path, title, platform="", limit=20):
 
 def download_image(filename, destination, opener=urlopen):
     filename = Path(filename).name
-    request = Request(IMAGE_URL + filename, headers={"User-Agent":"OpenBox/1"})
-    with opener(request, timeout=30) as response:
-        if not response.headers.get_content_type().startswith("image/"):
-            raise ValueError("The metadata server did not return an image.")
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        temporary = destination.with_suffix(destination.suffix + ".tmp")
-        with temporary.open("wb") as output:
-            shutil.copyfileobj(response, output)
-        temporary.replace(destination)
-    return str(destination)
+    return str(download_file(
+        IMAGE_URL + filename,
+        destination,
+        expected_types=("image/",),
+        max_bytes=32 * 1024 * 1024,
+        timeout=30,
+        opener=opener,
+    ))
 
 
 def apply_game_metadata(game, database_path, database_id, media_types, media_root, overwrite=False, opener=urlopen, region_priority=None):
