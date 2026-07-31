@@ -132,12 +132,14 @@ WATCH_STOP = threading.Event()
 METADATA_DATABASE = DATA.parent / "metadata/launchbox.db"
 FIELDS = {
     "name", "platform", "genre", "year", "developer", "publisher", "series",
-    "collection", "description", "path", "launch", "cover", "background",
+    "collection", "description", "path", "launch", "launch_profile", "cover", "background",
+    "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen",
     "source", "steam_app_id", "lutris_id", "install_dir",
     "heroic_app_id", "rom_name", "clone_of", "set_type", "ra_game_id", "ra_hash", "launchbox_db_id", "archive_member", "video", "music",
     "video_snap", "video_theme", "video_trailer", "video_recording",
     "progress", "rating", "notes", "region", "play_mode", "sort_title", "added_at",
     "alternate_names", "max_players", "wikipedia_url", "video_url", "hide_in_bigbox", "esrb",
+    "broken", "portable", "controller_support", "disc_count",
     "gameyfin_id", "gameyfin_provider", "store_catalog", "store_installed", "owned",
     "tracking_mode", "tracking_delay", "tracking_frequency", "tracking_process_name", "igdb_id",
 }
@@ -349,6 +351,7 @@ def public_settings(state=None):
         "watch_folders": settings.get("watch_folders", []),
         "screensaver_seconds": settings.get("screensaver_seconds", 90),
         "controller_map": settings.get("controller_map", {}),
+        "badge_visibility": settings.get("badge_visibility", ["favorite", "installed", "saves", "documents", "progress", "storefront", "achievements", "rating"]),
         "image_group": settings.get("image_group", "cover"),
         "image_group_by_platform": settings.get("image_group_by_platform", {}),
         "image_group_by_playlist": settings.get("image_group_by_playlist", {}),
@@ -438,11 +441,23 @@ def public_state():
             "path_exists": path_exists,
             "has_cover": probe_path(game.get("cover"), file_only=True),
             "has_background": probe_path(game.get("background"), file_only=True),
+            "has_clear_logo": probe_path(game.get("clear_logo"), file_only=True),
+            "has_fanart": probe_path(game.get("fanart"), file_only=True),
+            "has_banner": probe_path(game.get("banner"), file_only=True),
+            "has_icon": probe_path(game.get("icon"), file_only=True),
+            "has_box_back": probe_path(game.get("box_back"), file_only=True),
+            "has_box_spine": probe_path(game.get("box_spine"), file_only=True),
+            "has_box_3d": probe_path(game.get("box_3d"), file_only=True),
+            "has_title_screen": probe_path(game.get("title_screen"), file_only=True),
             "has_video": bool(video_path),
             "active_video_field": video_field,
             "has_music": probe_path(game.get("music"), file_only=True),
             "has_saves": index in save_indices or bool(game.get("save_paths")),
             "has_documents": bool(game.get("documents")),
+            "has_versions": bool(game.get("versions")),
+            "has_achievements": bool(game.get("ra_game_id")),
+            "has_highscores": bool(game.get("rom_name")) and str(game.get("platform", "")).casefold() in {"arcade", "mame", "finalburn neo"},
+            "has_missing_media": not probe_path(game.get("cover"), file_only=True),
             "extract_archive": bool(game.get("extract_archive")),
             "applications": game.get("applications", []),
             "versions": game.get("versions", []),
@@ -727,6 +742,9 @@ def start_game(index=None, stable_game_id=""):
     game = copy.deepcopy(state["games"][index])
     stable_game_id = str(game.get("game_id") or stable_game_id)
     profiles = dict(state["profiles"])
+    selected_profile = str(game.get("launch_profile", "")).strip()
+    if selected_profile and selected_profile in profiles:
+        profiles = {game.get("platform", ""): profiles[selected_profile]}
     args, cwd = build_launch(game, profiles)
     if not os.environ.get("OPENBOX_SAFE_MODE"):
         result = run_plugins(DATA.parent / "plugins", "before_launch", {"game": game, "args": args, "cwd": cwd})
@@ -1194,7 +1212,7 @@ class Handler(BaseHTTPRequestHandler):
                 if kind == "screenshot":
                     index = int(query["index"][0])
                     media = Path(game.get("screenshots", [])[index])
-                elif kind in {"cover", "background", "video", "music", "video_snap", "video_theme", "video_trailer", "video_recording"}:
+                elif kind in {"cover", "background", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "video", "music", "video_snap", "video_theme", "video_trailer", "video_recording"}:
                     if kind == "video":
                         _, video_path = active_video(game)
                         media = Path(video_path or game.get("video", ""))
@@ -1460,6 +1478,28 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.send_json(200, {"items": sorted(BACKUP_ITEMS)})
             return
+        if parsed.path == "/api/backups":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            folder = DATA.parent / "backups"
+            backups = []
+            for path in sorted(folder.glob("OpenBoxBackup-*.zip"), key=lambda item: item.stat().st_mtime, reverse=True):
+                try:
+                    with zipfile.ZipFile(path) as package:
+                        manifest = json.loads(package.read("manifest.json")) if "manifest.json" in package.namelist() else {}
+                except (OSError, zipfile.BadZipFile, KeyError, json.JSONDecodeError):
+                    manifest = {"items": [], "invalid": True}
+                backups.append({
+                    "name": path.name,
+                    "path": str(path),
+                    "size": path.stat().st_size,
+                    "created": manifest.get("created", ""),
+                    "items": manifest.get("items", []),
+                    "invalid": bool(manifest.get("invalid")),
+                })
+            self.send_json(200, {"backups": backups})
+            return
         self.send_json(404, {"error": "Not found"})
 
     def _do_POST(self):
@@ -1693,6 +1733,13 @@ class Handler(BaseHTTPRequestHandler):
         game = {key: str(source[key]).strip() for key in FIELDS if key in source}
         game["extract_archive"] = bool(source.get("extract_archive"))
         game["hidden"] = bool(source.get("hidden"))
+        for field in ("broken", "portable"):
+            game[field] = bool(source.get(field))
+        if "disc_count" in source:
+            try:
+                game["disc_count"] = max(0, int(source.get("disc_count") or 0))
+            except (TypeError, ValueError) as error:
+                raise ValueError("Disc count must be a number.") from error
         if game.get("progress", "") not in PROGRESS:
             raise ValueError("Unknown progress value.")
         try:
@@ -2075,8 +2122,12 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Progress automation idle days must be between 0 and 3650.")
         welcome_completed = bool(merged.get("welcome_completed", False))
         image_group = str(merged.get("image_group", "cover"))
-        if image_group not in {"cover", "background", "screenshot"}:
+        if image_group not in {"cover", "background", "screenshot", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen"}:
             raise ValueError("Unknown default image group.")
+        badge_visibility = merged.get("badge_visibility", ["favorite", "installed", "saves", "documents", "progress", "storefront", "achievements", "rating"])
+        allowed_badges = {"favorite", "installed", "missing_media", "saves", "documents", "versions", "storefront", "achievements", "highscores", "progress", "rating", "broken", "portable", "controller"}
+        if not isinstance(badge_visibility, list) or not set(badge_visibility) <= allowed_badges:
+            raise ValueError("Badge visibility must contain known badge names.")
         save_backup_limit = int(merged.get("save_backup_limit", 10))
         if not 0 <= save_backup_limit <= 500:
             raise ValueError("Save backup limit must be between 0 and 500.")
@@ -2147,6 +2198,7 @@ class Handler(BaseHTTPRequestHandler):
                 "watch_folders": clean_folders,
                 "screensaver_seconds": seconds,
                 "controller_map": clean_mapping,
+                "badge_visibility": [str(item) for item in badge_visibility],
                 "cloud_folder": cloud_folder,
                 "startup_commands": startup_commands,
                 "shutdown_commands": shutdown_commands,
@@ -2209,7 +2261,7 @@ class Handler(BaseHTTPRequestHandler):
         group = str(payload.get("group", ""))
         scope = str(payload.get("scope", "global"))
         name = str(payload.get("name", "")).strip()
-        if group not in {"default", "cover", "background", "screenshot"} or scope not in {"global", "platform", "playlist"}:
+        if group not in {"default", "cover", "background", "screenshot", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen"} or scope not in {"global", "platform", "playlist"}:
             raise ValueError("Unknown image group.")
         if scope != "global" and (not name or len(name) > 200):
             raise ValueError("A platform or playlist is required.")
@@ -2455,18 +2507,37 @@ class Handler(BaseHTTPRequestHandler):
         rules = payload.get("rules", {})
         if not name or not isinstance(rules, dict):
             raise ValueError("Playlist name and rules are required.")
+        playlist_type = str(payload.get("type", "filter")).strip().casefold()
+        if playlist_type not in {"filter", "manual"}:
+            raise ValueError("Playlist type must be filter or manual.")
+        state = load_state()
         clean = {
             key: str(rules.get(key, "")).strip()
-            for key in ("platform", "view", "query")
+            for key in ("platform", "view", "query", "platform_category", "esrb", "progress", "genre", "developer", "publisher", "installed", "hidden", "favorite")
             if str(rules.get(key, "")).strip()
         }
+        members = payload.get("members", payload.get("ids", []))
+        if not isinstance(members, list) or len(members) > 100000:
+            raise ValueError("Playlist members must be a list.")
+        member_ids = []
+        for value in members:
+            game = game_from_payload(state, {"game_id": value}) if str(value).startswith("game-") else game_from_payload(state, {"id": value})
+            stable_id = str(game.get("game_id") or "")
+            if stable_id and stable_id not in member_ids:
+                member_ids.append(stable_id)
+        parent = str(payload.get("parent", "")).strip()
+        notes = str(payload.get("notes", "")).strip()
         def mutate(state):
             playlists = state.setdefault("playlists", [])
             existing = next((item for item in playlists if item.get("name") == name), None)
             if existing:
                 existing["rules"] = clean
+                existing["type"] = playlist_type
+                existing["members"] = member_ids if playlist_type == "manual" else []
+                existing["parent"] = parent
+                existing["notes"] = notes
             else:
-                playlists.append({"name": name, "rules": clean})
+                playlists.append({"name": name, "type": playlist_type, "rules": clean, "members": member_ids if playlist_type == "manual" else [], "parent": parent, "notes": notes})
         transact_state(mutate)
         self.send_json(200, {"saved": name})
 

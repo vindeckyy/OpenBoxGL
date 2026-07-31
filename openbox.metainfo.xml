@@ -15,6 +15,13 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="0.6.0" date="2026-07-30">
+      <description>
+        <p>The Web UI adds LaunchBox-style advanced search, ordered manual playlists with parent grouping, context actions, Ctrl and Shift multi-selection, configurable status badges, richer collection details, related-game reasons, artwork galleries, and per-game launch profile overrides.</p>
+        <p>Backup archives can be listed, inspected, and restored from the Web UI. Extended artwork groups cover clear logos, fanart, banners, icons, box backs, box spines, 3D boxes, and title screens. Game metadata now includes controller support, disc count, portable status, and broken-entry flags.</p>
+        <p>Backend hardening adds schema migrations, stable game identities, recovery and atomic persistence, bounded jobs and I/O, safer archive and restore paths, stricter packaging checks, focused regression tests, and verified Chromium coverage for the new workflows.</p>
+      </description>
+    </release>
     <release version="0.5.0" date="2026-07-30">
       <description>
         <p>Steam Game Mode guest support runs Big Box inside gamescope on Steam Deck and similar handhelds, while Steam keeps Input and Quick Access Menu controls. Settings can now remove all Steam-imported library entries at once without deleting game files or media.</p>

@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 
 PROGRESS = {"", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned"}
-MEDIA_FIELDS = ("cover", "background", "video", "music")
+MEDIA_FIELDS = ("cover", "background", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "video", "music")
 
 
 def related_game_ids(games, selected, limit=8):

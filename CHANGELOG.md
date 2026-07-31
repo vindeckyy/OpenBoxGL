@@ -10,6 +10,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Flatpak packages now include the diagnostic logging module.
 
+## [0.6.0] - 2026-07-30
+
+### Added
+
+- LaunchBox-style advanced search in the Web UI, including field terms, quoted values, status filters, and negative terms.
+- Ordered manual playlists with parent grouping, notes, membership editing, and keyboard-friendly reorder controls, alongside existing filter playlists.
+- Game context actions, Ctrl/Shift multi-selection, configurable status badges, richer platform/category/playlist detail panes, related-game reasons, artwork galleries, and per-game launch profile overrides.
+- Backup archive listing, manifest summaries, restore actions, expanded artwork groups, and metadata fields for controller support, disc count, portable games, and broken entries.
+
+### Changed
+
+- State persistence now uses schema migrations, stable game identities with legacy aliases, last-known-good recovery, process-safe transactions, atomic writes, and corruption preservation.
+- Long-running backend jobs now expose bounded state, retries, cancellation, durations, and replacement protection. Request bodies, downloads, archives, media responses, save restores, backup restores, and plugin execution use bounded and validated paths.
+- Packaging uses the runtime module manifest and stricter import and artifact checks. Flatpak support documentation and release validation were refreshed.
+
+### Verification
+
+- Added focused API and launch-profile regression tests.
+- Ran `./run_all_tests.sh`, Python compilation, JavaScript syntax checks, diff validation, and a Chromium smoke test covering the new search, selection, context, playlist, backup, settings, media, and detail workflows.
+
 ## [0.5.0] - 2026-07-30
 
 ### Added
@@ -188,7 +208,8 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.6.0
 [0.5.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.5.0
 [0.4.10]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.10
 [0.4.9]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.4.9

@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from parity_discovery import discovery_lists, item_rating
 from parity_import import generate_m3u, group_multi_disc, recommend_emulators
@@ -84,6 +85,26 @@ class ParityFeatureTests(unittest.TestCase):
         self.assertEqual(lists["recently_added"][0], 0)
         self.assertEqual(lists["never_played"][0], 0)
         self.assertEqual(item_rating(games[0]), 5.0)
+
+    def test_launch_profile_override(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "game.sh"
+            path.write_text("#!/bin/sh\n")
+            import web_app
+            from openbox import save_state
+            save_state({
+                "games": [{"name": "Profile test", "platform": "Linux", "path": str(path), "launch_profile": "handheld"}],
+                "profiles": {"Linux": "default {path}", "handheld": "custom {path}"},
+                "history": [], "settings": {}, "playlists": [],
+            })
+            process = type("Process", (), {"pid": 1234, "wait": lambda self: 0, "poll": lambda self: 0})()
+            with tempfile.TemporaryDirectory() as cwd:
+                with mock.patch("web_app.subprocess.Popen", return_value=process) as popen:
+                    with mock.patch("web_app.build_launch", return_value=(["custom", str(path)], cwd)) as build:
+                        web_app.start_game(0)
+            build.assert_called_once()
+            self.assertEqual(build.call_args.args[1], {"Linux": "custom {path}"})
+            popen.assert_called_once()
 
 
 if __name__ == "__main__":

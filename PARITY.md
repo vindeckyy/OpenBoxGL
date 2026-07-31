@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v0.5.0**, with Steam Game Mode, library and AppImage reliability fixes, local diagnostic logs, Steam-import cleanup, and repaired LaunchBox artwork downloads (see the CHANGELOG).
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v0.6.0**, with LaunchBox-style search, playlists, collection details, badges, media groups, backup management, and backend reliability work (see the CHANGELOG).
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -22,7 +22,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | EA, Ubisoft, and Xbox imports | done | Lutris/Heroic catalog import with EA, Ubisoft, and Xbox/Game Pass tagging; Xbox native PC packages remain unavailable on Linux |
 | MAME and FinalBurn full-set imports | done | DAT/XML metadata classifies and imports merged, split, and non-merged sets |
 | LaunchBox Games Database matching | done | Official daily database sync, local matching, and selected metadata/media downloads work |
-| Media manager and image groups | done | Grid image groups, audits, bulk downloads, duplicate cleanup, region priority, and download limits work |
+| Media manager and image groups | done | Grid image groups, extended artwork groups, audits, bulk downloads, duplicate cleanup, region priority, and download limits work |
 | Emulator profiles and per-game commands | done | Commands launch without a shell |
 | Emulator installation and automatic configuration | done | Install, Update All, open emulator, recommend-on-import, and dependency checks work |
 | Archive extraction before launch | done | ZIP uses safe built-in extraction; 7z/RAR use installed 7z |
@@ -33,12 +33,12 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Save management | done | Discover, scan, retention limits, versioned backups, backup-on-close, and restore work |
 | RetroAchievements | done | Account, matching, progress, badges, Big Box filters, pause access, and emulator injection work |
 | Video, music, and screenshot playback | done | Multi-category videos, library BGM, video/BGM mix, capture, and gallery work |
-| Playlists, auto-filters, and saved filters | done | Platform, view, and search rules save, apply, update, and delete |
+| Playlists, auto-filters, and saved filters | done | Platform, view, search rules, ordered manual members, parent playlists, and notes save, apply, update, and delete |
 | Big Box controller-first navigation | done | Stage, hybrid, and CoverFlow layouts; filter/sort/RA filters; pause overlay; screensaver launch |
 | Steam Game Mode / gamescope guest | done | `--game-mode` opens Big Box; guest detection; Steam launches keep Input; non-Steam windows get best-effort STEAM_GAME props |
 | Themes and per-platform themes | done | Five stock CSS themes ship with the Web UI; import, persist, apply live, and open-folder access work |
 | Plugin manager and extension API | done | Local packages install and run hooks; curated community catalog is bundled |
-| Backups and restore | done | Restore creates a pre-restore safety copy |
+| Backups and restore | done | The web UI lists archives, shows manifests, restores selected archives, and creates a pre-restore safety copy |
 | Library audit and missing-file checks | done | Files, provider-aware duplicates, media, extras, saves, and emulator configuration are audited |
 | Linux packaging and updates | done | AppImage build, Flatpak manifest, Makefile install/uninstall, desktop entry, and verified update mechanism |
 | Welcome wizard and first-run setup | done | Staged setup wizard with media limits and persistent import queues |
@@ -78,6 +78,11 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Big Box shutdown apps on mode switch | done | Configurable commands run when entering or leaving Big Box |
 | Xbox 360 and loose arcade import | done | default.xex folder scan and Hypseus/Singe loose file import |
 | Vita3K title resolution | done | Title IDs resolve to readable game names on import |
+| Advanced search syntax | done | Field terms such as `platform:PC`, quoted values, status terms, and negative terms filter the live grid |
+| Context actions and multi-selection | done | Right-click actions plus Ctrl/Shift range selection expose launch, favorite, progress, playlist, edit, and remove actions |
+| Configurable status badges | done | Settings controls favorite, install, media, save, progress, storefront, achievement, rating, and hardware badges |
+| Collection and related details | done | Platform, category, and playlist detail panes show stats, quick actions, rich related-game reasons, and artwork galleries |
+| Per-game launch profile overrides | done | A game can select an installed emulator profile without changing the platform default |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 

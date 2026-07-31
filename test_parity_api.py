@@ -369,6 +369,71 @@ class ParityApiTests(unittest.TestCase):
         self.assertEqual(settings["gameyfin_password"], "secret")
         self.assertEqual(settings["gameyfin_install_dir"], "/tmp/gameyfin")
 
+    def test_manual_playlist_preserves_order_and_metadata(self):
+        from openbox import load_state, save_state
+        from web_app import Handler
+
+        save_state({
+            "games": [
+                {"name": "Alpha", "game_id": "game-alpha", "path": "/bin/true"},
+                {"name": "Beta", "game_id": "game-beta", "path": "/bin/true"},
+            ],
+            "profiles": {}, "history": [], "settings": {}, "playlists": [],
+        })
+        handler = object.__new__(Handler)
+        handler.send_json = mock.Mock()
+        Handler.save_playlist(handler, {
+            "name": "Weekend order",
+            "type": "manual",
+            "members": [1, 0, 1],
+            "parent": "Favorites",
+            "notes": "Play in this order",
+            "rules": {},
+        })
+        state = load_state()
+        playlist = state["playlists"][0]
+        self.assertEqual(playlist["type"], "manual")
+        self.assertEqual(playlist["members"], [state["games"][1]["game_id"], state["games"][0]["game_id"]])
+        self.assertEqual(playlist["parent"], "Favorites")
+        self.assertEqual(playlist["notes"], "Play in this order")
+
+    def test_settings_save_persists_badges_and_extended_image_group(self):
+        from openbox import load_state, save_state
+        from web_app import Handler
+
+        save_state({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
+        handler = object.__new__(Handler)
+        handler.send_json = mock.Mock()
+        Handler.save_settings(handler, {
+            "watch_folders": [],
+            "image_group": "fanart",
+            "badge_visibility": ["favorite", "missing_media", "controller"],
+        })
+        settings = load_state()["settings"]
+        self.assertEqual(settings["image_group"], "fanart")
+        self.assertEqual(settings["badge_visibility"], ["favorite", "missing_media", "controller"])
+
+    def test_backup_listing_reports_created_manifest(self):
+        from openbox import load_state, save_state
+        from web_app import Handler
+
+        save_state({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
+        create_handler = object.__new__(Handler)
+        create_handler.send_json = mock.Mock()
+        Handler.create_library_backup(create_handler, {"items": ["library", "settings"], "keep": 7})
+
+        list_handler = object.__new__(Handler)
+        list_handler.authorized = mock.Mock(return_value=True)
+        list_handler.send_json = mock.Mock()
+        list_handler.do_GET = Handler.do_GET.__get__(list_handler, Handler)
+        list_handler.path = "/api/backups"
+        list_handler.headers = {}
+        list_handler.do_GET()
+        status, payload = list_handler.send_json.call_args[0]
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["backups"])
+        self.assertIn(["library", "settings"], [item["items"] for item in payload["backups"]])
+
     def test_local_plugin_catalog_file(self):
         catalog = load_local_catalog()
         self.assertTrue(any(item.get("id") == "openbox.library-stats" for item in catalog))
