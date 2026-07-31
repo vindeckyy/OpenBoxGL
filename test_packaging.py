@@ -211,6 +211,7 @@ def test_release_appimage_workflow():
     content = workflow.read_text()
     assert "tags:" in content and '"v*"' in content
     assert "./build_appimage.sh" in content
+    assert "target_commitish: master" in content
     assert "OpenBox-x86_64.AppImage" in content
     assert "OpenBox-x86_64.AppImage.zsync" in content
     assert "OpenBox-x86_64.AppImage.sha256" in content
