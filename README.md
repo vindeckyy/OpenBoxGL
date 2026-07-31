@@ -56,7 +56,7 @@
 
 ## Overview
 
-OpenBox Game Launcher is an open-source game library manager and launcher built for Linux. It puts PC games, storefront libraries, ROM collections, arcade sets, and emulator workflows in one searchable catalog with artwork, metadata, session tracking, save management, and launch profiles.
+OpenBox Game Launcher is an open-source game library manager and launcher built for Linux. It puts PC games, storefront libraries, ROM collections, arcade sets, and emulator workflows in one searchable catalog with advanced search, ordered playlists, artwork galleries, session tracking, save and library backups, and launch profiles.
 
 OpenBox Game Launcher is unrelated to [Openbox](https://openbox.org/), the open-source Linux window manager. The projects have different maintainers, codebases, and purposes.
 
@@ -128,7 +128,7 @@ OpenBox is an independent open-source project aimed at Linux parity with LaunchB
 
 ### Library management
 
-Both projects handle large local libraries, metadata editing, favorites, collections, filters, playlists, and bulk operations. OpenBox also has searchable settings, sidebar section hiding, arrange-by jump bars, provider-aware duplicate detection, ESRB filtering, custom fields, list view, platform categories, and a library health audit for missing files, media, saves, and emulator configuration.
+Both projects handle large local libraries, metadata editing, favorites, collections, filters, playlists, and bulk operations. OpenBox also has field-based search, ordered manual playlists, context actions with multi-selection, configurable status badges, searchable settings, sidebar section hiding, arrange-by jump bars, provider-aware duplicate detection, ESRB filtering, custom fields, list view, platform categories, collection details, related-game reasons, and a library health audit for missing files, media, saves, and emulator configuration.
 
 ### Imports and storefronts
 
@@ -148,11 +148,11 @@ LaunchBox covers many of the same sources on Windows. On Linux, these importers 
 
 ### Metadata and artwork
 
-OpenBox syncs with the official LaunchBox Games Database, matches games locally, downloads artwork and metadata (including ESRB), supports image groups, duplicate cleanup, region priority, download limits, bulk media jobs, Steam trailer download, and Heroic GOG media download. Licensed EmuMovies and Bezel Project hooks are available when you provide your own credentials. Bundled media packs for platform logos, controller prompts, and badges are included without a subscription.
+OpenBox syncs with the official LaunchBox Games Database, matches games locally, downloads artwork and metadata (including ESRB), supports standard and extended artwork groups with detail galleries, duplicate cleanup, region priority, download limits, bulk media jobs, Steam trailer download, and Heroic GOG media download. Licensed EmuMovies and Bezel Project hooks are available when you provide your own credentials. Bundled media packs for platform logos, controller prompts, and badges are included without a subscription.
 
 ### Launching, sessions, and saves
 
-OpenBox launches through safe tokenized emulator commands without shell interpolation, extracts archives before launch when needed, tracks sessions with play counts and play time, shows startup/shutdown overlays, supports force-close on exit, and can back up saves on session close with retention limits and guarded restore. Optional Ludusavi and Hoard CLI hooks are available from the game detail pane when those tools are on PATH.
+OpenBox launches through safe tokenized emulator commands without shell interpolation, supports per-game launch profile overrides, extracts archives before launch when needed, tracks sessions with play counts and play time, shows startup/shutdown overlays, supports force-close on exit, and can back up saves on session close with retention limits and guarded restore. Optional Ludusavi and Hoard CLI hooks are available from the game detail pane when those tools are on PATH.
 
 RetroAchievements support includes account login, ROM hash matching for ZIP and 7z archives, badge display, hardcore status, beaten/mastered stats, Big Box filters, pause-menu access, and emulator launch injection.
 
@@ -180,7 +180,8 @@ The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md
 - Storefront Manager for catalog browse, uninstalled import, and startup auto-import (including Gameyfin install/uninstall)
 - Installed-only and owned-library filters in desktop and Big Box views
 - Game Discovery Center with recently added, never played, continue playing, highly rated, random picks, and short-session lists
-- Collections, saved filter presets with explorer facets, favorites, bulk edits, custom fields, ESRB filters, list view, platform categories, and Surprise Me random selection
+- Collections, advanced search syntax, saved filter presets with explorer facets, ordered manual playlists with parent grouping and notes, favorites, bulk edits, custom fields, ESRB filters, list view, platform categories, and Surprise Me random selection
+- Context actions with Ctrl/Shift multi-selection, configurable status badges, collection detail panes, related-game reasons, and per-game launch profile overrides
 - Rotating local diagnostic log with Settings copy support for troubleshooting. Logs redact tokens and passwords, but may include game names and file paths.
 - Platform documents pane for manuals and reference files per platform
 - MAME and FinalBurn merged/split/non-merged set classification with BIOS awareness
@@ -188,7 +189,7 @@ The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md
 ### Metadata, media, and playback
 
 - LaunchBox Games Database daily sync, local matching, ESRB metadata, and artwork download
-- Media manager with image groups, audits, duplicate cleanup, region priority, download limits, and bundled media packs
+- Media manager with standard and extended artwork groups, detail galleries, audits, duplicate cleanup, region priority, download limits, and bundled media packs
 - Steam trailer and Heroic GOG media download from the game detail pane
 - In-app PDF/document reader with page navigation, spread layout, and light/dark themes
 - Multi-category video playback, screenshot capture, gallery lightbox, and library BGM in Big Box
@@ -208,7 +209,7 @@ The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md
 - Startup and shutdown overlays with force-close support
 - Game progress automation from play time and idle days
 - Save discovery for Steam Cloud, RetroArch, PCSX2, PPSSPP, RPCS3, Dolphin, and Cemu
-- Versioned backups, retention limits, pre-restore safety copies, and backup-on-close
+- Versioned save backups, retention limits, pre-restore safety copies, backup-on-close, and a library backup manager with archive inspection and restore
 
 ### Big Box, controller use, and couch play
 
@@ -256,7 +257,7 @@ LaunchBox Premium workflows are included in OpenBox without a subscription:
 - EmuMovies and Bezel Project downloads with user-provided credentials
 - OBS recording auto-attach on session close
 - MAME community high score export and import
-- Granular JSON library backups and restore with rotation, automatic pre-restore safety copy, and safe archive path handling
+- Granular JSON library backups with archive listing, manifest inspection, backup rotation, automatic pre-restore safety copy, and safe archive path handling
 - `openbox://` deep links, keyboard launcher support, and optional IGDB metadata lookup
 - Mounted-folder sync for Syncthing, Dropbox, Google Drive, or any local path
 - Plugin hooks and bundled plugin catalog
@@ -281,7 +282,7 @@ To launch the Tk interface from the AppImage, pass `--native`:
 ./OpenBox-x86_64.AppImage --native
 ```
 
-Desktop integrators such as Gear Lever work with the AppImage. If an older build opened then never showed a window after integration, install **v0.5.0 or newer**, remove the old menu entry, and re-add the AppImage.
+Desktop integrators such as Gear Lever work with the AppImage. If an older build opened then never showed a window after integration, install **v0.6.0 or newer**, remove the old menu entry, and re-add the AppImage.
 
 ### System install
 
@@ -315,7 +316,7 @@ Optional local configuration can be loaded from `~/.env` or a project `.env` fil
 ## Screenshots
 
 <p align="center">
-  <strong>Library</strong>: grid and list views, platform filters, playlists, drag-and-drop import
+  <strong>Library</strong>: grid and list views, platform filters, ordered playlists, status badges, and drag-and-drop import
 </p>
 
 <p align="center">
@@ -419,7 +420,7 @@ OpenBox/
 ├── env_config.py           Local environment and token loading
 ├── plugins.py              Plugin lifecycle and hooks
 ├── plugin_catalog.py       Bundled community plugin catalog
-├── catalog.py              Search, filters, and bulk edits
+├── catalog.py              Related games, search, filters, and bulk edits
 └── test_*.py               Test suite
 ```
 
