@@ -15,6 +15,14 @@ def main():
         assert result["merged"] == 1
         assert game["play_count"] == 3 and game["progress"] == "Completed" and game["favorite"]
         assert json.loads(target.read_text())["format"] == 1
+
+        # A game deleted locally must not be resurrected from the cloud.
+        deleted = {"name":"Deleted", "path":"/games/gone.rom", "play_count":2}
+        target.write_text(json.dumps({"generated_at":"2026-01-01T00:00:00","games":{game_key(deleted):{"play_count":2}}}))
+        state2 = {"games":[], "settings":{}}
+        sync_statistics(state2, directory, "2026-04-01T00:00:00")
+        payload = json.loads(target.read_text())
+        assert game_key(deleted) not in payload["games"]
     print("cloud-sync self-test: ok")
 
 

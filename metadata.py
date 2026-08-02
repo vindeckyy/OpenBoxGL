@@ -86,14 +86,14 @@ def sync_database(destination, opener=urlopen):
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=destination.parent, suffix=".zip", delete=False) as temporary:
         archive = Path(temporary.name)
-    download_file(
-        DATABASE_URL,
-        archive,
-        max_bytes=2 * 1024 * 1024 * 1024,
-        timeout=120,
-        opener=opener,
-    )
     try:
+        download_file(
+            DATABASE_URL,
+            archive,
+            max_bytes=2 * 1024 * 1024 * 1024,
+            timeout=120,
+            opener=opener,
+        )
         build_database(archive, destination)
     finally:
         archive.unlink(missing_ok=True)

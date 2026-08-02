@@ -432,7 +432,7 @@ class OpenBox(tk.Tk):
     def launch_game(self, game):
         try:
             args, cwd = build_launch(game, self.profiles)
-            process = subprocess.Popen(args, cwd=cwd)
+            process = subprocess.Popen(args, cwd=cwd, start_new_session=True)
             started = datetime.now()
             game_id = str(game.get("game_id") or "")
             def mutate(state):

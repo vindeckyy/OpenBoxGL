@@ -10,6 +10,22 @@ def _parse_env_line(line):
         return None
     key, value = line.split("=", 1)
     key = key.strip()
+    # Strip inline comments: a '#' preceded by whitespace is a comment,
+    # but '#' inside an unquoted value is preserved (e.g. PASSWORD=p#ss).
+    value = value.strip()
+    quote = ""
+    comment_at = -1
+    for index, char in enumerate(value):
+        if char in ("'", '"'):
+            if quote == "":
+                quote = char
+            elif quote == char:
+                quote = ""
+        elif char == "#" and not quote and index > 0 and value[index - 1].isspace():
+            comment_at = index
+            break
+    if comment_at != -1:
+        value = value[:comment_at].rstrip()
     value = value.strip().strip('"').strip("'")
     if not key:
         return None

@@ -183,7 +183,7 @@ def catalog_lutris(home=Path.home(), run=None, which=shutil.which):
             "installed": installed,
             "install_uri": f"lutris:rungameid/{game_id}",
             "path": installed_game["path"] if installed_game else command[0],
-            "launch": installed_game["launch"] if installed_game else " ".join(command + ["lutris:rungameid/{lutris_id}"]),
+            "launch": installed_game["launch"] if installed_game else " ".join(command + [f"lutris:rungameid/{game_id}"]),
             "lutris_id": game_id,
             "install_dir": installed_game.get("install_dir", "") if installed_game else "",
         })

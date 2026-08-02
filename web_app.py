@@ -128,6 +128,9 @@ JOB_MANAGER = JobManager()
 FILE_PROBE_CACHE = {}
 FILE_PROBE_LOCK = threading.Lock()
 FILE_PROBE_TTL = 1.0
+PLUGIN_LIBRARY_CACHE = {"at": 0.0, "payload": None}
+PLUGIN_LIBRARY_TTL = 3.0
+PLUGIN_LIBRARY_LOCK = threading.Lock()
 WATCH_STOP = threading.Event()
 METADATA_DATABASE = DATA.parent / "metadata/launchbox.db"
 FIELDS = {
@@ -319,6 +322,17 @@ def auto_import_worker(cancel_event=None):
                 merge_imported_games(imported, lambda game: ("gameyfin", str(game.get("gameyfin_id", ""))))
             except (OSError, ValueError, GameyfinError) as error:
                 LOGGER.warning("Gameyfin auto-import failed: %s", error)
+        for config in list_scan_configs(state):
+            if not config.get("auto_update"):
+                continue
+            folder = str(config.get("folder", "")).strip()
+            if not folder:
+                continue
+            try:
+                imported = scan_emulator_folder(folder)
+                merge_imported_games(imported, lambda game: ("path", str(game.get("path", ""))))
+            except (OSError, ValueError) as error:
+                LOGGER.warning("Emulator scan auto-update failed for %s: %s", folder, error)
 
 
 def clean_commands(commands):
@@ -481,7 +495,14 @@ def public_state():
         games.append(visible)
     decorated = games
     if not os.environ.get("OPENBOX_SAFE_MODE"):
-        result = run_plugins(DATA.parent / "plugins", "library", {"games": games})
+        now = time.monotonic()
+        cached = PLUGIN_LIBRARY_CACHE
+        with PLUGIN_LIBRARY_LOCK:
+            if cached["payload"] is not None and now - cached["at"] < PLUGIN_LIBRARY_TTL:
+                result = cached["payload"]
+            else:
+                result = run_plugins(DATA.parent / "plugins", "library", {"games": games})
+                cached.update({"at": now, "payload": result})
         decorated = result.get("games", games) if isinstance(result, dict) else games
     if isinstance(decorated, list) and len(decorated) == len(games) and all(isinstance(game, dict) for game in decorated):
         games = decorated
@@ -1170,9 +1191,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200, {
                 "games":len(games),
                 "matched":sum(bool(game.get("launchbox_db_id")) for game in games),
-                "missing_cover":sum(not Path(game.get("cover", "")).is_file() for game in games),
-                "missing_background":sum(not Path(game.get("background", "")).is_file() for game in games),
-                "missing_screenshots":sum(not any(Path(path).is_file() for path in game.get("screenshots", [])) for game in games),
+                "missing_cover":sum(not Path(str(game.get("cover") or "")).is_file() for game in games),
+                "missing_background":sum(not Path(str(game.get("background") or "")).is_file() for game in games),
+                "missing_screenshots":sum(not any(Path(str(path)).is_file() for path in game.get("screenshots", []) if path) for game in games),
             })
             return
         if parsed.path == "/api/media/bulk/status":
@@ -2404,8 +2425,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, {"cover": target.get("cover", ""), "background": target.get("background", "")})
 
     def bigbox_mode_switch(self, payload):
-        entering = bool(payload.get("entering"))
-        key = "bigbox_shutdown_commands" if entering else "shutdown_commands"
+        if not payload.get("entering"):
+            return
+        key = "bigbox_shutdown_commands"
         for command in load_state().get("settings", {}).get(key, []):
             try:
                 args = shlex.split(str(command))
@@ -2592,7 +2614,7 @@ class Handler(BaseHTTPRequestHandler):
     def restore_library_backup(self, payload):
         archive = approved_backup_file(payload.get("path", ""))
         items = payload.get("items")
-        restored = restore_backup(archive, DATA.parent, items=items, running_map=RUNNING)
+        restored = restore_backup(archive, DATA.parent, items=items, running_map=RUNNING, force=bool(payload.get("force")))
         self.send_json(200, {"restored": restored})
 
     def scan_emulator_folder_route(self, payload):
@@ -2770,7 +2792,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, {"path": path})
 
     def cleanup_media(self, payload):
-        groups = find_duplicate_media(load_state()["games"])
+        groups = find_duplicate_media(load_state()["games"], allowed_roots=[DATA.parent])
         apply = bool(payload.get("apply"))
         deleted = cleanup_duplicates(groups, dry_run=not apply, allowed_roots=[DATA.parent])
         self.send_json(200, {"groups": len(groups), "paths": deleted, "applied": apply})

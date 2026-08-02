@@ -40,6 +40,17 @@ class StockThemesTests(unittest.TestCase):
             self.assertTrue(is_stock_theme(stock))
             self.assertIn("Midnight Circuit", stock.read_text(encoding="utf-8"))
 
+    def test_ensure_preserves_user_edits_to_stock_theme(self):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "themes"
+            ensure_stock_themes(destination, ROOT)
+            edited = destination / "Midnight Circuit.css"
+            original = edited.read_bytes()
+            edited.write_bytes(original + b"\n/* user tweak */\n")
+            # Re-running must not revert the user's tweak.
+            ensure_stock_themes(destination, ROOT)
+            self.assertTrue(edited.read_bytes().endswith(b"/* user tweak */\n"))
+
 
 if __name__ == "__main__":
     unittest.main()

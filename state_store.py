@@ -286,10 +286,12 @@ class JsonStateStore:
                 output.flush()
                 os.fsync(output.fileno())
             os.chmod(temporary, 0o600)
+            # Write the backup from the temporary first so a failure here
+            # cannot leave a fresh primary paired with a stale backup.
+            shutil.copy2(temporary, self.backup_path)
+            os.chmod(self.backup_path, 0o600)
             os.replace(temporary, self.path)
             os.chmod(self.path, 0o600)
-            shutil.copy2(self.path, self.backup_path)
-            os.chmod(self.backup_path, 0o600)
             directory_fd = os.open(self.path.parent, os.O_RDONLY)
             try:
                 os.fsync(directory_fd)

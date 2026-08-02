@@ -30,6 +30,28 @@ def test():
         assert not list_plugins(plugins)[0]["enabled"]
         assert remove_plugin(plugins, "test.plugin") == "test.plugin"
         assert list_plugins(plugins) == []
+
+        # Reinstalling after removal comes back enabled.
+        assert not install_plugin(package, plugins)["updated"]
+        assert list_plugins(plugins)[0]["enabled"]
+
+        # A failed update must restore the previous working version.
+        broken = root / "broken"
+        broken.mkdir()
+        (broken / "plugin.json").write_text(json.dumps({
+            "id":"test.plugin", "name":"Test", "version":"2", "hooks":["before_launch"],
+        }))
+        (broken / "plugin.py").write_text("raise RuntimeError('boom')\n")
+        from unittest import mock
+        with mock.patch("plugins.shutil.copytree", side_effect=OSError("disk full")):
+            try:
+                install_plugin(broken, plugins)
+                assert False, "expected OSError"
+            except OSError:
+                pass
+        # The previous version is still installed and enabled.
+        assert list_plugins(plugins)[0]["version"] == "1"
+        assert list_plugins(plugins)[0]["enabled"]
     print("plugin self-test: ok")
 
 

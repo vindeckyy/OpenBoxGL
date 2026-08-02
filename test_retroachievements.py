@@ -29,6 +29,15 @@ def test():
         assert (game_id, matched_hash) == (42, digest)
         progress = game_progress(game_id, {"username":"player","api_key":"key"}, fetch)
         assert progress["earned"] == 1 and progress["achievements"][0]["earned"]
+
+        # A game-list entry with "Hashes": null must not abort the match.
+        null_hash = hashlib.md5(b"other rom").hexdigest()
+        responses["API_GetGameList.php"] = [{"ID":7,"Hashes":None}, {"ID":42,"Hashes":[null_hash]}]
+        other = root / "other.nes"
+        other.write_bytes(b"NES\x1a" + b"\0" * 12 + b"other rom")
+        # Use a fresh cache dir so the updated game list is fetched.
+        game_id, matched_hash = match_game({"path":str(other),"platform":"NES"}, {"username":"player","api_key":"key"}, root / "cache2", fetch)
+        assert (game_id, matched_hash) == (42, null_hash)
     print("RetroAchievements self-test: ok")
 
 

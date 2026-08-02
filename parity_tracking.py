@@ -111,7 +111,7 @@ def find_pids_in_folder(folder):
             continue
         pid = int(entry.name)
         cwd = _proc_cwd(pid)
-        if cwd.startswith(folder):
+        if cwd == folder or cwd.startswith(folder + os.sep):
             matches.append(pid)
     return matches
 

@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Ensure screenshot/demo fixtures never remain in user libraries."""
 
+import os
+import tempfile
+
+# Isolate from the real data dir before importing openbox.
+_ISOLATED = tempfile.mkdtemp(prefix="openbox-demo-purge-")
+os.environ["OPENBOX_DATA_DIR"] = _ISOLATED
+
 from openbox import is_demo_game, purge_demo_games
 
 

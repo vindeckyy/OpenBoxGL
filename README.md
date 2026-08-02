@@ -69,7 +69,7 @@ OpenBox provides two interfaces:
 | Web UI | `python3 web_app.py` or `openbox` | Full feature set, REST API, Big Box mode |
 | Native UI | `python3 openbox.py` or `openbox-native` | Lightweight desktop use |
 
-Library data is stored locally at `~/.local/share/openbox-game-launcher/library.json`.
+Library data is stored locally at `~/.local/share/openbox-game-launcher/library.json`. Set the `OPENBOX_DATA_DIR` environment variable to use a different data directory.
 
 > **Independence notice:** OpenBox Game Launcher is an independent open-source project. It is not affiliated with LaunchBox, Unbroken Software, LLC, or the Openbox window manager project. LaunchBox and Big Box are trademarks of Unbroken Software, LLC. See [DISCLAIMER.md](DISCLAIMER.md).
 

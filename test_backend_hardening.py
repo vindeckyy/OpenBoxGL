@@ -10,7 +10,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from backend_io import download_file
+from backend_io import download_file, read_limited
 from catalog import bulk_update
 from parity_gameyfin import GameyfinError, uninstall_gameyfin_game
 from state_store import JsonStateStore, StateCorruptError, STATE_SCHEMA_VERSION
@@ -83,6 +83,29 @@ class BackendHardeningTests(unittest.TestCase):
             with self.assertRaises(GameyfinError):
                 uninstall_gameyfin_game({"install_dir": str(root), "path": str(outside)})
             self.assertTrue(outside.exists())
+
+    def test_read_limited_rejects_negative_and_huge_content_length(self):
+        # Negative Content-Length must be rejected up front.
+        with self.assertRaises(ValueError):
+            read_limited(FakeResponse(b"x", headers={"Content-Length": "-1"}), max_bytes=8)
+        # A huge declared length must not produce a negative read size.
+        with self.assertRaises(ValueError):
+            read_limited(FakeResponse(b"x", headers={"Content-Length": "999999999999"}), max_bytes=8)
+        # Oversize body beyond the limit raises.
+        with self.assertRaises(ValueError):
+            read_limited(FakeResponse(b"123456789"), max_bytes=8)
+
+    def test_state_backup_is_updated_with_primary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "library.json"
+            store = JsonStateStore(path)
+            store.save({"games": [{"name": "First"}], "profiles": {}, "history": []})
+            store.save({"games": [{"name": "Second"}], "profiles": {}, "history": []})
+            backup = json.loads(store.backup_path.read_text())
+            # The backup reflects the latest commit, not a stale prior state.
+            self.assertEqual(backup["games"][0]["name"], "Second")
+            primary = json.loads(path.read_text())
+            self.assertEqual(primary["games"][0]["name"], "Second")
 
     def test_archive_symlink_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

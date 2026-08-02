@@ -13,6 +13,7 @@ from plugin_catalog import load_local_catalog
 class ParityApiTests(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
+        self._prev_data_dir = os.environ.get("OPENBOX_DATA_DIR")
         os.environ["OPENBOX_DATA_DIR"] = self.tempdir.name
         from openbox import save_state
         from web_app import Handler
@@ -23,6 +24,10 @@ class ParityApiTests(unittest.TestCase):
 
     def tearDown(self):
         self.tempdir.cleanup()
+        if self._prev_data_dir is None:
+            os.environ.pop("OPENBOX_DATA_DIR", None)
+        else:
+            os.environ["OPENBOX_DATA_DIR"] = self._prev_data_dir
 
     def payload(self, response):
         return response[0][1]

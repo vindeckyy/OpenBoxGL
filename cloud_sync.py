@@ -68,20 +68,37 @@ def sync_statistics(state, folder, now=None):
         except (OSError, json.JSONDecodeError):
             remote = {}
         remote_games = remote.get("games", {}) if isinstance(remote, dict) and isinstance(remote.get("games", {}), dict) else {}
-        last_sync = str(state.get("settings", {}).get("last_cloud_sync", ""))
-        remote_is_newer = _timestamp(remote.get("generated_at", "")) > _timestamp(last_sync)
+        remote_generated = _timestamp(remote.get("generated_at", ""))
+        last_sync = _timestamp(state.get("settings", {}).get("last_cloud_sync", ""))
+        remote_newer_overall = remote_generated > last_sync
+        merged = {}
         changed = 0
         for game in state["games"]:
-            saved = remote_games.get(game_key(game), {})
-            if not saved:
-                saved = remote_games.get(legacy_game_key(game), {})
+            key = game_key(game)
+            saved = remote_games.get(key, {})
             if not isinstance(saved, dict):
-                continue
+                saved = {}
+            remote_key = key
+            if not saved:
+                legacy = legacy_game_key(game)
+                saved = remote_games.get(legacy, {})
+                if isinstance(saved, dict):
+                    remote_key = legacy
+            if not isinstance(saved, dict):
+                saved = {}
+            local_played = _timestamp(game.get("last_played"))
+            remote_played = _timestamp(saved.get("last_played"))
+            if local_played or remote_played:
+                # The side with the newer last_played is authoritative.
+                remote_wins = remote_played > local_played
+            else:
+                # No play timestamps on either side: defer to file freshness.
+                remote_wins = remote_newer_overall
             before = {field: game.get(field) for field in STAT_FIELDS}
             game["play_count"] = max(nonnegative_int(game.get("play_count")), nonnegative_int(saved.get("play_count")))
             game["playtime_seconds"] = max(nonnegative_int(game.get("playtime_seconds")), nonnegative_int(saved.get("playtime_seconds")))
             game["last_played"] = max(str(game.get("last_played", "")), str(saved.get("last_played", "")))
-            if remote_is_newer:
+            if remote_wins:
                 if str(saved.get("progress", "")) in PROGRESS:
                     game["progress"] = str(saved.get("progress", ""))
                 try:
@@ -92,18 +109,31 @@ def sync_statistics(state, folder, now=None):
                     pass
                 if isinstance(saved.get("favorite"), bool):
                     game["favorite"] = saved["favorite"]
+            elif saved:
+                # Local changes win; keep newer per-field values from the remote.
+                if remote_played > local_played:
+                    for field in ("progress", "rating", "favorite"):
+                        if saved.get(field) is not None and str(saved.get(field)) != "":
+                            game[field] = saved[field]
             changed += before != {field: game.get(field) for field in STAT_FIELDS}
+            merged[key] = {
+                field: game.get(field, 0 if field in {"play_count", "playtime_seconds", "rating"} else "")
+                for field in STAT_FIELDS
+            }
+            if remote_key != key:
+                merged.pop(remote_key, None)
         timestamp = now or datetime.now().astimezone().isoformat(timespec="seconds")
+        if remote_generated and last_sync >= remote_generated:
+            # Local state is newer; bump the remote timestamp to now.
+            generated_at = timestamp
+        else:
+            # Preserve the remote timestamp when the remote was newer or this
+            # is the first sync, so a future sync can still compare correctly.
+            generated_at = remote.get("generated_at", timestamp)
         payload = {
             "format": 1,
-            "generated_at": timestamp,
-            "games": {
-                game_key(game): {
-                    field: game.get(field, 0 if field in {"play_count", "playtime_seconds", "rating"} else "")
-                    for field in STAT_FIELDS
-                }
-                for game in state["games"]
-            },
+            "generated_at": generated_at,
+            "games": merged,
         }
         atomic_write_text(target, json.dumps(payload, indent=2), mode=0o600)
     state.setdefault("settings", {})["last_cloud_sync"] = timestamp

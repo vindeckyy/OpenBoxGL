@@ -34,12 +34,12 @@ def read_limited(response, max_bytes=MAX_RESPONSE_BYTES) -> bytes:
             declared = int(headers.get("Content-Length", "0"))
         except (TypeError, ValueError):
             declared = 0
-    if declared > max_bytes:
+    if declared < 0 or declared > max_bytes:
         raise ValueError("The remote response is too large.")
     chunks = []
     total = 0
     while True:
-        chunk = response.read(min(CHUNK_SIZE, max_bytes - total + 1))
+        chunk = response.read(min(CHUNK_SIZE, max(0, max_bytes - total + 1)))
         if not chunk:
             break
         total += len(chunk)

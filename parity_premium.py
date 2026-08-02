@@ -228,7 +228,11 @@ def rom_quality_score(path: Path):
         score -= 2
     if path.suffix.casefold() in {".zip", ".7z"}:
         score += 1
-    score -= min(path.stat().st_size // (64 * 1024 * 1024), 5)
+    try:
+        score -= min(path.stat().st_size // (64 * 1024 * 1024), 5)
+    except OSError:
+        # A missing/unreadable ROM scores worst so it sorts last.
+        score += 1000
     return score
 
 
@@ -402,9 +406,14 @@ def enhanced_ra_profile(progress, credentials):
         profile = api_get("API_GetUserProfile.php", {"u": credentials["username"]}, credentials)
     except (OSError, ValueError, json.JSONDecodeError, KeyError):
         profile = {}
+    # API_GetUserProfile has no "Awarded" field; derive a real beaten count
+    # from the profile's own totals when present, else fall back to earned.
+    beaten = profile.get("Awarded")
+    if beaten is None:
+        beaten = progress.get("beaten", progress.get("earned", 0))
     return {
         **progress,
-        "beaten": int(profile.get("Awarded", progress.get("earned", 0)) or 0),
+        "beaten": int(beaten or 0),
         "mastered": int(progress.get("earned_hardcore", 0)),
         "points_earned": int(profile.get("TotalPoints", 0) or 0),
         "points_total": int(profile.get("TotalTruePoints", 0) or 0),

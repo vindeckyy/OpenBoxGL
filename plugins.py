@@ -94,11 +94,28 @@ def install_plugin(source, directory):
         manifest = read_manifest(package)
         destination = root / manifest["id"]
         updated = destination.exists()
+        backup = None
         if updated:
             backup = root / ".backups" / f"{manifest['id']}-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
             backup.parent.mkdir(parents=True, exist_ok=True)
-            destination.replace(backup)
-        shutil.copytree(package, destination)
+        staging = root / f".{manifest['id']}.installing"
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
+        shutil.copytree(package, staging)
+        try:
+            if updated:
+                destination.replace(backup)
+            staging.replace(destination)
+        except Exception:
+            # A failed update must not leave the plugin uninstalled.
+            if updated and backup and not destination.exists() and backup.exists():
+                backup.replace(destination)
+            raise
+        finally:
+            if staging.exists():
+                shutil.rmtree(staging, ignore_errors=True)
+            if backup and backup.exists() and destination.exists():
+                shutil.rmtree(backup, ignore_errors=True)
     return {**manifest, "updated":updated}
 
 
@@ -119,6 +136,12 @@ def remove_plugin(directory, plugin_id):
     trash = root / ".removed" / f"{manifest['id']}-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
     trash.parent.mkdir(parents=True, exist_ok=True)
     (root / manifest["id"]).replace(trash)
+    # Clear any disabled state so a reinstall comes back enabled.
+    state = load_plugin_state(root)
+    disabled = set(state.get("disabled", []))
+    disabled.discard(manifest["id"])
+    state["disabled"] = sorted(disabled)
+    save_plugin_state(root, state)
     return manifest["id"]
 
 

@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from metadata import IMAGE_URL, apply_game_metadata, build_database, search_games
+from metadata import IMAGE_URL, apply_game_metadata, build_database, search_games, sync_database
 
 
 class ImageResponse(io.BytesIO):
@@ -22,6 +22,16 @@ class ImageResponse(io.BytesIO):
 def test():
     with TemporaryDirectory() as directory:
         root = Path(directory)
+        # A failed download must not leak the temp zip in the data dir.
+        def failing_opener(request, timeout=0):
+            raise OSError("network down")
+        try:
+            sync_database(root / "metadata.db", opener=failing_opener)
+            raise AssertionError("expected download failure")
+        except OSError:
+            pass
+        leftovers = [p for p in root.iterdir() if p.suffix == ".zip"]
+        assert leftovers == [], f"temp zip leaked: {leftovers}"
         package = root / "Metadata.zip"
         xml = """<LaunchBox>
           <Game><DatabaseID>42</DatabaseID><Name>Real Game (USA)</Name><Platform>NES</Platform><Developer>Studio</Developer><Overview>Real description</Overview></Game>

@@ -16,7 +16,25 @@ SCHEME = "openbox"
 def parse_uri(uri):
     text = str(uri).strip()
     if text.startswith(f"{SCHEME}://"):
-        text = text[len(f"{SCHEME}://") :]
+        # Validate the host: allow an empty/localhost authority, or a bare
+        # action segment (openbox://search/foo), but never a foreign host.
+        rest = text[len(f"{SCHEME}://") :]
+        authority, sep, path = rest.partition("/")
+        if authority and not sep:
+            # No path: either a bare action (openbox://bigbox) or a host.
+            if "." in authority or ":" in authority:
+                return {"action": "unknown"}
+            if authority.casefold() in {"", "localhost", "openbox"}:
+                text = path
+            else:
+                text = authority
+        else:
+            known = {"start", "search", "showgame", "game", "launch", "bigbox", "fullscreen", "settings"}
+            if authority.casefold() not in {"", "localhost", "openbox"} and authority.casefold() not in known:
+                return {"action": "unknown"}
+            # A known action as the "authority" is a bare form: keep the
+            # whole remainder as the action path.
+            text = rest if authority.casefold() in known else (path if sep else authority)
     elif text.startswith(f"{SCHEME}:"):
         text = text[len(f"{SCHEME}:") :]
     text = text.lstrip("/")
@@ -90,7 +108,6 @@ def handle_cli(argv, data_dir):
 
 
 def dispatch_uri(uri, data_dir, host="127.0.0.1", port=None, token=None, open_browser=False):
-    port = port or read_port_file(data_dir) or 8787
     token_path = Path(data_dir) / "server.token"
     if token is None and token_path.is_file():
         token = token_path.read_text().strip()
@@ -109,6 +126,11 @@ def dispatch_uri(uri, data_dir, host="127.0.0.1", port=None, token=None, open_br
             except Exception:
                 pass
         return 0
+    if port is None:
+        port = read_port_file(data_dir)
+    if not port:
+        print("OpenBox is not running (no server port found). Start OpenBox first.", file=sys.stderr)
+        return 1
     try:
         if action in {"showgame", "game", "launch"}:
             game_id = parsed.get("id", "")

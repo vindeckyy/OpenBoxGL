@@ -56,6 +56,23 @@ class DeeplinkTests(unittest.TestCase):
         self.assertEqual(parse_uri("openbox://showgame/42")["id"], "42")
         self.assertEqual(parse_uri("openbox://start")["action"], "start")
 
+    def test_parse_uri_rejects_foreign_host(self):
+        self.assertEqual(parse_uri("openbox://evil.example/launch/42")["action"], "unknown")
+        self.assertEqual(parse_uri("openbox://evil.example/showgame/42")["action"], "unknown")
+
+    def test_dispatch_uri_requires_port_file(self):
+        from parity_deeplinks import dispatch_uri
+        with tempfile.TemporaryDirectory() as temporary:
+            data_dir = Path(temporary)
+            code = dispatch_uri("openbox://showgame/42", data_dir)
+            self.assertEqual(code, 1)
+            # A real port makes it through to the API call.
+            (data_dir / "server.port").write_text("12345")
+            (data_dir / "server.token").write_text("tok")
+            with mock.patch("parity_deeplinks.api_request", return_value={}):
+                code = dispatch_uri("openbox://showgame/42", data_dir, token="tok")
+            self.assertEqual(code, 0)
+
     def test_build_launch_url(self):
         url = build_launch_url("http://127.0.0.1:8787", "search", query="quake")
         self.assertIn("deeplink=search", url)
@@ -93,6 +110,38 @@ class BackupTests(unittest.TestCase):
             rotate_backups(folder, 1)
             self.assertFalse(old.exists())
             self.assertTrue(newer.exists())
+
+    def test_restore_merges_settings_into_library(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            state = {"settings": {"theme": "dark", "volume": 7}, "games": [{"name": "Test"}]}
+            archive = create_backup(root, state, ["library", "settings"], keep=0)
+            # Simulate the running library diverging after the backup.
+            (root / "library.json").write_text(json.dumps({"settings": {"theme": "light"}, "games": []}))
+            restore_backup(archive, root)
+            restored = json.loads((root / "library.json").read_text())
+            # Archived settings are merged back into the restored state.
+            self.assertEqual(restored["settings"]["theme"], "dark")
+            self.assertEqual(restored["settings"]["volume"], 7)
+            self.assertEqual(restored["games"][0]["name"], "Test")
+
+    def test_restore_refuses_older_backup_unless_forced(self):
+        import time as _time
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            state = {"settings": {}, "games": [{"name": "Old"}]}
+            archive = create_backup(root, state, ["library"], keep=0)
+            # Let the backup's manifest timestamp age, then write a newer
+            # library so the backup is strictly older than the current state.
+            _time.sleep(1.1)
+            current = {"settings": {}, "games": [{"name": "New"}]}
+            (root / "library.json").write_text(json.dumps(current))
+            with self.assertRaises(ValueError):
+                restore_backup(archive, root)
+            # Force restores anyway.
+            restore_backup(archive, root, force=True)
+            restored = json.loads((root / "library.json").read_text())
+            self.assertEqual(restored["games"][0]["name"], "Old")
 
 
 class TrackingTests(unittest.TestCase):

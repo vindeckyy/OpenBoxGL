@@ -43,7 +43,10 @@ def access_token(client_id=None, client_secret=None):
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     with urlopen(request, timeout=30) as response:
-        payload = json.loads(read_limited(response, 2 * 1024 * 1024).decode())
+        try:
+            payload = json.loads(read_limited(response, 2 * 1024 * 1024).decode())
+        except json.JSONDecodeError as error:
+            raise ValueError("IGDB token request returned an invalid response.") from error
     token = payload.get("access_token", "")
     if not token:
         raise ValueError("IGDB token request failed.")

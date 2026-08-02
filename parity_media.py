@@ -84,7 +84,7 @@ def _fingerprint(path: Path):
     return f"{size}:{digest}"
 
 
-def find_duplicate_media(games):
+def find_duplicate_media(games, allowed_roots=None):
     buckets = {}
     for game in games:
         paths = []
@@ -102,11 +102,24 @@ def find_duplicate_media(games):
             except OSError:
                 continue
             buckets.setdefault(key, []).append(str(path))
+    roots = [Path(root).expanduser().resolve(strict=False) for root in (allowed_roots or [])]
     groups = []
     for paths in buckets.values():
         unique = list(dict.fromkeys(paths))
         if len(unique) > 1:
-            groups.append({"keep": unique[0], "duplicates": unique[1:]})
+            # Prefer to keep a copy inside the allowed roots when present,
+            # so the retained file is the one the library can reference.
+            keep = unique[0]
+            if roots:
+                in_root = next(
+                    (candidate for candidate in unique
+                     if any(Path(candidate).expanduser().resolve() == root or root in Path(candidate).expanduser().resolve().parents for root in roots)),
+                    None,
+                )
+                if in_root:
+                    keep = in_root
+            duplicates = [path for path in unique if path != keep]
+            groups.append({"keep": keep, "duplicates": duplicates})
     return groups
 
 

@@ -28,7 +28,9 @@ def is_stock_theme(path):
 def ensure_stock_themes(destination, root=None):
     """Install or refresh bundled stock themes into the user themes folder.
 
-    User-imported themes without the stock marker are left untouched.
+    User-imported themes without the stock marker are left untouched, and
+    user edits to a stock theme are preserved (only missing or identical
+    files are written).
     """
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=True)
@@ -36,6 +38,9 @@ def ensure_stock_themes(destination, root=None):
     for source in stock_theme_sources(root):
         target = destination / source.name
         if target.exists() and not is_stock_theme(target):
+            continue
+        if target.exists() and target.read_bytes() != source.read_bytes():
+            # Keep the user's customized copy.
             continue
         shutil.copy2(source, target)
         installed.append(target.stem)

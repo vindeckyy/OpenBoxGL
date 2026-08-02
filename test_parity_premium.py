@@ -14,6 +14,7 @@ from parity_premium import (
     pick_best_rom,
     rank_rom_group,
     resolve_vita_title,
+    rom_quality_score,
 )
 
 
@@ -32,6 +33,16 @@ class PremiumFeatureTests(unittest.TestCase):
             good.write_bytes(b"y" * 64)
             self.assertEqual(pick_best_rom([str(bad), str(good)]), str(good))
             self.assertEqual(rank_rom_group([str(bad), str(good)])[0], str(good))
+
+    def test_rom_quality_score_missing_path(self):
+        # A missing ROM must score worst, not raise.
+        missing = Path("/nonexistent/game.zip")
+        self.assertGreaterEqual(rom_quality_score(missing), 1000)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            present = root / "Game.zip"
+            present.write_bytes(b"x")
+            self.assertLess(rom_quality_score(present), rom_quality_score(missing))
 
     def test_vita_title_resolution(self):
         title = resolve_vita_title({"title": "PCSE01234", "title_id": "PCSE01234", "metadata": {"Title": "Persona 4 Golden"}})

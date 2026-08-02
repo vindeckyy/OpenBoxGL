@@ -22,6 +22,13 @@ def version_tuple(value):
     return tuple(map(int, match.groups()))
 
 
+def _version_key(value):
+    """Compare with pre-release/build suffix awareness (suffix sorts lower)."""
+    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)([-+].*)?", str(value).strip())
+    if not match:
+        raise ValueError("The release has an invalid version.")
+    return tuple(map(int, match.groups()[:3])) + (1 if not match.group(4) else 0,)
+
 def github_request(url, opener=urlopen):
     from env_config import github_token_from_env
 
@@ -98,14 +105,21 @@ def check_update(opener=urlopen):
     appimage = urls.get(ASSET, "")
     checksum = digests.get(ASSET, "")
     checksum_url = urls.get(f"{ASSET}.sha256", "")
-    if version_tuple(version) > version_tuple(VERSION) and not appimage.startswith(TRUSTED_RELEASE_PREFIX):
+    try:
+        release_available = _version_key(version) > _version_key(VERSION)
+    except ValueError:
+        release_available = False
+    if release_available and re.search(r"[-+]", version):
+        # Never auto-update to a pre-release or build-suffixed tag.
+        release_available = False
+    if release_available and not appimage.startswith(TRUSTED_RELEASE_PREFIX):
         raise ValueError("The release is missing verified OpenBox update assets.")
-    if version_tuple(version) > version_tuple(VERSION) and not checksum and not checksum_url:
+    if release_available and not checksum and not checksum_url:
         raise ValueError("The release is missing a SHA-256 checksum for the AppImage.")
     return {
         "current": VERSION,
         "latest": version.lstrip("v"),
-        "available": version_tuple(version) > version_tuple(VERSION),
+        "available": release_available,
         "notes": str(release.get("body", ""))[:4000],
         "appimage": appimage,
         "checksum": checksum,

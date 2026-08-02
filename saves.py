@@ -21,7 +21,7 @@ def game_backup_dir(game, root):
 
 
 def save_roots(game):
-    return [Path(path).expanduser() for path in game.get("save_paths", []) if str(path).strip()]
+    return [Path(path).expanduser().resolve() for path in game.get("save_paths", []) if str(path).strip()]
 
 
 def discover_save_paths(game, home=Path.home()):
@@ -97,12 +97,16 @@ def discover_save_paths(game, home=Path.home()):
 
 
 def backup_saves(game, root, label="manual"):
+    root = Path(root).expanduser().resolve()
     roots = [path for path in save_roots(game) if path.exists()]
     if not roots:
         raise FileNotFoundError("No configured save paths currently exist.")
     if any(path.is_symlink() for path in roots):
         raise ValueError("Save backup paths may not be symlinks.")
     directory = game_backup_dir(game, root)
+    directory.parent.mkdir(parents=True, exist_ok=True)
+    if directory.is_symlink() or any(parent.is_symlink() for parent in directory.parents):
+        raise ValueError("Save backup directory may not contain symlinks.")
     directory.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     archive = directory / f"{stamp}-{label}.zip"
@@ -184,6 +188,13 @@ def restore_saves(game, root, backup_name):
             if raw_destination.is_symlink() or any(parent.is_symlink() for parent in raw_destination.parents if parent != base):
                 raise ValueError("Save restore destination contains a symlink.")
             destination.parent.mkdir(parents=True, exist_ok=True)
+            # Re-validate after mkdir: a symlink planted at a previously missing
+            # intermediate directory must not redirect the restore write.
+            resolved = destination.resolve()
+            if resolved != base and base not in resolved.parents:
+                raise ValueError("Save backup contains an unsafe path.")
+            if resolved.is_symlink() or any(parent.is_symlink() for parent in resolved.parents if parent != base):
+                raise ValueError("Save restore destination contains a symlink.")
             with package.open(info) as source:
                 atomic_copy_stream(source, destination, mode=0o600, max_bytes=MAX_SAVE_ARCHIVE_MEMBER_BYTES)
     return archive

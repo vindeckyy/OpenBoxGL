@@ -51,6 +51,8 @@ class JobManager:
                 old_event = self._cancel_events.get(current["job_id"])
                 if old_event:
                     old_event.set()
+                self._futures.pop(current["job_id"], None)
+                self._cancel_events.pop(current["job_id"], None)
             job_id = uuid.uuid4().hex
             job = {
                 "job_id": job_id,

@@ -221,6 +221,14 @@ def game_from_gameyfin(record, install_root, provider=""):
     }
 
 
+def _resolve_provider(client, conf):
+    providers = client.list_providers()
+    provider = conf["provider"]
+    if provider not in {item.get("key") for item in providers if isinstance(item, dict)}:
+        provider = providers[0].get("key", DEFAULT_PROVIDER) if providers else DEFAULT_PROVIDER
+    return provider
+
+
 def catalog_gameyfin(settings, client=None):
     conf = gameyfin_settings(settings)
     if not conf["url"]:
@@ -228,9 +236,7 @@ def catalog_gameyfin(settings, client=None):
     install_root = conf["install_dir"] or str(Path.home() / "Games" / "Gameyfin")
     client = client or GameyfinClient(conf["url"], conf["username"], conf["password"])
     providers = client.list_providers()
-    provider = conf["provider"]
-    if provider not in {item.get("key") for item in providers if isinstance(item, dict)}:
-        provider = providers[0].get("key", DEFAULT_PROVIDER) if providers else DEFAULT_PROVIDER
+    provider = _resolve_provider(client, conf)
     catalog = []
     for record in client.list_games():
         if not isinstance(record, dict) or record.get("id") is None:
@@ -264,7 +270,8 @@ def install_gameyfin_game(settings, game_id, client=None):
     record = records.get(str(game_id))
     if not record:
         raise GameyfinError(f"Gameyfin game {game_id} was not found.")
-    entry = game_from_gameyfin(record, install_root, conf["provider"])
+    provider = _resolve_provider(client, conf)
+    entry = game_from_gameyfin(record, install_root, provider)
     destination = Path(entry["install_dir"])
     staging = destination.with_name(f".{destination.name}.openbox-installing")
     previous = destination.with_name(f".{destination.name}.openbox-previous")
@@ -276,7 +283,7 @@ def install_gameyfin_game(settings, game_id, client=None):
         shutil.rmtree(previous) if previous.is_dir() else previous.unlink()
     staging.mkdir(parents=True, exist_ok=True)
     try:
-        downloaded = client.download_game(game_id, conf["provider"], staging)
+        downloaded = client.download_game(game_id, provider, staging)
         if destination.exists():
             destination.rename(previous)
         staging.rename(destination)

@@ -86,6 +86,45 @@ class ParityFeatureTests(unittest.TestCase):
         self.assertEqual(lists["never_played"][0], 0)
         self.assertEqual(item_rating(games[0]), 5.0)
 
+    def test_short_sessions_sort_shortest_first(self):
+        games = [
+            {"name": "Long", "playtime_seconds": 5000},
+            {"name": "Short", "playtime_seconds": 30},
+            {"name": "No time"},
+        ]
+        lists = discovery_lists(games, limit=2)
+        self.assertEqual(lists["short_sessions"], [1, 0])
+
+    def test_auto_update_scan_configs_executed(self):
+        import web_app
+        from openbox import save_state
+        with tempfile.TemporaryDirectory() as folder:
+            from openbox import load_state
+            save_state({
+                "games": [],
+                "profiles": {},
+                "history": [],
+                "settings": {
+                    "emulator_scan_configs": [
+                        {"folder": "/roms/nes", "emulator_id": "retroarch", "auto_update": True},
+                        {"folder": "/roms/skip", "emulator_id": "mame", "auto_update": False},
+                    ],
+                    "watch_folders": [],
+                    "storefront_auto_import": {},
+                },
+                "playlists": [],
+            })
+            scanned = []
+            def fake_scan(folder):
+                scanned.append(folder)
+                return []
+            with mock.patch("web_app.scan_emulator_folder", side_effect=fake_scan) as scan:
+                with mock.patch("web_app.merge_imported_games", return_value=(0, 0)):
+                    with mock.patch("web_app.WATCH_STOP") as stop:
+                        stop.wait.side_effect = [False, True]  # one iteration then stop
+                        web_app.auto_import_worker()
+            self.assertEqual(scanned, ["/roms/nes"])
+
     def test_launch_profile_override(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "game.sh"

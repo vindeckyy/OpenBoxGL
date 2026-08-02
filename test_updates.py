@@ -73,6 +73,16 @@ def main():
         raise AssertionError("empty checksum should fail")
     except ValueError as error:
         assert "checksum" in str(error).casefold()
+
+    # A pre-release tag parses without raising and is not "available".
+    from updates import _version_key
+    assert _version_key("1.2.3-rc1") < _version_key("1.2.3")
+    assert _version_key("1.2.3+build") < _version_key("1.2.3")
+    pre_release = dict(release, tag_name=f"v{latest}-rc1")
+    def pre_opener(request, timeout=0):
+        return Response(json.dumps(pre_release).encode())
+    pre_update = check_update(pre_opener)
+    assert pre_update["available"] is False
     print("update self-test: ok")
 
 

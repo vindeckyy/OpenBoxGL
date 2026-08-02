@@ -45,6 +45,10 @@ def is_gamescope_guest(environ=None, force=False):
     env = environ if environ is not None else os.environ
     if str(env.get("GAMESCOPE_WAYLAND_DISPLAY", "")).strip():
         return True
+    # Steam sets this in Game Mode even when the gamescope compositor env
+    # is not exported (some Deck firmware / nested sessions).
+    if str(env.get("STEAM_GAMESCOPE_RESTRICTED", "")).strip():
+        return True
     desktop = " ".join(
         [
             str(env.get("XDG_CURRENT_DESKTOP", "")),

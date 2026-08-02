@@ -11,6 +11,7 @@ import subprocess
 import zipfile
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from archives import safe_zip_extract
@@ -130,10 +131,20 @@ def download_bezel(platform, dest_dir, opener=urlopen):
     extract_to = dest / platform.replace(" ", "_")
     if extract_to.is_symlink():
         raise ValueError("Bezel extraction destination may not be a symlink.")
-    if extract_to.exists():
-        shutil.rmtree(extract_to)
-    extract_to.mkdir(parents=True, exist_ok=True)
-    safe_zip_extract(archive, extract_to)
+    # Extract into a staging dir first: a corrupt or unsafe new archive must
+    # not destroy the user's previously working bezel set.
+    staging = dest / f".{extract_to.name}.extracting"
+    if staging.exists():
+        shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True, exist_ok=True)
+    try:
+        safe_zip_extract(archive, staging)
+        if extract_to.exists():
+            shutil.rmtree(extract_to)
+        staging.replace(extract_to)
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
     return str(extract_to)
 
 
@@ -164,7 +175,8 @@ def download_emumovies_media(game, credentials, media_root, media_type="box"):
     # EmuMovies requires a licensed account; attempt their search endpoint shape.
     platform = str(game.get("platform") or "Arcade")
     name = str(game.get("name") or "")
-    url = f"https://api.emumovies.com/v1/media/{media_type}?system={platform}&search={name}"
+    query = urlencode({"system": platform, "search": name})
+    url = f"https://api.emumovies.com/v1/media/{media_type}?{query}"
     import base64
     token = base64.b64encode(f"{username}:{password}".encode()).decode()
     root = Path(media_root) / "emumovies" / re.sub(r"[^a-z0-9]+", "-", name.casefold()).strip("-")

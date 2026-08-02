@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -28,6 +29,19 @@ def test():
         steam_save = root / ".local/share/Steam/userdata/1/42/remote"
         steam_save.mkdir(parents=True)
         assert discover_save_paths({"name":"Steam Game","steam_app_id":"42"}, root)[0]["path"] == str(steam_save)
+
+        # A relative save_paths entry must back up and restore against the
+        # resolved path, not the process cwd.
+        relative = root / "relative-saves"
+        relative.mkdir()
+        rel_file = relative / "slot.sav"
+        rel_file.write_text("rel")
+        rel_path = os.path.relpath(relative, Path.cwd())
+        rel_game = {"name":"Relative", "path":"/games/rel", "save_paths":[rel_path]}
+        rel_archive = backup_saves(rel_game, root / "backups")
+        rel_file.write_text("rel2")
+        restore_saves(rel_game, root / "backups", rel_archive.name)
+        assert rel_file.read_text() == "rel"
     print("save self-test: ok")
 
 

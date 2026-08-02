@@ -19,6 +19,7 @@ class ApiSweep(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tempdir = tempfile.TemporaryDirectory()
+        cls._prev_data_dir = os.environ.get("OPENBOX_DATA_DIR")
         os.environ["OPENBOX_DATA_DIR"] = cls.tempdir.name
         import web_app
         from openbox import save_state
@@ -37,6 +38,10 @@ class ApiSweep(unittest.TestCase):
         cls.server.server_close()
         cls.thread.join(timeout=2)
         cls.tempdir.cleanup()
+        if cls._prev_data_dir is None:
+            os.environ.pop("OPENBOX_DATA_DIR", None)
+        else:
+            os.environ["OPENBOX_DATA_DIR"] = cls._prev_data_dir
 
     def setUp(self):
         self.save_state({
