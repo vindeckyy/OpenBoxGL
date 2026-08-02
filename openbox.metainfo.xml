@@ -15,6 +15,13 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="0.7.0" date="2026-08-02">
+      <description>
+        <p>Backup restore now merges archived settings back into the library instead of a sidecar file the app never reads, refuses to overwrite a newer library unless forced, and re-validates symlink parents during extraction.</p>
+        <p>Cloud sync propagates deletions and resolves conflicts per game by play timestamp. Save backups resolve relative paths, and plugin updates are atomic with rollback. Emulator scan auto-update configs now run, and storefront launch commands substitute their identifiers.</p>
+        <p>Big Box exit no longer fires the app-exit commands, plugin library hooks are cached so the UI stays responsive, and the test runner reports per-file results without stopping on the first failure.</p>
+      </description>
+    </release>
     <release version="0.6.0" date="2026-07-30">
       <description>
         <p>The Web UI adds LaunchBox-style advanced search, ordered manual playlists with parent grouping, context actions, Ctrl and Shift multi-selection, configurable status badges, richer collection details, related-game reasons, artwork galleries, and per-game launch profile overrides.</p>

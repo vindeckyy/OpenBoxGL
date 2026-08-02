@@ -4,15 +4,49 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-08-02
 
 ### Fixed
 
-- Flatpak packages now include the diagnostic logging module.
+- Backup restore now merges archived settings back into `library.json` instead of a sidecar file the app never reads, so settings survive a restore.
+- Restoring an older backup over a newer library is refused unless explicitly forced, and restore re-validates symlink parents after `mkdir` to close a zip-slip window.
+- Save backups resolve relative `save_paths` against the game instead of the process working directory, and reject symlinked backup directories.
+- Cloud sync propagates local deletions and resolves per-game conflicts by `last_played` instead of a stale global timestamp, so newer progress, ratings, and favorites win.
+- Big Box exit no longer runs the app-exit `shutdown_commands`; only entering Big Box runs its configured commands.
+- The media audit endpoint tolerates null media fields instead of returning a 500.
+- Plugin updates are atomic with rollback on failure, and reinstalling a removed plugin no longer comes back disabled.
+- The plugin `library` hook is TTL-cached so `/api/library` no longer blocks up to 5 seconds per plugin per request.
+- Storefront catalog launch commands substitute their real identifiers (`{lutris_id}`, Steam, and Heroic).
+- EmuMovies media searches URL-encode their query parameters.
+- Bezel downloads extract into staging and swap atomically, so a corrupt archive no longer destroys the working bezel set.
+- Emulator scan folders with `auto_update` enabled are re-scanned by the auto-import worker.
+- `read_limited` rejects negative or huge `Content-Length` headers up front.
+- Replaced backend jobs clean up their futures so the job manager does not grow unbounded.
+- The state-store backup is written from the temp file before `os.replace`, so a crash cannot pair a fresh primary with a stale backup.
+- Pre-release and build-suffixed release tags parse cleanly and are never treated as available updates.
+- `.env` files strip inline comments while preserving `#` inside unquoted values.
+- `openbox://` deeplinks reject foreign hosts and fail clearly when no server port is known instead of silently hitting a dead port.
+- Folder-based session tracking matches path boundaries so `MyGame2` no longer matches `MyGame`.
+- The native UI launches games detached from the launcher's process session.
+- `rom_quality_score` no longer crashes on a missing or unreadable ROM.
+- Duplicate-media cleanup prefers keeping the copy inside the allowed media roots.
+- The metadata database temp zip is cleaned up when the download fails.
+- User edits to stock themes are preserved instead of being reverted on every Themes dialog open.
+- Gamescope guest detection also recognizes `STEAM_GAMESCOPE_RESTRICTED` sessions.
+- IGDB token failures and Gameyfin provider fallbacks now surface readable errors.
+- Flatpak packages include the diagnostic logging module.
 
 ### Changed
 
-- Refreshed user-facing documentation, package metadata, and installation guidance for v0.6.0.
+- The test runner now continues past failures and reports a per-file pass/fail summary instead of stopping at the first error.
+- Tests no longer leak environment variables (`GITHUB_TOKEN`, `RA_*`, `OPENBOX_DATA_DIR`) into the shell or a real home directory.
+- Documented `OPENBOX_DATA_DIR` and the RetroAchievements and EmuMovies environment variables in the README and `.env.example`.
+- Refreshed user-facing documentation, package metadata, and installation guidance.
+
+### Verification
+
+- Added regression tests for every fix in this release.
+- Ran `./run_all_tests.sh`: 32 test files, 0 failures.
 
 ## [0.6.0] - 2026-07-30
 
