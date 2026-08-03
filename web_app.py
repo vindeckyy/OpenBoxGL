@@ -2,6 +2,7 @@
 """Local browser UI for OpenBox. Independent open-source software not affiliated with LaunchBox or Unbroken Software, LLC."""
 
 import copy
+import email.utils
 import json
 import html
 import logging
@@ -34,7 +35,7 @@ from importers import import_heroic, import_lutris, import_steam
 from metadata import apply_game_metadata, search_games, sync_database
 from job_manager import JobManager
 from openbox_logging import configure_logging, read_diagnostic_log
-from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, build_launch, discover_profiles, load_state, purge_demo_games, recover_state as recover_library_state, save_state, update_state, update_state_with_result
+from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, STATE_STORE, build_launch, discover_profiles, load_state, purge_demo_games, recover_state as recover_library_state, save_state, update_state, update_state_with_result
 from state_store import StateCorruptError, secure_text_write
 from env_config import bootstrap_env
 from parity_discovery import discovery_lists, related_with_reasons
@@ -127,10 +128,17 @@ MEDIA_JOB = {}
 JOB_MANAGER = JobManager()
 FILE_PROBE_CACHE = {}
 FILE_PROBE_LOCK = threading.Lock()
-FILE_PROBE_TTL = 1.0
+FILE_PROBE_TTL = 60.0
 PLUGIN_LIBRARY_CACHE = {"at": 0.0, "payload": None}
 PLUGIN_LIBRARY_TTL = 3.0
 PLUGIN_LIBRARY_LOCK = threading.Lock()
+MEDIA_EPOCH = {"value": 0}
+MEDIA_EPOCH_LOCK = threading.Lock()
+PLUGIN_EPOCH = {"value": 0}
+PUBLIC_STATE_CACHE = {"signature": None, "payload": None, "raw": None}
+PUBLIC_STATE_LOCK = threading.Lock()
+STATE_VIEW_CACHE = {"signature": None, "state": None}
+STATE_VIEW_LOCK = threading.Lock()
 WATCH_STOP = threading.Event()
 METADATA_DATABASE = DATA.parent / "metadata/launchbox.db"
 FIELDS = {
@@ -432,65 +440,70 @@ def public_settings(state=None):
     }
 
 
-def public_state():
+def _public_state_signature():
+    return (STATE_STORE.signature(), MEDIA_EPOCH["value"], PLUGIN_EPOCH["value"])
+
+
+def _build_public_state():
     with STATE_LOCK:
         state = load_state()
     save_indices = set(games_with_saves(state["games"]))
     games = []
     for index, game in enumerate(state["games"]):
-        normalize_video_fields(game)
-        visible = {key: game.get(key, "") for key in FIELDS}
-        video_field, video_path = active_video(game, state.get("settings", {}).get("video_priority"))
-        path_exists = probe_path(game.get("path"))
-        store_installed = bool(game["store_installed"]) if "store_installed" in game else path_exists
+        projected = dict(game)
+        normalize_video_fields(projected)
+        visible = {key: projected.get(key, "") for key in FIELDS}
+        video_field, video_path = active_video(projected, state.get("settings", {}).get("video_priority"))
+        path_exists = probe_path(projected.get("path"))
+        store_installed = bool(projected["store_installed"]) if "store_installed" in projected else path_exists
         visible.update({
             "id": index,
-            "game_id": game.get("game_id", ""),
-            "favorite": bool(game.get("favorite")),
-            "hidden": bool(game.get("hidden")),
-            "hide_in_bigbox": bool(game.get("hide_in_bigbox")),
-            "last_played": game.get("last_played", ""),
-            "play_count": game.get("play_count", 0),
-            "playtime_seconds": game.get("playtime_seconds", 0),
+            "game_id": projected.get("game_id", ""),
+            "favorite": bool(projected.get("favorite")),
+            "hidden": bool(projected.get("hidden")),
+            "hide_in_bigbox": bool(projected.get("hide_in_bigbox")),
+            "last_played": projected.get("last_played", ""),
+            "play_count": projected.get("play_count", 0),
+            "playtime_seconds": projected.get("playtime_seconds", 0),
             "path_exists": path_exists,
-            "has_cover": probe_path(game.get("cover"), file_only=True),
-            "has_background": probe_path(game.get("background"), file_only=True),
-            "has_clear_logo": probe_path(game.get("clear_logo"), file_only=True),
-            "has_fanart": probe_path(game.get("fanart"), file_only=True),
-            "has_banner": probe_path(game.get("banner"), file_only=True),
-            "has_icon": probe_path(game.get("icon"), file_only=True),
-            "has_box_back": probe_path(game.get("box_back"), file_only=True),
-            "has_box_spine": probe_path(game.get("box_spine"), file_only=True),
-            "has_box_3d": probe_path(game.get("box_3d"), file_only=True),
-            "has_title_screen": probe_path(game.get("title_screen"), file_only=True),
+            "has_cover": probe_path(projected.get("cover"), file_only=True),
+            "has_background": probe_path(projected.get("background"), file_only=True),
+            "has_clear_logo": probe_path(projected.get("clear_logo"), file_only=True),
+            "has_fanart": probe_path(projected.get("fanart"), file_only=True),
+            "has_banner": probe_path(projected.get("banner"), file_only=True),
+            "has_icon": probe_path(projected.get("icon"), file_only=True),
+            "has_box_back": probe_path(projected.get("box_back"), file_only=True),
+            "has_box_spine": probe_path(projected.get("box_spine"), file_only=True),
+            "has_box_3d": probe_path(projected.get("box_3d"), file_only=True),
+            "has_title_screen": probe_path(projected.get("title_screen"), file_only=True),
             "has_video": bool(video_path),
             "active_video_field": video_field,
-            "has_music": probe_path(game.get("music"), file_only=True),
-            "has_saves": index in save_indices or bool(game.get("save_paths")),
-            "has_documents": bool(game.get("documents")),
-            "has_versions": bool(game.get("versions")),
-            "has_achievements": bool(game.get("ra_game_id")),
-            "has_highscores": bool(game.get("rom_name")) and str(game.get("platform", "")).casefold() in {"arcade", "mame", "finalburn neo"},
-            "has_missing_media": not probe_path(game.get("cover"), file_only=True),
-            "extract_archive": bool(game.get("extract_archive")),
-            "applications": game.get("applications", []),
-            "versions": game.get("versions", []),
-            "documents": game.get("documents", []),
-            "save_paths": game.get("save_paths", []),
-            "screenshots": game.get("screenshots", []),
-            "alternate_names": game.get("alternate_names", []) if isinstance(game.get("alternate_names"), list) else [name for name in str(game.get("alternate_names") or "").split(";") if name.strip()],
+            "has_music": probe_path(projected.get("music"), file_only=True),
+            "has_saves": index in save_indices or bool(projected.get("save_paths")),
+            "has_documents": bool(projected.get("documents")),
+            "has_versions": bool(projected.get("versions")),
+            "has_achievements": bool(projected.get("ra_game_id")),
+            "has_highscores": bool(projected.get("rom_name")) and str(projected.get("platform", "")).casefold() in {"arcade", "mame", "finalburn neo"},
+            "has_missing_media": not probe_path(projected.get("cover"), file_only=True),
+            "extract_archive": bool(projected.get("extract_archive")),
+            "applications": projected.get("applications", []),
+            "versions": projected.get("versions", []),
+            "documents": projected.get("documents", []),
+            "save_paths": projected.get("save_paths", []),
+            "screenshots": projected.get("screenshots", []),
+            "alternate_names": projected.get("alternate_names", []) if isinstance(projected.get("alternate_names"), list) else [name for name in str(projected.get("alternate_names") or "").split(";") if name.strip()],
             "available_screenshots": [
-                index for index, path in enumerate(game.get("screenshots", []))
+                index for index, path in enumerate(projected.get("screenshots", []))
                 if probe_path(path, file_only=True)
             ],
-            "esrb": game.get("esrb", ""),
-            "custom_fields": game.get("custom_fields", {}) if isinstance(game.get("custom_fields"), dict) else {},
-            "platform_category": category_for_platform(game.get("platform", ""), state.get("settings", {})),
-            "store_catalog": bool(game.get("store_catalog")),
+            "esrb": projected.get("esrb", ""),
+            "custom_fields": projected.get("custom_fields", {}) if isinstance(projected.get("custom_fields"), dict) else {},
+            "platform_category": category_for_platform(projected.get("platform", ""), state.get("settings", {})),
+            "store_catalog": bool(projected.get("store_catalog")),
             "store_installed": store_installed,
-            "owned": bool(game.get("owned") or game.get("store_catalog") or game.get("steam_app_id") or game.get("heroic_app_id") or game.get("lutris_id") or game.get("gameyfin_id")),
-            "installable": bool(game.get("gameyfin_id")) and not store_installed,
-            "gameyfin_id": game.get("gameyfin_id", ""),
+            "owned": bool(projected.get("owned") or projected.get("store_catalog") or projected.get("steam_app_id") or projected.get("heroic_app_id") or projected.get("lutris_id") or projected.get("gameyfin_id")),
+            "installable": bool(projected.get("gameyfin_id")) and not store_installed,
+            "gameyfin_id": projected.get("gameyfin_id", ""),
         })
         games.append(visible)
     decorated = games
@@ -516,7 +529,46 @@ def public_state():
         "ra_configured": bool(load_ra_credentials(DATA.parent)),
         "settings": public_settings(state),
         "discovery": discovery_lists(state["games"]),
+        "media_epoch": MEDIA_EPOCH["value"],
     }
+
+
+def _public_state_cached():
+    with PUBLIC_STATE_LOCK:
+        signature = _public_state_signature()
+        if PUBLIC_STATE_CACHE["raw"] is not None and PUBLIC_STATE_CACHE["signature"] == signature:
+            return PUBLIC_STATE_CACHE
+    payload = _build_public_state()
+    raw = json.dumps(payload).encode()
+    with PUBLIC_STATE_LOCK:
+        if PUBLIC_STATE_CACHE["raw"] is not None and PUBLIC_STATE_CACHE["signature"] == signature:
+            return PUBLIC_STATE_CACHE
+        PUBLIC_STATE_CACHE.update({"signature": signature, "payload": payload, "raw": raw})
+        return PUBLIC_STATE_CACHE
+
+
+def public_state():
+    """Return the full library projection, cached until library state changes."""
+    return _public_state_cached()["payload"]
+
+
+def public_state_bytes():
+    """Return the serialized library projection, cached until library state changes."""
+    return _public_state_cached()["raw"]
+
+
+def load_state_view():
+    """Read-only library snapshot reused across requests until the file changes."""
+    with STATE_VIEW_LOCK:
+        signature = STATE_STORE.signature()
+        if STATE_VIEW_CACHE["state"] is not None and STATE_VIEW_CACHE["signature"] == signature:
+            return STATE_VIEW_CACHE["state"]
+    state = load_state()
+    with STATE_VIEW_LOCK:
+        if STATE_VIEW_CACHE["state"] is not None and STATE_VIEW_CACHE["signature"] == signature:
+            return STATE_VIEW_CACHE["state"]
+        STATE_VIEW_CACHE.update({"signature": signature, "state": state})
+        return state
 
 
 def transact_state(mutator):
@@ -703,8 +755,20 @@ def finish_session(launch_id, game_index, started, process):
                 pass
 
 
+def clear_file_probe_cache():
+    with FILE_PROBE_LOCK:
+        FILE_PROBE_CACHE.clear()
+
+
+def bump_media_epoch():
+    """Invalidate browser media caches by bumping the version suffix in media URLs."""
+    with MEDIA_EPOCH_LOCK:
+        MEDIA_EPOCH["value"] += 1
+    clear_file_probe_cache()
+
+
 def download_image(url, destination):
-    return str(download_file(
+    result = str(download_file(
         url,
         destination,
         expected_types=("image/",),
@@ -712,6 +776,8 @@ def download_image(url, destination):
         timeout=15,
         opener=urlopen,
     ))
+    bump_media_epoch()
+    return result
 
 
 def update_steam_metadata(game):
@@ -903,23 +969,63 @@ class Handler(BaseHTTPRequestHandler):
         LOGGER.debug("HTTP %s %s -> %s", getattr(self, "command", "?"), urlparse(getattr(self, "path", "")).path, code)
         super().send_response(code, message)
 
-    def headers_common(self, content_type):
+    def headers_common(self, content_type, cache_control="no-store"):
         self.send_header("Content-Type", content_type)
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", cache_control)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'")
 
-    def send_bytes(self, status, data, content_type):
+    def send_bytes(self, status, data, content_type, cache_control="no-store", etag=None, last_modified=None):
+        if etag and self.headers.get("If-None-Match", "").strip() == etag:
+            self.send_response(304)
+            self.headers_common(content_type, cache_control=cache_control)
+            self.send_header("ETag", etag)
+            self.end_headers()
+            return
         self.send_response(status)
-        self.headers_common(content_type)
+        self.headers_common(content_type, cache_control=cache_control)
+        if etag:
+            self.send_header("ETag", etag)
+        if last_modified:
+            self.send_header("Last-Modified", last_modified)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
 
+    def _cache_headers(self, path, stat_result):
+        etag = f'"{stat_result.st_mtime_ns:x}-{stat_result.st_size:x}"'
+        last_modified = email.utils.formatdate(stat_result.st_mtime, usegmt=True)
+        return etag, last_modified
+
     def send_file(self, status, path, content_type=None):
         path = Path(path)
-        size = path.stat().st_size
+        stat_result = path.stat()
+        size = stat_result.st_size
+        etag, last_modified = self._cache_headers(path, stat_result)
+        request_cache_control = "private, max-age=31536000, immutable"
+        conditional = self.headers.get("If-None-Match", "")
+        if etag in {item.strip() for item in conditional.split(",")}:
+            self.send_response(304)
+            self.headers_common(content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream", cache_control=request_cache_control)
+            self.send_header("ETag", etag)
+            self.send_header("Last-Modified", last_modified)
+            self.end_headers()
+            return
+        if not conditional:
+            if_modified_since = self.headers.get("If-Modified-Since", "")
+            if if_modified_since:
+                try:
+                    since = email.utils.parsedate_to_datetime(if_modified_since)
+                    if stat_result.st_mtime < since.timestamp() + 1:
+                        self.send_response(304)
+                        self.headers_common(content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream", cache_control=request_cache_control)
+                        self.send_header("ETag", etag)
+                        self.send_header("Last-Modified", last_modified)
+                        self.end_headers()
+                        return
+                except (TypeError, ValueError):
+                    pass
         start, end = 0, size - 1
         response_status = status
         range_header = self.headers.get("Range", "")
@@ -936,7 +1042,7 @@ class Handler(BaseHTTPRequestHandler):
                 start = max(0, size - length)
             if start < 0 or start >= size or end < start:
                 self.send_response(416)
-                self.headers_common(content_type or "application/octet-stream")
+                self.headers_common(content_type or "application/octet-stream", cache_control=request_cache_control)
                 self.send_header("Content-Range", f"bytes */{size}")
                 self.end_headers()
                 return
@@ -944,8 +1050,10 @@ class Handler(BaseHTTPRequestHandler):
             response_status = 206
         length = max(0, end - start + 1)
         self.send_response(response_status)
-        self.headers_common(content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+        self.headers_common(content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream", cache_control=request_cache_control)
         self.send_header("Accept-Ranges", "bytes")
+        self.send_header("ETag", etag)
+        self.send_header("Last-Modified", last_modified)
         self.send_header("Content-Length", str(length))
         if response_status == 206:
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
@@ -998,19 +1106,26 @@ class Handler(BaseHTTPRequestHandler):
             if not name or not theme.is_file() or theme.stem != name:
                 self.send_bytes(200, b"", "text/css; charset=utf-8")
                 return
-            self.send_bytes(200, theme.read_bytes(), "text/css; charset=utf-8")
+            theme_bytes = theme.read_bytes()
+            etag = f'"{theme.stat().st_mtime_ns:x}-{len(theme_bytes):x}"'
+            self.send_bytes(
+                200, theme_bytes, "text/css; charset=utf-8",
+                cache_control="public, max-age=0, must-revalidate",
+                etag=etag,
+                last_modified=email.utils.formatdate(theme.stat().st_mtime, usegmt=True),
+            )
             return
         if parsed.path == "/api/library":
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
                 return
-            self.send_json(200, public_state())
+            self.send_bytes(200, public_state_bytes(), "application/json; charset=utf-8")
             return
         if parsed.path == "/api/profiles":
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
                 return
-            state = load_state()
+            state = load_state_view()
             self.send_json(200, {"profiles": state["profiles"], "detected": discover_profiles()})
             return
         if parsed.path == "/api/settings":
@@ -1040,7 +1155,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 query = parse_qs(parsed.query)
-                state = load_state()
+                state = load_state_view()
                 index = state["games"].index(game_from_query(state, query))
                 related = related_game_ids(state["games"], index)
                 self.send_json(200, {"ids": related})
@@ -1064,7 +1179,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 query = parse_qs(parsed.query)
-                game = game_from_query(load_state(), query)
+                game = game_from_query(load_state_view(), query)
                 backups = [{"name": path.name, "size": path.stat().st_size} for path in list_backups(game, DATA.parent / "save-backups")]
                 self.send_json(200, {"backups": backups})
             except (KeyError, IndexError, ValueError):
@@ -1076,7 +1191,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 query = parse_qs(parsed.query)
-                game = game_from_query(load_state(), query)
+                game = game_from_query(load_state_view(), query)
                 configured = set(game.get("save_paths", []))
                 candidates = [
                     item for item in discover_save_paths(game) + extra_save_candidates(game)
@@ -1092,7 +1207,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             ensure_stock_themes(DATA.parent / "themes", ROOT)
             themes = sorted(path.stem for path in (DATA.parent / "themes").glob("*.css"))
-            settings = load_state().get("settings", {})
+            settings = load_state_view().get("settings", {})
             platform = parse_qs(parsed.query).get("platform", [""])[0]
             mappings = settings.get("theme_by_platform", {})
             self.send_json(200, {
@@ -1126,8 +1241,9 @@ class Handler(BaseHTTPRequestHandler):
                 limit = min(500, max(1, int(parse_qs(parsed.query).get("limit", ["100"])[0])))
             except ValueError:
                 limit = 100
-            history = list(reversed(load_state().get("history", [])[-limit:]))
-            self.send_json(200, {"history": history, "enabled": load_state().get("settings", {}).get("track_session_history", True)})
+            state_view = load_state_view()
+            history = list(reversed(state_view.get("history", [])[-limit:]))
+            self.send_json(200, {"history": history, "enabled": state_view.get("settings", {}).get("track_session_history", True)})
             return
         if parsed.path == "/api/ra/settings":
             if not self.authorized():
@@ -1171,7 +1287,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 query = parse_qs(parsed.query)
-                game = game_from_query(load_state(), query)
+                game = game_from_query(load_state_view(), query)
                 title = query.get("q", [game.get("name", "")])[0]
                 results = search_games(METADATA_DATABASE, title, game.get("platform", ""))
                 self.send_json(200, {"results":results})
@@ -1185,7 +1301,7 @@ class Handler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             platform = query.get("platform", ["all"])[0]
             games = [
-                game for game in load_state()["games"]
+                game for game in load_state_view()["games"]
                 if platform == "all" or game.get("platform") == platform
             ]
             self.send_json(200, {
@@ -1228,7 +1344,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             query = parse_qs(parsed.query)
             try:
-                game = game_from_query(load_state(), query)
+                game = game_from_query(load_state_view(), query)
                 kind = query["kind"][0]
                 if kind == "screenshot":
                     index = int(query["index"][0])
@@ -1253,7 +1369,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             query = parse_qs(parsed.query)
             try:
-                game = game_from_query(load_state(), query)
+                game = game_from_query(load_state_view(), query)
                 document = game.get("documents", [])[int(query["index"][0])]
                 path = safe_document_file(document["path"])
                 self.send_response(200)
@@ -1271,7 +1387,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
                 return
-            data = json.dumps(load_state(), indent=2).encode()
+            data = json.dumps(load_state_view(), indent=2).encode()
             self.send_response(200)
             self.headers_common("application/json")
             self.send_header("Content-Disposition", "attachment; filename=openbox-library.json")
@@ -1283,7 +1399,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
                 return
-            self.send_json(200, discovery_lists(load_state()["games"]))
+            self.send_json(200, discovery_lists(load_state_view()["games"]))
             return
         if parsed.path == "/api/related/rich":
             if not self.authorized():
@@ -1291,7 +1407,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 index = int(parse_qs(parsed.query)["id"][0])
-                self.send_json(200, {"items": related_with_reasons(load_state()["games"], index)})
+                self.send_json(200, {"items": related_with_reasons(load_state_view()["games"], index)})
             except (KeyError, IndexError, ValueError):
                 self.send_json(404, {"error": "Game not found"})
             return
@@ -1313,7 +1429,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
                 return
-            self.send_json(200, {"groups": find_duplicate_media(load_state()["games"])})
+            self.send_json(200, {"groups": find_duplicate_media(load_state_view()["games"])})
             return
         if parsed.path == "/api/media/queue":
             if not self.authorized():
@@ -1325,7 +1441,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
                 return
-            found = scan_all_saves(load_state()["games"])
+            found = scan_all_saves(load_state_view()["games"])
             self.send_json(200, {"games": {str(key): value for key, value in found.items()}, "count": len(found)})
             return
         if parsed.path == "/api/highscores":
@@ -1349,7 +1465,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(403, {"error": "Unauthorized"})
                 return
             platform = parse_qs(parsed.query).get("platform", [""])[0]
-            docs = load_state().get("settings", {}).get("platform_documents", {})
+            docs = load_state_view().get("settings", {}).get("platform_documents", {})
             self.send_json(200, {"documents": docs.get(platform, []) if platform else docs})
             return
         if parsed.path == "/api/platform/document":
@@ -1360,7 +1476,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 platform = query["platform"][0]
                 index = int(query["index"][0])
-                document = load_state().get("settings", {}).get("platform_documents", {}).get(platform, [])[index]
+                document = load_state_view().get("settings", {}).get("platform_documents", {}).get(platform, [])[index]
                 path = safe_document_file(document["path"])
                 self.send_response(200)
                 self.headers_common(mimetypes.guess_type(path.name)[0] or "application/octet-stream")
@@ -1379,7 +1495,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             source = parse_qs(parsed.query).get("source", [""])[0]
             try:
-                self.send_json(200, {"catalog": storefront_catalog(source, settings=load_state().get("settings", {}))})
+                self.send_json(200, {"catalog": storefront_catalog(source, settings=load_state_view().get("settings", {}))})
             except (ValueError, OSError, FileNotFoundError, subprocess.SubprocessError) as error:
                 self.send_json(400, {"error": str(error)})
             return
@@ -1401,7 +1517,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(403, {"error": "Unauthorized"})
                 return
             try:
-                _catalog, providers = catalog_gameyfin(load_state().get("settings", {}))
+                _catalog, providers = catalog_gameyfin(load_state_view().get("settings", {}))
                 self.send_json(200, {"providers": providers})
             except (ValueError, OSError, TypeError, AttributeError) as error:
                 self.send_json(400, {"error": str(error)})
@@ -1429,13 +1545,13 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
                 return
-            self.send_json(200, {"packs": list_media_packs(load_state().get("settings", {}))})
+            self.send_json(200, {"packs": list_media_packs(load_state_view().get("settings", {}))})
             return
         if parsed.path == "/api/premium/platform-categories":
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
                 return
-            self.send_json(200, {"categories": platform_categories(load_state().get("settings", {}))})
+            self.send_json(200, {"categories": platform_categories(load_state_view().get("settings", {}))})
             return
         if parsed.path == "/api/filter-presets":
             if not self.authorized():
@@ -1452,7 +1568,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(403, {"error": "Unauthorized"})
                 return
             field = parse_qs(parsed.query).get("field", ["genre"])[0]
-            state = load_state()
+            state = load_state_view()
             self.send_json(200, {"field": field, "facets": explorer_facets(state["games"], field)})
             return
         if parsed.path == "/api/launcher/menu":
@@ -1466,7 +1582,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
                 return
-            self.send_json(200, {"exclusions": list_exclusions(load_state())})
+            self.send_json(200, {"exclusions": list_exclusions(load_state_view())})
             return
         if parsed.path == "/api/emulators/definitions":
             if not self.authorized():
@@ -1478,7 +1594,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
                 return
-            self.send_json(200, {"configs": list_scan_configs(load_state())})
+            self.send_json(200, {"configs": list_scan_configs(load_state_view())})
             return
         if parsed.path == "/api/metadata/igdb/search":
             if not self.authorized():
@@ -1812,6 +1928,7 @@ class Handler(BaseHTTPRequestHandler):
                 game["game_id"] = existing.get("game_id", game.get("game_id", ""))
                 existing.update(game)
         transact_state(mutate)
+        clear_file_probe_cache()
         self.send_json(200, {"ok": True})
 
     def bulk_edit(self, payload):
@@ -1836,6 +1953,8 @@ class Handler(BaseHTTPRequestHandler):
                     remove_file_if_safe(Path(path), DATA.parent)
                 except (OSError, ValueError):
                     pass
+            bump_media_epoch()
+        clear_file_probe_cache()
         self.send_json(200, {"removed": removed})
 
     def delete_steam_games(self, payload):
@@ -1868,6 +1987,7 @@ class Handler(BaseHTTPRequestHandler):
             str(payload.get("folder", "")),
             chosen_emulators=payload.get("chosen_emulators"),
         )
+        clear_file_probe_cache()
         self.send_json(200, {"added": added, "found": found, "recommendations": recommendations})
 
     def import_wizard(self, payload):
@@ -1876,6 +1996,7 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(chosen, dict):
             raise ValueError("chosen_emulators must be an object.")
         added, found, recommendations = import_folder_path(folder, chosen_emulators=chosen)
+        clear_file_probe_cache()
         installs = []
         for platform, app_id in chosen.items():
             if not app_id:
@@ -1921,6 +2042,7 @@ class Handler(BaseHTTPRequestHandler):
             state["games"].extend(new_games)
             return len(new_games)
         _, added = transact_state(mutate)
+        clear_file_probe_cache()
         self.send_json(200, {"added": added, "found": len(imported)})
 
     def import_heroic_games(self):
@@ -1937,6 +2059,7 @@ class Handler(BaseHTTPRequestHandler):
             state["games"].extend(new_games)
             return len(new_games)
         _, added = transact_state(mutate)
+        clear_file_probe_cache()
         self.send_json(200, {"added": added, "found": len(imported)})
 
     def import_lutris_games(self):
@@ -1950,6 +2073,7 @@ class Handler(BaseHTTPRequestHandler):
             state["games"].extend(new_games)
             return len(new_games)
         _, added = transact_state(mutate)
+        clear_file_probe_cache()
         self.send_json(200, {"added": added, "found": len(imported)})
 
     def import_arcade_games(self, payload):
@@ -1971,6 +2095,7 @@ class Handler(BaseHTTPRequestHandler):
             state["games"].extend(new_games)
             return len(new_games)
         _, added = transact_state(mutate)
+        clear_file_probe_cache()
         counts = {kind: sum(game["set_type"] == kind for game in imported) for kind in ("parent", "merged", "split", "non-merged")}
         self.send_json(200, {"added": added, "found": len(imported), "sets": counts})
 
@@ -2024,6 +2149,7 @@ class Handler(BaseHTTPRequestHandler):
         def mutate(state):
             game_from_payload(state, {"game_id": stable_game_id}).update(changes)
         transact_state(mutate)
+        bump_media_epoch()
         self.send_json(200, {"updated":sorted(changes)})
 
     def bulk_media(self, payload):
@@ -2070,6 +2196,7 @@ class Handler(BaseHTTPRequestHandler):
                     errors.append(f"{original.get('name', stable_id)}: {error}")
                 with PROCESS_LOCK:
                     MEDIA_JOB.update({"current":current, "updated":updated_count, "errors":errors[-20:]})
+            bump_media_epoch()
             with PROCESS_LOCK:
                 MEDIA_JOB["state"] = "done"
 
@@ -2402,6 +2529,7 @@ class Handler(BaseHTTPRequestHandler):
         def mutate(state):
             return apply_media_pack(state, pack_id)
         state, pack = transact_state(mutate)
+        bump_media_epoch()
         self.send_json(200, {"pack": pack, "settings": public_settings(state)})
 
     def download_trailer(self, payload):
@@ -2412,6 +2540,7 @@ class Handler(BaseHTTPRequestHandler):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)
         transact_state(mutate)
+        bump_media_epoch()
         self.send_json(200, {"video_trailer": path})
 
     def download_gog_route(self, payload):
@@ -2422,6 +2551,7 @@ class Handler(BaseHTTPRequestHandler):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)
         transact_state(mutate)
+        bump_media_epoch()
         self.send_json(200, {"cover": target.get("cover", ""), "background": target.get("background", "")})
 
     def bigbox_mode_switch(self, payload):
@@ -2439,6 +2569,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def install_plugin(self, payload):
         manifest = install_plugin(str(payload.get("path", "")), DATA.parent / "plugins")
+        PLUGIN_EPOCH["value"] += 1
         self.send_json(200, {"plugin":manifest})
 
     def toggle_plugin(self, payload):
@@ -2447,10 +2578,12 @@ class Handler(BaseHTTPRequestHandler):
             str(payload.get("id", "")),
             bool(payload.get("enabled")),
         )
+        PLUGIN_EPOCH["value"] += 1
         self.send_json(200, {"enabled":enabled})
 
     def remove_plugin(self, payload):
         plugin_id = remove_plugin(DATA.parent / "plugins", str(payload.get("id", "")))
+        PLUGIN_EPOCH["value"] += 1
         self.send_json(200, {"removed":plugin_id})
 
     def launch_extra(self, payload):
@@ -2615,12 +2748,15 @@ class Handler(BaseHTTPRequestHandler):
         archive = approved_backup_file(payload.get("path", ""))
         items = payload.get("items")
         restored = restore_backup(archive, DATA.parent, items=items, running_map=RUNNING, force=bool(payload.get("force")))
+        if "media" in restored:
+            bump_media_epoch()
         self.send_json(200, {"restored": restored})
 
     def scan_emulator_folder_route(self, payload):
         folder = str(payload.get("folder", "")).strip()
         imported = scan_emulator_folder(folder)
         added, found = merge_imported_games(imported, lambda game: ("path", str(game.get("path", ""))))
+        clear_file_probe_cache()
         self.send_json(200, {"added": added, "found": found})
 
     def save_emulator_scan_config(self, payload):
@@ -2795,6 +2931,8 @@ class Handler(BaseHTTPRequestHandler):
         groups = find_duplicate_media(load_state()["games"], allowed_roots=[DATA.parent])
         apply = bool(payload.get("apply"))
         deleted = cleanup_duplicates(groups, dry_run=not apply, allowed_roots=[DATA.parent])
+        if apply and deleted:
+            bump_media_epoch()
         self.send_json(200, {"groups": len(groups), "paths": deleted, "applied": apply})
 
     def take_screenshot(self, payload):
@@ -2808,6 +2946,7 @@ class Handler(BaseHTTPRequestHandler):
             if path not in screenshots:
                 screenshots.append(path)
         transact_state(mutate)
+        bump_media_epoch()
         self.send_json(200, {"path": path})
 
     def obs_attach(self, payload):
@@ -2819,6 +2958,7 @@ class Handler(BaseHTTPRequestHandler):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)
         transact_state(mutate)
+        bump_media_epoch()
         self.send_json(200, {"path": path, "obs": obs_recording_status()})
 
     def apply_save_scan(self, payload):

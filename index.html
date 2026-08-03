@@ -101,6 +101,7 @@
     .icon-button { border:1px solid var(--border-control); border-radius:4px; padding:7px 10px; background:#242a3a; color:#dbe0ea; }
     .icon-button:hover { background:var(--surface-hover); }
     .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr)); gap:17px 14px; padding:4px 0 25px; }
+    .grid-spacer { grid-column:1/-1; pointer-events:none; }
     .card { position:relative; min-width:0; color:var(--white); }
     .card-main {
       display:block; width:100%; border:0; padding:0; color:inherit; background:transparent;
@@ -744,12 +745,12 @@
   <script>
     const token = new URLSearchParams(location.search).get('token') || '';
     let games = [], playlists = [], filterPresets = [], explorerField = 'genre', explorerRules = {}, activeFilterPreset = '', bigBoxGames = [], runningGames = [], raConfigured = false, selectedId = null, platform = 'all', activePlaylist = '', editingId = null, metadataGameId = null, bigBoxIndex = 0, gamepadState = {}, lastSessionEvent = 0, bulkMode = false, bigBoxLastInput = performance.now(), screenSaverGame = null, contextGameId = null, availableProfiles = {};
-    let appSettings = {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',locale:'en'}, bigBoxFilter = 'all', bigBoxSort = 'title', bigBoxRaFilter = 'all', bigBoxPlatform = 'all', platformCategory = 'all', pendingUpdate = null, duplicateMediaGroups = 0, libraryBgm = null, readerPage = 1, readerUrl = '', bigBoxHybridQuery = '';
+    let appSettings = {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',locale:'en'}, bigBoxFilter = 'all', bigBoxSort = 'title', bigBoxRaFilter = 'all', bigBoxPlatform = 'all', platformCategory = 'all', pendingUpdate = null, duplicateMediaGroups = 0, libraryBgm = null, readerPage = 1, readerUrl = '', bigBoxHybridQuery = '', mediaEpoch = 0;
     const defaultControllerMap = {play:0,back:1,favorite:2,random:3,page_left:4,page_right:5,pause:8,menu:9};
     const selectedIds = new Set();
     const $ = id => document.getElementById(id);
     const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-    const media = (game, kind, index = '') => `/api/media?id=${game.id}&kind=${kind}${index === '' ? '' : `&index=${index}`}&token=${encodeURIComponent(token)}`;
+    const media = (game, kind, index = '') => `/api/media?id=${game.id}&kind=${kind}${index === '' ? '' : `&index=${index}`}&v=${mediaEpoch}&token=${encodeURIComponent(token)}`;
     const duration = seconds => { const minutes = Math.floor((seconds || 0) / 60), hours = Math.floor(minutes / 60); return hours ? `${hours}h ${minutes % 60}m` : `${minutes}m`; };
     const defaultBadges = ['favorite','installed','saves','documents','progress','storefront','achievements','rating'];
     const badgeVisibility = () => new Set(appSettings.badge_visibility || defaultBadges);
@@ -762,8 +763,25 @@
       return playlistMembers(playlist).has(String(game.game_id)) || playlistMembers(playlist).has(String(game.id));
     };
     const formatBytes = value => { const bytes = Number(value || 0); return bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`; };
-    function advancedQueryMatches(game, query) {
+    const queryTokenCache = new Map();
+    function parseQueryTokens(query) {
+      const cached = queryTokenCache.get(query);
+      if (cached) return cached;
       const tokens = String(query || '').match(/(?:[^\s"]+:"[^"]*"|[^\s]+|"[^"]*")+/g) || [];
+      const parsed = tokens.map(token => {
+        const negative = token.startsWith('-');
+        const raw = negative ? token.slice(1) : token;
+        const separator = raw.indexOf(':');
+        const key = separator > 0 ? raw.slice(0, separator).toLowerCase() : 'title';
+        const value = (separator > 0 ? raw.slice(separator + 1) : raw).replace(/^"|"$/g, '').toLowerCase();
+        return { negative, key, value };
+      });
+      if (queryTokenCache.size > 64) queryTokenCache.clear();
+      queryTokenCache.set(query, parsed);
+      return parsed;
+    }
+    function advancedQueryMatches(game, query) {
+      const parsedTokens = parseQueryTokens(query);
       const fields = {
         title:['name','sort_title','alternate_names'], platform:['platform'], plat:['platform'], genre:['genre'],
         dev:['developer'], developer:['developer'], pub:['publisher'], publisher:['publisher'], series:['series'],
@@ -772,23 +790,15 @@
         favorite:['favorite'], fav:['favorite'], installed:['installed'], hide:['hidden'], hidden:['hidden'],
         broken:['broken'], portable:['portable'], controller:['controller_support'], all:['name','sort_title','alternate_names','platform','genre','developer','publisher','series','region','notes','source','play_mode','status','progress','controller_support']
       };
-      const valueFor = (key, names) => {
-        const values = names.flatMap(name => Array.isArray(game[name]) ? game[name] : [game[name]]).filter(value => value !== undefined && value !== null && value !== '');
+      return parsedTokens.every(({ negative, key, value }) => {
+        const names = fields[key] || fields.all;
+        const values = names.flatMap(name => Array.isArray(game[name]) ? game[name] : [game[name]]).filter(item => item !== undefined && item !== null && item !== '');
         if (key === 'installed') values.push(gameInstalled(game) ? 'yes' : 'no');
         if (key === 'favorite' || key === 'fav') values.push(game.favorite ? 'yes' : 'no');
         if (key === 'hide' || key === 'hidden') values.push(game.hidden ? 'yes' : 'no');
         if (key === 'broken') values.push(game.broken ? 'yes' : 'no');
         if (key === 'portable') values.push(game.portable ? 'yes' : 'no');
-        return values.map(value => String(value).toLowerCase());
-      };
-      return tokens.every(token => {
-        const negative = token.startsWith('-');
-        const raw = negative ? token.slice(1) : token;
-        const separator = raw.indexOf(':');
-        const key = separator > 0 ? raw.slice(0, separator).toLowerCase() : 'title';
-        const value = (separator > 0 ? raw.slice(separator + 1) : raw).replace(/^"|"$/g, '').toLowerCase();
-        const names = fields[key] || fields.all;
-        const matched = valueFor(key, names).some(item => item.includes(value));
+        const matched = values.map(item => String(item).toLowerCase()).some(item => item.includes(value));
         return negative ? !matched : matched;
       });
     }
@@ -841,6 +851,7 @@
       filterPresets = state.filter_presets || state.settings?.filter_presets || appSettings.filter_presets || [];
       raConfigured = state.ra_configured;
       appSettings = state.settings || appSettings;
+      mediaEpoch = state.media_epoch || 0;
       if (activePlaylist && !playlists.some(item => item.name === activePlaylist)) activePlaylist = '';
       if (selectedId !== null && !games.some(game => game.id === selectedId)) selectedId = null;
       for (const id of selectedIds) if (!games.some(game => game.id === id)) selectedIds.delete(id);
@@ -848,8 +859,17 @@
       applySidebarVisibility();
       applyLocaleStrings();
       maybeShowWelcome();
-      api('/api/profiles').then(result => { availableProfiles = result.profiles || {}; }).catch(() => {});
-      loadExplorerFacets().catch(() => {});
+      const fingerprint = `${games.length}:${games[0]?.id || ''}:${games.at(-1)?.id || ''}`;
+      if (lastFacetsFingerprint !== fingerprint) {
+        lastFacetsFingerprint = fingerprint;
+        loadExplorerFacets().catch(() => {});
+      }
+    }
+    let profilesFetched = false, lastFacetsFingerprint = null;
+    async function ensureProfiles() {
+      if (profilesFetched) return;
+      profilesFetched = true;
+      try { availableProfiles = (await api('/api/profiles')).profiles || {}; } catch(error) { profilesFetched = false; }
     }
     function applyLocaleStrings() {
       const strings = appSettings.strings || {};
@@ -949,8 +969,16 @@
         const rect = bar.getBoundingClientRect();
         const ratio = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
         const target = groups.reduce((best, group) => Math.abs(group.index / Math.max(visible.length - 1, 1) - ratio) < Math.abs(best.index / Math.max(visible.length - 1, 1) - ratio) ? group : best, groups[0]);
-        const card = document.querySelector(`[data-game="${visible[target.index].id}"]`);
-        if (card) card.scrollIntoView({block:'nearest'});
+        const pane = gridPane();
+        if (pane && gridRowHeight) {
+          const row = Math.floor(target.index / Math.max(gridCols, 1));
+          gridScrollTop = Math.max(0, row * gridRowHeight - pane.clientHeight / 2);
+          pane.scrollTop = gridScrollTop;
+          renderGrid();
+        } else {
+          const card = document.querySelector(`[data-game="${visible[target.index].id}"]`);
+          if (card) card.scrollIntoView({block:'nearest'});
+        }
       };
       bar.onclick = jumpToGroup;
       bar.onkeydown = event => {
@@ -1071,7 +1099,31 @@
       }
       return `<div class="cover-title">${escapeHtml(game.name)}</div>`;
     }
+    let gridScrollTop = 0, gridRowHeight = 0, gridCols = 1;
+    const gridPane = () => document.querySelector('main.library');
+    function measureGridLayout() {
+      const grid = $('grid');
+      if (!grid) return;
+      const firstCard = grid.querySelector('.card, .list-row');
+      if (!firstCard) { gridRowHeight = 0; gridCols = 1; return; }
+      const style = getComputedStyle(grid);
+      gridRowHeight = firstCard.offsetHeight + (parseFloat(style.rowGap) || 0);
+      if (grid.classList.contains('list-view')) { gridCols = 1; return; }
+      const columnGap = parseFloat(style.columnGap) || 0;
+      gridCols = Math.max(1, Math.floor((grid.clientWidth + columnGap) / (firstCard.offsetWidth + columnGap)));
+    }
+    function gridWindow(total) {
+      if (!gridRowHeight) return [0, total];
+      const pane = gridPane();
+      const paneHeight = pane ? pane.clientHeight : 0;
+      const rows = Math.ceil(total / Math.max(gridCols, 1));
+      const firstRow = Math.max(0, Math.floor(gridScrollTop / gridRowHeight) - 2);
+      const lastRow = Math.min(rows - 1, Math.ceil((gridScrollTop + paneHeight) / gridRowHeight) + 2);
+      return [Math.min(total, firstRow * gridCols), Math.min(total, (lastRow + 1) * gridCols)];
+    }
     function renderGrid() {
+      const pane = gridPane();
+      if (pane) gridScrollTop = pane.scrollTop;
       const visible = filteredGames();
       const explicitImageGroup = activePlaylist ? appSettings.image_group_by_playlist?.[activePlaylist] : platform !== 'all' ? appSettings.image_group_by_platform?.[platform] : appSettings.image_group;
       $('imageGroup').value = explicitImageGroup || (platform === 'all' && !activePlaylist ? 'cover' : 'default');
@@ -1080,32 +1132,41 @@
       $('libraryTitle').textContent = activeFilterPreset || activePlaylist || (platform === 'all' ? $('view').selectedOptions[0].text : platform);
       $('libraryMeta').textContent = bulkMode ? `${selectedIds.size} selected · ${visible.length} shown` : `${visible.length} game${visible.length === 1 ? '' : 's'}`;
       $('surpriseButton').disabled = !visible.length;
+      $('status').textContent = `${games.length} games · local library`;
       if (!visible.length) {
         $('grid').className = 'grid';
         $('grid').innerHTML = `<div class="empty"><div><h2>${games.length ? 'No games match this view' : 'Your library is empty'}</h2><p>${games.length ? 'Change the active filters.' : 'Add a real game or import a folder to begin.'}</p>${games.length ? '' : '<button id="emptyAdd">Add game</button>'}</div></div>`;
         if ($('emptyAdd')) $('emptyAdd').onclick = () => openGameDialog();
+        gridRowHeight = 0;
         renderArrangeBar(visible);
         return;
       }
-      if ((appSettings.library_view || 'grid') === 'list') {
-        $('grid').className = 'list-view';
-        $('grid').innerHTML = `<div class="list-head"><span>Title</span><span>Platform</span><span>Genre</span><span>ESRB</span><span>Progress</span><span>Plays</span><span>Rating</span></div>${visible.map(game => `<button type="button" class="list-row ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`).join('')}`;
-      } else {
-        $('grid').className = 'grid';
-        $('grid').innerHTML = visible.map(game => `<article class="card ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}">
+      const listView = (appSettings.library_view || 'grid') === 'list';
+      $('grid').className = listView ? 'list-view' : 'grid';
+      const total = visible.length;
+      const [start, end] = gridWindow(total);
+      const rows = Math.ceil(total / Math.max(gridCols, 1));
+      const topHeight = Math.floor(start / Math.max(gridCols, 1)) * gridRowHeight;
+      const bottomHeight = gridRowHeight ? Math.max(0, rows - Math.ceil(end / Math.max(gridCols, 1))) * gridRowHeight : 0;
+      const topSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${topHeight}px"></div>` : '';
+      const bottomSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${bottomHeight}px"></div>` : '';
+      const chunk = visible.slice(start, end);
+      const rendered = chunk.map(game => listView
+        ? `<button type="button" class="list-row ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
+        : `<article class="card ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}">
         ${bulkMode ? `<input class="card-picker" type="checkbox" data-game-picker="${game.id}" ${selectedIds.has(game.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(game.name)}">` : ''}
         <button type="button" class="card-main" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><div class="cover ${appSettings.bigbox_mode === 'coverflow' ? 'jewel-3d' : ''}">${imageMarkup(game,imageGroup)}</div>
         <h3>${escapeHtml(game.name)}</h3><p>${escapeHtml(game.developer || game.platform || '')}</p>
         <div class="badge-row">${renderBadges(game)}</div></button>
       </article>`).join('');
-      }
+      $('grid').innerHTML = listView ? `<div class="list-head"><span>Title</span><span>Platform</span><span>Genre</span><span>ESRB</span><span>Progress</span><span>Plays</span><span>Rating</span></div>${topSpacer}${rendered}${bottomSpacer}` : `${topSpacer}${rendered}${bottomSpacer}`;
       document.querySelectorAll('[data-game]').forEach(card => card.onclick = event => {
         const id = Number(card.dataset.game);
         if (event.shiftKey || event.ctrlKey || event.metaKey || bulkMode) {
           if (event.shiftKey && selectedId !== null) {
             const ids = visible.map(game => game.id);
-            const start = ids.indexOf(selectedId), end = ids.indexOf(id);
-            if (start >= 0 && end >= 0) ids.slice(Math.min(start,end), Math.max(start,end) + 1).forEach(value => selectedIds.add(value));
+            const startIndex = ids.indexOf(selectedId), endIndex = ids.indexOf(id);
+            if (startIndex >= 0 && endIndex >= 0) ids.slice(Math.min(startIndex,endIndex), Math.max(startIndex,endIndex) + 1).forEach(value => selectedIds.add(value));
           } else {
             selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id);
           }
@@ -1122,6 +1183,9 @@
         input.closest('.card')?.classList.toggle('selected', input.checked || selectedId === id);
       });
       renderArrangeBar(visible);
+      const measuredBefore = gridRowHeight;
+      measureGridLayout();
+      if (!measuredBefore && gridRowHeight && total) renderGrid();
     }
     function renderDetails() {
       const game = games.find(item => item.id === selectedId);
@@ -1415,7 +1479,7 @@
       $('shutdownMessage').textContent = 'Running shutdown applications…';
       window.close();
     }
-    async function favorite(id) { try { await api('/api/favorite',{method:'POST',body:JSON.stringify({id})}); await refresh(); } catch(error) { notify(error.message); } }
+    async function favorite(id) { try { const result = await api('/api/favorite',{method:'POST',body:JSON.stringify({id})}); const game = games.find(item => item.id === id); if (game) game.favorite = result.favorite; renderGrid(); renderDetails(); } catch(error) { notify(error.message); } }
     function closeContextMenu() { $('contextMenu').hidden = true; contextGameId = null; }
     function openContextMenu(event, id) {
       event.preventDefault();
@@ -1565,7 +1629,8 @@
         }
       } catch(error) { notify(error.message); renderDetails(); }
     }
-    function openGameDialog(game = null) {
+    async function openGameDialog(game = null) {
+      await ensureProfiles();
       editingId = game ? game.id : null;
       $('dialogTitle').textContent = game ? 'Edit game' : 'Add game';
       [...$('gameForm').elements].forEach(element => {
@@ -2522,8 +2587,21 @@
       })()) startScreenSaver();
       requestAnimationFrame(pollGamepads);
     }
-    $('sidebarSearch').oninput = () => { activePlaylist = ''; render(); }; $('view').onchange = () => { activePlaylist = ''; render(); }; $('sort').onchange = renderGrid;
-    if ($('esrbFilter')) $('esrbFilter').onchange = render;
+    let searchTimer = null;
+    $('sidebarSearch').oninput = () => { activePlaylist = ''; clearTimeout(searchTimer); searchTimer = setTimeout(() => { renderPlaylists(); renderGrid(); }, 150); };
+    $('view').onchange = () => { activePlaylist = ''; renderPlaylists(); renderGrid(); };
+    $('sort').onchange = renderGrid;
+    if ($('esrbFilter')) $('esrbFilter').onchange = renderGrid;
+    const libraryPaneElement = document.querySelector('main.library');
+    if (libraryPaneElement) {
+      libraryPaneElement.addEventListener('scroll', () => {
+        const top = libraryPaneElement.scrollTop;
+        if (gridRowHeight && Math.abs(top - gridScrollTop) < gridRowHeight) return;
+        gridScrollTop = top;
+        renderGrid();
+      }, { passive: true });
+      window.addEventListener('resize', () => { gridRowHeight = 0; renderGrid(); });
+    }
     $('viewToggleButton').onclick = () => {
       appSettings.library_view = (appSettings.library_view || 'grid') === 'list' ? 'grid' : 'list';
       if ($('libraryViewSetting')) $('libraryViewSetting').value = appSettings.library_view;

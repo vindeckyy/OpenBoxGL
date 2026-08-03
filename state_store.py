@@ -17,6 +17,7 @@ from typing import Any, Callable
 
 
 STATE_SCHEMA_VERSION = 3
+COMPACT_JSON_THRESHOLD = 1024 * 1024
 LEGACY_INDEXED_ID = re.compile(r"^game-[0-9a-f]{24}-\d+$")
 
 
@@ -216,8 +217,12 @@ class JsonStateStore:
             return None
         return (stat.st_mtime_ns, stat.st_size, stat.st_ino)
 
-    def _remember(self, state: dict[str, Any]) -> None:
-        self._cached_state = copy.deepcopy(state)
+    def signature(self) -> tuple[int, int, int] | None:
+        """Return a cheap content signature; None when the primary file is absent."""
+        return self._signature()
+
+    def _remember(self, state: dict[str, Any], adopt: bool = False) -> None:
+        self._cached_state = state if adopt else copy.deepcopy(state)
         self._cached_signature = self._signature()
 
     @contextmanager
@@ -243,6 +248,19 @@ class JsonStateStore:
             raise StateCorruptError(
                 f"Unable to read {self.path}. The original file was preserved; restore or inspect it before continuing."
             ) from error
+        if (
+            isinstance(raw, dict)
+            and raw.get("schema_version") == STATE_SCHEMA_VERSION
+            and all(key in raw for key in ("games", "profiles", "history", "settings", "playlists"))
+            and isinstance(raw.get("games"), list)
+            and all(
+                isinstance(game, dict)
+                and str(game.get("game_id") or "").strip()
+                and not _is_legacy_indexed_id(str(game.get("game_id") or ""))
+                for game in raw["games"]
+            )
+        ):
+            return raw, False
         return normalize_state(raw)
 
     def load(self) -> dict[str, Any]:
@@ -255,7 +273,7 @@ class JsonStateStore:
                 if changed:
                     self._write_unlocked(state)
                 self._remember(state)
-                return copy.deepcopy(state)
+                return state
 
     def recover(self) -> dict[str, Any]:
         with self._thread_lock, self._file_lock(True):
@@ -267,22 +285,23 @@ class JsonStateStore:
                 raise StateCorruptError(f"The last-known-good state is also unusable: {self.backup_path}") from error
             self._write_unlocked(state)
             self._remember(state)
-            return copy.deepcopy(state)
+            return state
 
-    def _write_unlocked(self, state: dict[str, Any]) -> None:
-        normalized, _ = normalize_state(state)
+    def _write_unlocked(self, state: dict[str, Any], adopt: bool = False) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        if self.path.is_file():
-            shutil.copy2(self.path, self.backup_path)
-            os.chmod(self.backup_path, 0o600)
         fd, temporary_name = tempfile.mkstemp(
             prefix=f".{self.path.name}.", suffix=".tmp", dir=self.path.parent
         )
         temporary = Path(temporary_name)
+        compact = json.dumps(state, separators=(",", ":"), ensure_ascii=False).encode()
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as output:
-                json.dump(normalized, output, indent=2, ensure_ascii=False)
-                output.write("\n")
+                if len(compact) > COMPACT_JSON_THRESHOLD:
+                    output.write(compact.decode("utf-8"))
+                    output.write("\n")
+                else:
+                    json.dump(state, output, indent=2, ensure_ascii=False)
+                    output.write("\n")
                 output.flush()
                 os.fsync(output.fileno())
             os.chmod(temporary, 0o600)
@@ -297,7 +316,7 @@ class JsonStateStore:
                 os.fsync(directory_fd)
             finally:
                 os.close(directory_fd)
-            self._remember(normalized)
+            self._remember(state, adopt=adopt)
         finally:
             if temporary.exists():
                 temporary.unlink()
@@ -305,20 +324,23 @@ class JsonStateStore:
     def save(self, state: dict[str, Any]) -> dict[str, Any]:
         with self._thread_lock, self._file_lock(True):
             normalized, _ = normalize_state(state)
-            self._write_unlocked(normalized)
-            return copy.deepcopy(normalized)
+            self._write_unlocked(normalized, adopt=True)
+            return normalized
 
     def update(self, mutator: Callable[[dict[str, Any]], Any]) -> dict[str, Any]:
+        """Apply a mutation and return a detached snapshot of the committed state."""
         state, _ = self.update_with_result(mutator)
-        return state
+        return copy.deepcopy(state)
 
     def update_with_result(self, mutator: Callable[[dict[str, Any]], Any]) -> tuple[dict[str, Any], Any]:
+        """Apply a mutation under the process lock and return the committed state
+        together with the mutator result. The returned state is owned by the
+        store's cache and must be treated as read-only by the caller."""
         with self._thread_lock, self._file_lock(True):
             state, _ = self._load_unlocked()
             result = mutator(state)
-            normalized, _ = normalize_state(state)
-            self._write_unlocked(normalized)
-            return copy.deepcopy(normalized), result
+            self._write_unlocked(state, adopt=True)
+            return state, result
 
 
 def secure_text_write(path: Path, value: str) -> None:
