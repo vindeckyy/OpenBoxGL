@@ -1098,7 +1098,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_bytes(200, html, "text/html; charset=utf-8")
             return
         if parsed.path in ("/favicon.svg", "/favicon.ico"):
-            # I12: browsers request an icon on every initial load; serve the
+            # Browsers request an icon on every initial load; serve the
             # repo icon instead of a 404 console error.
             icon = ROOT / "openbox.svg"
             if icon.is_file():

@@ -10,7 +10,7 @@ perf_gen_library.py) and measures the core request paths:
 
 Usage:
   python3 -B scripts/perf_bench.py --base-dir /tmp/openbox-perf --sizes 100,1000,5000 \
-      --out specs/verifications/perf-results.json
+      --out perf-results.json
 """
 
 import argparse
@@ -124,7 +124,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-dir", default="/tmp/openbox-perf")
     parser.add_argument("--sizes", default="1000", help="comma-separated game counts")
-    parser.add_argument("--out", default="specs/verifications/perf-results.json")
+    parser.add_argument("--out", default="perf-results.json")
     args = parser.parse_args()
 
     base = Path(args.base_dir)

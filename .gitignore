@@ -2,7 +2,6 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.atl/
 
 # Local secrets - NEVER commit these
 .env
@@ -21,17 +20,5 @@ build/
 *.AppImage.sha256
 *.AppImage.zsync
 
-# Local development files
-.agent/
-BUILD.md
-scripts/unpack_manual.py
-scripts/sync-ide-rules.sh
-.cursor/
-.freebuff
-
 # Puppeteer dependency for README screenshot capture
 scripts/node_modules/
-
-# Local design detector artifacts and IDE hooks
-.impeccable/
-.github/hooks/

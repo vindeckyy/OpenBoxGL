@@ -154,7 +154,7 @@ class ApiSweep(unittest.TestCase):
         self.assert_alive()
 
     def test_concurrent_partial_settings_saves(self):
-        # I18: concurrent partial saves of distinct keys must not lost-update.
+        # Concurrent partial saves of distinct keys must not lost-update.
         keys = [
             "screensaver_seconds", "save_backup_limit", "media_download_limit",
             "tracking_delay", "tracking_frequency", "progress_automation_play_minutes",

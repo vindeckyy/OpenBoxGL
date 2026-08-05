@@ -108,7 +108,7 @@ class BackendHardeningTests(unittest.TestCase):
             self.assertEqual(primary["games"][0]["name"], "Second")
 
     def test_concurrent_update_writers_keep_both_changes(self):
-        # I17: two store instances (native UI and web backend) committing via
+        # Two store instances (native UI and web backend) committing via
         # update() under the cross-process flock must not lose each other's data.
         import threading
 
