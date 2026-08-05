@@ -1,0 +1,80 @@
+story_id: e03s04
+spec: e03s04-root-cause-repair.md
+title: "Root-cause and repair of confirmed defects"
+status: passing
+bcps: 8
+risk: P0
+security: high
+tasks:
+  - id: 1
+    description: "Fix I15: guard optional .env reads so unreadable or non-UTF-8 files cannot abort startup"
+    verify: "grep -q 'except (OSError, UnicodeDecodeError)' env_config.py && python3 -B test_env_config.py"
+    risk: P1
+    security: medium
+    status: passing
+    allure:
+      severity: high
+      categories: ["Wave 3", "env", "startup"]
+  - id: 2
+    description: "Fix I18: hold the state lock across settings snapshot, validation, and commit"
+    verify: "grep -q 'with STATE_LOCK:' web_app.py && grep -q 'def _save_settings_locked' web_app.py && python3 -B test_bug_sweep_api.py --group settings"
+    risk: P0
+    security: medium
+    status: passing
+    allure:
+      severity: critical
+      categories: ["Wave 3", "settings", "concurrency"]
+  - id: 3
+    description: "Add durable concurrent partial-settings regression (I18)"
+    verify: "grep -q 'test_concurrent_partial_settings_saves' test_bug_sweep_api.py && python3 -B test_bug_sweep_api.py"
+    risk: P0
+    security: medium
+    status: passing
+    allure:
+      severity: critical
+      categories: ["Wave 3", "settings", "regression"]
+  - id: 4
+    description: "Add cross-process update-vs-update regression and confirm I17 is mitigated by the flock transaction path"
+    verify: "grep -q 'test_concurrent_update_writers_keep_both_changes' test_backend_hardening.py && python3 -B test_backend_hardening.py"
+    risk: P0
+    security: medium
+    status: passing
+    allure:
+      severity: critical
+      categories: ["Wave 3", "persistence", "regression"]
+  - id: 5
+    description: "Add mid-swap plugin rollback regression and confirm I16 ordering is fixed"
+    verify: "grep -q 'failing_replace' test_plugins.py && python3 -B test_plugins.py"
+    risk: P1
+    security: low
+    status: passing
+    allure:
+      severity: high
+      categories: ["Wave 3", "plugins", "regression"]
+  - id: 6
+    description: "Fix I14: raise the Gameyfin install poll cap from 40 attempts to 1200"
+    verify: "grep -q 'attempts = 1200' index.html"
+    risk: P1
+    security: none
+    status: passing
+    allure:
+      severity: normal
+      categories: ["Wave 3", "gameyfin", "frontend"]
+  - id: 7
+    description: "Fix I12: serve the repo icon at /favicon.svg and /favicon.ico and reference it from index.html"
+    verify: "grep -q 'favicon.svg' web_app.py && grep -q 'rel=.icon.' index.html"
+    risk: P3
+    security: none
+    status: passing
+    allure:
+      severity: normal
+      categories: ["Wave 3", "favicon"]
+  - id: 8
+    description: "Record every candidate in the ledger with mechanism, priority, reproduction count, and terminal disposition"
+    verify: "grep -q '^## Candidates' specs/verifications/e03-candidate-ledger.md && grep -q 'status: fixed\\|status: mitigated\\|status: deferred\\|status: rejected' specs/verifications/e03-candidate-ledger.md"
+    risk: P2
+    security: none
+    status: passing
+    allure:
+      severity: normal
+      categories: ["Wave 3", "ledger"]

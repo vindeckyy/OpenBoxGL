@@ -1097,6 +1097,13 @@ class Handler(BaseHTTPRequestHandler):
             html = (ROOT / "index.html").read_bytes()
             self.send_bytes(200, html, "text/html; charset=utf-8")
             return
+        if parsed.path in ("/favicon.svg", "/favicon.ico"):
+            # I12: browsers request an icon on every initial load; serve the
+            # repo icon instead of a 404 console error.
+            icon = ROOT / "openbox.svg"
+            if icon.is_file():
+                self.send_bytes(200, icon.read_bytes(), "image/svg+xml")
+                return
         if parsed.path == "/api/theme.css":
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
@@ -2222,8 +2229,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, {"ok": True, "games": len(state.get("games", []))})
 
     def save_settings(self, payload):
+        # Hold the local state lock across the snapshot, validation, and commit
+        # so a concurrent partial save cannot observe a stale settings base.
         with STATE_LOCK:
-            existing_settings = dict(load_state().get("settings", {}))
+            return self._save_settings_locked(payload)
+
+    def _save_settings_locked(self, payload):
+        existing_settings = dict(load_state().get("settings", {}))
         merged = dict(existing_settings)
         for key, value in payload.items():
             if key == "gameyfin_password" and not str(value).strip():
@@ -2402,7 +2414,7 @@ class Handler(BaseHTTPRequestHandler):
             for key, value in normalized_settings.items():
                 if key in incoming_keys or key not in settings:
                     settings[key] = value
-        state = transact_state(mutate)[0]
+        state = update_state_with_result(mutate)[0]
         self.send_json(200, public_settings(state))
 
     def save_image_group(self, payload):

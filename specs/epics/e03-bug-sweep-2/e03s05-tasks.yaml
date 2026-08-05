@@ -1,0 +1,53 @@
+story_id: e03s05
+spec: e03s05-regression-handoff.md
+title: "Whole-product regression, packaging, and sweep handoff"
+status: passing
+bcps: 3
+risk: P1
+security: low
+tasks:
+  - id: 1
+    description: "Run the full standalone Python test suite after all repairs"
+    verify: "./run_all_tests.sh"
+    risk: P1
+    security: low
+    status: passing
+    allure:
+      severity: high
+      categories: ["Wave 4", "regression"]
+  - id: 2
+    description: "Rebuild the AppImage because packaged content changed and rerun packaging tests against the rebuilt artifact"
+    verify: "test -x OpenBox-x86_64.AppImage && OPENBOX_APPIMAGE=\"$PWD/OpenBox-x86_64.AppImage\" OPENBOX_REQUIRE_ARTIFACTS=1 python3 -B test_packaging.py"
+    risk: P1
+    security: low
+    status: passing
+    allure:
+      severity: high
+      categories: ["Wave 4", "packaging"]
+  - id: 3
+    description: "Reconcile ISSUES.md, STATE.md, and the journal with terminal dispositions"
+    verify: "grep -q 'closed 2026-08-04' .agent/ISSUES.md && grep -q 'Session: 30' .agent/STATE.md"
+    risk: P1
+    security: none
+    status: passing
+    allure:
+      severity: high
+      categories: ["Wave 4", "handoff"]
+  - id: 4
+    description: "Pass the capsule consistency checker with zero CRITICAL/HIGH/MED findings"
+    verify: "bash scripts/lib/plan-consistency-check.sh specs/epics/e03-bug-sweep-2 | grep -q 'CRITICAL=0 HIGH=0 MED=0'"
+    risk: P1
+    security: none
+    status: passing
+    allure:
+      severity: high
+      categories: ["Wave 4", "consistency"]
+  - id: 5
+    description: "Write the final sweep summary with residual risk and working-tree preservation proof"
+    verify: "test -f specs/verifications/e03s05-final.md && grep -q 'Residual risk' specs/verifications/e03s05-final.md"
+    risk: P2
+    security: none
+    status: passing
+    allure:
+      severity: normal
+      categories: ["Wave 4", "summary"]

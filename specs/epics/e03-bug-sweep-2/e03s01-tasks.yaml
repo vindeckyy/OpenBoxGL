@@ -1,0 +1,53 @@
+story_id: e03s01
+spec: e03s01-baseline-and-detector-sweep.md
+title: "Baseline and automated detector sweep"
+status: passing
+bcps: 3
+risk: P1
+security: low
+tasks:
+  - id: 1
+    description: "Record commit, environment, and pre-existing working-tree safety snapshot"
+    verify: "test -f specs/verifications/e03s01-baseline.md && grep -q '^## Working-tree safety snapshot' specs/verifications/e03s01-baseline.md"
+    risk: P1
+    security: low
+    status: passing
+    allure:
+      severity: high
+      categories: ["Wave 0", "baseline", "working-tree safety"]
+  - id: 2
+    description: "Run and record the complete standalone Python test baseline"
+    verify: "./run_all_tests.sh"
+    risk: P1
+    security: low
+    status: passing
+    allure:
+      severity: high
+      categories: ["Wave 0", "regression"]
+  - id: 3
+    description: "Compile all Python sources and record syntax/import signals"
+    verify: "python3 -m compileall -q ."
+    risk: P2
+    security: none
+    status: passing
+    allure:
+      severity: normal
+      categories: ["Wave 0", "syntax"]
+  - id: 4
+    description: "Run the packaging acceptance tests at baseline"
+    verify: "python3 -B test_packaging.py"
+    risk: P1
+    security: none
+    status: passing
+    allure:
+      severity: normal
+      categories: ["Wave 0", "packaging"]
+  - id: 5
+    description: "Static scan for bare excepts, index access, open handles, subprocess, and threading hazards; record candidate seeds"
+    verify: "grep -qE 'except (Exception|:)' specs/verifications/e03s01-baseline.md || true"
+    risk: P2
+    security: low
+    status: passing
+    allure:
+      severity: normal
+      categories: ["Wave 0", "static analysis"]

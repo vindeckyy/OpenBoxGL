@@ -153,6 +153,49 @@ class ApiSweep(unittest.TestCase):
         self.assertTrue(settings["gameyfin_password_set"])
         self.assert_alive()
 
+    def test_concurrent_partial_settings_saves(self):
+        # I18: concurrent partial saves of distinct keys must not lost-update.
+        keys = [
+            "screensaver_seconds", "save_backup_limit", "media_download_limit",
+            "tracking_delay", "tracking_frequency", "progress_automation_play_minutes",
+            "progress_automation_idle_days", "locale",
+        ]
+        for iteration in range(8):
+            values = [30 + iteration, 1 + iteration, 1 + iteration, 1 + iteration,
+                      1.0 + iteration * 0.1, 1 + iteration, 1 + iteration, f"en{iteration}"]
+            barrier = threading.Barrier(len(keys))
+            statuses = {}
+
+            def worker(key, value):
+                barrier.wait()
+                status, _ = self.request("/api/settings", {key: value})
+                statuses[key] = status
+
+            threads = [
+                threading.Thread(target=worker, args=(key, value))
+                for key, value in zip(keys, values)
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+            self.assertEqual(set(statuses.values()), {200}, statuses)
+            status, settings = self.request("/api/settings")
+            self.assertEqual(status, 200)
+            expected = {
+                "screensaver_seconds": values[0],
+                "save_backup_limit": values[1],
+                "media_download_limit": values[2],
+                "tracking_delay": values[3],
+                "tracking_frequency": float(values[4]),
+                "progress_automation_play_minutes": values[5],
+                "progress_automation_idle_days": values[6],
+                "locale": str(values[7]),
+            }
+            for key, value in expected.items():
+                self.assertEqual(settings.get(key), value, f"iteration {iteration} lost {key}")
+        self.assert_alive()
+
     def test_lifecycle(self):
         for path in ("/api/saves?id=99", "/api/saves/discover?id=99"):
             status, payload = self.request(path)

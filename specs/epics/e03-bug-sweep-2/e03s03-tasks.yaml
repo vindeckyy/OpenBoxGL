@@ -1,0 +1,53 @@
+story_id: e03s03
+spec: e03s03-browser-critical-journeys.md
+title: "Critical browser journey sweep"
+status: passing
+bcps: 5
+risk: P1
+security: medium
+tasks:
+  - id: 1
+    description: "Start an isolated loopback server with synthetic library, SAFE_MODE, and an ephemeral port"
+    verify: "test -f specs/verifications/e03s03-browser-sweep.md && grep -q 'Isolated browser fixture' specs/verifications/e03s03-browser-sweep.md"
+    risk: P1
+    security: medium
+    status: passing
+    allure:
+      severity: high
+      categories: ["Wave 2", "browser", "isolation"]
+  - id: 2
+    description: "Run the journey harness: load, settings round-trip, storefront partial save, favicon, launch, update check"
+    verify: "test -f specs/verifications/e03s03-browser.json && grep -q 'failedRequests.: \\[\\]' specs/verifications/e03s03-browser.json"
+    risk: P1
+    security: medium
+    status: passing
+    allure:
+      severity: high
+      categories: ["Wave 2", "browser", "journeys"]
+  - id: 3
+    description: "Capture screenshots and network/console diagnostics as artifacts"
+    verify: "ls specs/verifications/artifacts/e03s03-*.png | wc -l | grep -q '6'"
+    risk: P2
+    security: none
+    status: passing
+    allure:
+      severity: normal
+      categories: ["Wave 2", "evidence"]
+  - id: 4
+    description: "Verify favicon routes answer 200 and no 404 appears on initial load (I12)"
+    verify: "grep -q 'favicon' specs/verifications/e03s03-browser.json"
+    risk: P2
+    security: none
+    status: passing
+    allure:
+      severity: normal
+      categories: ["Wave 2", "favicon"]
+  - id: 5
+    description: "Terminate the server and remove the temporary data root; record cleanup proof"
+    verify: "grep -q 'Cleanup proof' specs/verifications/e03s03-browser-sweep.md"
+    risk: P1
+    security: low
+    status: passing
+    allure:
+      severity: high
+      categories: ["Wave 2", "cleanup"]

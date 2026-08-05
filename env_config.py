@@ -36,8 +36,14 @@ def load_dotenv(path):
     path = Path(path)
     if not path.is_file():
         return {}
+    try:
+        lines = path.read_text().splitlines()
+    except (OSError, UnicodeDecodeError):
+        # Optional .env files must never abort startup. Skip anything we
+        # cannot read or decode cleanly.
+        return {}
     values = {}
-    for line in path.read_text().splitlines():
+    for line in lines:
         parsed = _parse_env_line(line)
         if parsed:
             key, value = parsed

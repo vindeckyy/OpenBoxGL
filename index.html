@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <title>OpenBox Game Launcher</title>
   <style>
     :root {
@@ -2449,7 +2450,7 @@
       appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectStorefrontSettings())});
       notify('Storefront settings saved');
     }
-    async function watchGameyfinInstall(gameyfinId, attempts = 40) {
+    async function watchGameyfinInstall(gameyfinId, attempts = 1200) {
       const job = await api(`/api/gameyfin/install/status?gameyfin_id=${encodeURIComponent(gameyfinId)}`);
       if (job.state === 'installing') {
         if (attempts <= 0) throw new Error('Gameyfin install timed out');

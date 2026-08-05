@@ -16,6 +16,23 @@ class EnvConfigTests(unittest.TestCase):
             self.assertEqual(values["RETROACHIEVEMENTS_USERNAME"], "player")
             self.assertEqual(os.environ["RETROACHIEVEMENTS_API_KEY"], "secret")
 
+    def test_load_dotenv_skips_unreadable_and_binary_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            binary = Path(folder) / ".env"
+            binary.write_bytes(b"TOKEN=\xff\xfe\x00broken")
+            self.assertEqual(load_dotenv(binary), {})
+            unreadable = Path(folder) / "locked.env"
+            unreadable.write_text("TOKEN=secret\n")
+            unreadable.chmod(0)
+            try:
+                self.assertEqual(load_dotenv(unreadable), {})
+            finally:
+                unreadable.chmod(0o600)
+            # bootstrap_env with a binary .env in scope must not raise.
+            with mock.patch("env_config.discover_env_files", return_value=[binary]):
+                bootstrap_env(None)
+            self.assertNotIn("TOKEN", os.environ)
+
     def test_load_dotenv_strips_inline_comments(self):
         from env_config import _parse_env_line
         self.assertEqual(_parse_env_line("TOKEN=abc # note"), ("TOKEN", "abc"))

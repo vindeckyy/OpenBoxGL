@@ -1,0 +1,59 @@
+id: e03
+slug: bug-sweep-2
+title: "Second evidence-driven OpenBox bug sweep"
+status: passing
+date: 2026-08-04
+purpose: "Sweep the open I12-I18 backlog and hunt new defects with frozen-baseline, adversarial API, isolated browser, and packaging evidence; fix bounded defects with red-green regressions."
+source_scope: "specs/product/SCOPE_LATEST.yaml"
+impact_assessment: "specs/IMPACT_LATEST.md"
+constraints:
+  timebox_hours: 8
+  fix_budget_hours: 3
+  max_story_bcps: 8
+  new_dependencies: false
+  isolated_user_data: true
+risk: P1
+security: high
+slopcheck:
+  - dependency: "Python standard library"
+    verdict: OK
+    reason: "Used for fixtures, HTTP probes, temp directories, flock-based store tests, and assertions."
+  - dependency: "Existing Puppeteer fallback under scripts/node_modules"
+    verdict: OK
+    reason: "Used only to exercise the existing web UI and capture evidence; no application dependency is added."
+stories:
+  - id: e03s01
+    title: "Baseline and automated detector sweep"
+    bcps: 3
+    risk: P1
+    delta: ADDED
+    status: passing
+  - id: e03s02
+    title: "API and failure-boundary sweep"
+    bcps: 5
+    risk: P0
+    delta: MODIFIED
+    status: passing
+  - id: e03s03
+    title: "Critical browser journey sweep"
+    bcps: 5
+    risk: P1
+    delta: MODIFIED
+    status: passing
+  - id: e03s04
+    title: "Root-cause and repair of confirmed defects"
+    bcps: 8
+    risk: P0
+    delta: MODIFIED
+    status: passing
+  - id: e03s05
+    title: "Whole-product regression, packaging, and sweep handoff"
+    bcps: 3
+    risk: P1
+    delta: ADDED
+    status: passing
+acceptance_summary:
+  - "All candidates have evidence and terminal dispositions."
+  - "I12, I14, I15, I18 are fixed with regressions; I16 and I17 are verified mitigated with regression coverage; I13 remains an explicitly deferred optional-hardware P3."
+  - "Full tests, compile check, packaging tests (including a rebuilt AppImage), and final evidence gates pass."
+  - "No unrelated working-tree changes or real user data are damaged."

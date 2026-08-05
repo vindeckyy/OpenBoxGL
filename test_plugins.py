@@ -52,6 +52,28 @@ def test():
         # The previous version is still installed and enabled.
         assert list_plugins(plugins)[0]["version"] == "1"
         assert list_plugins(plugins)[0]["enabled"]
+
+        # A swap failure after the old copy moved to .backups must restore it.
+        real_replace = Path.replace
+        calls = {"count": 0}
+
+        def failing_replace(self, target):
+            calls["count"] += 1
+            if calls["count"] == 2:
+                raise OSError("swap failed")
+            return real_replace(self, target)
+
+        with mock.patch.object(Path, "replace", failing_replace):
+            try:
+                install_plugin(broken, plugins)
+                assert False, "expected OSError"
+            except OSError:
+                pass
+        # First replace: destination -> backup. Second: staging -> destination.
+        assert calls["count"] >= 2
+        assert list_plugins(plugins)[0]["version"] == "1"
+        assert (plugins / "test.plugin" / "plugin.py").is_file()
+        assert not (plugins / ".backups").exists() or not list((plugins / ".backups").iterdir())
     print("plugin self-test: ok")
 
 

@@ -107,6 +107,39 @@ class BackendHardeningTests(unittest.TestCase):
             primary = json.loads(path.read_text())
             self.assertEqual(primary["games"][0]["name"], "Second")
 
+    def test_concurrent_update_writers_keep_both_changes(self):
+        # I17: two store instances (native UI and web backend) committing via
+        # update() under the cross-process flock must not lose each other's data.
+        import threading
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "library.json"
+            seed = JsonStateStore(path)
+            seed.save({"schema_version": 3, "games": [], "profiles": {},
+                       "history": [], "settings": {}, "playlists": []})
+            web_store = JsonStateStore(path)
+            native_store = JsonStateStore(path)
+            barrier = threading.Barrier(2)
+
+            def web_add():
+                barrier.wait()
+                web_store.update(lambda state: state["games"].append({
+                    "game_id": "game-web", "path": "/bin/true", "name": "WebGame",
+                }))
+
+            def native_touch():
+                barrier.wait()
+                native_store.update(lambda state: state["settings"].update({"native_touched": True}))
+
+            threads = [threading.Thread(target=web_add), threading.Thread(target=native_touch)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+            final = json.loads(path.read_text())
+            self.assertEqual([game["game_id"] for game in final["games"]], ["game-web"])
+            self.assertTrue(final["settings"]["native_touched"])
+
     def test_archive_symlink_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             archive = Path(directory) / "link.zip"
