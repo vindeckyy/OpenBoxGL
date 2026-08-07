@@ -149,6 +149,10 @@
     .extras { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
     .media-player { width:100%; display:block; border-radius:6px; background:#080a0f; }
     .screenshot-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    .perf-row { display:grid; grid-template-columns:1fr auto auto auto; gap:8px; align-items:end; padding:8px 0; border-bottom:1px solid #30364a; }
+    .perf-row:last-child { border-bottom:0; }
+    .perf-name { align-self:center; font-size:var(--font-meta); color:#dfe3ec; overflow-wrap:anywhere; }
+    .perf-row .field { margin:0; }
     .screenshot-grid button { aspect-ratio:16/9; overflow:hidden; border:1px solid #3c4357; border-radius:var(--radius-cover); padding:0; background:#090c13; }
     .screenshot-grid img { width:100%; height:100%; display:block; object-fit:cover; }
     .media-dialog { width:min(1100px,94vw); background:#090c13; }
@@ -454,6 +458,7 @@
       <div class="form-grid">
         <label class="field wide"><span>One profile per line: Platform = command. Use {path} for the ROM.</span><textarea id="profilesText"></textarea></label>
         <div class="wide" id="detectedProfiles"></div>
+        <div class="wide"><div class="section-title">Handheld performance</div><p class="description">Set a TDP limit (watts) applied via ryzenadj when a game from this profile launches, and an optional restore limit when the session ends. Requires ryzenadj on PATH.</p><div class="form-grid" id="perfProfiles"></div></div>
         <div class="wide"><div class="section-title">Install and configure</div><div class="emulator-list" id="emulatorCatalog"></div></div>
       </div>
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelProfiles">Cancel</button><button class="primary">Save</button></div>
@@ -648,6 +653,7 @@
         <label class="field settings-field" data-setting="progress automation paused idle days"><span>Mark as Paused after days without play</span><input id="progressAutomationIdleDays" type="number" min="0" max="3650"></label>
         <label class="field settings-field" data-setting="progress first play completion status"><span>Progress status on first play</span><select id="progressOnFirstPlay"><option value="">None</option><option value="Playing">Playing</option><option value="Paused">Paused</option><option value="Beaten">Beaten</option><option value="Completed">Completed</option><option value="Mastered">Mastered</option></select></label>
         <label class="field settings-field" data-setting="tracking mode process folder wine proton"><span>Default session tracking mode</span><select id="trackingMode"><option value="default">Default</option><option value="process">Process</option><option value="original_process">Original process</option><option value="folder">Install folder</option><option value="process_name">Process name</option></select></label>
+        <label class="field settings-field" data-setting="handheld performance tdp ryzenadj apply limits"><span>Apply handheld performance limits</span><select id="applyPerf"><option value="auto">Auto (handheld only)</option><option value="always">Always</option><option value="off">Off</option></select></label>
         <label class="field settings-field" data-setting="tracking delay seconds launch"><span>Tracking start delay in seconds</span><input id="trackingDelay" type="number" min="0" max="600"></label>
         <label class="field settings-field" data-setting="tracking frequency poll seconds"><span>Tracking poll frequency in seconds</span><input id="trackingFrequency" type="number" min="0.5" max="60" step="0.5"></label>
         <label class="check settings-field" data-setting="auto close steam heroic lutris storefront"><input type="checkbox" id="autoCloseStoreClients"> Close storefront clients after a session ends</label>
@@ -1434,6 +1440,7 @@
         tracking_mode:$('trackingMode').value,
         tracking_delay:Number($('trackingDelay').value),
         tracking_frequency:Number($('trackingFrequency').value),
+        apply_perf:$('applyPerf').value,
         auto_close_store_clients:$('autoCloseStoreClients').checked,
         image_group:$('defaultImageGroup').value,
         badge_visibility:[...document.querySelectorAll('[data-badge-setting]:checked')].map(input => input.dataset.badgeSetting),
@@ -1754,6 +1761,7 @@
         if ($('trackingMode')) $('trackingMode').value = appSettings.tracking_mode || 'default';
         if ($('trackingDelay')) $('trackingDelay').value = appSettings.tracking_delay ?? 0;
         if ($('trackingFrequency')) $('trackingFrequency').value = appSettings.tracking_frequency ?? 2;
+        if ($('applyPerf')) $('applyPerf').value = appSettings.apply_perf || 'auto';
         if ($('autoCloseStoreClients')) $('autoCloseStoreClients').checked = Boolean(appSettings.auto_close_store_clients);
         $('saveBackupLimit').value = appSettings.save_backup_limit ?? 10;
         $('mediaDownloadLimit').value = appSettings.media_download_limit ?? 0;
@@ -1863,7 +1871,7 @@
     };
     async function openProfiles() {
       try {
-        const [result,emulators] = await Promise.all([api('/api/profiles'),api('/api/emulators')]);
+        const [result,emulators,perf] = await Promise.all([api('/api/profiles'),api('/api/emulators'),api('/api/perf_profiles')]);
         $('profilesText').value = Object.entries(result.profiles).sort().map(([platform,command]) => `${platform} = ${command}`).join('\n');
         const detected = Object.entries(result.detected).filter(([platform]) => !result.profiles[platform]);
         $('detectedProfiles').innerHTML = detected.length ? `<button type="button" class="icon-button" id="useDetected">Add ${detected.length} detected profiles</button>` : '';
@@ -1871,6 +1879,17 @@
           const lines = Object.entries(result.detected).map(([platform,command]) => `${platform} = ${command}`).join('\n');
           $('profilesText').value = [$('profilesText').value, lines].filter(Boolean).join('\n');
         };
+        perfDraft = Object.fromEntries(Object.entries(perf.perf_profiles || {}).map(([name,value]) => [name,{...value}]));
+        const names = Object.keys(result.profiles).sort();
+        $('perfProfiles').innerHTML = names.length
+          ? names.map(name => {
+              const entry = perfDraft[name] || {enabled:false,tdp_w:0,restore_tdp_w:0};
+              return `<div class="perf-row wide"><span class="perf-name">${escapeHtml(name)}</span><label class="check"><input type="checkbox" data-perf-enabled="${escapeHtml(name)}" ${entry.enabled ? 'checked' : ''}> Enable TDP</label><label class="field"><span>Limit (W)</span><input type="number" min="0" max="60" step="0.5" data-perf-tdp="${escapeHtml(name)}" value="${entry.tdp_w || ''}"></label><label class="field"><span>Restore (W)</span><input type="number" min="0" max="60" step="0.5" data-perf-restore="${escapeHtml(name)}" value="${entry.restore_tdp_w || ''}"></label></div>`;
+            }).join('')
+          : '<p class="description wide">No emulator profiles yet. Add one above to set a TDP limit.</p>';
+        document.querySelectorAll('[data-perf-enabled]').forEach(input => input.onchange = () => { const entry = perfDraft[input.dataset.perfEnabled] ||= {enabled:false,tdp_w:0,restore_tdp_w:0}; entry.enabled = input.checked; });
+        document.querySelectorAll('[data-perf-tdp]').forEach(input => input.oninput = () => { const entry = perfDraft[input.dataset.perfTdp] ||= {enabled:false,tdp_w:0,restore_tdp_w:0}; entry.tdp_w = Number(input.value) || 0; });
+        document.querySelectorAll('[data-perf-restore]').forEach(input => input.oninput = () => { const entry = perfDraft[input.dataset.perfRestore] ||= {enabled:false,tdp_w:0,restore_tdp_w:0}; entry.restore_tdp_w = Number(input.value) || 0; });
         renderEmulators(emulators.emulators);
         $('profilesDialog').showModal();
       } catch(error) { notify(error.message); }
@@ -1944,6 +1963,7 @@
         } else if (result.install_all?.state === 'error') notify(result.install_all.error || 'Install all failed');
       } catch(error) { notify(error.message); }
     }
+    let perfDraft = {};
     $('profilesForm').onsubmit = async event => {
       event.preventDefault();
       const profiles = {};
@@ -1951,7 +1971,12 @@
         const split = line.indexOf('=');
         if (split > 0) profiles[line.slice(0,split).trim()] = line.slice(split + 1).trim();
       });
-      try { const result = await api('/api/profiles',{method:'POST',body:JSON.stringify({profiles})}); $('profilesDialog').close(); notify(`${result.saved} emulator profiles saved`); } catch(error) { notify(error.message); }
+      try {
+        const result = await api('/api/profiles',{method:'POST',body:JSON.stringify({profiles})});
+        try { await api('/api/perf_profiles',{method:'POST',body:JSON.stringify({perf_profiles:perfDraft})}); } catch(error) { notify(error.message); }
+        $('profilesDialog').close();
+        notify(`${result.saved} emulator profiles saved`);
+      } catch(error) { notify(error.message); }
     };
     async function loadTheme() {
       const result = await api(`/api/themes?platform=${encodeURIComponent(platform === 'all' ? '' : platform)}`);

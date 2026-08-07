@@ -18,6 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 from archives import extract_game
 from backend_io import atomic_write_text
 from openbox_logging import configure_logging
+from parity_perf import apply_perf_profile, effective_profile_name, restore_perf_profile
 from state_store import JsonStateStore
 
 CUSTOM_DATA_DIR = os.environ.get("OPENBOX_DATA_DIR")
@@ -432,6 +433,7 @@ class OpenBox(tk.Tk):
     def launch_game(self, game):
         try:
             args, cwd = build_launch(game, self.profiles)
+            apply_perf_profile(effective_profile_name(game, self.profiles), load_state())
             process = subprocess.Popen(args, cwd=cwd, start_new_session=True)
             started = datetime.now()
             game_id = str(game.get("game_id") or "")
@@ -470,6 +472,10 @@ class OpenBox(tk.Tk):
             })
             state["history"][:] = state["history"][-500:]
         self._commit(mutate)
+        try:
+            restore_perf_profile(effective_profile_name(game, self.profiles), load_state())
+        except Exception:  # never let performance tuning break session bookkeeping
+            logging.getLogger("openbox").exception("restore_perf failed")
         self.render()
 
     def toggle_favorite(self):

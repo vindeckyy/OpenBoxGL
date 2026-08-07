@@ -78,6 +78,7 @@ from parity_gamescope import (
     steam_game_id_for,
 )
 from parity_backup import BACKUP_ITEMS, create_backup, restore_backup
+from parity_perf import apply_perf_profile, effective_profile_name, restore_perf_profile
 from parity_tracking import close_store_client, wait_for_exit, TRACKING_MODES
 from parity_igdb import apply_to_game as apply_igdb_metadata, fetch_game as fetch_igdb_game, search_games as search_igdb_games
 from parity_emulator_defs import (
@@ -428,6 +429,7 @@ def public_settings(state=None):
         "tracking_mode": settings.get("tracking_mode", "default"),
         "tracking_delay": settings.get("tracking_delay", 0),
         "tracking_frequency": settings.get("tracking_frequency", 2),
+        "apply_perf": settings.get("apply_perf", "auto"),
         "auto_close_store_clients": settings.get("auto_close_store_clients", False),
         "filter_presets": list_presets(state),
         "import_exclusions": list_exclusions(state),
@@ -737,6 +739,10 @@ def finish_session(launch_id, game_index, started, process):
     with PROCESS_LOCK:
         running = RUNNING.pop(launch_id, {})
         PROCESSES.pop(launch_id, None)
+    try:
+        restore_perf_profile(str(running.get("effective_profile", "")), load_state())
+    except Exception:  # never let performance tuning break session bookkeeping
+        LOGGER.exception("restore_perf failed")
     session_event("stopped", launch_id, game_name)
     if not os.environ.get("OPENBOX_SAFE_MODE"):
         run_plugins(DATA.parent / "plugins", "after_session", session)
@@ -833,6 +839,8 @@ def start_game(index=None, stable_game_id=""):
     if selected_profile and selected_profile in profiles:
         profiles = {game.get("platform", ""): profiles[selected_profile]}
     args, cwd = build_launch(game, profiles)
+    effective_profile = effective_profile_name(game, state["profiles"])
+    apply_perf_profile(effective_profile, state)
     if not os.environ.get("OPENBOX_SAFE_MODE"):
         result = run_plugins(DATA.parent / "plugins", "before_launch", {"game": game, "args": args, "cwd": cwd})
         if not isinstance(result, dict):
@@ -864,6 +872,7 @@ def start_game(index=None, stable_game_id=""):
             "launch_id": launch_id,
             "game_id": index,
             "stable_game_id": stable_game_id,
+            "effective_profile": effective_profile,
             "game": current.get("name", "Untitled"),
             "game_path": str(current.get("path", "")),
             "steam_app_id": str(current.get("steam_app_id") or ""),
@@ -1134,6 +1143,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
             state = load_state_view()
             self.send_json(200, {"profiles": state["profiles"], "detected": discover_profiles()})
+            return
+        if parsed.path == "/api/perf_profiles":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            self.send_json(200, {"perf_profiles": load_state_view().get("perf_profiles", {})})
             return
         if parsed.path == "/api/settings":
             if not self.authorized():
@@ -1707,6 +1722,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.bulk_media(payload)
             elif route == "/api/profiles":
                 self.save_profiles(payload)
+            elif route == "/api/perf_profiles":
+                self.save_perf_profiles(payload)
             elif route == "/api/settings":
                 self.save_settings(payload)
             elif route == "/api/state/recover":
@@ -2224,6 +2241,31 @@ class Handler(BaseHTTPRequestHandler):
         transact_state(mutate)
         self.send_json(200, {"saved": len(clean)})
 
+    def save_perf_profiles(self, payload):
+        raw = payload.get("perf_profiles")
+        if not isinstance(raw, dict):
+            raise ValueError("Performance profiles must be an object.")
+        clean = {}
+        for name, entry in raw.items():
+            key = str(name).strip()
+            if not key or not isinstance(entry, dict):
+                continue
+            try:
+                tdp = max(0.0, float(entry.get("tdp_w", 0)))
+                restore = max(0.0, float(entry.get("restore_tdp_w", 0)))
+            except (TypeError, ValueError):
+                raise ValueError(f"Invalid TDP value for profile {key}.")
+            if tdp or restore:
+                clean[key] = {
+                    "enabled": bool(entry.get("enabled", False)),
+                    "tdp_w": tdp,
+                    "restore_tdp_w": restore,
+                }
+        def mutate(state):
+            state["perf_profiles"] = clean
+        transact_state(mutate)
+        self.send_json(200, {"saved": len(clean)})
+
     def recover_state(self):
         state = recover_library_state()
         self.send_json(200, {"ok": True, "games": len(state.get("games", []))})
@@ -2353,6 +2395,9 @@ class Handler(BaseHTTPRequestHandler):
         progress_on_first_play = str(merged.get("progress_on_first_play", "Playing")).strip()
         if progress_on_first_play and progress_on_first_play not in PROGRESS:
             raise ValueError("Unknown progress value for first play.")
+        apply_perf = str(merged.get("apply_perf", "auto")).strip().casefold()
+        if apply_perf not in {"off", "auto", "always"}:
+            raise ValueError("Apply performance limits must be off, auto, or always.")
         gameyfin_password = str(merged.get("gameyfin_password", "")).strip()
         normalized_settings = {
                 "watch_folders": clean_folders,
@@ -2402,6 +2447,7 @@ class Handler(BaseHTTPRequestHandler):
                 "tracking_mode": tracking_mode,
                 "tracking_delay": tracking_delay,
                 "tracking_frequency": tracking_frequency,
+                "apply_perf": apply_perf,
                 "progress_on_first_play": progress_on_first_play,
                 "auto_close_store_clients": bool(merged.get("auto_close_store_clients", False)),
         }

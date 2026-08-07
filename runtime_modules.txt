@@ -36,3 +36,4 @@ parity_igdb.py
 parity_emulator_defs.py
 parity_import_policy.py
 parity_gamescope.py
+parity_perf.py

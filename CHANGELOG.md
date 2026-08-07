@@ -4,6 +4,12 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-08-07
+
+### Added
+
+- Handheld performance profiles: per launch-profile TDP limits applied via `ryzenadj` at launch, with an optional restore limit when the session ends, gated by an `Apply handheld performance limits` setting (auto / always / off). `auto` applies only on Steam Deck / Bazzite game mode and battery-powered handhelds; a missing `ryzenadj` or permission error logs a warning and never blocks a launch.
+
 ## [0.7.0] - 2026-08-02
 
 ### Fixed
@@ -246,7 +252,8 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.0
 [0.7.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.7.0
 [0.6.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.6.0
 [0.5.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.5.0
