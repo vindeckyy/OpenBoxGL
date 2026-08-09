@@ -1376,7 +1376,16 @@
         runningGames = result.running;
         const stopped = result.events.filter(event => event.kind === 'stopped').at(-1);
         if (stopped) {
-          showLifecycle('Session ended', stopped.game, 'Play time and history were saved', 1600);
+          const exitCode = Number(stopped.exit_code ?? '');
+          const shortSession = Number(stopped.seconds ?? 0) < 5;
+          const failed = Number.isFinite(exitCode) && exitCode !== 0;
+          if (failed && shortSession) {
+            showLifecycle('Session failed', stopped.game, `Exited immediately with code ${exitCode}. Check the Launch command and emulator install.`, 5000);
+          } else if (failed) {
+            showLifecycle('Session ended', stopped.game, `Exited with code ${exitCode}.`, 2500);
+          } else {
+            showLifecycle('Session ended', stopped.game, 'Play time and history were saved', 1600);
+          }
           await refresh();
         }
         $('sessionsButton').textContent = result.running.length ? `Running (${result.running.length})` : 'Running';

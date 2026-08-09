@@ -4,6 +4,8 @@ from emulators import emulator_status, install_emulator
 
 class Result:
     returncode = 0
+    stdout = ""
+    stderr = ""
 
 
 def test():

@@ -4,6 +4,19 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-08-09
+
+### Fixed
+
+- Launching a game with no launch command and no matching platform profile now fails with a clear error before anything runs, instead of silently spawning a process that exits on the spot and reporting a normal session end. Games whose file is not executable get the same message.
+- The web UI now shows the real outcome of a failed session. An immediate exit with a non-zero code reports "Session failed" with the exit code and a hint to check the launch command and emulator install, instead of the generic "Play time and history were saved" toast.
+- Emulator installs no longer re-add the Flathub remote when it already exists, which previously made `flatpak remote-add --user` exit non-zero and abort the install. When a remote add or install does fail, the error now includes flatpak's own message instead of a bare non-zero status.
+
+### Verification
+
+- Added regression coverage for the emulator install path and ran the full suite.
+- Ran `./run_all_tests.sh`: 36 test files, 0 failures.
+
 ## [0.8.0] - 2026-08-07
 
 ### Added
@@ -252,7 +265,8 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.1
 [0.8.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.0
 [0.7.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.7.0
 [0.6.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.6.0

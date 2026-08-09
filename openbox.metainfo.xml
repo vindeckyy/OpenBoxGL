@@ -15,6 +15,11 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="0.8.1" date="2026-08-09">
+      <description>
+        <p>Launching a game with no launch command or profile now reports a clear error instead of silently exiting with a failed session. The web UI shows the exit code when a session fails, and the emulator install flow skips re-adding an existing Flathub remote and surfaces the flatpak error when it does fail.</p>
+      </description>
+    </release>
     <release version="0.8.0" date="2026-08-07">
       <description>
         <p>Handheld performance profiles: set a TDP limit per launch profile, applied via ryzenadj when a game launches, with an optional restore limit when the session ends. A new Apply handheld performance limits setting (auto / always / off) decides when limits are used; auto applies only on Steam Deck or Bazzite game mode and battery-powered handhelds.</p>

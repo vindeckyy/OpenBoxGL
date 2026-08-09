@@ -579,17 +579,22 @@ def transact_state(mutator):
         return update_state_with_result(mutator)
 
 
-def session_event(kind, launch_id, game_name):
+def session_event(kind, launch_id, game_name, exit_code=None, seconds=None):
     global EVENT_SEQUENCE
     with PROCESS_LOCK:
         EVENT_SEQUENCE += 1
-        SESSION_EVENTS.append({
+        event = {
             "id": EVENT_SEQUENCE,
             "kind": kind,
             "launch_id": launch_id,
             "game": game_name,
             "time": datetime.now().isoformat(timespec="seconds"),
-        })
+        }
+        if exit_code is not None:
+            event["exit_code"] = exit_code
+        if seconds is not None:
+            event["seconds"] = seconds
+        SESSION_EVENTS.append(event)
         SESSION_EVENTS[:] = SESSION_EVENTS[-100:]
 
 
@@ -692,7 +697,6 @@ def finish_session(launch_id, game_index, started, process):
         original_game_name = str(game_snapshot.get("name", "") or identity.get("game_name") or "Untitled")
     exit_code = wait_for_exit(process, game_snapshot, settings)
     seconds = max(1, int((datetime.now() - started).total_seconds()))
-
     if game_snapshot:
         if settings.get("backup_on_close") and game_snapshot.get("save_paths"):
             try:
@@ -743,7 +747,7 @@ def finish_session(launch_id, game_index, started, process):
         restore_perf_profile(str(running.get("effective_profile", "")), load_state())
     except Exception:  # never let performance tuning break session bookkeeping
         LOGGER.exception("restore_perf failed")
-    session_event("stopped", launch_id, game_name)
+    session_event("stopped", launch_id, game_name, exit_code=exit_code, seconds=seconds)
     if not os.environ.get("OPENBOX_SAFE_MODE"):
         run_plugins(DATA.parent / "plugins", "after_session", session)
     try:
@@ -839,6 +843,16 @@ def start_game(index=None, stable_game_id=""):
     if selected_profile and selected_profile in profiles:
         profiles = {game.get("platform", ""): profiles[selected_profile]}
     args, cwd = build_launch(game, profiles)
+    if (
+        len(args) == 1
+        and not shlex.split(str(game.get("launch", "")) or "")
+        and not shlex.split(str(profiles.get(game.get("platform", ""), "")) or "")
+        and not os.access(str(args[0]), os.X_OK)
+    ):
+        raise ValueError(
+            f"{game.get('name', 'This game')} has no launch command and its file is not executable. "
+            "Set a launch command for the platform in Emulator profiles, or per-game in Edit game."
+        )
     effective_profile = effective_profile_name(game, state["profiles"])
     apply_perf_profile(effective_profile, state)
     if not os.environ.get("OPENBOX_SAFE_MODE"):
@@ -2028,7 +2042,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 install_emulator(str(app_id))
                 installs.append(str(app_id))
-            except (OSError, ValueError):
+            except (OSError, ValueError, RuntimeError):
                 pass
         self.send_json(200, {"added": added, "found": found, "recommendations": recommendations, "installed": installs})
 
@@ -2500,7 +2514,7 @@ class Handler(BaseHTTPRequestHandler):
                         state["profiles"].setdefault(platform, command)
                 transact_state(mutate)
                 job = {"state": "done", "profiles": profiles}
-            except (OSError, ValueError, subprocess.SubprocessError) as error:
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
                 job = {"state": "error", "error": str(error)}
             with PROCESS_LOCK:
                 INSTALLS[app_id] = job
@@ -2513,7 +2527,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 result = install_all_emulators()
                 job = {"state": "done", **result}
-            except (OSError, ValueError, subprocess.SubprocessError) as error:
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
                 job = {"state": "error", "error": str(error)}
             with PROCESS_LOCK:
                 INSTALLS["__all__"] = job

@@ -176,12 +176,29 @@ def install_emulator(app_id, run=subprocess.run, which=shutil.which):
     flatpak = which("flatpak")
     if not flatpak:
         raise FileNotFoundError("Flatpak is required for automatic emulator installation.")
-    run(
-        [flatpak, "remote-add", "--user", "--if-not-exists", "flathub", "https://flathub.org/repo/flathub.flatpakrepo"],
-        check=True, capture_output=True, text=True, timeout=120,
+    remotes = run(
+        [flatpak, "remotes", "--user"],
+        capture_output=True, text=True, timeout=120,
     )
-    run(
+    if "flathub" not in (remotes.stdout + remotes.stderr).lower():
+        remote_result = run(
+            [flatpak, "remote-add", "--user", "--if-not-exists", "flathub", "https://flathub.org/repo/flathub.flatpakrepo"],
+            capture_output=True, text=True, timeout=120,
+        )
+        if remote_result.returncode != 0:
+            detail = (remote_result.stderr or remote_result.stdout or "").strip()
+            raise RuntimeError(
+                "Could not add the Flathub remote. "
+                + (f"flatpak says: {detail}" if detail else "Check network access to flathub.org.")
+            )
+    install_result = run(
         [flatpak, "install", "--user", "--noninteractive", "-y", "flathub", app_id],
-        check=True, capture_output=True, text=True, timeout=1800,
+        capture_output=True, text=True, timeout=1800,
     )
+    if install_result.returncode != 0:
+        detail = (install_result.stderr or install_result.stdout or "").strip()
+        raise RuntimeError(
+            f"Flatpak could not install {EMULATORS[app_id]['name']}. "
+            + (f"flatpak says: {detail}" if detail else "Check network access to flathub.org.")
+        )
     return commands_for(app_id, [flatpak, "run", app_id])
