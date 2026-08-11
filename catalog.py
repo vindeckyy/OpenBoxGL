@@ -5,6 +5,85 @@ from datetime import datetime
 
 PROGRESS = {"", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned"}
 MEDIA_FIELDS = ("cover", "background", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "video", "music")
+MAX_TAGS = 50
+MAX_TAG_LENGTH = 64
+
+
+def normalize_tags(value):
+    """Canonicalize a tags list: strings, trimmed and collapsed, deduped by casefold.
+
+    Returns a list of the first spelling and request order for each unique tag.
+    Values over ``MAX_TAG_LENGTH`` characters and non-list inputs raise ``ValueError``.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("Tags must be a list.")
+    clean = []
+    seen = set()
+    for raw in value:
+        label = " ".join(str(raw).split())
+        if not label:
+            continue
+        if len(label) > MAX_TAG_LENGTH:
+            raise ValueError(f"Tags are limited to {MAX_TAG_LENGTH} characters.")
+        folded = label.casefold()
+        if folded in seen:
+            continue
+        seen.add(folded)
+        clean.append(label)
+        if len(clean) >= MAX_TAGS:
+            break
+    return clean
+
+
+def apply_tag_changes(game, *, replace=None, add=None, remove=None):
+    """Apply tag operations to a game dict, returning True when the stored value changed.
+
+    ``replace`` sets the full list, ``add`` appends missing labels in request order,
+    and ``remove`` deletes exact case-insensitive matches while preserving the order
+    of retained labels. Omitted operations leave the current value untouched.
+    """
+    current = game.get("tags")
+    if not isinstance(current, list):
+        current = []
+    result = list(current)
+    if replace is not None:
+        result = normalize_tags(replace)
+    if add is not None:
+        additions = normalize_tags(add)
+        existing = {label.casefold() for label in result}
+        for label in additions:
+            if label.casefold() not in existing:
+                result.append(label)
+                existing.add(label.casefold())
+    if remove is not None:
+        removals = normalize_tags(remove)
+        drop = {label.casefold() for label in removals}
+        result = [label for label in result if label.casefold() not in drop]
+    result = result[:MAX_TAGS]
+    if result == current:
+        return False
+    game["tags"] = result
+    return True
+
+
+def tag_counts(games):
+    """Return ``[{"tag": str, "count": int}, ...]`` for visible, non-hidden games.
+
+    Sorted by count descending, then display spelling case-insensitively.
+    """
+    counts = {}
+    for game in games:
+        if not isinstance(game, dict) or game.get("hidden"):
+            continue
+        for label in game.get("tags", []):
+            if not isinstance(label, str) or not label.strip():
+                continue
+            key = label.strip().casefold()
+            if key:
+                counts.setdefault(key, {"tag": label.strip(), "count": 0})["count"] += 1
+    return sorted(counts.values(), key=lambda item: (-item["count"], item["tag"].casefold()))
 
 
 def related_game_ids(games, selected, limit=8):
@@ -28,11 +107,18 @@ def related_game_ids(games, selected, limit=8):
 
 
 def bulk_update(games, ids, changes):
-    allowed = {"platform", "genre", "progress", "rating", "favorite", "hidden", "esrb", "custom_fields"}
+    allowed = {"platform", "genre", "progress", "rating", "favorite", "hidden", "esrb", "custom_fields", "tags", "tags_add", "tags_remove"}
     if not isinstance(ids, list) or not ids:
         raise ValueError("Select at least one game.")
     if not isinstance(changes, dict) or not changes or not set(changes) <= allowed:
         raise ValueError("No valid bulk changes were supplied.")
+    if "tags" in changes and ("tags_add" in changes or "tags_remove" in changes):
+        raise ValueError("Tags cannot be replaced and adjusted in the same request.")
+    if "tags_add" in changes and "tags_remove" in changes:
+        additions = {label.casefold() for label in normalize_tags(changes["tags_add"])}
+        removals = {label.casefold() for label in normalize_tags(changes["tags_remove"])}
+        if additions & removals:
+            raise ValueError("A tag cannot be added and removed in the same request.")
     clean = {}
     for field, value in changes.items():
         if field in {"favorite", "hidden"}:
@@ -54,6 +140,10 @@ def bulk_update(games, ids, changes):
             if not isinstance(value, dict):
                 raise ValueError("Custom fields must be an object.")
             clean[field] = {str(key).strip(): str(val).strip() for key, val in value.items() if str(key).strip()}
+        elif field == "tags":
+            clean[field] = normalize_tags(value)
+        elif field in ("tags_add", "tags_remove"):
+            clean[field] = normalize_tags(value)
         else:
             clean[field] = str(value).strip()
     stable_indexes = {}
@@ -79,6 +169,13 @@ def bulk_update(games, ids, changes):
                 merged = {}
             merged.update(patch.pop("custom_fields"))
             games[index]["custom_fields"] = merged
+        if "tags" in patch or "tags_add" in patch or "tags_remove" in patch:
+            apply_tag_changes(
+                games[index],
+                replace=patch.pop("tags", None),
+                add=patch.pop("tags_add", None),
+                remove=patch.pop("tags_remove", None),
+            )
         games[index].update(patch)
     return len(selected)
 

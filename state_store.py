@@ -16,9 +16,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 
-STATE_SCHEMA_VERSION = 3
+STATE_SCHEMA_VERSION = 4
 COMPACT_JSON_THRESHOLD = 1024 * 1024
 LEGACY_INDEXED_ID = re.compile(r"^game-[0-9a-f]{24}-\d+$")
+QUEUE_CAP = 500
+NOTIFICATIONS_CAP = 200
 
 
 class StateCorruptError(RuntimeError):
@@ -33,6 +35,8 @@ def default_state() -> dict[str, Any]:
         "history": [],
         "settings": {},
         "playlists": [],
+        "queue": [],
+        "notifications": [],
     }
 
 
@@ -97,10 +101,50 @@ def _migrate_v2_to_v3(state: dict[str, Any]) -> None:
     state["schema_version"] = 3
 
 
+def _migrate_v3_to_v4(state: dict[str, Any]) -> None:
+    """Add the play queue and notification center while preserving unknown fields."""
+    if not isinstance(state.get("queue"), list):
+        state["queue"] = []
+    else:
+        state["queue"] = state["queue"][:QUEUE_CAP]
+    if not isinstance(state.get("notifications"), list):
+        state["notifications"] = []
+    else:
+        state["notifications"] = state["notifications"][:NOTIFICATIONS_CAP]
+    for game in state.get("games", []):
+        if isinstance(game, dict) and "tags" in game and not isinstance(game.get("tags"), list):
+            game["tags"] = []
+    state["schema_version"] = 4
+
+
 MIGRATIONS: dict[int, Callable[[dict[str, Any]], None]] = {
     1: _migrate_v1_to_v2,
     2: _migrate_v2_to_v3,
+    3: _migrate_v3_to_v4,
 }
+
+
+def _normalize_feature_fields(state: dict[str, Any]) -> bool:
+    """Repair feature collections and per-game tags for every schema version.
+
+    Non-list queue/notifications values become empty lists, valid lists are
+    capped, and each present non-list game ``tags`` value becomes ``[]`` while
+    missing ``tags`` stays absent. Returns True when anything changed.
+    """
+    changed = False
+    for key, cap in (("queue", QUEUE_CAP), ("notifications", NOTIFICATIONS_CAP)):
+        value = state.get(key)
+        if not isinstance(value, list):
+            state[key] = []
+            changed = True
+        elif len(value) > cap:
+            state[key] = value[:cap]
+            changed = True
+    for game in state.get("games", []):
+        if isinstance(game, dict) and "tags" in game and not isinstance(game.get("tags"), list):
+            game["tags"] = []
+            changed = True
+    return changed
 
 
 def _normalize_game_ids(games: list[dict[str, Any]]) -> bool:
@@ -193,6 +237,8 @@ def normalize_state(raw: Any) -> tuple[dict[str, Any], bool]:
     state["schema_version"] = STATE_SCHEMA_VERSION
     if not isinstance(state.get("games"), list):
         raise StateCorruptError("OpenBox library.json has an invalid games collection.")
+    if _normalize_feature_fields(state):
+        changed = True
     if _normalize_game_ids(state["games"]):
         changed = True
     _validate_state(state)
@@ -253,10 +299,15 @@ class JsonStateStore:
             and raw.get("schema_version") == STATE_SCHEMA_VERSION
             and all(key in raw for key in ("games", "profiles", "history", "settings", "playlists"))
             and isinstance(raw.get("games"), list)
+            and isinstance(raw.get("queue"), list)
+            and len(raw["queue"]) <= QUEUE_CAP
+            and isinstance(raw.get("notifications"), list)
+            and len(raw["notifications"]) <= NOTIFICATIONS_CAP
             and all(
                 isinstance(game, dict)
                 and str(game.get("game_id") or "").strip()
                 and not _is_legacy_indexed_id(str(game.get("game_id") or ""))
+                and ("tags" not in game or isinstance(game.get("tags"), list))
                 for game in raw["games"]
             )
         ):

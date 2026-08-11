@@ -353,6 +353,10 @@
     <button class="menu-button" id="bulkButton">Bulk Edit</button>
     <button class="menu-button" id="backupButton">Backup</button>
     <button class="menu-button" id="fullscreenButton">Fullscreen</button>
+    <button class="menu-button" id="queueButton">Queue</button>
+    <button class="menu-button" id="tagsButton">Tags</button>
+    <button class="menu-button" id="notificationsButton">Notifications</button>
+    <button class="menu-button" id="webhooksButton">Webhooks</button>
     <span class="top-status" id="status">Local library</span>
   </header>
 
@@ -595,6 +599,11 @@
       <button type="button" class="primary" id="welcomeDone">Finish setup</button>
     </div>
   </dialog>
+  <dialog id="featureDialog">
+    <div class="dialog-head"><h2 id="featureDialogTitle">OpenBox</h2><button type="button" id="closeFeature" aria-label="Close feature dialog">×</button></div>
+    <div class="form-grid"><div class="wide" id="featureContent"></div></div>
+    <div class="dialog-actions"><button type="button" class="primary" id="doneFeature">Done</button></div>
+  </dialog>
   <div class="shutdown-overlay" id="shutdownOverlay" hidden>
     <div class="shutdown-panel">
       <h2>Shutting down OpenBox</h2>
@@ -795,7 +804,8 @@
         region:['region'], play:['play_mode'], playmode:['play_mode'], notes:['notes'], source:['source'],
         store:['source'], storefront:['source'], status:['status'], progress:['progress'], rating:['rating'],
         favorite:['favorite'], fav:['favorite'], installed:['installed'], hide:['hidden'], hidden:['hidden'],
-        broken:['broken'], portable:['portable'], controller:['controller_support'], all:['name','sort_title','alternate_names','platform','genre','developer','publisher','series','region','notes','source','play_mode','status','progress','controller_support']
+        broken:['broken'], portable:['portable'], controller:['controller_support'], tag:['tags'], tags:['tags'],
+        all:['name','sort_title','alternate_names','platform','genre','developer','publisher','series','region','notes','source','play_mode','status','progress','controller_support','tags']
       };
       return parsedTokens.every(({ negative, key, value }) => {
         const names = fields[key] || fields.all;
@@ -2883,6 +2893,42 @@
     if (deeplink.get('deeplink') === 'search') $('sidebarSearch').value = deeplink.get('q') || '';
     if (deeplink.get('deeplink') === 'showgame') selectedId = Number(deeplink.get('id'));
     Promise.all([refresh(),loadTheme()]).then(async () => {
+    let featureMode = '';
+    async function openFeature(mode) {
+      featureMode = mode;
+      $('featureDialogTitle').textContent = mode === 'queue' ? 'Play Queue' : mode === 'tags' ? 'Tags' : mode === 'notifications' ? 'Notifications' : 'Webhook Settings';
+      const content = $('featureContent');
+      try {
+        if (mode === 'queue') {
+          const result = await api('/api/queue');
+          content.innerHTML = `<div class="extras"><button class="primary" type="button" id="queueAdvance">Play next</button><button class="icon-button" type="button" id="queueAdd">Add selected game</button></div><div class="emulator-list">${(result.queue || []).map(item => `<div class="detail-card"><strong>${escapeHtml(item.name)}</strong><p class="description">${escapeHtml(item.platform || '')}${item.note ? ` · ${escapeHtml(item.note)}` : ''}</p><button type="button" class="icon-button" data-queue-remove="${escapeHtml(item.game_id)}">Remove</button></div>`).join('') || '<p class="description">Queue is empty.</p>'}</div>`;
+          $('queueAdvance').onclick = async () => { try { await api('/api/queue',{method:'POST',body:JSON.stringify({action:'advance'})}); notify('Queue advanced'); openFeature('queue'); } catch (error) { notify(error.message); } };
+          $('queueAdd').onclick = async () => { if (selectedId === null) return notify('Select a game first.'); const game = games[selectedId]; try { await api('/api/queue',{method:'POST',body:JSON.stringify({action:'enqueue',game_ids:[game.game_id]})}); notify('Game added to queue'); openFeature('queue'); } catch (error) { notify(error.message); } };
+          document.querySelectorAll('[data-queue-remove]').forEach(button => button.onclick = async () => { await api('/api/queue',{method:'POST',body:JSON.stringify({action:'remove',game_ids:[button.dataset.queueRemove]})}); openFeature('queue'); });
+        } else if (mode === 'tags') {
+          const result = await api('/api/tags');
+          content.innerHTML = `<p class="description">Select a game, then add or replace its tags.</p><div class="platforms">${(result.tags || []).map(item => `<button type="button" class="platform" data-tag-filter="${escapeHtml(item.tag)}">${escapeHtml(item.tag)} (${item.count})</button>`).join('') || '<span class="description">No tags yet.</span>'}</div><div class="extras"><input id="featureTagInput" placeholder="comma-separated tags"><button type="button" class="primary" id="saveFeatureTags">Save tags on selected game</button></div>`;
+          document.querySelectorAll('[data-tag-filter]').forEach(button => button.onclick = () => { $('sidebarSearch').value = `tag:${button.dataset.tagFilter}`; $('featureDialog').close(); render(); });
+          $('saveFeatureTags').onclick = async () => { if (selectedId === null) return notify('Select a game first.'); const tags = $('featureTagInput').value.split(',').map(value => value.trim()).filter(Boolean); try { await api('/api/tags',{method:'POST',body:JSON.stringify({ids:[games[selectedId].game_id],tags})}); await refresh(); openFeature('tags'); notify('Tags saved'); } catch (error) { notify(error.message); } };
+        } else if (mode === 'notifications') {
+          const result = await api('/api/notifications');
+          content.innerHTML = `<div class="extras"><button type="button" class="primary" id="readNotifications">Mark all read</button><button type="button" class="icon-button" id="clearNotifications">Clear</button></div>${(result.notifications || []).map(item => `<div class="detail-card"><strong>${escapeHtml(item.title)}</strong><p class="description">${escapeHtml(item.body)}<br>${escapeHtml(item.created_at)}</p></div>`).join('') || '<p class="description">No notifications.</p>'}`;
+          $('readNotifications').onclick = async () => { await api('/api/notifications',{method:'POST',body:JSON.stringify({action:'read'})}); openFeature('notifications'); };
+          $('clearNotifications').onclick = async () => { await api('/api/notifications',{method:'POST',body:JSON.stringify({action:'clear'})}); openFeature('notifications'); };
+        } else {
+          const result = await api('/api/webhooks');
+          content.innerHTML = `<p class="description">Webhook delivery uses signed JSON over HTTPS. HTTP requires OPENBOX_ALLOW_HTTP_WEBHOOKS=1.</p><label class="field wide"><span>URL</span><input id="webhookUrl" type="url"></label><label class="field wide"><span>Secret</span><input id="webhookSecret" type="password" autocomplete="off"></label><label class="field wide"><span>Events, comma separated</span><input id="webhookEvents" value="${escapeHtml(result.events.join(', '))}"></label><div class="extras"><button type="button" class="primary" id="saveWebhook">Save webhook</button><button type="button" class="icon-button" id="testWebhook">Test</button></div>${(result.webhooks || []).map(item => `<div class="detail-card"><strong>${escapeHtml(item.url)}</strong><p class="description">${escapeHtml(item.last_status || 'Not tested')} ${item.secret_set ? '· secret set' : ''}</p></div>`).join('')}`;
+          $('saveWebhook').onclick = async () => { try { const current = result.webhooks[0]; await api('/api/webhooks',{method:'POST',body:JSON.stringify({webhooks:[{...(current || {}),url:$('webhookUrl').value.trim(),secret:$('webhookSecret').value,events:$('webhookEvents').value.split(',').map(value => value.trim()).filter(Boolean),enabled:true}]})}); notify('Webhook saved'); openFeature('webhooks'); } catch (error) { notify(error.message); } };
+          $('testWebhook').onclick = async () => { try { const result = await api('/api/webhooks/test',{method:'POST',body:JSON.stringify({url:$('webhookUrl').value.trim(),secret:$('webhookSecret').value,events:['session.started']})}); notify(result.ok ? 'Webhook test succeeded' : result.error); } catch (error) { notify(error.message); } };
+        }
+        if (!$('featureDialog').open) $('featureDialog').showModal();
+      } catch (error) { notify(error.message); }
+    }
+    $('queueButton').onclick = () => openFeature('queue');
+    $('tagsButton').onclick = () => openFeature('tags');
+    $('notificationsButton').onclick = () => openFeature('notifications');
+    $('webhooksButton').onclick = () => openFeature('webhooks');
+    $('closeFeature').onclick = $('doneFeature').onclick = () => $('featureDialog').close();
       pollSessions();
       maybeShowWelcome();
       await runStartupStorefrontImports().catch(() => {});

@@ -26,9 +26,24 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.parse import parse_qs, urlparse
 
+from backend_io import download_file, remove_file_if_safe
 from arcade import import_arcade
-from backend_io import contained_path, download_file, read_limited, remove_file_if_safe
-from catalog import PROGRESS, apply_progress_automation, bulk_update, game_media_paths, related_game_ids
+from automation import (
+    DEFAULT_ATTEMPTS,
+    DEFAULT_TIMEOUT,
+    EVENT_TYPES,
+    MAX_WEBHOOKS,
+    build_event,
+    serialize_envelope,
+    sign_event,
+    test_ping,
+    utc_now,
+    validate_webhook,
+)
+from catalog import PROGRESS, apply_progress_automation, apply_tag_changes, bulk_update, game_media_paths, normalize_tags, related_game_ids, tag_counts
+from notifications import add_notification, clear as clear_notifications, mark_read as mark_notifications_read, unread_count
+from play_queue import advance as advance_queue, enqueue as enqueue_queue, normalize_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
+
 from cloud_sync import sync_statistics
 from emulators import emulator_status, install_all_emulators, install_emulator, launch_emulator, recommendations_for_platform, update_all_emulators, update_emulator
 from importers import import_heroic, import_lutris, import_steam
@@ -142,6 +157,9 @@ STATE_VIEW_CACHE = {"signature": None, "state": None}
 STATE_VIEW_LOCK = threading.Lock()
 WATCH_STOP = threading.Event()
 METADATA_DATABASE = DATA.parent / "metadata/launchbox.db"
+SERVER_PORT = 0
+WEBHOOK_DISPATCHER = None
+WEBHOOK_DISPATCHER_LOCK = threading.Lock()
 FIELDS = {
     "name", "platform", "genre", "year", "developer", "publisher", "series",
     "collection", "description", "path", "launch", "launch_profile", "cover", "background",
@@ -501,6 +519,7 @@ def _build_public_state():
             "esrb": projected.get("esrb", ""),
             "custom_fields": projected.get("custom_fields", {}) if isinstance(projected.get("custom_fields"), dict) else {},
             "platform_category": category_for_platform(projected.get("platform", ""), state.get("settings", {})),
+            "tags": list(projected.get("tags", [])) if isinstance(projected.get("tags"), list) else [],
             "store_catalog": bool(projected.get("store_catalog")),
             "store_installed": store_installed,
             "owned": bool(projected.get("owned") or projected.get("store_catalog") or projected.get("steam_app_id") or projected.get("heroic_app_id") or projected.get("lutris_id") or projected.get("gameyfin_id")),
@@ -571,12 +590,201 @@ def load_state_view():
             return STATE_VIEW_CACHE["state"]
         STATE_VIEW_CACHE.update({"signature": signature, "state": state})
         return state
-
-
 def transact_state(mutator):
     """Run one read-modify-write transaction under the local and process lock."""
     with STATE_LOCK:
-        return update_state_with_result(mutator)
+        result = update_state_with_result(mutator)
+    with PUBLIC_STATE_LOCK:
+        PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None})
+    with STATE_VIEW_LOCK:
+        STATE_VIEW_CACHE.update({"signature": None, "state": None})
+    with PLUGIN_LIBRARY_LOCK:
+        PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None})
+    return result
+
+
+def webhook_configs(state=None):
+    """Return the persisted webhook configurations list (redacted when public)."""
+    state = state or load_state()
+    configs = state.get("settings", {}).get("webhooks", [])
+    if not isinstance(configs, list):
+        return []
+    return [config for config in configs if isinstance(config, dict)]
+def emit_notification(*, kind="system", level="info", title="OpenBox", body="", source="", correlation_id="", dedupe_key=""):
+    def mutate(state):
+        return add_notification(state, kind=kind, level=level, title=title, body=body, source=source, correlation_id=correlation_id, dedupe_key=dedupe_key)
+    try:
+        transact_state(mutate)
+    except Exception:
+        LOGGER.exception("Could not persist notification")
+
+
+
+
+def public_webhook_configs(state=None):
+    """Return webhook configs with secrets replaced by a secret_set flag."""
+    configs = []
+    for config in webhook_configs(state):
+        public = {
+            key: value
+            for key, value in config.items()
+            if key != "secret"
+        }
+        public["secret_set"] = bool(config.get("secret"))
+        configs.append(public)
+    return configs
+
+
+def _webhook_settings(state=None):
+    state = state or load_state()
+    settings = state.get("settings", {})
+    return {
+        "attempts": int(settings.get("webhook_attempts") or automation.DEFAULT_ATTEMPTS),
+        "timeout": int(settings.get("webhook_timeout") or automation.DEFAULT_TIMEOUT),
+    }
+
+
+def _webhook_payload(envelope, configs):
+    """Persist and enqueue one event envelope for matching webhook configs.
+
+    Never raises: webhook delivery is best-effort and must not change the
+    outcome of the originating operation. Returns the event id string.
+    """
+    event_id = str(envelope.get("id") or "")
+    try:
+        matched = [config for config in configs if config.get("enabled") and event_matches(config, envelope)]
+        dispatcher = get_webhook_dispatcher()
+        if dispatcher is None:
+            return event_id
+        if not dispatcher.enqueue(matched, envelope):
+            LOGGER.warning("Webhook queue is full; event %s was dropped", event_id)
+            _emit_webhook_failure(event_id, "Webhook delivery queue is full; the event was dropped.")
+    except Exception:
+        LOGGER.exception("Webhook delivery failed for event %s", event_id)
+    return event_id
+
+
+def event_matches(config, envelope):
+    events = config.get("events") or []
+    return isinstance(events, list) and str(envelope.get("type", "")) in events
+
+
+def _emit_webhook_failure(event_id, error):
+    """Surface a delivery failure through the Notification Center when present.
+
+    Uses getattr so this module works even before the notification module
+    lands in the same release; failures are logged when no emitter exists.
+    """
+    emitter = globals().get("emit_notification")
+    if emitter is None:
+        LOGGER.warning("Webhook event %s failed delivery: %s", event_id, error)
+        return
+    try:
+        emitter(
+            level="error",
+            source="webhook",
+            title="Webhook delivery failed",
+            body=error,
+            correlation_id=event_id,
+            dedupe_key=f"webhook:{event_id}",
+        )
+    except Exception:
+        LOGGER.exception("Failed to record webhook delivery failure notification")
+
+
+def _commit_webhook_result(webhook_id, event_id, status, error, sent_at, terminal):
+    """Persist the last delivery status for one webhook config.
+
+    Runs outside every dispatcher, process, and state lock; the callback
+    contract requires the worker to release all locks before invoking it.
+    """
+    try:
+        def mutate(state):
+            settings = state.setdefault("settings", {})
+            for config in settings.get("webhooks", []):
+                if not isinstance(config, dict):
+                    continue
+                if str(config.get("id") or "") != webhook_id:
+                    continue
+                config["last_status"] = status
+                config["last_error"] = error
+                if sent_at:
+                    config["last_sent_at"] = sent_at
+                if terminal:
+                    config["last_delivery_at"] = sent_at or utc_now()
+                return True
+            return False
+
+        _, updated = transact_state(mutate)
+        if not updated:
+            return
+        if terminal and (status is None or status >= 300 or status == 0):
+            _emit_webhook_failure(
+                event_id,
+                error or f"Webhook delivery failed with HTTP {status}." if status else (error or "Webhook delivery failed."),
+            )
+    except Exception:
+        LOGGER.exception("Failed to commit webhook delivery status for %s", webhook_id)
+
+
+def get_webhook_dispatcher():
+    """Return the lazily-created dispatcher singleton, or None in safe mode.
+
+    The dispatcher factory is replaceable under ``WEBHOOK_DISPATCHER_FACTORY``
+    so handler/session tests can inject a fake without running ``main()``.
+    """
+    global WEBHOOK_DISPATCHER
+    if os.environ.get("OPENBOX_SAFE_MODE"):
+        return None
+    factory = globals().get("WEBHOOK_DISPATCHER_FACTORY", _default_webhook_dispatcher_factory)
+    with WEBHOOK_DISPATCHER_LOCK:
+        if WEBHOOK_DISPATCHER is None:
+            WEBHOOK_DISPATCHER = factory()
+            WEBHOOK_DISPATCHER.start()
+        return WEBHOOK_DISPATCHER
+
+
+def _default_webhook_dispatcher_factory():
+    from automation import WebhookDispatcher
+    return WebhookDispatcher(on_result=_commit_webhook_result)
+
+
+def publish_event(event, data):
+    """Build and enqueue one webhook event for matching configs. Never raises.
+
+    Returns the event id string, or "" when the event could not be built.
+    """
+    try:
+        envelope = build_event(event, data)
+    except (ValueError, TypeError) as error:
+        LOGGER.warning("Skipped webhook event %s: %s", event, error)
+        return ""
+    try:
+        configs = webhook_configs(load_state())
+        _webhook_payload(envelope, configs)
+    except Exception:
+        LOGGER.exception("Webhook publish failed for event %s", event)
+    return str(envelope.get("id") or "")
+
+
+def shutdown_webhooks(wait_seconds=2.0):
+    """Stop and join the lazy webhook dispatcher singleton if it exists."""
+    global WEBHOOK_DISPATCHER
+    with WEBHOOK_DISPATCHER_LOCK:
+        dispatcher = WEBHOOK_DISPATCHER
+        WEBHOOK_DISPATCHER = None
+    if dispatcher is not None:
+        try:
+            dispatcher.shutdown(wait_seconds=wait_seconds)
+        except Exception:
+            LOGGER.exception("Webhook dispatcher shutdown failed")
+
+
+def _publish_session_event(envelope):
+    try:
+        publish_event(envelope["type"], envelope["data"])
+    except Exception:
+        LOGGER.exception("Failed to publish session webhook event")
 
 
 def session_event(kind, launch_id, game_name, exit_code=None, seconds=None):
@@ -748,6 +956,15 @@ def finish_session(launch_id, game_index, started, process):
     except Exception:  # never let performance tuning break session bookkeeping
         LOGGER.exception("restore_perf failed")
     session_event("stopped", launch_id, game_name, exit_code=exit_code, seconds=seconds)
+    _publish_session_event(build_event("session.stopped", {
+        "launch_id": launch_id,
+        "game_id": running_snapshot.get("stable_game_id", ""),
+        "name": game_name,
+        "seconds": seconds,
+        "exit_code": exit_code,
+        "started_at": session.get("started", ""),
+        "stopped_at": utc_now(),
+    }))
     if not os.environ.get("OPENBOX_SAFE_MODE"):
         run_plugins(DATA.parent / "plugins", "after_session", session)
     try:
@@ -920,6 +1137,13 @@ def start_game(index=None, stable_game_id=""):
             daemon=True,
         ).start()
     session_event("started", launch_id, entry["game"])
+    _publish_session_event(build_event("session.started", {
+        "launch_id": entry.get("launch_id", ""),
+        "game_id": entry.get("stable_game_id", ""),
+        "name": entry.get("game", "Untitled"),
+        "platform": game.get("platform", ""),
+        "started_at": entry.get("started", ""),
+    }))
     threading.Thread(
         target=finish_session,
         args=(launch_id, index, started, process),
@@ -1645,6 +1869,32 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.send_json(200, {"results": results})
             return
+        if parsed.path == "/api/webhooks":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            state = load_state_view()
+            self.send_json(200, {"webhooks": public_webhook_configs(state), "events": list(EVENT_TYPES), "attempts": int(state.get("settings", {}).get("webhook_attempts") or DEFAULT_ATTEMPTS), "timeout": int(state.get("settings", {}).get("webhook_timeout") or DEFAULT_TIMEOUT)})
+            return
+        if parsed.path == "/api/queue":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            self.send_json(200, {"queue": resolve_queue(load_state_view())})
+            return
+        if parsed.path == "/api/notifications":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            state = load_state_view()
+            self.send_json(200, {"notifications": state.get("notifications", []), "unread": unread_count(state)})
+            return
+        if parsed.path == "/api/tags":
+            if not self.authorized():
+                self.send_json(403, {"error": "Unauthorized"})
+                return
+            self.send_json(200, {"tags": tag_counts(load_state_view()["games"])})
+            return
         if parsed.path == "/api/backup/manifest":
             if not self.authorized():
                 self.send_json(403, {"error": "Unauthorized"})
@@ -1702,6 +1952,16 @@ class Handler(BaseHTTPRequestHandler):
                 self.bulk_wizard(payload)
             elif route == "/api/premium/media-packs/apply":
                 self.apply_media_pack_route(payload)
+            elif route == "/api/queue":
+                self.queue(payload)
+            elif route == "/api/notifications":
+                self.notifications(payload)
+            elif route == "/api/tags":
+                self.tags(payload)
+            elif route == "/api/webhooks":
+                self.save_webhooks(payload)
+            elif route == "/api/webhooks/test":
+                self.test_webhook(payload)
             elif route == "/api/metadata/trailer":
                 self.download_trailer(payload)
             elif route == "/api/metadata/gog":
@@ -1903,6 +2163,80 @@ class Handler(BaseHTTPRequestHandler):
         _, favorite = transact_state(mutate)
         self.send_json(200, {"favorite": favorite})
 
+
+    def queue(self, payload):
+        action = str(payload.get("action") or "list")
+        def mutate(state):
+            if action == "enqueue":
+                enqueue_queue(state, payload.get("game_ids", []), payload.get("position"), payload.get("note", ""))
+            elif action == "remove":
+                remove_queue(state, payload.get("game_ids", []))
+            elif action == "reorder":
+                reorder_queue(state, payload.get("ordered_game_ids", []))
+            elif action == "advance":
+                return advance_queue(state, payload.get("current_game_id"))
+            elif action not in {"list", "resolve"}:
+                raise ValueError("Unknown queue action.")
+            return None
+        _, result = transact_state(mutate)
+        self.send_json(200, {"queue": resolve_queue(load_state()), "next": result if action == "advance" else None})
+
+    def notifications(self, payload):
+        action = str(payload.get("action") or "list")
+        def mutate(state):
+            if action == "read":
+                mark_notifications_read(state, payload.get("ids"))
+            elif action == "clear":
+                clear_notifications(state, payload.get("ids"))
+            elif action != "list":
+                raise ValueError("Unknown notification action.")
+            return unread_count(state)
+        _, unread = transact_state(mutate)
+        state = load_state()
+        self.send_json(200, {"notifications": state.get("notifications", []), "unread": unread_count(state) if action == "list" else unread})
+
+    def tags(self, payload):
+        ids = payload.get("ids")
+        changes = {key: payload[key] for key in ("tags", "tags_add", "tags_remove") if key in payload}
+        if not changes:
+            raise ValueError("No tag changes were supplied.")
+        def mutate(state):
+            return bulk_update(state["games"], ids, changes)
+        _, updated = transact_state(mutate)
+        self.send_json(200, {"updated": updated, "tags": tag_counts(load_state()["games"])})
+
+    def save_webhooks(self, payload):
+        configs = payload.get("webhooks", payload.get("configs", []))
+        if not isinstance(configs, list) or len(configs) > MAX_WEBHOOKS:
+            raise ValueError(f"Webhooks must be a list of at most {MAX_WEBHOOKS} entries.")
+        clean = []
+        for raw in configs:
+            if not isinstance(raw, dict):
+                raise ValueError("Webhook configuration must be an object.")
+            config = dict(raw)
+            config["id"] = str(config.get("id") or f"wh-{secrets.token_hex(8)}")
+            config["url"] = str(config.get("url") or "").strip()
+            config["events"] = list(config.get("events") or [])
+            config["enabled"] = bool(config.get("enabled", True))
+            config["attempts"] = int(config.get("attempts") or DEFAULT_ATTEMPTS)
+            config["timeout"] = int(config.get("timeout") or DEFAULT_TIMEOUT)
+            if not config.get("secret") and raw.get("secret_set"):
+                existing = next((item for item in webhook_configs() if item.get("id") == config["id"]), {})
+                config["secret"] = str(existing.get("secret") or "")
+            validate_webhook(config, openbox_port=self.server.server_port)
+            clean.append(config)
+        def mutate(state):
+            settings = state.setdefault("settings", {})
+            settings["webhooks"] = clean
+            settings["webhook_attempts"] = int(payload.get("attempts") or DEFAULT_ATTEMPTS)
+            settings["webhook_timeout"] = int(payload.get("timeout") or DEFAULT_TIMEOUT)
+        transact_state(mutate)
+        self.send_json(200, {"webhooks": public_webhook_configs(), "events": list(EVENT_TYPES)})
+
+    def test_webhook(self, payload):
+        config = dict(payload.get("webhook") or payload)
+        result = test_ping(config, openbox_port=self.server.server_port)
+        self.send_json(200, result)
     def save_game(self, payload):
         source = payload.get("game", {})
         game = {key: str(source[key]).strip() for key in FIELDS if key in source}

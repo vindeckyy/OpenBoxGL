@@ -186,6 +186,13 @@ The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md
 - Platform documents pane for manuals and reference files per platform
 - MAME and FinalBurn merged/split/non-merged set classification with BIOS awareness
 
+### Queue, tags, notifications, and webhooks
+
+- The Web UI exposes a persistent play queue with enqueue, remove, advance, notes, and missing-entry handling through `/api/queue`.
+- Games carry normalized tags with tag counts, tag filtering, and bulk tag updates through `/api/tags`.
+- Notification Center data is persisted in the local library, capped, deduplicated, and manageable through `/api/notifications`.
+- Webhook settings support event selection, signed delivery, bounded retries, HTTPS validation, test delivery, and redacted secrets through `/api/webhooks`; HTTP test targets require `OPENBOX_ALLOW_HTTP_WEBHOOKS=1`.
+
 ### Metadata, media, and playback
 
 - LaunchBox Games Database daily sync, local matching, ESRB metadata, and artwork download

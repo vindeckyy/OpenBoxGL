@@ -4,6 +4,13 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Added Web UI surfaces for the persistent play queue, normalized game tags, Notification Center, and signed webhook settings.
+- Added `/api/queue`, `/api/tags`, `/api/notifications`, and `/api/webhooks` contracts with bounded state, secret redaction, and destination validation.
+
 ## [0.8.1] - 2026-08-09
 
 ### Fixed

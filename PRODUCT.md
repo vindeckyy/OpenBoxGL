@@ -24,11 +24,8 @@ Users run OpenBox on Linux desktops, laptops, Steam Decks, and handheld PCs. The
 
 ## Capabilities and Constraints
 
-- Library data is stored locally as JSON under the user's data directory.
-- The web UI is served locally by Python and communicates with a token-authenticated REST API.
-- Current import sources include Steam, Heroic, Lutris, Gameyfin, ROM folders, arcade sets, ScummVM, RPCS3, Vita3K, and local executables.
-- Current workflows include advanced search, metadata and artwork galleries, filters, collections, ordered playlists, configurable badges, custom fields, ESRB data, emulator profiles and per-game overrides, game launching, session history, progress automation, save and library backups, RetroAchievements, plugins, themes, and Big Box mode.
-- Linux is the primary platform. OpenBox does not provide Windows LaunchBox binary compatibility or distribute ROMs.
+- The web UI includes persistent play queue controls, normalized game tags and filtering, a deduplicated notification center, and signed webhook automation.
+- Webhooks validate destinations and keep secrets out of public API responses; plain HTTP is disabled unless explicitly enabled for trusted local testing.
 - The project prefers the Python standard library and existing patterns; new dependencies require justification.
 - OpenBox has no Premium paywall, and it does not require an OpenBox account.
 - Secrets and tokens come from environment configuration and user data must not enter the repository.

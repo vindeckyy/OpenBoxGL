@@ -83,6 +83,10 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Configurable status badges | done | Settings controls favorite, install, media, save, progress, storefront, achievement, rating, and hardware badges |
 | Collection and related details | done | Platform, category, and playlist detail panes show stats, quick actions, rich related-game reasons, and artwork galleries |
 | Per-game launch profile overrides | done | A game can select an installed emulator profile without changing the platform default |
+| Persistent play queue | done | Queue controls add, remove, advance, reorder, and resolve missing games |
+| Game tags and tag filtering | done | Tags normalize, count, filter, and bulk-edit through the Web UI |
+| Notification Center | done | Persistent deduplicated notifications expose unread state and read/clear controls |
+| Signed webhook automation | done | Event subscriptions, HTTPS validation, bounded retries, test delivery, and secret redaction work locally |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 
