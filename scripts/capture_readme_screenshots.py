@@ -5,7 +5,8 @@ Usage:
   cd scripts && npm install    # once; installs puppeteer@22
   python3 scripts/capture_readme_screenshots.py
 
-Writes assets/openbox-screenshot.png and assets/openbox-game-detail.png (1920x1080).
+Writes assets/openbox-screenshot.png, assets/openbox-game-detail.png,
+and assets/openbox-bigbox.png (1920x1080).
 Requires LaunchBox metadata under ~/.local/share/openbox-game-launcher/ (or network sync).
 """
 
@@ -197,7 +198,7 @@ def build_library() -> None:
         "playlists": [],
         "settings": {
             "welcome_completed": True,
-            "theme": "Midnight Circuit",
+            "theme": "",
             "library_view": "grid",
             "image_group": "cover",
             "bigbox_mode": "stage",
@@ -243,9 +244,9 @@ def start_server() -> tuple[subprocess.Popen[str], str]:
     return process, url
 
 
-def capture_with_puppeteer(app_url: str, output: Path, detail_game_id: int | None = None) -> None:
+def capture_with_puppeteer(app_url: str, output: Path, mode: str = "", detail_game_id: int | None = None) -> None:
     script = ROOT / "scripts" / "capture_screenshot_puppeteer.mjs"
-    command = ["node", str(script), app_url, str(output)]
+    command = ["node", str(script), app_url, str(output), mode]
     if detail_game_id is not None:
         command.append(str(detail_game_id))
     subprocess.run(command, check=True, cwd=str(ROOT))
@@ -268,16 +269,21 @@ def main() -> None:
     server, app_url = start_server()
     library_out = FIXTURE_ROOT / "openbox-screenshot.png"
     detail_out = FIXTURE_ROOT / "openbox-game-detail.png"
+    bigbox_out = FIXTURE_ROOT / "openbox-bigbox.png"
     try:
         capture_with_puppeteer(app_url, library_out)
-        capture_with_puppeteer(app_url, detail_out, detail_game_id=1)
+        capture_with_puppeteer(app_url, detail_out, mode="detail", detail_game_id=1)
+        capture_with_puppeteer(app_url, bigbox_out, mode="bigbox")
         assert_dimensions(library_out)
         assert_dimensions(detail_out)
+        assert_dimensions(bigbox_out)
         ASSETS_DIR.mkdir(exist_ok=True)
         shutil.copy2(library_out, ASSETS_DIR / "openbox-screenshot.png")
         shutil.copy2(detail_out, ASSETS_DIR / "openbox-game-detail.png")
+        shutil.copy2(bigbox_out, ASSETS_DIR / "openbox-bigbox.png")
         print(f"Wrote {ASSETS_DIR / 'openbox-screenshot.png'}")
         print(f"Wrote {ASSETS_DIR / 'openbox-game-detail.png'}")
+        print(f"Wrote {ASSETS_DIR / 'openbox-bigbox.png'}")
     finally:
         server.terminate()
         try:

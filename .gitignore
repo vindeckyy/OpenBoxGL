@@ -22,3 +22,4 @@ build/
 
 # Puppeteer dependency for README screenshot capture
 scripts/node_modules/
+.commandcode/
