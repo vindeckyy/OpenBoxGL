@@ -137,6 +137,10 @@ Update relevant docs when behavior changes:
 
 Parity-related modules include `parity_import.py`, `parity_premium.py`, `parity_storefront.py`, `parity_discovery.py`, `parity_media.py`, `parity_saves.py`, `parity_integrations.py`, `parity_gamescope.py`, and the other `parity_*.py` helpers.
 
+## Documentation site
+
+The public documentation is published at [openboxgl.github.io](https://openboxgl.github.io/). Site source and content changes belong in the [OpenBoxGL Pages repository](https://github.com/OpenBoxGL/openboxgl.github.io); run `npm ci` and `npm test` there before pushing.
+
 ## Security issues
 
 Do not open public issues for security vulnerabilities. Follow [SECURITY.md](SECURITY.md).

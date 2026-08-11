@@ -360,6 +360,8 @@ Optional local configuration can be loaded from `~/.env` or a project `.env` fil
 
 ## Documentation
 
+The full user documentation is available at [OpenBoxGL Documentation](https://openboxgl.github.io/).
+
 | Document | Description |
 | --- | --- |
 | [PARITY.md](PARITY.md) | LaunchBox capability matrix and Linux parity decisions |

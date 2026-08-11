@@ -11,7 +11,7 @@
     <p>Features include Big Box fullscreen browsing, Steam Game Mode guest support for handhelds, LaunchBox Games Database sync, advanced search, manual and filter playlists, context actions, configurable status badges, collection details, RetroAchievements integration, save and library backups, artwork galleries, plugin hooks, storefront import tools, custom fields, ESRB filters, list view, drag-and-drop import, bundled media packs, and localized UI strings. LaunchBox Premium-equivalent workflows are included without a subscription.</p>
   </description>
   <launchable type="desktop-id">io.openbox.GameLauncher.desktop</launchable>
-  <url type="homepage">https://github.com/vindeckyy/OpenBoxGL</url>
+  <url type="homepage">https://openboxgl.github.io/</url>
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
