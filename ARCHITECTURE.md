@@ -192,7 +192,7 @@ POST /api/launch
     -> finish_session()
     -> playtime and history update
     -> after_session plugins
-    -> session.finished
+    -> session.stopped
 ```
 
 Process groups make pause, resume, stop, restart, and force-close practical for emulator and game process trees. Live sessions are intentionally process-local, so an unexpected server exit cannot preserve all in-flight state.

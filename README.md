@@ -126,9 +126,8 @@ LaunchBox Games Database sync, IGDB search, Steam/GOG media, EmuMovies, Bezel Pr
 
 Auto-detect emulators on `$PATH`, Flathub install/update, YAML definition packs, archive extraction (ZIP/7z/RAR), safe tokenized commands, per-game launch overrides. Example emulator profile:
 
-```ini
-[SNES]
-command = retroarch -L /usr/lib/libretro/snes9x_libretro.so "{path}"
+```
+SNES = retroarch -L /usr/lib/libretro/snes9x_libretro.so "{path}"
 ```
 
 Tokens: `{path}`, `{name}`, `{rom_name}`, `{app_id}`, `{heroic_app_id}`, `{lutris_id}`.
