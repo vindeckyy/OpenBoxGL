@@ -8,24 +8,24 @@
   <style>
     :root {
       color-scheme: dark;
-      --bg:#0d1018; --panel:#171b29; --panel2:#202536; --line:#30364a;
-      --text:#f3f5fb; --muted:#8e96aa; --cyan:#25b7e8; --green:#08bf20;
-      --topbar:#11141d; --surface-deep:#111722; --surface-header:#131925;
-      --surface-card:#1c2131; --surface-field:#24293a; --surface-hover:#30374a;
-      --border-control:#353c50; --border-card:#3b4256; --focus:#35a9d5;
-      --active:#45c4ef; --action:#21aeda; --action-ink:#07131a; --white:#fff;
-      --gold:#e5b940; --rating:#43bce5; --launch-shadow:#00a91c33; --danger:#743747;
-      --mark-start:#ffbf30; --mark-end:#f27022; --mark-ink:#18100a;
-      --cover-title-start:#313c5a; --empty-action:#2aaddb; --achievement:#e8ba41;
-      --lifecycle-bg:#283651; --lifecycle-kicker:#55c7ee; --bigbox-bg:#26334f;
-      --bigbox-copy:#aeb8ca;
+      --bg:#11100e; --panel:#1b1916; --panel2:#24211d; --line:#3d3932;
+      --text:#f4efe6; --muted:#aaa094; --cyan:#72c9d4; --green:#8fbd8d;
+      --topbar:#171513; --surface-deep:#141311; --surface-header:#1c1916;
+      --surface-card:#211e1a; --surface-field:#27231e; --surface-hover:#342d23;
+      --border-control:#4b4338; --border-card:#534a3d; --focus:#e1b866;
+      --active:#e1b866; --action:#d7a34a; --action-ink:#1c160d; --white:#fff;
+      --gold:#e5b65c; --rating:#f0bd63; --launch-shadow:#d7a34a44; --danger:#743f3f;
+      --mark-start:#f0c36a; --mark-end:#ba593d; --mark-ink:#1c160d;
+      --cover-title-start:#51412d; --empty-action:#d7a34a; --achievement:#e8ba55;
+      --lifecycle-bg:#45351d; --lifecycle-kicker:#f0c36a; --bigbox-bg:#30261a;
+      --bigbox-copy:#d0c0a5;
       --radius-hairline:2px; --radius-cover:5px; --radius-panel:12px; --radius-pill-large:28px;
-      --font-micro:8px; --font-label:9px; --font-meta:10px; --font-body-small:11px;
-      --font-body:12px; --font-action:14px; --font-dialog:15px; --font-title-large:16px;
-      --font-heading:22px; --font-brand:0.8125rem; --font-nav:0.6875rem;
-      --font-subtitle:18px; --font-bigbox:20px; --font-panel-title:28px;
+      --font-micro:9px; --font-label:11px; --font-meta:12px; --font-body-small:13px;
+      --font-body:14px; --font-action:15px; --font-dialog:16px; --font-title-large:18px;
+      --font-heading:24px; --font-brand:0.9375rem; --font-nav:0.8125rem;
+      --font-subtitle:19px; --font-bigbox:21px; --font-panel-title:28px;
       --font-bigbox-display:clamp(38px,5vw,72px); --font-screensaver:clamp(44px,8vw,110px);
-      --topbar-min-height:2rem;
+      --topbar-min-height:3rem;
     }
     * { box-sizing:border-box; }
     html {
@@ -35,8 +35,8 @@
       text-size-adjust:100%;
     }
     body {
-      margin:0; overflow:hidden; color:var(--text); font:var(--font-body)/1.4 Inter,ui-sans-serif,system-ui,sans-serif;
-      background:radial-gradient(circle at 52% 25%,#252c43 0,#111621 38%,#090c13 100%);
+      margin:0; overflow:hidden; color:var(--text); font:var(--font-body)/1.45 ui-sans-serif,system-ui,sans-serif;
+      background:var(--bg);
       display:flex; flex-direction:column; height:100%; min-height:100%;
     }
     button,input,select,textarea { font:inherit; }
@@ -44,64 +44,107 @@
     button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible {
       outline:2px solid var(--focus); outline-offset:2px;
     }
+    button:not(:disabled),select:not(:disabled),input:not(:disabled),textarea:not(:disabled) { transition:transform .15s ease, background-color .15s ease, border-color .15s ease, color .15s ease; }
+    button:not(:disabled):active { transform:scale(.98); }
+    button:disabled,select:disabled,input:disabled,textarea:disabled { cursor:not-allowed; opacity:.55; }
+    @keyframes surface-in {
+      from { opacity:0; transform:translateY(8px); }
+      to { opacity:1; transform:translateY(0); }
+    }
+    @keyframes menu-in {
+      from { opacity:0; transform:translateY(-6px) scale(.98); }
+      to { opacity:1; transform:translateY(0) scale(1); }
+    }
+    @keyframes dialog-in {
+      from { opacity:0; transform:translateY(10px) scale(.98); }
+      to { opacity:1; transform:translateY(0) scale(1); }
+    }
+    @keyframes overlay-in {
+      from { opacity:0; }
+      to { opacity:1; }
+    }
+    @keyframes spinner {
+      to { transform:rotate(360deg); }
+    }
+    .library-head { animation:surface-in .24s cubic-bezier(.2,.8,.2,1) both; }
+    .drop-zone { animation:surface-in .24s .04s cubic-bezier(.2,.8,.2,1) both; }
+    .tool-menu { transform-origin:top right; }
+    .topbar-tools[open] .tool-menu { animation:menu-in .18s cubic-bezier(.2,.8,.2,1) both; }
+    dialog[open] { animation:dialog-in .22s cubic-bezier(.2,.8,.2,1) both; }
+    dialog[open]::backdrop { animation:overlay-in .18s ease both; }
+    .lifecycle:not([hidden]),.bigbox:not([hidden]),.bigbox-menu:not([hidden]),.bigbox-pause:not([hidden]),.screensaver:not([hidden]) { animation:overlay-in .22s ease both; }
+    .motion-enter { animation:surface-in .24s cubic-bezier(.2,.8,.2,1) both; }
+    .motion-enter[style*="--motion-index"] { animation-delay:calc(var(--motion-index) * 20ms); }
+    [aria-busy="true"] { position:relative; color:transparent !important; pointer-events:none; }
+    [aria-busy="true"]::after { content:""; position:absolute; left:50%; top:50%; width:1em; height:1em; margin:-.5em; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; color:var(--action-ink); animation:spinner .8s linear infinite; }
+    .topbar-tools summary:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
     .topbar {
-      flex-shrink:0; min-height:var(--topbar-min-height); display:flex; align-items:center; gap:0.125rem;
-      padding:0.3125rem 0.4375rem; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin;
-      background:var(--topbar); border-bottom:1px solid #252a39; box-shadow:0 2px 12px #0008;
+      flex-shrink:0; min-height:var(--topbar-min-height); display:flex; align-items:center; gap:0.25rem;
+      padding:0.5rem 0.75rem; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin;
+      background:var(--topbar); border-bottom:1px solid var(--line);
     }
     .topbar::-webkit-scrollbar { height:0.375rem; }
-    .topbar::-webkit-scrollbar-thumb { background:#3a4156; border-radius:0.1875rem; }
+    .topbar::-webkit-scrollbar-thumb { background:#665844; border-radius:0.1875rem; }
     .brand {
-      display:flex; align-items:center; gap:0.4375rem; margin-right:0.5rem; flex-shrink:0; white-space:nowrap;
-      font-weight:800; font-size:var(--font-brand); line-height:1.2;
+      display:flex; align-items:center; gap:0.5rem; margin-right:0.75rem; flex-shrink:0; white-space:nowrap;
+      font-weight:800; font-size:var(--font-brand); line-height:1.2; letter-spacing:-.02em;
     }
     .mark {
-      width:1em; height:1em; min-width:1em; min-height:1em; display:grid; place-items:center; border-radius:0.25rem;
-      background:linear-gradient(135deg,var(--mark-start),var(--mark-end)); color:var(--mark-ink); font-size:var(--font-meta); line-height:1;
+      width:1.45em; height:1.45em; min-width:1.45em; min-height:1.45em; display:grid; place-items:center; border-radius:0.25rem;
+      background:var(--mark-start); color:var(--mark-ink); font-size:var(--font-meta); line-height:1;
     }
     .menu-button {
-      flex-shrink:0; white-space:nowrap; border:0; padding:0.45em 0.7em; color:#aeb5c5; background:transparent;
-      text-transform:uppercase; font-size:var(--font-nav); letter-spacing:0.05em; line-height:1.25;
+      flex-shrink:0; white-space:nowrap; border:0; border-radius:4px; padding:0.55em 0.8em; color:#bfb4a5; background:transparent;
+      font-size:var(--font-nav); line-height:1.25;
     }
-    .menu-button:hover { color:#fff; background:#282e3e; }
+    .menu-button:hover { color:var(--text); background:var(--surface-hover); }
+    .topbar-tools {
+      display:flex; align-items:center; gap:0.125rem; margin-left:0.25rem; padding-left:0.5rem; border-left:1px solid var(--line);
+    }
+    .topbar-tools summary { cursor:pointer; list-style:none; }
+    .topbar-tools summary::-webkit-details-marker { display:none; }
+    .topbar-tools[open] { position:relative; }
+    .topbar-tools[open] .tool-menu { position:fixed; z-index:10; top:calc(var(--topbar-min-height) + 0.5rem); right:0.75rem; display:grid; grid-template-columns:repeat(2,minmax(8rem,1fr)); gap:0.25rem; min-width:19rem; max-height:calc(100vh - 5rem); overflow:auto; padding:0.5rem; border:1px solid var(--border-control); background:var(--panel); box-shadow:0 14px 30px #0008; }
+    .tool-menu { display:none; }
+    .tool-menu .menu-button { text-align:left; }
     .top-status {
-      flex-shrink:0; margin-left:auto; padding-left:0.5rem; white-space:nowrap; color:#778095;
-      font-size:var(--font-nav); text-transform:uppercase; line-height:1.25;
+      flex-shrink:0; margin-left:auto; padding-left:0.75rem; white-space:nowrap; color:#a99d8e;
+      font-size:var(--font-nav); line-height:1.25;
     }
-    .workspace { flex:1; min-height:0; display:grid; grid-template-columns:170px minmax(520px,1fr) 410px; }
-    .sidebar,.details { background:linear-gradient(180deg,#171b29ee,#111521f4); backdrop-filter:blur(18px); }
-    .sidebar { border-right:1px solid var(--line); padding:12px 8px; overflow:auto; }
-    .field { display:block; margin-bottom:8px; }
-    .field span { display:block; color:#9ba3b6; font-size:9px; margin-bottom:3px; }
+    .workspace { flex:1; min-height:0; display:grid; grid-template-columns:190px minmax(520px,1fr) 410px; }
+    .sidebar,.details { background:var(--panel); }
+    .sidebar { border-right:1px solid var(--line); padding:16px 10px; overflow:auto; }
+    .field { display:block; margin-bottom:10px; }
+    .field span { display:block; color:#b4a89a; font-size:var(--font-label); margin-bottom:4px; }
     input,select,textarea {
-      width:100%; border:1px solid #343a4d; border-radius:3px; background:var(--surface-field); color:var(--white); padding:7px 8px; outline:none;
+      width:100%; border:1px solid var(--border-control); border-radius:3px; background:var(--surface-field); color:var(--white); padding:8px 9px; outline:none;
     }
-    input:focus,select:focus,textarea:focus { border-color:var(--focus); box-shadow:0 0 0 1px #35a9d555; }
-    .section-title { margin:15px 6px 6px; color:#7f899f; font-size:9px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
-    .platforms { display:grid; gap:2px; }
-    .playlist-row { display:grid; grid-template-columns:1fr 25px; gap:2px; }
+    input:focus,select:focus,textarea:focus { border-color:var(--focus); box-shadow:0 0 0 1px #e1b86655; }
+    .section-title { margin:18px 6px 7px; color:#9f9182; font-size:var(--font-label); font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    .platforms { display:grid; gap:3px; }
+    .playlist-row { display:grid; grid-template-columns:1fr 29px; gap:3px; }
     .playlist-row .platform { min-width:0; }
-    .playlist-delete { border:0; border-radius:4px; color:#7f899f; background:transparent; }
+    .playlist-delete { border:0; border-radius:4px; color:#9f9182; background:transparent; }
     .playlist-delete:hover { color:var(--white); background:var(--danger); }
     .platform {
-      width:100%; display:flex; gap:8px; align-items:center; border:0; border-radius:4px; padding:6px 8px; text-align:left; color:#c4c9d5; background:transparent;
+      width:100%; display:flex; gap:8px; align-items:center; border:0; border-radius:4px; padding:7px 8px; text-align:left; color:#d1c7ba; background:transparent;
     }
-    .platform::before { content:""; width:7px; height:7px; border-radius:var(--radius-hairline); background:#4d5872; box-shadow:0 0 8px #0006; }
-    .platform:hover,.platform.active { background:#303649; color:var(--white); }
-    .platform.active::before { background:var(--cyan); box-shadow:0 2px 6px #0006; }
-    .library { min-width:0; padding:12px 14px 0; overflow:auto; background:linear-gradient(135deg,#111722db,#1b2130cf); }
+    .platform::before { content:""; width:7px; height:7px; border-radius:var(--radius-hairline); background:#716454; }
+    .platform:hover,.platform.active { background:var(--surface-hover); color:var(--white); }
+    .platform.active::before { background:var(--active); }
+    .library { min-width:0; padding:16px 18px 0; overflow:auto; background:var(--surface-deep); }
     .library-head {
-      position:sticky; top:0; z-index:4; display:flex; align-items:center; flex-wrap:wrap; gap:0.5rem 0.75rem;
-      padding:0.625rem 0 0.5625rem; margin-top:-0.75rem; background:#131925f2; backdrop-filter:blur(10px);
+      position:sticky; top:0; z-index:4; display:flex; align-items:center; flex-wrap:wrap; gap:0.625rem 0.75rem;
+      padding:0.75rem 0 0.875rem; margin-top:-1rem; background:var(--surface-deep); border-bottom:1px solid var(--line);
     }
     .library-head > div:first-child { flex:1 1 10rem; min-width:0; }
-    .library-head h1 { margin:0; font-size:1.0625rem; line-height:1.2; }
-    .library-head p { margin:0.0625rem 0 0; color:var(--muted); font-size:var(--font-nav); line-height:1.3; }
-    .library-head .search { width:auto; min-width:8.75rem; max-width:14rem; flex:0 1 14rem; margin-left:auto; }
+    .library-head h1 { margin:0; font-size:1.25rem; line-height:1.2; letter-spacing:-.02em; }
+    .library-head p { margin:0.125rem 0 0; color:var(--muted); font-size:var(--font-body-small); line-height:1.3; }
+    .library-head .search { width:auto; min-width:9.5rem; max-width:14rem; flex:0 1 14rem; margin-left:auto; }
     .library-head .icon-button { flex-shrink:0; white-space:nowrap; }
-    .icon-button { border:1px solid var(--border-control); border-radius:4px; padding:7px 10px; background:#242a3a; color:#dbe0ea; }
+    .icon-button { border:1px solid var(--border-control); border-radius:4px; padding:8px 11px; background:var(--surface-card); color:#e0d7ca; }
     .icon-button:hover { background:var(--surface-hover); }
-    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr)); gap:17px 14px; padding:4px 0 25px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:20px 16px; padding:12px 0 25px; }
     .grid-spacer { grid-column:1/-1; pointer-events:none; }
     .card { position:relative; min-width:0; color:var(--white); }
     .card-main {
@@ -111,102 +154,108 @@
     .card-main:focus-visible { outline:2px solid var(--focus); outline-offset:3px; border-radius:var(--radius-cover); }
     .cover {
       position:relative; aspect-ratio:.72; overflow:hidden; border:1px solid var(--border-card); border-radius:var(--radius-cover);
-      background:linear-gradient(145deg,#283149,#111722); box-shadow:0 8px 18px #0007; transition:.14s ease;
+      background:linear-gradient(145deg,#51412d,#1b1814); box-shadow:0 8px 18px #0007; transition:.14s ease;
     }
     .cover img { width:100%; height:100%; display:block; object-fit:cover; }
-    .cover-title { position:absolute; inset:0; display:grid; place-items:center; padding:12px; text-align:center; font-weight:900; font-size:var(--font-title-large); letter-spacing:-.02em; background:linear-gradient(145deg,var(--cover-title-start),#151b29 70%); }
+    .cover-title { position:absolute; inset:0; display:grid; place-items:center; padding:12px; text-align:center; font-weight:900; font-size:var(--font-title-large); letter-spacing:-.02em; background:linear-gradient(145deg,var(--cover-title-start),#211b14 70%); }
     .card-main:hover .cover,.card.selected .cover,.card-main:focus-visible .cover {
-      transform:translateY(-2px); border-color:var(--active); box-shadow:0 0 0 2px #28b9e544,0 10px 23px #000a;
+      transform:translateY(-2px); border-color:var(--active); box-shadow:0 0 0 2px #e1b86644,0 10px 23px #000a;
     }
-    .card h3 { margin:7px 0 1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--font-meta); font-weight:650; }
-    .card p { margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#818a9f; font-size:9px; }
-    .badges { height:12px; margin-top:4px; color:var(--gold); font-size:var(--font-micro); }
-    .card-picker { position:absolute; z-index:2; top:7px; left:7px; width:20px; height:20px; accent-color:var(--cyan); }
+    .card h3 { margin:8px 0 2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--font-meta); font-weight:700; }
+    .card p { margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#a29485; font-size:var(--font-body-small); }
+    .badges { height:14px; margin-top:5px; color:var(--gold); font-size:var(--font-micro); }
+    .card-picker { position:absolute; z-index:2; top:7px; left:7px; width:20px; height:20px; accent-color:var(--active); }
     .related-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; }
-    .related-game { min-width:0; border:1px solid var(--border-control); border-radius:var(--radius-cover); padding:7px; background:#242a3a; color:#dbe0ea; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .empty { min-height:65vh; display:grid; place-items:center; text-align:center; color:#9aa3b6; }
-    .empty h2 { margin:0 0 5px; color:#e8ecf5; }
-    .empty button { margin-top:13px; border:0; border-radius:var(--radius-cover); padding:9px 18px; background:var(--empty-action); color:#071018; font-weight:800; }
-    .details { position:relative; border-left:1px solid var(--line); overflow:auto; box-shadow:-12px 0 30px #0005; }
-    .detail-empty { height:100%; display:grid; place-items:center; padding:40px; text-align:center; color:#7f899e; }
-    .hero { position:relative; min-height:190px; background:linear-gradient(135deg,#29344d,#121722); background-size:cover; background-position:center; }
-    .hero::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg,#080b1115 35%,#171b29 100%); }
-    .hero-copy { position:absolute; z-index:1; left:17px; right:17px; bottom:14px; }
-    .hero-kicker { color:#c3c9d6; font-size:9px; text-transform:uppercase; }
-    .hero h2 { margin:2px 0 0; font-size:var(--font-heading); line-height:1.05; text-transform:uppercase; text-shadow:0 2px 8px #000; }
-    .detail-body { padding:0 15px 20px; }
-    .rating { display:flex; align-items:center; gap:8px; margin:7px 0 12px; color:var(--rating); }
-    .rating strong { padding:3px 6px; border-radius:3px; background:#4b5264; color:#fff; font-size:var(--font-meta); }
-    .play { width:100%; border:0; border-radius:18px; padding:9px; background:var(--green); color:var(--action-ink); font-size:var(--font-action); font-weight:900; box-shadow:0 5px 14px #0008; }
+    .related-game { min-width:0; border:1px solid var(--border-control); border-radius:var(--radius-cover); padding:7px; background:var(--surface-card); color:#e0d7ca; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .empty { grid-column:1/-1; min-height:58vh; display:grid; place-items:center; text-align:left; color:#b9ad9e; }
+    .empty > div { width:min(680px,100%); padding:32px; border:1px solid var(--border-card); background:var(--panel); box-shadow:0 18px 40px #0005; }
+    .empty h2 { margin:0 0 8px; color:var(--text); font-size:1.75rem; letter-spacing:-.03em; }
+    .empty p { max-width:50ch; margin:0; font-size:var(--font-body); line-height:1.55; }
+    .empty .empty-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:22px; }
+    .empty button { margin:0; border:0; border-radius:var(--radius-cover); padding:10px 18px; background:var(--empty-action); color:var(--action-ink); font-weight:800; }
+    .empty .empty-secondary { border:1px solid var(--border-control); background:var(--surface-card); color:var(--text); }
+    .details { position:relative; border-left:1px solid var(--line); overflow:auto; }
+    .detail-empty { height:100%; display:grid; place-items:center; padding:40px; text-align:center; color:#9f9182; }
+    .hero { position:relative; min-height:210px; background:linear-gradient(135deg,#51412d,#211b14); background-size:cover; background-position:center; }
+    .hero::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg,#0d0b0815 35%,#1b1916 100%); }
+    .hero-copy { position:absolute; z-index:1; left:18px; right:18px; bottom:16px; }
+    .hero-kicker { color:#ddc7a2; font-size:var(--font-label); text-transform:uppercase; letter-spacing:.08em; }
+    .hero h2 { margin:3px 0 0; font-size:var(--font-heading); line-height:1.05; text-transform:uppercase; text-shadow:0 2px 8px #000; }
+    .detail-body { padding:0 17px 22px; }
+    .rating { display:flex; align-items:center; gap:8px; margin:9px 0 13px; color:var(--rating); }
+    .rating strong { padding:4px 7px; border-radius:3px; background:#594a36; color:#fff; font-size:var(--font-meta); }
+    .play { width:100%; border:0; border-radius:18px; padding:10px; background:var(--action); color:var(--action-ink); font-size:var(--font-action); font-weight:900; box-shadow:0 5px 14px var(--launch-shadow); }
     .play:disabled { cursor:not-allowed; opacity:.4; }
-    .detail-actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin:9px 0 13px; }
-    .detail-card { margin-top:10px; padding:12px; border:1px solid #30374a; border-radius:8px; background:#1c2131; }
-    .detail-card h3 { margin:0 0 9px; color:#8e9ab1; font-size:var(--font-meta); text-transform:uppercase; letter-spacing:.08em; }
-    .facts { display:grid; grid-template-columns:1fr 1fr; gap:9px 16px; }
-    .fact small { display:block; color:#717b91; font-size:var(--font-micro); text-transform:uppercase; }
-    .fact span { display:block; margin-top:2px; color:#dfe3ec; font-size:var(--font-meta); overflow-wrap:anywhere; }
-    .description { margin:10px 0 0; color:#aeb5c5; font-size:var(--font-meta); white-space:pre-wrap; }
-    .extras { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
-    .media-player { width:100%; display:block; border-radius:6px; background:#080a0f; }
+    .detail-actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin:10px 0 14px; }
+    .detail-card { margin-top:11px; padding:13px; border:1px solid var(--line); border-radius:8px; background:var(--surface-card); }
+    .detail-card h3 { margin:0 0 9px; color:#b09f8d; font-size:var(--font-meta); text-transform:uppercase; letter-spacing:.08em; }
+    .facts { display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; }
+    .fact small { display:block; color:#958677; font-size:var(--font-micro); text-transform:uppercase; }
+    .fact span { display:block; margin-top:2px; color:#e5dbce; font-size:var(--font-meta); overflow-wrap:anywhere; }
+    .description { margin:10px 0 0; color:#c0b3a4; font-size:var(--font-meta); white-space:pre-wrap; }
+    .extras { display:flex; flex-wrap:wrap; gap:7px; margin-top:11px; }
+    .media-player { width:100%; display:block; border-radius:6px; background:#0b0a08; }
     .screenshot-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
-    .perf-row { display:grid; grid-template-columns:1fr auto auto auto; gap:8px; align-items:end; padding:8px 0; border-bottom:1px solid #30364a; }
+    .perf-row { display:grid; grid-template-columns:1fr auto auto auto; gap:8px; align-items:end; padding:8px 0; border-bottom:1px solid var(--line); }
     .perf-row:last-child { border-bottom:0; }
-    .perf-name { align-self:center; font-size:var(--font-meta); color:#dfe3ec; overflow-wrap:anywhere; }
+    .perf-name { align-self:center; font-size:var(--font-meta); color:#e5dbce; overflow-wrap:anywhere; }
     .perf-row .field { margin:0; }
-    .screenshot-grid button { aspect-ratio:16/9; overflow:hidden; border:1px solid #3c4357; border-radius:var(--radius-cover); padding:0; background:#090c13; }
+    .screenshot-grid button { aspect-ratio:16/9; overflow:hidden; border:1px solid var(--border-control); border-radius:var(--radius-cover); padding:0; background:var(--surface-deep); }
     .screenshot-grid img { width:100%; height:100%; display:block; object-fit:cover; }
-    .media-dialog { width:min(1100px,94vw); background:#090c13; }
+    .media-dialog { width:min(1100px,94vw); background:var(--surface-deep); }
     .media-dialog img { display:block; width:100%; max-height:88vh; object-fit:contain; }
-    .media-dialog button { position:absolute; top:8px; right:8px; z-index:1; width:34px; height:34px; border:1px solid #ffffff55; border-radius:50%; background:#080b11cc; color:#fff; font-size:var(--font-bigbox); }
+    .media-dialog button { position:absolute; top:8px; right:8px; z-index:1; width:34px; height:34px; border:1px solid #ffffff55; border-radius:50%; background:#171513dd; color:var(--text); font-size:var(--font-bigbox); }
     .reader-dialog { width:min(1100px,95vw); height:92vh; }
     .reader-dialog iframe { width:100%; height:calc(92vh - 48px); border:0; background:#fff; }
-    dialog { width:min(680px,90vw); border:1px solid #41485d; border-radius:8px; padding:0; color:#fff; background:#171b28; box-shadow:0 30px 80px #000c; }
-    dialog::backdrop { background:#05070bc7; backdrop-filter:blur(4px); }
+    dialog { width:min(680px,90vw); border:1px solid var(--border-card); border-radius:8px; padding:0; color:var(--text); background:var(--panel); box-shadow:0 30px 80px #000c; }
+    dialog::backdrop { background:#050403d9; backdrop-filter:blur(4px); }
     .profiles-dialog { width:min(920px,94vw); max-height:90vh; }
     .profiles-dialog .form-grid { max-height:calc(90vh - 110px); overflow:auto; }
     .profiles-dialog .emulator-list { grid-template-columns:1fr; }
-    .dialog-head { display:flex; align-items:center; padding:13px 16px; border-bottom:1px solid #30364a; }
+    .dialog-head { display:flex; align-items:center; padding:13px 16px; border-bottom:1px solid var(--line); }
     .dialog-head h2 { margin:0; font-size:var(--font-dialog); }
-    .dialog-head button { min-width:34px; min-height:34px; margin-left:auto; border:0; background:transparent; color:#c9cfdb; font-size:var(--font-subtitle); }
+    .dialog-head button { min-width:34px; min-height:34px; margin-left:auto; border:0; background:transparent; color:#d5c8b8; font-size:var(--font-subtitle); }
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; padding:16px; }
     .form-grid .wide { grid-column:1/-1; }
     textarea { min-height:76px; resize:vertical; }
-    .check { display:flex; align-items:center; gap:8px; color:#c6ccda; }
+    .check { display:flex; align-items:center; gap:8px; color:#e0d7ca; }
     .check input { width:auto; }
     .emulator-list { display:grid; grid-template-columns:repeat(2,1fr); gap:7px; margin-top:8px; }
-    .emulator-item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; padding:9px; border:1px solid #30374a; border-radius:6px; background:#1c2131; }
+    .emulator-item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; padding:9px; border:1px solid var(--line); border-radius:6px; background:var(--surface-card); }
     .emulator-item div { min-width:0; }
     .list-view { display:block; padding-bottom:25px; }
     .list-row {
       display:grid; width:100%; grid-template-columns:2fr 1fr 1fr 90px 90px 70px 70px; gap:8px; align-items:center;
-      padding:8px 10px; border:0; border-bottom:1px solid #2a3144; cursor:pointer; color:inherit; background:transparent;
+      padding:9px 10px; border:0; border-bottom:1px solid var(--line); cursor:pointer; color:inherit; background:transparent;
       font:inherit; text-align:left;
     }
-    .list-row:hover,.list-row.selected,.list-row:focus-visible { background:#2a3144; }
+    .list-row:hover,.list-row.selected,.list-row:focus-visible { background:var(--surface-hover); }
     .list-row:focus-visible { outline:2px solid var(--focus); outline-offset:-2px; }
-    .list-head { display:grid; grid-template-columns:2fr 1fr 1fr 90px 90px 70px 70px; gap:8px; padding:6px 10px; color:#7f899f; font-size:9px; text-transform:uppercase; border-bottom:1px solid #30364a; }
-    .drop-zone { width:100%; margin:0 0 12px; padding:18px; border:1px dashed #3f4a63; border-radius:8px; color:#9aa3b6; text-align:center; background:#15192588; font:inherit; }
-    .drop-zone.active { border-color:#45c4ef; color:#dbe0ea; background:#1b284088; }
+    .list-head { display:grid; grid-template-columns:2fr 1fr 1fr 90px 90px 70px 70px; gap:8px; padding:7px 10px; color:#9f9182; font-size:var(--font-label); text-transform:uppercase; border-bottom:1px solid var(--line); }
+    .drop-zone { width:100%; margin:0 0 14px; padding:16px; border:1px dashed #6b5a43; border-radius:6px; color:#c4b5a2; text-align:left; background:#1b1814; font:inherit; }
+    .drop-zone.active { border-color:var(--active); color:var(--text); background:#312518; }
+    .primary-nav { color:var(--text); background:var(--surface-hover); }
+    .primary-nav:hover { background:#4a3923; }
     .jewel-3d { transform:perspective(900px) rotateY(-18deg); box-shadow:12px 8px 24px #0009; }
     .bigbox-startup-video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:.35; pointer-events:none; }
     .hybrid-search { margin-left:12px; width:180px; }
     .emulator-item strong,.emulator-item small { display:block; }
-    .emulator-item small { overflow:hidden; color:#7f899f; text-overflow:ellipsis; white-space:nowrap; }
+    .emulator-item small { overflow:hidden; color:#9f9182; text-overflow:ellipsis; white-space:nowrap; }
     .emulator-actions { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
     .emulator-actions button { white-space:nowrap; }
-    .achievement { display:grid; grid-template-columns:44px 1fr auto; gap:9px; align-items:center; margin-top:7px; padding:7px; border:1px solid #30374a; border-radius:6px; background:#171b29; }
+    .achievement { display:grid; grid-template-columns:44px 1fr auto; gap:9px; align-items:center; margin-top:7px; padding:7px; border:1px solid var(--line); border-radius:6px; background:var(--panel); }
     .achievement img { width:44px; height:44px; border-radius:var(--radius-cover); }
     .achievement small,.achievement span { display:block; }
-    .achievement small { color:#7f899f; }
+    .achievement small { color:#9f9182; }
     .achievement span { color:var(--achievement); }
     .metadata-results { display:grid; gap:6px; max-height:45vh; overflow:auto; }
-    .metadata-result { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; padding:9px; border:1px solid #30374a; border-radius:6px; background:#1c2131; }
-    .metadata-result small { display:block; color:#7f899f; }
+    .metadata-result { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; padding:9px; border:1px solid var(--line); border-radius:6px; background:var(--surface-card); }
+    .metadata-result small { display:block; color:#9f9182; }
     .dialog-actions { display:flex; justify-content:flex-end; gap:8px; padding:0 16px 16px; }
-    .primary { border:0; border-radius:4px; padding:8px 16px; background:#21aeda; color:#07131a; font-weight:800; }
-    .toast { position:fixed; z-index:20; right:18px; bottom:18px; max-width:360px; padding:11px 14px; border:1px solid #495169; border-radius:6px; background:#202638; color:#fff; box-shadow:0 12px 30px #0009; opacity:0; transform:translateY(8px); pointer-events:none; transition:.2s; }
+    .primary { border:0; border-radius:4px; padding:9px 16px; background:var(--action); color:var(--action-ink); font-weight:800; }
+    .toast { position:fixed; z-index:20; right:18px; bottom:18px; max-width:360px; padding:11px 14px; border:1px solid var(--border-card); border-radius:6px; background:var(--surface-card); color:var(--text); box-shadow:0 12px 30px #0009; opacity:0; transform:translateY(8px); pointer-events:none; transition:opacity .2s ease, transform .2s ease; }
     .toast.show { opacity:1; transform:none; }
-    .context-menu { position:fixed; z-index:60; width:min(280px,calc(100vw - 20px)); padding:6px; border:1px solid #4a536b; border-radius:7px; background:#171d2c; box-shadow:0 18px 50px #000c; }
+    .context-menu { position:fixed; z-index:60; width:min(280px,calc(100vw - 20px)); padding:6px; border:1px solid var(--border-card); border-radius:7px; background:var(--panel); box-shadow:0 18px 50px #000c; }
     .context-menu[hidden] { display:none; }
     .context-menu button,.context-menu select { width:100%; margin:2px 0; }
     .context-menu button { text-align:left; }
@@ -215,90 +264,94 @@
     .badge.favorite,.badge.progress { color:#f2c34a; }
     .badge.danger { color:#ff9d9d; border-color:#78404b; }
     .collection-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:12px; }
-    .collection-stat { padding:9px; border:1px solid #30374a; border-radius:6px; background:#1c2131; }
+    .collection-stat { padding:9px; border:1px solid var(--line); border-radius:6px; background:var(--surface-card); }
     .collection-stat small,.collection-stat strong { display:block; }
-    .collection-stat small { color:#7f899f; font-size:9px; text-transform:uppercase; }
+    .collection-stat small { color:#9f9182; font-size:9px; text-transform:uppercase; }
     .collection-stat strong { margin-top:2px; font-size:16px; }
     .playlist-manager-list,.backup-list { display:grid; gap:8px; max-height:55vh; overflow:auto; }
-    .playlist-manager-item,.backup-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px; border:1px solid #30374a; border-radius:7px; background:#1c2131; }
-    .playlist-manager-item small,.backup-item small { display:block; color:#7f899f; }
+    .playlist-manager-item,.backup-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px; border:1px solid var(--line); border-radius:7px; background:var(--surface-card); }
+    .playlist-manager-item small,.backup-item small { display:block; color:#9f9182; }
     .playlist-manager-actions { display:flex; flex-wrap:wrap; gap:5px; justify-content:flex-end; }
     .member-list { display:grid; gap:4px; margin-top:7px; }
     .member-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:4px; align-items:center; }
-    .lifecycle { position:fixed; z-index:40; inset:0; display:grid; place-items:center; text-align:center; background:radial-gradient(circle at 50% 42%,var(--lifecycle-bg),#080b12 70%); }
+    .lifecycle { position:fixed; z-index:40; inset:0; display:grid; place-items:center; text-align:center; background:radial-gradient(circle at 50% 42%,var(--lifecycle-bg),var(--bg) 70%); }
     .lifecycle[hidden] { display:none; }
     .lifecycle small { color:var(--lifecycle-kicker); font-size:12px; font-weight:800; letter-spacing:.2em; text-transform:uppercase; }
     .lifecycle h2 { max-width:80vw; margin:12px 0 6px; font-size:clamp(34px,6vw,78px); line-height:1; text-transform:uppercase; }
-    .lifecycle p { color:#98a4b8; font-size:var(--font-action); }
-    .bigbox { position:fixed; z-index:30; inset:0; display:grid; grid-template-rows:auto 1fr auto; padding:34px 46px; overflow:hidden; cursor:none; background:radial-gradient(circle at 70% 30%,var(--bigbox-bg),#080b12 68%); }
+    .lifecycle p { color:#c0b3a4; font-size:var(--font-action); }
+    .bigbox { position:fixed; z-index:30; inset:0; display:grid; grid-template-rows:auto 1fr auto; padding:34px 46px; overflow:hidden; cursor:none; background:radial-gradient(circle at 70% 30%,var(--bigbox-bg),var(--bg) 68%); }
     .bigbox[hidden] { display:none; }
-    .bigbox-head { display:flex; align-items:center; color:#aab3c6; text-transform:uppercase; letter-spacing:.15em; }
+    .bigbox-head { display:flex; align-items:center; color:#c8bba7; text-transform:uppercase; letter-spacing:.15em; }
     .bigbox-head strong { color:#fff; font-size:var(--font-subtitle); }
     .bigbox-head span { margin-left:auto; }
     .bigbox-stage { display:grid; grid-template-columns:minmax(280px,42%) 1fr; gap:55px; align-items:center; min-height:0; }
-    .bigbox-cover { justify-self:end; width:min(34vw,390px); aspect-ratio:.72; display:grid; place-items:center; overflow:hidden; border:2px solid #47c9f4; border-radius:10px; background:#1d263a; box-shadow:0 0 0 5px #2bbbe52e,0 30px 70px #000c; font-size:34px; font-weight:900; text-align:center; padding:25px; }
+    .bigbox-cover { justify-self:end; width:min(34vw,390px); aspect-ratio:.72; display:grid; place-items:center; overflow:hidden; border:2px solid var(--active); border-radius:10px; background:var(--surface-card); box-shadow:0 0 0 5px #e1b8662e,0 30px 70px #000c; font-size:34px; font-weight:900; text-align:center; padding:25px; }
     .bigbox-cover img { width:100%; height:100%; object-fit:cover; }
     .bigbox-copy h2 { margin:0; font-size:var(--font-bigbox-display); line-height:.95; text-transform:uppercase; }
     .bigbox-copy p { max-width:700px; color:var(--bigbox-copy); font-size:var(--font-title-large); }
-    .bigbox-play { display:inline-block; margin-top:20px; min-width:240px; border:0; border-radius:var(--radius-pill-large); padding:14px 25px; background:var(--green); color:var(--action-ink); font-size:var(--font-bigbox); font-weight:900; }
-    .bigbox-foot { display:flex; justify-content:center; gap:28px; color:#98a2b5; font-size:var(--font-action); }
+    .bigbox-play { display:inline-block; margin-top:20px; min-width:240px; border:0; border-radius:var(--radius-pill-large); padding:14px 25px; background:var(--action); color:var(--action-ink); font-size:var(--font-bigbox); font-weight:900; }
+    .bigbox-foot { display:flex; justify-content:center; gap:28px; color:#b5a894; font-size:var(--font-action); }
     .bigbox-menu { position:fixed; z-index:32; inset:0; display:grid; place-items:center; cursor:auto; background:#05070bd9; }
     .bigbox-menu[hidden] { display:none; }
-    .bigbox-menu-panel { width:min(520px,90vw); padding:26px; border:1px solid #45516b; border-radius:var(--radius-panel); background:#171d2c; box-shadow:0 30px 90px #000; }
+    .bigbox-menu-panel { width:min(520px,90vw); padding:26px; border:1px solid var(--border-card); border-radius:var(--radius-panel); background:var(--panel); box-shadow:0 30px 90px #000; }
     .bigbox-menu-panel h2 { margin:0 0 18px; font-size:var(--font-panel-title); }
-    .screensaver { position:fixed; z-index:34; inset:0; display:grid; place-items:end start; padding:7vw; overflow:hidden; cursor:none; background:#080b12 center/cover no-repeat; }
+    .screensaver { position:fixed; z-index:34; inset:0; display:grid; place-items:end start; padding:7vw; overflow:hidden; cursor:none; background:var(--bg) center/cover no-repeat; }
     .screensaver[hidden] { display:none; }
     .screensaver video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
     .screensaver::after { content:""; position:absolute; z-index:1; inset:0; background:linear-gradient(90deg,#05070bcf,#05070b1f 70%),linear-gradient(0deg,#05070bcf,transparent 60%); }
     .screensaver-copy { position:relative; z-index:2; }
     .screensaver-copy h2 { max-width:70vw; margin:4px 0; font-size:var(--font-screensaver); line-height:.9; text-transform:uppercase; }
-    .screensaver-copy p { color:#c4ccda; font-size:var(--font-subtitle); }
+    .screensaver-copy p { color:#d0c2af; font-size:var(--font-subtitle); }
     .arrange-wrap { display:grid; grid-template-columns:1fr 18px; gap:8px; align-items:stretch; }
-    .arrange-bar { position:relative; border-radius:4px; background:#1a1f2d; border:1px solid #30374a; cursor:pointer; }
+    .arrange-bar { position:relative; border-radius:4px; background:var(--surface-deep); border:1px solid var(--line); cursor:pointer; }
     .arrange-bar:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
     .arrange-marker { position:absolute; left:2px; right:2px; height:2px; background:var(--focus); border-radius:var(--radius-hairline); }
-    .arrange-marker span { position:absolute; right:20px; transform:translateY(-50%); padding:1px 4px; border-radius:3px; background:#242a3a; color:#9aa3b6; font-size:var(--font-micro); white-space:nowrap; opacity:0; pointer-events:none; }
+    .arrange-marker span { position:absolute; right:20px; transform:translateY(-50%); padding:1px 4px; border-radius:3px; background:var(--surface-card); color:#b09f8d; font-size:var(--font-micro); white-space:nowrap; opacity:0; pointer-events:none; }
     .arrange-bar:hover .arrange-marker span { opacity:1; }
     .settings-search { margin-bottom:10px; }
     .settings-field[hidden] { display:none !important; }
     .shutdown-overlay { position:fixed; z-index:40; inset:0; display:grid; place-items:center; background:#05070bcc; }
     .shutdown-overlay[hidden] { display:none; }
-    .shutdown-panel { width:min(420px,92vw); padding:18px; border:1px solid #30374a; border-radius:10px; background:#171b29; }
+    .shutdown-panel { width:min(420px,92vw); padding:18px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
     .shutdown-panel h2 { margin:0 0 8px; font-size:var(--font-title-large); }
     .shutdown-panel p { margin:0 0 12px; color:#9aa3b6; font-size:var(--font-body-small); }
     .history-list { max-height:50vh; overflow:auto; display:grid; gap:6px; }
-    .history-item { padding:8px 10px; border:1px solid #30374a; border-radius:6px; background:#1c2131; font-size:var(--font-meta); }
+    .history-item { padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--surface-card); font-size:var(--font-meta); }
     .welcome-steps { display:grid; gap:10px; }
     .welcome-steps button { justify-self:start; }
-    .reader-toolbar { display:flex; flex-wrap:wrap; gap:6px; padding:0 16px 10px; border-bottom:1px solid #30364a; }
+    .reader-toolbar { display:flex; flex-wrap:wrap; gap:6px; padding:0 16px 10px; border-bottom:1px solid var(--line); }
     .discovery-grid { display:grid; gap:12px; max-height:55vh; overflow:auto; }
-    .discovery-section h3 { margin:0 0 6px; color:#8e9ab1; font-size:var(--font-meta); text-transform:uppercase; letter-spacing:.08em; }
+    .discovery-section h3 { margin:0 0 6px; color:#b09f8d; font-size:var(--font-meta); text-transform:uppercase; letter-spacing:.08em; }
     .discovery-row { display:flex; flex-wrap:wrap; gap:6px; }
     .bigbox-hybrid { grid-template-columns:220px 1fr; gap:28px; }
     .bigbox-platforms { display:grid; gap:4px; max-height:58vh; overflow:auto; padding-right:6px; }
-    .bigbox-platform { width:100%; border:1px solid #30374a; border-radius:6px; padding:8px 10px; text-align:left; color:#c4c9d5; background:#1c2131; }
-    .bigbox-platform.active { border-color:var(--active); box-shadow:0 0 0 1px #28b9e544; color:var(--white); }
+    .bigbox-platform { width:100%; border:1px solid var(--line); border-radius:6px; padding:8px 10px; text-align:left; color:#d1c7ba; background:var(--surface-card); }
+    .bigbox-platform.active { border-color:var(--active); box-shadow:0 0 0 1px #e1b86644; color:var(--white); }
     .coverflow-strip { display:flex; gap:14px; overflow:auto; padding:10px 0 18px; scroll-snap-type:x mandatory; }
-    .coverflow-card { flex:0 0 min(18vw,170px); scroll-snap-align:center; border:1px solid #3b4256; border-radius:8px; overflow:visible; background:#1d263a; transform:perspective(900px) rotateY(-8deg); transition:.15s ease; position:relative; }
-    .coverflow-card.jewel-case::before { content:''; position:absolute; left:-10px; top:4%; width:10px; height:92%; background:linear-gradient(180deg,#566078,#2a3144); transform:rotateY(78deg); transform-origin:right center; border-radius:var(--radius-hairline) 0 0 var(--radius-hairline); box-shadow:inset 0 0 0 1px #667089; }
+    .coverflow-card { flex:0 0 min(18vw,170px); scroll-snap-align:center; border:1px solid var(--border-card); border-radius:8px; overflow:visible; background:var(--surface-card); transform:perspective(900px) rotateY(-8deg); transition:.15s ease; position:relative; }
+    .coverflow-card.jewel-case::before { content:''; position:absolute; left:-10px; top:4%; width:10px; height:92%; background:linear-gradient(180deg,#75634a,var(--surface-hover)); transform:rotateY(78deg); transform-origin:right center; border-radius:var(--radius-hairline) 0 0 var(--radius-hairline); box-shadow:inset 0 0 0 1px #8b7659; }
     .coverflow-card.jewel-case::after { content:''; position:absolute; inset:0; border-radius:8px; box-shadow:inset 0 0 0 1px #ffffff18, 0 12px 24px #0006; pointer-events:none; }
-    .coverflow-card.active { transform:perspective(900px) rotateY(0deg) scale(1.04); border-color:#45c4ef; box-shadow:0 0 0 2px #28b9e544; }
+    .coverflow-card.active { transform:perspective(900px) rotateY(0deg) scale(1.04); border-color:var(--active); box-shadow:0 0 0 2px #e1b86644; }
     .coverflow-card img { width:100%; aspect-ratio:.72; object-fit:cover; display:block; border-radius:8px; }
     .reader-viewport { overflow:hidden; height:calc(92vh - 92px); background:#fff; }
     .reader-viewport.spread iframe { width:200%; max-width:none; }
     .reader-viewport iframe { width:100%; height:100%; border:0; background:#fff; }
     .platform-panel { padding:16px; }
     .storefront-catalog { max-height:40vh; overflow:auto; display:grid; gap:6px; }
-    .storefront-row { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:8px 10px; border:1px solid #30374a; border-radius:6px; background:#1c2131; font-size:var(--font-body-small); }
+    .storefront-row { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--surface-card); font-size:var(--font-body-small); }
     .bigbox-pause { position:fixed; z-index:36; inset:0; display:grid; place-items:center; background:#05070bd9; cursor:auto; }
     .bigbox-pause[hidden] { display:none; }
-    .bigbox-pause-panel { width:min(760px,92vw); padding:24px; border:1px solid #45516b; border-radius:var(--radius-panel); background:#171d2c; box-shadow:0 30px 90px #000; }
+    .bigbox-pause-panel { width:min(760px,92vw); padding:24px; border:1px solid var(--border-card); border-radius:var(--radius-panel); background:var(--panel); box-shadow:0 30px 90px #000; }
     .bigbox-pause-panel h2 { margin:0 0 12px; font-size:var(--font-panel-title); }
-    .bigbox-status { margin-left:16px; color:#7f899f; font-size:var(--font-body-small); }
+    .bigbox-status { margin-left:16px; color:#9f9182; font-size:var(--font-body-small); }
     .bigbox-status strong { color:var(--rating); }
     @media(max-width:1100px) {
       .workspace { grid-template-columns:150px 1fr 340px; }
       .grid { grid-template-columns:repeat(auto-fill,minmax(105px,1fr)); }
+    }
+    @media(pointer:coarse) {
+      button,select,input:not([type="checkbox"]),textarea { min-height:44px; }
+      input,select,textarea { font-size:1rem; }
     }
     @media(max-width:760px) {
       body { height:auto; min-height:100%; overflow:auto; }
@@ -313,10 +366,15 @@
       .list-row,.list-head { grid-template-columns:minmax(0,2fr) minmax(80px,1fr); }
       .list-row > :nth-child(n+3),.list-head > :nth-child(n+3) { display:none; }
       button,select,input:not([type="checkbox"]),textarea { min-height:44px; }
+      input,select,textarea { font-size:1rem; }
       .dialog-head button,.media-dialog button { min-width:44px; min-height:44px; }
     }
     @media(prefers-reduced-motion:reduce) {
+      button:not(:disabled),select:not(:disabled),input:not(:disabled),textarea:not(:disabled),
       .cover,.card-main .cover,.coverflow-card,.toast,.play,.bigbox-play,.icon-button,.menu-button { transition:none !important; }
+      .motion-enter,.topbar-tools[open] .tool-menu,dialog[open],dialog[open]::backdrop,
+      .lifecycle:not([hidden]),.bigbox:not([hidden]),.bigbox-menu:not([hidden]),.bigbox-pause:not([hidden]),.screensaver:not([hidden]),
+      [aria-busy="true"]::after { animation:none !important; }
       .card-main:hover .cover,.card.selected .cover,.card-main:focus-visible .cover,
       .coverflow-card.active { transform:none; }
       .bigbox-startup-video,.screensaver video { display:none; }
@@ -328,35 +386,40 @@
 <body>
   <header class="topbar">
     <div class="brand"><span class="mark">O</span>OpenBox</div>
-    <button class="menu-button" id="libraryButton">Library</button>
-    <button class="menu-button" id="addButton">Add Game</button>
-    <button class="menu-button" id="importButton">Import Folder</button>
-    <button class="menu-button" id="steamButton">Import Steam</button>
-    <button class="menu-button" id="heroicButton">Import Heroic</button>
-    <button class="menu-button" id="lutrisButton">Import Lutris</button>
-    <button class="menu-button" id="arcadeButton">Import Arcade</button>
-    <button class="menu-button" id="emulatorsButton">Emulators</button>
-    <button class="menu-button" id="settingsButton">Settings</button>
+    <button class="menu-button primary-nav" id="libraryButton">Library</button>
+    <button class="menu-button primary-nav" id="addButton">Add game</button>
+    <button class="menu-button primary-nav" id="importButton">Import folder</button>
     <button class="menu-button" id="bigBoxButton">Big Box</button>
     <button class="menu-button" id="sessionsButton">Running</button>
-    <button class="menu-button" id="historyButton">History</button>
-    <button class="menu-button" id="themesButton">Themes</button>
-    <button class="menu-button" id="saveFilterButton">Save Filter</button>
-    <button class="menu-button" id="savePresetButton">Save Preset</button>
-    <button class="menu-button" id="playlistsButton">Playlists</button>
-    <button class="menu-button" id="achievementsButton">Achievements</button>
-    <button class="menu-button" id="pluginsButton">Plugins</button>
-    <button class="menu-button" id="discoveryButton">Discovery</button>
-    <button class="menu-button" id="storefrontButton">Storefronts</button>
-    <button class="menu-button" id="mediaButton">Media</button>
-    <button class="menu-button" id="healthButton">Health</button>
-    <button class="menu-button" id="bulkButton">Bulk Edit</button>
-    <button class="menu-button" id="backupButton">Backup</button>
-    <button class="menu-button" id="fullscreenButton">Fullscreen</button>
-    <button class="menu-button" id="queueButton">Queue</button>
-    <button class="menu-button" id="tagsButton">Tags</button>
-    <button class="menu-button" id="notificationsButton">Notifications</button>
-    <button class="menu-button" id="webhooksButton">Webhooks</button>
+    <details class="topbar-tools">
+      <summary class="menu-button">Tools</summary>
+      <div class="tool-menu">
+        <button class="menu-button" id="steamButton">Import Steam</button>
+        <button class="menu-button" id="heroicButton">Import Heroic</button>
+        <button class="menu-button" id="lutrisButton">Import Lutris</button>
+        <button class="menu-button" id="arcadeButton">Import Arcade</button>
+        <button class="menu-button" id="emulatorsButton">Emulators</button>
+        <button class="menu-button" id="settingsButton">Settings</button>
+        <button class="menu-button" id="historyButton">History</button>
+        <button class="menu-button" id="themesButton">Themes</button>
+        <button class="menu-button" id="saveFilterButton">Save filter</button>
+        <button class="menu-button" id="savePresetButton">Save preset</button>
+        <button class="menu-button" id="playlistsButton">Playlists</button>
+        <button class="menu-button" id="achievementsButton">Achievements</button>
+        <button class="menu-button" id="pluginsButton">Plugins</button>
+        <button class="menu-button" id="discoveryButton">Discovery</button>
+        <button class="menu-button" id="storefrontButton">Storefronts</button>
+        <button class="menu-button" id="mediaButton">Media</button>
+        <button class="menu-button" id="healthButton">Health</button>
+        <button class="menu-button" id="bulkButton">Bulk edit</button>
+        <button class="menu-button" id="backupButton">Backup</button>
+        <button class="menu-button" id="fullscreenButton">Fullscreen</button>
+        <button class="menu-button" id="queueButton">Queue</button>
+        <button class="menu-button" id="tagsButton">Tags</button>
+        <button class="menu-button" id="notificationsButton">Notifications</button>
+        <button class="menu-button" id="webhooksButton">Webhooks</button>
+      </div>
+    </details>
     <span class="top-status" id="status">Local library</span>
   </header>
 
@@ -607,7 +670,7 @@
   <div class="shutdown-overlay" id="shutdownOverlay" hidden>
     <div class="shutdown-panel">
       <h2>Shutting down OpenBox</h2>
-      <p id="shutdownMessage">Closing running games and startup applications…</p>
+      <p id="shutdownMessage">Closing running games and startup applications...</p>
       <div class="dialog-actions"><button type="button" class="icon-button" id="forceShutdown">Force close</button></div>
     </div>
   </div>
@@ -727,7 +790,7 @@
     <div class="reader-toolbar"><button type="button" class="icon-button" id="readerPrev">Previous page</button><button type="button" class="icon-button" id="readerNext">Next page</button><span class="description" id="readerPageLabel">Page 1</span><button type="button" class="icon-button" data-reader-layout="single">Single page</button><button type="button" class="icon-button" data-reader-layout="spread">Two-page spread</button><button type="button" class="icon-button" data-reader-theme="light">Light</button><button type="button" class="icon-button" data-reader-theme="dark">Dark</button></div>
     <div class="reader-viewport" id="readerViewport"><iframe id="readerFrame" title="Document reader"></iframe></div>
   </dialog>
-  <div class="toast" id="toast"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   <div class="context-menu" id="contextMenu" hidden>
     <button type="button" class="icon-button" id="contextPlay">Play</button>
     <button type="button" class="icon-button" id="contextFavorite">Toggle favorite</button>
@@ -861,6 +924,13 @@
       return payload;
     }
     function notify(message) { $('toast').textContent = message; $('toast').classList.add('show'); clearTimeout(notify.timer); notify.timer = setTimeout(() => $('toast').classList.remove('show'), 2800); }
+    function setButtonBusy(button, busy) {
+      if (!button) return;
+      button.disabled = busy;
+      button.toggleAttribute('aria-busy', busy);
+      if (busy) button.setAttribute('aria-label', 'Starting game');
+      else button.removeAttribute('aria-label');
+    }
     async function refresh() {
       const state = await api('/api/library');
       games = state.games;
@@ -1152,8 +1222,12 @@
       $('status').textContent = `${games.length} games · local library`;
       if (!visible.length) {
         $('grid').className = 'grid';
-        $('grid').innerHTML = `<div class="empty"><div><h2>${games.length ? 'No games match this view' : 'Your library is empty'}</h2><p>${games.length ? 'Change the active filters.' : 'Add a real game or import a folder to begin.'}</p>${games.length ? '' : '<button id="emptyAdd">Add game</button>'}</div></div>`;
+        $('grid').innerHTML = games.length
+          ? `<div class="empty"><div><h2>No games match this view</h2><p>Change the active filters or search the library again.</p></div></div>`
+          : `<div class="empty"><div><h2>Start your library</h2><p>Bring your games into OpenBox, then search, filter, and launch them from one collection.</p><div class="empty-actions"><button id="emptyAdd">Add game</button><button class="empty-secondary" id="emptyImport">Import folder</button><button class="empty-secondary" id="emptySteam">Import Steam</button></div></div></div>`;
         if ($('emptyAdd')) $('emptyAdd').onclick = () => openGameDialog();
+        if ($('emptyImport')) $('emptyImport').onclick = () => importFolder();
+        if ($('emptySteam')) $('emptySteam').onclick = () => importSteam();
         gridRowHeight = 0;
         renderArrangeBar(visible);
         return;
@@ -1168,9 +1242,9 @@
       const topSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${topHeight}px"></div>` : '';
       const bottomSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${bottomHeight}px"></div>` : '';
       const chunk = visible.slice(start, end);
-      const rendered = chunk.map(game => listView
-        ? `<button type="button" class="list-row ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
-        : `<article class="card ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}">
+      const rendered = chunk.map((game,index) => listView
+         ? `<button type="button" class="list-row motion-enter ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" style="--motion-index:${Math.min(index,10)}" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
+         : `<article class="card motion-enter ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" style="--motion-index:${Math.min(index,10)}">
         ${bulkMode ? `<input class="card-picker" type="checkbox" data-game-picker="${game.id}" ${selectedIds.has(game.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(game.name)}">` : ''}
         <button type="button" class="card-main" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><div class="cover ${appSettings.bigbox_mode === 'coverflow' ? 'jewel-3d' : ''}">${imageMarkup(game,imageGroup)}</div>
         <h3>${escapeHtml(game.name)}</h3><p>${escapeHtml(game.developer || game.platform || '')}</p>
@@ -1214,7 +1288,7 @@
       }
       if (!game) { $('details').innerHTML = '<div class="detail-empty">Select a game to inspect its real metadata and artwork.</div>'; return; }
       const heroStyle = game.has_background ? `style="background-image:url('${media(game,'background')}')"` : '';
-      $('details').innerHTML = `<div class="hero" ${heroStyle}><div class="hero-copy"><div class="hero-kicker">${escapeHtml(game.platform || 'Unspecified platform')}</div><h2>${escapeHtml(game.name)}</h2></div></div>
+      $('details').innerHTML = `<div class="hero motion-enter" ${heroStyle}><div class="hero-copy"><div class="hero-kicker">${escapeHtml(game.platform || 'Unspecified platform')}</div><h2>${escapeHtml(game.name)}</h2></div></div>
         <div class="detail-body">
           <div class="rating"><strong>${game.favorite ? '★ Favorite' : game.rating ? `${game.rating} ★` : 'Library'}</strong><span>${escapeHtml(game.progress || game.genre || '')}</span><span class="badge-row">${renderBadges(game)}</span></div>
           <button class="play" id="playButton" ${game.path_exists && game.store_installed !== false ? '' : game.gameyfin_id && !game.store_installed ? '' : 'disabled'}>${game.gameyfin_id && !game.store_installed ? '⬇ INSTALL' : '▶ PLAY'}</button>
@@ -1228,13 +1302,13 @@
           ${game.has_music ? `<div class="detail-card"><h3>Music</h3><audio class="media-player" controls preload="metadata" src="${media(game,'music')}"></audio></div>` : ''}
           ${game.available_screenshots.length ? `<div class="detail-card"><h3>Screenshots</h3><div class="screenshot-grid">${game.available_screenshots.map(index => `<button data-screenshot="${index}" aria-label="Open screenshot ${index + 1}"><img src="${media(game,'screenshot',index)}" alt="" loading="lazy" decoding="async"></button>`).join('')}</div></div>` : ''}
           ${renderArtwork(game)}
-          <div class="detail-card"><h3>Related Games</h3><div class="related-grid" id="relatedGames"><span class="description">Finding matches…</span></div></div>
+          <div class="detail-card"><h3>Related Games</h3><div class="related-grid" id="relatedGames"><span class="description">Finding matches...</span></div></div>
           ${raConfigured ? `<div class="detail-card"><h3>RetroAchievements</h3><div id="achievementContent"><p class="description">${game.ra_game_id ? `Matched to game ${escapeHtml(game.ra_game_id)}.` : 'Match this ROM to load achievements.'}</p><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}<button class="icon-button" id="openBrowser">Open Wikipedia</button></div><button class="icon-button" id="loadAchievements">Load achievements</button><div id="achievementStats"></div></div></div>` : ''}
           <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${game.save_paths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}${game.platform === 'Arcade' || game.rom_name ? '<button class="icon-button" id="exportHighscores">Export high scores</button>' : ''}</div><div class="description" id="saveDiscovery">${game.save_paths.length ? `${game.save_paths.length} configured location${game.save_paths.length === 1 ? '' : 's'}` : 'No save location configured.'}${appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
         </div>`;
       $('playButton').onclick = () => {
         if (game.gameyfin_id && !game.store_installed) installGameyfin(game);
-        else launch(game.id);
+        else launch(game.id, $('playButton'));
       };
       $('favoriteButton').onclick = () => favorite(game.id);
       $('editButton').onclick = () => openGameDialog(game);
@@ -1358,12 +1432,14 @@
       $('readerFrame').src = `${readerUrl}${suffix}`;
       $('readerPageLabel').textContent = `Page ${readerPage}`;
     }
-    async function launch(id) {
+    async function launch(id, trigger = $('playButton')) {
+      setButtonBusy(trigger, true);
       try {
         const result = await api('/api/launch',{method:'POST',body:JSON.stringify({id})});
         showLifecycle('Starting', result.game, 'The game process is running', 1800);
         await refresh();
       } catch(error) { notify(error.message); }
+      finally { setButtonBusy(trigger, false); }
     }
     function showLifecycle(kind, game, message, milliseconds) {
       $('lifecycleKind').textContent = kind;
@@ -1501,9 +1577,9 @@
       if (shuttingDown) return;
       shuttingDown = true;
       $('shutdownOverlay').hidden = false;
-      $('shutdownMessage').textContent = force ? 'Force closing running games…' : 'Closing running games before exit…';
+      $('shutdownMessage').textContent = force ? 'Force closing running games...' : 'Closing running games before exit...';
       try { await api('/api/shutdown',{method:'POST',body:JSON.stringify({force})}); } catch(error) {}
-      $('shutdownMessage').textContent = 'Running shutdown applications…';
+      $('shutdownMessage').textContent = 'Running shutdown applications...';
       window.close();
     }
     async function favorite(id) { try { const result = await api('/api/favorite',{method:'POST',body:JSON.stringify({id})}); const game = games.find(item => item.id === id); if (game) game.favorite = result.favorite; renderGrid(); renderDetails(); } catch(error) { notify(error.message); } }
@@ -1595,7 +1671,7 @@
     }
     function renderMetadataStatus(status) {
       const state = status.job.state;
-      $('metadataStatus').textContent = status.ready ? 'Local database ready.' : state === 'downloading' ? 'Downloading and indexing the official database…' : state === 'error' ? status.job.error : 'Download the official metadata database before searching.';
+      $('metadataStatus').textContent = status.ready ? 'Local database ready.' : state === 'downloading' ? 'Downloading and indexing the official database...' : state === 'error' ? status.job.error : 'Download the official metadata database before searching.';
       $('syncMetadata').disabled = state === 'downloading';
     }
     async function searchMetadata() {
@@ -1648,7 +1724,7 @@
     }
     async function loadAchievements(id) {
       try {
-        $('achievementContent').innerHTML = '<p class="description">Matching ROM and loading progress…</p>';
+        $('achievementContent').innerHTML = '<p class="description">Matching ROM and loading progress...</p>';
         const result = await api('/api/ra/game',{method:'POST',body:JSON.stringify({id})});
         await refresh();
         if ($('achievementContent')) {
@@ -1687,7 +1763,7 @@
         profileSelect.innerHTML = '<option value="">Default platform profile</option>' + Object.keys(availableProfiles).filter(name => !platformName || name === platformName).map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
         profileSelect.value = currentProfile;
       }
-      $('gameDialog').showModal();
+      openDialog($('gameDialog'));
     }
     $('gameForm').onsubmit = async event => {
       event.preventDefault();
@@ -1866,7 +1942,7 @@
     };
     $('checkUpdate').onclick = async () => {
       try {
-        $('updateStatus').textContent = 'Checking the verified GitHub release channel…';
+        $('updateStatus').textContent = 'Checking the verified GitHub release channel...';
         pendingUpdate = await api('/api/update');
         $('updateStatus').textContent = pendingUpdate.available ? `OpenBox ${pendingUpdate.latest} is available. ${pendingUpdate.notes || ''}` : `OpenBox ${pendingUpdate.current} is current.`;
         $('installUpdate').hidden = !pendingUpdate.available;
@@ -1916,7 +1992,7 @@
     function renderEmulators(emulators) {
       $('emulatorCatalog').innerHTML = `<div class="extras"><button type="button" class="primary" id="installAllEmulators">Install all available emulators</button><button type="button" class="icon-button" id="updateAllEmulators">Update installed emulators</button></div>` + emulators.map(emulator => {
         const state = emulator.job.state || (emulator.installed ? 'installed' : 'available');
-        const label = state === 'installing' ? 'Installing…' : emulator.installed ? 'Add profiles' : state === 'error' ? 'Retry' : 'Install';
+        const label = state === 'installing' ? 'Installing...' : emulator.installed ? 'Add profiles' : state === 'error' ? 'Retry' : 'Install';
         const openButton = emulator.installed ? `<button type="button" class="icon-button" data-open-emulator="${escapeHtml(emulator.app_id)}">Open</button>` : '';
         const updateButton = emulator.installed && emulator.mode === 'flatpak' ? `<button type="button" class="icon-button" data-update-emulator="${escapeHtml(emulator.app_id)}">Update</button>` : '';
         return `<div class="emulator-item" title="${escapeHtml(emulator.job.error || '')}"><div><strong>${escapeHtml(emulator.name)}</strong><small>${escapeHtml(emulator.platforms.join(' · '))} · ${escapeHtml(state)}</small></div><div class="emulator-actions">${openButton}${updateButton}<button type="button" class="icon-button" ${state === 'installing' || (!emulator.installed && !emulator.can_install) ? 'disabled' : ''} data-emulator="${escapeHtml(emulator.app_id)}" data-installed="${emulator.installed}">${label}</button></div></div>`;
@@ -2506,7 +2582,7 @@
     }
     async function installGameyfin(game) {
       try {
-        notify(`Installing ${game.name} from Gameyfin…`);
+        notify(`Installing ${game.name} from Gameyfin...`);
         await api('/api/gameyfin/install',{method:'POST',body:JSON.stringify({gameyfin_id:game.gameyfin_id,library_id:game.id})});
         await watchGameyfinInstall(game.gameyfin_id);
         await refresh();
@@ -2774,7 +2850,10 @@
       const target = event.target.closest?.('[data-game]');
       if (target) openContextMenu(event, Number(target.dataset.game));
     });
-    document.addEventListener('click', event => { if (!event.target.closest?.('#contextMenu')) closeContextMenu(); });
+    document.addEventListener('click', event => {
+      if (!event.target.closest?.('#contextMenu')) closeContextMenu();
+      if (!event.target.closest?.('.topbar-tools')) document.querySelectorAll('.topbar-tools[open]').forEach(menu => menu.removeAttribute('open'));
+    });
     if ($('scanEmulatorFolder')) $('scanEmulatorFolder').onclick = async () => {
       const folder = $('emulatorScanFolder').value.trim();
       if (!folder) return notify('Enter a ROM folder path first.');
@@ -2794,18 +2873,38 @@
         renderGrid();
       } catch(error) { notify(error.message); }
     };
-    $('closeDialog').onclick = $('cancelDialog').onclick = () => $('gameDialog').close();
-    $('closeProfiles').onclick = $('cancelProfiles').onclick = () => $('profilesDialog').close();
-    $('closeThemes').onclick = $('cancelThemes').onclick = () => $('themesDialog').close();
-    $('closeAchievements').onclick = $('cancelAchievements').onclick = () => $('achievementsDialog').close();
-    $('closePlugins').onclick = $('donePlugins').onclick = () => $('pluginsDialog').close();
-    $('closeMetadata').onclick = $('doneMetadata').onclick = () => $('metadataDialog').close();
-    $('closeMediaManager').onclick = $('doneMediaManager').onclick = () => $('mediaManagerDialog').close();
-    $('closeHealth').onclick = $('doneHealth').onclick = () => $('healthDialog').close();
-    $('closeBulk').onclick = $('cancelBulk').onclick = () => $('bulkDialog').close();
-    $('closeSessions').onclick = $('doneSessions').onclick = () => $('sessionsDialog').close();
-    $('closeHistory').onclick = $('doneHistory').onclick = () => $('historyDialog').close();
-    $('closeWelcome').onclick = () => $('welcomeDialog').close();
+    let lastDialogTrigger = null;
+    const dialogTriggers = new WeakMap();
+    document.addEventListener('click', event => {
+      const trigger = event.target.closest?.('button,summary');
+      if (trigger) lastDialogTrigger = trigger;
+    }, true);
+    const dialogObserver = new MutationObserver(() => {
+      document.querySelectorAll('dialog[open]').forEach(dialog => {
+        if (!dialogTriggers.has(dialog)) dialogTriggers.set(dialog, lastDialogTrigger);
+      });
+    });
+    dialogObserver.observe(document.body, {subtree:true, attributes:true, attributeFilter:['open']});
+    function openDialog(dialog, trigger = lastDialogTrigger || document.activeElement) {
+      const opener = trigger instanceof HTMLElement ? trigger : null;
+      if (opener) dialogTriggers.set(dialog, opener);
+      dialog.showModal();
+    }
+    function closeDialog(dialog) {
+      dialog.close();
+    }
+    $('closeDialog').onclick = $('cancelDialog').onclick = () => closeDialog($('gameDialog'));
+    $('closeProfiles').onclick = $('cancelProfiles').onclick = () => closeDialog($('profilesDialog'));
+    $('closeThemes').onclick = $('cancelThemes').onclick = () => closeDialog($('themesDialog'));
+    $('closeAchievements').onclick = $('cancelAchievements').onclick = () => closeDialog($('achievementsDialog'));
+    $('closePlugins').onclick = $('donePlugins').onclick = () => closeDialog($('pluginsDialog'));
+    $('closeMetadata').onclick = $('doneMetadata').onclick = () => closeDialog($('metadataDialog'));
+    $('closeMediaManager').onclick = $('doneMediaManager').onclick = () => closeDialog($('mediaManagerDialog'));
+    $('closeHealth').onclick = $('doneHealth').onclick = () => closeDialog($('healthDialog'));
+    $('closeBulk').onclick = $('cancelBulk').onclick = () => closeDialog($('bulkDialog'));
+    $('closeSessions').onclick = $('doneSessions').onclick = () => closeDialog($('sessionsDialog'));
+    $('closeHistory').onclick = $('doneHistory').onclick = () => closeDialog($('historyDialog'));
+    $('closeWelcome').onclick = () => closeDialog($('welcomeDialog'));
     $('welcomeImportFolder').onclick = () => { $('welcomeDialog').close(); importFolder(); };
     $('welcomeImportSteam').onclick = () => { $('welcomeDialog').close(); importSteam(); };
     $('welcomeSyncMetadata').onclick = async () => {
@@ -2824,6 +2923,10 @@
     window.addEventListener('beforeunload', event => { if (runningGames.length) { event.preventDefault(); gracefulShutdown(); } });
     document.addEventListener('keydown', event => {
       if ((event.ctrlKey || event.metaKey) && event.key === ',') { event.preventDefault(); openSettings(); }
+      if (event.key === 'Escape') {
+        document.querySelectorAll('.topbar-tools[open]').forEach(menu => menu.removeAttribute('open'));
+        closeContextMenu();
+      }
     });
     $('closeSettings').onclick = $('cancelSettings').onclick = () => $('settingsDialog').close();
     $('closeBigBoxMenu').onclick = closeBigBoxMenu;
@@ -2887,6 +2990,9 @@
           readerPage = 1;
         }
         if (dialog.id === 'mediaDialog') $('fullScreenshot')?.remove();
+        const trigger = dialogTriggers.get(dialog);
+        dialogTriggers.delete(dialog);
+        if (trigger?.isConnected) trigger.focus();
       });
     });
     const deeplink = new URLSearchParams(location.search);
