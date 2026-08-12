@@ -139,7 +139,7 @@ Parity-related modules include `parity_import.py`, `parity_premium.py`, `parity_
 
 ## Documentation site
 
-The public documentation is published at [openboxgl.github.io](https://openboxgl.github.io/). Site source and content changes belong in the [OpenBoxGL Pages repository](https://github.com/OpenBoxGL/openboxgl.github.io); run `npm ci` and `npm test` there before pushing.
+The public documentation is published at [openboxgl.github.io](https://openboxgl.github.io/). Site source and content changes belong in the [OpenBoxGL Pages repository](https://github.com/OpenBoxGL/openboxgl.github.io); run `bun install --frozen-lockfile` and `bun run test` there before pushing.
 
 ## Security issues
 
