@@ -17,7 +17,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.1"><img src="https://img.shields.io/badge/Release-v0.8.1-0052CC" alt="Release v0.8.1"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.2"><img src="https://img.shields.io/badge/Release-v0.8.2-0052CC" alt="Release v0.8.2"></a>
   <a href="PARITY.md"><img src="https://img.shields.io/badge/LaunchBox-Parity%20Matrix-555" alt="LaunchBox parity matrix"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions"><img src="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>

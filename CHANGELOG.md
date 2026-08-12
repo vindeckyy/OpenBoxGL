@@ -6,10 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [0.8.2] - 2026-08-12
+
 ### Added
 
 - Added Web UI surfaces for the persistent play queue, normalized game tags, Notification Center, and signed webhook settings.
 - Added `/api/queue`, `/api/tags`, `/api/notifications`, and `/api/webhooks` contracts with bounded state, secret redaction, and destination validation.
+
+### Fixed
+
+- Box art now keeps its natural aspect ratio in the library grid, Big Box Stage, and CoverFlow views instead of being force-cropped into a single ratio, so games with non-standard artwork (for example SNES titles) display uncropped. Title-only covers keep the standard portrait box.
+
+### Verification
+
+- Ran `./run_all_tests.sh`: 39 test files, 0 failures.
 
 ## [0.8.1] - 2026-08-09
 
@@ -272,7 +282,8 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.2
 [0.8.1]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.1
 [0.8.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.0
 [0.7.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.7.0
