@@ -85,10 +85,11 @@ def _fingerprint(path: Path):
 
 
 def find_duplicate_media(games, allowed_roots=None):
+    from catalog import MEDIA_FIELDS
     buckets = {}
     for game in games:
         paths = []
-        for field in ("cover", "background"):
+        for field in MEDIA_FIELDS:
             value = str(game.get(field) or "").strip()
             if value:
                 paths.append(value)

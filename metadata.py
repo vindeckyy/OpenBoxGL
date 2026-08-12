@@ -16,6 +16,59 @@ DATABASE_URL = "https://gamesdb.launchbox-app.com/Metadata.zip"
 IMAGE_URL = "https://images.launchbox-app.com/"
 
 
+# LaunchBox Games Database image type strings mapped to OpenBox media fields.
+# Each entry lists LBDB types in preference order; the first type with an image
+# for the game wins, so reconstructed art is only used when no primary exists.
+MEDIA_TYPE_MAP = {
+    "cover": ("Box - Front", "Box - Front - Reconstructed"),
+    "background": ("Fanart - Background",),
+    "screenshots": ("Screenshot - Gameplay",),
+    "box_back": ("Box - Back", "Box - Back - Reconstructed"),
+    "box_spine": ("Box - Spine",),
+    "box_3d": ("Box - 3D",),
+    "clear_logo": ("Clear Logo",),
+    "fanart": ("Fanart - Box - Front", "Fanart - Box - Back"),
+    "banner": ("Banner",),
+    "icon": ("Icon",),
+    "title_screen": ("Screenshot - Game Title",),
+    "cart_front": ("Cart - Front",),
+    "cart_back": ("Cart - Back",),
+    "disc": ("Disc", "Fanart - Disc"),
+    "advertisement": ("Advertisement Flyer - Front", "Advertisement Flyer - Back"),
+    "manual": (),
+}
+
+
+# Short app platform names mapped to the LaunchBox Games Database spelling so
+# search ranking still prefers an exact platform match for imported games.
+PLATFORM_ALIASES = {
+    "NES": "Nintendo Entertainment System",
+    "SNES": "Super Nintendo Entertainment System",
+    "Genesis": "Sega Genesis",
+    "GB": "Nintendo Game Boy",
+    "GBC": "Nintendo Game Boy Color",
+    "GBA": "Nintendo Game Boy Advance",
+    "N64": "Nintendo 64",
+    "PSX": "Sony Playstation",
+    "PS1": "Sony Playstation",
+    "PS2": "Sony Playstation 2",
+    "PS3": "Sony Playstation 3",
+    "PSP": "Sony PSP",
+    "XBOX": "Microsoft Xbox",
+    "X360": "Microsoft Xbox 360",
+    "DC": "Sega Dreamcast",
+    "SATURN": "Sega Saturn",
+    "WII": "Nintendo Wii",
+    "WIIU": "Nintendo Wii U",
+    "3DS": "Nintendo 3DS",
+    "DS": "Nintendo DS",
+    "GAMECUBE": "Nintendo GameCube",
+    "ARCADE": "Arcade",
+    "MS-DOS": "MS-DOS",
+    "DOS": "MS-DOS",
+}
+
+
 def normalized(text):
     text = re.sub(r"\([^)]*(?:USA|Europe|Japan|World|Rev|Disc)[^)]*\)|\[[^]]+]", "", str(text), flags=re.I)
     return re.sub(r"[^a-z0-9]+", " ", text.casefold()).strip()
@@ -103,12 +156,13 @@ def search_games(database_path, title, platform="", limit=20):
     database = sqlite3.connect(database_path)
     database.row_factory = sqlite3.Row
     query = normalized(title)
+    lbdb_platform = PLATFORM_ALIASES.get(platform, platform)
     rows = database.execute(
         """SELECT * FROM games
            WHERE normalized = ? OR normalized LIKE ?
            ORDER BY (normalized = ?) DESC, (lower(platform) = lower(?)) DESC, length(name)
            LIMIT ?""",
-        (query, f"%{query}%", query, platform, limit),
+        (query, f"%{query}%", query, lbdb_platform, limit),
     ).fetchall()
     database.close()
     return [dict(row) for row in rows]
@@ -155,18 +209,32 @@ def apply_game_metadata(game, database_path, database_id, media_types, media_roo
     )
     database.close()
     root = Path(media_root) / str(database_id)
-    if "cover" in media_types and (overwrite or not game.get("cover")):
-        image = next((item for item in images if item["type"] == "Box - Front"), None)
-        if image:
-            game["cover"] = download_image(image["filename"], root / f"cover{Path(image['filename']).suffix}", opener)
-    if "background" in media_types and (overwrite or not game.get("background")):
-        image = next((item for item in images if item["type"] == "Fanart - Background"), None)
-        if image:
-            game["background"] = download_image(image["filename"], root / f"background{Path(image['filename']).suffix}", opener)
-    if "screenshots" in media_types and (overwrite or not game.get("screenshots")):
-        screenshots = [item for item in images if item["type"] == "Screenshot - Gameplay"][:12]
-        game["screenshots"] = [
-            download_image(item["filename"], root / f"screenshot-{index}{Path(item['filename']).suffix}", opener)
-            for index, item in enumerate(screenshots, 1)
-        ]
+    images_by_type = {}
+    for item in images:
+        images_by_type.setdefault(item["type"], []).append(item)
+    for media_type in media_types:
+        if media_type == "screenshots":
+            if overwrite or not game.get("screenshots"):
+                candidates = images_by_type.get("Screenshot - Gameplay", [])
+                downloaded = [
+                    download_image(item["filename"], root / f"screenshot-{index}{Path(item['filename']).suffix}", opener)
+                    for index, item in enumerate(candidates[:12], 1)
+                ]
+                if downloaded:
+                    game["screenshots"] = downloaded
+            continue
+        if media_type == "manual":
+            # Manuals are not part of the LaunchBox metadata zip.
+            continue
+        if not (overwrite or not game.get(media_type)):
+            continue
+        for lbdb_type in MEDIA_TYPE_MAP.get(media_type, ()):
+            candidates = images_by_type.get(lbdb_type, [])
+            if not candidates:
+                continue
+            image = candidates[0]
+            game[media_type] = download_image(
+                image["filename"], root / f"{media_type}{Path(image['filename']).suffix}", opener
+            )
+            break
     return game

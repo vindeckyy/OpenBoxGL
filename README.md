@@ -60,7 +60,7 @@
 ## Quick Start
 
 1. **Install.** Grab the [latest AppImage](https://github.com/vindeckyy/OpenBoxGL/releases/latest), or run from source with `python3 web_app.py` (Python 3.10+).
-2. **Open your browser** to the printed URL — you'll see an empty library grid.
+2. **Open the UI.** It opens in a chrome-less app window by default; if no Chromium-family browser is installed it falls back to your default browser. From source you can also open the printed URL directly.
 3. **Import games.** Click **Import Folder** and point at a directory of `.sh` files, or **Import Steam** to scan your installed games.
 4. **Press PLAY.** Sessions, play time, and history are tracked automatically.
 
@@ -120,7 +120,7 @@ One catalog for Steam, Heroic, Lutris, Gameyfin, ROM folders, ScummVM, RPCS3, Vi
 
 ### Metadata & Media
 
-LaunchBox Games Database sync, IGDB search, Steam/GOG media, EmuMovies, Bezel Project, bundled media packs (platform logos, controller prompts, badges), duplicate cleanup, region priority, download limits.
+LaunchBox Games Database sync (covers, backgrounds, screenshots, box backs, spines, 3D boxes, clear logos, fanart, banners, title screens, carts, discs, and advertisement flyers), IGDB search, Steam/GOG media, EmuMovies, Bezel Project, bundled media packs (platform logos, controller prompts, badges), duplicate cleanup, region priority, download limits.
 
 ### Emulators & Launching
 

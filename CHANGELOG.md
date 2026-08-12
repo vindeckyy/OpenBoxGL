@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added
+
+- Full LaunchBox media catalog downloads: box backs, box spines, 3D boxes, clear logos, fanart, banners, title screens, cart fronts, cart backs, discs, and advertisement flyers can now be fetched from the LaunchBox Games Database alongside covers, backgrounds, and gameplay screenshots. The metadata dialog, bulk download dialog, media audit, artwork gallery, image groups, and auto-import setting all accept the expanded type set. Manuals are a user-supplied field because the LaunchBox metadata feed ships no manual images.
+- The desktop UI now opens in a chrome-less app window by default instead of a browser tab, using the installed Chromium-family browser when available (Firefox falls back to a separate window). The Settings panel controls this with an "Open the UI in" option, and `--app-window` / `--no-app-window` override it at launch.
+- Metadata search matches retro platform names against their LaunchBox Games Database spellings, so exact-name searches rank platform-correct results first.
+- Metadata status now reports per-field coverage counts for the library (matched games, covers, box backs, carts, discs).
+
+### Fixed
+
+- Duplicate media cleanup now scans every media field, not just covers and backgrounds.
+
+### Verification
+
+- Ran `./run_all_tests.sh`: 39 test files, 0 failures.
+
 ## [0.8.2] - 2026-08-12
 
 ### Added

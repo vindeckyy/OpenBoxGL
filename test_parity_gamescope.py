@@ -12,6 +12,7 @@ from parity_gamescope import (
     kiosk_command,
     mark_process_windows,
     open_ui,
+    resolve_app_window_browser,
     resolve_kiosk_browser,
     set_steam_game_prop,
     should_nest_gamescope,
@@ -62,6 +63,21 @@ class UrlAndBrowserTests(unittest.TestCase):
 
     def test_resolve_kiosk_browser_none(self):
         self.assertIsNone(resolve_kiosk_browser(which=lambda name: None))
+
+    def test_resolve_app_window_browser_uses_chromium_family(self):
+        def which(name):
+            return "/usr/bin/brave-browser" if name == "brave-browser" else None
+
+        self.assertEqual(resolve_app_window_browser(which=which), ["/usr/bin/brave-browser"])
+
+    def test_resolve_app_window_browser_firefox_fallback(self):
+        def which(name):
+            return "/usr/bin/firefox" if name == "firefox" else None
+
+        self.assertEqual(resolve_app_window_browser(which=which), ["/usr/bin/firefox"])
+
+    def test_resolve_app_window_browser_none(self):
+        self.assertIsNone(resolve_app_window_browser(which=lambda name: None))
 
     def test_kiosk_command_app_flag(self):
         cmd = kiosk_command(["/usr/bin/google-chrome"], "http://127.0.0.1/?token=1")
@@ -142,6 +158,72 @@ class UrlAndBrowserTests(unittest.TestCase):
         )
         self.assertEqual(result["mode"], "webbrowser")
         self.assertEqual(browsed, ["http://127.0.0.1:1/?token=t"])
+
+    def test_open_ui_native_window_uses_app_mode(self):
+        calls = []
+
+        def fake_which(name):
+            return "/bin/google-chrome" if name == "google-chrome" else None
+
+        def fake_popen(args, start_new_session=False, env=None):
+            calls.append(args)
+            return mock.Mock(pid=77)
+
+        result = open_ui(
+            "http://127.0.0.1:1/?token=t",
+            guest=False,
+            native_window=True,
+            popen=fake_popen,
+            browser_open=lambda url: self.fail("webbrowser should not run"),
+            which=fake_which,
+        )
+        self.assertEqual(result["mode"], "app")
+        self.assertNotIn("deeplink", result["url"])
+        self.assertTrue(any("--app=http://127.0.0.1:1/?token=t" == str(part) for part in calls[0]))
+        self.assertEqual(result["pid"], 77)
+
+    def test_open_ui_native_window_falls_back_to_xdg_open(self):
+        calls = []
+
+        def fake_which(name):
+            return "/usr/bin/xdg-open" if name == "xdg-open" else None
+
+        def fake_popen(args, start_new_session=False, env=None):
+            calls.append(args)
+            return mock.Mock(pid=1)
+
+        result = open_ui(
+            "http://127.0.0.1:1/?token=t",
+            guest=False,
+            native_window=True,
+            popen=fake_popen,
+            browser_open=lambda url: self.fail("webbrowser should not run"),
+            which=fake_which,
+        )
+        self.assertEqual(result["mode"], "xdg-open")
+        self.assertEqual(calls[0], ["/usr/bin/xdg-open", "http://127.0.0.1:1/?token=t"])
+
+    def test_open_ui_native_window_firefox_fallback(self):
+        calls = []
+
+        def fake_which(name):
+            return "/usr/bin/firefox" if name == "firefox" else None
+
+        def fake_popen(args, start_new_session=False, env=None):
+            calls.append(args)
+            return mock.Mock(pid=9)
+
+        result = open_ui(
+            "http://127.0.0.1:1/?token=t",
+            guest=False,
+            native_window=True,
+            popen=fake_popen,
+            browser_open=lambda url: self.fail("webbrowser should not run"),
+            which=fake_which,
+        )
+        self.assertEqual(result["mode"], "app")
+        self.assertEqual(calls[0][0], "/usr/bin/firefox")
+        self.assertIn("--new-window", calls[0])
 
 
 class PropTests(unittest.TestCase):

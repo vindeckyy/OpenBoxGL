@@ -445,7 +445,7 @@
       <div class="library-head">
         <div><h1 id="libraryTitle">All Games</h1><p id="libraryMeta">0 games</p></div>
         <select class="search" id="sort" aria-label="Sort games"><option value="title">Title</option><option value="rating">Rating</option><option value="recent">Recently played</option><option value="recent_activity">Recent activity</option><option value="playtime">Play time</option><option value="added">Date added</option><option value="platform">Platform</option><option value="genre">Genre</option></select>
-        <select class="search" id="imageGroup" aria-label="Image group"><option value="default">Use default</option><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option><option value="clear_logo">Clear logos</option><option value="fanart">Fanart</option><option value="banner">Banners</option><option value="box_back">Box backs</option><option value="box_spine">Box spines</option><option value="box_3d">3D boxes</option><option value="title_screen">Title screens</option></select>
+        <select class="search" id="imageGroup" aria-label="Image group"><option value="default">Use default</option><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option><option value="clear_logo">Clear logos</option><option value="fanart">Fanart</option><option value="banner">Banners</option><option value="box_back">Box backs</option><option value="box_spine">Box spines</option><option value="box_3d">3D boxes</option><option value="title_screen">Title screens</option><option value="cart_front">Cart fronts</option><option value="cart_back">Cart backs</option><option value="disc">Discs</option><option value="advertisement">Ads / flyers</option><option value="manual">Manuals</option></select>
         <button class="icon-button" id="viewToggleButton">List view</button>
         <button class="icon-button" id="surpriseButton">Surprise me</button>
       </div>
@@ -499,6 +499,11 @@
         <label class="field wide"><span>Box spine path</span><input name="box_spine"></label>
         <label class="field wide"><span>3D box path</span><input name="box_3d"></label>
         <label class="field wide"><span>Title screen path</span><input name="title_screen"></label>
+        <label class="field wide"><span>Cart front path</span><input name="cart_front"></label>
+        <label class="field wide"><span>Cart back path</span><input name="cart_back"></label>
+        <label class="field wide"><span>Disc path</span><input name="disc"></label>
+        <label class="field wide"><span>Advertisement / flyer path</span><input name="advertisement"></label>
+        <label class="field wide"><span>Manual path</span><input name="manual"></label>
         <label class="field wide"><span>Screenshot paths, one per line</span><textarea name="screenshots"></textarea></label>
         <label class="field wide"><span>RetroAchievements Game ID, optional manual match</span><input name="ra_game_id" inputmode="numeric"></label>
         <label class="field wide"><span>Launch command, optional override</span><input name="launch"></label>
@@ -579,6 +584,19 @@
       <label class="check"><input type="checkbox" id="metadataCover" checked> Box front</label>
       <label class="check"><input type="checkbox" id="metadataBackground" checked> Background</label>
       <label class="check"><input type="checkbox" id="metadataScreenshots" checked> Screenshots</label>
+      <label class="check"><input type="checkbox" id="metadataBoxBack"> Box back</label>
+      <label class="check"><input type="checkbox" id="metadataBoxSpine"> Box spine</label>
+      <label class="check"><input type="checkbox" id="metadataBox3d"> 3D box</label>
+      <label class="check"><input type="checkbox" id="metadataClearLogo"> Clear logo</label>
+      <label class="check"><input type="checkbox" id="metadataFanart"> Fanart</label>
+      <label class="check"><input type="checkbox" id="metadataBanner"> Banner</label>
+      <label class="check"><input type="checkbox" id="metadataIcon"> Icon</label>
+      <label class="check"><input type="checkbox" id="metadataTitleScreen"> Title screen</label>
+      <label class="check"><input type="checkbox" id="metadataCartFront"> Cart front</label>
+      <label class="check"><input type="checkbox" id="metadataCartBack"> Cart back</label>
+      <label class="check"><input type="checkbox" id="metadataDisc"> Disc</label>
+      <label class="check"><input type="checkbox" id="metadataAdvertisement"> Advertisement / flyer</label>
+      <label class="check"><input type="checkbox" id="metadataManual"> Manual</label>
       <label class="check"><input type="checkbox" id="metadataOverwrite"> Replace existing fields and media</label>
     </form>
     <div class="dialog-actions"><button type="button" class="primary" id="doneMetadata">Done</button></div>
@@ -590,6 +608,19 @@
       <label class="check"><input type="checkbox" id="bulkCover" checked> Box fronts</label>
       <label class="check"><input type="checkbox" id="bulkBackground" checked> Backgrounds</label>
       <label class="check"><input type="checkbox" id="bulkScreenshots" checked> Screenshots</label>
+      <label class="check"><input type="checkbox" id="bulkBoxBack"> Box backs</label>
+      <label class="check"><input type="checkbox" id="bulkBoxSpine"> Box spines</label>
+      <label class="check"><input type="checkbox" id="bulkBox3d"> 3D boxes</label>
+      <label class="check"><input type="checkbox" id="bulkClearLogo"> Clear logos</label>
+      <label class="check"><input type="checkbox" id="bulkFanart"> Fanart</label>
+      <label class="check"><input type="checkbox" id="bulkBanner"> Banners</label>
+      <label class="check"><input type="checkbox" id="bulkIcon"> Icons</label>
+      <label class="check"><input type="checkbox" id="bulkTitleScreen"> Title screens</label>
+      <label class="check"><input type="checkbox" id="bulkCartFront"> Cart fronts</label>
+      <label class="check"><input type="checkbox" id="bulkCartBack"> Cart backs</label>
+      <label class="check"><input type="checkbox" id="bulkDisc"> Discs</label>
+      <label class="check"><input type="checkbox" id="bulkAdvertisement"> Ads / flyers</label>
+      <label class="check"><input type="checkbox" id="bulkManual"> Manuals</label>
       <label class="check"><input type="checkbox" id="bulkOverwrite"> Replace existing media</label>
       <button type="button" class="primary" id="startBulkMedia">Download for matched games</button>
       <button type="button" class="icon-button" id="cleanupMedia">Find duplicate media</button>
@@ -685,7 +716,7 @@
         <div class="wide settings-field" data-setting="diagnostic support troubleshooting logs"><button type="button" class="icon-button" id="copyDiagnosticLog">Copy diagnostic log</button><span class="description">Review it before sharing because it can include game names and local file paths.</span></div>
         <label class="field wide settings-field" data-setting="cloud sync syncthing dropbox nextcloud"><span>Mounted Nextcloud, Syncthing, Dropbox, or other cloud folder for game-stat syncing</span><input id="cloudFolder"></label>
         <div class="wide settings-field" data-setting="cloud sync"><button type="button" class="icon-button" id="syncCloud">Sync statistics now</button><span class="description" id="cloudStatus"></span></div>
-        <label class="field wide settings-field" data-setting="default image group viewing cover background screenshot clear logo fanart banner icon box back box spine 3d box title screen"><span>Default image group</span><select id="defaultImageGroup"><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option><option value="clear_logo">Clear logos</option><option value="fanart">Fanart</option><option value="banner">Banners</option><option value="icon">Icons</option><option value="box_back">Box backs</option><option value="box_spine">Box spines</option><option value="box_3d">3D boxes</option><option value="title_screen">Title screens</option></select></label>
+        <label class="field wide settings-field" data-setting="default image group viewing cover background screenshot clear logo fanart banner icon box back box spine 3d box title screen cart front cart back disc ads flyers manuals"><span>Default image group</span><select id="defaultImageGroup"><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option><option value="clear_logo">Clear logos</option><option value="fanart">Fanart</option><option value="banner">Banners</option><option value="icon">Icons</option><option value="box_back">Box backs</option><option value="box_spine">Box spines</option><option value="box_3d">3D boxes</option><option value="title_screen">Title screens</option><option value="cart_front">Cart fronts</option><option value="cart_back">Cart backs</option><option value="disc">Discs</option><option value="advertisement">Ads / flyers</option><option value="manual">Manuals</option></select></label>
         <div class="wide settings-field" data-setting="badges favorite installed missing media saves documents versions storefront achievements high scores progress rating broken portable controller"><span>Visible game badges</span><div class="badge-row">
           <label class="check"><input type="checkbox" data-badge-setting="favorite"> Favorite</label>
           <label class="check"><input type="checkbox" data-badge-setting="installed"> Installed</label>
@@ -711,7 +742,7 @@
         <label class="field wide settings-field" data-setting="obs recording folder path"><span>OBS recording folder, optional override</span><input id="obsRecordingPath" placeholder="~/Videos"></label>
         <label class="field settings-field" data-setting="save backup limit retention"><span>Save backup retention limit, 0 keeps all</span><input id="saveBackupLimit" type="number" min="0" max="500"></label>
         <label class="field settings-field" data-setting="media download limit queue welcome wizard"><span>Media download limit during imports, 0 unlimited</span><input id="mediaDownloadLimit" type="number" min="0" max="10000"></label>
-        <label class="field wide settings-field" data-setting="auto import media types cover background screenshots"><span>Auto-import media types, comma separated</span><input id="autoImportMediaTypes" placeholder="cover, background, screenshots"></label>
+        <label class="field wide settings-field" data-setting="auto import media types cover background screenshots box back spine 3d clear logo fanart banner icon title screen cart front cart back disc ads flyers manuals"><span>Auto-import media types, comma separated</span><input id="autoImportMediaTypes" placeholder="cover, background, screenshots"></label>
         <label class="field wide settings-field" data-setting="region priority metadata images"><span>Region priority, comma separated</span><input id="regionPriority"></label>
         <label class="field wide settings-field" data-setting="library music background big box"><span>Library background music path</span><input id="libraryMusic"></label>
         <label class="check settings-field" data-setting="video bgm mix background music"><input type="checkbox" id="videoBgmMix"> Mix video audio with background music</label>
@@ -740,6 +771,7 @@
         <label class="field settings-field" data-setting="attract mode screensaver big box"><span>Attract mode delay in seconds</span><input id="attractModeSeconds" type="number" min="0" max="3600"></label>
         <label class="check settings-field" data-setting="system tray minimize close"><input type="checkbox" id="trayEnabled"> Enable desktop tray integration</label>
         <label class="check settings-field" data-setting="system tray minimize close"><input type="checkbox" id="minimizeToTray"> Minimize to tray when window closes</label>
+        <label class="field wide settings-field" data-setting="ui window app window browser tab native chrome-less"><span>Open the UI in</span><select id="uiWindow"><option value="app">A chrome-less app window</option><option value="browser">A browser tab</option></select><span class="description">Applies the next time OpenBox launches. Falls back to a browser tab when no Chromium-family browser is installed.</span></label>
         <label class="field wide settings-field" data-setting="ludusavi hoard saves backup"><span>Ludusavi backup path, optional</span><input id="ludusaviBackupPath" placeholder="Leave blank for Ludusavi default"></label>
         <div class="wide settings-field" data-setting="media packs themes badges controller"><button type="button" class="icon-button" id="applyMediaPack">Apply bundled media pack</button><span class="description" id="mediaPackStatus"></span></div>
         <div class="wide section-title settings-field" data-setting="controller gamepad mapping">Standard Gamepad Button Mapping</div>
@@ -903,7 +935,7 @@
         visible.has('controller') && badge(game.controller_support, Boolean(game.controller_support)),
       ].filter(Boolean).join('');
     }
-    const artworkKinds = [['clear_logo','Clear logo','has_clear_logo'],['fanart','Fanart','has_fanart'],['banner','Banner','has_banner'],['icon','Icon','has_icon'],['box_back','Box back','has_box_back'],['box_spine','Box spine','has_box_spine'],['box_3d','3D box','has_box_3d'],['title_screen','Title screen','has_title_screen']];
+    const artworkKinds = [['clear_logo','Clear logo','has_clear_logo'],['fanart','Fanart','has_fanart'],['banner','Banner','has_banner'],['icon','Icon','has_icon'],['box_back','Box back','has_box_back'],['box_spine','Box spine','has_box_spine'],['box_3d','3D box','has_box_3d'],['title_screen','Title screen','has_title_screen'],['cart_front','Cart front','has_cart_front'],['cart_back','Cart back','has_cart_back'],['disc','Disc','has_disc'],['advertisement','Advertisement / flyer','has_advertisement'],['manual','Manual','has_manual']];
     function renderArtwork(game) {
       const items = artworkKinds.filter(([, , flag]) => game[flag]);
       return items.length ? `<div class="detail-card"><h3>Artwork</h3><div class="screenshot-grid">${items.map(([kind,label]) => `<button data-artwork="${kind}" aria-label="Open ${escapeHtml(label)}"><img src="${media(game,kind)}" alt="${escapeHtml(label)}" loading="lazy" decoding="async"></button>`).join('')}</div></div>` : '';
@@ -1178,7 +1210,7 @@
       renderDetails();
     }
     function imageMarkup(game, imageGroup) {
-      const flags = {cover:'has_cover',background:'has_background',screenshot:'available_screenshots',clear_logo:'has_clear_logo',fanart:'has_fanart',banner:'has_banner',icon:'has_icon',box_back:'has_box_back',box_spine:'has_box_spine',box_3d:'has_box_3d',title_screen:'has_title_screen'};
+      const flags = {cover:'has_cover',background:'has_background',screenshot:'available_screenshots',clear_logo:'has_clear_logo',fanart:'has_fanart',banner:'has_banner',icon:'has_icon',box_back:'has_box_back',box_spine:'has_box_spine',box_3d:'has_box_3d',title_screen:'has_title_screen',cart_front:'has_cart_front',cart_back:'has_cart_back',disc:'has_disc',advertisement:'has_advertisement',manual:'has_manual'};
       const flag = flags[imageGroup];
       const available = imageGroup === 'screenshot' ? game.available_screenshots?.length : game[flag];
       if (available) {
@@ -1557,6 +1589,7 @@
         attract_mode_seconds:Number($('attractModeSeconds').value || $('screensaverSeconds').value || 90),
         tray_enabled:$('trayEnabled').checked,
         minimize_to_tray:$('minimizeToTray').checked,
+        ui_window:$('uiWindow').value || 'app',
         ludusavi_backup_path:$('ludusaviBackupPath')?.value.trim() || '',
       };
     }
@@ -1690,7 +1723,7 @@
       } catch(error) { notify(error.message); }
     }
     async function applyMetadata(databaseId) {
-      const media = [['cover','metadataCover'],['background','metadataBackground'],['screenshots','metadataScreenshots']].filter(([,id]) => $(id).checked).map(([name]) => name);
+      const media = [['cover','metadataCover'],['background','metadataBackground'],['screenshots','metadataScreenshots'],['box_back','metadataBoxBack'],['box_spine','metadataBoxSpine'],['box_3d','metadataBox3d'],['clear_logo','metadataClearLogo'],['fanart','metadataFanart'],['banner','metadataBanner'],['icon','metadataIcon'],['title_screen','metadataTitleScreen'],['cart_front','metadataCartFront'],['cart_back','metadataCartBack'],['disc','metadataDisc'],['advertisement','metadataAdvertisement'],['manual','metadataManual']].filter(([,id]) => $(id).checked).map(([name]) => name);
       try {
         notify('Downloading selected metadata and media');
         await api('/api/metadata/apply',{method:'POST',body:JSON.stringify({id:metadataGameId,database_id:databaseId,media,overwrite:$('metadataOverwrite').checked})});
@@ -1886,6 +1919,7 @@
         $('attractModeSeconds').value = appSettings.attract_mode_seconds ?? appSettings.screensaver_seconds ?? 90;
         $('trayEnabled').checked = Boolean(appSettings.tray_enabled);
         $('minimizeToTray').checked = Boolean(appSettings.minimize_to_tray);
+        if ($('uiWindow')) $('uiWindow').value = appSettings.ui_window || 'app';
         if ($('ludusaviBackupPath')) $('ludusaviBackupPath').value = appSettings.ludusavi_backup_path || '';
         $('mediaPackStatus').textContent = (appSettings.media_packs || []).filter(item => item.active).map(item => item.name).join(', ');
         $('viewToggleButton').textContent = (appSettings.library_view || 'grid') === 'list' ? 'Grid view' : 'List view';
@@ -2165,7 +2199,7 @@
       if (!$('mediaManagerDialog').open) $('mediaManagerDialog').showModal();
       try {
         const audit = await api(`/api/media/audit?platform=${encodeURIComponent(platform)}`);
-        $('mediaAudit').innerHTML = `<h3>${platform === 'all' ? 'Entire library' : escapeHtml(platform)}</h3><div class="facts">${fact('Games',audit.games)}${fact('Database matched',audit.matched)}${fact('Missing box front',audit.missing_cover)}${fact('Missing background',audit.missing_background)}${fact('Missing screenshots',audit.missing_screenshots)}</div>`;
+        $('mediaAudit').innerHTML = `<h3>${platform === 'all' ? 'Entire library' : escapeHtml(platform)}</h3><div class="facts">${fact('Games',audit.games)}${fact('Database matched',audit.matched)}${fact('Missing box front',audit.missing_cover)}${fact('Missing background',audit.missing_background)}${fact('Missing screenshots',audit.missing_screenshots)}${fact('Missing box back',audit.missing_box_back)}${fact('Missing box spine',audit.missing_box_spine)}${fact('Missing 3D box',audit.missing_box_3d)}${fact('Missing clear logo',audit.missing_clear_logo)}${fact('Missing fanart',audit.missing_fanart)}${fact('Missing banner',audit.missing_banner)}${fact('Missing icon',audit.missing_icon)}${fact('Missing title screen',audit.missing_title_screen)}${fact('Missing cart front',audit.missing_cart_front)}${fact('Missing cart back',audit.missing_cart_back)}${fact('Missing disc',audit.missing_disc)}${fact('Missing ads / flyers',audit.missing_advertisement)}${fact('Missing manual',audit.missing_manual)}</div>`;
         const status = await api('/api/media/bulk/status');
         renderBulkMediaStatus(status.job);
       } catch(error) { notify(error.message); }
@@ -2175,7 +2209,7 @@
       $('startBulkMedia').disabled = job.state === 'running';
     }
     $('startBulkMedia').onclick = async () => {
-      const media = [['cover','bulkCover'],['background','bulkBackground'],['screenshots','bulkScreenshots']].filter(([,id]) => $(id).checked).map(([name]) => name);
+      const media = [['cover','bulkCover'],['background','bulkBackground'],['screenshots','bulkScreenshots'],['box_back','bulkBoxBack'],['box_spine','bulkBoxSpine'],['box_3d','bulkBox3d'],['clear_logo','bulkClearLogo'],['fanart','bulkFanart'],['banner','bulkBanner'],['icon','bulkIcon'],['title_screen','bulkTitleScreen'],['cart_front','bulkCartFront'],['cart_back','bulkCartBack'],['disc','bulkDisc'],['advertisement','bulkAdvertisement'],['manual','bulkManual']].filter(([,id]) => $(id).checked).map(([name]) => name);
       try {
         await api('/api/media/bulk',{method:'POST',body:JSON.stringify({platform,media,overwrite:$('bulkOverwrite').checked})});
         watchBulkMedia();

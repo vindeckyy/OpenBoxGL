@@ -164,6 +164,7 @@ FIELDS = {
     "name", "platform", "genre", "year", "developer", "publisher", "series",
     "collection", "description", "path", "launch", "launch_profile", "cover", "background",
     "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen",
+    "cart_front", "cart_back", "disc", "advertisement", "manual",
     "source", "steam_app_id", "lutris_id", "install_dir",
     "heroic_app_id", "rom_name", "clone_of", "set_type", "ra_game_id", "ra_hash", "launchbox_db_id", "archive_member", "video", "music",
     "video_snap", "video_theme", "video_trailer", "video_recording",
@@ -172,6 +173,15 @@ FIELDS = {
     "broken", "portable", "controller_support", "disc_count",
     "gameyfin_id", "gameyfin_provider", "store_catalog", "store_installed", "owned",
     "tracking_mode", "tracking_delay", "tracking_frequency", "tracking_process_name", "igdb_id",
+}
+
+
+# Media fields that can be populated from the LaunchBox Games Database. Kept as
+# one set so metadata apply, bulk download, auto-import, and the audit all agree.
+MEDIA_TYPES_ALL = {
+    "cover", "background", "screenshots", "clear_logo", "fanart", "banner", "icon",
+    "box_back", "box_spine", "box_3d", "title_screen",
+    "cart_front", "cart_back", "disc", "advertisement", "manual",
 }
 
 
@@ -440,6 +450,7 @@ def public_settings(state=None):
         "bigbox_shutdown_commands": settings.get("bigbox_shutdown_commands", []),
         "tray_enabled": settings.get("tray_enabled", False),
         "minimize_to_tray": settings.get("minimize_to_tray", False),
+        "ui_window": settings.get("ui_window", "app"),
         "media_packs": list_media_packs(settings),
         "controller_prompt_hint": settings.get("controller_prompt_hint", ""),
         "premium_features_free": True,
@@ -496,6 +507,11 @@ def _build_public_state():
             "has_box_spine": probe_path(projected.get("box_spine"), file_only=True),
             "has_box_3d": probe_path(projected.get("box_3d"), file_only=True),
             "has_title_screen": probe_path(projected.get("title_screen"), file_only=True),
+            "has_cart_front": probe_path(projected.get("cart_front"), file_only=True),
+            "has_cart_back": probe_path(projected.get("cart_back"), file_only=True),
+            "has_disc": probe_path(projected.get("disc"), file_only=True),
+            "has_advertisement": probe_path(projected.get("advertisement"), file_only=True),
+            "has_manual": probe_path(projected.get("manual"), file_only=True),
             "has_video": bool(video_path),
             "active_video_field": video_field,
             "has_music": probe_path(projected.get("music"), file_only=True),
@@ -1536,7 +1552,23 @@ class Handler(BaseHTTPRequestHandler):
                 return
             with PROCESS_LOCK:
                 job = dict(METADATA_JOB)
-            self.send_json(200, {"ready":METADATA_DATABASE.is_file(), "job":job})
+            state_view = load_state_view()
+            games = state_view["games"]
+            matched = sum(bool(game.get("launchbox_db_id")) for game in games)
+
+            def _missing(field):
+                return sum(not Path(str(game.get(field) or "")).is_file() for game in games)
+
+            coverage = {
+                "games": len(games),
+                "matched_games": matched,
+                "matched_ratio": round(matched / len(games), 4) if games else 0.0,
+                "with_cover": len(games) - _missing("cover"),
+                "with_box_back": len(games) - _missing("box_back"),
+                "with_cart_front": len(games) - _missing("cart_front"),
+                "with_disc": len(games) - _missing("disc"),
+            }
+            self.send_json(200, {"ready":METADATA_DATABASE.is_file(), "job":job, "coverage":coverage})
             return
         if parsed.path == "/api/metadata/search":
             if not self.authorized():
@@ -1570,6 +1602,19 @@ class Handler(BaseHTTPRequestHandler):
                 "missing_cover":sum(not Path(str(game.get("cover") or "")).is_file() for game in games),
                 "missing_background":sum(not Path(str(game.get("background") or "")).is_file() for game in games),
                 "missing_screenshots":sum(not any(Path(str(path)).is_file() for path in game.get("screenshots", []) if path) for game in games),
+                "missing_box_back":sum(not Path(str(game.get("box_back") or "")).is_file() for game in games),
+                "missing_box_spine":sum(not Path(str(game.get("box_spine") or "")).is_file() for game in games),
+                "missing_box_3d":sum(not Path(str(game.get("box_3d") or "")).is_file() for game in games),
+                "missing_clear_logo":sum(not Path(str(game.get("clear_logo") or "")).is_file() for game in games),
+                "missing_fanart":sum(not Path(str(game.get("fanart") or "")).is_file() for game in games),
+                "missing_banner":sum(not Path(str(game.get("banner") or "")).is_file() for game in games),
+                "missing_icon":sum(not Path(str(game.get("icon") or "")).is_file() for game in games),
+                "missing_title_screen":sum(not Path(str(game.get("title_screen") or "")).is_file() for game in games),
+                "missing_cart_front":sum(not Path(str(game.get("cart_front") or "")).is_file() for game in games),
+                "missing_cart_back":sum(not Path(str(game.get("cart_back") or "")).is_file() for game in games),
+                "missing_disc":sum(not Path(str(game.get("disc") or "")).is_file() for game in games),
+                "missing_advertisement":sum(not Path(str(game.get("advertisement") or "")).is_file() for game in games),
+                "missing_manual":sum(not Path(str(game.get("manual") or "")).is_file() for game in games),
             })
             return
         if parsed.path == "/api/media/bulk/status":
@@ -1609,7 +1654,7 @@ class Handler(BaseHTTPRequestHandler):
                 if kind == "screenshot":
                     index = int(query["index"][0])
                     media = Path(game.get("screenshots", [])[index])
-                elif kind in {"cover", "background", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "video", "music", "video_snap", "video_theme", "video_trailer", "video_recording"}:
+                elif kind in {"cover", "background", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "cart_front", "cart_back", "disc", "advertisement", "manual", "video", "music", "video_snap", "video_theme", "video_trailer", "video_recording"}:
                     if kind == "video":
                         _, video_path = active_video(game)
                         media = Path(video_path or game.get("video", ""))
@@ -2506,7 +2551,7 @@ class Handler(BaseHTTPRequestHandler):
         if not METADATA_DATABASE.is_file():
             raise ValueError("Download the metadata database first.")
         media_types = payload.get("media", [])
-        if not isinstance(media_types, list) or not set(media_types) <= {"cover", "background", "screenshots"}:
+        if not isinstance(media_types, list) or not set(media_types) <= MEDIA_TYPES_ALL:
             raise ValueError("Invalid media selection.")
         state = load_state()
         original_game = game_from_payload(state, payload)
@@ -2526,7 +2571,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def bulk_media(self, payload):
         media_types = payload.get("media", [])
-        if not isinstance(media_types, list) or not media_types or not set(media_types) <= {"cover", "background", "screenshots"}:
+        if not isinstance(media_types, list) or not media_types or not set(media_types) <= MEDIA_TYPES_ALL:
             raise ValueError("Select at least one valid media type.")
         if not METADATA_DATABASE.is_file():
             raise ValueError("Download the metadata database first.")
@@ -2672,7 +2717,7 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Progress automation idle days must be between 0 and 3650.")
         welcome_completed = bool(merged.get("welcome_completed", False))
         image_group = str(merged.get("image_group", "cover"))
-        if image_group not in {"cover", "background", "screenshot", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen"}:
+        if image_group not in {"cover", "background", "screenshot", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "cart_front", "cart_back", "disc", "advertisement", "manual"}:
             raise ValueError("Unknown default image group.")
         badge_visibility = merged.get("badge_visibility", ["favorite", "installed", "saves", "documents", "progress", "storefront", "achievements", "rating"])
         allowed_badges = {"favorite", "installed", "missing_media", "saves", "documents", "versions", "storefront", "achievements", "highscores", "progress", "rating", "broken", "portable", "controller"}
@@ -2685,8 +2730,8 @@ class Handler(BaseHTTPRequestHandler):
         if media_download_limit < 0 or media_download_limit > 10000:
             raise ValueError("Media download limit must be between 0 and 10000.")
         auto_import_media_types = merged.get("auto_import_media_types", [])
-        if not isinstance(auto_import_media_types, list) or not set(auto_import_media_types) <= {"cover", "background", "screenshots"}:
-            raise ValueError("Auto-import media types must be cover, background, and/or screenshots.")
+        if not isinstance(auto_import_media_types, list) or not set(auto_import_media_types) <= MEDIA_TYPES_ALL:
+            raise ValueError("Auto-import media types include an unknown media type.")
         region_priority = merged.get("region_priority", list(REGION_PRIORITY_DEFAULT))
         if not isinstance(region_priority, list) or not region_priority:
             raise ValueError("Region priority must be a non-empty list.")
@@ -2746,6 +2791,9 @@ class Handler(BaseHTTPRequestHandler):
         apply_perf = str(merged.get("apply_perf", "auto")).strip().casefold()
         if apply_perf not in {"off", "auto", "always"}:
             raise ValueError("Apply performance limits must be off, auto, or always.")
+        ui_window = str(merged.get("ui_window", "app")).strip().casefold()
+        if ui_window not in {"app", "browser"}:
+            raise ValueError("UI window mode must be app or browser.")
         gameyfin_password = str(merged.get("gameyfin_password", "")).strip()
         normalized_settings = {
                 "watch_folders": clean_folders,
@@ -2796,6 +2844,7 @@ class Handler(BaseHTTPRequestHandler):
                 "tracking_delay": tracking_delay,
                 "tracking_frequency": tracking_frequency,
                 "apply_perf": apply_perf,
+                "ui_window": ui_window,
                 "progress_on_first_play": progress_on_first_play,
                 "auto_close_store_clients": bool(merged.get("auto_close_store_clients", False)),
         }
@@ -2815,7 +2864,7 @@ class Handler(BaseHTTPRequestHandler):
         group = str(payload.get("group", ""))
         scope = str(payload.get("scope", "global"))
         name = str(payload.get("name", "")).strip()
-        if group not in {"default", "cover", "background", "screenshot", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen"} or scope not in {"global", "platform", "playlist"}:
+        if group not in {"default", "cover", "background", "screenshot", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "cart_front", "cart_back", "disc", "advertisement", "manual"} or scope not in {"global", "platform", "playlist"}:
             raise ValueError("Unknown image group.")
         if scope != "global" and (not name or len(name) > 200):
             raise ValueError("A platform or playlist is required.")
@@ -3600,9 +3649,18 @@ def main():
     url = f"http://127.0.0.1:{port}/?token={TOKEN}"
     force_game_mode = "--game-mode" in sys.argv
     guest = is_gamescope_guest(force=force_game_mode)
+    # Desktop sessions open the UI in a chrome-less app window unless the
+    # ui_window setting says otherwise; flags override the setting.
+    if "--app-window" in sys.argv:
+        native_window = True
+    elif "--no-app-window" in sys.argv:
+        native_window = False
+    else:
+        window_mode = str(load_state().get("settings", {}).get("ui_window", "app")).strip().casefold()
+        native_window = window_mode == "app" and not guest
     print(url, flush=True)
     if "--no-browser" not in sys.argv:
-        opened = open_ui(url, guest=guest, force_game_mode=force_game_mode)
+        opened = open_ui(url, guest=guest, force_game_mode=force_game_mode, native_window=native_window)
         browser_pid = opened.get("pid")
         if opened.get("mode") == "kiosk" and guest and browser_pid:
             browser_name = Path(str(opened.get("browser") or "")).name

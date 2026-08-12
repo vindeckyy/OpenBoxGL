@@ -22,6 +22,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | EA, Ubisoft, and Xbox imports | done | Lutris/Heroic catalog import with EA, Ubisoft, and Xbox/Game Pass tagging; Xbox native PC packages remain unavailable on Linux |
 | MAME and FinalBurn full-set imports | done | DAT/XML metadata classifies and imports merged, split, and non-merged sets |
 | LaunchBox Games Database matching | done | Official daily database sync, local matching, and selected metadata/media downloads work |
+| Full LaunchBox media catalog | done | Box backs, spines, 3D boxes, clear logos, fanart, banners, title screens, carts, discs, and advertisement flyers download from the database alongside covers, backgrounds, and screenshots; manuals are user-supplied paths because the LaunchBox metadata feed ships no manual images |
 | Media manager and image groups | done | Grid image groups, extended artwork groups, audits, bulk downloads, duplicate cleanup, region priority, and download limits work |
 | Emulator profiles and per-game commands | done | Commands launch without a shell |
 | Emulator installation and automatic configuration | done | Install, Update All, open emulator, recommend-on-import, and dependency checks work |

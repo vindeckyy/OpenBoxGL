@@ -100,6 +100,23 @@ def resolve_kiosk_browser(which=None, run=None):
     return None
 
 
+def resolve_app_window_browser(which=None, run=None):
+    """Return argv for a chrome-less app window, or None.
+
+    Chromium-family browsers open a real app window via --app=URL. Firefox
+    opens a separate window (--new-window) as a fallback so app-window mode
+    still helps Firefox-only desktops, though its chrome stays visible.
+    """
+    finder = which or shutil.which
+    browser = resolve_kiosk_browser(which=finder, run=run)
+    if browser:
+        return browser
+    firefox = finder("firefox")
+    if firefox:
+        return [firefox]
+    return None
+
+
 def kiosk_command(browser_argv, url):
     """Build a single-window browser command for the OpenBox UI URL."""
     if not browser_argv:
@@ -121,14 +138,19 @@ def host_helper_env(environ=None):
     return env
 
 
-def open_ui(url, *, guest=False, force_game_mode=False, popen=None, browser_open=None, which=None, environ=None):
-    """Open the UI; use kiosk browser when guest/game-mode, else xdg-open/webbrowser."""
+def open_ui(url, *, guest=False, force_game_mode=False, native_window=False, popen=None, browser_open=None, which=None, environ=None):
+    """Open the UI; use a kiosk/app window when guest/game-mode or requested."""
     target = game_mode_url(url) if (guest or force_game_mode) else url
     opener = popen or subprocess.Popen
     browse = browser_open or webbrowser.open
     helper_env = host_helper_env(environ)
-    if guest or force_game_mode:
-        browser = resolve_kiosk_browser(which=which)
+    if guest or force_game_mode or native_window:
+        if guest or force_game_mode:
+            browser = resolve_kiosk_browser(which=which)
+            mode = "kiosk"
+        else:
+            browser = resolve_app_window_browser(which=which)
+            mode = "app"
         if browser:
             try:
                 process = opener(
@@ -140,7 +162,7 @@ def open_ui(url, *, guest=False, force_game_mode=False, popen=None, browser_open
                 browser = None
             else:
                 pid = getattr(process, "pid", None)
-                return {"url": target, "mode": "kiosk", "browser": browser[0], "pid": pid}
+                return {"url": target, "mode": mode, "browser": browser[0], "pid": pid}
     finder = which or shutil.which
     xdg = finder("xdg-open")
     if xdg:
