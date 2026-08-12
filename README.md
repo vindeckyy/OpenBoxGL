@@ -204,7 +204,23 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 
 ## Installation
 
-### AppImage (recommended)
+### One-liner (recommended)
+
+Downloads the latest AppImage from GitHub Releases, verifies its SHA-256 checksum, and installs it to `~/.local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/master/scripts/install.sh | bash
+```
+
+To also launch OpenBox right after installing:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/master/scripts/install.sh | bash -s -- --run
+```
+
+The script resolves the latest release automatically, checks the AppImage against its published SHA-256 before installing, and adds a friendly `openbox` launcher. Install to a different directory with `OPENBOX_INSTALL_DIR` (e.g. `OPENBOX_INSTALL_DIR="$HOME/Applications"`).
+
+### AppImage (manual)
 
 Download the latest release from [GitHub Releases](https://github.com/vindeckyy/OpenBoxGL/releases/latest).
 
