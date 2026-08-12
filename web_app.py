@@ -47,7 +47,7 @@ from play_queue import advance as advance_queue, enqueue as enqueue_queue, norma
 from cloud_sync import sync_statistics
 from emulators import emulator_status, install_all_emulators, install_emulator, launch_emulator, recommendations_for_platform, update_all_emulators, update_emulator
 from importers import import_heroic, import_lutris, import_steam
-from metadata import apply_game_metadata, search_games, sync_database
+from metadata import apply_game_metadata, find_archive_manual, search_games, sync_database
 from job_manager import JobManager
 from openbox_logging import configure_logging, read_diagnostic_log
 from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, STATE_STORE, build_launch, discover_profiles, load_state, purge_demo_games, recover_state as recover_library_state, save_state, update_state, update_state_with_result
@@ -1563,11 +1563,9 @@ class Handler(BaseHTTPRequestHandler):
                 "games": len(games),
                 "matched_games": matched,
                 "matched_ratio": round(matched / len(games), 4) if games else 0.0,
-                "with_cover": len(games) - _missing("cover"),
-                "with_box_back": len(games) - _missing("box_back"),
-                "with_cart_front": len(games) - _missing("cart_front"),
-                "with_disc": len(games) - _missing("disc"),
             }
+            for field in sorted(MEDIA_TYPES_ALL):
+                coverage[f"with_{field}"] = len(games) - _missing(field)
             self.send_json(200, {"ready":METADATA_DATABASE.is_file(), "job":job, "coverage":coverage})
             return
         if parsed.path == "/api/metadata/search":
@@ -2555,6 +2553,8 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Invalid media selection.")
         state = load_state()
         original_game = game_from_payload(state, payload)
+        if "manual" in media_types and not str(original_game.get("path") or "").strip():
+            raise ValueError("This game has no file path, so no manual can be imported.")
         stable_game_id = original_game.get("game_id")
         original = dict(original_game)
         updated = apply_game_metadata(
@@ -2562,12 +2562,13 @@ class Handler(BaseHTTPRequestHandler):
             DATA.parent / "media/launchbox", bool(payload.get("overwrite")),
             region_priority=load_state().get("settings", {}).get("region_priority"),
         )
+        notes = list(updated.pop("_media_notes") or []) if "_media_notes" in updated else []
         changes = {key:value for key,value in updated.items() if original.get(key) != value}
         def mutate(state):
             game_from_payload(state, {"game_id": stable_game_id}).update(changes)
         transact_state(mutate)
         bump_media_epoch()
-        self.send_json(200, {"updated":sorted(changes)})
+        self.send_json(200, {"updated":sorted(changes), "notes":notes})
 
     def bulk_media(self, payload):
         media_types = payload.get("media", [])
@@ -2594,6 +2595,7 @@ class Handler(BaseHTTPRequestHandler):
             with PROCESS_LOCK:
                 MEDIA_JOB["total"] = len(targets)
             updated_count, errors = 0, []
+            manual_missing = 0
             for current, (stable_id, database_id) in enumerate(targets, 1):
                 original = {}
                 try:
@@ -2603,6 +2605,9 @@ class Handler(BaseHTTPRequestHandler):
                         dict(original), METADATA_DATABASE, int(database_id), media_types,
                         DATA.parent / "media/launchbox", overwrite,
                     )
+                    notes = updated.pop("_media_notes") if "_media_notes" in updated else None
+                    if notes:
+                        manual_missing += 1
                     changes = {key:value for key,value in updated.items() if original.get(key) != value}
                     if changes:
                         def mutate(state):
@@ -2612,7 +2617,7 @@ class Handler(BaseHTTPRequestHandler):
                 except (OSError, ValueError, sqlite3.Error) as error:
                     errors.append(f"{original.get('name', stable_id)}: {error}")
                 with PROCESS_LOCK:
-                    MEDIA_JOB.update({"current":current, "updated":updated_count, "errors":errors[-20:]})
+                    MEDIA_JOB.update({"current":current, "updated":updated_count, "errors":errors[-20:], "manual_missing":manual_missing})
             bump_media_epoch()
             with PROCESS_LOCK:
                 MEDIA_JOB["state"] = "done"

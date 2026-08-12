@@ -74,19 +74,118 @@ def test_platform_aliases():
     with TemporaryDirectory() as directory:
         root = Path(directory)
         package = root / "Metadata.zip"
+        # One game per platform pairing: the LBDB spelling under the app's
+        # short name plus a same-titled game on a decoy platform, so the
+        # ranking boost is what decides the top hit, not title order.
+        pairs = [
+            ("SNES", "Super Nintendo Entertainment System", "Decoy Console"),
+            ("Game Boy", "Nintendo Game Boy", "Decoy Console"),
+            ("Game Boy Advance", "Nintendo Game Boy Advance", "Decoy Console"),
+            ("GameCube", "Nintendo GameCube", "Decoy Console"),
+            ("Wii", "Nintendo Wii", "Decoy Console"),
+            ("PlayStation", "Sony Playstation", "Decoy Console"),
+            ("PlayStation 3", "Sony Playstation 3", "Decoy Console"),
+            ("PlayStation Vita", "Sony Playstation Vita", "Decoy Console"),
+            ("PSP", "Sony PSP", "Decoy Console"),
+            ("Xbox", "Microsoft Xbox", "Decoy Console"),
+            ("Xbox 360", "Microsoft Xbox 360", "Decoy Console"),
+            ("NES", "Nintendo Entertainment System", "Decoy Console"),
+            ("Genesis", "Sega Genesis", "Decoy Console"),
+            ("Nintendo 64", "Nintendo 64", "Decoy Console"),
+            ("Nintendo 3DS", "Nintendo 3DS", "Decoy Console"),
+            ("Nintendo Switch", "Nintendo Switch", "Decoy Console"),
+            ("Sega Saturn", "Sega Saturn", "Decoy Console"),
+            ("ScummVM", "ScummVM", "Decoy Console"),
+            ("Arcade", "Arcade", "Decoy Console"),
+            ("PC", "Windows", "Decoy Console"),
+            ("MS-DOS", "MS-DOS", "Decoy Console"),
+        ]
+        games = []
+        for index, (app_name, lbdb_platform, decoy) in enumerate(pairs, 1):
+            # Zero-padded titles so LIKE '%probe 01%' cannot also match
+            # probe 10..21 and pollute the pass-through assertion.
+            title = f"Alias Probe {index:02d}"
+            games.append(f"<Game><DatabaseID>{index * 10}</DatabaseID><Name>{title}</Name><Platform>{lbdb_platform}</Platform></Game>")
+            games.append(f"<Game><DatabaseID>{index * 10 + 1}</DatabaseID><Name>{title}</Name><Platform>{decoy}</Platform></Game>")
+        xml = f"<LaunchBox>{''.join(games)}</LaunchBox>"
+        with zipfile.ZipFile(package, "w") as archive:
+            archive.writestr("Metadata.xml", xml)
+        database = root / "metadata.db"
+        build_database(package, database)
+        for index, (app_name, lbdb_platform, _decoy) in enumerate(pairs, 1):
+            results = search_games(database, f"Alias Probe {index:02d}", app_name)
+            assert results[0]["platform"] == lbdb_platform, (app_name, results[:2])
+        # Unknown platform names must pass through untouched and still match
+        # by title rather than ranking against a wrong LBDB spelling.
+        results = search_games(database, "Alias Probe 01", "WiiWare")
+        assert results, "pass-through platforms must still find title matches"
+        assert {row["platform"] for row in results} == {"Super Nintendo Entertainment System", "Decoy Console"}
+    print("platform alias self-test: ok")
+
+
+def test_manual_import():
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        package = root / "Metadata.zip"
         xml = """<LaunchBox>
-          <Game><DatabaseID>7</DatabaseID><Name>Super Cart (USA)</Name><Platform>Super Nintendo Entertainment System</Platform></Game>
+          <Game><DatabaseID>42</DatabaseID><Name>Manual Game</Name><Platform>NES</Platform></Game>
+          <GameImage><DatabaseID>42</DatabaseID><FileName>cover.png</FileName><Type>Box - Front</Type></GameImage>
         </LaunchBox>"""
         with zipfile.ZipFile(package, "w") as archive:
             archive.writestr("Metadata.xml", xml)
         database = root / "metadata.db"
         build_database(package, database)
-        # The app calls search_games with its short platform name; the alias
-        # table maps SNES to the LBDB spelling so exact-match ranking still wins.
-        assert search_games(database, "Super Cart", "SNES")[0]["database_id"] == 7
-    print("platform alias self-test: ok")
+
+        def opener(request):
+            raise AssertionError("manual import must not download from the LBDB image host")
+
+        game_zip = root / "game.zip"
+        with zipfile.ZipFile(game_zip, "w") as archive:
+            archive.writestr("manual.pdf", "%PDF-1.4 fake")
+            archive.writestr("game.rom", "rom")
+        media_root = root / "media"
+
+        game = apply_game_metadata(
+            {"name": "Manual Game", "path": str(game_zip)},
+            database, 42, ["manual"], media_root,
+            opener=opener,
+        )
+        assert Path(game["manual"]).is_file()
+        assert Path(game["manual"]).suffix == ".pdf"
+        assert Path(game["manual"]).parent == Path(media_root) / "42"
+        assert "_media_notes" not in game
+
+        bare_zip = root / "bare.zip"
+        with zipfile.ZipFile(bare_zip, "w") as archive:
+            archive.writestr("game.rom", "rom")
+        bare = apply_game_metadata(
+            {"name": "Manual Game", "path": str(bare_zip)},
+            database, 42, ["manual"], media_root,
+            opener=opener,
+        )
+        assert not bare.get("manual")
+        assert "manual: no manual in this archive" in (bare.get("_media_notes") or [])
+
+        non_archive = apply_game_metadata(
+            {"name": "Manual Game", "path": str(root / "game.nes")},
+            database, 42, ["manual"], media_root,
+            opener=opener,
+        )
+        assert not non_archive.get("manual")
+
+        corrupt = root / "corrupt.zip"
+        corrupt.write_bytes(b"not a zip")
+        corrupted = apply_game_metadata(
+            {"name": "Manual Game", "path": str(corrupt)},
+            database, 42, ["manual"], media_root,
+            opener=opener,
+        )
+        assert not corrupted.get("manual")
+        assert "manual: no manual in this archive" in (corrupted.get("_media_notes") or [])
+    print("manual import self-test: ok")
 
 
 if __name__ == "__main__":
     test()
     test_platform_aliases()
+    test_manual_import()

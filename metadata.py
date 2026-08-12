@@ -14,6 +14,7 @@ from backend_io import download_file
 
 DATABASE_URL = "https://gamesdb.launchbox-app.com/Metadata.zip"
 IMAGE_URL = "https://images.launchbox-app.com/"
+MANUAL_SUFFIXES = (".pdf", ".txt")
 
 
 # LaunchBox Games Database image type strings mapped to OpenBox media fields.
@@ -35,35 +36,41 @@ MEDIA_TYPE_MAP = {
     "cart_back": ("Cart - Back",),
     "disc": ("Disc", "Fanart - Disc"),
     "advertisement": ("Advertisement Flyer - Front", "Advertisement Flyer - Back"),
+    # No LBDB type ships manual scans; find_archive_manual handles this field.
     "manual": (),
 }
 
 
-# Short app platform names mapped to the LaunchBox Games Database spelling so
-# search ranking still prefers an exact platform match for imported games.
+# The app's own platform names mapped to the LaunchBox Games Database
+# spelling, used only to rank search results: the LBDB platform string gets
+# the exact-match boost in search_games. Names not listed here pass through
+# unchanged. Verified against the LBDB feed; entries without an LBDB platform
+# row (e.g. the app's "Disc image" and "WiiWare") are deliberately absent.
 PLATFORM_ALIASES = {
     "NES": "Nintendo Entertainment System",
     "SNES": "Super Nintendo Entertainment System",
-    "Genesis": "Sega Genesis",
-    "GB": "Nintendo Game Boy",
-    "GBC": "Nintendo Game Boy Color",
-    "GBA": "Nintendo Game Boy Advance",
-    "N64": "Nintendo 64",
-    "PSX": "Sony Playstation",
-    "PS1": "Sony Playstation",
-    "PS2": "Sony Playstation 2",
-    "PS3": "Sony Playstation 3",
+    "Game Boy": "Nintendo Game Boy",
+    "Game Boy Color": "Nintendo Game Boy Color",
+    "Game Boy Advance": "Nintendo Game Boy Advance",
+    "Nintendo 64": "Nintendo 64",
+    "Nintendo DS": "Nintendo DS",
+    "Nintendo 3DS": "Nintendo 3DS",
+    "GameCube": "Nintendo GameCube",
+    "Wii": "Nintendo Wii",
+    "Wii U": "Nintendo Wii U",
+    "Nintendo Switch": "Nintendo Switch",
+    "PlayStation": "Sony Playstation",
+    "PlayStation 2": "Sony Playstation 2",
+    "PlayStation 3": "Sony Playstation 3",
     "PSP": "Sony PSP",
-    "XBOX": "Microsoft Xbox",
-    "X360": "Microsoft Xbox 360",
-    "DC": "Sega Dreamcast",
-    "SATURN": "Sega Saturn",
-    "WII": "Nintendo Wii",
-    "WIIU": "Nintendo Wii U",
-    "3DS": "Nintendo 3DS",
-    "DS": "Nintendo DS",
-    "GAMECUBE": "Nintendo GameCube",
-    "ARCADE": "Arcade",
+    "PlayStation Vita": "Sony Playstation Vita",
+    "Xbox": "Microsoft Xbox",
+    "Xbox 360": "Microsoft Xbox 360",
+    "Genesis": "Sega Genesis",
+    "Sega Saturn": "Sega Saturn",
+    "Arcade": "Arcade",
+    "ScummVM": "ScummVM",
+    "PC": "Windows",
     "MS-DOS": "MS-DOS",
     "DOS": "MS-DOS",
 }
@@ -180,6 +187,52 @@ def download_image(filename, destination, opener=urlopen):
     ))
 
 
+def find_archive_manual(game, media_root, opener=urlopen):
+    """Copy a manual (PDF or text) out of the game's own archive, if any.
+
+    The LaunchBox feed ships no manual images, so the manual field falls back
+    to the game file itself: the existing extraction cache is reused and a
+    candidate manual is copied into media_root/<database_id>/. Returns the
+    destination path string, or None when there is nothing to copy.
+    """
+    source = str(game.get("path") or "")
+    if not source:
+        return None
+    archive = Path(source)
+    if not archive.is_file() or archive.suffix.casefold() not in {".zip", ".7z", ".rar"}:
+        return None
+    try:
+        from archives import extract_game
+        extracted = extract_game(archive, Path(media_root).parent.parent / "cache" / "archives")
+        # extract_game returns the chosen launch file; its parent is the
+        # full extraction cache directory that holds the other members.
+        extraction_dir = Path(extracted).parent
+    except (OSError, ValueError, RuntimeError, zipfile.BadZipFile):
+        return None
+    candidates = [
+        path for path in extraction_dir.rglob("*")
+        if not path.is_symlink() and path.is_file()
+        and path.name != ".complete"
+        and path.suffix.casefold() in MANUAL_SUFFIXES
+    ]
+    if not candidates:
+        return None
+
+    def rank(path):
+        name = path.name.casefold()
+        if name == "manual.pdf":
+            return (0, 0, -path.stat().st_mtime)
+        if name == "manual.txt":
+            return (1, 0, -path.stat().st_mtime)
+        return (2, len(path.name), -path.stat().st_mtime)
+
+    chosen = min(candidates[:8], key=rank)
+    destination = Path(media_root) / f"manual{chosen.suffix.casefold()}"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(chosen, destination)
+    return str(destination)
+
+
 def apply_game_metadata(game, database_path, database_id, media_types, media_root, overwrite=False, opener=urlopen, region_priority=None):
     from parity_media import REGION_PRIORITY_DEFAULT, sort_images_by_region
 
@@ -224,7 +277,14 @@ def apply_game_metadata(game, database_path, database_id, media_types, media_roo
                     game["screenshots"] = downloaded
             continue
         if media_type == "manual":
-            # Manuals are not part of the LaunchBox metadata zip.
+            # The LBDB zip ships no manuals; fall back to a manual shipped
+            # inside the game's own archive when one is present.
+            if overwrite or not game.get("manual"):
+                candidate = find_archive_manual(game, root, opener)
+                if candidate:
+                    game["manual"] = candidate
+                else:
+                    game["_media_notes"] = list(game.get("_media_notes") or []) + ["manual: no manual in this archive"]
             continue
         if not (overwrite or not game.get(media_type)):
             continue

@@ -466,6 +466,41 @@ class ParityApiTests(unittest.TestCase):
         catalog = load_local_catalog()
         self.assertTrue(any(item.get("id") == "openbox.library-stats" for item in catalog))
 
+    def test_state_view_flags_manual_media(self):
+        from openbox import save_state
+        from web_app import DATA, Handler, public_state
+
+        media_root = Path(DATA.parent) / "media"
+        manual = media_root / "manual.pdf"
+        manual.parent.mkdir(parents=True, exist_ok=True)
+        manual.write_bytes(b"%PDF-1.4 test")
+        save_state({
+            "games": [{"name": "Manual Game", "platform": "NES", "path": "", "manual": str(manual)}],
+            "profiles": {},
+            "history": [],
+            "settings": {},
+            "playlists": [],
+        })
+        view = public_state()
+        self.assertTrue(view["games"][0]["has_manual"])
+        self.assertEqual(view["games"][0]["manual"], str(manual))
+        handler = object.__new__(Handler)
+        handler.authorized = mock.Mock(return_value=True)
+        handler.send_file = mock.Mock()
+        handler.do_GET = Handler.do_GET.__get__(handler, Handler)
+        handler.path = "/api/media?id=0&kind=manual"
+        handler.headers = {}
+        handler.do_GET()
+        status, path = handler.send_file.call_args[0]
+        self.assertEqual(status, 200)
+        self.assertEqual(str(path), str(manual))
+
+    def test_apply_metadata_rejects_manual_without_game_path(self):
+        from web_app import Handler
+
+        with self.assertRaises(ValueError):
+            Handler.apply_metadata(self.handler, {"id": 0, "database_id": 1, "media": ["manual"], "overwrite": False})
+
 
 if __name__ == "__main__":
     unittest.main()

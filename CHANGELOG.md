@@ -8,10 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Full LaunchBox media catalog downloads: box backs, box spines, 3D boxes, clear logos, fanart, banners, title screens, cart fronts, cart backs, discs, and advertisement flyers can now be fetched from the LaunchBox Games Database alongside covers, backgrounds, and gameplay screenshots. The metadata dialog, bulk download dialog, media audit, artwork gallery, image groups, and auto-import setting all accept the expanded type set. Manuals are a user-supplied field because the LaunchBox metadata feed ships no manual images.
+- Full LaunchBox media catalog downloads: box backs, box spines, 3D boxes, clear logos, fanart, banners, title screens, cart fronts, cart backs, discs, and advertisement flyers can now be fetched from the LaunchBox Games Database alongside covers, backgrounds, and gameplay screenshots. The metadata dialog, bulk download dialog, media audit, artwork gallery, image groups, and auto-import setting all accept the expanded type set. Manuals are not in the LaunchBox feed, so the manual option pulls a PDF or text manual out of the game's own archive when one is present and reports when none was found.
 - The desktop UI now opens in a chrome-less app window by default instead of a browser tab, using the installed Chromium-family browser when available (Firefox falls back to a separate window). The Settings panel controls this with an "Open the UI in" option, and `--app-window` / `--no-app-window` override it at launch.
-- Metadata search matches retro platform names against their LaunchBox Games Database spellings, so exact-name searches rank platform-correct results first.
-- Metadata status now reports per-field coverage counts for the library (matched games, covers, box backs, carts, discs).
+- Metadata search maps the app's own platform names (for example Game Boy, PlayStation, GameCube, Xbox) to their LaunchBox Games Database spellings, so exact-name searches rank platform-correct results first.
+- The LaunchBox Games Database dialog now shows library coverage facts (matched games, match ratio, and per-field media counts) once the local database is ready.
 
 ### Fixed
 

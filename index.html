@@ -580,6 +580,7 @@
       <button class="icon-button" id="searchIgdb" type="button">Search IGDB</button>
       <button class="primary" type="submit">Search</button>
       <div class="wide description" id="metadataStatus"></div>
+      <div class="wide detail-card" id="metadataCoverage" style="display:none"><div class="facts" id="metadataCoverageFacts"></div></div>
       <div class="wide metadata-results" id="metadataResults"></div>
       <label class="check"><input type="checkbox" id="metadataCover" checked> Box front</label>
       <label class="check"><input type="checkbox" id="metadataBackground" checked> Background</label>
@@ -771,7 +772,7 @@
         <label class="field settings-field" data-setting="attract mode screensaver big box"><span>Attract mode delay in seconds</span><input id="attractModeSeconds" type="number" min="0" max="3600"></label>
         <label class="check settings-field" data-setting="system tray minimize close"><input type="checkbox" id="trayEnabled"> Enable desktop tray integration</label>
         <label class="check settings-field" data-setting="system tray minimize close"><input type="checkbox" id="minimizeToTray"> Minimize to tray when window closes</label>
-        <label class="field wide settings-field" data-setting="ui window app window browser tab native chrome-less"><span>Open the UI in</span><select id="uiWindow"><option value="app">A chrome-less app window</option><option value="browser">A browser tab</option></select><span class="description">Applies the next time OpenBox launches. Falls back to a browser tab when no Chromium-family browser is installed.</span></label>
+        <label class="field wide settings-field" data-setting="ui window app window browser tab native chrome-less"><span>Open the UI in</span><select id="uiWindow"><option value="app">A chrome-less app window</option><option value="browser">A browser tab</option></select><span class="description">Applies the next time OpenBox launches. Falls back to your default browser when no compatible browser can open a chrome-less window.</span></label>
         <label class="field wide settings-field" data-setting="ludusavi hoard saves backup"><span>Ludusavi backup path, optional</span><input id="ludusaviBackupPath" placeholder="Leave blank for Ludusavi default"></label>
         <div class="wide settings-field" data-setting="media packs themes badges controller"><button type="button" class="icon-button" id="applyMediaPack">Apply bundled media pack</button><span class="description" id="mediaPackStatus"></span></div>
         <div class="wide section-title settings-field" data-setting="controller gamepad mapping">Standard Gamepad Button Mapping</div>
@@ -938,7 +939,7 @@
     const artworkKinds = [['clear_logo','Clear logo','has_clear_logo'],['fanart','Fanart','has_fanart'],['banner','Banner','has_banner'],['icon','Icon','has_icon'],['box_back','Box back','has_box_back'],['box_spine','Box spine','has_box_spine'],['box_3d','3D box','has_box_3d'],['title_screen','Title screen','has_title_screen'],['cart_front','Cart front','has_cart_front'],['cart_back','Cart back','has_cart_back'],['disc','Disc','has_disc'],['advertisement','Advertisement / flyer','has_advertisement'],['manual','Manual','has_manual']];
     function renderArtwork(game) {
       const items = artworkKinds.filter(([, , flag]) => game[flag]);
-      return items.length ? `<div class="detail-card"><h3>Artwork</h3><div class="screenshot-grid">${items.map(([kind,label]) => `<button data-artwork="${kind}" aria-label="Open ${escapeHtml(label)}"><img src="${media(game,kind)}" alt="${escapeHtml(label)}" loading="lazy" decoding="async"></button>`).join('')}</div></div>` : '';
+      return items.length ? `<div class="detail-card"><h3>Artwork</h3><div class="screenshot-grid">${items.map(([kind,label]) => kind === 'manual' ? `<button data-manual="${media(game,'manual')}" aria-label="Open ${escapeHtml(label)}"><div class="cover-title">${escapeHtml(label)}</div></button>` : `<button data-artwork="${kind}" aria-label="Open ${escapeHtml(label)}"><img src="${media(game,kind)}" alt="${escapeHtml(label)}" loading="lazy" decoding="async"></button>`).join('')}</div></div>` : '';
     }
 
     async function api(path, options = {}) {
@@ -1381,6 +1382,9 @@
         $('mediaDialog').append(image);
         $('mediaDialog').showModal();
       });
+      document.querySelectorAll('[data-manual]').forEach(button => button.onclick = () => {
+        window.open(button.dataset.manual, '_blank');
+      });
       document.querySelectorAll('[data-document]').forEach(button => button.onclick = () => openReader(game, Number(button.dataset.document)));
       if ($('loadAchievements')) $('loadAchievements').onclick = () => loadAchievements(game.id);
       if ($('downloadTrailer')) $('downloadTrailer').onclick = async () => { try { await api('/api/metadata/trailer',{method:'POST',body:JSON.stringify({id:game.id})}); await refresh(); renderDetails(); notify('Steam trailer downloaded'); } catch(error) { notify(error.message); } };
@@ -1714,8 +1718,29 @@
       const state = status.job.state;
       $('metadataStatus').textContent = status.ready ? 'Local database ready.' : state === 'downloading' ? 'Downloading and indexing the official database...' : state === 'error' ? status.job.error : 'Download the official metadata database before searching.';
       $('syncMetadata').disabled = state === 'downloading';
-    }
-    async function searchMetadata() {
+      const coverage = status.coverage;
+      const coverageBox = $('metadataCoverage');
+      const factsBox = $('metadataCoverageFacts');
+      if (coverageBox) {
+        if (status.ready && coverage && coverage.games) {
+          const fields = [
+            ['with_cover', 'Games with box front'],
+            ['with_background', 'Games with background'],
+            ['with_box_back', 'Games with box back'],
+            ['with_cart_front', 'Games with cart front'],
+            ['with_disc', 'Games with disc'],
+            ['with_advertisement', 'Games with ads / flyers'],
+            ['with_title_screen', 'Games with title screen'],
+            ['with_clear_logo', 'Games with clear logo'],
+            ['with_manual', 'Games with manual'],
+          ];
+          factsBox.innerHTML = `${fact('Games', coverage.games)}${fact('Database matched', coverage.matched_games)}${fact('Match ratio', coverage.matched_ratio == null ? '-' : `${Math.round(coverage.matched_ratio * 100)}%`)}${fields.filter(([key]) => coverage[key] != null).map(([key, label]) => fact(label, coverage[key])).join('')}`;
+          coverageBox.style.display = '';
+        } else {
+          coverageBox.style.display = 'none';
+        }
+      }
+    }    async function searchMetadata() {
       try {
         const result = await api(`/api/metadata/search?id=${metadataGameId}&q=${encodeURIComponent($('metadataQuery').value)}`);
         $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platform)}${item.release_date ? ` · ${escapeHtml(item.release_date)}` : ''}${item.developer ? ` · ${escapeHtml(item.developer)}` : ''}</small></div><button type="button" class="primary" data-apply-metadata="${item.database_id}">Use</button></div>`).join('') : '<p class="description">No matching games found.</p>';
@@ -1726,10 +1751,10 @@
       const media = [['cover','metadataCover'],['background','metadataBackground'],['screenshots','metadataScreenshots'],['box_back','metadataBoxBack'],['box_spine','metadataBoxSpine'],['box_3d','metadataBox3d'],['clear_logo','metadataClearLogo'],['fanart','metadataFanart'],['banner','metadataBanner'],['icon','metadataIcon'],['title_screen','metadataTitleScreen'],['cart_front','metadataCartFront'],['cart_back','metadataCartBack'],['disc','metadataDisc'],['advertisement','metadataAdvertisement'],['manual','metadataManual']].filter(([,id]) => $(id).checked).map(([name]) => name);
       try {
         notify('Downloading selected metadata and media');
-        await api('/api/metadata/apply',{method:'POST',body:JSON.stringify({id:metadataGameId,database_id:databaseId,media,overwrite:$('metadataOverwrite').checked})});
+        const result = await api('/api/metadata/apply',{method:'POST',body:JSON.stringify({id:metadataGameId,database_id:databaseId,media,overwrite:$('metadataOverwrite').checked})});
         $('metadataDialog').close();
         await refresh();
-        notify('Metadata applied');
+        notify((result.notes || []).length ? result.notes.join(' · ') : 'Metadata applied');
       } catch(error) { notify(error.message); }
     }
     $('metadataSearchForm').onsubmit = event => { event.preventDefault(); searchMetadata(); };
@@ -2205,7 +2230,8 @@
       } catch(error) { notify(error.message); }
     }
     function renderBulkMediaStatus(job) {
-      $('bulkMediaStatus').textContent = job.state === 'running' ? `${job.current || 0} of ${job.total || 0} · ${job.updated || 0} games updated` : job.state === 'done' ? `${job.updated || 0} games updated${job.errors?.length ? ` · ${job.errors.length} errors` : ''}` : '';
+      const manualMissing = job.manual_missing || 0;
+      $('bulkMediaStatus').textContent = job.state === 'running' ? `${job.current || 0} of ${job.total || 0} · ${job.updated || 0} games updated` : job.state === 'done' ? `${job.updated || 0} games updated${manualMissing ? ` · ${manualMissing} had no manual in their archive` : ''}${job.errors?.length ? ` · ${job.errors.length} errors` : ''}` : '';
       $('startBulkMedia').disabled = job.state === 'running';
     }
     $('startBulkMedia').onclick = async () => {
