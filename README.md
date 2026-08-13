@@ -282,6 +282,8 @@ The full user documentation is at [openboxgl.github.io](https://openboxgl.github
 | [Plugins](https://openboxgl.github.io/guides/plugins/) | Install, hooks, safe mode |
 | [REST API](https://openboxgl.github.io/reference/api/) | Full endpoint documentation |
 | [PARITY.md](PARITY.md) | LaunchBox capability matrix |
+| [SUPPORT.md](SUPPORT.md) | Supported platforms, runtimes, and reporting guidance |
+| [docs/reliability.md](docs/reliability.md) | Edge case catalog and expected behavior |
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and contribution guidelines |
 | [SECURITY.md](SECURITY.md) | Security reporting process |
