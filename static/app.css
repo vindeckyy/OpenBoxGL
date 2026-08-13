@@ -109,7 +109,7 @@
     .field { display:block; margin-bottom:10px; }
     .field span { display:block; color:#b4a89a; font-size:var(--font-label); margin-bottom:4px; }
     input,select,textarea {
-      width:100%; border:1px solid var(--border-control); border-radius:3px; background:var(--surface-field); color:var(--white); padding:8px 9px; outline:none;
+      width:100%; border:1px solid var(--border-control); border-radius:3px; background:var(--surface-field); color:var(--white); padding:8px 9px;
     }
     input:focus,select:focus,textarea:focus { border-color:var(--focus); box-shadow:0 0 0 1px #e1b86655; }
     .section-title { margin:18px 6px 7px; color:#9f9182; font-size:var(--font-label); font-weight:800; letter-spacing:.08em; text-transform:uppercase; }

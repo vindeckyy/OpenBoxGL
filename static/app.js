@@ -2200,7 +2200,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
     $('reopenWelcome').onclick = () => $('welcomeDialog').showModal();
     $('settingsSearch').oninput = filterSettings;
     $('forceShutdown').onclick = () => gracefulShutdown(true);
-    window.addEventListener('beforeunload', event => { if (runningGames.length) { event.preventDefault(); gracefulShutdown(); } });
+    window.addEventListener('beforeunload', event => { if (AppState.runningGames.length) { event.preventDefault(); gracefulShutdown(); } });
     document.addEventListener('keydown', event => {
       if ((event.ctrlKey || event.metaKey) && event.key === ',') { event.preventDefault(); openSettings(); }
       if (event.key === 'Escape') {

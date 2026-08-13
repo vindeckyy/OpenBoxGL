@@ -83,7 +83,7 @@
     <aside class="details" id="details"><div class="detail-empty">Select a game to inspect its real metadata and artwork.</div></aside>
   </div>
 
-  <dialog id="gameDialog">
+  <dialog id="gameDialog" aria-modal="true">
     <form id="gameForm">
       <div class="dialog-head"><h2 id="dialogTitle">Add game</h2><button type="button" id="closeDialog" aria-label="Close Add game dialog">×</button></div>
       <div class="form-grid">
@@ -149,7 +149,7 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelDialog">Cancel</button><button class="primary">Save</button></div>
     </form>
   </dialog>
-  <dialog id="profilesDialog" class="profiles-dialog">
+  <dialog id="profilesDialog" aria-modal="true" class="profiles-dialog">
     <form id="profilesForm">
       <div class="dialog-head"><h2>Emulator profiles</h2><button type="button" id="closeProfiles" aria-label="Close Emulator profiles dialog">×</button></div>
       <div class="form-grid">
@@ -161,7 +161,7 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelProfiles">Cancel</button><button class="primary">Save</button></div>
     </form>
   </dialog>
-  <dialog id="themesDialog">
+  <dialog id="themesDialog" aria-modal="true">
     <form id="themesForm">
       <div class="dialog-head"><h2>Themes</h2><button type="button" id="closeThemes" aria-label="Close Themes dialog">×</button></div>
       <div class="form-grid">
@@ -174,7 +174,7 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelThemes">Cancel</button><button class="primary">Apply</button></div>
     </form>
   </dialog>
-  <dialog id="achievementsDialog">
+  <dialog id="achievementsDialog" aria-modal="true">
     <form id="achievementsForm">
       <div class="dialog-head"><h2>RetroAchievements</h2><button type="button" id="closeAchievements" aria-label="Close RetroAchievements dialog">×</button></div>
       <div class="form-grid">
@@ -186,7 +186,7 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelAchievements">Cancel</button><button class="primary">Connect account</button></div>
     </form>
   </dialog>
-  <dialog id="pluginsDialog">
+  <dialog id="pluginsDialog" aria-modal="true">
     <div class="dialog-head"><h2>Plugins</h2><button type="button" id="closePlugins" aria-label="Close Plugins dialog">×</button></div>
     <div class="form-grid">
       <div class="wide description">Plugins are trusted local Python code. Install only packages you trust.</div>
@@ -196,7 +196,7 @@
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="donePlugins">Done</button></div>
   </dialog>
-  <dialog id="metadataDialog">
+  <dialog id="metadataDialog" aria-modal="true">
     <div class="dialog-head"><h2>LaunchBox Games Database</h2><button type="button" id="closeMetadata" aria-label="Close LaunchBox Games Database dialog">×</button></div>
     <form id="metadataSearchForm" class="form-grid">
       <label class="field wide"><span>Game title</span><input id="metadataQuery" required></label>
@@ -226,7 +226,7 @@
     </form>
     <div class="dialog-actions"><button type="button" class="primary" id="doneMetadata">Done</button></div>
   </dialog>
-  <dialog id="mediaManagerDialog">
+  <dialog id="mediaManagerDialog" aria-modal="true">
     <div class="dialog-head"><h2>Media Manager</h2><button type="button" id="closeMediaManager" aria-label="Close Media Manager dialog">×</button></div>
     <div class="form-grid">
       <div class="wide detail-card" id="mediaAudit"></div>
@@ -254,7 +254,7 @@
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneMediaManager">Done</button></div>
   </dialog>
-  <dialog id="healthDialog">
+  <dialog id="healthDialog" aria-modal="true">
     <div class="dialog-head"><h2>Library Audit</h2><button type="button" id="closeHealth" aria-label="Close Library Audit dialog">×</button></div>
     <div class="form-grid">
       <div class="wide detail-card" id="healthSummary"></div>
@@ -265,7 +265,7 @@
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneHealth">Done</button></div>
   </dialog>
-  <dialog id="bulkDialog">
+  <dialog id="bulkDialog" aria-modal="true">
     <form id="bulkForm">
       <div class="dialog-head"><h2>Bulk Edit</h2><button type="button" id="closeBulk" aria-label="Close Bulk Edit dialog">×</button></div>
       <div class="form-grid">
@@ -281,7 +281,7 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelBulk">Cancel</button><button class="primary">Apply</button></div>
     </form>
   </dialog>
-  <dialog id="playlistsDialog">
+  <dialog id="playlistsDialog" aria-modal="true">
     <div class="dialog-head"><h2>Playlists</h2><button type="button" id="closePlaylists" aria-label="Close Playlists dialog">×</button></div>
     <div class="form-grid">
       <div class="wide extras"><button type="button" class="primary" id="newManualPlaylist">New manual playlist</button><button type="button" class="icon-button" id="newFilterPlaylist">New filter playlist</button></div>
@@ -290,7 +290,7 @@
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="donePlaylists">Done</button></div>
   </dialog>
-  <dialog id="backupDialog">
+  <dialog id="backupDialog" aria-modal="true">
     <div class="dialog-head"><h2>Backups</h2><button type="button" id="closeBackups" aria-label="Close Backups dialog">×</button></div>
     <div class="form-grid">
       <div class="wide extras"><button type="button" class="primary" id="createNamedBackup">Create backup</button><button type="button" class="icon-button" id="refreshBackups">Refresh</button></div>
@@ -299,17 +299,17 @@
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneBackups">Done</button></div>
   </dialog>
-  <dialog id="sessionsDialog">
+  <dialog id="sessionsDialog" aria-modal="true">
     <div class="dialog-head"><h2>Running Games</h2><button type="button" id="closeSessions" aria-label="Close Running Games dialog">×</button></div>
     <div class="form-grid"><div class="wide emulator-list" id="sessionList"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneSessions">Done</button></div>
   </dialog>
-  <dialog id="historyDialog">
+  <dialog id="historyDialog" aria-modal="true">
     <div class="dialog-head"><h2>Play Session History</h2><button type="button" id="closeHistory" aria-label="Close Play Session History dialog">×</button></div>
     <div class="form-grid"><div class="wide history-list" id="historyList"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneHistory">Done</button></div>
   </dialog>
-  <dialog id="welcomeDialog">
+  <dialog id="welcomeDialog" aria-modal="true">
     <div class="dialog-head"><h2>Welcome to OpenBox</h2><button type="button" id="closeWelcome" aria-label="Close Welcome to OpenBox dialog">×</button></div>
     <div class="form-grid welcome-steps">
       <p class="wide description">Set up your library in a few quick steps. You can reopen this wizard from Settings.</p>
@@ -320,7 +320,7 @@
       <button type="button" class="primary" id="welcomeDone">Finish setup</button>
     </div>
   </dialog>
-  <dialog id="featureDialog">
+  <dialog id="featureDialog" aria-modal="true">
     <div class="dialog-head"><h2 id="featureDialogTitle">OpenBox</h2><button type="button" id="closeFeature" aria-label="Close feature dialog">×</button></div>
     <div class="form-grid"><div class="wide" id="featureContent"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneFeature">Done</button></div>
@@ -332,7 +332,7 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="forceShutdown">Force close</button></div>
     </div>
   </div>
-  <dialog id="settingsDialog">
+  <dialog id="settingsDialog" aria-modal="true">
     <form id="settingsForm">
       <div class="dialog-head"><h2>OpenBox Settings</h2><button type="button" id="closeSettings" aria-label="Close OpenBox Settings dialog">×</button></div>
       <div class="form-grid">
@@ -416,12 +416,12 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelSettings">Cancel</button><button class="primary">Save</button></div>
     </form>
   </dialog>
-  <dialog id="discoveryDialog">
+  <dialog id="discoveryDialog" aria-modal="true">
     <div class="dialog-head"><h2>Game Discovery Center</h2><button type="button" id="closeDiscovery" aria-label="Close Game Discovery Center dialog">×</button></div>
     <div class="form-grid"><div class="wide discovery-grid" id="discoveryContent"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneDiscovery">Done</button></div>
   </dialog>
-  <dialog id="storefrontDialog">
+  <dialog id="storefrontDialog" aria-modal="true">
     <div class="dialog-head"><h2>Storefront Manager</h2><button type="button" id="closeStorefront" aria-label="Close Storefront Manager dialog">×</button></div>
     <div class="form-grid">
       <p class="wide description">Import owned and installed games from Steam, Heroic, Lutris, and Gameyfin. Install or uninstall Gameyfin titles on demand from the library or Big Box.</p>
@@ -460,7 +460,7 @@
     <button type="button" class="icon-button" id="contextNewPlaylist">New playlist from game</button>
     <button type="button" class="icon-button" id="contextRemove">Remove from library</button>
   </div>
-  <section class="lifecycle" id="lifecycle" hidden><div><small id="lifecycleKind"></small><h2 id="lifecycleGame"></h2><p id="lifecycleMessage"></p></div></section>
+  <section class="lifecycle" id="lifecycle" role="status" aria-live="polite" hidden><div><small id="lifecycleKind"></small><h2 id="lifecycleGame"></h2><p id="lifecycleMessage"></p></div></section>
   <section class="bigbox" id="bigBox" hidden tabindex="0">
     <video class="bigbox-startup-video" id="bigBoxStartupVideo" muted loop playsinline hidden></video>
     <div class="bigbox-head"><strong>OpenBox</strong><input class="hybrid-search" id="bigBoxHybridSearch" type="search" placeholder="Search this platform" hidden><span class="bigbox-status" id="bigBoxStatus"></span><span id="bigBoxCounter"></span></div>
