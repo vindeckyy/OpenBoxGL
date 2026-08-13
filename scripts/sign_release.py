@@ -32,7 +32,7 @@ def digest_file(path):
     return digest.digest()
 
 
-def sign(artifact, private_key_path, out=None):
+def sign(artifact, private_key_path, out=None, public_key_out=None):
     artifact = Path(artifact)
     key_path = Path(private_key_path)
     private_key = Ed25519PrivateKey.from_private_bytes(key_path.read_bytes())
@@ -49,7 +49,10 @@ def sign(artifact, private_key_path, out=None):
     public_bytes = private_key.public_key().public_bytes(
         encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
     )
-    public_path = Path("openbox-release.pub")
+    # The committed repo copy of openbox-release.pub is a placeholder; the
+    # real maintainer key replaces it at first signed release. The signer
+    # only writes into the repo when the maintainer asks for it explicitly.
+    public_path = Path(public_key_out) if public_key_out else Path("openbox-release.pub")
     public_path.write_bytes(public_bytes)
     print(f"wrote {out_path} and {public_path}")
 
@@ -58,9 +61,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--key", required=True)
     parser.add_argument("--out")
+    parser.add_argument("--public-key-out")
     parser.add_argument("artifact")
     args = parser.parse_args()
-    sign(args.artifact, args.key, args.out)
+    sign(args.artifact, args.key, args.out, args.public_key_out)
 
 
 if __name__ == "__main__":

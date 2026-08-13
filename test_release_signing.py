@@ -27,11 +27,12 @@ class VerifyReleaseTests(unittest.TestCase):
 
             sign = subprocess.run(
                 [sys.executable, str(ROOT / "scripts/sign_release.py"),
-                 "--key", str(key_path), "--out", str(root / "artifact.sig"), str(artifact)],
+                 "--key", str(key_path), "--out", str(root / "artifact.sig"),
+                 "--public-key-out", str(root / "release.pub"), str(artifact)],
                 cwd=ROOT, capture_output=True, text=True, check=False,
             )
             self.assertEqual(sign.returncode, 0, sign.stderr)
-            pub = ROOT / "openbox-release.pub"
+            pub = root / "release.pub"
             self.assertTrue(pub.is_file(), "signer must emit the public key")
 
             verify = subprocess.run(

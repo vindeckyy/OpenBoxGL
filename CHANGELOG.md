@@ -4,7 +4,7 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [0.9.0] - 2026-08-14
 
 ### Added
 
@@ -12,27 +12,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The desktop UI now opens in a chrome-less app window by default instead of a browser tab, using the installed Chromium-family browser when available (Firefox falls back to a separate window). The Settings panel controls this with an "Open the UI in" option, and `--app-window` / `--no-app-window` override it at launch.
 - Metadata search maps the app's own platform names (for example Game Boy, PlayStation, GameCube, Xbox) to their LaunchBox Games Database spellings, so exact-name searches rank platform-correct results first.
 - The LaunchBox Games Database dialog now shows library coverage facts (matched games, match ratio, and per-field media counts) once the local database is ready.
+- Engineering gates: a `make check` pipeline (ruff lint, compile checks, full test suite, coverage floors), a version-sync check that fails when `updates.py` disagrees with README, metainfo, PARITY.md, or the bug report template, and a CI workflow that runs all of it on push, PR, and a weekly schedule.
+- The HTTP layer moved from two monolithic dispatch chains to a route registry (`routes.py`) with per-route handlers, structured error codes plus per-request ids, a versioned `/api/v1` surface, gzip and conditional GET on the library payload, a settings key whitelist, rolling state snapshots with dry-run recovery, and a background jobs listing.
+- The browser UI split into static assets served by the local server, with all UI state centralized in one `AppState` object, a persistent error banner that copies request ids, and a UI smoke test.
+- Release tooling: CycloneDX SBOM generation, Ed25519 release signing with a standard-library verifier, and a release pipeline script that runs everything up to the final human publish step.
+- Docs: a 23-scenario reliability catalog, a support matrix, a triage policy, and an API v1 contract generator.
 
 ### Fixed
 
 - Duplicate media cleanup now scans every media field, not just covers and backgrounds.
+- Latent undefined names in `web_app.py`: `automation.DEFAULT_ATTEMPTS`/`DEFAULT_TIMEOUT` (module referenced instead of the imported names) and `contained_path`/`read_limited` (used but not imported from `backend_io`).
+- Lint debt across the gate rule set: default-argument calls, loop-variable closures, unused variables, lambda assignments, missing `check=` on `subprocess.run`, shebangs, and import placement.
 
 ### Verification
 
-- Ran `./run_all_tests.sh`: 39 test files, 0 failures.
-- Ran `make check`: lint, compile, tests, coverage gates all pass. Baseline coverage 55% total, 44% for `web_app.py` (floors recorded in COVERAGE.md).
+- Ran `./run_all_tests.sh`: 45 test files, 0 failures.
+- Ran `make check`: lint, compile, tests, and coverage gates all pass (56% total, 44% `web_app.py`, floors recorded in COVERAGE.md).
+- UI smoke test (`scripts/ui_smoke.sh`) boots a real server and drives the grid with no page errors.
 - `python3 scripts/check_version_sync.py` passes at 0.9.0.
-
-### Added
-
-- Engineering gates: a `make check` pipeline (ruff lint, compile checks, full test suite, coverage floors), a version-sync check that fails when `updates.py` disagrees with README, metainfo, PARITY.md, or the bug report template, and a CI workflow that runs all of it on push, PR, and a weekly schedule.
-- Dev-only tooling pinned by `pyproject.toml` (ruff, coverage) in `.venv-dev`; the runtime app remains dependency-free.
-
-### Fixed
-
-- Latent undefined names in `web_app.py`: `automation.DEFAULT_ATTEMPTS`/`DEFAULT_TIMEOUT` (module referenced instead of the imported names) and `contained_path`/`read_limited` (used but not imported from `backend_io`).
-- The full LaunchBox media catalog downloader kept an unused `Request` import in `parity_integrations.py`.
-- Lint debt across the gate rule set: default-argument calls, loop-variable closures, unused variables, lambda assignments, missing `check=` on `subprocess.run`, shebangs, and import placement.
 
 ## [0.8.2] - 2026-08-12
 
