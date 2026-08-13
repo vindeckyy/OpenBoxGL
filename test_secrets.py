@@ -21,6 +21,7 @@ class SecretSafetyTests(unittest.TestCase):
             ["git", "check-ignore", "-q", ".env"],
             cwd=ROOT,
             capture_output=True,
+            check=False,
         )
         self.assertEqual(result.returncode, 0, ".env must be ignored by git")
 

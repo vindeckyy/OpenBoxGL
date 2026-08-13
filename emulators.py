@@ -122,6 +122,7 @@ def launch_emulator(app_id, which=shutil.which):
     if flatpak and subprocess.run(
         [flatpak, "info", app_id],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        check=False,
     ).returncode == 0:
         subprocess.Popen([flatpak, "run", app_id], start_new_session=True)
         return {"mode": "flatpak", "command": f"flatpak run {app_id}"}

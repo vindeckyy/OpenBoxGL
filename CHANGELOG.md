@@ -20,6 +20,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Verification
 
 - Ran `./run_all_tests.sh`: 39 test files, 0 failures.
+- Ran `make check`: lint, compile, tests, coverage gates all pass. Baseline coverage 55% total, 44% for `web_app.py` (floors recorded in COVERAGE.md).
+- `python3 scripts/check_version_sync.py` passes at 0.9.0.
+
+### Added
+
+- Engineering gates: a `make check` pipeline (ruff lint, compile checks, full test suite, coverage floors), a version-sync check that fails when `updates.py` disagrees with README, metainfo, PARITY.md, or the bug report template, and a CI workflow that runs all of it on push, PR, and a weekly schedule.
+- Dev-only tooling pinned by `pyproject.toml` (ruff, coverage) in `.venv-dev`; the runtime app remains dependency-free.
+
+### Fixed
+
+- Latent undefined names in `web_app.py`: `automation.DEFAULT_ATTEMPTS`/`DEFAULT_TIMEOUT` (module referenced instead of the imported names) and `contained_path`/`read_limited` (used but not imported from `backend_io`).
+- The full LaunchBox media catalog downloader kept an unused `Request` import in `parity_integrations.py`.
+- Lint debt across the gate rule set: default-argument calls, loop-variable closures, unused variables, lambda assignments, missing `check=` on `subprocess.run`, shebangs, and import placement.
 
 ## [0.8.2] - 2026-08-12
 
@@ -297,8 +310,9 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.9.0...HEAD
 [0.8.2]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.2
+[0.9.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.9.0
 [0.8.1]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.1
 [0.8.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.0
 [0.7.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.7.0

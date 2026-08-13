@@ -165,6 +165,7 @@ def run_plugins(directory, hook, payload):
                     [sys.executable, str(RUNNER), str(entry), hook],
                     input=encoded.encode("utf-8"), stdout=stdout_file, stderr=stderr_file,
                     timeout=5, env=plugin_env, start_new_session=True,
+                    check=False,
                 )
                 stdout_file.seek(0)
                 stdout = stdout_file.read(MAX_PLUGIN_PAYLOAD + 1)

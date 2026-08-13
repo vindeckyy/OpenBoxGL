@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 from unittest import mock
 
-from parity_backup import BACKUP_ITEMS, create_backup, restore_backup, rotate_backups
+from parity_backup import create_backup, restore_backup, rotate_backups
 from parity_deeplinks import build_launch_url, handle_cli, parse_uri
 from parity_emulator_defs import build_launch_command, load_definitions, platform_for_extension, scan_folder
 from parity_filter_presets import (

@@ -24,8 +24,8 @@ def save_roots(game):
     return [Path(path).expanduser().resolve() for path in game.get("save_paths", []) if str(path).strip()]
 
 
-def discover_save_paths(game, home=Path.home()):
-    home = Path(home)
+def discover_save_paths(game, home=None):
+    home = Path(home or Path.home())
     candidates = []
     app_id = str(game.get("steam_app_id", ""))
     if app_id.isdigit():

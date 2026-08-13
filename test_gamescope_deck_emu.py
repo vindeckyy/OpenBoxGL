@@ -331,7 +331,7 @@ def main():
                 time.sleep(1.2)
                 marked = False
                 marked_id = None
-                for attempt in range(15):
+                for _ in range(15):
                     result = subprocess.run(
                         ["xdotool", "search", "--name", "Emu Guest Title"],
                         capture_output=True,
@@ -354,7 +354,7 @@ def main():
                     if marked:
                         break
                     # Fallback: any window with our synthetic id range
-                    prop_root = subprocess.run(
+                    subprocess.run(
                         ["xprop", "-root"],
                         capture_output=True,
                         text=True,

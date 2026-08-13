@@ -7,6 +7,8 @@ on:
   pull_request:
     branches:
       - master
+  schedule:
+    - cron: "17 3 * * 1" # weekly drift check on master
 
 permissions:
   contents: read
@@ -14,6 +16,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -32,3 +35,46 @@ jobs:
 
       - name: Run test suite
         run: ./run_all_tests.sh
+
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dev tooling
+        run: |
+          python3 -m venv .venv-dev
+          .venv-dev/bin/pip install ruff coverage
+
+      - name: Lint
+        run: .venv-dev/bin/ruff check .
+
+      - name: Version sync
+        run: python3 scripts/check_version_sync.py
+
+      - name: Compile runtime modules
+        run: |
+          while IFS= read -r module; do
+            [ -n "$module" ] || continue
+            python3 -m py_compile "$module"
+          done < runtime_modules.txt
+          python3 -m py_compile test_*.py scripts/*.py
+
+      - name: Full gate (coverage)
+        run: python3 scripts/check_tests.py
+
+      - name: Whitespace hygiene
+        run: |
+          git diff --check
+          if git ls-files | grep -E '\.(AppImage|pyc)$'; then
+            echo "generated artifacts tracked by git"
+            exit 1
+          fi

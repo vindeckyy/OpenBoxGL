@@ -46,7 +46,7 @@ def test():
         with mock.patch("plugins.shutil.copytree", side_effect=OSError("disk full")):
             try:
                 install_plugin(broken, plugins)
-                assert False, "expected OSError"
+                raise AssertionError("expected OSError")
             except OSError:
                 pass
         # The previous version is still installed and enabled.
@@ -66,7 +66,7 @@ def test():
         with mock.patch.object(Path, "replace", failing_replace):
             try:
                 install_plugin(broken, plugins)
-                assert False, "expected OSError"
+                raise AssertionError("expected OSError")
             except OSError:
                 pass
         # First replace: destination -> backup. Second: staging -> destination.

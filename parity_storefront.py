@@ -7,10 +7,11 @@ import re
 import shutil
 from pathlib import Path
 
-from importers import heroic_bases, import_heroic, import_lutris, import_steam, json_records, steam_command, steam_roots, vdf_values
+from importers import heroic_bases, import_heroic, import_lutris, import_steam, steam_command, steam_roots
 
 
-def steam_owned_app_ids(home=Path.home()):
+def steam_owned_app_ids(home=None):
+    home = home or Path.home()
     app_ids = set()
     for root in steam_roots(home):
         userdata = root / "userdata"
@@ -54,13 +55,14 @@ def heroic_library_records(base):
     return records
 
 
-def catalog_steam(home=Path.home()):
+def catalog_steam(home=None):
+    home = home or Path.home()
     installed = {game["steam_app_id"]: game for game in import_steam(home)}
     owned = steam_owned_app_ids(home) or set(installed)
     try:
-        executable, launch = steam_command()
+        executable, _launch = steam_command()
     except FileNotFoundError:
-        executable, launch = shutil.which("xdg-open") or "xdg-open", "xdg-open steam://rungameid/{app_id}"
+        executable, _launch = shutil.which("xdg-open") or "xdg-open", "xdg-open steam://rungameid/{app_id}"
     opener = shutil.which("xdg-open") or executable
     catalog = []
     for app_id in sorted(owned, key=lambda value: int(value)):
@@ -79,7 +81,8 @@ def catalog_steam(home=Path.home()):
     return catalog
 
 
-def catalog_heroic(home=Path.home()):
+def catalog_heroic(home=None):
+    home = home or Path.home()
     installed = {
         (game.get("source"), game.get("heroic_app_id")): game
         for game in import_heroic(home)
@@ -137,7 +140,8 @@ def catalog_heroic(home=Path.home()):
     return catalog
 
 
-def catalog_lutris(home=Path.home(), run=None, which=shutil.which):
+def catalog_lutris(home=None, run=None, which=shutil.which):
+    home = home or Path.home()
     run = run or __import__("subprocess").run
     if binary := which("lutris"):
         command = [binary]
@@ -190,7 +194,7 @@ def catalog_lutris(home=Path.home(), run=None, which=shutil.which):
     return catalog
 
 
-def storefront_catalog(source, home=Path.home(), run=None, which=shutil.which, settings=None):
+def storefront_catalog(source, home=None, run=None, which=shutil.which, settings=None):
     source = str(source or "").strip().casefold()
     if source == "steam":
         return catalog_steam(home)

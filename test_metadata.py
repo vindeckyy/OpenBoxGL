@@ -102,6 +102,7 @@ def test_platform_aliases():
         ]
         games = []
         for index, (app_name, lbdb_platform, decoy) in enumerate(pairs, 1):
+            del app_name
             # Zero-padded titles so LIKE '%probe 01%' cannot also match
             # probe 10..21 and pollute the pass-through assertion.
             title = f"Alias Probe {index:02d}"

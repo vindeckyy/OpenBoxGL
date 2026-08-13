@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import unittest
-from datetime import datetime, timezone
 
 from automation import EVENT_TYPES, build_event, sign_event, validate_webhook
 from catalog import apply_tag_changes, bulk_update, normalize_tags, tag_counts

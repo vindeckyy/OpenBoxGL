@@ -11,11 +11,9 @@ Usage:
 
 import argparse
 import binascii
-import os
 import random
 import struct
 import sys
-import tempfile
 import zlib
 from pathlib import Path
 
@@ -70,10 +68,10 @@ def build_games(count, data_dir: Path, rng: random.Random):
         slug = f"game-{index:05d}"
         roll = rng.random()
 
-        def media_path(kind, ext="png"):
+        def media_path(kind, ext="png", slug=slug):
             return str(media_root / slug / f"{kind}.{ext}")
 
-        def maybe_media(kind, chance, ext="png"):
+        def maybe_media(kind, chance, ext="png", slug=slug):
             if rng.random() < chance:
                 path = media_path(kind, ext)
                 path_obj = media_root / slug / f"{kind}.{ext}"
@@ -84,7 +82,7 @@ def build_games(count, data_dir: Path, rng: random.Random):
             return ""
 
         path_exists = rng.random() < 0.85
-        path = f"/usr/bin/true" if path_exists else f"/nonexistent/openbox-perf/{slug}/game.bin"
+        path = "/usr/bin/true" if path_exists else f"/nonexistent/openbox-perf/{slug}/game.bin"
         screenshots = []
         for shot in range(rng.choice([0, 0, 0, 1, 1, 2, 3, 4])):
             shot_path = media_root / slug / f"screenshot-{shot}.png"

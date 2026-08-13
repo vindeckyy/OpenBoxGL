@@ -12,7 +12,8 @@ def vdf_values(text):
     return dict(re.findall(r'"([^"]+)"\s+"([^"]*)"', text))
 
 
-def steam_roots(home=Path.home()):
+def steam_roots(home=None):
+    home = home or Path.home()
     candidates = (
         home / ".local/share/Steam",
         home / ".steam/steam",
@@ -42,7 +43,8 @@ def steam_libraries(root):
     return sorted(libraries)
 
 
-def import_steam(home=Path.home()):
+def import_steam(home=None):
+    home = home or Path.home()
     executable, command = steam_command()
     games = []
     seen = set()
@@ -79,7 +81,8 @@ def json_records(path):
     return []
 
 
-def heroic_bases(home=Path.home()):
+def heroic_bases(home=None):
+    home = home or Path.home()
     candidates = (
         home / ".config/heroic",
         home / ".var/app/com.heroicgameslauncher.hgl/config/heroic",
@@ -87,7 +90,8 @@ def heroic_bases(home=Path.home()):
     return [path for path in candidates if path.is_dir()]
 
 
-def import_heroic(home=Path.home()):
+def import_heroic(home=None):
+    home = home or Path.home()
     opener = shutil.which("xdg-open")
     if not opener:
         raise FileNotFoundError("xdg-open is required to launch imported Heroic games.")
@@ -123,7 +127,8 @@ def import_heroic(home=Path.home()):
     return games
 
 
-def import_lutris(home=Path.home(), run=subprocess.run, which=shutil.which):
+def import_lutris(home=None, run=subprocess.run, which=shutil.which):
+    home = home or Path.home()
     if binary := which("lutris"):
         command = [binary]
     elif binary := which("flatpak"):

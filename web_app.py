@@ -26,7 +26,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.parse import parse_qs, urlparse
 
-from backend_io import download_file, remove_file_if_safe
+from backend_io import contained_path, download_file, read_limited, remove_file_if_safe
 from arcade import import_arcade
 from automation import (
     DEFAULT_ATTEMPTS,
@@ -34,23 +34,21 @@ from automation import (
     EVENT_TYPES,
     MAX_WEBHOOKS,
     build_event,
-    serialize_envelope,
-    sign_event,
     test_ping,
     utc_now,
     validate_webhook,
 )
-from catalog import PROGRESS, apply_progress_automation, apply_tag_changes, bulk_update, game_media_paths, normalize_tags, related_game_ids, tag_counts
+from catalog import PROGRESS, apply_progress_automation, bulk_update, game_media_paths, related_game_ids, tag_counts
 from notifications import add_notification, clear as clear_notifications, mark_read as mark_notifications_read, unread_count
-from play_queue import advance as advance_queue, enqueue as enqueue_queue, normalize_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
+from play_queue import advance as advance_queue, enqueue as enqueue_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
 
 from cloud_sync import sync_statistics
 from emulators import emulator_status, install_all_emulators, install_emulator, launch_emulator, recommendations_for_platform, update_all_emulators, update_emulator
 from importers import import_heroic, import_lutris, import_steam
-from metadata import apply_game_metadata, find_archive_manual, search_games, sync_database
+from metadata import apply_game_metadata, search_games, sync_database
 from job_manager import JobManager
 from openbox_logging import configure_logging, read_diagnostic_log
-from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, STATE_STORE, build_launch, discover_profiles, load_state, purge_demo_games, recover_state as recover_library_state, save_state, update_state, update_state_with_result
+from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, STATE_STORE, build_launch, discover_profiles, load_state, purge_demo_games, recover_state as recover_library_state, update_state, update_state_with_result
 from state_store import StateCorruptError, secure_text_write
 from env_config import bootstrap_env
 from parity_discovery import discovery_lists, related_with_reasons
@@ -63,7 +61,6 @@ from parity_integrations import (
 from parity_media import (
     REGION_PRIORITY_DEFAULT, active_video, cleanup_duplicates, enqueue_media_job,
     find_duplicate_media, load_media_queue, media_types_from_settings, normalize_video_fields,
-    save_media_queue,
 )
 from parity_saves import enforce_backup_limit, extra_save_candidates, games_with_saves, scan_all_saves
 from parity_storefront import catalog_entries_to_games, storefront_catalog
@@ -80,10 +77,9 @@ from parity_filter_presets import (
     delete_preset,
     explorer_facets,
     list_presets,
-    preset_by_name,
     save_preset,
 )
-from parity_deeplinks import handle_cli, launcher_menu_items, parse_uri
+from parity_deeplinks import handle_cli, launcher_menu_items
 from parity_gamescope import (
     OPENBOX_STEAM_GAME_ID,
     is_gamescope_guest,
@@ -106,7 +102,6 @@ from parity_emulator_defs import (
 from parity_import_policy import add_exclusion, filter_imported, list_exclusions, remove_exclusion
 from stock_themes import ensure_stock_themes
 from parity_premium import (
-    BULK_WIZARD_FIELDS,
     LIST_COLUMNS_DEFAULT,
     apply_media_pack,
     bulk_wizard_changes,
@@ -655,8 +650,8 @@ def _webhook_settings(state=None):
     state = state or load_state()
     settings = state.get("settings", {})
     return {
-        "attempts": int(settings.get("webhook_attempts") or automation.DEFAULT_ATTEMPTS),
-        "timeout": int(settings.get("webhook_timeout") or automation.DEFAULT_TIMEOUT),
+        "attempts": int(settings.get("webhook_attempts") or DEFAULT_ATTEMPTS),
+        "timeout": int(settings.get("webhook_timeout") or DEFAULT_TIMEOUT),
     }
 
 
@@ -2413,7 +2408,7 @@ class Handler(BaseHTTPRequestHandler):
         added, found, recommendations = import_folder_path(folder, chosen_emulators=chosen)
         clear_file_probe_cache()
         installs = []
-        for platform, app_id in chosen.items():
+        for app_id in chosen.values():
             if not app_id:
                 continue
             try:
@@ -2610,7 +2605,7 @@ class Handler(BaseHTTPRequestHandler):
                         manual_missing += 1
                     changes = {key:value for key,value in updated.items() if original.get(key) != value}
                     if changes:
-                        def mutate(state):
+                        def mutate(state, stable_id=stable_id, changes=changes):
                             game_from_payload(state, {"game_id": stable_id}).update(changes)
                         transact_state(mutate)
                         updated_count += 1
@@ -2651,8 +2646,8 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 tdp = max(0.0, float(entry.get("tdp_w", 0)))
                 restore = max(0.0, float(entry.get("restore_tdp_w", 0)))
-            except (TypeError, ValueError):
-                raise ValueError(f"Invalid TDP value for profile {key}.")
+            except (TypeError, ValueError) as error:
+                raise ValueError(f"Invalid TDP value for profile {key}.") from error
             if tdp or restore:
                 clean[key] = {
                     "enabled": bool(entry.get("enabled", False)),
@@ -3466,13 +3461,17 @@ class Handler(BaseHTTPRequestHandler):
             installed_only=bool(payload.get("installed_only")),
         )
         if source.casefold() == "steam":
-            identity = lambda game: ("steam", str(game.get("steam_app_id", "")))
+            def identity(game):
+                return ("steam", str(game.get("steam_app_id", "")))
         elif source.casefold() == "heroic":
-            identity = lambda game: ("heroic", str(game.get("source", "")), str(game.get("heroic_app_id", "")))
+            def identity(game):
+                return ("heroic", str(game.get("source", "")), str(game.get("heroic_app_id", "")))
         elif source.casefold() == "lutris":
-            identity = lambda game: ("lutris", str(game.get("lutris_id", "")))
+            def identity(game):
+                return ("lutris", str(game.get("lutris_id", "")))
         elif source.casefold() == "gameyfin":
-            identity = lambda game: ("gameyfin", str(game.get("gameyfin_id", "")))
+            def identity(game):
+                return ("gameyfin", str(game.get("gameyfin_id", "")))
         else:
             raise ValueError("Storefront source must be steam, heroic, lutris, or gameyfin.")
         added, found = merge_imported_games(imported, identity)

@@ -5,10 +5,11 @@ import os
 import tempfile
 
 # Isolate from the real data dir before importing openbox.
+# noqa: E402 - the environment must be set before openbox resolves DATA.
 _ISOLATED = tempfile.mkdtemp(prefix="openbox-demo-purge-")
 os.environ["OPENBOX_DATA_DIR"] = _ISOLATED
 
-from openbox import is_demo_game, purge_demo_games
+from openbox import is_demo_game, purge_demo_games  # noqa: E402
 
 
 def main():

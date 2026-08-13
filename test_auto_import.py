@@ -8,7 +8,7 @@ def main():
         prev_data_dir = os.environ.get("OPENBOX_DATA_DIR")
         os.environ["OPENBOX_DATA_DIR"] = str(Path(directory) / "data")
         try:
-            data = Path(directory) / "data"
+            Path(directory, "data").mkdir(parents=True, exist_ok=True)
             games = Path(directory) / "games"
             games.mkdir()
             (games / "one.nes").write_bytes(b"NES\x1a")

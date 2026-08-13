@@ -1,10 +1,8 @@
 """Tests for storefront catalog helpers."""
 
-import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import Mock
 
 from parity_storefront import catalog_entries_to_games, catalog_steam, storefront_catalog
 

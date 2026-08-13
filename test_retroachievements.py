@@ -22,7 +22,8 @@ def test():
                 "Achievements":{"1":{"Title":"Win","Description":"Finish","Points":5,"BadgeName":"123","DateEarned":"today"}},
             },
         }
-        fetch = lambda endpoint, params, credentials: responses[endpoint]
+        def fetch(endpoint, params, credentials):
+            return responses[endpoint]
         save_credentials(root, "player", "key", fetch)
         assert (root / "retroachievements.json").stat().st_mode & 0o777 == 0o600
         game_id, matched_hash = match_game({"path":str(nes),"platform":"NES"}, {"username":"player","api_key":"key"}, root / "cache", fetch)

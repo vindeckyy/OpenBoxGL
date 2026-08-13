@@ -166,14 +166,14 @@ class ApiSweep(unittest.TestCase):
             barrier = threading.Barrier(len(keys))
             statuses = {}
 
-            def worker(key, value):
+            def worker(key, value, statuses=statuses, barrier=barrier):
                 barrier.wait()
                 status, _ = self.request("/api/settings", {key: value})
                 statuses[key] = status
 
             threads = [
                 threading.Thread(target=worker, args=(key, value))
-                for key, value in zip(keys, values)
+                for key, value in zip(keys, values, strict=True)
             ]
             for thread in threads:
                 thread.start()

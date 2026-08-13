@@ -24,7 +24,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Callable
+from collections.abc import Callable
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 

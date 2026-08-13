@@ -6,7 +6,6 @@ launch a game. ``shutil.which`` and ``subprocess.run`` are faked so the
 exact ryzenadj argv can be asserted.
 """
 
-import json
 import os
 import subprocess
 import tempfile

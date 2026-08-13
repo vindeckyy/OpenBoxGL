@@ -6,7 +6,6 @@ and the media-epoch cache-busting counter.
 """
 
 import io
-import json
 import os
 import tempfile
 import unittest
@@ -160,7 +159,6 @@ class PerfCacheTests(unittest.TestCase):
         self.assertEqual(state["games"], [])
 
     def test_delete_game_with_media_bumps_epoch(self):
-        from web_app import Handler
 
         media = Path(self.tempdir.name) / "media" / "game" / "cover.png"
         media.parent.mkdir(parents=True, exist_ok=True)
@@ -179,7 +177,6 @@ class PerfCacheTests(unittest.TestCase):
         self.assertFalse(media.exists())
 
     def test_delete_game_without_media_does_not_bump(self):
-        from web_app import Handler
 
         self.save_state({
             "games": [{"game_id": "g1", "name": "Alpha", "path": "/bin/true"}],

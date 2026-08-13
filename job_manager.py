@@ -9,7 +9,7 @@ import time
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
-from typing import Callable
+from collections.abc import Callable
 
 
 LOGGER = logging.getLogger("openbox.jobs")

@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from env_config import bootstrap_env, load_dotenv, retroachievements_from_env
+from env_config import bootstrap_env, load_dotenv
 
 
 class EnvConfigTests(unittest.TestCase):

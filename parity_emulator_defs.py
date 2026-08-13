@@ -1,6 +1,5 @@
 """YAML emulator definition packs and ROM scan helpers."""
 
-import re
 import shlex
 import shutil
 from pathlib import Path

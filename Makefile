@@ -10,7 +10,24 @@ PYTHON_SOURCES = $(shell sed '/^[[:space:]]*#/d;/^[[:space:]]*$$/d' runtime_modu
 
 DATA_FILES = index.html openbox.svg openbox.metainfo.xml LICENSE
 
-.PHONY: install uninstall appimage
+.PHONY: install uninstall appimage check version-check dev-venv test-one
+
+dev-venv:
+	python3 -m venv .venv-dev
+	.venv-dev/bin/pip install ruff coverage
+
+# Full verification gate: lint, compile, tests, coverage floors.
+# Dev-only dependencies live in .venv-dev; the runtime app stays dep-free.
+check: dev-venv
+	python3 scripts/check_tests.py
+
+# A single test file, e.g. `make test-one TEST=test_saves.py`.
+test-one:
+	python3 -B $(TEST)
+
+# Fails when the version in updates.py disagrees with any published spot.
+version-check:
+	python3 scripts/check_version_sync.py
 
 install:
 	install -d $(DESTDIR)$(BINDIR)

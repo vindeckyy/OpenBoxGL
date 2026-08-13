@@ -1,6 +1,5 @@
 """Tests for parity integration helpers."""
 
-import json
 import unittest
 import zipfile
 from datetime import datetime, timedelta
@@ -15,7 +14,6 @@ from parity_integrations import (
     export_highscores,
     find_latest_recording,
     import_highscores,
-    obs_recording_directory,
 )
 
 

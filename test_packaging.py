@@ -4,7 +4,6 @@
 import os
 import ast
 import subprocess
-import tempfile
 from pathlib import Path
 
 
@@ -40,6 +39,7 @@ def test_appdir_structure():
         subprocess.run(
             [str(appimage), "--appimage-extract"],
             cwd=ROOT, capture_output=True, text=True, timeout=30,
+            check=False,
         )
         assert appdir.is_dir(), "AppDir not extracted"
         assert (appdir / "AppRun").is_file(), "missing AppRun"

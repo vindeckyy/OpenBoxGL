@@ -90,7 +90,6 @@ class ParityApiTests(unittest.TestCase):
         import threading
         import time
         from http.server import ThreadingHTTPServer
-        from urllib.error import HTTPError
         import urllib.request
 
         import web_app
@@ -442,7 +441,7 @@ class ParityApiTests(unittest.TestCase):
         self.assertEqual(settings["badge_visibility"], ["favorite", "missing_media", "controller"])
 
     def test_backup_listing_reports_created_manifest(self):
-        from openbox import load_state, save_state
+        from openbox import save_state
         from web_app import Handler
 
         save_state({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})

@@ -38,7 +38,15 @@ python3 openbox.py
 
 ## Testing
 
-Run the full suite before submitting a pull request:
+Run the full verification gate before submitting a pull request. This covers lint, compile checks, the full test suite, and coverage floors:
+
+```bash
+make check
+```
+
+The gate needs dev-only tooling (ruff and coverage) in `.venv-dev`, which `make check` creates on first run. The runtime app itself stays dependency-free.
+
+Run the plain test suite without coverage when iterating:
 
 ```bash
 ./run_all_tests.sh
@@ -47,7 +55,13 @@ Run the full suite before submitting a pull request:
 Run an individual module when iterating:
 
 ```bash
-python3 test_catalog.py
+make test-one TEST=test_catalog.py
+```
+
+Check that the version in `updates.py` matches every published spot:
+
+```bash
+make version-check
 ```
 
 Packaging checks:
@@ -72,6 +86,9 @@ All tests must pass on CI before a PR can be merged.
 - Target Python 3.10+ syntax and standard library usage already present in the codebase.
 - Avoid adding dependencies unless they are required and approved in the PR discussion.
 - Use explicit error messages for user-facing validation failures.
+- Keep the lint gate green: `.venv-dev/bin/ruff check .` must pass. The gate rule set lives in `pyproject.toml`.
+- Any PR that changes `web_app.py` must add or update a test that exercises the touched route.
+- Do not lower the coverage floors in `scripts/check_tests.py`; raise them when coverage improves.
 
 ### Web UI (`index.html`)
 
@@ -82,7 +99,7 @@ All tests must pass on CI before a PR can be merged.
 
 1. Fork the repository and create a feature branch from `master`.
 2. Make your changes with clear commits.
-3. Run `./run_all_tests.sh`.
+3. Run `make check` (or `./run_all_tests.sh` when coverage is not available locally).
 4. Open a pull request using the provided template.
 5. Describe the problem, the solution, and the test plan.
 6. Address review feedback promptly.

@@ -1,0 +1,33 @@
+# OpenBox development tooling configuration.
+#
+# The runtime app has zero third-party dependencies and must stay that way.
+# Everything in this file applies to development only: linting, coverage, and
+# the CI gates. The AppImage build never installs these packages.
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+# Keep the gate small and fully justified. E4/E7/E9 + F catch real bugs
+# (undefined names, unused imports); B is flake8-bugbear; PLW1510 catches
+# subprocess.run calls without an explicit check argument; EXE001 keeps
+# shebangs honest; UP035 catches deprecated typing imports; E402 keeps
+# imports at module top except where an environment must be set first.
+select = ["E4", "E7", "E9", "F", "B", "PLW1510", "EXE001", "UP035", "E402"]
+
+[tool.ruff.lint.per-file-ignores]
+# The metadata self-test needs to import after env isolation.
+"test_demo_purge.py" = ["E402"]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "test_*",
+    "scripts/*",
+    "build/*",
+]
+
+[tool.coverage.report]
+# The floor is enforced by scripts/check_tests.py, not here, so a developer
+# running `coverage report` directly sees the honest number.
+show_missing = false
+skip_covered = false

@@ -2,9 +2,7 @@
 
 import hashlib
 import json
-import os
 import re
-import zipfile
 from pathlib import Path
 from time import time
 from urllib.parse import urlencode

@@ -1,7 +1,6 @@
 """openbox:// URI parsing and local launcher helpers."""
 
 import json
-import re
 import sys
 import urllib.parse
 import urllib.request

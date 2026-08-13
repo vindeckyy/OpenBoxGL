@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import configparser
 import json
-import os
 import re
 import shutil
 import subprocess
-import zipfile
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import urlopen
 
 from archives import safe_zip_extract
 from backend_io import atomic_copy_stream, atomic_write_text, download_file
@@ -121,7 +119,6 @@ def download_bezel(platform, dest_dir, opener=urlopen):
     dest = Path(dest_dir)
     dest.mkdir(parents=True, exist_ok=True)
     archive = dest / f"{platform.replace(' ', '_')}-bezels.zip"
-    request = Request(urls[platform], headers={"User-Agent": "OpenBox/1"})
     download_file(
         urls[platform], archive,
         max_bytes=512 * 1024 * 1024,
@@ -312,7 +309,7 @@ def obs_recording_status(home=None):
 
 def _pgrep(name):
     try:
-        result = subprocess.run(["pgrep", "-x", name], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(["pgrep", "-x", name], capture_output=True, text=True, timeout=5, check=False)
         return result.returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False

@@ -1,7 +1,6 @@
 """Per-game process tracking modes for Linux launch sessions."""
 
 import os
-import signal
 import time
 from pathlib import Path
 

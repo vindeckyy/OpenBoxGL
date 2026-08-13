@@ -18,6 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 from archives import extract_game
 from backend_io import atomic_write_text
 from openbox_logging import configure_logging
+from parity_import import EXTENSIONS_EXTRA, PLATFORM_BY_EXTENSION_EXTRA
 from parity_perf import apply_perf_profile, effective_profile_name, restore_perf_profile
 from state_store import JsonStateStore
 
@@ -28,7 +29,6 @@ LEGACY_DATA = Path.home() / ".local" / "share" / "launchbox-linux" / "library.js
 if not CUSTOM_DATA_DIR and not DATA.exists() and LEGACY_DATA.is_file():
     APP_DIR.mkdir(parents=True, exist_ok=True)
     shutil.copy2(LEGACY_DATA, DATA)
-from parity_import import EXTENSIONS_EXTRA, PLATFORM_BY_EXTENSION_EXTRA
 
 STATE_STORE = JsonStateStore(DATA)
 

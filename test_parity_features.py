@@ -1,6 +1,5 @@
 """Tests for LaunchBox parity helper modules."""
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -98,8 +97,7 @@ class ParityFeatureTests(unittest.TestCase):
     def test_auto_update_scan_configs_executed(self):
         import web_app
         from openbox import save_state
-        with tempfile.TemporaryDirectory() as folder:
-            from openbox import load_state
+        with tempfile.TemporaryDirectory():
             save_state({
                 "games": [],
                 "profiles": {},
@@ -118,7 +116,7 @@ class ParityFeatureTests(unittest.TestCase):
             def fake_scan(folder):
                 scanned.append(folder)
                 return []
-            with mock.patch("web_app.scan_emulator_folder", side_effect=fake_scan) as scan:
+            with mock.patch("web_app.scan_emulator_folder", side_effect=fake_scan):
                 with mock.patch("web_app.merge_imported_games", return_value=(0, 0)):
                     with mock.patch("web_app.WATCH_STOP") as stop:
                         stop.wait.side_effect = [False, True]  # one iteration then stop

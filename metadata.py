@@ -6,7 +6,7 @@ import sqlite3
 import tempfile
 import zipfile
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.request import urlopen
 from xml.etree import ElementTree
 
 from backend_io import download_file

@@ -4,7 +4,6 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 from parity_premium import (
     custom_field_defs,
