@@ -27,3 +27,6 @@ scripts/node_modules/
 .coverage
 .coverage.*
 htmlcov/
+
+# Maintainer-only signing material (never commit private keys)
+*.ed25519.key
