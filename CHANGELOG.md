@@ -8,21 +8,69 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Full LaunchBox media catalog downloads: box backs, box spines, 3D boxes, clear logos, fanart, banners, title screens, cart fronts, cart backs, discs, and advertisement flyers can now be fetched from the LaunchBox Games Database alongside covers, backgrounds, and gameplay screenshots. The metadata dialog, bulk download dialog, media audit, artwork gallery, image groups, and auto-import setting all accept the expanded type set. Manuals are not in the LaunchBox feed, so the manual option pulls a PDF or text manual out of the game's own archive when one is present and reports when none was found.
-- The desktop UI now opens in a chrome-less app window by default instead of a browser tab, using the installed Chromium-family browser when available (Firefox falls back to a separate window). The Settings panel controls this with an "Open the UI in" option, and `--app-window` / `--no-app-window` override it at launch.
-- Metadata search maps the app's own platform names (for example Game Boy, PlayStation, GameCube, Xbox) to their LaunchBox Games Database spellings, so exact-name searches rank platform-correct results first.
-- The LaunchBox Games Database dialog now shows library coverage facts (matched games, match ratio, and per-field media counts) once the local database is ready.
-- Engineering gates: a `make check` pipeline (ruff lint, compile checks, full test suite, coverage floors), a version-sync check that fails when `updates.py` disagrees with README, metainfo, PARITY.md, or the bug report template, and a CI workflow that runs all of it on push, PR, and a weekly schedule.
-- The HTTP layer moved from two monolithic dispatch chains to a route registry (`routes.py`) with per-route handlers, structured error codes plus per-request ids, a versioned `/api/v1` surface, gzip and conditional GET on the library payload, a settings key whitelist, rolling state snapshots with dry-run recovery, and a background jobs listing.
-- The browser UI split into static assets served by the local server, with all UI state centralized in one `AppState` object, a persistent error banner that copies request ids, and a UI smoke test.
-- Release tooling: CycloneDX SBOM generation, Ed25519 release signing with a standard-library verifier, and a release pipeline script that runs everything up to the final human publish step.
-- Docs: a 23-scenario reliability catalog, a support matrix, a triage policy, and an API v1 contract generator.
+#### LaunchBox media catalog and archive manuals
+
+- Full LaunchBox Games Database media downloads beyond covers, backgrounds, and screenshots: box backs, box spines, 3D boxes, clear logos, fanart, banners, title screens, cart fronts, cart backs, discs, and advertisement flyers. The metadata dialog, bulk download dialog, media audit, artwork gallery, image groups, and the auto-import setting all accept the expanded type set.
+- Manuals are not in the LaunchBox feed, so the manual option now pulls a PDF or text manual (`MANUAL_SUFFIXES = (".pdf", ".txt")`) out of the game's own archive. The finder ranks `manual.pdf` first, then shortest and most recent candidates, caps the candidate list at 8 to stay safe on pathological archives, copies the winner next to the game's media, and never blocks a sync on a bad archive. When nothing is found, the game records a `manual: no manual in this archive` note that the UI surfaces.
+- Metadata search maps the app's own platform names to their LaunchBox spellings: `Game Boy` to `Nintendo Game Boy`, `PlayStation` to `Sony Playstation`, `GameCube` to `Nintendo GameCube`, `Xbox` to `Microsoft Xbox`, and 22 more (26 aliases total, including `PC` to `Windows` and `DOS` to `MS-DOS`). Exact-name searches now rank platform-correct results first.
+- The LaunchBox Games Database dialog shows library coverage facts (matched games, match ratio, and per-field media counts) once the local database is ready.
+
+#### Desktop window
+
+- The desktop UI opens in a chrome-less app window by default instead of a browser tab: a Chromium-family browser opens with `--app=`, Firefox falls back to a separate window, and with no compatible browser the default browser is used. The Settings panel controls this with an "Open the UI in" option, and `--app-window` / `--no-app-window` override it at launch.
+
+#### Engineering gates
+
+- `make check` runs ruff lint, compile checks over every runtime module and test, the full test suite under coverage, and coverage floors in one command. CI enforces it on push, pull requests, and a weekly schedule. Baselines are recorded in `COVERAGE.md`: 55% total and 44% for `web_app.py`, and the floors fail the build when coverage regresses.
+- A version-sync check (`scripts/check_version_sync.py`) fails when `updates.py` disagrees with the README badge, metainfo, PARITY.md, the bug report template, or CHANGELOG, so a release can no longer ship with a stale version claim.
+- Dev-only tooling (ruff, coverage) is pinned in `pyproject.toml` and lives in `.venv-dev`; the runtime app still has zero third-party dependencies.
+
+#### HTTP layer
+
+- The two monolithic dispatch chains (a 613-line GET and a 195-line POST if-chain) became a route registry in `routes.py`: 88 GET and 118 POST entries (including v1 aliases), each a named `Handler` method, with zero behavior change during the mechanical extraction.
+- Structured errors in `api_errors.py`: every failure carries a stable machine code (`BAD_REQUEST`, `GAME_NOT_FOUND`, `MEDIA_NOT_FOUND`, `ROUTE_NOT_FOUND`, `MEDIA_JOB_RUNNING`, `STATE_UNAVAILABLE`, ...) and a per-request id that appears in the UI and the diagnostic log. POST handlers re-raise `ApiError` unchanged and convert legacy `ValueError`s into `400 BAD_REQUEST` instead of leaking them to the generic 500 path.
+- A versioned `/api/v1` surface aliases the stable routes; legacy paths keep working for older clients.
+- The library payload is gzip-compressed once per state change and served with a `private, no-cache` ETag, so polls get 304s when nothing changed: 5,000 games serve in about 2 ms at 638 KB instead of 13.8 MB (measured in `PERF.md`).
+- Settings saves now drop unknown keys against a 72-key whitelist (`settings_schema.py`) with a diagnostic warning, instead of persisting junk from a stale client.
+
+#### Reliability
+
+- Rolling state snapshots: the state store keeps the last 5 committed states as timestamped JSON copies under `library.json.snapshots/`, rotated on every commit. `/api/state/recover` gained `dry_run` (preview what recovery would do) and `snapshot` (restore a named point in time) modes; snapshot names are strictly validated.
+- Background jobs keep a bounded history of the last 50 finished jobs, exposed at `/api/jobs` and rendered in the Library Audit dialog as a jobs panel.
+- Graceful shutdown: Ctrl-C / SIGTERM now stops running sessions and drains webhooks in the `finally` block instead of stranding game processes.
+- The browser's session poll runs every 1s while a game is running and every 10s when idle, cutting idle wakeups on handhelds.
+- Log redaction now covers RetroAchievements key and `client_secret` shapes in addition to tokens, passwords, and authorization headers.
+- A local-only diagnostic report packager (`/api/diagnostic`) bundles redacted logs, system facts, and the version for pasting into issues.
+
+#### Frontend
+
+- `index.html` shrank from 3,117 lines to a 485-line shell; the JS and CSS live in `static/app.js` and `static/app.css`, served over `/static/*` with ETag caching and a filename whitelist. The server injects the token into the asset URLs so script and stylesheet loads authenticate.
+- All 30 browser state globals moved into one `AppState` object; browser-only preferences (library view, image group, badge visibility, sidebar sections) persist through `localStorage` with a versioned key.
+- Server errors surface in a persistent, dismissible banner with a "Copy details" action that includes the request id, and `window.onunhandledrejection` routes internal errors there.
+- The `api()` helper maps 45 stable routes to `/api/v1` through a single `API_V1` map, so a future v2 rename is a one-object change.
+- Accessibility: every dialog is `aria-modal`, toasts and lifecycle messages are live regions, the label floor rose from 11px to 12px, and the library heading leads the workspace.
+- The interface language selector now ships English-only with an honest note; the five partial translations were removed until real localization lands.
+- `scripts/ui_smoke.sh` boots a real server and drives the grid with puppeteer, asserting the grid renders, selection works, and no page errors fire.
+
+#### Release and supply chain
+
+- `scripts/gen_sbom.py` produces a CycloneDX 1.4 SBOM of the runtime modules, bundled data files, and the bundled Python stdlib.
+- `scripts/sign_release.py` (Ed25519, maintainer-only) and `scripts/verify_release.py` (pure-stdlib RFC 8032 verification) sign and check release artifacts; `test_release_signing.py` proves the round trip and tamper detection.
+- `scripts/release.sh` chains version sync, the make check gate, AppImage build, SBOM, checksum, optional signing, and a release notes draft, stopping before the human publish step.
+- `scripts/gen_api_docs.py` generates the API v1 contract page from the live route tables.
+
+#### Documentation
+
+- `docs/reliability.md`: a 23-scenario edge case catalog (truncated state, full disk, orphaned sessions, wrong credentials, huge archives, broken symlinks, 20k-game libraries) with expected behavior and verification status per row.
+- `SUPPORT.md`: the platform and runtime matrix plus reporting guidance.
+- `TRIAGE.md`: response targets and the triage flow.
 
 ### Fixed
 
 - Duplicate media cleanup now scans every media field, not just covers and backgrounds.
-- Latent undefined names in `web_app.py`: `automation.DEFAULT_ATTEMPTS`/`DEFAULT_TIMEOUT` (module referenced instead of the imported names) and `contained_path`/`read_limited` (used but not imported from `backend_io`).
-- Lint debt across the gate rule set: default-argument calls, loop-variable closures, unused variables, lambda assignments, missing `check=` on `subprocess.run`, shebangs, and import placement.
+- Latent undefined names in `web_app.py` that would have crashed their code paths on first use: `automation.DEFAULT_ATTEMPTS`/`DEFAULT_TIMEOUT` (module referenced instead of the imported names) and `contained_path`/`read_limited` (used but not imported from `backend_io`).
+- A stale `Request` import in the media catalog downloader.
+- Lint debt across the gate rule set: default-argument calls (`home=Path.home()`), loop-variable closures, unused variables, lambda assignments, missing `check=` on `subprocess.run`, shebangs, and import placement.
 
 ### Verification
 
@@ -30,6 +78,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Ran `make check`: lint, compile, tests, and coverage gates all pass (56% total, 44% `web_app.py`, floors recorded in COVERAGE.md).
 - UI smoke test (`scripts/ui_smoke.sh`) boots a real server and drives the grid with no page errors.
 - `python3 scripts/check_version_sync.py` passes at 0.9.0.
+- Perf bench at 5,000 games: gzip library 1.9ms / 638KB vs 13.7ms / 13.8MB plain (see `PERF.md`).
 
 ## [0.8.2] - 2026-08-12
 
