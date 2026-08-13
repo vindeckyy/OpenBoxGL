@@ -65,8 +65,10 @@ def _start_server(data_dir):
     return process, origin, token
 
 
-def _request(origin, token, path, method="GET", body=None, timeout=120):
+def _request(origin, token, path, method="GET", body=None, timeout=120, gzip=False):
     headers = {"X-OpenBox-Token": token}
+    if gzip:
+        headers["Accept-Encoding"] = "gzip"
     data = None
     if body is not None:
         data = json.dumps(body).encode()
@@ -91,10 +93,15 @@ def benchmark(data_dir):
 
         library_times = []
         library_bytes = None
+        gzip_times = []
+        gzip_bytes = None
         for _ in range(3):
             elapsed, payload = _request(origin, token, "/api/library")
             library_times.append(elapsed)
             library_bytes = len(payload)
+            gzip_elapsed, gzip_payload = _request(origin, token, "/api/library", gzip=True)
+            gzip_times.append(gzip_elapsed)
+            gzip_bytes = len(gzip_payload)
 
         media_times = []
         for _ in range(3):
@@ -109,6 +116,8 @@ def benchmark(data_dir):
         return {
             "library_ms": round(_median(library_times) * 1000, 1),
             "library_bytes": library_bytes,
+            "library_gzip_ms": round(_median(gzip_times) * 1000, 1),
+            "library_gzip_bytes": gzip_bytes,
             "media_ms": round(_median(media_times) * 1000, 1),
             "favorite_mutation_ms": round(_median(mutation_times) * 1000, 1),
         }

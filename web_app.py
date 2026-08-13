@@ -153,7 +153,7 @@ PLUGIN_LIBRARY_LOCK = threading.Lock()
 MEDIA_EPOCH = {"value": 0}
 MEDIA_EPOCH_LOCK = threading.Lock()
 PLUGIN_EPOCH = {"value": 0}
-PUBLIC_STATE_CACHE = {"signature": None, "payload": None, "raw": None}
+PUBLIC_STATE_CACHE = {"signature": None, "payload": None, "raw": None, "raw_gzip": None}
 PUBLIC_STATE_LOCK = threading.Lock()
 STATE_VIEW_CACHE = {"signature": None, "state": None}
 STATE_VIEW_LOCK = threading.Lock()
@@ -579,10 +579,11 @@ def _public_state_cached():
             return PUBLIC_STATE_CACHE
     payload = _build_public_state()
     raw = json.dumps(payload).encode()
+    raw_gzip = gzip.compress(raw) if len(raw) >= GZIP_THRESHOLD else raw
     with PUBLIC_STATE_LOCK:
         if PUBLIC_STATE_CACHE["raw"] is not None and PUBLIC_STATE_CACHE["signature"] == signature:
             return PUBLIC_STATE_CACHE
-        PUBLIC_STATE_CACHE.update({"signature": signature, "payload": payload, "raw": raw})
+        PUBLIC_STATE_CACHE.update({"signature": signature, "payload": payload, "raw": raw, "raw_gzip": raw_gzip})
         return PUBLIC_STATE_CACHE
 
 
@@ -1453,8 +1454,24 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(403, {"error": "Unauthorized"})
             return
         etag = public_state_etag()
+        if etag and self.headers.get("If-None-Match", "").strip() == etag:
+            self.send_response(304)
+            self.headers_common("application/json; charset=utf-8", "private, no-cache")
+            self.send_header("ETag", etag)
+            self.end_headers()
+            return
+        data = public_state_bytes()
+        if "gzip" in self.headers.get("Accept-Encoding", ""):
+            compressed = _public_state_cached()["raw_gzip"]
+            if compressed is not None and len(compressed) < len(data):
+                self.send_bytes(
+                    200, compressed, "application/json; charset=utf-8",
+                    cache_control="private, no-cache", etag=etag,
+                    extra_headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+                )
+                return
         self.send_bytes(
-            200, public_state_bytes(), "application/json; charset=utf-8",
+            200, data, "application/json; charset=utf-8",
             cache_control="private, no-cache", etag=etag,
         )
         return
