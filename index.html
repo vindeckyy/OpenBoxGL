@@ -1496,6 +1496,8 @@
       showLifecycle.timer = setTimeout(() => $('lifecycle').hidden = true, milliseconds);
     }
     let sessionPollBusy = false;
+    let sessionPollIdle = false;
+    function scheduleSessionPoll(delay) { setTimeout(pollSessions, delay); }
     async function pollSessions() {
       if (sessionPollBusy) {
         setTimeout(pollSessions, 1000);
@@ -1525,8 +1527,12 @@
         if (result.running.length) $('status').textContent = `${result.running.length} game${result.running.length === 1 ? '' : 's'} running`;
         if ($('sessionsDialog').open) renderSessions();
       } catch(error) { notify(error.message); }
-      finally { sessionPollBusy = false; }
-      setTimeout(pollSessions, 1000);
+      finally {
+        sessionPollBusy = false;
+        // Poll every second while a session is active, every ten when idle.
+        sessionPollIdle = !runningGames.length;
+        setTimeout(pollSessions, sessionPollIdle ? 10000 : 1000);
+      }
     }
     async function openHistory() {
       try {

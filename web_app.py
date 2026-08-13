@@ -3733,11 +3733,24 @@ def main():
                 },
                 daemon=True,
             ).start()
+    # Run configured commands before serving: startup_commands already ran.
+    def stop():
+        """Graceful shutdown: stop sessions, then stop accepting requests."""
+        with PROCESS_LOCK:
+            launch_ids = list(RUNNING.keys())
+        for launch_id in launch_ids:
+            try:
+                control_game_session(launch_id, "stop")
+            except ValueError:
+                pass
+        shutdown_webhooks(wait_seconds=2.0)
+
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        stop()
         WATCH_STOP.set()
         JOB_MANAGER.cancel("auto-import")
         JOB_MANAGER.shutdown(wait=False, cancel_futures=True)
