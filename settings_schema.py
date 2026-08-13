@@ -74,6 +74,7 @@ KNOWN_SETTINGS = {
     "save_backup_limit",
     "cloud_folder",
     "last_cloud_sync",
+    "last_update_check",
     # integrations
     "obs_auto_attach",
     "obs_recording_path",

@@ -1471,9 +1471,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(403, {"error": "Unauthorized"})
             return
         try:
-            self.send_json(200, check_update())
+            payload = check_update()
         except (ValueError, OSError, TypeError, AttributeError) as error:
             self.send_json(400, {"error": str(error)})
+            return
+        last_checked = load_state_view().get("settings", {}).get("last_update_check", "")
+        self.send_json(200, {**payload, "last_checked": last_checked})
         return
     def _api_get_api_related(self, parsed):
         if not self.authorized():
