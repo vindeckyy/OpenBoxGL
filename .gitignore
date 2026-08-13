@@ -30,3 +30,12 @@ htmlcov/
 
 # Maintainer-only signing material (never commit private keys)
 *.ed25519.key
+
+# Local-only planning and design docs (kept out of the repo)
+PLAN.md
+POLISH_PLAN.md
+ARCHITECTURE.md
+DESIGN.md
+PRODUCT.md
+COVERAGE.md
+PERF.md
