@@ -168,6 +168,70 @@ POST_TABLE = {
 }
 
 
+# Versioned aliases: /api/v1/<path> serves the same handlers as /api/<path>.
+# The v1 surface is the forward-compatible contract; legacy paths remain for
+# older clients. Adding a route does not add a v1 alias automatically unless
+# the path lives in V1_ALIASED_PREFIXES.
+V1_ALIASED_PREFIXES = (
+    "/api/library",
+    "/api/settings",
+    "/api/health",
+    "/api/health/dedupe",
+    "/api/launch",
+    "/api/game",
+    "/api/game/delete",
+    "/api/games/bulk",
+    "/api/queue",
+    "/api/tags",
+    "/api/notifications",
+    "/api/webhooks",
+    "/api/playlists",
+    "/api/running",
+    "/api/history",
+    "/api/saves",
+    "/api/media",
+    "/api/media/bulk",
+    "/api/media/audit",
+    "/api/metadata/status",
+    "/api/metadata/apply",
+    "/api/metadata/search",
+    "/api/import",
+    "/api/import/steam",
+    "/api/import/heroic",
+    "/api/import/lutris",
+    "/api/import/arcade",
+    "/api/emulators",
+    "/api/emulators/install",
+    "/api/profiles",
+    "/api/themes",
+    "/api/update",
+    "/api/update/install",
+    "/api/backup",
+    "/api/backup/create",
+    "/api/backup/restore",
+    "/api/backups",
+    "/api/jobs",
+    "/api/log",
+    "/api/diagnostic",
+    "/api/shutdown",
+    "/api/favorite",
+    "/api/plugins",
+    "/api/state/recover",
+    "/api/filter-presets",
+)
+
+
+def _apply_v1_aliases(table, dispatcher_name):
+    for path in V1_ALIASED_PREFIXES:
+        if path in table:
+            table[f"/api/v1{path[len('/api'):]}"] = table[path]
+    return table
+
+
+GET_TABLE = _apply_v1_aliases(GET_TABLE, "GET")
+POST_TABLE = _apply_v1_aliases(POST_TABLE, "POST")
+
+
 def dispatch_get(handler, parsed):
     method = GET_TABLE.get(parsed.path)
     if method is None:

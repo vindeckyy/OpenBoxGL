@@ -6,15 +6,20 @@ import copy
 import fcntl
 import hashlib
 import json
+import logging
 import os
 import re
+import secrets
 import shutil
 import tempfile
 import threading
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from collections.abc import Callable
+
+LOGGER = logging.getLogger("openbox.state")
 
 
 STATE_SCHEMA_VERSION = 4
@@ -249,10 +254,12 @@ def normalize_state(raw: Any) -> tuple[dict[str, Any], bool]:
 class JsonStateStore:
     """A small JSON store with atomic commits and a sidecar last-known-good copy."""
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, snapshot_limit: int = 5):
         self.path = Path(path)
         self.lock_path = self.path.with_name(f".{self.path.name}.lock")
         self.backup_path = self.path.with_name(f"{self.path.name}.bak")
+        self.snapshots_dir = self.path.with_name(f"{self.path.name}.snapshots")
+        self.snapshot_limit = max(0, int(snapshot_limit))
         self._thread_lock = threading.RLock()
         self._cached_state: dict[str, Any] | None = None
         self._cached_signature: tuple[int, int, int] | None = None
@@ -369,9 +376,55 @@ class JsonStateStore:
             finally:
                 os.close(directory_fd)
             self._remember(state, adopt=adopt)
+            self._rotate_snapshots()
         finally:
             if temporary.exists():
                 temporary.unlink()
+
+    def _rotate_snapshots(self) -> None:
+        """Keep the last N committed states as timestamped copies.
+
+        Rotation is best-effort: a failed copy never blocks the commit that
+        already landed. The recovery dialog offers these when both the
+        primary file and .bak are unusable.
+        """
+        if not self.snapshot_limit:
+            return
+        try:
+            self.snapshots_dir.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            target = self.snapshots_dir / f"{stamp}-{secrets.token_hex(4)}.json"
+            shutil.copy2(self.path, target)
+            os.chmod(target, 0o600)
+            existing = sorted(
+                self.snapshots_dir.glob("*.json"),
+                key=lambda item: item.stat().st_mtime,
+            )
+            for stale in existing[: max(0, len(existing) - self.snapshot_limit)]:
+                stale.unlink(missing_ok=True)
+        except OSError:
+            LOGGER.warning("Snapshot rotation failed; the committed state is unaffected.")
+
+    def snapshots(self) -> list[dict[str, Any]]:
+        """Return available state snapshots, newest first."""
+        items = []
+        try:
+            for path in sorted(self.snapshots_dir.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True):
+                items.append({"name": path.name, "size": path.stat().st_size, "modified": path.stat().st_mtime})
+        except OSError:
+            pass
+        return items
+
+    def restore_snapshot(self, name: str) -> dict[str, Any]:
+        """Restore a named snapshot over the primary state file."""
+        candidate = self.snapshots_dir / Path(name).name
+        if not candidate.is_file() or candidate.parent != self.snapshots_dir:
+            raise StateCorruptError(f"Unknown snapshot: {name}")
+        with self._thread_lock, self._file_lock(True):
+            state, _ = normalize_state(self._read_unlocked(candidate))
+            self._write_unlocked(state)
+            self._remember(state)
+            return state
 
     def save(self, state: dict[str, Any]) -> dict[str, Any]:
         with self._thread_lock, self._file_lock(True):

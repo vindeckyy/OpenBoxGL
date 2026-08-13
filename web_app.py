@@ -2081,7 +2081,7 @@ class Handler(BaseHTTPRequestHandler):
     def _api_post_api_settings(self, payload):
         self.save_settings(payload)
     def _api_post_api_state_recover(self, payload):
-        self.recover_state()
+        self.recover_state(payload)
     def _api_post_api_image_group(self, payload):
         self.save_image_group(payload)
     def _api_post_api_cloud_sync(self, payload):
@@ -2716,7 +2716,20 @@ class Handler(BaseHTTPRequestHandler):
         transact_state(mutate)
         self.send_json(200, {"saved": len(clean)})
 
-    def recover_state(self):
+    def recover_state(self, payload=None):
+        payload = payload or {}
+        if payload.get("dry_run"):
+            with STATE_LOCK:
+                return self.send_json(200, {
+                    "dry_run": True,
+                    "backup_available": STATE_STORE.backup_path.is_file(),
+                    "snapshots": STATE_STORE.snapshots(),
+                    "games": load_state().get("games", []) and len(load_state().get("games", [])),
+                })
+        if payload.get("snapshot"):
+            state = STATE_STORE.restore_snapshot(str(payload["snapshot"]))
+            bump_media_epoch()
+            return self.send_json(200, {"ok": True, "games": len(state.get("games", [])), "snapshot": str(payload["snapshot"])})
         state = recover_library_state()
         self.send_json(200, {"ok": True, "games": len(state.get("games", []))})
 
