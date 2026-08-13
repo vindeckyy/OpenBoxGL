@@ -107,10 +107,33 @@ const token = new URLSearchParams(location.search).get('token') || '';
       return items.length ? `<div class="detail-card"><h3>Artwork</h3><div class="screenshot-grid">${items.map(([kind,label]) => kind === 'manual' ? `<button data-manual="${media(game,'manual')}" aria-label="Open ${escapeHtml(label)}"><div class="cover-title">${escapeHtml(label)}</div></button>` : `<button data-artwork="${kind}" aria-label="Open ${escapeHtml(label)}"><img src="${media(game,kind)}" alt="${escapeHtml(label)}" loading="lazy" decoding="async"></button>`).join('')}</div></div>` : '';
     }
 
+    const API_V1 = {
+      library: '/api/v1/library', settings: '/api/v1/settings', health: '/api/v1/health',
+      health_dedupe: '/api/v1/health/dedupe', launch: '/api/v1/launch', game: '/api/v1/game',
+      game_delete: '/api/v1/game/delete', games_bulk: '/api/v1/games/bulk', queue: '/api/v1/queue',
+      tags: '/api/v1/tags', notifications: '/api/v1/notifications', webhooks: '/api/v1/webhooks',
+      playlists: '/api/v1/playlists', running: '/api/v1/running', history: '/api/v1/history',
+      saves: '/api/v1/saves', media: '/api/v1/media', media_bulk: '/api/v1/media/bulk',
+      media_audit: '/api/v1/media/audit', metadata_status: '/api/v1/metadata/status',
+      metadata_apply: '/api/v1/metadata/apply', metadata_search: '/api/v1/metadata/search',
+      import: '/api/v1/import', import_steam: '/api/v1/import/steam',
+      import_heroic: '/api/v1/import/heroic', import_lutris: '/api/v1/import/lutris',
+      import_arcade: '/api/v1/import/arcade', emulators: '/api/v1/emulators',
+      emulators_install: '/api/v1/emulators/install', profiles: '/api/v1/profiles',
+      themes: '/api/v1/themes', update: '/api/v1/update', update_install: '/api/v1/update/install',
+      backup: '/api/v1/backup', backup_create: '/api/v1/backup/create',
+      backup_restore: '/api/v1/backup/restore', backups: '/api/v1/backups', jobs: '/api/v1/jobs',
+      log: '/api/v1/log', diagnostic: '/api/v1/diagnostic', shutdown: '/api/v1/shutdown',
+      favorite: '/api/v1/favorite', plugins: '/api/v1/plugins', state_recover: '/api/v1/state/recover',
+      filter_presets: '/api/v1/filter-presets',
+    };
     async function api(path, options = {}) {
+      // The v1 surface is the stable contract; unmapped call sites keep the
+      // legacy paths until they are migrated one by one.
+      const target = API_V1[path.replace(/^\/api\//, '').replace(/\//g, '_')] || path;
       let response;
       try {
-        response = await fetch(path, { ...options, headers:{'X-OpenBox-Token':token,'Content-Type':'application/json',...(options.headers || {})} });
+        response = await fetch(target, { ...options, headers:{'X-OpenBox-Token':token,'Content-Type':'application/json',...(options.headers || {})} });
       } catch (error) {
         throw new Error(error.message || 'Could not reach the OpenBox server.');
       }
