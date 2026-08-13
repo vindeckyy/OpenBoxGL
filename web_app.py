@@ -1391,8 +1391,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def _api_get_index(self, parsed):
         if parsed.path in ("/", "/index.html"):
-            html = (ROOT / "index.html").read_bytes()
-            self.send_bytes(200, html, "text/html; charset=utf-8")
+            html = (ROOT / "index.html").read_bytes().decode("utf-8")
+            # <script src> and <link> loads cannot carry the X-OpenBox-Token
+            # header, so embed the token in the static asset URLs; the
+            # authorized() check accepts the query form.
+            html = html.replace(
+                '"/static/app.js"', f'"/static/app.js?token={TOKEN}"',
+            ).replace(
+                '"/static/app.css"', f'"/static/app.css?token={TOKEN}"',
+            )
+            self.send_bytes(200, html.encode("utf-8"), "text/html; charset=utf-8")
             return
     def _api_get_static(self, parsed):
         # Static UI assets (app.js/app.css) live next to index.html. Serve

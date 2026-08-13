@@ -1,16 +1,39 @@
 const token = new URLSearchParams(location.search).get('token') || '';
-    let games = [], playlists = [], filterPresets = [], explorerField = 'genre', explorerRules = {}, activeFilterPreset = '', bigBoxGames = [], runningGames = [], raConfigured = false, selectedId = null, platform = 'all', activePlaylist = '', editingId = null, metadataGameId = null, bigBoxIndex = 0, gamepadState = {}, lastSessionEvent = 0, bulkMode = false, bigBoxLastInput = performance.now(), screenSaverGame = null, contextGameId = null, availableProfiles = {};
-    let appSettings = {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',locale:'en'}, bigBoxFilter = 'all', bigBoxSort = 'title', bigBoxRaFilter = 'all', bigBoxPlatform = 'all', platformCategory = 'all', pendingUpdate = null, duplicateMediaGroups = 0, libraryBgm = null, readerPage = 1, readerUrl = '', bigBoxHybridQuery = '', mediaEpoch = 0;
+    const AppState = {
+      games: [], playlists: [], filterPresets: [], explorerField: 'genre', explorerRules: {}, activeFilterPreset: '', bigBoxGames: [], runningGames: [], raConfigured: false, selectedId: null, platform: 'all', activePlaylist: '', editingId: null, metadataGameId: null, bigBoxIndex: 0, gamepadState: {}, lastSessionEvent: 0, bulkMode: false, bigBoxLastInput: performance.now(), screenSaverGame: null, contextGameId: null, availableProfiles: {},
+      appSettings: {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',locale:'en'}, bigBoxFilter: 'all', bigBoxSort: 'title', bigBoxRaFilter: 'all', bigBoxPlatform: 'all', platformCategory: 'all', pendingUpdate: null, duplicateMediaGroups: 0, libraryBgm: null, readerPage: 1, readerUrl: '', bigBoxHybridQuery: '', mediaEpoch: 0,
+      // Browser-only preferences survive reloads via localStorage; library
+      // data stays server-owned and never enters this key.
+      persist() {
+        try {
+          localStorage.setItem('openbox-ui-state-v1', JSON.stringify({
+            library_view: this.appSettings.library_view,
+            image_group: this.appSettings.image_group,
+            badge_visibility: this.appSettings.badge_visibility,
+            hidden_sidebar_sections: this.appSettings.hidden_sidebar_sections,
+          }));
+        } catch (error) { /* private mode or quota; ignore */ }
+      },
+      restorePersisted() {
+        try {
+          const saved = JSON.parse(localStorage.getItem('openbox-ui-state-v1') || '{}');
+          for (const key of Object.keys(saved)) {
+            if (saved[key] !== undefined && saved[key] !== null) this.appSettings[key] = saved[key];
+          }
+        } catch (error) { /* corrupted or unavailable; ignore */ }
+      },
+    };
+
     const defaultControllerMap = {play:0,back:1,favorite:2,random:3,page_left:4,page_right:5,pause:8,menu:9};
     const selectedIds = new Set();
     const $ = id => document.getElementById(id);
     const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-    const media = (game, kind, index = '') => `/api/media?id=${game.id}&kind=${kind}${index === '' ? '' : `&index=${index}`}&v=${mediaEpoch}&token=${encodeURIComponent(token)}`;
+    const media = (game, kind, index = '') => `/api/media?id=${game.id}&kind=${kind}${index === '' ? '' : `&index=${index}`}&v=${AppState.mediaEpoch}&token=${encodeURIComponent(token)}`;
     const duration = seconds => { const minutes = Math.floor((seconds || 0) / 60), hours = Math.floor(minutes / 60); return hours ? `${hours}h ${minutes % 60}m` : `${minutes}m`; };
     const defaultBadges = ['favorite','installed','saves','documents','progress','storefront','achievements','rating'];
-    const badgeVisibility = () => new Set(appSettings.badge_visibility || defaultBadges);
+    const badgeVisibility = () => new Set(AppState.appSettings.badge_visibility || defaultBadges);
     const gameInstalled = game => game.store_installed !== false && (game.path_exists || game.store_installed);
-    const playlistFor = name => playlists.find(item => item.name === name);
+    const playlistFor = name => AppState.playlists.find(item => item.name === name);
     const playlistMembers = playlist => new Set((playlist?.members || []).map(String));
     const gameInPlaylist = (game, playlist) => {
       if (!playlist) return false;
@@ -109,20 +132,20 @@ const token = new URLSearchParams(location.search).get('token') || '';
     }
     async function refresh() {
       const state = await api('/api/library');
-      games = state.games;
-      playlists = state.playlists || [];
-      filterPresets = state.filter_presets || state.settings?.filter_presets || appSettings.filter_presets || [];
-      raConfigured = state.ra_configured;
-      appSettings = state.settings || appSettings;
-      mediaEpoch = state.media_epoch || 0;
-      if (activePlaylist && !playlists.some(item => item.name === activePlaylist)) activePlaylist = '';
-      if (selectedId !== null && !games.some(game => game.id === selectedId)) selectedId = null;
-      for (const id of selectedIds) if (!games.some(game => game.id === id)) selectedIds.delete(id);
+      AppState.games = state.games;
+      AppState.playlists = state.playlists || [];
+      AppState.filterPresets = state.filter_presets || state.settings?.filter_presets || AppState.appSettings.filter_presets || [];
+      AppState.raConfigured = state.ra_configured;
+      AppState.appSettings = state.settings || AppState.appSettings;
+      AppState.mediaEpoch = state.media_epoch || 0;
+      if (AppState.activePlaylist && !AppState.playlists.some(item => item.name === AppState.activePlaylist)) AppState.activePlaylist = '';
+      if (AppState.selectedId !== null && !AppState.games.some(game => game.id === AppState.selectedId)) AppState.selectedId = null;
+      for (const id of selectedIds) if (!AppState.games.some(game => game.id === id)) selectedIds.delete(id);
       render();
       applySidebarVisibility();
       applyLocaleStrings();
       maybeShowWelcome();
-      const fingerprint = `${games.length}:${games[0]?.id || ''}:${games.at(-1)?.id || ''}`;
+      const fingerprint = `${AppState.games.length}:${AppState.games[0]?.id || ''}:${AppState.games.at(-1)?.id || ''}`;
       if (lastFacetsFingerprint !== fingerprint) {
         lastFacetsFingerprint = fingerprint;
         loadExplorerFacets().catch(() => {});
@@ -132,22 +155,22 @@ const token = new URLSearchParams(location.search).get('token') || '';
     async function ensureProfiles() {
       if (profilesFetched) return;
       profilesFetched = true;
-      try { availableProfiles = (await api('/api/profiles')).profiles || {}; } catch(error) { profilesFetched = false; }
+      try { AppState.availableProfiles = (await api('/api/profiles')).profiles || {}; } catch(error) { profilesFetched = false; }
     }
     function applyLocaleStrings() {
-      const strings = appSettings.strings || {};
+      const strings = AppState.appSettings.strings || {};
       if (strings.drop_import && $('dropZone')) $('dropZone').textContent = strings.drop_import;
       if ($('viewToggleButton')) {
-        const listView = (appSettings.library_view || 'grid') === 'list';
+        const listView = (AppState.appSettings.library_view || 'grid') === 'list';
         $('viewToggleButton').textContent = listView ? (strings.grid_view || 'Grid view') : (strings.list_view || 'List view');
       }
     }
     function platformCategoryFor(game) {
-      const categories = appSettings.platform_categories || {};
+      const categories = AppState.appSettings.platform_categories || {};
       return categories[game.platform] || 'Other';
     }
     function applySidebarVisibility() {
-      const hidden = new Set((appSettings.hidden_sidebar_sections || []).map(value => value.trim().toLowerCase()).filter(Boolean));
+      const hidden = new Set((AppState.appSettings.hidden_sidebar_sections || []).map(value => value.trim().toLowerCase()).filter(Boolean));
       document.querySelectorAll('[data-sidebar-section]').forEach(element => {
         element.hidden = hidden.has(element.dataset.sidebarSection);
       });
@@ -170,18 +193,18 @@ const token = new URLSearchParams(location.search).get('token') || '';
     function filteredGames() {
       const query = $('sidebarSearch').value.toLowerCase().trim();
       const view = $('view').value;
-      const preset = filterPresets.find(item => item.name === activeFilterPreset);
+      const preset = AppState.filterPresets.find(item => item.name === AppState.activeFilterPreset);
       const presetRules = preset?.rules || {};
-      const activePlaylistData = playlistFor(activePlaylist);
-      const visible = games.filter(game => {
+      const activePlaylistData = playlistFor(AppState.activePlaylist);
+      const visible = AppState.games.filter(game => {
         const completed = ['Beaten','Completed','Mastered'].includes(game.progress);
         const installed = gameInstalled(game);
         const ownedUninstalled = Boolean(game.owned || game.store_catalog || game.gameyfin_id) && !installed;
         const effectiveView = presetRules.view || view;
         const viewMatch = (effectiveView === 'all' && !game.hidden) || (effectiveView === 'favorites' && game.favorite && !game.hidden) || (effectiveView === 'recent' && game.last_played && !game.hidden) || (effectiveView === 'never' && !game.play_count && !game.hidden) || (effectiveView === 'playing' && ['Playing','Paused'].includes(game.progress) && !game.hidden) || (effectiveView === 'completed' && completed && !game.hidden) || (effectiveView === 'installed' && installed && !game.hidden) || (effectiveView === 'owned' && ownedUninstalled && !game.hidden) || (effectiveView === 'saves' && game.has_saves && !game.hidden) || (effectiveView === 'hidden' && game.hidden) || (effectiveView === 'missing' && !game.path_exists && !game.hidden);
-        const effectivePlatform = presetRules.platform || platform;
+        const effectivePlatform = presetRules.platform || AppState.platform;
         const platformMatch = effectivePlatform === 'all' || game.platform === effectivePlatform;
-        const category = presetRules.platform_category || platformCategory;
+        const category = presetRules.platform_category || AppState.platformCategory;
         const categoryMatch = category === 'all' || platformCategoryFor(game) === category;
         const esrb = presetRules.esrb || $('esrbFilter')?.value || '';
         const esrbMatch = !esrb || (game.esrb || 'Unrated') === esrb;
@@ -192,7 +215,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
         const genreMatch = !presetRules.genre || String(game.genre || '').toLowerCase().includes(String(presetRules.genre).toLowerCase());
         const developerMatch = !presetRules.developer || String(game.developer || '').toLowerCase().includes(String(presetRules.developer).toLowerCase());
         const publisherMatch = !presetRules.publisher || String(game.publisher || '').toLowerCase().includes(String(presetRules.publisher).toLowerCase());
-        const explorerProgressMatch = explorerRules.progress === '__unset' ? !game.progress : !explorerRules.progress || game.progress === explorerRules.progress;
+        const explorerProgressMatch = AppState.explorerRules.progress === '__unset' ? !game.progress : !AppState.explorerRules.progress || game.progress === AppState.explorerRules.progress;
         const installedRule = presetRules.installed;
         const installedMatch = installedRule !== 'installed' && installedRule !== 'uninstalled'
           || installedRule === 'installed' && installed
@@ -250,29 +273,29 @@ const token = new URLSearchParams(location.search).get('token') || '';
     }
     function renderPlatformCategories() {
       const counts = new Map();
-      games.forEach(game => {
+      AppState.games.forEach(game => {
         const name = platformCategoryFor(game);
         counts.set(name, (counts.get(name) || 0) + 1);
       });
-      const items = [['all',`All (${games.length})`], ...[...counts].sort((a,b) => a[0].localeCompare(b[0])).map(([name,count]) => [name,`${name} (${count})`])];
+      const items = [['all',`All (${AppState.games.length})`], ...[...counts].sort((a,b) => a[0].localeCompare(b[0])).map(([name,count]) => [name,`${name} (${count})`])];
       if (!$('platformCategories')) return;
-      $('platformCategories').innerHTML = items.map(([value,label]) => `<button class="platform ${platformCategory === value ? 'active' : ''}" data-platform-category="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join('');
-      document.querySelectorAll('[data-platform-category]').forEach(button => button.onclick = () => { activePlaylist = ''; platformCategory = button.dataset.platformCategory; selectedId = null; render(); loadTheme(); });
+      $('platformCategories').innerHTML = items.map(([value,label]) => `<button class="platform ${AppState.platformCategory === value ? 'active' : ''}" data-platform-category="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join('');
+      document.querySelectorAll('[data-platform-category]').forEach(button => button.onclick = () => { AppState.activePlaylist = ''; AppState.platformCategory = button.dataset.platformCategory; AppState.selectedId = null; render(); loadTheme(); });
     }
     function renderPlatforms() {
       const counts = new Map();
-      games.forEach(game => counts.set(game.platform || 'Unspecified', (counts.get(game.platform || 'Unspecified') || 0) + 1));
-      const items = [['all',`All (${games.length})`], ...[...counts].sort((a,b) => a[0].localeCompare(b[0])).map(([name,count]) => [name,`${name} (${count})`])];
-      $('platforms').innerHTML = items.map(([value,label]) => `<button class="platform ${platform === value ? 'active' : ''}" data-platform="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join('');
-      document.querySelectorAll('[data-platform]').forEach(button => button.onclick = () => { activePlaylist = ''; platform = button.dataset.platform; selectedId = null; render(); loadTheme(); });
+      AppState.games.forEach(game => counts.set(game.platform || 'Unspecified', (counts.get(game.platform || 'Unspecified') || 0) + 1));
+      const items = [['all',`All (${AppState.games.length})`], ...[...counts].sort((a,b) => a[0].localeCompare(b[0])).map(([name,count]) => [name,`${name} (${count})`])];
+      $('platforms').innerHTML = items.map(([value,label]) => `<button class="platform ${AppState.platform === value ? 'active' : ''}" data-platform="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join('');
+      document.querySelectorAll('[data-platform]').forEach(button => button.onclick = () => { AppState.activePlaylist = ''; AppState.platform = button.dataset.platform; AppState.selectedId = null; render(); loadTheme(); });
     }
     function renderPlaylists() {
-      $('playlists').innerHTML = playlists.length ? playlists.map(item => `<div class="playlist-row"><button class="platform ${activePlaylist === item.name ? 'active' : ''}" data-playlist="${escapeHtml(item.name)}">${escapeHtml(item.name)} <small>${item.type === 'manual' ? `(${(item.members || []).length})` : '↻'}</small></button><button class="playlist-delete" data-delete-playlist="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '<span class="description">Create a playlist to pin one here.</span>';
+      $('playlists').innerHTML = AppState.playlists.length ? AppState.playlists.map(item => `<div class="playlist-row"><button class="platform ${AppState.activePlaylist === item.name ? 'active' : ''}" data-playlist="${escapeHtml(item.name)}">${escapeHtml(item.name)} <small>${item.type === 'manual' ? `(${(item.members || []).length})` : '↻'}</small></button><button class="playlist-delete" data-delete-playlist="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '<span class="description">Create a playlist to pin one here.</span>';
       document.querySelectorAll('[data-playlist]').forEach(button => button.onclick = () => {
-        const item = playlists.find(playlist => playlist.name === button.dataset.playlist);
+        const item = AppState.playlists.find(playlist => playlist.name === button.dataset.playlist);
         if (!item) return;
-        activePlaylist = item.name;
-        platform = item.rules.platform || 'all';
+        AppState.activePlaylist = item.name;
+        AppState.platform = item.rules.platform || 'all';
         $('view').value = [...$('view').options].some(option => option.value === item.rules.view) ? item.rules.view : 'all';
         $('sidebarSearch').value = item.type === 'manual' ? '' : item.rules.query || '';
         render();
@@ -283,16 +306,16 @@ const token = new URLSearchParams(location.search).get('token') || '';
     function renderFilterPresets() {
       const container = $('filterPresets');
       if (!container) return;
-      container.innerHTML = filterPresets.length ? filterPresets.map(item => `<div class="playlist-row"><button class="platform ${activeFilterPreset === item.name ? 'active' : ''}" data-filter-preset="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.bigbox_quick ? ' ★' : ''}</button><button class="playlist-delete" data-delete-preset="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '<span class="description">Save a preset to pin filters.</span>';
+      container.innerHTML = AppState.filterPresets.length ? AppState.filterPresets.map(item => `<div class="playlist-row"><button class="platform ${AppState.activeFilterPreset === item.name ? 'active' : ''}" data-filter-preset="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.bigbox_quick ? ' ★' : ''}</button><button class="playlist-delete" data-delete-preset="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '<span class="description">Save a preset to pin filters.</span>';
       document.querySelectorAll('[data-filter-preset]').forEach(button => button.onclick = () => {
-        const item = filterPresets.find(preset => preset.name === button.dataset.filterPreset);
+        const item = AppState.filterPresets.find(preset => preset.name === button.dataset.filterPreset);
         if (!item) return;
-        activeFilterPreset = item.name;
-        activePlaylist = '';
-        explorerRules = {};
+        AppState.activeFilterPreset = item.name;
+        AppState.activePlaylist = '';
+        AppState.explorerRules = {};
         const rules = item.rules || {};
-        platform = rules.platform || 'all';
-        platformCategory = rules.platform_category || 'all';
+        AppState.platform = rules.platform || 'all';
+        AppState.platformCategory = rules.platform_category || 'all';
         if (rules.view) $('view').value = [...$('view').options].some(option => option.value === rules.view) ? rules.view : 'all';
         if (rules.query !== undefined) $('sidebarSearch').value = rules.query || '';
         if (rules.esrb !== undefined && $('esrbFilter')) $('esrbFilter').value = rules.esrb || '';
@@ -303,36 +326,36 @@ const token = new URLSearchParams(location.search).get('token') || '';
         if (!confirm(`Delete preset "${button.dataset.deletePreset}"?`)) return;
         try {
           await api('/api/filter-presets/delete',{method:'POST',body:JSON.stringify({name:button.dataset.deletePreset})});
-          if (activeFilterPreset === button.dataset.deletePreset) activeFilterPreset = '';
+          if (AppState.activeFilterPreset === button.dataset.deletePreset) AppState.activeFilterPreset = '';
           await refresh();
           notify('Preset deleted');
         } catch(error) { notify(error.message); }
       });
       const quick = $('bigBoxQuickPreset');
       if (quick) {
-        const quickItems = filterPresets.filter(item => item.bigbox_quick);
+        const quickItems = AppState.filterPresets.filter(item => item.bigbox_quick);
         quick.innerHTML = '<option value="">None</option>' + quickItems.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join('');
       }
     }
     async function loadExplorerFacets(field = explorerField) {
-      explorerField = field;
+      AppState.explorerField = field;
       const container = $('explorerFacets');
       if (!container) return;
       try {
         const result = await api(`/api/explorer/facets?field=${encodeURIComponent(field)}`);
-        const tabs = ['genre','developer','platform','progress','esrb'].map(name => `<button type="button" class="platform ${explorerField === name ? 'active' : ''}" data-explorer-field="${name}">${name}</button>`).join('');
-        const facets = (result.facets || []).map(item => `<button type="button" class="platform" data-explorer-value="${escapeHtml(item.value)}" data-explorer-field="${explorerField}">${escapeHtml(item.value)} (${item.count})</button>`).join('');
+        const tabs = ['genre','developer','platform','progress','esrb'].map(name => `<button type="button" class="platform ${AppState.explorerField === name ? 'active' : ''}" data-explorer-field="${name}">${name}</button>`).join('');
+        const facets = (result.facets || []).map(item => `<button type="button" class="platform" data-explorer-value="${escapeHtml(item.value)}" data-explorer-field="${AppState.explorerField}">${escapeHtml(item.value)} (${item.count})</button>`).join('');
         container.innerHTML = `<div class="platforms">${tabs}</div><div class="platforms">${facets || '<span class="description">No values yet.</span>'}</div>`;
         document.querySelectorAll('[data-explorer-field]').forEach(button => {
           if (button.dataset.explorerValue) {
             button.onclick = () => {
-              activeFilterPreset = '';
-              activePlaylist = '';
-              explorerRules = {};
+              AppState.activeFilterPreset = '';
+              AppState.activePlaylist = '';
+              AppState.explorerRules = {};
               if (button.dataset.explorerField === 'genre') $('sidebarSearch').value = button.dataset.explorerValue;
               else if (button.dataset.explorerField === 'developer') $('sidebarSearch').value = button.dataset.explorerValue;
-              else if (button.dataset.explorerField === 'platform') platform = button.dataset.explorerValue;
-              else if (button.dataset.explorerField === 'progress') explorerRules = {progress:button.dataset.explorerValue === 'Unset' ? '__unset' : button.dataset.explorerValue};
+              else if (button.dataset.explorerField === 'platform') AppState.platform = button.dataset.explorerValue;
+              else if (button.dataset.explorerField === 'progress') AppState.explorerRules = {progress:button.dataset.explorerValue === 'Unset' ? '__unset' : button.dataset.explorerValue};
               else if (button.dataset.explorerField === 'esrb' && $('esrbFilter')) $('esrbFilter').value = button.dataset.explorerValue === 'Unrated' ? '' : button.dataset.explorerValue;
               render();
             };
@@ -345,7 +368,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       }
     }
     function selectGame(id) {
-      selectedId = id;
+      AppState.selectedId = id;
       document.querySelectorAll('[data-game]').forEach(item => {
         const row = item.closest('.card,.list-row') || item;
         row.classList.toggle('selected', Number(item.dataset.game) === id);
@@ -395,17 +418,17 @@ const token = new URLSearchParams(location.search).get('token') || '';
       const pane = gridPane();
       if (pane) gridScrollTop = pane.scrollTop;
       const visible = filteredGames();
-      const explicitImageGroup = activePlaylist ? appSettings.image_group_by_playlist?.[activePlaylist] : platform !== 'all' ? appSettings.image_group_by_platform?.[platform] : appSettings.image_group;
-      $('imageGroup').value = explicitImageGroup || (platform === 'all' && !activePlaylist ? 'cover' : 'default');
-      const imageGroup = $('imageGroup').value === 'default' ? appSettings.image_group || 'cover' : $('imageGroup').value;
-      $('bulkButton').textContent = bulkMode ? selectedIds.size ? `Edit ${selectedIds.size} Selected` : 'Cancel Bulk Edit' : 'Bulk Edit';
-      $('libraryTitle').textContent = activeFilterPreset || activePlaylist || (platform === 'all' ? $('view').selectedOptions[0].text : platform);
-      $('libraryMeta').textContent = bulkMode ? `${selectedIds.size} selected · ${visible.length} shown` : `${visible.length} game${visible.length === 1 ? '' : 's'}`;
+      const explicitImageGroup = AppState.activePlaylist ? AppState.appSettings.image_group_by_playlist?.[AppState.activePlaylist] : AppState.platform !== 'all' ? AppState.appSettings.image_group_by_platform?.[AppState.platform] : AppState.appSettings.image_group;
+      $('imageGroup').value = explicitImageGroup || (AppState.platform === 'all' && !AppState.activePlaylist ? 'cover' : 'default');
+      const imageGroup = $('imageGroup').value === 'default' ? AppState.appSettings.image_group || 'cover' : $('imageGroup').value;
+      $('bulkButton').textContent = AppState.bulkMode ? selectedIds.size ? `Edit ${selectedIds.size} Selected` : 'Cancel Bulk Edit' : 'Bulk Edit';
+      $('libraryTitle').textContent = AppState.activeFilterPreset || AppState.activePlaylist || (AppState.platform === 'all' ? $('view').selectedOptions[0].text : AppState.platform);
+      $('libraryMeta').textContent = AppState.bulkMode ? `${selectedIds.size} selected · ${visible.length} shown` : `${visible.length} game${visible.length === 1 ? '' : 's'}`;
       $('surpriseButton').disabled = !visible.length;
-      $('status').textContent = `${games.length} games · local library`;
+      $('status').textContent = `${AppState.games.length} games · local library`;
       if (!visible.length) {
         $('grid').className = 'grid';
-        $('grid').innerHTML = games.length
+        $('grid').innerHTML = AppState.games.length
           ? `<div class="empty"><div><h2>No games match this view</h2><p>Change the active filters or search the library again.</p></div></div>`
           : `<div class="empty"><div><h2>Start your library</h2><p>Bring your games into OpenBox, then search, filter, and launch them from one collection.</p><div class="empty-actions"><button id="emptyAdd">Add game</button><button class="empty-secondary" id="emptyImport">Import folder</button><button class="empty-secondary" id="emptySteam">Import Steam</button></div></div></div>`;
         if ($('emptyAdd')) $('emptyAdd').onclick = () => openGameDialog();
@@ -415,7 +438,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
         renderArrangeBar(visible);
         return;
       }
-      const listView = (appSettings.library_view || 'grid') === 'list';
+      const listView = (AppState.appSettings.library_view || 'grid') === 'list';
       $('grid').className = listView ? 'list-view' : 'grid';
       const total = visible.length;
       const [start, end] = gridWindow(total);
@@ -426,26 +449,26 @@ const token = new URLSearchParams(location.search).get('token') || '';
       const bottomSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${bottomHeight}px"></div>` : '';
       const chunk = visible.slice(start, end);
       const rendered = chunk.map((game,index) => listView
-         ? `<button type="button" class="list-row motion-enter ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" style="--motion-index:${Math.min(index,10)}" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
-         : `<article class="card motion-enter ${selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" style="--motion-index:${Math.min(index,10)}">
-        ${bulkMode ? `<input class="card-picker" type="checkbox" data-game-picker="${game.id}" ${selectedIds.has(game.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(game.name)}">` : ''}
-        <button type="button" class="card-main" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><div class="cover ${appSettings.bigbox_mode === 'coverflow' ? 'jewel-3d' : ''}">${imageMarkup(game,imageGroup)}</div>
+         ? `<button type="button" class="list-row motion-enter ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" style="--motion-index:${Math.min(index,10)}" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
+         : `<article class="card motion-enter ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" style="--motion-index:${Math.min(index,10)}">
+        ${AppState.bulkMode ? `<input class="card-picker" type="checkbox" data-game-picker="${game.id}" ${selectedIds.has(game.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(game.name)}">` : ''}
+        <button type="button" class="card-main" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><div class="cover ${AppState.appSettings.bigbox_mode === 'coverflow' ? 'jewel-3d' : ''}">${imageMarkup(game,imageGroup)}</div>
         <h3>${escapeHtml(game.name)}</h3><p>${escapeHtml(game.developer || game.platform || '')}</p>
         <div class="badge-row">${renderBadges(game)}</div></button>
       </article>`).join('');
       $('grid').innerHTML = listView ? `<div class="list-head"><span>Title</span><span>Platform</span><span>Genre</span><span>ESRB</span><span>Progress</span><span>Plays</span><span>Rating</span></div>${topSpacer}${rendered}${bottomSpacer}` : `${topSpacer}${rendered}${bottomSpacer}`;
       document.querySelectorAll('[data-game]').forEach(card => card.onclick = event => {
         const id = Number(card.dataset.game);
-        if (event.shiftKey || event.ctrlKey || event.metaKey || bulkMode) {
-          if (event.shiftKey && selectedId !== null) {
+        if (event.shiftKey || event.ctrlKey || event.metaKey || AppState.bulkMode) {
+          if (event.shiftKey && AppState.selectedId !== null) {
             const ids = visible.map(game => game.id);
-            const startIndex = ids.indexOf(selectedId), endIndex = ids.indexOf(id);
+            const startIndex = ids.indexOf(AppState.selectedId), endIndex = ids.indexOf(id);
             if (startIndex >= 0 && endIndex >= 0) ids.slice(Math.min(startIndex,endIndex), Math.max(startIndex,endIndex) + 1).forEach(value => selectedIds.add(value));
           } else {
             selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id);
           }
-          selectedId = id;
-          if (!bulkMode) { bulkMode = true; notify('Selection mode enabled. Use Bulk Edit to apply changes.'); }
+          AppState.selectedId = id;
+          if (!AppState.bulkMode) { AppState.bulkMode = true; notify('Selection mode enabled. Use Bulk Edit to apply changes.'); }
           renderGrid();
         } else {
           selectGame(id);
@@ -454,7 +477,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       document.querySelectorAll('[data-game-picker]').forEach(input => input.onchange = () => {
         const id = Number(input.dataset.gamePicker);
         input.checked ? selectedIds.add(id) : selectedIds.delete(id);
-        input.closest('.card')?.classList.toggle('selected', input.checked || selectedId === id);
+        input.closest('.card')?.classList.toggle('selected', input.checked || AppState.selectedId === id);
       });
       renderArrangeBar(visible);
       const measuredBefore = gridRowHeight;
@@ -462,11 +485,11 @@ const token = new URLSearchParams(location.search).get('token') || '';
       if (!measuredBefore && gridRowHeight && total) renderGrid();
     }
     function renderDetails() {
-      const game = games.find(item => item.id === selectedId);
-      if (!game && (platform !== 'all' || platformCategory !== 'all' || activePlaylist)) {
-        if (activePlaylist) renderCollectionDetails(activePlaylist, filteredGames(), 'Playlist');
-        else if (platformCategory !== 'all') renderCollectionDetails(platformCategory, games.filter(item => platformCategoryFor(item) === platformCategory), 'Category');
-        else renderPlatformDetails(platform);
+      const game = AppState.games.find(item => item.id === AppState.selectedId);
+      if (!game && (AppState.platform !== 'all' || AppState.platformCategory !== 'all' || AppState.activePlaylist)) {
+        if (AppState.activePlaylist) renderCollectionDetails(AppState.activePlaylist, filteredGames(), 'Playlist');
+        else if (AppState.platformCategory !== 'all') renderCollectionDetails(AppState.platformCategory, AppState.games.filter(item => platformCategoryFor(item) === AppState.platformCategory), 'Category');
+        else renderPlatformDetails(AppState.platform);
         return;
       }
       if (!game) { $('details').innerHTML = '<div class="detail-empty">Select a game to inspect its real metadata and artwork.</div>'; return; }
@@ -486,8 +509,8 @@ const token = new URLSearchParams(location.search).get('token') || '';
           ${game.available_screenshots.length ? `<div class="detail-card"><h3>Screenshots</h3><div class="screenshot-grid">${game.available_screenshots.map(index => `<button data-screenshot="${index}" aria-label="Open screenshot ${index + 1}"><img src="${media(game,'screenshot',index)}" alt="" loading="lazy" decoding="async"></button>`).join('')}</div></div>` : ''}
           ${renderArtwork(game)}
           <div class="detail-card"><h3>Related Games</h3><div class="related-grid" id="relatedGames"><span class="description">Finding matches...</span></div></div>
-          ${raConfigured ? `<div class="detail-card"><h3>RetroAchievements</h3><div id="achievementContent"><p class="description">${game.ra_game_id ? `Matched to game ${escapeHtml(game.ra_game_id)}.` : 'Match this ROM to load achievements.'}</p><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}<button class="icon-button" id="openBrowser">Open Wikipedia</button></div><button class="icon-button" id="loadAchievements">Load achievements</button><div id="achievementStats"></div></div></div>` : ''}
-          <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${game.save_paths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}${game.platform === 'Arcade' || game.rom_name ? '<button class="icon-button" id="exportHighscores">Export high scores</button>' : ''}</div><div class="description" id="saveDiscovery">${game.save_paths.length ? `${game.save_paths.length} configured location${game.save_paths.length === 1 ? '' : 's'}` : 'No save location configured.'}${appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
+          ${AppState.raConfigured ? `<div class="detail-card"><h3>RetroAchievements</h3><div id="achievementContent"><p class="description">${game.ra_game_id ? `Matched to game ${escapeHtml(game.ra_game_id)}.` : 'Match this ROM to load achievements.'}</p><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}<button class="icon-button" id="openBrowser">Open Wikipedia</button></div><button class="icon-button" id="loadAchievements">Load achievements</button><div id="achievementStats"></div></div></div>` : ''}
+          <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${game.save_paths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${AppState.appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}${game.platform === 'Arcade' || game.rom_name ? '<button class="icon-button" id="exportHighscores">Export high scores</button>' : ''}</div><div class="description" id="saveDiscovery">${game.save_paths.length ? `${game.save_paths.length} configured location${game.save_paths.length === 1 ? '' : 's'}` : 'No save location configured.'}${AppState.appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
         </div>`;
       $('playButton').onclick = () => {
         if (game.gameyfin_id && !game.store_installed) installGameyfin(game);
@@ -545,14 +568,14 @@ const token = new URLSearchParams(location.search).get('token') || '';
     async function loadRelated(id) {
       try {
         const result = await api(`/api/related/rich?id=${id}`);
-        if (!$('relatedGames') || selectedId !== id) return;
-        const related = (result.items || []).map(item => ({...item, game:games.find(game => game.id === item.id)})).filter(item => item.game);
+        if (!$('relatedGames') || AppState.selectedId !== id) return;
+        const related = (result.items || []).map(item => ({...item, game:AppState.games.find(game => game.id === item.id)})).filter(item => item.game);
         $('relatedGames').innerHTML = related.length ? related.map(item => `<button class="related-game" data-related="${item.game.id}" title="${escapeHtml(item.reasons.join(', '))}">${escapeHtml(item.game.name)}<small>${escapeHtml(item.reasons.join(' · '))}</small></button>`).join('') : '<span class="description">No related games are in this library yet.</span>';
         document.querySelectorAll('[data-related]').forEach(button => button.onclick = () => selectGame(Number(button.dataset.related)));
       } catch(error) { if ($('relatedGames')) $('relatedGames').textContent = error.message; }
     }
     const fact = (label,value) => `<div class="fact"><small>${label}</small><span>${escapeHtml(value || '-')}</span></div>`;
-    function render() { renderPlatformCategories(); renderPlatforms(); renderPlaylists(); renderFilterPresets(); renderGrid(); renderDetails(); applySidebarVisibility(); $('status').textContent = `${games.length} games · local library`; }
+    function render() { renderPlatformCategories(); renderPlatforms(); renderPlaylists(); renderFilterPresets(); renderGrid(); renderDetails(); applySidebarVisibility(); $('status').textContent = `${AppState.games.length} games · local library`; }
     function collectionStats(items) {
       const completed = items.filter(game => ['Beaten','Completed','Mastered'].includes(game.progress)).length;
       const playtime = items.reduce((total, game) => total + Number(game.playtime_seconds || 0), 0);
@@ -568,14 +591,14 @@ const token = new URLSearchParams(location.search).get('token') || '';
       document.querySelectorAll('[data-collection-game]').forEach(button => button.onclick = () => selectGame(Number(button.dataset.collectionGame)));
     }
     async function renderPlatformDetails(platformName) {
-      const count = games.filter(game => (game.platform || 'Unspecified') === platformName).length;
-      const items = games.filter(game => (game.platform || 'Unspecified') === platformName);
+      const count = AppState.games.filter(game => (game.platform || 'Unspecified') === platformName).length;
+      const items = AppState.games.filter(game => (game.platform || 'Unspecified') === platformName);
       let documents = [];
       try {
         const result = await api(`/api/platform/documents?platform=${encodeURIComponent(platformName)}`);
         documents = result.documents || [];
       } catch(error) {
-        documents = appSettings.platform_documents?.[platformName] || [];
+        documents = AppState.appSettings.platform_documents?.[platformName] || [];
       }
       $('details').innerHTML = `<div class="platform-panel"><div class="hero-kicker">Platform</div><h2>${escapeHtml(platformName)}</h2><p class="description">${count} game${count === 1 ? '' : 's'} in this platform view.</p>${collectionStats(items)}<div class="detail-card"><h3>Platform documents</h3>${documents.length ? `<div class="extras">${documents.map((item,index) => `<button class="icon-button" data-platform-doc="${index}">${escapeHtml(item.name)}</button>`).join('')}</div>` : '<p class="description">No platform documents configured yet.</p>'}<div class="extras"><button class="icon-button" id="editPlatformDocuments">Edit platform documents</button></div></div><div class="detail-card"><h3>Platform shortcuts</h3><div class="extras"><button class="primary" id="platformRandom">Play random</button>${items.filter(game => game.last_played).sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)))[0] ? `<button class="icon-button" id="platformLast">Last played</button>` : ''}${items.sort((a,b) => Number(b.play_count || 0) - Number(a.play_count || 0))[0] ? `<button class="icon-button" id="platformMost">Most played</button>` : ''}</div></div></div>`;
       if (items.length) $('platformRandom').onclick = () => launch(items[Math.floor(Math.random() * items.length)].id);
@@ -584,13 +607,13 @@ const token = new URLSearchParams(location.search).get('token') || '';
       if (last && $('platformLast')) $('platformLast').onclick = () => selectGame(last.id);
       if (most && $('platformMost')) $('platformMost').onclick = () => selectGame(most.id);
       $('editPlatformDocuments').onclick = async () => {
-        const current = (appSettings.platform_documents?.[platformName] || documents).map(item => `${item.name} | ${item.path}`).join('\n');
+        const current = (AppState.appSettings.platform_documents?.[platformName] || documents).map(item => `${item.name} | ${item.path}`).join('\n');
         const value = prompt(`Platform documents for ${platformName}, one per line: Name | Path`, current);
         if (value === null) return;
         const rows = value.split('\n').map(line => line.trim()).filter(Boolean).map(line => { const [name,...rest] = line.split('|'); return {name:(name || '').trim(), path:rest.join('|').trim()}; }).filter(item => item.name && item.path);
         try {
           await api('/api/platform/documents',{method:'POST',body:JSON.stringify({platform:platformName,documents:rows})});
-          appSettings.platform_documents = {...(appSettings.platform_documents || {}), [platformName]: rows};
+          AppState.appSettings.platform_documents = {...(AppState.appSettings.platform_documents || {}), [platformName]: rows};
           renderPlatformDetails(platformName);
           notify('Platform documents saved');
         } catch(error) { notify(error.message); }
@@ -604,8 +627,8 @@ const token = new URLSearchParams(location.search).get('token') || '';
     function openReader(game, index, customUrl) {
       const doc = game.documents[index];
       if (!doc) return;
-      readerPage = 1;
-      readerUrl = customUrl || `/api/document?id=${game.id}&index=${index}&token=${encodeURIComponent(token)}`;
+      AppState.readerPage = 1;
+      AppState.readerUrl = customUrl || `/api/document?id=${game.id}&index=${index}&token=${encodeURIComponent(token)}`;
       $('readerTitle').textContent = doc.name;
       $('readerViewport').classList.remove('spread');
       $('readerFrame').style.filter = '';
@@ -613,10 +636,10 @@ const token = new URLSearchParams(location.search).get('token') || '';
       $('readerDialog').showModal();
     }
     function setReaderPage(page) {
-      readerPage = Math.max(1, page);
-      const suffix = readerUrl.toLowerCase().includes('.pdf') || readerUrl.includes('/api/document') ? `#page=${readerPage}` : '';
-      $('readerFrame').src = `${readerUrl}${suffix}`;
-      $('readerPageLabel').textContent = `Page ${readerPage}`;
+      AppState.readerPage = Math.max(1, page);
+      const suffix = AppState.readerUrl.toLowerCase().includes('.pdf') || AppState.readerUrl.includes('/api/document') ? `#page=${AppState.readerPage}` : '';
+      $('readerFrame').src = `${AppState.readerUrl}${suffix}`;
+      $('readerPageLabel').textContent = `Page ${AppState.readerPage}`;
     }
     async function launch(id, trigger = $('playButton')) {
       setButtonBusy(trigger, true);
@@ -645,9 +668,9 @@ const token = new URLSearchParams(location.search).get('token') || '';
       }
       sessionPollBusy = true;
       try {
-        const result = await api(`/api/running?after=${lastSessionEvent}`);
-        lastSessionEvent = result.last_event;
-        runningGames = result.running;
+        const result = await api(`/api/running?after=${AppState.lastSessionEvent}`);
+        AppState.lastSessionEvent = result.last_event;
+        AppState.runningGames = result.running;
         const stopped = result.events.filter(event => event.kind === 'stopped').at(-1);
         if (stopped) {
           const exitCode = Number(stopped.exit_code ?? '');
@@ -670,7 +693,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       finally {
         sessionPollBusy = false;
         // Poll every second while a session is active, every ten when idle.
-        sessionPollIdle = !runningGames.length;
+        sessionPollIdle = !AppState.runningGames.length;
         setTimeout(pollSessions, sessionPollIdle ? 10000 : 1000);
       }
     }
@@ -692,12 +715,12 @@ const token = new URLSearchParams(location.search).get('token') || '';
     }
     async function completeWelcome() {
       try {
-        appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify({...collectSettings(),welcome_completed:true})});
+        AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify({...collectSettings(),welcome_completed:true})});
         $('welcomeDialog').close();
       } catch(error) { notify(error.message); }
     }
     function maybeShowWelcome() {
-      if (!appSettings.welcome_completed && !games.length) $('welcomeDialog').showModal();
+      if (!AppState.appSettings.welcome_completed && !AppState.games.length) $('welcomeDialog').showModal();
     }
     function collectSettings() {
       return {
@@ -732,7 +755,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
         image_group:$('defaultImageGroup').value,
         badge_visibility:[...document.querySelectorAll('[data-badge-setting]:checked')].map(input => input.dataset.badgeSetting),
         controller_map:Object.fromEntries([...document.querySelectorAll('[data-controller]')].map(input => [input.dataset.controller,Number(input.value)])),
-        welcome_completed:appSettings.welcome_completed,
+        welcome_completed:AppState.appSettings.welcome_completed,
         locale:$('localeSetting').value,
         library_view:$('libraryViewSetting').value,
         custom_field_defs:($('customFieldDefs').value || '').split('\n').map(line => line.trim()).filter(Boolean).map(line => { const [name,...rest] = line.split('|'); return {name:(name || '').trim(), options:rest.join('|').split(',').map(value => value.trim()).filter(Boolean)}; }).filter(item => item.name),
@@ -775,41 +798,41 @@ const token = new URLSearchParams(location.search).get('token') || '';
       $('shutdownMessage').textContent = 'Running shutdown applications...';
       window.close();
     }
-    async function favorite(id) { try { const result = await api('/api/favorite',{method:'POST',body:JSON.stringify({id})}); const game = games.find(item => item.id === id); if (game) game.favorite = result.favorite; renderGrid(); renderDetails(); } catch(error) { notify(error.message); } }
-    function closeContextMenu() { $('contextMenu').hidden = true; contextGameId = null; }
+    async function favorite(id) { try { const result = await api('/api/favorite',{method:'POST',body:JSON.stringify({id})}); const game = AppState.games.find(item => item.id === id); if (game) game.favorite = result.favorite; renderGrid(); renderDetails(); } catch(error) { notify(error.message); } }
+    function closeContextMenu() { $('contextMenu').hidden = true; AppState.contextGameId = null; }
     function openContextMenu(event, id) {
       event.preventDefault();
-      contextGameId = id;
-      selectedId = id;
+      AppState.contextGameId = id;
+      AppState.selectedId = id;
       const menu = $('contextMenu');
-      $('contextPlaylist').innerHTML = '<option value="">Add to playlist...</option>' + playlists.filter(item => item.type === 'manual').map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join('');
+      $('contextPlaylist').innerHTML = '<option value="">Add to playlist...</option>' + AppState.playlists.filter(item => item.type === 'manual').map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join('');
       menu.hidden = false;
       menu.style.left = `${Math.min(event.clientX, window.innerWidth - menu.offsetWidth - 8)}px`;
       menu.style.top = `${Math.min(event.clientY, window.innerHeight - menu.offsetHeight - 8)}px`;
     }
     async function updateGameStatus(id, progress) {
-      const game = games.find(item => item.id === id);
+      const game = AppState.games.find(item => item.id === id);
       if (!game) return;
       try { await api('/api/game',{method:'POST',body:JSON.stringify({id,game:{...game,progress}})}); await refresh(); notify(`Progress set to ${progress || 'Not set'}`); } catch(error) { notify(error.message); }
     }
     async function removeGame(id,name) {
       if (!confirm(`Remove "${name}" from OpenBox? Game files will not be deleted.`)) return;
       const alsoDeleteMedia = confirm('Also delete associated media files listed in this game entry?');
-      try { await api('/api/game/delete',{method:'POST',body:JSON.stringify({id,delete_media:alsoDeleteMedia})}); selectedId = null; await refresh(); notify('Game removed from library'); } catch(error) { notify(error.message); }
+      try { await api('/api/game/delete',{method:'POST',body:JSON.stringify({id,delete_media:alsoDeleteMedia})}); AppState.selectedId = null; await refresh(); notify('Game removed from library'); } catch(error) { notify(error.message); }
     }
     async function launchExtra(id,kind,index) { try { await api('/api/extra/launch',{method:'POST',body:JSON.stringify({id,kind,index})}); notify('Opened'); } catch(error) { notify(error.message); } }
     async function openSessions() {
       try {
-        const result = await api(`/api/running?after=${lastSessionEvent}`);
-        runningGames = result.running;
-        lastSessionEvent = result.last_event;
+        const result = await api(`/api/running?after=${AppState.lastSessionEvent}`);
+        AppState.runningGames = result.running;
+        AppState.lastSessionEvent = result.last_event;
         renderSessions();
         if (!$('sessionsDialog').open) $('sessionsDialog').showModal();
       } catch(error) { notify(error.message); }
     }
     function renderSessions() {
-      $('sessionList').innerHTML = runningGames.length ? runningGames.map(session => {
-        const game = games.find(item => item.id === session.game_id);
+      $('sessionList').innerHTML = AppState.runningGames.length ? AppState.runningGames.map(session => {
+        const game = AppState.games.find(item => item.id === session.game_id);
         const extras = game ? `${game.documents.map((item,index) => `<button class="icon-button" data-session-extra="${game.id}:documents:${index}">Read ${escapeHtml(item.name)}</button>`).join('')}${game.applications.map((item,index) => `<button class="icon-button" data-session-extra="${game.id}:applications:${index}">${escapeHtml(item.name)}</button>`).join('')}${game.versions.map((item,index) => `<button class="icon-button" data-session-extra="${game.id}:versions:${index}">Version · ${escapeHtml(item.name)}</button>`).join('')}${game.save_paths.length ? `<button class="icon-button" data-session-backup="${game.id}">Back up saves</button>` : ''}` : '';
         return `<div class="detail-card"><h3>${escapeHtml(session.game)}</h3><p class="description">${session.paused ? 'Paused' : 'Running'} · PID ${session.pid} · started ${escapeHtml(session.started.replace('T',' '))}</p><div class="extras"><button class="primary" data-session-action="${session.launch_id}:${session.paused ? 'resume' : 'pause'}">${session.paused ? 'Resume' : 'Pause'}</button><button class="icon-button" data-session-action="${session.launch_id}:restart">Restart</button><button class="icon-button" data-session-action="${session.launch_id}:stop">Exit</button><button class="icon-button" data-session-action="${session.launch_id}:kill">Force close</button>${extras}</div></div>`;
       }).join('') : '<p class="description">No games are running.</p>';
@@ -852,7 +875,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
     }
     async function steamMetadata(id) { try { notify('Downloading Steam metadata and artwork'); await api('/api/metadata/steam',{method:'POST',body:JSON.stringify({id})}); await refresh(); notify('Steam metadata updated'); } catch(error) { notify(error.message); } }
     async function openMetadata(game) {
-      metadataGameId = game.id;
+      AppState.metadataGameId = game.id;
       $('metadataQuery').value = game.name;
       $('metadataResults').innerHTML = '';
       if (!$('metadataDialog').open) $('metadataDialog').showModal();
@@ -890,7 +913,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       }
     }    async function searchMetadata() {
       try {
-        const result = await api(`/api/metadata/search?id=${metadataGameId}&q=${encodeURIComponent($('metadataQuery').value)}`);
+        const result = await api(`/api/metadata/search?id=${AppState.metadataGameId}&q=${encodeURIComponent($('metadataQuery').value)}`);
         $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platform)}${item.release_date ? ` · ${escapeHtml(item.release_date)}` : ''}${item.developer ? ` · ${escapeHtml(item.developer)}` : ''}</small></div><button type="button" class="primary" data-apply-metadata="${item.database_id}">Use</button></div>`).join('') : '<p class="description">No matching games found.</p>';
         document.querySelectorAll('[data-apply-metadata]').forEach(button => button.onclick = () => applyMetadata(button.dataset.applyMetadata));
       } catch(error) { notify(error.message); }
@@ -899,7 +922,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       const media = [['cover','metadataCover'],['background','metadataBackground'],['screenshots','metadataScreenshots'],['box_back','metadataBoxBack'],['box_spine','metadataBoxSpine'],['box_3d','metadataBox3d'],['clear_logo','metadataClearLogo'],['fanart','metadataFanart'],['banner','metadataBanner'],['icon','metadataIcon'],['title_screen','metadataTitleScreen'],['cart_front','metadataCartFront'],['cart_back','metadataCartBack'],['disc','metadataDisc'],['advertisement','metadataAdvertisement'],['manual','metadataManual']].filter(([,id]) => $(id).checked).map(([name]) => name);
       try {
         notify('Downloading selected metadata and media');
-        const result = await api('/api/metadata/apply',{method:'POST',body:JSON.stringify({id:metadataGameId,database_id:databaseId,media,overwrite:$('metadataOverwrite').checked})});
+        const result = await api('/api/metadata/apply',{method:'POST',body:JSON.stringify({id:AppState.metadataGameId,database_id:databaseId,media,overwrite:$('metadataOverwrite').checked})});
         $('metadataDialog').close();
         await refresh();
         notify((result.notes || []).length ? result.notes.join(' · ') : 'Metadata applied');
@@ -916,7 +939,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
     $('searchIgdb').onclick = async () => {
       const game = games.find(item => item.id === metadataGameId);
       try {
-        const result = await api(`/api/metadata/igdb/search?q=${encodeURIComponent($('metadataQuery').value)}&platform=${encodeURIComponent(game?.platform || '')}`);
+        const result = await api(`/api/metadata/igdb/search?q=${encodeURIComponent($('metadataQuery').value)}&AppState.platform =${encodeURIComponent(game?.platform || '')}`);
         $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platforms || '')}${item.year ? ` · ${escapeHtml(item.year)}` : ''}</small><p class="description">${escapeHtml(item.summary || '')}</p></div><button type="button" class="primary" data-apply-igdb="${item.id}">Use</button></div>`).join('') : '<p class="description">No IGDB matches found.</p>';
         document.querySelectorAll('[data-apply-igdb]').forEach(button => button.onclick = async () => {
           try {
@@ -948,7 +971,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
     }
     async function openGameDialog(game = null) {
       await ensureProfiles();
-      editingId = game ? game.id : null;
+      AppState.editingId = game ? game.id : null;
       $('dialogTitle').textContent = game ? 'Edit game' : 'Add game';
       [...$('gameForm').elements].forEach(element => {
         if (!element.name) return;
@@ -962,7 +985,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
         else element.value = game?.[element.name] || '';
       });
       const container = $('customFieldInputs');
-      const defs = appSettings.custom_field_defs || [];
+      const defs = AppState.appSettings.custom_field_defs || [];
       container.innerHTML = defs.length ? defs.map(def => {
         const value = game?.custom_fields?.[def.name] || '';
         if (def.options?.length) {
@@ -974,7 +997,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       const platformName = $('gameForm').elements.platform.value.trim();
       if (profileSelect) {
         const currentProfile = game?.launch_profile || '';
-        profileSelect.innerHTML = '<option value="">Default platform profile</option>' + Object.keys(availableProfiles).filter(name => !platformName || name === platformName).map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+        profileSelect.innerHTML = '<option value="">Default platform profile</option>' + Object.keys(AppState.availableProfiles).filter(name => !platformName || name === platformName).map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
         profileSelect.value = currentProfile;
       }
       openDialog($('gameDialog'));
@@ -1051,58 +1074,58 @@ const token = new URLSearchParams(location.search).get('token') || '';
     }
     async function openSettings() {
       try {
-        appSettings = await api('/api/settings');
-        $('watchFolders').value = appSettings.watch_folders.join('\n');
-        $('cloudFolder').value = appSettings.cloud_folder || '';
-        $('cloudStatus').textContent = appSettings.last_cloud_sync ? ` Last synced ${appSettings.last_cloud_sync.replace('T',' ')}` : '';
-        $('screensaverSeconds').value = appSettings.screensaver_seconds;
-        $('startupCommands').value = (appSettings.startup_commands || []).join('\n');
-        $('shutdownCommands').value = (appSettings.shutdown_commands || []).join('\n');
-        $('defaultImageGroup').value = appSettings.image_group || 'cover';
-        const visibleBadges = new Set(appSettings.badge_visibility || defaultBadges);
+        AppState.appSettings = await api('/api/settings');
+        $('watchFolders').value = AppState.appSettings.watch_folders.join('\n');
+        $('cloudFolder').value = AppState.appSettings.cloud_folder || '';
+        $('cloudStatus').textContent = AppState.appSettings.last_cloud_sync ? ` Last synced ${AppState.appSettings.last_cloud_sync.replace('T',' ')}` : '';
+        $('screensaverSeconds').value = AppState.appSettings.screensaver_seconds;
+        $('startupCommands').value = (AppState.appSettings.startup_commands || []).join('\n');
+        $('shutdownCommands').value = (AppState.appSettings.shutdown_commands || []).join('\n');
+        $('defaultImageGroup').value = AppState.appSettings.image_group || 'cover';
+        const visibleBadges = new Set(AppState.appSettings.badge_visibility || defaultBadges);
         document.querySelectorAll('[data-badge-setting]').forEach(input => input.checked = visibleBadges.has(input.dataset.badgeSetting));
-        $('trackSessionHistory').checked = appSettings.track_session_history !== false;
-        $('backupOnClose').checked = Boolean(appSettings.backup_on_close);
-        $('progressAutomationEnabled').checked = Boolean(appSettings.progress_automation_enabled);
-        $('progressAutomationMinutes').value = appSettings.progress_automation_play_minutes ?? 30;
-        $('progressAutomationIdleDays').value = appSettings.progress_automation_idle_days ?? 30;
-        if ($('progressOnFirstPlay')) $('progressOnFirstPlay').value = appSettings.progress_on_first_play ?? 'Playing';
-        if ($('trackingMode')) $('trackingMode').value = appSettings.tracking_mode || 'default';
-        if ($('trackingDelay')) $('trackingDelay').value = appSettings.tracking_delay ?? 0;
-        if ($('trackingFrequency')) $('trackingFrequency').value = appSettings.tracking_frequency ?? 2;
-        if ($('applyPerf')) $('applyPerf').value = appSettings.apply_perf || 'auto';
-        if ($('autoCloseStoreClients')) $('autoCloseStoreClients').checked = Boolean(appSettings.auto_close_store_clients);
-        $('saveBackupLimit').value = appSettings.save_backup_limit ?? 10;
-        $('mediaDownloadLimit').value = appSettings.media_download_limit ?? 0;
-        $('autoImportMediaTypes').value = (appSettings.auto_import_media_types || ['cover','background','screenshots']).join(', ');
-        $('regionPriority').value = (appSettings.region_priority || ['North America','World','Europe','Japan']).join(', ');
-        $('libraryMusic').value = appSettings.library_music || '';
-        $('videoBgmMix').checked = Boolean(appSettings.video_bgm_mix);
-        $('bigBoxMode').value = appSettings.bigbox_mode || 'stage';
-        $('showPlaylistActions').checked = appSettings.show_playlist_actions !== false;
-        $('dynamicPlayButton').checked = appSettings.dynamic_play_button !== false;
-        $('hiddenSidebarSections').value = (appSettings.hidden_sidebar_sections || []).join(', ');
-        $('obsAutoAttach').checked = appSettings.obs_auto_attach !== false;
-        $('obsRecordingPath').value = appSettings.obs_recording_path || '';
-        $('localeSetting').value = appSettings.locale || 'en';
-        $('libraryViewSetting').value = appSettings.library_view || 'grid';
-        $('customFieldDefs').value = (appSettings.custom_field_defs || []).map(item => `${item.name}|${(item.options || []).join(',')}`).join('\n');
-        $('bigboxStartupVideo').value = appSettings.bigbox_startup_video || '';
-        $('bigboxShutdownCommands').value = (appSettings.bigbox_shutdown_commands || []).join('\n');
-        $('attractModeSeconds').value = appSettings.attract_mode_seconds ?? appSettings.screensaver_seconds ?? 90;
-        $('trayEnabled').checked = Boolean(appSettings.tray_enabled);
-        $('minimizeToTray').checked = Boolean(appSettings.minimize_to_tray);
-        if ($('uiWindow')) $('uiWindow').value = appSettings.ui_window || 'app';
-        if ($('ludusaviBackupPath')) $('ludusaviBackupPath').value = appSettings.ludusavi_backup_path || '';
-        $('mediaPackStatus').textContent = (appSettings.media_packs || []).filter(item => item.active).map(item => item.name).join(', ');
-        $('viewToggleButton').textContent = (appSettings.library_view || 'grid') === 'list' ? 'Grid view' : 'List view';
+        $('trackSessionHistory').checked = AppState.appSettings.track_session_history !== false;
+        $('backupOnClose').checked = Boolean(AppState.appSettings.backup_on_close);
+        $('progressAutomationEnabled').checked = Boolean(AppState.appSettings.progress_automation_enabled);
+        $('progressAutomationMinutes').value = AppState.appSettings.progress_automation_play_minutes ?? 30;
+        $('progressAutomationIdleDays').value = AppState.appSettings.progress_automation_idle_days ?? 30;
+        if ($('progressOnFirstPlay')) $('progressOnFirstPlay').value = AppState.appSettings.progress_on_first_play ?? 'Playing';
+        if ($('trackingMode')) $('trackingMode').value = AppState.appSettings.tracking_mode || 'default';
+        if ($('trackingDelay')) $('trackingDelay').value = AppState.appSettings.tracking_delay ?? 0;
+        if ($('trackingFrequency')) $('trackingFrequency').value = AppState.appSettings.tracking_frequency ?? 2;
+        if ($('applyPerf')) $('applyPerf').value = AppState.appSettings.apply_perf || 'auto';
+        if ($('autoCloseStoreClients')) $('autoCloseStoreClients').checked = Boolean(AppState.appSettings.auto_close_store_clients);
+        $('saveBackupLimit').value = AppState.appSettings.save_backup_limit ?? 10;
+        $('mediaDownloadLimit').value = AppState.appSettings.media_download_limit ?? 0;
+        $('autoImportMediaTypes').value = (AppState.appSettings.auto_import_media_types || ['cover','background','screenshots']).join(', ');
+        $('regionPriority').value = (AppState.appSettings.region_priority || ['North America','World','Europe','Japan']).join(', ');
+        $('libraryMusic').value = AppState.appSettings.library_music || '';
+        $('videoBgmMix').checked = Boolean(AppState.appSettings.video_bgm_mix);
+        $('bigBoxMode').value = AppState.appSettings.bigbox_mode || 'stage';
+        $('showPlaylistActions').checked = AppState.appSettings.show_playlist_actions !== false;
+        $('dynamicPlayButton').checked = AppState.appSettings.dynamic_play_button !== false;
+        $('hiddenSidebarSections').value = (AppState.appSettings.hidden_sidebar_sections || []).join(', ');
+        $('obsAutoAttach').checked = AppState.appSettings.obs_auto_attach !== false;
+        $('obsRecordingPath').value = AppState.appSettings.obs_recording_path || '';
+        $('localeSetting').value = AppState.appSettings.locale || 'en';
+        $('libraryViewSetting').value = AppState.appSettings.library_view || 'grid';
+        $('customFieldDefs').value = (AppState.appSettings.custom_field_defs || []).map(item => `${item.name}|${(item.options || []).join(',')}`).join('\n');
+        $('bigboxStartupVideo').value = AppState.appSettings.bigbox_startup_video || '';
+        $('bigboxShutdownCommands').value = (AppState.appSettings.bigbox_shutdown_commands || []).join('\n');
+        $('attractModeSeconds').value = AppState.appSettings.attract_mode_seconds ?? AppState.appSettings.screensaver_seconds ?? 90;
+        $('trayEnabled').checked = Boolean(AppState.appSettings.tray_enabled);
+        $('minimizeToTray').checked = Boolean(AppState.appSettings.minimize_to_tray);
+        if ($('uiWindow')) $('uiWindow').value = AppState.appSettings.ui_window || 'app';
+        if ($('ludusaviBackupPath')) $('ludusaviBackupPath').value = AppState.appSettings.ludusavi_backup_path || '';
+        $('mediaPackStatus').textContent = (AppState.appSettings.media_packs || []).filter(item => item.active).map(item => item.name).join(', ');
+        $('viewToggleButton').textContent = (AppState.appSettings.library_view || 'grid') === 'list' ? 'Grid view' : 'List view';
         $('settingsSearch').value = '';
         filterSettings();
-        const mapping = {...defaultControllerMap,...appSettings.controller_map};
+        const mapping = {...defaultControllerMap,...AppState.appSettings.controller_map};
         document.querySelectorAll('[data-controller]').forEach(input => input.value = mapping[input.dataset.controller]);
-        $('updateStatus').textContent = `OpenBox ${appSettings.version}${appSettings.appimage ? ' · AppImage' : ' · source checkout'}`;
+        $('updateStatus').textContent = `OpenBox ${AppState.appSettings.version}${AppState.appSettings.appimage ? ' · AppImage' : ' · source checkout'}`;
         $('installUpdate').hidden = true;
-        $('installDesktop').disabled = !appSettings.appimage;
+        $('installDesktop').disabled = !AppState.appSettings.appimage;
         if (!$('settingsDialog').open) $('settingsDialog').showModal();
       } catch(error) { notify(error.message); }
     }
@@ -1110,7 +1133,8 @@ const token = new URLSearchParams(location.search).get('token') || '';
       event.preventDefault();
       try {
         await saveEmumoviesSettings().catch(() => {});
-        appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
+        AppState.persist();
+        AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
         $('settingsDialog').close();
         notify('Settings saved');
         applyLibraryMusic();
@@ -1120,7 +1144,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
     };
     $('scanWatched').onclick = async () => {
       try {
-        appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
+        AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
         const result = await api('/api/import/watch',{method:'POST',body:'{}'});
         await refresh();
         notify(`${result.added} games imported from watched folders${result.errors.length ? ` · ${result.errors.length} errors` : ''}`);
@@ -1130,7 +1154,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       if (!confirm('Remove every imported Steam game from OpenBox? Game files and media will stay on disk.')) return;
       try {
         const result = await api('/api/games/delete-steam',{method:'POST',body:'{}'});
-        selectedId = null;
+        AppState.selectedId = null;
         await refresh();
         notify(`${result.removed} imported Steam game${result.removed === 1 ? '' : 's'} removed from library`);
       } catch(error) { notify(error.message); }
@@ -1149,7 +1173,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
     };
     $('syncCloud').onclick = async () => {
       try {
-        appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
+        AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
         const result = await api('/api/cloud/sync',{method:'POST',body:'{}'});
         $('cloudStatus').textContent = ` Synced ${result.games} games, merged ${result.merged} remote changes`;
         await refresh();
@@ -1158,7 +1182,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
     $('checkUpdate').onclick = async () => {
       try {
         $('updateStatus').textContent = 'Checking the verified GitHub release channel...';
-        pendingUpdate = await api('/api/update');
+        AppState.pendingUpdate = await api('/api/update');
         $('updateStatus').textContent = pendingUpdate.available ? `OpenBox ${pendingUpdate.latest} is available. ${pendingUpdate.notes || ''}` : `OpenBox ${pendingUpdate.current} is current.`;
         $('installUpdate').hidden = !pendingUpdate.available;
       } catch(error) { $('updateStatus').textContent = error.message; }
@@ -1289,16 +1313,16 @@ const token = new URLSearchParams(location.search).get('token') || '';
       } catch(error) { notify(error.message); }
     };
     async function loadTheme() {
-      const result = await api(`/api/themes?platform=${encodeURIComponent(platform === 'all' ? '' : platform)}`);
+      const result = await api(`/api/themes?platform=${encodeURIComponent(AppState.platform === 'all' ? '' : AppState.platform)}`);
       $('themeStylesheet').href = result.selected ? `/api/theme.css?name=${encodeURIComponent(result.selected)}&token=${encodeURIComponent(token)}` : '';
       return result;
     }
     async function openThemes() {
       try {
         const result = await loadTheme();
-        const platforms = [...new Set(games.map(game => game.platform).filter(Boolean))].sort();
+        const platforms = [...new Set(AppState.games.map(game => game.platform).filter(Boolean))].sort();
         $('themeScope').innerHTML = '<option value="">All platforms</option>' + platforms.map(name => `<option>${escapeHtml(name)}</option>`).join('');
-        $('themeScope').value = platform === 'all' ? '' : platform;
+        $('themeScope').value = AppState.platform === 'all' ? '' : AppState.platform;
         $('themeSelect').innerHTML = '<option value="">Default</option>' + result.themes.map(name => `<option>${escapeHtml(name)}</option>`).join('');
         $('themeSelect').value = result.selected;
         $('themeScope').onchange = async () => {
@@ -1371,8 +1395,8 @@ const token = new URLSearchParams(location.search).get('token') || '';
     async function openMediaManager() {
       if (!$('mediaManagerDialog').open) $('mediaManagerDialog').showModal();
       try {
-        const audit = await api(`/api/media/audit?platform=${encodeURIComponent(platform)}`);
-        $('mediaAudit').innerHTML = `<h3>${platform === 'all' ? 'Entire library' : escapeHtml(platform)}</h3><div class="facts">${fact('Games',audit.games)}${fact('Database matched',audit.matched)}${fact('Missing box front',audit.missing_cover)}${fact('Missing background',audit.missing_background)}${fact('Missing screenshots',audit.missing_screenshots)}${fact('Missing box back',audit.missing_box_back)}${fact('Missing box spine',audit.missing_box_spine)}${fact('Missing 3D box',audit.missing_box_3d)}${fact('Missing clear logo',audit.missing_clear_logo)}${fact('Missing fanart',audit.missing_fanart)}${fact('Missing banner',audit.missing_banner)}${fact('Missing icon',audit.missing_icon)}${fact('Missing title screen',audit.missing_title_screen)}${fact('Missing cart front',audit.missing_cart_front)}${fact('Missing cart back',audit.missing_cart_back)}${fact('Missing disc',audit.missing_disc)}${fact('Missing ads / flyers',audit.missing_advertisement)}${fact('Missing manual',audit.missing_manual)}</div>`;
+        const audit = await api(`/api/media/audit?platform=${encodeURIComponent(AppState.platform)}`);
+        $('mediaAudit').innerHTML = `<h3>${AppState.platform === 'all' ? 'Entire library' : escapeHtml(AppState.platform)}</h3><div class="facts">${fact('Games',audit.games)}${fact('Database matched',audit.matched)}${fact('Missing box front',audit.missing_cover)}${fact('Missing background',audit.missing_background)}${fact('Missing screenshots',audit.missing_screenshots)}${fact('Missing box back',audit.missing_box_back)}${fact('Missing box spine',audit.missing_box_spine)}${fact('Missing 3D box',audit.missing_box_3d)}${fact('Missing clear logo',audit.missing_clear_logo)}${fact('Missing fanart',audit.missing_fanart)}${fact('Missing banner',audit.missing_banner)}${fact('Missing icon',audit.missing_icon)}${fact('Missing title screen',audit.missing_title_screen)}${fact('Missing cart front',audit.missing_cart_front)}${fact('Missing cart back',audit.missing_cart_back)}${fact('Missing disc',audit.missing_disc)}${fact('Missing ads / flyers',audit.missing_advertisement)}${fact('Missing manual',audit.missing_manual)}</div>`;
         const status = await api('/api/media/bulk/status');
         renderBulkMediaStatus(status.job);
       } catch(error) { notify(error.message); }
@@ -1424,7 +1448,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
         const result = await api('/api/health',{method:'POST',body:'{}'});
         $('healthSummary').innerHTML = `<h3>Audit summary</h3><div class="facts">${fact('Games',result.games)}${fact('Missing games',result.missing)}${fact('Duplicates',result.duplicates)}${fact('Missing box fronts',result.missing_media)}</div>`;
         $('healthIssues').innerHTML = result.issues.length ? result.issues.map(issue => `<button type="button" class="metadata-result icon-button" data-audit-game="${issue.id}"><div><strong>${escapeHtml(issue.game)}</strong><small>${escapeHtml(issue.type)} · ${escapeHtml(issue.detail)}</small></div></button>`).join('') : '<p class="description">No library issues found.</p>';
-        document.querySelectorAll('[data-audit-game]').forEach(button => button.onclick = () => { selectedId = Number(button.dataset.auditGame); $('healthDialog').close(); render(); });
+        document.querySelectorAll('[data-audit-game]').forEach(button => button.onclick = () => { AppState.selectedId = Number(button.dataset.auditGame); $('healthDialog').close(); render(); });
         $('dedupeButton').disabled = !result.duplicates;
         renderJobsPanel();
         if (!$('healthDialog').open) $('healthDialog').showModal();
@@ -1435,32 +1459,32 @@ const token = new URLSearchParams(location.search).get('token') || '';
       try { const result = await api('/api/health/dedupe',{method:'POST',body:'{}'}); await refresh(); await health(); notify(`${result.removed.length} duplicate entries removed`); } catch(error) { notify(error.message); }
     };
     async function savePreset() {
-      const name = prompt('Filter preset name', activeFilterPreset || activePlaylist);
+      const name = prompt('Filter preset name', AppState.activeFilterPreset || AppState.activePlaylist);
       if (!name?.trim()) return;
       const bigbox_quick = confirm('Pin this preset to Big Box quick-switch?');
       const rules = {
-        platform,
-        platform_category: platformCategory,
+        platform: AppState.platform,
+        platform_category: AppState.platformCategory,
         view: $('view').value,
         query: $('sidebarSearch').value.trim(),
         esrb: $('esrbFilter')?.value || '',
-        progress: explorerRules.progress || ($('view').value === 'playing' ? 'Playing' : ''),
+        progress: AppState.explorerRules.progress || ($('view').value === 'playing' ? 'Playing' : ''),
       };
       try {
         await api('/api/filter-presets',{method:'POST',body:JSON.stringify({name:name.trim(),rules,bigbox_quick})});
-        activeFilterPreset = name.trim();
-        activePlaylist = '';
+        AppState.activeFilterPreset = name.trim();
+        AppState.activePlaylist = '';
         await refresh();
         notify('Filter preset saved');
       } catch(error) { notify(error.message); }
     }
     async function saveFilter() {
-      const name = prompt('Playlist name', activePlaylist);
+      const name = prompt('Playlist name', AppState.activePlaylist);
       if (!name?.trim()) return;
-      const rules = {platform,platform_category:platformCategory,view:$('view').value,query:$('sidebarSearch').value.trim(),esrb:$('esrbFilter')?.value || '',progress:explorerRules.progress || ''};
+      const rules = {platform: AppState.platform,platform_category:AppState.platformCategory,view:$('view').value,query:$('sidebarSearch').value.trim(),esrb:$('esrbFilter')?.value || '',progress:AppState.explorerRules.progress || ''};
       try {
         await api('/api/playlists',{method:'POST',body:JSON.stringify({name:name.trim(),type:'filter',rules})});
-        activePlaylist = name.trim();
+        AppState.activePlaylist = name.trim();
         await refresh();
         notify('Playlist saved');
       } catch(error) { notify(error.message); }
@@ -1485,7 +1509,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       const playlist = playlistFor(name);
       if (!playlist) return;
       if (playlist.type !== 'manual') return notify('Filter playlists manage membership from their rules.');
-      const members = [...new Set([...(playlist.members || []), ...ids.map(id => games.find(game => game.id === id)?.game_id || id)])];
+      const members = [...new Set([...(playlist.members || []), ...ids.map(id => AppState.games.find(game => game.id === id)?.game_id || id)])];
       await saveManualPlaylist(name, members, playlist.parent, playlist.notes);
     }
     async function updateManualPlaylist(playlist, members) {
@@ -1493,8 +1517,8 @@ const token = new URLSearchParams(location.search).get('token') || '';
       openPlaylists();
     }
     async function openPlaylists() {
-      $('playlistManagerList').innerHTML = playlists.length ? playlists.map(item => {
-        const members = (item.members || []).map(value => games.find(game => String(game.game_id) === String(value))).filter(Boolean);
+      $('playlistManagerList').innerHTML = AppState.playlists.length ? AppState.playlists.map(item => {
+        const members = (item.members || []).map(value => AppState.games.find(game => String(game.game_id) === String(value))).filter(Boolean);
         const memberRows = item.type === 'manual' ? `<div class="member-list">${members.map((game,index) => `<div class="member-row"><span>${escapeHtml(game.name)}</span><button type="button" class="icon-button" data-playlist-name="${escapeHtml(item.name)}" data-playlist-index="${index}" data-playlist-direction="up">↑</button><button type="button" class="icon-button" data-playlist-name="${escapeHtml(item.name)}" data-playlist-index="${index}" data-playlist-direction="down">↓</button></div>`).join('') || '<span class="description">No games yet.</span>'}</div>` : '';
         return `<div class="playlist-manager-item"><div><strong>${escapeHtml(item.name)}</strong><small>${item.type === 'manual' ? `${members.length} ordered games` : 'Filter playlist'}${item.parent ? ` · under ${escapeHtml(item.parent)}` : ''}</small>${memberRows}</div><div class="playlist-manager-actions"><button type="button" class="icon-button" data-edit-playlist="${escapeHtml(item.name)}">Edit</button><button type="button" class="playlist-delete" data-manager-delete-playlist="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div></div>`;
       }).join('') : '<p class="description">No playlists yet.</p>';
@@ -1538,7 +1562,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       if (!confirm(`Delete playlist "${name}"?`)) return;
       try {
         await api('/api/playlists/delete',{method:'POST',body:JSON.stringify({name})});
-        if (activePlaylist === name) activePlaylist = '';
+        if (AppState.activePlaylist === name) AppState.activePlaylist = '';
         await refresh();
         notify('Playlist deleted');
       } catch(error) { notify(error.message); }
@@ -1550,8 +1574,8 @@ const token = new URLSearchParams(location.search).get('token') || '';
       } catch(error) { notify(error.message); }
     }
     function bulkAction() {
-      if (!bulkMode) {
-        bulkMode = true;
+      if (!AppState.bulkMode) {
+        AppState.bulkMode = true;
         selectedIds.clear();
         renderGrid();
         notify('Select games, then choose Edit Selected');
@@ -1560,7 +1584,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
         $('bulkCount').textContent = `${selectedIds.size} game${selectedIds.size === 1 ? '' : 's'} selected. Only supplied values will change.`;
         $('bulkDialog').showModal();
       } else {
-        bulkMode = false;
+        AppState.bulkMode = false;
         renderGrid();
       }
     }
@@ -1577,26 +1601,26 @@ const token = new URLSearchParams(location.search).get('token') || '';
         const result = await api('/api/games/bulk-wizard',{method:'POST',body:JSON.stringify({ids:[...selectedIds],changes})});
         $('bulkDialog').close();
         selectedIds.clear();
-        bulkMode = false;
+        AppState.bulkMode = false;
         await refresh();
         notify(`${result.updated} games updated`);
       } catch(error) { notify(error.message); }
     };
     function openBigBox() {
-      bigBoxFilter = 'all';
-      bigBoxSort = 'title';
-      bigBoxHybridQuery = '';
+      AppState.bigBoxFilter = 'all';
+      AppState.bigBoxSort = 'title';
+      AppState.bigBoxHybridQuery = '';
       if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').value = '';
-      bigBoxGames = filteredBigBoxGames();
-      if (!bigBoxGames.length) { notify('No games are available in the current view'); return; }
-      bigBoxIndex = Math.max(0,bigBoxGames.findIndex(game => game.id === selectedId));
-      bigBoxLastInput = performance.now();
-      gamepadState = {};
+      AppState.bigBoxGames = filteredBigBoxGames();
+      if (!AppState.bigBoxGames.length) { notify('No games are available in the current view'); return; }
+      AppState.bigBoxIndex = Math.max(0,AppState.bigBoxGames.findIndex(game => game.id === AppState.selectedId));
+      AppState.bigBoxLastInput = performance.now();
+      AppState.gamepadState = {};
       $('bigBox').hidden = false;
       $('bigBox').focus();
       const startup = $('bigBoxStartupVideo');
-      if (startup && appSettings.bigbox_startup_video) {
-        startup.src = appSettings.bigbox_startup_video;
+      if (startup && AppState.appSettings.bigbox_startup_video) {
+        startup.src = AppState.appSettings.bigbox_startup_video;
         startup.hidden = false;
         startup.play().catch(() => {});
       } else if (startup) {
@@ -1619,24 +1643,24 @@ const token = new URLSearchParams(location.search).get('token') || '';
     }
     function filteredBigBoxGames() {
       let result = filteredGames().filter(game => !game.hide_in_bigbox);
-      if (bigBoxPlatform !== 'all') result = result.filter(game => game.platform === bigBoxPlatform);
-      if (bigBoxHybridQuery) {
-        const query = bigBoxHybridQuery.toLowerCase();
+      if (AppState.bigBoxPlatform !== 'all') result = result.filter(game => game.platform === AppState.bigBoxPlatform);
+      if (AppState.bigBoxHybridQuery) {
+        const query = AppState.bigBoxHybridQuery.toLowerCase();
         result = result.filter(game => [game.name,game.sort_title,game.genre,game.developer].join(' ').toLowerCase().includes(query));
       }
-      if (bigBoxFilter === 'installed') result = result.filter(game => game.store_installed !== false && (game.path_exists || game.store_installed));
-      if (bigBoxFilter === 'owned') result = result.filter(game => game.owned || game.store_catalog || game.gameyfin_id || game.steam_app_id || game.heroic_app_id || game.lutris_id);
-      if (bigBoxFilter === 'favorites') result = result.filter(game => game.favorite);
-      if (bigBoxFilter === 'playing') result = result.filter(game => ['Playing','Paused'].includes(game.progress));
-      if (bigBoxFilter === 'completed') result = result.filter(game => ['Beaten','Completed','Mastered'].includes(game.progress));
-      if (bigBoxRaFilter === 'matched') result = result.filter(game => game.ra_game_id);
-      if (bigBoxRaFilter === 'unmatched') result = result.filter(game => !game.ra_game_id);
+      if (AppState.bigBoxFilter === 'installed') result = result.filter(game => game.store_installed !== false && (game.path_exists || game.store_installed));
+      if (AppState.bigBoxFilter === 'owned') result = result.filter(game => game.owned || game.store_catalog || game.gameyfin_id || game.steam_app_id || game.heroic_app_id || game.lutris_id);
+      if (AppState.bigBoxFilter === 'favorites') result = result.filter(game => game.favorite);
+      if (AppState.bigBoxFilter === 'playing') result = result.filter(game => ['Playing','Paused'].includes(game.progress));
+      if (AppState.bigBoxFilter === 'completed') result = result.filter(game => ['Beaten','Completed','Mastered'].includes(game.progress));
+      if (AppState.bigBoxRaFilter === 'matched') result = result.filter(game => game.ra_game_id);
+      if (AppState.bigBoxRaFilter === 'unmatched') result = result.filter(game => !game.ra_game_id);
       result = [...result];
-      if (bigBoxSort === 'rating') result.sort((a,b) => Number(b.rating || 0) - Number(a.rating || 0) || a.name.localeCompare(b.name));
-      else if (bigBoxSort === 'recent') result.sort((a,b) => String(b.last_played || '').localeCompare(String(a.last_played || '')));
-      else if (bigBoxSort === 'recent_activity') result.sort((a,b) => recentActivityValue(b) - recentActivityValue(a));
-      else if (bigBoxSort === 'playtime') result.sort((a,b) => Number(b.playtime_seconds || 0) - Number(a.playtime_seconds || 0));
-      else if (bigBoxSort === 'random') {
+      if (AppState.bigBoxSort === 'rating') result.sort((a,b) => Number(b.rating || 0) - Number(a.rating || 0) || a.name.localeCompare(b.name));
+      else if (AppState.bigBoxSort === 'recent') result.sort((a,b) => String(b.last_played || '').localeCompare(String(a.last_played || '')));
+      else if (AppState.bigBoxSort === 'recent_activity') result.sort((a,b) => recentActivityValue(b) - recentActivityValue(a));
+      else if (AppState.bigBoxSort === 'playtime') result.sort((a,b) => Number(b.playtime_seconds || 0) - Number(a.playtime_seconds || 0));
+      else if (AppState.bigBoxSort === 'random') {
         for (let index = result.length - 1; index > 0; index--) {
           const swap = Math.floor(Math.random() * (index + 1));
           [result[index],result[swap]] = [result[swap],result[index]];
@@ -1645,76 +1669,76 @@ const token = new URLSearchParams(location.search).get('token') || '';
       return result;
     }
     function openBigBoxMenu() {
-      $('bigBoxFilter').value = bigBoxFilter;
-      $('bigBoxSort').value = bigBoxSort;
-      $('bigBoxRaFilter').value = bigBoxRaFilter;
+      $('bigBoxFilter').value = AppState.bigBoxFilter;
+      $('bigBoxSort').value = AppState.bigBoxSort;
+      $('bigBoxRaFilter').value = AppState.bigBoxRaFilter;
       $('bigBoxMenu').hidden = false;
       $('bigBoxFilter').focus();
     }
     function closeBigBoxMenu() {
       $('bigBoxMenu').hidden = true;
       $('bigBox').focus();
-      bigBoxLastInput = performance.now();
+      AppState.bigBoxLastInput = performance.now();
     }
     function applyBigBoxMenu() {
-      const currentId = bigBoxGames[bigBoxIndex]?.id;
-      bigBoxFilter = $('bigBoxFilter').value;
-      bigBoxSort = $('bigBoxSort').value;
-      bigBoxRaFilter = $('bigBoxRaFilter').value;
+      const currentId = AppState.bigBoxGames[AppState.bigBoxIndex]?.id;
+      AppState.bigBoxFilter = $('bigBoxFilter').value;
+      AppState.bigBoxSort = $('bigBoxSort').value;
+      AppState.bigBoxRaFilter = $('bigBoxRaFilter').value;
       const quickPreset = $('bigBoxQuickPreset')?.value;
       if (quickPreset) {
-        const preset = filterPresets.find(item => item.name === quickPreset);
+        const preset = AppState.filterPresets.find(item => item.name === quickPreset);
         if (preset?.rules) {
-          bigBoxFilter = preset.rules.view === 'favorites' ? 'favorites' : preset.rules.view === 'installed' ? 'installed' : preset.rules.view === 'owned' ? 'owned' : preset.rules.view === 'playing' ? 'playing' : preset.rules.view === 'completed' ? 'completed' : bigBoxFilter;
+          AppState.bigBoxFilter = preset.rules.view === 'favorites' ? 'favorites' : preset.rules.view === 'installed' ? 'installed' : preset.rules.view === 'owned' ? 'owned' : preset.rules.view === 'playing' ? 'playing' : preset.rules.view === 'completed' ? 'completed' : AppState.bigBoxFilter;
         }
       }
-      bigBoxGames = filteredBigBoxGames();
-      if (!bigBoxGames.length) { notify('No games match those Big Box filters'); return; }
-      bigBoxIndex = Math.max(0,bigBoxGames.findIndex(game => game.id === currentId));
+      AppState.bigBoxGames = filteredBigBoxGames();
+      if (!AppState.bigBoxGames.length) { notify('No games match those Big Box filters'); return; }
+      AppState.bigBoxIndex = Math.max(0,AppState.bigBoxGames.findIndex(game => game.id === currentId));
       closeBigBoxMenu();
       renderBigBox();
     }
     function moveBigBox(change) {
-      bigBoxIndex = (bigBoxIndex + change % bigBoxGames.length + bigBoxGames.length) % bigBoxGames.length;
-      selectedId = bigBoxGames[bigBoxIndex].id;
-      bigBoxLastInput = performance.now();
+      AppState.bigBoxIndex = (AppState.bigBoxIndex + change % AppState.bigBoxGames.length + AppState.bigBoxGames.length) % AppState.bigBoxGames.length;
+      AppState.selectedId = AppState.bigBoxGames[AppState.bigBoxIndex].id;
+      AppState.bigBoxLastInput = performance.now();
       renderBigBox();
     }
     function renderBigBox() {
-      const game = bigBoxGames[bigBoxIndex];
+      const game = AppState.bigBoxGames[AppState.bigBoxIndex];
       if (!game) return;
-      $('bigBoxCounter').textContent = `${bigBoxIndex + 1} / ${bigBoxGames.length}`;
-      const hint = appSettings.controller_prompt_hint || 'A Play · B Back · M Menu';
+      $('bigBoxCounter').textContent = `${AppState.bigBoxIndex + 1} / ${AppState.bigBoxGames.length}`;
+      const hint = AppState.appSettings.controller_prompt_hint || 'A Play · B Back · M Menu';
       navigator.getBattery?.().then(status => {
         if (!$('bigBoxStatus')) return;
         $('bigBoxStatus').innerHTML = status ? `<strong>${Math.round(status.level * 100)}%</strong> battery · ${escapeHtml(hint)}` : escapeHtml(hint);
       }).catch(() => { if ($('bigBoxStatus')) $('bigBoxStatus').textContent = hint; });
-      const mode = appSettings.bigbox_mode || 'stage';
+      const mode = AppState.appSettings.bigbox_mode || 'stage';
       if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').hidden = mode !== 'hybrid';
       const playLabel = game.gameyfin_id && !game.store_installed
         ? '⬇ INSTALL'
-        : (appSettings.dynamic_play_button === false ? '▶ PLAY' : game.versions.length ? '▶ PLAY DEFAULT' : game.applications.length ? '▶ PLAY GAME' : '▶ PLAY');
+        : (AppState.appSettings.dynamic_play_button === false ? '▶ PLAY' : game.versions.length ? '▶ PLAY DEFAULT' : game.applications.length ? '▶ PLAY GAME' : '▶ PLAY');
       if (mode === 'hybrid') {
-        const platforms = [...new Set(bigBoxGames.map(item => item.platform || 'Unspecified'))].sort();
-        if (bigBoxPlatform === 'all' && platforms.length) bigBoxPlatform = platforms[0];
-        const platformGames = bigBoxGames.filter(item => (item.platform || 'Unspecified') === bigBoxPlatform);
+        const platforms = [...new Set(AppState.bigBoxGames.map(item => item.platform || 'Unspecified'))].sort();
+        if (AppState.bigBoxPlatform === 'all' && platforms.length) AppState.bigBoxPlatform = platforms[0];
+        const platformGames = AppState.bigBoxGames.filter(item => (item.platform || 'Unspecified') === AppState.bigBoxPlatform);
         if (platformGames.length && !platformGames.some(item => item.id === game.id)) {
-          bigBoxIndex = bigBoxGames.findIndex(item => item.id === platformGames[0].id);
+          AppState.bigBoxIndex = AppState.bigBoxGames.findIndex(item => item.id === platformGames[0].id);
           return renderBigBox();
         }
         $('bigBoxStage').className = 'bigbox-stage bigbox-hybrid';
         const canAct = (game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed);
         const ownedLabel = game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : '';
         const uninstallBtn = game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:10px">Uninstall</button>' : '';
-        $('bigBoxStage').innerHTML = `<div class="bigbox-platforms">${platforms.map(name => `<button class="bigbox-platform ${bigBoxPlatform === name ? 'active' : ''}" data-bigbox-platform="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}</div>`;
-        document.querySelectorAll('[data-bigbox-platform]').forEach(button => button.onclick = () => { bigBoxPlatform = button.dataset.bigboxPlatform; bigBoxIndex = 0; renderBigBox(); });
+        $('bigBoxStage').innerHTML = `<div class="bigbox-platforms">${platforms.map(name => `<button class="bigbox-platform ${AppState.bigBoxPlatform === name ? 'active' : ''}" data-bigbox-AppState.platform ="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}</div>`;
+        document.querySelectorAll('[data-bigbox-platform]').forEach(button => button.onclick = () => { AppState.bigBoxPlatform = button.dataset.bigboxPlatform; AppState.bigBoxIndex = 0; renderBigBox(); });
       } else if (mode === 'coverflow') {
         $('bigBoxStage').className = 'bigbox-stage';
         const canAct = (game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed);
         const ownedLabel = game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : '';
         const uninstallBtn = game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:10px">Uninstall</button>' : '';
-        $('bigBoxStage').innerHTML = `<div class="coverflow-strip">${bigBoxGames.map((item,index) => `<button class="coverflow-card jewel-case ${index === bigBoxIndex ? 'active' : ''}" data-coverflow="${index}" aria-label="Open ${escapeHtml(item.name)}">${item.has_cover ? `<img src="${media(item,'cover')}" alt="" loading="lazy" decoding="async">` : `<div class="cover-title">${escapeHtml(item.name)}</div>`}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}</div>`;
-        document.querySelectorAll('[data-coverflow]').forEach(button => button.onclick = () => { bigBoxIndex = Number(button.dataset.coverflow); selectedId = bigBoxGames[bigBoxIndex].id; renderBigBox(); });
+        $('bigBoxStage').innerHTML = `<div class="coverflow-strip">${AppState.bigBoxGames.map((item,index) => `<button class="coverflow-card jewel-case ${index === AppState.bigBoxIndex ? 'active' : ''}" data-coverflow="${index}" aria-label="Open ${escapeHtml(item.name)}">${item.has_cover ? `<img src="${media(item,'cover')}" alt="" loading="lazy" decoding="async">` : `<div class="cover-title">${escapeHtml(item.name)}</div>`}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}</div>`;
+        document.querySelectorAll('[data-coverflow]').forEach(button => button.onclick = () => { AppState.bigBoxIndex = Number(button.dataset.coverflow); AppState.selectedId = AppState.bigBoxGames[AppState.bigBoxIndex].id; renderBigBox(); });
       } else {
         $('bigBoxStage').className = 'bigbox-stage';
         $('bigBoxStage').innerHTML = `<div class="bigbox-cover${game.has_cover ? '' : ' no-image'}">${game.has_cover ? `<img src="${media(game,'cover')}" alt="">` : escapeHtml(game.name)}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : ''}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${(game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed) ? '' : 'disabled'}>${playLabel}</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:10px">Uninstall</button>' : ''}</div>`;
@@ -1727,20 +1751,20 @@ const token = new URLSearchParams(location.search).get('token') || '';
       applyLibraryMusic();
     }
     function applyLibraryMusic() {
-      const path = appSettings.library_music;
-      if (!path) { if (libraryBgm) { libraryBgm.pause(); libraryBgm = null; } return; }
-      if (!libraryBgm) { libraryBgm = new Audio(); libraryBgm.loop = true; libraryBgm.volume = appSettings.video_bgm_mix ? 0.35 : 0.6; }
-      if (libraryBgm.src !== location.origin + path && !libraryBgm.src.endsWith(path)) libraryBgm.src = path;
-      if ($('bigBox').hidden) { libraryBgm.pause(); return; }
-      libraryBgm.play().catch(() => {});
+      const path = AppState.appSettings.library_music;
+      if (!path) { if (AppState.libraryBgm) { AppState.libraryBgm.pause(); AppState.libraryBgm = null; } return; }
+      if (!AppState.libraryBgm) { AppState.libraryBgm = new Audio(); AppState.libraryBgm.loop = true; AppState.libraryBgm.volume = AppState.appSettings.video_bgm_mix ? 0.35 : 0.6; }
+      if (AppState.libraryBgm.src !== location.origin + path && !AppState.libraryBgm.src.endsWith(path)) AppState.libraryBgm.src = path;
+      if ($('bigBox').hidden) { AppState.libraryBgm.pause(); return; }
+      AppState.libraryBgm.play().catch(() => {});
     }
     function openBigBoxPause() {
-      const session = runningGames[0];
+      const session = AppState.runningGames[0];
       if (!session) return openSessions();
-      const game = games.find(item => item.id === session.game_id);
+      const game = AppState.games.find(item => item.id === session.game_id);
       $('bigBoxPauseTitle').textContent = session.game;
       $('bigBoxPauseMeta').textContent = `${session.paused ? 'Paused' : 'Running'} · started ${session.started.replace('T',' ')}`;
-      $('bigBoxPauseActions').innerHTML = `<button class="primary" data-pause-action="${session.launch_id}:${session.paused ? 'resume' : 'pause'}">${session.paused ? 'Resume' : 'Pause'}</button><button class="icon-button" data-pause-action="${session.launch_id}:stop">Exit game</button>${game?.documents.map((item,index) => `<button class="icon-button" data-pause-doc="${game.id}:${index}">Read ${escapeHtml(item.name)}</button>`).join('') || ''}${raConfigured ? `<button class="icon-button" id="pauseAchievements">Achievements</button>` : ''}`;
+      $('bigBoxPauseActions').innerHTML = `<button class="primary" data-pause-action="${session.launch_id}:${session.paused ? 'resume' : 'pause'}">${session.paused ? 'Resume' : 'Pause'}</button><button class="icon-button" data-pause-action="${session.launch_id}:stop">Exit game</button>${game?.documents.map((item,index) => `<button class="icon-button" data-pause-doc="${game.id}:${index}">Read ${escapeHtml(item.name)}</button>`).join('') || ''}${AppState.raConfigured ? `<button class="icon-button" id="pauseAchievements">Achievements</button>` : ''}`;
       document.querySelectorAll('[data-pause-action]').forEach(button => button.onclick = async () => {
         const [launch_id,action] = button.dataset.pauseAction.split(':');
         await api('/api/session/control',{method:'POST',body:JSON.stringify({launch_id,action})});
@@ -1749,7 +1773,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       });
       document.querySelectorAll('[data-pause-doc]').forEach(button => button.onclick = () => {
         const [id,index] = button.dataset.pauseDoc.split(':');
-        const docGame = games.find(item => item.id === Number(id));
+        const docGame = AppState.games.find(item => item.id === Number(id));
         if (!docGame) return;
         openReader(docGame, Number(index));
       });
@@ -1762,10 +1786,10 @@ const token = new URLSearchParams(location.search).get('token') || '';
         const labels = {recently_added:'Recently added',never_played:'Never played',continue_playing:'Continue playing',highly_rated:'Highly rated',random_picks:'Random picks',short_sessions:'Short sessions'};
         $('discoveryContent').innerHTML = Object.entries(labels).map(([key,label]) => {
           const ids = result[key] || [];
-          const items = ids.map(id => games.find(game => game.id === id)).filter(Boolean);
+          const items = ids.map(id => AppState.games.find(game => game.id === id)).filter(Boolean);
           return `<div class="discovery-section"><h3>${label}</h3><div class="discovery-row">${items.length ? items.map(game => `<button class="related-game" data-discovery="${game.id}">${escapeHtml(game.name)}</button>`).join('') : '<span class="description">No matches yet.</span>'}</div></div>`;
         }).join('');
-        document.querySelectorAll('[data-discovery]').forEach(button => button.onclick = () => { selectedId = Number(button.dataset.discovery); $('discoveryDialog').close(); render(); });
+        document.querySelectorAll('[data-discovery]').forEach(button => button.onclick = () => { AppState.selectedId = Number(button.dataset.discovery); $('discoveryDialog').close(); render(); });
         $('discoveryDialog').showModal();
       } catch(error) { notify(error.message); }
     }
@@ -1785,21 +1809,21 @@ const token = new URLSearchParams(location.search).get('token') || '';
       } catch(error) { notify(error.message); }
     }
     function openStorefronts() {
-      const settings = appSettings.storefront_auto_import || {};
+      const settings = AppState.appSettings.storefront_auto_import || {};
       $('storefrontAutoImportSteam').checked = Boolean(settings.steam);
       $('storefrontAutoImportHeroic').checked = Boolean(settings.heroic);
       $('storefrontAutoImportLutris').checked = Boolean(settings.lutris);
       if ($('storefrontAutoImportGameyfin')) $('storefrontAutoImportGameyfin').checked = Boolean(settings.gameyfin);
-      if ($('storefrontGameyfinUrl')) $('storefrontGameyfinUrl').value = appSettings.gameyfin_url || '';
-      if ($('storefrontGameyfinUsername')) $('storefrontGameyfinUsername').value = appSettings.gameyfin_username || '';
+      if ($('storefrontGameyfinUrl')) $('storefrontGameyfinUrl').value = AppState.appSettings.gameyfin_url || '';
+      if ($('storefrontGameyfinUsername')) $('storefrontGameyfinUsername').value = AppState.appSettings.gameyfin_username || '';
       if ($('storefrontGameyfinPassword')) $('storefrontGameyfinPassword').value = '';
-      if ($('storefrontGameyfinInstallDir')) $('storefrontGameyfinInstallDir').value = appSettings.gameyfin_install_dir || '';
-      if ($('storefrontGameyfinStatus')) $('storefrontGameyfinStatus').textContent = appSettings.gameyfin_url ? `Configured · ${appSettings.gameyfin_url}` : '';
+      if ($('storefrontGameyfinInstallDir')) $('storefrontGameyfinInstallDir').value = AppState.appSettings.gameyfin_install_dir || '';
+      if ($('storefrontGameyfinStatus')) $('storefrontGameyfinStatus').textContent = AppState.appSettings.gameyfin_url ? `Configured · ${AppState.appSettings.gameyfin_url}` : '';
       $('storefrontCatalog').innerHTML = '';
       $('storefrontDialog').showModal();
     }
     async function saveStorefrontSettings() {
-      appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectStorefrontSettings())});
+      AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectStorefrontSettings())});
       notify('Storefront settings saved');
     }
     async function watchGameyfinInstall(gameyfinId, attempts = 1200) {
@@ -1818,7 +1842,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
         await api('/api/gameyfin/install',{method:'POST',body:JSON.stringify({gameyfin_id:game.gameyfin_id,library_id:game.id})});
         await watchGameyfinInstall(game.gameyfin_id);
         await refresh();
-        bigBoxGames = filteredBigBoxGames();
+        AppState.bigBoxGames = filteredBigBoxGames();
         if (!$('bigBox').hidden) renderBigBox();
         else renderDetails();
         notify(`${game.name} installed`);
@@ -1829,7 +1853,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       try {
         await api('/api/gameyfin/uninstall',{method:'POST',body:JSON.stringify({id:game.id})});
         await refresh();
-        bigBoxGames = filteredBigBoxGames();
+        AppState.bigBoxGames = filteredBigBoxGames();
         if (!$('bigBox').hidden) renderBigBox();
         else renderDetails();
         notify(`${game.name} uninstalled locally`);
@@ -1850,20 +1874,20 @@ const token = new URLSearchParams(location.search).get('token') || '';
     async function captureScreenshot(id) { try { const result = await api('/api/screenshot',{method:'POST',body:JSON.stringify({id})}); await refresh(); notify(`Screenshot saved to ${result.path}`); } catch(error) { notify(error.message); } }
     async function downloadBezel(platform) { if (!platform) return notify('Select a game with a platform first'); try { const result = await api('/api/bezels/download',{method:'POST',body:JSON.stringify({platform})}); notify(`Bezels downloaded to ${result.path}`); } catch(error) { notify(error.message); } }
     async function runStartupStorefrontImports() {
-      const settings = appSettings.storefront_auto_import || {};
+      const settings = AppState.appSettings.storefront_auto_import || {};
       if (settings.steam) await api('/api/import/steam',{method:'POST',body:'{}'}).catch(() => {});
       if (settings.heroic) await api('/api/import/heroic',{method:'POST',body:'{}'}).catch(() => {});
       if (settings.lutris) await api('/api/import/lutris',{method:'POST',body:'{}'}).catch(() => {});
       if (settings.gameyfin) await api('/api/storefront/import',{method:'POST',body:JSON.stringify({source:'gameyfin'})}).catch(() => {});
     }
     function startScreenSaver() {
-      if (!bigBoxGames.length || $('bigBox').hidden) return;
-      screenSaverGame = bigBoxGames[Math.floor(Math.random() * bigBoxGames.length)];
-      $('screenSaver').style.backgroundImage = screenSaverGame.has_background ? `url('${media(screenSaverGame,'background')}')` : screenSaverGame.has_cover ? `url('${media(screenSaverGame,'cover')}')` : '';
-      $('screenSaverTitle').textContent = screenSaverGame.name;
-      $('screenSaverPlatform').textContent = screenSaverGame.platform || '';
-      if (screenSaverGame.has_video) {
-        $('screenSaverVideo').src = media(screenSaverGame,'video');
+      if (!AppState.bigBoxGames.length || $('bigBox').hidden) return;
+      AppState.screenSaverGame = AppState.bigBoxGames[Math.floor(Math.random() * AppState.bigBoxGames.length)];
+      $('screenSaver').style.backgroundImage = AppState.screenSaverGame.has_background ? `url('${media(AppState.screenSaverGame,'background')}')` : AppState.screenSaverGame.has_cover ? `url('${media(AppState.screenSaverGame,'cover')}')` : '';
+      $('screenSaverTitle').textContent = AppState.screenSaverGame.name;
+      $('screenSaverPlatform').textContent = AppState.screenSaverGame.platform || '';
+      if (AppState.screenSaverGame.has_video) {
+        $('screenSaverVideo').src = media(AppState.screenSaverGame,'video');
         $('screenSaverVideo').play().catch(() => {});
       } else {
         $('screenSaverVideo').removeAttribute('src');
@@ -1878,18 +1902,18 @@ const token = new URLSearchParams(location.search).get('token') || '';
       $('screenSaver').hidden = true;
       $('screenSaverVideo').pause();
       $('screenSaverVideo').removeAttribute('src');
-      screenSaverGame = null;
-      bigBoxLastInput = performance.now();
+      AppState.screenSaverGame = null;
+      AppState.bigBoxLastInput = performance.now();
     }
     async function favoriteBigBox() {
-      const id = bigBoxGames[bigBoxIndex]?.id;
+      const id = AppState.bigBoxGames[AppState.bigBoxIndex]?.id;
       if (id === undefined) return;
       try {
         await api('/api/favorite',{method:'POST',body:JSON.stringify({id})});
         await refresh();
-        bigBoxGames = filteredBigBoxGames();
-        if (!bigBoxGames.length) { closeBigBox(); notify('The current view is now empty'); return; }
-        bigBoxIndex = Math.max(0,bigBoxGames.findIndex(game => game.id === id));
+        AppState.bigBoxGames = filteredBigBoxGames();
+        if (!AppState.bigBoxGames.length) { closeBigBox(); notify('The current view is now empty'); return; }
+        AppState.bigBoxIndex = Math.max(0,AppState.bigBoxGames.findIndex(game => game.id === id));
         renderBigBox();
       } catch(error) { notify(error.message); }
     }
@@ -1897,15 +1921,15 @@ const token = new URLSearchParams(location.search).get('token') || '';
       if ($('bigBox').hidden) return;
       const pad = navigator.getGamepads?.()[0];
       if (pad) {
-        const mapping = {...defaultControllerMap,...appSettings.controller_map};
+        const mapping = {...defaultControllerMap,...AppState.appSettings.controller_map};
         const pressed = action => Boolean(pad.buttons[mapping[action]]?.pressed);
         const current = {left:pad.buttons[14]?.pressed || pad.axes[0] < -.6,right:pad.buttons[15]?.pressed || pad.axes[0] > .6,up:pad.buttons[12]?.pressed || pad.axes[1] < -.6,down:pad.buttons[13]?.pressed || pad.axes[1] > .6,play:pressed('play'),back:pressed('back'),favorite:pressed('favorite'),random:pressed('random'),pageLeft:pressed('page_left'),pageRight:pressed('page_right'),pause:pressed('pause'),menu:pressed('menu')};
-        const edge = action => current[action] && !gamepadState[action];
+        const edge = action => current[action] && !AppState.gamepadState[action];
         if (!$('screenSaver').hidden && Object.keys(current).some(edge)) {
-          const game = screenSaverGame;
+          const game = AppState.screenSaverGame;
           stopScreenSaver();
           if (edge('play') && game) launch(game.id);
-          gamepadState = current;
+          AppState.gamepadState = current;
           requestAnimationFrame(pollGamepads);
           return;
         }
@@ -1922,27 +1946,27 @@ const token = new URLSearchParams(location.search).get('token') || '';
         } else {
           if (edge('left') || edge('up')) moveBigBox(-1);
           if (edge('right') || edge('down')) moveBigBox(1);
-          if (edge('play')) launch(bigBoxGames[bigBoxIndex].id);
+          if (edge('play')) launch(AppState.bigBoxGames[AppState.bigBoxIndex].id);
           if (edge('back')) closeBigBox();
           if (edge('favorite')) favoriteBigBox();
-          if (edge('random')) { bigBoxIndex = Math.floor(Math.random() * bigBoxGames.length); renderBigBox(); }
+          if (edge('random')) { AppState.bigBoxIndex = Math.floor(Math.random() * AppState.bigBoxGames.length); renderBigBox(); }
           if (edge('pageLeft')) moveBigBox(-10);
           if (edge('pageRight')) moveBigBox(10);
-          if (edge('pause') && runningGames.length) openBigBoxPause();
+          if (edge('pause') && AppState.runningGames.length) openBigBoxPause();
           if (edge('menu')) openBigBoxMenu();
         }
-        if (Object.keys(current).some(edge)) bigBoxLastInput = performance.now();
-        gamepadState = current;
+        if (Object.keys(current).some(edge)) AppState.bigBoxLastInput = performance.now();
+        AppState.gamepadState = current;
       }
       if ($('screenSaver').hidden && $('bigBoxMenu').hidden && (() => {
-        const delay = Number(appSettings.attract_mode_seconds ?? appSettings.screensaver_seconds ?? 0);
-        return delay && performance.now() - bigBoxLastInput >= delay * 1000;
+        const delay = Number(AppState.appSettings.attract_mode_seconds ?? AppState.appSettings.screensaver_seconds ?? 0);
+        return delay && performance.now() - AppState.bigBoxLastInput >= delay * 1000;
       })()) startScreenSaver();
       requestAnimationFrame(pollGamepads);
     }
     let searchTimer = null;
-    $('sidebarSearch').oninput = () => { activePlaylist = ''; clearTimeout(searchTimer); searchTimer = setTimeout(() => { renderPlaylists(); renderGrid(); }, 150); };
-    $('view').onchange = () => { activePlaylist = ''; renderPlaylists(); renderGrid(); };
+    $('sidebarSearch').oninput = () => { AppState.activePlaylist = ''; clearTimeout(searchTimer); searchTimer = setTimeout(() => { renderPlaylists(); renderGrid(); }, 150); };
+    $('view').onchange = () => { AppState.activePlaylist = ''; renderPlaylists(); renderGrid(); };
     $('sort').onchange = renderGrid;
     if ($('esrbFilter')) $('esrbFilter').onchange = renderGrid;
     const libraryPaneElement = document.querySelector('main.library');
@@ -1956,8 +1980,9 @@ const token = new URLSearchParams(location.search).get('token') || '';
       window.addEventListener('resize', () => { gridRowHeight = 0; renderGrid(); });
     }
     $('viewToggleButton').onclick = () => {
-      appSettings.library_view = (appSettings.library_view || 'grid') === 'list' ? 'grid' : 'list';
-      if ($('libraryViewSetting')) $('libraryViewSetting').value = appSettings.library_view;
+      AppState.appSettings.library_view = (AppState.appSettings.library_view || 'grid') === 'list' ? 'grid' : 'list';
+      if ($('libraryViewSetting')) $('libraryViewSetting').value = AppState.appSettings.library_view;
+      AppState.persist();
       applyLocaleStrings();
       renderGrid();
     };
@@ -1995,9 +2020,9 @@ const token = new URLSearchParams(location.search).get('token') || '';
     }
     if ($('bigBoxHybridSearch')) {
       $('bigBoxHybridSearch').oninput = () => {
-        bigBoxHybridQuery = $('bigBoxHybridSearch').value.trim();
-        bigBoxIndex = 0;
-        bigBoxGames = filteredBigBoxGames();
+        AppState.bigBoxHybridQuery = $('bigBoxHybridSearch').value.trim();
+        AppState.bigBoxIndex = 0;
+        AppState.bigBoxGames = filteredBigBoxGames();
         renderBigBox();
       };
     }
@@ -2011,12 +2036,12 @@ const token = new URLSearchParams(location.search).get('token') || '';
         const pack = packs[Number(pick) - 1];
         if (!pack) return;
         const result = await api('/api/premium/media-packs/apply',{method:'POST',body:JSON.stringify({id:pack.id})});
-        appSettings = result.settings || appSettings;
+        AppState.appSettings = result.settings || appSettings;
         $('mediaPackStatus').textContent = (appSettings.media_packs || []).filter(item => item.active).map(item => item.name).join(', ');
         notify(`Applied ${pack.name}`);
       } catch(error) { notify(error.message); }
     };
-    $('libraryButton').onclick = () => { activePlaylist = ''; platform = 'all'; $('view').value = 'all'; $('sidebarSearch').value = ''; selectedId = null; render(); loadTheme(); };
+    $('libraryButton').onclick = () => { AppState.activePlaylist = ''; AppState.platform = 'all'; $('view').value = 'all'; $('sidebarSearch').value = ''; AppState.selectedId = null; render(); loadTheme(); };
     $('discoveryButton').onclick = openDiscovery;
     $('storefrontButton').onclick = openStorefronts;
     $('closeDiscovery').onclick = $('doneDiscovery').onclick = () => $('discoveryDialog').close();
@@ -2049,7 +2074,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
     $('importVita3kStore').onclick = async () => { try { const result = await api('/api/import/vita3k',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} Vita3K games imported`); } catch(error) { notify(error.message); } };
     $('openThemeFolder').onclick = async () => { try { const result = await api('/api/themes/open-folder',{method:'POST',body:'{}'}); notify(`Opened ${result.path}`); } catch(error) { notify(error.message); } };
     $('injectRa').onclick = async () => { try { const result = await api('/api/ra/inject',{method:'POST',body:'{}'}); notify(`Updated ${result.updated.length} emulator config file${result.updated.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
-    $('cleanupMedia').onclick = async () => { try { const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({apply:false})}); duplicateMediaGroups = result.groups; $('applyCleanupMedia').hidden = !duplicateMediaGroups; notify(`${duplicateMediaGroups} duplicate media group${duplicateMediaGroups === 1 ? '' : 's'} found`); } catch(error) { notify(error.message); } };
+    $('cleanupMedia').onclick = async () => { try { const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({apply:false})}); AppState.duplicateMediaGroups = result.groups; $('applyCleanupMedia').hidden = !duplicateMediaGroups; notify(`${duplicateMediaGroups} duplicate media group${duplicateMediaGroups === 1 ? '' : 's'} found`); } catch(error) { notify(error.message); } };
     $('applyCleanupMedia').onclick = async () => { if (!confirm('Delete duplicate media files listed by the cleanup scan?')) return; try { const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({apply:true})}); $('applyCleanupMedia').hidden = true; notify(`Removed ${result.paths.length} duplicate file${result.paths.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
     $('scanAllSaves').onclick = async () => { try { const result = await api('/api/saves/scan/apply',{method:'POST',body:'{}'}); await refresh(); notify(`Added save paths on ${result.updated} location${result.updated === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
     $('bigBoxPause').onclick = event => { if (event.target === $('bigBoxPause')) $('bigBoxPause').hidden = true; };
@@ -2096,12 +2121,12 @@ const token = new URLSearchParams(location.search).get('token') || '';
       } catch(error) { notify(error.message); }
     };
     $('fullscreenButton').onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
-    $('surpriseButton').onclick = () => { const visible = filteredGames(); if (visible.length) { selectedId = visible[Math.floor(Math.random() * visible.length)].id; render(); } };
+    $('surpriseButton').onclick = () => { const visible = filteredGames(); if (visible.length) { AppState.selectedId = visible[Math.floor(Math.random() * visible.length)].id; render(); } };
     $('imageGroup').onchange = async () => {
       const scope = activePlaylist ? 'playlist' : platform !== 'all' ? 'platform' : 'global';
       const name = activePlaylist || (platform === 'all' ? '' : platform);
       try {
-        appSettings = await api('/api/image-group',{method:'POST',body:JSON.stringify({group:$('imageGroup').value,scope,name})});
+        AppState.appSettings = await api('/api/image-group',{method:'POST',body:JSON.stringify({group:$('imageGroup').value,scope,name})});
         renderGrid();
       } catch(error) { notify(error.message); }
     };
@@ -2165,7 +2190,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
     $('applyBigBoxMenu').onclick = applyBigBoxMenu;
     $('screenSaver').onclick = stopScreenSaver;
     $('closeMedia').onclick = () => { $('mediaDialog').close(); $('fullScreenshot')?.remove(); };
-    $('closeReader').onclick = () => { $('readerDialog').close(); $('readerFrame').removeAttribute('src'); readerUrl = ''; readerPage = 1; };
+    $('closeReader').onclick = () => { $('readerDialog').close(); $('readerFrame').removeAttribute('src'); AppState.readerUrl = ''; AppState.readerPage = 1; };
     $('bigBox').onkeydown = event => {
       if (!$('screenSaver').hidden) {
         const game = screenSaverGame;
@@ -2179,13 +2204,13 @@ const token = new URLSearchParams(location.search).get('token') || '';
         if (event.key === 'Enter') applyBigBoxMenu();
         return;
       }
-      bigBoxLastInput = performance.now();
+      AppState.bigBoxLastInput = performance.now();
       if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') moveBigBox(-1);
       if (event.key === 'ArrowRight' || event.key === 'ArrowDown') moveBigBox(1);
       if (event.key === 'Enter') launch(bigBoxGames[bigBoxIndex].id);
       if (event.key.toLowerCase() === 'p' && runningGames.length) openBigBoxPause();
       if (event.key.toLowerCase() === 'm') openBigBoxMenu();
-      if (event.key.toLowerCase() === 'r') { bigBoxIndex = Math.floor(Math.random() * bigBoxGames.length); renderBigBox(); }
+      if (event.key.toLowerCase() === 'r') { AppState.bigBoxIndex = Math.floor(Math.random() * bigBoxGames.length); renderBigBox(); }
       if (event.key.toLowerCase() === 'f') favoriteBigBox();
       if (event.key === 'Escape' || event.key === 'Backspace') closeBigBox();
     };
@@ -2218,8 +2243,8 @@ const token = new URLSearchParams(location.search).get('token') || '';
       dialog.addEventListener('close', () => {
         if (dialog.id === 'readerDialog') {
           $('readerFrame').removeAttribute('src');
-          readerUrl = '';
-          readerPage = 1;
+          AppState.readerUrl = '';
+          AppState.readerPage = 1;
         }
         if (dialog.id === 'mediaDialog') $('fullScreenshot')?.remove();
         const trigger = dialogTriggers.get(dialog);
@@ -2229,7 +2254,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
     });
     const deeplink = new URLSearchParams(location.search);
     if (deeplink.get('deeplink') === 'search') $('sidebarSearch').value = deeplink.get('q') || '';
-    if (deeplink.get('deeplink') === 'showgame') selectedId = Number(deeplink.get('id'));
+    if (deeplink.get('deeplink') === 'showgame') AppState.selectedId = Number(deeplink.get('id'));
     Promise.all([refresh(),loadTheme()]).then(async () => {
     let featureMode = '';
     async function openFeature(mode) {
@@ -2271,7 +2296,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       maybeShowWelcome();
       await runStartupStorefrontImports().catch(() => {});
       if (deeplink.get('deeplink') === 'bigbox') openBigBox();
-      else if (appSettings.gamescope_guest) openBigBox();
+      else if (AppState.appSettings.gamescope_guest) openBigBox();
       if (deeplink.get('deeplink') === 'settings') openSettings();
       if (deeplink.get('deeplink') === 'showgame' && selectedId !== null) render();
     }).catch(error => notify(error.message));
