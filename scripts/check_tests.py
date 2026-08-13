@@ -99,6 +99,16 @@ def main() -> int:
         if failed_tests:
             failures.append("tests")
 
+        # The deck/gamescope tests spawn nested gamescope sessions that can
+        # outlive their parent process. Reap any that the suite left behind
+        # so local runs and CI runners do not accumulate X sessions.
+        cleanup = subprocess.run(
+            ["pkill", "-f", "OPENBOX_DECK_EMU_"],
+            capture_output=True, text=True, check=False,
+        )
+        if cleanup.returncode not in (0, 1):
+            print("gamescope orphan cleanup failed")
+
         combined = run([str(COVERAGE), "combine", "--quiet"])
         if combined.returncode != 0:
             print("coverage combine failed")

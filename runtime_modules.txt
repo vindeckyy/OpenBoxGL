@@ -38,7 +38,7 @@ parity_import_policy.py
 parity_gamescope.py
 parity_perf.py
 routes.py
-
+api_errors.py
 automation.py
 notifications.py
 play_queue.py

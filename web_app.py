@@ -39,6 +39,7 @@ from automation import (
     validate_webhook,
 )
 from catalog import PROGRESS, apply_progress_automation, bulk_update, game_media_paths, related_game_ids, tag_counts
+from api_errors import ApiError, BadRequest, GameNotFound, MediaNotFound, BadgeNotFound, DocumentNotFound, PlatformDocumentNotFound
 from notifications import add_notification, clear as clear_notifications, mark_read as mark_notifications_read, unread_count
 from routes import dispatch_get, dispatch_post
 from play_queue import advance as advance_queue, enqueue as enqueue_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
@@ -1436,7 +1437,7 @@ class Handler(BaseHTTPRequestHandler):
             related = related_game_ids(state["games"], index)
             self.send_json(200, {"ids": related})
         except (KeyError, IndexError, ValueError):
-            self.send_json(404, {"error": "Game not found"})
+            raise GameNotFound("Game not found") from None
         return
     def _api_get_api_emulators(self, parsed):
         if not self.authorized():
@@ -1459,7 +1460,7 @@ class Handler(BaseHTTPRequestHandler):
             backups = [{"name": path.name, "size": path.stat().st_size} for path in list_backups(game, DATA.parent / "save-backups")]
             self.send_json(200, {"backups": backups})
         except (KeyError, IndexError, ValueError):
-            self.send_json(404, {"error": "Game not found"})
+            raise GameNotFound("Game not found") from None
         return
     def _api_get_api_saves_discover(self, parsed):
         if not self.authorized():
@@ -1475,7 +1476,7 @@ class Handler(BaseHTTPRequestHandler):
             ]
             self.send_json(200, {"candidates": candidates})
         except (KeyError, IndexError, ValueError):
-            self.send_json(404, {"error": "Game not found"})
+            raise GameNotFound("Game not found") from None
         return
     def _api_get_api_themes(self, parsed):
         if not self.authorized():
@@ -1629,7 +1630,7 @@ class Handler(BaseHTTPRequestHandler):
         name = re.sub(r"[^A-Za-z0-9_-]", "", query.get("name", [""])[0])
         locked = query.get("locked", ["0"])[0] == "1"
         if not name:
-            self.send_json(404, {"error": "Badge not found"})
+            raise BadgeNotFound("Badge not found")
             return
         badge = DATA.parent / "media/retroachievements/badges" / f"{name}{'_lock' if locked else ''}.png"
         try:
@@ -1637,7 +1638,7 @@ class Handler(BaseHTTPRequestHandler):
                 download_image(f"https://media.retroachievements.org/Badge/{badge.name}", badge)
             self.send_file(200, badge, "image/png")
         except (OSError, ValueError):
-            self.send_json(404, {"error": "Badge not found"})
+            raise BadgeNotFound("Badge not found") from None
         return
     def _api_get_api_media(self, parsed):
         if not self.authorized():
@@ -1662,7 +1663,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise FileNotFoundError
             self.send_file(200, media)
         except (KeyError, IndexError, ValueError, FileNotFoundError):
-            self.send_json(404, {"error": "Media not found"})
+            raise MediaNotFound("Media not found") from None
         return
     def _api_get_api_document(self, parsed):
         if not self.authorized():
@@ -1682,7 +1683,7 @@ class Handler(BaseHTTPRequestHandler):
             with path.open("rb") as source:
                 shutil.copyfileobj(source, self.wfile)
         except (KeyError, IndexError, ValueError, FileNotFoundError):
-            self.send_json(404, {"error": "Document not found"})
+            raise DocumentNotFound("Document not found") from None
         return
     def _api_get_api_backup(self, parsed):
         if not self.authorized():
@@ -1710,7 +1711,7 @@ class Handler(BaseHTTPRequestHandler):
             index = int(parse_qs(parsed.query)["id"][0])
             self.send_json(200, {"items": related_with_reasons(load_state_view()["games"], index)})
         except (KeyError, IndexError, ValueError):
-            self.send_json(404, {"error": "Game not found"})
+            raise GameNotFound("Game not found") from None
         return
     def _api_get_api_emulators_recommend(self, parsed):
         if not self.authorized():
@@ -1753,7 +1754,7 @@ class Handler(BaseHTTPRequestHandler):
             game = game_from_query(load_state(), parse_qs(parsed.query))
             self.send_json(200, {"scores": read_local_highscores(game)})
         except (KeyError, IndexError, ValueError):
-            self.send_json(404, {"error": "Game not found"})
+            raise GameNotFound("Game not found") from None
         return
     def _api_get_api_obs_status(self, parsed):
         if not self.authorized():
@@ -1788,7 +1789,7 @@ class Handler(BaseHTTPRequestHandler):
             with path.open("rb") as source:
                 shutil.copyfileobj(source, self.wfile)
         except (KeyError, IndexError, ValueError, FileNotFoundError):
-            self.send_json(404, {"error": "Platform document not found"})
+            raise PlatformDocumentNotFound("Platform document not found") from None
         return
     def _api_get_api_storefront_catalog(self, parsed):
         if not self.authorized():
@@ -1807,7 +1808,7 @@ class Handler(BaseHTTPRequestHandler):
         query = parse_qs(parsed.query)
         gameyfin_id = str(query.get("gameyfin_id", [""])[0]).strip()
         if not gameyfin_id:
-            self.send_json(400, {"error": "gameyfin_id is required."})
+            raise BadRequest("gameyfin_id is required.")
             return
         with PROCESS_LOCK:
             job = dict(INSTALLS.get(f"gameyfin:{gameyfin_id}", {"state": "idle"}))
@@ -2156,21 +2157,27 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Request body must be a JSON object.")
             route = urlparse(self.path).path
             dispatch_post(self, route, payload)
+        except ApiError:
+            raise
         except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError, json.JSONDecodeError, GameyfinError, FileNotFoundError, RuntimeError, subprocess.SubprocessError) as error:
             LOGGER.warning("Request %s failed: %s", urlparse(self.path).path, error)
-            self.send_json(400, {"error": str(error)})
+            raise BadRequest(str(error)) from None
 
     def _handle_request(self, method):
         path = urlparse(self.path).path
-        LOGGER.debug("HTTP %s %s started", method, path)
+        request_id = secrets.token_hex(4)
+        LOGGER.debug("HTTP %s %s started [%s]", method, path, request_id)
         try:
             getattr(self, f"_{method}")()
+        except ApiError as error:
+            LOGGER.info("HTTP %s %s [%s] %s: %s", method, path, request_id, error.code, error.message)
+            self.send_json(error.status, error.to_payload(request_id))
         except StateCorruptError as error:
             LOGGER.error("OpenBox state is unavailable: %s", error)
-            self.send_json(503, {"error": "OpenBox library data needs recovery before this operation can continue."})
+            self.send_json(503, {"error": "OpenBox library data needs recovery before this operation can continue.", "code": "STATE_UNAVAILABLE", "request_id": request_id})
         except Exception:
-            LOGGER.exception("Unhandled HTTP %s %s", method, path)
-            self.send_json(500, {"error": "Unexpected server error. Copy the diagnostic log from Settings and include it in your report."})
+            LOGGER.exception("Unhandled HTTP %s %s [%s]", method, path, request_id)
+            self.send_json(500, {"error": "Unexpected server error. Copy the diagnostic log from Settings and include it in your report.", "code": "INTERNAL_ERROR", "request_id": request_id})
 
     def do_GET(self):
         self._handle_request("do_GET")

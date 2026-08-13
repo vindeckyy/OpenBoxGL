@@ -6,6 +6,9 @@ the method name that serves it. Adding a route = add a handler method and one
 table entry here.
 """
 
+from api_errors import RouteNotFound
+
+
 GET_TABLE = {
     "/": "_api_get_index",
     "/api/backup": "_api_get_api_backup",
@@ -166,14 +169,12 @@ POST_TABLE = {
 def dispatch_get(handler, parsed):
     method = GET_TABLE.get(parsed.path)
     if method is None:
-        handler.send_json(404, {"error": "Not found"})
-        return
+        raise RouteNotFound("Not found")
     getattr(handler, method)(parsed)
 
 
 def dispatch_post(handler, route, payload):
     method = POST_TABLE.get(route)
     if method is None:
-        handler.send_json(404, {"error": "Not found"})
-        return
+        raise RouteNotFound("Not found")
     getattr(handler, method)(payload)

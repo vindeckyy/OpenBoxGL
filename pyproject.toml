@@ -7,6 +7,8 @@
 [tool.ruff]
 target-version = "py310"
 line-length = 120
+
+[tool.ruff.lint]
 # Keep the gate small and fully justified. E4/E7/E9 + F catch real bugs
 # (undefined names, unused imports); B is flake8-bugbear; PLW1510 catches
 # subprocess.run calls without an explicit check argument; EXE001 keeps
