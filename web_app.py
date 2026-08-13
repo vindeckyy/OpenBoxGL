@@ -3,6 +3,7 @@
 
 import copy
 import email.utils
+import gzip
 import json
 import html
 import logging
@@ -128,6 +129,8 @@ from updates import VERSION, check_update, install_desktop_entry, install_update
 
 ROOT = Path(__file__).parent
 TOKEN = secrets.token_urlsafe(24)
+# JSON payloads at or above this size get gzip when the client accepts it.
+GZIP_THRESHOLD = 1024
 LOGGER = logging.getLogger("openbox")
 STATE_LOCK = threading.Lock()
 PROCESS_LOCK = threading.Lock()
@@ -589,6 +592,13 @@ def public_state():
 def public_state_bytes():
     """Return the serialized library projection, cached until library state changes."""
     return _public_state_cached()["raw"]
+
+
+def public_state_etag():
+    """Stable ETag for the library projection, derived from its signature."""
+    signature = _public_state_signature()
+    stat = signature[0] or (0, 0, 0)
+    return f'"{stat[0]:x}-{stat[1]:x}-{signature[1]}-{signature[2]}"'
 
 
 def load_state_view():
@@ -1236,7 +1246,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'")
 
-    def send_bytes(self, status, data, content_type, cache_control="no-store", etag=None, last_modified=None):
+    def send_bytes(self, status, data, content_type, cache_control="no-store", etag=None, last_modified=None, extra_headers=None):
         if etag and self.headers.get("If-None-Match", "").strip() == etag:
             self.send_response(304)
             self.headers_common(content_type, cache_control=cache_control)
@@ -1249,6 +1259,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("ETag", etag)
         if last_modified:
             self.send_header("Last-Modified", last_modified)
+        for name, value in (extra_headers or {}).items():
+            self.send_header(name, value)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -1329,7 +1341,27 @@ class Handler(BaseHTTPRequestHandler):
                 remaining -= len(chunk)
 
     def send_json(self, status, payload):
-        self.send_bytes(status, json.dumps(payload).encode(), "application/json; charset=utf-8")
+        data = json.dumps(payload).encode()
+        self.send_bytes(status, data, "application/json; charset=utf-8")
+
+    def send_json_compressed(self, status, payload):
+        """Send a JSON payload, gzipped for clients that accept it.
+
+        Loopback bandwidth is free but compression wins on two fronts:
+        large libraries make /api/library a multi-megabyte payload, and
+        gzip shrinks the JSON to a fraction of that while the CPU cost is
+        negligible on the local machine.
+        """
+        data = json.dumps(payload).encode()
+        if len(data) >= GZIP_THRESHOLD and "gzip" in self.headers.get("Accept-Encoding", ""):
+            compressed = gzip.compress(data)
+            if len(compressed) < len(data):
+                self.send_bytes(
+                    status, compressed, "application/json; charset=utf-8",
+                    extra_headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+                )
+                return
+        self.send_bytes(status, data, "application/json; charset=utf-8")
 
     def authorized(self):
         query_token = parse_qs(urlparse(self.path).query).get("token", [""])[0]
@@ -1390,7 +1422,11 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             self.send_json(403, {"error": "Unauthorized"})
             return
-        self.send_bytes(200, public_state_bytes(), "application/json; charset=utf-8")
+        etag = public_state_etag()
+        self.send_bytes(
+            200, public_state_bytes(), "application/json; charset=utf-8",
+            cache_control="private, no-cache", etag=etag,
+        )
         return
     def _api_get_api_profiles(self, parsed):
         if not self.authorized():
