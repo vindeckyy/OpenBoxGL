@@ -2,7 +2,7 @@
 
 Measured by `scripts/perf_bench.py` against a synthetic library served by the real server (loopback, gzip enabled). Reference machine: this workstation.
 
-## Baseline (2026-08-13)
+## Baseline (2026-08-12)
 
 | Library size | /api/library plain | /api/library gzip | /api/media | Favorite mutation (full save) |
 |---|---|---|---|---|
