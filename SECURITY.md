@@ -55,6 +55,10 @@ The following are generally out of scope:
 - Do not commit `.env`, API tokens, RetroAchievements credentials, or EmuMovies credentials to the repository.
 - Keep OpenBox updated to the latest release.
 
+## Release signing
+
+Release artifacts are signed with an Ed25519 key. `scripts/sign_release.py` writes `openbox-release.pub` next to the signature; the committed copy is a placeholder and must be replaced with the real maintainer key before the first signed release. Keep the private key out of the repository and CI; if it is compromised, rotate the key, publish a new `openbox-release.pub`, and re-sign the latest release.
+
 ## Disclosure
 
 We prefer coordinated disclosure. Reporters will be credited in release notes when fixes ship, unless they request anonymity.
