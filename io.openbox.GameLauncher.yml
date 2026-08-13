@@ -22,6 +22,8 @@ modules:
       - mkdir -p /app/share/openbox
       - while IFS= read -r f; do [ -n "$f" ] || continue; install -Dm644 "$f" "/app/share/openbox/$f"; done < runtime_modules.txt
       - install -Dm644 index.html /app/share/openbox/index.html
+      - install -Dm644 static/app.js /app/share/openbox/static/app.js
+      - install -Dm644 static/app.css /app/share/openbox/static/app.css
       - install -d /app/share/openbox/emulator_defs
       - for f in emulator_defs/*.yaml; do install -Dm644 "$f" "/app/share/openbox/emulator_defs/"; done
       - install -Dm755 scripts/openbox-launcher.sh /app/share/openbox/openbox-launcher.sh

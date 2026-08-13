@@ -29,6 +29,8 @@ GET_TABLE = {
     "/api/highscores": "_api_get_api_highscores",
     "/api/history": "_api_get_api_history",
     "/api/jobs": "_api_get_api_jobs",
+    "/static/app.js": "_api_get_static",
+    "/static/app.css": "_api_get_static",
     "/api/import/exclusions": "_api_get_api_import_exclusions",
     "/api/launcher/menu": "_api_get_api_launcher_menu",
     "/api/library": "_api_get_api_library",

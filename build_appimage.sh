@@ -22,6 +22,8 @@ while IFS= read -r file; do
   cp "$source_root/$file" "$appdir/usr/share/openbox/$file"
 done < "$source_root/runtime_modules.txt"
 cp "$source_root/index.html" "$appdir/usr/share/openbox/index.html"
+mkdir -p "$appdir/usr/share/openbox/static"
+cp "$source_root"/static/app.js "$source_root"/static/app.css "$appdir/usr/share/openbox/static/"
 mkdir -p "$appdir/usr/share/openbox/emulator_defs"
 cp "$source_root"/emulator_defs/*.yaml "$appdir/usr/share/openbox/emulator_defs/"
 install -Dm755 "$source_root/scripts/openbox-launcher.sh" "$appdir/usr/share/openbox/openbox-launcher.sh"

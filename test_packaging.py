@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent
 PYTHON_MODULES = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
-DATA_FILES = ["index.html"]
+DATA_FILES = ["index.html", "static/app.js", "static/app.css"]
 STOCK_THEMES = [
     "Midnight Circuit.css",
     "Phosphor Terminal.css",

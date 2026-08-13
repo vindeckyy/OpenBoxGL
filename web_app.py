@@ -40,7 +40,7 @@ from automation import (
     validate_webhook,
 )
 from catalog import PROGRESS, apply_progress_automation, bulk_update, game_media_paths, related_game_ids, tag_counts
-from api_errors import ApiError, BadRequest, GameNotFound, MediaNotFound, BadgeNotFound, DocumentNotFound, PlatformDocumentNotFound
+from api_errors import ApiError, BadRequest, GameNotFound, MediaNotFound, BadgeNotFound, DocumentNotFound, PlatformDocumentNotFound, RouteNotFound
 from notifications import add_notification, clear as clear_notifications, mark_read as mark_notifications_read, unread_count
 from routes import dispatch_get, dispatch_post
 from play_queue import advance as advance_queue, enqueue as enqueue_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
@@ -1394,6 +1394,21 @@ class Handler(BaseHTTPRequestHandler):
             html = (ROOT / "index.html").read_bytes()
             self.send_bytes(200, html, "text/html; charset=utf-8")
             return
+    def _api_get_static(self, parsed):
+        # Static UI assets (app.js/app.css) live next to index.html. Serve
+        # them with long-lived caching keyed on mtime+size ETags.
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        name = Path(parsed.path).name
+        if name not in {"app.js", "app.css"}:
+            raise RouteNotFound("Not found")
+        asset = ROOT / "static" / name
+        if not asset.is_file():
+            raise RouteNotFound("Not found")
+        content_type = "text/javascript; charset=utf-8" if name.endswith(".js") else "text/css; charset=utf-8"
+        self.send_file(200, asset, content_type)
+        return
     def _api_get_favicon(self, parsed):
         if parsed.path in ("/favicon.svg", "/favicon.ico"):
             # Browsers request an icon on every initial load; serve the
