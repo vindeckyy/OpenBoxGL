@@ -19,7 +19,13 @@ This plan turns OpenBox from a well-tested hobby launcher into software a compan
 - [x] Phase 4.2 (pulled forward): crash report packager + /api/diagnostic.
 - [x] Phase 1.3: /api/v1 aliases. Phase 1.5: rolling state snapshots + dry-run recovery.
 - [x] Phase 1.8: last update check timestamp.
-- [ ] Phase 2: frontend architecture (in progress).
+- [x] Phase 2.1: index.html split into static/app.js + static/app.css served over /static/* (c8ee38f).
+- [x] Phase 2.2: AppState object owns all 30 state vars; localStorage prefs; ui_smoke.sh gate (8cff936).
+- [x] Phase 2.4: API_V1 map routes 45 stable paths to /api/v1 (62 of 131 call sites) (ec44fa9).
+- [x] Phase 2.5: honest English-only localization choice shipped (ec44fa9).
+- [x] Phase 2.6: dialog aria-modal, live regions, focus-visible repair (2cc68ab).
+- [x] Phase 2.7: error banner with request-id capture + copy diagnostics (355ffc9).
+- [ ] Phase 3: design and product polish (in progress).
 
 ---
 

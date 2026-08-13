@@ -2222,6 +2222,8 @@ const token = new URLSearchParams(location.search).get('token') || '';
     $('closeWelcome').onclick = () => closeDialog($('welcomeDialog'));
     $('welcomeImportFolder').onclick = () => { $('welcomeDialog').close(); importFolder(); };
     $('welcomeImportSteam').onclick = () => { $('welcomeDialog').close(); importSteam(); };
+    $('welcomeImportHeroic').onclick = () => { $('welcomeDialog').close(); importHeroic(); };
+    $('welcomeImportLutris').onclick = () => { $('welcomeDialog').close(); importLutris(); };
     $('welcomeSyncMetadata').onclick = async () => {
       $('welcomeDialog').close();
       try {

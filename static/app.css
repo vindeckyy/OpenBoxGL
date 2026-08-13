@@ -12,10 +12,9 @@
       --lifecycle-bg:#45351d; --lifecycle-kicker:#f0c36a; --bigbox-bg:#30261a;
       --bigbox-copy:#d0c0a5;
       --radius-hairline:2px; --radius-cover:5px; --radius-panel:12px; --radius-pill-large:28px;
-      --font-micro:9px; --font-label:11px; --font-meta:12px; --font-body-small:13px;
+      --font-micro:10px; --font-label:12px; --font-meta:12px; --font-body-small:13px;
       --font-body:14px; --font-action:15px; --font-dialog:16px; --font-title-large:18px;
-      --font-heading:24px; --font-brand:0.9375rem; --font-nav:0.8125rem;
-      --font-subtitle:19px; --font-bigbox:21px; --font-panel-title:28px;
+      --font-heading:24px; --font-brand:0.9375rem; --font-nav:0.8125rem;      --font-subtitle:19px; --font-bigbox:21px; --font-panel-title:28px;
       --font-bigbox-display:clamp(38px,5vw,72px); --font-screensaver:clamp(44px,8vw,110px);
       --topbar-min-height:3rem;
     }
@@ -130,7 +129,7 @@
       padding:0.75rem 0 0.875rem; margin-top:-1rem; background:var(--surface-deep); border-bottom:1px solid var(--line);
     }
     .library-head > div:first-child { flex:1 1 10rem; min-width:0; }
-    .library-head h1 { margin:0; font-size:1.25rem; line-height:1.2; letter-spacing:-.02em; }
+    .library-head h1 { margin:0; font-size:1.5rem; line-height:1.1; letter-spacing:-.02em; font-weight:900; }
     .library-head p { margin:0.125rem 0 0; color:var(--muted); font-size:var(--font-body-small); line-height:1.3; }
     .library-head .search { width:auto; min-width:9.5rem; max-width:14rem; flex:0 1 14rem; margin-left:auto; }
     .library-head .icon-button { flex-shrink:0; white-space:nowrap; }
