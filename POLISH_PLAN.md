@@ -1,11 +1,25 @@
 # OpenBox Production Polish Plan (v0.9 -> 1.0)
 
 Owner: OpenBox maintainers
-Status: Draft for review
+Status: In execution. Phases 0-1 shipped (see PROGRESS below).
 Scope: backend, frontend, reliability, security, performance, packaging, release trust
 Explicitly out of scope: new feature surfaces, subscription tiers, cloud-hosted services
 
 This plan turns OpenBox from a well-tested hobby launcher into software a company would ship and stand behind. The goal is not "looks nicer". The goal is: every shipped release is reproducible, measurable, recoverable, and honest about what it can and cannot do.
+## PROGRESS
+
+- [x] Phase 0: engineering foundation (make check gate, ruff, coverage floors, version sync, CI rework, 4 undefined-name fixes, version 0.9.0).
+- [x] Phase 1.1: route registry (routes.py, 60 GET + 90 POST entries, zero behavior change).
+- [x] Phase 1.2: structured errors + request ids (api_errors.py).
+- [x] Phase 1.4: ETag conditional GET + gzip on the library payload.
+- [x] Phase 1.6: settings whitelist (settings_schema.py) with unknown-key dropping.
+- [x] Phase 1.7: secret redaction extended to RA key / client_secret shapes.
+- [x] Phase 1.9: job history + /api/jobs + Library Audit jobs panel.
+- [x] Phase 1.10: graceful shutdown + adaptive session polling.
+- [x] Phase 4.2 (pulled forward): crash report packager + /api/diagnostic.
+- [x] Phase 1.3: /api/v1 aliases. Phase 1.5: rolling state snapshots + dry-run recovery.
+- [x] Phase 1.8: last update check timestamp.
+- [ ] Phase 2: frontend architecture (in progress).
 
 ---
 
