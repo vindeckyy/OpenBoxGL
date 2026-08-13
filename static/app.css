@@ -246,6 +246,9 @@
     .metadata-result small { display:block; color:#9f9182; }
     .dialog-actions { display:flex; justify-content:flex-end; gap:8px; padding:0 16px 16px; }
     .primary { border:0; border-radius:4px; padding:9px 16px; background:var(--action); color:var(--action-ink); font-weight:800; }
+    .error-banner { position:fixed; left:50%; bottom:60px; transform:translateX(-50%); display:flex; align-items:center; gap:8px; max-width:min(640px,calc(100vw - 32px)); background:var(--danger,#743f3f); color:var(--text); border:1px solid var(--border-control); border-radius:6px; padding:10px 12px; box-shadow:0 10px 30px #000c; z-index:400; font-size:13px; }
+    .error-banner[hidden] { display:none; }
+    .error-banner span { flex:1; }
     .toast { position:fixed; z-index:20; right:18px; bottom:18px; max-width:360px; padding:11px 14px; border:1px solid var(--border-card); border-radius:6px; background:var(--surface-card); color:var(--text); box-shadow:0 12px 30px #0009; opacity:0; transform:translateY(8px); pointer-events:none; transition:opacity .2s ease, transform .2s ease; }
     .toast.show { opacity:1; transform:none; }
     .context-menu { position:fixed; z-index:60; width:min(280px,calc(100vw - 20px)); padding:6px; border:1px solid var(--border-card); border-radius:7px; background:var(--panel); box-shadow:0 18px 50px #000c; }

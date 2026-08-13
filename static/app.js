@@ -142,10 +142,45 @@ const token = new URLSearchParams(location.search).get('token') || '';
       if (text) {
         try { payload = JSON.parse(text); } catch { throw new Error('The server returned an invalid response.'); }
       }
-      if (!response.ok) throw new Error(payload.error || 'Request failed');
+      if (!response.ok) {
+        const error = new Error(payload.error || 'Request failed');
+        error.code = payload.code;
+        error.requestId = payload.request_id;
+        error.detail = payload.detail;
+        throw error;
+      }
       return payload;
     }
     function notify(message) { $('toast').textContent = message; $('toast').classList.add('show'); clearTimeout(notify.timer); notify.timer = setTimeout(() => $('toast').classList.remove('show'), 2800); }
+    let lastBannerDetails = '';
+    function showErrorBanner(error) {
+      const text = error?.message || String(error || 'Something went wrong.');
+      $('errorBannerText').textContent = text;
+      lastBannerDetails = [
+        text,
+        error?.code ? `code: ${error.code}` : '',
+        error?.requestId ? `request id: ${error.requestId}` : '',
+        error?.detail ? String(error.detail) : '',
+      ].filter(Boolean).join('\n');
+      $('errorBanner').hidden = false;
+      clearTimeout(showErrorBanner.timer);
+      showErrorBanner.timer = setTimeout(() => { $('errorBanner').hidden = true; }, 10000);
+    }
+    function copyDiagnostics() {
+      try {
+        navigator.clipboard.writeText(lastBannerDetails || 'No error details captured.');
+        notify('Error details copied');
+      } catch (error) {
+        notify('Could not copy: clipboard unavailable');
+      }
+    }
+    $('errorBannerDismiss').onclick = () => { $('errorBanner').hidden = true; };
+    $('errorBannerCopy').onclick = copyDiagnostics;
+    window.addEventListener('unhandledrejection', event => {
+      if (event.reason && (event.reason.code === 'INTERNAL_ERROR' || event.reason.requestId || event.reason instanceof Error)) {
+        showErrorBanner(event.reason);
+      }
+    });
     function setButtonBusy(button, busy) {
       if (!button) return;
       button.disabled = busy;

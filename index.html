@@ -450,6 +450,11 @@
     <div class="reader-viewport" id="readerViewport"><iframe id="readerFrame" title="Document reader"></iframe></div>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div class="error-banner" id="errorBanner" role="alert" hidden>
+    <span id="errorBannerText"></span>
+    <button type="button" class="icon-button" id="errorBannerCopy">Copy details</button>
+    <button type="button" class="icon-button" id="errorBannerDismiss" aria-label="Dismiss error">×</button>
+  </div>
   <div class="context-menu" id="contextMenu" hidden>
     <button type="button" class="icon-button" id="contextPlay">Play</button>
     <button type="button" class="icon-button" id="contextFavorite">Toggle favorite</button>
