@@ -14,6 +14,7 @@ GET_TABLE = {
     "/api/backup": "_api_get_api_backup",
     "/api/backup/manifest": "_api_get_api_backup_manifest",
     "/api/backups": "_api_get_api_backups",
+    "/api/diagnostic": "_api_get_api_diagnostic",
     "/api/discovery": "_api_get_api_discovery",
     "/api/document": "_api_get_api_document",
     "/api/emulators": "_api_get_api_emulators",

@@ -1,6 +1,7 @@
 openbox.py
 web_app.py
 openbox_logging.py
+crash_report.py
 state_store.py
 settings_schema.py
 backend_io.py

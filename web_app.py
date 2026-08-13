@@ -46,6 +46,7 @@ from routes import dispatch_get, dispatch_post
 from play_queue import advance as advance_queue, enqueue as enqueue_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
 
 from cloud_sync import sync_statistics
+from crash_report import build_report
 from emulators import emulator_status, install_all_emulators, install_emulator, launch_emulator, recommendations_for_platform, update_all_emulators, update_emulator
 from importers import import_heroic, import_lutris, import_steam
 from metadata import apply_game_metadata, search_games, sync_database
@@ -1458,6 +1459,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(403, {"error": "Unauthorized"})
             return
         self.send_json(200, {"log": read_diagnostic_log(DATA.parent)})
+        return
+    def _api_get_api_diagnostic(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"report": build_report(DATA.parent)})
         return
     def _api_get_api_update(self, parsed):
         if not self.authorized():
