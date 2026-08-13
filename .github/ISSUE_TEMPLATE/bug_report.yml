@@ -67,6 +67,23 @@ body:
       required: true
 
   - type: textarea
+    id: diagnostic
+    attributes:
+      label: Diagnostic report
+      description: Paste the output of Settings -> Library Audit -> the diagnostic log, or the "Copy details" output from an error banner. It is redacted automatically.
+    validations:
+      required: false
+
+  - type: input
+    id: library_size
+    attributes:
+      label: Library size
+      description: Roughly how many games are in the library
+      placeholder: e.g. 400
+    validations:
+      required: false
+
+  - type: textarea
     id: logs
     attributes:
       label: Logs or screenshots
