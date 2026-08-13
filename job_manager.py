@@ -23,11 +23,13 @@ def _now() -> str:
 class JobManager:
     """Run bounded backend jobs and prevent stale workers overwriting new jobs."""
 
-    def __init__(self, max_workers=4):
+    def __init__(self, max_workers=4, history_limit=50):
         self._lock = threading.RLock()
         self._jobs: dict[str, dict] = {}
         self._futures: dict[str, Future] = {}
         self._cancel_events: dict[str, threading.Event] = {}
+        self._history: list[dict] = []
+        self._history_limit = max(0, int(history_limit))
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="openbox-job")
 
     def snapshot(self, name):
@@ -37,6 +39,19 @@ class JobManager:
     def snapshots(self):
         with self._lock:
             return {name: dict(job) for name, job in self._jobs.items()}
+
+    def history(self, limit=50):
+        """Return finished jobs, newest first, so the UI can show a log."""
+        limit = max(1, min(int(limit), 200))
+        with self._lock:
+            return [dict(job) for job in self._history[-limit:]][::-1]
+
+    def _archive(self, job):
+        if not self._history_limit:
+            return
+        with self._lock:
+            self._history.append(dict(job))
+            del self._history[: max(0, len(self._history) - self._history_limit)]
 
     def submit(self, name, worker: Callable, *, replace=False, max_attempts=1, backoff_seconds=1.0):
         name = str(name).strip()
@@ -84,6 +99,7 @@ class JobManager:
                         return
                     if cancel_event.is_set():
                         current.update({"state": "cancelled", "finished_at": _now()})
+                        self._archive(current)
                         return
                     current.update({"state": "running", "started_at": current.get("started_at") or _now(), "attempt": attempt})
                 try:
@@ -103,6 +119,7 @@ class JobManager:
                                 "finished_at": _now(),
                                 "duration_seconds": round(time.monotonic() - started, 3),
                             })
+                            self._archive(current)
                     return
                 except Exception as error:  # worker isolation boundary
                     LOGGER.exception("Backend job %s failed on attempt %s", name, attempt)
@@ -118,6 +135,7 @@ class JobManager:
                                 "finished_at": _now(),
                                 "duration_seconds": round(time.monotonic() - started, 3),
                             })
+                            self._archive(current)
                     return
 
         future = self._executor.submit(run)
@@ -135,6 +153,7 @@ class JobManager:
                 event.set()
             if job.get("state") == "queued":
                 job.update({"state": "cancelled", "finished_at": _now()})
+                self._archive(job)
             return True
 
     def shutdown(self, wait=True, cancel_futures=False):

@@ -12,9 +12,9 @@ LOG_NAME = "openbox"
 LOG_FILE = "openbox.log"
 MAX_BYTES = 2 * 1024 * 1024
 BACKUP_COUNT = 4
-_SECRET = re.compile(r'(?i)(token|password|secret|api[_-]?key|authorization)([=:]\s*)([^\s,&"\']+)')
-_JSON_SECRET = re.compile(r'(?i)("(?:token|password|secret|api[_-]?key|authorization)"\s*:\s*")[^"]*')
-_PYTHON_SECRET = re.compile(r"(?i)(['\"]?(?:token|password|secret|api[_-]?key|authorization)['\"]?\s*[:=]\s*['\"]?)[^\s,}\]\"']+")
+_SECRET = re.compile(r'(?i)(token|password|secret|api[_-]?key|authorization|client[_-]?secret|ra[\s]+(?:api[\s]+)?key)([=:]\s*)([^\s,&"\']+)')
+_JSON_SECRET = re.compile(r'(?i)("(?:token|password|secret|api[_-]?key|authorization|client[_-]?secret)"\s*:\s*")[^"]*')
+_PYTHON_SECRET = re.compile(r"(?i)(['\"]?(?:token|password|secret|api[_-]?key|authorization|client[_-]?secret)['\"]?\s*[:=]\s*['\"]?)[^\s,}\]\"']+")
 _BEARER = re.compile(r"(?i)(authorization\s*[:=]\s*bearer\s+)\S+")
 logging.getLogger(LOG_NAME).addHandler(logging.NullHandler())
 

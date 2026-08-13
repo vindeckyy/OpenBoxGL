@@ -1401,6 +1401,11 @@ class Handler(BaseHTTPRequestHandler):
             if icon.is_file():
                 self.send_bytes(200, icon.read_bytes(), "image/svg+xml")
                 return
+    def _api_get_api_jobs(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"jobs": JOB_MANAGER.snapshots(), "history": JOB_MANAGER.history()})
     def _api_get_api_theme_css(self, parsed):
         if not self.authorized():
             self.send_json(403, {"error": "Unauthorized"})

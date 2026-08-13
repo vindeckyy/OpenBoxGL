@@ -27,6 +27,7 @@ GET_TABLE = {
     "/api/gameyfin/providers": "_api_get_api_gameyfin_providers",
     "/api/highscores": "_api_get_api_highscores",
     "/api/history": "_api_get_api_history",
+    "/api/jobs": "_api_get_api_jobs",
     "/api/import/exclusions": "_api_get_api_import_exclusions",
     "/api/launcher/menu": "_api_get_api_launcher_menu",
     "/api/library": "_api_get_api_library",

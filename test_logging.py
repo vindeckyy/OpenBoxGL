@@ -10,6 +10,10 @@ def test_redaction():
     assert "<redacted>" in redact('{"api_key":"secret-token"}')
     assert "hunter2" not in redact("{'password': 'hunter2'}")
     assert "secret-token" not in redact("Authorization: Bearer secret-token")
+    assert "retroach-key-abc" not in redact("RA key= retroach-key-abc")
+    assert "retroach-key-abc" not in redact("RA API KEY= retroach-key-abc")
+    assert "igdb-secret" not in redact("client_secret= igdb-secret")
+    assert "igdb-secret" not in redact('{"client_secret": "igdb-secret"}')
 
 
 def test_file_logging():

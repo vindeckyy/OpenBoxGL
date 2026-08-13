@@ -190,6 +190,7 @@
     .detail-card { margin-top:11px; padding:13px; border:1px solid var(--line); border-radius:8px; background:var(--surface-card); }
     .detail-card h3 { margin:0 0 9px; color:#b09f8d; font-size:var(--font-meta); text-transform:uppercase; letter-spacing:.08em; }
     .facts { display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; }
+    .job-row{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--line)}
     .fact small { display:block; color:#958677; font-size:var(--font-micro); text-transform:uppercase; }
     .fact span { display:block; margin-top:2px; color:#e5dbce; font-size:var(--font-meta); overflow-wrap:anywhere; }
     .description { margin:10px 0 0; color:#c0b3a4; font-size:var(--font-meta); white-space:pre-wrap; }
@@ -635,6 +636,7 @@
     <div class="form-grid">
       <div class="wide detail-card" id="healthSummary"></div>
       <div class="wide metadata-results" id="healthIssues"></div>
+      <div class="wide detail-card" id="jobsPanel" hidden></div>
       <button type="button" class="icon-button" id="scanAllSaves">Scan library for saves</button>
       <button type="button" class="icon-button" id="dedupeButton">Remove duplicate entries</button>
     </div>
@@ -2256,6 +2258,21 @@
       if (!path) return;
       try { await api('/api/themes/import',{method:'POST',body:JSON.stringify({path})}); await openThemes(); notify('Theme imported'); } catch(error) { notify(error.message); }
     };
+    async function renderJobsPanel() {
+      try {
+        const result = await api('/api/jobs');
+        const active = Object.entries(result.jobs || {}).filter(([, job]) => job.state === 'running' || job.state === 'queued');
+        const finished = (result.history || []).slice(0, 5);
+        if (!active.length && !finished.length) { $('jobsPanel').hidden = true; return; }
+        const stateClass = state => state === 'error' ? 'danger' : (state === 'running' || state === 'queued') ? 'active' : '';
+        const rows = [
+          ...active.map(([name, job]) => `<div class="job-row"><strong>${escapeHtml(name)}</strong><span class="badge ${stateClass(job.state)}">${escapeHtml(job.state)}</span>${job.error ? `<small>${escapeHtml(job.error)}</small>` : ''}</div>`),
+          ...finished.map(job => `<div class="job-row"><strong>${escapeHtml(job.name)}</strong><span class="badge ${stateClass(job.state)}">${escapeHtml(job.state)}</span><small>${job.duration_seconds}s ago-finish</small>${job.error ? `<small>${escapeHtml(job.error)}</small>` : ''}</div>`),
+        ];
+        $('jobsPanel').innerHTML = `<h3>Background jobs</h3><div class="facts">${rows.join('')}</div>`;
+        $('jobsPanel').hidden = false;
+      } catch (error) { /* jobs view is best-effort; never block the audit */ }
+    }
     async function health() {
       try {
         const result = await api('/api/health',{method:'POST',body:'{}'});
@@ -2263,6 +2280,7 @@
         $('healthIssues').innerHTML = result.issues.length ? result.issues.map(issue => `<button type="button" class="metadata-result icon-button" data-audit-game="${issue.id}"><div><strong>${escapeHtml(issue.game)}</strong><small>${escapeHtml(issue.type)} · ${escapeHtml(issue.detail)}</small></div></button>`).join('') : '<p class="description">No library issues found.</p>';
         document.querySelectorAll('[data-audit-game]').forEach(button => button.onclick = () => { selectedId = Number(button.dataset.auditGame); $('healthDialog').close(); render(); });
         $('dedupeButton').disabled = !result.duplicates;
+        renderJobsPanel();
         if (!$('healthDialog').open) $('healthDialog').showModal();
       } catch(error) { notify(error.message); }
     }
