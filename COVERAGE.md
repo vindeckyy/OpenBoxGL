@@ -5,3 +5,4 @@ Coverage is measured by `scripts/check_tests.py` (the `make check` gate). This f
 | Date | Total | web_app.py | Note |
 |---|---|---|---|
 | 2026-08-13 | 55% | 44% | Baseline before the polish program. Floors set here. |
+| 2026-08-13 | 56% | 44% | After phases 0-7: gates, routes, snapshots, jobs, static split, signing tests. |

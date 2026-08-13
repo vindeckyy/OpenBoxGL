@@ -25,7 +25,13 @@ This plan turns OpenBox from a well-tested hobby launcher into software a compan
 - [x] Phase 2.5: honest English-only localization choice shipped (ec44fa9).
 - [x] Phase 2.6: dialog aria-modal, live regions, focus-visible repair (2cc68ab).
 - [x] Phase 2.7: error banner with request-id capture + copy diagnostics (355ffc9).
-- [ ] Phase 3: design and product polish (in progress).
+- [x] Phase 3.1/3.2: library heading lead, 12px label floor, 3.3 unified onboarding (d555486).
+- [x] Phase 4.1/4.3: reliability catalog (23 scenarios) + SUPPORT.md + README links (ec8d7d2).
+- [x] Phase 4.2: error banner with request-id capture (355ffc9).
+- [x] Phase 5: gzip bytes cached per state change (1.9ms at 5k games, 96% smaller); PERF.md baseline (44e9cc3).
+- [x] Phase 6.2/6.1: SBOM generator + Ed25519 signing/verification with tamper test (a255873).
+- [x] Phase 7: release pipeline script, TRIAGE.md, enriched bug template, API v1 contract generator.
+- [x] Final gate: make check green (56% total / 44% web_app floors), 45 test files, UI smoke green..
 
 ---
 
