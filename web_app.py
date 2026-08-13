@@ -40,6 +40,7 @@ from automation import (
 )
 from catalog import PROGRESS, apply_progress_automation, bulk_update, game_media_paths, related_game_ids, tag_counts
 from notifications import add_notification, clear as clear_notifications, mark_read as mark_notifications_read, unread_count
+from routes import dispatch_get, dispatch_post
 from play_queue import advance as advance_queue, enqueue as enqueue_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
 
 from cloud_sync import sync_statistics
@@ -1351,10 +1352,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def _do_GET(self):
         parsed = urlparse(self.path)
+        dispatch_get(self, parsed)
+
+    def _api_get_index(self, parsed):
         if parsed.path in ("/", "/index.html"):
             html = (ROOT / "index.html").read_bytes()
             self.send_bytes(200, html, "text/html; charset=utf-8")
             return
+    def _api_get_favicon(self, parsed):
         if parsed.path in ("/favicon.svg", "/favicon.ico"):
             # Browsers request an icon on every initial load; serve the
             # repo icon instead of a 404 console error.
@@ -1362,606 +1367,784 @@ class Handler(BaseHTTPRequestHandler):
             if icon.is_file():
                 self.send_bytes(200, icon.read_bytes(), "image/svg+xml")
                 return
-        if parsed.path == "/api/theme.css":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            name = parse_qs(parsed.query).get("name", [""])[0]
-            theme = DATA.parent / "themes" / f"{Path(name).stem}.css"
-            if not name or not theme.is_file() or theme.stem != name:
-                self.send_bytes(200, b"", "text/css; charset=utf-8")
-                return
-            theme_bytes = theme.read_bytes()
-            etag = f'"{theme.stat().st_mtime_ns:x}-{len(theme_bytes):x}"'
-            self.send_bytes(
-                200, theme_bytes, "text/css; charset=utf-8",
-                cache_control="public, max-age=0, must-revalidate",
-                etag=etag,
-                last_modified=email.utils.formatdate(theme.stat().st_mtime, usegmt=True),
-            )
+    def _api_get_api_theme_css(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
             return
-        if parsed.path == "/api/library":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_bytes(200, public_state_bytes(), "application/json; charset=utf-8")
+        name = parse_qs(parsed.query).get("name", [""])[0]
+        theme = DATA.parent / "themes" / f"{Path(name).stem}.css"
+        if not name or not theme.is_file() or theme.stem != name:
+            self.send_bytes(200, b"", "text/css; charset=utf-8")
             return
-        if parsed.path == "/api/profiles":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
+        theme_bytes = theme.read_bytes()
+        etag = f'"{theme.stat().st_mtime_ns:x}-{len(theme_bytes):x}"'
+        self.send_bytes(
+            200, theme_bytes, "text/css; charset=utf-8",
+            cache_control="public, max-age=0, must-revalidate",
+            etag=etag,
+            last_modified=email.utils.formatdate(theme.stat().st_mtime, usegmt=True),
+        )
+        return
+    def _api_get_api_library(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_bytes(200, public_state_bytes(), "application/json; charset=utf-8")
+        return
+    def _api_get_api_profiles(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        state = load_state_view()
+        self.send_json(200, {"profiles": state["profiles"], "detected": discover_profiles()})
+        return
+    def _api_get_api_perf_profiles(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"perf_profiles": load_state_view().get("perf_profiles", {})})
+        return
+    def _api_get_api_settings(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, public_settings())
+        return
+    def _api_get_api_log(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"log": read_diagnostic_log(DATA.parent)})
+        return
+    def _api_get_api_update(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        try:
+            self.send_json(200, check_update())
+        except (ValueError, OSError, TypeError, AttributeError) as error:
+            self.send_json(400, {"error": str(error)})
+        return
+    def _api_get_api_related(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        try:
+            query = parse_qs(parsed.query)
             state = load_state_view()
-            self.send_json(200, {"profiles": state["profiles"], "detected": discover_profiles()})
+            index = state["games"].index(game_from_query(state, query))
+            related = related_game_ids(state["games"], index)
+            self.send_json(200, {"ids": related})
+        except (KeyError, IndexError, ValueError):
+            self.send_json(404, {"error": "Game not found"})
+        return
+    def _api_get_api_emulators(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
             return
-        if parsed.path == "/api/perf_profiles":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, {"perf_profiles": load_state_view().get("perf_profiles", {})})
+        emulators = emulator_status()
+        with PROCESS_LOCK:
+            for emulator in emulators:
+                emulator["job"] = INSTALLS.get(emulator["app_id"], {})
+            install_all = INSTALLS.get("__all__", {})
+        self.send_json(200, {"emulators": emulators, "install_all": install_all})
+        return
+    def _api_get_api_saves(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
             return
-        if parsed.path == "/api/settings":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, public_settings())
-            return
-        if parsed.path == "/api/log":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, {"log": read_diagnostic_log(DATA.parent)})
-            return
-        if parsed.path == "/api/update":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            try:
-                self.send_json(200, check_update())
-            except (ValueError, OSError, TypeError, AttributeError) as error:
-                self.send_json(400, {"error": str(error)})
-            return
-        if parsed.path == "/api/related":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            try:
-                query = parse_qs(parsed.query)
-                state = load_state_view()
-                index = state["games"].index(game_from_query(state, query))
-                related = related_game_ids(state["games"], index)
-                self.send_json(200, {"ids": related})
-            except (KeyError, IndexError, ValueError):
-                self.send_json(404, {"error": "Game not found"})
-            return
-        if parsed.path == "/api/emulators":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            emulators = emulator_status()
-            with PROCESS_LOCK:
-                for emulator in emulators:
-                    emulator["job"] = INSTALLS.get(emulator["app_id"], {})
-                install_all = INSTALLS.get("__all__", {})
-            self.send_json(200, {"emulators": emulators, "install_all": install_all})
-            return
-        if parsed.path == "/api/saves":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            try:
-                query = parse_qs(parsed.query)
-                game = game_from_query(load_state_view(), query)
-                backups = [{"name": path.name, "size": path.stat().st_size} for path in list_backups(game, DATA.parent / "save-backups")]
-                self.send_json(200, {"backups": backups})
-            except (KeyError, IndexError, ValueError):
-                self.send_json(404, {"error": "Game not found"})
-            return
-        if parsed.path == "/api/saves/discover":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            try:
-                query = parse_qs(parsed.query)
-                game = game_from_query(load_state_view(), query)
-                configured = set(game.get("save_paths", []))
-                candidates = [
-                    item for item in discover_save_paths(game) + extra_save_candidates(game)
-                    if item["path"] not in configured
-                ]
-                self.send_json(200, {"candidates": candidates})
-            except (KeyError, IndexError, ValueError):
-                self.send_json(404, {"error": "Game not found"})
-            return
-        if parsed.path == "/api/themes":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            ensure_stock_themes(DATA.parent / "themes", ROOT)
-            themes = sorted(path.stem for path in (DATA.parent / "themes").glob("*.css"))
-            settings = load_state_view().get("settings", {})
-            platform = parse_qs(parsed.query).get("platform", [""])[0]
-            mappings = settings.get("theme_by_platform", {})
-            self.send_json(200, {
-                "themes":themes,
-                "selected":mappings.get(platform, settings.get("theme", "")) if platform else settings.get("theme", ""),
-                "global":settings.get("theme", ""),
-                "mappings":mappings,
-            })
-            return
-        if parsed.path == "/api/running":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            try:
-                after = int(parse_qs(parsed.query).get("after", ["0"])[0])
-            except ValueError:
-                after = 0
-            with PROCESS_LOCK:
-                payload = {
-                    "running": list(RUNNING.values()),
-                    "events": [event for event in SESSION_EVENTS if event["id"] > after],
-                    "last_event": EVENT_SEQUENCE,
-                }
-            self.send_json(200, payload)
-            return
-        if parsed.path == "/api/history":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            try:
-                limit = min(500, max(1, int(parse_qs(parsed.query).get("limit", ["100"])[0])))
-            except ValueError:
-                limit = 100
-            state_view = load_state_view()
-            history = list(reversed(state_view.get("history", [])[-limit:]))
-            self.send_json(200, {"history": history, "enabled": state_view.get("settings", {}).get("track_session_history", True)})
-            return
-        if parsed.path == "/api/ra/settings":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            credentials = load_ra_credentials(DATA.parent)
-            if not credentials:
-                self.send_json(200, {"configured": False})
-                return
-            try:
-                profile = ra_api_get("API_GetUserProfile.php", {"u":credentials["username"]}, credentials)
-                self.send_json(200, {
-                    "configured": True,
-                    "username": profile.get("User", credentials["username"]),
-                    "points": profile.get("TotalPoints", 0),
-                    "motto": profile.get("Motto", ""),
-                })
-            except (OSError, ValueError, json.JSONDecodeError) as error:
-                self.send_json(400, {"error": str(error)})
-            return
-        if parsed.path == "/api/plugins":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, {"plugins":list_plugins(DATA.parent / "plugins")})
-            return
-        if parsed.path == "/api/metadata/status":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            with PROCESS_LOCK:
-                job = dict(METADATA_JOB)
-            state_view = load_state_view()
-            games = state_view["games"]
-            matched = sum(bool(game.get("launchbox_db_id")) for game in games)
-
-            def _missing(field):
-                return sum(not Path(str(game.get(field) or "")).is_file() for game in games)
-
-            coverage = {
-                "games": len(games),
-                "matched_games": matched,
-                "matched_ratio": round(matched / len(games), 4) if games else 0.0,
-            }
-            for field in sorted(MEDIA_TYPES_ALL):
-                coverage[f"with_{field}"] = len(games) - _missing(field)
-            self.send_json(200, {"ready":METADATA_DATABASE.is_file(), "job":job, "coverage":coverage})
-            return
-        if parsed.path == "/api/metadata/search":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            if not METADATA_DATABASE.is_file():
-                self.send_json(409, {"error": "Download the LaunchBox metadata database first."})
-                return
-            try:
-                query = parse_qs(parsed.query)
-                game = game_from_query(load_state_view(), query)
-                title = query.get("q", [game.get("name", "")])[0]
-                results = search_games(METADATA_DATABASE, title, game.get("platform", ""))
-                self.send_json(200, {"results":results})
-            except (KeyError, IndexError, ValueError, sqlite3.Error) as error:
-                self.send_json(400, {"error":str(error)})
-            return
-        if parsed.path == "/api/media/audit":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
+        try:
             query = parse_qs(parsed.query)
-            platform = query.get("platform", ["all"])[0]
-            games = [
-                game for game in load_state_view()["games"]
-                if platform == "all" or game.get("platform") == platform
-            ]
-            self.send_json(200, {
-                "games":len(games),
-                "matched":sum(bool(game.get("launchbox_db_id")) for game in games),
-                "missing_cover":sum(not Path(str(game.get("cover") or "")).is_file() for game in games),
-                "missing_background":sum(not Path(str(game.get("background") or "")).is_file() for game in games),
-                "missing_screenshots":sum(not any(Path(str(path)).is_file() for path in game.get("screenshots", []) if path) for game in games),
-                "missing_box_back":sum(not Path(str(game.get("box_back") or "")).is_file() for game in games),
-                "missing_box_spine":sum(not Path(str(game.get("box_spine") or "")).is_file() for game in games),
-                "missing_box_3d":sum(not Path(str(game.get("box_3d") or "")).is_file() for game in games),
-                "missing_clear_logo":sum(not Path(str(game.get("clear_logo") or "")).is_file() for game in games),
-                "missing_fanart":sum(not Path(str(game.get("fanart") or "")).is_file() for game in games),
-                "missing_banner":sum(not Path(str(game.get("banner") or "")).is_file() for game in games),
-                "missing_icon":sum(not Path(str(game.get("icon") or "")).is_file() for game in games),
-                "missing_title_screen":sum(not Path(str(game.get("title_screen") or "")).is_file() for game in games),
-                "missing_cart_front":sum(not Path(str(game.get("cart_front") or "")).is_file() for game in games),
-                "missing_cart_back":sum(not Path(str(game.get("cart_back") or "")).is_file() for game in games),
-                "missing_disc":sum(not Path(str(game.get("disc") or "")).is_file() for game in games),
-                "missing_advertisement":sum(not Path(str(game.get("advertisement") or "")).is_file() for game in games),
-                "missing_manual":sum(not Path(str(game.get("manual") or "")).is_file() for game in games),
-            })
-            return
-        if parsed.path == "/api/media/bulk/status":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            with PROCESS_LOCK:
-                job = dict(MEDIA_JOB)
-            self.send_json(200, {"job":job})
-            return
-        if parsed.path == "/api/ra/badge":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            query = parse_qs(parsed.query)
-            name = re.sub(r"[^A-Za-z0-9_-]", "", query.get("name", [""])[0])
-            locked = query.get("locked", ["0"])[0] == "1"
-            if not name:
-                self.send_json(404, {"error": "Badge not found"})
-                return
-            badge = DATA.parent / "media/retroachievements/badges" / f"{name}{'_lock' if locked else ''}.png"
-            try:
-                if not badge.is_file():
-                    download_image(f"https://media.retroachievements.org/Badge/{badge.name}", badge)
-                self.send_file(200, badge, "image/png")
-            except (OSError, ValueError):
-                self.send_json(404, {"error": "Badge not found"})
-            return
-        if parsed.path == "/api/media":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            query = parse_qs(parsed.query)
-            try:
-                game = game_from_query(load_state_view(), query)
-                kind = query["kind"][0]
-                if kind == "screenshot":
-                    index = int(query["index"][0])
-                    media = Path(game.get("screenshots", [])[index])
-                elif kind in {"cover", "background", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "cart_front", "cart_back", "disc", "advertisement", "manual", "video", "music", "video_snap", "video_theme", "video_trailer", "video_recording"}:
-                    if kind == "video":
-                        _, video_path = active_video(game)
-                        media = Path(video_path or game.get("video", ""))
-                    else:
-                        media = Path(game.get(kind, ""))
-                else:
-                    raise ValueError
-                if not media.is_file():
-                    raise FileNotFoundError
-                self.send_file(200, media)
-            except (KeyError, IndexError, ValueError, FileNotFoundError):
-                self.send_json(404, {"error": "Media not found"})
-            return
-        if parsed.path == "/api/document":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            query = parse_qs(parsed.query)
-            try:
-                game = game_from_query(load_state_view(), query)
-                document = game.get("documents", [])[int(query["index"][0])]
-                path = safe_document_file(document["path"])
-                self.send_response(200)
-                self.headers_common(mimetypes.guess_type(path.name)[0] or "application/octet-stream")
-                safe_name = re.sub(r'[\r\n"]', "_", path.name)
-                self.send_header("Content-Disposition", f'inline; filename="{safe_name}"')
-                self.send_header("Content-Length", str(path.stat().st_size))
-                self.end_headers()
-                with path.open("rb") as source:
-                    shutil.copyfileobj(source, self.wfile)
-            except (KeyError, IndexError, ValueError, FileNotFoundError):
-                self.send_json(404, {"error": "Document not found"})
-            return
-        if parsed.path == "/api/backup":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            data = json.dumps(load_state_view(), indent=2).encode()
-            self.send_response(200)
-            self.headers_common("application/json")
-            self.send_header("Content-Disposition", "attachment; filename=openbox-library.json")
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
-            return
-        if parsed.path == "/api/discovery":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, discovery_lists(load_state_view()["games"]))
-            return
-        if parsed.path == "/api/related/rich":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            try:
-                index = int(parse_qs(parsed.query)["id"][0])
-                self.send_json(200, {"items": related_with_reasons(load_state_view()["games"], index)})
-            except (KeyError, IndexError, ValueError):
-                self.send_json(404, {"error": "Game not found"})
-            return
-        if parsed.path == "/api/emulators/recommend":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            platform = parse_qs(parsed.query).get("platform", [""])[0]
-            self.send_json(200, {"recommendations": recommendations_for_platform(platform)})
-            return
-        if parsed.path == "/api/emulators/dependencies":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            name = parse_qs(parsed.query).get("name", [""])[0]
-            self.send_json(200, detect_dependencies(name))
-            return
-        if parsed.path == "/api/media/duplicates":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, {"groups": find_duplicate_media(load_state_view()["games"])})
-            return
-        if parsed.path == "/api/media/queue":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, {"queue": load_media_queue(DATA.parent / "media-queue.json")})
-            return
-        if parsed.path == "/api/saves/scan":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            found = scan_all_saves(load_state_view()["games"])
-            self.send_json(200, {"games": {str(key): value for key, value in found.items()}, "count": len(found)})
-            return
-        if parsed.path == "/api/highscores":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            try:
-                game = game_from_query(load_state(), parse_qs(parsed.query))
-                self.send_json(200, {"scores": read_local_highscores(game)})
-            except (KeyError, IndexError, ValueError):
-                self.send_json(404, {"error": "Game not found"})
-            return
-        if parsed.path == "/api/obs/status":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, obs_recording_status())
-            return
-        if parsed.path == "/api/platform/documents":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            platform = parse_qs(parsed.query).get("platform", [""])[0]
-            docs = load_state_view().get("settings", {}).get("platform_documents", {})
-            self.send_json(200, {"documents": docs.get(platform, []) if platform else docs})
-            return
-        if parsed.path == "/api/platform/document":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            query = parse_qs(parsed.query)
-            try:
-                platform = query["platform"][0]
-                index = int(query["index"][0])
-                document = load_state_view().get("settings", {}).get("platform_documents", {}).get(platform, [])[index]
-                path = safe_document_file(document["path"])
-                self.send_response(200)
-                self.headers_common(mimetypes.guess_type(path.name)[0] or "application/octet-stream")
-                safe_name = re.sub(r'[\r\n"]', "_", path.name)
-                self.send_header("Content-Disposition", f'inline; filename="{safe_name}"')
-                self.send_header("Content-Length", str(path.stat().st_size))
-                self.end_headers()
-                with path.open("rb") as source:
-                    shutil.copyfileobj(source, self.wfile)
-            except (KeyError, IndexError, ValueError, FileNotFoundError):
-                self.send_json(404, {"error": "Platform document not found"})
-            return
-        if parsed.path == "/api/storefront/catalog":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            source = parse_qs(parsed.query).get("source", [""])[0]
-            try:
-                self.send_json(200, {"catalog": storefront_catalog(source, settings=load_state_view().get("settings", {}))})
-            except (ValueError, OSError, FileNotFoundError, subprocess.SubprocessError) as error:
-                self.send_json(400, {"error": str(error)})
-            return
-        if parsed.path == "/api/gameyfin/install/status":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            query = parse_qs(parsed.query)
-            gameyfin_id = str(query.get("gameyfin_id", [""])[0]).strip()
-            if not gameyfin_id:
-                self.send_json(400, {"error": "gameyfin_id is required."})
-                return
-            with PROCESS_LOCK:
-                job = dict(INSTALLS.get(f"gameyfin:{gameyfin_id}", {"state": "idle"}))
-            self.send_json(200, job)
-            return
-        if parsed.path == "/api/gameyfin/providers":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            try:
-                _catalog, providers = catalog_gameyfin(load_state_view().get("settings", {}))
-                self.send_json(200, {"providers": providers})
-            except (ValueError, OSError, TypeError, AttributeError) as error:
-                self.send_json(400, {"error": str(error)})
-            return
-        if parsed.path == "/api/save-tools/status":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, save_tool_status())
-            return
-        if parsed.path == "/api/plugins/catalog":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, {"catalog": fetch_plugin_catalog()})
-            return
-        if parsed.path == "/api/premium/strings":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            locale = parse_qs(parsed.query).get("locale", ["en"])[0]
-            self.send_json(200, {"locale": locale, "strings": strings_for(locale)})
-            return
-        if parsed.path == "/api/premium/media-packs":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, {"packs": list_media_packs(load_state_view().get("settings", {}))})
-            return
-        if parsed.path == "/api/premium/platform-categories":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, {"categories": platform_categories(load_state_view().get("settings", {}))})
-            return
-        if parsed.path == "/api/filter-presets":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            state = load_state()
-            self.send_json(200, {
-                "presets": list_presets(state),
-                "bigbox_quick": bigbox_quick_presets(state),
-            })
-            return
-        if parsed.path == "/api/explorer/facets":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            field = parse_qs(parsed.query).get("field", ["genre"])[0]
-            state = load_state_view()
-            self.send_json(200, {"field": field, "facets": explorer_facets(state["games"], field)})
-            return
-        if parsed.path == "/api/launcher/menu":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            payload = public_state()
-            self.send_json(200, {"items": launcher_menu_items(payload["games"])})
-            return
-        if parsed.path == "/api/import/exclusions":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, {"exclusions": list_exclusions(load_state_view())})
-            return
-        if parsed.path == "/api/emulators/definitions":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, {"definitions": load_definitions(ROOT / "emulator_defs")})
-            return
-        if parsed.path == "/api/emulators/scan-configs":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, {"configs": list_scan_configs(load_state_view())})
-            return
-        if parsed.path == "/api/metadata/igdb/search":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            query = parse_qs(parsed.query).get("q", [""])[0]
-            platform = parse_qs(parsed.query).get("platform", [""])[0]
-            try:
-                results = search_igdb_games(query, platform=platform)
-            except (OSError, ValueError) as error:
-                self.send_json(400, {"error": str(error)})
-                return
-            self.send_json(200, {"results": results})
-            return
-        if parsed.path == "/api/webhooks":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            state = load_state_view()
-            self.send_json(200, {"webhooks": public_webhook_configs(state), "events": list(EVENT_TYPES), "attempts": int(state.get("settings", {}).get("webhook_attempts") or DEFAULT_ATTEMPTS), "timeout": int(state.get("settings", {}).get("webhook_timeout") or DEFAULT_TIMEOUT)})
-            return
-        if parsed.path == "/api/queue":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, {"queue": resolve_queue(load_state_view())})
-            return
-        if parsed.path == "/api/notifications":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            state = load_state_view()
-            self.send_json(200, {"notifications": state.get("notifications", []), "unread": unread_count(state)})
-            return
-        if parsed.path == "/api/tags":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, {"tags": tag_counts(load_state_view()["games"])})
-            return
-        if parsed.path == "/api/backup/manifest":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            self.send_json(200, {"items": sorted(BACKUP_ITEMS)})
-            return
-        if parsed.path == "/api/backups":
-            if not self.authorized():
-                self.send_json(403, {"error": "Unauthorized"})
-                return
-            folder = DATA.parent / "backups"
-            backups = []
-            for path in sorted(folder.glob("OpenBoxBackup-*.zip"), key=lambda item: item.stat().st_mtime, reverse=True):
-                try:
-                    with zipfile.ZipFile(path) as package:
-                        manifest = json.loads(package.read("manifest.json")) if "manifest.json" in package.namelist() else {}
-                except (OSError, zipfile.BadZipFile, KeyError, json.JSONDecodeError):
-                    manifest = {"items": [], "invalid": True}
-                backups.append({
-                    "name": path.name,
-                    "path": str(path),
-                    "size": path.stat().st_size,
-                    "created": manifest.get("created", ""),
-                    "items": manifest.get("items", []),
-                    "invalid": bool(manifest.get("invalid")),
-                })
+            game = game_from_query(load_state_view(), query)
+            backups = [{"name": path.name, "size": path.stat().st_size} for path in list_backups(game, DATA.parent / "save-backups")]
             self.send_json(200, {"backups": backups})
+        except (KeyError, IndexError, ValueError):
+            self.send_json(404, {"error": "Game not found"})
+        return
+    def _api_get_api_saves_discover(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
             return
-        self.send_json(404, {"error": "Not found"})
+        try:
+            query = parse_qs(parsed.query)
+            game = game_from_query(load_state_view(), query)
+            configured = set(game.get("save_paths", []))
+            candidates = [
+                item for item in discover_save_paths(game) + extra_save_candidates(game)
+                if item["path"] not in configured
+            ]
+            self.send_json(200, {"candidates": candidates})
+        except (KeyError, IndexError, ValueError):
+            self.send_json(404, {"error": "Game not found"})
+        return
+    def _api_get_api_themes(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        ensure_stock_themes(DATA.parent / "themes", ROOT)
+        themes = sorted(path.stem for path in (DATA.parent / "themes").glob("*.css"))
+        settings = load_state_view().get("settings", {})
+        platform = parse_qs(parsed.query).get("platform", [""])[0]
+        mappings = settings.get("theme_by_platform", {})
+        self.send_json(200, {
+            "themes":themes,
+            "selected":mappings.get(platform, settings.get("theme", "")) if platform else settings.get("theme", ""),
+            "global":settings.get("theme", ""),
+            "mappings":mappings,
+        })
+        return
+    def _api_get_api_running(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        try:
+            after = int(parse_qs(parsed.query).get("after", ["0"])[0])
+        except ValueError:
+            after = 0
+        with PROCESS_LOCK:
+            payload = {
+                "running": list(RUNNING.values()),
+                "events": [event for event in SESSION_EVENTS if event["id"] > after],
+                "last_event": EVENT_SEQUENCE,
+            }
+        self.send_json(200, payload)
+        return
+    def _api_get_api_history(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        try:
+            limit = min(500, max(1, int(parse_qs(parsed.query).get("limit", ["100"])[0])))
+        except ValueError:
+            limit = 100
+        state_view = load_state_view()
+        history = list(reversed(state_view.get("history", [])[-limit:]))
+        self.send_json(200, {"history": history, "enabled": state_view.get("settings", {}).get("track_session_history", True)})
+        return
+    def _api_get_api_ra_settings(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        credentials = load_ra_credentials(DATA.parent)
+        if not credentials:
+            self.send_json(200, {"configured": False})
+            return
+        try:
+            profile = ra_api_get("API_GetUserProfile.php", {"u":credentials["username"]}, credentials)
+            self.send_json(200, {
+                "configured": True,
+                "username": profile.get("User", credentials["username"]),
+                "points": profile.get("TotalPoints", 0),
+                "motto": profile.get("Motto", ""),
+            })
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            self.send_json(400, {"error": str(error)})
+        return
+    def _api_get_api_plugins(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"plugins":list_plugins(DATA.parent / "plugins")})
+        return
+    def _api_get_api_metadata_status(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        with PROCESS_LOCK:
+            job = dict(METADATA_JOB)
+        state_view = load_state_view()
+        games = state_view["games"]
+        matched = sum(bool(game.get("launchbox_db_id")) for game in games)
+        def _missing(field):
+            return sum(not Path(str(game.get(field) or "")).is_file() for game in games)
+        coverage = {
+            "games": len(games),
+            "matched_games": matched,
+            "matched_ratio": round(matched / len(games), 4) if games else 0.0,
+        }
+        for field in sorted(MEDIA_TYPES_ALL):
+            coverage[f"with_{field}"] = len(games) - _missing(field)
+        self.send_json(200, {"ready":METADATA_DATABASE.is_file(), "job":job, "coverage":coverage})
+        return
+    def _api_get_api_metadata_search(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        if not METADATA_DATABASE.is_file():
+            self.send_json(409, {"error": "Download the LaunchBox metadata database first."})
+            return
+        try:
+            query = parse_qs(parsed.query)
+            game = game_from_query(load_state_view(), query)
+            title = query.get("q", [game.get("name", "")])[0]
+            results = search_games(METADATA_DATABASE, title, game.get("platform", ""))
+            self.send_json(200, {"results":results})
+        except (KeyError, IndexError, ValueError, sqlite3.Error) as error:
+            self.send_json(400, {"error":str(error)})
+        return
+    def _api_get_api_media_audit(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        query = parse_qs(parsed.query)
+        platform = query.get("platform", ["all"])[0]
+        games = [
+            game for game in load_state_view()["games"]
+            if platform == "all" or game.get("platform") == platform
+        ]
+        self.send_json(200, {
+            "games":len(games),
+            "matched":sum(bool(game.get("launchbox_db_id")) for game in games),
+            "missing_cover":sum(not Path(str(game.get("cover") or "")).is_file() for game in games),
+            "missing_background":sum(not Path(str(game.get("background") or "")).is_file() for game in games),
+            "missing_screenshots":sum(not any(Path(str(path)).is_file() for path in game.get("screenshots", []) if path) for game in games),
+            "missing_box_back":sum(not Path(str(game.get("box_back") or "")).is_file() for game in games),
+            "missing_box_spine":sum(not Path(str(game.get("box_spine") or "")).is_file() for game in games),
+            "missing_box_3d":sum(not Path(str(game.get("box_3d") or "")).is_file() for game in games),
+            "missing_clear_logo":sum(not Path(str(game.get("clear_logo") or "")).is_file() for game in games),
+            "missing_fanart":sum(not Path(str(game.get("fanart") or "")).is_file() for game in games),
+            "missing_banner":sum(not Path(str(game.get("banner") or "")).is_file() for game in games),
+            "missing_icon":sum(not Path(str(game.get("icon") or "")).is_file() for game in games),
+            "missing_title_screen":sum(not Path(str(game.get("title_screen") or "")).is_file() for game in games),
+            "missing_cart_front":sum(not Path(str(game.get("cart_front") or "")).is_file() for game in games),
+            "missing_cart_back":sum(not Path(str(game.get("cart_back") or "")).is_file() for game in games),
+            "missing_disc":sum(not Path(str(game.get("disc") or "")).is_file() for game in games),
+            "missing_advertisement":sum(not Path(str(game.get("advertisement") or "")).is_file() for game in games),
+            "missing_manual":sum(not Path(str(game.get("manual") or "")).is_file() for game in games),
+        })
+        return
+    def _api_get_api_media_bulk_status(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        with PROCESS_LOCK:
+            job = dict(MEDIA_JOB)
+        self.send_json(200, {"job":job})
+        return
+    def _api_get_api_ra_badge(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        query = parse_qs(parsed.query)
+        name = re.sub(r"[^A-Za-z0-9_-]", "", query.get("name", [""])[0])
+        locked = query.get("locked", ["0"])[0] == "1"
+        if not name:
+            self.send_json(404, {"error": "Badge not found"})
+            return
+        badge = DATA.parent / "media/retroachievements/badges" / f"{name}{'_lock' if locked else ''}.png"
+        try:
+            if not badge.is_file():
+                download_image(f"https://media.retroachievements.org/Badge/{badge.name}", badge)
+            self.send_file(200, badge, "image/png")
+        except (OSError, ValueError):
+            self.send_json(404, {"error": "Badge not found"})
+        return
+    def _api_get_api_media(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        query = parse_qs(parsed.query)
+        try:
+            game = game_from_query(load_state_view(), query)
+            kind = query["kind"][0]
+            if kind == "screenshot":
+                index = int(query["index"][0])
+                media = Path(game.get("screenshots", [])[index])
+            elif kind in {"cover", "background", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "cart_front", "cart_back", "disc", "advertisement", "manual", "video", "music", "video_snap", "video_theme", "video_trailer", "video_recording"}:
+                if kind == "video":
+                    _, video_path = active_video(game)
+                    media = Path(video_path or game.get("video", ""))
+                else:
+                    media = Path(game.get(kind, ""))
+            else:
+                raise ValueError
+            if not media.is_file():
+                raise FileNotFoundError
+            self.send_file(200, media)
+        except (KeyError, IndexError, ValueError, FileNotFoundError):
+            self.send_json(404, {"error": "Media not found"})
+        return
+    def _api_get_api_document(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        query = parse_qs(parsed.query)
+        try:
+            game = game_from_query(load_state_view(), query)
+            document = game.get("documents", [])[int(query["index"][0])]
+            path = safe_document_file(document["path"])
+            self.send_response(200)
+            self.headers_common(mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+            safe_name = re.sub(r'[\r\n"]', "_", path.name)
+            self.send_header("Content-Disposition", f'inline; filename="{safe_name}"')
+            self.send_header("Content-Length", str(path.stat().st_size))
+            self.end_headers()
+            with path.open("rb") as source:
+                shutil.copyfileobj(source, self.wfile)
+        except (KeyError, IndexError, ValueError, FileNotFoundError):
+            self.send_json(404, {"error": "Document not found"})
+        return
+    def _api_get_api_backup(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        data = json.dumps(load_state_view(), indent=2).encode()
+        self.send_response(200)
+        self.headers_common("application/json")
+        self.send_header("Content-Disposition", "attachment; filename=openbox-library.json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+        return
+    def _api_get_api_discovery(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, discovery_lists(load_state_view()["games"]))
+        return
+    def _api_get_api_related_rich(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        try:
+            index = int(parse_qs(parsed.query)["id"][0])
+            self.send_json(200, {"items": related_with_reasons(load_state_view()["games"], index)})
+        except (KeyError, IndexError, ValueError):
+            self.send_json(404, {"error": "Game not found"})
+        return
+    def _api_get_api_emulators_recommend(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        platform = parse_qs(parsed.query).get("platform", [""])[0]
+        self.send_json(200, {"recommendations": recommendations_for_platform(platform)})
+        return
+    def _api_get_api_emulators_dependencies(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        name = parse_qs(parsed.query).get("name", [""])[0]
+        self.send_json(200, detect_dependencies(name))
+        return
+    def _api_get_api_media_duplicates(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"groups": find_duplicate_media(load_state_view()["games"])})
+        return
+    def _api_get_api_media_queue(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"queue": load_media_queue(DATA.parent / "media-queue.json")})
+        return
+    def _api_get_api_saves_scan(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        found = scan_all_saves(load_state_view()["games"])
+        self.send_json(200, {"games": {str(key): value for key, value in found.items()}, "count": len(found)})
+        return
+    def _api_get_api_highscores(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        try:
+            game = game_from_query(load_state(), parse_qs(parsed.query))
+            self.send_json(200, {"scores": read_local_highscores(game)})
+        except (KeyError, IndexError, ValueError):
+            self.send_json(404, {"error": "Game not found"})
+        return
+    def _api_get_api_obs_status(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, obs_recording_status())
+        return
+    def _api_get_api_platform_documents(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        platform = parse_qs(parsed.query).get("platform", [""])[0]
+        docs = load_state_view().get("settings", {}).get("platform_documents", {})
+        self.send_json(200, {"documents": docs.get(platform, []) if platform else docs})
+        return
+    def _api_get_api_platform_document(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        query = parse_qs(parsed.query)
+        try:
+            platform = query["platform"][0]
+            index = int(query["index"][0])
+            document = load_state_view().get("settings", {}).get("platform_documents", {}).get(platform, [])[index]
+            path = safe_document_file(document["path"])
+            self.send_response(200)
+            self.headers_common(mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+            safe_name = re.sub(r'[\r\n"]', "_", path.name)
+            self.send_header("Content-Disposition", f'inline; filename="{safe_name}"')
+            self.send_header("Content-Length", str(path.stat().st_size))
+            self.end_headers()
+            with path.open("rb") as source:
+                shutil.copyfileobj(source, self.wfile)
+        except (KeyError, IndexError, ValueError, FileNotFoundError):
+            self.send_json(404, {"error": "Platform document not found"})
+        return
+    def _api_get_api_storefront_catalog(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        source = parse_qs(parsed.query).get("source", [""])[0]
+        try:
+            self.send_json(200, {"catalog": storefront_catalog(source, settings=load_state_view().get("settings", {}))})
+        except (ValueError, OSError, FileNotFoundError, subprocess.SubprocessError) as error:
+            self.send_json(400, {"error": str(error)})
+        return
+    def _api_get_api_gameyfin_install_status(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        query = parse_qs(parsed.query)
+        gameyfin_id = str(query.get("gameyfin_id", [""])[0]).strip()
+        if not gameyfin_id:
+            self.send_json(400, {"error": "gameyfin_id is required."})
+            return
+        with PROCESS_LOCK:
+            job = dict(INSTALLS.get(f"gameyfin:{gameyfin_id}", {"state": "idle"}))
+        self.send_json(200, job)
+        return
+    def _api_get_api_gameyfin_providers(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        try:
+            _catalog, providers = catalog_gameyfin(load_state_view().get("settings", {}))
+            self.send_json(200, {"providers": providers})
+        except (ValueError, OSError, TypeError, AttributeError) as error:
+            self.send_json(400, {"error": str(error)})
+        return
+    def _api_get_api_save_tools_status(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, save_tool_status())
+        return
+    def _api_get_api_plugins_catalog(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"catalog": fetch_plugin_catalog()})
+        return
+    def _api_get_api_premium_strings(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        locale = parse_qs(parsed.query).get("locale", ["en"])[0]
+        self.send_json(200, {"locale": locale, "strings": strings_for(locale)})
+        return
+    def _api_get_api_premium_media_packs(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"packs": list_media_packs(load_state_view().get("settings", {}))})
+        return
+    def _api_get_api_premium_platform_categories(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"categories": platform_categories(load_state_view().get("settings", {}))})
+        return
+    def _api_get_api_filter_presets(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        state = load_state()
+        self.send_json(200, {
+            "presets": list_presets(state),
+            "bigbox_quick": bigbox_quick_presets(state),
+        })
+        return
+    def _api_get_api_explorer_facets(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        field = parse_qs(parsed.query).get("field", ["genre"])[0]
+        state = load_state_view()
+        self.send_json(200, {"field": field, "facets": explorer_facets(state["games"], field)})
+        return
+    def _api_get_api_launcher_menu(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        payload = public_state()
+        self.send_json(200, {"items": launcher_menu_items(payload["games"])})
+        return
+    def _api_get_api_import_exclusions(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"exclusions": list_exclusions(load_state_view())})
+        return
+    def _api_get_api_emulators_definitions(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"definitions": load_definitions(ROOT / "emulator_defs")})
+        return
+    def _api_get_api_emulators_scan_configs(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"configs": list_scan_configs(load_state_view())})
+        return
+    def _api_get_api_metadata_igdb_search(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        query = parse_qs(parsed.query).get("q", [""])[0]
+        platform = parse_qs(parsed.query).get("platform", [""])[0]
+        try:
+            results = search_igdb_games(query, platform=platform)
+        except (OSError, ValueError) as error:
+            self.send_json(400, {"error": str(error)})
+            return
+        self.send_json(200, {"results": results})
+        return
+    def _api_get_api_webhooks(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        state = load_state_view()
+        self.send_json(200, {"webhooks": public_webhook_configs(state), "events": list(EVENT_TYPES), "attempts": int(state.get("settings", {}).get("webhook_attempts") or DEFAULT_ATTEMPTS), "timeout": int(state.get("settings", {}).get("webhook_timeout") or DEFAULT_TIMEOUT)})
+        return
+    def _api_get_api_queue(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"queue": resolve_queue(load_state_view())})
+        return
+    def _api_get_api_notifications(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        state = load_state_view()
+        self.send_json(200, {"notifications": state.get("notifications", []), "unread": unread_count(state)})
+        return
+    def _api_get_api_tags(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"tags": tag_counts(load_state_view()["games"])})
+        return
+    def _api_get_api_backup_manifest(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        self.send_json(200, {"items": sorted(BACKUP_ITEMS)})
+        return
+    def _api_get_api_backups(self, parsed):
+        if not self.authorized():
+            self.send_json(403, {"error": "Unauthorized"})
+            return
+        folder = DATA.parent / "backups"
+        backups = []
+        for path in sorted(folder.glob("OpenBoxBackup-*.zip"), key=lambda item: item.stat().st_mtime, reverse=True):
+            try:
+                with zipfile.ZipFile(path) as package:
+                    manifest = json.loads(package.read("manifest.json")) if "manifest.json" in package.namelist() else {}
+            except (OSError, zipfile.BadZipFile, KeyError, json.JSONDecodeError):
+                manifest = {"items": [], "invalid": True}
+            backups.append({
+                "name": path.name,
+                "path": str(path),
+                "size": path.stat().st_size,
+                "created": manifest.get("created", ""),
+                "items": manifest.get("items", []),
+                "invalid": bool(manifest.get("invalid")),
+            })
+        self.send_json(200, {"backups": backups})
+        return
+    def _api_post_api_launch(self, payload):
+        self.launch(payload)
+    def _api_post_api_session_control(self, payload):
+        self.control_session(payload)
+    def _api_post_api_favorite(self, payload):
+        self.favorite(payload)
+    def _api_post_api_game(self, payload):
+        self.save_game(payload)
+    def _api_post_api_game_delete(self, payload):
+        self.delete_game(payload)
+    def _api_post_api_games_delete_steam(self, payload):
+        self.delete_steam_games(payload)
+    def _api_post_api_games_bulk(self, payload):
+        self.bulk_edit(payload)
+    def _api_post_api_games_bulk_wizard(self, payload):
+        self.bulk_wizard(payload)
+    def _api_post_api_premium_media_packs_apply(self, payload):
+        self.apply_media_pack_route(payload)
+    def _api_post_api_queue(self, payload):
+        self.queue(payload)
+    def _api_post_api_notifications(self, payload):
+        self.notifications(payload)
+    def _api_post_api_tags(self, payload):
+        self.tags(payload)
+    def _api_post_api_webhooks(self, payload):
+        self.save_webhooks(payload)
+    def _api_post_api_webhooks_test(self, payload):
+        self.test_webhook(payload)
+    def _api_post_api_metadata_trailer(self, payload):
+        self.download_trailer(payload)
+    def _api_post_api_metadata_gog(self, payload):
+        self.download_gog_route(payload)
+    def _api_post_api_bigbox_mode(self, payload):
+        self.bigbox_mode_switch(payload)
+    def _api_post_api_import(self, payload):
+        self.import_folder(payload)
+    def _api_post_api_import_wizard(self, payload):
+        self.import_wizard(payload)
+    def _api_post_api_import_xbox360(self, payload):
+        self.import_xbox360(payload)
+    def _api_post_api_import_loose_arcade(self, payload):
+        self.import_loose_arcade_route(payload)
+    def _api_post_api_import_watch(self, payload):
+        self.scan_watch_folders()
+    def _api_post_api_import_steam(self, payload):
+        self.import_steam_games()
+    def _api_post_api_import_heroic(self, payload):
+        self.import_heroic_games()
+    def _api_post_api_import_lutris(self, payload):
+        self.import_lutris_games()
+    def _api_post_api_import_arcade(self, payload):
+        self.import_arcade_games(payload)
+    def _api_post_api_metadata_steam(self, payload):
+        self.steam_metadata(payload)
+    def _api_post_api_metadata_sync(self, payload):
+        self.sync_metadata()
+    def _api_post_api_metadata_apply(self, payload):
+        self.apply_metadata(payload)
+    def _api_post_api_media_bulk(self, payload):
+        self.bulk_media(payload)
+    def _api_post_api_profiles(self, payload):
+        self.save_profiles(payload)
+    def _api_post_api_perf_profiles(self, payload):
+        self.save_perf_profiles(payload)
+    def _api_post_api_settings(self, payload):
+        self.save_settings(payload)
+    def _api_post_api_state_recover(self, payload):
+        self.recover_state()
+    def _api_post_api_image_group(self, payload):
+        self.save_image_group(payload)
+    def _api_post_api_cloud_sync(self, payload):
+        self.send_json(200, sync_cloud())
+    def _api_post_api_update_install(self, payload):
+        update = check_update()
+        self.send_json(200, install_update(update))
+    def _api_post_api_desktop_install(self, payload):
+        self.send_json(200, {"desktop": install_desktop_entry()})
+    def _api_post_api_emulators_install(self, payload):
+        self.install_emulator(payload)
+    def _api_post_api_emulators_install_all(self, payload):
+        self.install_all_emulators()
+    def _api_post_api_emulators_update(self, payload):
+        self.update_one_emulator(payload)
+    def _api_post_api_emulators_update_all(self, payload):
+        self.update_all_emulators_route()
+    def _api_post_api_emulators_open(self, payload):
+        self.open_emulator(payload)
+    def _api_post_api_import_scummvm(self, payload):
+        self.import_scummvm_games()
+    def _api_post_api_import_rpcs3(self, payload):
+        self.import_rpcs3_games()
+    def _api_post_api_import_vita3k(self, payload):
+        self.import_vita3k_games()
+    def _api_post_api_ra_inject(self, payload):
+        self.inject_ra()
+    def _api_post_api_bezels_download(self, payload):
+        self.download_bezels(payload)
+    def _api_post_api_emumovies_settings(self, payload):
+        self.save_emumovies(payload)
+    def _api_post_api_emumovies_download(self, payload):
+        self.emumovies_download(payload)
+    def _api_post_api_media_cleanup(self, payload):
+        self.cleanup_media(payload)
+    def _api_post_api_screenshot(self, payload):
+        self.take_screenshot(payload)
+    def _api_post_api_obs_attach(self, payload):
+        self.obs_attach(payload)
+    def _api_post_api_saves_scan_apply(self, payload):
+        self.apply_save_scan(payload)
+    def _api_post_api_platform_documents(self, payload):
+        self.save_platform_documents(payload)
+    def _api_post_api_storefront_import(self, payload):
+        self.import_storefront_catalog(payload)
+    def _api_post_api_gameyfin_test(self, payload):
+        self.test_gameyfin(payload)
+    def _api_post_api_gameyfin_install(self, payload):
+        self.install_gameyfin(payload)
+    def _api_post_api_gameyfin_uninstall(self, payload):
+        self.uninstall_gameyfin(payload)
+    def _api_post_api_save_tools_ludusavi(self, payload):
+        self.run_ludusavi_tool(payload)
+    def _api_post_api_save_tools_hoard(self, payload):
+        self.run_hoard_tool(payload)
+    def _api_post_api_highscores_export(self, payload):
+        self.export_game_highscores(payload)
+    def _api_post_api_highscores_import(self, payload):
+        self.import_game_highscores(payload)
+    def _api_post_api_plugins_catalog_install(self, payload):
+        self.install_catalog_plugin(payload)
+    def _api_post_api_themes_open_folder(self, payload):
+        self.open_themes_folder()
+    def _api_post_api_shutdown(self, payload):
+        self.shutdown(payload)
+    def _api_post_api_ra_settings(self, payload):
+        self.save_ra_settings(payload)
+    def _api_post_api_ra_game(self, payload):
+        self.ra_game(payload)
+    def _api_post_api_plugins_install(self, payload):
+        self.install_plugin(payload)
+    def _api_post_api_plugins_toggle(self, payload):
+        self.toggle_plugin(payload)
+    def _api_post_api_plugins_remove(self, payload):
+        self.remove_plugin(payload)
+    def _api_post_api_extra_launch(self, payload):
+        self.launch_extra(payload)
+    def _api_post_api_saves_backup(self, payload):
+        self.backup_game_saves(payload)
+    def _api_post_api_saves_restore(self, payload):
+        self.restore_game_saves(payload)
+    def _api_post_api_saves_add(self, payload):
+        self.add_game_save_path(payload)
+    def _api_post_api_themes_select(self, payload):
+        self.select_theme(payload)
+    def _api_post_api_themes_import(self, payload):
+        self.import_theme(payload)
+    def _api_post_api_playlists(self, payload):
+        self.save_playlist(payload)
+    def _api_post_api_playlists_delete(self, payload):
+        self.delete_playlist(payload)
+    def _api_post_api_filter_presets(self, payload):
+        self.save_filter_preset(payload)
+    def _api_post_api_filter_presets_delete(self, payload):
+        self.delete_filter_preset(payload)
+    def _api_post_api_import_exclusions(self, payload):
+        self.add_import_exclusion(payload)
+    def _api_post_api_import_exclusions_delete(self, payload):
+        self.remove_import_exclusion(payload)
+    def _api_post_api_backup_create(self, payload):
+        self.create_library_backup(payload)
+    def _api_post_api_backup_restore(self, payload):
+        self.restore_library_backup(payload)
+    def _api_post_api_emulators_scan(self, payload):
+        self.scan_emulator_folder_route(payload)
+    def _api_post_api_emulators_scan_configs(self, payload):
+        self.save_emulator_scan_config(payload)
+    def _api_post_api_metadata_igdb_apply(self, payload):
+        self.apply_igdb_metadata(payload)
+    def _api_post_api_health(self, payload):
+        self.health()
+    def _api_post_api_health_dedupe(self, payload):
+        self.dedupe()
 
     def _do_POST(self):
         if not self.authorized():
@@ -1972,189 +2155,7 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError("Request body must be a JSON object.")
             route = urlparse(self.path).path
-            if route == "/api/launch":
-                self.launch(payload)
-            elif route == "/api/session/control":
-                self.control_session(payload)
-            elif route == "/api/favorite":
-                self.favorite(payload)
-            elif route == "/api/game":
-                self.save_game(payload)
-            elif route == "/api/game/delete":
-                self.delete_game(payload)
-            elif route == "/api/games/delete-steam":
-                self.delete_steam_games(payload)
-            elif route == "/api/games/bulk":
-                self.bulk_edit(payload)
-            elif route == "/api/games/bulk-wizard":
-                self.bulk_wizard(payload)
-            elif route == "/api/premium/media-packs/apply":
-                self.apply_media_pack_route(payload)
-            elif route == "/api/queue":
-                self.queue(payload)
-            elif route == "/api/notifications":
-                self.notifications(payload)
-            elif route == "/api/tags":
-                self.tags(payload)
-            elif route == "/api/webhooks":
-                self.save_webhooks(payload)
-            elif route == "/api/webhooks/test":
-                self.test_webhook(payload)
-            elif route == "/api/metadata/trailer":
-                self.download_trailer(payload)
-            elif route == "/api/metadata/gog":
-                self.download_gog_route(payload)
-            elif route == "/api/bigbox/mode":
-                self.bigbox_mode_switch(payload)
-            elif route == "/api/import":
-                self.import_folder(payload)
-            elif route == "/api/import/wizard":
-                self.import_wizard(payload)
-            elif route == "/api/import/xbox360":
-                self.import_xbox360(payload)
-            elif route == "/api/import/loose-arcade":
-                self.import_loose_arcade_route(payload)
-            elif route == "/api/import/watch":
-                self.scan_watch_folders()
-            elif route == "/api/import/steam":
-                self.import_steam_games()
-            elif route == "/api/import/heroic":
-                self.import_heroic_games()
-            elif route == "/api/import/lutris":
-                self.import_lutris_games()
-            elif route == "/api/import/arcade":
-                self.import_arcade_games(payload)
-            elif route == "/api/metadata/steam":
-                self.steam_metadata(payload)
-            elif route == "/api/metadata/sync":
-                self.sync_metadata()
-            elif route == "/api/metadata/apply":
-                self.apply_metadata(payload)
-            elif route == "/api/media/bulk":
-                self.bulk_media(payload)
-            elif route == "/api/profiles":
-                self.save_profiles(payload)
-            elif route == "/api/perf_profiles":
-                self.save_perf_profiles(payload)
-            elif route == "/api/settings":
-                self.save_settings(payload)
-            elif route == "/api/state/recover":
-                self.recover_state()
-            elif route == "/api/image-group":
-                self.save_image_group(payload)
-            elif route == "/api/cloud/sync":
-                self.send_json(200, sync_cloud())
-            elif route == "/api/update/install":
-                update = check_update()
-                self.send_json(200, install_update(update))
-            elif route == "/api/desktop/install":
-                self.send_json(200, {"desktop": install_desktop_entry()})
-            elif route == "/api/emulators/install":
-                self.install_emulator(payload)
-            elif route == "/api/emulators/install-all":
-                self.install_all_emulators()
-            elif route == "/api/emulators/update":
-                self.update_one_emulator(payload)
-            elif route == "/api/emulators/update-all":
-                self.update_all_emulators_route()
-            elif route == "/api/emulators/open":
-                self.open_emulator(payload)
-            elif route == "/api/import/scummvm":
-                self.import_scummvm_games()
-            elif route == "/api/import/rpcs3":
-                self.import_rpcs3_games()
-            elif route == "/api/import/vita3k":
-                self.import_vita3k_games()
-            elif route == "/api/ra/inject":
-                self.inject_ra()
-            elif route == "/api/bezels/download":
-                self.download_bezels(payload)
-            elif route == "/api/emumovies/settings":
-                self.save_emumovies(payload)
-            elif route == "/api/emumovies/download":
-                self.emumovies_download(payload)
-            elif route == "/api/media/cleanup":
-                self.cleanup_media(payload)
-            elif route == "/api/screenshot":
-                self.take_screenshot(payload)
-            elif route == "/api/obs/attach":
-                self.obs_attach(payload)
-            elif route == "/api/saves/scan/apply":
-                self.apply_save_scan(payload)
-            elif route == "/api/platform/documents":
-                self.save_platform_documents(payload)
-            elif route == "/api/storefront/import":
-                self.import_storefront_catalog(payload)
-            elif route == "/api/gameyfin/test":
-                self.test_gameyfin(payload)
-            elif route == "/api/gameyfin/install":
-                self.install_gameyfin(payload)
-            elif route == "/api/gameyfin/uninstall":
-                self.uninstall_gameyfin(payload)
-            elif route == "/api/save-tools/ludusavi":
-                self.run_ludusavi_tool(payload)
-            elif route == "/api/save-tools/hoard":
-                self.run_hoard_tool(payload)
-            elif route == "/api/highscores/export":
-                self.export_game_highscores(payload)
-            elif route == "/api/highscores/import":
-                self.import_game_highscores(payload)
-            elif route == "/api/plugins/catalog/install":
-                self.install_catalog_plugin(payload)
-            elif route == "/api/themes/open-folder":
-                self.open_themes_folder()
-            elif route == "/api/shutdown":
-                self.shutdown(payload)
-            elif route == "/api/ra/settings":
-                self.save_ra_settings(payload)
-            elif route == "/api/ra/game":
-                self.ra_game(payload)
-            elif route == "/api/plugins/install":
-                self.install_plugin(payload)
-            elif route == "/api/plugins/toggle":
-                self.toggle_plugin(payload)
-            elif route == "/api/plugins/remove":
-                self.remove_plugin(payload)
-            elif route == "/api/extra/launch":
-                self.launch_extra(payload)
-            elif route == "/api/saves/backup":
-                self.backup_game_saves(payload)
-            elif route == "/api/saves/restore":
-                self.restore_game_saves(payload)
-            elif route == "/api/saves/add":
-                self.add_game_save_path(payload)
-            elif route == "/api/themes/select":
-                self.select_theme(payload)
-            elif route == "/api/themes/import":
-                self.import_theme(payload)
-            elif route == "/api/playlists":
-                self.save_playlist(payload)
-            elif route == "/api/playlists/delete":
-                self.delete_playlist(payload)
-            elif route == "/api/filter-presets":
-                self.save_filter_preset(payload)
-            elif route == "/api/filter-presets/delete":
-                self.delete_filter_preset(payload)
-            elif route == "/api/import/exclusions":
-                self.add_import_exclusion(payload)
-            elif route == "/api/import/exclusions/delete":
-                self.remove_import_exclusion(payload)
-            elif route == "/api/backup/create":
-                self.create_library_backup(payload)
-            elif route == "/api/backup/restore":
-                self.restore_library_backup(payload)
-            elif route == "/api/emulators/scan":
-                self.scan_emulator_folder_route(payload)
-            elif route == "/api/emulators/scan-configs":
-                self.save_emulator_scan_config(payload)
-            elif route == "/api/metadata/igdb/apply":
-                self.apply_igdb_metadata(payload)
-            elif route == "/api/health":
-                self.health()
-            elif route == "/api/health/dedupe":
-                self.dedupe()
-            else:
-                self.send_json(404, {"error": "Not found"})
+            dispatch_post(self, route, payload)
         except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError, json.JSONDecodeError, GameyfinError, FileNotFoundError, RuntimeError, subprocess.SubprocessError) as error:
             LOGGER.warning("Request %s failed: %s", urlparse(self.path).path, error)
             self.send_json(400, {"error": str(error)})
