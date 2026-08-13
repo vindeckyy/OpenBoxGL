@@ -53,6 +53,7 @@ from job_manager import JobManager
 from openbox_logging import configure_logging, read_diagnostic_log
 from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, STATE_STORE, build_launch, discover_profiles, load_state, purge_demo_games, recover_state as recover_library_state, update_state, update_state_with_result
 from state_store import StateCorruptError, secure_text_write
+from settings_schema import KNOWN_SETTINGS, sanitize_settings
 from env_config import bootstrap_env
 from parity_discovery import discovery_lists, related_with_reasons
 from parity_import import detect_dependencies, import_multi_platform, import_rpcs3_hdd, import_scummvm, import_vita3k, recommend_emulators
@@ -2898,6 +2899,11 @@ class Handler(BaseHTTPRequestHandler):
                 key for key, value in payload.items()
                 if key != "gameyfin_password" or str(value).strip()
             }
+            # Drop keys nobody knows about before they reach the store.
+            clean_payload, dropped = sanitize_settings(payload)
+            if dropped:
+                LOGGER.warning("Dropping unknown settings keys: %s", ", ".join(sorted(map(str, dropped))))
+            incoming_keys = {key for key in incoming_keys if key in KNOWN_SETTINGS}
             for key, value in normalized_settings.items():
                 if key in incoming_keys or key not in settings:
                     settings[key] = value
