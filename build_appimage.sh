@@ -8,7 +8,7 @@ mkdir -p "$build_root/tools"
 temporary="$(mktemp -d "$build_root/appimage.XXXXXX")"
 trap 'rm -rf -- "$temporary"' EXIT
 appdir="$temporary/OpenBox.AppDir"
-mkdir -p "$appdir/usr/bin" "$appdir/usr/lib" "$appdir/usr/share/openbox" "$appdir/usr/share/applications" "$appdir/usr/share/icons/hicolor/scalable/apps" "$appdir/usr/share/metainfo"
+mkdir -p "$appdir/usr/bin" "$appdir/usr/lib" "$appdir/usr/share/openbox" "$appdir/usr/share/openbox/handlers" "$appdir/usr/share/applications" "$appdir/usr/share/icons/hicolor/scalable/apps" "$appdir/usr/share/metainfo"
 
 python_binary="$(readlink -f "$(command -v python3)")"
 stdlib="$(python3 -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')"
