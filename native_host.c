@@ -1,10 +1,7 @@
 /*
- * OpenBox native host.
- *
- * A small WebKitGTK 4.1 window that renders the same UI the web app serves
- * over loopback. The host owns the Python server lifecycle, exposes native
- * dialogs and window chrome to the page through a JS bridge, and shuts the
- * server down cleanly when the window closes.
+ * OpenBox native host: a small WebKitGTK 4.1 window rendering the web app
+ * over loopback. Owns the Python server lifecycle, exposes native dialogs
+ * and window chrome via a JS bridge, shuts the server down on window close.
  *
  * Business logic stays in Python; this file is chrome, bridge, and process
  * ownership only.
@@ -304,8 +301,7 @@ evaluate(WebKitWebView *view, const char *script)
 static void
 resolve_bridge(WebKitWebView *view, const char *id, const char *result_json)
 {
-    /* result_json is a JSON value and therefore valid JavaScript verbatim;
-     * only id, embedded in a single-quoted string, needs escaping. */
+    /* result_json is valid JS verbatim; only id needs escaping. */
     char *escaped_id = g_strescape(id, NULL);
     char *script = g_strdup_printf(
         "window.__openboxResolve && window.__openboxResolve('%s', %s);",
@@ -354,6 +350,17 @@ handle_dialog(WebKitWebView *view, const char *id, JSCValue *args)
     g_free(result_json);
 }
 
+static gboolean
+uri_scheme_allowed(const char *uri)
+{
+    char *scheme = g_uri_parse_scheme(uri);
+    gboolean ok = scheme &&
+                  (g_ascii_strcasecmp(scheme, "http") == 0 ||
+                   g_ascii_strcasecmp(scheme, "https") == 0);
+    g_free(scheme);
+    return ok;
+}
+
 static void
 handle_open_external(WebKitWebView *view, const char *id, JSCValue *args)
 {
@@ -361,14 +368,21 @@ handle_open_external(WebKitWebView *view, const char *id, JSCValue *args)
     char *target_str = target ? jsc_value_to_string(target) : NULL;
     gboolean ok = FALSE;
     if (target_str) {
-        GError *error = NULL;
-        ok = g_app_info_launch_default_for_uri(target_str, NULL, &error);
-        if (error) {
-            g_printerr("native_host: open external failed: %s\n", error->message);
-            g_error_free(error);
+        if (!uri_scheme_allowed(target_str)) {
+            /* Security: never hand a non-allowlisted URI to the default handler. */
+            g_printerr("native_host: open external rejected scheme in '%s'\n", target_str);
+        } else {
+            GError *error = NULL;
+            ok = g_app_info_launch_default_for_uri(target_str, NULL, &error);
+            if (error) {
+                g_printerr("native_host: open external failed: %s\n", error->message);
+                g_error_free(error);
+            }
         }
     }
-    resolve_bridge(view, id, g_strdup_printf("{\"ok\":%s}", ok ? "true" : "false"));
+    char *result_json = g_strdup_printf("{\"ok\":%s}", ok ? "true" : "false");
+    resolve_bridge(view, id, result_json);
+    g_free(result_json);
     g_free(target_str);
 }
 
@@ -378,24 +392,18 @@ handle_reveal(WebKitWebView *view, const char *id, JSCValue *args)
     JSCValue *path = jsc_value_object_get_property(args, "path");
     char *path_str = path ? jsc_value_to_string(path) : NULL;
     gboolean ok = FALSE;
-    if (path_str) {
+    if (path_str && path_exists(path_str)) {
+        /* Security: reveal the containing folder only; never launch the path itself. */
+        char *dir = g_path_get_dirname(path_str);
         GError *error = NULL;
-        char *uri = g_filename_to_uri(path_str, NULL, &error);
-        ok = uri ? g_app_info_launch_default_for_uri(uri, NULL, &error) : FALSE;
-        if (!ok) {
-            /* Fall back to showing the containing folder. */
-            g_clear_error(&error);
-            char *dir = g_path_get_dirname(path_str);
-            char *dir_uri = g_filename_to_uri(dir, NULL, &error);
-            ok = dir_uri ? g_app_info_launch_default_for_uri(dir_uri, NULL, &error) : FALSE;
-            g_free(dir);
-            g_free(dir_uri);
-        }
+        char *dir_uri = g_filename_to_uri(dir, NULL, &error);
+        ok = dir_uri ? g_app_info_launch_default_for_uri(dir_uri, NULL, &error) : FALSE;
         if (error) {
             g_printerr("native_host: reveal failed: %s\n", error->message);
             g_error_free(error);
         }
-        g_free(uri);
+        g_free(dir_uri);
+        g_free(dir);
     }
     char *result_json = g_strdup_printf("{\"ok\":%s}", ok ? "true" : "false");
     resolve_bridge(view, id, result_json);
@@ -429,6 +437,72 @@ handle_window(WebKitWebView *view, const char *id, JSCValue *args)
     g_free(action_str);
 }
 
+static gboolean
+uri_is_loopback(const char *uri)
+{
+    if (!uri) {
+        return FALSE;
+    }
+    GUri *parsed = g_uri_parse(uri, G_URI_FLAGS_NONE, NULL);
+    if (!parsed) {
+        return FALSE;
+    }
+    const char *scheme = g_uri_get_scheme(parsed);
+    const char *host = g_uri_get_host(parsed);
+    gboolean ok = scheme && host &&
+                  (g_ascii_strcasecmp(scheme, "http") == 0 ||
+                   g_ascii_strcasecmp(scheme, "https") == 0) &&
+                  (strcmp(host, "127.0.0.1") == 0 ||
+                   strcmp(host, "localhost") == 0 ||
+                   strcmp(host, "::1") == 0);
+    g_uri_unref(parsed);
+    return ok;
+}
+
+static gboolean
+is_loopback_origin(WebKitWebView *view)
+{
+    return uri_is_loopback(webkit_web_view_get_uri(view));
+}
+
+static gboolean
+decide_policy(WebKitWebView *view, WebKitPolicyDecision *decision,
+              WebKitPolicyDecisionType type, gpointer user_data)
+{
+    (void)view;
+    (void)user_data;
+    switch (type) {
+    case WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION: {
+        WebKitNavigationPolicyDecision *nav =
+            WEBKIT_NAVIGATION_POLICY_DECISION(decision);
+        WebKitNavigationAction *action =
+            webkit_navigation_policy_decision_get_navigation_action(nav);
+        WebKitURIRequest *request =
+            action ? webkit_navigation_action_get_request(action) : NULL;
+        if (!uri_is_loopback(request ? webkit_uri_request_get_uri(request) : NULL)) {
+            webkit_policy_decision_ignore(decision);
+            return TRUE;
+        }
+        return FALSE;
+    }
+    case WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION:
+        webkit_policy_decision_ignore(decision);
+        return TRUE;
+    case WEBKIT_POLICY_DECISION_TYPE_RESPONSE: {
+        WebKitResponsePolicyDecision *resp =
+            WEBKIT_RESPONSE_POLICY_DECISION(decision);
+        WebKitURIResponse *response = webkit_response_policy_decision_get_response(resp);
+        if (!uri_is_loopback(response ? webkit_uri_response_get_uri(response) : NULL)) {
+            webkit_policy_decision_ignore(decision);
+            return TRUE;
+        }
+        return FALSE;
+    }
+    default:
+        return FALSE;
+    }
+}
+
 static void
 message_received(WebKitUserContentManager *mgr,
                  WebKitJavascriptResult *result,
@@ -444,6 +518,17 @@ message_received(WebKitUserContentManager *mgr,
     JSCValue *args_val = jsc_value_object_get_property(value, "args");
     char *id = jsc_value_to_string(id_val);
     char *method = jsc_value_to_string(method_val);
+
+    if (!is_loopback_origin(view)) {
+        /* Security: only the app's own loopback page may drive the bridge. */
+        g_printerr("native_host: rejecting bridge message from non-loopback origin\n");
+        if (id) {
+            resolve_bridge(view, id, "{\"ok\":false}");
+        }
+        g_free(id);
+        g_free(method);
+        return;
+    }
 
     if (id && method) {
         if (strcmp(method, "dialog") == 0) {
@@ -505,9 +590,10 @@ inject_bridge(WebKitWebView *view)
         "  onGamepad: function(callback) {}\n"
         "};\n"
         "true;\n";
+    /* Security: top frame only so embedded iframes cannot reach the bridge. */
     webkit_user_content_manager_add_script(
         webkit_web_view_get_user_content_manager(view),
-        webkit_user_script_new(script, WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+        webkit_user_script_new(script, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
                                WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, NULL, NULL));
 }
 
@@ -558,8 +644,7 @@ main(int argc, char **argv)
         return 0;
     }
 
-    /* Signal web_app.py that the native host is present (inherited via
-     * fork+exec so /api/native/capabilities can report host features). */
+    /* Signal web_app.py that the native host is present (env survives fork+exec). */
     setenv("OPENBOX_NATIVE_HOST", "1", 1);
 
     if (!boot_server()) {
@@ -592,11 +677,11 @@ main(int argc, char **argv)
     G_GNUC_BEGIN_IGNORE_DEPRECATIONS
     webkit_settings_set_enable_accelerated_2d_canvas(settings, TRUE);
     G_GNUC_END_IGNORE_DEPRECATIONS
-    webkit_settings_set_enable_developer_extras(settings, TRUE); /* devtools for debugging */
     GdkRGBA bg = {0.067, 0.063, 0.055, 1.0};
     webkit_web_view_set_background_color(view, &bg);
     g_signal_connect(mgr, "script-message-received::openbox",
                      G_CALLBACK(message_received), view);
+    g_signal_connect(view, "decide-policy", G_CALLBACK(decide_policy), NULL);
     inject_bridge(view);
     gtk_container_add(GTK_CONTAINER(main_window), GTK_WIDGET(view));
 
