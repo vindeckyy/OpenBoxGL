@@ -1,14 +1,9 @@
 {
-  "name": "scripts",
+  "name": "openbox-scripts",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "description": "Puppeteer-based screenshot and smoke-test tooling for OpenBox",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
   "dependencies": {
     "puppeteer": "^22.15.0"
   }
