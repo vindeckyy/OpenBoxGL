@@ -381,8 +381,8 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.9.0...HEAD
 [0.8.2]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.2
+[1.0.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.9.0
 [0.8.1]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.1
 [0.8.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.0
