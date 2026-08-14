@@ -68,6 +68,12 @@ jobs:
           done < runtime_modules.txt
           python3 -m py_compile test_*.py scripts/*.py
 
+      - name: Compile native host
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev
+          gcc -O2 native_host.c -o /tmp/native_host_check $(pkg-config --cflags --libs webkit2gtk-4.1)
+
       - name: Full gate (coverage)
         run: python3 scripts/check_tests.py
 
