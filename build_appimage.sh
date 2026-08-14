@@ -24,6 +24,8 @@ done < "$source_root/runtime_modules.txt"
 cp "$source_root/index.html" "$appdir/usr/share/openbox/index.html"
 mkdir -p "$appdir/usr/share/openbox/static"
 cp "$source_root"/static/app.js "$source_root"/static/app.css "$appdir/usr/share/openbox/static/"
+mkdir -p "$appdir/usr/share/openbox/assets"
+cp "$source_root"/assets/openbox-logo.png "$appdir/usr/share/openbox/assets/"
 mkdir -p "$appdir/usr/share/openbox/emulator_defs"
 cp "$source_root"/emulator_defs/*.yaml "$appdir/usr/share/openbox/emulator_defs/"
 install -Dm755 "$source_root/scripts/openbox-launcher.sh" "$appdir/usr/share/openbox/openbox-launcher.sh"
@@ -31,7 +33,7 @@ mkdir -p "$appdir/usr/share/openbox/plugins"
 cp "$source_root/plugins/catalog.json" "$appdir/usr/share/openbox/plugins/catalog.json"
 mkdir -p "$appdir/usr/share/openbox/themes"
 cp "$source_root"/themes/*.css "$appdir/usr/share/openbox/themes/"
-
+gcc -O2 "$source_root/native_host.c" -o "$appdir/usr/share/openbox/native_host" $(pkg-config --cflags --libs webkit2gtk-4.1)
 while IFS= read -r library; do
   cp -L "$library" "$appdir/usr/lib/$(basename "$library")"
 done < <(
@@ -41,13 +43,6 @@ done < <(
     grep -vE '/(libc|libm|libpthread|libdl|librt|ld-linux)[^/]*\.so' |
     sort -u
 )
-
-for data in /usr/share/tcltk/tcl8.6 /usr/share/tcltk/tk8.6; do
-  if [ -d "$data" ]; then
-    mkdir -p "$appdir/usr/share/tcltk"
-    cp -a "$data" "$appdir/usr/share/tcltk/"
-  fi
-done
 
 install -m 755 /dev/stdin "$appdir/AppRun" <<'EOF'
 #!/bin/bash
@@ -63,15 +58,15 @@ export APPDIR="$app_root"
 export PATH="$app_root/usr/bin:${PATH:-/usr/bin:/bin}"
 export PYTHONHOME="$app_root/usr"
 export PYTHONPATH="$app_root/usr/share/openbox${PYTHONPATH:+:$PYTHONPATH}"
-export TCL_LIBRARY="$app_root/usr/share/tcltk/tcl8.6"
-export TK_LIBRARY="$app_root/usr/share/tcltk/tk8.6"
 lib_path="$app_root/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 python="$app_root/usr/bin/python3"
-if [ "${1:-}" = "--native" ]; then
+if [ "${1:-}" = "--web" ]; then
   shift
-  exec env LD_LIBRARY_PATH="$lib_path" "$python" "$app_root/usr/share/openbox/openbox.py" "$@"
+  exec env LD_LIBRARY_PATH="$lib_path" "$python" "$app_root/usr/share/openbox/web_app.py" "$@"
 fi
-exec env LD_LIBRARY_PATH="$lib_path" "$python" "$app_root/usr/share/openbox/web_app.py" "$@"
+export OPENBOX_WEB_APP="$app_root/usr/share/openbox/web_app.py"
+export OPENBOX_PYTHON="$python"
+exec env LD_LIBRARY_PATH="$lib_path" "$app_root/usr/share/openbox/native_host" "$@"
 EOF
 
 # Unique desktop/icon names avoid colliding with the Openbox window manager.

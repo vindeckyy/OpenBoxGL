@@ -37,6 +37,7 @@ KNOWN_SETTINGS = {
     "apply_perf",
     # library presentation
     "library_view",
+    "cover_grouping",
     "list_columns",
     "image_group",
     "image_group_by_platform",
@@ -94,7 +95,6 @@ KNOWN_SETTINGS = {
     "controller_prompt_hint",
     "controller_prompt_pack",
     # window and tray
-    "ui_window",
     "tray_enabled",
     "minimize_to_tray",
     # onboarding

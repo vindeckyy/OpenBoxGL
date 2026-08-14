@@ -1,27 +1,7 @@
 const token = new URLSearchParams(location.search).get('token') || '';
     const AppState = {
       games: [], playlists: [], filterPresets: [], explorerField: 'genre', explorerRules: {}, activeFilterPreset: '', bigBoxGames: [], runningGames: [], raConfigured: false, selectedId: null, platform: 'all', activePlaylist: '', editingId: null, metadataGameId: null, bigBoxIndex: 0, gamepadState: {}, lastSessionEvent: 0, bulkMode: false, bigBoxLastInput: performance.now(), screenSaverGame: null, contextGameId: null, availableProfiles: {},
-      appSettings: {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',locale:'en'}, bigBoxFilter: 'all', bigBoxSort: 'title', bigBoxRaFilter: 'all', bigBoxPlatform: 'all', platformCategory: 'all', pendingUpdate: null, duplicateMediaGroups: 0, libraryBgm: null, readerPage: 1, readerUrl: '', bigBoxHybridQuery: '', mediaEpoch: 0,
-      // Browser-only preferences survive reloads via localStorage; library
-      // data stays server-owned and never enters this key.
-      persist() {
-        try {
-          localStorage.setItem('openbox-ui-state-v1', JSON.stringify({
-            library_view: this.appSettings.library_view,
-            image_group: this.appSettings.image_group,
-            badge_visibility: this.appSettings.badge_visibility,
-            hidden_sidebar_sections: this.appSettings.hidden_sidebar_sections,
-          }));
-        } catch (error) { /* private mode or quota; ignore */ }
-      },
-      restorePersisted() {
-        try {
-          const saved = JSON.parse(localStorage.getItem('openbox-ui-state-v1') || '{}');
-          for (const key of Object.keys(saved)) {
-            if (saved[key] !== undefined && saved[key] !== null) this.appSettings[key] = saved[key];
-          }
-        } catch (error) { /* corrupted or unavailable; ignore */ }
-      },
+      appSettings: {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',cover_grouping:'shape',locale:'en'}, bigBoxFilter: 'all', bigBoxSort: 'title', bigBoxRaFilter: 'all', bigBoxPlatform: 'all', platformCategory: 'all', pendingUpdate: null, duplicateMediaGroups: 0, libraryBgm: null, readerPage: 1, readerUrl: '', bigBoxHybridQuery: '', mediaEpoch: 0, coverRatios: {},
     };
 
     const defaultControllerMap = {play:0,back:1,favorite:2,random:3,page_left:4,page_right:5,pause:8,menu:9};
@@ -150,6 +130,80 @@ const token = new URLSearchParams(location.search).get('token') || '';
         throw error;
       }
       return payload;
+    }
+    const nativeBridge = typeof window.openboxNative === 'object' ? window.openboxNative : null;
+    const nativeCaps = { webview:false, dialogs:false, tray:false, single_instance:false, gamepad:'webkit', fullscreen:true, clipboard:true };
+    async function detectNative() {
+      try {
+        Object.assign(nativeCaps, await api('/api/native/capabilities'));
+      } catch { /* no host connected; browser fallbacks stay active */ }
+    }
+    function nativeEnabled(feature) { return Boolean(nativeCaps[feature]); }
+    function nativePrompt(message, defaultValue = '') {
+      // The host has no text input; its native dialogs are file/folder pickers
+      // only, so plain text prompts always stay browser-side.
+      return prompt(message, defaultValue);
+    }
+    function nativeConfirm(message) {
+      return confirm(message);
+    }
+    async function nativePickFolder(message) {
+      if (nativeBridge?.dialog) {
+        try {
+          const result = await nativeBridge.dialog('folder', {title:message});
+          return result?.path || null;
+        } catch { return null; }
+      }
+      return prompt(message);
+    }
+    async function nativePickFile(message) {
+      if (nativeBridge?.dialog) {
+        try {
+          const result = await nativeBridge.dialog('file', {title:message});
+          return result?.path || null;
+        } catch { return null; }
+      }
+      return prompt(message);
+    }
+    async function nativeReveal(path) {
+      if (!path) return false;
+      if (nativeBridge?.reveal) {
+        try {
+          const result = await nativeBridge.reveal(path);
+          return Boolean(result?.ok);
+        } catch { return false; }
+      }
+      try {
+        const result = await api('/api/native/reveal',{method:'POST',body:JSON.stringify({path})});
+        return Boolean(result?.ok);
+      } catch { return false; }
+    }
+    async function nativeOpenExternal(target) {
+      if (nativeBridge?.openExternal) { const result = await nativeBridge.openExternal(target); return result?.ok; }
+      if (nativeEnabled('dialogs')) { const result = await api('/api/native/open-external',{method:'POST',body:JSON.stringify({url:target})}); return result?.ok; }
+      window.open(target, '_blank');
+      return true;
+    }
+    async function nativeWindowAction(action) {
+      if (nativeBridge?.windowAction) { const result = await nativeBridge.windowAction(action); return result?.ok; }
+      if (nativeEnabled('fullscreen')) {
+        const result = await api('/api/native/window',{method:'POST',body:JSON.stringify({action})});
+        return result?.ok;
+      }
+      return false;
+    }
+    async function nativeFullscreen() {
+      if (nativeBridge?.windowAction) {
+        return document.fullscreenElement
+          ? nativeBridge.windowAction('unset-fullscreen')
+          : nativeBridge.windowAction('set-fullscreen');
+      }
+      if (nativeEnabled('fullscreen')) {
+        return document.fullscreenElement
+          ? api('/api/native/window',{method:'POST',body:JSON.stringify({action:'unset-fullscreen'})})
+          : api('/api/native/window',{method:'POST',body:JSON.stringify({action:'set-fullscreen'})});
+      }
+      return document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
     }
     function notify(message) { $('toast').textContent = message; $('toast').classList.add('show'); clearTimeout(notify.timer); notify.timer = setTimeout(() => $('toast').classList.remove('show'), 2800); }
     let lastBannerDetails = '';
@@ -439,9 +493,89 @@ const token = new URLSearchParams(location.search).get('token') || '';
       const available = imageGroup === 'screenshot' ? game.available_screenshots?.length : game[flag];
       if (available) {
         const index = imageGroup === 'screenshot' ? game.available_screenshots[0] : '';
-        return `<img src="${media(game,imageGroup,index)}" alt="" loading="lazy" decoding="async">`;
+        const priority = game.id === AppState.selectedId ? 'high' : 'low';
+        return `<img src="${media(game,imageGroup,index)}" alt="" loading="lazy" decoding="async" fetchpriority="${priority}" data-gid="${game.id}">`;
       }
       return `<div class="cover-title">${escapeHtml(game.name)}</div>`;
+    }
+    // Cover shape tracking: the load listener + render sweep record each cover's
+    // natural aspect ratio (w/h) per game id. Unknown covers default to the
+    // .cover-title fallback shape (portrait, aspect-ratio .72).
+    const RATIO_BUCKETS = [['portrait','Portrait'],['square','Square'],['landscape','Landscape']];
+    const RATIO_REP = {portrait:.72, square:1, landscape:16/9};
+    const coverBucketOf = ratio => ratio == null ? 'portrait' : ratio < .85 ? 'portrait' : ratio <= 1.15 ? 'square' : 'landscape';
+    let ratioRegroupTimer = null;
+    // Cover images load async; when a newly measured ratio moves a game into a
+    // different bucket than the one the grid was rendered with, regroup once.
+    // Debounced so lazy loads (which fire as covers scroll into view) batch
+    // into a single render instead of one re-render per image.
+    const recordCoverRatio = img => {
+      if (img.naturalWidth <= 32) return;
+      const gid = img.dataset.gid;
+      const ratio = img.naturalWidth / img.naturalHeight;
+      const prev = AppState.coverRatios[gid];
+      AppState.coverRatios[gid] = ratio;
+      if (prev !== ratio && coverBucketOf(prev) !== coverBucketOf(ratio)) {
+        clearTimeout(ratioRegroupTimer);
+        ratioRegroupTimer = setTimeout(() => { ratioRegroupTimer = null; renderGrid(); }, 150);
+      }
+    };
+    function groupedSections(visible) {
+      const buckets = {portrait:[],square:[],landscape:[]};
+      visible.forEach(game => buckets[coverBucketOf(AppState.coverRatios[game.id])].push(game));
+      const sections = [];
+      for (const [key,label] of RATIO_BUCKETS) if (buckets[key].length) sections.push({key,label,games:buckets[key]});
+      return sections;
+    }
+    function gridCellWidth() {
+      const grid = $('grid');
+      const style = getComputedStyle(grid);
+      const gap = parseFloat(style.columnGap) || 0;
+      const cols = Math.max(1, Math.floor((grid.clientWidth + gap) / (132 + gap)));
+      return [(grid.clientWidth - (cols - 1) * gap) / cols, cols];
+    }
+    let groupedGeo = null, textBlockH = 62, ratioHeadH = 30;
+    function gridRowsGeometry(sections) {
+      const [cellW, cols] = gridCellWidth();
+      const rowGap = parseFloat(getComputedStyle($('grid')).rowGap) || 0;
+      const rows = [];
+      let top = 0;
+      for (const section of sections) {
+        rows.push({kind:'header', label:section.label, count:section.games.length, top, height:ratioHeadH});
+        top += ratioHeadH + rowGap;
+        const cardRows = Math.ceil(section.games.length / cols);
+        for (let r = 0; r < cardRows; r++) {
+          const games = section.games.slice(r * cols, (r + 1) * cols);
+          const minRatio = Math.min(...games.map(game => AppState.coverRatios[game.id] || RATIO_REP[section.key]));
+          rows.push({kind:'cards', section, games, top, height:cellW / minRatio + textBlockH});
+          top += cellW / minRatio + textBlockH + rowGap;
+        }
+      }
+      return {rows, cols, totalHeight: top};
+    }
+    function renderGroupedGrid(visible, imageGroup, fromScroll, motionClass) {
+      const sections = groupedSections(visible);
+      const {rows, cols, totalHeight} = gridRowsGeometry(sections);
+      const pane = gridPane();
+      const paneHeight = pane ? pane.clientHeight : 0;
+      const maxRow = Math.max(200, ...rows.map(row => row.height));
+      const topLimit = gridScrollTop - 2 * maxRow, bottomLimit = gridScrollTop + paneHeight + 2 * maxRow;
+      const windowRows = rows.filter(row => row.top + row.height > topLimit && row.top < bottomLimit);
+      const firstTop = windowRows.length ? windowRows[0].top : 0;
+      const lastBottom = windowRows.length ? windowRows[windowRows.length - 1].top + windowRows[windowRows.length - 1].height : 0;
+      let cardIndex = 0;
+      const rendered = windowRows.map(row => row.kind === 'header'
+        ? `<div class="ratio-head">${row.label}<span class="ratio-count">${row.count}</span></div>`
+        : row.games.map(game => gridCardHTML(game, cardIndex++, imageGroup, fromScroll, motionClass, row.section.key)).join('')).join('');
+      return {topSpacer:`<div class="grid-spacer" style="height:${firstTop}px"></div>`, bottomSpacer:`<div class="grid-spacer" style="height:${Math.max(0, totalHeight - lastBottom)}px"></div>`, rendered, geometry:{rows, cols, totalHeight}};
+    }
+    function gridCardHTML(game, index, imageGroup, fromScroll, motionClass, bucketKey = '') {
+      return `<article class="card${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${bucketKey ? ` data-ratio="${bucketKey}"` : ''}${fromScroll ? '' : ` style="--motion-index:${Math.min(index,10)}"`}>
+        ${AppState.bulkMode ? `<input class="card-picker" type="checkbox" data-game-picker="${game.id}" ${selectedIds.has(game.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(game.name)}">` : ''}
+        <button type="button" class="card-main" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><div class="cover ${AppState.appSettings.bigbox_mode === 'coverflow' ? 'jewel-3d' : ''}">${imageMarkup(game,imageGroup)}</div>
+        <h3>${escapeHtml(game.name)}</h3><p>${escapeHtml(game.developer || game.platform || '')}</p>
+        <div class="badge-row">${renderBadges(game)}</div></button>
+      </article>`;
     }
     let gridScrollTop = 0, gridRowHeight = 0, gridCols = 1;
     const gridPane = () => document.querySelector('main.library');
@@ -456,6 +590,18 @@ const token = new URLSearchParams(location.search).get('token') || '';
       if (grid.classList.contains('list-view')) { gridCols = 1; gridRowHeight = firstCard.offsetHeight + rowGap; return; }
       const columnGap = parseFloat(style.columnGap) || 0;
       gridCols = Math.max(1, Math.floor((grid.clientWidth + columnGap) / (firstCard.offsetWidth + columnGap)));
+      if (groupedGeo) {
+        gridCols = groupedGeo.cols;
+        const card = grid.querySelector('.card');
+        if (card) {
+          const cover = card.querySelector('.cover');
+          if (cover) textBlockH = card.offsetHeight - cover.offsetHeight;
+        }
+        const head = grid.querySelector('.ratio-head');
+        if (head) ratioHeadH = head.offsetHeight;
+        gridRowHeight = Math.max(200, ...groupedGeo.rows.map(row => row.height));
+        return;
+      }
       // Grid rows are sized by their tallest card. Natural-ratio covers make
       // card heights vary, so use the tallest card in the first row instead of
       // a single-card sample, otherwise the virtual window drifts on scroll.
@@ -472,26 +618,35 @@ const token = new URLSearchParams(location.search).get('token') || '';
       const lastRow = Math.min(rows - 1, Math.ceil((gridScrollTop + paneHeight) / gridRowHeight) + 2);
       return [Math.min(total, firstRow * gridCols), Math.min(total, (lastRow + 1) * gridCols)];
     }
-    function renderGrid() {
+    function renderGrid({fromScroll} = {}) {
       const pane = gridPane();
       if (pane) gridScrollTop = pane.scrollTop;
       const visible = filteredGames();
       const explicitImageGroup = AppState.activePlaylist ? AppState.appSettings.image_group_by_playlist?.[AppState.activePlaylist] : AppState.platform !== 'all' ? AppState.appSettings.image_group_by_platform?.[AppState.platform] : AppState.appSettings.image_group;
-      $('imageGroup').value = explicitImageGroup || (AppState.platform === 'all' && !AppState.activePlaylist ? 'cover' : 'default');
-      const imageGroup = $('imageGroup').value === 'default' ? AppState.appSettings.image_group || 'cover' : $('imageGroup').value;
-      $('bulkButton').textContent = AppState.bulkMode ? selectedIds.size ? `Edit ${selectedIds.size} Selected` : 'Cancel Bulk Edit' : 'Bulk Edit';
-      $('libraryTitle').textContent = AppState.activeFilterPreset || AppState.activePlaylist || (AppState.platform === 'all' ? $('view').selectedOptions[0].text : AppState.platform);
-      $('libraryMeta').textContent = AppState.bulkMode ? `${selectedIds.size} selected · ${visible.length} shown` : `${visible.length} game${visible.length === 1 ? '' : 's'}`;
-      $('surpriseButton').disabled = !visible.length;
-      $('status').textContent = `${AppState.games.length} games · local library`;
+      const effectiveImageGroup = explicitImageGroup || (AppState.platform === 'all' && !AppState.activePlaylist ? 'cover' : 'default');
+      const imageGroup = effectiveImageGroup === 'default' ? AppState.appSettings.image_group || 'cover' : effectiveImageGroup;
+      // Scroll-triggered renders only repaint the virtual window. The chrome
+      // below is state-driven and never changes while scrolling, so touching it
+      // on every row crossing is pure layout waste on the slow webview.
+      if (!fromScroll) {
+        $('imageGroup').value = effectiveImageGroup;
+        $('grouping').value = AppState.appSettings.cover_grouping || 'shape';
+        $('bulkButton').textContent = AppState.bulkMode ? selectedIds.size ? `Edit ${selectedIds.size} Selected` : 'Cancel Bulk Edit' : 'Bulk Edit';
+        $('libraryTitle').textContent = AppState.activeFilterPreset || AppState.activePlaylist || (AppState.platform === 'all' ? $('view').selectedOptions[0].text : AppState.platform);
+        $('libraryMeta').textContent = AppState.bulkMode ? `${selectedIds.size} selected · ${visible.length} shown` : `${visible.length} game${visible.length === 1 ? '' : 's'}`;
+        $('surpriseButton').disabled = !visible.length;
+        $('status').textContent = `${AppState.games.length} games · local library`;
+      }
       if (!visible.length) {
         $('grid').className = 'grid';
         $('grid').innerHTML = AppState.games.length
           ? `<div class="empty"><div><h2>No games match this view</h2><p>Change the active filters or search the library again.</p></div></div>`
-          : `<div class="empty"><div><h2>Start your library</h2><p>Bring your games into OpenBox, then search, filter, and launch them from one collection.</p><div class="empty-actions"><button id="emptyAdd">Add game</button><button class="empty-secondary" id="emptyImport">Import folder</button><button class="empty-secondary" id="emptySteam">Import Steam</button></div></div></div>`;
+          : `<div class="empty"><div><h2>Start your library</h2><p>Bring your games into OpenBox, then search, filter, and launch them from one collection.</p><div class="empty-actions"><button id="emptyAdd">Add game</button><button class="empty-secondary" id="emptyImport">Import folder</button><button class="empty-secondary" id="emptySteam">Import Steam</button><button class="empty-secondary" id="emptyHeroic">Import Heroic</button><button class="empty-secondary" id="emptyLutris">Import Lutris</button></div></div></div>`;
         if ($('emptyAdd')) $('emptyAdd').onclick = () => openGameDialog();
         if ($('emptyImport')) $('emptyImport').onclick = () => importFolder();
         if ($('emptySteam')) $('emptySteam').onclick = () => importSteam();
+        if ($('emptyHeroic')) $('emptyHeroic').onclick = () => importHeroic();
+        if ($('emptyLutris')) $('emptyLutris').onclick = () => importLutris();
         gridRowHeight = 0;
         renderArrangeBar(visible);
         return;
@@ -499,22 +654,31 @@ const token = new URLSearchParams(location.search).get('token') || '';
       const listView = (AppState.appSettings.library_view || 'grid') === 'list';
       $('grid').className = listView ? 'list-view' : 'grid';
       const total = visible.length;
-      const [start, end] = gridWindow(total);
-      const rows = Math.ceil(total / Math.max(gridCols, 1));
-      const topHeight = Math.floor(start / Math.max(gridCols, 1)) * gridRowHeight;
-      const bottomHeight = gridRowHeight ? Math.max(0, rows - Math.ceil(end / Math.max(gridCols, 1))) * gridRowHeight : 0;
-      const topSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${topHeight}px"></div>` : '';
-      const bottomSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${bottomHeight}px"></div>` : '';
-      const chunk = visible.slice(start, end);
-      const rendered = chunk.map((game,index) => listView
-         ? `<button type="button" class="list-row motion-enter ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" style="--motion-index:${Math.min(index,10)}" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
-         : `<article class="card motion-enter ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}" style="--motion-index:${Math.min(index,10)}">
-        ${AppState.bulkMode ? `<input class="card-picker" type="checkbox" data-game-picker="${game.id}" ${selectedIds.has(game.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(game.name)}">` : ''}
-        <button type="button" class="card-main" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><div class="cover ${AppState.appSettings.bigbox_mode === 'coverflow' ? 'jewel-3d' : ''}">${imageMarkup(game,imageGroup)}</div>
-        <h3>${escapeHtml(game.name)}</h3><p>${escapeHtml(game.developer || game.platform || '')}</p>
-        <div class="badge-row">${renderBadges(game)}</div></button>
-      </article>`).join('');
+      const grouped = !listView && (AppState.appSettings.cover_grouping || 'shape') === 'shape';
+      // Entrance animation only runs on full (state-driven) renders; scroll
+      // renders must not re-trigger the staggered surface-in on every row
+      // crossing. fromScroll drops both the class and the inline delay.
+      const motionClass = fromScroll ? '' : ' motion-enter';
+      let topSpacer = '', bottomSpacer = '', rendered = '';
+      if (grouped) {
+        const result = renderGroupedGrid(visible, imageGroup, fromScroll, motionClass);
+        topSpacer = result.topSpacer; bottomSpacer = result.bottomSpacer; rendered = result.rendered;
+        groupedGeo = result.geometry;
+      } else {
+        groupedGeo = null;
+        const [start, end] = gridWindow(total);
+        const rows = Math.ceil(total / Math.max(gridCols, 1));
+        const topHeight = Math.floor(start / Math.max(gridCols, 1)) * gridRowHeight;
+        const bottomHeight = gridRowHeight ? Math.max(0, rows - Math.ceil(end / Math.max(gridCols, 1))) * gridRowHeight : 0;
+        topSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${topHeight}px"></div>` : '';
+        bottomSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${bottomHeight}px"></div>` : '';
+        const chunk = visible.slice(start, end);
+        rendered = chunk.map((game,index) => listView
+           ? `<button type="button" class="list-row${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${fromScroll ? '' : ` style="--motion-index:${Math.min(index,10)}"`} data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
+           : gridCardHTML(game, index, imageGroup, fromScroll, motionClass)).join('');
+      }
       $('grid').innerHTML = listView ? `<div class="list-head"><span>Title</span><span>Platform</span><span>Genre</span><span>ESRB</span><span>Progress</span><span>Plays</span><span>Rating</span></div>${topSpacer}${rendered}${bottomSpacer}` : `${topSpacer}${rendered}${bottomSpacer}`;
+      document.querySelectorAll('#grid img[data-gid]').forEach(img => { if (img.complete) recordCoverRatio(img); });
       document.querySelectorAll('[data-game]').forEach(card => card.onclick = event => {
         const id = Number(card.dataset.game);
         if (event.shiftKey || event.ctrlKey || event.metaKey || AppState.bulkMode) {
@@ -540,7 +704,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       renderArrangeBar(visible);
       const measuredBefore = gridRowHeight;
       measureGridLayout();
-      if (!measuredBefore && gridRowHeight && total) renderGrid();
+      if (!measuredBefore && gridRowHeight && total) renderGrid({fromScroll});
     }
     function renderDetails() {
       const game = AppState.games.find(item => item.id === AppState.selectedId);
@@ -556,7 +720,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
         <div class="detail-body">
           <div class="rating"><strong>${game.favorite ? '★ Favorite' : game.rating ? `${game.rating} ★` : 'Library'}</strong><span>${escapeHtml(game.progress || game.genre || '')}</span><span class="badge-row">${renderBadges(game)}</span></div>
           <button class="play" id="playButton" ${game.path_exists && game.store_installed !== false ? '' : game.gameyfin_id && !game.store_installed ? '' : 'disabled'}>${game.gameyfin_id && !game.store_installed ? '⬇ INSTALL' : '▶ PLAY'}</button>
-          <div class="detail-actions"><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">Edit metadata</button><button class="icon-button" id="databaseMetadataButton">Find metadata</button>${game.steam_app_id ? '<button class="icon-button" id="steamMetadataButton">Use Steam data</button>' : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="uninstallGameyfin">Uninstall Gameyfin copy</button>' : ''}<button class="icon-button" id="removeGameButton">Remove game</button></div>
+          <div class="detail-actions"><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">Edit metadata</button><button class="icon-button" id="databaseMetadataButton">Find metadata</button>${game.steam_app_id ? '<button class="icon-button" id="steamMetadataButton">Use Steam data</button>' : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="uninstallGameyfin">Uninstall Gameyfin copy</button>' : ''}${game.path ? '<button class="icon-button" id="showInFolderButton">Show in folder</button>' : ''}<button class="icon-button" id="removeGameButton">Remove game</button></div>
           <div class="detail-card"><h3>Information</h3><div class="facts">
             ${fact('Release date',game.year)}${fact('Developer',game.developer)}${fact('Publisher',game.publisher)}${fact('ESRB',game.esrb)}${fact('Source',game.source)}${fact('Category',platformCategoryFor(game))}${Object.entries(game.custom_fields || {}).map(([key,value]) => fact(key,value)).join('')}${fact('Max players',game.max_players)}${fact('Controller support',game.controller_support)}${fact('Disc count',game.disc_count)}${fact('Play time',duration(game.playtime_seconds))}
             ${fact('Launches',game.play_count)}${fact('Last played',game.last_played ? game.last_played.replace('T',' ') : '')}${fact('Progress',game.progress)}${fact('Rating',game.rating ? `${game.rating} / 5` : '')}${fact('Region',game.region)}${fact('Play mode',game.play_mode)}${fact('Wikipedia',game.wikipedia_url)}${fact('Video URL',game.video_url)}
@@ -582,6 +746,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       if ($('downloadBezel')) $('downloadBezel').onclick = () => downloadBezel(game.platform);
       if ($('uninstallGameyfin')) $('uninstallGameyfin').onclick = () => uninstallGameyfin(game);
       if ($('exportHighscores')) $('exportHighscores').onclick = async () => { try { const result = await api('/api/highscores/export',{method:'POST',body:JSON.stringify({id:game.id})}); notify(`Exported ${result.files.length} high score file${result.files.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
+      if ($('showInFolderButton')) $('showInFolderButton').onclick = () => nativeReveal(game.path);
       $('removeGameButton').onclick = () => removeGame(game.id,game.name);
       document.querySelectorAll('[data-extra]').forEach(button => button.onclick = () => {
         const [kind,index] = button.dataset.extra.split(':');
@@ -606,13 +771,13 @@ const token = new URLSearchParams(location.search).get('token') || '';
         $('mediaDialog').showModal();
       });
       document.querySelectorAll('[data-manual]').forEach(button => button.onclick = () => {
-        window.open(button.dataset.manual, '_blank');
+        nativeOpenExternal(button.dataset.manual);
       });
       document.querySelectorAll('[data-document]').forEach(button => button.onclick = () => openReader(game, Number(button.dataset.document)));
       if ($('loadAchievements')) $('loadAchievements').onclick = () => loadAchievements(game.id);
       if ($('downloadTrailer')) $('downloadTrailer').onclick = async () => { try { await api('/api/metadata/trailer',{method:'POST',body:JSON.stringify({id:game.id})}); await refresh(); renderDetails(); notify('Steam trailer downloaded'); } catch(error) { notify(error.message); } };
       if ($('downloadGogMedia')) $('downloadGogMedia').onclick = async () => { try { await api('/api/metadata/gog',{method:'POST',body:JSON.stringify({id:game.id})}); await refresh(); renderDetails(); notify('GOG media downloaded'); } catch(error) { notify(error.message); } };
-      if ($('openBrowser')) $('openBrowser').onclick = () => { const url = game.wikipedia_url || `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(game.name)}`; window.open(url, '_blank'); };
+      if ($('openBrowser')) $('openBrowser').onclick = () => { const url = game.wikipedia_url || `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(game.name)}`; nativeOpenExternal(url); };
       if ($('backupSaves')) {
         $('backupSaves').onclick = () => backupSaves(game.id);
         loadBackups(game.id);
@@ -718,6 +883,22 @@ const token = new URLSearchParams(location.search).get('token') || '';
     }
     let sessionPollBusy = false;
     let sessionPollIdle = false;
+    function connectSessionEvents() {
+      try {
+        const source = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
+        source.onmessage = event => {
+          let data;
+          try { data = JSON.parse(event.data); } catch { return; }
+          const kind = data?.kind || data?.type;
+          if (kind === 'session.started' || kind === 'session.stopped' || kind === 'session.state' || kind === 'job.finished') {
+            pollSessions();
+          } else if (kind === 'state.changed') {
+            refresh().catch(() => {});
+          }
+        };
+        source.onerror = () => { source.close(); /* fall back to polling */ };
+      } catch { /* EventSource unsupported; polling stays */ }
+    }
     function scheduleSessionPoll(delay) { setTimeout(pollSessions, delay); }
     async function pollSessions() {
       if (sessionPollBusy) {
@@ -816,13 +997,13 @@ const token = new URLSearchParams(location.search).get('token') || '';
         welcome_completed:AppState.appSettings.welcome_completed,
         locale:$('localeSetting').value,
         library_view:$('libraryViewSetting').value,
+        cover_grouping:$('groupingSetting').value,
         custom_field_defs:($('customFieldDefs').value || '').split('\n').map(line => line.trim()).filter(Boolean).map(line => { const [name,...rest] = line.split('|'); return {name:(name || '').trim(), options:rest.join('|').split(',').map(value => value.trim()).filter(Boolean)}; }).filter(item => item.name),
         bigbox_startup_video:$('bigboxStartupVideo').value.trim(),
         bigbox_shutdown_commands:$('bigboxShutdownCommands').value.split('\n').map(value => value.trim()).filter(Boolean),
         attract_mode_seconds:Number($('attractModeSeconds').value || $('screensaverSeconds').value || 90),
         tray_enabled:$('trayEnabled').checked,
         minimize_to_tray:$('minimizeToTray').checked,
-        ui_window:$('uiWindow').value || 'app',
         ludusavi_backup_path:$('ludusaviBackupPath')?.value.trim() || '',
       };
     }
@@ -994,6 +1175,14 @@ const token = new URLSearchParams(location.search).get('token') || '';
         watchMetadata();
       } catch(error) { notify(error.message); }
     };
+    $('autoMatchMetadata').onclick = async () => {
+      try {
+        $('metadataStatus').textContent = 'Auto-matching your library by exact title. This only binds exact matches; ambiguous titles are left for you to confirm.';
+        $('autoMatchMetadata').disabled = true;
+        await api('/api/metadata/match',{method:'POST',body:JSON.stringify({platform})});
+        watchMatchMetadata();
+      } catch(error) { notify(error.message); $('autoMatchMetadata').disabled = false; }
+    };
     $('searchIgdb').onclick = async () => {
       const game = games.find(item => item.id === metadataGameId);
       try {
@@ -1009,6 +1198,20 @@ const token = new URLSearchParams(location.search).get('token') || '';
         });
       } catch(error) { notify(error.message); }
     };
+    async function watchMatchMetadata() {
+      try {
+        const status = await api('/api/metadata/status');
+        const job = status.job || {};
+        if (job.state === 'running') {
+          $('metadataStatus').textContent = `Auto-matching: ${job.matched || 0} matched so far.`;
+          return setTimeout(watchMatchMetadata, 1200);
+        }
+        $('autoMatchMetadata').disabled = false;
+        await refresh();
+        renderMetadataStatus(status);
+        notify(`Auto-match finished: ${job.matched || 0} games matched`);
+      } catch(error) { notify(error.message); $('autoMatchMetadata').disabled = false; }
+    }
     async function watchMetadata() {
       try {
         const status = await api('/api/metadata/status');
@@ -1076,7 +1279,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       try { await api('/api/game',{method:'POST',body:JSON.stringify({id:editingId,game})}); $('gameDialog').close(); await refresh(); notify('Library saved'); } catch(error) { notify(error.message); }
     };
     async function importFolder() {
-      const folder = prompt('Enter the absolute path of the folder to import.');
+      const folder = await nativePickFolder('Enter the absolute path of the folder to import.');
       if (!folder) return;
       try {
         const preview = await api('/api/import',{method:'POST',body:JSON.stringify({folder,recommend:true})});
@@ -1118,11 +1321,11 @@ const token = new URLSearchParams(location.search).get('token') || '';
       } catch(error) { notify(error.message); }
     }
     async function importArcade() {
-      const folder = prompt('Absolute path of the arcade ROM folder');
+      const folder = await nativePickFolder('Absolute path of the arcade ROM folder');
       if (!folder) return;
       const source = prompt('Set type: MAME or FinalBurn Neo', 'MAME');
       if (!source) return;
-      const dat = prompt('Absolute DAT/XML path. Leave blank to use installed MAME metadata.', '') ?? '';
+      const dat = (await nativePickFile('Absolute DAT/XML path. Leave blank to use installed MAME metadata.')) ?? '';
       const command = prompt('Launch command. Leave blank for the detected emulator. You can use {rom_name} and {path}.', '') ?? '';
       try {
         const result = await api('/api/import/arcade',{method:'POST',body:JSON.stringify({folder,source,dat,command})});
@@ -1167,13 +1370,13 @@ const token = new URLSearchParams(location.search).get('token') || '';
         $('obsRecordingPath').value = AppState.appSettings.obs_recording_path || '';
         $('localeSetting').value = AppState.appSettings.locale || 'en';
         $('libraryViewSetting').value = AppState.appSettings.library_view || 'grid';
+        if ($('groupingSetting')) $('groupingSetting').value = AppState.appSettings.cover_grouping || 'shape';
         $('customFieldDefs').value = (AppState.appSettings.custom_field_defs || []).map(item => `${item.name}|${(item.options || []).join(',')}`).join('\n');
         $('bigboxStartupVideo').value = AppState.appSettings.bigbox_startup_video || '';
         $('bigboxShutdownCommands').value = (AppState.appSettings.bigbox_shutdown_commands || []).join('\n');
         $('attractModeSeconds').value = AppState.appSettings.attract_mode_seconds ?? AppState.appSettings.screensaver_seconds ?? 90;
         $('trayEnabled').checked = Boolean(AppState.appSettings.tray_enabled);
         $('minimizeToTray').checked = Boolean(AppState.appSettings.minimize_to_tray);
-        if ($('uiWindow')) $('uiWindow').value = AppState.appSettings.ui_window || 'app';
         if ($('ludusaviBackupPath')) $('ludusaviBackupPath').value = AppState.appSettings.ludusavi_backup_path || '';
         $('mediaPackStatus').textContent = (AppState.appSettings.media_packs || []).filter(item => item.active).map(item => item.name).join(', ');
         $('viewToggleButton').textContent = (AppState.appSettings.library_view || 'grid') === 'list' ? 'Grid view' : 'List view';
@@ -1191,7 +1394,6 @@ const token = new URLSearchParams(location.search).get('token') || '';
       event.preventDefault();
       try {
         await saveEmumoviesSettings().catch(() => {});
-        AppState.persist();
         AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
         $('settingsDialog').close();
         notify('Settings saved');
@@ -1442,7 +1644,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       } catch(error) { notify(error.message); }
     };
     $('installPlugin').onclick = async () => {
-      const path = prompt('Absolute path of the plugin directory or ZIP package');
+      const path = await nativePickFile('Absolute path of the plugin directory or ZIP package');
       if (!path) return;
       try {
         const result = await api('/api/plugins/install',{method:'POST',body:JSON.stringify({path})});
@@ -1482,7 +1684,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       } catch(error) { notify(error.message); }
     }
     $('importTheme').onclick = async () => {
-      const path = prompt('Enter the absolute path of a CSS theme file.');
+      const path = await nativePickFile('Enter the absolute path of a CSS theme file.');
       if (!path) return;
       try { await api('/api/themes/import',{method:'POST',body:JSON.stringify({path})}); await openThemes(); notify('Theme imported'); } catch(error) { notify(error.message); }
     };
@@ -1688,7 +1890,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       }
       renderBigBox();
       api('/api/bigbox/mode',{method:'POST',body:JSON.stringify({entering:true})}).catch(() => {});
-      document.documentElement.requestFullscreen?.().catch(() => {});
+      nativeFullscreen().catch(() => {});
       requestAnimationFrame(pollGamepads);
     }
     function closeBigBox() {
@@ -1697,7 +1899,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       $('bigBox').hidden = true;
       if ($('bigBoxStartupVideo')) { $('bigBoxStartupVideo').pause(); $('bigBoxStartupVideo').hidden = true; }
       api('/api/bigbox/mode',{method:'POST',body:JSON.stringify({entering:false})}).catch(() => {});
-      if (document.fullscreenElement) document.exitFullscreen?.();
+      if (document.fullscreenElement) nativeFullscreen().catch(() => {});
     }
     function filteredBigBoxGames() {
       let result = filteredGames().filter(game => !game.hide_in_bigbox);
@@ -2026,23 +2228,45 @@ const token = new URLSearchParams(location.search).get('token') || '';
     $('sidebarSearch').oninput = () => { AppState.activePlaylist = ''; clearTimeout(searchTimer); searchTimer = setTimeout(() => { renderPlaylists(); renderGrid(); }, 150); };
     $('view').onchange = () => { AppState.activePlaylist = ''; renderPlaylists(); renderGrid(); };
     $('sort').onchange = renderGrid;
+    // load events do not bubble, so ratio tracking uses a capture-phase
+    // listener on #grid that survives innerHTML rebuilds without re-attaching.
+    $('grid').addEventListener('load', event => {
+      const img = event.target;
+      if (img.tagName === 'IMG' && img.dataset.gid) recordCoverRatio(img);
+    }, true);
+    $('grouping').onchange = async () => {
+      AppState.appSettings.cover_grouping = $('grouping').value;
+      if ($('groupingSetting')) $('groupingSetting').value = $('grouping').value;
+      renderGrid();
+      await api('/api/settings',{method:'POST',body:JSON.stringify({cover_grouping:AppState.appSettings.cover_grouping})}).catch(() => {});
+    };
     if ($('esrbFilter')) $('esrbFilter').onchange = renderGrid;
     const libraryPaneElement = document.querySelector('main.library');
+    let scrollFramePending = false;
     if (libraryPaneElement) {
+      // Coalesce raw scroll events into one render per animation frame: they
+      // fire far faster than paint, and each renderGrid rewrites the whole
+      // visible grid. The row-distance check drops renders that did not cross
+      // a row boundary, and renders that do run skip the entrance animation.
       libraryPaneElement.addEventListener('scroll', () => {
-        const top = libraryPaneElement.scrollTop;
-        if (gridRowHeight && Math.abs(top - gridScrollTop) < gridRowHeight) return;
-        gridScrollTop = top;
-        renderGrid();
+        if (scrollFramePending) return;
+        scrollFramePending = true;
+        requestAnimationFrame(() => {
+          scrollFramePending = false;
+          const top = libraryPaneElement.scrollTop;
+          if (gridRowHeight && Math.abs(top - gridScrollTop) < gridRowHeight) return;
+          gridScrollTop = top;
+          renderGrid({fromScroll:true});
+        });
       }, { passive: true });
       window.addEventListener('resize', () => { gridRowHeight = 0; renderGrid(); });
     }
-    $('viewToggleButton').onclick = () => {
+    $('viewToggleButton').onclick = async () => {
       AppState.appSettings.library_view = (AppState.appSettings.library_view || 'grid') === 'list' ? 'grid' : 'list';
       if ($('libraryViewSetting')) $('libraryViewSetting').value = AppState.appSettings.library_view;
-      AppState.persist();
       applyLocaleStrings();
       renderGrid();
+      await api('/api/settings',{method:'POST',body:JSON.stringify({library_view:AppState.appSettings.library_view})}).catch(() => {});
     };
     async function importDroppedFolder(folder) {
       try {
@@ -2066,12 +2290,12 @@ const token = new URLSearchParams(location.search).get('token') || '';
     if ($('dropZone')) {
       ['dragenter','dragover'].forEach(name => $('dropZone').addEventListener(name, event => { event.preventDefault(); $('dropZone').classList.add('active'); }));
       $('dropZone').addEventListener('dragleave', () => $('dropZone').classList.remove('active'));
-      $('dropZone').addEventListener('drop', event => {
+      $('dropZone').addEventListener('drop', async event => {
         event.preventDefault();
         $('dropZone').classList.remove('active');
         const names = [...event.dataTransfer.items].map(item => item.getAsFile?.()?.name).filter(Boolean);
         const hint = names.length ? `\n\nDropped: ${names.slice(0, 3).join(', ')}` : '';
-        const folder = prompt(`Enter the absolute path of the folder to import.${hint}`);
+        const folder = await nativePickFolder(`Enter the absolute path of the folder to import.${hint}`);
         if (folder) importDroppedFolder(folder.trim());
       });
       $('dropZone').onclick = () => importFolder();
@@ -2178,7 +2402,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
         notify(`Added ${result.added} of ${result.found} scanned games`);
       } catch(error) { notify(error.message); }
     };
-    $('fullscreenButton').onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+    $('fullscreenButton').onclick = () => nativeFullscreen().catch(() => {});
     $('surpriseButton').onclick = () => { const visible = filteredGames(); if (visible.length) { AppState.selectedId = visible[Math.floor(Math.random() * visible.length)].id; render(); } };
     $('imageGroup').onchange = async () => {
       const scope = activePlaylist ? 'playlist' : platform !== 'all' ? 'platform' : 'global';
@@ -2203,11 +2427,24 @@ const token = new URLSearchParams(location.search).get('token') || '';
     function openDialog(dialog, trigger = lastDialogTrigger || document.activeElement) {
       const opener = trigger instanceof HTMLElement ? trigger : null;
       if (opener) dialogTriggers.set(dialog, opener);
+      if (!dialog.showModal) { dialog.setAttribute('open', ''); return; }
       dialog.showModal();
+      // Focus the first focusable control so keyboard users land somewhere
+      // useful, not on the inert backdrop.
+      const first = dialog.querySelector('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (first) first.focus();
     }
     function closeDialog(dialog) {
-      dialog.close();
+      if (dialog.open && typeof dialog.close === 'function') dialog.close();
+      else dialog.removeAttribute('open');
     }
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape') return;
+      const open = [...document.querySelectorAll('dialog[open]')].at(-1);
+      if (!open) return;
+      event.preventDefault();
+      closeDialog(open);
+    });
     $('closeDialog').onclick = $('cancelDialog').onclick = () => closeDialog($('gameDialog'));
     $('closeProfiles').onclick = $('cancelProfiles').onclick = () => closeDialog($('profilesDialog'));
     $('closeThemes').onclick = $('cancelThemes').onclick = () => closeDialog($('themesDialog'));
@@ -2340,7 +2577,6 @@ const token = new URLSearchParams(location.search).get('token') || '';
           $('clearNotifications').onclick = async () => { await api('/api/notifications',{method:'POST',body:JSON.stringify({action:'clear'})}); openFeature('notifications'); };
         } else {
           const result = await api('/api/webhooks');
-          content.innerHTML = `<p class="description">Webhook delivery uses signed JSON over HTTPS. HTTP requires OPENBOX_ALLOW_HTTP_WEBHOOKS=1.</p><label class="field wide"><span>URL</span><input id="webhookUrl" type="url"></label><label class="field wide"><span>Secret</span><input id="webhookSecret" type="password" autocomplete="off"></label><label class="field wide"><span>Events, comma separated</span><input id="webhookEvents" value="${escapeHtml(result.events.join(', '))}"></label><div class="extras"><button type="button" class="primary" id="saveWebhook">Save webhook</button><button type="button" class="icon-button" id="testWebhook">Test</button></div>${(result.webhooks || []).map(item => `<div class="detail-card"><strong>${escapeHtml(item.url)}</strong><p class="description">${escapeHtml(item.last_status || 'Not tested')} ${item.secret_set ? '· secret set' : ''}</p></div>`).join('')}`;
           $('saveWebhook').onclick = async () => { try { const current = result.webhooks[0]; await api('/api/webhooks',{method:'POST',body:JSON.stringify({webhooks:[{...(current || {}),url:$('webhookUrl').value.trim(),secret:$('webhookSecret').value,events:$('webhookEvents').value.split(',').map(value => value.trim()).filter(Boolean),enabled:true}]})}); notify('Webhook saved'); openFeature('webhooks'); } catch (error) { notify(error.message); } };
           $('testWebhook').onclick = async () => { try { const result = await api('/api/webhooks/test',{method:'POST',body:JSON.stringify({url:$('webhookUrl').value.trim(),secret:$('webhookSecret').value,events:['session.started']})}); notify(result.ok ? 'Webhook test succeeded' : result.error); } catch (error) { notify(error.message); } };
         }
@@ -2352,8 +2588,9 @@ const token = new URLSearchParams(location.search).get('token') || '';
     $('notificationsButton').onclick = () => openFeature('notifications');
     $('webhooksButton').onclick = () => openFeature('webhooks');
     $('closeFeature').onclick = $('doneFeature').onclick = () => $('featureDialog').close();
+      await detectNative().catch(() => {});
+      connectSessionEvents();
       pollSessions();
-      maybeShowWelcome();
       await runStartupStorefrontImports().catch(() => {});
       if (deeplink.get('deeplink') === 'bigbox') openBigBox();
       else if (AppState.appSettings.gamescope_guest) openBigBox();

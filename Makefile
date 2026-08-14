@@ -8,10 +8,14 @@ LICENSEDIR = $(PREFIX)/share/licenses/openbox
 
 PYTHON_SOURCES = $(shell sed '/^[[:space:]]*#/d;/^[[:space:]]*$$/d' runtime_modules.txt)
 
-DATA_FILES = index.html openbox.svg openbox.metainfo.xml LICENSE
+DATA_FILES = index.html openbox.svg openbox.metainfo.xml LICENSE assets/openbox-logo.png
 STATIC_FILES = static/app.js static/app.css
+NATIVE_HOST = native_host
 
-.PHONY: install uninstall appimage check version-check dev-venv test-one
+.PHONY: install uninstall appimage check version-check dev-venv test-one native-host
+
+native-host:
+	gcc -O2 native_host.c -o $(NATIVE_HOST) $$(pkg-config --cflags --libs webkit2gtk-4.1)
 
 dev-venv:
 	python3 -m venv .venv-dev
@@ -30,20 +34,26 @@ test-one:
 version-check:
 	python3 scripts/check_version_sync.py
 
-install:
+install: native-host
 	install -d $(DESTDIR)$(BINDIR)
 	install -d $(DESTDIR)$(SHAREDIR)
 	install -d $(DESTDIR)$(SHAREDIR)/themes
 	install -d $(DESTDIR)$(ICONDIR)
+	install -Dm755 openbox.sh $(DESTDIR)$(BINDIR)/openbox
+	install -Dm755 openbox-native.sh $(DESTDIR)$(BINDIR)/openbox-native
 	install -d $(DESTDIR)$(DESKTOPDIR)
 	install -d $(DESTDIR)$(METAINFODIR)
 	install -d $(DESTDIR)$(LICENSEDIR)
-	install -Dm755 openbox.sh $(DESTDIR)$(BINDIR)/openbox
-	install -Dm755 openbox-native.sh $(DESTDIR)$(BINDIR)/openbox-native
-	for f in $(PYTHON_SOURCES); do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/$$f"; done
+	install -Dm755 $(NATIVE_HOST) $(DESTDIR)$(SHAREDIR)/$(NATIVE_HOST)
 	install -d $(DESTDIR)$(SHAREDIR)/emulator_defs
 	for f in emulator_defs/*.yaml; do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/emulator_defs/"; done
 	install -Dm755 scripts/openbox-launcher.sh $(DESTDIR)$(SHAREDIR)/openbox-launcher.sh
+	# Runtime Python modules (web_app.py, the handlers/ package, parity_*.py,
+	# ...) from runtime_modules.txt, mirroring the repo layout under the share
+	# dir. `install -D` creates the handlers/ subdirectory as needed.
+	for f in $(PYTHON_SOURCES); do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/$$f"; done
+	# plugin_catalog.py resolves plugins/catalog.json relative to its own path.
+	install -Dm644 plugins/catalog.json $(DESTDIR)$(SHAREDIR)/plugins/catalog.json
 	for f in $(DATA_FILES); do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/$$f"; done
 	for f in $(STATIC_FILES); do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/$$f"; done
 	for f in themes/*.css; do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/$$f"; done

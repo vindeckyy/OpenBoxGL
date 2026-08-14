@@ -46,6 +46,16 @@ def main() -> int:
         if result.returncode != 0:
             failures.append("ruff")
 
+
+    # Stage 2.5: v1 route surface must match the frozen contract. The v1
+    # surface is the native host's only contract; drift fails the gate.
+    v1_contract = run([sys.executable, "-B", str(ROOT / "scripts" / "check_v1_contract.py")])
+    if v1_contract.returncode != 0:
+        if v1_contract.stdout.strip():
+            print(v1_contract.stdout.strip())
+        if v1_contract.stderr.strip():
+            print(v1_contract.stderr.strip())
+        failures.append("v1_contract")
     # Stage 2: compile every runtime module plus the tests themselves.
     modules = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip()]
     compile_failed = 0

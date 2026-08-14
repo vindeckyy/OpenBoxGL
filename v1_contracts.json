@@ -1,0 +1,288 @@
+{
+  "version": 1,
+  "routes": [
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/backup"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/backup/create"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/backup/restore"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/backups"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/diagnostic"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/emulators"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/emulators/install"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/favorite"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v1/filter-presets"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/game"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/game/delete"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/games/bulk"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/health"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/health/dedupe"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/history"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/import"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/import/arcade"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/import/heroic"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/import/lutris"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/import/steam"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/jobs"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/launch"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/library"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/log"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/media"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/media/audit"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/media/bulk"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/metadata/apply"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/metadata/match"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/metadata/search"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/metadata/status"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v1/notifications"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/playlists"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/plugins"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v1/profiles"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v1/queue"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/running"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/saves"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v1/settings"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/shutdown"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/state/recover"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v1/tags"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/themes"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/update"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/update/install"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v1/webhooks"
+    }
+  ]
+}

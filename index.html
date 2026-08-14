@@ -10,41 +10,47 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="mark">O</span>OpenBox</div>
-    <button class="menu-button primary-nav" id="libraryButton">Library</button>
-    <button class="menu-button primary-nav" id="addButton">Add game</button>
-    <button class="menu-button primary-nav" id="importButton">Import folder</button>
-    <button class="menu-button" id="bigBoxButton">Big Box</button>
-    <button class="menu-button" id="sessionsButton">Running</button>
-    <details class="topbar-tools">
-      <summary class="menu-button">Tools</summary>
-      <div class="tool-menu">
-        <button class="menu-button" id="steamButton">Import Steam</button>
-        <button class="menu-button" id="heroicButton">Import Heroic</button>
-        <button class="menu-button" id="lutrisButton">Import Lutris</button>
-        <button class="menu-button" id="arcadeButton">Import Arcade</button>
-        <button class="menu-button" id="emulatorsButton">Emulators</button>
-        <button class="menu-button" id="settingsButton">Settings</button>
-        <button class="menu-button" id="historyButton">History</button>
-        <button class="menu-button" id="themesButton">Themes</button>
-        <button class="menu-button" id="saveFilterButton">Save filter</button>
-        <button class="menu-button" id="savePresetButton">Save preset</button>
-        <button class="menu-button" id="playlistsButton">Playlists</button>
-        <button class="menu-button" id="achievementsButton">Achievements</button>
-        <button class="menu-button" id="pluginsButton">Plugins</button>
-        <button class="menu-button" id="discoveryButton">Discovery</button>
-        <button class="menu-button" id="storefrontButton">Storefronts</button>
-        <button class="menu-button" id="mediaButton">Media</button>
-        <button class="menu-button" id="healthButton">Health</button>
-        <button class="menu-button" id="bulkButton">Bulk edit</button>
-        <button class="menu-button" id="backupButton">Backup</button>
-        <button class="menu-button" id="fullscreenButton">Fullscreen</button>
-        <button class="menu-button" id="queueButton">Queue</button>
-        <button class="menu-button" id="tagsButton">Tags</button>
-        <button class="menu-button" id="notificationsButton">Notifications</button>
-        <button class="menu-button" id="webhooksButton">Webhooks</button>
-      </div>
-    </details>
+    <div class="brand"><img class="mark" src="/static/logo.png" alt="OpenBox">OpenBox</div>
+    <nav class="topbar-zone" aria-label="Library">
+      <button class="menu-button primary-nav" id="libraryButton">Library</button>
+      <button class="menu-button primary-nav" id="addButton">Add game</button>
+      <button class="menu-button primary-nav" id="importButton">Import folder</button>
+    </nav>
+    <nav class="topbar-zone" aria-label="Actions">
+      <button class="menu-button" id="bigBoxButton">Big Box</button>
+      <button class="menu-button" id="sessionsButton">Running</button>
+      <button class="menu-button" id="queueButton">Queue</button>
+    </nav>
+    <nav class="topbar-zone topbar-zone-tools" aria-label="Tools">
+      <details class="topbar-tools">
+        <summary class="menu-button">Tools</summary>
+        <div class="tool-menu">
+          <button class="menu-button" id="steamButton">Import Steam</button>
+          <button class="menu-button" id="heroicButton">Import Heroic</button>
+          <button class="menu-button" id="lutrisButton">Import Lutris</button>
+          <button class="menu-button" id="arcadeButton">Import Arcade</button>
+          <button class="menu-button" id="emulatorsButton">Emulators</button>
+          <button class="menu-button" id="settingsButton">Settings</button>
+          <button class="menu-button" id="historyButton">History</button>
+          <button class="menu-button" id="themesButton">Themes</button>
+          <button class="menu-button" id="saveFilterButton">Save filter</button>
+          <button class="menu-button" id="savePresetButton">Save preset</button>
+          <button class="menu-button" id="playlistsButton">Playlists</button>
+          <button class="menu-button" id="achievementsButton">Achievements</button>
+          <button class="menu-button" id="pluginsButton">Plugins</button>
+          <button class="menu-button" id="discoveryButton">Discovery</button>
+          <button class="menu-button" id="storefrontButton">Storefronts</button>
+          <button class="menu-button" id="mediaButton">Media</button>
+          <button class="menu-button" id="healthButton">Health</button>
+          <button class="menu-button" id="bulkButton">Bulk edit</button>
+          <button class="menu-button" id="backupButton">Backup</button>
+          <button class="menu-button" id="fullscreenButton">Fullscreen</button>
+          <button class="menu-button" id="tagsButton">Tags</button>
+          <button class="menu-button" id="notificationsButton">Notifications</button>
+          <button class="menu-button" id="webhooksButton">Webhooks</button>
+        </div>
+      </details>
+    </nav>
     <span class="top-status" id="status">Local library</span>
   </header>
 
@@ -70,6 +76,7 @@
         <div><h1 id="libraryTitle">All Games</h1><p id="libraryMeta">0 games</p></div>
         <select class="search" id="sort" aria-label="Sort games"><option value="title">Title</option><option value="rating">Rating</option><option value="recent">Recently played</option><option value="recent_activity">Recent activity</option><option value="playtime">Play time</option><option value="added">Date added</option><option value="platform">Platform</option><option value="genre">Genre</option></select>
         <select class="search" id="imageGroup" aria-label="Image group"><option value="default">Use default</option><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option><option value="clear_logo">Clear logos</option><option value="fanart">Fanart</option><option value="banner">Banners</option><option value="box_back">Box backs</option><option value="box_spine">Box spines</option><option value="box_3d">3D boxes</option><option value="title_screen">Title screens</option><option value="cart_front">Cart fronts</option><option value="cart_back">Cart backs</option><option value="disc">Discs</option><option value="advertisement">Ads / flyers</option><option value="manual">Manuals</option></select>
+        <select class="search" id="grouping" aria-label="Group covers"><option value="shape">Group by shape</option><option value="none">No grouping</option></select>
         <button class="icon-button" id="viewToggleButton">List view</button>
         <button class="icon-button" id="surpriseButton">Surprise me</button>
       </div>
@@ -83,7 +90,7 @@
     <aside class="details" id="details"><div class="detail-empty">Select a game to inspect its real metadata and artwork.</div></aside>
   </div>
 
-  <dialog id="gameDialog" aria-modal="true">
+  <dialog id="gameDialog" aria-modal="true" aria-labelledby="dialogTitle">
     <form id="gameForm">
       <div class="dialog-head"><h2 id="dialogTitle">Add game</h2><button type="button" id="closeDialog" aria-label="Close Add game dialog">×</button></div>
       <div class="form-grid">
@@ -149,9 +156,9 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelDialog">Cancel</button><button class="primary">Save</button></div>
     </form>
   </dialog>
-  <dialog id="profilesDialog" aria-modal="true" class="profiles-dialog">
+  <dialog id="profilesDialog" aria-modal="true" class="profiles-dialog" aria-labelledby="profilesDialogTitle">
     <form id="profilesForm">
-      <div class="dialog-head"><h2>Emulator profiles</h2><button type="button" id="closeProfiles" aria-label="Close Emulator profiles dialog">×</button></div>
+      <div class="dialog-head"><h2 id="profilesDialogTitle">Emulator profiles</h2><button type="button" id="closeProfiles" aria-label="Close Emulator profiles dialog">×</button></div>
       <div class="form-grid">
         <label class="field wide"><span>One profile per line: Platform = command. Use {path} for the ROM.</span><textarea id="profilesText"></textarea></label>
         <div class="wide" id="detectedProfiles"></div>
@@ -161,9 +168,9 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelProfiles">Cancel</button><button class="primary">Save</button></div>
     </form>
   </dialog>
-  <dialog id="themesDialog" aria-modal="true">
+  <dialog id="themesDialog" aria-modal="true" aria-labelledby="themesDialogTitle">
     <form id="themesForm">
-      <div class="dialog-head"><h2>Themes</h2><button type="button" id="closeThemes" aria-label="Close Themes dialog">×</button></div>
+      <div class="dialog-head"><h2 id="themesDialogTitle">Themes</h2><button type="button" id="closeThemes" aria-label="Close Themes dialog">×</button></div>
       <div class="form-grid">
         <p class="wide description">Stock themes ship with OpenBox. Import your own CSS to restyle the library, detail pane, dialogs, and Big Box.</p>
         <label class="field wide"><span>Apply to</span><select id="themeScope"><option value="">All platforms</option></select></label>
@@ -174,9 +181,9 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelThemes">Cancel</button><button class="primary">Apply</button></div>
     </form>
   </dialog>
-  <dialog id="achievementsDialog" aria-modal="true">
+  <dialog id="achievementsDialog" aria-modal="true" aria-labelledby="achievementsDialogTitle">
     <form id="achievementsForm">
-      <div class="dialog-head"><h2>RetroAchievements</h2><button type="button" id="closeAchievements" aria-label="Close RetroAchievements dialog">×</button></div>
+      <div class="dialog-head"><h2 id="achievementsDialogTitle">RetroAchievements</h2><button type="button" id="closeAchievements" aria-label="Close RetroAchievements dialog">×</button></div>
       <div class="form-grid">
         <label class="field"><span>Username</span><input id="raUsername" required></label>
         <label class="field"><span>Web API key</span><input id="raApiKey" type="password" autocomplete="off"></label>
@@ -186,8 +193,8 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelAchievements">Cancel</button><button class="primary">Connect account</button></div>
     </form>
   </dialog>
-  <dialog id="pluginsDialog" aria-modal="true">
-    <div class="dialog-head"><h2>Plugins</h2><button type="button" id="closePlugins" aria-label="Close Plugins dialog">×</button></div>
+  <dialog id="pluginsDialog" aria-modal="true" aria-labelledby="pluginsDialogTitle">
+    <div class="dialog-head"><h2 id="pluginsDialogTitle">Plugins</h2><button type="button" id="closePlugins" aria-label="Close Plugins dialog">×</button></div>
     <div class="form-grid">
       <div class="wide description">Plugins are trusted local Python code. Install only packages you trust.</div>
       <div class="wide emulator-list" id="pluginList"></div>
@@ -196,13 +203,14 @@
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="donePlugins">Done</button></div>
   </dialog>
-  <dialog id="metadataDialog" aria-modal="true">
-    <div class="dialog-head"><h2>LaunchBox Games Database</h2><button type="button" id="closeMetadata" aria-label="Close LaunchBox Games Database dialog">×</button></div>
+  <dialog id="metadataDialog" aria-modal="true" aria-labelledby="metadataDialogTitle">
+    <div class="dialog-head"><h2 id="metadataDialogTitle">LaunchBox Games Database</h2><button type="button" id="closeMetadata" aria-label="Close LaunchBox Games Database dialog">×</button></div>
     <form id="metadataSearchForm" class="form-grid">
       <label class="field wide"><span>Game title</span><input id="metadataQuery" required></label>
       <button class="icon-button" id="syncMetadata" type="button">Download database</button>
       <button class="icon-button" id="searchIgdb" type="button">Search IGDB</button>
       <button class="primary" type="submit">Search</button>
+      <button class="icon-button" id="autoMatchMetadata" type="button">Auto-match library</button>
       <div class="wide description" id="metadataStatus"></div>
       <div class="wide detail-card" id="metadataCoverage" style="display:none"><div class="facts" id="metadataCoverageFacts"></div></div>
       <div class="wide metadata-results" id="metadataResults"></div>
@@ -226,8 +234,8 @@
     </form>
     <div class="dialog-actions"><button type="button" class="primary" id="doneMetadata">Done</button></div>
   </dialog>
-  <dialog id="mediaManagerDialog" aria-modal="true">
-    <div class="dialog-head"><h2>Media Manager</h2><button type="button" id="closeMediaManager" aria-label="Close Media Manager dialog">×</button></div>
+  <dialog id="mediaManagerDialog" aria-modal="true" aria-labelledby="mediaManagerDialogTitle">
+    <div class="dialog-head"><h2 id="mediaManagerDialogTitle">Media Manager</h2><button type="button" id="closeMediaManager" aria-label="Close Media Manager dialog">×</button></div>
     <div class="form-grid">
       <div class="wide detail-card" id="mediaAudit"></div>
       <label class="check"><input type="checkbox" id="bulkCover" checked> Box fronts</label>
@@ -254,8 +262,8 @@
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneMediaManager">Done</button></div>
   </dialog>
-  <dialog id="healthDialog" aria-modal="true">
-    <div class="dialog-head"><h2>Library Audit</h2><button type="button" id="closeHealth" aria-label="Close Library Audit dialog">×</button></div>
+  <dialog id="healthDialog" aria-modal="true" aria-labelledby="healthDialogTitle">
+    <div class="dialog-head"><h2 id="healthDialogTitle">Library Audit</h2><button type="button" id="closeHealth" aria-label="Close Library Audit dialog">×</button></div>
     <div class="form-grid">
       <div class="wide detail-card" id="healthSummary"></div>
       <div class="wide metadata-results" id="healthIssues"></div>
@@ -265,9 +273,9 @@
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneHealth">Done</button></div>
   </dialog>
-  <dialog id="bulkDialog" aria-modal="true">
+  <dialog id="bulkDialog" aria-modal="true" aria-labelledby="bulkDialogTitle">
     <form id="bulkForm">
-      <div class="dialog-head"><h2>Bulk Edit</h2><button type="button" id="closeBulk" aria-label="Close Bulk Edit dialog">×</button></div>
+      <div class="dialog-head"><h2 id="bulkDialogTitle">Bulk Edit</h2><button type="button" id="closeBulk" aria-label="Close Bulk Edit dialog">×</button></div>
       <div class="form-grid">
         <p class="wide description" id="bulkCount"></p>
         <label class="field"><span>Platform, blank keeps current</span><input name="platform"></label>
@@ -281,8 +289,8 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelBulk">Cancel</button><button class="primary">Apply</button></div>
     </form>
   </dialog>
-  <dialog id="playlistsDialog" aria-modal="true">
-    <div class="dialog-head"><h2>Playlists</h2><button type="button" id="closePlaylists" aria-label="Close Playlists dialog">×</button></div>
+  <dialog id="playlistsDialog" aria-modal="true" aria-labelledby="playlistsDialogTitle">
+    <div class="dialog-head"><h2 id="playlistsDialogTitle">Playlists</h2><button type="button" id="closePlaylists" aria-label="Close Playlists dialog">×</button></div>
     <div class="form-grid">
       <div class="wide extras"><button type="button" class="primary" id="newManualPlaylist">New manual playlist</button><button type="button" class="icon-button" id="newFilterPlaylist">New filter playlist</button></div>
       <div class="wide description">Manual playlists keep an ordered set of games. Filter playlists update from their rules.</div>
@@ -290,8 +298,8 @@
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="donePlaylists">Done</button></div>
   </dialog>
-  <dialog id="backupDialog" aria-modal="true">
-    <div class="dialog-head"><h2>Backups</h2><button type="button" id="closeBackups" aria-label="Close Backups dialog">×</button></div>
+  <dialog id="backupDialog" aria-modal="true" aria-labelledby="backupDialogTitle">
+    <div class="dialog-head"><h2 id="backupDialogTitle">Backups</h2><button type="button" id="closeBackups" aria-label="Close Backups dialog">×</button></div>
     <div class="form-grid">
       <div class="wide extras"><button type="button" class="primary" id="createNamedBackup">Create backup</button><button type="button" class="icon-button" id="refreshBackups">Refresh</button></div>
       <div class="wide description">Backups include selected library data, settings, media, plugins, and themes. Restore creates a safety copy first.</div>
@@ -299,18 +307,18 @@
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneBackups">Done</button></div>
   </dialog>
-  <dialog id="sessionsDialog" aria-modal="true">
-    <div class="dialog-head"><h2>Running Games</h2><button type="button" id="closeSessions" aria-label="Close Running Games dialog">×</button></div>
+  <dialog id="sessionsDialog" aria-modal="true" aria-labelledby="sessionsDialogTitle">
+    <div class="dialog-head"><h2 id="sessionsDialogTitle">Running Games</h2><button type="button" id="closeSessions" aria-label="Close Running Games dialog">×</button></div>
     <div class="form-grid"><div class="wide emulator-list" id="sessionList"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneSessions">Done</button></div>
   </dialog>
-  <dialog id="historyDialog" aria-modal="true">
-    <div class="dialog-head"><h2>Play Session History</h2><button type="button" id="closeHistory" aria-label="Close Play Session History dialog">×</button></div>
+  <dialog id="historyDialog" aria-modal="true" aria-labelledby="historyDialogTitle">
+    <div class="dialog-head"><h2 id="historyDialogTitle">Play Session History</h2><button type="button" id="closeHistory" aria-label="Close Play Session History dialog">×</button></div>
     <div class="form-grid"><div class="wide history-list" id="historyList"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneHistory">Done</button></div>
   </dialog>
-  <dialog id="welcomeDialog" aria-modal="true">
-    <div class="dialog-head"><h2>Welcome to OpenBox</h2><button type="button" id="closeWelcome" aria-label="Close Welcome to OpenBox dialog">×</button></div>
+  <dialog id="welcomeDialog" aria-modal="true" aria-labelledby="welcomeDialogTitle">
+    <div class="dialog-head"><h2 id="welcomeDialogTitle">Welcome to OpenBox</h2><button type="button" id="closeWelcome" aria-label="Close Welcome to OpenBox dialog">×</button></div>
     <div class="form-grid welcome-steps">
       <p class="wide description">Bring your games into OpenBox. Pick a starting point and the library fills in as imports finish.</p>
       <button type="button" class="primary" id="welcomeImportFolder">Import a ROM or game folder</button>
@@ -322,7 +330,7 @@
       <button type="button" class="primary" id="welcomeDone">Finish setup</button>
     </div>
   </dialog>
-  <dialog id="featureDialog" aria-modal="true">
+  <dialog id="featureDialog" aria-modal="true" aria-labelledby="featureDialogTitle">
     <div class="dialog-head"><h2 id="featureDialogTitle">OpenBox</h2><button type="button" id="closeFeature" aria-label="Close feature dialog">×</button></div>
     <div class="form-grid"><div class="wide" id="featureContent"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneFeature">Done</button></div>
@@ -334,9 +342,9 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="forceShutdown">Force close</button></div>
     </div>
   </div>
-  <dialog id="settingsDialog" aria-modal="true">
+  <dialog id="settingsDialog" aria-modal="true" aria-labelledby="settingsDialogTitle">
     <form id="settingsForm">
-      <div class="dialog-head"><h2>OpenBox Settings</h2><button type="button" id="closeSettings" aria-label="Close OpenBox Settings dialog">×</button></div>
+      <div class="dialog-head"><h2 id="settingsDialogTitle">OpenBox Settings</h2><button type="button" id="closeSettings" aria-label="Close OpenBox Settings dialog">×</button></div>
       <div class="form-grid">
         <label class="field wide settings-field" data-setting="search watched folders cloud screensaver startup shutdown session history backup progress automation image group controller gamepad"><span>Search settings</span><input id="settingsSearch" class="settings-search" type="search" placeholder="Type to filter settings"></label>
         <label class="field wide settings-field" data-setting="watched folders import auto"><span>Automatically watched game folders, one absolute path per line</span><textarea id="watchFolders"></textarea></label>
@@ -393,13 +401,13 @@
         <div class="wide settings-field" data-setting="emulator scan folder rom wizard"><button type="button" class="icon-button" id="scanEmulatorFolder">Scan ROM folder</button></div>
         <label class="field settings-field" data-setting="localization"><span>Interface language</span><select id="localeSetting"><option value="en">English</option></select><small>Localization is planned for a future release.</small></label>
         <label class="field settings-field" data-setting="library view list grid columns"><span>Default library view</span><select id="libraryViewSetting"><option value="grid">Grid</option><option value="list">List</option></select></label>
+        <label class="field settings-field" data-setting="library view grid grouping cover aspect ratio shape none"><span>Group covers by shape</span><select id="groupingSetting"><option value="shape">Group by cover shape</option><option value="none">No grouping</option></select></label>
         <label class="field wide settings-field" data-setting="custom fields metadata premium"><span>Custom fields, one per line: Name|Option1,Option2</span><textarea id="customFieldDefs" placeholder="Cabinet|Upright,Cocktail"></textarea></label>
         <label class="field wide settings-field" data-setting="big box startup video attract"><span>Big Box startup video path</span><input id="bigboxStartupVideo"></label>
         <label class="field wide settings-field" data-setting="big box shutdown applications switch"><span>Applications to run when switching into Big Box, one command per line</span><textarea id="bigboxShutdownCommands"></textarea></label>
         <label class="field settings-field" data-setting="attract mode screensaver big box"><span>Attract mode delay in seconds</span><input id="attractModeSeconds" type="number" min="0" max="3600"></label>
         <label class="check settings-field" data-setting="system tray minimize close"><input type="checkbox" id="trayEnabled"> Enable desktop tray integration</label>
         <label class="check settings-field" data-setting="system tray minimize close"><input type="checkbox" id="minimizeToTray"> Minimize to tray when window closes</label>
-        <label class="field wide settings-field" data-setting="ui window app window browser tab native chrome-less"><span>Open the UI in</span><select id="uiWindow"><option value="app">A chrome-less app window</option><option value="browser">A browser tab</option></select><span class="description">Applies the next time OpenBox launches. Falls back to your default browser when no compatible browser can open a chrome-less window.</span></label>
         <label class="field wide settings-field" data-setting="ludusavi hoard saves backup"><span>Ludusavi backup path, optional</span><input id="ludusaviBackupPath" placeholder="Leave blank for Ludusavi default"></label>
         <div class="wide settings-field" data-setting="media packs themes badges controller"><button type="button" class="icon-button" id="applyMediaPack">Apply bundled media pack</button><span class="description" id="mediaPackStatus"></span></div>
         <div class="wide section-title settings-field" data-setting="controller gamepad mapping">Standard Gamepad Button Mapping</div>
@@ -418,13 +426,13 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelSettings">Cancel</button><button class="primary">Save</button></div>
     </form>
   </dialog>
-  <dialog id="discoveryDialog" aria-modal="true">
-    <div class="dialog-head"><h2>Game Discovery Center</h2><button type="button" id="closeDiscovery" aria-label="Close Game Discovery Center dialog">×</button></div>
+  <dialog id="discoveryDialog" aria-modal="true" aria-labelledby="discoveryDialogTitle">
+    <div class="dialog-head"><h2 id="discoveryDialogTitle">Game Discovery Center</h2><button type="button" id="closeDiscovery" aria-label="Close Game Discovery Center dialog">×</button></div>
     <div class="form-grid"><div class="wide discovery-grid" id="discoveryContent"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneDiscovery">Done</button></div>
   </dialog>
-  <dialog id="storefrontDialog" aria-modal="true">
-    <div class="dialog-head"><h2>Storefront Manager</h2><button type="button" id="closeStorefront" aria-label="Close Storefront Manager dialog">×</button></div>
+  <dialog id="storefrontDialog" aria-modal="true" aria-labelledby="storefrontDialogTitle">
+    <div class="dialog-head"><h2 id="storefrontDialogTitle">Storefront Manager</h2><button type="button" id="closeStorefront" aria-label="Close Storefront Manager dialog">×</button></div>
     <div class="form-grid">
       <p class="wide description">Import owned and installed games from Steam, Heroic, Lutris, and Gameyfin. Install or uninstall Gameyfin titles on demand from the library or Big Box.</p>
       <div class="wide extras"><button type="button" class="primary" id="importSteamStore">Import Steam</button><button type="button" class="icon-button" id="importHeroicStore">Import Heroic</button><button type="button" class="icon-button" id="importLutrisStore">Import Lutris</button><button type="button" class="icon-button" id="importGameyfinStore">Import Gameyfin</button><button type="button" class="icon-button" id="importScummvmStore">Import ScummVM</button><button type="button" class="icon-button" id="importRpcs3Store">Import RPCS3</button><button type="button" class="icon-button" id="importVita3kStore">Import Vita3K</button></div>
@@ -445,8 +453,8 @@
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="saveStorefront">Save storefront settings</button></div>
   </dialog>
-  <dialog class="media-dialog" id="mediaDialog"><button type="button" id="closeMedia" aria-label="Close screenshot">×</button></dialog>
-  <dialog class="reader-dialog" id="readerDialog">
+  <dialog class="media-dialog" id="mediaDialog" aria-label="Media viewer"><button type="button" id="closeMedia" aria-label="Close screenshot">×</button></dialog>
+  <dialog class="reader-dialog" id="readerDialog" aria-labelledby="readerTitle">
     <div class="dialog-head"><h2 id="readerTitle">Document</h2><button type="button" id="closeReader" aria-label="Close Document reader">×</button></div>
     <div class="reader-toolbar"><button type="button" class="icon-button" id="readerPrev">Previous page</button><button type="button" class="icon-button" id="readerNext">Next page</button><span class="description" id="readerPageLabel">Page 1</span><button type="button" class="icon-button" data-reader-layout="single">Single page</button><button type="button" class="icon-button" data-reader-layout="spread">Two-page spread</button><button type="button" class="icon-button" data-reader-theme="light">Light</button><button type="button" class="icon-button" data-reader-theme="dark">Dark</button></div>
     <div class="reader-viewport" id="readerViewport"><iframe id="readerFrame" title="Document reader"></iframe></div>

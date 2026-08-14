@@ -9,7 +9,7 @@ from urllib.request import Request, urlopen
 
 from backend_io import atomic_write_bytes, atomic_write_text, download_file, read_limited
 
-VERSION = "0.9.0"
+VERSION = "1.0.0"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
 ASSET = "OpenBox-x86_64.AppImage"
 TRUSTED_RELEASE_PREFIX = "https://github.com/vindeckyy/OpenBoxGL/releases/download/"

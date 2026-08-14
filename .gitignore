@@ -28,8 +28,13 @@ scripts/node_modules/
 .coverage.*
 htmlcov/
 
+# Compiled native host binary (built from native_host.c)
+native_host
+
+# Harness working directory
+.omo/
+
 # Maintainer-only signing material (never commit private keys)
-*.ed25519.key
 
 # Local-only planning and design docs (kept out of the repo)
 PLAN.md

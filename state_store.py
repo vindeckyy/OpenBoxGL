@@ -22,7 +22,7 @@ from collections.abc import Callable
 LOGGER = logging.getLogger("openbox.state")
 
 
-STATE_SCHEMA_VERSION = 4
+STATE_SCHEMA_VERSION = 5
 COMPACT_JSON_THRESHOLD = 1024 * 1024
 LEGACY_INDEXED_ID = re.compile(r"^game-[0-9a-f]{24}-\d+$")
 QUEUE_CAP = 500
@@ -43,6 +43,7 @@ def default_state() -> dict[str, Any]:
         "playlists": [],
         "queue": [],
         "notifications": [],
+        "ui_state": {},
     }
 
 
@@ -123,10 +124,18 @@ def _migrate_v3_to_v4(state: dict[str, Any]) -> None:
     state["schema_version"] = 4
 
 
+def _migrate_v4_to_v5(state: dict[str, Any]) -> None:
+    """Add the host-owned ui_state block while preserving every existing field."""
+    if not isinstance(state.get("ui_state"), dict):
+        state["ui_state"] = {}
+    state["schema_version"] = 5
+
+
 MIGRATIONS: dict[int, Callable[[dict[str, Any]], None]] = {
     1: _migrate_v1_to_v2,
     2: _migrate_v2_to_v3,
     3: _migrate_v3_to_v4,
+    4: _migrate_v4_to_v5,
 }
 
 

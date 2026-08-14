@@ -20,6 +20,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from datetime import datetime, timedelta
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +50,21 @@ GAMES = [
     ("Mega Man X", "Super Nintendo Entertainment System", 143, "MegaManX.smc", "covers/mega_man_x_real.jpg", None),
     ("Final Fantasy VII", "Sony Playstation", 525, "FinalFantasyVII.bin", "covers/final_fantasy_vii_cover.jpg", None),
 ]
+
+DISC_PLATFORMS = {
+    "Sony Playstation",
+    "Sony Playstation 2",
+    "Sony Playstation 3",
+    "Sony Playstation 4",
+    "Sony Playstation 5",
+    "Sega CD",
+    "Sega Saturn",
+    "Panasonic 3DO",
+    "Xbox",
+    "Xbox 360",
+    "Xbox One",
+    "PC Engine CD",
+}
 
 
 def ensure_fixture_tree() -> None:
@@ -80,6 +97,11 @@ def apply_record_metadata(entry: dict, database_id: int, database: Path) -> None
     entry["description"] = record.get("overview") or entry.get("description", "")
     entry["year"] = (record.get("release_date") or "")[:4]
     entry["launchbox_db_id"] = str(database_id)
+    # LaunchBox stores ESRB like "E10+ - Everyone 10+ and up"; trim to the
+    # rating code so the detail panel reads "E10+", not the long label.
+    entry["esrb"] = (record.get("esrb") or "").split(" - ", 1)[0].strip()
+    entry["max_players"] = str(record.get("max_players") or "")
+    entry["genre"] = record.get("genre") or entry.get("genre", "")
 
 
 def file_fingerprint(path: Path) -> str:
@@ -164,6 +186,7 @@ def build_library() -> None:
         media_dir = media_root / str(database_id)
         cover = resolve_cover(database_id, cover_rel, media_dir / Path(cover_rel).name, database)
         background = copy_media(background_rel, media_dir / Path(background_rel).name) if background_rel else None
+        play_count = (index + 1) * 3
         entry = {
             "name": name,
             "platform": platform,
@@ -172,9 +195,9 @@ def build_library() -> None:
             "source": "Screenshot fixture",
             "cover": cover,
             "background": background or "",
-            "progress": "Playing" if index % 3 == 0 else "Completed" if index % 3 == 1 else "",
+            "progress": "Playing" if index % 3 == 0 else "Completed" if index % 3 == 1 else "On Hold",
             "favorite": index in {0, 4, 7},
-            "play_count": (index + 1) * 3,
+            "play_count": play_count,
             "rating": 4 + (index % 2),
             "genre": {
                 "Windows": "Action",
@@ -185,6 +208,14 @@ def build_library() -> None:
                 "Sega Genesis": "Platform",
                 "Sony Playstation": "Role-Playing",
             }.get(platform, "Action"),
+            "region": "Worldwide",
+            "play_mode": "Single player",
+            "controller_support": "Keyboard + Mouse" if platform == "Windows" else "Yes",
+            "disc_count": "1" if platform in DISC_PLATFORMS else "",
+            "playtime_seconds": (play_count + 1) * 3600,
+            "last_played": (datetime(2026, 8, 12, 18, 0) - timedelta(days=index)).isoformat(),
+            "wikipedia_url": f"https://en.wikipedia.org/wiki/{quote(name.replace(' ', '_'))}",
+            "video_url": "",
         }
         apply_record_metadata(entry, database_id, database)
         if not entry.get("cover") or not Path(entry["cover"]).is_file():

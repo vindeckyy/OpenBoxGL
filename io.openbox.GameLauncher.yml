@@ -16,6 +16,14 @@ finish-args:
   - --filesystem=home
 
 modules:
+  - name: native-host
+    buildsystem: simple
+    build-commands:
+      - gcc -O2 native_host.c -o native_host $(pkg-config --cflags --libs webkit2gtk-4.1)
+      - install -Dm755 native_host /app/share/openbox/native_host
+    sources:
+      - type: dir
+        path: .
   - name: openbox
     buildsystem: simple
     build-commands:
@@ -24,6 +32,8 @@ modules:
       - install -Dm644 index.html /app/share/openbox/index.html
       - install -Dm644 static/app.js /app/share/openbox/static/app.js
       - install -Dm644 static/app.css /app/share/openbox/static/app.css
+      - install -Dm644 assets/openbox-logo.png /app/share/openbox/assets/openbox-logo.png
+      - install -Dm644 plugins/catalog.json /app/share/openbox/plugins/catalog.json
       - install -d /app/share/openbox/emulator_defs
       - for f in emulator_defs/*.yaml; do install -Dm644 "$f" "/app/share/openbox/emulator_defs/"; done
       - install -Dm755 scripts/openbox-launcher.sh /app/share/openbox/openbox-launcher.sh

@@ -30,11 +30,13 @@ python3 web_app.py
 
 Optional local configuration can be loaded from `~/.env` or a project `.env` file. See `.env.example`. Never commit secrets, tokens, or personal credentials.
 
-### Native UI
+### Native window
 
 ```bash
-python3 openbox.py
+python3 web_app.py --no-browser   # loopback server (native host spawns this)
 ```
+
+Build the native host with `make native-host`, then run `./openbox-native.sh`.
 
 ## Testing
 

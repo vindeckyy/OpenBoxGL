@@ -31,6 +31,20 @@ class JobManager:
         self._history: list[dict] = []
         self._history_limit = max(0, int(history_limit))
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="openbox-job")
+        self._observer = None
+
+    def set_observer(self, observer):
+        """Register a callback `observer(job)` invoked after a job finishes."""
+        with self._lock:
+            self._observer = observer
+
+    def _notify(self, job):
+        observer = self._observer
+        if observer is not None:
+            try:
+                observer(job)
+            except Exception:
+                LOGGER.exception("Job observer failed")
 
     def snapshot(self, name):
         with self._lock:
@@ -100,6 +114,7 @@ class JobManager:
                     if cancel_event.is_set():
                         current.update({"state": "cancelled", "finished_at": _now()})
                         self._archive(current)
+                        self._notify(dict(current))
                         return
                     current.update({"state": "running", "started_at": current.get("started_at") or _now(), "attempt": attempt})
                 try:
@@ -120,6 +135,7 @@ class JobManager:
                                 "duration_seconds": round(time.monotonic() - started, 3),
                             })
                             self._archive(current)
+                            self._notify(dict(current))
                     return
                 except Exception as error:  # worker isolation boundary
                     LOGGER.exception("Backend job %s failed on attempt %s", name, attempt)
@@ -136,6 +152,7 @@ class JobManager:
                                 "duration_seconds": round(time.monotonic() - started, 3),
                             })
                             self._archive(current)
+                            self._notify(dict(current))
                     return
 
         future = self._executor.submit(run)

@@ -174,6 +174,55 @@ def search_games(database_path, title, platform="", limit=20):
     database.close()
     return [dict(row) for row in rows]
 
+def batch_match(database_path, titles):
+    """Match many (title, platform) pairs against LBDB in one pass.
+
+    ``titles`` is an iterable of (title, platform) tuples. Returns a dict
+    mapping each original title to its best record (a dict with
+    database_id/name/platform), or absent when no exact match exists. Only
+    exact normalized-title hits qualify; auto-match never guesses fuzzy or
+    partial titles onto a record.
+    """
+    rows = {}
+    if not titles:
+        return rows
+    database = sqlite3.connect(database_path)
+    database.row_factory = sqlite3.Row
+    try:
+        pairs = [(title, platform, normalized(title)) for title, platform in titles]
+        queries = sorted({query for _, _, query in pairs if query})
+        for query in queries:
+            for row in database.execute(
+                """SELECT database_id, name, platform, normalized FROM games
+                   WHERE normalized = ?
+                   ORDER BY length(name)""",
+                (query,),
+            ).fetchall():
+                rows.setdefault(query, []).append(dict(row))
+    finally:
+        database.close()
+    matched = {}
+    for title, platform, query in pairs:
+        candidates = rows.get(query)
+        if not candidates:
+            continue
+        lbdb_platform = PLATFORM_ALIASES.get(platform, platform)
+        best = max(
+            candidates,
+            key=lambda item: (
+                str(item["platform"]).casefold() == str(lbdb_platform).casefold(),
+                -len(str(item["name"])),
+            ),
+        )
+        matched[title] = best
+    return matched
+
+
+def best_match(database_path, title, platform=""):
+    """Return the single most confident LBDB match for a title, or None."""
+    return batch_match(database_path, [(title, platform)]).get(title)
+
+
 
 def download_image(filename, destination, opener=urlopen):
     filename = Path(filename).name

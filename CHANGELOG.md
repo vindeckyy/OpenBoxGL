@@ -4,6 +4,30 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-08-13
+
+### Added
+
+#### Native window (native-first)
+
+- OpenBox opens in a native WebKitGTK window by default, rendering the same `index.html`, `app.js`, and `app.css` as the web UI. The native host owns server lifecycle, single instance, window geometry, minimize-to-tray, and a fallback ladder to the system-browser app window when WebKitGTK is missing.
+- The removed Tk interface no longer ships; `--web` remains a development opt-out.
+
+#### Batch metadata auto-match
+
+- One "Auto-match library" action binds every unmatched game whose title exactly matches the LaunchBox Games Database, replacing the one-game-at-a-time dialog flow. Only exact normalized-title hits qualify, so ambiguous titles are left unmatched for manual confirmation.
+
+#### Frontend hardening
+
+- The topbar regroups into Library, Actions, and Tools zones; the empty-state import surface covers all storefront paths.
+- Session and job events stream over Server-Sent Events with polling kept as a fallback.
+- The dialog manager now traps focus and closes on Escape.
+
+### Changed
+
+- The `ui_window` app/browser split is removed; native is the default and `--web`/`--app-window` flags remain for contributors.
+- The 260-method `Handler` class is split into capability mixins under `handlers/` (library, imports, media, metadata, sessions, settings, extensions, health, emulators, data). `web_app.py` drops from 3,755 to 1,628 lines and keeps server plumbing, shell/SSE serving, bootstrap, and lifecycle; each mixin's methods resolve the live `web_app` namespace at call time, so response bytes and route wiring are unchanged.
+
 ## [0.9.0] - 2026-08-12
 
 ### Added
@@ -14,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Manuals are not in the LaunchBox feed, so the manual option now pulls a PDF or text manual (`MANUAL_SUFFIXES = (".pdf", ".txt")`) out of the game's own archive. The finder ranks `manual.pdf` first, then shortest and most recent candidates, caps the candidate list at 8 to stay safe on pathological archives, copies the winner next to the game's media, and never blocks a sync on a bad archive. When nothing is found, the game records a `manual: no manual in this archive` note that the UI surfaces.
 - Metadata search maps the app's own platform names to their LaunchBox spellings: `Game Boy` to `Nintendo Game Boy`, `PlayStation` to `Sony Playstation`, `GameCube` to `Nintendo GameCube`, `Xbox` to `Microsoft Xbox`, and 22 more (26 aliases total, including `PC` to `Windows` and `DOS` to `MS-DOS`). Exact-name searches now rank platform-correct results first.
 - The LaunchBox Games Database dialog shows library coverage facts (matched games, match ratio, and per-field media counts) once the local database is ready.
+- Batch auto-match: one "Auto-match library" action binds every unmatched game whose title exactly matches the database, instead of matching one game at a time. Only exact normalized-title hits qualify, so ambiguous or partial titles are left unmatched for manual confirmation rather than guessed onto the wrong record.
 
 #### Desktop window
 

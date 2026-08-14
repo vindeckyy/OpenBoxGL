@@ -9,6 +9,18 @@ table entry here.
 from api_errors import RouteNotFound
 
 
+# GET paths that must not require a token: the shell and its assets. The
+# favicon and index are served to the browser before it has the token in hand.
+PUBLIC_GET_PATHS = frozenset({
+    "/",
+    "/index.html",
+    "/static/app.js",
+    "/static/app.css",
+    "/static/logo.png",
+    "/favicon.ico",
+    "/favicon.svg",
+})
+
 GET_TABLE = {
     "/": "_api_get_index",
     "/api/backup": "_api_get_api_backup",
@@ -31,6 +43,7 @@ GET_TABLE = {
     "/api/jobs": "_api_get_api_jobs",
     "/static/app.js": "_api_get_static",
     "/static/app.css": "_api_get_static",
+    "/static/logo.png": "_api_get_static",
     "/api/import/exclusions": "_api_get_api_import_exclusions",
     "/api/launcher/menu": "_api_get_api_launcher_menu",
     "/api/library": "_api_get_api_library",
@@ -71,6 +84,8 @@ GET_TABLE = {
     "/api/themes": "_api_get_api_themes",
     "/api/update": "_api_get_api_update",
     "/api/webhooks": "_api_get_api_webhooks",
+    "/api/events": "_api_get_api_events",
+    "/api/native/capabilities": "handlers.native.capabilities",
     "/favicon.ico": "_api_get_favicon",
     "/favicon.svg": "_api_get_favicon",
     "/index.html": "_api_get_index",
@@ -131,6 +146,7 @@ POST_TABLE = {
     "/api/metadata/igdb/apply": "_api_post_api_metadata_igdb_apply",
     "/api/metadata/steam": "_api_post_api_metadata_steam",
     "/api/metadata/sync": "_api_post_api_metadata_sync",
+    "/api/metadata/match": "_api_post_api_metadata_match",
     "/api/metadata/trailer": "_api_post_api_metadata_trailer",
     "/api/notifications": "_api_post_api_notifications",
     "/api/obs/attach": "_api_post_api_obs_attach",
@@ -165,6 +181,10 @@ POST_TABLE = {
     "/api/themes/open-folder": "_api_post_api_themes_open_folder",
     "/api/themes/select": "_api_post_api_themes_select",
     "/api/update/install": "_api_post_api_update_install",
+    "/api/native/dialog": "handlers.native.dialog",
+    "/api/native/open-external": "handlers.native.open_external",
+    "/api/native/reveal": "handlers.native.reveal",
+    "/api/native/window": "handlers.native.window",
     "/api/webhooks": "_api_post_api_webhooks",
     "/api/webhooks/test": "_api_post_api_webhooks_test",
 }
@@ -196,6 +216,7 @@ V1_ALIASED_PREFIXES = (
     "/api/media/audit",
     "/api/metadata/status",
     "/api/metadata/apply",
+    "/api/metadata/match",
     "/api/metadata/search",
     "/api/import",
     "/api/import/steam",
@@ -234,15 +255,43 @@ GET_TABLE = _apply_v1_aliases(GET_TABLE, "GET")
 POST_TABLE = _apply_v1_aliases(POST_TABLE, "POST")
 
 
-def dispatch_get(handler, parsed):
-    method = GET_TABLE.get(parsed.path)
-    if method is None:
-        raise RouteNotFound("Not found")
-    getattr(handler, method)(parsed)
+def _resolve(spec):
+    """Resolve a route entry to a callable.
 
+    A bare name is a method on ``web_app.Handler`` (legacy). A dotted
+    ``"module.qualified_name"`` string points at a module-level function in the
+    ``handlers`` package that takes the request handler as its first argument.
+    """
+    if "." not in spec:
+        return None  # caller falls back to getattr(handler, spec)
+    import importlib
+    module_name, _, attr = spec.rpartition(".")
+    module = importlib.import_module(module_name)
+    return getattr(module, attr)
+
+
+def dispatch_get(handler, parsed):
+    spec = GET_TABLE.get(parsed.path)
+    if spec is None:
+        raise RouteNotFound("Not found")
+    if parsed.path not in PUBLIC_GET_PATHS and not handler.authorized():
+        handler.send_json(403, {"error": "Unauthorized"})
+        return
+    callable_ = _resolve(spec)
+    if callable_ is None:
+        getattr(handler, spec)(parsed)
+    else:
+        callable_(handler, parsed)
 
 def dispatch_post(handler, route, payload):
-    method = POST_TABLE.get(route)
-    if method is None:
+    spec = POST_TABLE.get(route)
+    if spec is None:
         raise RouteNotFound("Not found")
-    getattr(handler, method)(payload)
+    if not handler.authorized():
+        handler.send_json(403, {"error": "Unauthorized"})
+        return
+    callable_ = _resolve(spec)
+    if callable_ is None:
+        getattr(handler, spec)(payload)
+    else:
+        callable_(handler, payload)
