@@ -170,6 +170,7 @@ def test_legal_policy():
     assert "15 U.S.C." not in disclaimer
     assert "Openbox window manager" in trademarks
     assert "| 0.8.x | Yes |" in security
+    assert "| 1.0.x | Yes |" in security
     assert "| < 0.4.0 | No |" in security
     print("  Legal policy: ok")
 
