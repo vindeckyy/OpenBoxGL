@@ -1,13 +1,6 @@
 """Signed, bounded, asynchronous webhook delivery for OpenBox automation.
 
-Independent open-source software not affiliated with LaunchBox or Unbroken
-Software, LLC.
-
-The dispatcher is deliberately pure: it never imports ``web_app`` or touches
-the state store. ``on_result(webhook_id, event_id, status, error, sent_at,
-terminal)`` is the only bridge back to the application layer, so delivery
-failures can update persisted config status and surface through the
-Notification Center without a module import cycle.
+Independent open-source software not affiliated with LaunchBox or Unbroken Software, LLC.
 """
 
 from __future__ import annotations
@@ -45,8 +38,7 @@ _RESPONSE_DRAIN_BYTES = 4 * 1024
 _ATTEMPT_DELAYS = (1.0, 2.0, 4.0, 8.0)
 _MAX_RETRY_AFTER = 30.0
 
-# Event types a webhook configuration may subscribe to. The list is the
-# catalog exposed by the API; data payloads are allowlisted per event.
+# Event types a webhook config may subscribe to; data payloads are allowlisted per event.
 EVENT_TYPES = (
     "session.started",
     "session.stopped",
@@ -119,12 +111,7 @@ def serialize_envelope(envelope: dict) -> bytes:
 
 
 def sign_event(secret: str, timestamp: str, body: bytes) -> str:
-    """Compute the HMAC-SHA256 signature over ``timestamp + "." + body``.
-
-    The digest covers the exact transmitted bytes, so the receiver can verify
-    by concatenating the ``X-OpenBox-Timestamp`` header value, a literal dot,
-    and the raw request body.
-    """
+    """Compute the HMAC-SHA256 signature over ``timestamp + "." + body`` (the exact transmitted bytes)."""
     mac = hmac.new(str(secret).encode("utf-8"), digestmod=hashlib.sha256)
     mac.update(str(timestamp).encode("utf-8"))
     mac.update(b".")
@@ -173,11 +160,7 @@ def _port_in_use(host: str, port: int) -> bool:
 
 
 class WebhookDispatcher:
-    """Deliver signed envelopes to configured webhooks on background workers.
-
-    The dispatcher never blocks the originating operation: a bounded queue
-    feeds four daemon workers, and delivery retries happen off-thread.
-    """
+    """Deliver signed envelopes to configured webhooks on background workers; never blocks the caller."""
 
     def __init__(
         self,
@@ -214,11 +197,7 @@ class WebhookDispatcher:
                     thread.start()
 
     def enqueue(self, configs, envelope) -> bool:
-        """Enqueue one envelope for every matching enabled config.
-
-        Returns True when every matched config was queued; overflow or a
-        stopped dispatcher returns False so the caller can log/surface it.
-        """
+        """Enqueue one envelope for every matching enabled config; returns False on overflow or a stopped dispatcher."""
         event = str(envelope.get("type", ""))
         body = serialize_envelope(envelope)
         event_id = str(envelope.get("id", ""))
@@ -281,9 +260,7 @@ class WebhookDispatcher:
             try:
                 status, retry_after, redirected = self._send_once(item, url, timeout)
             except ValueError as error:
-                # Invalid URLs fail validation before the first delivery; a
-                # redirected request is a terminal failure rather than an
-                # unvalidated second request.
+                # Invalid URLs fail validation before first delivery; a redirect is a terminal failure, not a follow.
                 final_status = None
                 final_error = str(error)
                 break
@@ -424,10 +401,7 @@ def _is_loopback_host(host: str) -> bool:
 def validate_webhook(config, *, openbox_port=None, resolver=None) -> None:
     """Validate one webhook configuration for saving and before delivery.
 
-    Raises ValueError with a user-facing message for every unsafe or unusable
-    URL. HTTP is only allowed when ``OPENBOX_ALLOW_HTTP_WEBHOOKS=1``; loopback
-    URLs whose port equals the running OpenBox server port are rejected to
-    prevent the application from webhooking itself.
+    HTTP only with OPENBOX_ALLOW_HTTP_WEBHOOKS=1; loopback URLs on the OpenBox server port are rejected.
     """
     if not isinstance(config, dict):
         raise ValueError("Webhook configuration must be an object.")
@@ -488,11 +462,7 @@ def validate_webhook(config, *, openbox_port=None, resolver=None) -> None:
 
 
 def test_ping(config, *, openbox_port=None, resolver=None, opener=None, timeout=None) -> dict:
-    """Perform one bounded synchronous test.ping delivery.
-
-    Returns {"ok": bool, "status": int|None, "error": str} without exposing
-    the response body, resolved addresses, or credentials.
-    """
+    """Perform one bounded synchronous test.ping delivery; never exposes the response body, addresses, or credentials."""
     validate_webhook(config, openbox_port=openbox_port, resolver=resolver)
     url = _clean_url(config.get("url"))
     envelope = {

@@ -140,12 +140,7 @@ MIGRATIONS: dict[int, Callable[[dict[str, Any]], None]] = {
 
 
 def _normalize_feature_fields(state: dict[str, Any]) -> bool:
-    """Repair feature collections and per-game tags for every schema version.
-
-    Non-list queue/notifications values become empty lists, valid lists are
-    capped, and each present non-list game ``tags`` value becomes ``[]`` while
-    missing ``tags`` stays absent. Returns True when anything changed.
-    """
+    """Repair feature collections and per-game tags; returns True if anything changed."""
     changed = False
     for key, cap in (("queue", QUEUE_CAP), ("notifications", NOTIFICATIONS_CAP)):
         value = state.get(key)
@@ -373,8 +368,7 @@ class JsonStateStore:
                 output.flush()
                 os.fsync(output.fileno())
             os.chmod(temporary, 0o600)
-            # Write the backup from the temporary first so a failure here
-            # cannot leave a fresh primary paired with a stale backup.
+            # Backup first: a failure must not pair a fresh primary with a stale backup.
             shutil.copy2(temporary, self.backup_path)
             os.chmod(self.backup_path, 0o600)
             os.replace(temporary, self.path)
@@ -391,12 +385,7 @@ class JsonStateStore:
                 temporary.unlink()
 
     def _rotate_snapshots(self) -> None:
-        """Keep the last N committed states as timestamped copies.
-
-        Rotation is best-effort: a failed copy never blocks the commit that
-        already landed. The recovery dialog offers these when both the
-        primary file and .bak are unusable.
-        """
+        """Keep the last N committed states as timestamped recovery copies; best-effort."""
         if not self.snapshot_limit:
             return
         try:
@@ -447,9 +436,7 @@ class JsonStateStore:
         return copy.deepcopy(state)
 
     def update_with_result(self, mutator: Callable[[dict[str, Any]], Any]) -> tuple[dict[str, Any], Any]:
-        """Apply a mutation under the process lock and return the committed state
-        together with the mutator result. The returned state is owned by the
-        store's cache and must be treated as read-only by the caller."""
+        """Apply a mutation under the process lock; the returned state is cache-owned, read-only for the caller."""
         with self._thread_lock, self._file_lock(True):
             state, _ = self._load_unlocked()
             result = mutator(state)

@@ -17,9 +17,7 @@ IMAGE_URL = "https://images.launchbox-app.com/"
 MANUAL_SUFFIXES = (".pdf", ".txt")
 
 
-# LaunchBox Games Database image type strings mapped to OpenBox media fields.
-# Each entry lists LBDB types in preference order; the first type with an image
-# for the game wins, so reconstructed art is only used when no primary exists.
+# LBDB image type strings mapped to OpenBox media fields, in preference order.
 MEDIA_TYPE_MAP = {
     "cover": ("Box - Front", "Box - Front - Reconstructed"),
     "background": ("Fanart - Background",),
@@ -41,11 +39,7 @@ MEDIA_TYPE_MAP = {
 }
 
 
-# The app's own platform names mapped to the LaunchBox Games Database
-# spelling, used only to rank search results: the LBDB platform string gets
-# the exact-match boost in search_games. Names not listed here pass through
-# unchanged. Verified against the LBDB feed; entries without an LBDB platform
-# row (e.g. the app's "Disc image" and "WiiWare") are deliberately absent.
+# App platform names mapped to LBDB spellings for search ranking; unlisted names pass through.
 PLATFORM_ALIASES = {
     "NES": "Nintendo Entertainment System",
     "SNES": "Super Nintendo Entertainment System",
@@ -177,11 +171,7 @@ def search_games(database_path, title, platform="", limit=20):
 def batch_match(database_path, titles):
     """Match many (title, platform) pairs against LBDB in one pass.
 
-    ``titles`` is an iterable of (title, platform) tuples. Returns a dict
-    mapping each original title to its best record (a dict with
-    database_id/name/platform), or absent when no exact match exists. Only
-    exact normalized-title hits qualify; auto-match never guesses fuzzy or
-    partial titles onto a record.
+    Only exact normalized-title hits qualify; auto-match never guesses fuzzy or partial titles.
     """
     rows = {}
     if not titles:
@@ -239,10 +229,7 @@ def download_image(filename, destination, opener=urlopen):
 def find_archive_manual(game, media_root, opener=urlopen):
     """Copy a manual (PDF or text) out of the game's own archive, if any.
 
-    The LaunchBox feed ships no manual images, so the manual field falls back
-    to the game file itself: the existing extraction cache is reused and a
-    candidate manual is copied into media_root/<database_id>/. Returns the
-    destination path string, or None when there is nothing to copy.
+    Reuses the extraction cache; returns the destination path string or None.
     """
     source = str(game.get("path") or "")
     if not source:
@@ -253,8 +240,7 @@ def find_archive_manual(game, media_root, opener=urlopen):
     try:
         from archives import extract_game
         extracted = extract_game(archive, Path(media_root).parent.parent / "cache" / "archives")
-        # extract_game returns the chosen launch file; its parent is the
-        # full extraction cache directory that holds the other members.
+        # extract_game returns the chosen launch file; its parent holds the other extracted members.
         extraction_dir = Path(extracted).parent
     except (OSError, ValueError, RuntimeError, zipfile.BadZipFile):
         return None
@@ -326,8 +312,7 @@ def apply_game_metadata(game, database_path, database_id, media_types, media_roo
                     game["screenshots"] = downloaded
             continue
         if media_type == "manual":
-            # The LBDB zip ships no manuals; fall back to a manual shipped
-            # inside the game's own archive when one is present.
+            # LBDB zips ship no manuals; fall back to one inside the game's own archive.
             if overwrite or not game.get("manual"):
                 candidate = find_archive_manual(game, root, opener)
                 if candidate:

@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 """Local-first Linux game library and launcher. Independent open-source software not affiliated with LaunchBox or Unbroken Software, LLC.
 
-This module is the shared core: data-path selection, state-store access, launch
-command construction, and emulator profile discovery. Both the web server
-(web_app.py) and the native host import these helpers. The presentation layer
-is one UI served by web_app.py and rendered by the native host.
+Shared core for the web server and native host: data paths, state store, launch commands, profile discovery.
 """
 
 import os
@@ -146,7 +143,6 @@ if __name__ == "__main__":
             raise AssertionError("empty paths must not launch")
         print("openbox self-test: ok")
     else:
-        # The native host and the web server are the entry points. Running this
-        # module directly only matters for the self-test above.
+        # Only the self-test above runs this module directly.
         sys.stderr.write("openbox.py is a library module. Run web_app.py or the native host.\n")
         sys.exit(1)

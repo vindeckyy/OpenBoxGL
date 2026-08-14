@@ -225,8 +225,7 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None, force=F
                     if any(parent.is_symlink() for parent in [target, *target.parents] if parent != target_root and parent.exists()):
                         raise ValueError("Backup destination contains a symlink.")
                     target.parent.mkdir(parents=True, exist_ok=True)
-                    # Re-validate after mkdir: a symlink planted at a previously
-                    # missing intermediate directory must not redirect the write.
+                    # Re-validate after mkdir: a planted symlink must not redirect the write.
                     resolved = target.resolve()
                     try:
                         resolved.relative_to(target_root)

@@ -1,20 +1,6 @@
-"""Settings key registry.
+"""Settings key registry: one source of truth for keys in state["settings"].
 
-One source of truth for every key that may live in state["settings"]. The
-save path drops unknown keys instead of persisting them silently, so a typo
-or an old client cannot smuggle junk into library.json.
-
-The list is the union of:
-
-- every key _save_settings_locked normalizes and writes;
-- every key any module reads from settings (grep for `settings.get(` /
-  `settings[` when adding one);
-- runtime bookkeeping markers written by backend code (sync stamps,
-  webhook state, prompts, theme mappings).
-
-When adding a setting: add the key here, validate it in
-_save_settings_locked, and add a test row. Do not rely on this list alone
-for validation; it is the boundary, the handler is the validator.
+Unknown keys are dropped on save; when adding a setting, add it here and validate it in _save_settings_locked.
 """
 
 KNOWN_SETTINGS = {
@@ -107,11 +93,7 @@ KNOWN_SETTINGS = {
 
 
 def sanitize_settings(settings):
-    """Return a copy of settings containing only known keys.
-
-    Unknown keys are dropped (with their names returned) rather than
-    persisted, so a stale client cannot write garbage into the store.
-    """
+    """Return a copy of settings containing only known keys; unknown keys are dropped (names returned)."""
     if not isinstance(settings, dict):
         return {}, list(settings) if settings else []
     dropped = [key for key in settings if key not in KNOWN_SETTINGS]

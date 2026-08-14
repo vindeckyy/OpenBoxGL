@@ -10,11 +10,7 @@ MAX_TAG_LENGTH = 64
 
 
 def normalize_tags(value):
-    """Canonicalize a tags list: strings, trimmed and collapsed, deduped by casefold.
-
-    Returns a list of the first spelling and request order for each unique tag.
-    Values over ``MAX_TAG_LENGTH`` characters and non-list inputs raise ``ValueError``.
-    """
+    """Canonicalize tags: trimmed strings deduped by casefold; over-long values and non-lists raise ValueError."""
     if value is None:
         return []
     if not isinstance(value, list):
@@ -38,12 +34,7 @@ def normalize_tags(value):
 
 
 def apply_tag_changes(game, *, replace=None, add=None, remove=None):
-    """Apply tag operations to a game dict, returning True when the stored value changed.
-
-    ``replace`` sets the full list, ``add`` appends missing labels in request order,
-    and ``remove`` deletes exact case-insensitive matches while preserving the order
-    of retained labels. Omitted operations leave the current value untouched.
-    """
+    """Apply replace/add/remove tag operations to a game dict; returns True when the stored value changed."""
     current = game.get("tags")
     if not isinstance(current, list):
         current = []
@@ -69,10 +60,7 @@ def apply_tag_changes(game, *, replace=None, add=None, remove=None):
 
 
 def tag_counts(games):
-    """Return ``[{"tag": str, "count": int}, ...]`` for visible, non-hidden games.
-
-    Sorted by count descending, then display spelling case-insensitively.
-    """
+    """Return ``[{"tag": str, "count": int}, ...]`` for visible games, sorted by count then spelling."""
     counts = {}
     for game in games:
         if not isinstance(game, dict) or game.get("hidden"):

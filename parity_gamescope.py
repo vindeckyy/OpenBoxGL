@@ -1,8 +1,6 @@
 """Portable Steam gamescope guest helpers for OpenBox.
 
-OpenBox stays a guest under Steam's gamescope session (Deck/Bazzite/Chimera
-and nested desktop gamescope). Detection is env-based; xprop and kiosk
-browsers are best-effort.
+Detection is env-based; xprop and kiosk browsers are best-effort.
 """
 
 from __future__ import annotations
@@ -45,8 +43,7 @@ def is_gamescope_guest(environ=None, force=False):
     env = environ if environ is not None else os.environ
     if str(env.get("GAMESCOPE_WAYLAND_DISPLAY", "")).strip():
         return True
-    # Steam sets this in Game Mode even when the gamescope compositor env
-    # is not exported (some Deck firmware / nested sessions).
+    # Steam sets this in Game Mode even when the gamescope env is not exported (some Deck firmware).
     if str(env.get("STEAM_GAMESCOPE_RESTRICTED", "")).strip():
         return True
     desktop = " ".join(
@@ -101,12 +98,7 @@ def resolve_kiosk_browser(which=None, run=None):
 
 
 def resolve_app_window_browser(which=None, run=None):
-    """Return argv for a chrome-less app window, or None.
-
-    Chromium-family browsers open a real app window via --app=URL. Firefox
-    opens a separate window (--new-window) as a fallback so app-window mode
-    still helps Firefox-only desktops, though its chrome stays visible.
-    """
+    """Return argv for a chrome-less app window, or None; Chromium uses --app=URL, Firefox falls back to --new-window."""
     finder = which or shutil.which
     browser = resolve_kiosk_browser(which=finder, run=run)
     if browser:

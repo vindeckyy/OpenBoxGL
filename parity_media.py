@@ -108,8 +108,7 @@ def find_duplicate_media(games, allowed_roots=None):
     for paths in buckets.values():
         unique = list(dict.fromkeys(paths))
         if len(unique) > 1:
-            # Prefer to keep a copy inside the allowed roots when present,
-            # so the retained file is the one the library can reference.
+            # Keep a copy inside the allowed roots when present, so the retained file is the one the library can reference.
             keep = unique[0]
             if roots:
                 in_root = next(

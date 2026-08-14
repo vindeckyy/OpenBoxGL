@@ -1,13 +1,6 @@
 """Structured API errors with stable machine-readable codes.
 
-Handlers raise these instead of returning ad-hoc 400/404 payloads. The
-dispatcher maps each class to an HTTP status and a JSON body of:
-
-    {"error": <human text>, "code": <stable code>, "request_id": <id>}
-
-Stable codes let the browser branch on the failure instead of matching
-strings. Adding a code means adding a class here; never reuse a code with
-a different meaning.
+Handlers raise these; the dispatcher maps each class to an HTTP status and a JSON body with error/code/request_id.
 """
 
 

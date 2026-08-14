@@ -128,8 +128,7 @@ def download_bezel(platform, dest_dir, opener=urlopen):
     extract_to = dest / platform.replace(" ", "_")
     if extract_to.is_symlink():
         raise ValueError("Bezel extraction destination may not be a symlink.")
-    # Extract into a staging dir first: a corrupt or unsafe new archive must
-    # not destroy the user's previously working bezel set.
+    # Stage first: a corrupt or unsafe archive must not destroy the working bezel set.
     staging = dest / f".{extract_to.name}.extracting"
     if staging.exists():
         shutil.rmtree(staging, ignore_errors=True)

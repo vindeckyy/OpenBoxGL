@@ -38,13 +38,7 @@ def _stock_version(path):
 
 
 def ensure_stock_themes(destination, root=None):
-    """Install or refresh bundled stock themes into the user themes folder.
-
-    A theme whose header lacks the stock marker is a user import and is left
-    untouched. Marker-carrying themes are refreshed when the bundled version
-    is newer, so stock fixes reach existing installs; edits to the currently
-    bundled stock are preserved until the next stock update.
-    """
+    """Install or refresh bundled stock themes; user imports (no stock marker) are left untouched."""
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=True)
     installed = []

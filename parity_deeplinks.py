@@ -15,8 +15,7 @@ SCHEME = "openbox"
 def parse_uri(uri):
     text = str(uri).strip()
     if text.startswith(f"{SCHEME}://"):
-        # Validate the host: allow an empty/localhost authority, or a bare
-        # action segment (openbox://search/foo), but never a foreign host.
+        # Allow an empty/localhost authority or a bare action segment (openbox://search/foo), never a foreign host.
         rest = text[len(f"{SCHEME}://") :]
         authority, sep, path = rest.partition("/")
         if authority and not sep:
@@ -31,8 +30,7 @@ def parse_uri(uri):
             known = {"start", "search", "showgame", "game", "launch", "bigbox", "fullscreen", "settings"}
             if authority.casefold() not in {"", "localhost", "openbox"} and authority.casefold() not in known:
                 return {"action": "unknown"}
-            # A known action as the "authority" is a bare form: keep the
-            # whole remainder as the action path.
+            # A known action as authority is the bare form; keep the remainder as the action path.
             text = rest if authority.casefold() in known else (path if sep else authority)
     elif text.startswith(f"{SCHEME}:"):
         text = text[len(f"{SCHEME}:") :]
@@ -113,8 +111,7 @@ def dispatch_uri(uri, data_dir, host="127.0.0.1", port=None, token=None, open_br
     parsed = parse_uri(uri)
     action = parsed.get("action", "start")
     if action == "start":
-        # No running server yet: fall through so web_app.main() boots normally.
-        # A successful no-op exit here made Gear Lever / mime launches look dead.
+        # No server yet: fall through so web_app.main() boots normally.
         if not token_path.is_file() or not read_port_file(data_dir):
             return None
         if open_browser:

@@ -188,8 +188,7 @@ def restore_saves(game, root, backup_name):
             if raw_destination.is_symlink() or any(parent.is_symlink() for parent in raw_destination.parents if parent != base):
                 raise ValueError("Save restore destination contains a symlink.")
             destination.parent.mkdir(parents=True, exist_ok=True)
-            # Re-validate after mkdir: a symlink planted at a previously missing
-            # intermediate directory must not redirect the restore write.
+            # Re-validate after mkdir: a planted symlink must not redirect the restore write.
             resolved = destination.resolve()
             if resolved != base and base not in resolved.parents:
                 raise ValueError("Save backup contains an unsafe path.")

@@ -1,16 +1,13 @@
 """Small stdlib-only request/response contract helpers.
 
-Handlers use these to validate payloads and coerce values instead of inline
-casts, so a malformed request fails with a clear 400 and a stable code. The
-``V1_SCHEMA`` dict documents the top v1 routes for ``gen_api_docs.py``.
+Handlers use these to validate payloads; a malformed request fails with a clear 400 and a stable code.
 """
 
 from __future__ import annotations
 
 from api_errors import BadRequest
 
-# Documented response shapes for the top v1 routes. Keys are v1 paths; values
-# describe the response so the generated docs list real fields, not just names.
+# Documented response shapes for the top v1 routes; keys are v1 paths.
 V1_SCHEMA = {
     "/api/v1/library": {
         "response": "games, playlists, settings, platforms, categories, tags, queue",

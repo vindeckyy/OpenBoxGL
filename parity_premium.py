@@ -406,8 +406,7 @@ def enhanced_ra_profile(progress, credentials):
         profile = api_get("API_GetUserProfile.php", {"u": credentials["username"]}, credentials)
     except (OSError, ValueError, json.JSONDecodeError, KeyError):
         profile = {}
-    # API_GetUserProfile has no "Awarded" field; derive a real beaten count
-    # from the profile's own totals when present, else fall back to earned.
+    # API_GetUserProfile has no Awarded field; derive the beaten count from the profile's totals, else earned.
     beaten = profile.get("Awarded")
     if beaten is None:
         beaten = progress.get("beaten", progress.get("earned", 0))

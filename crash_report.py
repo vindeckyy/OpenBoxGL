@@ -1,9 +1,6 @@
 """Package a redacted diagnostic report for pasting into a GitHub issue.
 
-Local-only and opt-in: nothing leaves the machine unless the user copies
-the text themselves. The report bundles the diagnostic log (already
-redacted by openbox_logging), system facts, and the OpenBox version so a
-maintainer can triage without follow-up questions.
+Local-only and opt-in: nothing leaves the machine unless the user copies it.
 """
 
 from __future__ import annotations
@@ -36,11 +33,7 @@ def system_facts() -> dict:
 
 
 def build_report(data_dir, *, include_log=True, log_limit=250_000):
-    """Return the diagnostic report text.
-
-    The log is passed through read_diagnostic_log which redacts on read;
-    the JSON structure keeps the rest machine-parseable for maintainers.
-    """
+    """Return the diagnostic report text; the log is redacted on read."""
     root = Path(data_dir)
     facts = system_facts()
     facts["data_dir"] = str(root)

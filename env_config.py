@@ -10,8 +10,7 @@ def _parse_env_line(line):
         return None
     key, value = line.split("=", 1)
     key = key.strip()
-    # Strip inline comments: a '#' preceded by whitespace is a comment,
-    # but '#' inside an unquoted value is preserved (e.g. PASSWORD=p#ss).
+    # A '#' preceded by whitespace is a comment; inside an unquoted value it is preserved.
     value = value.strip()
     quote = ""
     comment_at = -1
@@ -39,8 +38,7 @@ def load_dotenv(path):
     try:
         lines = path.read_text().splitlines()
     except (OSError, UnicodeDecodeError):
-        # Optional .env files must never abort startup. Skip anything we
-        # cannot read or decode cleanly.
+        # Optional .env files must never abort startup; skip anything unreadable.
         return {}
     values = {}
     for line in lines:

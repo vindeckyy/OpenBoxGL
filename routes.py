@@ -1,20 +1,25 @@
-"""Route tables for the local HTTP API.
-
-Both dispatchers were extracted from Handler._do_GET/_do_POST chains. The
-handler methods live on web_app.Handler; these tables map a request path to
-the method name that serves it. Adding a route = add a handler method and one
-table entry here.
-"""
+"""Route tables mapping HTTP paths to Handler method names."""
 
 from api_errors import RouteNotFound
 
 
-# GET paths that must not require a token: the shell and its assets. The
-# favicon and index are served to the browser before it has the token in hand.
+# Token-free: the shell and assets the browser needs before it has a token.
 PUBLIC_GET_PATHS = frozenset({
     "/",
     "/index.html",
     "/static/app.js",
+    "/static/util.js",
+    "/static/state.js",
+    "/static/library.js",
+    "/static/settings.js",
+    "/static/imports.js",
+    "/static/metadata.js",
+    "/static/media.js",
+    "/static/reader.js",
+    "/static/sessions.js",
+    "/static/bigbox.js",
+    "/static/storefront.js",
+    "/static/dialogs.js",
     "/static/app.css",
     "/static/logo.png",
     "/favicon.ico",
@@ -42,6 +47,18 @@ GET_TABLE = {
     "/api/history": "_api_get_api_history",
     "/api/jobs": "_api_get_api_jobs",
     "/static/app.js": "_api_get_static",
+    "/static/util.js": "_api_get_static",
+    "/static/state.js": "_api_get_static",
+    "/static/library.js": "_api_get_static",
+    "/static/settings.js": "_api_get_static",
+    "/static/imports.js": "_api_get_static",
+    "/static/metadata.js": "_api_get_static",
+    "/static/media.js": "_api_get_static",
+    "/static/reader.js": "_api_get_static",
+    "/static/sessions.js": "_api_get_static",
+    "/static/bigbox.js": "_api_get_static",
+    "/static/storefront.js": "_api_get_static",
+    "/static/dialogs.js": "_api_get_static",
     "/static/app.css": "_api_get_static",
     "/static/logo.png": "_api_get_static",
     "/api/import/exclusions": "_api_get_api_import_exclusions",
@@ -190,10 +207,7 @@ POST_TABLE = {
 }
 
 
-# Versioned aliases: /api/v1/<path> serves the same handlers as /api/<path>.
-# The v1 surface is the forward-compatible contract; legacy paths remain for
-# older clients. Adding a route does not add a v1 alias automatically unless
-# the path lives in V1_ALIASED_PREFIXES.
+# Paths also served under /api/v1/<path> for legacy clients.
 V1_ALIASED_PREFIXES = (
     "/api/library",
     "/api/settings",
@@ -256,12 +270,7 @@ POST_TABLE = _apply_v1_aliases(POST_TABLE, "POST")
 
 
 def _resolve(spec):
-    """Resolve a route entry to a callable.
-
-    A bare name is a method on ``web_app.Handler`` (legacy). A dotted
-    ``"module.qualified_name"`` string points at a module-level function in the
-    ``handlers`` package that takes the request handler as its first argument.
-    """
+    """Resolve a route entry: a bare name is a Handler method, a dotted name a handlers-package function."""
     if "." not in spec:
         return None  # caller falls back to getattr(handler, spec)
     import importlib

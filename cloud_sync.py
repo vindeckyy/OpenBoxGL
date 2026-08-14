@@ -127,8 +127,7 @@ def sync_statistics(state, folder, now=None):
             # Local state is newer; bump the remote timestamp to now.
             generated_at = timestamp
         else:
-            # Preserve the remote timestamp when the remote was newer or this
-            # is the first sync, so a future sync can still compare correctly.
+            # Keep the remote timestamp when newer or first sync, so the next sync can still compare.
             generated_at = remote.get("generated_at", timestamp)
         payload = {
             "format": 1,

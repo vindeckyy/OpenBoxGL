@@ -1,13 +1,6 @@
 """Handheld performance profiles: per-profile TDP limits via ryzenadj.
 
-OpenBox is a local-first Linux game launcher. This module adds optional
-handheld performance tuning on launch: a launch profile (platform or
-per-game override) can carry a TDP limit in watts, applied through
-``ryzenadj -stapm-limit=<mW>`` before the game starts and optionally
-restored when the session ends. It is deliberately dependency-free
-(standard library only) and never raises: a missing binary, a
-permission error, or an unhandheld host degrades to a logged no-op so
-launching a game is never blocked by performance tuning.
+Dependency-free and never raises: failures degrade to a logged no-op.
 """
 
 from __future__ import annotations
@@ -25,11 +18,7 @@ LOGGER = logging.getLogger("openbox")
 def effective_profile_name(game, profiles):
     """Resolve the launch-profile name a game uses, matching web_app.start_game.
 
-    ``profiles`` is the state dict mapping profile names (platforms and
-    per-game overrides) to command templates. A per-game ``launch_profile``
-    wins when it names an existing profile; otherwise the game platform is
-    the profile name. Both backends share this so TDP keys line up with the
-    launch-profile the game actually uses.
+    A per-game ``launch_profile`` wins when it names an existing profile, else the platform.
     """
     selected = str(game.get("launch_profile", "")).strip()
     if selected and selected in profiles:
@@ -43,12 +32,7 @@ def _has_battery():
 
 
 def perf_should_apply(state, environ=None):
-    """Decide whether performance limits should be applied on this host.
-
-    Setting ``apply_perf`` is one of ``off``, ``auto``, ``always``
-    (default ``auto``). ``auto`` applies only on gamescope guests
-    (Steam Deck / Bazzite game mode) or battery-powered hosts.
-    """
+    """Decide whether limits apply: ``off``/``auto``/``always``; ``auto`` only on gamescope guests or battery power."""
     mode = str(state.get("settings", {}).get("apply_perf", "auto")).strip().casefold()
     if mode == "off":
         return False
@@ -103,12 +87,7 @@ def apply_perf_profile(profile_name, state, environ=None):
 
 
 def restore_perf_profile(profile_name, state):
-    """Restore the profile's saved TDP limit after a session; never raises.
-
-    Only restores when limits were eligible to be applied on this host
-    (same gating as :func:`apply_perf_profile`), so a desktop session
-    that never applied a limit does not try to restore one.
-    """
+    """Restore the saved TDP limit after a session; only when limits were eligible on this host, never raises."""
     result = {"profile": profile_name, "applied": False, "reason": "", "tdp_w": 0}
     if not perf_should_apply(state):
         result["reason"] = "auto-skipped"
