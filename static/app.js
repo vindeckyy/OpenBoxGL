@@ -192,16 +192,15 @@ const token = new URLSearchParams(location.search).get('token') || '';
       }
       return false;
     }
+    // The native host fullscreens the GTK window, which never sets
+    // document.fullscreenElement, so the toggle state is tracked here.
+    let nativeFullscreenOn = false;
     async function nativeFullscreen() {
       if (nativeBridge?.windowAction) {
-        return document.fullscreenElement
-          ? nativeBridge.windowAction('unset-fullscreen')
-          : nativeBridge.windowAction('set-fullscreen');
-      }
-      if (nativeEnabled('fullscreen')) {
-        return document.fullscreenElement
-          ? api('/api/native/window',{method:'POST',body:JSON.stringify({action:'unset-fullscreen'})})
-          : api('/api/native/window',{method:'POST',body:JSON.stringify({action:'set-fullscreen'})});
+        const action = nativeFullscreenOn ? 'unset-fullscreen' : 'set-fullscreen';
+        const result = await nativeBridge.windowAction(action);
+        if (result?.ok !== false) nativeFullscreenOn = !nativeFullscreenOn;
+        return result;
       }
       return document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
     }
@@ -1899,7 +1898,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       $('bigBox').hidden = true;
       if ($('bigBoxStartupVideo')) { $('bigBoxStartupVideo').pause(); $('bigBoxStartupVideo').hidden = true; }
       api('/api/bigbox/mode',{method:'POST',body:JSON.stringify({entering:false})}).catch(() => {});
-      if (document.fullscreenElement) nativeFullscreen().catch(() => {});
+      if (document.fullscreenElement || nativeFullscreenOn) nativeFullscreen().catch(() => {});
     }
     function filteredBigBoxGames() {
       let result = filteredGames().filter(game => !game.hide_in_bigbox);
@@ -2391,7 +2390,16 @@ const token = new URLSearchParams(location.search).get('token') || '';
     });
     document.addEventListener('click', event => {
       if (!event.target.closest?.('#contextMenu')) closeContextMenu();
-      if (!event.target.closest?.('.topbar-tools')) document.querySelectorAll('.topbar-tools[open]').forEach(menu => menu.removeAttribute('open'));
+      const tools = event.target.closest?.('.topbar-tools');
+      const closeToolsMenus = () => document.querySelectorAll('.topbar-tools[open]').forEach(menu => menu.removeAttribute('open'));
+      if (!tools) { closeToolsMenus(); return; }
+      if (event.target.closest('summary')) {
+        event.preventDefault();
+        if (tools.hasAttribute('open')) closeToolsMenus();
+        else { closeToolsMenus(); tools.setAttribute('open', ''); }
+      } else if (event.target.closest('.tool-menu button')) {
+        closeToolsMenus();
+      }
     });
     if ($('scanEmulatorFolder')) $('scanEmulatorFolder').onclick = async () => {
       const folder = $('emulatorScanFolder').value.trim();
@@ -2477,6 +2485,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
     window.addEventListener('beforeunload', event => { if (AppState.runningGames.length) { event.preventDefault(); gracefulShutdown(); } });
     document.addEventListener('keydown', event => {
       if ((event.ctrlKey || event.metaKey) && event.key === ',') { event.preventDefault(); openSettings(); }
+      if (event.key === 'F11') { event.preventDefault(); nativeFullscreen().catch(() => {}); }
       if (event.key === 'Escape') {
         document.querySelectorAll('.topbar-tools[open]').forEach(menu => menu.removeAttribute('open'));
         closeContextMenu();

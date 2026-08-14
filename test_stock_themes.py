@@ -51,6 +51,27 @@ class StockThemesTests(unittest.TestCase):
             ensure_stock_themes(destination, ROOT)
             self.assertTrue(edited.read_bytes().endswith(b"/* user tweak */\n"))
 
+    def test_ensure_refreshes_stale_stock_theme(self):
+        """A stock theme from an older build keeps its edit-preserving
+        guarantee only for the current version; stale stock must be replaced
+        so shipped CSS fixes reach existing installs."""
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "themes"
+            destination.mkdir()
+            stale = destination / "Cinema Marquee.css"
+            stale.write_text(
+                "/* OpenBox Stock Theme: Cinema Marquee */\n"
+                ".topbar { backdrop-filter: blur(8px); }\n",
+                encoding="utf-8",
+            )
+            installed = ensure_stock_themes(destination, ROOT)
+            self.assertIn("Cinema Marquee", installed)
+            refreshed = stale.read_text(encoding="utf-8")
+            self.assertIn("v2", refreshed)
+            self.assertNotIn("backdrop-filter: blur(8px)", refreshed)
+            # A second run with the current version is a no-op.
+            self.assertEqual(ensure_stock_themes(destination, ROOT), [])
+
     def test_stock_themes_keep_tools_menu_usable(self):
         """The Tools menu is position:fixed inside the topbar; a theme must not
         turn .topbar into its containing block (backdrop-filter) or push the

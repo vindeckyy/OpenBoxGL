@@ -1,4 +1,4 @@
-/* OpenBox Stock Theme: Nordic Mist */
+/* OpenBox Stock Theme v2: Nordic Mist */
 @import url("https://fonts.bunny.net/css?family=outfit:400,500,600,700,800|fraunces:500,600,700");
 
 :root {
@@ -60,15 +60,6 @@ body {
   font-size: 14px;
   letter-spacing: -0.02em;
   color: #e8eef4;
-}
-
-.mark {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: linear-gradient(145deg, #8ec9d8, #4a8fa3);
-  color: #0c1418;
-  box-shadow: 0 4px 14px #6eb5c944;
 }
 
 .menu-button {

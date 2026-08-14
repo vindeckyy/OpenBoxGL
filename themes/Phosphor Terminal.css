@@ -1,4 +1,4 @@
-/* OpenBox Stock Theme: Phosphor Terminal */
+/* OpenBox Stock Theme v2: Phosphor Terminal */
 @import url("https://fonts.bunny.net/css?family=ibm-plex-mono:400,500,600,700|share-tech-mono:400");
 
 :root {
@@ -76,16 +76,6 @@ body::after {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #9dff9d;
-}
-
-.mark {
-  width: 16px;
-  height: 16px;
-  border-radius: 2px;
-  background: #49ff7a;
-  color: #021006;
-  box-shadow: 0 0 12px #49ff7aaa;
-  font-family: "Share Tech Mono", monospace;
 }
 
 .menu-button {

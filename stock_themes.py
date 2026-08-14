@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
-STOCK_MARKER = "/* OpenBox Stock Theme:"
+STOCK_MARKER = "/* OpenBox Stock Theme"
+_VERSION_PATTERN = re.compile(r"^/\* OpenBox Stock Theme v(\d+):")
 
 
 def stock_theme_sources(root=None):
@@ -25,12 +27,23 @@ def is_stock_theme(path):
     return head.lstrip().startswith(STOCK_MARKER)
 
 
+def _stock_version(path):
+    try:
+        with path.open("r", encoding="utf-8", errors="ignore") as handle:
+            head = handle.read(120)
+    except OSError:
+        return None
+    match = _VERSION_PATTERN.match(head.lstrip())
+    return int(match.group(1)) if match else 0
+
+
 def ensure_stock_themes(destination, root=None):
     """Install or refresh bundled stock themes into the user themes folder.
 
-    User-imported themes without the stock marker are left untouched, and
-    user edits to a stock theme are preserved (only missing or identical
-    files are written).
+    A theme whose header lacks the stock marker is a user import and is left
+    untouched. Marker-carrying themes are refreshed when the bundled version
+    is newer, so stock fixes reach existing installs; edits to the currently
+    bundled stock are preserved until the next stock update.
     """
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=True)
@@ -39,8 +52,7 @@ def ensure_stock_themes(destination, root=None):
         target = destination / source.name
         if target.exists() and not is_stock_theme(target):
             continue
-        if target.exists() and target.read_bytes() != source.read_bytes():
-            # Keep the user's customized copy.
+        if target.exists() and _stock_version(target) >= _stock_version(source):
             continue
         shutil.copy2(source, target)
         installed.append(target.stem)

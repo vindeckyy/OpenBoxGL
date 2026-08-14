@@ -1,4 +1,4 @@
-/* OpenBox Stock Theme: Midnight Circuit */
+/* OpenBox Stock Theme v2: Midnight Circuit */
 @import url("https://fonts.bunny.net/css?family=syne:600,700,800|manrope:400,500,600,700");
 
 :root {
@@ -79,15 +79,6 @@ body::before {
   font-weight: 800;
   letter-spacing: -0.02em;
   font-size: 13px;
-}
-
-.mark {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  background: linear-gradient(135deg, #3de0ff, #6b8cff);
-  color: #041018;
-  box-shadow: 0 0 16px #3de0ff55;
 }
 
 .menu-button {

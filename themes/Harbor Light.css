@@ -1,4 +1,4 @@
-/* OpenBox Stock Theme: Harbor Light */
+/* OpenBox Stock Theme v2: Harbor Light */
 @import url("https://fonts.bunny.net/css?family=sora:400,500,600,700,800|literata:400,500,600");
 
 :root {
@@ -60,15 +60,6 @@ body {
   font-weight: 800;
   color: #152033;
   letter-spacing: -0.03em;
-}
-
-.mark {
-  width: 18px;
-  height: 18px;
-  border-radius: 6px;
-  background: linear-gradient(135deg, #0b7ea8, #1aa6c4);
-  color: #fff;
-  box-shadow: 0 4px 12px #0b7ea844;
 }
 
 .menu-button {

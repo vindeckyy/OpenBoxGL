@@ -1,4 +1,4 @@
-/* OpenBox Stock Theme: Cinema Marquee */
+/* OpenBox Stock Theme v2: Cinema Marquee */
 @import url("https://fonts.bunny.net/css?family=bebas-neue:400|source-sans-3:400,500,600,700");
 
 :root {
@@ -71,15 +71,6 @@ body::before {
   font-size: 18px;
   letter-spacing: 0.08em;
   color: #f3e6c8;
-}
-
-.mark {
-  width: 18px;
-  height: 18px;
-  border-radius: 3px;
-  background: linear-gradient(145deg, #f0d078, #c4922a);
-  color: #1a1008;
-  box-shadow: 0 0 14px #e8c46a55;
 }
 
 .menu-button {
