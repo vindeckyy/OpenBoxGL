@@ -1,12 +1,19 @@
-"""ExtensionsHandlers capability handlers. Plugins, themes, playlists, filter presets, and webhooks.
+"""ExtensionsHandlers capability handlers. Plugins, themes, playlists, filter presets, and webhooks."""
 
-Method bodies reference DATA, load_state, transact_state, and other
-names from the live ``web_app`` namespace. ``rebind_methods`` repoints
-each function's ``__globals__`` at that namespace, so the bodies run
-verbatim without circular imports or snapshotting process-global state.
-"""
+import email.utils
+import secrets
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+from urllib.parse import parse_qs
 
-from handlers import rebind_methods
+from automation import DEFAULT_ATTEMPTS, DEFAULT_TIMEOUT, EVENT_TYPES, MAX_WEBHOOKS, test_ping, validate_webhook
+from openbox import DATA, load_state
+from plugin_catalog import download_plugin_package, fetch_plugin_catalog
+from plugins import install_plugin, list_plugins, remove_plugin, set_plugin_enabled
+from stock_themes import ensure_stock_themes
+from webapp_state import PLUGIN_EPOCH, ROOT, game_from_payload, load_state_view, public_webhook_configs, transact_state, webhook_configs
 
 
 class ExtensionsHandlers:
@@ -235,4 +242,3 @@ class ExtensionsHandlers:
         self.send_json(200, {"path": str(folder)})
 
 
-rebind_methods(ExtensionsHandlers)

@@ -50,9 +50,11 @@ class SseTests(unittest.TestCase):
         return got
 
     def test_events_streams_broadcast(self):
+        import webapp_state
+
         def emit():
             time.sleep(0.3)
-            self.web_app.broadcast_event("session.started", {"id": 1, "game": "Quake"})
+            webapp_state.broadcast_event("session.started", {"id": 1, "game": "Quake"})
 
         threading.Thread(target=emit, daemon=True).start()
         req = urllib.request.Request(

@@ -1,12 +1,13 @@
-"""SessionHandlers capability handlers. Launch, session lifecycle, running/history, shutdown, recovery, and Big Box.
+"""SessionHandlers capability handlers. Launch, session lifecycle, running/history, shutdown, recovery, and Big Box."""
 
-Method bodies reference DATA, load_state, transact_state, and other
-names from the live ``web_app`` namespace. ``rebind_methods`` repoints
-each function's ``__globals__`` at that namespace, so the bodies run
-verbatim without circular imports or snapshotting process-global state.
-"""
+import shlex
+import shutil
+import subprocess
+from pathlib import Path
+from urllib.parse import parse_qs
 
-from handlers import rebind_methods
+from openbox import STATE_STORE, load_state, recover_state as recover_library_state
+from webapp_state import EVENT_SEQUENCE, PROCESS_LOCK, RUNNING, SESSION_EVENTS, STATE_LOCK, bump_media_epoch, control_game_session, game_from_payload, load_state_view, start_game
 
 
 class SessionHandlers:
@@ -134,4 +135,3 @@ class SessionHandlers:
         self.send_json(200, {"ok": True})
 
 
-rebind_methods(SessionHandlers)

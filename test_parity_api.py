@@ -54,8 +54,8 @@ class ParityApiTests(unittest.TestCase):
         handler.authorized = mock.Mock(return_value=True)
         handler.body = mock.Mock(return_value={"source": "steam", "installed_only": True, "uninstalled_only": False})
         handler.send_json = mock.Mock()
-        with mock.patch("web_app.storefront_catalog", return_value=[]):
-            with mock.patch("web_app.catalog_entries_to_games", return_value=[]):
+        with mock.patch("handlers.imports.storefront_catalog", return_value=[]):
+            with mock.patch("handlers.imports.catalog_entries_to_games", return_value=[]):
                 Handler.import_storefront_catalog(handler, handler.body())
         handler.send_json.assert_called_with(200, {"added": 0, "found": 0, "imported": 0})
 
@@ -82,7 +82,7 @@ class ParityApiTests(unittest.TestCase):
         handler.path = "/api/log"
         handler.headers = {"X-OpenBox-Token": TOKEN}
         handler.send_json = mock.Mock()
-        with mock.patch("web_app.read_diagnostic_log", return_value="2026-07-30 DEBUG test message"):
+        with mock.patch("handlers.health.read_diagnostic_log", return_value="2026-07-30 DEBUG test message"):
             Handler._do_GET(handler)
         handler.send_json.assert_called_once_with(200, {"log": "2026-07-30 DEBUG test message"})
 
@@ -93,6 +93,7 @@ class ParityApiTests(unittest.TestCase):
         import urllib.request
 
         import web_app
+        import webapp_state
         from openbox import save_state
 
         save_state({
@@ -103,7 +104,7 @@ class ParityApiTests(unittest.TestCase):
             "playlists": [],
         })
         web_app.TOKEN = "testtoken"
-        web_app.INSTALLS.clear()
+        webapp_state.INSTALLS.clear()
         started = threading.Event()
         release = threading.Event()
 
@@ -123,7 +124,7 @@ class ParityApiTests(unittest.TestCase):
                 headers={"Content-Type": "application/json", "X-OpenBox-Token": "testtoken"},
                 method="POST",
             )
-            with mock.patch("web_app.install_gameyfin_game", side_effect=slow_install):
+            with mock.patch("handlers.data.install_gameyfin_game", side_effect=slow_install):
                 with urllib.request.urlopen(request, timeout=5) as response:
                     self.assertEqual(response.status, 202)
                     payload = json.loads(response.read())
@@ -150,7 +151,7 @@ class ParityApiTests(unittest.TestCase):
         finally:
             server.shutdown()
             server.server_close()
-            web_app.INSTALLS.clear()
+            webapp_state.INSTALLS.clear()
 
     def test_settings_save_preserves_storefront_auto_import_when_omitted(self):
         from openbox import load_state, save_state
@@ -209,7 +210,7 @@ class ParityApiTests(unittest.TestCase):
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
         handler.path = "/api/storefront/catalog?source=heroic"
         handler.headers = {}
-        with mock.patch("web_app.storefront_catalog", side_effect=FileNotFoundError("xdg-open missing")):
+        with mock.patch("handlers.imports.storefront_catalog", side_effect=FileNotFoundError("xdg-open missing")):
             handler.do_GET()
         status, payload = handler.send_json.call_args[0]
         self.assertEqual(status, 400)
@@ -225,7 +226,7 @@ class ParityApiTests(unittest.TestCase):
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
         handler.path = "/api/gameyfin/providers"
         handler.headers = {}
-        with mock.patch("web_app.catalog_gameyfin", side_effect=GameyfinError("Gameyfin URL is not configured.")):
+        with mock.patch("handlers.data.catalog_gameyfin", side_effect=GameyfinError("Gameyfin URL is not configured.")):
             handler.do_GET()
         status, payload = handler.send_json.call_args[0]
         self.assertEqual(status, 400)
@@ -238,6 +239,7 @@ class ParityApiTests(unittest.TestCase):
         import urllib.request
 
         import web_app
+        import webapp_state
         from openbox import load_state, save_state
 
         save_state({
@@ -248,7 +250,7 @@ class ParityApiTests(unittest.TestCase):
             "playlists": [],
         })
         web_app.TOKEN = "testtoken"
-        web_app.INSTALLS.clear()
+        webapp_state.INSTALLS.clear()
 
         def fast_install(settings, game_id, client=None):
             return {"gameyfin_id": str(game_id), "store_installed": True, "path": "/tmp/fake", "launch": "/tmp/fake"}
@@ -264,7 +266,7 @@ class ParityApiTests(unittest.TestCase):
                 headers={"Content-Type": "application/json", "X-OpenBox-Token": "testtoken"},
                 method="POST",
             )
-            with mock.patch("web_app.install_gameyfin_game", side_effect=fast_install):
+            with mock.patch("handlers.data.install_gameyfin_game", side_effect=fast_install):
                 with urllib.request.urlopen(request, timeout=5) as response:
                     self.assertEqual(response.status, 202)
                 status_request = urllib.request.Request(
@@ -287,7 +289,7 @@ class ParityApiTests(unittest.TestCase):
         finally:
             server.shutdown()
             server.server_close()
-            web_app.INSTALLS.clear()
+            webapp_state.INSTALLS.clear()
 
     def test_post_wrong_json_shapes_return_json_error(self):
         import threading
@@ -342,7 +344,7 @@ class ParityApiTests(unittest.TestCase):
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
         handler.path = "/api/update"
         handler.headers = {}
-        with mock.patch("web_app.check_update", side_effect=AttributeError("release missing tag_name")):
+        with mock.patch("handlers.health.check_update", side_effect=AttributeError("release missing tag_name")):
             handler.do_GET()
         status, payload = handler.send_json.call_args[0]
         self.assertEqual(status, 400)
@@ -444,7 +446,8 @@ class ParityApiTests(unittest.TestCase):
 
     def test_state_view_flags_manual_media(self):
         from openbox import save_state
-        from web_app import DATA, Handler, public_state
+        from web_app import DATA, Handler
+        from webapp_state import public_state
 
         media_root = Path(DATA.parent) / "media"
         manual = media_root / "manual.pdf"

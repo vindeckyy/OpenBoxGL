@@ -1,12 +1,21 @@
-"""LibraryHandlers capability handlers. Library, game CRUD, favorites, tags, queue, notifications, and health.
+"""LibraryHandlers capability handlers. Library, game CRUD, favorites, tags, queue, notifications, and health."""
 
-Method bodies reference DATA, load_state, transact_state, and other
-names from the live ``web_app`` namespace. ``rebind_methods`` repoints
-each function's ``__globals__`` at that namespace, so the bodies run
-verbatim without circular imports or snapshotting process-global state.
-"""
+from datetime import datetime
+from pathlib import Path
+from urllib.parse import parse_qs
 
-from handlers import rebind_methods
+from api_errors import GameNotFound
+from backend_io import remove_file_if_safe
+from catalog import PROGRESS, bulk_update, game_media_paths, related_game_ids, tag_counts
+from notifications import clear as clear_notifications, mark_read as mark_notifications_read, unread_count
+from openbox import DATA, load_state
+from parity_deeplinks import launcher_menu_items
+from parity_discovery import discovery_lists, related_with_reasons
+from parity_filter_presets import bigbox_quick_presets, delete_preset, explorer_facets, list_presets, save_preset
+from parity_media import normalize_video_fields
+from parity_premium import bulk_wizard_changes, custom_field_defs, normalize_custom_fields
+from play_queue import advance as advance_queue, enqueue as enqueue_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
+from webapp_state import FIELDS, _public_state_cached, bump_media_epoch, clear_file_probe_cache, game_from_payload, game_from_query, game_identity, load_state_view, public_state, public_state_bytes, public_state_etag, public_settings, transact_state
 
 
 class LibraryHandlers:
@@ -392,4 +401,3 @@ class LibraryHandlers:
         self.send_json(200, {"removed": removed})
 
 
-rebind_methods(LibraryHandlers)

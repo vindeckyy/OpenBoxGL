@@ -19,24 +19,6 @@ select = ["E4", "E7", "E9", "F", "B", "PLW1510", "EXE001", "UP035", "E402"]
 [tool.ruff.lint.per-file-ignores]
 # The metadata self-test needs to import after env isolation.
 "test_demo_purge.py" = ["E402"]
-# Mixin handler bodies resolve DATA, load_state, transact_state, and other names
-# from the live web_app namespace via rebind_methods (handlers/__init__.py), so
-# F821 cannot see them statically. The names resolve at call time by design.
-"handlers/library.py" = ["F821"]
-"handlers/imports.py" = ["F821"]
-"handlers/media.py" = ["F821"]
-"handlers/metadata.py" = ["F821"]
-"handlers/sessions.py" = ["F821"]
-"handlers/settings.py" = ["F821"]
-"handlers/extensions.py" = ["F821"]
-"handlers/health.py" = ["F821"]
-"handlers/emulators.py" = ["F821"]
-"handlers/data.py" = ["F821"]
-# web_app.py imports these names solely so moved method bodies can resolve them
-# at call time through the live namespace. They are never read in web_app.py's
-# own remaining code, so F401 flags them, but deleting them would break the
-# mixins that depend on the live web_app.__dict__.
-"web_app.py" = ["F401"]
 
 [tool.coverage.run]
 source = ["."]

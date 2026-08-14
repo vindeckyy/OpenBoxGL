@@ -11,7 +11,8 @@ def main():
         os.environ["OPENBOX_DATA_DIR"] = directory
         try:
             from openbox import load_state, save_state
-            from web_app import RUNNING, STATE_LOCK, control_game_session, finish_session, start_game
+            from web_app import RUNNING, control_game_session
+            from webapp_state import STATE_LOCK, finish_session, start_game
 
             save_state({"games":[{"name":"Session test", "path":"/bin/sleep", "launch":"sleep 30"}], "profiles":{}, "history":[]})
             session = start_game(0)
@@ -37,7 +38,7 @@ def main():
                     return 0
 
             RUNNING["restart-test"] = {"restart": True}
-            with mock.patch("web_app.start_game") as restart:
+            with mock.patch("webapp_state.start_game") as restart:
                 finish_session("restart-test", 0, datetime.now(), FinishedProcess())
             restart.assert_called_once_with(0, stable_game_id=load_state()["games"][0]["game_id"])
 

@@ -1,12 +1,20 @@
-"""DataHandlers capability handlers. Saves, save tools, highscores, Gameyfin, and platform documents.
+"""DataHandlers capability handlers. Saves, save tools, highscores, Gameyfin, and platform documents."""
 
-Method bodies reference DATA, load_state, transact_state, and other
-names from the live ``web_app`` namespace. ``rebind_methods`` repoints
-each function's ``__globals__`` at that namespace, so the bodies run
-verbatim without circular imports or snapshotting process-global state.
-"""
+import copy
+import mimetypes
+import re
+import shutil
+from pathlib import Path
+from urllib.parse import parse_qs
 
-from handlers import rebind_methods
+from api_errors import BadRequest, DocumentNotFound, GameNotFound, PlatformDocumentNotFound
+from openbox import DATA, load_state
+from parity_gameyfin import GameyfinError, catalog_gameyfin, install_gameyfin_game, test_gameyfin_connection, uninstall_gameyfin_game
+from parity_integrations import export_highscores, import_highscores, read_local_highscores
+from parity_save_tools import run_hoard, run_ludusavi, save_tool_status
+from parity_saves import enforce_backup_limit, extra_save_candidates, scan_all_saves
+from saves import backup_saves, discover_save_paths, list_backups, restore_saves
+from webapp_state import INSTALLS, JOB_MANAGER, PROCESS_LOCK, game_from_payload, game_from_query, load_state_view, resolve_library_game, safe_document_file, transact_state
 
 
 class DataHandlers:
@@ -292,4 +300,3 @@ class DataHandlers:
         self.send_json(200, {"restored": restored})
 
 
-rebind_methods(DataHandlers)

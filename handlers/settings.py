@@ -1,12 +1,18 @@
-"""SettingsHandlers capability handlers. Settings, profiles, performance profiles, and RetroAchievements.
+"""SettingsHandlers capability handlers. Settings, profiles, performance profiles, and RetroAchievements."""
 
-Method bodies reference DATA, load_state, transact_state, and other
-names from the live ``web_app`` namespace. ``rebind_methods`` repoints
-each function's ``__globals__`` at that namespace, so the bodies run
-verbatim without circular imports or snapshotting process-global state.
-"""
+import copy
+import json
+from pathlib import Path
 
-from handlers import rebind_methods
+from catalog import PROGRESS
+from openbox import discover_profiles, load_state, update_state_with_result
+from parity_integrations import inject_retroachievements
+from parity_media import REGION_PRIORITY_DEFAULT
+from parity_premium import LIST_COLUMNS_DEFAULT, custom_field_defs, enhanced_ra_profile, platform_categories
+from parity_tracking import TRACKING_MODES
+from retroachievements import api_get as ra_api_get, game_progress as ra_game_progress, load_credentials as load_ra_credentials, match_game as match_ra_game, save_credentials as save_ra_credentials
+from settings_schema import KNOWN_SETTINGS, sanitize_settings
+from webapp_state import DATA, LOGGER, MEDIA_TYPES_ALL, STATE_LOCK, clean_commands, game_from_payload, load_state_view, public_settings, transact_state
 
 
 class SettingsHandlers:
@@ -335,4 +341,3 @@ class SettingsHandlers:
         self.send_json(200, inject_retroachievements(credentials))
 
 
-rebind_methods(SettingsHandlers)

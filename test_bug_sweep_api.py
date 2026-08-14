@@ -130,23 +130,23 @@ class ApiSweep(unittest.TestCase):
         self.assert_alive()
 
     def test_exceptions(self):
-        with mock.patch("web_app.check_update", side_effect=AttributeError("missing tag")):
+        with mock.patch("handlers.health.check_update", side_effect=AttributeError("missing tag")):
             status, payload = self.request("/api/update")
         self.assertEqual(status, 400)
         self.assertIn("missing tag", payload["error"])
-        with mock.patch("web_app.storefront_catalog", side_effect=ValueError("bad source")):
+        with mock.patch("handlers.imports.storefront_catalog", side_effect=ValueError("bad source")):
             status, payload = self.request("/api/storefront/catalog?source=fixture")
         self.assertEqual(status, 400)
         self.assertIn("bad source", payload["error"])
         with mock.patch(
-            "web_app.storefront_catalog",
+            "handlers.imports.storefront_catalog",
             side_effect=subprocess.TimeoutExpired(cmd=["lutris"], timeout=30),
         ):
             status, payload = self.request("/api/storefront/catalog?source=lutris")
         self.assertEqual(status, 400)
         self.assertIn("error", payload)
         with mock.patch(
-            "web_app.import_lutris",
+            "handlers.imports.import_lutris",
             side_effect=subprocess.CalledProcessError(1, ["lutris"]),
         ):
             status, payload = self.request("/api/import/lutris", {})

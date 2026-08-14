@@ -1,12 +1,14 @@
-"""HealthHandlers capability handlers. Jobs, log, diagnostic, backup, and update endpoints.
+"""HealthHandlers capability handlers. Jobs, log, diagnostic, backup, and update endpoints."""
 
-Method bodies reference DATA, load_state, transact_state, and other
-names from the live ``web_app`` namespace. ``rebind_methods`` repoints
-each function's ``__globals__`` at that namespace, so the bodies run
-verbatim without circular imports or snapshotting process-global state.
-"""
+import json
+import zipfile
 
-from handlers import rebind_methods
+from crash_report import build_report
+from openbox import DATA, load_state
+from openbox_logging import read_diagnostic_log
+from parity_backup import BACKUP_ITEMS, create_backup, restore_backup
+from updates import check_update, install_desktop_entry, install_update
+from webapp_state import JOB_MANAGER, RUNNING, approved_backup_file, bump_media_epoch, load_state_view, sync_cloud
 
 
 class HealthHandlers:
@@ -97,4 +99,3 @@ class HealthHandlers:
         self.send_json(200, {"restored": restored})
 
 
-rebind_methods(HealthHandlers)

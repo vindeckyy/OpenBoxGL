@@ -1,12 +1,12 @@
-"""EmulatorsHandlers capability handlers. Emulator install, update, open, scan, and definitions.
+"""EmulatorsHandlers capability handlers. Emulator install, update, open, scan, and definitions."""
 
-Method bodies reference DATA, load_state, transact_state, and other
-names from the live ``web_app`` namespace. ``rebind_methods`` repoints
-each function's ``__globals__`` at that namespace, so the bodies run
-verbatim without circular imports or snapshotting process-global state.
-"""
+import subprocess
+from urllib.parse import parse_qs
 
-from handlers import rebind_methods
+from emulators import emulator_status, install_all_emulators, install_emulator, launch_emulator, recommendations_for_platform, update_all_emulators, update_emulator
+from parity_emulator_defs import list_scan_configs, load_definitions, save_scan_config, scan_folder as scan_emulator_folder
+from parity_import import detect_dependencies
+from webapp_state import INSTALLS, JOB_MANAGER, PROCESS_LOCK, ROOT, clear_file_probe_cache, load_state_view, merge_imported_games, transact_state
 
 
 class EmulatorsHandlers:
@@ -161,4 +161,3 @@ class EmulatorsHandlers:
         self.send_json(202, {"state": "updating"})
 
 
-rebind_methods(EmulatorsHandlers)

@@ -32,7 +32,8 @@ class PerfCacheTests(unittest.TestCase):
         cls._prev_data_dir = os.environ.get("OPENBOX_DATA_DIR")
         os.environ["OPENBOX_DATA_DIR"] = cls.tempdir.name
         from openbox import save_state
-        from web_app import Handler, MEDIA_EPOCH
+        from web_app import Handler
+        from webapp_state import MEDIA_EPOCH
 
         save_state({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
         cls.Handler = Handler
@@ -141,18 +142,18 @@ class PerfCacheTests(unittest.TestCase):
         self.assertEqual(body, b"")
 
     def test_media_epoch_bumps_on_download(self):
-        from web_app import bump_media_epoch, download_image
+        from webapp_state import bump_media_epoch, download_image
 
         self.assertEqual(self.MEDIA_EPOCH["value"], 0)
         bump_media_epoch()
         self.assertEqual(self.MEDIA_EPOCH["value"], 1)
-        with mock.patch("web_app.download_file", return_value="/tmp/fake.png") as downloader:
+        with mock.patch("webapp_state.download_file", return_value="/tmp/fake.png") as downloader:
             download_image("https://example.com/x.png", Path(self.tempdir.name) / "x.png")
         downloader.assert_called_once()
         self.assertEqual(self.MEDIA_EPOCH["value"], 2)
 
     def test_public_state_includes_media_epoch(self):
-        from web_app import public_state
+        from webapp_state import public_state
 
         state = public_state()
         self.assertEqual(state["media_epoch"], self.MEDIA_EPOCH["value"])

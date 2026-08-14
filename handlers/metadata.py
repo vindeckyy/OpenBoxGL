@@ -1,12 +1,15 @@
-"""MetadataHandlers capability handlers. Metadata search, status, apply, sync, Steam, IGDB, and batch auto-match.
+"""MetadataHandlers capability handlers. Metadata search, status, apply, sync, Steam, IGDB, and batch auto-match."""
 
-Method bodies reference DATA, load_state, transact_state, and other
-names from the live ``web_app`` namespace. ``rebind_methods`` repoints
-each function's ``__globals__`` at that namespace, so the bodies run
-verbatim without circular imports or snapshotting process-global state.
-"""
+import copy
+import sqlite3
+import zipfile
+from pathlib import Path
+from urllib.parse import parse_qs
 
-from handlers import rebind_methods
+from metadata import apply_game_metadata, batch_match, search_games, sync_database
+from openbox import load_state
+from parity_igdb import apply_to_game as apply_igdb_metadata, fetch_game as fetch_igdb_game, search_games as search_igdb_games
+from webapp_state import DATA, JOB_MANAGER, METADATA_DATABASE, METADATA_JOB, MEDIA_TYPES_ALL, PROCESS_LOCK, bump_media_epoch, game_from_payload, game_from_query, load_state_view, transact_state, update_steam_metadata
 
 
 class MetadataHandlers:
@@ -184,4 +187,3 @@ class MetadataHandlers:
         self.send_json(200, {"applied": True, "game": name})
 
 
-rebind_methods(MetadataHandlers)

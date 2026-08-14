@@ -1,12 +1,18 @@
-"""ImportsHandlers capability handlers. Import sources, storefront catalogs, and import exclusions.
+"""ImportsHandlers capability handlers. Import sources, storefront catalogs, and import exclusions."""
 
-Method bodies reference DATA, load_state, transact_state, and other
-names from the live ``web_app`` namespace. ``rebind_methods`` repoints
-each function's ``__globals__`` at that namespace, so the bodies run
-verbatim without circular imports or snapshotting process-global state.
-"""
+import subprocess
+from datetime import datetime
+from urllib.parse import parse_qs
 
-from handlers import rebind_methods
+from arcade import import_arcade
+from emulators import install_emulator
+from importers import import_heroic, import_lutris, import_steam
+from openbox import load_state
+from parity_import import import_rpcs3_hdd, import_scummvm, import_vita3k
+from parity_import_policy import add_exclusion, list_exclusions, remove_exclusion
+from parity_premium import import_loose_arcade, import_xbox360_folder
+from parity_storefront import catalog_entries_to_games, storefront_catalog
+from webapp_state import clear_file_probe_cache, import_folder_path, load_state_view, merge_imported_games, transact_state
 
 
 class ImportsHandlers:
@@ -252,4 +258,3 @@ class ImportsHandlers:
         self.send_json(200, {"added": added, "found": found, "imported": len(imported)})
 
 
-rebind_methods(ImportsHandlers)

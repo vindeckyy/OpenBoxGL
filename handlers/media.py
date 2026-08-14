@@ -1,12 +1,20 @@
-"""MediaHandlers capability handlers. Media serving, audit, bulk download, cleanup, screenshots, OBS, bezels, and EmuMovies.
+"""MediaHandlers capability handlers. Media serving, audit, bulk download, cleanup, screenshots, OBS, bezels, and EmuMovies."""
 
-Method bodies reference DATA, load_state, transact_state, and other
-names from the live ``web_app`` namespace. ``rebind_methods`` repoints
-each function's ``__globals__`` at that namespace, so the bodies run
-verbatim without circular imports or snapshotting process-global state.
-"""
+import copy
+import re
+import sqlite3
+from datetime import datetime
+from pathlib import Path
+from urllib.parse import parse_qs
 
-from handlers import rebind_methods
+from api_errors import BadgeNotFound, MediaNotFound
+from metadata import apply_game_metadata
+from openbox import load_state
+from parity_integrations import attach_recording, capture_screenshot, download_bezel, download_emumovies_media, load_emumovies_credentials, obs_recording_status, save_emumovies_credentials
+from parity_media import active_video, cleanup_duplicates, find_duplicate_media, load_media_queue
+from parity_premium import apply_media_pack, download_gog_media, download_steam_trailer, list_media_packs, platform_categories, strings_for
+from parity_saves import scan_all_saves
+from webapp_state import DATA, JOB_MANAGER, MEDIA_JOB, MEDIA_TYPES_ALL, METADATA_DATABASE, PROCESS_LOCK, bump_media_epoch, download_image, game_from_payload, game_from_query, load_state_view, public_settings, transact_state
 
 
 class MediaHandlers:
@@ -313,4 +321,3 @@ class MediaHandlers:
         self.send_json(200, {"updated": updated, "games": len(found)})
 
 
-rebind_methods(MediaHandlers)

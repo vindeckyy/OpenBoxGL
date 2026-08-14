@@ -14,7 +14,7 @@ def main():
             (games / "one.nes").write_bytes(b"NES\x1a")
             (games / "ignore.txt").write_text("not a game")
             from openbox import load_state
-            from web_app import import_folder_path
+            from webapp_state import import_folder_path
 
             added, found, _ = import_folder_path(games)
             assert (added, found) == (1, 1)

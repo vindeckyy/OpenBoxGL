@@ -13,7 +13,8 @@ def main():
             from catalog import apply_progress_automation, game_media_paths
             from emulators import EMULATORS, install_all_emulators, launch_emulator
             from openbox import save_state
-            from web_app import Handler, finish_session, public_settings
+            from web_app import Handler
+            from webapp_state import finish_session, public_settings
 
             game = {
                 "name": "Demo",
