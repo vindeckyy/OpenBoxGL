@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: write
+  # Required by actions/attest-build-provenance (OIDC minting + attestation API).
+  id-token: write
+  attestations: write
 
 jobs:
   appimage:
@@ -14,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # actions/checkout@v4
 
       - name: Install build dependencies
         run: |
@@ -41,11 +44,26 @@ jobs:
       - name: Write SHA-256 checksum
         run: sha256sum OpenBox-x86_64.AppImage | tee OpenBox-x86_64.AppImage.sha256
 
+      - name: Generate SBOM
+        id: sbom
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          echo "sbom-file=OpenBox-$VERSION-sbom.json" >> "$GITHUB_OUTPUT"
+          python3 scripts/gen_sbom.py --version "$VERSION" --out "OpenBox-$VERSION-sbom.json"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # actions/attest-build-provenance@v2
+        with:
+          subject-name: OpenBox-x86_64.AppImage
+          subject-path: OpenBox-x86_64.AppImage
+
       - name: Verify zsync metadata
         run: test -f OpenBox-x86_64.AppImage.zsync
 
       - name: Create release and upload assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           target_commitish: master
@@ -58,3 +76,4 @@ jobs:
             OpenBox-x86_64.AppImage
             OpenBox-x86_64.AppImage.zsync
             OpenBox-x86_64.AppImage.sha256
+            ${{ steps.sbom.outputs.sbom-file }}
