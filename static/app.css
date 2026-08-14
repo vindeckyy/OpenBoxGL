@@ -68,6 +68,7 @@
     [aria-busy="true"] { position:relative; color:transparent !important; pointer-events:none; }
     [aria-busy="true"]::after { content:""; position:absolute; left:50%; top:50%; width:1em; height:1em; margin:-.5em; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; color:var(--action-ink); animation:spinner .8s linear infinite; }
     .topbar-tools summary:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+    header.topbar { position:relative; z-index:25; }
     .topbar {
       flex-shrink:0; min-height:var(--topbar-min-height); display:flex; align-items:center; gap:0.25rem;
       padding:0.5rem 0.75rem; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin;

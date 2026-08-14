@@ -12,7 +12,29 @@
   --cyan: #e8c46a;
   --green: #d4a017;
   --accent: #e8c46a;
-  --danger: #c44b3c;
+  --danger: #c95d4f;
+  --focus: #e8c46a;
+  --active: #e8c46a;
+  --action: #e8c46a;
+  --action-ink: #1a1008;
+  --surface-card: #1a1410;
+  --surface-field: #100c0a;
+  --surface-hover: #241c16;
+  --border-control: #4a3828;
+  --border-card: #4a3828;
+  --topbar: #1a1410;
+  --brand: #f3e6c8;
+  --gold: #e8c46a;
+  --rating: #e8c46a;
+  --launch-shadow: #c4922a55;
+  --achievement: #e8c46a;
+  --lifecycle-bg: #3a2418;
+  --lifecycle-kicker: #e8c46a;
+  --bigbox-bg: #5a3018;
+  --bigbox-copy: #c4b09a;
+  --empty-action: #e8c46a;
+  --cover-title-start: #2a2018;
+  --white: #f6efe4;
 }
 
 body {
@@ -35,7 +57,7 @@ body::before {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-.topbar, .workspace { position: relative; z-index: 1; }
+.workspace { position: relative; z-index: 1; }
 
 .topbar {
   min-height: 34px;
@@ -72,12 +94,11 @@ body::before {
   box-shadow: inset 0 -2px 0 #e8c46a;
 }
 
-.top-status { color: #8a7460; }
+.top-status { color: #98806b; }
 
 .sidebar, .details {
-  background: linear-gradient(180deg, #161210f5, #100c0af8);
+  background: linear-gradient(180deg, #161210, #100c0a);
   border-color: #3a2e24;
-  backdrop-filter: blur(12px);
 }
 
 .sidebar { border-right: 1px solid #3a2e24; }

@@ -51,6 +51,44 @@ class StockThemesTests(unittest.TestCase):
             ensure_stock_themes(destination, ROOT)
             self.assertTrue(edited.read_bytes().endswith(b"/* user tweak */\n"))
 
+    def test_stock_themes_keep_tools_menu_usable(self):
+        """The Tools menu is position:fixed inside the topbar; a theme must not
+        turn .topbar into its containing block (backdrop-filter) or push the
+        fixed overlays into normal flow (position:relative), or the menu stops
+        opening after a theme is applied."""
+        for path in stock_theme_sources(ROOT):
+            css = path.read_text(encoding="utf-8")
+            for block in _css_blocks(css):
+                selector, body = block
+                if ".topbar" in selector.split("::")[0].replace(" ", ""):
+                    self.assertNotIn(
+                        "backdrop-filter", body,
+                        f"{path.name}: backdrop-filter on .topbar clips the fixed Tools menu",
+                    )
+                if "position: relative" in body or "position:relative" in body:
+                    for overlay in (".lifecycle", ".bigbox", ".toast", ".tool-menu", "dialog"):
+                        if overlay in selector:
+                            self.fail(
+                                f"{path.name}: {overlay} must not be forced to position:relative"
+                            )
+
+
+def _css_blocks(css):
+    """Yield (selector, body) pairs for each top-level {...} block."""
+    depth = 0
+    start = None
+    for index, char in enumerate(css):
+        if char == "{":
+            if depth == 0:
+                start = index
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0 and start is not None:
+                selector = css[:start].rsplit("}", 1)[-1].strip()
+                yield selector, css[start + 1:index]
+                start = None
+
 
 if __name__ == "__main__":
     unittest.main()

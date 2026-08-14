@@ -38,7 +38,7 @@ const puppeteer = require('./scripts/node_modules/puppeteer');
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-  await page.goto(`http://127.0.0.1:${process.env.PORT}?token=${process.env.TOKEN}`, {waitUntil: 'networkidle0', timeout: 20000});
+  await page.goto(`http://127.0.0.1:${process.env.PORT}?token=${process.env.TOKEN}`, {waitUntil: 'networkidle2', timeout: 20000});
   await new Promise(r => setTimeout(r, 3000));
   const before = await page.evaluate(() => ({
     gamesLen: AppState.games.length,
@@ -50,9 +50,32 @@ const puppeteer = require('./scripts/node_modules/puppeteer');
   await new Promise(r => setTimeout(r, 800));
   const after = await page.evaluate(() => ({ details: document.getElementById('details').innerText.slice(0, 200) }));
   console.log(JSON.stringify({before, clicked, after}, null, 2));
+  const themeNames = ['Midnight Circuit', 'Harbor Light', 'Cinema Marquee', 'Nordic Mist', 'Phosphor Terminal'];
+  const themeResults = [];
+  for (const name of themeNames) {
+    await page.evaluate(async (n) => {
+      const t = new URLSearchParams(location.search).get('token');
+      await fetch('/api/themes/select', {method: 'POST', headers: {'X-OpenBox-Token': t, 'Content-Type': 'application/json'}, body: JSON.stringify({name: n})});
+    }, name);
+    await page.reload({waitUntil: 'domcontentloaded', timeout: 20000});
+    await new Promise(r => setTimeout(r, 1200));
+    await page.click('.topbar-tools summary');
+    await new Promise(r => setTimeout(r, 300));
+    const ok = await page.evaluate(() => {
+      const menu = document.querySelector('.topbar-tools .tool-menu');
+      if (!menu) return false;
+      const rect = menu.getBoundingClientRect();
+      const topEl = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return menu.contains(topEl);
+    });
+    themeResults.push({name, ok});
+    await page.evaluate(() => document.querySelector('.topbar-tools')?.removeAttribute('open'));
+  }
+  console.log('theme menus:', JSON.stringify(themeResults));
   console.log('JS errors:', errors.length ? errors.join('\n') : 'none');
   await browser.close();
   if (errors.length) process.exit(1);
   if (!before.cardCount || !clicked) process.exit(1);
+  if (themeResults.some(r => !r.ok)) process.exit(1);
 })().catch(e => { console.error('SMOKE FAIL', e.message); process.exit(1); });
 EOF

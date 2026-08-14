@@ -13,6 +13,28 @@
   --green: #5fbf9a;
   --accent: #6eb5c9;
   --danger: #d66b6b;
+  --focus: #6eb5c9;
+  --active: #6eb5c9;
+  --action: #6eb5c9;
+  --action-ink: #061018;
+  --surface-card: #1e2731;
+  --surface-field: #0c1116;
+  --surface-hover: #1a2a38;
+  --border-control: #344354;
+  --border-card: #344354;
+  --topbar: #121820;
+  --brand: #e8eef4;
+  --gold: #e2c36b;
+  --rating: #6eb5c9;
+  --launch-shadow: #6eb5c944;
+  --achievement: #e2c36b;
+  --lifecycle-bg: #243848;
+  --lifecycle-kicker: #6eb5c9;
+  --bigbox-bg: #2a4a5e;
+  --bigbox-copy: #a3b2c2;
+  --empty-action: #6eb5c9;
+  --cover-title-start: #243140;
+  --white: #e8eef4;
 }
 
 body {
@@ -27,9 +49,8 @@ body {
 
 .topbar {
   min-height: 34px;
-  background: rgba(15, 20, 25, 0.82);
+  background: #121820;
   border-bottom: 1px solid #2c3846;
-  backdrop-filter: blur(20px);
   box-shadow: 0 8px 28px #0005;
 }
 
@@ -67,8 +88,7 @@ body {
 .top-status { color: #738496; text-transform: none; }
 
 .sidebar, .details {
-  background: rgba(23, 30, 38, 0.72);
-  backdrop-filter: blur(24px);
+  background: rgba(23, 30, 38, 0.96);
   border-color: #2c3846;
 }
 
@@ -120,8 +140,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .library-head {
-  background: rgba(15, 20, 25, 0.75);
-  backdrop-filter: blur(16px);
+  background: #0f1419;
 }
 
 .library-head h1 {
@@ -206,8 +225,7 @@ input:focus, select:focus, textarea:focus {
 .detail-card, .emulator-item, .metadata-result, .history-item, .storefront-row {
   border: 1px solid #2c3846;
   border-radius: 14px;
-  background: rgba(30, 39, 49, 0.7);
-  backdrop-filter: blur(10px);
+  background: rgba(30, 39, 49, 0.98);
 }
 
 .rating { color: #6eb5c9; }
@@ -220,8 +238,7 @@ input:focus, select:focus, textarea:focus {
 dialog {
   border: 1px solid #344354;
   border-radius: 18px;
-  background: rgba(23, 30, 38, 0.94);
-  backdrop-filter: blur(24px);
+  background: #171e26;
   box-shadow: 0 40px 100px #000c;
 }
 

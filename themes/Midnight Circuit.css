@@ -14,6 +14,28 @@
   --accent: #3de0ff;
   --accent-2: #6b8cff;
   --danger: #ff5d7a;
+  --focus: #3de0ff;
+  --active: #3de0ff;
+  --action: #2dff9a;
+  --action-ink: #041510;
+  --surface-card: #121c30;
+  --surface-field: #0c1424;
+  --surface-hover: #152844;
+  --border-control: #2a3c5c;
+  --border-card: #314868;
+  --topbar: #10182a;
+  --brand: #eef3ff;
+  --gold: #6b8cff;
+  --rating: #3de0ff;
+  --launch-shadow: #1ad4c455;
+  --achievement: #6b8cff;
+  --lifecycle-bg: #050912;
+  --lifecycle-kicker: #3de0ff;
+  --bigbox-bg: #050912;
+  --bigbox-copy: #8490ab;
+  --empty-action: #2dff9a;
+  --cover-title-start: #1a2d4c;
+  --white: #eef3ff;
 }
 
 * { box-sizing: border-box; }
@@ -43,17 +65,13 @@ body::before {
   mask-image: radial-gradient(ellipse at 50% 30%, #000 20%, transparent 75%);
 }
 
-.topbar, .workspace, .toast, .lifecycle, .bigbox, dialog {
-  position: relative;
-  z-index: 1;
-}
+.workspace { position: relative; z-index: 1; }
 
 .topbar {
   min-height: 34px;
-  background: linear-gradient(180deg, #10182aee, #0a101cee);
+  background: linear-gradient(180deg, #10182a, #0a101c);
   border-bottom: 1px solid #2a3d63;
   box-shadow: 0 1px 0 #3de0ff22, 0 10px 30px #0008;
-  backdrop-filter: blur(16px);
 }
 
 .brand {
@@ -84,11 +102,10 @@ body::before {
   box-shadow: inset 0 -1px 0 #3de0ff66;
 }
 
-.top-status { color: #6d7c9a; }
+.top-status { color: #7c89a4; }
 
 .sidebar, .details {
-  background: linear-gradient(180deg, #0e1628f2, #0a1120f8);
-  backdrop-filter: blur(22px);
+  background: linear-gradient(180deg, #0e1628, #0a1120);
   border-color: #24324d;
 }
 
@@ -134,8 +151,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .library-head {
-  background: #0a1220f0;
-  backdrop-filter: blur(14px);
+  background: #0a1220;
   border-bottom: 1px solid #1e2d4a55;
 }
 

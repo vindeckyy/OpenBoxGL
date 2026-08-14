@@ -13,6 +13,28 @@
   --green: #33ff66;
   --accent: #49ff7a;
   --danger: #ff6b4a;
+  --focus: #49ff7a;
+  --active: #49ff7a;
+  --action: #49ff7a;
+  --action-ink: #021006;
+  --surface-card: #061008;
+  --surface-field: #020804;
+  --surface-hover: #0a1c10;
+  --border-control: #234f32;
+  --border-card: #234f32;
+  --topbar: #040a06;
+  --brand: #9dff9d;
+  --gold: #49ff7a;
+  --rating: #49ff7a;
+  --launch-shadow: #49ff7a33;
+  --achievement: #49ff7a;
+  --lifecycle-bg: #020402;
+  --lifecycle-kicker: #49ff7a;
+  --bigbox-bg: #020402;
+  --bigbox-copy: #6fb87a;
+  --empty-action: #49ff7a;
+  --cover-title-start: #061008;
+  --white: #c8ffc8;
 }
 
 body {
@@ -79,7 +101,7 @@ body::after {
   box-shadow: inset 0 -1px 0 #49ff7a;
 }
 
-.top-status { color: #4a7d54; letter-spacing: 0.08em; }
+.top-status { color: #538d5e; letter-spacing: 0.08em; }
 
 .sidebar, .details {
   background: linear-gradient(180deg, #061008f5, #030805f8);
