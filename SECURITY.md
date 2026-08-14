@@ -59,7 +59,7 @@ The following are generally out of scope:
 
 ## Release signing
 
-Release artifacts are signed with an Ed25519 key. `scripts/sign_release.py` writes `openbox-release.pub` next to the signature; the committed copy is a placeholder and must be replaced with the real maintainer key before the first signed release. Keep the private key out of the repository and CI; if it is compromised, rotate the key, publish a new `openbox-release.pub`, and re-sign the latest release.
+Release artifacts are published with a SHA-256 checksum (`OpenBox-x86_64.AppImage.sha256`). Ed25519 signing is optional: `scripts/sign_release.py` produces a signature only when a signing key is supplied via `OPENBOX_SIGNING_KEY`; the CI release workflow currently publishes the checksum without a signature. The committed `openbox-release.pub` is a placeholder and must be replaced with the real maintainer key before the first signed release. Keep the private key out of the repository and CI; if it is compromised, rotate the key, publish a new `openbox-release.pub`, and re-sign the latest release.
 
 ## Disclosure
 
