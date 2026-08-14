@@ -39,7 +39,29 @@ async function waitForStableGrid() {
   throw new Error("Grid never stabilized with decoded covers.");
 }
 
+// async-decoded images can resolve complete without being committed to the
+// compositor, so a screenshot can catch unpainted covers. Re-fire each load
+// with decoding=sync and settle two frames so every cover is committed.
+async function forceSynchronousDecode() {
+  await page.evaluate(async () => {
+    const images = [...document.querySelectorAll("#grid img")];
+    for (const img of images) {
+      img.loading = "eager";
+      img.decoding = "sync";
+    }
+    await Promise.all(images.map((img) => new Promise((resolve) => {
+      img.onload = resolve;
+      img.onerror = resolve;
+      img.src = img.src;
+    })));
+  });
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+}
+
 await waitForStableGrid();
+await forceSynchronousDecode();
 
 if (mode === "bigbox") {
   // Navigate to Big Box via the deeplink, then wait for the overlay-in
@@ -84,6 +106,7 @@ if (mode === "bigbox") {
   // Selecting a game re-renders the grid; wait for the new img elements to
   // settle and decode so no cover is a placeholder in the detail capture.
   await waitForStableGrid();
+  await forceSynchronousDecode();
 }
 
 await page.screenshot({ path: outputPath, type: "png" });
