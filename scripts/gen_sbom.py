@@ -8,7 +8,7 @@ release can answer "what is inside this artifact" with zero new runtime
 dependencies.
 
 Usage:
-  python3 scripts/gen_sbom.py --version 0.9.0 --out sbom.json
+  python3 scripts/gen_sbom.py --version 1.0.0 --out sbom.json
 """
 
 import argparse
