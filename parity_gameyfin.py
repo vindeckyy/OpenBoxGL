@@ -163,15 +163,12 @@ class GameyfinClient:
         destination = Path(destination)
         destination.mkdir(parents=True, exist_ok=True)
         target = destination / filename
-        try:
-            with response:
-                atomic_copy_stream(
-                    response, target, mode=0o600,
-                    max_bytes=4 * 1024 * 1024 * 1024,
-                )
-            fsync_directory(destination)
-        except Exception:
-            raise
+        with response:
+            atomic_copy_stream(
+                response, target, mode=0o600,
+                max_bytes=4 * 1024 * 1024 * 1024,
+            )
+        fsync_directory(destination)
         return target
 
 
