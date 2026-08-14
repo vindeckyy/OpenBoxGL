@@ -25,6 +25,7 @@
       -webkit-text-size-adjust:100%;
       text-size-adjust:100%;
     }
+    html { height:100%; background:var(--bg); }
     body {
       margin:0; overflow:hidden; color:var(--text); font:var(--font-body)/1.45 ui-sans-serif,system-ui,sans-serif;
       background:var(--bg);
@@ -282,6 +283,7 @@
     .lifecycle h2 { max-width:80vw; margin:12px 0 6px; font-size:clamp(34px,6vw,78px); line-height:1; text-transform:uppercase; }
     .lifecycle p { color:#c0b3a4; font-size:var(--font-action); }
     .bigbox { position:fixed; z-index:30; inset:0; display:grid; grid-template-rows:auto 1fr auto; padding:34px 46px; overflow:hidden; cursor:none; background:radial-gradient(circle at 70% 30%,var(--bigbox-bg),var(--bg) 68%); }
+    .bigbox:focus, .bigbox:focus-visible { outline:none; }
     .bigbox[hidden] { display:none; }
     .bigbox-head { display:flex; align-items:center; color:#c8bba7; text-transform:uppercase; letter-spacing:.15em; }
     .bigbox-head strong { color:#fff; font-size:var(--font-subtitle); }

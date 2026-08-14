@@ -17,13 +17,29 @@ await page.waitForFunction(
   () => document.querySelectorAll("#grid [data-game]").length >= 12,
   { timeout: 60000 },
 );
-await page.waitForFunction(
-  () => {
-    const images = [...document.querySelectorAll("#grid img")];
-    return images.length >= 12 && images.every((img) => img.complete && img.naturalWidth > 32);
-  },
-  { timeout: 120000 },
-);
+
+// Cover ratio measurement regroups the grid after images load, which swaps
+// the img elements. Wait until the DOM is stable AND every cover is decoded
+// before capturing, so no card is ever a placeholder in the screenshot.
+async function waitForStableGrid() {
+  for (let attempt = 0; attempt < 25; attempt++) {
+    const previous = await page.evaluate(() =>
+      [...document.querySelectorAll("#grid img")].map((img) => img.src).join("\n"),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const settled = await page.evaluate(async (prev) => {
+      const images = [...document.querySelectorAll("#grid img")];
+      if (images.map((img) => img.src).join("\n") !== prev) return false;
+      if (!images.every((img) => img.complete && img.naturalWidth > 32)) return false;
+      await Promise.all(images.map((img) => img.decode().catch(() => {})));
+      return true;
+    }, previous);
+    if (settled) return;
+  }
+  throw new Error("Grid never stabilized with decoded covers.");
+}
+
+await waitForStableGrid();
 
 if (mode === "bigbox") {
   // Navigate to Big Box via the deeplink, then wait for the overlay-in
@@ -65,6 +81,9 @@ if (mode === "bigbox") {
     { timeout: 60000 },
   );
   await new Promise((resolve) => setTimeout(resolve, 300));
+  // Selecting a game re-renders the grid; wait for the new img elements to
+  // settle and decode so no cover is a placeholder in the detail capture.
+  await waitForStableGrid();
 }
 
 await page.screenshot({ path: outputPath, type: "png" });
