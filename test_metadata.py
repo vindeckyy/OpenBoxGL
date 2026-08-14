@@ -124,6 +124,38 @@ def test_platform_aliases():
     print("platform alias self-test: ok")
 
 
+def test_batch_match():
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        package = root / "Metadata.zip"
+        xml = """<LaunchBox>
+          <Game><DatabaseID>1</DatabaseID><Name>Super Adventure</Name><Platform>Nintendo Entertainment System</Platform></Game>
+          <Game><DatabaseID>2</DatabaseID><Name>Super Adventure (USA)</Name><Platform>Nintendo Entertainment System</Platform></Game>
+          <Game><DatabaseID>3</DatabaseID><Name>Robot Quest</Name><Platform>Sega Genesis</Platform></Game>
+        </LaunchBox>"""
+        with zipfile.ZipFile(package, "w") as archive:
+            archive.writestr("Metadata.xml", xml)
+        database = root / "metadata.db"
+        build_database(package, database)
+        from metadata import batch_match, best_match
+
+        # Exact title binds; normalization strips the region tag so the
+        # bare name and the (USA) variant both resolve to the same family.
+        matches = batch_match(database, [
+            ("Super Adventure", "NES"),
+            ("Robot Quest", "Genesis"),
+            ("Does Not Exist", "NES"),
+        ])
+        assert matches["Super Adventure"]["database_id"] == 1
+        assert matches["Robot Quest"]["database_id"] == 3
+        assert "Does Not Exist" not in matches
+
+        # best_match is the single-title shortcut over the same logic.
+        assert best_match(database, "Super Adventure", "NES")["database_id"] == 1
+        assert best_match(database, "Missing Title") is None
+    print("batch match self-test: ok")
+
+
 def test_manual_import():
     with TemporaryDirectory() as directory:
         root = Path(directory)
@@ -189,4 +221,5 @@ def test_manual_import():
 if __name__ == "__main__":
     test()
     test_platform_aliases()
+    test_batch_match()
     test_manual_import()

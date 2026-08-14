@@ -17,7 +17,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.9.0"><img src="https://img.shields.io/badge/Release-v0.9.0-0052CC" alt="Release v0.9.0"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/Release-v1.0.0-0052CC" alt="Release v1.0.0"></a>
   <a href="PARITY.md"><img src="https://img.shields.io/badge/LaunchBox-Parity%20Matrix-555" alt="LaunchBox parity matrix"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions"><img src="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
@@ -74,12 +74,12 @@ OpenBox Game Launcher is an open-source game library manager and launcher built 
 
 OpenBox Game Launcher is unrelated to [Openbox](https://openbox.org/), the open-source Linux window manager. The projects have different maintainers, codebases, and purposes.
 
-OpenBox provides two interfaces:
+OpenBox provides one UI over two hosts:
 
-| Interface | Entry point | Best for |
+| Host | Entry point | Best for |
 | --- | --- | --- |
-| Web UI | `python3 web_app.py` or `openbox` | Full feature set, REST API, Big Box mode |
-| Native UI | `python3 openbox.py` or `openbox-native` | Lightweight desktop use |
+| Native window | `openbox` or `openbox-native` | Default desktop use; one WebKitGTK window renders the full UI |
+| Web UI | `openbox --web` or `python3 web_app.py` | Development and debugging; full feature set, REST API, Big Box mode |
 
 Library data is stored locally at `~/.local/share/openbox-game-launcher/library.json`. Set the `OPENBOX_DATA_DIR` environment variable to use a different data directory.
 
@@ -228,10 +228,10 @@ chmod +x OpenBox-x86_64.AppImage
 ./OpenBox-x86_64.AppImage
 ```
 
-To launch the Tk interface from the AppImage, pass `--native`:
+The AppImage opens the native window by default. To use the loopback web UI instead, pass `--web`:
 
 ```bash
-./OpenBox-x86_64.AppImage --native
+./OpenBox-x86_64.AppImage --web
 ```
 
 Desktop integrators such as Gear Lever work with the AppImage. If an older build opened then never showed a window after integration, install **v0.6.0 or newer**, remove the old menu entry, and re-add the AppImage.
@@ -240,8 +240,8 @@ Desktop integrators such as Gear Lever work with the AppImage. If an older build
 
 ```bash
 sudo make install
-openbox          # Web UI
-openbox-native   # Native UI
+openbox          # Native window (default)
+openbox --web    # Web UI (development)
 ```
 
 ### Flatpak
@@ -337,8 +337,9 @@ OpenBox targets Linux (desktop, Steam Deck, handhelds). Windows-only features ar
 
 ```
 OpenBox/
-├── web_app.py              Web UI server + REST API
-├── openbox.py              Native Tk UI
+├── native_host.c           Native WebKitGTK host (spawns web_app.py)
+├── web_app.py              Loopback server + REST API (shared core)
+├── openbox.py              Shared core helpers (data paths, launch, profiles)
 ├── importers.py            Steam, Heroic, Lutris, ROM imports
 ├── parity_*.py             Parity modules (storefront, saves, media, discovery, integrations, etc.)
 ├── emulators.py            Emulator profiles + Flathub management

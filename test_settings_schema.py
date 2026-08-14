@@ -50,7 +50,7 @@ class SettingsSchemaTests(unittest.TestCase):
             "bigbox_shutdown_commands", "tray_enabled", "minimize_to_tray", "gameyfin_url",
             "gameyfin_username", "gameyfin_password", "gameyfin_install_dir",
             "gameyfin_provider", "ludusavi_backup_path", "tracking_mode", "tracking_delay",
-            "tracking_frequency", "apply_perf", "ui_window", "progress_on_first_play",
+            "tracking_frequency", "apply_perf", "progress_on_first_play",
             "auto_close_store_clients",
         ):
             self.assertIn(key, KNOWN_SETTINGS, f"save-path key missing from whitelist: {key}")

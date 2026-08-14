@@ -36,12 +36,13 @@ def v3_state(**overrides):
 
 
 class V3MigrationTests(unittest.TestCase):
-    def test_v3_gains_collections_and_schema_4(self):
+    def test_v3_gains_collections_and_schema_5(self):
         state, changed = normalize_state(v3_state())
         self.assertTrue(changed)
-        self.assertEqual(state["schema_version"], 4)
+        self.assertEqual(state["schema_version"], 5)
         self.assertEqual(state["queue"], [])
         self.assertEqual(state["notifications"], [])
+        self.assertEqual(state["ui_state"], {})
 
     def test_unknown_fields_survive_migration(self):
         state, _ = normalize_state(v3_state())

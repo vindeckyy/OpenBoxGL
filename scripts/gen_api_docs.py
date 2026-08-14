@@ -15,6 +15,15 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from routes import GET_TABLE, POST_TABLE, V1_ALIASED_PREFIXES  # noqa: E402
+from contracts import V1_SCHEMA  # noqa: E402
+
+
+def _describe(v1_path, handler):
+    """Return a documented response shape when the route is in V1_SCHEMA."""
+    schema = V1_SCHEMA.get(v1_path)
+    if schema and schema.get("response"):
+        return f"`{schema['response']}`"
+    return f"`{handler}`"
 
 
 def main():
@@ -29,8 +38,8 @@ def main():
         "",
         "Authentication: every request needs the `X-OpenBox-Token` header with the per-process token from `server.token`. Responses are JSON; errors carry `error`, `code`, and `request_id`.",
         "",
-        "| Method | Path | Handler |",
-        "|---|---|---|",
+        "| Method | Path | Handler | Response |",
+        "|---|---|---|---|",
     ]
     seen = set()
     for path in sorted(V1_ALIASED_PREFIXES):
@@ -44,9 +53,10 @@ def main():
             methods.append("GET")
         if v1_path in POST_TABLE:
             methods.append("POST")
-        lines.append(f"| {' / '.join(methods)} | `{v1_path}` | `{handler}` |")
+        response = _describe(v1_path, handler)
+        lines.append(f"| {' / '.join(methods)} | `{v1_path}` | `{handler}` | {response} |")
     lines.append("")
-    lines.append("Generated from `routes.py`; do not edit by hand.")
+    lines.append("Generated from `routes.py` and `contracts.py`; do not edit by hand.")
     Path(args.out).write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"wrote {args.out} with {len(seen)} routes")
 

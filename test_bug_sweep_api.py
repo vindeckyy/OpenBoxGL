@@ -104,6 +104,16 @@ class ApiSweep(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assert_alive()
 
+    def test_post_auth(self):
+        from routes import POST_TABLE
+
+        for route in sorted(POST_TABLE):
+            status, _ = self.request(route, {}, token=None)
+            self.assertEqual(status, 403, route)
+            status, _ = self.request(route, {}, token="wrong")
+            self.assertEqual(status, 403, route)
+        self.assert_alive()
+
     def test_validation(self):
         for body in (b"{", b"[]", b"null", b'"text"'):
             status, payload = self.request("/api/settings", body, raw=True)

@@ -200,29 +200,6 @@ class ParityApiTests(unittest.TestCase):
         self.assertTrue(settings["storefront_auto_import"]["heroic"])
         self.assertFalse(settings["storefront_auto_import"]["steam"])
 
-    def test_settings_save_validates_ui_window_mode(self):
-        from openbox import load_state, save_state
-        from web_app import Handler
-
-        save_state({
-            "games": [],
-            "profiles": {},
-            "history": [],
-            "settings": {},
-            "playlists": [],
-        })
-        handler = object.__new__(Handler)
-        handler.send_json = mock.Mock()
-        Handler.save_settings(handler, {"ui_window": "browser"})
-        self.assertEqual(load_state()["settings"]["ui_window"], "browser")
-        with self.assertRaises(ValueError):
-            Handler.save_settings(handler, {"ui_window": "teleport"})
-
-    def test_settings_default_ui_window_is_app(self):
-        from web_app import public_settings
-
-        self.assertEqual(public_settings({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})["ui_window"], "app")
-
     def test_storefront_catalog_route_returns_json_error(self):
         from web_app import Handler
 

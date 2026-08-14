@@ -15,6 +15,12 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="1.0.0" date="2026-08-13">
+      <description>
+        <p>Native-first release. OpenBox now opens in a native WebKitGTK window by default, rendering the same library UI as the web app instead of a browser tab or the removed Tk interface. The native host owns server lifecycle, single instance, window geometry, minimize-to-tray, and a fallback to the system-browser app window when WebKitGTK is unavailable.</p>
+        <p>Batch metadata auto-match binds every unmatched game whose title exactly matches the LaunchBox Games Database in one action, instead of matching one game at a time.</p>
+      </description>
+    </release>
     <release version="0.9.0" date="2026-08-12">
       <description>
         <p>Engineering foundation release: lint, compile, coverage, and version-sync gates, a fixed route error path, and a crash report packager.</p>

@@ -200,12 +200,23 @@ class SavePerfProfilesTest(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tempdir.cleanup)
-        os.environ["OPENBOX_DATA_DIR"] = self.tempdir.name
-        self.data_dir = Path(self.tempdir.name)
-        self.data_dir.mkdir(parents=True, exist_ok=True)
         import web_app
         from openbox import STATE_STORE
         self.web_app = web_app
+        # Snapshot every shared global this test mutates so tearDown can
+        # restore them. Other test modules import the same web_app/STATE_STORE
+        # singletons; leaving them pointed at a tempdir poisons later tests.
+        self._prev_data_dir = os.environ.get("OPENBOX_DATA_DIR")
+        self._prev_data = web_app.DATA
+        self._prev_store_path = STATE_STORE.path
+        self._prev_store_lock = STATE_STORE.lock_path
+        self._prev_store_backup = STATE_STORE.backup_path
+        self._prev_cached_state = STATE_STORE._cached_state
+        self._prev_cached_signature = STATE_STORE._cached_signature
+        self.addCleanup(self._restore_globals)
+        os.environ["OPENBOX_DATA_DIR"] = self.tempdir.name
+        self.data_dir = Path(self.tempdir.name)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         web_app.DATA = self.data_dir / "library.json"
         STATE_STORE.path = web_app.DATA
         STATE_STORE.lock_path = web_app.DATA.with_name(f".{web_app.DATA.name}.lock")
@@ -214,6 +225,20 @@ class SavePerfProfilesTest(unittest.TestCase):
         STATE_STORE._cached_signature = None
         # Seed an empty library so transactions have a base to mutate.
         STATE_STORE.save({"games": [], "profiles": {}, "settings": {}, "history": [], "playlists": []})
+
+    def _restore_globals(self):
+        from openbox import STATE_STORE
+
+        if self._prev_data_dir is None:
+            os.environ.pop("OPENBOX_DATA_DIR", None)
+        else:
+            os.environ["OPENBOX_DATA_DIR"] = self._prev_data_dir
+        self.web_app.DATA = self._prev_data
+        STATE_STORE.path = self._prev_store_path
+        STATE_STORE.lock_path = self._prev_store_lock
+        STATE_STORE.backup_path = self._prev_store_backup
+        STATE_STORE._cached_state = self._prev_cached_state
+        STATE_STORE._cached_signature = self._prev_cached_signature
 
     def handler(self):
         handler = self.web_app.Handler.__new__(self.web_app.Handler)
