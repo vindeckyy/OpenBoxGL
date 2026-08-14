@@ -4,29 +4,55 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2026-08-13
+## [1.0.0] - 2026-08-14
 
 ### Added
 
 #### Native window (native-first)
 
-- OpenBox opens in a native WebKitGTK window by default, rendering the same `index.html`, `app.js`, and `app.css` as the web UI. The native host owns server lifecycle, single instance, window geometry, minimize-to-tray, and a fallback ladder to the system-browser app window when WebKitGTK is missing.
-- The removed Tk interface no longer ships; `--web` remains a development opt-out.
+- `native_host.c` (C, WebKitGTK) renders the same `index.html`, `app.js`, and `app.css` as the web UI in a native window, with smooth scrolling, hardware acceleration, and the app's exact background color. The native host owns server lifecycle, single-instance locking, minimize-to-tray, window geometry persistence, and a fallback ladder (system-browser chrome-less app window, then the default browser) when WebKitGTK is missing or the host fails to start.
+- `openbox` and `openbox-native` launchers resolve the share directory across repo, Makefile/Flatpak, and AppImage layouts; `openbox --web` remains the development opt-out to the loopback web UI in a browser.
+- Native IPC: `/api/native/*` routes with dynamic capability reporting, plus a JS↔C bridge (`window.openboxNative`) for native dialogs, external opens, reveal-in-file-manager, and window chrome including Big Box fullscreen enter/exit.
+- Server-Sent Events: `/api/events` streams session and job events; the job manager emits observer events and polling remains the fallback. SIGTERM/SIGINT teardown stops running sessions and drains work before exit.
+
+#### State and API contract
+
+- Schema v5 adds a host-owned `ui_state` block; existing games, settings, playlists, and history migrate untouched.
+- The v1 API contract is frozen: `contracts.py` + `v1_contracts.json` (46 routes) with `scripts/check_v1_contract.py` wired into the coverage gate and CI, and `test_v1_aliases.py` pinning legacy aliases.
 
 #### Batch metadata auto-match
 
 - One "Auto-match library" action binds every unmatched game whose title exactly matches the LaunchBox Games Database, replacing the one-game-at-a-time dialog flow. Only exact normalized-title hits qualify, so ambiguous titles are left unmatched for manual confirmation.
 
-#### Frontend hardening
+#### Frontend
 
-- The topbar regroups into Library, Actions, and Tools zones; the empty-state import surface covers all storefront paths.
-- Session and job events stream over Server-Sent Events with polling kept as a fallback.
-- The dialog manager now traps focus and closes on Escape.
+- Grid cover-grouping by aspect ratio (default), persisted as `cover_grouping` and toggleable from the library header.
+- The topbar regroups into Library, Actions, and Tools zones; the empty-state import surface covers every storefront path.
+- The dialog manager traps focus and closes on Escape.
+- Scroll-lag fixes: rAF-coalesced grid rendering, backdrop blur removed from the base scroll path, hover-gated cover transitions, and a constrained workspace grid row.
+
+#### Tests and documentation
+
+- `test_native_ipc.py` and `test_sse.py` cover the native bridge and the event stream.
+- The screenshot pipeline now waits for Big Box and game-detail views to settle and enriches fixture metadata (ESRB, max players, play time, region, play mode, wiki links).
+- `docs/adr/0001-native-host.md` and `docs/native-host-contract.md` document the host/server split and the IPC contract.
 
 ### Changed
 
-- The `ui_window` app/browser split is removed; native is the default and `--web`/`--app-window` flags remain for contributors.
-- The 260-method `Handler` class is split into capability mixins under `handlers/` (library, imports, media, metadata, sessions, settings, extensions, health, emulators, data). `web_app.py` drops from 3,755 to 1,628 lines and keeps server plumbing, shell/SSE serving, bootstrap, and lifecycle; each mixin's methods resolve the live `web_app` namespace at call time, so response bytes and route wiring are unchanged.
+- The 260-method `Handler` class is split into capability mixins under `handlers/` (data, library, settings, media, metadata, imports, sessions, extensions, health, emulators, native). `web_app.py` drops from 3,755 to 1,628 lines and keeps server plumbing, shell/SSE serving, bootstrap, and lifecycle; each mixin's methods resolve the live `web_app` namespace at call time, so response bytes and route wiring are unchanged. Authentication is centralized in dispatch and route tables resolve module-qualified method names.
+- The removed Tk interface no longer ships: AppImage dependencies drop python3-tk/tcl/tk in favor of WebKitGTK 4.1 and GTK dev headers, and the AppImage installs the `handlers/` package. CI compiles the native host (libwebkit2gtk-4.1-dev) on pull requests so C build breaks fail early, and release CI ships the compiled host and the logo asset.
+- Packaging installs the runtime modules and `handlers/` (tracked in `runtime_modules.txt`), with SHARE resolution for Makefile/Flatpak layouts.
+
+### Fixed
+
+- The AppImage build now creates the `handlers/` directory so the handler split installs correctly.
+- The `gen_sbom` usage example version, stale 0.9.0 release-date and localization claims, and SECURITY.md support rows (the 1.0.x row is pinned in tests).
+
+### Verification
+
+- Ran `./run_all_tests.sh`: 47 test files, 0 failures.
+- Ran `make check`: lint, compile, tests, coverage floors (59.0% total vs 55.0% floor; 65.0% `web_app.py` vs 44.0% floor), and the v1 contract check all pass.
+- UI smoke test (`scripts/ui_smoke.sh`) boots a real server, drives the grid, and asserts the Tools menu still opens under every stock theme with no page errors.
 
 ## [0.9.0] - 2026-08-12
 

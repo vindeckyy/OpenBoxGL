@@ -60,7 +60,7 @@
 ## Quick Start
 
 1. **Install.** Grab the [latest AppImage](https://github.com/vindeckyy/OpenBoxGL/releases/latest), or run from source with `python3 web_app.py` (Python 3.10+).
-2. **Open the UI.** It opens in a chrome-less app window by default and falls back to your default browser when no compatible browser can open one. The Settings panel controls this, and `--app-window` / `--no-app-window` override it at launch. From source you can also open the printed URL directly.
+2. **Open the UI.** `openbox` opens a native WebKitGTK window by default, and falls back to a chrome-less app window (then your default browser) when WebKitGTK is missing. `openbox --web` skips the native window and opens the loopback web UI in a browser; from source you can also open the printed URL directly.
 3. **Import games.** Click **Import Folder** and point at a directory of `.sh` files, or **Import Steam** to scan your installed games.
 4. **Press PLAY.** Sessions, play time, and history are tracked automatically.
 
@@ -259,7 +259,7 @@ cd OpenBoxGL
 python3 web_app.py
 ```
 
-Requirements: Python 3.10 or newer on a Linux system with standard desktop tooling.
+Requirements: Python 3.10 or newer on a Linux system with standard desktop tooling. The native window additionally needs WebKitGTK 4.1 (`make native-host` builds `native_host`); `python3 web_app.py` runs without it.
 
 Optional local configuration can be loaded from `~/.env` or a project `.env` file. See `.env.example`. Never commit secrets.
 
@@ -338,8 +338,15 @@ OpenBox targets Linux (desktop, Steam Deck, handhelds). Windows-only features ar
 ```
 OpenBox/
 ├── native_host.c           Native WebKitGTK host (spawns web_app.py)
+├── handlers/               Route handler mixins (library, media, imports, settings, ...)
 ├── web_app.py              Loopback server + REST API (shared core)
+├── routes.py               GET/POST route tables (67 GET + 95 POST entries)
+├── contracts.py            Frozen v1 API contract + legacy aliases
 ├── openbox.py              Shared core helpers (data paths, launch, profiles)
+├── state_store.py          Schema-versioned state, atomic writes, snapshots
+├── settings_schema.py      Settings key whitelist
+├── api_errors.py           Structured API error codes
+├── job_manager.py          Background job lifecycle
 ├── importers.py            Steam, Heroic, Lutris, ROM imports
 ├── parity_*.py             Parity modules (storefront, saves, media, discovery, integrations, etc.)
 ├── emulators.py            Emulator profiles + Flathub management
@@ -364,9 +371,10 @@ OpenBox/
 ./run_all_tests.sh
 ```
 
-Build the AppImage:
+Build the native window host and the AppImage:
 
 ```bash
+make native-host     # WebKitGTK window host (needs libwebkit2gtk-4.1)
 ./build_appimage.sh
 ```
 
