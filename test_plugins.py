@@ -135,6 +135,39 @@ def test():
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
+
+    # The plugin environment filter must strip correctly spelled Gameyfin
+    # variables: the pattern is GAMEYFIN_, not GAMEFYIN_. A real plugin run
+    # proves the filtered environment, not a copy of the filter code.
+    import json as _json
+    import tempfile as _tempfile
+    import unittest.mock as _mock
+    from pathlib import Path as _Path
+    import plugins as _plugins
+    with _tempfile.TemporaryDirectory() as directory:
+        root = _Path(directory)
+        plugin = root / "env.dump"
+        (plugin / "plugin.py").parent.mkdir(parents=True, exist_ok=True)
+        (plugin / "plugin.py").write_text(
+            "import json, os\n"
+            "def before_launch(payload):\n"
+            "    open(os.environ['ENV_DUMP'], 'w').write(json.dumps("
+            "{k: v for k, v in os.environ.items() if 'GAMEFYIN' in k or 'GAMEYFIN' in k}))\n"
+            "    return payload\n"
+        )
+        (plugin / "plugin.json").write_text(_json.dumps({
+            "id": "env.dump", "name": "env dump", "version": "1",
+            "entry": "plugin.py", "hooks": ["before_launch"],
+        }))
+        dump = root / "env.json"
+        env = dict(os.environ)
+        env["GAMEYFIN_URL"] = "http://internal"
+        env["GAMEYFIN_PASSWORD"] = "secret"
+        env["ENV_DUMP"] = str(dump)
+        with _mock.patch.dict(os.environ, env, clear=True):
+            _plugins.run_plugins(root, "before_launch", {"args": []})
+        leaked = _json.loads(dump.read_text())
+        assert leaked == {}, leaked
     print("plugin self-test: ok")
 
 

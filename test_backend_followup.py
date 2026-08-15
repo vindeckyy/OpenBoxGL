@@ -96,6 +96,17 @@ class BackendFollowupTests(unittest.TestCase):
         self.assertEqual(manager.snapshot("cancel").get("state"), "cancelled")
         manager.shutdown(wait=True, cancel_futures=True)
 
+    def test_completed_futures_are_released(self):
+        manager = JobManager(max_workers=2)
+        for index in range(5):
+            manager.submit(f"job-{index}", lambda: {"ok": True})
+        for _ in range(200):
+            if all(manager.snapshot(f"job-{index}").get("state") == "done" for index in range(5)):
+                break
+            time.sleep(0.01)
+        self.assertEqual(manager._futures, {}, "completed futures must not accumulate")
+        manager.shutdown(wait=True, cancel_futures=True)
+
     def test_archive_duplicate_and_size_limits(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

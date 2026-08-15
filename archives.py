@@ -135,6 +135,13 @@ def validate_7z_paths(extractor, archive):
                 raise ValueError("Archive expands beyond the allowed size.")
             current_path = ""
             current_size = 0
+    # A listing may end without the trailing blank separator; count the
+    # final member so it cannot dodge the safety limits.
+    if current_path:
+        members += 1
+        total_bytes += current_size
+        if members > MAX_ARCHIVE_MEMBERS or total_bytes > MAX_ARCHIVE_TOTAL_BYTES:
+            raise ValueError("Archive expands beyond the allowed size.")
 
 
 def choose_game_file(destination, member=""):

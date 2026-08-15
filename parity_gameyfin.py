@@ -74,11 +74,13 @@ class GameyfinClient:
             raise GameyfinError(f"Gameyfin request failed ({error.code}): {detail or error.reason}") from error
         except urllib.error.URLError as error:
             raise GameyfinError(f"Could not reach Gameyfin: {error.reason}") from error
+        if raw:
+            # The caller owns the response: it must consume it inside a
+            # ``with response:`` block before the object goes out of scope.
+            return response
         with response:
             content_type = response.headers.get("Content-Type", "")
             payload = read_limited(response, 16 * 1024 * 1024)
-        if raw:
-            return response, payload
         if "json" in content_type or payload[:1] in (b"{", b"["):
             try:
                 return json.loads(payload.decode() or "null")
@@ -94,13 +96,15 @@ class GameyfinClient:
             "username": self.username,
             "password": self.password,
         }).encode()
-        self.request(
+        response = self.request(
             "POST",
             "/login",
             data=body,
             headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "text/html,application/json"},
             raw=True,
         )
+        # Only the session cookie matters; the body is never read.
+        response.close()
         self._logged_in = True
         return True
 
@@ -190,7 +194,7 @@ def game_from_gameyfin(record, install_root, provider=""):
     platform = platform_from_gameyfin(platforms)
     folder = Path(install_root).expanduser() / f"{_slug(title)}-{game_id}"
     installed = folder.exists() and any(folder.iterdir()) if folder.is_dir() else folder.is_file()
-    path = str(folder) if installed else str(folder)
+    path = str(folder)
     cover = ""
     cover_info = record.get("cover") or {}
     if isinstance(cover_info, dict) and cover_info.get("id"):
@@ -217,8 +221,7 @@ def game_from_gameyfin(record, install_root, provider=""):
     }
 
 
-def _resolve_provider(client, conf):
-    providers = client.list_providers()
+def _resolve_provider(client, conf, providers):
     provider = conf["provider"]
     if provider not in {item.get("key") for item in providers if isinstance(item, dict)}:
         provider = providers[0].get("key", DEFAULT_PROVIDER) if providers else DEFAULT_PROVIDER
@@ -232,7 +235,7 @@ def catalog_gameyfin(settings, client=None):
     install_root = conf["install_dir"] or str(Path.home() / "Games" / "Gameyfin")
     client = client or GameyfinClient(conf["url"], conf["username"], conf["password"])
     providers = client.list_providers()
-    provider = _resolve_provider(client, conf)
+    provider = _resolve_provider(client, conf, providers)
     catalog = []
     for record in client.list_games():
         if not isinstance(record, dict) or record.get("id") is None:
@@ -266,7 +269,8 @@ def install_gameyfin_game(settings, game_id, client=None):
     record = records.get(str(game_id))
     if not record:
         raise GameyfinError(f"Gameyfin game {game_id} was not found.")
-    provider = _resolve_provider(client, conf)
+    providers = client.list_providers()
+    provider = _resolve_provider(client, conf, providers)
     entry = game_from_gameyfin(record, install_root, provider)
     destination = Path(entry["install_dir"])
     staging = destination.with_name(f".{destination.name}.openbox-installing")

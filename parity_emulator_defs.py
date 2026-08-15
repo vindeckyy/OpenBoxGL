@@ -21,19 +21,53 @@ def _parse_yaml(text):
     for line in text.splitlines():
         if not line.strip() or line.strip().startswith("#"):
             continue
-        if not line.startswith(" "):
+        if not line.startswith((" ", "\t")):
             if line.endswith(":"):
                 current = line[:-1].strip()
-                data[current] = [] if current.endswith("s") else ""
+                data[current] = None
             elif ":" in line:
                 key, value = line.split(":", 1)
                 data[key.strip()] = value.strip().strip('"').strip("'")
             continue
-        if current and isinstance(data.get(current), list):
-            item = line.strip().lstrip("- ").strip().strip('"').strip("'")
-            if item:
-                data[current].append(item)
+        if current is None:
+            continue
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            item = stripped[2:].strip().strip('"').strip("'")
+        else:
+            item = stripped.strip('"').strip("'")
+        if not item:
+            continue
+        # A plain value becomes a one-element sequence, not a scalar: the
+        # key's data type must come from the YAML shape, never its name.
+        if data[current] is None:
+            data[current] = [item]
+        elif isinstance(data[current], list):
+            data[current].append(item)
+        else:
+            data[current] = [data[current], item]
     return data
+
+
+def main():
+    # pyyaml absent: the fallback parser must not infer types from key names.
+    text = """id: demo
+name: Demo
+extensions:
+  - iso
+  - cso
+platform: Single
+"""
+    data = _parse_yaml(text)
+    assert data["id"] == "demo"
+    assert data["name"] == "Demo"
+    assert data["extensions"] == ["iso", "cso"]
+    assert data["platform"] == "Single"
+    print("emulator-defs fallback parser self-test: ok")
+
+
+if __name__ == "__main__":
+    main()
 
 
 def load_definitions(defs_dir=None):

@@ -158,7 +158,16 @@ class JobManager:
         future = self._executor.submit(run)
         with self._lock:
             self._futures[job_id] = future
+            future.add_done_callback(self._drop_future)
             return dict(self._jobs[name])
+
+    def _drop_future(self, future):
+        """Forget a finished future so completed jobs cannot accumulate."""
+        with self._lock:
+            for job_id, stored in list(self._futures.items()):
+                if stored is future:
+                    self._futures.pop(job_id, None)
+                    break
 
     def cancel(self, name):
         with self._lock:

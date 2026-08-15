@@ -57,16 +57,19 @@ def add_exclusion(state, source, external_id, heroic_source=""):
 def remove_exclusion(state, source, external_id):
     source_key = str(source).strip().casefold()
     external_id = str(external_id).strip()
+    before = list_exclusions(state)
     items = [
-        item for item in list_exclusions(state)
+        item for item in before
         if not (
             isinstance(item, dict)
             and str(item.get("source", "")).casefold() == source_key
             and str(item.get("external_id", "")) == external_id
         )
     ]
-    state.setdefault("settings", {})["import_exclusions"] = items
-    return True
+    removed = len(before) - len(items)
+    if removed:
+        state.setdefault("settings", {})["import_exclusions"] = items
+    return removed
 
 
 def filter_imported(imported, state):
@@ -84,3 +87,14 @@ def filter_imported(imported, state):
             continue
         kept.append(game)
     return kept
+
+
+def main():
+    state = {"settings": {"import_exclusions": [{"source": "steam", "external_id": "570"}]}}
+    assert remove_exclusion(state, "steam", "570") == 1
+    assert remove_exclusion(state, "steam", "999") == 0
+    print("import-policy self-test: ok")
+
+
+if __name__ == "__main__":
+    main()

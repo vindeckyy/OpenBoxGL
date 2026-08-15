@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Cloud sync: the local-wins merge branch contained a dead condition (`remote_played > local_played` can never be true there), so newer per-field remote values were silently dropped.
+- State backup now mirrors the latest committed primary, staged atomically, instead of aliasing the brand-new write.
+- Plugin environment filtering fixed a typo (`GAMEFYIN_` -> `GAMEYFIN_`), so correctly spelled Gameyfin variables are stripped from plugin subprocesses.
+- Play queue: skip flags recorded while advancing are now written back to state before a valid item is returned, so they can no longer silently disappear.
+- Queue `path_exists` now checks the filesystem instead of reporting any nonempty path string as existing.
+- OBS status: `recording` now requires a recording file produced within the last two minutes instead of reporting any running OBS process as actively recording.
+- Steam and Lutris imports now verify the Flatpak app is actually installed (`flatpak info`) before building a `flatpak run` command.
+- IGDB: time-to-beat came from a nonexistent `time_to_beat` field on the games endpoint. It now queries the separate `game_time_to_beats` endpoint and converts its seconds value to hours.
+- Gameyfin: catalog requests the provider list once; raw responses are returned open and closed by the caller; the tautological `str(folder) if installed else str(folder)` is gone.
+- Job manager: completed futures are now released via a done callback so job bookkeeping cannot accumulate indefinitely.
+- Webhook retry: the injected clock now measures the sleep duration and warns when the wall-clock sleep overshoots.
+- The emulator-defs YAML fallback parser no longer decides a key is a list based on whether its name ends in "s"; indented values build sequences from the actual shape.
+- Native dialog bridge: selected paths are now JSON-quoted strings, so paths with spaces or quotes produce valid JSON and no longer leak the `g_strescape` allocation.
+- Ed25519 point decoding now rejects out-of-range coordinates, small-order points, and off-curve values in both `updates.py` and `scripts/verify_release.py`, and checks the canonical scalar before point arithmetic.
+- `remove_exclusion` returns the number of removed entries; the API route reports `removed` truthfully.
+- `sanitize_settings` no longer iterates a non-dict input into garbage dropped-key lists.
+- The 7z archive validator counts a final member even when the listing omits the trailing blank separator.
+- Screenshot capture: the previously ignored `window_hint` now selects active-window flags for gnome-screenshot, spectacle, and scrot.
+
+### Changed
+
+- `_tdp_args` returns only the argument list; the unused milliwatt value is gone.
+
+
 - Big Box hybrid mode: platform buttons were emitting a broken `data-bigbox-AppState.platform` attribute that the click handler never matched, so switching platforms did nothing. The attribute now matches the selector.
 - IGDB search sent a malformed `&AppState.platform =` query parameter instead of `platform=`, dropping the platform hint from searches.
 - Custom-field keys in the details pane were rendered without escaping; a crafted key could inject HTML. Keys and values are now both escaped.

@@ -58,7 +58,7 @@ def _run_ryzenadj(extra_args, which=shutil.which, run=subprocess.run):
 def _tdp_args(tdp_w):
     """Build ryzenadj args for a TDP limit in watts (mW internally)."""
     mw = int(round(float(tdp_w) * 1000))
-    return ["-stapm-limit=" + str(mw)], mw
+    return ["-stapm-limit=" + str(mw)]
 
 
 def apply_perf_profile(profile_name, state, environ=None):
@@ -73,7 +73,7 @@ def apply_perf_profile(profile_name, state, environ=None):
         result["reason"] = "no-profile" if not perf else ("disabled" if not perf.get("enabled") else "bad-tdp")
         return result
     try:
-        args, mw = _tdp_args(perf["tdp_w"])
+        args = _tdp_args(perf["tdp_w"])
     except (TypeError, ValueError):
         result["reason"] = "bad-tdp"
         return result
@@ -97,7 +97,7 @@ def restore_perf_profile(profile_name, state):
         result["reason"] = "no-restore"
         return result
     try:
-        args, mw = _tdp_args(perf["restore_tdp_w"])
+        args = _tdp_args(perf["restore_tdp_w"])
     except (TypeError, ValueError):
         result["reason"] = "bad-tdp"
         return result

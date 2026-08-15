@@ -111,10 +111,9 @@ def sync_statistics(state, folder, now=None):
                     game["favorite"] = saved["favorite"]
             elif saved:
                 # Local changes win; keep newer per-field values from the remote.
-                if remote_played > local_played:
-                    for field in ("progress", "rating", "favorite"):
-                        if saved.get(field) is not None and str(saved.get(field)) != "":
-                            game[field] = saved[field]
+                for field in ("progress", "rating", "favorite"):
+                    if saved.get(field) is not None and str(saved.get(field)) != "":
+                        game[field] = saved[field]
             changed += before != {field: game.get(field) for field in STAT_FIELDS}
             merged[key] = {
                 field: game.get(field, 0 if field in {"play_count", "playtime_seconds", "rating"} else "")

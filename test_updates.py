@@ -83,6 +83,29 @@ def main():
         return Response(json.dumps(pre_release).encode())
     pre_update = check_update(pre_opener)
     assert pre_update["available"] is False
+
+    # Malformed Ed25519 points must be rejected, never verified.
+    from updates import _point_decompress, _verify_ed25519
+    p = 2 ** 255 - 19
+    for bad in (
+        (p).to_bytes(32, "little"),          # y == p: out of range
+        (2).to_bytes(32, "little"),          # not on the curve
+        bytes(32),                           # identity / small order
+        (1).to_bytes(32, "little"),          # order-2 point
+        (p - 1).to_bytes(32, "little"),      # order-2 point
+    ):
+        try:
+            _point_decompress(bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid point accepted")
+    for bad in (bytes(32), (1).to_bytes(32, "little"), (p).to_bytes(32, "little")):
+        try:
+            result = _verify_ed25519(bad, bytes(64), b"msg")
+        except ValueError:
+            result = False
+        assert result is False
     print("update self-test: ok")
 
 

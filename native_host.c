@@ -352,9 +352,16 @@ handle_dialog(WebKitWebView *view, const char *id, JSCValue *args)
     char *result_json = NULL;
     if (result == GTK_RESPONSE_ACCEPT) {
         char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-        result_json = g_strdup_printf("{\"path\":%s,\"cancelled\":false}",
-                                      filename ? g_strescape(filename, NULL) : "null");
-        g_free(filename);
+        if (filename) {
+            char *escaped = g_strescape(filename, NULL);
+            char *quoted = g_strdup_printf("\"%s\"", escaped);
+            result_json = g_strdup_printf("{\"path\":%s,\"cancelled\":false}", quoted);
+            g_free(quoted);
+            g_free(escaped);
+            g_free(filename);
+        } else {
+            result_json = g_strdup("{\"path\":null,\"cancelled\":false}");
+        }
     } else {
         result_json = g_strdup("{\"path\":null,\"cancelled\":true}");
     }

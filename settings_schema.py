@@ -95,6 +95,6 @@ KNOWN_SETTINGS = {
 def sanitize_settings(settings):
     """Return a copy of settings containing only known keys; unknown keys are dropped (names returned)."""
     if not isinstance(settings, dict):
-        return {}, list(settings) if settings else []
+        return {}, []
     dropped = [key for key in settings if key not in KNOWN_SETTINGS]
     return {key: value for key, value in settings.items() if key in KNOWN_SETTINGS}, dropped

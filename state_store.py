@@ -368,8 +368,14 @@ class JsonStateStore:
                 output.flush()
                 os.fsync(output.fileno())
             os.chmod(temporary, 0o600)
-            # Backup first: a failure must not pair a fresh primary with a stale backup.
-            shutil.copy2(temporary, self.backup_path)
+            # Backup first: a failure must not pair a fresh primary with a
+            # stale backup. The backup mirrors the latest committed state
+            # (previous versions live in snapshots); stage it atomically so
+            # an interrupted backup copy can never leave a corrupt file.
+            backup_tmp = self.backup_path.with_name(self.backup_path.name + ".tmp")
+            shutil.copy2(temporary, backup_tmp)
+            os.chmod(backup_tmp, 0o600)
+            os.replace(backup_tmp, self.backup_path)
             os.chmod(self.backup_path, 0o600)
             os.replace(temporary, self.path)
             os.chmod(self.path, 0o600)

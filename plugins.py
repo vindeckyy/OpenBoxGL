@@ -164,7 +164,7 @@ def run_plugins(directory, hook, payload):
             sensitive = (
                 "TOKEN", "PASSWORD", "SECRET", "API_KEY",
                 "OPENBOX_", "RETROACHIEVEMENTS_", "EMUMOVIES_", "GITHUB_",
-                "RA_", "IGDB_", "GAMEFYIN_",
+                "RA_", "IGDB_", "GAMEYFIN_",
             )
             upper_env = {key.upper(): key for key in plugin_env}
             for pattern in sensitive:

@@ -1,9 +1,27 @@
-#!/usr/bin/env python3
+import os
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
-from archives import extract_game, safe_zip_extract
+import archives
+from archives import extract_game, safe_zip_extract, validate_7z_paths
+
+
+def _fake_7z_script(root, *members):
+    """An executable stand-in for 7z that prints a -slt listing.
+
+    Real 7z separates records with blank lines; only the final trailing
+    separator is omitted, which is the case the flush must handle.
+    """
+    records = []
+    for path, size in members:
+        records.append(f"Path = {path}\nSize = {size}")
+    listing = "\n\n".join(records)
+    script = root / "fake-7z"
+    script.write_text(f"#!/bin/sh\nprintf '%b' {listing!r}\n")
+    script.chmod(0o755)
+    return str(script)
 
 
 def test():
@@ -24,6 +42,22 @@ def test():
             pass
         else:
             raise AssertionError("path traversal must be rejected")
+
+        # A listing without a trailing blank separator must still count its
+        # final member against the archive safety limits.
+        fake = _fake_7z_script(root, ("last.rom", 5))
+        with mock.patch.object(archives, "MAX_ARCHIVE_MEMBERS", 1):
+            validate_7z_paths(fake, root / "listing.7z")
+        # Two members cross MAX_ARCHIVE_MEMBERS=1; the second must trip the
+        # limit even though the listing has no trailing blank line.
+        fake = _fake_7z_script(root, ("last.rom", 5), ("last2.rom", 5))
+        with mock.patch.object(archives, "MAX_ARCHIVE_MEMBERS", 1):
+            try:
+                validate_7z_paths(fake, root / "listing.7z")
+            except ValueError as error:
+                assert "beyond" in str(error)
+            else:
+                raise AssertionError("final members must not dodge the limits")
     print("archive self-test: ok")
 
 

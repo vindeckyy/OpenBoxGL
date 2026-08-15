@@ -22,14 +22,26 @@ def steam_roots(home=None):
     return [path for path in candidates if (path / "steamapps").is_dir()]
 
 
+def _flatpak_installed(app_id, run=subprocess.run):
+    """True only when the named Flatpak app is actually installed."""
+    flatpak = shutil.which("flatpak")
+    if not flatpak:
+        return False
+    try:
+        result = run([flatpak, "info", app_id], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+
 def steam_command():
     if binary := shutil.which("steam"):
         return binary, "steam -applaunch {app_id}"
-    if binary := shutil.which("flatpak"):
-        return binary, "flatpak run com.valvesoftware.Steam -applaunch {app_id}"
+    if _flatpak_installed("com.valvesoftware.Steam"):
+        return shutil.which("flatpak"), "flatpak run com.valvesoftware.Steam -applaunch {app_id}"
     if binary := shutil.which("xdg-open"):
         return binary, "xdg-open steam://rungameid/{app_id}"
-    raise FileNotFoundError("Steam, Flatpak, or xdg-open is required to launch imported Steam games.")
+    raise FileNotFoundError("Steam, the Steam Flatpak, or xdg-open is required to launch imported Steam games.")
 
 
 def steam_libraries(root):
@@ -131,10 +143,10 @@ def import_lutris(home=None, run=subprocess.run, which=shutil.which):
     home = home or Path.home()
     if binary := which("lutris"):
         command = [binary]
-    elif binary := which("flatpak"):
-        command = [binary, "run", "net.lutris.Lutris"]
+    elif which("flatpak") and _flatpak_installed("net.lutris.Lutris", run=run):
+        command = [which("flatpak"), "run", "net.lutris.Lutris"]
     else:
-        raise FileNotFoundError("Lutris or Flatpak is required to import Lutris games.")
+        raise FileNotFoundError("Lutris or the Lutris Flatpak is required to import Lutris games.")
     result = run(
         command + ["--list-games", "--installed", "--json"],
         capture_output=True, text=True, check=True, timeout=30,

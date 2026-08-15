@@ -38,6 +38,18 @@ class FakeResponse(io.BytesIO):
 
 
 class GameyfinTests(unittest.TestCase):
+    def test_raw_request_returns_open_response(self):
+        class Opener:
+            def open(self, request, timeout=0):
+                return FakeResponse(b"{\"ok\":true}")
+
+        client = GameyfinClient("http://gameyfin.local", opener=Opener())
+        response = client.request("POST", "/login", data=b"user=x", raw=True)
+        self.assertFalse(response.closed, "raw responses must reach the caller open")
+        with response:
+            pass
+        self.assertTrue(response.closed)
+
     def test_game_from_record_marks_uninstalled(self):
         with tempfile.TemporaryDirectory() as directory:
             game = game_from_gameyfin(

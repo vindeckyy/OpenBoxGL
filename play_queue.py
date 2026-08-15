@@ -1,6 +1,7 @@
 """Pure helpers for OpenBox's persistent play queue."""
 from __future__ import annotations
 from datetime import datetime, timezone
+from pathlib import Path
 
 CAP = 500
 NOTE_LIMIT = 200
@@ -30,12 +31,13 @@ def resolve_queue(state):
     result = []
     for entry in normalize_queue(state.get("queue")):
         game = games.get(entry["game_id"])
+        game_path = str(game.get("path") or "") if game else ""
         result.append({
             **entry,
             "name": game.get("name", "Missing") if game else "Missing",
             "platform": game.get("platform", "") if game else "",
             "cover": game.get("cover", "") if game else "",
-            "path_exists": bool(game and game.get("path")),
+            "path_exists": bool(game) and bool(game_path) and Path(game_path).expanduser().exists(),
             "missing": game is None,
         })
     return result
@@ -94,6 +96,25 @@ def advance(state, current_game_id=None):
         if not game or not game.get("path"):
             item["skip"] = True
             continue
+        state["queue"] = queue
         return item
     state["queue"] = queue
     return None
+
+
+def main():
+    # A queue with one valid entry must still persist the skips it recorded.
+    state = {"games": [
+        {"game_id": "g1", "path": ""},
+        {"game_id": "g2", "path": "/bin/true"},
+    ], "queue": [{"game_id": "g1", "skip": False}, {"game_id": "g2", "skip": False}]}
+    next_item = advance(state)
+    assert next_item["game_id"] == "g2"
+    assert state["queue"][0]["skip"] is True, "skip state must be written back"
+    assert advance(state, "g2") is None
+    assert state["queue"][0]["skip"] is True
+    print("play-queue skip persistence self-test: ok")
+
+
+if __name__ == "__main__":
+    main()

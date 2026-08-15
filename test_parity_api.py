@@ -75,6 +75,16 @@ class ParityApiTests(unittest.TestCase):
         self.assertEqual(self.handler.send_json.call_args[0], (200, {"removed": 1}))
         self.assertEqual([game["name"] for game in load_state()["games"]], ["Manual Steam shortcut", "ROM"])
 
+    def test_remove_import_exclusion_reports_actual_removal(self):
+        from web_app import Handler
+
+        handler = object.__new__(Handler)
+        handler.body = mock.Mock(return_value={"source": "steam", "external_id": "570"})
+        handler.send_json = mock.Mock()
+        # No exclusion exists: removal must report removed=False.
+        Handler.remove_import_exclusion(handler, handler.body())
+        handler.send_json.assert_called_with(200, {"removed": False, "count": 0})
+
     def test_diagnostic_log_route_returns_local_log(self):
         from web_app import Handler, TOKEN
 

@@ -7,7 +7,7 @@ import json
 import re
 import shutil
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import urlopen
@@ -196,13 +196,17 @@ def download_emumovies_media(game, credentials, media_root, media_type="box"):
 def capture_screenshot(dest_path, window_hint=""):
     dest = Path(dest_path)
     dest.parent.mkdir(parents=True, exist_ok=True)
+    # window_hint requests the focused/active window instead of the root
+    # screen; each tool gets its own window flag. Unsupported tools fall
+    # back to their full-screen mode below.
+    window = bool(window_hint)
     commands = []
     if shutil.which("gnome-screenshot"):
-        commands.append(["gnome-screenshot", "-f", str(dest)])
+        commands.append(["gnome-screenshot"] + (["-w", str(dest)] if window else ["-f", str(dest)]))
     if shutil.which("spectacle"):
-        commands.append(["spectacle", "-b", "-n", "-o", str(dest)])
+        commands.append(["spectacle", "-a" if window else "-b", "-n", "-o", str(dest)])
     if shutil.which("scrot"):
-        commands.append(["scrot", str(dest)])
+        commands.append(["scrot", "-u", str(dest)] if window else ["scrot", str(dest)])
     if shutil.which("import"):
         commands.append(["import", "-window", "root", str(dest)])
     last_error = None
@@ -298,12 +302,18 @@ def find_latest_recording(directory, since=None):
 def obs_recording_status(home=None):
     directory = obs_recording_directory(home)
     latest = find_latest_recording(directory)
+    running = bool(shutil.which("obs") and _pgrep("obs"))
     return {
-        "running": bool(shutil.which("obs") and _pgrep("obs")),
-        "recording": bool(_pgrep("obs")),
+        "running": running,
+        "recording": running and bool(find_latest_recording(directory, since=_recording_start_margin())),
         "directory": str(directory),
         "latest_recording": latest,
     }
+
+
+def _recording_start_margin():
+    """A recent recording counts as active; OBS exposes no stdout status flag."""
+    return datetime.now().astimezone() - timedelta(seconds=120)
 
 
 def _pgrep(name):

@@ -37,6 +37,18 @@ class PerfWriteTests(unittest.TestCase):
             self.assertEqual(primary["games"][0]["name"], "Second")
             self.assertEqual(backup["games"][0]["name"], "Second")
 
+    def test_backup_never_contains_uncommitted_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.make_store(directory)
+            store.save({"games": [{"game_id": "g1", "name": "Before"}], "profiles": {}, "history": [], "settings": {}, "playlists": []})
+            with mock.patch("os.replace", side_effect=OSError("simulated failure")):
+                with self.assertRaises(OSError):
+                    store.save({"games": [{"game_id": "g1", "name": "After"}], "profiles": {}, "history": [], "settings": {}, "playlists": []})
+            primary = json.loads(store.path.read_text())
+            backup = json.loads(store.backup_path.read_text())
+            self.assertEqual(primary["games"][0]["name"], "Before")
+            self.assertEqual(backup["games"][0]["name"], "Before", "backup must hold the previous good state")
+
     def test_large_library_writes_compact_json(self):
         with tempfile.TemporaryDirectory() as directory:
             store = self.make_store(directory)
@@ -88,7 +100,7 @@ class PerfWriteTests(unittest.TestCase):
             primary = json.loads(store.path.read_text())
             backup = json.loads(store.backup_path.read_text())
             self.assertEqual(primary["games"][0]["name"], "Before")
-            self.assertIn(backup["games"][0]["name"], {"Before", "After"})
+            self.assertEqual(backup["games"][0]["name"], "Before")
 
     def test_recover_still_restores_backup(self):
         with tempfile.TemporaryDirectory() as directory:

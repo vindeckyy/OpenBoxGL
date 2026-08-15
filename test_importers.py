@@ -1,12 +1,34 @@
 #!/usr/bin/env python3
 from tempfile import TemporaryDirectory
 from pathlib import Path
+from unittest import mock
 
+import importers
 from importers import import_heroic, import_lutris, import_steam, vdf_values
 
 
 def test():
     assert vdf_values('"appid" "42"\n"name" "Real Game"') == {"appid": "42", "name": "Real Game"}
+
+    # Steam flatpak: an uninstalled flatpak must fall through to xdg-open,
+    # never fabricate a flatpak launch command.
+    failed = type("Result", (), {"returncode": 1, "stdout": "", "stderr": ""})()
+    which = lambda name: "/usr/bin/flatpak" if name == "flatpak" else "/usr/bin/xdg-open" if name == "xdg-open" else None
+    with mock.patch.object(importers.shutil, "which", side_effect=which), \
+         mock.patch.object(importers.subprocess, "run", return_value=failed):
+        binary, command = importers.steam_command()
+    assert "xdg-open" in command, "uninstalled Steam flatpak must not produce a flatpak command"
+
+    # Lutris flatpak: uninstalled flatpak must raise, not run a fake command.
+    with mock.patch.object(importers.shutil, "which", side_effect=which), \
+         mock.patch.object(importers.subprocess, "run", return_value=failed):
+        try:
+            import_lutris(Path("/tmp"), run=lambda *args, **kwargs: failed, which=which)
+        except FileNotFoundError:
+            pass
+        else:
+            raise AssertionError("uninstalled Lutris flatpak must not import")
+
     with TemporaryDirectory() as directory:
         steamapps = Path(directory) / ".local/share/Steam/steamapps"
         steamapps.mkdir(parents=True)

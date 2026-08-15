@@ -112,13 +112,24 @@ def _point_decompress(public_bytes):
     """
     p = 2 ** 255 - 19
     d = (-121665 * pow(121666, p - 2, p)) % p
-    y = int.from_bytes(public_bytes, "little") & ((1 << 255) - 1)
-    sign = public_bytes[31] >> 7
-    y = y & ~(1 << 255)
-    x2 = ((y * y - 1) * pow(d * y * y + 1, p - 2, p)) % p
+    y = int.from_bytes(public_bytes, "little")
+    sign = (y >> 255) & 1
+    y &= (1 << 255) - 1
+    # Reject encodings with y >= p (non-canonical field elements). The
+    # sign bit must be masked before the range check (RFC 8032).
+    if y >= p:
+        raise ValueError("Invalid Ed25519 point: coordinate out of range.")
+    # Reject small-order points (identity, order 2, order 4): they are
+    # never valid verification keys for this application.
+    if y in (0, 1, p - 1):
+        raise ValueError("Invalid Ed25519 point: small-order point.")
+    denominator = (d * y * y + 1) % p
+    x2 = ((y * y - 1) * pow(denominator, p - 2, p)) % p
     x = pow(x2, (p + 3) // 8, p)
     if (x * x) % p != x2:
         x = (x * pow(2, (p - 1) // 4, p)) % p
+        if (x * x) % p != x2:
+            raise ValueError("Invalid Ed25519 point: not on the curve.")
     if (x & 1) != sign:
         x = p - x
     return x, y
@@ -135,13 +146,16 @@ def _verify_ed25519(public_bytes, signature, message):
     if len(public_bytes) != 32 or len(signature) != 64:
         raise ValueError("Invalid Ed25519 key or signature length.")
 
-    A = _point_decompress(public_bytes)
-    R = _point_decompress(signature[:32])
+    # Canonical scalar check must happen before any point arithmetic so
+    # malformed signatures fail cleanly.
     s = int.from_bytes(signature[32:], "little")
-    h = hashlib.sha512(signature[:32] + public_bytes + message).digest()
-    k = int.from_bytes(h, "little") % L
     if s >= L:
         return False
+
+    A = _point_decompress(public_bytes)
+    R = _point_decompress(signature[:32])
+    h = hashlib.sha512(signature[:32] + public_bytes + message).digest()
+    k = int.from_bytes(h, "little") % L
 
     def point_add(P, Q):
         x1, y1, x2, y2 = P[0], P[1], Q[0], Q[1]
@@ -159,7 +173,10 @@ def _verify_ed25519(public_bytes, signature, message):
             n >>= 1
         return result
 
-    return point_mul(s, (Bx, By)) == point_add(R, point_mul(k, A))
+    kA = point_mul(k, A)
+    if kA is None:
+        kA = (0, 1)
+    return point_mul(s, (Bx, By)) == point_add(R, kA)
 
 
 def load_release_signature(url, opener=urlopen):
@@ -331,3 +348,25 @@ def install_desktop_entry(appimage=None):
     ), mode=0o755)
     desktop.chmod(0o755)
     return str(desktop)
+
+
+def main():
+    # RFC 8032 round-trip: malformed points must fail cleanly, not verify.
+    # The canonical signer is exercised by test_release_signing.py; this
+    # only proves the decoder rejects invalid and non-canonical points.
+    zero_sig = bytes(64)
+    try:
+        _point_decompress((2).to_bytes(32, "little"))
+        raise SystemExit("off-curve point accepted")
+    except ValueError:
+        pass
+    try:
+        _verify_ed25519(b"\xff" * 32, zero_sig, b"payload")
+        raise SystemExit("out-of-range point verified")
+    except ValueError:
+        pass
+    print("ed25519 decoder self-test: ok")
+
+
+if __name__ == "__main__":
+    main()

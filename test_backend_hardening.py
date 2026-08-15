@@ -94,14 +94,15 @@ class BackendHardeningTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             read_limited(FakeResponse(b"123456789"), max_bytes=8)
 
-    def test_state_backup_is_updated_with_primary(self):
+    def test_state_backup_matches_primary_after_commit(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "library.json"
             store = JsonStateStore(path)
             store.save({"games": [{"name": "First"}], "profiles": {}, "history": []})
             store.save({"games": [{"name": "Second"}], "profiles": {}, "history": []})
             backup = json.loads(store.backup_path.read_text())
-            # The backup reflects the latest commit, not a stale prior state.
+            # The backup mirrors the latest committed primary; snapshots
+            # hold earlier states. It must never contain uncommitted bytes.
             self.assertEqual(backup["games"][0]["name"], "Second")
             primary = json.loads(path.read_text())
             self.assertEqual(primary["games"][0]["name"], "Second")

@@ -1,7 +1,13 @@
 """Contract tests for queue, tags, notifications, and webhook primitives."""
 from __future__ import annotations
 
+import tempfile
+import time
 import unittest
+from pathlib import Path
+from unittest import mock
+
+import automation
 
 from automation import EVENT_TYPES, build_event, sign_event, validate_webhook
 from catalog import apply_tag_changes, bulk_update, normalize_tags, tag_counts
@@ -24,6 +30,32 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(advance(self.state)["game_id"], "g1")
         self.assertEqual(advance(self.state, "g1")["game_id"], "g3")
         self.assertEqual(remove(self.state, ["g2"]), 1)
+
+    def test_advance_persists_skips_before_returning_valid_item(self):
+        # Skip flags recorded while scanning must reach state even when a
+        # later valid entry is returned.
+        state = {"games": [
+            {"game_id": "g1", "name": "Broken", "path": ""},
+            {"game_id": "g2", "name": "OK", "path": "/bin/true"},
+        ], "queue": [
+            {"game_id": "g1", "skip": False},
+            {"game_id": "g2", "skip": False},
+        ]}
+        self.assertEqual(advance(state)["game_id"], "g2")
+        self.assertTrue(state["queue"][0]["skip"])
+        self.assertFalse(state["queue"][1]["skip"])
+
+    def test_resolve_queue_path_exists_checks_filesystem(self):
+        with tempfile.TemporaryDirectory() as directory:
+            real = Path(directory) / "real.iso"
+            real.write_bytes(b"x")
+            state = {"games": [
+                {"game_id": "g1", "path": str(real)},
+                {"game_id": "g2", "path": "/does/not/exist.iso"},
+            ], "queue": [{"game_id": "g1"}, {"game_id": "g2"}]}
+            resolved = resolve_queue(state)
+            self.assertTrue(resolved[0]["path_exists"])
+            self.assertFalse(resolved[1]["path_exists"])
 
     def test_reorder_rejects_partial_queue(self):
         enqueue(self.state, ["g1", "g3"])
@@ -64,6 +96,51 @@ class NotificationTests(unittest.TestCase):
 
 
 class WebhookTests(unittest.TestCase):
+    def test_delivery_uses_injected_clock_for_retry_timing(self):
+        from automation import WebhookDispatcher
+        calls = []
+
+        def clock():
+            calls.append(1)
+            return len(calls) * 10.0
+
+        def opener(request, timeout=0):
+            # Always retryable: forces the retry sleep path.
+            return type("Response", (), {
+                "status": 429,
+                "headers": {"Retry-After": ""},
+                "__enter__": lambda self: self,
+                "__exit__": lambda self, *_: False,
+            })()
+
+        results = []
+        dispatcher = WebhookDispatcher(
+            on_result=lambda *args: results.append(args),
+            opener=opener,
+            clock=clock,
+            max_workers=1,
+        )
+        with mock.patch("automation.time.sleep") as sleep, mock.patch.object(automation.LOGGER, "warning"):
+            self.assertTrue(dispatcher.enqueue(
+                [{"id": "w1", "url": "https://example.com/hook", "events": ["library.changed"], "enabled": True, "attempts": 2, "timeout": 1, "secret": ""}],
+                build_event("library.changed", {"action": "add", "count": 1}),
+            ))
+            dispatcher.start()
+            for _ in range(200):
+                if results:
+                    break
+                time.sleep(0.01)
+            dispatcher.shutdown(wait_seconds=1)
+        # The worker may finish the final attempt during shutdown.
+        for _ in range(200):
+            if results:
+                break
+            time.sleep(0.01)
+        self.assertEqual(len(results), 1, "one terminal on_result per envelope")
+        # The injected clock must have been read around the retry sleep.
+        self.assertTrue(calls, "injected clock must be exercised")
+        self.assertTrue(sleep.called, "retry backoff must sleep")
+
     def test_event_allowlist_and_signature(self):
         event = build_event("session.started", {"name": "Alpha", "secret": "must-drop"})
         self.assertEqual(event["data"], {"name": "Alpha"})

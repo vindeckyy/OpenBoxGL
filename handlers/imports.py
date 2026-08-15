@@ -203,9 +203,9 @@ class ImportsHandlers:
         source = str(payload.get("source", "")).strip()
         external_id = str(payload.get("external_id", "")).strip()
         def mutate(state):
-            remove_exclusion(state, source, external_id)
-        transact_state(mutate)
-        self.send_json(200, {"removed": True})
+            return remove_exclusion(state, source, external_id)
+        _, count = transact_state(mutate)
+        self.send_json(200, {"removed": count > 0, "count": count})
 
     def _merge_imported_games(self, imported, identity_fn):
         return merge_imported_games(imported, identity_fn)

@@ -280,9 +280,11 @@ class WebhookDispatcher:
                     terminal = False
                     final_error = "stopped"
                     break
-                self._clock()
+                started = self._clock()
                 time.sleep(delay)
-                self._clock()
+                elapsed = max(0.0, self._clock() - started)
+                if elapsed > max(delay * 1.1, delay + 1.0):
+                    LOGGER.warning("Webhook retry sleep took %.2fs (expected %.2fs)", elapsed, delay)
         try:
             self._on_result(webhook_id, event_id, final_status, final_error, sent_at, terminal)
         except Exception:  # the callback must never break a delivery worker

@@ -110,7 +110,7 @@ def fetch_game(game_id):
     query = (
         f"fields name,summary,storyline,first_release_date,genres.name,platforms.name,"
         f"involved_companies.company.name,involved_companies.developer,involved_companies.publisher,"
-        f"rating,aggregated_rating,time_to_beat.normally,time_to_beat.completely;"
+        f"rating,aggregated_rating;"
         f" where id = {game_id};"
     )
     records = igdb_request("games", query)
@@ -129,7 +129,7 @@ def fetch_game(game_id):
             developers.append(name)
         if entry.get("publisher"):
             publishers.append(name)
-    beat = record.get("time_to_beat") or {}
+    beat = _fetch_time_to_beat(game_id)
     return {
         "name": record.get("name", ""),
         "description": record.get("summary") or record.get("storyline") or "",
@@ -139,9 +139,30 @@ def fetch_game(game_id):
         "publisher": ", ".join(publishers),
         "rating": round(float(record.get("rating", 0) or 0) / 20, 2) if record.get("rating") else None,
         "critic_score": record.get("aggregated_rating"),
-        "time_to_beat_hours": beat.get("normally") or beat.get("completely"),
+        "time_to_beat_hours": beat,
         "igdb_id": game_id,
     }
+
+
+def _fetch_time_to_beat(game_id):
+    """Median completion time in hours from the game_time_to_beats endpoint.
+
+    The endpoint reports seconds (hastily/normally/completely). It is a
+    separate query; the games endpoint has no time_to_beat field.
+    """
+    try:
+        records = igdb_request(
+            "game_time_to_beats",
+            f"fields normally; where game_id = {int(game_id)}; limit 1;",
+        )
+    except (OSError, ValueError):
+        return None
+    if not records or not isinstance(records[0], dict):
+        return None
+    seconds = records[0].get("normally")
+    if not isinstance(seconds, int) or seconds <= 0:
+        return None
+    return round(seconds / 3600, 1)
 
 
 def apply_to_game(game, metadata):

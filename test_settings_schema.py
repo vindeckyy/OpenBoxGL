@@ -31,7 +31,13 @@ class SettingsSchemaTests(unittest.TestCase):
     def test_non_dict_input(self):
         clean, dropped = sanitize_settings(["not", "a", "dict"])
         self.assertEqual(clean, {})
-        self.assertEqual(dropped, ["not", "a", "dict"])
+        self.assertEqual(dropped, [])
+
+    def test_non_dict_string_input(self):
+        # A string is malformed input, not a list of keys to iterate.
+        clean, dropped = sanitize_settings("theme")
+        self.assertEqual(clean, {})
+        self.assertEqual(dropped, [])
 
     def test_registry_contains_every_key_the_save_path_writes(self):
         # The save handler normalizes and writes these keys; the whitelist
