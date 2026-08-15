@@ -196,7 +196,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 </p>
 
 <p align="center">
-  <sub>Screenshots use real LaunchBox metadata and cover art. Regenerate with <code>python3 scripts/capture_readme_screenshots.py</code> (see <code>scripts/package.json</code>).</sub>
+  <sub>Screenshots use real LaunchBox metadata and cover art. Regenerate with <code>python3 scripts/capture_readme_screenshots.py</code> (after <code>cd scripts && npm install</code> for puppeteer).</sub>
 </p>
 
 ---
@@ -340,7 +340,7 @@ OpenBox/
 ├── native_host.c           Native WebKitGTK host (spawns web_app.py)
 ├── handlers/               Route handler mixins (library, media, imports, settings, ...)
 ├── web_app.py              Loopback server + REST API (shared core)
-├── routes.py               GET/POST route tables (67 GET + 95 POST entries)
+├── routes.py               GET/POST route tables (79 GET + 95 POST entries; 103/124 incl. v1 aliases; v1_contracts.json freezes 46 paths)
 ├── contracts.py            Frozen v1 API contract + legacy aliases
 ├── openbox.py              Shared core helpers (data paths, launch, profiles)
 ├── state_store.py          Schema-versioned state, atomic writes, snapshots

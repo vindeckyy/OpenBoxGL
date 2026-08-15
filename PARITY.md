@@ -75,7 +75,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Big Box hybrid scoped search | done | Hybrid mode exposes platform-scoped search while browsing |
 | Attract mode and startup video | done | Separate attract delay, optional Big Box startup video, and screensaver launch |
 | Bundled media packs (free) | done | Platform logos, controller prompts, and badge packs apply without a subscription |
-| Localization (en/es/de/fr/pt) | done | Locale setting loads translated UI strings |
+| Localization | partial | Interface is English-only; the five partial translations were removed until real localization lands |
 | Big Box shutdown apps on mode switch | done | Configurable commands run when entering Big Box (not when leaving) |
 | Xbox 360 and loose arcade import | done | default.xex folder scan and Hypseus/Singe loose file import |
 | Vita3K title resolution | done | Title IDs resolve to readable game names on import |
