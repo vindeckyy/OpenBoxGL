@@ -1008,6 +1008,19 @@ def update_steam_metadata(game):
             pass
 
 
+def _contained_launch_cwd(cwd, game):
+    """True when a plugin-requested working directory stays inside the game or data directories."""
+    roots = [DATA.parent, DATA.parent / "cache" / "archives"]
+    game_path = str(game.get("path") or "").strip()
+    if game_path:
+        roots.append(str(Path(game_path).expanduser().parent))
+    try:
+        contained_path(cwd, roots)
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 def start_game(index=None, stable_game_id=""):
     state = load_state()
     if stable_game_id:
@@ -1036,6 +1049,7 @@ def start_game(index=None, stable_game_id=""):
         )
     effective_profile = effective_profile_name(game, state["profiles"])
     apply_perf_profile(effective_profile, state)
+    original_args, original_cwd = args, cwd
     if not os.environ.get("OPENBOX_SAFE_MODE"):
         result = run_plugins(DATA.parent / "plugins", "before_launch", {"game": game, "args": args, "cwd": cwd})
         if not isinstance(result, dict):
@@ -1043,6 +1057,20 @@ def start_game(index=None, stable_game_id=""):
         if result.get("cancel"):
             raise ValueError(str(result.get("error") or "Launch canceled by a plugin."))
         args, cwd = result.get("args"), result.get("cwd")
+        # The hook may adjust arguments, but it must not swap the binary or
+        # move the working directory outside the game or data directories.
+        if (
+            not isinstance(args, list) or not args
+            or not all(isinstance(part, str) and part for part in args)
+            or args[0] != original_args[0]
+            or (cwd is not None and not isinstance(cwd, str))
+            or (cwd is not None and not _contained_launch_cwd(cwd, game))
+        ):
+            LOGGER.warning(
+                "Ignoring before_launch result from plugin hook: invalid args/cwd (requested args=%r, cwd=%r); using the original launch command",
+                args, cwd,
+            )
+            args, cwd = original_args, original_cwd
     if not isinstance(args, list) or not args or not all(isinstance(part, str) and part for part in args):
         raise ValueError("A plugin returned an invalid launch command.")
     if not isinstance(cwd, str) or not Path(cwd).is_dir():

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -38,6 +39,11 @@ def download_plugin_package(entry, dest_dir, opener=urlopen):
     url = str(entry.get("url") or "").strip()
     if not url:
         raise ValueError("This catalog entry has no download URL.")
+    sha256 = str(entry.get("sha256") or "").strip()
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", sha256):
+        raise ValueError(
+            f"Catalog entry {entry.get('id', '?')} is missing a valid sha256 checksum; refusing to download."
+        )
     dest = Path(dest_dir)
     dest.mkdir(parents=True, exist_ok=True)
     archive = dest / f"{entry.get('id', 'plugin')}.zip"
@@ -47,6 +53,6 @@ def download_plugin_package(entry, dest_dir, opener=urlopen):
         max_bytes=128 * 1024 * 1024,
         timeout=120,
         opener=opener,
-        sha256=str(entry.get("sha256") or "").strip(),
+        sha256=sha256,
     )
     return archive

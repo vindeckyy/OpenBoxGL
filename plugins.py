@@ -159,6 +159,18 @@ def run_plugins(directory, hook, payload):
             plugin_env = os.environ.copy()
             for key in ("PYTHONPATH", "PYTHONHOME", "LD_PRELOAD", "LD_LIBRARY_PATH"):
                 plugin_env.pop(key, None)
+            # Strip credentials and OpenBox-internal configuration so plugins
+            # cannot read tokens, secrets, or host state out of the environment.
+            sensitive = (
+                "TOKEN", "PASSWORD", "SECRET", "API_KEY",
+                "OPENBOX_", "RETROACHIEVEMENTS_", "EMUMOVIES_", "GITHUB_",
+                "RA_", "IGDB_", "GAMEFYIN_",
+            )
+            upper_env = {key.upper(): key for key in plugin_env}
+            for pattern in sensitive:
+                for upper_key in list(upper_env):
+                    if pattern in upper_key:
+                        plugin_env.pop(upper_env.pop(upper_key), None)
             plugin_env["PYTHONNOUSERSITE"] = "1"
             with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
                 completed = subprocess.run(
