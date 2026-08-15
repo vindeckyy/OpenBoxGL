@@ -47,7 +47,7 @@ import { refresh, renderDetails } from './library.js';
     async function searchMetadata() {
       try {
         const result = await api(`/api/metadata/search?id=${AppState.metadataGameId}&q=${encodeURIComponent($('metadataQuery').value)}`);
-        $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platform)}${item.release_date ? ` · ${escapeHtml(item.release_date)}` : ''}${item.developer ? ` · ${escapeHtml(item.developer)}` : ''}</small></div><button type="button" class="primary" data-apply-metadata="${item.database_id}">Use</button></div>`).join('') : '<p class="description">No matching games found.</p>';
+        $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platform)}${item.release_date ? ` · ${escapeHtml(item.release_date)}` : ''}${item.developer ? ` · ${escapeHtml(item.developer)}` : ''}</small></div><button type="button" class="primary" data-apply-metadata="${Number(item.database_id) || ''}">Use</button></div>`).join('') : '<p class="description">No matching games found.</p>';
         document.querySelectorAll('[data-apply-metadata]').forEach(button => button.onclick = () => applyMetadata(button.dataset.applyMetadata));
       } catch(error) { notify(error.message); }
     }
@@ -70,8 +70,8 @@ import { refresh, renderDetails } from './library.js';
     $('searchIgdb').onclick = async () => {
       const game = AppState.games.find(item => item.id === AppState.metadataGameId);
       try {
-        const result = await api(`/api/metadata/igdb/search?q=${encodeURIComponent($('metadataQuery').value)}&AppState.platform =${encodeURIComponent(game?.platform || '')}`);
-        $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platforms || '')}${item.year ? ` · ${escapeHtml(item.year)}` : ''}</small><p class="description">${escapeHtml(item.summary || '')}</p></div><button type="button" class="primary" data-apply-igdb="${item.id}">Use</button></div>`).join('') : '<p class="description">No IGDB matches found.</p>';
+        const result = await api(`/api/metadata/igdb/search?q=${encodeURIComponent($('metadataQuery').value)}&platform=${encodeURIComponent(game?.platform || '')}`);
+        $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platforms || '')}${item.year ? ` · ${escapeHtml(item.year)}` : ''}</small><p class="description">${escapeHtml(item.summary || '')}</p></div><button type="button" class="primary" data-apply-igdb="${Number(item.id) || ''}">Use</button></div>`).join('') : '<p class="description">No IGDB matches found.</p>';
         document.querySelectorAll('[data-apply-igdb]').forEach(button => button.onclick = async () => {
           try {
             await api('/api/metadata/igdb/apply',{method:'POST',body:JSON.stringify({id:AppState.metadataGameId,igdb_id:Number(button.dataset.applyIgdb)})});
