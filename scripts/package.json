@@ -5,7 +5,7 @@
   "private": true,
   "license": "AGPL-3.0-or-later",
   "dependencies": {
-    "puppeteer": "22.15.0"
+    "puppeteer": "25.6.0"
   },
   "devDependencies": {
     "eslint": "9.39.5",
