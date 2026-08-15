@@ -89,6 +89,6 @@
     const RATIO_BUCKETS = [['portrait','Portrait'],['square','Square'],['landscape','Landscape']];
     const RATIO_REP = {portrait:.72, square:1, landscape:16/9};
     const coverBucketOf = ratio => ratio == null ? 'portrait' : ratio < .85 ? 'portrait' : ratio <= 1.15 ? 'square' : 'landscape';
-    const fact = (label,value) => `<div class="fact"><small>${label}</small><span>${escapeHtml(value || '-')}</span></div>`;
+    const fact = (label,value) => `<div class="fact"><small>${escapeHtml(label)}</small><span>${escapeHtml(value || '-')}</span></div>`;
 
 export { $, escapeHtml, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches };

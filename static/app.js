@@ -1,4 +1,12 @@
 const token = new URLSearchParams(location.search).get('token') || '';
+// Scrub the token from browser history immediately after reading it: keep any
+// deeplink params, drop only 'token'.
+{
+  const qs = new URLSearchParams(location.search);
+  qs.delete('token');
+  const q = qs.toString();
+  history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+}
 
 import { $, escapeHtml } from './util.js';
 import { AppState, api, notify, nativeFullscreen, detectNative, filteredGames, nativePickFile, selectedIds } from './state.js';
