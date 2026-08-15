@@ -38,7 +38,7 @@ jobs:
           python-version: "3.12"
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@f3712979fa5f215279b101dd0a2e3bdfb4353324 # github/codeql-action@v3 (v3.37.7)
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # github/codeql-action@v3 (v3.37.7)
         with:
           languages: ${{ matrix.language }}
 
