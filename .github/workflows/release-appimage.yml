@@ -55,7 +55,7 @@ jobs:
         # Runs only when the maintainer configures OPENBOX_SIGNING_KEY as a
         # repository secret; without it the release stays checksum-only.
         id: sign
-        if: ${{ secrets.OPENBOX_SIGNING_KEY != '' }}
+        if: ${{ env.OPENBOX_SIGNING_KEY != '' }}
         run: |
           echo "$OPENBOX_SIGNING_KEY" > /tmp/openbox-release-key
           python3 scripts/sign_release.py --key /tmp/openbox-release-key --out OpenBox-x86_64.AppImage.sig OpenBox-x86_64.AppImage
