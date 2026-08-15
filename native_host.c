@@ -301,6 +301,18 @@ evaluate(WebKitWebView *view, const char *script)
 static void
 resolve_bridge(WebKitWebView *view, const char *id, const char *result_json)
 {
+    /*
+     * Invariant: result_json must be valid JS/JSON produced only by callers
+     * in this file (literal objects or g_strescape'd values), never raw
+     * attacker data — it is spliced verbatim into the page. Cheap defensive
+     * guard: if a future caller ever threads untrusted text through here,
+     * reject it instead of evaluating it.
+     */
+    if (!result_json || strstr(result_json, ";") || strstr(result_json, "//") ||
+        strstr(result_json, "*/")) {
+        g_printerr("native_host: resolve_bridge rejected suspicious result payload\n");
+        return;
+    }
     /* result_json is valid JS verbatim; only id needs escaping. */
     char *escaped_id = g_strescape(id, NULL);
     char *script = g_strdup_printf(
@@ -353,11 +365,26 @@ handle_dialog(WebKitWebView *view, const char *id, JSCValue *args)
 static gboolean
 uri_scheme_allowed(const char *uri)
 {
-    char *scheme = g_uri_parse_scheme(uri);
-    gboolean ok = scheme &&
+    if (!uri) {
+        return FALSE;
+    }
+    /* Reject control characters (chars < 0x20 or 0x7F) outright. */
+    for (const unsigned char *p = (const unsigned char *)uri; *p != '\0'; p++) {
+        if (*p < 0x20 || *p == 0x7F) {
+            return FALSE;
+        }
+    }
+    GUri *parsed = g_uri_parse(uri, G_URI_FLAGS_NONE, NULL);
+    if (!parsed) {
+        return FALSE;
+    }
+    const char *scheme = g_uri_get_scheme(parsed);
+    const char *host = g_uri_get_host(parsed);
+    const char *userinfo = g_uri_get_userinfo(parsed);
+    gboolean ok = scheme && host && host[0] != '\0' && !userinfo &&
                   (g_ascii_strcasecmp(scheme, "http") == 0 ||
                    g_ascii_strcasecmp(scheme, "https") == 0);
-    g_free(scheme);
+    g_uri_unref(parsed);
     return ok;
 }
 
@@ -386,24 +413,47 @@ handle_open_external(WebKitWebView *view, const char *id, JSCValue *args)
     g_free(target_str);
 }
 
+static gboolean
+path_is_under(const char *path, const char *base)
+{
+    /* Both args are canonicalized absolute paths; base must be absolute. */
+    gsize base_len = strlen(base);
+    return g_str_has_prefix(path, base) &&
+           (path[base_len] == '\0' || path[base_len] == G_DIR_SEPARATOR);
+}
+
 static void
 handle_reveal(WebKitWebView *view, const char *id, JSCValue *args)
 {
     JSCValue *path = jsc_value_object_get_property(args, "path");
     char *path_str = path ? jsc_value_to_string(path) : NULL;
+    const char *home = g_get_home_dir();
     gboolean ok = FALSE;
-    if (path_str && path_exists(path_str)) {
-        /* Security: reveal the containing folder only; never launch the path itself. */
-        char *dir = g_path_get_dirname(path_str);
-        GError *error = NULL;
-        char *dir_uri = g_filename_to_uri(dir, NULL, &error);
-        ok = dir_uri ? g_app_info_launch_default_for_uri(dir_uri, NULL, &error) : FALSE;
-        if (error) {
-            g_printerr("native_host: reveal failed: %s\n", error->message);
-            g_error_free(error);
+    if (path_str) {
+        if (!g_path_is_absolute(path_str)) {
+            /* Security: never resolve a relative path against our cwd. */
+            g_printerr("native_host: reveal rejected relative path '%s'\n", path_str);
+        } else {
+            char *canon = g_canonicalize_filename(path_str, NULL);
+            if (!path_is_under(canon, data_dir) && !path_is_under(canon, home)) {
+                /* Security: only reveal files under the data dir or the user's home dir. */
+                g_printerr("native_host: reveal rejected path outside data/home dirs: '%s'\n",
+                           canon);
+            } else if (path_exists(canon)) {
+                /* Security: reveal the containing folder only; never launch the path itself. */
+                char *dir = g_path_get_dirname(canon);
+                GError *error = NULL;
+                char *dir_uri = g_filename_to_uri(dir, NULL, &error);
+                ok = dir_uri ? g_app_info_launch_default_for_uri(dir_uri, NULL, &error) : FALSE;
+                if (error) {
+                    g_printerr("native_host: reveal failed: %s\n", error->message);
+                    g_error_free(error);
+                }
+                g_free(dir_uri);
+                g_free(dir);
+            }
+            g_free(canon);
         }
-        g_free(dir_uri);
-        g_free(dir);
     }
     char *result_json = g_strdup_printf("{\"ok\":%s}", ok ? "true" : "false");
     resolve_bridge(view, id, result_json);
