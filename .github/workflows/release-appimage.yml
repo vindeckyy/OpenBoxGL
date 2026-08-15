@@ -14,6 +14,13 @@ permissions:
 jobs:
   appimage:
     runs-on: ubuntu-latest
+    # Publishing a release requires explicit human approval in the "release" environment.
+    environment: release
+    # Only one release build publishes at a time; a newer tag waits its turn
+    # instead of cancelling the in-flight release.
+    concurrency:
+      group: release
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
@@ -43,6 +50,18 @@ jobs:
 
       - name: Write SHA-256 checksum
         run: sha256sum OpenBox-x86_64.AppImage | tee OpenBox-x86_64.AppImage.sha256
+
+      - name: Sign AppImage (Ed25519)
+        # Runs only when the maintainer configures OPENBOX_SIGNING_KEY as a
+        # repository secret; without it the release stays checksum-only.
+        id: sign
+        if: ${{ secrets.OPENBOX_SIGNING_KEY != '' }}
+        run: |
+          echo "$OPENBOX_SIGNING_KEY" > /tmp/openbox-release-key
+          python3 scripts/sign_release.py --key /tmp/openbox-release-key --out OpenBox-x86_64.AppImage.sig OpenBox-x86_64.AppImage
+          echo "sig-file=OpenBox-x86_64.AppImage.sig" >> "$GITHUB_OUTPUT"
+        env:
+          OPENBOX_SIGNING_KEY: ${{ secrets.OPENBOX_SIGNING_KEY }}
 
       - name: Generate SBOM
         id: sbom
@@ -76,4 +95,5 @@ jobs:
             OpenBox-x86_64.AppImage
             OpenBox-x86_64.AppImage.zsync
             OpenBox-x86_64.AppImage.sha256
+            ${{ steps.sign.outputs.sig-file }}
             ${{ steps.sbom.outputs.sbom-file }}

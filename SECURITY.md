@@ -59,7 +59,7 @@ The following are generally out of scope:
 
 ## Release signing
 
-Release artifacts are published with a SHA-256 checksum (`OpenBox-x86_64.AppImage.sha256`). Ed25519 signing is optional: `scripts/sign_release.py` produces a signature only when a signing key is supplied via `OPENBOX_SIGNING_KEY`; the CI release workflow currently publishes the checksum without a signature. The committed `openbox-release.pub` is a placeholder and must be replaced with the real maintainer key before the first signed release. Keep the private key out of the repository and CI; if it is compromised, rotate the key, publish a new `openbox-release.pub`, and re-sign the latest release.
+Release artifacts are published with a SHA-256 checksum (`OpenBox-x86_64.AppImage.sha256`) as the baseline. When `OPENBOX_SIGNING_KEY` is configured as a repository secret, the CI release workflow signs the AppImage automatically with Ed25519 via `scripts/sign_release.py` and publishes the `.sig` alongside it; without that secret, releases publish checksum-only. The committed `openbox-release.pub` is a placeholder and must be replaced with the real maintainer key before relying on any signatures; keep the private key out of the repository and CI, and if it is compromised, rotate the key, publish a new `openbox-release.pub`, and re-sign the latest release.
 
 ## Disclosure
 

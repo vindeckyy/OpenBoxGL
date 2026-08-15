@@ -1,6 +1,9 @@
 """Verified GitHub release updates for the OpenBox AppImage."""
 
+import base64
+import hashlib
 import json
+import logging
 import os
 import re
 from pathlib import Path
@@ -9,10 +12,21 @@ from urllib.request import Request, urlopen
 
 from backend_io import atomic_write_bytes, atomic_write_text, download_file, read_limited
 
+logger = logging.getLogger("openbox")
+
 VERSION = "1.0.0"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
 ASSET = "OpenBox-x86_64.AppImage"
 TRUSTED_RELEASE_PREFIX = "https://github.com/vindeckyy/OpenBoxGL/releases/download/"
+
+# Committed openbox-release.pub bytes. The repo ships a placeholder key; the
+# maintainer replaces it with the real Ed25519 public key at first signed
+# release (see scripts/sign_release.py). The updater refuses to trust it.
+PLACEHOLDER_PUBLIC_KEY = bytes.fromhex(
+    "9df1f9e7cdba094ac9d858d541b7529c28329a309ff79a4812457eb3f259fa8d"
+)
+PUBLIC_KEY_PATH = Path(__file__).resolve().parent / "openbox-release.pub"
+SIGNATURE_ASSET = f"{ASSET}.sig"
 
 
 def version_tuple(value):
@@ -90,6 +104,129 @@ def resolve_update_checksum(update, opener=urlopen):
     raise ValueError("The release checksum is unavailable.")
 
 
+def _point_decompress(public_bytes):
+    """Decompress an Ed25519 public key to affine coordinates (RFC 8032).
+
+    Mirrors scripts/verify_release.py; kept stdlib-only because scripts/ is
+    not shipped inside the AppImage runtime.
+    """
+    p = 2 ** 255 - 19
+    d = (-121665 * pow(121666, p - 2, p)) % p
+    y = int.from_bytes(public_bytes, "little") & ((1 << 255) - 1)
+    sign = public_bytes[31] >> 7
+    y = y & ~(1 << 255)
+    x2 = ((y * y - 1) * pow(d * y * y + 1, p - 2, p)) % p
+    x = pow(x2, (p + 3) // 8, p)
+    if (x * x) % p != x2:
+        x = (x * pow(2, (p - 1) // 4, p)) % p
+    if (x & 1) != sign:
+        x = p - x
+    return x, y
+
+
+def _verify_ed25519(public_bytes, signature, message):
+    """RFC 8032 Ed25519 verification with stdlib big ints."""
+    p = 2 ** 255 - 19
+    L = 2 ** 252 + 27742317777372353535851937790883648493
+    Bx = 15112221349535400772501151409588531511454012693041857206046113283949847762202
+    By = 46316835694926478169428394003475163141307993866256225615783033603165251855960
+    d = (-121665 * pow(121666, p - 2, p)) % p
+
+    if len(public_bytes) != 32 or len(signature) != 64:
+        raise ValueError("Invalid Ed25519 key or signature length.")
+
+    A = _point_decompress(public_bytes)
+    R = _point_decompress(signature[:32])
+    s = int.from_bytes(signature[32:], "little")
+    h = hashlib.sha512(signature[:32] + public_bytes + message).digest()
+    k = int.from_bytes(h, "little") % L
+    if s >= L:
+        return False
+
+    def point_add(P, Q):
+        x1, y1, x2, y2 = P[0], P[1], Q[0], Q[1]
+        x3 = ((x1 * y2 + y1 * x2) * pow(1 + d * x1 * x2 * y1 * y2, p - 2, p)) % p
+        y3 = ((y1 * y2 + x1 * x2) * pow(1 - d * x1 * x2 * y1 * y2, p - 2, p)) % p
+        return (x3, y3)
+
+    def point_mul(n, P):
+        result = None
+        addend = P
+        while n:
+            if n & 1:
+                result = addend if result is None else point_add(result, addend)
+            addend = point_add(addend, addend)
+            n >>= 1
+        return result
+
+    return point_mul(s, (Bx, By)) == point_add(R, point_mul(k, A))
+
+
+def load_release_signature(url, opener=urlopen):
+    """Fetch and parse a release .sig payload (same JSON contract as sign_release.py)."""
+    with github_request(url, opener=opener) as response:
+        payload = json.loads(read_limited(response, 64 * 1024).decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("The release signature is invalid.")
+    if payload.get("algorithm") != "ed25519":
+        raise ValueError(f"The release signature uses an unsupported algorithm: {payload.get('algorithm')!r}")
+    if payload.get("digest_algorithm") != "sha256":
+        raise ValueError("The release signature is missing a SHA-256 digest.")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(payload.get("digest", "")).lower()):
+        raise ValueError("The release signature is missing a valid digest.")
+    try:
+        signature = base64.b64decode(str(payload.get("signature", "")), validate=True)
+    except (TypeError, ValueError) as error:
+        raise ValueError("The release signature is missing a valid signature.") from error
+    if len(signature) != 64:
+        raise ValueError("The release signature has an invalid length.")
+    return {"digest": payload["digest"].lower(), "signature": signature}
+
+
+def verify_update_signature(update, artifact_digest, signature, public_key_bytes):
+    """Verify a release signature against the artifact digest and committed public key."""
+    if len(public_key_bytes) != 32:
+        raise ValueError("The release public key is invalid.")
+    if signature["digest"] != artifact_digest:
+        raise ValueError("The release signature does not match the artifact digest.")
+    if not _verify_ed25519(public_key_bytes, signature["signature"], bytes.fromhex(artifact_digest)):
+        raise ValueError("The release signature verification failed.")
+    return True
+
+
+def _release_public_key():
+    """Committed public key bytes, or None when the file is unavailable."""
+    try:
+        return PUBLIC_KEY_PATH.read_bytes()
+    except OSError:
+        logger.warning("openbox-release.pub is missing; release signatures cannot be verified")
+        return None
+
+
+def verify_release_signature(update, artifact_digest, opener=urlopen):
+    """Verify the release .sig against the committed public key when published.
+
+    Rules: only verify when the release payload actually carries a signature
+    URL; if the committed key is still the placeholder, skip verification with
+    a loud warning; if the key is real and verification fails, raise so the
+    install aborts. Always returns True for unsigned releases (sha256 baseline).
+    """
+    sig_url = str(update.get("sig_url", "")).strip()
+    if not sig_url:
+        return True
+    if not sig_url.startswith(TRUSTED_RELEASE_PREFIX):
+        raise ValueError("The release signature URL is not a trusted OpenBox release asset.")
+    public_key = _release_public_key()
+    if public_key is None or public_key == PLACEHOLDER_PUBLIC_KEY:
+        logger.warning(
+            "release signature published but openbox-release.pub is still the placeholder "
+            "key; signature NOT verified (update installed on checksum only)"
+        )
+        return True
+    signature = load_release_signature(sig_url, opener=opener)
+    return verify_update_signature(update, artifact_digest, signature, public_key)
+
+
 def check_update(opener=urlopen):
     try:
         with github_request(RELEASE_API, opener=opener) as response:
@@ -105,6 +242,7 @@ def check_update(opener=urlopen):
     appimage = urls.get(ASSET, "")
     checksum = digests.get(ASSET, "")
     checksum_url = urls.get(f"{ASSET}.sha256", "")
+    sig_url = urls.get(SIGNATURE_ASSET, "")
     try:
         release_available = _version_key(version) > _version_key(VERSION)
     except ValueError:
@@ -124,6 +262,8 @@ def check_update(opener=urlopen):
         "appimage": appimage,
         "checksum": checksum,
         "checksum_url": checksum_url,
+        "sig": bool(sig_url),
+        "sig_url": sig_url,
         "page": str(release.get("html_url", "")),
     }
 
@@ -138,6 +278,10 @@ def install_update(update, destination=None, opener=urlopen):
     if not appimage.startswith(TRUSTED_RELEASE_PREFIX):
         raise ValueError("The update URLs are not trusted OpenBox release assets.")
     expected = resolve_update_checksum(update, opener=opener)
+    # Verify the Ed25519 signature (when published and the committed key is
+    # real) before anything is downloaded. Failure aborts the install; the
+    # sha256 baseline is always enforced either way.
+    verify_release_signature(update, expected, opener=opener)
     temporary = destination.with_name(f".{destination.name}.update")
     try:
         download_file(
