@@ -5,6 +5,10 @@
   "private": true,
   "license": "AGPL-3.0-or-later",
   "dependencies": {
-    "puppeteer": "^22.15.0"
+    "puppeteer": "22.15.0"
+  },
+  "devDependencies": {
+    "eslint": "9.39.5",
+    "globals": "17.11.0"
   }
 }

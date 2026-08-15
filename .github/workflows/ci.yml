@@ -57,6 +57,18 @@ jobs:
       - name: Lint
         run: .venv-dev/bin/ruff check .
 
+      - name: JS lint
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "true"
+        run: |
+          # eslint only — no Chromium needed for the lint step. npm ci also
+          # installs the puppeteer dep (and its postinstall would fetch a
+          # browser), so PUPPETEER_SKIP_DOWNLOAD keeps the gate job light.
+          npm ci --prefix scripts
+          # Flat config's base path is the cwd, so lint static/ from the root
+          # (npx eslint ../static/ from scripts/ would silently ignore files).
+          ./scripts/node_modules/.bin/eslint --config scripts/eslint.config.mjs static/
+
       - name: Version sync
         run: python3 scripts/check_version_sync.py
 
