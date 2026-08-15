@@ -78,7 +78,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 #### HTTP layer
 
-- The two monolithic dispatch chains (a 613-line GET and a 195-line POST if-chain) became a route registry in `routes.py`: 88 GET and 118 POST entries (including v1 aliases; the pre-alias base was 64 GET + 90 POST), each a named `Handler` method, with zero behavior change during the mechanical extraction. The contract-frozen v1 surface is 46 routes (`v1_contracts.json`).
+- The two monolithic dispatch chains (a 613-line GET and a 195-line POST if-chain) became a route registry in `routes.py`: 103 GET and 124 POST entries (including v1 aliases; the pre-alias base was 79 GET + 95 POST, plus 24 GET and 29 POST alias entries), each a named `Handler` method (5 entries use dotted `handlers.native.*` specs), with zero behavior change during the mechanical extraction. The contract-frozen v1 surface is 46 routes (`v1_contracts.json`).
 - Structured errors in `api_errors.py`: every failure carries a stable machine code (`BAD_REQUEST`, `GAME_NOT_FOUND`, `MEDIA_NOT_FOUND`, `ROUTE_NOT_FOUND`, `MEDIA_JOB_RUNNING`, `STATE_UNAVAILABLE`, ...) and a per-request id that appears in the UI and the diagnostic log. POST handlers re-raise `ApiError` unchanged and convert legacy `ValueError`s into `400 BAD_REQUEST` instead of leaking them to the generic 500 path.
 - A versioned `/api/v1` surface aliases the stable routes; legacy paths keep working for older clients.
 - The library payload is gzip-compressed once per state change and served with a `private, no-cache` ETag, so polls get 304s when nothing changed: 5,000 games serve in about 2 ms at 638 KB instead of 13.8 MB (measured in [docs/development/PERF.md](docs/development/PERF.md)).
