@@ -58,7 +58,7 @@ class PerfCacheTests(unittest.TestCase):
         handler = object.__new__(self.Handler)
         handler.wfile = io.BytesIO()
         handler._headers_buffer = []
-        handler.headers = {}
+        handler.headers = {"Host": "127.0.0.1"}
         handler.request_version = "HTTP/1.1"
         handler.log_request = lambda *args, **kwargs: None
         return handler
@@ -133,6 +133,7 @@ class PerfCacheTests(unittest.TestCase):
         etag = headers["etag"]
         handler = self.make_handler()
         handler.headers["If-None-Match"] = etag
+        handler.headers["Host"] = "127.0.0.1"
         handler.authorized = mock.Mock(return_value=True)
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
         handler.path = "/api/theme.css?name=test-theme&token=test"

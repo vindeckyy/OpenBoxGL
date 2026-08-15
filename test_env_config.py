@@ -17,6 +17,8 @@ class EnvConfigTests(unittest.TestCase):
             self.assertEqual(os.environ["RETROACHIEVEMENTS_API_KEY"], "secret")
 
     def test_load_dotenv_skips_unreadable_and_binary_files(self):
+        if os.geteuid() == 0:
+            self.skipTest("permission bits are bypassed when running as root")
         with tempfile.TemporaryDirectory() as folder:
             binary = Path(folder) / ".env"
             binary.write_bytes(b"TOKEN=\xff\xfe\x00broken")

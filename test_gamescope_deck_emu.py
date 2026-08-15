@@ -20,11 +20,12 @@ import time
 import unittest
 import urllib.request
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parent
 FAILURES = []
+TOKEN_FILE = None  # <data_dir>/server.token, set in main() once the temp dir exists
 
 
 def _gamescope_available():
@@ -153,24 +154,36 @@ def wait_url(proc, timeout=20):
     return None, buf
 
 
+def server_token():
+    """Read the API token from the data dir's server.token file (0600).
+
+    web_app.py stopped printing the token-bearing URL to stdout; the token
+    file at <data_dir>/server.token is the canonical source. The harness sets
+    TOKEN_FILE when it creates the temp data dir before spawning the server.
+    """
+    if TOKEN_FILE is None:
+        raise RuntimeError("server.token not located; harness did not set TOKEN_FILE")
+    if not TOKEN_FILE.is_file():
+        raise RuntimeError(f"server.token missing in {TOKEN_FILE.parent}; is the server running?")
+    return TOKEN_FILE.read_text(encoding="utf-8").strip()
+
+
 def api_get(base_url, path):
     parsed = urlparse(base_url)
-    token = parse_qs(parsed.query)["token"][0]
     url = f"http://{parsed.hostname}:{parsed.port}{path}"
-    req = urllib.request.Request(url, headers={"X-OpenBox-Token": token})
+    req = urllib.request.Request(url, headers={"X-OpenBox-Token": server_token()})
     with urllib.request.urlopen(req, timeout=15) as response:
         return json.loads(response.read().decode())
 
 
 def api_post(base_url, path, body):
     parsed = urlparse(base_url)
-    token = parse_qs(parsed.query)["token"][0]
     url = f"http://{parsed.hostname}:{parsed.port}{path}"
     data = json.dumps(body).encode()
     req = urllib.request.Request(
         url,
         data=data,
-        headers={"X-OpenBox-Token": token, "Content-Type": "application/json"},
+        headers={"X-OpenBox-Token": server_token(), "Content-Type": "application/json"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=15) as response:
@@ -270,6 +283,8 @@ def main():
             bin_dir = Path(tmp) / "bin"
             bin_dir.mkdir()
             data_dir.mkdir()
+            global TOKEN_FILE
+            TOKEN_FILE = data_dir / "server.token"
             steam_log = Path(tmp) / "steam.log"
             write_fake_steam(bin_dir, steam_log)
 

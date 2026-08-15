@@ -1,20 +1,36 @@
 #!/usr/bin/env python3
+import hashlib
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from plugin_catalog import REMOTE_CATALOG
+from plugin_catalog import download_plugin_package, load_local_catalog, REMOTE_CATALOG
 from plugins import install_plugin, list_plugins, remove_plugin, run_plugins, set_plugin_enabled
 
 
 def test():
     assert REMOTE_CATALOG == "https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/master/plugins/catalog.json"
+    assert any(entry.get("id") == "openbox.library-stats" and entry.get("local_only") for entry in load_local_catalog())
+    # A remote catalog entry without a valid sha256 must be refused before any download.
+    import tempfile
+    with tempfile.TemporaryDirectory() as directory:
+        for bad_entry in (
+            {"id":"no-checksum", "url":"https://example.invalid/plugin.zip"},
+            {"id":"bad-checksum", "url":"https://example.invalid/plugin.zip", "sha256":"deadbeef"},
+        ):
+            try:
+                download_plugin_package(bad_entry, directory)
+                raise AssertionError("expected ValueError for missing sha256")
+            except ValueError:
+                pass
     with TemporaryDirectory() as directory:
         root = Path(directory)
         package = root / "source"
         package.mkdir()
         (package / "plugin.json").write_text(json.dumps({
             "id":"test.plugin", "name":"Test", "version":"1", "hooks":["before_launch"],
+            "sha256": hashlib.sha256(b"test.plugin v1").hexdigest(),
         }))
         (package / "plugin.py").write_text(
             "def before_launch(payload):\n"
@@ -40,6 +56,7 @@ def test():
         broken.mkdir()
         (broken / "plugin.json").write_text(json.dumps({
             "id":"test.plugin", "name":"Test", "version":"2", "hooks":["before_launch"],
+            "sha256": hashlib.sha256(b"test.plugin v2").hexdigest(),
         }))
         (broken / "plugin.py").write_text("raise RuntimeError('boom')\n")
         from unittest import mock
@@ -74,6 +91,50 @@ def test():
         assert list_plugins(plugins)[0]["version"] == "1"
         assert (plugins / "test.plugin" / "plugin.py").is_file()
         assert not (plugins / ".backups").exists() or not list((plugins / ".backups").iterdir())
+
+        # A before_launch plugin must not be able to swap the binary or point the
+        # working directory outside the game/data directories: start_game falls
+        # back to the original launch command instead of running the tampered one.
+        env_backup = dict(os.environ)
+        try:
+            import tempfile
+            import unittest.mock as mock
+            with tempfile.TemporaryDirectory() as data_dir:
+                os.environ["OPENBOX_DATA_DIR"] = data_dir
+                os.environ.pop("OPENBOX_SAFE_MODE", None)
+                from openbox import save_state
+                import webapp_state
+                from pathlib import Path as _Path
+                game_dir = _Path(data_dir) / "games"
+                game_dir.mkdir(parents=True)
+                game_file = game_dir / "game.sh"
+                game_file.write_text("#!/bin/sh\n")
+                save_state({"games": [{"name": "Escape", "path": str(game_file)}], "profiles": {}, "history": []})
+
+                def tamper(_directory, _hook, payload):
+                    payload["args"] = ["/bin/sh", "-c", "echo pwned > /tmp/plugin-escape"]
+                    payload["cwd"] = "/"
+                    return payload
+
+                process = type("Process", (), {"pid": 4242, "wait": lambda self: 0, "poll": lambda self: 0})()
+                with mock.patch("webapp_state.subprocess.Popen", return_value=process) as popen:
+                    with mock.patch("webapp_state.run_plugins", side_effect=tamper) as hook:
+                        with mock.patch("webapp_state.finish_session"):
+                            webapp_state.start_game(0)
+                hook.assert_called_once()
+                launched = popen.call_args[0][0]
+                assert launched == ["bash", str(game_file)], launched
+                # Original cwd is the game directory; a valid plugin result is kept.
+                with mock.patch("webapp_state.subprocess.Popen", return_value=process) as popen:
+                    with mock.patch("webapp_state.run_plugins", side_effect=lambda _directory, _hook, payload: {
+                        "args": payload["args"] + ["--ok"], "cwd": payload["cwd"],
+                    }):
+                        with mock.patch("webapp_state.finish_session"):
+                            webapp_state.start_game(0)
+                assert popen.call_args[0][0][-1] == "--ok"
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
     print("plugin self-test: ok")
 
 

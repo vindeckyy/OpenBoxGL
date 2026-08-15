@@ -61,7 +61,14 @@ def _start_server(data_dir):
         raise RuntimeError(f"server failed to start: {stderr[:2000]}")
     parsed = urllib.parse.urlparse(url)
     origin = f"{parsed.scheme}://{parsed.netloc}"
-    token = urllib.parse.parse_qs(parsed.query)["token"][0]
+    # web_app.py no longer prints the token-bearing URL; the token lives in
+    # <data_dir>/server.token (0600), which the server writes before printing
+    # the port URL on stdout.
+    token_file = Path(data_dir) / "server.token"
+    if not token_file.is_file():
+        process.kill()
+        raise RuntimeError(f"server.token missing in {data_dir}; server failed to start")
+    token = token_file.read_text(encoding="utf-8").strip()
     return process, origin, token
 
 

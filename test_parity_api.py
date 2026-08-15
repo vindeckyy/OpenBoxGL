@@ -40,7 +40,7 @@ class ParityApiTests(unittest.TestCase):
         handler.send_json = mock.Mock()
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
         handler.path = "/api/plugins/catalog"
-        handler.headers = {}
+        handler.headers = {"Host": "127.0.0.1"}
         handler.do_GET()
         handler.send_json.assert_called_once()
         status, payload = handler.send_json.call_args[0]
@@ -209,7 +209,7 @@ class ParityApiTests(unittest.TestCase):
         handler.send_json = mock.Mock()
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
         handler.path = "/api/storefront/catalog?source=heroic"
-        handler.headers = {}
+        handler.headers = {"Host": "127.0.0.1"}
         with mock.patch("handlers.imports.storefront_catalog", side_effect=FileNotFoundError("xdg-open missing")):
             handler.do_GET()
         status, payload = handler.send_json.call_args[0]
@@ -225,7 +225,7 @@ class ParityApiTests(unittest.TestCase):
         handler.send_json = mock.Mock()
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
         handler.path = "/api/gameyfin/providers"
-        handler.headers = {}
+        handler.headers = {"Host": "127.0.0.1"}
         with mock.patch("handlers.data.catalog_gameyfin", side_effect=GameyfinError("Gameyfin URL is not configured.")):
             handler.do_GET()
         status, payload = handler.send_json.call_args[0]
@@ -327,7 +327,7 @@ class ParityApiTests(unittest.TestCase):
         handler.authorized = mock.Mock(return_value=False)
         handler.send_json = mock.Mock()
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
-        handler.headers = {}
+        handler.headers = {"Host": "127.0.0.1"}
         for path in ("/api/premium/strings", "/api/premium/media-packs", "/api/premium/platform-categories"):
             handler.send_json.reset_mock()
             handler.path = path
@@ -343,7 +343,7 @@ class ParityApiTests(unittest.TestCase):
         handler.send_json = mock.Mock()
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
         handler.path = "/api/update"
-        handler.headers = {}
+        handler.headers = {"Host": "127.0.0.1"}
         with mock.patch("handlers.health.check_update", side_effect=AttributeError("release missing tag_name")):
             handler.do_GET()
         status, payload = handler.send_json.call_args[0]
@@ -433,7 +433,7 @@ class ParityApiTests(unittest.TestCase):
         list_handler.send_json = mock.Mock()
         list_handler.do_GET = Handler.do_GET.__get__(list_handler, Handler)
         list_handler.path = "/api/backups"
-        list_handler.headers = {}
+        list_handler.headers = {"Host": "127.0.0.1"}
         list_handler.do_GET()
         status, payload = list_handler.send_json.call_args[0]
         self.assertEqual(status, 200)
@@ -468,7 +468,8 @@ class ParityApiTests(unittest.TestCase):
         handler.send_file = mock.Mock()
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
         handler.path = "/api/media?id=0&kind=manual"
-        handler.headers = {}
+        handler.headers = {"Host": "127.0.0.1"}
+        handler.requestline = "GET / HTTP/1.1"
         handler.do_GET()
         status, path = handler.send_file.call_args[0]
         self.assertEqual(status, 200)

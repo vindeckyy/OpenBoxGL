@@ -249,7 +249,7 @@ def build_library() -> None:
     (DATA_DIR / "library.json").write_text(json.dumps(state, indent=2))
 
 
-def start_server() -> tuple[subprocess.Popen[str], str]:
+def start_server() -> tuple[subprocess.Popen[str], str, str]:
     env = os.environ.copy()
     env["OPENBOX_DATA_DIR"] = str(DATA_DIR)
     process = subprocess.Popen(
@@ -264,7 +264,7 @@ def start_server() -> tuple[subprocess.Popen[str], str]:
     deadline = time.time() + 20
     while time.time() < deadline:
         line = process.stdout.readline() if process.stdout else ""
-        if "http://127.0.0.1:" in line and "token=" in line:
+        if "http://127.0.0.1:" in line:
             url = line.strip().split()[-1]
             break
         if process.poll() is not None:
@@ -272,7 +272,15 @@ def start_server() -> tuple[subprocess.Popen[str], str]:
     if not url:
         process.kill()
         raise SystemExit("Timed out waiting for OpenBox server URL.")
-    return process, url
+    # web_app.py no longer prints the token-bearing URL; the token lives in
+    # <data_dir>/server.token (0600), which the server writes before printing
+    # the port URL on stdout.
+    token_file = DATA_DIR / "server.token"
+    if not token_file.is_file():
+        process.kill()
+        raise SystemExit("Timed out waiting for OpenBox server.token.")
+    token = token_file.read_text(encoding="utf-8").strip()
+    return process, url, token
 
 
 def capture_with_puppeteer(app_url: str, output: Path, mode: str = "", detail_game_id: int | None = None) -> None:
@@ -297,7 +305,7 @@ def assert_dimensions(path: Path) -> None:
 def main() -> None:
     ensure_fixture_tree()
     build_library()
-    server, app_url = start_server()
+    server, app_url, _token = start_server()
     library_out = FIXTURE_ROOT / "openbox-screenshot.png"
     detail_out = FIXTURE_ROOT / "openbox-game-detail.png"
     bigbox_out = FIXTURE_ROOT / "openbox-bigbox.png"
