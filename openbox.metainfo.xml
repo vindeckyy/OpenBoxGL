@@ -15,6 +15,12 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="1.1.0" date="2026-08-15">
+      <description>
+        <p>Bug-fix release. Cloud sync now merges newer per-field values when local changes win, the last-known-good backup mirrors the latest committed state, and play queue skip flags persist before advancing. Queue paths are probed on the filesystem, and OBS recording status requires a recent recording instead of any running process.</p>
+        <p>Steam and Lutris Flatpak commands verify the app is installed, IGDB time-to-beat now queries the real game_time_to_beats endpoint, and Gameyfin catalog fetches its provider list once. Ed25519 point decoding rejects malformed encodings, the native bridge quotes dialog paths as JSON strings, and the 7z validator counts a final member even without a trailing separator.</p>
+      </description>
+    </release>
     <release version="1.0.1" date="2026-08-15">
       <description>
         <p>Hardening release. Frontend fixes restore Big Box platform switching and IGDB platform-hinted searches, and a crafted custom-field key can no longer inject HTML into the details pane. The session token is scrubbed from the browser address bar after load, and the server rejects requests without a Host header, tightens its CSP, and carries the same security headers on the SSE stream.</p>

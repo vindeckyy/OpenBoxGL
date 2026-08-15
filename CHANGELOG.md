@@ -4,7 +4,7 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.1] - 2026-08-15
+## [1.1.0] - 2026-08-15
 
 ### Fixed
 
@@ -31,6 +31,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `_tdp_args` returns only the argument list; the unused milliwatt value is gone.
 
+## [1.0.1] - 2026-08-15
+
+### Fixed
 
 - Big Box hybrid mode: platform buttons were emitting a broken `data-bigbox-AppState.platform` attribute that the click handler never matched, so switching platforms did nothing. The attribute now matches the selector.
 - IGDB search sent a malformed `&AppState.platform =` query parameter instead of `platform=`, dropping the platform hint from searches.
@@ -471,6 +474,7 @@ If you jumped from an older build and skipped the last two releases:
 - AppImage, Flatpak manifest, and Makefile install targets
 
 [0.8.2]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.2
+[1.1.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.0.0
 [0.9.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.9.0
