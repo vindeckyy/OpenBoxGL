@@ -59,6 +59,10 @@ from handlers.settings import SettingsHandlers
 # 127.0.0.1 and carries the attacker's hostname in the Host header.
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
+# Security headers shared by every response (including the SSE stream) so the
+# policy can't drift between code paths.
+CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.bunny.net; font-src 'self' https://fonts.bunny.net; script-src 'self'; object-src 'none'; base-uri 'none'"
+
 
 class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, EmulatorsHandlers, DataHandlers, BaseHTTPRequestHandler):
     server_version = "OpenBox/1"
@@ -81,7 +85,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         self.send_header("Cache-Control", cache_control)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.bunny.net; font-src 'self' https://fonts.bunny.net; script-src 'self' 'unsafe-inline'")
+        self.send_header("Content-Security-Policy", CSP_DEFAULT)
 
     def send_bytes(self, status, data, content_type, cache_control="no-store", etag=None, last_modified=None, extra_headers=None):
         if etag and self.headers.get("If-None-Match", "").strip() == etag:
@@ -270,6 +274,9 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "close")
         self.send_header("X-Accel-Buffering", "no")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Content-Security-Policy", CSP_DEFAULT)
         self.end_headers()
         try:
             while True:
@@ -305,7 +312,8 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         headers = getattr(self, "headers", None)
         host = headers.get("Host", "") if headers is not None else ""
         if not host:
-            return True
+            LOGGER.warning("Rejecting request with missing or empty Host header")
+            return False
         hostname = host.rsplit(":", 1)[0].strip("[]")
         return hostname in LOOPBACK_HOSTS
 
@@ -388,7 +396,8 @@ def main():
         native_window = False
     else:
         native_window = not guest
-    print(url, flush=True)
+    print(f"http://127.0.0.1:{port}/", flush=True)
+    LOGGER.info("OpenBox web UI URL: %s", url)
     if "--no-browser" not in sys.argv:
         opened = open_ui(url, guest=guest, force_game_mode=force_game_mode, native_window=native_window)
         browser_pid = opened.get("pid")
