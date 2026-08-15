@@ -9,6 +9,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+import sys
 import time
 import webbrowser
 from pathlib import Path
@@ -169,7 +170,11 @@ def open_ui(url, *, guest=False, force_game_mode=False, native_window=False, pop
                 "browser": xdg,
                 "pid": getattr(process, "pid", None),
             }
-    browse(target)
+    if not browse(target):
+        # webbrowser could not open anything either; fail loud so a
+        # double-click launch is not a black hole.
+        print(f"OpenBox server running at {target} — no window opener available; open this URL manually.",
+              file=sys.stderr)
     return {"url": target, "mode": "webbrowser", "browser": "", "pid": None}
 
 

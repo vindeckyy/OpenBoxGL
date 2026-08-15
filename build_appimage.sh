@@ -29,6 +29,7 @@ cp "$source_root"/assets/openbox-logo.png "$appdir/usr/share/openbox/assets/"
 mkdir -p "$appdir/usr/share/openbox/emulator_defs"
 cp "$source_root"/emulator_defs/*.yaml "$appdir/usr/share/openbox/emulator_defs/"
 install -Dm755 "$source_root/scripts/openbox-launcher.sh" "$appdir/usr/share/openbox/openbox-launcher.sh"
+install -Dm755 "$source_root/openbox-native.sh" "$appdir/usr/share/openbox/openbox-native.sh"
 mkdir -p "$appdir/usr/share/openbox/plugins"
 cp "$source_root/plugins/catalog.json" "$appdir/usr/share/openbox/plugins/catalog.json"
 mkdir -p "$appdir/usr/share/openbox/themes"
@@ -60,13 +61,20 @@ export PYTHONHOME="$app_root/usr"
 export PYTHONPATH="$app_root/usr/share/openbox${PYTHONPATH:+:$PYTHONPATH}"
 lib_path="$app_root/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 python="$app_root/usr/bin/python3"
+data_dir="${OPENBOX_DATA_DIR:-$HOME/.local/share/openbox-game-launcher}"
+mkdir -p "$data_dir"
+# Capture loader-level failures (missing libwebkit2gtk, etc.) that are
+# otherwise invisible on a file-manager double-click.
+exec 2>>"$data_dir/openbox-launch.log"
 if [ "${1:-}" = "--web" ]; then
   shift
   exec env LD_LIBRARY_PATH="$lib_path" "$python" "$app_root/usr/share/openbox/web_app.py" "$@"
 fi
 export OPENBOX_WEB_APP="$app_root/usr/share/openbox/web_app.py"
 export OPENBOX_PYTHON="$python"
-exec env LD_LIBRARY_PATH="$lib_path" "$app_root/usr/share/openbox/native_host" "$@"
+export APPDIR
+export LD_LIBRARY_PATH="$lib_path"
+exec "$app_root/usr/share/openbox/openbox-native.sh" "$@"
 EOF
 
 # Unique desktop/icon names avoid colliding with the Openbox window manager.

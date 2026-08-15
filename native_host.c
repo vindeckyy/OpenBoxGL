@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <sys/file.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 #define DEFAULT_DATA_DIR "/.local/share/openbox-game-launcher"
@@ -687,6 +688,34 @@ main(int argc, char **argv)
         data_dir = default_data_dir;
     }
 
+    /*
+     * Capture everything the host prints on failure in the data dir so a
+     * file-manager double-click (no terminal) is not silent: the single-
+     * instance message, boot errors, and any loader/GTK failures land here.
+     */
+    int log_fd = open(data_dir, O_RDONLY | O_DIRECTORY);
+    if (log_fd >= 0) {
+        close(log_fd);
+        char *log_path = g_build_filename(data_dir, "openbox-native.log", NULL);
+        int fd = open(log_path, O_WRONLY | O_CREAT | O_APPEND, 0600);
+        g_free(log_path);
+        if (fd >= 0) {
+            dup2(fd, STDERR_FILENO);
+            if (fd != STDERR_FILENO) {
+                close(fd);
+            }
+            time_t now = time(NULL);
+            char stamp[64];
+            struct tm local;
+            if (localtime_r(&now, &local) &&
+                strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &local) > 0) {
+                g_printerr("=== native_host %s ===\n", stamp);
+            } else {
+                g_printerr("=== native_host ===\n");
+            }
+        }
+    }
+
     if (!acquire_single_instance()) {
         /* Another instance is running; a second launch focuses it and exits. */
         g_printerr("native_host: an OpenBox window is already open\n");
@@ -722,8 +751,17 @@ main(int argc, char **argv)
     /* Match app theme (#11100e) and enable smooth scrolling/GPU acceleration. */
     WebKitSettings *settings = webkit_web_view_get_settings(view);
     webkit_settings_set_enable_smooth_scrolling(settings, TRUE);
+    /*
+     * WebKitGTK's dmabuf renderer can fail silently on AMD GPUs (Steam Deck),
+     * leaving a blank window; opt out unless the user explicitly opts in.
+     */
+    if (!g_getenv("OPENBOX_ENABLE_DMABUF")) {
+        g_setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", TRUE);
+    }
+    /* ON_DEMAND is the WebKit default; ALWAYS forces accelerated compositing
+     * even on compositors that mishandle it. Let WebKit decide per-frame. */
     webkit_settings_set_hardware_acceleration_policy(
-        settings, WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
+        settings, WEBKIT_HARDWARE_ACCELERATION_POLICY_ON_DEMAND);
     G_GNUC_BEGIN_IGNORE_DEPRECATIONS
     webkit_settings_set_enable_accelerated_2d_canvas(settings, TRUE);
     G_GNUC_END_IGNORE_DEPRECATIONS
