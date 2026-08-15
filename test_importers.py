@@ -13,7 +13,12 @@ def test():
     # Steam flatpak: an uninstalled flatpak must fall through to xdg-open,
     # never fabricate a flatpak launch command.
     failed = type("Result", (), {"returncode": 1, "stdout": "", "stderr": ""})()
-    which = lambda name: "/usr/bin/flatpak" if name == "flatpak" else "/usr/bin/xdg-open" if name == "xdg-open" else None
+    def which(name):
+        if name == "flatpak":
+            return "/usr/bin/flatpak"
+        if name == "xdg-open":
+            return "/usr/bin/xdg-open"
+        return None
     with mock.patch.object(importers.shutil, "which", side_effect=which), \
          mock.patch.object(importers.subprocess, "run", return_value=failed):
         binary, command = importers.steam_command()
