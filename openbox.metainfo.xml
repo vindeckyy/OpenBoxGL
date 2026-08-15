@@ -15,6 +15,12 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="1.0.1" date="2026-08-15">
+      <description>
+        <p>Hardening release. Frontend fixes restore Big Box platform switching and IGDB platform-hinted searches, and a crafted custom-field key can no longer inject HTML into the details pane. The session token is scrubbed from the browser address bar after load, and the server rejects requests without a Host header, tightens its CSP, and carries the same security headers on the SSE stream.</p>
+        <p>Plugin catalog downloads now require a valid sha256 checksum, plugin subprocess environments are scrubbed of secret variables, and tampered before_launch hooks fall back to the original launch command. AppImage launches on SteamOS route through the fallback ladder with failures written to openbox-launch.log instead of vanishing, dmabuf rendering is off unless explicitly enabled, and the updater verifies an Ed25519 signature when a release publishes one.</p>
+      </description>
+    </release>
     <release version="1.0.0" date="2026-08-14">
       <description>
         <p>Native-first release. OpenBox now opens in a native WebKitGTK window by default, rendering the same library UI as the web app instead of a browser tab or the removed Tk interface. The native host owns server lifecycle, single instance, window geometry, minimize-to-tray, and a fallback to the system-browser app window when WebKitGTK is unavailable.</p>

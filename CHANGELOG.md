@@ -4,6 +4,45 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-08-15
+
+### Fixed
+
+- Big Box hybrid mode: platform buttons were emitting a broken `data-bigbox-AppState.platform` attribute that the click handler never matched, so switching platforms did nothing. The attribute now matches the selector.
+- IGDB search sent a malformed `&AppState.platform =` query parameter instead of `platform=`, dropping the platform hint from searches.
+- Custom-field keys in the details pane were rendered without escaping; a crafted key could inject HTML. Keys and values are now both escaped.
+- The session token stayed in the browser address bar after load. It is now scrubbed from history immediately, with deeplink parameters preserved.
+
+### Changed
+
+- CSP tightened: `script-src 'self'` without `'unsafe-inline'`, plus `object-src 'none'` and `base-uri 'none'`.
+- Requests without a Host header are now rejected instead of bypassing the loopback check.
+- The SSE stream now carries the same security headers as every other response.
+- The startup URL printed to stdout no longer contains the session token.
+- The updater verifies an Ed25519 signature when a release publishes one, and skips with a loud warning while the public key is still the placeholder.
+- WebKit rendering defaults changed: dmabuf renderer disabled unless `OPENBOX_ENABLE_DMABUF` is set (fixes silent window failures on AMD GPUs, including Steam Deck), and hardware acceleration switched to on-demand.
+
+### Hardened
+
+- The native host now validates full URIs (scheme, host, no userinfo, no control characters) before handing anything to the default handler.
+- Reveal-in-folder is restricted to paths under the data directory or home directory.
+- The native bridge rejects suspicious payloads instead of evaluating them.
+- Plugin catalog downloads now require a valid sha256 checksum; entries without one are refused.
+- Plugin subprocess environments are scrubbed of token, password, secret, and API-key variables.
+- `before_launch` plugin hooks can no longer swap the launch binary or move the working directory outside the game or data directories; tampered results fall back to the original command.
+
+### Fixed (launch reliability)
+
+- AppImage launches now route through the fallback ladder instead of exec-ing the native host directly, and all launch failures are written to `~/.local/share/openbox-game-launcher/openbox-launch.log` instead of vanishing on a double-click.
+- The native host writes its own log and the single-instance message is no longer invisible.
+- Game Mode with no kiosk browser installed now prints the server URL instead of failing silently.
+
+### Verification
+
+- `./run_all_tests.sh`: 47 test files, 0 failures.
+- `make check`: lint, compile checks, coverage floors green.
+- CI smoke test now covers Big Box platform switching and IGDB search parameters; JS linting runs in CI; Dependabot watches GitHub Actions and npm.
+
 ## [1.0.0] - 2026-08-14
 
 ### Added
@@ -408,7 +447,8 @@ If you jumped from an older build and skipped the last two releases:
 - AppImage, Flatpak manifest, and Makefile install targets
 
 [0.8.2]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.2
-[1.0.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v0.9.0...v1.0.0
+[1.0.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.0.0
 [0.9.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.9.0
 [0.8.1]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.1
 [0.8.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.0
