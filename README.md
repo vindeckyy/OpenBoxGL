@@ -17,7 +17,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.2.0"><img src="https://img.shields.io/badge/Release-v1.2.0-0052CC" alt="Release v1.2.0"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.3.0"><img src="https://img.shields.io/badge/Release-v1.3.0-0052CC" alt="Release v1.3.0"></a>
   <a href="PARITY.md"><img src="https://img.shields.io/badge/LaunchBox-Parity%20Matrix-555" alt="LaunchBox parity matrix"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions"><img src="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
@@ -208,7 +208,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 Download the installer from a specific signed release, inspect it, then run it. The installer verifies the release public-key pin, SHA-256 checksum, and Ed25519 signature before installing to `~/.local/bin`:
 
 ```bash
-VERSION=1.2.0
+VERSION=1.3.0
 curl --proto '=https' --tlsv1.2 --fail --location \
   --output install.sh \
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install.sh"
