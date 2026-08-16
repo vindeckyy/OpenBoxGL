@@ -33,32 +33,6 @@ def resolve_mode(game, settings):
     return {"mode": mode, "delay": delay, "frequency": frequency, "process_name": process_name}
 
 
-def child_pids(pid):
-    children = []
-    for entry in Path("/proc").iterdir():
-        if not entry.name.isdigit():
-            continue
-        try:
-            stat = (entry / "stat").read_text().split()
-            if int(stat[3]) == pid:
-                children.append(int(entry.name))
-        except (OSError, IndexError, ValueError):
-            continue
-    return children
-
-
-def process_tree(pid):
-    seen = set()
-    stack = [pid]
-    while stack:
-        current = stack.pop()
-        if current in seen:
-            continue
-        seen.add(current)
-        stack.extend(child_pids(current))
-    return seen
-
-
 def _proc_name(pid):
     try:
         return (Path(f"/proc/{pid}/comm").read_text().strip())

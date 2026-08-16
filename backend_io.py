@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import shutil
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
@@ -117,21 +116,6 @@ def contained_path(path: Path, roots, *, must_exist=False) -> Path:
     return candidate
 
 
-def safe_media_path(path: Path, data_root: Path) -> Path:
-    return contained_path(path, [Path(data_root)])
-
-
-def remove_file_if_safe(path: Path, data_root: Path) -> bool:
-    path = Path(path).expanduser()
-    if path.is_symlink():
-        raise ValueError(f"Refusing to delete a symlink: {path}")
-    target = safe_media_path(path, data_root)
-    if not target.is_file():
-        return False
-    target.unlink()
-    return True
-
-
 def download_file(
     url: str,
     destination: Path,
@@ -191,9 +175,3 @@ def download_file(
             Path(temporary_name).unlink(missing_ok=True)
     return destination
 
-
-def safe_copytree(source: Path, destination: Path) -> None:
-    source = Path(source)
-    destination = Path(destination)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(source, destination)

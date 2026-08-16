@@ -52,11 +52,6 @@ def _png_bytes():
     return signature + chunk(b"IHDR", ihdr) + chunk(b"IDAT", raw) + chunk(b"IEND", b"")
 
 
-def _write_png(path: Path):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(_png_bytes())
-
-
 def build_games(count, data_dir: Path, rng: random.Random):
     """Return a list of N realistic game dicts, writing fixture media files."""
     media_root = data_dir / "media"

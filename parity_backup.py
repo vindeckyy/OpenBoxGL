@@ -8,7 +8,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from backend_io import atomic_copy_stream, atomic_write_text, fsync_directory
+from backend_io import atomic_copy_stream, fsync_directory
 from state_store import default_state
 
 
@@ -31,22 +31,6 @@ def games_running(running_map):
 
 def settings_snapshot(state):
     return state.get("settings", {})
-
-
-def write_settings_file(data_dir, settings):
-    path = Path(data_dir) / "settings.json"
-    atomic_write_text(path, json.dumps(settings, indent=2) + "\n")
-
-
-def read_settings_file(data_dir):
-    path = Path(data_dir) / "settings.json"
-    if not path.is_file():
-        return {}
-    try:
-        data = json.loads(path.read_text())
-    except json.JSONDecodeError:
-        return {}
-    return data if isinstance(data, dict) else {}
 
 
 def normalize_items(items):

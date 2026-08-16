@@ -27,13 +27,6 @@ def runtime_version():
     return match.group(1)
 
 
-def check_line(version, file_name, line, expect, context):
-    if expect not in line:
-        print(f"{file_name}:{context}: expected {expect!r}, got {line.strip()!r}")
-        return False
-    return True
-
-
 def main() -> int:
     version = runtime_version()
     if not version:

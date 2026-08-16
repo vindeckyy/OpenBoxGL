@@ -1,7 +1,5 @@
 """Named filter presets with optional Big Box quick-switch slots."""
 
-from copy import deepcopy
-
 PRESET_RULE_KEYS = (
     "platform",
     "view",
@@ -82,13 +80,6 @@ def delete_preset(state, name):
         return False
     state["filter_presets"] = kept
     return True
-
-
-def preset_by_name(state, name):
-    for item in list_presets(state):
-        if item.get("name") == name:
-            return item
-    return None
 
 
 def bigbox_quick_presets(state, limit=8):
@@ -200,7 +191,3 @@ def explorer_facets(games, field, limit=40):
     items = sorted(counts.items(), key=lambda pair: (-pair[1], pair[0].casefold()))
     return [{"value": value, "count": count} for value, count in items[:limit]]
 
-
-def apply_preset_to_client_rules(preset):
-    item = preset if isinstance(preset, dict) else {}
-    return deepcopy(item.get("rules", {}))

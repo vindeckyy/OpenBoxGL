@@ -72,7 +72,6 @@ EVENT_DATA_ALLOWLISTS: dict[str, tuple[str, ...]] = {
 
 SOURCE_NAME = "openbox"
 ENVELOPE_VERSION = 1
-SECRET_MIN_LENGTH = 8
 SIGNATURE_HEADER = "X-OpenBox-Signature"
 
 

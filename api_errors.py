@@ -30,11 +30,6 @@ class BadRequest(ApiError):
     code = "BAD_REQUEST"
 
 
-class Unauthorized(ApiError):
-    status = 403
-    code = "UNAUTHORIZED"
-
-
 class NotFound(ApiError):
     status = 404
     code = "NOT_FOUND"
@@ -62,21 +57,3 @@ class PlatformDocumentNotFound(NotFound):
 
 class RouteNotFound(NotFound):
     code = "ROUTE_NOT_FOUND"
-
-
-class Conflict(ApiError):
-    status = 409
-    code = "CONFLICT"
-
-
-class MediaJobRunning(Conflict):
-    code = "MEDIA_JOB_RUNNING"
-
-
-class ServiceUnavailable(ApiError):
-    status = 503
-    code = "SERVICE_UNAVAILABLE"
-
-
-class StateUnavailable(ServiceUnavailable):
-    code = "STATE_UNAVAILABLE"

@@ -1,11 +1,6 @@
-"""Small stdlib-only request/response contract helpers.
-
-Handlers use these to validate payloads; a malformed request fails with a clear 400 and a stable code.
-"""
+"""Frozen v1 API contract: documented response shapes for the top v1 routes."""
 
 from __future__ import annotations
-
-from api_errors import BadRequest
 
 # Documented response shapes for the top v1 routes; keys are v1 paths.
 V1_SCHEMA = {
@@ -79,35 +74,3 @@ V1_SCHEMA = {
         "response": "jobs, history",
     },
 }
-
-
-def require_fields(payload, *names):
-    """Raise BadRequest when any named key is missing or blank."""
-    if not isinstance(payload, dict):
-        raise BadRequest("Request body must be a JSON object.")
-    for name in names:
-        if name not in payload or payload[name] in (None, ""):
-            raise BadRequest(f"Missing required field: {name}")
-    return payload
-
-
-def optional_str(payload, key, default=""):
-    """Coerce an optional value to a stripped string."""
-    value = payload.get(key) if isinstance(payload, dict) else None
-    if value is None:
-        return default
-    return str(value).strip()
-
-
-def bounded_list(value, cap, default=None):
-    """Return a list, truncating to ``cap`` entries; non-lists become empty."""
-    if not isinstance(value, list):
-        return [] if default is None else list(default)
-    return value[:cap]
-
-
-def one_of(value, choices, default):
-    """Return ``value`` when it is a valid choice, otherwise ``default``."""
-    if value in choices:
-        return value
-    return default

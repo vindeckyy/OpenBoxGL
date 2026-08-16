@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-from automation import DEFAULT_ATTEMPTS, DEFAULT_TIMEOUT, MAX_WEBHOOKS, build_event, utc_now
+from automation import MAX_WEBHOOKS, build_event, utc_now
 from backend_io import contained_path, download_file, read_limited
 from catalog import apply_progress_automation
 from cloud_sync import sync_statistics
@@ -84,7 +84,6 @@ STATE_VIEW_CACHE = {"signature": None, "state": None}
 STATE_VIEW_LOCK = threading.Lock()
 WATCH_STOP = threading.Event()
 METADATA_DATABASE = DATA.parent / "metadata/launchbox.db"
-SERVER_PORT = 0
 WEBHOOK_DISPATCHER = None
 WEBHOOK_DISPATCHER_LOCK = threading.Lock()
 EVENT_SUBSCRIBERS = set()
@@ -717,15 +716,6 @@ def public_webhook_configs(state=None):
         public["secret_set"] = bool(config.get("secret"))
         configs.append(public)
     return configs
-
-
-def _webhook_settings(state=None):
-    state = state or load_state()
-    settings = state.get("settings", {})
-    return {
-        "attempts": int(settings.get("webhook_attempts") or DEFAULT_ATTEMPTS),
-        "timeout": int(settings.get("webhook_timeout") or DEFAULT_TIMEOUT),
-    }
 
 
 def _webhook_payload(envelope, configs):

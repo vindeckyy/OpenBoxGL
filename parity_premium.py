@@ -69,8 +69,6 @@ REGION_RANK = {
 
 BAD_TAGS = re.compile(r"\((?:beta|proto|demo|sample|unl|pirate|hack|translation)\)", re.I)
 
-LOCALES = ("en", "es", "de", "fr", "pt")
-
 STRINGS = {
     "en": {
         "library": "Library",
