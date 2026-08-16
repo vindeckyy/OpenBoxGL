@@ -16,7 +16,6 @@ try:
             options |= _orjson.OPT_SORT_KEYS
         if kwargs.get("indent") == 2:
             options |= _orjson.OPT_INDENT_2
-        separators = kwargs.get("separators")
         # orjson always uses compact separators without indent
         return _orjson.dumps(obj, option=options or None).decode("utf-8")
 
