@@ -73,6 +73,50 @@ class PerfStateTests(unittest.TestCase):
         self.assertIsNot(first, third)
         self.assertEqual(len(third["games"]), 3)
 
+    def test_public_state_handles_non_string_game_paths(self):
+        self.save_state({
+            "games": [{"game_id": "g1", "name": "Alpha", "path": 42}],
+            "profiles": {}, "history": [], "settings": {}, "playlists": [],
+        })
+        from webapp_state import public_state
+
+        self.assertFalse(public_state()["games"][0]["path_exists"])
+
+    def test_background_plugin_refresh_keeps_current_game_snapshot(self):
+        import webapp_state
+
+        captured = {}
+        stale_games = [{"name": "Stale Alpha"}, {"name": "Stale Beta"}]
+        with webapp_state.PLUGIN_LIBRARY_LOCK:
+            webapp_state.PLUGIN_LIBRARY_CACHE.update({
+                "at": 0.0,
+                "payload": {"games": stale_games},
+                "state_signature": self.STATE_STORE.signature(),
+            })
+            webapp_state._PLUGIN_REFRESH_IN_PROGRESS["value"] = False
+
+        class DeferredThread:
+            def __init__(self, target, daemon=True):
+                captured["target"] = target
+
+            def start(self):
+                return None
+
+        def fake_run_plugins(_directory, _hook, payload):
+            captured["games"] = payload["games"]
+            return {"games": []}
+
+        try:
+            with mock.patch.object(webapp_state.threading, "Thread", DeferredThread), \
+                 mock.patch.object(webapp_state, "run_plugins", side_effect=fake_run_plugins):
+                webapp_state._build_public_state()
+                captured["target"]()
+            self.assertEqual([game["name"] for game in captured["games"]], ["Alpha", "Beta"])
+        finally:
+            with webapp_state.PLUGIN_LIBRARY_LOCK:
+                webapp_state.PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None, "state_signature": None})
+                webapp_state._PLUGIN_REFRESH_IN_PROGRESS["value"] = False
+
     def test_public_state_bytes_match_payload(self):
         from webapp_state import public_state, public_state_bytes
 
