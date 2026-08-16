@@ -329,8 +329,8 @@ def _window_ids_for_pid(pid, *, xdotool=None, wmctrl=None, runner=None, display=
     return ids
 
 
-def _window_ids_by_name(name, *, xdotool=None, runner=None, display=None):
-    if not name:
+def _window_ids_by_flag(flag, value, *, xdotool=None, runner=None, display=None):
+    if not value:
         return []
     binary = xdotool or shutil.which("xdotool")
     if not binary:
@@ -341,7 +341,7 @@ def _window_ids_by_name(name, *, xdotool=None, runner=None, display=None):
     run = runner or subprocess.run
     try:
         result = run(
-            [binary, "search", "--name", str(name)],
+            [binary, "search", flag, str(value)],
             capture_output=True,
             text=True,
             timeout=5,
@@ -355,30 +355,12 @@ def _window_ids_by_name(name, *, xdotool=None, runner=None, display=None):
     return [line.strip() for line in str(result.stdout or "").splitlines() if line.strip()]
 
 
-def _window_ids_by_class(class_name, *, xdotool=None, runner=None, display=None):
-    if not class_name:
-        return []
-    binary = xdotool or shutil.which("xdotool")
-    if not binary:
-        return []
-    env_display = display if display is not None else os.environ.get("DISPLAY", "")
-    if not str(env_display).strip():
-        return []
-    run = runner or subprocess.run
-    try:
-        result = run(
-            [binary, "search", "--class", str(class_name)],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-            env={**os.environ, "DISPLAY": str(env_display)},
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return []
-    if getattr(result, "returncode", 1) != 0:
-        return []
-    return [line.strip() for line in str(result.stdout or "").splitlines() if line.strip()]
+def _window_ids_by_name(name, **kwargs):
+    return _window_ids_by_flag("--name", name, **kwargs)
+
+
+def _window_ids_by_class(class_name, **kwargs):
+    return _window_ids_by_flag("--class", class_name, **kwargs)
 
 
 def mark_process_windows(
