@@ -94,11 +94,14 @@ def related_game_ids(games, selected, limit=8):
     return [index for _, _, index in sorted(ranked)[:limit]]
 
 
-def bulk_update(games, ids, changes):
-    allowed = {"platform", "genre", "progress", "rating", "favorite", "hidden", "esrb", "custom_fields", "tags", "tags_add", "tags_remove"}
+_BULK_ALLOWED = {"platform", "genre", "progress", "rating", "favorite", "hidden", "esrb", "custom_fields", "tags", "tags_add", "tags_remove"}
+
+
+def _validate_bulk_changes(ids, changes):
+    """Validate bulk-update ids and changes; raises ValueError with the exact original messages."""
     if not isinstance(ids, list) or not ids:
         raise ValueError("Select at least one game.")
-    if not isinstance(changes, dict) or not changes or not set(changes) <= allowed:
+    if not isinstance(changes, dict) or not changes or not set(changes) <= _BULK_ALLOWED:
         raise ValueError("No valid bulk changes were supplied.")
     if "tags" in changes and ("tags_add" in changes or "tags_remove" in changes):
         raise ValueError("Tags cannot be replaced and adjusted in the same request.")
@@ -107,6 +110,10 @@ def bulk_update(games, ids, changes):
         removals = {label.casefold() for label in normalize_tags(changes["tags_remove"])}
         if additions & removals:
             raise ValueError("A tag cannot be added and removed in the same request.")
+
+
+def _clean_bulk_fields(changes):
+    """Normalize each bulk-change field, preserving the exact per-field order, checks, and messages."""
     clean = {}
     for field, value in changes.items():
         if field in {"favorite", "hidden"}:
@@ -134,6 +141,11 @@ def bulk_update(games, ids, changes):
             clean[field] = normalize_tags(value)
         else:
             clean[field] = str(value).strip()
+    return clean
+
+
+def _resolve_bulk_indexes(games, ids):
+    """Map ids (indexes or stable ids/aliases) to a sorted, deduped index list with the original bounds check."""
     stable_indexes = {}
     for index, game in enumerate(games):
         if game.get("game_id"):
@@ -149,22 +161,33 @@ def bulk_update(games, ids, changes):
     })
     if selected[0] < 0 or selected[-1] >= len(games):
         raise IndexError("A selected game no longer exists.")
+    return selected
+
+
+def _apply_bulk_patch(game, patch):
+    """Apply one cleaned patch dict to a game: custom_fields merge, tag changes, then the remaining fields."""
+    if "custom_fields" in patch:
+        merged = game.get("custom_fields", {})
+        if not isinstance(merged, dict):
+            merged = {}
+        merged.update(patch.pop("custom_fields"))
+        game["custom_fields"] = merged
+    if "tags" in patch or "tags_add" in patch or "tags_remove" in patch:
+        apply_tag_changes(
+            game,
+            replace=patch.pop("tags", None),
+            add=patch.pop("tags_add", None),
+            remove=patch.pop("tags_remove", None),
+        )
+    game.update(patch)
+
+
+def bulk_update(games, ids, changes):
+    _validate_bulk_changes(ids, changes)
+    clean = _clean_bulk_fields(changes)
+    selected = _resolve_bulk_indexes(games, ids)
     for index in selected:
-        patch = dict(clean)
-        if "custom_fields" in patch:
-            merged = games[index].get("custom_fields", {})
-            if not isinstance(merged, dict):
-                merged = {}
-            merged.update(patch.pop("custom_fields"))
-            games[index]["custom_fields"] = merged
-        if "tags" in patch or "tags_add" in patch or "tags_remove" in patch:
-            apply_tag_changes(
-                games[index],
-                replace=patch.pop("tags", None),
-                add=patch.pop("tags_add", None),
-                remove=patch.pop("tags_remove", None),
-            )
-        games[index].update(patch)
+        _apply_bulk_patch(games[index], dict(clean))
     return len(selected)
 
 
