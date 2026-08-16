@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import signal
 import shutil
 import subprocess
 import sys
@@ -82,7 +83,16 @@ def _run_under_gamescope():
         sys.executable,
         str(Path(__file__).resolve()),
     ]
-    proc = subprocess.Popen(cmd, env=env, cwd=str(ROOT))
+    log_out = open(log_file.name, "ab")
+    proc = subprocess.Popen(
+        cmd,
+        env=env,
+        cwd=str(ROOT),
+        start_new_session=True,
+        stdout=log_out,
+        stderr=subprocess.STDOUT,
+    )
+    log_out.close()
     try:
         deadline = time.time() + 95
         code = None
@@ -98,19 +108,18 @@ def _run_under_gamescope():
                 break
             time.sleep(0.25)
         if proc.poll() is None:
-            # gamescope does not exit after the child; tear the tree down.
+            # gamescope does not exit after the child; tear the whole tree down.
             try:
-                subprocess.run(
-                    ["pkill", "-TERM", "-P", str(proc.pid)],
-                    check=False,
-                    capture_output=True,
-                )
+                os.killpg(proc.pid, signal.SIGTERM)
             except OSError:
                 pass
-            proc.terminate()
             try:
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except OSError:
+                    pass
                 proc.kill()
         try:
             child_log = Path(log_file.name).read_text(encoding="utf-8", errors="replace")
