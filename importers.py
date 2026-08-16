@@ -139,14 +139,21 @@ def import_heroic(home=None):
     return games
 
 
-def import_lutris(home=None, run=subprocess.run, which=shutil.which):
-    home = home or Path.home()
+def _lutris_command(home, run, which):
+    """Resolve the Lutris binary, or the Lutris Flatpak run command.
+
+    Returns (command, binary); binary is the lutris binary when found, else
+    None (the flatpak branch leaves it unset, exactly like the original).
+    """
     if binary := which("lutris"):
-        command = [binary]
-    elif which("flatpak") and _flatpak_installed("net.lutris.Lutris", run=run):
-        command = [which("flatpak"), "run", "net.lutris.Lutris"]
-    else:
-        raise FileNotFoundError("Lutris or the Lutris Flatpak is required to import Lutris games.")
+        return [binary], binary
+    if which("flatpak") and _flatpak_installed("net.lutris.Lutris", run=run):
+        return [which("flatpak"), "run", "net.lutris.Lutris"], None
+    raise FileNotFoundError("Lutris or the Lutris Flatpak is required to import Lutris games.")
+
+
+def _load_lutris_records(command, run):
+    """Query Lutris and normalize the JSON game list."""
     result = run(
         command + ["--list-games", "--installed", "--json"],
         capture_output=True, text=True, check=True, timeout=30,
@@ -158,43 +165,63 @@ def import_lutris(home=None, run=subprocess.run, which=shutil.which):
         records = records.get("games", [])
     if not isinstance(records, list):
         raise ValueError("Lutris returned an invalid game list.")
+    return records
+
+
+def _lutris_record_source(record):
+    origin = " ".join(str(record.get(key, "")) for key in ("service", "source")).lower()
+    if "xbox" in origin or "game pass" in origin:
+        return "Xbox"
+    if "origin" in origin or "ea app" in origin:
+        return "EA"
+    if "ubisoft" in origin or "uplay" in origin:
+        return "Ubisoft"
+    return "Lutris"
+
+
+def _lutris_cover_path(home, slug):
+    return next((
+        path for base in (
+            home / ".local/share/lutris/coverart",
+            home / ".var/app/net.lutris.Lutris/data/lutris/coverart",
+        ) for suffix in (".jpg", ".png", ".webp")
+        if slug and (path := base / f"{slug}{suffix}").is_file()
+    ), "")
+
+
+def _lutris_game_entry(record, home, command, binary):
+    if not isinstance(record, dict) or record.get("installed") is False:
+        return None
+    game_id = str(record.get("id", "")).strip()
+    name = str(record.get("name", "")).strip()
+    if not game_id.isdigit() or not name:
+        return None
+    source = _lutris_record_source(record)
+    runner = str(record.get("runner", "")).strip()
+    slug = str(record.get("slug") or record.get("game_slug") or "").strip()
+    cover = _lutris_cover_path(home, slug)
+    game = {
+        "name": name,
+        "platform": str(record.get("platform") or ("Windows" if runner in {"wine", "winesteam"} else "PC")),
+        "source": source,
+        "collection": source,
+        "path": binary,
+        "launch": shlex.join(command + ["lutris:rungameid/{lutris_id}"]),
+        "lutris_id": game_id,
+        "install_dir": str(record.get("directory") or record.get("path") or ""),
+    }
+    if cover:
+        game["cover"] = str(cover)
+    return game
+
+
+def import_lutris(home=None, run=subprocess.run, which=shutil.which):
+    home = home or Path.home()
+    command, binary = _lutris_command(home, run, which)
+    records = _load_lutris_records(command, run)
     games = []
     for record in records:
-        if not isinstance(record, dict) or record.get("installed") is False:
-            continue
-        game_id = str(record.get("id", "")).strip()
-        name = str(record.get("name", "")).strip()
-        if not game_id.isdigit() or not name:
-            continue
-        origin = " ".join(str(record.get(key, "")) for key in ("service", "source")).lower()
-        if "xbox" in origin or "game pass" in origin:
-            source = "Xbox"
-        elif "origin" in origin or "ea app" in origin:
-            source = "EA"
-        elif "ubisoft" in origin or "uplay" in origin:
-            source = "Ubisoft"
-        else:
-            source = "Lutris"
-        runner = str(record.get("runner", "")).strip()
-        slug = str(record.get("slug") or record.get("game_slug") or "").strip()
-        cover = next((
-            path for base in (
-                home / ".local/share/lutris/coverart",
-                home / ".var/app/net.lutris.Lutris/data/lutris/coverart",
-            ) for suffix in (".jpg", ".png", ".webp")
-            if slug and (path := base / f"{slug}{suffix}").is_file()
-        ), "")
-        game = {
-            "name": name,
-            "platform": str(record.get("platform") or ("Windows" if runner in {"wine", "winesteam"} else "PC")),
-            "source": source,
-            "collection": source,
-            "path": binary,
-            "launch": shlex.join(command + ["lutris:rungameid/{lutris_id}"]),
-            "lutris_id": game_id,
-            "install_dir": str(record.get("directory") or record.get("path") or ""),
-        }
-        if cover:
-            game["cover"] = str(cover)
-        games.append(game)
+        game = _lutris_game_entry(record, home, command, binary)
+        if game:
+            games.append(game)
     return games
