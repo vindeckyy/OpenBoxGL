@@ -17,6 +17,88 @@ from play_queue import advance as advance_queue, enqueue as enqueue_queue, remov
 from webapp_state import FIELDS, MEDIA_PATH_FIELDS, _public_state_cached, approved_media_path, bump_media_epoch, clear_file_probe_cache, game_from_payload, game_from_query, game_identity, load_state_view, public_state, public_state_bytes, public_state_etag, public_settings, transact_state
 
 
+def _clean_game_fields(source):
+    game = {key: str(source[key]).strip() for key in FIELDS if key in source}
+    game["extract_archive"] = bool(source.get("extract_archive"))
+    game["hidden"] = bool(source.get("hidden"))
+    for field in ("broken", "portable"):
+        game[field] = bool(source.get(field))
+    if "disc_count" in source:
+        try:
+            game["disc_count"] = max(0, int(source.get("disc_count") or 0))
+        except (TypeError, ValueError) as error:
+            raise ValueError("Disc count must be a number.") from error
+    if game.get("progress", "") not in PROGRESS:
+        raise ValueError("Unknown progress value.")
+    try:
+        game["rating"] = float(game.get("rating") or 0)
+    except (TypeError, ValueError) as error:
+        raise ValueError("Rating must be a number from 0 to 5.") from error
+    if not 0 <= game["rating"] <= 5:
+        raise ValueError("Rating must be between 0 and 5.")
+    return game
+
+
+def _apply_game_extras(game, applications, versions, documents):
+    game["applications"] = applications
+    game["versions"] = versions
+    game["documents"] = documents
+    for field in MEDIA_PATH_FIELDS:
+        if game.get(field):
+            game[field] = str(approved_media_path(game[field], must_exist=False))
+    for document in game["documents"]:
+        document["path"] = str(approved_media_path(document["path"], must_exist=False))
+    return game
+
+
+def _clean_game_lists(game, source):
+    save_paths = source.get("save_paths", [])
+    if not isinstance(save_paths, list):
+        raise ValueError("Save paths must be a list.")
+    game["save_paths"] = [str(path).strip() for path in save_paths if str(path).strip()][:50]
+    screenshots = source.get("screenshots", [])
+    if not isinstance(screenshots, list):
+        raise ValueError("Screenshots must be a list.")
+    game["screenshots"] = [
+        str(approved_media_path(str(path).strip(), must_exist=False))
+        for path in screenshots[:100] if str(path).strip()
+    ]
+    if "alternate_names" in source:
+        names = source.get("alternate_names", [])
+        if isinstance(names, str):
+            game["alternate_names"] = [name.strip() for name in names.split(";") if name.strip()]
+        elif isinstance(names, list):
+            game["alternate_names"] = [str(name).strip() for name in names if str(name).strip()][:20]
+    return game
+
+
+def _apply_game_misc(game, source):
+    normalize_video_fields(game)
+    game["hide_in_bigbox"] = bool(source.get("hide_in_bigbox"))
+    esrb = str(source.get("esrb", game.get("esrb", ""))).strip()
+    if esrb:
+        game["esrb"] = esrb
+    defs = custom_field_defs(load_state().get("settings", {}))
+    if "custom_fields" in source and isinstance(source.get("custom_fields"), dict):
+        game["custom_fields"] = {
+            str(key).strip(): str(value).strip()
+            for key, value in source["custom_fields"].items()
+            if str(key).strip()
+        }
+        normalize_custom_fields(game, defs)
+    return game
+
+
+def _save_game_mutate(state, payload, game):
+    if payload.get("id") is None and not payload.get("game_id"):
+        game["added_at"] = datetime.now().isoformat(timespec="seconds")
+        state["games"].append(game)
+    else:
+        existing = game_from_payload(state, payload)
+        game["game_id"] = existing.get("game_id", game.get("game_id", ""))
+        existing.update(game)
+
+
 class LibraryHandlers:
     def _api_get_api_library(self, parsed):
         etag = public_state_etag()
@@ -190,74 +272,21 @@ class LibraryHandlers:
 
     def save_game(self, payload):
         source = payload.get("game", {})
-        game = {key: str(source[key]).strip() for key in FIELDS if key in source}
-        game["extract_archive"] = bool(source.get("extract_archive"))
-        game["hidden"] = bool(source.get("hidden"))
-        for field in ("broken", "portable"):
-            game[field] = bool(source.get(field))
-        if "disc_count" in source:
-            try:
-                game["disc_count"] = max(0, int(source.get("disc_count") or 0))
-            except (TypeError, ValueError) as error:
-                raise ValueError("Disc count must be a number.") from error
-        if game.get("progress", "") not in PROGRESS:
-            raise ValueError("Unknown progress value.")
-        try:
-            game["rating"] = float(game.get("rating") or 0)
-        except (TypeError, ValueError) as error:
-            raise ValueError("Rating must be a number from 0 to 5.") from error
-        if not 0 <= game["rating"] <= 5:
-            raise ValueError("Rating must be between 0 and 5.")
-        game["applications"] = self.clean_extras(source.get("applications", []), command=True)
-        game["versions"] = self.clean_extras(source.get("versions", []), command=True)
-        game["documents"] = self.clean_extras(source.get("documents", []), command=False)
-        for field in MEDIA_PATH_FIELDS:
-            if game.get(field):
-                game[field] = str(approved_media_path(game[field], must_exist=False))
-        for document in game["documents"]:
-            document["path"] = str(approved_media_path(document["path"], must_exist=False))
-        save_paths = source.get("save_paths", [])
-        if not isinstance(save_paths, list):
-            raise ValueError("Save paths must be a list.")
-        game["save_paths"] = [str(path).strip() for path in save_paths if str(path).strip()][:50]
-        screenshots = source.get("screenshots", [])
-        if not isinstance(screenshots, list):
-            raise ValueError("Screenshots must be a list.")
-        game["screenshots"] = [
-            str(approved_media_path(str(path).strip(), must_exist=False))
-            for path in screenshots[:100] if str(path).strip()
-        ]
-        if "alternate_names" in source:
-            names = source.get("alternate_names", [])
-            if isinstance(names, str):
-                game["alternate_names"] = [name.strip() for name in names.split(";") if name.strip()]
-            elif isinstance(names, list):
-                game["alternate_names"] = [str(name).strip() for name in names if str(name).strip()][:20]
-        normalize_video_fields(game)
-        game["hide_in_bigbox"] = bool(source.get("hide_in_bigbox"))
-        esrb = str(source.get("esrb", game.get("esrb", ""))).strip()
-        if esrb:
-            game["esrb"] = esrb
-        defs = custom_field_defs(load_state().get("settings", {}))
-        if "custom_fields" in source and isinstance(source.get("custom_fields"), dict):
-            game["custom_fields"] = {
-                str(key).strip(): str(value).strip()
-                for key, value in source["custom_fields"].items()
-                if str(key).strip()
-            }
-            normalize_custom_fields(game, defs)
+        game = _clean_game_fields(source)
+        _apply_game_extras(
+            game,
+            self.clean_extras(source.get("applications", []), command=True),
+            self.clean_extras(source.get("versions", []), command=True),
+            self.clean_extras(source.get("documents", []), command=False),
+        )
+        _clean_game_lists(game, source)
+        _apply_game_misc(game, source)
         if not game.get("name"):
             raise ValueError("Name is required.")
         if not game.get("path") or not Path(game["path"]).exists():
             raise ValueError("Path must point to an existing local file.")
         def mutate(state):
-            if payload.get("id") is None and not payload.get("game_id"):
-                game["added_at"] = datetime.now().isoformat(timespec="seconds")
-                state["games"].append(game)
-            else:
-                existing = game_from_payload(state, payload)
-                game["game_id"] = existing.get("game_id", game.get("game_id", ""))
-                existing.update(game)
+            _save_game_mutate(state, payload, game)
         transact_state(mutate)
         clear_file_probe_cache()
         self.send_json(200, {"ok": True})
