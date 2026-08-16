@@ -522,11 +522,7 @@ def _is_loopback_host(host: str) -> bool:
         return False
 
 
-def validate_webhook(config, *, openbox_port=None, resolver=None) -> None:
-    """Validate one webhook configuration for saving and before delivery.
-
-    HTTP only with OPENBOX_ALLOW_HTTP_WEBHOOKS=1; loopback URLs on the OpenBox server port are rejected.
-    """
+def _validate_webhook_events(config: dict) -> None:
     if not isinstance(config, dict):
         raise ValueError("Webhook configuration must be an object.")
     events = config.get("events")
@@ -535,6 +531,9 @@ def validate_webhook(config, *, openbox_port=None, resolver=None) -> None:
     unknown = [event for event in events if event not in EVENT_TYPES]
     if unknown:
         raise ValueError(f"Unknown webhook event: {unknown[0]}")
+
+
+def _parse_webhook_url(config: dict) -> tuple[str, str, str]:
     url = _clean_url(config.get("url"))
     if not url:
         raise ValueError("Webhook URL is required.")
@@ -550,6 +549,10 @@ def validate_webhook(config, *, openbox_port=None, resolver=None) -> None:
     if scheme == "http" and os.environ.get("OPENBOX_ALLOW_HTTP_WEBHOOKS") != "1":
         raise ValueError("HTTP webhooks are disabled; enable them with OPENBOX_ALLOW_HTTP_WEBHOOKS=1.")
     host = _hostname_for(parsed)
+    return url, scheme, host
+
+
+def _validate_webhook_host(parsed, host: str, scheme: str, *, openbox_port=None, resolver=None) -> None:
     if parsed.username or parsed.password:
         raise ValueError("Webhook URLs may not embed credentials.")
     if parsed.fragment:
@@ -574,11 +577,25 @@ def validate_webhook(config, *, openbox_port=None, resolver=None) -> None:
             raise ValueError("Webhook URL could not be resolved.")
         for address in addresses:
             _reject_unsafe_address(address)
+
+
+def _validate_webhook_attempts(config: dict) -> None:
     try:
         int(config.get("attempts") or DEFAULT_ATTEMPTS)
         int(config.get("timeout") or DEFAULT_TIMEOUT)
     except (TypeError, ValueError) as error:
         raise ValueError("Webhook attempts and timeout must be numbers.") from error
+
+
+def validate_webhook(config, *, openbox_port=None, resolver=None) -> None:
+    """Validate one webhook configuration for saving and before delivery.
+
+    HTTP only with OPENBOX_ALLOW_HTTP_WEBHOOKS=1; loopback URLs on the OpenBox server port are rejected.
+    """
+    _validate_webhook_events(config)
+    url, scheme, host = _parse_webhook_url(config)
+    _validate_webhook_host(urlparse(url), host, scheme, openbox_port=openbox_port, resolver=resolver)
+    _validate_webhook_attempts(config)
 
 
 def test_ping(config, *, openbox_port=None, resolver=None, opener=None, timeout=None) -> dict:
