@@ -15,6 +15,12 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="1.2.0" date="2026-08-15">
+      <description>
+        <p>Security release. Release artifacts now require Ed25519 signatures, the workflow separates build, attestation, and publication permissions, build inputs are pinned, and plugin catalogs and downloaded payloads receive stronger integrity checks.</p>
+        <p>SteamOS AppImages no longer expose bundled libraries to the host shell, fixing the rl_print_keybinding startup failure. Webhook delivery, backups, archives, native bridge origins, Gameyfin paths, media roots, environment loading, jobs, and event streams now enforce tighter trust and resource boundaries.</p>
+      </description>
+    </release>
     <release version="1.1.0" date="2026-08-15">
       <description>
         <p>Bug-fix release. Cloud sync now merges newer per-field values when local changes win, the last-known-good backup mirrors the latest committed state, and play queue skip flags persist before advancing. Queue paths are probed on the filesystem, and OBS recording status requires a recent recording instead of any running process.</p>

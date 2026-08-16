@@ -4,6 +4,27 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-08-15
+
+### Fixed
+
+- SteamOS AppImages no longer export bundled libraries into the host shell, fixing startup failures where `/bin/bash` could not resolve `rl_print_keybinding`.
+- Webhook delivery rejects non-public destinations, pins validated DNS results, disables proxies and redirects, and bounds response reads.
+- Library and save backups use private atomic files, reject unsafe archive entries, and protect restore paths against symlinks and archive replacement races.
+- Native bridge authorization now requires the exact OpenBox origin, including its dynamic port.
+- Gameyfin validates IDs before path construction, contains filesystem operations under the install root, requires HTTPS, and verifies supplied checksums.
+- 7z extraction rejects links, operates on a bounded snapshot, and validates the staging tree before promotion.
+- Media and document reads enforce approved roots, including symlinked parent checks.
+- Environment loading accepts only owner-controlled files and supported keys, and no longer searches the current directory.
+- Job and SSE queues now have explicit capacity, expiry, cleanup, and slow-client behavior.
+
+### Changed
+
+- Release artifacts require Ed25519 signatures against the pinned production public key.
+- Release jobs separate build, provenance attestation, and publication permissions and refuse asset overwrites.
+- Build and CI inputs are pinned, the SBOM is generated from the completed AppImage, and Puppeteer 25.7.0 resolves the audited npm dependency issues.
+- Plugin catalogs require a pinned digest, HTTPS package URLs, and package checksums.
+
 ## [1.1.0] - 2026-08-15
 
 ### Fixed
@@ -474,6 +495,7 @@ If you jumped from an older build and skipped the last two releases:
 - AppImage, Flatpak manifest, and Makefile install targets
 
 [0.8.2]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.2
+[1.2.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.0.0

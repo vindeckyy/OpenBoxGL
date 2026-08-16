@@ -61,10 +61,10 @@ The following are generally out of scope:
 
 Release publication is fail-closed. The workflow requires `OPENBOX_SIGNING_KEY`, derives an Ed25519 public key in a mode-`0600` temporary file, compares it with the committed `openbox-release.pub`, signs the AppImage, and verifies the signature before upload. The updater and `scripts/install.sh` reject checksum-only releases.
 
-The committed `openbox-release.pub` is still a placeholder, so a maintainer must complete these external release controls before publishing the first usable signed release:
+The committed `openbox-release.pub` pins the production release key. Maintainers must preserve these external release controls:
 
 - Generate a new Ed25519 key pair outside the repository and store only the private key as the `OPENBOX_SIGNING_KEY` repository secret.
-- Replace `openbox-release.pub` with the real 32-byte public key and update `RELEASE_KEY_SHA256` in `scripts/install.sh` in the same reviewed change.
+- When rotating the signing key, replace `openbox-release.pub` and update `RELEASE_KEY_SHA256` in `scripts/install.sh` in the same reviewed change.
 - Require approval for the `release` environment and protect `v*` tags against unreviewed pushes; use annotated, signed tags where the GitHub organization supports the signing-key policy.
 - Publish `openbox-release.pub`, the `.sig`, the checksum, and `install.sh` together. Rotate the key and repeat the pin update if it is compromised.
 

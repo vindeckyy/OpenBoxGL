@@ -7,9 +7,8 @@ ASSET="OpenBox-x86_64.AppImage"
 KEY_ASSET="openbox-release.pub"
 SIG_ASSET="${ASSET}.sig"
 DEST_DIR="${OPENBOX_INSTALL_DIR:-$HOME/.local/bin}"
-# This hash is the bootstrap trust anchor for the currently committed
-# placeholder. Replace it in the same change that replaces openbox-release.pub.
-RELEASE_KEY_SHA256="ef1c74cd6cb91624b31af8f28a37e7e90c1a3be5e20c334370f88c5f15281222"
+# Bootstrap trust anchor for the committed production release key.
+RELEASE_KEY_SHA256="33135a3b4019c3d22d66d4b14e076824291f0ebbaf52d91bac9008a580ec00d9"
 
 umask 077
 TMP_DIR="$(mktemp -d)"

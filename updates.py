@@ -14,14 +14,12 @@ from backend_io import atomic_write_bytes, atomic_write_text, download_file, rea
 
 logger = logging.getLogger("openbox")
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
 ASSET = "OpenBox-x86_64.AppImage"
 TRUSTED_RELEASE_PREFIX = "https://github.com/vindeckyy/OpenBoxGL/releases/download/"
 
-# Committed openbox-release.pub bytes. The repository currently carries a
-# bootstrap placeholder; a maintainer must replace it before publishing an
-# update that the updater can install.
+# Legacy bootstrap key. Releases signed with this value are rejected.
 PLACEHOLDER_PUBLIC_KEY = bytes.fromhex(
     "9df1f9e7cdba094ac9d858d541b7529c28329a309ff79a4812457eb3f259fa8d"
 )
