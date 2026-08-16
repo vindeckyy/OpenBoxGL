@@ -22,6 +22,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -33,6 +34,7 @@ static pid_t server_pid = 0;
 static GtkWidget *main_window = NULL;
 static char *token = NULL;
 static char *origin = NULL;
+static guint16 server_port = 0;
 static const char *data_dir = NULL;
 static const char *web_app_path = NULL;
 static const char *python_path = "python3";
@@ -51,22 +53,43 @@ static GtkStatusIcon *tray_icon = NULL;
 static gboolean
 path_exists(const char *path)
 {
-    return g_file_test(path, G_FILE_TEST_EXISTS);
+    return path && g_file_test(path, G_FILE_TEST_EXISTS);
 }
 
 static char *
-read_trimmed_file(const char *path)
+read_secure_trimmed_file(const char *path)
 {
-    GError *error = NULL;
-    char *contents = NULL;
-    gsize length = 0;
-    if (!g_file_get_contents(path, &contents, &length, &error)) {
-        if (error) {
-            g_printerr("native_host: %s\n", error->message);
-            g_error_free(error);
-        }
+    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) {
+        g_printerr("native_host: could not open %s: %s\n", path, strerror(errno));
         return NULL;
     }
+    struct stat info;
+    if (fstat(fd, &info) < 0 || !S_ISREG(info.st_mode) ||
+        info.st_uid != geteuid() || (info.st_mode & 0077) != 0 ||
+        info.st_size <= 0 || info.st_size > 4096) {
+        g_printerr("native_host: rejecting insecure server file %s\n", path);
+        close(fd);
+        return NULL;
+    }
+    gsize capacity = (gsize)info.st_size + 1;
+    char *contents = g_malloc(capacity);
+    gsize length = 0;
+    while (length < (gsize)info.st_size) {
+        ssize_t count = read(fd, contents + length, (gsize)info.st_size - length);
+        if (count < 0 && errno == EINTR) {
+            continue;
+        }
+        if (count <= 0) {
+            g_printerr("native_host: could not read %s\n", path);
+            close(fd);
+            g_free(contents);
+            return NULL;
+        }
+        length += (gsize)count;
+    }
+    close(fd);
+    contents[length] = '\0';
     char *end = contents + length;
     while (end > contents && (end[-1] == '\n' || end[-1] == '\r')) {
         *--end = '\0';
@@ -75,10 +98,71 @@ read_trimmed_file(const char *path)
 }
 
 static gboolean
+secure_file_ready(const char *path)
+{
+    struct stat info;
+    return lstat(path, &info) == 0 && S_ISREG(info.st_mode) &&
+           info.st_uid == geteuid() && (info.st_mode & 0077) == 0 &&
+           info.st_size > 0 && info.st_size <= 4096;
+}
+
+static gboolean
+remove_boot_file(const char *path)
+{
+    if (unlink(path) == 0 || errno == ENOENT) {
+        return TRUE;
+    }
+    g_printerr("native_host: could not remove stale %s: %s\n", path, strerror(errno));
+    return FALSE;
+}
+
+static gboolean
+parse_server_port(const char *text, guint16 *parsed_port)
+{
+    if (!text || !text[0]) {
+        return FALSE;
+    }
+    errno = 0;
+    char *end = NULL;
+    unsigned long value = strtoul(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0' || value < 1 || value > 65535) {
+        return FALSE;
+    }
+    *parsed_port = (guint16)value;
+    return TRUE;
+}
+
+static gboolean
+token_is_valid(const char *value)
+{
+    if (!value) {
+        return FALSE;
+    }
+    gsize length = strlen(value);
+    if (length < 16 || length > 256) {
+        return FALSE;
+    }
+    for (const unsigned char *cursor = (const unsigned char *)value;
+         *cursor != '\0'; cursor++) {
+        if (!g_ascii_isalnum(*cursor) && *cursor != '-' && *cursor != '_') {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
+static gboolean
 boot_server(void)
 {
     char *port_file = g_build_filename(data_dir, "server.port", NULL);
     char *token_file = g_build_filename(data_dir, "server.token", NULL);
+
+    /* Never accept a pair left behind by a crashed or interrupted server. */
+    if (!remove_boot_file(port_file) || !remove_boot_file(token_file)) {
+        g_free(port_file);
+        g_free(token_file);
+        return FALSE;
+    }
 
     server_pid = fork();
     if (server_pid < 0) {
@@ -103,29 +187,31 @@ boot_server(void)
     /* Parent: wait for the server to publish its port and token. */
     int waited = 0;
     while (waited < BOOT_TIMEOUT_SECONDS * 10) {
-        if (path_exists(port_file) && path_exists(token_file)) {
+        if (secure_file_ready(port_file) && secure_file_ready(token_file)) {
             break;
         }
         g_usleep(100 * 1000);
         waited++;
     }
-    if (!path_exists(port_file) || !path_exists(token_file)) {
+    if (!secure_file_ready(port_file) || !secure_file_ready(token_file)) {
         g_printerr("native_host: server did not boot within %d seconds\n", BOOT_TIMEOUT_SECONDS);
         g_free(port_file);
         g_free(token_file);
         return FALSE;
     }
 
-    char *port = read_trimmed_file(port_file);
-    token = read_trimmed_file(token_file);
+    char *port = read_secure_trimmed_file(port_file);
+    token = read_secure_trimmed_file(token_file);
     g_free(port_file);
     g_free(token_file);
 
-    if (!port || !token) {
+    if (!port || !token || !parse_server_port(port, &server_port) || !token_is_valid(token)) {
         g_printerr("native_host: could not read server.port or server.token\n");
+        g_free(port);
+        g_clear_pointer(&token, g_free);
         return FALSE;
     }
-    origin = g_strdup_printf("http://127.0.0.1:%s", port);
+    origin = g_strdup_printf("http://127.0.0.1:%u", server_port);
     g_free(port);
     return TRUE;
 }
@@ -157,7 +243,7 @@ static gboolean
 acquire_single_instance(void)
 {
     char *lock_path = g_build_filename(data_dir, "native-host.lock", NULL);
-    lock_fd = open(lock_path, O_CREAT | O_RDWR, 0600);
+    lock_fd = open(lock_path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0600);
     g_free(lock_path);
     if (lock_fd < 0) {
         return TRUE; /* can't lock; run anyway rather than brick the app */
@@ -496,31 +582,41 @@ handle_window(WebKitWebView *view, const char *id, JSCValue *args)
 }
 
 static gboolean
-uri_is_loopback(const char *uri)
+uri_matches_expected_origin(const char *uri)
 {
-    if (!uri) {
+    if (!uri || !origin) {
         return FALSE;
     }
     GUri *parsed = g_uri_parse(uri, G_URI_FLAGS_NONE, NULL);
-    if (!parsed) {
+    GUri *expected = g_uri_parse(origin, G_URI_FLAGS_NONE, NULL);
+    if (!parsed || !expected) {
+        if (parsed) {
+            g_uri_unref(parsed);
+        }
+        if (expected) {
+            g_uri_unref(expected);
+        }
         return FALSE;
     }
     const char *scheme = g_uri_get_scheme(parsed);
+    const char *expected_scheme = g_uri_get_scheme(expected);
     const char *host = g_uri_get_host(parsed);
-    gboolean ok = scheme && host &&
-                  (g_ascii_strcasecmp(scheme, "http") == 0 ||
-                   g_ascii_strcasecmp(scheme, "https") == 0) &&
-                  (strcmp(host, "127.0.0.1") == 0 ||
-                   strcmp(host, "localhost") == 0 ||
-                   strcmp(host, "::1") == 0);
+    const char *expected_host = g_uri_get_host(expected);
+    const char *userinfo = g_uri_get_userinfo(parsed);
+    gboolean ok = scheme && expected_scheme && host && expected_host &&
+                  !userinfo &&
+                  g_ascii_strcasecmp(scheme, expected_scheme) == 0 &&
+                  g_ascii_strcasecmp(host, expected_host) == 0 &&
+                  g_uri_get_port(parsed) == g_uri_get_port(expected);
     g_uri_unref(parsed);
+    g_uri_unref(expected);
     return ok;
 }
 
 static gboolean
-is_loopback_origin(WebKitWebView *view)
+is_expected_origin(WebKitWebView *view)
 {
-    return uri_is_loopback(webkit_web_view_get_uri(view));
+    return uri_matches_expected_origin(webkit_web_view_get_uri(view));
 }
 
 static gboolean
@@ -537,7 +633,7 @@ decide_policy(WebKitWebView *view, WebKitPolicyDecision *decision,
             webkit_navigation_policy_decision_get_navigation_action(nav);
         WebKitURIRequest *request =
             action ? webkit_navigation_action_get_request(action) : NULL;
-        if (!uri_is_loopback(request ? webkit_uri_request_get_uri(request) : NULL)) {
+        if (!uri_matches_expected_origin(request ? webkit_uri_request_get_uri(request) : NULL)) {
             webkit_policy_decision_ignore(decision);
             return TRUE;
         }
@@ -550,7 +646,7 @@ decide_policy(WebKitWebView *view, WebKitPolicyDecision *decision,
         WebKitResponsePolicyDecision *resp =
             WEBKIT_RESPONSE_POLICY_DECISION(decision);
         WebKitURIResponse *response = webkit_response_policy_decision_get_response(resp);
-        if (!uri_is_loopback(response ? webkit_uri_response_get_uri(response) : NULL)) {
+        if (!uri_matches_expected_origin(response ? webkit_uri_response_get_uri(response) : NULL)) {
             webkit_policy_decision_ignore(decision);
             return TRUE;
         }
@@ -577,9 +673,9 @@ message_received(WebKitUserContentManager *mgr,
     char *id = jsc_value_to_string(id_val);
     char *method = jsc_value_to_string(method_val);
 
-    if (!is_loopback_origin(view)) {
-        /* Security: only the app's own loopback page may drive the bridge. */
-        g_printerr("native_host: rejecting bridge message from non-loopback origin\n");
+    if (!is_expected_origin(view)) {
+        /* Security: only the exact booted app origin may drive the bridge. */
+        g_printerr("native_host: rejecting bridge message from unexpected origin\n");
         if (id) {
             resolve_bridge(view, id, "{\"ok\":false}");
         }
@@ -704,7 +800,7 @@ main(int argc, char **argv)
     if (log_fd >= 0) {
         close(log_fd);
         char *log_path = g_build_filename(data_dir, "openbox-native.log", NULL);
-        int fd = open(log_path, O_WRONLY | O_CREAT | O_APPEND, 0600);
+        int fd = open(log_path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC | O_NOFOLLOW, 0600);
         g_free(log_path);
         if (fd >= 0) {
             dup2(fd, STDERR_FILENO);

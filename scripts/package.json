@@ -5,10 +5,13 @@
   "private": true,
   "license": "AGPL-3.0-or-later",
   "dependencies": {
-    "puppeteer": "22.15.0"
+    "puppeteer": "25.7.0"
   },
   "devDependencies": {
     "eslint": "9.39.5",
     "globals": "17.11.0"
+  },
+  "overrides": {
+    "js-yaml": "4.3.1"
   }
 }

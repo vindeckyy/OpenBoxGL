@@ -19,7 +19,7 @@ native-host:
 
 dev-venv:
 	python3 -m venv .venv-dev
-	.venv-dev/bin/pip install ruff coverage
+	.venv-dev/bin/pip install --disable-pip-version-check -r requirements-dev.txt
 
 # Full verification gate: lint, compile, tests, coverage floors.
 # Dev-only dependencies live in .venv-dev; the runtime app stays dep-free.

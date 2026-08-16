@@ -6,30 +6,36 @@ on:
       - "v*"
 
 permissions:
-  contents: write
-  # Required by actions/attest-build-provenance (OIDC minting + attestation API).
-  id-token: write
-  attestations: write
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  appimage:
+  build:
     runs-on: ubuntu-latest
-    # Publishing a release requires explicit human approval in the "release" environment.
-    environment: release
-    # Only one release build publishes at a time; a newer tag waits its turn
-    # instead of cancelling the in-flight release.
-    concurrency:
-      group: release
-      cancel-in-progress: false
+    timeout-minutes: 35
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate release tag
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] || {
+            echo "invalid release tag: $GITHUB_REF_NAME" >&2
+            exit 1
+          }
 
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             python3 \
             libwebkit2gtk-4.1-dev \
             libgtk-3-dev \
@@ -46,31 +52,51 @@ jobs:
         run: ./run_all_tests.sh
 
       - name: Build AppImage
+        env:
+          OPENBOX_APPDIR: ${{ runner.temp }}/OpenBox.AppDir
         run: ./build_appimage.sh "$PWD/OpenBox-x86_64.AppImage"
 
       - name: Write SHA-256 checksum
         run: sha256sum OpenBox-x86_64.AppImage | tee OpenBox-x86_64.AppImage.sha256
 
-      - name: Sign AppImage (Ed25519)
-        # Runs only when the maintainer configures OPENBOX_SIGNING_KEY as a
-        # repository secret; without it the release stays checksum-only.
-        id: sign
-        if: ${{ env.OPENBOX_SIGNING_KEY != '' }}
-        run: |
-          echo "$OPENBOX_SIGNING_KEY" > /tmp/openbox-release-key
-          python3 scripts/sign_release.py --key /tmp/openbox-release-key --out OpenBox-x86_64.AppImage.sig OpenBox-x86_64.AppImage
-          echo "sig-file=OpenBox-x86_64.AppImage.sig" >> "$GITHUB_OUTPUT"
-        env:
-          OPENBOX_SIGNING_KEY: ${{ secrets.OPENBOX_SIGNING_KEY }}
-
       - name: Generate SBOM
-        id: sbom
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          VERSION="${RELEASE_TAG#v}"
-          echo "sbom-file=OpenBox-$VERSION-sbom.json" >> "$GITHUB_OUTPUT"
-          python3 scripts/gen_sbom.py --version "$VERSION" --out "OpenBox-$VERSION-sbom.json"
+          VERSION="${GITHUB_REF_NAME#v}"
+          python3 scripts/gen_sbom.py \
+            --version "$VERSION" \
+            --appdir "${RUNNER_TEMP}/OpenBox.AppDir" \
+            --out "OpenBox-$VERSION-sbom.json"
+
+      - name: Verify zsync metadata
+        run: test -f OpenBox-x86_64.AppImage.zsync
+
+      - name: Upload unsigned build outputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4.6.2
+        with:
+          name: openbox-release-assets
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            OpenBox-x86_64.AppImage
+            OpenBox-x86_64.AppImage.zsync
+            OpenBox-x86_64.AppImage.sha256
+            OpenBox-*-sbom.json
+
+  attest:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Download build output
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4.3.0
+        with:
+          name: openbox-release-assets
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # actions/attest-build-provenance@v2
@@ -78,22 +104,87 @@ jobs:
           subject-name: OpenBox-x86_64.AppImage
           subject-path: OpenBox-x86_64.AppImage
 
-      - name: Verify zsync metadata
-        run: test -f OpenBox-x86_64.AppImage.zsync
+  publish:
+    needs: [build, attest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      actions: read
+      contents: write
 
-      - name: Create release and upload assets
+    steps:
+      - name: Checkout exact tagged commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download build outputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4.3.0
+        with:
+          name: openbox-release-assets
+
+      - name: Validate annotated tag points at the build commit
+        run: |
+          test "$(git cat-file -t "$GITHUB_REF_NAME")" = tag
+          test "$(git rev-parse "$GITHUB_REF_NAME^{}")" = "$GITHUB_SHA"
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install signing dependency
+        run: python3 -m pip install --disable-pip-version-check cryptography==50.0.0
+
+      - name: Sign and verify release
+        env:
+          OPENBOX_SIGNING_KEY: ${{ secrets.OPENBOX_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${OPENBOX_SIGNING_KEY:-}" || {
+            echo "OPENBOX_SIGNING_KEY is required; refusing to publish an unsigned release" >&2
+            exit 1
+          }
+          umask 077
+          key_file="$(mktemp)"
+          public_key_file="$(mktemp)"
+          trap 'rm -f -- "$key_file" "$public_key_file"' EXIT
+          printf '%s' "$OPENBOX_SIGNING_KEY" > "$key_file"
+          unset OPENBOX_SIGNING_KEY
+          python3 scripts/sign_release.py \
+            --key "$key_file" \
+            --public-key-out "$public_key_file" \
+            --out OpenBox-x86_64.AppImage.sig \
+            OpenBox-x86_64.AppImage
+          cmp -s "$public_key_file" openbox-release.pub || {
+            echo "OPENBOX_SIGNING_KEY does not match the committed release public key" >&2
+            exit 1
+          }
+          sha256sum --check --strict OpenBox-x86_64.AppImage.sha256
+          python3 scripts/verify_release.py \
+            --key openbox-release.pub \
+            OpenBox-x86_64.AppImage \
+            OpenBox-x86_64.AppImage.sig
+          cp scripts/install.sh install.sh
+
+      - name: Create release and upload signed assets
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          target_commitish: master
+          target_commitish: ${{ github.sha }}
           name: ${{ github.ref_name }}
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           fail_on_unmatched_files: true
-          overwrite_files: true
+          overwrite_files: false
           files: |
             OpenBox-x86_64.AppImage
             OpenBox-x86_64.AppImage.zsync
             OpenBox-x86_64.AppImage.sha256
-            ${{ steps.sign.outputs.sig-file }}
-            ${{ steps.sbom.outputs.sbom-file }}
+            OpenBox-x86_64.AppImage.sig
+            openbox-release.pub
+            install.sh
+            OpenBox-*-sbom.json

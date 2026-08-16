@@ -2,6 +2,7 @@
 """Tests for Playnite-inspired parity helpers."""
 
 import json
+import stat
 import tempfile
 import unittest
 import zipfile
@@ -92,6 +93,8 @@ class BackupTests(unittest.TestCase):
             state = {"settings": {"theme": "dark"}, "games": [{"name": "Test"}]}
             archive = create_backup(root, state, ["library", "settings"], keep=0)
             self.assertTrue(archive.is_file())
+            self.assertEqual(stat.S_IMODE(archive.stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(archive.parent.stat().st_mode), 0o700)
             with zipfile.ZipFile(archive) as package:
                 manifest = json.loads(package.read("manifest.json"))
             self.assertEqual(set(manifest["items"]), {"library", "settings"})

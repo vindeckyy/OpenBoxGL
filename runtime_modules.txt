@@ -19,6 +19,7 @@ metadata.py
 archives.py
 saves.py
 updates.py
+openbox-release.pub
 env_config.py
 parity_discovery.py
 parity_import.py

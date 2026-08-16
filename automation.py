@@ -6,6 +6,7 @@ Independent open-source software not affiliated with LaunchBox or Unbroken Softw
 from __future__ import annotations
 
 import hashlib
+import http.client
 import hmac
 import ipaddress
 import json
@@ -18,8 +19,9 @@ import time
 import uuid
 from datetime import datetime, timezone
 from collections.abc import Callable
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPHandler, HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
 
 from backend_io import read_limited
 
@@ -34,6 +36,7 @@ MAX_ATTEMPTS = 5
 DEFAULT_TIMEOUT = 5
 MAX_TIMEOUT = 15
 MAX_WEBHOOKS = 32
+MAX_PENDING_QUEUE = 1024
 _RESPONSE_DRAIN_BYTES = 4 * 1024
 _ATTEMPT_DELAYS = (1.0, 2.0, 4.0, 8.0)
 _MAX_RETRY_AFTER = 30.0
@@ -147,6 +150,83 @@ def _drain_response(response) -> None:
             pass
 
 
+class _NoRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, *_args, **_kwargs):
+        raise ValueError("Webhook redirects are disabled.")
+
+
+class _PinnedHTTPConnection(http.client.HTTPConnection):
+    """Connect to a previously validated address while retaining the URL host."""
+
+    def __init__(self, host, *, resolved_address, **kwargs):
+        self._resolved_address = resolved_address
+        super().__init__(host, **kwargs)
+
+    def _create_connection(self, _address, timeout, source_address):
+        return socket.create_connection((self._resolved_address, self.port), timeout, source_address)
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """HTTPS variant of ``_PinnedHTTPConnection``; TLS still uses the URL hostname."""
+
+    def __init__(self, host, *, resolved_address, **kwargs):
+        self._resolved_address = resolved_address
+        super().__init__(host, **kwargs)
+
+    def _create_connection(self, _address, timeout, source_address):
+        return socket.create_connection((self._resolved_address, self.port), timeout, source_address)
+
+
+def _pinned_address(host: str) -> str:
+    addresses = _resolve_addresses(host)
+    if not addresses:
+        raise ValueError("Webhook hostname did not resolve.")
+    if _is_loopback_host(host):
+        if any(not _loopback_address(address) for address in addresses):
+            raise ValueError("Webhook URL resolved outside loopback.")
+        return addresses[0]
+    for address in addresses:
+        _reject_unsafe_address(address)
+    return addresses[0]
+
+
+class _PinnedHTTPHandler(HTTPHandler):
+    def http_open(self, request):
+        host = _hostname_for(urlparse(request.full_url))
+        address = _pinned_address(host)
+        return self.do_open(
+            lambda connection_host, **kwargs: _PinnedHTTPConnection(
+                connection_host, resolved_address=address, **kwargs
+            ),
+            request,
+        )
+
+
+class _PinnedHTTPSHandler(HTTPSHandler):
+    def https_open(self, request):
+        host = _hostname_for(urlparse(request.full_url))
+        address = _pinned_address(host)
+        return self.do_open(
+            lambda connection_host, **kwargs: _PinnedHTTPSConnection(
+                connection_host, resolved_address=address, **kwargs
+            ),
+            request,
+            context=self._context,
+        )
+
+
+_NO_REDIRECT_OPENER = build_opener(
+    ProxyHandler({}),
+    _PinnedHTTPHandler(),
+    _PinnedHTTPSHandler(),
+    _NoRedirectHandler(),
+)
+
+
+def _open_webhook(request: Request, timeout: float):
+    return _NO_REDIRECT_OPENER.open(request, timeout=timeout)
+
+
 def _port_in_use(host: str, port: int) -> bool:
     """True when a TCP listener is accepting on host:port (loopback only)."""
     if not port or not 1 <= port <= 65535:
@@ -173,11 +253,11 @@ class WebhookDispatcher:
         max_pending: int = DEFAULT_MAX_PENDING,
     ):
         self._on_result = on_result
-        self._opener = opener
+        self._opener = opener or _open_webhook
         self._resolver = resolver
         self._clock = clock or time.monotonic
-        self._max_pending = max(1, int(max_pending))
-        self._queue: queue.Queue = queue.Queue(maxsize=max(1, int(max_pending)))
+        self._max_pending = max(1, min(int(max_pending), MAX_PENDING_QUEUE))
+        self._queue: queue.Queue = queue.Queue(maxsize=self._max_pending)
         self._lock = threading.RLock()
         self._condition = threading.Condition(self._lock)
         self._stopping = False
@@ -220,6 +300,8 @@ class WebhookDispatcher:
         with self._condition:
             if self._stopping:
                 return False
+            if self._queue.qsize() + len(matched) > self._max_pending:
+                return False
             for config in matched:
                 item = {
                     "webhook_id": str(config.get("id") or ""),
@@ -233,11 +315,7 @@ class WebhookDispatcher:
                     "body": body,
                     "timestamp": timestamp,
                 }
-                try:
-                    self._queue.put_nowait(item)
-                except queue.Full:
-                    self._condition.notify_all()
-                    return False
+                self._queue.put_nowait(item)
             self._condition.notify_all()
             return True
 
@@ -264,13 +342,16 @@ class WebhookDispatcher:
                 final_status = None
                 final_error = str(error)
                 break
+            except HTTPError as error:
+                final_error = str(error)
+                continue
             except (OSError, TimeoutError) as error:
                 final_error = str(error)
                 continue
             sent_at = utc_now()
             if redirected or not _retryable_status(status):
                 final_status = status
-                final_error = "" if status == 200 else f"HTTP {status}"
+                final_error = "" if 200 <= status < 300 else f"HTTP {status}"
                 break
             final_status = status
             final_error = f"HTTP {status}"
@@ -291,6 +372,7 @@ class WebhookDispatcher:
             LOGGER.exception("Webhook on_result callback failed for %s", webhook_id)
 
     def _send_once(self, item: dict, url: str, timeout: int):
+        _validate_delivery_url(url, resolver=self._resolver)
         request = Request(
             url,
             data=item["body"],
@@ -308,14 +390,26 @@ class WebhookDispatcher:
                 SIGNATURE_HEADER,
                 f"sha256={sign_event(item['secret'], item['timestamp'], item['body'])}",
             )
-        with self._opener(request, timeout=timeout) as response:
-            status = int(getattr(response, "status", 200))
-            headers = getattr(response, "headers", None)
-            retry_after = ""
-            if headers is not None:
-                retry_after = str(headers.get("Retry-After", "")).strip()
-            _drain_response(response)
-            return status, retry_after, 300 <= status < 400
+        try:
+            with self._opener(request, timeout=timeout) as response:
+                status = int(getattr(response, "status", 200))
+                if 300 <= status < 400:
+                    raise ValueError("Webhook redirects are disabled.")
+                headers = getattr(response, "headers", None)
+                retry_after = ""
+                if headers is not None:
+                    retry_after = str(headers.get("Retry-After", "")).strip()
+                _drain_response(response)
+                return status, retry_after, False
+        except HTTPError as error:
+            headers = getattr(error, "headers", None)
+            retry_after = str(headers.get("Retry-After", "")).strip() if headers else ""
+            _drain_response(error)
+            try:
+                error.close()
+            except Exception:
+                pass
+            return int(error.code), retry_after, False
 
     def _worker_loop(self):
         while True:
@@ -346,6 +440,8 @@ class WebhookDispatcher:
             self._condition.notify_all()
         deadline = self._clock() + max(0.0, float(wait_seconds))
         for thread in list(self._threads):
+            if not thread.is_alive():
+                continue
             remaining = max(0.0, deadline - self._clock())
             thread.join(timeout=remaining)
 
@@ -372,14 +468,41 @@ def _reject_unsafe_address(address: str) -> None:
         ip = ipaddress.ip_address(address)
     except ValueError as error:
         raise ValueError("Webhook URL could not be resolved to a valid address.") from error
-    if ip.is_unspecified:
-        raise ValueError("Webhook URLs may not target an unspecified address.")
-    if ip.is_multicast:
-        raise ValueError("Webhook URLs may not target a multicast address.")
-    if ip.is_link_local:
-        raise ValueError("Webhook URLs may not target a link-local address.")
-    if ip.is_reserved:
-        raise ValueError("Webhook URLs may not target a reserved address.")
+    if not ip.is_global:
+        raise ValueError("Webhook URLs may only target public addresses.")
+
+
+def _validate_delivery_url(url: str, *, resolver=None) -> None:
+    """Re-check DNS immediately before a delivery to reduce rebinding exposure."""
+    if len(str(url or "")) > MAX_URL_LENGTH:
+        raise ValueError("Webhook URL is too long.")
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname
+    except ValueError as error:
+        raise ValueError("Webhook URL is invalid.") from error
+    if parsed.scheme not in {"http", "https"} or not host:
+        raise ValueError("Webhook URL is invalid.")
+    if parsed.scheme == "http" and os.environ.get("OPENBOX_ALLOW_HTTP_WEBHOOKS") != "1":
+        raise ValueError("HTTP webhooks are disabled.")
+    if parsed.username or parsed.password:
+        raise ValueError("Webhook URLs may not embed credentials.")
+    if parsed.fragment:
+        raise ValueError("Webhook URLs may not contain a fragment.")
+    try:
+        if parsed.port is not None and not 1 <= parsed.port <= 65535:
+            raise ValueError("Webhook URL port must be between 1 and 65535.")
+    except ValueError as error:
+        raise ValueError("Webhook URL port is invalid.") from error
+    addresses = _resolve_addresses(host, resolver=resolver)
+    if not addresses:
+        raise ValueError("Webhook hostname did not resolve.")
+    if _is_loopback_host(host):
+        if any(not _loopback_address(address) for address in addresses):
+            raise ValueError("Webhook URL resolved outside loopback.")
+        return
+    for address in addresses:
+        _reject_unsafe_address(address)
 
 
 def _loopback_address(address: str) -> bool:
@@ -435,6 +558,9 @@ def validate_webhook(config, *, openbox_port=None, resolver=None) -> None:
     if parsed.port is not None and not 1 <= parsed.port <= 65535:
         raise ValueError("Webhook URL port must be between 1 and 65535.")
     if _is_loopback_host(host):
+        addresses = _resolve_addresses(host, resolver=resolver)
+        if not addresses or any(not _loopback_address(address) for address in addresses):
+            raise ValueError("Webhook loopback hostname resolved outside loopback.")
         try:
             port = parsed.port or (443 if scheme == "https" else 80)
         except ValueError:
@@ -449,13 +575,6 @@ def validate_webhook(config, *, openbox_port=None, resolver=None) -> None:
             raise ValueError("Webhook URL could not be resolved.")
         for address in addresses:
             _reject_unsafe_address(address)
-        if _loopback_address(addresses[0]):
-            try:
-                port = parsed.port or (443 if scheme == "https" else 80)
-            except ValueError:
-                port = 0
-            if openbox_port and int(openbox_port) == port:
-                raise ValueError("Webhook URL may not point at the running OpenBox server.")
     try:
         int(config.get("attempts") or DEFAULT_ATTEMPTS)
         int(config.get("timeout") or DEFAULT_TIMEOUT)
@@ -467,6 +586,7 @@ def test_ping(config, *, openbox_port=None, resolver=None, opener=None, timeout=
     """Perform one bounded synchronous test.ping delivery; never exposes the response body, addresses, or credentials."""
     validate_webhook(config, openbox_port=openbox_port, resolver=resolver)
     url = _clean_url(config.get("url"))
+    _validate_delivery_url(url, resolver=resolver)
     envelope = {
         "id": new_event_id(),
         "type": "test.ping",
@@ -498,13 +618,23 @@ def test_ping(config, *, openbox_port=None, resolver=None, opener=None, timeout=
         1, min(int(config.get("timeout") or DEFAULT_TIMEOUT), MAX_TIMEOUT)
     )
     try:
-        with (opener or urlopen)(request, timeout=effective_timeout) as response:
+        with (opener or _open_webhook)(request, timeout=effective_timeout) as response:
             status = int(getattr(response, "status", 200))
+            if 300 <= status < 400:
+                _drain_response(response)
+                return {"ok": False, "status": status, "error": "Webhook redirects are disabled."}
             _drain_response(response)
             return {
                 "ok": status < 300,
                 "status": status,
                 "error": "" if status < 300 else f"HTTP {status}",
             }
-    except (OSError, ValueError) as error:
+    except HTTPError as error:
+        _drain_response(error)
+        try:
+            error.close()
+        except Exception:
+            pass
+        return {"ok": False, "status": int(error.code), "error": f"HTTP {error.code}"}
+    except (OSError, URLError, ValueError) as error:
         return {"ok": False, "status": None, "error": str(error)}

@@ -19,9 +19,9 @@ RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
 ASSET = "OpenBox-x86_64.AppImage"
 TRUSTED_RELEASE_PREFIX = "https://github.com/vindeckyy/OpenBoxGL/releases/download/"
 
-# Committed openbox-release.pub bytes. The repo ships a placeholder key; the
-# maintainer replaces it with the real Ed25519 public key at first signed
-# release (see scripts/sign_release.py). The updater refuses to trust it.
+# Committed openbox-release.pub bytes. The repository currently carries a
+# bootstrap placeholder; a maintainer must replace it before publishing an
+# update that the updater can install.
 PLACEHOLDER_PUBLIC_KEY = bytes.fromhex(
     "9df1f9e7cdba094ac9d858d541b7529c28329a309ff79a4812457eb3f259fa8d"
 )
@@ -212,34 +212,34 @@ def verify_update_signature(update, artifact_digest, signature, public_key_bytes
 
 
 def _release_public_key():
-    """Committed public key bytes, or None when the file is unavailable."""
+    """Return the committed Ed25519 public key, or None when unavailable."""
     try:
-        return PUBLIC_KEY_PATH.read_bytes()
+        public_key = PUBLIC_KEY_PATH.read_bytes()
     except OSError:
         logger.warning("openbox-release.pub is missing; release signatures cannot be verified")
         return None
+    if len(public_key) != 32:
+        logger.warning("openbox-release.pub has an invalid length; release signatures cannot be verified")
+        return None
+    return public_key
 
 
 def verify_release_signature(update, artifact_digest, opener=urlopen):
-    """Verify the release .sig against the committed public key when published.
+    """Verify the release .sig against the committed public key.
 
-    Rules: only verify when the release payload actually carries a signature
-    URL; if the committed key is still the placeholder, skip verification with
-    a loud warning; if the key is real and verification fails, raise so the
-    install aborts. Always returns True for unsigned releases (sha256 baseline).
+    Updates are intentionally unavailable until a real maintainer key replaces
+    the repository placeholder. Checksum-only releases are never installable.
     """
     sig_url = str(update.get("sig_url", "")).strip()
     if not sig_url:
-        return True
+        raise ValueError("The release is unsigned; refusing to install it.")
     if not sig_url.startswith(TRUSTED_RELEASE_PREFIX):
         raise ValueError("The release signature URL is not a trusted OpenBox release asset.")
     public_key = _release_public_key()
-    if public_key is None or public_key == PLACEHOLDER_PUBLIC_KEY:
-        logger.warning(
-            "release signature published but openbox-release.pub is still the placeholder "
-            "key; signature NOT verified (update installed on checksum only)"
-        )
-        return True
+    if public_key is None:
+        raise ValueError("The committed OpenBox release public key is unavailable or invalid.")
+    if public_key == PLACEHOLDER_PUBLIC_KEY:
+        raise ValueError("The committed OpenBox release public key is still the placeholder.")
     signature = load_release_signature(sig_url, opener=opener)
     return verify_update_signature(update, artifact_digest, signature, public_key)
 
@@ -271,6 +271,10 @@ def check_update(opener=urlopen):
         raise ValueError("The release is missing verified OpenBox update assets.")
     if release_available and not checksum and not checksum_url:
         raise ValueError("The release is missing a SHA-256 checksum for the AppImage.")
+    if release_available and not sig_url:
+        raise ValueError("The release is missing an Ed25519 signature for the AppImage.")
+    if release_available and not sig_url.startswith(TRUSTED_RELEASE_PREFIX):
+        raise ValueError("The release signature URL is not a trusted OpenBox release asset.")
     return {
         "current": VERSION,
         "latest": version.lstrip("v"),
@@ -295,9 +299,8 @@ def install_update(update, destination=None, opener=urlopen):
     if not appimage.startswith(TRUSTED_RELEASE_PREFIX):
         raise ValueError("The update URLs are not trusted OpenBox release assets.")
     expected = resolve_update_checksum(update, opener=opener)
-    # Verify the Ed25519 signature (when published and the committed key is
-    # real) before anything is downloaded. Failure aborts the install; the
-    # sha256 baseline is always enforced either way.
+    # Verify the Ed25519 signature before anything is downloaded. The checksum
+    # remains an independent corruption check during the download.
     verify_release_signature(update, expected, opener=opener)
     temporary = destination.with_name(f".{destination.name}.update")
     try:

@@ -12,9 +12,24 @@ class EnvConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / ".env"
             path.write_text('RETROACHIEVEMENTS_USERNAME="player"\nRETROACHIEVEMENTS_API_KEY=secret\n')
+            path.chmod(0o600)
             values = load_dotenv(path)
             self.assertEqual(values["RETROACHIEVEMENTS_USERNAME"], "player")
             self.assertEqual(os.environ["RETROACHIEVEMENTS_API_KEY"], "secret")
+
+    def test_load_dotenv_requires_owner_only_regular_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            path = root / ".env"
+            path.write_text("TOKEN=secret\n")
+            path.chmod(0o644)
+            self.assertEqual(load_dotenv(path), {})
+            target = root / "target.env"
+            target.write_text("TOKEN=secret\n")
+            target.chmod(0o600)
+            link = root / "linked.env"
+            link.symlink_to(target)
+            self.assertEqual(load_dotenv(link), {})
 
     def test_load_dotenv_skips_unreadable_and_binary_files(self):
         if os.geteuid() == 0:
@@ -42,6 +57,20 @@ class EnvConfigTests(unittest.TestCase):
         self.assertEqual(_parse_env_line('KEY="a b" # note'), ("KEY", "a b"))
         self.assertEqual(_parse_env_line('KEY="a # b"'), ("KEY", "a # b"))
 
+    def test_load_dotenv_rejects_unknown_environment_keys(self):
+        previous = os.environ.pop("LD_PRELOAD", None)
+        try:
+            with tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / ".env"
+                path.write_text("LD_PRELOAD=/tmp/evil.so\nUNKNOWN_SETTING=bad\n")
+                path.chmod(0o600)
+                self.assertEqual(load_dotenv(path), {})
+                self.assertNotIn("LD_PRELOAD", os.environ)
+                self.assertNotIn("UNKNOWN_SETTING", os.environ)
+        finally:
+            if previous is not None:
+                os.environ["LD_PRELOAD"] = previous
+
     def test_github_token_from_env(self):
         os.environ["GITHUB_TOKEN"] = "fake-github-token-for-test"
         try:
@@ -55,6 +84,7 @@ class EnvConfigTests(unittest.TestCase):
             home = Path(folder)
             env = home / ".env"
             env.write_text("RA_USERNAME=boot\nRA_API_KEY=strap\n")
+            env.chmod(0o600)
             with mock.patch("env_config.Path.home", return_value=home):
                 bootstrap_env(None)
             try:
@@ -62,6 +92,17 @@ class EnvConfigTests(unittest.TestCase):
             finally:
                 os.environ.pop("RA_USERNAME", None)
                 os.environ.pop("RA_API_KEY", None)
+
+    def test_discovery_ignores_current_working_directory(self):
+        from env_config import discover_env_files
+
+        with tempfile.TemporaryDirectory() as folder:
+            current = Path(folder)
+            env = current / ".env"
+            env.write_text("TOKEN=unsafe\n")
+            env.chmod(0o600)
+            with mock.patch("env_config.Path.cwd", return_value=current):
+                self.assertNotIn(env, discover_env_files())
 
 
 if __name__ == "__main__":

@@ -1,8 +1,10 @@
+import base64
 import hashlib
 import io
 import json
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 from updates import (
     ASSET,
@@ -12,6 +14,7 @@ from updates import (
     check_update,
     install_update,
     load_checksum_file,
+    verify_release_signature,
     version_tuple,
 )
 
@@ -37,6 +40,15 @@ def main():
     tag = f"v{latest}"
     payload = b"new appimage"
     digest = hashlib.sha256(payload).hexdigest()
+    public_key = bytes.fromhex("03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8")
+    signature = base64.b64decode("53/D1Z5YXcVxj9ZgLlTSt/jkeX9MDO53qddaj7bh64byCG1YW1/oTIbdiO8tNmoO7WaHkjkmM5SbYWusjIp6Dg==")
+    signature_payload = {
+        "algorithm": "ed25519",
+        "artifact": ASSET,
+        "digest_algorithm": "sha256",
+        "digest": digest,
+        "signature": base64.b64encode(signature).decode("ascii"),
+    }
     release = {
         "tag_name": tag,
         "html_url": f"https://github.com/vindeckyy/OpenBoxGL/releases/tag/{tag}",
@@ -47,24 +59,40 @@ def main():
                 "digest": f"sha256:{digest}",
             },
             {"name": f"{ASSET}.sha256", "browser_download_url": f"https://github.com/vindeckyy/OpenBoxGL/releases/download/{tag}/{ASSET}.sha256"},
+            {"name": f"{ASSET}.sig", "browser_download_url": f"https://github.com/vindeckyy/OpenBoxGL/releases/download/{tag}/{ASSET}.sig"},
         ],
     }
     def opener(request, timeout=0):
         url = request.full_url
         if url.endswith(".sha256"):
             return Response(f"{digest}  {ASSET}\n".encode())
+        if url.endswith(".sig"):
+            return Response(json.dumps(signature_payload).encode())
         if url.endswith(ASSET):
             return Response(payload)
         return Response(json.dumps(release).encode())
     update = check_update(opener)
     assert update["available"] and update["latest"] == latest
     assert update["checksum"] == digest
-    with tempfile.TemporaryDirectory() as directory:
-        destination = Path(directory) / ASSET
-        destination.write_bytes(b"old appimage")
-        result = install_update(update, destination, opener)
-        assert destination.read_bytes() == payload
-        assert Path(result["backup"]).read_bytes() == b"old appimage"
+    assert update["sig"] is True
+    with mock.patch("updates._release_public_key", return_value=public_key):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / ASSET
+            destination.write_bytes(b"old appimage")
+            result = install_update(update, destination, opener)
+            assert destination.read_bytes() == payload
+            assert Path(result["backup"]).read_bytes() == b"old appimage"
+    try:
+        unsigned = dict(release, assets=[asset for asset in release["assets"] if not asset["name"].endswith(".sig")])
+        check_update(lambda request, timeout=0: Response(json.dumps(unsigned).encode()))
+        raise AssertionError("unsigned release should fail closed")
+    except ValueError as error:
+        assert "signature" in str(error).casefold()
+    try:
+        verify_release_signature(update, digest, opener)
+        raise AssertionError("placeholder release key should fail closed")
+    except ValueError as error:
+        assert "placeholder" in str(error).casefold()
     try:
         load_checksum_file(
             f"{TRUSTED_RELEASE_PREFIX}{tag}/{ASSET}.sha256",

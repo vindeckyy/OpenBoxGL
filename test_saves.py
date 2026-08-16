@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import stat
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -15,6 +16,8 @@ def test():
         file.write_text("before")
         game = {"name": "Real Game", "path": "/games/real", "save_paths": [str(save)]}
         archive = backup_saves(game, root / "backups")
+        assert stat.S_IMODE(archive.stat().st_mode) == 0o600
+        assert stat.S_IMODE(archive.parent.stat().st_mode) == 0o700
         file.write_text("after")
         restore_saves(game, root / "backups", archive.name)
         assert file.read_text() == "before"

@@ -1,9 +1,12 @@
 """Safe, cached extraction for compressed game files."""
 
 import hashlib
+import os
 import selectors
+import stat
 import shutil
 import subprocess
+import tempfile
 import time
 import zipfile
 from pathlib import Path
@@ -13,6 +16,76 @@ MAX_ARCHIVE_MEMBERS = 25_000
 MAX_ARCHIVE_MEMBER_BYTES = 2 * 1024 * 1024 * 1024
 MAX_ARCHIVE_TOTAL_BYTES = 8 * 1024 * 1024 * 1024
 MAX_ARCHIVE_LISTING_BYTES = 16 * 1024 * 1024
+
+
+def _snapshot_archive(archive, directory):
+    """Copy one securely opened archive to a private temporary pathname.
+
+    7z has to receive a pathname, so validating the source and then invoking
+    7z on the original pathname leaves a replacement race.  The extractor
+    only ever sees this owner-only snapshot, whose descriptor was opened with
+    ``O_NOFOLLOW``.
+    """
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    source_fd = os.open(archive, flags)
+    snapshot_fd = -1
+    snapshot_name = None
+    source = None
+    output = None
+    try:
+        source_info = os.fstat(source_fd)
+        if not stat.S_ISREG(source_info.st_mode):
+            raise ValueError("Archive source must be a regular file.")
+        if source_info.st_size > MAX_ARCHIVE_TOTAL_BYTES:
+            raise ValueError("Archive source is too large.")
+        snapshot_fd, snapshot_name = tempfile.mkstemp(
+            prefix=".openbox-archive-",
+            suffix=Path(archive).suffix,
+            dir=directory,
+        )
+        source = os.fdopen(source_fd, "rb")
+        source_fd = -1
+        output = os.fdopen(snapshot_fd, "wb")
+        snapshot_fd = -1
+        copied = 0
+        with source, output:
+            while True:
+                chunk = source.read(min(1024 * 1024, MAX_ARCHIVE_TOTAL_BYTES + 1 - copied))
+                if not chunk:
+                    break
+                copied += len(chunk)
+                if copied > MAX_ARCHIVE_TOTAL_BYTES:
+                    raise ValueError("Archive source is too large.")
+                output.write(chunk)
+            output.flush()
+            os.fsync(output.fileno())
+        return Path(snapshot_name)
+    except Exception:
+        if source is not None:
+            source.close()
+        if output is not None:
+            output.close()
+        if source_fd >= 0:
+            os.close(source_fd)
+        if snapshot_fd >= 0:
+            os.close(snapshot_fd)
+        if snapshot_name:
+            Path(snapshot_name).unlink(missing_ok=True)
+        raise
+
+
+def _validate_extracted_tree(destination):
+    """Reject links and special files before an extracted tree is promoted."""
+    root = Path(destination).resolve()
+    for path in Path(destination).rglob("*"):
+        info = path.lstat()
+        if stat.S_ISLNK(info.st_mode):
+            raise ValueError(f"Archive links are not supported: {path.name}")
+        if not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)):
+            raise ValueError(f"Archive special files are not supported: {path.name}")
+        resolved = path.resolve(strict=False)
+        if resolved != root and root not in resolved.parents:
+            raise ValueError(f"Archive extraction escaped its destination: {path.name}")
 
 
 def extraction_dir(archive, cache_root):
@@ -111,33 +184,45 @@ def validate_7z_paths(extractor, archive):
         selector.close()
     if return_code != 0:
         raise ValueError("7z could not inspect the archive.")
+    records = []
+    record = {}
+    for line in bytes(output).decode("utf-8", errors="replace").splitlines():
+        if not line.strip():
+            if record:
+                records.append(record)
+                record = {}
+            continue
+        key, separator, value = line.partition(" = ")
+        if separator:
+            record[key] = value
+    if record:
+        records.append(record)
+
     members = 0
     total_bytes = 0
-    current_path = ""
-    current_size = 0
-    for line in bytes(output).decode("utf-8", errors="replace").splitlines():
-        if line.startswith("Path = "):
-            current_path = line[7:]
-            candidate = Path(current_path.replace("\\", "/"))
-            if candidate.is_absolute() or ".." in candidate.parts:
-                raise ValueError(f"Unsafe archive path: {current_path}")
-        elif line.startswith("Size = "):
-            try:
-                current_size = int(line[7:].strip())
-            except ValueError:
-                current_size = 0
-            if current_size > MAX_ARCHIVE_MEMBER_BYTES:
-                raise ValueError("Archive member is too large.")
-        elif not line.strip() and current_path:
-            members += 1
-            total_bytes += current_size
-            if members > MAX_ARCHIVE_MEMBERS or total_bytes > MAX_ARCHIVE_TOTAL_BYTES:
-                raise ValueError("Archive expands beyond the allowed size.")
-            current_path = ""
-            current_size = 0
-    # A listing may end without the trailing blank separator; count the
-    # final member so it cannot dodge the safety limits.
-    if current_path:
+    for record in records:
+        # The listing starts with an archive-level record that has
+        # ``Physical Size`` but no member ``Size``.  Only member records are
+        # subject to path, link, and expansion checks.
+        current_path = record.get("Path", "")
+        if "Size" not in record or not current_path:
+            continue
+        candidate = Path(current_path.replace("\\", "/"))
+        if candidate.is_absolute() or ".." in candidate.parts:
+            raise ValueError(f"Unsafe archive path: {current_path}")
+        attributes = record.get("Attributes", "").casefold()
+        attribute_tokens = attributes.split()
+        link_fields = {"Symbolic Link", "Hard Link", "Reparse Point"}
+        if any(field in record for field in link_fields) or any(
+            token.startswith("l") for token in attribute_tokens
+        ):
+            raise ValueError(f"Archive links are not supported: {current_path}")
+        try:
+            current_size = int(record.get("Size", "0").strip())
+        except ValueError:
+            raise ValueError("Archive member size is invalid.") from None
+        if current_size < 0 or current_size > MAX_ARCHIVE_MEMBER_BYTES:
+            raise ValueError("Archive member is too large.")
         members += 1
         total_bytes += current_size
         if members > MAX_ARCHIVE_MEMBERS or total_bytes > MAX_ARCHIVE_TOTAL_BYTES:
@@ -169,22 +254,23 @@ def extract_game(archive_path, cache_root, member=""):
     if destination.is_symlink():
         raise ValueError("Archive cache destination is a symlink.")
     if not complete.is_file():
-        staging = destination.with_name(f".{destination.name}.extracting")
-        if staging.exists():
-            shutil.rmtree(staging)
-        staging.mkdir(parents=True, exist_ok=True)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        staging = Path(tempfile.mkdtemp(prefix=f".{destination.name}.extracting-", dir=destination.parent))
+        snapshot = None
         try:
+            snapshot = _snapshot_archive(archive, destination.parent)
             if archive.suffix.lower() == ".zip":
-                safe_zip_extract(archive, staging)
+                safe_zip_extract(snapshot, staging)
             else:
                 extractor = shutil.which("7z") or shutil.which("7zz")
                 if not extractor:
                     raise FileNotFoundError("7z or 7zz is required to extract this archive.")
-                validate_7z_paths(extractor, archive)
+                validate_7z_paths(extractor, snapshot)
                 subprocess.run(
-                    [extractor, "x", "-y", f"-o{staging}", str(archive)],
+                    [extractor, "x", "-y", "-snl-", "-snh-", f"-o{staging}", str(snapshot)],
                     check=True, capture_output=True, timeout=300,
                 )
+            _validate_extracted_tree(staging)
             (staging / ".complete").touch()
             if destination.exists():
                 shutil.rmtree(destination)
@@ -192,4 +278,7 @@ def extract_game(archive_path, cache_root, member=""):
         except Exception:
             shutil.rmtree(staging, ignore_errors=True)
             raise
+        finally:
+            if snapshot is not None:
+                snapshot.unlink(missing_ok=True)
     return choose_game_file(destination, member)

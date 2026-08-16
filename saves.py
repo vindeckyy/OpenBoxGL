@@ -4,6 +4,8 @@ import hashlib
 import json
 import os
 import re
+import stat
+import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +15,72 @@ from backend_io import atomic_copy_stream, fsync_directory
 
 MAX_SAVE_ARCHIVE_MEMBER_BYTES = 4 * 1024 * 1024 * 1024
 MAX_SAVE_ARCHIVE_TOTAL_BYTES = 32 * 1024 * 1024 * 1024
+MAX_SAVE_ARCHIVE_MEMBERS = 50_000
+
+
+def _reject_symlink_components(path):
+    path = Path(os.path.abspath(os.fspath(path)))
+    for component in (path, *path.parents):
+        if component.is_symlink():
+            raise ValueError(f"Save path may not contain symlinks: {component}")
+
+
+def _write_archive_file(package, source, archive_name):
+    """Copy a file opened without following a symlink into a ZIP member."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(source, flags)
+    except OSError as error:
+        raise ValueError(f"Save backup source could not be opened safely: {source}") from error
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ValueError(f"Save backup source is not a regular file: {source}")
+        with os.fdopen(descriptor, "rb") as input_file:
+            descriptor = -1
+            with package.open(archive_name, "w") as output:
+                while True:
+                    chunk = input_file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _restrict_archive_permissions(folder):
+    for existing in Path(folder).glob("*.zip"):
+        if existing.is_symlink():
+            continue
+        os.chmod(existing, 0o600)
+
+
+def _write_private_archive(archive, populate):
+    archive = Path(archive)
+    archive.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if archive.parent.is_symlink():
+        raise ValueError("Save backup directory may not be a symlink.")
+    os.chmod(archive.parent, 0o700)
+    _restrict_archive_permissions(archive.parent)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{archive.name}.", suffix=".tmp", dir=archive.parent
+    )
+    temporary = Path(temporary_name)
+    os.chmod(temporary, 0o600)
+    try:
+        with os.fdopen(descriptor, "w+b") as output:
+            descriptor = -1
+            with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as package:
+                populate(package)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, archive)
+        os.chmod(archive, 0o600)
+        fsync_directory(archive.parent)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        temporary.unlink(missing_ok=True)
 
 
 def game_backup_dir(game, root):
@@ -21,7 +89,17 @@ def game_backup_dir(game, root):
 
 
 def save_roots(game):
-    return [Path(path).expanduser().resolve() for path in game.get("save_paths", []) if str(path).strip()]
+    configured = game.get("save_paths", [])
+    if not isinstance(configured, list):
+        return []
+    roots = []
+    for path in configured:
+        if not str(path).strip():
+            continue
+        raw_path = Path(path).expanduser()
+        _reject_symlink_components(raw_path)
+        roots.append(raw_path.resolve())
+    return roots
 
 
 def discover_save_paths(game, home=None):
@@ -97,54 +175,91 @@ def discover_save_paths(game, home=None):
 
 
 def backup_saves(game, root, label="manual"):
-    root = Path(root).expanduser().resolve()
+    raw_root = Path(root).expanduser()
+    _reject_symlink_components(raw_root)
+    root = raw_root.resolve()
     roots = [path for path in save_roots(game) if path.exists()]
     if not roots:
         raise FileNotFoundError("No configured save paths currently exist.")
     if any(path.is_symlink() for path in roots):
         raise ValueError("Save backup paths may not be symlinks.")
     directory = game_backup_dir(game, root)
+    _reject_symlink_components(directory)
     directory.parent.mkdir(parents=True, exist_ok=True)
-    if directory.is_symlink() or any(parent.is_symlink() for parent in directory.parents):
-        raise ValueError("Save backup directory may not contain symlinks.")
+    _reject_symlink_components(directory)
     directory.mkdir(parents=True, exist_ok=True)
+    os.chmod(directory.parent, 0o700)
+    os.chmod(directory, 0o700)
+    _restrict_archive_permissions(directory)
+    label = str(label or "manual").strip()
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", label):
+        raise ValueError("Save backup label is invalid.")
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     archive = directory / f"{stamp}-{label}.zip"
-    temporary = archive.with_name(f".{archive.name}.tmp")
     manifest = {"game": game.get("name", ""), "roots": [{"path":str(path), "file":path.is_file()} for path in roots]}
-    try:
-        with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as package:
-            package.writestr("manifest.json", json.dumps(manifest))
-            for index, source in enumerate(roots):
-                if source.is_file():
-                    package.write(source, f"roots/{index}/{source.name}")
-                else:
-                    for file in source.rglob("*"):
-                        if file.is_symlink():
-                            raise ValueError(f"Save backup source contains a symlink: {file}")
-                        if file.is_file():
-                            package.write(file, f"roots/{index}/{file.relative_to(source)}")
-        os.replace(temporary, archive)
-        fsync_directory(archive.parent)
-    finally:
-        temporary.unlink(missing_ok=True)
+
+    def populate(package):
+        package.writestr("manifest.json", json.dumps(manifest))
+        for index, source in enumerate(roots):
+            if source.is_file():
+                _write_archive_file(package, source, f"roots/{index}/{source.name}")
+            else:
+                _reject_symlink_components(source)
+                for file in source.rglob("*"):
+                    if file.is_symlink():
+                        raise ValueError(f"Save backup source contains a symlink: {file}")
+                    if file.is_file():
+                        _write_archive_file(package, file, f"roots/{index}/{file.relative_to(source)}")
+
+    _write_private_archive(archive, populate)
     return archive
 
 
 def list_backups(game, root):
-    directory = game_backup_dir(game, root)
-    return sorted(directory.glob("*.zip"), reverse=True) if directory.is_dir() else []
+    raw_root = Path(root).expanduser()
+    _reject_symlink_components(raw_root)
+    directory = game_backup_dir(game, raw_root.resolve())
+    _reject_symlink_components(directory)
+    if not directory.is_dir() or directory.is_symlink():
+        return []
+    return sorted(
+        (path for path in directory.glob("*.zip") if path.is_file() and not path.is_symlink()),
+        reverse=True,
+    )
 
 
 def restore_saves(game, root, backup_name):
-    directory = game_backup_dir(game, root).resolve()
-    archive = (directory / Path(backup_name).name).resolve()
+    raw_root = Path(root).expanduser()
+    _reject_symlink_components(raw_root)
+    root = raw_root.resolve()
+    directory = game_backup_dir(game, root)
+    _reject_symlink_components(directory)
+    archive = directory / Path(backup_name).name
+    _reject_symlink_components(archive)
     if directory not in archive.parents or not archive.is_file():
         raise FileNotFoundError("Save backup not found.")
-    backup_saves(game, root, "before-restore")
     with zipfile.ZipFile(archive) as package:
+        infos = package.infolist()
+        if len(infos) > MAX_SAVE_ARCHIVE_MEMBERS:
+            raise ValueError("Save backup contains too many files.")
+        total_bytes = 0
+        seen = set()
+        for info in infos:
+            name = info.filename.replace("\\", "/")
+            if not name or "\x00" in name or Path(name).is_absolute() or ".." in Path(name).parts or name in seen:
+                raise ValueError("Save backup contains an unsafe path.")
+            seen.add(name)
+            if info.file_size > MAX_SAVE_ARCHIVE_MEMBER_BYTES:
+                raise ValueError("Save backup member is too large.")
+            total_bytes += info.file_size
+            if total_bytes > MAX_SAVE_ARCHIVE_TOTAL_BYTES:
+                raise ValueError("Save backup expands beyond the allowed size.")
         try:
-            manifest = json.loads(package.read("manifest.json"))
+            with package.open("manifest.json") as source:
+                manifest_bytes = source.read(1024 * 1024 + 1)
+            if len(manifest_bytes) > 1024 * 1024:
+                raise ValueError("Save backup manifest is too large.")
+            manifest = json.loads(manifest_bytes)
         except (KeyError, UnicodeDecodeError, json.JSONDecodeError) as error:
             raise ValueError("Save backup manifest is invalid.") from error
         configured = save_roots(game)
@@ -153,40 +268,43 @@ def restore_saves(game, root, backup_name):
             raise ValueError("Save backup roots do not match this game.")
         roots = []
         for index, item in enumerate(saved_roots):
-            saved_path = str(item.get("path", "")) if isinstance(item, dict) else str(item)
+            if not isinstance(item, dict):
+                raise ValueError("Save backup roots do not match this game.")
+            saved_path = str(item.get("path", ""))
             if Path(saved_path).expanduser() != configured[index]:
                 raise ValueError("Save backup roots do not match this game.")
-            roots.append({"path": configured[index], "file": bool(item.get("file")) if isinstance(item, dict) else False})
-        total_bytes = 0
-        seen = set()
-        for info in package.infolist():
-            if info.is_dir() or not info.filename.startswith("roots/"):
-                continue
+            expected_file = configured[index].is_file()
+            if bool(item.get("file")) != expected_file:
+                raise ValueError("Save backup root type does not match this game.")
+            _reject_symlink_components(configured[index])
+            roots.append({"path": configured[index], "file": expected_file})
+        destinations = []
+        for info in infos:
             name = info.filename.replace("\\", "/")
-            if "\x00" in name or Path(name).is_absolute() or ".." in Path(name).parts or name in seen:
-                raise ValueError("Save backup contains an unsafe path.")
-            seen.add(name)
-            if info.file_size > MAX_SAVE_ARCHIVE_MEMBER_BYTES:
-                raise ValueError("Save backup member is too large.")
-            total_bytes += info.file_size
-            if total_bytes > MAX_SAVE_ARCHIVE_TOTAL_BYTES:
-                raise ValueError("Save backup expands beyond the allowed size.")
+            if info.is_dir() or not name.startswith("roots/"):
+                continue
             parts = Path(name).parts
             if len(parts) < 3:
                 continue
-            index = int(parts[1])
-            if index >= len(roots):
+            try:
+                index = int(parts[1])
+            except ValueError as error:
+                raise ValueError("Invalid save backup manifest.") from error
+            if index < 0 or index >= len(roots):
                 raise ValueError("Invalid save backup manifest.")
-            root = roots[index]
-            base = (root["path"].parent if root["file"] else root["path"]).resolve()
-            if root["path"].is_symlink() or any(parent.is_symlink() for parent in root["path"].parents):
-                raise ValueError("Save restore destination contains a symlink.")
+            root_info = roots[index]
+            base = (root_info["path"].parent if root_info["file"] else root_info["path"]).resolve()
+            _reject_symlink_components(root_info["path"])
+            _reject_symlink_components(base)
             destination = (base / Path(*parts[2:])).resolve()
             if destination != base and base not in destination.parents:
                 raise ValueError("Save backup contains an unsafe path.")
             raw_destination = base / Path(*parts[2:])
             if raw_destination.is_symlink() or any(parent.is_symlink() for parent in raw_destination.parents if parent != base):
                 raise ValueError("Save restore destination contains a symlink.")
+            destinations.append((info, destination, base))
+        backup_saves(game, root, "before-restore")
+        for info, destination, base in destinations:
             destination.parent.mkdir(parents=True, exist_ok=True)
             # Re-validate after mkdir: a planted symlink must not redirect the restore write.
             resolved = destination.resolve()

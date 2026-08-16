@@ -14,7 +14,7 @@ from parity_integrations import attach_recording, capture_screenshot, download_b
 from parity_media import active_video, cleanup_duplicates, find_duplicate_media, load_media_queue
 from parity_premium import apply_media_pack, download_gog_media, download_steam_trailer, list_media_packs, platform_categories, strings_for
 from parity_saves import scan_all_saves
-from webapp_state import DATA, JOB_MANAGER, MEDIA_JOB, MEDIA_TYPES_ALL, METADATA_DATABASE, PROCESS_LOCK, bump_media_epoch, download_image, game_from_payload, game_from_query, load_state_view, public_settings, transact_state
+from webapp_state import DATA, JOB_MANAGER, MEDIA_JOB, MEDIA_TYPES_ALL, METADATA_DATABASE, PROCESS_LOCK, approved_media_path, bump_media_epoch, download_image, game_from_payload, game_from_query, load_state_view, media_probe_path, public_settings, transact_state
 
 
 class MediaHandlers:
@@ -25,25 +25,28 @@ class MediaHandlers:
             game for game in load_state_view()["games"]
             if platform == "all" or game.get("platform") == platform
         ]
+        def screenshot_paths(game):
+            screenshots = game.get("screenshots", [])
+            return screenshots if isinstance(screenshots, list) else []
         self.send_json(200, {
             "games":len(games),
             "matched":sum(bool(game.get("launchbox_db_id")) for game in games),
-            "missing_cover":sum(not Path(str(game.get("cover") or "")).is_file() for game in games),
-            "missing_background":sum(not Path(str(game.get("background") or "")).is_file() for game in games),
-            "missing_screenshots":sum(not any(Path(str(path)).is_file() for path in game.get("screenshots", []) if path) for game in games),
-            "missing_box_back":sum(not Path(str(game.get("box_back") or "")).is_file() for game in games),
-            "missing_box_spine":sum(not Path(str(game.get("box_spine") or "")).is_file() for game in games),
-            "missing_box_3d":sum(not Path(str(game.get("box_3d") or "")).is_file() for game in games),
-            "missing_clear_logo":sum(not Path(str(game.get("clear_logo") or "")).is_file() for game in games),
-            "missing_fanart":sum(not Path(str(game.get("fanart") or "")).is_file() for game in games),
-            "missing_banner":sum(not Path(str(game.get("banner") or "")).is_file() for game in games),
-            "missing_icon":sum(not Path(str(game.get("icon") or "")).is_file() for game in games),
-            "missing_title_screen":sum(not Path(str(game.get("title_screen") or "")).is_file() for game in games),
-            "missing_cart_front":sum(not Path(str(game.get("cart_front") or "")).is_file() for game in games),
-            "missing_cart_back":sum(not Path(str(game.get("cart_back") or "")).is_file() for game in games),
-            "missing_disc":sum(not Path(str(game.get("disc") or "")).is_file() for game in games),
-            "missing_advertisement":sum(not Path(str(game.get("advertisement") or "")).is_file() for game in games),
-            "missing_manual":sum(not Path(str(game.get("manual") or "")).is_file() for game in games),
+            "missing_cover":sum(not media_probe_path(game.get("cover")) for game in games),
+            "missing_background":sum(not media_probe_path(game.get("background")) for game in games),
+            "missing_screenshots":sum(not any(media_probe_path(path) for path in screenshot_paths(game) if path) for game in games),
+            "missing_box_back":sum(not media_probe_path(game.get("box_back")) for game in games),
+            "missing_box_spine":sum(not media_probe_path(game.get("box_spine")) for game in games),
+            "missing_box_3d":sum(not media_probe_path(game.get("box_3d")) for game in games),
+            "missing_clear_logo":sum(not media_probe_path(game.get("clear_logo")) for game in games),
+            "missing_fanart":sum(not media_probe_path(game.get("fanart")) for game in games),
+            "missing_banner":sum(not media_probe_path(game.get("banner")) for game in games),
+            "missing_icon":sum(not media_probe_path(game.get("icon")) for game in games),
+            "missing_title_screen":sum(not media_probe_path(game.get("title_screen")) for game in games),
+            "missing_cart_front":sum(not media_probe_path(game.get("cart_front")) for game in games),
+            "missing_cart_back":sum(not media_probe_path(game.get("cart_back")) for game in games),
+            "missing_disc":sum(not media_probe_path(game.get("disc")) for game in games),
+            "missing_advertisement":sum(not media_probe_path(game.get("advertisement")) for game in games),
+            "missing_manual":sum(not media_probe_path(game.get("manual")) for game in games),
         })
         return
 
@@ -60,8 +63,8 @@ class MediaHandlers:
         if not name:
             raise BadgeNotFound("Badge not found")
             return
-        badge = DATA.parent / "media/retroachievements/badges" / f"{name}{'_lock' if locked else ''}.png"
         try:
+            badge = approved_media_path(DATA.parent / "media/retroachievements/badges" / f"{name}{'_lock' if locked else ''}.png")
             if not badge.is_file():
                 download_image(f"https://media.retroachievements.org/Badge/{badge.name}", badge)
             self.send_file(200, badge, "image/png")
@@ -85,8 +88,7 @@ class MediaHandlers:
                     media = Path(game.get(kind, ""))
             else:
                 raise ValueError
-            if not media.is_file():
-                raise FileNotFoundError
+            media = approved_media_path(media, must_exist=True)
             self.send_file(200, media)
         except (KeyError, IndexError, ValueError, FileNotFoundError):
             raise MediaNotFound("Media not found") from None
@@ -319,5 +321,3 @@ class MediaHandlers:
             return updated
         _, updated = transact_state(mutate)
         self.send_json(200, {"updated": updated, "games": len(found)})
-
-

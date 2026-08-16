@@ -2,7 +2,7 @@
 """Populate a fixture library with real LaunchBox art and capture README screenshots.
 
 Usage:
-  cd scripts && npm install    # once; installs puppeteer@22
+  cd scripts && npm ci    # once; requires Node.js 22.12+ and installs Puppeteer
   python3 scripts/capture_readme_screenshots.py
 
 Writes assets/openbox-screenshot.png, assets/openbox-game-detail.png,

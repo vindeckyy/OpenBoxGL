@@ -5,6 +5,7 @@ import email.utils
 import gzip
 import json
 import mimetypes
+import queue as queue_module
 import secrets
 import signal
 import subprocess
@@ -27,8 +28,6 @@ from routes import dispatch_get, dispatch_post
 from state_store import StateCorruptError, secure_text_write
 from stock_themes import ensure_stock_themes
 from webapp_state import (
-    EVENT_SUBSCRIBERS,
-    EVENT_SUBSCRIBERS_LOCK,
     GZIP_THRESHOLD,
     JOB_MANAGER,
     LOGGER,
@@ -42,6 +41,11 @@ from webapp_state import (
     control_game_session,
     run_configured_commands,
     shutdown_webhooks,
+    SSE_MAX_EVENT_BYTES,
+    SSE_QUEUE_SIZE,
+    SSE_WRITE_TIMEOUT,
+    register_event_subscriber,
+    unregister_event_subscriber,
 )
 from handlers.data import DataHandlers
 from handlers.emulators import EmulatorsHandlers
@@ -226,7 +230,13 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
 
     def _do_GET(self):
         parsed = urlparse(self.path)
-        dispatch_get(self, parsed)
+        try:
+            dispatch_get(self, parsed)
+        except ApiError:
+            raise
+        except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError, json.JSONDecodeError, GameyfinError, FileNotFoundError, RuntimeError, subprocess.SubprocessError) as error:
+            LOGGER.warning("Request %s failed: %s", parsed.path, error)
+            raise BadRequest(str(error)) from None
 
     def _api_get_index(self, parsed):
         if parsed.path in ("/", "/index.html"):
@@ -266,34 +276,41 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
                 return
 
     def _api_get_api_events(self, parsed):
-        queue = __import__("queue").Queue()
-        with EVENT_SUBSCRIBERS_LOCK:
-            EVENT_SUBSCRIBERS.add(queue)
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream")
-        self.send_header("Cache-Control", "no-cache")
-        self.send_header("Connection", "close")
-        self.send_header("X-Accel-Buffering", "no")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Content-Security-Policy", CSP_DEFAULT)
-        self.end_headers()
+        subscriber_queue = queue_module.Queue(maxsize=SSE_QUEUE_SIZE)
+        if not register_event_subscriber(subscriber_queue):
+            self.send_json(503, {"error": "Too many event streams."})
+            return
         try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "close")
+            self.send_header("X-Accel-Buffering", "no")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Content-Security-Policy", CSP_DEFAULT)
+            self.end_headers()
+            self.connection.settimeout(SSE_WRITE_TIMEOUT)
             while True:
                 try:
-                    kind, data = queue.get(timeout=15)
-                except Exception:
+                    item = subscriber_queue.get(timeout=15)
+                except queue_module.Empty:
                     # Keep the connection alive with a heartbeat comment.
                     self.wfile.write(b": ping\n\n")
                     self.wfile.flush()
                     continue
-                self.wfile.write(f"event: {kind}\ndata: {data}\n\n".encode())
+                if item is None:
+                    break
+                kind, data = item
+                event = f"event: {kind}\ndata: {data}\n\n".encode()
+                if len(event) > SSE_MAX_EVENT_BYTES:
+                    continue
+                self.wfile.write(event)
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
         finally:
-            with EVENT_SUBSCRIBERS_LOCK:
-                EVENT_SUBSCRIBERS.discard(queue)
+            unregister_event_subscriber(subscriber_queue)
 
     def _do_POST(self):
         try:
@@ -451,4 +468,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import base64
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -34,6 +35,19 @@ class VerifyReleaseTests(unittest.TestCase):
             self.assertEqual(sign.returncode, 0, sign.stderr)
             pub = root / "release.pub"
             self.assertTrue(pub.is_file(), "signer must emit the public key")
+
+            # Text key encodings are accepted for CI secrets, and signing
+            # without --public-key-out must not overwrite a working-tree key.
+            encoded_key = root / "encoded.key"
+            encoded_key.write_text(base64.b64encode(key.private_bytes_raw()).decode("ascii"))
+            encoded_sig = root / "encoded.sig"
+            encoded = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/sign_release.py"),
+                 "--key", str(encoded_key), "--out", str(encoded_sig), str(artifact)],
+                cwd=root, capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(encoded.returncode, 0, encoded.stderr)
+            self.assertFalse((root / "openbox-release.pub").exists())
 
             verify = subprocess.run(
                 [sys.executable, str(ROOT / "scripts/verify_release.py"),

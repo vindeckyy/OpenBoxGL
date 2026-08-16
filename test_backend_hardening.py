@@ -80,7 +80,7 @@ class BackendHardeningTests(unittest.TestCase):
             outside = Path(directory) / "outside.dat"
             outside.write_text("keep", encoding="utf-8")
             with self.assertRaises(GameyfinError):
-                uninstall_gameyfin_game({"install_dir": str(root), "path": str(outside)})
+                uninstall_gameyfin_game({"install_dir": str(root), "path": str(outside)}, root)
             self.assertTrue(outside.exists())
 
     def test_read_limited_rejects_negative_and_huge_content_length(self):

@@ -1,6 +1,7 @@
 """SSE event stream contract tests."""
 
 import os
+import queue
 import tempfile
 import threading
 import time
@@ -71,6 +72,54 @@ class SseTests(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             urllib.request.urlopen(req)
         self.assertEqual(ctx.exception.code, 403)
+
+    def test_slow_subscriber_is_dropped_without_blocking_broadcast(self):
+        import webapp_state
+
+        subscriber = queue.Queue(maxsize=1)
+        subscriber.put(("old", "{}"))
+        self.assertTrue(webapp_state.register_event_subscriber(subscriber))
+        try:
+            started = time.monotonic()
+            webapp_state.broadcast_event("session.started", {"id": 1})
+            self.assertLess(time.monotonic() - started, 0.2)
+            self.assertNotIn(subscriber, webapp_state.EVENT_SUBSCRIBERS)
+            self.assertIsNone(subscriber.get_nowait())
+        finally:
+            webapp_state.unregister_event_subscriber(subscriber)
+
+    def test_large_events_are_replaced_with_bounded_payloads(self):
+        import webapp_state
+
+        subscriber = queue.Queue(maxsize=2)
+        self.assertTrue(webapp_state.register_event_subscriber(subscriber))
+        try:
+            webapp_state.broadcast_event(
+                "session.started",
+                {"blob": "x" * (webapp_state.SSE_MAX_EVENT_BYTES + 1)},
+            )
+            kind, data = subscriber.get(timeout=1)
+            self.assertEqual(kind, "session.started")
+            self.assertLessEqual(len(data.encode()), webapp_state.SSE_MAX_EVENT_BYTES)
+            self.assertIn('"truncated":true', data)
+        finally:
+            webapp_state.unregister_event_subscriber(subscriber)
+
+    def test_subscriber_count_is_bounded(self):
+        import webapp_state
+
+        with webapp_state.EVENT_SUBSCRIBERS_LOCK:
+            available = max(0, webapp_state.SSE_MAX_SUBSCRIBERS - len(webapp_state.EVENT_SUBSCRIBERS))
+        subscribers = [queue.Queue(maxsize=1) for _ in range(available)]
+        registered = []
+        try:
+            for subscriber in subscribers:
+                self.assertTrue(webapp_state.register_event_subscriber(subscriber))
+                registered.append(subscriber)
+            self.assertFalse(webapp_state.register_event_subscriber(queue.Queue(maxsize=1)))
+        finally:
+            for subscriber in registered:
+                webapp_state.unregister_event_subscriber(subscriber)
 
 
 if __name__ == "__main__":

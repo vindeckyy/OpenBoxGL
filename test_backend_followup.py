@@ -107,6 +107,43 @@ class BackendFollowupTests(unittest.TestCase):
         self.assertEqual(manager._futures, {}, "completed futures must not accumulate")
         manager.shutdown(wait=True, cancel_futures=True)
 
+    def test_job_queue_and_name_limits(self):
+        manager = JobManager(max_workers=1, max_jobs=1)
+        started = threading.Event()
+        release = threading.Event()
+
+        def blocked(cancel_event):
+            started.set()
+            release.wait(1)
+
+        try:
+            manager.submit("first", blocked)
+            self.assertTrue(started.wait(1))
+            with self.assertRaises(RuntimeError):
+                manager.submit("second", lambda: None)
+            with self.assertRaises(RuntimeError):
+                manager.submit("first", lambda: None, replace=True)
+            self.assertEqual(manager.snapshot("first").get("state"), "running")
+            with self.assertRaises(ValueError):
+                manager.submit("x" * 129, lambda: None)
+        finally:
+            release.set()
+            manager.shutdown(wait=True, cancel_futures=True)
+
+    def test_job_results_are_bounded(self):
+        manager = JobManager(max_workers=1)
+        try:
+            manager.submit("large-result", lambda: {"blob": "x" * 70_000})
+            for _ in range(100):
+                if manager.snapshot("large-result").get("state") == "done":
+                    break
+                time.sleep(0.01)
+            result = manager.snapshot("large-result")
+            self.assertTrue(result.get("result_truncated"))
+            self.assertNotIn("blob", result)
+        finally:
+            manager.shutdown(wait=True, cancel_futures=True)
+
     def test_archive_duplicate_and_size_limits(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import inspect
+import json
 import logging
+import math
 import threading
 import time
 import uuid
@@ -14,23 +16,44 @@ from collections.abc import Callable
 
 LOGGER = logging.getLogger("openbox.jobs")
 MAX_ERROR_LENGTH = 800
+DEFAULT_MAX_WORKERS = 4
+DEFAULT_MAX_JOBS = 128
+MAX_JOB_NAME_LENGTH = 128
+MAX_JOB_WORKERS = 16
+MAX_JOB_RESULT_BYTES = 64 * 1024
+MAX_BACKOFF_SECONDS = 30.0
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _bounded_result(result):
+    if not isinstance(result, dict):
+        return {}
+    try:
+        size = len(json.dumps(result, ensure_ascii=False, default=str).encode("utf-8"))
+    except (TypeError, ValueError, OverflowError):
+        return {}
+    if size > MAX_JOB_RESULT_BYTES:
+        return {"error": "Job result exceeded the size limit.", "result_truncated": True}
+    return result
+
+
 class JobManager:
     """Run bounded backend jobs and prevent stale workers overwriting new jobs."""
 
-    def __init__(self, max_workers=4, history_limit=50):
+    def __init__(self, max_workers=DEFAULT_MAX_WORKERS, history_limit=50, max_jobs=DEFAULT_MAX_JOBS):
         self._lock = threading.RLock()
         self._jobs: dict[str, dict] = {}
         self._futures: dict[str, Future] = {}
         self._cancel_events: dict[str, threading.Event] = {}
+        self._inflight: set[str] = set()
         self._history: list[dict] = []
-        self._history_limit = max(0, int(history_limit))
-        self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="openbox-job")
+        self._history_limit = max(0, min(int(history_limit), 200))
+        self._max_jobs = max(1, min(int(max_jobs), 1024))
+        workers = max(1, min(int(max_workers), MAX_JOB_WORKERS))
+        self._executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="openbox-job")
         self._observer = None
 
     def set_observer(self, observer):
@@ -67,21 +90,45 @@ class JobManager:
             self._history.append(dict(job))
             del self._history[: max(0, len(self._history) - self._history_limit)]
 
+    def _prune_finished_locked(self):
+        finished = {"done", "error", "cancelled"}
+        for name, job in list(self._jobs.items()):
+            if len(self._jobs) < self._max_jobs:
+                return
+            if job.get("state") in finished:
+                self._jobs.pop(name, None)
+                self._cancel_events.pop(job.get("job_id"), None)
+
     def submit(self, name, worker: Callable, *, replace=False, max_attempts=1, backoff_seconds=1.0):
         name = str(name).strip()
         if not name:
             raise ValueError("A job name is required.")
+        if len(name) > MAX_JOB_NAME_LENGTH:
+            raise ValueError("Job name is too long.")
+        if any(ord(character) < 0x20 for character in name):
+            raise ValueError("Job name contains control characters.")
         max_attempts = max(1, min(int(max_attempts), 5))
+        try:
+            backoff_seconds = float(backoff_seconds)
+        except (TypeError, ValueError) as error:
+            raise ValueError("Job backoff must be a number.") from error
+        if not math.isfinite(backoff_seconds) or backoff_seconds < 0:
+            raise ValueError("Job backoff must be finite and non-negative.")
+        backoff_seconds = min(backoff_seconds, MAX_BACKOFF_SECONDS)
         with self._lock:
             current = self._jobs.get(name, {})
             if current.get("state") in {"queued", "running"} and not replace:
                 return dict(current)
             if replace and current.get("job_id"):
+                if current["job_id"] in self._inflight and len(self._inflight) >= self._max_jobs:
+                    raise RuntimeError("The background job queue is full.")
                 old_event = self._cancel_events.get(current["job_id"])
                 if old_event:
                     old_event.set()
-                self._futures.pop(current["job_id"], None)
-                self._cancel_events.pop(current["job_id"], None)
+            self._jobs.pop(name, None)
+            self._prune_finished_locked()
+            if len(self._inflight) >= self._max_jobs:
+                raise RuntimeError("The background job queue is full.")
             job_id = uuid.uuid4().hex
             job = {
                 "job_id": job_id,
@@ -98,6 +145,7 @@ class JobManager:
             cancel_event = threading.Event()
             self._jobs[name] = job
             self._cancel_events[job_id] = cancel_event
+            self._inflight.add(job_id)
 
         def run():
             accepts_context = False
@@ -110,13 +158,25 @@ class JobManager:
                 with self._lock:
                     current = self._jobs.get(name)
                     if not current or current.get("job_id") != job_id:
+                        self._inflight.discard(job_id)
+                        self._cancel_events.pop(job_id, None)
                         return
                     if cancel_event.is_set():
-                        current.update({"state": "cancelled", "finished_at": _now()})
-                        self._archive(current)
-                        self._notify(dict(current))
-                        return
-                    current.update({"state": "running", "started_at": current.get("started_at") or _now(), "attempt": attempt})
+                        notification = None
+                        if current.get("state") != "cancelled":
+                            current.update({"state": "cancelled", "finished_at": _now()})
+                            self._archive(current)
+                            notification = dict(current)
+                        self._cancel_events.pop(job_id, None)
+                        self._inflight.discard(job_id)
+                        cancelled = True
+                    else:
+                        cancelled = False
+                        current.update({"state": "running", "started_at": current.get("started_at") or _now(), "attempt": attempt})
+                if cancelled:
+                    if notification is not None:
+                        self._notify(notification)
+                    return
                 try:
                     result = worker(cancel_event) if accepts_context else worker()
                     if cancel_event.is_set():
@@ -124,24 +184,30 @@ class JobManager:
                         result = {}
                     else:
                         state = "done"
+                    notification = None
                     with self._lock:
                         current = self._jobs.get(name)
                         if current and current.get("job_id") == job_id:
-                            if isinstance(result, dict):
-                                current.update(result)
+                            current.update(_bounded_result(result))
                             current.update({
                                 "state": state,
                                 "finished_at": _now(),
                                 "duration_seconds": round(time.monotonic() - started, 3),
                             })
+                            self._cancel_events.pop(job_id, None)
+                            self._inflight.discard(job_id)
                             self._archive(current)
-                            self._notify(dict(current))
+                            notification = dict(current)
+                    if notification is not None:
+                        self._notify(notification)
                     return
                 except Exception as error:  # worker isolation boundary
                     LOGGER.exception("Backend job %s failed on attempt %s", name, attempt)
                     if attempt < max_attempts and not cancel_event.is_set():
-                        cancel_event.wait(max(0.0, float(backoff_seconds)) * (2 ** (attempt - 1)))
+                        delay = min(MAX_BACKOFF_SECONDS, backoff_seconds * (2 ** (attempt - 1)))
+                        cancel_event.wait(delay)
                         continue
+                    notification = None
                     with self._lock:
                         current = self._jobs.get(name)
                         if current and current.get("job_id") == job_id:
@@ -151,11 +217,23 @@ class JobManager:
                                 "finished_at": _now(),
                                 "duration_seconds": round(time.monotonic() - started, 3),
                             })
+                            self._cancel_events.pop(job_id, None)
+                            self._inflight.discard(job_id)
                             self._archive(current)
-                            self._notify(dict(current))
+                            notification = dict(current)
+                    if notification is not None:
+                        self._notify(notification)
                     return
 
-        future = self._executor.submit(run)
+        try:
+            future = self._executor.submit(run)
+        except Exception:
+            with self._lock:
+                if self._jobs.get(name, {}).get("job_id") == job_id:
+                    self._jobs.pop(name, None)
+                self._cancel_events.pop(job_id, None)
+                self._inflight.discard(job_id)
+            raise
         with self._lock:
             self._futures[job_id] = future
             future.add_done_callback(self._drop_future)
@@ -179,11 +257,33 @@ class JobManager:
                 event.set()
             if job.get("state") == "queued":
                 job.update({"state": "cancelled", "finished_at": _now()})
+                future = self._futures.get(job.get("job_id"))
+                if future is not None and future.cancel():
+                    self._futures.pop(job.get("job_id"), None)
+                    self._inflight.discard(job.get("job_id"))
+                self._cancel_events.pop(job.get("job_id"), None)
                 self._archive(job)
             return True
 
     def shutdown(self, wait=True, cancel_futures=False):
+        notifications = []
         with self._lock:
             for event in self._cancel_events.values():
                 event.set()
+            if cancel_futures:
+                for _name, job in list(self._jobs.items()):
+                    if job.get("state") != "queued":
+                        continue
+                    job_id = job.get("job_id")
+                    future = self._futures.get(job_id)
+                    if future is not None and not future.cancel():
+                        continue
+                    job.update({"state": "cancelled", "finished_at": _now()})
+                    self._archive(job)
+                    notifications.append(dict(job))
+                    self._cancel_events.pop(job_id, None)
+                    self._futures.pop(job_id, None)
+                    self._inflight.discard(job_id)
         self._executor.shutdown(wait=wait, cancel_futures=cancel_futures)
+        for job in notifications:
+            self._notify(job)

@@ -2,7 +2,8 @@
 
 import json
 import os
-import shutil
+import stat
+import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -64,8 +65,72 @@ def normalize_items(items):
 
 
 def backup_path(data_dir, prefix="OpenBoxBackup"):
-    stamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    stamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f")
     return Path(data_dir) / "backups" / f"{prefix}-{stamp}.zip"
+
+
+def _reject_symlink_components(path):
+    path = Path(os.path.abspath(os.fspath(path)))
+    for component in (path, *path.parents):
+        if component.is_symlink():
+            raise ValueError(f"Backup path may not contain symlinks: {component}")
+
+
+def _restrict_archive_permissions(folder, pattern):
+    for existing in Path(folder).glob(pattern):
+        if existing.is_symlink():
+            continue
+        os.chmod(existing, 0o600)
+
+
+def _write_archive_file(package, source, archive_name):
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(source, flags)
+    except OSError as error:
+        raise ValueError(f"Backup source could not be opened safely: {source}") from error
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ValueError(f"Backup source is not a regular file: {source}")
+        with os.fdopen(descriptor, "rb") as input_file:
+            descriptor = -1
+            with package.open(archive_name, "w") as output:
+                while True:
+                    chunk = input_file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _write_private_archive(archive, populate):
+    archive = Path(archive)
+    _reject_symlink_components(archive.parent)
+    archive.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    _reject_symlink_components(archive.parent)
+    os.chmod(archive.parent, 0o700)
+    _restrict_archive_permissions(archive.parent, "OpenBoxBackup-*.zip")
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{archive.name}.", suffix=".tmp", dir=archive.parent
+    )
+    temporary = Path(temporary_name)
+    os.chmod(temporary, 0o600)
+    try:
+        with os.fdopen(descriptor, "w+b") as output:
+            descriptor = -1
+            with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as package:
+                populate(package)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, archive)
+        os.chmod(archive, 0o600)
+        fsync_directory(archive.parent)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        temporary.unlink(missing_ok=True)
 
 
 def create_backup(data_dir, state, items, keep=0, running_map=None):
@@ -73,34 +138,36 @@ def create_backup(data_dir, state, items, keep=0, running_map=None):
         raise ValueError("Close running games before creating a backup.")
     selected = normalize_items(items)
     root = Path(data_dir)
+    _reject_symlink_components(root)
     archive = backup_path(root)
-    archive.parent.mkdir(parents=True, exist_ok=True)
-    temporary = archive.with_name(f".{archive.name}.tmp")
     manifest = {"items": selected, "created": datetime.now().isoformat(timespec="seconds")}
-    try:
-        with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as package:
-            package.writestr("manifest.json", json.dumps(manifest, indent=2))
-            if "settings" in selected:
-                package.writestr("settings.json", json.dumps(settings_snapshot(state), indent=2))
-            if "library" in selected:
-                package.writestr("library.json", json.dumps(state, indent=2))
-            for key in ("media", "plugins", "themes", "extension_data"):
-                if key not in selected:
-                    continue
-                folder = root / BACKUP_ITEMS[key]
-                if not folder.exists():
-                    continue
-                if folder.is_symlink():
-                    raise ValueError(f"Backup source is a symlink: {folder}")
-                for path in folder.rglob("*"):
-                    if path.is_symlink():
-                        raise ValueError(f"Backup source contains a symlink: {path}")
-                    if path.is_file():
-                        package.write(path, f"{BACKUP_ITEMS[key]}/{path.relative_to(folder).as_posix()}")
-        os.replace(temporary, archive)
-        fsync_directory(archive.parent)
-    finally:
-        temporary.unlink(missing_ok=True)
+
+    def populate(package):
+        package.writestr("manifest.json", json.dumps(manifest, indent=2))
+        if "settings" in selected:
+            package.writestr("settings.json", json.dumps(settings_snapshot(state), indent=2))
+        if "library" in selected:
+            package.writestr("library.json", json.dumps(state, indent=2))
+        for key in ("media", "plugins", "themes", "extension_data"):
+            if key not in selected:
+                continue
+            folder = root / BACKUP_ITEMS[key]
+            _reject_symlink_components(folder)
+            if not folder.exists():
+                continue
+            if folder.is_symlink():
+                raise ValueError(f"Backup source is a symlink: {folder}")
+            for path in folder.rglob("*"):
+                if path.is_symlink():
+                    raise ValueError(f"Backup source contains a symlink: {path}")
+                if path.is_file():
+                    _write_archive_file(
+                        package,
+                        path,
+                        f"{BACKUP_ITEMS[key]}/{path.relative_to(folder).as_posix()}",
+                    )
+
+    _write_private_archive(archive, populate)
     if keep and keep > 0:
         rotate_backups(root / "backups", keep)
     return archive
@@ -109,7 +176,14 @@ def create_backup(data_dir, state, items, keep=0, running_map=None):
 def rotate_backups(folder, keep):
     if keep < 1:
         raise ValueError("Backup retention must be at least 1.")
-    archives = sorted(Path(folder).glob("OpenBoxBackup-*.zip"), key=lambda path: path.stat().st_mtime)
+    folder = Path(folder)
+    _reject_symlink_components(folder)
+    archives = []
+    for path in folder.glob("OpenBoxBackup-*.zip"):
+        if path.is_symlink() or not path.is_file():
+            continue
+        archives.append(path)
+    archives.sort(key=lambda path: path.stat().st_mtime)
     for path in archives[:-keep]:
         path.unlink(missing_ok=True)
 
@@ -119,8 +193,9 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None, force=F
         raise ValueError("Close running games before restoring a backup.")
     selected = normalize_items(items) if items else None
     root = Path(data_dir)
-    if root.is_symlink():
-        raise ValueError("OpenBox data directory may not be a symlink.")
+    _reject_symlink_components(root)
+    archive_path = Path(archive_path)
+    _reject_symlink_components(archive_path)
     try:
         with zipfile.ZipFile(archive_path) as package:
             infos = package.infolist()
@@ -175,7 +250,14 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None, force=F
             if "library" in restore_items and "library.json" in package.namelist():
                 library_file = root / "library.json"
                 if library_file.is_file():
-                    shutil.copy2(library_file, library_file.with_name("library.before-restore.json"))
+                    _reject_symlink_components(library_file)
+                    with library_file.open("rb") as source:
+                        atomic_copy_stream(
+                            source,
+                            library_file.with_name("library.before-restore.json"),
+                            mode=0o600,
+                            max_bytes=MAX_BACKUP_MEMBER_BYTES,
+                        )
                 restored_state = default_state()
                 try:
                     restored_state.update(json.loads(package.read("library.json")))
@@ -211,10 +293,10 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None, force=F
                 prefix = f"{BACKUP_ITEMS[key]}/"
                 members = [name for name in package.namelist() if name.startswith(prefix) and not name.endswith("/")]
                 raw_root = root / BACKUP_ITEMS[key]
-                if raw_root.is_symlink():
-                    raise ValueError("Backup destination contains a symlink.")
+                _reject_symlink_components(raw_root)
                 target_root = raw_root.resolve()
                 target_root.mkdir(parents=True, exist_ok=True)
+                _reject_symlink_components(raw_root)
                 for member in members:
                     relative = member[len(prefix) :]
                     target = (target_root / relative).resolve()

@@ -47,8 +47,9 @@ done < <(
 
 install -m 755 /dev/stdin "$appdir/AppRun" <<'EOF'
 #!/bin/bash
-# Keep bundled libs on the Python process only. A sticky LD_LIBRARY_PATH leaks into
-# xdg-open/host browsers and breaks Gear Lever / desktop-menu launches.
+# Keep bundled libraries scoped to the process that needs them. Exporting the
+# path before entering a shell launcher makes /bin/bash resolve bundled
+# readline/ncurses libraries and can abort desktop launches.
 set -euo pipefail
 if command -v readlink >/dev/null 2>&1; then
   app_root="$(cd -- "$(dirname -- "$(readlink -f -- "$0" 2>/dev/null || echo "$0")")" && pwd)"
@@ -59,7 +60,7 @@ export APPDIR="$app_root"
 export PATH="$app_root/usr/bin:${PATH:-/usr/bin:/bin}"
 export PYTHONHOME="$app_root/usr"
 export PYTHONPATH="$app_root/usr/share/openbox${PYTHONPATH:+:$PYTHONPATH}"
-lib_path="$app_root/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+lib_path="$app_root/usr/lib"
 python="$app_root/usr/bin/python3"
 data_dir="${OPENBOX_DATA_DIR:-$HOME/.local/share/openbox-game-launcher}"
 mkdir -p "$data_dir"
@@ -73,7 +74,8 @@ fi
 export OPENBOX_WEB_APP="$app_root/usr/share/openbox/web_app.py"
 export OPENBOX_PYTHON="$python"
 export APPDIR
-export LD_LIBRARY_PATH="$lib_path"
+export OPENBOX_BUNDLED_LIB_PATH="$lib_path"
+unset LD_LIBRARY_PATH
 exec "$app_root/usr/share/openbox/openbox-native.sh" "$@"
 EOF
 
@@ -101,11 +103,31 @@ ln -s usr/share/applications/io.openbox.GameLauncher.desktop "$appdir/io.openbox
 ln -s usr/share/icons/hicolor/scalable/apps/io.openbox.GameLauncher.svg "$appdir/io.openbox.GameLauncher.svg"
 ln -s io.openbox.GameLauncher.svg "$appdir/.DirIcon"
 
+if [ -n "${OPENBOX_APPDIR:-}" ]; then
+  preserved_appdir="$OPENBOX_APPDIR"
+  mkdir -p "$preserved_appdir"
+  cp -a "$appdir"/. "$preserved_appdir"/
+fi
+
 tool="$build_root/tools/appimagetool-x86_64.AppImage"
+tool_url="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+tool_sha256="a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0"
 if [ ! -x "$tool" ]; then
-  curl -L --fail --output "$tool" "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+  downloaded_tool="$temporary/appimagetool-x86_64.AppImage"
+  curl --proto '=https' --tlsv1.2 --location --fail --silent --show-error --output "$downloaded_tool" "$tool_url"
+  downloaded_hash="$(sha256sum "$downloaded_tool" | awk '{print $1}')"
+  [ "$downloaded_hash" = "$tool_sha256" ] || {
+    echo "build_appimage.sh: appimagetool checksum mismatch" >&2
+    exit 1
+  }
+  mv "$downloaded_tool" "$tool"
   chmod +x "$tool"
 fi
+tool_hash="$(sha256sum "$tool" | awk '{print $1}')"
+[ "$tool_hash" = "$tool_sha256" ] || {
+  echo "build_appimage.sh: cached appimagetool checksum mismatch" >&2
+  exit 1
+}
 update_information="${OPENBOX_UPDATE_INFORMATION:-gh-releases-zsync|vindeckyy|OpenBoxGL|latest|OpenBox-x86_64.AppImage.zsync}"
 arguments=(-n -u "$update_information" "$appdir" "$output")
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$tool" "${arguments[@]}"

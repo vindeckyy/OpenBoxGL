@@ -20,15 +20,29 @@ else
 fi
 
 HOST_BIN="${OPENBOX_NATIVE_HOST:-$SHARE/native_host}"
+
+run_web_app()
+{
+  if [ -n "${OPENBOX_BUNDLED_LIB_PATH:-}" ]; then
+    exec env LD_LIBRARY_PATH="$OPENBOX_BUNDLED_LIB_PATH" "${OPENBOX_PYTHON:-python3}" "$SHARE/web_app.py" "$@"
+  else
+    exec "${OPENBOX_PYTHON:-python3}" "$SHARE/web_app.py" "$@"
+  fi
+}
+
 if [ ! -x "$HOST_BIN" ]; then
   echo "native_host is missing at $HOST_BIN; falling back to the system-browser app window." >&2
-  exec "${OPENBOX_PYTHON:-python3}" "$SHARE/web_app.py" "$@"
+  run_web_app "$@"
 fi
 
 export OPENBOX_WEB_APP="$SHARE/web_app.py"
 export OPENBOX_PYTHON="${OPENBOX_PYTHON:-python3}"
-"$HOST_BIN" "$@" && exit 0
+if [ -n "${OPENBOX_BUNDLED_LIB_PATH:-}" ]; then
+  env LD_LIBRARY_PATH="$OPENBOX_BUNDLED_LIB_PATH" "$HOST_BIN" "$@" && exit 0
+else
+  "$HOST_BIN" "$@" && exit 0
+fi
 code=$?
 echo "native_host failed (exit $code). Install webkit2gtk: libwebkit2gtk-4.1-dev on Debian/Ubuntu, webkit2gtk-4.1 on Fedora." >&2
 echo "Falling back to the system-browser app window." >&2
-exec "${OPENBOX_PYTHON:-python3}" "$SHARE/web_app.py" "$@"
+run_web_app "$@"

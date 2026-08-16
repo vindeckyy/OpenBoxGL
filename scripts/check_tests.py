@@ -37,7 +37,7 @@ def main() -> int:
 
     # Stage 1: lint.
     if not RUFF.is_file():
-        print("Missing .venv-dev/bin/ruff. Run: python3 -m venv .venv-dev && .venv-dev/bin/pip install ruff coverage")
+        print("Missing .venv-dev/bin/ruff. Run: make dev-venv")
         failures.append("ruff missing")
     else:
         result = run([str(RUFF), "check", "."])
@@ -65,6 +65,8 @@ def main() -> int:
             print(f"runtime module missing: {module}")
             failures.append(f"runtime module missing: {module}")
             continue
+        if path.suffix != ".py":
+            continue
         try:
             compile(path.read_bytes(), str(path), "exec")
         except SyntaxError as error:
@@ -81,7 +83,7 @@ def main() -> int:
 
     # Stage 3+4: tests under coverage in parallel, then the floor checks.
     if not COVERAGE.is_file():
-        print("Missing .venv-dev/bin/coverage. Run: python3 -m venv .venv-dev && .venv-dev/bin/pip install ruff coverage")
+        print("Missing .venv-dev/bin/coverage. Run: make dev-venv")
         failures.append("coverage missing")
     else:
         run([str(COVERAGE), "erase"])

@@ -12,6 +12,7 @@ import html
 import json
 import logging
 import os
+import queue
 import re
 import secrets
 import shlex
@@ -24,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-from automation import DEFAULT_ATTEMPTS, DEFAULT_TIMEOUT, build_event, utc_now
+from automation import DEFAULT_ATTEMPTS, DEFAULT_TIMEOUT, MAX_WEBHOOKS, build_event, utc_now
 from backend_io import contained_path, download_file, read_limited
 from catalog import apply_progress_automation
 from cloud_sync import sync_statistics
@@ -88,6 +89,10 @@ WEBHOOK_DISPATCHER = None
 WEBHOOK_DISPATCHER_LOCK = threading.Lock()
 EVENT_SUBSCRIBERS = set()
 EVENT_SUBSCRIBERS_LOCK = threading.Lock()
+SSE_MAX_SUBSCRIBERS = 16
+SSE_QUEUE_SIZE = 128
+SSE_MAX_EVENT_BYTES = 64 * 1024
+SSE_WRITE_TIMEOUT = 5
 FIELDS = {
     "name", "platform", "genre", "year", "developer", "publisher", "series",
     "collection", "description", "path", "launch", "launch_profile", "cover", "background",
@@ -110,6 +115,13 @@ MEDIA_TYPES_ALL = {
     "cover", "background", "screenshots", "clear_logo", "fanart", "banner", "icon",
     "box_back", "box_spine", "box_3d", "title_screen",
     "cart_front", "cart_back", "disc", "advertisement", "manual",
+}
+MEDIA_ROOTS_ENV = "OPENBOX_MEDIA_ROOTS"
+MEDIA_PATH_FIELDS = {
+    "cover", "background", "clear_logo", "fanart", "banner", "icon",
+    "box_back", "box_spine", "box_3d", "title_screen", "cart_front",
+    "cart_back", "disc", "advertisement", "manual", "video", "music",
+    "video_snap", "video_theme", "video_trailer", "video_recording",
 }
 
 
@@ -136,13 +148,111 @@ def probe_path(path, *, file_only=False):
     return result
 
 
-def safe_document_file(path):
-    candidate = Path(str(path or "")).expanduser()
-    if candidate.is_symlink():
-        raise ValueError("Symlinked documents are not supported.")
-    if not candidate.is_file():
+def _reject_media_symlink_components(path):
+    cursor = Path(path)
+    while True:
+        try:
+            if cursor.is_symlink():
+                raise ValueError(f"Media paths may not contain symlinks: {cursor}")
+        except OSError as error:
+            raise ValueError(f"Could not inspect media path: {cursor}") from error
+        if cursor.parent == cursor:
+            return
+        cursor = cursor.parent
+
+
+def _media_roots():
+    values = [DATA.parent / "media"]
+    configured = os.environ.get(MEDIA_ROOTS_ENV, "")
+    if len(configured) > 16 * 4096:
+        raise ValueError(f"{MEDIA_ROOTS_ENV} is too long.")
+    for item in configured.split(os.pathsep):
+        item = item.strip()
+        if not item:
+            continue
+        candidate = Path(item).expanduser()
+        if not candidate.is_absolute():
+            raise ValueError(f"{MEDIA_ROOTS_ENV} entries must be absolute paths.")
+        values.append(candidate)
+    roots = []
+    if len(values) > 32:
+        raise ValueError(f"{MEDIA_ROOTS_ENV} contains too many roots.")
+    for value in values:
+        _reject_media_symlink_components(value)
+        try:
+            root = value.resolve(strict=False)
+        except (OSError, RuntimeError) as error:
+            raise ValueError(f"Could not resolve media root: {value}") from error
+        if root == Path("/"):
+            raise ValueError("Filesystem root is not an approved media root.")
+        if root not in roots:
+            roots.append(root)
+    return roots
+
+
+def approved_media_path(path, *, must_exist=False):
+    """Return a regular media path under DATA/media or explicit approved roots.
+
+    Existing libraries stored outside OpenBox must opt in with
+    ``OPENBOX_MEDIA_ROOTS`` (an absolute-path list separated by ``os.pathsep``).
+    Paths outside those roots, and any symlinked component, are rejected before
+    media or document handlers can use them.
+    """
+    raw = Path(str(path or "")).expanduser()
+    if not str(path or "").strip() or not raw.is_absolute():
+        raise ValueError("Media paths must be absolute paths under an approved media root.")
+    _reject_media_symlink_components(raw)
+    try:
+        candidate = raw.resolve(strict=False)
+    except (OSError, RuntimeError) as error:
+        raise ValueError(f"Could not resolve media path: {raw}") from error
+    roots = _media_roots()
+    if not any(candidate != root and root in candidate.parents for root in roots):
+        raise ValueError(f"Path is outside an approved OpenBox media directory: {candidate}")
+    if must_exist and not candidate.is_file():
         raise FileNotFoundError(str(candidate))
     return candidate
+
+
+def safe_document_file(path):
+    return approved_media_path(path, must_exist=True)
+
+
+def media_probe_path(path):
+    try:
+        return probe_path(approved_media_path(path), file_only=True)
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def sanitize_media_path(path):
+    value = str(path or "").strip()
+    if not value:
+        return ""
+    try:
+        return str(approved_media_path(value))
+    except (OSError, ValueError, TypeError):
+        return ""
+
+
+def sanitize_document_records(records):
+    if not isinstance(records, list):
+        return []
+    clean = []
+    for item in records[:100]:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("path", "")).strip()
+        if not path:
+            continue
+        try:
+            safe_path = approved_media_path(path)
+        except (OSError, ValueError, TypeError):
+            continue
+        record = dict(item)
+        record["path"] = str(safe_path)
+        clean.append(record)
+    return clean
 
 
 def approved_backup_file(path):
@@ -327,6 +437,9 @@ def run_configured_commands(key):
 def public_settings(state=None):
     state = state or load_state()
     settings = state.get("settings", {})
+    platform_documents = settings.get("platform_documents", {})
+    if not isinstance(platform_documents, dict):
+        platform_documents = {}
     return {
         "watch_folders": settings.get("watch_folders", []),
         "screensaver_seconds": settings.get("screensaver_seconds", 90),
@@ -367,7 +480,10 @@ def public_settings(state=None):
         "gameyfin_provider": settings.get("gameyfin_provider", ""),
         "ludusavi_backup_path": settings.get("ludusavi_backup_path", ""),
         "save_tools": save_tool_status(),
-        "platform_documents": settings.get("platform_documents", {}),
+        "platform_documents": {
+            str(platform): sanitize_document_records(documents)
+            for platform, documents in platform_documents.items()
+        },
         "custom_field_defs": custom_field_defs(settings),
         "platform_categories": platform_categories(settings),
         "list_columns": settings.get("list_columns", list(LIST_COLUMNS_DEFAULT)),
@@ -412,8 +528,23 @@ def _build_public_state():
     for index, game in enumerate(state["games"]):
         projected = dict(game)
         normalize_video_fields(projected)
+        for field in MEDIA_PATH_FIELDS:
+            projected[field] = sanitize_media_path(projected.get(field, ""))
         visible = {key: projected.get(key, "") for key in FIELDS}
+        for field in MEDIA_PATH_FIELDS:
+            visible[field] = projected[field]
+        visible["documents"] = sanitize_document_records(projected.get("documents", []))
+        screenshots = projected.get("screenshots", [])
+        if not isinstance(screenshots, list):
+            screenshots = []
+        visible["screenshots"] = [
+            safe_path for path in screenshots
+            for safe_path in [sanitize_media_path(path)] if safe_path
+        ]
         video_field, video_path = active_video(projected, state.get("settings", {}).get("video_priority"))
+        video_path = sanitize_media_path(video_path)
+        if not video_path:
+            video_field = ""
         path_exists = probe_path(projected.get("path"))
         store_installed = bool(projected["store_installed"]) if "store_installed" in projected else path_exists
         visible.update({
@@ -426,40 +557,40 @@ def _build_public_state():
             "play_count": projected.get("play_count", 0),
             "playtime_seconds": projected.get("playtime_seconds", 0),
             "path_exists": path_exists,
-            "has_cover": probe_path(projected.get("cover"), file_only=True),
-            "has_background": probe_path(projected.get("background"), file_only=True),
-            "has_clear_logo": probe_path(projected.get("clear_logo"), file_only=True),
-            "has_fanart": probe_path(projected.get("fanart"), file_only=True),
-            "has_banner": probe_path(projected.get("banner"), file_only=True),
-            "has_icon": probe_path(projected.get("icon"), file_only=True),
-            "has_box_back": probe_path(projected.get("box_back"), file_only=True),
-            "has_box_spine": probe_path(projected.get("box_spine"), file_only=True),
-            "has_box_3d": probe_path(projected.get("box_3d"), file_only=True),
-            "has_title_screen": probe_path(projected.get("title_screen"), file_only=True),
-            "has_cart_front": probe_path(projected.get("cart_front"), file_only=True),
-            "has_cart_back": probe_path(projected.get("cart_back"), file_only=True),
-            "has_disc": probe_path(projected.get("disc"), file_only=True),
-            "has_advertisement": probe_path(projected.get("advertisement"), file_only=True),
-            "has_manual": probe_path(projected.get("manual"), file_only=True),
+            "has_cover": media_probe_path(visible.get("cover")),
+            "has_background": media_probe_path(visible.get("background")),
+            "has_clear_logo": media_probe_path(visible.get("clear_logo")),
+            "has_fanart": media_probe_path(visible.get("fanart")),
+            "has_banner": media_probe_path(visible.get("banner")),
+            "has_icon": media_probe_path(visible.get("icon")),
+            "has_box_back": media_probe_path(visible.get("box_back")),
+            "has_box_spine": media_probe_path(visible.get("box_spine")),
+            "has_box_3d": media_probe_path(visible.get("box_3d")),
+            "has_title_screen": media_probe_path(visible.get("title_screen")),
+            "has_cart_front": media_probe_path(visible.get("cart_front")),
+            "has_cart_back": media_probe_path(visible.get("cart_back")),
+            "has_disc": media_probe_path(visible.get("disc")),
+            "has_advertisement": media_probe_path(visible.get("advertisement")),
+            "has_manual": media_probe_path(visible.get("manual")),
             "has_video": bool(video_path),
             "active_video_field": video_field,
-            "has_music": probe_path(projected.get("music"), file_only=True),
+            "has_music": media_probe_path(visible.get("music")),
             "has_saves": index in save_indices or bool(projected.get("save_paths")),
-            "has_documents": bool(projected.get("documents")),
+            "has_documents": bool(visible["documents"]),
             "has_versions": bool(projected.get("versions")),
             "has_achievements": bool(projected.get("ra_game_id")),
             "has_highscores": bool(projected.get("rom_name")) and str(projected.get("platform", "")).casefold() in {"arcade", "mame", "finalburn neo"},
-            "has_missing_media": not probe_path(projected.get("cover"), file_only=True),
+            "has_missing_media": not media_probe_path(visible.get("cover")),
             "extract_archive": bool(projected.get("extract_archive")),
             "applications": projected.get("applications", []),
             "versions": projected.get("versions", []),
-            "documents": projected.get("documents", []),
+            "documents": visible["documents"],
             "save_paths": projected.get("save_paths", []),
-            "screenshots": projected.get("screenshots", []),
+            "screenshots": visible["screenshots"],
             "alternate_names": projected.get("alternate_names", []) if isinstance(projected.get("alternate_names"), list) else [name for name in str(projected.get("alternate_names") or "").split(";") if name.strip()],
             "available_screenshots": [
-                index for index, path in enumerate(projected.get("screenshots", []))
-                if probe_path(path, file_only=True)
+                index for index, path in enumerate(visible["screenshots"])
+                if media_probe_path(path)
             ],
             "esrb": projected.get("esrb", ""),
             "custom_fields": projected.get("custom_fields", {}) if isinstance(projected.get("custom_fields"), dict) else {},
@@ -562,7 +693,7 @@ def webhook_configs(state=None):
     configs = state.get("settings", {}).get("webhooks", [])
     if not isinstance(configs, list):
         return []
-    return [config for config in configs if isinstance(config, dict)]
+    return [config for config in configs[:MAX_WEBHOOKS] if isinstance(config, dict)]
 def emit_notification(*, kind="system", level="info", title="OpenBox", body="", source="", correlation_id="", dedupe_key=""):
     def mutate(state):
         return add_notification(state, kind=kind, level=level, title=title, body=body, source=source, correlation_id=correlation_id, dedupe_key=dedupe_key)
@@ -738,14 +869,54 @@ def _publish_session_event(envelope):
         publish_event(envelope["type"], envelope["data"])
     except Exception:
         LOGGER.exception("Failed to publish session webhook event")
+
+
+def register_event_subscriber(subscriber):
+    with EVENT_SUBSCRIBERS_LOCK:
+        if len(EVENT_SUBSCRIBERS) >= SSE_MAX_SUBSCRIBERS:
+            return False
+        EVENT_SUBSCRIBERS.add(subscriber)
+        return True
+
+
+def unregister_event_subscriber(subscriber):
+    with EVENT_SUBSCRIBERS_LOCK:
+        EVENT_SUBSCRIBERS.discard(subscriber)
+
+
+def _close_sse_subscriber(subscriber):
+    try:
+        while True:
+            subscriber.get_nowait()
+    except queue.Empty:
+        pass
+    except Exception:
+        return
+    try:
+        subscriber.put_nowait(None)
+    except Exception:
+        pass
+
+
 def broadcast_event(kind, payload):
-    """Push one event to every connected SSE subscriber. Never raises."""
+    """Push one bounded event to every connected SSE subscriber. Never blocks."""
+    try:
+        data = json.dumps(payload, ensure_ascii=False)
+        encoded = data.encode("utf-8")
+    except (TypeError, ValueError):
+        LOGGER.warning("Skipped non-serializable SSE event %s", kind)
+        return
+    if len(encoded) > SSE_MAX_EVENT_BYTES:
+        data = json.dumps({"truncated": True, "bytes": len(encoded)}, separators=(",", ":"))
+    event_kind = str(kind).replace("\r", "").replace("\n", "")[:64]
     with EVENT_SUBSCRIBERS_LOCK:
         subscribers = list(EVENT_SUBSCRIBERS)
-    data = json.dumps(payload, ensure_ascii=False)
-    for queue in subscribers:
+    for subscriber in subscribers:
         try:
-            queue.put((kind, data))
+            subscriber.put_nowait((event_kind, data))
+        except queue.Full:
+            unregister_event_subscriber(subscriber)
+            _close_sse_subscriber(subscriber)
         except Exception:
             LOGGER.exception("SSE subscriber queue failed")
 
@@ -1190,4 +1361,3 @@ def sync_cloud():
 
     update_state(mutate)
     return result
-

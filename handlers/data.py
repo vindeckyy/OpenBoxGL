@@ -9,12 +9,12 @@ from urllib.parse import parse_qs
 
 from api_errors import BadRequest, DocumentNotFound, GameNotFound, PlatformDocumentNotFound
 from openbox import DATA, load_state
-from parity_gameyfin import GameyfinError, catalog_gameyfin, install_gameyfin_game, test_gameyfin_connection, uninstall_gameyfin_game
+from parity_gameyfin import GameyfinError, catalog_gameyfin, gameyfin_settings, install_gameyfin_game, test_gameyfin_connection, uninstall_gameyfin_game, validate_gameyfin_id
 from parity_integrations import export_highscores, import_highscores, read_local_highscores
 from parity_save_tools import run_hoard, run_ludusavi, save_tool_status
 from parity_saves import enforce_backup_limit, extra_save_candidates, scan_all_saves
 from saves import backup_saves, discover_save_paths, list_backups, restore_saves
-from webapp_state import INSTALLS, JOB_MANAGER, PROCESS_LOCK, game_from_payload, game_from_query, load_state_view, resolve_library_game, safe_document_file, transact_state
+from webapp_state import INSTALLS, JOB_MANAGER, PROCESS_LOCK, approved_media_path, game_from_payload, game_from_query, load_state_view, resolve_library_game, safe_document_file, sanitize_document_records, transact_state
 
 
 class DataHandlers:
@@ -76,7 +76,14 @@ class DataHandlers:
     def _api_get_api_platform_documents(self, parsed):
         platform = parse_qs(parsed.query).get("platform", [""])[0]
         docs = load_state_view().get("settings", {}).get("platform_documents", {})
-        self.send_json(200, {"documents": docs.get(platform, []) if platform else docs})
+        if platform:
+            result = sanitize_document_records(docs.get(platform, [])) if isinstance(docs, dict) else []
+        else:
+            result = {
+                str(name): sanitize_document_records(items)
+                for name, items in docs.items()
+            } if isinstance(docs, dict) else {}
+        self.send_json(200, {"documents": result})
         return
 
     def _api_get_api_platform_document(self, parsed):
@@ -100,10 +107,10 @@ class DataHandlers:
 
     def _api_get_api_gameyfin_install_status(self, parsed):
         query = parse_qs(parsed.query)
-        gameyfin_id = str(query.get("gameyfin_id", [""])[0]).strip()
-        if not gameyfin_id:
+        raw_gameyfin_id = str(query.get("gameyfin_id", [""])[0]).strip()
+        if not raw_gameyfin_id:
             raise BadRequest("gameyfin_id is required.")
-            return
+        gameyfin_id = validate_gameyfin_id(raw_gameyfin_id)
         with PROCESS_LOCK:
             job = dict(INSTALLS.get(f"gameyfin:{gameyfin_id}", {"state": "idle"}))
         self.send_json(200, job)
@@ -181,6 +188,8 @@ class DataHandlers:
         if not platform:
             raise ValueError("Platform is required.")
         documents = self.clean_extras(payload.get("documents", []), command=False)
+        for document in documents:
+            document["path"] = str(approved_media_path(document["path"], must_exist=False))
         def mutate(state):
             settings = state.setdefault("settings", {})
             settings.setdefault("platform_documents", {})[platform] = documents
@@ -197,9 +206,10 @@ class DataHandlers:
         self.send_json(200, result)
 
     def install_gameyfin(self, payload):
-        game_id = str(payload.get("gameyfin_id") or payload.get("id") or "").strip()
-        if not game_id:
+        raw_game_id = str(payload.get("gameyfin_id") or payload.get("id") or "").strip()
+        if not raw_game_id:
             raise ValueError("gameyfin_id is required.")
+        game_id = validate_gameyfin_id(raw_game_id)
         library_id = payload.get("library_id")
         stable_library_id = ""
         if library_id is not None:
@@ -259,7 +269,9 @@ class DataHandlers:
         target = copy.deepcopy(original)
         if not target.get("gameyfin_id"):
             raise ValueError("This game is not a Gameyfin entry.")
-        result = uninstall_gameyfin_game(target)
+        settings = gameyfin_settings(state.get("settings", {}))
+        install_root = settings["install_dir"] or str(Path.home() / "Games" / "Gameyfin")
+        result = uninstall_gameyfin_game(target, install_root)
         def mutate(state):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)
@@ -298,5 +310,3 @@ class DataHandlers:
         game = game_from_payload(state, payload)
         restored = import_highscores(game, import_dir)
         self.send_json(200, {"restored": restored})
-
-

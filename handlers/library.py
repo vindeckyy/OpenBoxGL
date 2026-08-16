@@ -5,17 +5,16 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 from api_errors import GameNotFound
-from backend_io import remove_file_if_safe
 from catalog import PROGRESS, bulk_update, game_media_paths, related_game_ids, tag_counts
 from notifications import clear as clear_notifications, mark_read as mark_notifications_read, unread_count
-from openbox import DATA, load_state
+from openbox import load_state
 from parity_deeplinks import launcher_menu_items
 from parity_discovery import discovery_lists, related_with_reasons
 from parity_filter_presets import bigbox_quick_presets, delete_preset, explorer_facets, list_presets, save_preset
 from parity_media import normalize_video_fields
 from parity_premium import bulk_wizard_changes, custom_field_defs, normalize_custom_fields
 from play_queue import advance as advance_queue, enqueue as enqueue_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
-from webapp_state import FIELDS, _public_state_cached, bump_media_epoch, clear_file_probe_cache, game_from_payload, game_from_query, game_identity, load_state_view, public_state, public_state_bytes, public_state_etag, public_settings, transact_state
+from webapp_state import FIELDS, MEDIA_PATH_FIELDS, _public_state_cached, approved_media_path, bump_media_epoch, clear_file_probe_cache, game_from_payload, game_from_query, game_identity, load_state_view, public_state, public_state_bytes, public_state_etag, public_settings, transact_state
 
 
 class LibraryHandlers:
@@ -212,6 +211,11 @@ class LibraryHandlers:
         game["applications"] = self.clean_extras(source.get("applications", []), command=True)
         game["versions"] = self.clean_extras(source.get("versions", []), command=True)
         game["documents"] = self.clean_extras(source.get("documents", []), command=False)
+        for field in MEDIA_PATH_FIELDS:
+            if game.get(field):
+                game[field] = str(approved_media_path(game[field], must_exist=False))
+        for document in game["documents"]:
+            document["path"] = str(approved_media_path(document["path"], must_exist=False))
         save_paths = source.get("save_paths", [])
         if not isinstance(save_paths, list):
             raise ValueError("Save paths must be a list.")
@@ -219,7 +223,10 @@ class LibraryHandlers:
         screenshots = source.get("screenshots", [])
         if not isinstance(screenshots, list):
             raise ValueError("Screenshots must be a list.")
-        game["screenshots"] = [str(path).strip() for path in screenshots if str(path).strip()][:100]
+        game["screenshots"] = [
+            str(approved_media_path(str(path).strip(), must_exist=False))
+            for path in screenshots[:100] if str(path).strip()
+        ]
         if "alternate_names" in source:
             names = source.get("alternate_names", [])
             if isinstance(names, str):
@@ -274,7 +281,9 @@ class LibraryHandlers:
         if delete_media:
             for path in media_paths:
                 try:
-                    remove_file_if_safe(Path(path), DATA.parent)
+                    target = approved_media_path(path, must_exist=True)
+                    if target.is_file():
+                        target.unlink()
                 except (OSError, ValueError):
                     pass
             bump_media_epoch()
@@ -399,5 +408,3 @@ class LibraryHandlers:
             return removed
         _, removed = transact_state(mutate)
         self.send_json(200, {"removed": removed})
-
-

@@ -8,7 +8,7 @@ release can answer "what is inside this artifact" with zero new runtime
 dependencies.
 
 Usage:
-  python3 scripts/gen_sbom.py --version 1.0.1 --out sbom.json
+  python3 scripts/gen_sbom.py --version 1.0.1 --appdir build/OpenBox.AppDir --out sbom.json
 """
 
 import argparse
@@ -38,7 +38,39 @@ def runtime_modules():
     return [line.strip() for line in lines if line.strip() and not line.lstrip().startswith("#")]
 
 
-def build_sbom(version, include_stdlib=True):
+def artifact_components(appdir, version):
+    root = Path(appdir).expanduser()
+    if not root.is_dir():
+        raise ValueError(f"AppDir does not exist: {root}")
+    components = []
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            components.append({
+                "type": "file",
+                "bom-ref": f"openbox-artifact-{hashlib.sha256(relative.encode()).hexdigest()}",
+                "name": relative,
+                "version": version,
+                "properties": [
+                    {"name": "openbox:artifact-path", "value": relative},
+                    {"name": "openbox:symlink-target", "value": str(path.readlink())},
+                ],
+            })
+        elif path.is_file():
+            components.append({
+                "type": "file",
+                "bom-ref": f"openbox-artifact-{hashlib.sha256(relative.encode()).hexdigest()}",
+                "name": relative,
+                "version": version,
+                "hashes": [{"alg": "SHA-256", "content": _hash(path)}],
+                "properties": [
+                    {"name": "openbox:artifact-path", "value": relative},
+                ],
+            })
+    return components
+
+
+def build_sbom(version, include_stdlib=True, appdir=None):
     now = datetime.now(timezone.utc).isoformat()
     components = []
 
@@ -97,6 +129,9 @@ def build_sbom(version, include_stdlib=True):
             ],
         })
 
+    if appdir is not None:
+        components.extend(artifact_components(appdir, version))
+
     return {
         "bomFormat": "CycloneDX",
         "specVersion": "1.4",
@@ -120,8 +155,9 @@ def main():
     parser.add_argument("--version", required=True)
     parser.add_argument("--out", default="sbom.json")
     parser.add_argument("--no-stdlib", action="store_true")
+    parser.add_argument("--appdir", type=Path, help="include every file and symlink from a built AppDir")
     args = parser.parse_args()
-    sbom = build_sbom(args.version, include_stdlib=not args.no_stdlib)
+    sbom = build_sbom(args.version, include_stdlib=not args.no_stdlib, appdir=args.appdir)
     Path(args.out).write_text(json.dumps(sbom, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {args.out} ({len(sbom['components'])} components)")
 

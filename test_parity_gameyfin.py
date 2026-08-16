@@ -3,6 +3,7 @@
 
 import io
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,7 +16,9 @@ from parity_gameyfin import (
     catalog_gameyfin,
     game_from_gameyfin,
     install_gameyfin_game,
+    normalize_base_url,
     uninstall_gameyfin_game,
+    validate_gameyfin_id,
 )
 from parity_save_tools import run_ludusavi, save_tool_status
 from parity_storefront import catalog_entries_to_games, storefront_catalog
@@ -38,12 +41,57 @@ class FakeResponse(io.BytesIO):
 
 
 class GameyfinTests(unittest.TestCase):
+    def test_ids_are_decimal_and_bounded(self):
+        self.assertEqual(validate_gameyfin_id("00042"), "42")
+        for value in ("", "-1", "1/../2", "abc", "9" * 21):
+            with self.assertRaises(GameyfinError):
+                validate_gameyfin_id(value)
+
+    def test_non_loopback_gameyfin_requires_https(self):
+        with self.assertRaises(GameyfinError):
+            normalize_base_url("http://gameyfin.example")
+        self.assertEqual(normalize_base_url("http://127.0.0.1:8080"), "http://127.0.0.1:8080")
+        with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_HTTP_GAMEYFIN": "1"}):
+            self.assertEqual(normalize_base_url("http://gameyfin.example"), "http://gameyfin.example")
+
+    def test_redirect_and_absolute_request_must_stay_on_origin(self):
+        class RedirectedResponse(FakeResponse):
+            def geturl(self):
+                return "https://attacker.example/payload"
+
+        class Opener:
+            def open(self, request, timeout=0):
+                return RedirectedResponse(b"{}")
+
+        client = GameyfinClient("https://gameyfin.example", opener=Opener())
+        with self.assertRaises(GameyfinError):
+            client.request("GET", "/connect/GameEndpoint/getAll")
+        with self.assertRaises(GameyfinError):
+            client.request("GET", "https://attacker.example/steal")
+
+    def test_download_checksum_mismatch_does_not_publish_file(self):
+        payload = b"trusted bytes"
+
+        class Opener:
+            def open(self, request, timeout=0):
+                return FakeResponse(payload, {
+                    "Content-Type": "application/octet-stream",
+                    "Content-Length": str(len(payload)),
+                    "X-Checksum-SHA256": "0" * 64,
+                })
+
+        with tempfile.TemporaryDirectory() as directory:
+            client = GameyfinClient("https://gameyfin.example", opener=Opener())
+            with self.assertRaises(GameyfinError):
+                client.download_game("42", DEFAULT_PROVIDER, directory)
+            self.assertEqual(list(Path(directory).iterdir()), [])
+
     def test_raw_request_returns_open_response(self):
         class Opener:
             def open(self, request, timeout=0):
                 return FakeResponse(b"{\"ok\":true}")
 
-        client = GameyfinClient("http://gameyfin.local", opener=Opener())
+        client = GameyfinClient("https://gameyfin.local", opener=Opener())
         response = client.request("POST", "/login", data=b"user=x", raw=True)
         self.assertFalse(response.closed, "raw responses must reach the caller open")
         with response:
@@ -64,7 +112,7 @@ class GameyfinTests(unittest.TestCase):
     def test_catalog_and_install_uninstall(self):
         with tempfile.TemporaryDirectory() as directory:
             settings = {
-                "gameyfin_url": "http://gameyfin.local",
+                "gameyfin_url": "https://gameyfin.local",
                 "gameyfin_username": "testuser",
                 "gameyfin_password": "secret",
                 "gameyfin_install_dir": directory,
@@ -98,14 +146,14 @@ class GameyfinTests(unittest.TestCase):
             installed = install_gameyfin_game(settings, 7, client=Client())
             self.assertTrue(installed["store_installed"])
             self.assertTrue(Path(installed["path"]).exists())
-            result = uninstall_gameyfin_game(installed)
+            result = uninstall_gameyfin_game(installed, directory)
             self.assertFalse(installed["store_installed"])
             self.assertTrue(result["removed"])
 
     def test_list_providers_ignores_non_dicts(self):
         class Client(GameyfinClient):
             def __init__(self):
-                super().__init__("http://gameyfin.local")
+                super().__init__("https://gameyfin.local")
                 self._logged_in = True
 
             def connect(self, endpoint, method, payload=None):
@@ -119,7 +167,7 @@ class GameyfinTests(unittest.TestCase):
     def test_install_keeps_existing_files_on_download_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             settings = {
-                "gameyfin_url": "http://gameyfin.local",
+                "gameyfin_url": "https://gameyfin.local",
                 "gameyfin_install_dir": directory,
                 "gameyfin_provider": DEFAULT_PROVIDER,
             }

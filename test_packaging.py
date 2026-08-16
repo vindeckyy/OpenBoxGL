@@ -4,6 +4,8 @@
 import os
 import ast
 import subprocess
+import tempfile
+import hashlib
 from pathlib import Path
 
 
@@ -119,6 +121,27 @@ def test_runtime_import_closure():
     print("  Runtime import closure: ok")
 
 
+def test_sbom_artifact_inventory():
+    from scripts.gen_sbom import build_sbom
+
+    with tempfile.TemporaryDirectory() as directory:
+        appdir = Path(directory) / "OpenBox.AppDir"
+        (appdir / "usr" / "bin").mkdir(parents=True)
+        artifact = appdir / "usr" / "bin" / "native_host"
+        artifact.write_bytes(b"native host")
+        (appdir / "current").symlink_to("usr/bin/native_host")
+        components = build_sbom("1.1.0", include_stdlib=False, appdir=appdir)["components"]
+        by_name = {component["name"]: component for component in components}
+        assert by_name["usr/bin/native_host"]["hashes"][0]["content"] == hashlib.sha256(b"native host").hexdigest()
+        assert by_name["current"]["properties"][-1]["value"] == "usr/bin/native_host"
+        try:
+            build_sbom("1.1.0", appdir=appdir / "missing")
+            raise AssertionError("missing AppDir should fail")
+        except ValueError:
+            pass
+    print("  SBOM AppDir inventory: ok")
+
+
 def test_flatpak_manifest():
     manifest = ROOT / "io.openbox.GameLauncher.yml"
     assert manifest.exists(), "missing Flatpak manifest"
@@ -129,6 +152,7 @@ def test_flatpak_manifest():
     assert "openbox.sh" in content
     runtime_modules = (ROOT / "runtime_modules.txt").read_text()
     assert "openbox_logging.py" in runtime_modules
+    assert "openbox-release.pub" in runtime_modules
     assert "runtime_modules.txt" in content
     assert "openbox.svg" in content
     print("  Flatpak manifest: ok")
@@ -195,6 +219,10 @@ def test_update_verification():
     assert version_tuple("0.1.0") < version_tuple("0.2.0")
     assert version_tuple("1.0.0") > version_tuple("0.9.9")
     assert version_tuple("1.2.3") == version_tuple("1.2.3")
+    installer = (ROOT / "scripts" / "install.sh").read_text()
+    assert "RELEASE_KEY_SHA256" in installer
+    assert "openssl pkeyutl -verify" in installer
+    assert "SIG_ASSET" in installer
     print("  Update version logic: ok")
 
 
@@ -203,7 +231,58 @@ def test_appimage_update_info():
     content = build_script.read_text()
     assert "OPENBOX_UPDATE_INFORMATION" in content
     assert "gh-releases-zsync|vindeckyy|OpenBoxGL|latest" in content
+    assert "OPENBOX_APPDIR" in content
+    assert "tool_sha256" in content
     print("  AppImage update info: ok")
+
+
+def test_appimage_library_scope():
+    build_script = (ROOT / "build_appimage.sh").read_text()
+    app_run = build_script.split('install -m 755 /dev/stdin "$appdir/AppRun" <<\'EOF\'', 1)[1].split("\nEOF\n", 1)[0]
+    native_launcher = (ROOT / "openbox-native.sh").read_text()
+    assert "OPENBOX_BUNDLED_LIB_PATH" in app_run
+    assert "unset LD_LIBRARY_PATH" in app_run
+    assert "export LD_LIBRARY_PATH" not in app_run
+    assert "env LD_LIBRARY_PATH=\"$OPENBOX_BUNDLED_LIB_PATH\" \"$HOST_BIN\"" in native_launcher
+    assert "env LD_LIBRARY_PATH=\"$OPENBOX_BUNDLED_LIB_PATH\" \"${OPENBOX_PYTHON:-python3}\"" in native_launcher
+    assert "export LD_LIBRARY_PATH" not in native_launcher
+    # The shell launcher itself runs without the bundled library path. Only
+    # the native binary receives it, so host shell commands cannot resolve
+    # AppImage-provided readline or ncurses symbols.
+    assert app_run.index("unset LD_LIBRARY_PATH") < app_run.index("openbox-native.sh")
+
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        share = root / "usr" / "share" / "openbox"
+        (root / "usr" / "bin").mkdir(parents=True)
+        share.mkdir(parents=True)
+        app_run_path = root / "AppRun"
+        app_run_path.write_text("#!/bin/bash\n" + app_run + "\n")
+        app_run_path.chmod(0o755)
+        (share / "openbox-native.sh").write_text((ROOT / "openbox-native.sh").read_text())
+        (share / "openbox-native.sh").chmod(0o755)
+        marker = root / "native-env"
+        native = share / "native_host"
+        native.write_text("#!/bin/sh\nprintf '%s' \"$LD_LIBRARY_PATH\" > \"$OPENBOX_TEST_ENV\"\n")
+        native.chmod(0o755)
+        env = os.environ.copy()
+        env.update({
+            "HOME": str(root),
+            "OPENBOX_DATA_DIR": str(root / "data"),
+            "OPENBOX_TEST_ENV": str(marker),
+            "LD_LIBRARY_PATH": "/host/incompatible/readline",
+        })
+        subprocess.run([str(app_run_path)], env=env, check=True, timeout=10)
+        assert marker.read_text() == str(root / "usr" / "lib")
+
+        marker.unlink()
+        native.unlink()
+        python = root / "usr" / "bin" / "python3"
+        python.write_text("#!/bin/sh\nprintf '%s' \"$LD_LIBRARY_PATH\" > \"$OPENBOX_TEST_ENV\"\n")
+        python.chmod(0o755)
+        subprocess.run([str(app_run_path)], env=env, check=True, timeout=10)
+        assert marker.read_text() == str(root / "usr" / "lib")
+    print("  AppImage library scope: ok")
 
 
 def test_release_appimage_workflow():
@@ -212,11 +291,17 @@ def test_release_appimage_workflow():
     content = workflow.read_text()
     assert "tags:" in content and '"v*"' in content
     assert "./build_appimage.sh" in content
-    assert "target_commitish: master" in content
+    assert "target_commitish: ${{ github.sha }}" in content
     assert "OpenBox-x86_64.AppImage" in content
     assert "OpenBox-x86_64.AppImage.zsync" in content
     assert "OpenBox-x86_64.AppImage.sha256" in content
     assert "sha256sum OpenBox-x86_64.AppImage" in content
+    assert "OpenBox-x86_64.AppImage.sig" in content
+    assert "openbox-release.pub" in content
+    assert "OPENBOX_SIGNING_KEY is required" in content
+    assert "persist-credentials: false" in content
+    assert "actions/upload-artifact@" in content
+    assert "overwrite_files: false" in content
     assert "softprops/action-gh-release@" in content
     assert "contents: write" in content
     print("  Release AppImage workflow: ok")
@@ -231,10 +316,12 @@ def main():
     test_makefile_install()
     test_runtime_manifest()
     test_runtime_import_closure()
+    test_sbom_artifact_inventory()
     test_appdir_structure()
     test_version_consistency()
     test_update_verification()
     test_appimage_update_info()
+    test_appimage_library_scope()
     test_release_appimage_workflow()
     print("packaging self-test: ok")
 

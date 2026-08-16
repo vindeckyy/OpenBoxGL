@@ -117,6 +117,7 @@ class WebhookTests(unittest.TestCase):
         dispatcher = WebhookDispatcher(
             on_result=lambda *args: results.append(args),
             opener=opener,
+            resolver=lambda host: ["93.184.216.34"],
             clock=clock,
             max_workers=1,
         )
@@ -140,6 +141,83 @@ class WebhookTests(unittest.TestCase):
         # The injected clock must have been read around the retry sleep.
         self.assertTrue(calls, "injected clock must be exercised")
         self.assertTrue(sleep.called, "retry backoff must sleep")
+
+    def test_private_and_mixed_dns_answers_are_rejected(self):
+        config = {"url": "https://webhook.example", "events": [EVENT_TYPES[0]]}
+        for address in ("10.0.0.1", "172.16.0.1", "192.168.1.1", "127.0.0.1", "fd00::1"):
+            with self.subTest(address=address), self.assertRaises(ValueError):
+                validate_webhook(config, resolver=lambda host, address=address: [address])
+        with self.assertRaises(ValueError):
+            validate_webhook(
+                config,
+                resolver=lambda host: ["93.184.216.34", "10.0.0.1"],
+            )
+
+    def test_redirect_response_is_terminal_and_not_followed(self):
+        calls = []
+
+        def opener(request, timeout=0):
+            calls.append(request.full_url)
+            return type("Response", (), {
+                "status": 302,
+                "headers": {},
+                "__enter__": lambda self: self,
+                "__exit__": lambda self, *_: False,
+                "read": lambda self, *_: b"",
+            })()
+
+        result = automation.test_ping(
+            {"url": "https://webhook.example/hook", "events": [EVENT_TYPES[0]]},
+            resolver=lambda host: ["93.184.216.34"],
+            opener=opener,
+        )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], 302)
+        self.assertEqual(len(calls), 1)
+
+    def test_success_status_range_does_not_record_error(self):
+        results = []
+
+        def opener(request, timeout=0):
+            return type("Response", (), {
+                "status": 201,
+                "headers": {},
+                "__enter__": lambda self: self,
+                "__exit__": lambda self, *_: False,
+            })()
+
+        dispatcher = automation.WebhookDispatcher(
+            on_result=lambda *args: results.append(args),
+            opener=opener,
+            resolver=lambda host: ["93.184.216.34"],
+            max_workers=1,
+        )
+        dispatcher.enqueue(
+            [{"id": "w1", "url": "https://webhook.example/hook", "events": ["library.changed"], "enabled": True}],
+            build_event("library.changed", {"action": "add"}),
+        )
+        dispatcher.start()
+        for _ in range(200):
+            if results:
+                break
+            time.sleep(0.01)
+        dispatcher.shutdown(wait_seconds=1)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0][2:4], (201, ""))
+
+    def test_queue_overflow_does_not_partially_enqueue_matching_configs(self):
+        from automation import WebhookDispatcher
+
+        dispatcher = WebhookDispatcher(on_result=lambda *args: None, max_pending=1)
+        configs = [
+            {"id": "w1", "url": "https://webhook.example/1", "events": ["library.changed"], "enabled": True},
+            {"id": "w2", "url": "https://webhook.example/2", "events": ["library.changed"], "enabled": True},
+        ]
+        try:
+            self.assertFalse(dispatcher.enqueue(configs, build_event("library.changed", {"action": "add"})))
+            self.assertEqual(dispatcher._queue.qsize(), 0)
+        finally:
+            dispatcher.shutdown(wait_seconds=0)
 
     def test_event_allowlist_and_signature(self):
         event = build_event("session.started", {"name": "Alpha", "secret": "must-drop"})

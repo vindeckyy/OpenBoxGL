@@ -19,8 +19,8 @@ def main():
             game = {
                 "name": "Demo",
                 "path": "/tmp/demo.rom",
-                "cover": f"{directory}/cover.jpg",
-                "screenshots": [f"{directory}/shot.png"],
+                "cover": f"{directory}/media/cover.jpg",
+                "screenshots": [f"{directory}/media/shot.png"],
                 "save_paths": [],
                 "playtime_seconds": 0,
                 "progress": "",
@@ -61,7 +61,8 @@ def main():
             state = __import__("openbox").load_state()
             assert state["history"] == []
 
-            cover = Path(directory) / "cover.jpg"
+            cover = Path(directory) / "media" / "cover.jpg"
+            cover.parent.mkdir(parents=True, exist_ok=True)
             cover.write_text("cover")
             handler = object.__new__(Handler)
             handler.send_json = mock.Mock()

@@ -64,7 +64,7 @@
 3. **Import games.** Click **Import Folder** and point at a directory of `.sh` files, or **Import Steam** to scan your installed games.
 4. **Press PLAY.** Sessions, play time, and history are tracked automatically.
 
-For ROMs, emulators, Big Box, RetroAchievements, and everything else — see [Getting started](https://openboxgl.github.io/getting-started/) and [Installation](https://openboxgl.github.io/install/).
+For ROMs, emulators, Big Box, RetroAchievements, and everything else, see [Getting started](https://openboxgl.github.io/getting-started/) and [Installation](https://openboxgl.github.io/install/).
 
 ---
 
@@ -196,28 +196,33 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 </p>
 
 <p align="center">
-  <sub>Screenshots use real LaunchBox metadata and cover art. Regenerate with <code>python3 scripts/capture_readme_screenshots.py</code> (after <code>cd scripts && npm install</code> for puppeteer).</sub>
+  <sub>Screenshots use real LaunchBox metadata and cover art. Regenerate with <code>python3 scripts/capture_readme_screenshots.py</code> (requires Node.js 22.12+; run <code>cd scripts && npm ci</code> first for Puppeteer).</sub>
 </p>
 
 ---
 
 ## Installation
 
-### One-liner (recommended)
+### Versioned release installer
 
-Downloads the latest AppImage from GitHub Releases, verifies its SHA-256 checksum, and installs it to `~/.local/bin`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/master/scripts/install.sh | bash
-```
-
-To also launch OpenBox right after installing:
+Download the installer from a specific signed release, inspect it, then run it. The installer verifies the release public-key pin, SHA-256 checksum, and Ed25519 signature before installing to `~/.local/bin`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/master/scripts/install.sh | bash -s -- --run
+VERSION=1.1.0
+curl --proto '=https' --tlsv1.2 --fail --location \
+  --output install.sh \
+  "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install.sh"
+less install.sh
+OPENBOX_RELEASE_TAG="v${VERSION}" bash install.sh
 ```
 
-The script resolves the latest release automatically, checks the AppImage against its published SHA-256 before installing, and adds a friendly `openbox` launcher. Install to a different directory with `OPENBOX_INSTALL_DIR` (e.g. `OPENBOX_INSTALL_DIR="$HOME/Applications"`).
+To launch OpenBox right after installing, pass `--run` after the tag-pinned invocation:
+
+```bash
+OPENBOX_RELEASE_TAG="v${VERSION}" bash install.sh --run
+```
+
+Omit `OPENBOX_RELEASE_TAG` only when you intentionally want the latest stable release. Install to a different directory with `OPENBOX_INSTALL_DIR` (for example, `OPENBOX_INSTALL_DIR="$HOME/Applications"`).
 
 ### AppImage (manual)
 

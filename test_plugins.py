@@ -10,7 +10,8 @@ from plugins import install_plugin, list_plugins, remove_plugin, run_plugins, se
 
 
 def test():
-    assert REMOTE_CATALOG == "https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/master/plugins/catalog.json"
+    assert "/master/" not in REMOTE_CATALOG
+    assert len(REMOTE_CATALOG.split("/")[-3]) == 40
     assert any(entry.get("id") == "openbox.library-stats" and entry.get("local_only") for entry in load_local_catalog())
     # A remote catalog entry without a valid sha256 must be refused before any download.
     import tempfile
@@ -18,6 +19,8 @@ def test():
         for bad_entry in (
             {"id":"no-checksum", "url":"https://example.invalid/plugin.zip"},
             {"id":"bad-checksum", "url":"https://example.invalid/plugin.zip", "sha256":"deadbeef"},
+            {"id":"insecure", "url":"http://example.invalid/plugin.zip", "sha256":"0" * 64},
+            {"id":"unsafe/../path", "url":"https://example.invalid/plugin.zip", "sha256":"0" * 64},
         ):
             try:
                 download_plugin_package(bad_entry, directory)

@@ -11,6 +11,7 @@ import argparse
 import base64
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -112,13 +113,26 @@ def main():
     if payload.get("algorithm") != "ed25519":
         print(f"unsupported algorithm: {payload.get('algorithm')}", file=sys.stderr)
         return 1
+    if payload.get("digest_algorithm") != "sha256":
+        print("unsupported digest algorithm", file=sys.stderr)
+        return 1
 
     artifact_digest = digest_file(Path(args.artifact))
+    if not re.fullmatch(r"[0-9a-f]{64}", str(payload.get("digest", ""))):
+        print("invalid artifact digest", file=sys.stderr)
+        return 1
     if payload.get("digest") != artifact_digest.hex():
         print("digest mismatch: the artifact changed after signing", file=sys.stderr)
         return 1
 
-    signature = base64.b64decode(payload["signature"])
+    try:
+        signature = base64.b64decode(str(payload["signature"]), validate=True)
+    except (KeyError, TypeError, ValueError):
+        print("invalid signature encoding", file=sys.stderr)
+        return 1
+    if len(signature) != 64:
+        print("invalid signature length", file=sys.stderr)
+        return 1
     if not verify_ed25519(public_bytes, signature, artifact_digest):
         print("signature verification failed", file=sys.stderr)
         return 1

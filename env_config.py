@@ -1,7 +1,43 @@
 """Load optional .env files for local credentials without extra dependencies."""
 
 import os
+import stat
 from pathlib import Path
+
+
+ENV_FILE_ENV = "OPENBOX_ENV_FILE"
+MAX_ENV_FILE_BYTES = 1024 * 1024
+ENV_KEYS = frozenset({
+    "GITHUB_TOKEN", "GH_TOKEN", "OPENBOX_GITHUB_TOKEN",
+    "IGDB_CLIENT_ID", "IGDB_CLIENT_SECRET",
+    "RETROACHIEVEMENTS_USERNAME", "RA_USERNAME", "OPENBOX_RA_USERNAME",
+    "RETROACHIEVEMENTS_API_KEY", "RA_API_KEY", "RETROACHIEVEMENTS_KEY",
+    "OPENBOX_RA_API_KEY",
+    "EMUMOVIES_USERNAME", "OPENBOX_EMUMOVIES_USERNAME",
+    "EMUMOVIES_PASSWORD", "OPENBOX_EMUMOVIES_PASSWORD",
+    "STRIPE_SECRET_KEY",
+    "OPENBOX_ALLOW_HTTP_WEBHOOKS", "OPENBOX_ALLOW_HTTP_GAMEYFIN",
+})
+
+
+def _secure_env_file(path):
+    """Return whether *path* is an owner-only regular env file.
+
+    Environment files can contain credentials and are read during startup.
+    Keep discovery limited to files owned by this user and reject symlinks
+    before opening them; ``load_dotenv`` repeats the checks on the opened FD
+    to close the replacement race between discovery and read.
+    """
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return False
+    return (
+        stat.S_ISREG(info.st_mode)
+        and info.st_uid == os.geteuid()
+        and not info.st_mode & 0o077
+        and info.st_size <= MAX_ENV_FILE_BYTES
+    )
 
 
 def _parse_env_line(line):
@@ -26,25 +62,46 @@ def _parse_env_line(line):
     if comment_at != -1:
         value = value[:comment_at].rstrip()
     value = value.strip().strip('"').strip("'")
-    if not key:
+    if not key or not key.replace("_", "a").isalnum() or key[0].isdigit() or "\x00" in value:
         return None
     return key, value
 
 
 def load_dotenv(path):
-    path = Path(path)
-    if not path.is_file():
+    path = Path(path).expanduser()
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
         return {}
     try:
-        lines = path.read_text().splitlines()
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.geteuid()
+            or info.st_mode & 0o077
+            or info.st_size > MAX_ENV_FILE_BYTES
+        ):
+            os.close(descriptor)
+            return {}
+        with os.fdopen(descriptor, "rb") as source:
+            descriptor = -1
+            contents = source.read(MAX_ENV_FILE_BYTES + 1)
+        if len(contents) > MAX_ENV_FILE_BYTES:
+            return {}
+        lines = contents.decode("utf-8").splitlines()
     except (OSError, UnicodeDecodeError):
         # Optional .env files must never abort startup; skip anything unreadable.
+        if descriptor >= 0:
+            os.close(descriptor)
         return {}
     values = {}
     for line in lines:
         parsed = _parse_env_line(line)
         if parsed:
             key, value = parsed
+            if key not in ENV_KEYS:
+                continue
             values[key] = value
             if key not in os.environ:
                 os.environ[key] = value
@@ -53,21 +110,26 @@ def load_dotenv(path):
 
 def discover_env_files(*extra_roots):
     roots = []
+    explicit = os.environ.get(ENV_FILE_ENV, "").strip()
+    files = []
+    if explicit:
+        candidate = Path(explicit).expanduser()
+        if _secure_env_file(candidate):
+            files.append(candidate)
     for root in extra_roots:
         if root:
             roots.append(Path(root).expanduser())
     roots.extend([
-        Path.cwd(),
-        Path(__file__).resolve().parent,
         Path.home(),
         Path.home() / ".config/openbox-game-launcher",
     ])
     seen = set()
-    files = []
+    for path in files:
+        seen.add(str(path))
     for root in roots:
         path = root / ".env"
         key = str(path)
-        if key not in seen and path.is_file():
+        if key not in seen and _secure_env_file(path):
             seen.add(key)
             files.append(path)
     return files
