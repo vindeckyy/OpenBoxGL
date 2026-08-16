@@ -15,6 +15,12 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="1.3.0" date="2026-08-16">
+      <description>
+        <p>Hardening release. Plugins use a bubblewrap sandbox when available, with no network or home-directory access, and skip execution by default when the sandbox cannot be created. The test gate now cleans up nested gamescope process trees.</p>
+        <p>Backend maintenance splits cloud sync, save and backup restore, launch, settings, metadata, import, archive, webhook, and job logic into focused helpers. Source setup documentation now covers tokenized UI access and explicit environment-file locations.</p>
+      </description>
+    </release>
     <release version="1.2.0" date="2026-08-15">
       <description>
         <p>Security release. Release artifacts now require Ed25519 signatures, the workflow separates build, attestation, and publication permissions, build inputs are pinned, and plugin catalogs and downloaded payloads receive stronger integrity checks.</p>

@@ -1,21 +1,14 @@
-### Fixed
+### Hardened
 
-- SteamOS AppImages no longer export bundled libraries into the host shell, fixing startup failures where `/bin/bash` could not resolve `rl_print_keybinding`.
-- Webhook delivery rejects non-public destinations, pins validated DNS results, disables proxies and redirects, and bounds response reads.
-- Library and save backups use private atomic files, reject unsafe archive entries, and protect restore paths against symlinks and archive replacement races.
-- The native bridge now accepts messages only from the exact OpenBox scheme, host, and port.
-- Gameyfin validates IDs before path construction, keeps installation and removal inside the configured root, requires HTTPS, and verifies supplied checksums.
-- 7z extraction rejects link entries, snapshots the archive before validation, and validates the staged tree before promotion.
-- Media and document endpoints enforce approved roots, including symlinked parent checks.
-- Environment loading no longer searches the current directory and accepts only owner-controlled files and supported keys.
-- Job bookkeeping, executor queues, SSE subscribers, and per-client event queues now have explicit limits and cleanup behavior.
+- Plugin execution now uses bubblewrap with isolated namespaces, no network access, and temporary mounts for home, temporary, runtime, and removable-media paths when the host supports it. If the sandbox cannot be created, enabled plugins are skipped by default; `OPENBOX_ALLOW_UNSANDBOXED_PLUGINS=1` is an explicit opt-in for trusted local plugins.
+- Gamescope regression tests now launch in their own process groups and terminate the full group on timeout, preventing nested gamescope processes from surviving the test gate.
 
 ### Changed
 
-- Release publication now requires an Ed25519 signature and a pinned public key. Missing signing material fails the release instead of publishing checksum-only artifacts.
-- The release workflow separates build, provenance attestation, and publication permissions, validates the tag against the application version, and refuses to overwrite existing assets.
-- AppImageTool, Python development tools, browser tooling, and CI dependencies are pinned; the generated SBOM inventories the completed AppImage.
-- Remote plugin catalogs require a pinned catalog digest, HTTPS package URLs, and package checksums.
-- Puppeteer was upgraded to 25.7.0; `npm audit` reports zero vulnerabilities.
+- Cloud sync, save and backup restore, launch handling, settings validation, metadata application, Lutris import, 7z validation, webhook validation, filter matching, and game resolution were split into focused helpers, keeping the security-sensitive paths easier to audit and test.
+- The background job manager now has dedicated coverage for retries, cancellation, queue and name limits, bounded results, shutdown, and completed-future cleanup.
+- Dead backend code and obsolete browser, screenshot, migration, and performance-capture scripts were removed.
+- From-source setup documentation now explains the tokenized UI URL and the supported `OPENBOX_ENV_FILE`, data-directory, home-directory, and user-config locations.
+- CI and release tooling now use the refreshed GitHub Actions and JavaScript dependencies, with CodeQL action components kept on one version and grouped Dependabot updates for future changes.
 
-The full changelog is available at https://github.com/vindeckyy/OpenBoxGL/compare/v1.1.0...v1.2.0.
+The full changelog is available at https://github.com/vindeckyy/OpenBoxGL/compare/v1.2.0...v1.3.0.
