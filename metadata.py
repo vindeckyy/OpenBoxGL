@@ -268,16 +268,23 @@ def find_archive_manual(game, media_root, opener=urlopen):
     return str(destination)
 
 
-def apply_game_metadata(game, database_path, database_id, media_types, media_root, overwrite=False, opener=urlopen, region_priority=None):
-    from parity_media import REGION_PRIORITY_DEFAULT, sort_images_by_region
+def _load_metadata_record(database_path, database_id):
+    """Open the LBDB and fetch the game row; raises if the game is missing.
 
+    Returns (database, record dict); the database stays open so the caller can
+    load images on the same connection, matching the original close timing.
+    """
     database = sqlite3.connect(database_path)
     database.row_factory = sqlite3.Row
     record = database.execute("SELECT * FROM games WHERE database_id = ?", (int(database_id),)).fetchone()
     if not record:
         database.close()
         raise ValueError("Metadata game not found.")
-    record = dict(record)
+    return database, dict(record)
+
+
+def _apply_metadata_fields(game, record, database_id, overwrite):
+    """Copy metadata fields, ESRB rating, max players, and the LBDB id onto game."""
     fields = {
         "name": "name", "platform": "platform", "year": "release_date", "developer": "developer",
         "publisher": "publisher", "genre": "genre", "description": "overview", "series": "series",
@@ -291,44 +298,68 @@ def apply_game_metadata(game, database_path, database_id, media_types, media_roo
     if record.get("max_players") and (overwrite or not game.get("max_players")):
         game["max_players"] = record["max_players"]
     game["launchbox_db_id"] = str(database_id)
+
+
+def _load_media_images(database, database_id, region_priority):
+    """Load the game's images, region-sorted, and close the database."""
+    from parity_media import REGION_PRIORITY_DEFAULT, sort_images_by_region
+
     images = sort_images_by_region(
         [dict(row) for row in database.execute("SELECT * FROM images WHERE database_id = ?", (int(database_id),))],
         region_priority or REGION_PRIORITY_DEFAULT,
     )
     database.close()
-    root = Path(media_root) / str(database_id)
+    return images
+
+
+def _group_images_by_type(images):
+    """Bucket images by their LBDB type string."""
     images_by_type = {}
     for item in images:
         images_by_type.setdefault(item["type"], []).append(item)
+    return images_by_type
+
+
+def _download_media_for_type(game, media_type, images_by_type, root, overwrite, opener):
+    """Download one media field from the LBDB image pool (or the game archive)."""
+    if media_type == "screenshots":
+        if overwrite or not game.get("screenshots"):
+            candidates = images_by_type.get("Screenshot - Gameplay", [])
+            downloaded = [
+                download_image(item["filename"], root / f"screenshot-{index}{Path(item['filename']).suffix}", opener)
+                for index, item in enumerate(candidates[:12], 1)
+            ]
+            if downloaded:
+                game["screenshots"] = downloaded
+        return
+    if media_type == "manual":
+        # LBDB zips ship no manuals; fall back to one inside the game's own archive.
+        if overwrite or not game.get("manual"):
+            candidate = find_archive_manual(game, root, opener)
+            if candidate:
+                game["manual"] = candidate
+            else:
+                game["_media_notes"] = list(game.get("_media_notes") or []) + ["manual: no manual in this archive"]
+        return
+    if not (overwrite or not game.get(media_type)):
+        return
+    for lbdb_type in MEDIA_TYPE_MAP.get(media_type, ()):
+        candidates = images_by_type.get(lbdb_type, [])
+        if not candidates:
+            continue
+        image = candidates[0]
+        game[media_type] = download_image(
+            image["filename"], root / f"{media_type}{Path(image['filename']).suffix}", opener
+        )
+        break
+
+
+def apply_game_metadata(game, database_path, database_id, media_types, media_root, overwrite=False, opener=urlopen, region_priority=None):
+    database, record = _load_metadata_record(database_path, database_id)
+    _apply_metadata_fields(game, record, database_id, overwrite)
+    images = _load_media_images(database, database_id, region_priority)
+    images_by_type = _group_images_by_type(images)
+    root = Path(media_root) / str(database_id)
     for media_type in media_types:
-        if media_type == "screenshots":
-            if overwrite or not game.get("screenshots"):
-                candidates = images_by_type.get("Screenshot - Gameplay", [])
-                downloaded = [
-                    download_image(item["filename"], root / f"screenshot-{index}{Path(item['filename']).suffix}", opener)
-                    for index, item in enumerate(candidates[:12], 1)
-                ]
-                if downloaded:
-                    game["screenshots"] = downloaded
-            continue
-        if media_type == "manual":
-            # LBDB zips ship no manuals; fall back to one inside the game's own archive.
-            if overwrite or not game.get("manual"):
-                candidate = find_archive_manual(game, root, opener)
-                if candidate:
-                    game["manual"] = candidate
-                else:
-                    game["_media_notes"] = list(game.get("_media_notes") or []) + ["manual: no manual in this archive"]
-            continue
-        if not (overwrite or not game.get(media_type)):
-            continue
-        for lbdb_type in MEDIA_TYPE_MAP.get(media_type, ()):
-            candidates = images_by_type.get(lbdb_type, [])
-            if not candidates:
-                continue
-            image = candidates[0]
-            game[media_type] = download_image(
-                image["filename"], root / f"{media_type}{Path(image['filename']).suffix}", opener
-            )
-            break
+        _download_media_for_type(game, media_type, images_by_type, root, overwrite, opener)
     return game
