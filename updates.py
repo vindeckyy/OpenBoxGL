@@ -225,8 +225,8 @@ def _release_public_key():
 def verify_release_signature(update, artifact_digest, opener=urlopen):
     """Verify the release .sig against the committed public key.
 
-    Updates are intentionally unavailable until a real maintainer key replaces
-    the repository placeholder. Checksum-only releases are never installable.
+    The known bootstrap placeholder and checksum-only releases are never
+    installable.
     """
     sig_url = str(update.get("sig_url", "")).strip()
     if not sig_url:

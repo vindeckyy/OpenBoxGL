@@ -88,11 +88,13 @@ def main():
         raise AssertionError("unsigned release should fail closed")
     except ValueError as error:
         assert "signature" in str(error).casefold()
-    try:
-        verify_release_signature(update, digest, opener)
-        raise AssertionError("placeholder release key should fail closed")
-    except ValueError as error:
-        assert "placeholder" in str(error).casefold()
+    from updates import PLACEHOLDER_PUBLIC_KEY
+    with mock.patch("updates._release_public_key", return_value=PLACEHOLDER_PUBLIC_KEY):
+        try:
+            verify_release_signature(update, digest, opener)
+            raise AssertionError("placeholder release key should fail closed")
+        except ValueError as error:
+            assert "placeholder" in str(error).casefold()
     try:
         load_checksum_file(
             f"{TRUSTED_RELEASE_PREFIX}{tag}/{ASSET}.sha256",
