@@ -150,7 +150,8 @@ def safe_zip_extract(
                     output.write(chunk)
 
 
-def validate_7z_paths(extractor, archive):
+def _read_7z_listing(extractor, archive):
+    """Run 7z -slt and stream its listing back under strict bounds."""
     process = subprocess.Popen(
         [extractor, "l", "-slt", str(archive)],
         stdout=subprocess.PIPE,
@@ -184,9 +185,14 @@ def validate_7z_paths(extractor, archive):
         selector.close()
     if return_code != 0:
         raise ValueError("7z could not inspect the archive.")
+    return bytes(output).decode("utf-8", errors="replace")
+
+
+def _parse_7z_records(text):
+    """Split 7z -slt output into one dict per blank-line-separated record."""
     records = []
     record = {}
-    for line in bytes(output).decode("utf-8", errors="replace").splitlines():
+    for line in text.splitlines():
         if not line.strip():
             if record:
                 records.append(record)
@@ -197,32 +203,44 @@ def validate_7z_paths(extractor, archive):
             record[key] = value
     if record:
         records.append(record)
+    return records
 
+
+def _validate_7z_member_record(record):
+    """Validate one member record; return its size or None to skip it."""
+    # The listing starts with an archive-level record that has
+    # ``Physical Size`` but no member ``Size``.  Only member records are
+    # subject to path, link, and expansion checks.
+    current_path = record.get("Path", "")
+    if "Size" not in record or not current_path:
+        return None
+    candidate = Path(current_path.replace("\\", "/"))
+    if candidate.is_absolute() or ".." in candidate.parts:
+        raise ValueError(f"Unsafe archive path: {current_path}")
+    attributes = record.get("Attributes", "").casefold()
+    attribute_tokens = attributes.split()
+    link_fields = {"Symbolic Link", "Hard Link", "Reparse Point"}
+    if any(field in record for field in link_fields) or any(
+        token.startswith("l") for token in attribute_tokens
+    ):
+        raise ValueError(f"Archive links are not supported: {current_path}")
+    try:
+        current_size = int(record.get("Size", "0").strip())
+    except ValueError:
+        raise ValueError("Archive member size is invalid.") from None
+    if current_size < 0 or current_size > MAX_ARCHIVE_MEMBER_BYTES:
+        raise ValueError("Archive member is too large.")
+    return current_size
+
+
+def validate_7z_paths(extractor, archive):
+    records = _parse_7z_records(_read_7z_listing(extractor, archive))
     members = 0
     total_bytes = 0
     for record in records:
-        # The listing starts with an archive-level record that has
-        # ``Physical Size`` but no member ``Size``.  Only member records are
-        # subject to path, link, and expansion checks.
-        current_path = record.get("Path", "")
-        if "Size" not in record or not current_path:
+        current_size = _validate_7z_member_record(record)
+        if current_size is None:
             continue
-        candidate = Path(current_path.replace("\\", "/"))
-        if candidate.is_absolute() or ".." in candidate.parts:
-            raise ValueError(f"Unsafe archive path: {current_path}")
-        attributes = record.get("Attributes", "").casefold()
-        attribute_tokens = attributes.split()
-        link_fields = {"Symbolic Link", "Hard Link", "Reparse Point"}
-        if any(field in record for field in link_fields) or any(
-            token.startswith("l") for token in attribute_tokens
-        ):
-            raise ValueError(f"Archive links are not supported: {current_path}")
-        try:
-            current_size = int(record.get("Size", "0").strip())
-        except ValueError:
-            raise ValueError("Archive member size is invalid.") from None
-        if current_size < 0 or current_size > MAX_ARCHIVE_MEMBER_BYTES:
-            raise ValueError("Archive member is too large.")
         members += 1
         total_bytes += current_size
         if members > MAX_ARCHIVE_MEMBERS or total_bytes > MAX_ARCHIVE_TOTAL_BYTES:
