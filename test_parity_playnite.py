@@ -91,6 +91,7 @@ class BackupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             state = {"settings": {"theme": "dark"}, "games": [{"name": "Test"}]}
+            (root / "library.json").write_text("{}")
             archive = create_backup(root, state, ["library", "settings"], keep=0)
             self.assertTrue(archive.is_file())
             self.assertEqual(stat.S_IMODE(archive.stat().st_mode), 0o600)
@@ -98,7 +99,6 @@ class BackupTests(unittest.TestCase):
             with zipfile.ZipFile(archive) as package:
                 manifest = json.loads(package.read("manifest.json"))
             self.assertEqual(set(manifest["items"]), {"library", "settings"})
-            (root / "library.json").write_text("{}")
             restore_backup(archive, root)
             restored = json.loads((root / "library.json").read_text())
             self.assertEqual(restored["games"][0]["name"], "Test")
