@@ -90,12 +90,14 @@ def bigbox_quick_presets(state, limit=8):
     return [item for item in list_presets(state) if item.get("bigbox_quick")][:limit]
 
 
-def game_matches_rules(game, rules):
-    if not isinstance(game, dict) or not isinstance(rules, dict):
-        return True
+def _matches_platform(game, rules):
     platform = str(rules.get("platform", "")).strip()
     if platform and platform != "all" and str(game.get("platform", "")) != platform:
         return False
+    return True
+
+
+def _matches_view(game, rules):
     view = str(rules.get("view", "")).strip()
     if view and view != "all":
         if view == "favorites" and not game.get("favorite"):
@@ -106,21 +108,37 @@ def game_matches_rules(game, rules):
             return False
         if view == "uninstalled" and game.get("store_installed") is not False:
             return False
+    return True
+
+
+def _matches_esrb_progress(game, rules):
     esrb = str(rules.get("esrb", "")).strip()
     if esrb and str(game.get("esrb", "")) != esrb:
         return False
     progress = str(rules.get("progress", "")).strip()
     if progress and str(game.get("progress", "")) != progress:
         return False
+    return True
+
+
+def _matches_booleans(game, rules):
     if "favorite" in rules and bool(game.get("favorite")) != bool(rules["favorite"]):
         return False
     if "hidden" in rules and bool(game.get("hidden")) != bool(rules["hidden"]):
         return False
+    return True
+
+
+def _matches_installed_state(game, rules):
     installed = rules.get("installed")
     if installed == "installed" and game.get("store_installed") is False:
         return False
     if installed == "uninstalled" and game.get("store_installed") is not False:
         return False
+    return True
+
+
+def _matches_text_fields(game, rules):
     genre = str(rules.get("genre", "")).strip()
     if genre and genre.casefold() not in str(game.get("genre", "")).casefold():
         return False
@@ -130,6 +148,10 @@ def game_matches_rules(game, rules):
     publisher = str(rules.get("publisher", "")).strip()
     if publisher and publisher.casefold() not in str(game.get("publisher", "")).casefold():
         return False
+    return True
+
+
+def _matches_query(game, rules):
     query = str(rules.get("query", "")).strip().casefold()
     if query:
         haystack = " ".join(
@@ -140,6 +162,23 @@ def game_matches_rules(game, rules):
         if query not in haystack:
             return False
     return True
+
+
+def game_matches_rules(game, rules):
+    if not isinstance(game, dict) or not isinstance(rules, dict):
+        return True
+    return all(
+        helper(game, rules)
+        for helper in (
+            _matches_platform,
+            _matches_view,
+            _matches_esrb_progress,
+            _matches_booleans,
+            _matches_installed_state,
+            _matches_text_fields,
+            _matches_query,
+        )
+    )
 
 
 def filter_games(games, rules, platform_category_fn=None):
