@@ -266,7 +266,7 @@ python3 web_app.py
 
 Requirements: Python 3.10 or newer on a Linux system with standard desktop tooling. The native window additionally needs WebKitGTK 4.1 (`make native-host` builds `native_host`); `python3 web_app.py` runs without it.
 
-Optional local configuration can be loaded from `~/.env` or a project `.env` file. See `.env.example`. Never commit secrets.
+Optional local configuration can be loaded from an explicit `OPENBOX_ENV_FILE`, the data directory (or its parent), `~/.env`, or `~/.config/openbox-game-launcher/.env`. See `.env.example`. Never commit secrets.
 
 ---
 
