@@ -931,20 +931,17 @@ def session_event(kind, launch_id, game_name, exit_code=None, seconds=None):
     broadcast_event(kind, event)
 
 
-def resolve_library_game(state, identity, fallback_index=None):
-    """Find a library game by stable ids/path, not a stale array index."""
-    games = state.get("games") or []
-    if not isinstance(identity, dict):
-        identity = {}
-    stable_id = str(identity.get("stable_game_id") or identity.get("game_id") or "").strip()
-    if stable_id:
-        for game in games:
-            aliases = game.get("legacy_game_ids", [])
-            if (
-                str(game.get("game_id") or "") == stable_id
-                or isinstance(aliases, list) and stable_id in {str(value) for value in aliases}
-            ):
-                return game
+def _stable_id_match(game, stable_id):
+    """True when the game's current or legacy stable id equals stable_id."""
+    aliases = game.get("legacy_game_ids", [])
+    return (
+        str(game.get("game_id") or "") == stable_id
+        or isinstance(aliases, list) and stable_id in {str(value) for value in aliases}
+    )
+
+
+def _match_storefront_ids(games, identity):
+    """Return the first game whose storefront id matches, else None."""
     for key in ("gameyfin_id", "steam_app_id", "heroic_app_id", "lutris_id"):
         value = str(identity.get(key) or "").strip()
         if not value:
@@ -952,8 +949,11 @@ def resolve_library_game(state, identity, fallback_index=None):
         for game in games:
             if str(game.get(key) or "") == value:
                 return game
-    path = str(identity.get("game_path") or identity.get("path") or "")
-    name = str(identity.get("game_name") or identity.get("game") or identity.get("name") or "")
+    return None
+
+
+def _match_path_and_name(games, path, name):
+    """Match by path, preferring an exact name when both are given."""
     if path:
         matches = [game for game in games if str(game.get("path", "")) == path]
         if name:
@@ -962,6 +962,11 @@ def resolve_library_game(state, identity, fallback_index=None):
                 return named[0]
         if len(matches) == 1:
             return matches[0]
+    return None
+
+
+def _match_fallback_index(games, fallback_index, name, path):
+    """Resolve by array index with name/path sanity checks, else None."""
     if fallback_index is not None:
         try:
             index = int(fallback_index)
@@ -977,6 +982,27 @@ def resolve_library_game(state, identity, fallback_index=None):
     return None
 
 
+def resolve_library_game(state, identity, fallback_index=None):
+    """Find a library game by stable ids/path, not a stale array index."""
+    games = state.get("games") or []
+    if not isinstance(identity, dict):
+        identity = {}
+    stable_id = str(identity.get("stable_game_id") or identity.get("game_id") or "").strip()
+    if stable_id:
+        for game in games:
+            if _stable_id_match(game, stable_id):
+                return game
+    game = _match_storefront_ids(games, identity)
+    if game is not None:
+        return game
+    path = str(identity.get("game_path") or identity.get("path") or "")
+    name = str(identity.get("game_name") or identity.get("game") or identity.get("name") or "")
+    game = _match_path_and_name(games, path, name)
+    if game is not None:
+        return game
+    return _match_fallback_index(games, fallback_index, name, path)
+
+
 def game_from_payload(state, payload):
     """Resolve additive stable IDs first, then retain the numeric frontend ID."""
     if not isinstance(payload, dict):
@@ -985,11 +1011,7 @@ def game_from_payload(state, payload):
     games = state.get("games") or []
     if stable_id:
         for game in games:
-            aliases = game.get("legacy_game_ids", [])
-            if (
-                str(game.get("game_id") or "") == stable_id
-                or isinstance(aliases, list) and stable_id in {str(value) for value in aliases}
-            ):
+            if _stable_id_match(game, stable_id):
                 return game
         raise IndexError("Game not found")
     if payload.get("id") is None:
