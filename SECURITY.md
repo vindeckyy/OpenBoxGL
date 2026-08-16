@@ -56,6 +56,7 @@ The following are generally out of scope:
 - Run OpenBox on trusted local networks. The web UI uses a session token; do not expose it directly to the public internet without a reverse proxy and additional hardening.
 - Do not commit `.env`, API tokens, RetroAchievements credentials, or EmuMovies credentials to the repository.
 - Keep OpenBox updated to the latest release.
+- Plugins run with an OS sandbox when bubblewrap is available. If the sandbox cannot start, OpenBox skips enabled plugins unless `OPENBOX_ALLOW_UNSANDBOXED_PLUGINS=1` is set explicitly. Only use that override for plugins you trust.
 
 ## Release signing
 

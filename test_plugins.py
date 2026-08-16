@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from plugin_catalog import download_plugin_package, load_local_catalog, REMOTE_CATALOG
 from plugins import install_plugin, list_plugins, remove_plugin, run_plugins, set_plugin_enabled
@@ -42,7 +43,11 @@ def test():
         )
         plugins = root / "installed"
         assert not install_plugin(package, plugins)["updated"]
-        result = run_plugins(plugins, "before_launch", {"args":["game"],"cwd":"/tmp"})
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with mock.patch("plugins._sandbox_available", return_value=False):
+                assert run_plugins(plugins, "before_launch", {"args":["game"]})["args"] == ["game"]
+        with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}):
+            result = run_plugins(plugins, "before_launch", {"args":["game"],"cwd":"/tmp"})
         assert result["args"][-1] == "--plugin-worked"
         set_plugin_enabled(plugins, "test.plugin", False)
         assert run_plugins(plugins, "before_launch", {"args":["game"]})["args"] == ["game"]
@@ -62,7 +67,6 @@ def test():
             "sha256": hashlib.sha256(b"test.plugin v2").hexdigest(),
         }))
         (broken / "plugin.py").write_text("raise RuntimeError('boom')\n")
-        from unittest import mock
         with mock.patch("plugins.shutil.copytree", side_effect=OSError("disk full")):
             try:
                 install_plugin(broken, plugins)
@@ -101,7 +105,6 @@ def test():
         env_backup = dict(os.environ)
         try:
             import tempfile
-            import unittest.mock as mock
             with tempfile.TemporaryDirectory() as data_dir:
                 os.environ["OPENBOX_DATA_DIR"] = data_dir
                 os.environ.pop("OPENBOX_SAFE_MODE", None)
@@ -167,7 +170,7 @@ def test():
         env["GAMEYFIN_URL"] = "http://internal"
         env["GAMEYFIN_PASSWORD"] = "secret"
         env["ENV_DUMP"] = str(dump)
-        with _mock.patch.dict(os.environ, env, clear=True):
+        with _mock.patch.dict(os.environ, {**env, "OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}, clear=True):
             _plugins.run_plugins(root, "before_launch", {"args": []})
         leaked = _json.loads(dump.read_text())
         assert leaked == {}, leaked

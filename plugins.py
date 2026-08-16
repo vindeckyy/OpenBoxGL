@@ -20,6 +20,74 @@ PLUGIN_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 RUNNER = Path(__file__).with_name("plugin_runner.py")
 LOGGER = logging.getLogger("openbox.plugins")
 MAX_PLUGIN_PAYLOAD = 2 * 1024 * 1024
+UNSANDBOXED_PLUGINS_ENV = "OPENBOX_ALLOW_UNSANDBOXED_PLUGINS"
+
+
+def _sandboxed_command(package_root, entry, hook):
+    """Build a bubblewrap command with no user-home or network access."""
+    bubblewrap = shutil.which("bwrap")
+    if not bubblewrap:
+        return None
+    relative_entry = entry.relative_to(package_root)
+    return [
+        bubblewrap,
+        "--die-with-parent",
+        "--new-session",
+        "--unshare-all",
+        "--ro-bind", "/", "/",
+        "--tmpfs", "/home",
+        "--tmpfs", "/tmp",
+        "--tmpfs", "/run",
+        "--tmpfs", "/mnt",
+        "--tmpfs", "/media",
+        "--proc", "/proc",
+        "--dev", "/dev",
+        "--dir", "/opt/openbox",
+        "--dir", "/opt/openbox/plugin",
+        "--dir", "/opt/openbox/runner",
+        "--ro-bind", str(package_root), "/opt/openbox/plugin",
+        "--ro-bind", str(RUNNER.parent), "/opt/openbox/runner",
+        "--chdir", "/tmp",
+        sys.executable,
+        "-B",
+        "/opt/openbox/runner/plugin_runner.py",
+        f"/opt/openbox/plugin/{relative_entry}",
+        hook,
+    ]
+
+
+def _sandbox_available():
+    """Check whether this host can create the namespaces bubblewrap needs."""
+    command = shutil.which("bwrap")
+    if not command:
+        return False
+    probe = subprocess.run(
+        [command, "--die-with-parent", "--new-session", "--unshare-all", "--ro-bind", "/", "/", "/usr/bin/true"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=2,
+        check=False,
+    )
+    return probe.returncode == 0
+
+
+def _plugin_command(package_root, entry, hook):
+    if os.environ.get(UNSANDBOXED_PLUGINS_ENV) == "1":
+        LOGGER.warning(
+            "Running plugin %s without an OS sandbox because %s=1",
+            package_root.name,
+            UNSANDBOXED_PLUGINS_ENV,
+        )
+        return [sys.executable, "-B", str(RUNNER), str(entry), hook]
+    command = _sandboxed_command(package_root, entry, hook)
+    if command and _sandbox_available():
+        return command
+    LOGGER.warning(
+        "Skipping plugin %s because bubblewrap is unavailable; set %s=1 only for trusted local plugins",
+        package_root.name,
+        UNSANDBOXED_PLUGINS_ENV,
+    )
+    return None
 
 
 def state_file(directory):
@@ -150,10 +218,14 @@ def run_plugins(directory, hook, payload):
     for manifest in list_plugins(directory):
         if not manifest["enabled"] or hook not in manifest["hooks"]:
             continue
-        entry = Path(directory) / manifest["id"] / manifest["entry"]
+        package_root = Path(directory) / manifest["id"]
+        entry = package_root / manifest["entry"]
         encoded = json.dumps(result)
         if len(encoded.encode("utf-8")) > MAX_PLUGIN_PAYLOAD:
             LOGGER.warning("Skipping plugin %s for %s because the payload is too large", manifest["id"], hook)
+            continue
+        command = _plugin_command(package_root, entry, hook)
+        if command is None:
             continue
         try:
             plugin_env = os.environ.copy()
@@ -174,7 +246,7 @@ def run_plugins(directory, hook, payload):
             plugin_env["PYTHONNOUSERSITE"] = "1"
             with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
                 completed = subprocess.run(
-                    [sys.executable, str(RUNNER), str(entry), hook],
+                    command,
                     input=encoded.encode("utf-8"), stdout=stdout_file, stderr=stderr_file,
                     timeout=5, env=plugin_env, start_new_session=True,
                     check=False,
