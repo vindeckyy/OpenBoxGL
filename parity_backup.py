@@ -172,6 +172,136 @@ def rotate_backups(folder, keep):
         path.unlink(missing_ok=True)
 
 
+def _validate_backup_entries(package):
+    """Validate every archive member; returns the infolist when all pass."""
+    infos = package.infolist()
+    if len(infos) > MAX_BACKUP_MEMBERS:
+        raise ValueError("Backup contains too many files.")
+    total_bytes = 0
+    seen_names = set()
+    for info in infos:
+        name = info.filename.replace("\\", "/")
+        relative = Path(name)
+        if not name or "\x00" in name or relative.is_absolute() or ".." in relative.parts:
+            raise ValueError("Backup contains an unsafe path.")
+        normalized = "/".join(part for part in relative.parts if part not in {"."})
+        if normalized in seen_names:
+            raise ValueError("Backup contains duplicate entries.")
+        seen_names.add(normalized)
+        mode = (info.external_attr >> 16) & 0o170000
+        if mode in {0o120000, 0o060000}:
+            raise ValueError("Backup links are not supported.")
+        if info.file_size > MAX_BACKUP_MEMBER_BYTES:
+            raise ValueError("Backup member is too large.")
+        total_bytes += info.file_size
+        if total_bytes > MAX_BACKUP_TOTAL_BYTES:
+            raise ValueError("Backup expands beyond the allowed size.")
+    return infos
+
+
+def _load_backup_manifest(package):
+    """Parse manifest.json; raises the identical ValueError on any problem."""
+    manifest = {}
+    if "manifest.json" in package.namelist():
+        try:
+            manifest = json.loads(package.read("manifest.json"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("Backup manifest is invalid.") from error
+        if not isinstance(manifest, dict):
+            raise ValueError("Backup manifest is invalid.")
+    return manifest
+
+
+def _resolve_restore_items(manifest, selected):
+    restore_items = selected or manifest.get("items") or ["library", "settings"]
+    return normalize_items(restore_items)
+
+
+def _check_restore_age(manifest, root, restore_items, force, package):
+    created = str(manifest.get("created", "")).strip()
+    if not force and created and "library" in restore_items and "library.json" in package.namelist():
+        current = root / "library.json"
+        if current.is_file():
+            try:
+                current_time = datetime.fromisoformat(
+                    datetime.fromtimestamp(current.stat().st_mtime).isoformat(timespec="seconds")
+                )
+                backup_time = datetime.fromisoformat(created)
+            except (TypeError, ValueError):
+                current_time = backup_time = None
+            if current_time is not None and backup_time is not None and backup_time < current_time:
+                raise ValueError(
+                    "This backup is older than the current library. "
+                    "Pass force=True to restore it anyway."
+                )
+
+
+def _restore_library(package, root, restore_items):
+    """Safety-copy + replace library.json; returns (restored_state, library_file)."""
+    if "library" not in restore_items or "library.json" not in package.namelist():
+        return None, None
+    library_file = root / "library.json"
+    if library_file.is_file():
+        _reject_symlink_components(library_file)
+        with library_file.open("rb") as source:
+            atomic_copy_stream(
+                source,
+                library_file.with_name("library.before-restore.json"),
+                mode=0o600,
+                max_bytes=MAX_BACKUP_MEMBER_BYTES,
+            )
+    restored_state = default_state()
+    try:
+        restored_state.update(json.loads(package.read("library.json")))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("Backup library is invalid.") from error
+    if not isinstance(restored_state.get("games"), list):
+        raise ValueError("Backup library is invalid.")
+    return restored_state, library_file
+
+
+def _restore_settings_from_package(package, root):
+    with package.open("settings.json") as source:
+        atomic_copy_stream(source, root / "settings.json", mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
+
+
+def _restore_media_tree(package, root, restore_items):
+    for key in ("media", "plugins", "themes", "extension_data"):
+        if key not in restore_items:
+            continue
+        prefix = f"{BACKUP_ITEMS[key]}/"
+        members = [name for name in package.namelist() if name.startswith(prefix) and not name.endswith("/")]
+        raw_root = root / BACKUP_ITEMS[key]
+        _reject_symlink_components(raw_root)
+        target_root = raw_root.resolve()
+        target_root.mkdir(parents=True, exist_ok=True)
+        _reject_symlink_components(raw_root)
+        for member in members:
+            relative = member[len(prefix) :]
+            target = (target_root / relative).resolve()
+            try:
+                target.relative_to(target_root)
+            except ValueError as error:
+                raise ValueError("Backup contains an unsafe path.") from error
+            if any(parent.is_symlink() for parent in [target, *target.parents] if parent != target_root and parent.exists()):
+                raise ValueError("Backup destination contains a symlink.")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            # Re-validate after mkdir: a planted symlink must not redirect the write.
+            resolved = target.resolve()
+            try:
+                resolved.relative_to(target_root)
+            except ValueError as error:
+                raise ValueError("Backup contains an unsafe path.") from error
+            if any(
+                parent.is_symlink()
+                for parent in [resolved, *resolved.parents]
+                if parent != target_root and parent.exists()
+            ):
+                raise ValueError("Backup destination contains a symlink.")
+            with package.open(member) as source:
+                atomic_copy_stream(source, target, mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
+
+
 def restore_backup(archive_path, data_dir, items=None, running_map=None, force=False):
     if running_map is not None and games_running(running_map):
         raise ValueError("Close running games before restoring a backup.")
@@ -182,73 +312,11 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None, force=F
     _reject_symlink_components(archive_path)
     try:
         with zipfile.ZipFile(archive_path) as package:
-            infos = package.infolist()
-            if len(infos) > MAX_BACKUP_MEMBERS:
-                raise ValueError("Backup contains too many files.")
-            total_bytes = 0
-            seen_names = set()
-            for info in infos:
-                name = info.filename.replace("\\", "/")
-                relative = Path(name)
-                if not name or "\x00" in name or relative.is_absolute() or ".." in relative.parts:
-                    raise ValueError("Backup contains an unsafe path.")
-                normalized = "/".join(part for part in relative.parts if part not in {"."})
-                if normalized in seen_names:
-                    raise ValueError("Backup contains duplicate entries.")
-                seen_names.add(normalized)
-                mode = (info.external_attr >> 16) & 0o170000
-                if mode in {0o120000, 0o060000}:
-                    raise ValueError("Backup links are not supported.")
-                if info.file_size > MAX_BACKUP_MEMBER_BYTES:
-                    raise ValueError("Backup member is too large.")
-                total_bytes += info.file_size
-                if total_bytes > MAX_BACKUP_TOTAL_BYTES:
-                    raise ValueError("Backup expands beyond the allowed size.")
-            manifest = {}
-            if "manifest.json" in package.namelist():
-                try:
-                    manifest = json.loads(package.read("manifest.json"))
-                except (UnicodeDecodeError, json.JSONDecodeError) as error:
-                    raise ValueError("Backup manifest is invalid.") from error
-                if not isinstance(manifest, dict):
-                    raise ValueError("Backup manifest is invalid.")
-            restore_items = selected or manifest.get("items") or ["library", "settings"]
-            restore_items = normalize_items(restore_items)
-            created = str(manifest.get("created", "")).strip()
-            if not force and created and "library" in restore_items and "library.json" in package.namelist():
-                current = root / "library.json"
-                if current.is_file():
-                    try:
-                        current_time = datetime.fromisoformat(
-                            datetime.fromtimestamp(current.stat().st_mtime).isoformat(timespec="seconds")
-                        )
-                        backup_time = datetime.fromisoformat(created)
-                    except (TypeError, ValueError):
-                        current_time = backup_time = None
-                    if current_time is not None and backup_time is not None and backup_time < current_time:
-                        raise ValueError(
-                            "This backup is older than the current library. "
-                            "Pass force=True to restore it anyway."
-                        )
-            restored_state = None
-            if "library" in restore_items and "library.json" in package.namelist():
-                library_file = root / "library.json"
-                if library_file.is_file():
-                    _reject_symlink_components(library_file)
-                    with library_file.open("rb") as source:
-                        atomic_copy_stream(
-                            source,
-                            library_file.with_name("library.before-restore.json"),
-                            mode=0o600,
-                            max_bytes=MAX_BACKUP_MEMBER_BYTES,
-                        )
-                restored_state = default_state()
-                try:
-                    restored_state.update(json.loads(package.read("library.json")))
-                except (UnicodeDecodeError, json.JSONDecodeError) as error:
-                    raise ValueError("Backup library is invalid.") from error
-                if not isinstance(restored_state.get("games"), list):
-                    raise ValueError("Backup library is invalid.")
+            _validate_backup_entries(package)
+            manifest = _load_backup_manifest(package)
+            restore_items = _resolve_restore_items(manifest, selected)
+            _check_restore_age(manifest, root, restore_items, force, package)
+            restored_state, library_file = _restore_library(package, root, restore_items)
             if "settings" in restore_items and "settings.json" in package.namelist():
                 try:
                     archived_settings = json.loads(package.read("settings.json"))
@@ -263,48 +331,13 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None, force=F
                         restored_state["settings"] = settings
                     settings.update(archived_settings)
                 else:
-                    with package.open("settings.json") as source:
-                        atomic_copy_stream(source, root / "settings.json", mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
+                    _restore_settings_from_package(package, root)
             if restored_state is not None:
                 with package.open("library.json") as source:
                     atomic_copy_stream(source, library_file, mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
             if "settings" in restore_items and "settings.json" in package.namelist():
-                with package.open("settings.json") as source:
-                    atomic_copy_stream(source, root / "settings.json", mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
-            for key in ("media", "plugins", "themes", "extension_data"):
-                if key not in restore_items:
-                    continue
-                prefix = f"{BACKUP_ITEMS[key]}/"
-                members = [name for name in package.namelist() if name.startswith(prefix) and not name.endswith("/")]
-                raw_root = root / BACKUP_ITEMS[key]
-                _reject_symlink_components(raw_root)
-                target_root = raw_root.resolve()
-                target_root.mkdir(parents=True, exist_ok=True)
-                _reject_symlink_components(raw_root)
-                for member in members:
-                    relative = member[len(prefix) :]
-                    target = (target_root / relative).resolve()
-                    try:
-                        target.relative_to(target_root)
-                    except ValueError as error:
-                        raise ValueError("Backup contains an unsafe path.") from error
-                    if any(parent.is_symlink() for parent in [target, *target.parents] if parent != target_root and parent.exists()):
-                        raise ValueError("Backup destination contains a symlink.")
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    # Re-validate after mkdir: a planted symlink must not redirect the write.
-                    resolved = target.resolve()
-                    try:
-                        resolved.relative_to(target_root)
-                    except ValueError as error:
-                        raise ValueError("Backup contains an unsafe path.") from error
-                    if any(
-                        parent.is_symlink()
-                        for parent in [resolved, *resolved.parents]
-                        if parent != target_root and parent.exists()
-                    ):
-                        raise ValueError("Backup destination contains a symlink.")
-                    with package.open(member) as source:
-                        atomic_copy_stream(source, target, mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
+                _restore_settings_from_package(package, root)
+            _restore_media_tree(package, root, restore_items)
     except zipfile.BadZipFile as error:
         raise ValueError("Backup archive is invalid.") from error
     return restore_items
