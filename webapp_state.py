@@ -7,6 +7,7 @@ so every reference resolves statically.
 """
 
 import copy
+from collections import OrderedDict
 import gzip
 import html
 import json
@@ -32,8 +33,8 @@ from cloud_sync import sync_statistics
 from importers import import_heroic, import_lutris, import_steam
 from job_manager import JobManager
 from notifications import add_notification
-from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, STATE_STORE, build_launch, load_state, update_state, update_state_with_result
-from parity_discovery import discovery_lists
+from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, STATE_STORE, build_launch, load_state, load_state_readonly, update_state, update_state_with_result
+from parity_discovery import discovery_lists, clear_discovery_cache
 from parity_emulator_defs import list_scan_configs, scan_folder as scan_emulator_folder
 from parity_filter_presets import list_presets
 from parity_gameyfin import GameyfinError, catalog_gameyfin
@@ -69,17 +70,24 @@ METADATA_JOB = {}
 MEDIA_JOB = {}
 JOB_MANAGER = JobManager()
 JOB_MANAGER.set_observer(lambda job: broadcast_event("job.finished", job))
-FILE_PROBE_CACHE = {}
+FILE_PROBE_CACHE = OrderedDict()
 FILE_PROBE_LOCK = threading.Lock()
-FILE_PROBE_TTL = 60.0
+FILE_PROBE_TTL = 120.0
+FILE_PROBE_MAX = 20000
+_KNOWN_MEDIA_MAX = 100000
 PLUGIN_LIBRARY_CACHE = {"at": 0.0, "payload": None}
-PLUGIN_LIBRARY_TTL = 3.0
+PLUGIN_LIBRARY_TTL = 30.0
 PLUGIN_LIBRARY_LOCK = threading.Lock()
+_PLUGIN_REFRESH_IN_PROGRESS = {"value": False}
 MEDIA_EPOCH = {"value": 0}
 MEDIA_EPOCH_LOCK = threading.Lock()
 PLUGIN_EPOCH = {"value": 0}
 PUBLIC_STATE_CACHE = {"signature": None, "payload": None, "raw": None, "raw_gzip": None}
 PUBLIC_STATE_LOCK = threading.Lock()
+PUBLIC_SETTINGS_CACHE = {"signature": None, "payload": None}
+PUBLIC_SETTINGS_LOCK = threading.Lock()
+_KNOWN_MEDIA_SET_CACHE = {"mtime_key": None, "result": None}
+_KNOWN_MEDIA_SET_LOCK = threading.Lock()
 STATE_VIEW_CACHE = {"signature": None, "state": None}
 STATE_VIEW_LOCK = threading.Lock()
 WATCH_STOP = threading.Event()
@@ -133,17 +141,24 @@ def probe_path(path, *, file_only=False):
     key = (value, file_only)
     with FILE_PROBE_LOCK:
         cached = FILE_PROBE_CACHE.get(key)
-        if cached and now - cached[0] < FILE_PROBE_TTL:
-            return cached[1]
-    candidate = Path(value)
-    result = candidate.is_file() if file_only else candidate.exists()
+        if cached is not None:
+            if now - cached[0] < FILE_PROBE_TTL:
+                FILE_PROBE_CACHE.move_to_end(key)
+                return cached[1]
+            FILE_PROBE_CACHE.pop(key, None)
+    try:
+        if file_only:
+            st = os.stat(value)
+            result = not (0o170000 & st.st_mode == 0o040000)
+        else:
+            os.stat(value)
+            result = True
+    except OSError:
+        result = False
     with FILE_PROBE_LOCK:
         FILE_PROBE_CACHE[key] = (now, result)
-        if len(FILE_PROBE_CACHE) > 10000:
-            cutoff = now - FILE_PROBE_TTL
-            for cached_key, (created, _) in list(FILE_PROBE_CACHE.items()):
-                if created < cutoff:
-                    FILE_PROBE_CACHE.pop(cached_key, None)
+        while len(FILE_PROBE_CACHE) > FILE_PROBE_MAX:
+            FILE_PROBE_CACHE.popitem(last=False)
     return result
 
 
@@ -435,6 +450,20 @@ def run_configured_commands(key):
 
 def public_settings(state=None):
     state = state or load_state()
+    sig = STATE_STORE.signature()
+    with PUBLIC_SETTINGS_LOCK:
+        if sig and PUBLIC_SETTINGS_CACHE["signature"] == sig and PUBLIC_SETTINGS_CACHE["payload"] is not None:
+            return PUBLIC_SETTINGS_CACHE["payload"]
+    result = _public_settings_uncached(state)
+    # Recheck signature after computing to avoid caching stale data under a new signature
+    sig_after = STATE_STORE.signature()
+    if sig_after == sig:
+        with PUBLIC_SETTINGS_LOCK:
+            PUBLIC_SETTINGS_CACHE.update({"signature": sig, "payload": result})
+    return result
+
+
+def _public_settings_uncached(state):
     settings = state.get("settings", {})
     platform_documents = settings.get("platform_documents", {})
     if not isinstance(platform_documents, dict):
@@ -521,14 +550,21 @@ def _public_state_signature():
 
 def _build_public_state():
     with STATE_LOCK:
-        state = load_state()
+        state = load_state_readonly()
     save_indices = set(games_with_saves(state["games"]))
+    media_set = _build_known_media_set()
+    _ms_contains = _media_set_contains
+    _sanitize = sanitize_media_path
+    _normalize_video = normalize_video_fields
+    _active_video = active_video
+    video_priority = state.get("settings", {}).get("video_priority")
     games = []
     for index, game in enumerate(state["games"]):
         projected = dict(game)
         normalize_video_fields(projected)
         for field in MEDIA_PATH_FIELDS:
-            projected[field] = sanitize_media_path(projected.get(field, ""))
+            raw_value = projected.get(field, "")
+            projected[field] = _sanitize(raw_value) if raw_value else ""
         visible = {key: projected.get(key, "") for key in FIELDS}
         for field in MEDIA_PATH_FIELDS:
             visible[field] = projected[field]
@@ -538,13 +574,13 @@ def _build_public_state():
             screenshots = []
         visible["screenshots"] = [
             safe_path for path in screenshots
-            for safe_path in [sanitize_media_path(path)] if safe_path
+            for safe_path in [_sanitize(path)] if safe_path
         ]
-        video_field, video_path = active_video(projected, state.get("settings", {}).get("video_priority"))
-        video_path = sanitize_media_path(video_path)
+        video_field, video_path = _active_video(projected, video_priority)
+        video_path = _sanitize(video_path) if video_path else ""
         if not video_path:
             video_field = ""
-        path_exists = probe_path(projected.get("path"))
+        path_exists = os.path.exists(projected.get("path", "")) if projected.get("path") else False
         store_installed = bool(projected["store_installed"]) if "store_installed" in projected else path_exists
         visible.update({
             "id": index,
@@ -556,30 +592,30 @@ def _build_public_state():
             "play_count": projected.get("play_count", 0),
             "playtime_seconds": projected.get("playtime_seconds", 0),
             "path_exists": path_exists,
-            "has_cover": media_probe_path(visible.get("cover")),
-            "has_background": media_probe_path(visible.get("background")),
-            "has_clear_logo": media_probe_path(visible.get("clear_logo")),
-            "has_fanart": media_probe_path(visible.get("fanart")),
-            "has_banner": media_probe_path(visible.get("banner")),
-            "has_icon": media_probe_path(visible.get("icon")),
-            "has_box_back": media_probe_path(visible.get("box_back")),
-            "has_box_spine": media_probe_path(visible.get("box_spine")),
-            "has_box_3d": media_probe_path(visible.get("box_3d")),
-            "has_title_screen": media_probe_path(visible.get("title_screen")),
-            "has_cart_front": media_probe_path(visible.get("cart_front")),
-            "has_cart_back": media_probe_path(visible.get("cart_back")),
-            "has_disc": media_probe_path(visible.get("disc")),
-            "has_advertisement": media_probe_path(visible.get("advertisement")),
-            "has_manual": media_probe_path(visible.get("manual")),
+            "has_cover": _ms_contains(media_set, visible.get("cover")),
+            "has_background": _ms_contains(media_set, visible.get("background")),
+            "has_clear_logo": _ms_contains(media_set, visible.get("clear_logo")),
+            "has_fanart": _ms_contains(media_set, visible.get("fanart")),
+            "has_banner": _ms_contains(media_set, visible.get("banner")),
+            "has_icon": _ms_contains(media_set, visible.get("icon")),
+            "has_box_back": _ms_contains(media_set, visible.get("box_back")),
+            "has_box_spine": _ms_contains(media_set, visible.get("box_spine")),
+            "has_box_3d": _ms_contains(media_set, visible.get("box_3d")),
+            "has_title_screen": _ms_contains(media_set, visible.get("title_screen")),
+            "has_cart_front": _ms_contains(media_set, visible.get("cart_front")),
+            "has_cart_back": _ms_contains(media_set, visible.get("cart_back")),
+            "has_disc": _ms_contains(media_set, visible.get("disc")),
+            "has_advertisement": _ms_contains(media_set, visible.get("advertisement")),
+            "has_manual": _ms_contains(media_set, visible.get("manual")),
             "has_video": bool(video_path),
             "active_video_field": video_field,
-            "has_music": media_probe_path(visible.get("music")),
+            "has_music": _ms_contains(media_set, visible.get("music")),
             "has_saves": index in save_indices or bool(projected.get("save_paths")),
             "has_documents": bool(visible["documents"]),
             "has_versions": bool(projected.get("versions")),
             "has_achievements": bool(projected.get("ra_game_id")),
             "has_highscores": bool(projected.get("rom_name")) and str(projected.get("platform", "")).casefold() in {"arcade", "mame", "finalburn neo"},
-            "has_missing_media": not media_probe_path(visible.get("cover")),
+            "has_missing_media": not _ms_contains(media_set, visible.get("cover")),
             "extract_archive": bool(projected.get("extract_archive")),
             "applications": projected.get("applications", []),
             "versions": projected.get("versions", []),
@@ -589,7 +625,7 @@ def _build_public_state():
             "alternate_names": projected.get("alternate_names", []) if isinstance(projected.get("alternate_names"), list) else [name for name in str(projected.get("alternate_names") or "").split(";") if name.strip()],
             "available_screenshots": [
                 index for index, path in enumerate(visible["screenshots"])
-                if media_probe_path(path)
+                if _ms_contains(media_set, path)
             ],
             "esrb": projected.get("esrb", ""),
             "custom_fields": projected.get("custom_fields", {}) if isinstance(projected.get("custom_fields"), dict) else {},
@@ -607,9 +643,26 @@ def _build_public_state():
         now = time.monotonic()
         cached = PLUGIN_LIBRARY_CACHE
         with PLUGIN_LIBRARY_LOCK:
-            if cached["payload"] is not None and now - cached["at"] < PLUGIN_LIBRARY_TTL:
+            if cached["payload"] is not None:
+                # Return cached result immediately; refresh in background if stale
                 result = cached["payload"]
+                if now - cached["at"] >= PLUGIN_LIBRARY_TTL and not _PLUGIN_REFRESH_IN_PROGRESS["value"]:
+                    _PLUGIN_REFRESH_IN_PROGRESS["value"] = True
+                    def _refresh_plugins():
+                        try:
+                            fresh = run_plugins(DATA.parent / "plugins", "library", {"games": games})
+                            with PLUGIN_LIBRARY_LOCK:
+                                PLUGIN_LIBRARY_CACHE.update({"at": time.monotonic(), "payload": fresh})
+                                PLUGIN_EPOCH["value"] += 1
+                            with PUBLIC_STATE_LOCK:
+                                PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None, "raw_gzip": None})
+                        except Exception:
+                            LOGGER.exception("Background plugin refresh failed")
+                        finally:
+                            _PLUGIN_REFRESH_IN_PROGRESS["value"] = False
+                    threading.Thread(target=_refresh_plugins, daemon=True).start()
             else:
+                # First call: block and populate cache
                 result = run_plugins(DATA.parent / "plugins", "library", {"games": games})
                 cached.update({"at": now, "payload": result})
         decorated = result.get("games", games) if isinstance(result, dict) else games
@@ -667,7 +720,7 @@ def load_state_view():
         signature = STATE_STORE.signature()
         if STATE_VIEW_CACHE["state"] is not None and STATE_VIEW_CACHE["signature"] == signature:
             return STATE_VIEW_CACHE["state"]
-    state = load_state()
+    state = load_state_readonly()
     with STATE_VIEW_LOCK:
         if STATE_VIEW_CACHE["state"] is not None and STATE_VIEW_CACHE["signature"] == signature:
             return STATE_VIEW_CACHE["state"]
@@ -679,10 +732,13 @@ def transact_state(mutator):
         result = update_state_with_result(mutator)
     with PUBLIC_STATE_LOCK:
         PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None})
+    with PUBLIC_SETTINGS_LOCK:
+        PUBLIC_SETTINGS_CACHE.update({"signature": None, "payload": None})
     with STATE_VIEW_LOCK:
         STATE_VIEW_CACHE.update({"signature": None, "state": None})
     with PLUGIN_LIBRARY_LOCK:
         PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None})
+    clear_discovery_cache()
     return result
 
 
@@ -1134,8 +1190,117 @@ def clear_file_probe_cache():
         FILE_PROBE_CACHE.clear()
 
 
+def _fast_realpath(value):
+    """Fast equivalent of str(Path(value).resolve(strict=False))."""
+    return os.path.realpath(os.path.expanduser(value))
+
+
+def _media_dir_mtime():
+    """Compute a combined mtime fingerprint for all media roots.
+    
+    Walks subdirectories to detect file additions/removals, which change
+    the parent directory mtime but not the root mtime.
+    """
+    combined = 0.0
+    try:
+        media_dir = DATA.parent / "media"
+        if media_dir.is_dir():
+            for dirpath, dirnames, filenames in os.walk(str(media_dir)):
+                try:
+                    combined += os.stat(dirpath).st_mtime
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    env_value = os.environ.get(MEDIA_ROOTS_ENV, "")
+    if env_value:
+        for item in env_value.split(os.pathsep):
+            item = item.strip()
+            if not item:
+                continue
+            try:
+                root = Path(item).expanduser()
+                if root.is_dir():
+                    for dirpath, dirnames, filenames in os.walk(str(root)):
+                        try:
+                            combined += os.stat(dirpath).st_mtime
+                        except OSError:
+                            pass
+            except OSError:
+                pass
+    return combined
+
+
+def _build_known_media_set():
+    """Pre-scan all media roots into a set of resolved absolute paths.
+
+    One directory walk replaces thousands of individual stat calls in
+    _build_public_state for large libraries. Results are memoized keyed
+    on the media directories' mtime, and invalidated by bump_media_epoch().
+    """
+    mtime_key = _media_dir_mtime()
+    with _KNOWN_MEDIA_SET_LOCK:
+        if _KNOWN_MEDIA_SET_CACHE["mtime_key"] == mtime_key and _KNOWN_MEDIA_SET_CACHE["result"] is not None:
+            return _KNOWN_MEDIA_SET_CACHE["result"]
+    known = set()
+    capped = False
+    try:
+        media_dir = DATA.parent / "media"
+        if media_dir.is_dir():
+            for entry in media_dir.rglob("*"):
+                try:
+                    if entry.is_file():
+                        known.add(os.path.realpath(str(entry)))
+                except OSError:
+                    pass
+                if len(known) > _KNOWN_MEDIA_MAX:
+                    capped = True
+                    break
+    except OSError:
+        pass
+    env_value = os.environ.get(MEDIA_ROOTS_ENV, "")
+    if env_value:
+        for item in env_value.split(os.pathsep):
+            item = item.strip()
+            if not item:
+                continue
+            try:
+                root = Path(item).expanduser()
+                if root.is_dir():
+                    for entry in root.rglob("*"):
+                        try:
+                            if entry.is_file():
+                                known.add(os.path.realpath(str(entry)))
+                        except OSError:
+                            pass
+                        if len(known) > _KNOWN_MEDIA_MAX:
+                            capped = True
+                            break
+                if capped:
+                    break
+            except OSError:
+                pass
+    if capped:
+        LOGGER.warning("Media set capped at %d entries; some media files may not be detected", _KNOWN_MEDIA_MAX)
+    with _KNOWN_MEDIA_SET_LOCK:
+        _KNOWN_MEDIA_SET_CACHE.update({"mtime_key": mtime_key, "result": known})
+    return known
+
+
+def _media_set_contains(media_set, path_value):
+    """O(1) check for whether a sanitized media path is in the pre-scanned set."""
+    if not media_set or not path_value:
+        return False
+    try:
+        return _fast_realpath(path_value) in media_set
+    except (TypeError, ValueError):
+        return False
+
+
 def bump_media_epoch():
     """Invalidate browser media caches by bumping the version suffix in media URLs."""
+    with _KNOWN_MEDIA_SET_LOCK:
+        _KNOWN_MEDIA_SET_CACHE.update({"mtime_key": None, "result": None})
     with MEDIA_EPOCH_LOCK:
         MEDIA_EPOCH["value"] += 1
     clear_file_probe_cache()

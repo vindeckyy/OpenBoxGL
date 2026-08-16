@@ -7,6 +7,7 @@ PROGRESS = {"", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandon
 MEDIA_FIELDS = ("cover", "background", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "cart_front", "cart_back", "disc", "advertisement", "manual", "video", "music")
 MAX_TAGS = 50
 MAX_TAG_LENGTH = 64
+_WORD_RE = re.compile(r"\w+")
 
 
 def normalize_tags(value):
@@ -77,12 +78,12 @@ def tag_counts(games):
 def related_game_ids(games, selected, limit=8):
     """Return related game IDs scored from local metadata only."""
     base = games[selected]
-    base_genres = set(re.findall(r"\w+", str(base.get("genre", "")).lower()))
+    base_genres = set(_WORD_RE.findall(str(base.get("genre", "")).lower()))
     ranked = []
     for index, game in enumerate(games):
         if index == selected or game.get("hidden"):
             continue
-        genres = set(re.findall(r"\w+", str(game.get("genre", "")).lower()))
+        genres = set(_WORD_RE.findall(str(game.get("genre", "")).lower()))
         score = 2 * len(base_genres & genres)
         score += 8 * bool(base.get("series") and base.get("series") == game.get("series"))
         score += 5 * bool(base.get("collection") and base.get("collection") == game.get("collection"))

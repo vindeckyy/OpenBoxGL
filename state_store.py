@@ -5,6 +5,43 @@ from __future__ import annotations
 import copy
 import fcntl
 import hashlib
+import json as _stdlib_json
+
+try:
+    import orjson as _orjson
+
+    def _json_dumps(obj, **kwargs):
+        options = 0
+        if kwargs.get("sort_keys"):
+            options |= _orjson.OPT_SORT_KEYS
+        if kwargs.get("indent") == 2:
+            options |= _orjson.OPT_INDENT_2
+        separators = kwargs.get("separators")
+        # orjson always uses compact separators without indent
+        return _orjson.dumps(obj, option=options or None).decode("utf-8")
+
+    def _json_dump_file(obj, fp, **kwargs):
+        fp.write(_json_dumps(obj, **kwargs))
+
+    def _json_load(fp):
+        return _orjson.loads(fp.read())
+
+    _json_decode_error = _orjson.JSONDecodeError
+
+except ImportError:
+    _orjson = None
+
+    def _json_dumps(obj, **kwargs):
+        return _stdlib_json.dumps(obj, **kwargs)
+
+    def _json_dump_file(obj, fp, **kwargs):
+        _stdlib_json.dump(obj, fp, **kwargs)
+
+    def _json_load(fp):
+        return _stdlib_json.load(fp)
+
+    _json_decode_error = _stdlib_json.JSONDecodeError
+
 import json
 import logging
 import os
@@ -295,14 +332,14 @@ class JsonStateStore:
 
     def _read_unlocked(self, path: Path) -> Any:
         with path.open("r", encoding="utf-8") as source:
-            return json.load(source)
+            return _json_load(source)
 
     def _load_unlocked(self) -> tuple[dict[str, Any], bool]:
         if not self.path.exists():
             return default_state(), False
         try:
             raw = self._read_unlocked(self.path)
-        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as error:
+        except (OSError, _json_decode_error, UnicodeDecodeError) as error:
             raise StateCorruptError(
                 f"Unable to read {self.path}. The original file was preserved; restore or inspect it before continuing."
             ) from error
@@ -338,13 +375,26 @@ class JsonStateStore:
                 self._remember(state)
                 return state
 
+    def load_readonly(self) -> dict[str, Any]:
+        """Return the cached state without copying. Callers must not mutate the result."""
+        with self._thread_lock:
+            signature = self._signature()
+            if self._cached_state is not None and signature == self._cached_signature:
+                return self._cached_state
+            with self._file_lock(True):
+                state, changed = self._load_unlocked()
+                if changed:
+                    self._write_unlocked(state)
+                self._remember(state)
+                return self._cached_state
+
     def recover(self) -> dict[str, Any]:
         with self._thread_lock, self._file_lock(True):
             if not self.backup_path.is_file():
                 raise StateCorruptError(f"No last-known-good state exists at {self.backup_path}.")
             try:
                 state, _ = normalize_state(self._read_unlocked(self.backup_path))
-            except (OSError, json.JSONDecodeError, UnicodeDecodeError, StateCorruptError) as error:
+            except (OSError, _json_decode_error, UnicodeDecodeError, StateCorruptError) as error:
                 raise StateCorruptError(f"The last-known-good state is also unusable: {self.backup_path}") from error
             self._write_unlocked(state)
             self._remember(state)
@@ -356,14 +406,14 @@ class JsonStateStore:
             prefix=f".{self.path.name}.", suffix=".tmp", dir=self.path.parent
         )
         temporary = Path(temporary_name)
-        compact = json.dumps(state, separators=(",", ":"), ensure_ascii=False).encode()
+        compact = _json_dumps(state, separators=(",", ":"), ensure_ascii=False).encode()
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as output:
                 if len(compact) > COMPACT_JSON_THRESHOLD:
                     output.write(compact.decode("utf-8"))
                     output.write("\n")
                 else:
-                    json.dump(state, output, indent=2, ensure_ascii=False)
+                    _json_dump_file(state, output, indent=2, ensure_ascii=False)
                     output.write("\n")
                 output.flush()
                 os.fsync(output.fileno())

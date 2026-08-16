@@ -26,6 +26,7 @@ import { refresh, launchExtra } from './library.js';
     function connectSessionEvents() {
       try {
         const source = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
+        let _sseRefreshTimer = null;
         source.onmessage = event => {
           let data;
           try { data = JSON.parse(event.data); } catch { return; }
@@ -33,7 +34,8 @@ import { refresh, launchExtra } from './library.js';
           if (kind === 'session.started' || kind === 'session.stopped' || kind === 'session.state' || kind === 'job.finished') {
             pollSessions();
           } else if (kind === 'state.changed') {
-            refresh().catch(() => {});
+            if (_sseRefreshTimer) clearTimeout(_sseRefreshTimer);
+            _sseRefreshTimer = setTimeout(() => { _sseRefreshTimer = null; refresh().catch(() => {}); }, 500);
           }
         };
         source.onerror = () => { source.close(); /* fall back to polling */ };

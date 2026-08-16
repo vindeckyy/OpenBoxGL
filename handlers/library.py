@@ -108,6 +108,42 @@ class LibraryHandlers:
             self.send_header("ETag", etag)
             self.end_headers()
             return
+        
+        # Check for pagination parameters
+        query_params = parse_qs(parsed.query)
+        offset_str = query_params.get("offset", [None])[0]
+        limit_str = query_params.get("limit", [None])[0]
+        
+        if offset_str is not None or limit_str is not None:
+            # Paginated response
+            try:
+                offset = int(offset_str) if offset_str else 0
+                limit = int(limit_str) if limit_str else 500
+                if offset < 0 or limit < 0 or limit > 5000:
+                    raise ValueError("Invalid pagination parameters")
+            except (ValueError, TypeError):
+                self.send_json(400, {"error": "Invalid pagination parameters"})
+                return
+            
+            payload = public_state()
+            total_count = len(payload["games"])
+            paginated_games = payload["games"][offset:offset + limit]
+            
+            response_payload = {
+                "games": paginated_games,
+                "total_count": total_count,
+                "offset": offset,
+                "limit": limit,
+                "playlists": payload.get("playlists", []),
+                "filter_presets": payload.get("filter_presets", []),
+                "settings": payload.get("settings", {}),
+                "media_epoch": payload.get("media_epoch", 0),
+                "ra_configured": payload.get("ra_configured", False),
+            }
+            self.send_json(200, response_payload)
+            return
+        
+        # Non-paginated response (backward compatible)
         data = public_state_bytes()
         if "gzip" in self.headers.get("Accept-Encoding", ""):
             compressed = _public_state_cached()["raw_gzip"]
@@ -122,6 +158,36 @@ class LibraryHandlers:
             200, data, "application/json; charset=utf-8",
             cache_control="private, no-cache", etag=etag,
         )
+        return
+
+    def _api_get_api_library_delta(self, parsed):
+        """Return only the specified games by ID for incremental updates."""
+        query_params = parse_qs(parsed.query)
+        ids_str = query_params.get("ids", [None])[0]
+        
+        if not ids_str:
+            self.send_json(400, {"error": "Missing ids parameter"})
+            return
+        
+        try:
+            ids = [int(id_str.strip()) for id_str in ids_str.split(",") if id_str.strip()]
+            if len(ids) > 1000:
+                self.send_json(400, {"error": "Too many IDs (max 1000)"})
+                return
+        except (ValueError, TypeError):
+            self.send_json(400, {"error": "Invalid IDs format"})
+            return
+        
+        payload = public_state()
+        games_by_id = {game.get("game_id", ""): game for game in payload["games"] if game.get("game_id")}
+        
+        delta_games = [games_by_id[id] for id in ids if id in games_by_id]
+        
+        response_payload = {
+            "games": delta_games,
+            "media_epoch": payload.get("media_epoch", 0),
+        }
+        self.send_json(200, response_payload)
         return
 
     def _api_get_api_related(self, parsed):

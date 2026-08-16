@@ -115,7 +115,7 @@ class PerfStateTests(unittest.TestCase):
     def test_probe_ttl_and_clear(self):
         from webapp_state import FILE_PROBE_CACHE, FILE_PROBE_TTL, bump_media_epoch, clear_file_probe_cache
 
-        self.assertEqual(FILE_PROBE_TTL, 60.0)
+        self.assertEqual(FILE_PROBE_TTL, 120.0)
         FILE_PROBE_CACHE[("/tmp/x", False)] = (0.0, True)
         clear_file_probe_cache()
         self.assertEqual(FILE_PROBE_CACHE, {})

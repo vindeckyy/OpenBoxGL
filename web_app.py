@@ -5,6 +5,7 @@ import email.utils
 import gzip
 import json
 import mimetypes
+import os
 import queue as queue_module
 import secrets
 import signal
@@ -70,6 +71,7 @@ CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsaf
 
 class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, EmulatorsHandlers, DataHandlers, BaseHTTPRequestHandler):
     server_version = "OpenBox/1"
+    protocol_version = "HTTP/1.1"
     MAX_BODY = 65536
     REQUEST_TIMEOUT = 30
 
@@ -161,6 +163,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
                 self.send_response(416)
                 self.headers_common(content_type or "application/octet-stream", cache_control=request_cache_control)
                 self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
                 self.end_headers()
                 return
             end = min(end, size - 1)
@@ -175,15 +178,48 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         if response_status == 206:
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
         self.end_headers()
-        with path.open("rb") as source:
-            source.seek(start)
-            remaining = length
-            while remaining:
-                chunk = source.read(min(1024 * 1024, remaining))
-                if not chunk:
-                    break
-                self.wfile.write(chunk)
-                remaining -= len(chunk)
+        self.wfile.flush()
+        # Use os.sendfile for zero-copy transfer on full-file requests (Linux)
+        if response_status == 200 and hasattr(os, "sendfile") and hasattr(self, "connection"):
+            sendfile_sent = 0
+            sendfile_failed = False
+            try:
+                file_fd = os.open(str(path), os.O_RDONLY)
+                try:
+                    offset = start
+                    while sendfile_sent < length:
+                        transferred = os.sendfile(self.connection.fileno(), file_fd, offset, min(1024 * 1024, length - sendfile_sent))
+                        if transferred == 0:
+                            break
+                        offset += transferred
+                        sendfile_sent += transferred
+                finally:
+                    os.close(file_fd)
+            except (OSError, AttributeError):
+                sendfile_failed = True
+            # Fall back to read/write on sendfile failure, but only if nothing was sent yet.
+            # If sendfile partially succeeded, we cannot know exactly how many bytes were sent,
+            # so resuming would risk duplicating bytes and breaking Content-Length framing.
+            if (sendfile_failed or sendfile_sent < length) and sendfile_sent == 0:
+                with path.open("rb") as source:
+                    source.seek(start)
+                    remaining = length
+                    while remaining:
+                        chunk = source.read(min(1024 * 1024, remaining))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        remaining -= len(chunk)
+        else:
+            with path.open("rb") as source:
+                source.seek(start)
+                remaining = length
+                while remaining:
+                    chunk = source.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
 
     def send_json(self, status, payload):
         data = json.dumps(payload).encode()
