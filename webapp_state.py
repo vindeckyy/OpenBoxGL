@@ -1182,8 +1182,8 @@ def _contained_launch_cwd(cwd, game):
     return True
 
 
-def start_game(index=None, stable_game_id=""):
-    state = load_state()
+def _resolve_start_game(state, index, stable_game_id):
+    """Resolve the game to launch by stable id or index; returns (game, index)."""
     if stable_game_id:
         selected = resolve_library_game(state, {"stable_game_id": stable_game_id}, fallback_index=index)
         if selected is None:
@@ -1191,12 +1191,11 @@ def start_game(index=None, stable_game_id=""):
         index = state["games"].index(selected)
     elif index is None or index < 0 or index >= len(state["games"]):
         raise IndexError("Game not found")
-    game = copy.deepcopy(state["games"][index])
-    stable_game_id = str(game.get("game_id") or stable_game_id)
-    profiles = dict(state["profiles"])
-    selected_profile = str(game.get("launch_profile", "")).strip()
-    if selected_profile and selected_profile in profiles:
-        profiles = {game.get("platform", ""): profiles[selected_profile]}
+    return copy.deepcopy(state["games"][index]), index
+
+
+def _start_launch_command(game, profiles):
+    """Build the launch argv and cwd, rejecting games that cannot run."""
     args, cwd = build_launch(game, profiles)
     if (
         len(args) == 1
@@ -1208,8 +1207,11 @@ def start_game(index=None, stable_game_id=""):
             f"{game.get('name', 'This game')} has no launch command and its file is not executable. "
             "Set a launch command for the platform in Emulator profiles, or per-game in Edit game."
         )
-    effective_profile = effective_profile_name(game, state["profiles"])
-    apply_perf_profile(effective_profile, state)
+    return args, cwd
+
+
+def _apply_start_plugins(game, args, cwd):
+    """Run the before_launch hook and enforce its response contract."""
     original_args, original_cwd = args, cwd
     if not os.environ.get("OPENBOX_SAFE_MODE"):
         result = run_plugins(DATA.parent / "plugins", "before_launch", {"game": game, "args": args, "cwd": cwd})
@@ -1232,17 +1234,19 @@ def start_game(index=None, stable_game_id=""):
                 args, cwd,
             )
             args, cwd = original_args, original_cwd
+    return args, cwd
+
+
+def _validate_start_command(args, cwd):
+    """Reject plugin-adjusted launch commands that are not usable."""
     if not isinstance(args, list) or not args or not all(isinstance(part, str) and part for part in args):
         raise ValueError("A plugin returned an invalid launch command.")
     if not isinstance(cwd, str) or not Path(cwd).is_dir():
         raise ValueError("A plugin returned an invalid working directory.")
-    process = subprocess.Popen(args, cwd=cwd, start_new_session=True)
-    started = datetime.now()
-    launch_id = secrets.token_urlsafe(8)
-    stable_game_id = str(game.get("game_id") or "")
-    entry = {}
-    missing = {"value": False}
 
+
+def _make_start_mutator(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile):
+    """Build the state transaction that records a launched session."""
     def mutate(state):
         current = resolve_library_game(state, {"stable_game_id": stable_game_id}, fallback_index=index)
         if current is None:
@@ -1267,16 +1271,11 @@ def start_game(index=None, stable_game_id=""):
             "pid": process.pid,
             "paused": False,
         })
-    update_state(mutate)
-    if missing["value"]:
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except (OSError, ProcessLookupError):
-            process.terminate()
-        raise IndexError("Game was removed while it was launching")
-    with PROCESS_LOCK:
-        RUNNING[launch_id] = entry
-        PROCESSES[launch_id] = process
+    return mutate
+
+
+def _annotate_gamescope_start(args, game, process):
+    """Tag the spawned process for gamescope guest mode when not a Steam launch."""
     if is_gamescope_guest(force="--game-mode" in sys.argv) and not is_steam_launch(args):
         window_class = Path(str(args[0])).name if args else None
         threading.Thread(
@@ -1289,7 +1288,11 @@ def start_game(index=None, stable_game_id=""):
             },
             daemon=True,
         ).start()
-    session_event("started", launch_id, entry["game"])
+
+
+def _publish_start_events(game, entry):
+    """Emit the started session events for one launch."""
+    session_event("started", entry["launch_id"], entry["game"])
     _publish_session_event(build_event("session.started", {
         "launch_id": entry.get("launch_id", ""),
         "game_id": entry.get("stable_game_id", ""),
@@ -1297,6 +1300,39 @@ def start_game(index=None, stable_game_id=""):
         "platform": game.get("platform", ""),
         "started_at": entry.get("started", ""),
     }))
+
+
+def start_game(index=None, stable_game_id=""):
+    state = load_state()
+    game, index = _resolve_start_game(state, index, stable_game_id)
+    stable_game_id = str(game.get("game_id") or stable_game_id)
+    profiles = dict(state["profiles"])
+    selected_profile = str(game.get("launch_profile", "")).strip()
+    if selected_profile and selected_profile in profiles:
+        profiles = {game.get("platform", ""): profiles[selected_profile]}
+    args, cwd = _start_launch_command(game, profiles)
+    effective_profile = effective_profile_name(game, state["profiles"])
+    apply_perf_profile(effective_profile, state)
+    args, cwd = _apply_start_plugins(game, args, cwd)
+    _validate_start_command(args, cwd)
+    process = subprocess.Popen(args, cwd=cwd, start_new_session=True)
+    started = datetime.now()
+    launch_id = secrets.token_urlsafe(8)
+    stable_game_id = str(game.get("game_id") or "")
+    entry = {}
+    missing = {"value": False}
+    update_state(_make_start_mutator(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile))
+    if missing["value"]:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except (OSError, ProcessLookupError):
+            process.terminate()
+        raise IndexError("Game was removed while it was launching")
+    with PROCESS_LOCK:
+        RUNNING[launch_id] = entry
+        PROCESSES[launch_id] = process
+    _annotate_gamescope_start(args, game, process)
+    _publish_start_events(game, entry)
     threading.Thread(
         target=finish_session,
         args=(launch_id, index, started, process),
