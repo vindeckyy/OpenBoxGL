@@ -104,7 +104,7 @@ jobs:
           name: openbox-release-assets
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # actions/attest-build-provenance@v4.2.2
         with:
           subject-name: OpenBox-x86_64.AppImage
           subject-path: OpenBox-x86_64.AppImage
