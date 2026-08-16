@@ -57,17 +57,84 @@ def _sync_lock(target):
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
+def _load_remote_state(target):
+    try:
+        remote = json.loads(target.read_text()) if target.is_file() else {}
+    except (OSError, json.JSONDecodeError):
+        remote = {}
+    remote_games = remote.get("games", {}) if isinstance(remote, dict) and isinstance(remote.get("games", {}), dict) else {}
+    return remote, remote_games
+
+
+def _resolve_saved_record(remote_games, game, key):
+    saved = remote_games.get(key, {})
+    if not isinstance(saved, dict):
+        saved = {}
+    remote_key = key
+    if not saved:
+        legacy = legacy_game_key(game)
+        saved = remote_games.get(legacy, {})
+        if isinstance(saved, dict):
+            remote_key = legacy
+    if not isinstance(saved, dict):
+        saved = {}
+    return saved, remote_key
+
+
+def _merge_game_stats(game, saved, remote_newer_overall):
+    local_played = _timestamp(game.get("last_played"))
+    remote_played = _timestamp(saved.get("last_played"))
+    if local_played or remote_played:
+        # The side with the newer last_played is authoritative.
+        remote_wins = remote_played > local_played
+    else:
+        # No play timestamps on either side: defer to file freshness.
+        remote_wins = remote_newer_overall
+    before = {field: game.get(field) for field in STAT_FIELDS}
+    game["play_count"] = max(nonnegative_int(game.get("play_count")), nonnegative_int(saved.get("play_count")))
+    game["playtime_seconds"] = max(nonnegative_int(game.get("playtime_seconds")), nonnegative_int(saved.get("playtime_seconds")))
+    game["last_played"] = max(str(game.get("last_played", "")), str(saved.get("last_played", "")))
+    if remote_wins:
+        if str(saved.get("progress", "")) in PROGRESS:
+            game["progress"] = str(saved.get("progress", ""))
+        try:
+            rating = float(saved.get("rating", game.get("rating", 0)))
+            if 0 <= rating <= 5:
+                game["rating"] = rating
+        except (TypeError, ValueError):
+            pass
+        if isinstance(saved.get("favorite"), bool):
+            game["favorite"] = saved["favorite"]
+    elif saved:
+        # Local changes win; keep newer per-field values from the remote.
+        for field in ("progress", "rating", "favorite"):
+            if saved.get(field) is not None and str(saved.get(field)) != "":
+                game[field] = saved[field]
+    changed = before != {field: game.get(field) for field in STAT_FIELDS}
+    merged = {
+        field: game.get(field, 0 if field in {"play_count", "playtime_seconds", "rating"} else "")
+        for field in STAT_FIELDS
+    }
+    return merged, changed
+
+
+def _resolve_generated_at(remote, remote_generated, last_sync, timestamp):
+    if remote_generated and last_sync >= remote_generated:
+        # Local state is newer; bump the remote timestamp to now.
+        generated_at = timestamp
+    else:
+        # Keep the remote timestamp when newer or first sync, so the next sync can still compare.
+        generated_at = remote.get("generated_at", timestamp)
+    return generated_at
+
+
 def sync_statistics(state, folder, now=None):
     folder = Path(folder).expanduser()
     if not folder.is_dir():
         raise ValueError(f"Cloud sync folder does not exist: {folder}")
     target = folder / "openbox-statistics.json"
     with _sync_lock(target):
-        try:
-            remote = json.loads(target.read_text()) if target.is_file() else {}
-        except (OSError, json.JSONDecodeError):
-            remote = {}
-        remote_games = remote.get("games", {}) if isinstance(remote, dict) and isinstance(remote.get("games", {}), dict) else {}
+        remote, remote_games = _load_remote_state(target)
         remote_generated = _timestamp(remote.get("generated_at", ""))
         last_sync = _timestamp(state.get("settings", {}).get("last_cloud_sync", ""))
         remote_newer_overall = remote_generated > last_sync
@@ -75,59 +142,14 @@ def sync_statistics(state, folder, now=None):
         changed = 0
         for game in state["games"]:
             key = game_key(game)
-            saved = remote_games.get(key, {})
-            if not isinstance(saved, dict):
-                saved = {}
-            remote_key = key
-            if not saved:
-                legacy = legacy_game_key(game)
-                saved = remote_games.get(legacy, {})
-                if isinstance(saved, dict):
-                    remote_key = legacy
-            if not isinstance(saved, dict):
-                saved = {}
-            local_played = _timestamp(game.get("last_played"))
-            remote_played = _timestamp(saved.get("last_played"))
-            if local_played or remote_played:
-                # The side with the newer last_played is authoritative.
-                remote_wins = remote_played > local_played
-            else:
-                # No play timestamps on either side: defer to file freshness.
-                remote_wins = remote_newer_overall
-            before = {field: game.get(field) for field in STAT_FIELDS}
-            game["play_count"] = max(nonnegative_int(game.get("play_count")), nonnegative_int(saved.get("play_count")))
-            game["playtime_seconds"] = max(nonnegative_int(game.get("playtime_seconds")), nonnegative_int(saved.get("playtime_seconds")))
-            game["last_played"] = max(str(game.get("last_played", "")), str(saved.get("last_played", "")))
-            if remote_wins:
-                if str(saved.get("progress", "")) in PROGRESS:
-                    game["progress"] = str(saved.get("progress", ""))
-                try:
-                    rating = float(saved.get("rating", game.get("rating", 0)))
-                    if 0 <= rating <= 5:
-                        game["rating"] = rating
-                except (TypeError, ValueError):
-                    pass
-                if isinstance(saved.get("favorite"), bool):
-                    game["favorite"] = saved["favorite"]
-            elif saved:
-                # Local changes win; keep newer per-field values from the remote.
-                for field in ("progress", "rating", "favorite"):
-                    if saved.get(field) is not None and str(saved.get(field)) != "":
-                        game[field] = saved[field]
-            changed += before != {field: game.get(field) for field in STAT_FIELDS}
-            merged[key] = {
-                field: game.get(field, 0 if field in {"play_count", "playtime_seconds", "rating"} else "")
-                for field in STAT_FIELDS
-            }
+            saved, remote_key = _resolve_saved_record(remote_games, game, key)
+            merged_record, record_changed = _merge_game_stats(game, saved, remote_newer_overall)
+            changed += record_changed
+            merged[key] = merged_record
             if remote_key != key:
                 merged.pop(remote_key, None)
         timestamp = now or datetime.now().astimezone().isoformat(timespec="seconds")
-        if remote_generated and last_sync >= remote_generated:
-            # Local state is newer; bump the remote timestamp to now.
-            generated_at = timestamp
-        else:
-            # Keep the remote timestamp when newer or first sync, so the next sync can still compare.
-            generated_at = remote.get("generated_at", timestamp)
+        generated_at = _resolve_generated_at(remote, remote_generated, last_sync, timestamp)
         payload = {
             "format": 1,
             "generated_at": generated_at,
