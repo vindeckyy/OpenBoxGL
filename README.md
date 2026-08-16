@@ -60,7 +60,7 @@
 ## Quick Start
 
 1. **Install.** Grab the [latest AppImage](https://github.com/vindeckyy/OpenBoxGL/releases/latest), or run from source with `python3 web_app.py` (Python 3.10+).
-2. **Open the UI.** `openbox` opens a native WebKitGTK window by default, and falls back to a chrome-less app window (then your default browser) when WebKitGTK is missing. `openbox --web` skips the native window and opens the loopback web UI in a browser; from source you can also open the printed URL directly.
+2. **Open the UI.** `openbox` opens a native WebKitGTK window by default, and falls back to a chrome-less app window (then your default browser) when WebKitGTK is missing. `openbox --web` skips the native window and opens the loopback web UI in a browser; from source, `python3 web_app.py` also opens the browser automatically with the token in the URL. To open the UI manually, append the token from the data directory, e.g. open `http://127.0.0.1:PORT/?token=$(cat ~/.local/share/openbox-game-launcher/server.token)`.
 3. **Import games.** Click **Import Folder** and point at a directory of `.sh` files, or **Import Steam** to scan your installed games.
 4. **Press PLAY.** Sessions, play time, and history are tracked automatically.
 
