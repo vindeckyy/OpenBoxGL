@@ -111,6 +111,7 @@ class MediaPathTests(unittest.TestCase):
             "playlists": [],
         }
         with mock.patch.object(webapp_state, "load_state", return_value=state), \
+             mock.patch.object(webapp_state, "load_state_readonly", return_value=state), \
              mock.patch.dict(os.environ, {"OPENBOX_SAFE_MODE": "1"}):
             game = webapp_state._build_public_state()["games"][0]
         self.assertEqual(game["active_video_field"], "video_theme")

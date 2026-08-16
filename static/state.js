@@ -195,9 +195,14 @@ const token = new URLSearchParams(location.search).get('token') || '';
         element.hidden = hidden.has(element.dataset.sidebarSection);
       });
     }
+    let _filteredCache = { key: null, result: [] };
     function filteredGames() {
-      const query = $('sidebarSearch').value.toLowerCase().trim();
-      const view = $('view').value;
+      const query = ($('sidebarSearch')?.value || '').toLowerCase().trim();
+      const view = $('view')?.value || 'all';
+      const sort = $('sort')?.value || 'name';
+      const esrb = $('esrbFilter')?.value || '';
+      const key = JSON.stringify([AppState._refreshCounter || 0, query, view, sort, esrb, AppState.platform, AppState.platformCategory, AppState.activePlaylist, AppState.activeFilterPreset, AppState.explorerRules.progress, AppState.explorerRules]);
+      if (_filteredCache.key === key) return _filteredCache.result;
       const preset = AppState.filterPresets.find(item => item.name === AppState.activeFilterPreset);
       const presetRules = preset?.rules || {};
       const activePlaylistData = playlistFor(AppState.activePlaylist);
@@ -229,7 +234,9 @@ const token = new URLSearchParams(location.search).get('token') || '';
         const playlistMatch = !activePlaylistData || gameInPlaylist(game, activePlaylistData);
         return viewMatch && platformMatch && categoryMatch && esrbMatch && queryMatch && progressMatch && explorerProgressMatch && favoriteMatch && genreMatch && developerMatch && publisherMatch && installedMatch && hiddenMatch && playlistMatch;
       });
-      return sortGames(visible, $('sort').value);
+      const sorted = sortGames(visible, sort);
+      _filteredCache = { key, result: sorted };
+      return sorted;
     }
     async function loadExplorerFacets(field = AppState.explorerField) {
       AppState.explorerField = field;

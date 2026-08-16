@@ -59,6 +59,11 @@ def load_state():
     return STATE_STORE.load()
 
 
+def load_state_readonly():
+    """Return the cached state without copying. Callers must not mutate the result."""
+    return STATE_STORE.load_readonly()
+
+
 def save_state(state):
     return STATE_STORE.save(state)
 

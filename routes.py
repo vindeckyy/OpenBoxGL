@@ -64,6 +64,7 @@ GET_TABLE = {
     "/api/import/exclusions": "_api_get_api_import_exclusions",
     "/api/launcher/menu": "_api_get_api_launcher_menu",
     "/api/library": "_api_get_api_library",
+    "/api/library/delta": "_api_get_api_library_delta",
     "/api/log": "_api_get_api_log",
     "/api/media": "_api_get_api_media",
     "/api/media/audit": "_api_get_api_media_audit",

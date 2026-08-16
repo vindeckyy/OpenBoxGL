@@ -19,6 +19,7 @@ let lastFacetsFingerprint = null;
       AppState.raConfigured = state.ra_configured;
       AppState.appSettings = state.settings || AppState.appSettings;
       AppState.mediaEpoch = state.media_epoch || 0;
+      AppState._refreshCounter = (AppState._refreshCounter || 0) + 1;
       if (AppState.activePlaylist && !AppState.playlists.some(item => item.name === AppState.activePlaylist)) AppState.activePlaylist = '';
       if (AppState.selectedId !== null && !AppState.games.some(game => game.id === AppState.selectedId)) AppState.selectedId = null;
       for (const id of selectedIds) if (!AppState.games.some(game => game.id === id)) selectedIds.delete(id);
@@ -29,7 +30,7 @@ let lastFacetsFingerprint = null;
       const fingerprint = `${AppState.games.length}:${AppState.games[0]?.id || ''}:${AppState.games.at(-1)?.id || ''}`;
       if (lastFacetsFingerprint !== fingerprint) {
         lastFacetsFingerprint = fingerprint;
-        loadExplorerFacets().catch(() => {});
+        (typeof requestIdleCallback === 'function' ? requestIdleCallback : setTimeout)(() => loadExplorerFacets().catch(() => {}));
       }
     }
     function renderArtwork(game) {
@@ -511,7 +512,7 @@ let lastFacetsFingerprint = null;
         openReader({id:'platform', documents:[doc], name:platformName}, 0, `/api/platform/document?platform=${encodeURIComponent(platformName)}&index=${button.dataset.platformDoc}&token=${encodeURIComponent(token)}`);
       });
     }
-    async function favorite(id) { try { const result = await api('/api/favorite',{method:'POST',body:JSON.stringify({id})}); const game = AppState.games.find(item => item.id === id); if (game) game.favorite = result.favorite; renderGrid(); renderDetails(); } catch(error) { notify(error.message); } }
+    async function favorite(id) { try { const result = await api('/api/favorite',{method:'POST',body:JSON.stringify({id})}); const game = AppState.games.find(item => item.id === id); if (game) { game.favorite = result.favorite; AppState._refreshCounter = (AppState._refreshCounter || 0) + 1; } renderGrid(); renderDetails(); } catch(error) { notify(error.message); } }
     async function updateGameStatus(id, progress) {
       const game = AppState.games.find(item => item.id === id);
       if (!game) return;
