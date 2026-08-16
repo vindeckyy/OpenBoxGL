@@ -1218,7 +1218,7 @@ def _media_dir_mtime():
     try:
         media_dir = DATA.parent / "media"
         if media_dir.is_dir():
-            for dirpath, dirnames, filenames in os.walk(str(media_dir)):
+            for dirpath, _dirnames, _filenames in os.walk(str(media_dir)):
                 try:
                     combined += os.stat(dirpath).st_mtime
                 except OSError:
@@ -1234,7 +1234,7 @@ def _media_dir_mtime():
             try:
                 root = Path(item).expanduser()
                 if root.is_dir():
-                    for dirpath, dirnames, filenames in os.walk(str(root)):
+                    for dirpath, _dirnames, _filenames in os.walk(str(root)):
                         try:
                             combined += os.stat(dirpath).st_mtime
                         except OSError:
