@@ -91,6 +91,11 @@ class MediaPathTests(unittest.TestCase):
                 handler._api_get_api_media(urlparse("/api/media?kind=cover"))
         handler.send_file.assert_not_called()
 
+    def test_file_probe_rejects_non_regular_files(self):
+        fifo = Path(self.tempdir.name) / "media.fifo"
+        os.mkfifo(fifo)
+        self.assertFalse(webapp_state.probe_path(fifo, file_only=True))
+
     def test_public_state_selects_only_approved_video(self):
         video_root = self.data_path.parent / "media"
         video_root.mkdir(parents=True)

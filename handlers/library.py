@@ -170,16 +170,19 @@ class LibraryHandlers:
             return
         
         try:
-            ids = [int(id_str.strip()) for id_str in ids_str.split(",") if id_str.strip()]
+            ids = [id_str.strip() for id_str in ids_str.split(",") if id_str.strip()]
+            if not ids:
+                self.send_json(400, {"error": "Missing ids parameter"})
+                return
             if len(ids) > 1000:
                 self.send_json(400, {"error": "Too many IDs (max 1000)"})
                 return
-        except (ValueError, TypeError):
+        except (AttributeError, TypeError):
             self.send_json(400, {"error": "Invalid IDs format"})
             return
         
         payload = public_state()
-        games_by_id = {game.get("game_id", ""): game for game in payload["games"] if game.get("game_id")}
+        games_by_id = {str(game.get("game_id")): game for game in payload["games"] if game.get("game_id")}
         
         delta_games = [games_by_id[id] for id in ids if id in games_by_id]
         

@@ -79,6 +79,15 @@ class PolishRouteTests(unittest.TestCase):
         payload = json.loads(gzip.decompress(body))
         self.assertEqual(payload["games"][0]["name"], "Fixture")
 
+    def test_library_delta_accepts_stable_game_ids(self):
+        status, _, body = self.request("/api/library")
+        self.assertEqual(status, 200)
+        game_id = json.loads(body)["games"][0]["game_id"]
+        status, _, body = self.request(f"/api/library/delta?ids={game_id}")
+        self.assertEqual(status, 200)
+        payload = json.loads(body)
+        self.assertEqual([game["game_id"] for game in payload["games"]], [game_id])
+
     def test_jobs_route_lists_jobs(self):
         status, _, payload = self.request("/api/jobs")
         self.assertEqual(status, 200)

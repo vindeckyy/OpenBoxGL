@@ -17,6 +17,7 @@ import queue
 import re
 import secrets
 import shlex
+import stat
 import signal
 import subprocess
 import sys
@@ -75,7 +76,7 @@ FILE_PROBE_LOCK = threading.Lock()
 FILE_PROBE_TTL = 120.0
 FILE_PROBE_MAX = 20000
 _KNOWN_MEDIA_MAX = 100000
-PLUGIN_LIBRARY_CACHE = {"at": 0.0, "payload": None}
+PLUGIN_LIBRARY_CACHE = {"at": 0.0, "payload": None, "state_signature": None}
 PLUGIN_LIBRARY_TTL = 30.0
 PLUGIN_LIBRARY_LOCK = threading.Lock()
 _PLUGIN_REFRESH_IN_PROGRESS = {"value": False}
@@ -149,7 +150,7 @@ def probe_path(path, *, file_only=False):
     try:
         if file_only:
             st = os.stat(value)
-            result = not (0o170000 & st.st_mode == 0o040000)
+            result = stat.S_ISREG(st.st_mode)
         else:
             os.stat(value)
             result = True
@@ -551,6 +552,7 @@ def _public_state_signature():
 def _build_public_state():
     with STATE_LOCK:
         state = load_state_readonly()
+        state_signature = STATE_STORE.signature()
     save_indices = set(games_with_saves(state["games"]))
     media_set = _build_known_media_set()
     _ms_contains = _media_set_contains
@@ -580,7 +582,8 @@ def _build_public_state():
         video_path = _sanitize(video_path) if video_path else ""
         if not video_path:
             video_field = ""
-        path_exists = os.path.exists(projected.get("path", "")) if projected.get("path") else False
+        raw_path = projected.get("path", "")
+        path_exists = os.path.exists(str(raw_path)) if raw_path else False
         store_installed = bool(projected["store_installed"]) if "store_installed" in projected else path_exists
         visible.update({
             "id": index,
@@ -643,28 +646,38 @@ def _build_public_state():
         now = time.monotonic()
         cached = PLUGIN_LIBRARY_CACHE
         with PLUGIN_LIBRARY_LOCK:
-            if cached["payload"] is not None:
+            if cached["payload"] is not None and cached.get("state_signature") == state_signature:
                 # Return cached result immediately; refresh in background if stale
                 result = cached["payload"]
                 if now - cached["at"] >= PLUGIN_LIBRARY_TTL and not _PLUGIN_REFRESH_IN_PROGRESS["value"]:
                     _PLUGIN_REFRESH_IN_PROGRESS["value"] = True
-                    def _refresh_plugins():
+                    refresh_games = games
+                    refresh_signature = state_signature
+                    def _refresh_plugins(games_snapshot=refresh_games, expected_signature=refresh_signature):
                         try:
-                            fresh = run_plugins(DATA.parent / "plugins", "library", {"games": games})
-                            with PLUGIN_LIBRARY_LOCK:
-                                PLUGIN_LIBRARY_CACHE.update({"at": time.monotonic(), "payload": fresh})
-                                PLUGIN_EPOCH["value"] += 1
+                            fresh = run_plugins(DATA.parent / "plugins", "library", {"games": games_snapshot})
+                            with STATE_LOCK:
+                                if STATE_STORE.signature() != expected_signature:
+                                    return
+                                with PLUGIN_LIBRARY_LOCK:
+                                    PLUGIN_LIBRARY_CACHE.update({
+                                        "at": time.monotonic(),
+                                        "payload": fresh,
+                                        "state_signature": expected_signature,
+                                    })
+                                    PLUGIN_EPOCH["value"] += 1
                             with PUBLIC_STATE_LOCK:
                                 PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None, "raw_gzip": None})
                         except Exception:
                             LOGGER.exception("Background plugin refresh failed")
                         finally:
-                            _PLUGIN_REFRESH_IN_PROGRESS["value"] = False
+                            with PLUGIN_LIBRARY_LOCK:
+                                _PLUGIN_REFRESH_IN_PROGRESS["value"] = False
                     threading.Thread(target=_refresh_plugins, daemon=True).start()
             else:
-                # First call: block and populate cache
+                # First call or changed state: block and populate cache
                 result = run_plugins(DATA.parent / "plugins", "library", {"games": games})
-                cached.update({"at": now, "payload": result})
+                cached.update({"at": now, "payload": result, "state_signature": state_signature})
         decorated = result.get("games", games) if isinstance(result, dict) else games
     if isinstance(decorated, list) and len(decorated) == len(games) and all(isinstance(game, dict) for game in decorated):
         games = decorated
@@ -737,7 +750,7 @@ def transact_state(mutator):
     with STATE_VIEW_LOCK:
         STATE_VIEW_CACHE.update({"signature": None, "state": None})
     with PLUGIN_LIBRARY_LOCK:
-        PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None})
+        PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None, "state_signature": None})
     clear_discovery_cache()
     return result
 
