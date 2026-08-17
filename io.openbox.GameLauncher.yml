@@ -30,8 +30,7 @@ modules:
       - mkdir -p /app/share/openbox
       - while IFS= read -r f; do [ -n "$f" ] || continue; install -Dm644 "$f" "/app/share/openbox/$f"; done < runtime_modules.txt
       - install -Dm644 index.html /app/share/openbox/index.html
-      - install -Dm644 static/app.js /app/share/openbox/static/app.js
-      - install -Dm644 static/app.css /app/share/openbox/static/app.css
+      - for f in static/*.js static/*.css; do install -Dm644 "$f" "/app/share/openbox/$f"; done
       - install -Dm644 assets/openbox-logo.png /app/share/openbox/assets/openbox-logo.png
       - install -Dm644 plugins/catalog.json /app/share/openbox/plugins/catalog.json
       - install -d /app/share/openbox/emulator_defs

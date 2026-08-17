@@ -102,7 +102,7 @@ def build_sbom(version, include_stdlib=True, appdir=None):
         })
 
     # Bundled UI and data files.
-    for name in ("index.html", "static/app.js", "static/app.css", "openbox.svg"):
+    for name in ("index.html", "openbox.svg"):
         path = ROOT / name
         if not path.is_file():
             continue
@@ -112,6 +112,24 @@ def build_sbom(version, include_stdlib=True, appdir=None):
             "name": name,
             "version": version,
             "hashes": [{"alg": "SHA-256", "content": _hash(path)}],
+        })
+    for static_file in sorted((ROOT / "static").glob("*.js")):
+        name = static_file.relative_to(ROOT).as_posix()
+        components.append({
+            "type": "file",
+            "bom-ref": f"openbox-data-{name.replace('.', '-').replace('/', '-')}",
+            "name": name,
+            "version": version,
+            "hashes": [{"alg": "SHA-256", "content": _hash(static_file)}],
+        })
+    for static_file in sorted((ROOT / "static").glob("*.css")):
+        name = static_file.relative_to(ROOT).as_posix()
+        components.append({
+            "type": "file",
+            "bom-ref": f"openbox-data-{name.replace('.', '-').replace('/', '-')}",
+            "name": name,
+            "version": version,
+            "hashes": [{"alg": "SHA-256", "content": _hash(static_file)}],
         })
 
     if include_stdlib:
