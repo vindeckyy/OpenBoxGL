@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.3.0"><img src="https://img.shields.io/badge/Release-v1.3.0-0052CC?style=for-the-badge" alt="Release v1.3.0"></a>
-  <a href="PARITY.md"><img src="https://img.shields.io/badge/LaunchBox-Parity%20Matrix-1f2937?style=for-the-badge" alt="LaunchBox parity matrix"></a>
+  <a href="docs/PARITY.md"><img src="https://img.shields.io/badge/LaunchBox-Parity%20Matrix-1f2937?style=for-the-badge" alt="LaunchBox parity matrix"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions"><img src="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml/badge.svg?style=for-the-badge" alt="CI"></a>
 </p>
 
@@ -87,7 +87,7 @@ OpenBox provides one UI over two hosts:
 
 Library data is stored locally at `~/.local/share/openbox-game-launcher/library.json`. Set the `OPENBOX_DATA_DIR` environment variable to use a different data directory.
 
-> **Independence notice:** OpenBox Game Launcher is an independent open-source project. It is not affiliated with LaunchBox, Unbroken Software, LLC, or the Openbox window manager project. LaunchBox and Big Box are trademarks of Unbroken Software, LLC. See [DISCLAIMER.md](DISCLAIMER.md).
+> **Independence notice:** OpenBox Game Launcher is an independent open-source project. It is not affiliated with LaunchBox, Unbroken Software, LLC, or the Openbox window manager project. LaunchBox and Big Box are trademarks of Unbroken Software, LLC. See [DISCLAIMER.md](docs/DISCLAIMER.md).
 
 ---
 
@@ -112,7 +112,7 @@ Consider OpenBox if you:
 - Need Flathub-aware emulator install/update flows
 - Want RetroAchievements, save backups, session history, and Big Box in one app
 
-The full capability matrix with acceptance checks lives in [PARITY.md](PARITY.md).
+The full capability matrix with acceptance checks lives in [PARITY.md](docs/PARITY.md).
 
 ---
 
@@ -298,12 +298,12 @@ The full user documentation is at [openboxgl.github.io](https://openboxgl.github
 | [RetroAchievements](https://openboxgl.github.io/guides/retroachievements/) | Matching, hardcore, badge injection |
 | [Plugins](https://openboxgl.github.io/guides/plugins/) | Install, hooks, safe mode |
 | [REST API](https://openboxgl.github.io/reference/api/) | Full endpoint documentation |
-| [PARITY.md](PARITY.md) | LaunchBox capability matrix |
+| [PARITY.md](docs/PARITY.md) | LaunchBox capability matrix |
 | [SUPPORT.md](SUPPORT.md) | Supported platforms, runtimes, and reporting guidance |
 | [docs/reliability.md](docs/reliability.md) | Edge case catalog and expected behavior |
-| [CHANGELOG.md](CHANGELOG.md) | Release history |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and contribution guidelines |
-| [SECURITY.md](SECURITY.md) | Security reporting process |
+| [CHANGELOG.md](docs/CHANGELOG.md) | Release history |
+| [CONTRIBUTING.md](docs/CONTRIBUTING.md) | Development workflow and contribution guidelines |
+| [SECURITY.md](docs/SECURITY.md) | Security reporting process |
 
 ---
 
@@ -344,7 +344,7 @@ No OpenBox account is required. Optional integrations (RetroAchievements, EmuMov
 
 ### Is Windows supported?
 
-OpenBox targets Linux (desktop, Steam Deck, handhelds). Windows-only features are documented as boundaries in [PARITY.md](PARITY.md). If you need Windows, LaunchBox remains a strong option.
+OpenBox targets Linux (desktop, Steam Deck, handhelds). Windows-only features are documented as boundaries in [PARITY.md](docs/PARITY.md). If you need Windows, LaunchBox remains a strong option.
 
 ---
 
@@ -365,7 +365,7 @@ OpenBox/
 ├── api_errors.py           Structured API error codes
 ├── job_manager.py          Background job lifecycle
 ├── importers.py            Steam, Heroic, Lutris, ROM imports
-├── parity_*.py             Parity modules (storefront, saves, media, discovery, integrations, etc.)
+├── pkg/parity/parity_*.py     Parity modules (shim at root for compat)
 ├── emulators.py            Emulator profiles + Flathub management
 ├── metadata.py             LaunchBox DB sync + media scraping
 ├── retroachievements.py    RA matching + badge injection
@@ -379,7 +379,7 @@ OpenBox/
 ├── themes/                 Stock themes (5 CSS files)
 ├── emulator_defs/          YAML definition packs
 ├── scripts/                Build, test, screenshot capture
-└── test_*.py               Test suite
+├── tests/test_*.py            Test suite (49 files)
 ```
 
 ### Run tests
@@ -395,7 +395,7 @@ make native-host     # WebKitGTK window host (needs libwebkit2gtk-4.1)
 ./build_appimage.sh
 ```
 
-Pull requests should pass the full test suite. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Pull requests should pass the full test suite. See [CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
 ---
 
@@ -405,7 +405,7 @@ OpenBox Game Launcher is released under the [GNU Affero General Public License v
 
 Trademark references to LaunchBox, Steam, Heroic, Lutris, RetroArch, and other third-party products are used for compatibility description only. OpenBox does not distribute ROMs, BIOS files, firmware, or DRM circumvention tools.
 
-For the full legal policy, see [DISCLAIMER.md](DISCLAIMER.md) and [TRADEMARKS.md](TRADEMARKS.md).
+For the full legal policy, see [DISCLAIMER.md](docs/DISCLAIMER.md) and [TRADEMARKS.md](docs/TRADEMARKS.md).
 
 ---
 
@@ -423,4 +423,4 @@ OpenBox is free and open source (AGPL-3.0). If it saves you time, a coffee helps
 - [Request a feature](https://github.com/vindeckyy/OpenBoxGL/issues/new?template=feature_request.yml)
 - [Review open issues](https://github.com/vindeckyy/OpenBoxGL/issues)
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before opening a pull request.
+Contributions are welcome. Please read [CONTRIBUTING.md](docs/CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](docs/CODE_OF_CONDUCT.md) before opening a pull request.
