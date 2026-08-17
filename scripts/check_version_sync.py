@@ -16,6 +16,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def _doc_path(name: str) -> Path:
+    # Support both flat (docs at root) and docs/ layout after reorg
+    direct = ROOT / name
+    if direct.is_file():
+        return direct
+    docs_path = ROOT / "docs" / name
+    if docs_path.is_file():
+        return docs_path
+    return direct
+
+
 def runtime_version():
     # Importing updates.py drags in no heavyweight dependencies; parse
     # the literal instead so this script works without importing the app.
@@ -46,7 +57,7 @@ def main() -> int:
         print(f"openbox.metainfo.xml: latest release is {latest.group(1) if latest else 'missing'}, expected {version}")
         failures.append("metainfo latest release")
 
-    parity = (ROOT / "PARITY.md").read_text(encoding="utf-8")
+    parity = _doc_path("PARITY.md").read_text(encoding="utf-8")
     parity_line = parity.splitlines()[2] if len(parity.splitlines()) > 2 else ""
     if f"**v{version}**" not in parity_line:
         print(f"PARITY.md: lead paragraph does not mention v{version}")
@@ -57,7 +68,7 @@ def main() -> int:
         print(f"bug_report.yml: does not mention v{version}")
         failures.append("bug report template")
 
-    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    changelog = _doc_path("CHANGELOG.md").read_text(encoding="utf-8")
     if version not in changelog:
         print(f"CHANGELOG.md: no entry mentions {version}")
         failures.append("CHANGELOG")
