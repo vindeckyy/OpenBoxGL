@@ -94,7 +94,10 @@ jobs:
               *.py) python3 -m py_compile "$module" ;;
             esac
           done < runtime_modules.txt
-          python3 -m py_compile test_*.py scripts/*.py
+          python3 -m py_compile scripts/*.py
+          # Support both flat and tests/ layout after reorg
+          if compgen -G "test_*.py" > /dev/null; then python3 -m py_compile test_*.py; fi
+          if compgen -G "tests/test_*.py" > /dev/null; then python3 -m py_compile tests/test_*.py; fi
 
       - name: Compile native host
         run: |

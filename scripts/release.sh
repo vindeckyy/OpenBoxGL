@@ -54,14 +54,18 @@ cmp -s "$generated_public_key" openbox-release.pub \
 python3 scripts/verify_release.py --key openbox-release.pub OpenBox-x86_64.AppImage OpenBox-x86_64.AppImage.sig
 
 echo "== 6/6 release notes draft =="
+CHANGELOG_FILE="CHANGELOG.md"
+if [ -f "docs/CHANGELOG.md" ]; then
+  CHANGELOG_FILE="docs/CHANGELOG.md"
+fi
 cat > "release-notes-$VERSION.md" <<NOTES
 # OpenBox v$VERSION
 
-$(sed -n '/^## Unreleased/,/^## \[/p' CHANGELOG.md | sed '1d;$d')
+$(sed -n '/^## Unreleased/,/^## \[/p' "$CHANGELOG_FILE" | sed '1d;$d')
 
 ## Verification
 
-- \`make check\`: lint, compile, $({ ls test_*.py | wc -l; }) test files, coverage floors green.
+- \`make check\`: lint, compile, $({ ls test_*.py tests/test_*.py 2>/dev/null | wc -l; }) test files, coverage floors green.
 - SBOM: \`OpenBox-$VERSION-sbom.json\` (CycloneDX 1.4)
 - SHA-256: \`$(cut -d' ' -f1 OpenBox-x86_64.AppImage.sha256)\`
 - Ed25519 signature: \`OpenBox-x86_64.AppImage.sig\` (verified against openbox-release.pub)
