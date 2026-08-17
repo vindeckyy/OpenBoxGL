@@ -171,7 +171,11 @@ class PerfStateTests(unittest.TestCase):
         from webapp_state import public_state
 
         game = public_state()["games"][0]
-        client = Path(__file__).parent / "index.html"
+        candidate = Path(__file__).resolve().parent
+        if (candidate / "index.html").is_file():
+            client = candidate / "index.html"
+        else:
+            client = candidate.parent / "index.html"
         referenced = set()
         for match in re.findall(r"game\.([A-Za-z_][A-Za-z0-9_]*)", client.read_text()):
             if match not in {"id"}:

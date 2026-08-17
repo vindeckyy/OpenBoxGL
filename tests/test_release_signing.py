@@ -7,7 +7,11 @@ import unittest
 import base64
 from pathlib import Path
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parent
+if not (ROOT / "web_app.py").exists() and (ROOT.parent / "web_app.py").exists():
+    ROOT = ROOT.parent
+if not (ROOT / ".gitignore").exists() and (ROOT.parent / ".gitignore").exists():
+    ROOT = ROOT.parent
 
 
 class VerifyReleaseTests(unittest.TestCase):

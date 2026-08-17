@@ -9,8 +9,27 @@ import hashlib
 from pathlib import Path
 
 
-ROOT = Path(__file__).parent
+def _repo_root() -> Path:
+    candidate = Path(__file__).resolve().parent
+    if (candidate / "runtime_modules.txt").is_file():
+        return candidate
+    if (candidate.parent / "runtime_modules.txt").is_file():
+        return candidate.parent
+    return candidate
+
+ROOT = _repo_root()
 PYTHON_MODULES = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
+
+def _doc_path(name: str) -> Path:
+    # Support both flat (docs at root) and docs/ layouts after reorg
+    direct = ROOT / name
+    if direct.is_file():
+        return direct
+    docs_path = ROOT / "docs" / name
+    if docs_path.is_file():
+        return docs_path
+    # Fallback for adr etc. already in docs/ but name may include subpath
+    return docs_path
 DATA_FILES = ["index.html", "static/app.js", "static/app.css"]
 STOCK_THEMES = [
     "Midnight Circuit.css",
@@ -101,7 +120,12 @@ def test_runtime_import_closure():
         line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     }
-    local_modules = {path.stem: path.name for path in ROOT.glob("*.py")}
+    # Support both flat (parity_*.py at root) and packaged (pkg/parity/) layouts
+    local_stems = {}
+    for path in [*ROOT.glob("*.py"), *ROOT.glob("pkg/parity/*.py")]:
+        local_stems.setdefault(path.stem, path.name)
+    # Also map pkg/parity names to their manifest paths for closure check
+    manifest_names = {Path(m).stem: m for m in manifest if m.endswith(".py")}
     missing = set()
     for filename in manifest:
         if not filename.endswith(".py"):
@@ -115,8 +139,8 @@ def test_runtime_import_closure():
             else:
                 continue
             for name in names:
-                if name in local_modules and local_modules[name] not in manifest:
-                    missing.add(local_modules[name])
+                if name in local_stems and name not in manifest_names:
+                    missing.add(local_stems[name])
     assert not missing, f"runtime import closure is missing: {sorted(missing)}"
     print("  Runtime import closure: ok")
 
@@ -182,10 +206,10 @@ def test_metainfo():
 
 
 def test_legal_policy():
-    disclaimer = (ROOT / "DISCLAIMER.md").read_text()
-    trademarks = (ROOT / "TRADEMARKS.md").read_text()
+    disclaimer = (_doc_path("DISCLAIMER.md")).read_text()
+    trademarks = (_doc_path("TRADEMARKS.md")).read_text()
     readme = (ROOT / "README.md").read_text()
-    security = (ROOT / "SECURITY.md").read_text()
+    security = (_doc_path("SECURITY.md")).read_text()
     assert "https://github.com/contact/dmca" in disclaimer
     assert "github-trademark-policy" in disclaimer
     assert "security/advisories/new" in disclaimer
@@ -204,7 +228,7 @@ def test_version_consistency():
     metainfo = ROOT / "openbox.metainfo.xml"
     content = metainfo.read_text()
     assert f'version="{VERSION}"' in content, f"Version mismatch: updates={VERSION}"
-    parity = (ROOT / "PARITY.md").read_text()
+    parity = (_doc_path("PARITY.md")).read_text()
     assert f"**v{VERSION}**" in parity, f"PARITY.md latest release should be v{VERSION}"
     bug_report = (ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml").read_text()
     assert f"v{VERSION}" in bug_report, f"bug_report.yml should mention v{VERSION}"

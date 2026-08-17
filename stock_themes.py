@@ -11,7 +11,18 @@ _VERSION_PATTERN = re.compile(r"^/\* OpenBox Stock Theme v(\d+):")
 
 
 def stock_theme_sources(root=None):
-    root = Path(root or Path(__file__).resolve().parent)
+    if root is None:
+        # Handle both flat (test at root) and packaged (test in tests/) layouts
+        candidate = Path(__file__).resolve().parent
+        if (candidate / "themes").is_dir():
+            root = candidate
+        else:
+            root = candidate.parent
+    else:
+        root = Path(root)
+        # If caller passed tests/ as root, fall back to parent
+        if not (root / "themes").is_dir() and (root.parent / "themes").is_dir():
+            root = root.parent
     themes_dir = root / "themes"
     if not themes_dir.is_dir():
         return []
