@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-08-17
+
+### Fixed
+
+- AppImage and Flatpak now bundle every static module, fixing 404s for util.js, state.js, library.js and other chunks that left the top bar unresponsive. Routes now handle future JavaScript chunks without manual table updates. Fixes #19.
+- Build provenance, SBOM generation and packaging tests now cover the full static set so the UI ships complete.
+
 ## [1.3.0] - 2026-08-16
 
 ### Hardened
