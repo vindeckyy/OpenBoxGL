@@ -9,7 +9,7 @@ LICENSEDIR = $(PREFIX)/share/licenses/openbox
 PYTHON_SOURCES = $(shell sed '/^[[:space:]]*#/d;/^[[:space:]]*$$/d' runtime_modules.txt)
 
 DATA_FILES = index.html openbox.svg openbox.metainfo.xml LICENSE assets/openbox-logo.png
-STATIC_FILES = static/app.js static/app.css
+STATIC_FILES = $(wildcard static/*.js) $(wildcard static/*.css)
 NATIVE_HOST = native_host
 
 .PHONY: install uninstall appimage check version-check dev-venv test-one native-host

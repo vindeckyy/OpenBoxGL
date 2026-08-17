@@ -19,6 +19,7 @@ def _repo_root() -> Path:
 
 ROOT = _repo_root()
 PYTHON_MODULES = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
+DATA_FILES = ["index.html", "openbox.svg"] + [f"static/{p.name}" for p in sorted((ROOT / "static").glob("*.js"))] + [f"static/{p.name}" for p in sorted((ROOT / "static").glob("*.css"))]
 
 def _doc_path(name: str) -> Path:
     # Support both flat (docs at root) and docs/ layouts after reorg
@@ -30,7 +31,6 @@ def _doc_path(name: str) -> Path:
         return docs_path
     # Fallback for adr etc. already in docs/ but name may include subpath
     return docs_path
-DATA_FILES = ["index.html", "static/app.js", "static/app.css"]
 STOCK_THEMES = [
     "Midnight Circuit.css",
     "Phosphor Terminal.css",

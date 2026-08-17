@@ -23,7 +23,7 @@ while IFS= read -r file; do
 done < "$source_root/runtime_modules.txt"
 cp "$source_root/index.html" "$appdir/usr/share/openbox/index.html"
 mkdir -p "$appdir/usr/share/openbox/static"
-cp "$source_root"/static/app.js "$source_root"/static/app.css "$appdir/usr/share/openbox/static/"
+cp "$source_root"/static/*.js "$source_root"/static/*.css "$appdir/usr/share/openbox/static/"
 mkdir -p "$appdir/usr/share/openbox/assets"
 cp "$source_root"/assets/openbox-logo.png "$appdir/usr/share/openbox/assets/"
 mkdir -p "$appdir/usr/share/openbox/emulator_defs"

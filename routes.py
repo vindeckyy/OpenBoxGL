@@ -280,11 +280,31 @@ def _resolve(spec):
     return getattr(module, attr)
 
 
+def _is_static_asset(path):
+    if not path.startswith("/static/"):
+        return False
+    name = path.rsplit("/", 1)[-1]
+    return name.endswith(".js") or name in {"app.css", "logo.png"}
+
+
+def _is_public_path(path):
+    if path in PUBLIC_GET_PATHS:
+        return True
+    # Allow any future ES-module chunk under /static/ without requiring a
+    # route table update. The handler still validates the file exists on disk.
+    if _is_static_asset(path):
+        return True
+    return False
+
+
 def dispatch_get(handler, parsed):
     spec = GET_TABLE.get(parsed.path)
     if spec is None:
-        raise RouteNotFound("Not found")
-    if parsed.path not in PUBLIC_GET_PATHS and not handler.authorized():
+        if _is_static_asset(parsed.path):
+            spec = "_api_get_static"
+        else:
+            raise RouteNotFound("Not found")
+    if not _is_public_path(parsed.path) and not handler.authorized():
         handler.handle_unauthorized()
         return
     callable_ = _resolve(spec)
