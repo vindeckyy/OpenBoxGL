@@ -12,6 +12,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -59,10 +60,53 @@ from handlers.metadata import MetadataHandlers
 from handlers.sessions import SessionHandlers
 from handlers.settings import SettingsHandlers
 
+import re as _re
+
+def _sanitize_error_message(error):
+    """Return a client-safe error string without absolute filesystem paths.
+
+    Full details are logged server-side; the client receives the prefix
+    before the path to avoid leaking home-directory layout.
+    """
+    raw = str(error)
+    if not raw:
+        return raw
+    # If the message contains an absolute path, strip the path portion.
+    # Heuristic: absolute paths contain "/" and typical error prefixes contain ":"
+    if "/" in raw or raw.strip().startswith("~"):
+        if ":" in raw:
+            # Keep text before the first path-like segment
+            # e.g. "Folder does not exist: /tmp/foo" -> "Folder does not exist."
+            prefix = raw.split(":", 1)[0].strip()
+            # Only strip if the suffix looks like a path (contains /)
+            suffix = raw.split(":", 1)[1]
+            if "/" in suffix or "~" in suffix:
+                # Preserve a trailing period for consistency
+                if not prefix.endswith("."):
+                    prefix += "."
+                return prefix
+        # Fallback: replace any absolute path token with [path]
+        sanitized = _re.sub(r"(?:~)?/[^\s\"']*", "[path]", raw)
+        sanitized = _re.sub(r"\[path\](?:\s*\[path\])+", "[path]", sanitized)
+        # Collapse " : [path]" to "."
+        sanitized = _re.sub(r"\s*:\s*\[path\].*", ".", sanitized)
+        sanitized = sanitized.strip()
+        if sanitized:
+            return sanitized
+    return raw
+
+
 # Host header values the API accepts. The server binds loopback only; rejecting
 # any other Host closes DNS-rebinding, where a remote page resolves to
 # 127.0.0.1 and carries the attacker's hostname in the Host header.
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+# Rate limiting for authentication failures (per client IP, loopback only).
+# 10 failures in 60s triggers 429 with Retry-After; success resets the window.
+_AUTH_FAILURES: dict[str, list[float]] = {}
+_AUTH_FAILURES_LOCK = threading.Lock()
+_AUTH_MAX_FAILURES = 10
+_AUTH_WINDOW_SECONDS = 60.0
 
 # Security headers shared by every response (including the SSE stream) so the
 # policy can't drift between code paths.
@@ -221,9 +265,9 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
                     self.wfile.write(chunk)
                     remaining -= len(chunk)
 
-    def send_json(self, status, payload):
+    def send_json(self, status, payload, extra_headers=None):
         data = json.dumps(payload).encode()
-        self.send_bytes(status, data, "application/json; charset=utf-8")
+        self.send_bytes(status, data, "application/json; charset=utf-8", extra_headers=extra_headers)
 
     def send_json_compressed(self, status, payload):
         """Send a JSON payload, gzipped for clients that accept it.
@@ -244,10 +288,72 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
                 return
         self.send_bytes(status, data, "application/json; charset=utf-8")
 
+    def _auth_client_ip(self):
+        try:
+            return self.client_address[0] if getattr(self, "client_address", None) else "127.0.0.1"
+        except Exception:
+            return "127.0.0.1"
+
+    def _is_auth_rate_limited(self):
+        now = time.monotonic()
+        ip = self._auth_client_ip()
+        with _AUTH_FAILURES_LOCK:
+            attempts = _AUTH_FAILURES.get(ip, [])
+            attempts = [t for t in attempts if now - t < _AUTH_WINDOW_SECONDS]
+            _AUTH_FAILURES[ip] = attempts
+            if len(attempts) >= _AUTH_MAX_FAILURES:
+                oldest = min(attempts) if attempts else now
+                return int(_AUTH_WINDOW_SECONDS - (now - oldest)) + 1
+            return 0
+
+    def _record_auth_failure(self):
+        now = time.monotonic()
+        ip = self._auth_client_ip()
+        with _AUTH_FAILURES_LOCK:
+            attempts = _AUTH_FAILURES.get(ip, [])
+            attempts = [t for t in attempts if now - t < _AUTH_WINDOW_SECONDS]
+            attempts.append(now)
+            _AUTH_FAILURES[ip] = attempts
+            if len(attempts) >= _AUTH_MAX_FAILURES:
+                oldest = min(attempts)
+                return int(_AUTH_WINDOW_SECONDS - (now - oldest)) + 1
+            return 0
+
+    def _clear_auth_failures(self):
+        ip = self._auth_client_ip()
+        with _AUTH_FAILURES_LOCK:
+            _AUTH_FAILURES.pop(ip, None)
+
     def authorized(self):
         query_token = parse_qs(urlparse(self.path).query).get("token", [""])[0]
         provided = self.headers.get("X-OpenBox-Token", "") or query_token
-        return secrets.compare_digest(provided, TOKEN)
+        ok = secrets.compare_digest(provided, TOKEN)
+        if ok:
+            self._clear_auth_failures()
+            return True
+        # Wrong token: still check rate limit so handle_unauthorized can
+        # decide between 403 and 429, but do not block correct tokens.
+        return False
+
+    def handle_unauthorized(self):
+        retry = self._record_auth_failure()
+        if retry:
+            self.send_json(
+                429,
+                {"error": "Too many authentication failures. Try again later.", "code": "RATE_LIMITED", "retry_after": retry},
+                extra_headers={"Retry-After": str(retry)},
+            )
+        else:
+            # Re-check if this failure pushed us over the limit
+            retry = self._is_auth_rate_limited()
+            if retry:
+                self.send_json(
+                    429,
+                    {"error": "Too many authentication failures. Try again later.", "code": "RATE_LIMITED", "retry_after": retry},
+                    extra_headers={"Retry-After": str(retry)},
+                )
+            else:
+                self.send_json(403, {"error": "Unauthorized"})
 
     def body(self):
         raw_length = self.headers.get("Content-Length", "0")
@@ -272,7 +378,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
             raise
         except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError, json.JSONDecodeError, GameyfinError, FileNotFoundError, RuntimeError, subprocess.SubprocessError) as error:
             LOGGER.warning("Request %s failed: %s", parsed.path, error)
-            raise BadRequest(str(error)) from None
+            raise BadRequest(_sanitize_error_message(error)) from None
 
     def _api_get_index(self, parsed):
         if parsed.path in ("/", "/index.html"):
@@ -359,7 +465,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
             raise
         except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError, json.JSONDecodeError, GameyfinError, FileNotFoundError, RuntimeError, subprocess.SubprocessError) as error:
             LOGGER.warning("Request %s failed: %s", urlparse(self.path).path, error)
-            raise BadRequest(str(error)) from None
+            raise BadRequest(_sanitize_error_message(error)) from None
 
     def _loopback_host(self):
         headers = getattr(self, "headers", None)
@@ -439,6 +545,9 @@ def main():
         f"{int(bool(_settings.get('tray_enabled')))} {int(bool(_settings.get('minimize_to_tray')))}\n",
     )
     url = f"http://127.0.0.1:{port}/?token={TOKEN}"
+    # Log without the token; the token-bearing URL is only printed to the
+    # native host via the token file and to a browser when explicitly opened.
+    safe_url = f"http://127.0.0.1:{port}/"
     force_game_mode = "--game-mode" in sys.argv
     guest = is_gamescope_guest(force=force_game_mode)
     # Desktop sessions open the UI in a chrome-less app window by default;
@@ -450,7 +559,7 @@ def main():
     else:
         native_window = not guest
     print(f"http://127.0.0.1:{port}/", flush=True)
-    LOGGER.info("OpenBox web UI URL: %s", url)
+    LOGGER.info("OpenBox web UI URL: %s", safe_url)
     if "--no-browser" not in sys.argv:
         opened = open_ui(url, guest=guest, force_game_mode=force_game_mode, native_window=native_window)
         browser_pid = opened.get("pid")

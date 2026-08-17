@@ -71,13 +71,28 @@ def save_credentials(directory, username, api_key, fetch=api_get):
     return profile
 
 
+MAX_ROM_BYTES = 512 * 1024 * 1024
+
+
 def rom_data(path):
     from parity_premium import archive_rom_bytes
 
     path = Path(path)
     if path.suffix.casefold() in {".zip", ".7z"}:
-        return archive_rom_bytes(path)
-    return path.read_bytes()
+        data = archive_rom_bytes(path)
+        if len(data) > MAX_ROM_BYTES:
+            raise ValueError("ROM file is too large for hashing.")
+        return data
+    try:
+        size = path.stat().st_size
+    except OSError as error:
+        raise FileNotFoundError(f"Could not stat ROM file: {path}") from error
+    if size > MAX_ROM_BYTES:
+        raise ValueError("ROM file is too large for hashing.")
+    data = path.read_bytes()
+    if len(data) > MAX_ROM_BYTES:
+        raise ValueError("ROM file is too large for hashing.")
+    return data
 
 
 def game_hash(game):

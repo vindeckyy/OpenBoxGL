@@ -15,11 +15,15 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
-  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.3.0"><img src="https://img.shields.io/badge/Release-v1.3.0-0052CC" alt="Release v1.3.0"></a>
-  <a href="PARITY.md"><img src="https://img.shields.io/badge/LaunchBox-Parity%20Matrix-555" alt="LaunchBox parity matrix"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/actions"><img src="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.3.0"><img src="https://img.shields.io/badge/Release-v1.3.0-0052CC?style=for-the-badge" alt="Release v1.3.0"></a>
+  <a href="PARITY.md"><img src="https://img.shields.io/badge/LaunchBox-Parity%20Matrix-1f2937?style=for-the-badge" alt="LaunchBox parity matrix"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/actions"><img src="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml/badge.svg?style=for-the-badge" alt="CI"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.3.0</strong></a>
 </p>
 
 <p align="center">
@@ -70,7 +74,7 @@ For ROMs, emulators, Big Box, RetroAchievements, and everything else, see [Getti
 
 ## Overview
 
-OpenBox Game Launcher is an open-source game library manager and launcher built for Linux. It puts PC games, storefront libraries, ROM collections, arcade sets, and emulator workflows in one searchable catalog with advanced search, ordered playlists, artwork galleries, session tracking, save and library backups, and launch profiles.
+OpenBox Game Launcher is an open-source game library manager and launcher for Linux. It puts Steam, Heroic (Epic/GOG/Amazon), Lutris, Gameyfin, ROM folders, ScummVM, RPCS3 and Vita3K collections, and local executables in one searchable catalog with advanced search, ordered playlists, artwork galleries, session tracking, save and library backups, launch profiles, and controller-ready Big Box mode. No account, no cloud, no telemetry.
 
 OpenBox Game Launcher is unrelated to [Openbox](https://openbox.org/), the open-source Linux window manager. The projects have different maintainers, codebases, and purposes.
 
@@ -144,7 +148,7 @@ Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attra
 
 REST API with token auth, Python plugins (`library`, `before_launch`, `after_session` hooks), local CSS themes with live reload, HMAC-signed webhooks, mounted-folder statistics sync, `openbox://` deep links.
 
-[Full feature list → Documentation](https://openboxgl.github.io/)
+[Full feature list in the documentation](https://openboxgl.github.io/)
 
 ---
 
@@ -202,6 +206,14 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 ---
 
 ## Installation
+
+| Method | Best for | Notes |
+| --- | --- | --- |
+| AppImage (installer) | Desktop, Steam Deck, handhelds, immutable systems | Built-in verified updater, installs to `~/.local/bin` |
+| AppImage (manual) | Offline or custom path | `chmod +x` and run, no install step |
+| Flatpak | Sandboxed installs | `flatpak-builder` from manifest |
+| Source | Development, patching | `git clone` and `python3 web_app.py` |
+| System | Install to `/usr/local` | `sudo make install` |
 
 ### Versioned release installer
 

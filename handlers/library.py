@@ -352,8 +352,30 @@ class LibraryHandlers:
         _apply_game_misc(game, source)
         if not game.get("name"):
             raise ValueError("Name is required.")
-        if not game.get("path") or not Path(game["path"]).exists():
+        game_path = str(game.get("path", "")).strip()
+        if not game_path:
+            raise ValueError("Path is required.")
+        candidate = Path(game_path).expanduser()
+        if not candidate.is_absolute():
+            raise ValueError("Game path must be an absolute path.")
+        # Reject symlinked components to avoid TOCTOU and path confusion;
+        # resolve without strict to check the would-be target.
+        cursor = candidate
+        while True:
+            try:
+                if cursor.is_symlink():
+                    raise ValueError("Game path may not contain symlinks.")
+            except OSError as error:
+                raise ValueError("Could not inspect game path.") from error
+            if cursor.parent == cursor:
+                break
+            cursor = cursor.parent
+        if not candidate.exists():
             raise ValueError("Path must point to an existing local file.")
+        if not candidate.is_file():
+            raise ValueError("Game path must be a regular file.")
+        # Store the expanded absolute form
+        game["path"] = str(candidate)
         def mutate(state):
             _save_game_mutate(state, payload, game)
         transact_state(mutate)
