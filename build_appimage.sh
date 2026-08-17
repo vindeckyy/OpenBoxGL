@@ -19,7 +19,7 @@ find "$appdir/usr/lib/python$python_version" -type d -name __pycache__ -prune -e
 
 while IFS= read -r file; do
   [ -n "$file" ] || continue
-  cp "$source_root/$file" "$appdir/usr/share/openbox/$file"
+  install -Dm644 "$source_root/$file" "$appdir/usr/share/openbox/$file"
 done < "$source_root/runtime_modules.txt"
 cp "$source_root/index.html" "$appdir/usr/share/openbox/index.html"
 mkdir -p "$appdir/usr/share/openbox/static"
