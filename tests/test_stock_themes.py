@@ -8,7 +8,10 @@ from pathlib import Path
 from stock_themes import ensure_stock_themes, is_stock_theme, stock_theme_sources
 
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parent
+# Handle both flat and tests/ layout
+if not (ROOT / "themes").is_dir() and (ROOT.parent / "themes").is_dir():
+    ROOT = ROOT.parent
 
 
 class StockThemesTests(unittest.TestCase):

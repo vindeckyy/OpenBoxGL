@@ -5,7 +5,11 @@ import subprocess
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parent
+if not (ROOT / "web_app.py").exists() and (ROOT.parent / "web_app.py").exists():
+    ROOT = ROOT.parent
+if not (ROOT / ".gitignore").exists() and (ROOT.parent / ".gitignore").exists():
+    ROOT = ROOT.parent
 SECRET_PATTERNS = (
     re.compile(r"ghp_[A-Za-z0-9_]{20,}"),
     re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),

@@ -24,7 +24,15 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-ROOT = Path(__file__).resolve().parent
+def _repo_root() -> Path:
+    candidate = Path(__file__).resolve().parent
+    if (candidate / "web_app.py").is_file():
+        return candidate
+    if (candidate.parent / "web_app.py").is_file():
+        return candidate.parent
+    return candidate
+
+ROOT = _repo_root()
 FAILURES = []
 TOKEN_FILE = None  # <data_dir>/server.token, set in main() once the temp dir exists
 

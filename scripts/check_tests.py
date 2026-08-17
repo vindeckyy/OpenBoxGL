@@ -12,6 +12,7 @@ Exits non-zero when any stage fails. Used by `make check` and CI.
 Dev-only dependencies are expected in .venv-dev (see CONTRIBUTING.md).
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -72,7 +73,7 @@ def main() -> int:
         except SyntaxError as error:
             print(f"compile failed: {module}: {error}")
             compile_failed += 1
-    for test_file in sorted(ROOT.glob("test_*.py")):
+    for test_file in sorted([*ROOT.glob("test_*.py"), *ROOT.glob("tests/test_*.py")]):
         try:
             compile(test_file.read_bytes(), str(test_file), "exec")
         except SyntaxError as error:
@@ -90,16 +91,19 @@ def main() -> int:
         for data_file in ROOT.glob(".coverage*"):
             data_file.unlink()
 
-        test_files = sorted(ROOT.glob("test_*.py"))
+        test_files = sorted([*ROOT.glob("test_*.py"), *ROOT.glob("tests/test_*.py")])
 
         # Serial on purpose: the gamescope/deck tests spawn real nested X
         # sessions and collide when run in parallel workers.
         failed_tests = []
+        # Ensure root is on PYTHONPATH so tests in tests/ can import flat modules
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(ROOT) + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         for test_file in test_files:
             code = subprocess.run(
                 [str(COVERAGE), "run", "-p", str(test_file)],
                 cwd=ROOT, capture_output=True, text=True,
-                check=False,
+                check=False, env=env,
             ).returncode
             if code:
                 failed_tests.append(test_file.name)
@@ -145,6 +149,15 @@ def main() -> int:
             print(f"web_app.py coverage: {web_total:.1f}% (floor {WEB_APP_FLOOR:.1f}%)")
             if web_total < WEB_APP_FLOOR:
                 failures.append("web_app coverage floor")
+
+            # Token hygiene: raw hex outside :root must not rise
+            token = run([sys.executable, "scripts/check_tokens.py"])
+            if token.stdout.strip():
+                print(token.stdout.strip())
+            if token.stderr.strip():
+                print(token.stderr.strip())
+            if token.returncode != 0:
+                failures.append("tokens")
 
     if failures:
         print(f"\nGATE FAILED: {', '.join(failures)}")
