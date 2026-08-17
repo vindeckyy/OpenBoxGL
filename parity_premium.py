@@ -308,6 +308,9 @@ def download_gog_media(game, media_root, opener=urlopen):
     return game
 
 
+MAX_ROM_ARCHIVE_BYTES = 512 * 1024 * 1024
+
+
 def archive_rom_bytes(path: Path):
     suffix = path.suffix.casefold()
     if suffix == ".zip":
@@ -315,7 +318,10 @@ def archive_rom_bytes(path: Path):
             files = [info for info in archive.infolist() if not info.is_dir()]
             if not files:
                 raise ValueError("Archive contains no ROM files.")
-            return archive.read(max(files, key=lambda info: info.file_size))
+            largest = max(files, key=lambda info: info.file_size)
+            if largest.file_size > MAX_ROM_ARCHIVE_BYTES:
+                raise ValueError("ROM archive member is too large.")
+            return archive.read(largest)
     if suffix == ".7z":
         if py7zr is None:
             process = subprocess.run(
@@ -323,6 +329,8 @@ def archive_rom_bytes(path: Path):
             )
             if process.returncode != 0 or not process.stdout:
                 raise ValueError("Install py7zr or 7z to hash ROMs inside .7z archives.")
+            if len(process.stdout) > MAX_ROM_ARCHIVE_BYTES:
+                raise ValueError("ROM archive member is too large.")
             return process.stdout
         with py7zr.SevenZipFile(path, mode="r") as archive:
             names = [name for name in archive.getnames() if not name.endswith("/")]
@@ -331,8 +339,19 @@ def archive_rom_bytes(path: Path):
             data = archive.read(names[0])
             if isinstance(data, dict):
                 data = next(iter(data.values()))
+            if isinstance(data, (bytes, bytearray)) and len(data) > MAX_ROM_ARCHIVE_BYTES:
+                raise ValueError("ROM archive member is too large.")
             return data
-    return path.read_bytes()
+    # Plain file fallback: enforce cap before reading
+    try:
+        if path.stat().st_size > MAX_ROM_ARCHIVE_BYTES:
+            raise ValueError("ROM file is too large.")
+    except OSError as error:
+        raise FileNotFoundError(f"Could not stat ROM file: {path}") from error
+    data = path.read_bytes()
+    if len(data) > MAX_ROM_ARCHIVE_BYTES:
+        raise ValueError("ROM file is too large.")
+    return data
 
 
 def import_loose_arcade(folder, command=""):

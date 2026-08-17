@@ -285,7 +285,7 @@ def dispatch_get(handler, parsed):
     if spec is None:
         raise RouteNotFound("Not found")
     if parsed.path not in PUBLIC_GET_PATHS and not handler.authorized():
-        handler.send_json(403, {"error": "Unauthorized"})
+        handler.handle_unauthorized()
         return
     callable_ = _resolve(spec)
     if callable_ is None:
@@ -298,7 +298,7 @@ def dispatch_post(handler, route, payload):
     if spec is None:
         raise RouteNotFound("Not found")
     if not handler.authorized():
-        handler.send_json(403, {"error": "Unauthorized"})
+        handler.handle_unauthorized()
         return
     callable_ = _resolve(spec)
     if callable_ is None:

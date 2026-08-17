@@ -167,7 +167,27 @@ class ExtensionsHandlers:
         source = Path(str(payload.get("path", ""))).expanduser()
         if not source.is_file() or source.suffix.lower() != ".css":
             raise ValueError("Theme path must point to a CSS file.")
+        if source.is_symlink() or any(parent.is_symlink() for parent in source.parents):
+            raise ValueError("Theme path may not contain symlinks.")
+        try:
+            size = source.stat().st_size
+        except OSError as error:
+            raise ValueError("Could not inspect theme file.") from error
+        if size > 256 * 1024:
+            raise ValueError("Theme file is too large (max 256 KiB).")
+        # Basic content check: reject remote @import that would bypass CSP
+        try:
+            text = source.read_text(encoding="utf-8", errors="strict")
+        except (OSError, UnicodeDecodeError) as error:
+            raise ValueError("Theme file is not valid UTF-8 CSS.") from error
+        lowered = text.lower()
+        if "@import" in lowered and "http" in lowered:
+            raise ValueError("Theme CSS may not contain remote @import.")
+        if len(text.encode("utf-8")) > 256 * 1024:
+            raise ValueError("Theme file is too large (max 256 KiB).")
         destination = DATA.parent / "themes" / source.name
+        if destination.is_symlink():
+            raise ValueError("Theme destination may not be a symlink.")
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
         self.send_json(200, {"theme": destination.stem})
