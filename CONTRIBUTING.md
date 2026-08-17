@@ -164,6 +164,16 @@ The public documentation is published at [openboxgl.github.io](https://openboxgl
 
 Do not open public issues for security vulnerabilities. Follow [SECURITY.md](SECURITY.md).
 
+## Developer Certificate of Origin
+
+This project uses the Developer Certificate of Origin. By contributing you certify that you have the right to submit the work under the open source license and that you agree to the DCO. Include a `Signed-off-by` line in every commit:
+
+```
+Signed-off-by: Your Name <your.email@example.com>
+```
+
+Use `git commit -s` to add it automatically. A contribution that includes third-party assets must state the source, the applicable license, and that you have the right to submit it. See [DISCLAIMER.md](DISCLAIMER.md) and [TRADEMARKS.md](TRADEMARKS.md) for content and trademark boundaries.
+
 ## Licensing
 
-By contributing, you agree that your contributions will be licensed under the [GNU Affero General Public License v3.0](LICENSE).
+By contributing, you agree that your contributions will be licensed under the [GNU Affero General Public License v3.0](LICENSE) and that you have the right to license them as such.

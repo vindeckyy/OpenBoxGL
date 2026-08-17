@@ -30,11 +30,13 @@ References to third-party products, platforms, services, and compatibility targe
 
 ## 3. Content and anti-piracy policy
 
-OpenBox does not distribute:
+OpenBox does not distribute, host, or bundle:
 
-1. **Bundled games or ROMs**: The repository and release artifacts contain no game files, ROMs, ISOs, or game binaries.
-2. **System firmware or BIOS**: The repository and release artifacts contain no proprietary console BIOS images, system firmware, or decryption keys.
-3. **DRM circumvention**: OpenBox does not bypass, tamper with, or circumvent digital rights management. It launches software through user-configured launchers and emulators.
+1. **Bundled games or ROMs**: The repository and release artifacts contain no game files, ROMs, ISOs, or game binaries. No cover art or game files are vendored in the repository. Showcase and documentation images are user supplied captures of user supplied games.
+2. **System firmware or BIOS**: The repository and release artifacts contain no proprietary console BIOS images, system firmware, or decryption keys. Import and save discovery merely read paths the user configured. Missing BIOS is reported as a dependency check, not silently fetched.
+3. **DRM circumvention**: OpenBox does not bypass, tamper with, or circumvent digital rights management, encryption, or access controls. It launches software through user-configured launchers and emulators with tokenized commands that do not perform shell interpolation. User supplied files remain on the user's machine.
+
+Contributions that add an import path, emulator profile, or sample must not include a copyrighted file, key, or bypass. See [TRADEMARKS.md](TRADEMARKS.md) and the Developer Certificate of Origin in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -45,15 +47,16 @@ OpenBox does not distribute:
 
 ---
 
-## 5. Formal notices
+## 5. Formal notices and designated agent
 
-Do not post legal notices or private contact information in a public GitHub issue.
+Do not post legal notices, takedown requests, or private contact information in a public GitHub issue, discussion, or pull request. GitHub is the host and the designated agent for content stored on GitHub.
 
-- For copyright complaints about content hosted on GitHub, use GitHub's [copyright claims form](https://github.com/contact/dmca) and follow GitHub's published process.
+- For copyright complaints about content hosted on GitHub, use GitHub's [copyright claims form](https://github.com/contact/dmca) and follow GitHub's published [DMCA process](https://docs.github.com/en/site-policy/content-removal-policies/dmca-takedown-policy). The project has no separate DMCA agent for GitHub hosted content.
 - For trademark complaints about misleading use of a name, logo, or brand on GitHub, use the [GitHub Trademark Policy](https://docs.github.com/en/site-policy/content-removal-policies/github-trademark-policy).
 - For security vulnerabilities, use the repository's [private security advisory form](https://github.com/vindeckyy/OpenBoxGL/security/advisories/new) as described in [SECURITY.md](SECURITY.md).
+- For documentation site concerns, use the same GitHub forms for the Pages repository, or open an issue that describes the page without pasting private data.
 
-The project cannot determine the legal validity of a complaint. Formal notices should use the applicable GitHub process or qualified legal counsel.
+The project cannot determine the legal validity of a complaint. Formal notices should use the applicable GitHub process or qualified legal counsel. See also the site policy at [openboxgl.github.io/policies/dmca/](/policies/dmca/) for the documentation site.
 
 ---
 
