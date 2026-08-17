@@ -15,6 +15,12 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="1.4.0" date="2026-08-17">
+      <description>
+        <p>Packaging fix release. AppImage and Flatpak now bundle every static module, fixing 404s for util.js, state.js and other chunks that left the top bar unresponsive. Routes now handle future JavaScript chunks without manual table updates.</p>
+        <p>Build provenance, SBOM and packaging tests now cover the full static set so the UI ships complete.</p>
+      </description>
+    </release>
     <release version="1.3.0" date="2026-08-16">
       <description>
         <p>Hardening release. Plugins use a bubblewrap sandbox when available, with no network or home-directory access, and skip execution by default when the sandbox cannot be created. The test gate now cleans up nested gamescope process trees.</p>
