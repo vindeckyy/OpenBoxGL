@@ -44,7 +44,7 @@ from parity_import import import_multi_platform, recommend_emulators
 from parity_import_policy import filter_imported, list_exclusions
 from parity_integrations import auto_attach_obs_recording, load_emumovies_credentials
 from parity_media import REGION_PRIORITY_DEFAULT, active_video, enqueue_media_job, media_types_from_settings, normalize_video_fields
-from parity_perf import apply_perf_profile, effective_profile_name, restore_perf_profile
+from parity_perf import apply_perf_profile, effective_profile_name
 from parity_premium import LIST_COLUMNS_DEFAULT, category_for_platform, custom_field_defs, import_with_emulator_choice, list_media_packs, platform_categories, strings_for
 from parity_saves import enforce_backup_limit, games_with_saves
 from parity_save_tools import save_tool_status
@@ -1103,7 +1103,64 @@ def game_from_query(state, query):
     return game_from_payload(state, payload)
 
 
-def finish_session(launch_id, game_index, started, process):
+def _read_proc_start_time(pid):
+    """Read process start time from /proc/<pid>/stat."""
+    try:
+        with open(f'/proc/{pid}/stat') as f:
+            fields = f.read().rsplit(')', 1)[-1].split()
+            return fields[19]  # starttime (field 22, 0-indexed as 19 after rparen split)
+    except (OSError, IndexError):
+        return None
+
+def _read_proc_cmdline(pid):
+    """Read command fingerprint from /proc/<pid>/cmdline."""
+    try:
+        with open(f'/proc/{pid}/cmdline') as f:
+            return f.read().replace('\0', ' ')[:100]
+    except OSError:
+        return ''
+
+def _verify_process_identity(session):
+    """Check if a persisted session's process is still the same one."""
+    pid = session.get('pid')
+    if not pid:
+        return False
+    # Check PID exists
+    try:
+        os.kill(pid, 0)
+    except (OSError, ProcessLookupError):
+        return False
+    # Verify start time matches
+    current_start = _read_proc_start_time(pid)
+    if current_start != session.get('proc_start_time'):
+        return False
+    # Verify command fingerprint matches
+    current_cmd = _read_proc_cmdline(pid)
+    if session.get('command_fingerprint') and current_cmd:
+        # Fuzzy match — first 50 chars should match
+        if current_cmd[:50] != session['command_fingerprint'][:50]:
+            return False
+    return True
+
+def reconcile_sessions_on_startup(state):
+    """Called once during server startup to handle sessions from previous run."""
+    sessions = state.get('active_sessions', [])
+    reattached = []
+    abandoned = []
+    for session in sessions:
+        if _verify_process_identity(session):
+            # Reattach: start a watcher thread for this process
+            reattached.append(session)
+        else:
+            # Mark abandoned — DON'T kill the PID
+            session['status'] = 'abandoned'
+            abandoned.append(session)
+    # Update state: keep reattached + abandoned (abandoned shown in UI)
+    state['active_sessions'] = reattached + abandoned
+    return reattached, abandoned
+
+
+def finish_session(launch_id, game_index, started, process, lease):
     running = {}
     running_snapshot = {}
     game_name = "Untitled"
@@ -1169,6 +1226,10 @@ def finish_session(launch_id, game_index, started, process):
             if settings.get("track_session_history", True):
                 state["history"].append(session_local)
                 state["history"][:] = state["history"][-500:]
+            
+            # Remove from active_sessions
+            state["active_sessions"] = [s for s in state.get("active_sessions", []) if s.get("launch_id") != launch_id]
+            
             session_result.update({"game_name": game_name_local, "session": session_local})
         update_state(mutate)
         game_name = session_result["game_name"]
@@ -1177,10 +1238,10 @@ def finish_session(launch_id, game_index, started, process):
         with PROCESS_LOCK:
             running = RUNNING.pop(launch_id, {})
             PROCESSES.pop(launch_id, None)
-    try:
-        restore_perf_profile(str(running.get("effective_profile", "")), load_state())
-    except Exception:  # never let performance tuning break session bookkeeping
-        LOGGER.exception("restore_perf failed")
+        try:
+            lease.restore()
+        except Exception:  # never let performance tuning break session bookkeeping
+            LOGGER.exception("restore_perf failed")
     session_event("stopped", launch_id, game_name, exit_code=exit_code, seconds=seconds)
     _publish_session_event(build_event("session.stopped", {
         "launch_id": launch_id,
@@ -1481,6 +1542,25 @@ def _make_start_mutator(stable_game_id, index, started, process, entry, missing,
             "pid": process.pid,
             "paused": False,
         })
+        
+        try:
+            pgid = os.getpgid(process.pid)
+        except OSError:
+            pgid = process.pid
+            
+        session_record = {
+            "game_id": stable_game_id,
+            "launch_id": launch_id,
+            "pid": process.pid,
+            "pgid": pgid,
+            "proc_start_time": _read_proc_start_time(process.pid),
+            "command_fingerprint": _read_proc_cmdline(process.pid),
+            "start_time": started.isoformat(timespec="seconds"),
+            "perf_profile": effective_profile,
+            "status": "active"
+        }
+        state.setdefault("active_sessions", []).append(session_record)
+        
     return mutate
 
 
@@ -1513,49 +1593,62 @@ def _publish_start_events(game, entry):
 
 
 def start_game(index=None, stable_game_id=""):
+    # Explicit 8-phase launch (Days 0-14, Task 2): each failure after phase 4 restores perf, no stale RUNNING.
+    # Phase 1: Resolve the game by stable ID.
     state = load_state()
     game, index = _resolve_start_game(state, index, stable_game_id)
     stable_game_id = str(game.get("game_id") or stable_game_id)
+    # Phase 2: Resolve and validate the launch command and working directory.
     profiles = dict(state["profiles"])
     selected_profile = str(game.get("launch_profile", "")).strip()
     if selected_profile and selected_profile in profiles:
         profiles = {game.get("platform", ""): profiles[selected_profile]}
     args, cwd = _start_launch_command(game, profiles)
-    effective_profile = effective_profile_name(game, state["profiles"])
-    apply_perf_profile(effective_profile, state)
-    args, cwd = _apply_start_plugins(game, args, cwd)
-    _validate_start_command(args, cwd)
-    process = subprocess.Popen(args, cwd=cwd, start_new_session=True)
-    started = datetime.now()
+    # Phase 3: Create a launch record containing stable game ID, canonical game path, profile name, and expected process identity.
     launch_id = secrets.token_urlsafe(8)
-    stable_game_id = str(game.get("game_id") or "")
-    entry = {}
-    missing = {"value": False}
+    # Phase 4: Apply the performance profile and retain whether it actually changed system state.
+    effective_profile = effective_profile_name(game, state["profiles"])
+    lease = apply_perf_profile(effective_profile, state)
+    
     try:
-        update_state(_make_start_mutator(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile))
+        # Phase 5: Start the process (plugins + validation must succeed first).
+        args, cwd = _apply_start_plugins(game, args, cwd)
+        _validate_start_command(args, cwd)
+        process = subprocess.Popen(args, cwd=cwd, start_new_session=True)
+        started = datetime.now()
+        entry = {}
+        missing = {"value": False}
+        # Phase 6: Persist the active-session record.
+        try:
+            update_state(_make_start_mutator(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile))
+        except Exception:
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except (OSError, ProcessLookupError):
+                process.terminate()
+            raise
+        if missing["value"]:
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except (OSError, ProcessLookupError):
+                process.terminate()
+            raise IndexError("Game was removed while it was launching")
+        # Phase 7: Register the in-memory session and start the watcher.
+        with PROCESS_LOCK:
+            RUNNING[launch_id] = entry
+            PROCESSES[launch_id] = process
+        _annotate_gamescope_start(args, game, process)
+        _publish_start_events(game, entry)
+        threading.Thread(
+            target=finish_session,
+            args=(launch_id, index, started, process, lease),
+            daemon=True,
+        ).start()
+        return dict(entry)
     except Exception:
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except (OSError, ProcessLookupError):
-            process.terminate()
+        # Phase 8: Restore the performance profile on every failure after phase 4 unless the watcher owns cleanup.
+        lease.restore()
         raise
-    if missing["value"]:
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except (OSError, ProcessLookupError):
-            process.terminate()
-        raise IndexError("Game was removed while it was launching")
-    with PROCESS_LOCK:
-        RUNNING[launch_id] = entry
-        PROCESSES[launch_id] = process
-    _annotate_gamescope_start(args, game, process)
-    _publish_start_events(game, entry)
-    threading.Thread(
-        target=finish_session,
-        args=(launch_id, index, started, process),
-        daemon=True,
-    ).start()
-    return dict(entry)
 
 
 def control_game_session(launch_id, action):

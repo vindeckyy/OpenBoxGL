@@ -24,6 +24,8 @@
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -38,7 +40,8 @@ static guint16 server_port = 0;
 static const char *data_dir = NULL;
 static const char *web_app_path = NULL;
 static const char *python_path = "python3";
-static int lock_fd = -1;
+static int server_sock_fd = -1;
+static guint socket_watch_id = 0;
 static char *geometry_path = NULL;
 static int default_width = 1280;
 static int default_height = 780;
@@ -151,6 +154,8 @@ token_is_valid(const char *value)
     return TRUE;
 }
 
+static void stop_server(void);
+
 static gboolean
 boot_server(void)
 {
@@ -174,6 +179,7 @@ boot_server(void)
 
     if (server_pid == 0) {
         /* Child: run the web server without a browser. */
+        setpgid(0, 0);
         const char *web_app = web_app_path;
         if (!web_app || !path_exists(web_app)) {
             g_printerr("native_host: OPENBOX_WEB_APP must point at web_app.py\n");
@@ -195,6 +201,7 @@ boot_server(void)
     }
     if (!secure_file_ready(port_file) || !secure_file_ready(token_file)) {
         g_printerr("native_host: server did not boot within %d seconds\n", BOOT_TIMEOUT_SECONDS);
+        stop_server();
         g_free(port_file);
         g_free(token_file);
         return FALSE;
@@ -207,6 +214,7 @@ boot_server(void)
 
     if (!port || !token || !parse_server_port(port, &server_port) || !token_is_valid(token)) {
         g_printerr("native_host: could not read server.port or server.token\n");
+        stop_server();
         g_free(port);
         g_clear_pointer(&token, g_free);
         return FALSE;
@@ -222,9 +230,9 @@ stop_server(void)
     if (server_pid <= 0) {
         return;
     }
-    kill(server_pid, SIGTERM);
+    kill(-server_pid, SIGTERM);
     int status = 0;
-    for (int i = 0; i < 50; i++) {
+    for (int i = 0; i < 20; i++) {
         pid_t result = waitpid(server_pid, &status, WNOHANG);
         if (result == server_pid) {
             break;
@@ -232,49 +240,104 @@ stop_server(void)
         g_usleep(100 * 1000);
     }
     /* Backstop: force kill if it is still alive. */
-    if (kill(server_pid, 0) == 0) {
-        kill(server_pid, SIGKILL);
+    if (kill(-server_pid, 0) == 0) {
+        kill(-server_pid, SIGKILL);
         waitpid(server_pid, &status, 0);
     }
     server_pid = 0;
+
+    if (data_dir) {
+        char *port_file = g_build_filename(data_dir, "server.port", NULL);
+        char *token_file = g_build_filename(data_dir, "server.token", NULL);
+        unlink(port_file);
+        unlink(token_file);
+        g_free(port_file);
+        g_free(token_file);
+    }
+}
+
+static gboolean on_socket_connection(GIOChannel *source, GIOCondition cond, gpointer data) {
+    (void)cond;
+    (void)data;
+    int client = accept(g_io_channel_unix_get_fd(source), NULL, NULL);
+    if (client >= 0) {
+        char buf[16];
+        ssize_t n = read(client, buf, sizeof(buf) - 1);
+        if (n > 0) {
+            buf[n] = '\0';
+            if (strncmp(buf, "focus", 5) == 0) {
+                if (main_window) {
+                    gtk_window_present(GTK_WINDOW(main_window));
+                }
+            }
+        }
+        close(client);
+    }
+    return TRUE;  // keep watching
 }
 
 static gboolean
 acquire_single_instance(void)
 {
-    char *lock_path = g_build_filename(data_dir, "native-host.lock", NULL);
-    lock_fd = open(lock_path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0600);
-    g_free(lock_path);
-    if (lock_fd < 0) {
-        return TRUE; /* can't lock; run anyway rather than brick the app */
+    char *sock_path = g_build_filename(data_dir, "openbox.sock", NULL);
+    int sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock_fd < 0) {
+        g_free(sock_path);
+        return TRUE;
     }
-    struct flock lock = {.l_type = F_WRLCK, .l_whence = SEEK_SET, .l_start = 0, .l_len = 0};
-    if (fcntl(lock_fd, F_SETLK, &lock) < 0) {
-        /* Already running: signal the existing instance to focus and exit. */
-        close(lock_fd);
-        lock_fd = -1;
+
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", sock_path);
+
+    if (connect(sock_fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+        ssize_t ignored = write(sock_fd, "focus\n", 6);
+        (void)ignored;
+        close(sock_fd);
+        g_free(sock_path);
         return FALSE;
     }
-    /* Write our pid so the existing instance can signal us (best-effort). */
-    char pidbuf[32];
-    int n = snprintf(pidbuf, sizeof(pidbuf), "%d\n", (int)getpid());
-    if (n > 0) {
-        ssize_t ignored = write(lock_fd, pidbuf, (size_t)n);
-        (void)ignored;
+
+    unlink(sock_path);
+
+    if (bind(sock_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        close(sock_fd);
+        g_free(sock_path);
+        return TRUE;
     }
+    if (listen(sock_fd, 1) < 0) {
+        close(sock_fd);
+        g_free(sock_path);
+        return TRUE;
+    }
+    chmod(sock_path, 0600);
+    server_sock_fd = sock_fd;
+
+    GIOChannel *channel = g_io_channel_unix_new(sock_fd);
+    socket_watch_id = g_io_add_watch(channel, G_IO_IN, on_socket_connection, NULL);
+    g_io_channel_unref(channel);
+
+    g_free(sock_path);
     return TRUE;
 }
 
 static void
 release_single_instance(void)
 {
-    if (lock_fd >= 0) {
-        close(lock_fd);
-        lock_fd = -1;
+    if (socket_watch_id > 0) {
+        g_source_remove(socket_watch_id);
+        socket_watch_id = 0;
     }
-    char *lock_path = g_build_filename(data_dir, "native-host.lock", NULL);
-    unlink(lock_path);
-    g_free(lock_path);
+    if (server_sock_fd >= 0) {
+        close(server_sock_fd);
+        server_sock_fd = -1;
+    }
+    if (data_dir) {
+        char *sock_path = g_build_filename(data_dir, "openbox.sock", NULL);
+        unlink(sock_path);
+        g_free(sock_path);
+    }
 }
 
 static void

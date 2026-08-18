@@ -1,6 +1,7 @@
 """LibraryHandlers capability handlers. Library, game CRUD, favorites, tags, queue, notifications, and health."""
 
 from datetime import datetime
+import os
 from pathlib import Path
 from urllib.parse import parse_qs
 
@@ -394,24 +395,51 @@ class LibraryHandlers:
     def delete_game(self, payload):
         delete_media = bool(payload.get("delete_media"))
         media_paths = []
+        referenced_media = set()
+        
         def mutate(state):
             game = game_from_payload(state, payload)
             if delete_media:
                 media_paths.extend(game_media_paths(game))
             state["games"].remove(game)
+            if delete_media:
+                for other_game in state["games"]:
+                    for path in game_media_paths(other_game):
+                        try:
+                            referenced_media.add(os.path.realpath(str(path)))
+                        except Exception:
+                            pass
             return game.get("name", "")
+            
         _, removed = transact_state(mutate)
+        
+        deleted_media = []
+        shared_media = []
+        
         if delete_media:
             for path in media_paths:
                 try:
                     target = approved_media_path(path, must_exist=True)
+                    canon = os.path.realpath(str(target))
+                    if canon in referenced_media:
+                        if str(target) not in shared_media:
+                            shared_media.append(str(target))
+                        continue
+                        
                     if target.is_file():
                         target.unlink()
+                        if str(target) not in deleted_media:
+                            deleted_media.append(str(target))
                 except (OSError, ValueError):
                     pass
             bump_media_epoch()
+            
         clear_file_probe_cache()
-        self.send_json(200, {"removed": removed})
+        self.send_json(200, {
+            "removed": removed,
+            "deleted_media": deleted_media,
+            "shared_media": shared_media
+        })
 
     def delete_steam_games(self, payload):
         def mutate(state):

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from backend_io import atomic_copy_stream, fsync_directory
 from state_store import default_state
+from pkg.parity.parity_redact import redact_settings, redact_state_for_export, merge_preserved_credentials
 
 
 BACKUP_ITEMS = {
@@ -124,14 +125,18 @@ def create_backup(data_dir, state, items, keep=0, running_map=None):
     root = Path(data_dir)
     _reject_symlink_components(root)
     archive = backup_path(root)
-    manifest = {"items": selected, "created": datetime.now().isoformat(timespec="seconds")}
+    manifest = {
+        "items": selected,
+        "created": datetime.now().isoformat(timespec="seconds"),
+        "redacted_secrets": True,
+    }
 
     def populate(package):
         package.writestr("manifest.json", json.dumps(manifest, indent=2))
         if "settings" in selected:
-            package.writestr("settings.json", json.dumps(settings_snapshot(state), indent=2))
+            package.writestr("settings.json", json.dumps(redact_settings(settings_snapshot(state)), indent=2))
         if "library" in selected:
-            package.writestr("library.json", json.dumps(state, indent=2))
+            package.writestr("library.json", json.dumps(redact_state_for_export(state), indent=2))
         for key in ("media", "plugins", "themes", "extension_data"):
             if key not in selected:
                 continue
@@ -317,6 +322,7 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None, force=F
             restore_items = _resolve_restore_items(manifest, selected)
             _check_restore_age(manifest, root, restore_items, force, package)
             restored_state, library_file = _restore_library(package, root, restore_items)
+            archived_settings = None
             if "settings" in restore_items and "settings.json" in package.namelist():
                 try:
                     archived_settings = json.loads(package.read("settings.json"))
@@ -324,19 +330,46 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None, force=F
                     raise ValueError("Backup settings are invalid.") from error
                 if not isinstance(archived_settings, dict):
                     raise ValueError("Backup settings are invalid.")
+            
+            # One central redacted-secrets handling for Days 0-14, Task 4: preserve local credentials when archive omits them.
+            if manifest.get("redacted_secrets"):
+                existing_settings = {}
+                settings_file = root / "settings.json"
+                if settings_file.is_file():
+                    try:
+                        with settings_file.open() as f:
+                            existing_settings = json.load(f)
+                    except json.JSONDecodeError:
+                        pass
+                if not isinstance(existing_settings, dict):
+                    existing_settings = {}
+                if archived_settings is not None:
+                    archived_settings = merge_preserved_credentials(archived_settings, existing_settings)
                 if restored_state is not None:
-                    settings = restored_state.setdefault("settings", {})
-                    if not isinstance(settings, dict):
-                        settings = {}
-                        restored_state["settings"] = settings
-                    settings.update(archived_settings)
+                    state_settings = restored_state.get("settings", {})
+                    if isinstance(state_settings, dict):
+                        restored_state["settings"] = merge_preserved_credentials(state_settings, existing_settings)
+            # Merge archived settings into restored library when both are present.
+            if archived_settings is not None and restored_state is not None:
+                settings = restored_state.setdefault("settings", {})
+                if not isinstance(settings, dict):
+                    settings = {}
+                    restored_state["settings"] = settings
+                settings.update(archived_settings)
+            import io
+            if restored_state is not None:
+                if manifest.get("redacted_secrets"):
+                    data = json.dumps(restored_state, indent=2).encode("utf-8")
+                    atomic_copy_stream(io.BytesIO(data), library_file, mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
+                else:
+                    with package.open("library.json") as source:
+                        atomic_copy_stream(source, library_file, mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
+            if archived_settings is not None:
+                if manifest.get("redacted_secrets"):
+                    data = json.dumps(archived_settings, indent=2).encode("utf-8")
+                    atomic_copy_stream(io.BytesIO(data), root / "settings.json", mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
                 else:
                     _restore_settings_from_package(package, root)
-            if restored_state is not None:
-                with package.open("library.json") as source:
-                    atomic_copy_stream(source, library_file, mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
-            if "settings" in restore_items and "settings.json" in package.namelist():
-                _restore_settings_from_package(package, root)
             _restore_media_tree(package, root, restore_items)
     except zipfile.BadZipFile as error:
         raise ValueError("Backup archive is invalid.") from error
