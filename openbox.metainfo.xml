@@ -15,6 +15,12 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="1.5.0" date="2026-08-18">
+      <description>
+        <p>Parity and reliability release. Adds Proton/Wine prefix management, Faugus launcher scans, Eden Switch emulator support, canonical identity deduplication, Edit Game modal navigation, acronym search matching, capability filter rules, and scoped media cleanup.</p>
+        <p>Reliability guardrails persist and reconcile active sessions against process cmdlines, make game launch preparation transactional, centralize backup credential redaction, and protect shared media files during cleanup.</p>
+      </description>
+    </release>
     <release version="1.4.0" date="2026-08-17">
       <description>
         <p>Packaging fix release. AppImage and Flatpak now bundle every static module, fixing 404s for util.js, state.js and other chunks that left the top bar unresponsive. Routes now handle future JavaScript chunks without manual table updates.</p>
