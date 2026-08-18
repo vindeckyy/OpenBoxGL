@@ -110,9 +110,10 @@ class TestSessionPersistence(unittest.TestCase):
 
         self.assertEqual(len(state["active_sessions"]), 2)
         
+    @patch('webapp_state.threading.Thread')
     @patch('webapp_state.subprocess.Popen')
     @patch('openbox.STATE_STORE')
-    def test_session_record_added_on_launch_and_removed_on_exit(self, mock_store, mock_popen):
+    def test_session_record_added_on_launch_and_removed_on_exit(self, mock_store, mock_popen, mock_thread):
         state = default_state()
         state["games"].append({
             "game_id": "game-1234",
