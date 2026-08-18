@@ -4,6 +4,8 @@
 
 | Version | Supported |
 | --- | --- |
+| 1.5.x | Yes |
+| 1.4.x | Yes |
 | 1.3.x | Yes |
 | 1.2.x | Yes |
 | 1.1.x | Yes |

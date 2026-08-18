@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-08-18
+
 ### Added
 
 - Edit Game modal now features Previous (← Prev) and Next (Next →) navigation buttons to rapidly cycle and edit games in the active filtered/sorted library without reopening the modal.
@@ -15,7 +17,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Added `Ctrl+Alt+Q` (and `Ctrl+Alt+R`) global shortcut to shuffle and focus a random game in the desktop grid and list views.
 - Search and filter queries now support acronym matching for game titles (e.g., `oot` matches *The Legend of Zelda: Ocarina of Time*, `mgs` matches *Metal Gear Solid*, `sotn` matches *Castlevania: Symphony of the Night*).
 - Expanded dynamic launch variables for custom emulators and launch commands, supporting `{ImagePath}`, `{dir}`, `{Dir}`, `{file}`, `{File}`, `{stem}`, `{FileNameWithoutExtension}`, `{Platform}`, `{EmulatorDir}`, and `{DataDir}`.
+- Added Proton and Wine prefix manager (`/api/wine/*`), Faugus scan and import (`/api/faugus/*`), and Eden Switch emulator definition (`emulator_defs/eden.yaml`).
+- Added canonical identity normalization across Steam, Heroic, Lutris, Faugus, and ROMs with duplicate game consolidation in library health checks.
 - Added `--fullscreen-width`, `--fullscreen-height`, and `--resolution <WxH>` CLI flags to control kiosk and native window viewport sizing.
+
+### Fixed
+
+- Resolved frontend module reference errors, prevented media dialog DOM accumulation, fixed play queue and tag selected game lookups, and expanded BigBox menu controller navigation.
+- Worker job queues and webapp state cleanup now guarantee cleanup on failure and process termination to prevent queue and process leaks.
+- Preserved shared media files during media deletion via realpath reference counting.
+- Stale Unix socket single-instance focus handling and native host boot cleanup now recover cleanly from crashed instances.
+
+### Hardened
+
+- Active sessions are now persisted and reconciled against PID, start time, and cmdline verification, marking abandoned sessions and reattaching watchers.
+- Launch preparation is transactional with explicit 8-phase lease tracking.
+- Backups and exports centralize credential and secret redaction with manifest tracking, preserving local secrets on restore.
+- Performance benchmark runner covers full operational matrix with 10k game scaling gates.
 
 ## [1.4.0] - 2026-08-17
 
@@ -535,7 +553,8 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[0.8.2]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.2
+[1.5.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.0.1...v1.1.0
