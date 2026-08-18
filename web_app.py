@@ -53,6 +53,7 @@ from webapp_state import (
 from handlers.data import DataHandlers
 from handlers.emulators import EmulatorsHandlers
 from handlers.extensions import ExtensionsHandlers
+from handlers.faugus import FaugusHandlers
 from handlers.health import HealthHandlers
 from handlers.imports import ImportsHandlers
 from handlers.library import LibraryHandlers
@@ -60,6 +61,7 @@ from handlers.media import MediaHandlers
 from handlers.metadata import MetadataHandlers
 from handlers.sessions import SessionHandlers
 from handlers.settings import SettingsHandlers
+from handlers.wine import WineHandlers
 
 import re as _re
 
@@ -114,7 +116,7 @@ _AUTH_WINDOW_SECONDS = 60.0
 CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.bunny.net; font-src 'self' https://fonts.bunny.net; script-src 'self'; object-src 'none'; base-uri 'none'"
 
 
-class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, EmulatorsHandlers, DataHandlers, BaseHTTPRequestHandler):
+class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, EmulatorsHandlers, DataHandlers, WineHandlers, FaugusHandlers, BaseHTTPRequestHandler):
     server_version = "OpenBox/1"
     protocol_version = "HTTP/1.1"
     MAX_BODY = 65536

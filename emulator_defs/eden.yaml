@@ -1,0 +1,15 @@
+id: eden
+name: Eden
+native: eden
+flatpak: io.github.eden-emu.eden
+extensions:
+  - nsp
+  - xci
+  - nca
+  - nro
+platforms:
+  - Nintendo Switch
+executable_patterns:
+  - eden
+  - eden-emu
+startup: "{path}"

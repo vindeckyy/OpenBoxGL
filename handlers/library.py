@@ -513,12 +513,28 @@ class LibraryHandlers:
 
     def health(self):
         state = load_state()
+        # Use canonical identity when available, fallback to legacy game_identity
+        try:
+            from pkg.parity.parity_identity import detect_duplicate_identities, normalize_identity
+            has_canonical = True
+        except ImportError:
+            has_canonical = False
         seen, duplicates, issues = {}, [], []
+        # Canonical duplicate detection for cross-source consolidation (Steam/Heroic/Lutris/Faugus/ROM)
+        if has_canonical:
+            dup_groups = detect_duplicate_identities(state["games"])
+            dup_index_by_id = {}
+            for grp in dup_groups:
+                for gid in grp["games"]:
+                    dup_index_by_id[gid] = grp["identity"]
         for index, game in enumerate(state["games"]):
-            identity = game_identity(game)
+            if has_canonical:
+                identity = normalize_identity(game) or game_identity(game)
+            else:
+                identity = game_identity(game)
             if identity in seen:
                 duplicates.append(index)
-                issues.append({"id":index, "game":game.get("name", ""), "type":"Duplicate", "detail":f"Matches {state['games'][seen[identity]].get('name', '')}"})
+                issues.append({"id":index, "game":game.get("name", ""), "type":"Duplicate", "detail":f"Matches {state['games'][seen[identity]].get('name', '')} — identity {identity}"})
             else:
                 seen[identity] = index
             path = Path(game.get("path", ""))
