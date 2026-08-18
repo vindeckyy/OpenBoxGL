@@ -74,6 +74,8 @@ handlers/extensions.py
 handlers/health.py
 handlers/emulators.py
 handlers/data.py
+handlers/wine.py
+handlers/faugus.py
 automation.py
 notifications.py
 play_queue.py
@@ -81,3 +83,7 @@ parity_identity.py
 pkg/parity/parity_identity.py
 pkg/parity/parity_redact.py
 parity_redact.py
+parity_wine.py
+pkg/parity/parity_wine.py
+parity_faugus.py
+pkg/parity/parity_faugus.py
