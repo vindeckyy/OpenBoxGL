@@ -101,7 +101,7 @@ class BackendFollowupTests(unittest.TestCase):
         for index in range(5):
             manager.submit(f"job-{index}", lambda: {"ok": True})
         for _ in range(200):
-            if all(manager.snapshot(f"job-{index}").get("state") == "done" for index in range(5)):
+            if all(manager.snapshot(f"job-{index}").get("state") == "done" for index in range(5)) and not manager._futures:
                 break
             time.sleep(0.01)
         self.assertEqual(manager._futures, {}, "completed futures must not accumulate")

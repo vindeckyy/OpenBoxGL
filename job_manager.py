@@ -236,6 +236,7 @@ class JobManager:
             with self._lock:
                 self._inflight.discard(job_id)
                 self._cancel_events.pop(job_id, None)
+                self._futures.pop(job_id, None)
 
     def _drop_future(self, future):
         """Forget a finished future so completed jobs cannot accumulate."""
