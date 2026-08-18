@@ -147,8 +147,10 @@ def generate(games_count, data_dir: Path, seed=42):
     rng = random.Random(seed)
     games = build_games(games_count, data_dir, rng)
     store = JsonStateStore(data_dir / "library.json")
+    from state_store import STATE_SCHEMA_VERSION
+
     state = {
-        "schema_version": 3,
+        "schema_version": STATE_SCHEMA_VERSION,
         "games": games,
         "profiles": {},
         "history": [],
