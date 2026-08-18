@@ -22,7 +22,7 @@ Describe how you verified the change.
 
 ## Checklist
 
-- [ ] I read [CONTRIBUTING.md](../CONTRIBUTING.md)
+- [ ] I read [CONTRIBUTING.md](../docs/CONTRIBUTING.md)
 - [ ] I updated documentation when user-facing behavior changed
 - [ ] I added or updated tests when behavior changed
 - [ ] I did not commit secrets, tokens, ROMs, or personal library data

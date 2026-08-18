@@ -56,7 +56,7 @@ Do not post legal notices, takedown requests, or private contact information in 
 - For security vulnerabilities, use the repository's [private security advisory form](https://github.com/vindeckyy/OpenBoxGL/security/advisories/new) as described in [SECURITY.md](SECURITY.md).
 - For documentation site concerns, use the same GitHub forms for the Pages repository, or open an issue that describes the page without pasting private data.
 
-The project cannot determine the legal validity of a complaint. Formal notices should use the applicable GitHub process or qualified legal counsel. See also the site policy at [openboxgl.github.io/policies/dmca/](/policies/dmca/) for the documentation site.
+The project cannot determine the legal validity of a complaint. Formal notices should use the applicable GitHub process or qualified legal counsel. See also the site policy at [openboxgl.github.io/policies/dmca/](https://openboxgl.github.io/policies/dmca/) for the documentation site.
 
 ---
 

@@ -9,7 +9,7 @@ Stages:
 
 Exits non-zero when any stage fails. Used by `make check` and CI.
 
-Dev-only dependencies are expected in .venv-dev (see CONTRIBUTING.md).
+Dev-only dependencies are expected in .venv-dev (see docs/CONTRIBUTING.md).
 """
 
 import os

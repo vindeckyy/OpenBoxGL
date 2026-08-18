@@ -96,6 +96,10 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Acronym search matching | done | Search queries match game title initials and acronyms (e.g. oot, mgs, sotn, ff) |
 | Dynamic launch variables | done | Template expansion for {ImagePath}, {dir}, {file}, {stem}, {Platform}, {EmulatorDir}, and {DataDir} |
 | Window resolution CLI options | done | --fullscreen-width, --fullscreen-height, and --resolution flags control viewport sizing |
+| Proton and Wine prefix manager | done | Discover Proton runtimes, custom wine prefixes, and manage Windows runner profiles |
+| Faugus launcher scan and import | done | Discover UMU configs and wine prefixes, and import Faugus games |
+| Eden Nintendo Switch emulator | done | YAML emulator definition and profile support for Eden Switch emulator |
+| Canonical identity deduplication | done | Cross-storefront canonical identification and deduplication |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 
