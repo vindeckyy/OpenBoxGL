@@ -102,18 +102,24 @@ def _save_game_mutate(state, payload, game):
 
 class LibraryHandlers:
     def _api_get_api_library(self, parsed):
+        # Check for pagination parameters before applying the full-library ETag.
+        # A page is a different representation even when the underlying state
+        # has not changed.
+        query_params = parse_qs(parsed.query)
+        offset_str = query_params.get("offset", [None])[0]
+        limit_str = query_params.get("limit", [None])[0]
         etag = public_state_etag()
-        if etag and self.headers.get("If-None-Match", "").strip() == etag:
+        if (
+            offset_str is None
+            and limit_str is None
+            and etag
+            and self.headers.get("If-None-Match", "").strip() == etag
+        ):
             self.send_response(304)
             self.headers_common("application/json; charset=utf-8", "private, no-cache")
             self.send_header("ETag", etag)
             self.end_headers()
             return
-        
-        # Check for pagination parameters
-        query_params = parse_qs(parsed.query)
-        offset_str = query_params.get("offset", [None])[0]
-        limit_str = query_params.get("limit", [None])[0]
         
         if offset_str is not None or limit_str is not None:
             # Paginated response

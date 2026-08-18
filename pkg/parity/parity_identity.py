@@ -72,6 +72,10 @@ def normalize_identity(game: dict) -> str | None:
     if not game:
         return None
 
+    source_identity = str(game.get("source_identity") or "").strip()
+    if source_identity:
+        return source_identity
+
     if game.get("steam_app_id"):
         return f"steam:{game['steam_app_id']}"
     
@@ -85,6 +89,9 @@ def normalize_identity(game: dict) -> str | None:
         
     if game.get("gameyfin_id"):
         return f"gameyfin:{game['gameyfin_id']}"
+
+    if game.get("faugus_id"):
+        return f"faugus:{game['faugus_id']}"
         
     rom_name = game.get("rom_name")
     if rom_name:
@@ -110,7 +117,7 @@ def detect_duplicate_identities(games: list[dict]) -> list[dict]:
     for game in games:
         ident = normalize_identity(game)
         if ident:
-            game_id = game.get("id")
+            game_id = game.get("game_id") or game.get("id")
             if game_id:
                 identities.setdefault(ident, []).append(game_id)
             

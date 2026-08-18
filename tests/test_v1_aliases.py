@@ -26,6 +26,17 @@ class V1AliasTests(unittest.TestCase):
         self.assertNotIn("/api/v1/not-a-real-route", GET_TABLE)
         self.assertNotIn("/api/v1/not-a-real-route", POST_TABLE)
 
+    def test_route_tables_match_handler_methods(self):
+        for path, spec in GET_TABLE.items():
+            if "." not in spec:
+                self.assertTrue(spec.startswith("_api_get_"), f"GET route has non-GET handler: {path}")
+        for path, spec in POST_TABLE.items():
+            if "." not in spec:
+                self.assertTrue(spec.startswith("_api_post_"), f"POST route has non-POST handler: {path}")
+
+    def test_session_cleanup_route_is_registered(self):
+        self.assertEqual(POST_TABLE["/api/session/cleanup"], "_api_post_api_session_cleanup")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -56,6 +56,47 @@ def _load_faugus_json(path):
         return None
 
 
+def _iter_prefix_dirs(base):
+    """Yield valid Wine prefix directories below a Faugus data root."""
+    if not base.is_dir() or base.is_symlink():
+        return
+
+    roots = [base]
+    nested = base / "prefixes"
+    if nested.is_dir() and not nested.is_symlink():
+        roots.append(nested)
+
+    seen = set()
+    for root in roots:
+        try:
+            children = list(root.iterdir())
+        except OSError:
+            continue
+        for child in children:
+            if child.is_symlink() or not child.is_dir():
+                continue
+            try:
+                is_prefix = (child / "drive_c").is_dir()
+            except OSError:
+                is_prefix = False
+            if not is_prefix:
+                continue
+            try:
+                key = str(child.resolve())
+            except OSError:
+                key = str(child)
+            if key in seen:
+                continue
+            seen.add(key)
+            yield child
+
+    try:
+        if (base / "drive_c").is_dir():
+            yield base
+    except OSError:
+        return
+
+
 def scan_faugus_games(data_dirs=None):
     """Return candidate game dicts found in Faugus launcher data.
 
@@ -104,31 +145,22 @@ def scan_faugus_games(data_dirs=None):
                     })
             except OSError:
                 pass
-        # Also look for prefix directories as fallback (derive game from prefix name)
-        prefixes_dir = base / "prefixes" if (base / "prefixes").is_dir() else base
-        if base.name == "prefixes" or (base / "drive_c").is_dir():
-            try:
-                for child in prefixes_dir.iterdir():
-                    if not child.is_dir() or child.is_symlink():
-                        continue
-                    if not (child / "drive_c").is_dir() and not child.name:
-                        continue
-                    game_id = child.name
-                    identity = f"faugus:{game_id}"
-                    if identity in seen:
-                        continue
-                    # Only add if no JSON already covered it
-                    seen.add(identity)
-                    candidates.append({
-                        "source": "Faugus",
-                        "source_identity": identity,
-                        "faugus_id": game_id,
-                        "name": game_id.replace("-", " ").title(),
-                        "path": "",
-                        "prefix": str(child),
-                        "runner": "",
-                        "config_path": "",
-                    })
-            except OSError:
-                pass
+        # Also look for prefix directories as fallback (derive game from prefix name).
+        for prefix in _iter_prefix_dirs(base):
+            game_id = prefix.name
+            identity = f"faugus:{game_id}"
+            if identity in seen:
+                continue
+            # Only add if no JSON already covered it.
+            seen.add(identity)
+            candidates.append({
+                "source": "Faugus",
+                "source_identity": identity,
+                "faugus_id": game_id,
+                "name": game_id.replace("-", " ").title(),
+                "path": "",
+                "prefix": str(prefix),
+                "runner": "",
+                "config_path": "",
+            })
     return sorted(candidates, key=lambda x: x["name"].lower())

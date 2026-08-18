@@ -44,7 +44,7 @@ from parity_import import import_multi_platform, recommend_emulators
 from parity_import_policy import filter_imported, list_exclusions
 from parity_integrations import auto_attach_obs_recording, load_emumovies_credentials
 from parity_media import REGION_PRIORITY_DEFAULT, active_video, enqueue_media_job, media_types_from_settings, normalize_video_fields
-from parity_perf import apply_perf_profile, effective_profile_name
+from parity_perf import apply_perf_profile, effective_profile_name, restore_perf_profile
 from parity_premium import LIST_COLUMNS_DEFAULT, category_for_platform, custom_field_defs, import_with_emulator_choice, list_media_packs, platform_categories, strings_for
 from parity_saves import enforce_backup_limit, games_with_saves
 from parity_save_tools import save_tool_status
@@ -1160,6 +1160,95 @@ def reconcile_sessions_on_startup(state):
     return reattached, abandoned
 
 
+class _ReattachedProcess:
+    """Process-like view for a verified process from a previous server run."""
+
+    def __init__(self, session):
+        self.pid = int(session["pid"])
+        self.pgid = int(session.get("pgid") or self.pid)
+        self._identity = {
+            "pid": self.pid,
+            "proc_start_time": session.get("proc_start_time"),
+            "command_fingerprint": session.get("command_fingerprint", ""),
+        }
+
+    def poll(self):
+        return None if _verify_process_identity(self._identity) else 0
+
+    def wait(self):
+        while self.poll() is None:
+            time.sleep(1.0)
+        return 0
+
+
+class _ReattachedLease:
+    """Restore a performance profile once when a reattached session ends."""
+
+    def __init__(self, profile_name):
+        self.profile_name = str(profile_name or "").strip()
+        self._restored = False
+        self._lock = threading.Lock()
+
+    def restore(self):
+        with self._lock:
+            if self._restored:
+                return
+            self._restored = True
+        if self.profile_name:
+            restore_perf_profile(self.profile_name, load_state())
+
+
+def reattach_session(session, state=None):
+    """Register a verified persisted session and resume normal lifecycle cleanup."""
+    if not isinstance(session, dict):
+        return False
+    launch_id = str(session.get("launch_id") or "").strip()
+    try:
+        pid = int(session.get("pid"))
+    except (TypeError, ValueError):
+        return False
+    if not launch_id or pid <= 0:
+        return False
+
+    state = state or load_state()
+    stable_game_id = str(session.get("game_id") or "").strip()
+    game = resolve_library_game(state, {"stable_game_id": stable_game_id})
+    games = state.get("games", [])
+    game_index = games.index(game) if game in games else -1
+    game = game or {}
+    started_value = str(session.get("start_time") or "").strip()
+    try:
+        started = datetime.fromisoformat(started_value)
+    except ValueError:
+        started = datetime.now()
+    entry = {
+        "launch_id": launch_id,
+        "game_id": game_index,
+        "stable_game_id": stable_game_id,
+        "effective_profile": str(session.get("perf_profile") or ""),
+        "game": game.get("name", "Unknown game"),
+        "game_path": str(game.get("path", "")),
+        "steam_app_id": str(game.get("steam_app_id") or ""),
+        "heroic_app_id": str(game.get("heroic_app_id") or ""),
+        "lutris_id": str(game.get("lutris_id") or ""),
+        "gameyfin_id": str(game.get("gameyfin_id") or ""),
+        "started": started.isoformat(timespec="seconds"),
+        "pid": pid,
+        "paused": False,
+    }
+    process = _ReattachedProcess(session)
+    lease = _ReattachedLease(session.get("perf_profile", ""))
+    with PROCESS_LOCK:
+        RUNNING[launch_id] = entry
+        PROCESSES[launch_id] = process
+    threading.Thread(
+        target=finish_session,
+        args=(launch_id, game_index, started, process, lease),
+        daemon=True,
+    ).start()
+    return True
+
+
 def finish_session(launch_id, game_index, started, process, lease):
     running = {}
     running_snapshot = {}
@@ -1167,6 +1256,7 @@ def finish_session(launch_id, game_index, started, process, lease):
     exit_code = 0
     seconds = 1
     session = {}
+    session_committed = False
     try:
         with PROCESS_LOCK:
             running_snapshot = dict(RUNNING.get(launch_id, {}))
@@ -1232,9 +1322,20 @@ def finish_session(launch_id, game_index, started, process, lease):
             
             session_result.update({"game_name": game_name_local, "session": session_local})
         update_state(mutate)
+        session_committed = True
         game_name = session_result["game_name"]
         session = session_result["session"]
     finally:
+        if not session_committed:
+            try:
+                def remove_failed_session(state):
+                    state["active_sessions"] = [
+                        item for item in state.get("active_sessions", [])
+                        if not isinstance(item, dict) or item.get("launch_id") != launch_id
+                    ]
+                update_state(remove_failed_session)
+            except Exception:
+                LOGGER.exception("Failed to clean up session %s after watcher failure", launch_id)
         with PROCESS_LOCK:
             running = RUNNING.pop(launch_id, {})
             PROCESSES.pop(launch_id, None)
@@ -1657,18 +1758,19 @@ def control_game_session(launch_id, action):
         running = RUNNING.get(launch_id)
         if not process or not running or process.poll() is not None:
             raise ValueError("That game is no longer running.")
+        process_group = process.pgid if isinstance(process, _ReattachedProcess) else process.pid
         try:
             if action == "pause":
-                os.killpg(process.pid, signal.SIGSTOP)
+                os.killpg(process_group, signal.SIGSTOP)
                 running["paused"] = True
             elif action == "resume":
-                os.killpg(process.pid, signal.SIGCONT)
+                os.killpg(process_group, signal.SIGCONT)
                 running["paused"] = False
             elif action in {"stop", "restart", "kill"}:
                 running["restart"] = action == "restart"
                 if running.get("paused") and action != "kill":
-                    os.killpg(process.pid, signal.SIGCONT)
-                os.killpg(process.pid, signal.SIGKILL if action == "kill" else signal.SIGTERM)
+                    os.killpg(process_group, signal.SIGCONT)
+                os.killpg(process_group, signal.SIGKILL if action == "kill" else signal.SIGTERM)
             else:
                 raise ValueError("Unknown session action.")
         except (ProcessLookupError, OSError):
