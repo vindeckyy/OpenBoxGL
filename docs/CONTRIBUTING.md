@@ -149,12 +149,12 @@ Bundled catalog entries live in `plugins/catalog.json` and `plugin_catalog.py`.
 
 Update relevant docs when behavior changes:
 
-- [README.md](README.md) for user-facing overview changes
+- [README.md](../README.md) for user-facing overview changes
 - [PARITY.md](PARITY.md) for capability status changes
 - [CHANGELOG.md](CHANGELOG.md) for release-visible changes
-- [openbox.metainfo.xml](openbox.metainfo.xml) and [SECURITY.md](SECURITY.md) when releases or support policy change
+- [openbox.metainfo.xml](../openbox.metainfo.xml) and [SECURITY.md](SECURITY.md) when releases or support policy change
 
-Parity-related modules include `parity_import.py`, `parity_premium.py`, `parity_storefront.py`, `parity_discovery.py`, `parity_media.py`, `parity_saves.py`, `parity_integrations.py`, `parity_gamescope.py`, and the other `parity_*.py` helpers.
+Parity-related modules live in `pkg/parity/` (e.g. `parity_import.py`, `parity_premium.py`, `parity_storefront.py`, `parity_discovery.py`, `parity_media.py`, `parity_saves.py`, `parity_integrations.py`, `parity_gamescope.py`, `parity_wine.py`, `parity_faugus.py`) with root compatibility shims.
 
 ## Documentation site
 
@@ -176,4 +176,4 @@ Use `git commit -s` to add it automatically. A contribution that includes third-
 
 ## Licensing
 
-By contributing, you agree that your contributions will be licensed under the [GNU Affero General Public License v3.0](LICENSE) and that you have the right to license them as such.
+By contributing, you agree that your contributions will be licensed under the [GNU Affero General Public License v3.0](../LICENSE) and that you have the right to license them as such.
