@@ -138,7 +138,25 @@ def build_launch_command(definition, rom_path, prefix=None):
         template_args = shlex.split(str(startup))
     except ValueError as error:
         raise ValueError(f"Invalid startup command for {definition.get('name', definition.get('id'))}.") from error
-    replacements = {"{path}": str(rom_path), "{name}": Path(rom_path).stem}
+    rom = Path(rom_path)
+    stem = rom.stem
+    game_name = str(definition.get("name") or stem)
+    parent_dir = str(rom.parent)
+    file_name = rom.name
+    emu_dir = str(Path(prefix[0]).parent) if prefix else ""
+    replacements = {
+        "{path}": str(rom_path),
+        "{ImagePath}": str(rom_path),
+        "{name}": game_name,
+        "{Name}": game_name,
+        "{dir}": parent_dir,
+        "{Dir}": parent_dir,
+        "{file}": file_name,
+        "{File}": file_name,
+        "{stem}": stem,
+        "{FileNameWithoutExtension}": stem,
+        "{EmulatorDir}": emu_dir,
+    }
     for value in template_args:
         for marker, replacement in replacements.items():
             value = value.replace(marker, replacement)

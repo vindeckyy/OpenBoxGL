@@ -153,7 +153,14 @@
         <label class="field wide"><span>Private notes</span><textarea name="notes"></textarea></label>
         <div class="wide form-grid" id="customFieldInputs"></div>
       </div>
-      <div class="dialog-actions"><button type="button" class="icon-button" id="cancelDialog">Cancel</button><button class="primary">Save</button></div>
+      <div class="dialog-actions">
+        <div class="dialog-nav" id="gameDialogNav">
+          <button type="button" class="icon-button" id="prevGameDialog" aria-label="Previous game">← Previous</button>
+          <button type="button" class="icon-button" id="nextGameDialog" aria-label="Next game">Next →</button>
+        </div>
+        <button type="button" class="icon-button" id="cancelDialog">Cancel</button>
+        <button class="primary" type="submit">Save</button>
+      </div>
     </form>
   </dialog>
   <dialog id="profilesDialog" aria-modal="true" class="profiles-dialog" aria-labelledby="profilesDialogTitle">
@@ -285,6 +292,7 @@
         <label class="field"><span>Favorite</span><select name="favorite"><option value="">Keep current</option><option value="true">Yes</option><option value="false">No</option></select></label>
         <label class="field"><span>Hidden</span><select name="hidden"><option value="">Keep current</option><option value="true">Yes</option><option value="false">No</option></select></label>
         <label class="field"><span>ESRB</span><select name="esrb"><option value="">Keep current</option><option>E</option><option>E10+</option><option>T</option><option>M</option><option>AO</option><option>RP</option><option>Unrated</option></select></label>
+        <label class="check wide"><input type="checkbox" name="reset_stats"> Reset play count, play time, and last played date</label>
       </div>
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelBulk">Cancel</button><button class="primary">Apply</button></div>
     </form>
@@ -473,6 +481,7 @@
     <select id="contextPlaylist" aria-label="Playlist"><option value="">Add to playlist...</option></select>
     <button type="button" class="icon-button" id="contextAddPlaylist">Add selected game</button>
     <button type="button" class="icon-button" id="contextNewPlaylist">New playlist from game</button>
+    <button type="button" class="icon-button" id="contextResetStats">Reset play statistics</button>
     <button type="button" class="icon-button" id="contextRemove">Remove from library</button>
   </div>
   <section class="lifecycle" id="lifecycle" role="status" aria-live="polite" hidden><div><small id="lifecycleKind"></small><h2 id="lifecycleGame"></h2><p id="lifecycleMessage"></p></div></section>

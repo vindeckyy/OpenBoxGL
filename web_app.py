@@ -548,6 +548,8 @@ def main():
     # Log without the token; the token-bearing URL is only printed to the
     # native host via the token file and to a browser when explicitly opened.
     safe_url = f"http://127.0.0.1:{port}/"
+    print(f"http://127.0.0.1:{port}/", flush=True)
+    LOGGER.info("OpenBox web UI URL: %s", safe_url)
     force_game_mode = "--game-mode" in sys.argv
     guest = is_gamescope_guest(force=force_game_mode)
     # Desktop sessions open the UI in a chrome-less app window by default;
@@ -558,10 +560,29 @@ def main():
         native_window = False
     else:
         native_window = not guest
-    print(f"http://127.0.0.1:{port}/", flush=True)
-    LOGGER.info("OpenBox web UI URL: %s", safe_url)
+    width = None
+    height = None
+    for i, arg in enumerate(sys.argv):
+        if arg in ("--fullscreen-width", "--width") and i + 1 < len(sys.argv):
+            try:
+                width = int(sys.argv[i + 1])
+            except ValueError:
+                pass
+        elif arg in ("--fullscreen-height", "--height") and i + 1 < len(sys.argv):
+            try:
+                height = int(sys.argv[i + 1])
+            except ValueError:
+                pass
+        elif arg.startswith("--resolution=") or (arg == "--resolution" and i + 1 < len(sys.argv)):
+            raw = arg.split("=", 1)[1] if "=" in arg else sys.argv[i + 1]
+            if "x" in raw.lower():
+                try:
+                    w_str, h_str = raw.lower().split("x", 1)
+                    width, height = int(w_str), int(h_str)
+                except ValueError:
+                    pass
     if "--no-browser" not in sys.argv:
-        opened = open_ui(url, guest=guest, force_game_mode=force_game_mode, native_window=native_window)
+        opened = open_ui(url, guest=guest, force_game_mode=force_game_mode, native_window=native_window, width=width, height=height)
         browser_pid = opened.get("pid")
         if opened.get("mode") == "kiosk" and guest and browser_pid:
             browser_name = Path(str(opened.get("browser") or "")).name

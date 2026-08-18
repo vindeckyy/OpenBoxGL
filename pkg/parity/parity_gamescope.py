@@ -110,7 +110,7 @@ def resolve_app_window_browser(which=None, run=None):
     return None
 
 
-def kiosk_command(browser_argv, url):
+def kiosk_command(browser_argv, url, width=None, height=None):
     """Build a single-window browser command for the OpenBox UI URL."""
     if not browser_argv:
         raise ValueError("No browser argv provided.")
@@ -118,8 +118,18 @@ def kiosk_command(browser_argv, url):
     binary = Path(args[0]).name.casefold()
     if binary == "flatpak" or "firefox" in binary:
         args.extend(["--new-window", url])
+        if width and height:
+            try:
+                args.extend(["--width", str(int(width)), "--height", str(int(height))])
+            except (ValueError, TypeError):
+                pass
         return args
     args.extend([f"--app={url}", "--new-window"])
+    if width and height:
+        try:
+            args.append(f"--window-size={int(width)},{int(height)}")
+        except (ValueError, TypeError):
+            pass
     return args
 
 
@@ -131,7 +141,7 @@ def host_helper_env(environ=None):
     return env
 
 
-def open_ui(url, *, guest=False, force_game_mode=False, native_window=False, popen=None, browser_open=None, which=None, environ=None):
+def open_ui(url, *, guest=False, force_game_mode=False, native_window=False, width=None, height=None, popen=None, browser_open=None, which=None, environ=None):
     """Open the UI; use a kiosk/app window when guest/game-mode or requested."""
     target = game_mode_url(url) if (guest or force_game_mode) else url
     opener = popen or subprocess.Popen
@@ -147,7 +157,7 @@ def open_ui(url, *, guest=False, force_game_mode=False, native_window=False, pop
         if browser:
             try:
                 process = opener(
-                    kiosk_command(browser, target),
+                    kiosk_command(browser, target, width=width, height=height),
                     start_new_session=True,
                     env=helper_env,
                 )

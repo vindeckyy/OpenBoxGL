@@ -150,7 +150,7 @@ MEDIA_PACKS = [
 ]
 
 BULK_WIZARD_FIELDS = (
-    "platform", "genre", "progress", "rating", "favorite", "hidden", "esrb", "custom_fields",
+    "platform", "genre", "progress", "rating", "favorite", "hidden", "esrb", "custom_fields", "reset_stats", "play_count", "playtime_seconds", "last_played",
 )
 
 LIST_COLUMNS_DEFAULT = ("name", "platform", "genre", "esrb", "progress", "last_played", "play_count")

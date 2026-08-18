@@ -13,6 +13,10 @@ PRESET_RULE_KEYS = (
     "developer",
     "publisher",
     "hidden",
+    "has_saves",
+    "has_achievements",
+    "has_missing_media",
+    "has_highscores",
 )
 EXPLORER_FIELDS = {"genre", "developer", "publisher", "platform", "progress", "esrb"}
 
@@ -25,11 +29,7 @@ def normalize_rules(rules):
         if key not in rules:
             continue
         value = rules[key]
-        if key == "favorite":
-            if value in (True, False, "true", "false"):
-                clean[key] = value is True or value == "true"
-            continue
-        if key == "hidden":
+        if key in ("favorite", "hidden", "has_saves", "has_achievements", "has_missing_media", "has_highscores"):
             if value in (True, False, "true", "false"):
                 clean[key] = value is True or value == "true"
             continue
@@ -126,6 +126,22 @@ def _matches_booleans(game, rules):
         return False
     if "hidden" in rules and bool(game.get("hidden")) != bool(rules["hidden"]):
         return False
+    if "has_saves" in rules:
+        actual = bool(game.get("save_paths") or game.get("has_saves"))
+        if actual != bool(rules["has_saves"]):
+            return False
+    if "has_achievements" in rules:
+        actual = bool(game.get("ra_game_id") or game.get("has_achievements"))
+        if actual != bool(rules["has_achievements"]):
+            return False
+    if "has_missing_media" in rules:
+        actual = bool(game.get("has_missing_media") or (not game.get("cover") or not game.get("background")))
+        if actual != bool(rules["has_missing_media"]):
+            return False
+    if "has_highscores" in rules:
+        actual = bool(game.get("has_highscores"))
+        if actual != bool(rules["has_highscores"]):
+            return False
     return True
 
 
@@ -159,8 +175,21 @@ def _matches_query(game, rules):
                 "name", "sort_title", "platform", "genre", "developer", "publisher", "series", "notes",
             )
         ).casefold()
-        if query not in haystack:
-            return False
+        if query in haystack:
+            return True
+        if 2 <= len(query) <= 8 and query.isalnum():
+            import re
+            name = str(game.get("name", "")).strip()
+            if name:
+                words = re.findall(r"[A-Za-z0-9]+", name)
+                acronym = "".join(w[0] for w in words).casefold()
+                if query == acronym or query in acronym:
+                    return True
+                if words and words[0].casefold() in ("the", "a", "an"):
+                    sub_acronym = "".join(w[0] for w in words[1:]).casefold()
+                    if query == sub_acronym or query in sub_acronym:
+                        return True
+        return False
     return True
 
 

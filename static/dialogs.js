@@ -1,5 +1,5 @@
 import { $, escapeHtml } from './util.js';
-import { AppState, ensureProfiles } from './state.js';
+import { AppState, ensureProfiles, filteredGames } from './state.js';
 import { closeBigBoxMenu } from './bigbox.js';
 
 
@@ -78,6 +78,18 @@ import { closeBigBoxMenu } from './bigbox.js';
         const currentProfile = game?.launch_profile || '';
         profileSelect.innerHTML = '<option value="">Default platform profile</option>' + Object.keys(AppState.availableProfiles).filter(name => !platformName || name === platformName).map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
         profileSelect.value = currentProfile;
+      }
+      const visible = typeof filteredGames === 'function' ? filteredGames() : (AppState.games || []);
+      const currentIndex = game ? visible.findIndex(g => g.id === game.id) : -1;
+      const prevBtn = $('prevGameDialog');
+      const nextBtn = $('nextGameDialog');
+      if (prevBtn) {
+        prevBtn.disabled = !game || currentIndex <= 0;
+        prevBtn.onclick = (game && currentIndex > 0) ? () => openGameDialog(visible[currentIndex - 1]) : null;
+      }
+      if (nextBtn) {
+        nextBtn.disabled = !game || currentIndex === -1 || currentIndex >= visible.length - 1;
+        nextBtn.onclick = (game && currentIndex !== -1 && currentIndex < visible.length - 1) ? () => openGameDialog(visible[currentIndex + 1]) : null;
       }
       openDialog($('gameDialog'));
     }
