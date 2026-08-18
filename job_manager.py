@@ -169,76 +169,73 @@ class JobManager:
         except (TypeError, ValueError):
             pass
         started = time.monotonic()
-        for attempt in range(1, max_attempts + 1):
-            with self._lock:
-                current = self._jobs.get(name)
-                if not current or current.get("job_id") != job_id:
-                    self._inflight.discard(job_id)
-                    self._cancel_events.pop(job_id, None)
+        try:
+            for attempt in range(1, max_attempts + 1):
+                with self._lock:
+                    current = self._jobs.get(name)
+                    if not current or current.get("job_id") != job_id:
+                        return
+                    if cancel_event.is_set():
+                        notification = None
+                        if current.get("state") != "cancelled":
+                            current.update({"state": "cancelled", "finished_at": _now()})
+                            self._archive(current)
+                            notification = dict(current)
+                        cancelled = True
+                    else:
+                        cancelled = False
+                        current.update({"state": "running", "started_at": current.get("started_at") or _now(), "attempt": attempt})
+                if cancelled:
+                    if notification is not None:
+                        self._notify(notification)
                     return
-                if cancel_event.is_set():
+                try:
+                    result = worker(cancel_event) if accepts_context else worker()
+                    if cancel_event.is_set():
+                        state = "cancelled"
+                        result = {}
+                    else:
+                        state = "done"
                     notification = None
-                    if current.get("state") != "cancelled":
-                        current.update({"state": "cancelled", "finished_at": _now()})
-                        self._archive(current)
-                        notification = dict(current)
-                    self._cancel_events.pop(job_id, None)
-                    self._inflight.discard(job_id)
-                    cancelled = True
-                else:
-                    cancelled = False
-                    current.update({"state": "running", "started_at": current.get("started_at") or _now(), "attempt": attempt})
-            if cancelled:
-                if notification is not None:
-                    self._notify(notification)
-                return
-            try:
-                result = worker(cancel_event) if accepts_context else worker()
-                if cancel_event.is_set():
-                    state = "cancelled"
-                    result = {}
-                else:
-                    state = "done"
-                notification = None
-                with self._lock:
-                    current = self._jobs.get(name)
-                    if current and current.get("job_id") == job_id:
-                        current.update(_bounded_result(result))
-                        current.update({
-                            "state": state,
-                            "finished_at": _now(),
-                            "duration_seconds": round(time.monotonic() - started, 3),
-                        })
-                        self._cancel_events.pop(job_id, None)
-                        self._inflight.discard(job_id)
-                        self._archive(current)
-                        notification = dict(current)
-                if notification is not None:
-                    self._notify(notification)
-                return
-            except Exception as error:  # worker isolation boundary
-                LOGGER.exception("Backend job %s failed on attempt %s", name, attempt)
-                if attempt < max_attempts and not cancel_event.is_set():
-                    delay = min(MAX_BACKOFF_SECONDS, backoff_seconds * (2 ** (attempt - 1)))
-                    cancel_event.wait(delay)
-                    continue
-                notification = None
-                with self._lock:
-                    current = self._jobs.get(name)
-                    if current and current.get("job_id") == job_id:
-                        current.update({
-                            "state": "cancelled" if cancel_event.is_set() else "error",
-                            "error": str(error)[:MAX_ERROR_LENGTH],
-                            "finished_at": _now(),
-                            "duration_seconds": round(time.monotonic() - started, 3),
-                        })
-                        self._cancel_events.pop(job_id, None)
-                        self._inflight.discard(job_id)
-                        self._archive(current)
-                        notification = dict(current)
-                if notification is not None:
-                    self._notify(notification)
-                return
+                    with self._lock:
+                        current = self._jobs.get(name)
+                        if current and current.get("job_id") == job_id:
+                            current.update(_bounded_result(result))
+                            current.update({
+                                "state": state,
+                                "finished_at": _now(),
+                                "duration_seconds": round(time.monotonic() - started, 3),
+                            })
+                            self._archive(current)
+                            notification = dict(current)
+                    if notification is not None:
+                        self._notify(notification)
+                    return
+                except Exception as error:  # worker isolation boundary
+                    LOGGER.exception("Backend job %s failed on attempt %s", name, attempt)
+                    if attempt < max_attempts and not cancel_event.is_set():
+                        delay = min(MAX_BACKOFF_SECONDS, backoff_seconds * (2 ** (attempt - 1)))
+                        cancel_event.wait(delay)
+                        continue
+                    notification = None
+                    with self._lock:
+                        current = self._jobs.get(name)
+                        if current and current.get("job_id") == job_id:
+                            current.update({
+                                "state": "cancelled" if cancel_event.is_set() else "error",
+                                "error": str(error)[:MAX_ERROR_LENGTH],
+                                "finished_at": _now(),
+                                "duration_seconds": round(time.monotonic() - started, 3),
+                            })
+                            self._archive(current)
+                            notification = dict(current)
+                    if notification is not None:
+                        self._notify(notification)
+                    return
+        finally:
+            with self._lock:
+                self._inflight.discard(job_id)
+                self._cancel_events.pop(job_id, None)
 
     def _drop_future(self, future):
         """Forget a finished future so completed jobs cannot accumulate."""

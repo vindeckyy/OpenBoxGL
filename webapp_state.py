@@ -526,12 +526,14 @@ def _public_settings_uncached(state):
         "tray_enabled": settings.get("tray_enabled", False),
         "minimize_to_tray": settings.get("minimize_to_tray", False),
         "media_packs": list_media_packs(settings),
-        "controller_prompt_hint": settings.get("controller_prompt_hint", ""),
+        "controller_prompt_hint": settings.get("controller_prompt_hint", False),
+        "controller_prompt_pack": settings.get("controller_prompt_pack", "xbox"),
         "premium_features_free": True,
         "progress_on_first_play": settings.get("progress_on_first_play", "Playing"),
         "tracking_mode": settings.get("tracking_mode", "default"),
         "tracking_delay": settings.get("tracking_delay", 0),
         "tracking_frequency": settings.get("tracking_frequency", 2),
+        "tracking_process_name": settings.get("tracking_process_name", ""),
         "apply_perf": settings.get("apply_perf", "auto"),
         "auto_close_store_clients": settings.get("auto_close_store_clients", False),
         "filter_presets": list_presets(state),
@@ -1102,71 +1104,79 @@ def game_from_query(state, query):
 
 
 def finish_session(launch_id, game_index, started, process):
-    with PROCESS_LOCK:
-        running_snapshot = dict(RUNNING.get(launch_id, {}))
-    identity = {
-        "stable_game_id": running_snapshot.get("stable_game_id", ""),
-        "game_path": running_snapshot.get("game_path", ""),
-        "game_name": running_snapshot.get("game") or running_snapshot.get("game_name", ""),
-        "steam_app_id": running_snapshot.get("steam_app_id", ""),
-        "heroic_app_id": running_snapshot.get("heroic_app_id", ""),
-        "lutris_id": running_snapshot.get("lutris_id", ""),
-        "gameyfin_id": running_snapshot.get("gameyfin_id", ""),
-    }
-    state = load_state()
-    with STATE_LOCK:
-        settings = copy.deepcopy(state.get("settings", {}))
-        game = resolve_library_game(state, identity, fallback_index=game_index) or {}
-        game_snapshot = copy.deepcopy(game)
-        original_game_name = str(game_snapshot.get("name", "") or identity.get("game_name") or "Untitled")
-    exit_code = wait_for_exit(process, game_snapshot, settings)
-    seconds = max(1, int((datetime.now() - started).total_seconds()))
-    if game_snapshot:
-        if settings.get("backup_on_close") and game_snapshot.get("save_paths"):
-            try:
-                backup_saves(game_snapshot, DATA.parent / "save-backups", label="on-close")
-                enforce_backup_limit(game_snapshot, DATA.parent / "save-backups", settings.get("save_backup_limit", 10))
-            except (OSError, FileNotFoundError):
-                pass
-        try:
-            auto_attach_obs_recording(game_snapshot, started, settings)
-        except (OSError, ValueError, FileNotFoundError):
-            pass
-        try:
-            close_store_client(game_snapshot, settings)
-        except (OSError, ValueError):
-            pass
-
-    session_result = {"game_name": original_game_name, "session": {}}
-
-    def mutate(state):
-        settings = state.get("settings", {})
-        game = resolve_library_game(state, identity, fallback_index=game_index)
-        if game is not None:
-            game["playtime_seconds"] = game.get("playtime_seconds", 0) + seconds
-            apply_progress_automation(game, settings)
-            for key in ("video_recording", "recording", "last_recording"):
-                if key in game_snapshot:
-                    game[key] = game_snapshot[key]
-            game_name = game.get("name", "Untitled")
-        else:
-            game_name = original_game_name
-        session = {
-            "game": game_name,
-            "started": started.isoformat(timespec="seconds"),
-            "seconds": seconds,
-            "exit_code": exit_code,
+    running = {}
+    running_snapshot = {}
+    game_name = "Untitled"
+    exit_code = 0
+    seconds = 1
+    session = {}
+    try:
+        with PROCESS_LOCK:
+            running_snapshot = dict(RUNNING.get(launch_id, {}))
+        identity = {
+            "stable_game_id": running_snapshot.get("stable_game_id", ""),
+            "game_path": running_snapshot.get("game_path", ""),
+            "game_name": running_snapshot.get("game") or running_snapshot.get("game_name", ""),
+            "steam_app_id": running_snapshot.get("steam_app_id", ""),
+            "heroic_app_id": running_snapshot.get("heroic_app_id", ""),
+            "lutris_id": running_snapshot.get("lutris_id", ""),
+            "gameyfin_id": running_snapshot.get("gameyfin_id", ""),
         }
-        if settings.get("track_session_history", True):
-            state["history"].append(session)
-            state["history"][:] = state["history"][-500:]
-        session_result.update({"game_name": game_name, "session": session})
-    update_state(mutate)
-    game_name = session_result["game_name"]
-    session = session_result["session"]
-    with PROCESS_LOCK:
-        running = RUNNING.pop(launch_id, {})
-        PROCESSES.pop(launch_id, None)
+        state = load_state()
+        with STATE_LOCK:
+            settings = copy.deepcopy(state.get("settings", {}))
+            game = resolve_library_game(state, identity, fallback_index=game_index) or {}
+            game_snapshot = copy.deepcopy(game)
+            original_game_name = str(game_snapshot.get("name", "") or identity.get("game_name") or "Untitled")
+        exit_code = wait_for_exit(process, game_snapshot, settings)
+        seconds = max(1, int((datetime.now() - started).total_seconds()))
+        if game_snapshot:
+            if settings.get("backup_on_close") and game_snapshot.get("save_paths"):
+                try:
+                    backup_saves(game_snapshot, DATA.parent / "save-backups", label="on-close")
+                    enforce_backup_limit(game_snapshot, DATA.parent / "save-backups", settings.get("save_backup_limit", 10))
+                except (OSError, FileNotFoundError):
+                    pass
+            try:
+                auto_attach_obs_recording(game_snapshot, started, settings)
+            except (OSError, ValueError, FileNotFoundError):
+                pass
+            try:
+                close_store_client(game_snapshot, settings)
+            except (OSError, ValueError):
+                pass
+
+        session_result = {"game_name": original_game_name, "session": {}}
+
+        def mutate(state):
+            settings = state.get("settings", {})
+            game = resolve_library_game(state, identity, fallback_index=game_index)
+            if game is not None:
+                game["playtime_seconds"] = game.get("playtime_seconds", 0) + seconds
+                apply_progress_automation(game, settings)
+                for key in ("video_recording", "recording", "last_recording"):
+                    if key in game_snapshot:
+                        game[key] = game_snapshot[key]
+                game_name_local = game.get("name", "Untitled")
+            else:
+                game_name_local = original_game_name
+            session_local = {
+                "game": game_name_local,
+                "started": started.isoformat(timespec="seconds"),
+                "seconds": seconds,
+                "exit_code": exit_code,
+            }
+            if settings.get("track_session_history", True):
+                state["history"].append(session_local)
+                state["history"][:] = state["history"][-500:]
+            session_result.update({"game_name": game_name_local, "session": session_local})
+        update_state(mutate)
+        game_name = session_result["game_name"]
+        session = session_result["session"]
+    finally:
+        with PROCESS_LOCK:
+            running = RUNNING.pop(launch_id, {})
+            PROCESSES.pop(launch_id, None)
     try:
         restore_perf_profile(str(running.get("effective_profile", "")), load_state())
     except Exception:  # never let performance tuning break session bookkeeping
@@ -1521,7 +1531,14 @@ def start_game(index=None, stable_game_id=""):
     stable_game_id = str(game.get("game_id") or "")
     entry = {}
     missing = {"value": False}
-    update_state(_make_start_mutator(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile))
+    try:
+        update_state(_make_start_mutator(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile))
+    except Exception:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except (OSError, ProcessLookupError):
+            process.terminate()
+        raise
     if missing["value"]:
         try:
             os.killpg(process.pid, signal.SIGTERM)
@@ -1547,19 +1564,22 @@ def control_game_session(launch_id, action):
         running = RUNNING.get(launch_id)
         if not process or not running or process.poll() is not None:
             raise ValueError("That game is no longer running.")
-        if action == "pause":
-            os.killpg(process.pid, signal.SIGSTOP)
-            running["paused"] = True
-        elif action == "resume":
-            os.killpg(process.pid, signal.SIGCONT)
-            running["paused"] = False
-        elif action in {"stop", "restart", "kill"}:
-            running["restart"] = action == "restart"
-            if running.get("paused") and action != "kill":
+        try:
+            if action == "pause":
+                os.killpg(process.pid, signal.SIGSTOP)
+                running["paused"] = True
+            elif action == "resume":
                 os.killpg(process.pid, signal.SIGCONT)
-            os.killpg(process.pid, signal.SIGKILL if action == "kill" else signal.SIGTERM)
-        else:
-            raise ValueError("Unknown session action.")
+                running["paused"] = False
+            elif action in {"stop", "restart", "kill"}:
+                running["restart"] = action == "restart"
+                if running.get("paused") and action != "kill":
+                    os.killpg(process.pid, signal.SIGCONT)
+                os.killpg(process.pid, signal.SIGKILL if action == "kill" else signal.SIGTERM)
+            else:
+                raise ValueError("Unknown session action.")
+        except (ProcessLookupError, OSError):
+            pass
         game = running["game"]
     if action in {"pause", "resume"}:
         session_event("paused" if action == "pause" else "resumed", launch_id, game)

@@ -139,13 +139,10 @@ def build_launch_command(definition, rom_path, prefix=None):
     except ValueError as error:
         raise ValueError(f"Invalid startup command for {definition.get('name', definition.get('id'))}.") from error
     replacements = {"{path}": str(rom_path), "{name}": Path(rom_path).stem}
-    args.extend(
-        next(
-            (value.replace(marker, replacement) for marker, replacement in replacements.items() if marker in value),
-            value,
-        )
-        for value in template_args
-    )
+    for value in template_args:
+        for marker, replacement in replacements.items():
+            value = value.replace(marker, replacement)
+        args.append(value)
     return args
 
 
@@ -187,7 +184,7 @@ def merge_profiles_from_definitions(existing_profiles):
             continue
         command = build_launch_command(definition, "{path}", prefix=prefix)
         for platform in definition.get("platforms", []):
-            profiles.setdefault(platform, " ".join(command))
+            profiles.setdefault(platform, shlex.join(command))
     return profiles
 
 

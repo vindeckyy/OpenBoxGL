@@ -12,9 +12,7 @@ from pathlib import Path
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from backend_io import read_limited
-
-from backend_io import download_file
+from backend_io import download_file, read_limited
 
 try:
     import py7zr

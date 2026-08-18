@@ -26,6 +26,8 @@ def add_notification(state, *, kind, level, title, body, source="", correlation_
         state["notifications"] = items
     created_at = now or _now()
     for item in items:
+        if not isinstance(item, dict):
+            continue
         same_key = dedupe_key and item.get("dedupe_key") == dedupe_key
         same_recent = (item.get("kind"), item.get("title")) == (kind, title) and _parse(created_at) - _parse(item.get("created_at")) < _DEDUPE_SECONDS
         if same_key or same_recent:
@@ -49,7 +51,7 @@ def unread_count(state):
 def mark_read(state, ids=None):
     wanted = set(ids or [])
     for item in state.setdefault("notifications", []):
-        if not wanted or item.get("id") in wanted:
+        if isinstance(item, dict) and (not wanted or item.get("id") in wanted):
             item["read"] = True
 
 
@@ -58,4 +60,7 @@ def clear(state, ids=None):
     if not wanted:
         state["notifications"] = []
     else:
-        state["notifications"] = [item for item in state.get("notifications", []) if item.get("id") not in wanted]
+        state["notifications"] = [
+            item for item in state.get("notifications", [])
+            if isinstance(item, dict) and item.get("id") not in wanted
+        ]

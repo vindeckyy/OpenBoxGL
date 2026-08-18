@@ -73,11 +73,12 @@ class SessionHandlers:
         payload = payload or {}
         if payload.get("dry_run"):
             with STATE_LOCK:
+                games_list = load_state().get("games", [])
                 return self.send_json(200, {
                     "dry_run": True,
                     "backup_available": STATE_STORE.backup_path.is_file(),
                     "snapshots": STATE_STORE.snapshots(),
-                    "games": load_state().get("games", []) and len(load_state().get("games", [])),
+                    "games": len(games_list) if isinstance(games_list, list) else 0,
                 })
         if payload.get("snapshot"):
             state = STATE_STORE.restore_snapshot(str(payload["snapshot"]))
@@ -101,7 +102,7 @@ class SessionHandlers:
 
     def bigbox_mode_switch(self, payload):
         if not payload.get("entering"):
-            return
+            return self.send_json(200, {"ok": True, "entering": False})
         key = "bigbox_shutdown_commands"
         for command in load_state().get("settings", {}).get(key, []):
             try:
@@ -110,7 +111,7 @@ class SessionHandlers:
                 subprocess.Popen(args, start_new_session=True)
             except (OSError, ValueError, IndexError):
                 pass
-        self.send_json(200, {"ok": True})
+        self.send_json(200, {"ok": True, "entering": True})
 
     def launch_extra(self, payload):
         state = load_state()

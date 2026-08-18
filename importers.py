@@ -205,7 +205,7 @@ def _lutris_game_entry(record, home, command, binary):
         "platform": str(record.get("platform") or ("Windows" if runner in {"wine", "winesteam"} else "PC")),
         "source": source,
         "collection": source,
-        "path": binary,
+        "path": binary or str(record.get("directory") or record.get("path") or command[0]),
         "launch": shlex.join(command + ["lutris:rungameid/{lutris_id}"]),
         "lutris_id": game_id,
         "install_dir": str(record.get("directory") or record.get("path") or ""),

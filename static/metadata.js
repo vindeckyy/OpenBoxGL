@@ -16,9 +16,9 @@ import { refresh, renderDetails } from './library.js';
         if (status.ready) searchMetadata();
       } catch(error) { notify(error.message); }
     }
-    function renderMetadataStatus(status) {
-      const state = status.job.state;
-      $('metadataStatus').textContent = status.ready ? 'Local database ready.' : state === 'downloading' ? 'Downloading and indexing the official database...' : state === 'error' ? status.job.error : 'Download the official metadata database before searching.';
+    function renderMetadataStatus(status = {}) {
+      const state = status?.job?.state || '';
+      $('metadataStatus').textContent = status.ready ? 'Local database ready.' : state === 'downloading' ? 'Downloading and indexing the official database...' : state === 'error' ? status?.job?.error || 'Error' : 'Download the official metadata database before searching.';
       $('syncMetadata').disabled = state === 'downloading';
       const coverage = status.coverage;
       const coverageBox = $('metadataCoverage');
@@ -110,7 +110,7 @@ import { refresh, renderDetails } from './library.js';
       try {
         const status = await api('/api/metadata/status');
         renderMetadataStatus(status);
-        if (status.job.state === 'downloading') return setTimeout(watchMetadata, 1500);
+        if (status?.job?.state === 'downloading') return setTimeout(watchMetadata, 1500);
         if (status.ready) { notify('Metadata database ready'); searchMetadata(); }
       } catch(error) { notify(error.message); }
     }

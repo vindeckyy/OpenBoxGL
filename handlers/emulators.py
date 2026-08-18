@@ -14,9 +14,12 @@ class EmulatorsHandlers:
         emulators = emulator_status()
         with PROCESS_LOCK:
             for emulator in emulators:
-                emulator["job"] = INSTALLS.get(emulator["app_id"], {})
+                app_id = emulator.get("app_id", "")
+                job = INSTALLS.get(f"update:{app_id}") or INSTALLS.get(app_id, {})
+                emulator["job"] = job
             install_all = INSTALLS.get("__all__", {})
-        self.send_json(200, {"emulators": emulators, "install_all": install_all})
+            update_all = INSTALLS.get("__update_all__", {})
+        self.send_json(200, {"emulators": emulators, "install_all": install_all, "update_all": update_all})
         return
 
     def _api_get_api_emulators_recommend(self, parsed):
@@ -59,7 +62,9 @@ class EmulatorsHandlers:
         self.save_emulator_scan_config(payload)
 
     def install_emulator(self, payload):
-        app_id = str(payload.get("app_id", ""))
+        app_id = str(payload.get("app_id", "")).strip()
+        if not app_id:
+            raise ValueError("app_id is required")
         with PROCESS_LOCK:
             if INSTALLS.get(app_id, {}).get("state") == "installing":
                 self.send_json(200, {"state": "installing"})
@@ -83,6 +88,12 @@ class EmulatorsHandlers:
         self.send_json(202, {"state": "installing"})
 
     def install_all_emulators(self):
+        with PROCESS_LOCK:
+            if INSTALLS.get("__all__", {}).get("state") == "installing":
+                self.send_json(200, {"state": "installing"})
+                return
+            INSTALLS["__all__"] = {"state": "installing"}
+
         def worker():
             try:
                 result = install_all_emulators()
@@ -92,16 +103,13 @@ class EmulatorsHandlers:
             with PROCESS_LOCK:
                 INSTALLS["__all__"] = job
 
-        with PROCESS_LOCK:
-            if INSTALLS.get("__all__", {}).get("state") == "installing":
-                self.send_json(200, {"state": "installing"})
-                return
-            INSTALLS["__all__"] = {"state": "installing"}
         JOB_MANAGER.submit("emulator-install-all", worker)
         self.send_json(202, {"state": "installing"})
 
     def open_emulator(self, payload):
-        app_id = str(payload.get("app_id", ""))
+        app_id = str(payload.get("app_id", "")).strip()
+        if not app_id:
+            raise ValueError("app_id is required")
         self.send_json(200, launch_emulator(app_id))
 
     def scan_emulator_folder_route(self, payload):
@@ -121,7 +129,9 @@ class EmulatorsHandlers:
         self.send_json(200, {"config": entry})
 
     def update_one_emulator(self, payload):
-        app_id = str(payload.get("app_id", ""))
+        app_id = str(payload.get("app_id", "")).strip()
+        if not app_id:
+            raise ValueError("app_id is required")
         with PROCESS_LOCK:
             key = f"update:{app_id}"
             if INSTALLS.get(key, {}).get("state") == "updating":

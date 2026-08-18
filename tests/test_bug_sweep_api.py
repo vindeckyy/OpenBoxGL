@@ -221,6 +221,40 @@ class ApiSweep(unittest.TestCase):
         self.assertIsInstance(payload, dict)
         self.assert_alive()
 
+    def test_bigbox_mode_switch(self):
+        status, payload = self.request("/api/bigbox/mode", {"entering": False})
+        self.assertEqual(status, 200)
+        self.assertTrue(payload.get("ok"))
+        self.assertFalse(payload.get("entering"))
+
+    def test_related_rich_by_game_id(self):
+        status, library = self.request("/api/library")
+        self.assertEqual(status, 200)
+        game_id = library["games"][0]["game_id"]
+        status, payload = self.request(f"/api/related/rich?game_id={game_id}")
+        self.assertEqual(status, 200)
+        self.assertIn("items", payload)
+
+    def test_settings_preservation(self):
+        status, _ = self.request("/api/settings", {
+            "tracking_process_name": "custom_proc",
+            "sidebar_sections": ["favorites", "recent"],
+            "controller_prompt_hint": True,
+            "controller_prompt_pack": "playstation",
+        })
+        self.assertEqual(status, 200)
+        status, settings = self.request("/api/settings")
+        self.assertEqual(status, 200)
+        self.assertEqual(settings.get("tracking_process_name"), "custom_proc")
+        self.assertEqual(settings.get("sidebar_sections"), ["favorites", "recent"])
+        self.assertEqual(settings.get("controller_prompt_hint"), True)
+        self.assertEqual(settings.get("controller_prompt_pack"), "playstation")
+
+    def test_emulator_validation(self):
+        for path in ("/api/emulators/install", "/api/emulators/open", "/api/emulators/update"):
+            status, payload = self.request(path, {"app_id": ""})
+            self.assertEqual(status, 400, f"Expected 400 for empty app_id on {path}")
+
 
 GROUPS = {
     "fixture": "test_fixture",
@@ -229,6 +263,10 @@ GROUPS = {
     "exceptions": "test_exceptions",
     "settings": "test_settings",
     "lifecycle": "test_lifecycle",
+    "bigbox": "test_bigbox_mode_switch",
+    "related": "test_related_rich_by_game_id",
+    "preservation": "test_settings_preservation",
+    "emulator_val": "test_emulator_validation",
 }
 
 if __name__ == "__main__":

@@ -345,12 +345,13 @@ class JsonStateStore:
         if (
             isinstance(raw, dict)
             and raw.get("schema_version") == STATE_SCHEMA_VERSION
-            and all(key in raw for key in ("games", "profiles", "history", "settings", "playlists"))
+            and all(key in raw for key in ("games", "profiles", "history", "settings", "playlists", "ui_state"))
             and isinstance(raw.get("games"), list)
             and isinstance(raw.get("queue"), list)
             and len(raw["queue"]) <= QUEUE_CAP
             and isinstance(raw.get("notifications"), list)
             and len(raw["notifications"]) <= NOTIFICATIONS_CAP
+            and isinstance(raw.get("ui_state"), dict)
             and all(
                 isinstance(game, dict)
                 and str(game.get("game_id") or "").strip()
@@ -449,11 +450,14 @@ class JsonStateStore:
             target = self.snapshots_dir / f"{stamp}-{secrets.token_hex(4)}.json"
             shutil.copy2(self.path, target)
             os.chmod(target, 0o600)
-            existing = sorted(
-                self.snapshots_dir.glob("*.json"),
-                key=lambda item: item.stat().st_mtime,
-            )
-            for stale in existing[: max(0, len(existing) - self.snapshot_limit)]:
+            existing = []
+            for path in self.snapshots_dir.glob("*.json"):
+                try:
+                    existing.append((path.stat().st_mtime, path))
+                except OSError:
+                    continue
+            existing.sort(key=lambda item: item[0])
+            for _, stale in existing[: max(0, len(existing) - self.snapshot_limit)]:
                 stale.unlink(missing_ok=True)
         except OSError:
             LOGGER.warning("Snapshot rotation failed; the committed state is unaffected.")
@@ -462,10 +466,16 @@ class JsonStateStore:
         """Return available state snapshots, newest first."""
         items = []
         try:
-            for path in sorted(self.snapshots_dir.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True):
-                items.append({"name": path.name, "size": path.stat().st_size, "modified": path.stat().st_mtime})
+            paths = list(self.snapshots_dir.glob("*.json"))
         except OSError:
-            pass
+            return items
+        for path in paths:
+            try:
+                st = path.stat()
+                items.append({"name": path.name, "size": st.st_size, "modified": st.st_mtime})
+            except OSError:
+                continue
+        items.sort(key=lambda item: item["modified"], reverse=True)
         return items
 
     def restore_snapshot(self, name: str) -> dict[str, Any]:

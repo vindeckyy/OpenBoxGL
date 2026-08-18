@@ -108,22 +108,22 @@ def dispatch_uri(uri, data_dir, host="127.0.0.1", port=None, token=None, open_br
     token_path = Path(data_dir) / "server.token"
     if token is None and token_path.is_file():
         token = token_path.read_text().strip()
+    if port is None:
+        port = read_port_file(data_dir)
     parsed = parse_uri(uri)
     action = parsed.get("action", "start")
     if action == "start":
         # No server yet: fall through so web_app.main() boots normally.
-        if not token_path.is_file() or not read_port_file(data_dir):
+        if not token_path.is_file() or not port:
             return None
         if open_browser:
             try:
                 import webbrowser
 
-                webbrowser.open(build_launch_url(f"http://{host}:{port}/?token={token}", "start"))
+                webbrowser.open(build_launch_url(f"http://{host}:{port}/?token={token or ''}", "start"))
             except Exception:
                 pass
         return 0
-    if port is None:
-        port = read_port_file(data_dir)
     if not port:
         print("OpenBox is not running (no server port found). Start OpenBox first.", file=sys.stderr)
         return 1

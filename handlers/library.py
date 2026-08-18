@@ -209,9 +209,12 @@ class LibraryHandlers:
         return
 
     def _api_get_api_related_rich(self, parsed):
+        state = load_state_view()
+        query = parse_qs(parsed.query)
         try:
-            index = int(parse_qs(parsed.query)["id"][0])
-            self.send_json(200, {"items": related_with_reasons(load_state_view()["games"], index)})
+            game = game_from_query(state, query)
+            index = state["games"].index(game)
+            self.send_json(200, {"items": related_with_reasons(state["games"], index)})
         except (KeyError, IndexError, ValueError):
             raise GameNotFound("Game not found") from None
         return

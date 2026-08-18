@@ -165,7 +165,7 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
       if (!session) return openSessions();
       const game = AppState.games.find(item => item.id === session.game_id);
       $('bigBoxPauseTitle').textContent = session.game;
-      $('bigBoxPauseMeta').textContent = `${session.paused ? 'Paused' : 'Running'} · started ${session.started.replace('T',' ')}`;
+      $('bigBoxPauseMeta').textContent = `${session.paused ? 'Paused' : 'Running'} · started ${String(session.started || '').replace('T',' ')}`;
       $('bigBoxPauseActions').innerHTML = `<button class="primary" data-pause-action="${session.launch_id}:${session.paused ? 'resume' : 'pause'}">${session.paused ? 'Resume' : 'Pause'}</button><button class="icon-button" data-pause-action="${session.launch_id}:stop">Exit game</button>${game?.documents.map((item,index) => `<button class="icon-button" data-pause-doc="${game.id}:${index}">Read ${escapeHtml(item.name)}</button>`).join('') || ''}${AppState.raConfigured ? `<button class="icon-button" id="pauseAchievements">Achievements</button>` : ''}`;
       document.querySelectorAll('[data-pause-action]').forEach(button => button.onclick = async () => {
         const [launch_id,action] = button.dataset.pauseAction.split(':');
@@ -174,33 +174,25 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
         openBigBoxPause();
       });
       document.querySelectorAll('[data-pause-doc]').forEach(button => button.onclick = () => {
-        const [id,index] = button.dataset.pauseDoc.split(':');
-        const docGame = AppState.games.find(item => item.id === Number(id));
-        if (!docGame) return;
-        openReader(docGame, Number(index));
+        const [gameId,index] = button.dataset.pauseDoc.split(':');
+        const targetGame = AppState.games.find(item => item.id === Number(gameId));
+        if (targetGame) openReader(targetGame,Number(index));
       });
-      if ($('pauseAchievements')) $('pauseAchievements').onclick = () => { if (game) loadAchievements(game.id); };
+      if ($('pauseAchievements')) $('pauseAchievements').onclick = () => { $('bigBoxPause').hidden = true; openAchievements(); };
       $('bigBoxPause').hidden = false;
     }
     function startScreenSaver() {
-      if (!AppState.bigBoxGames.length || $('bigBox').hidden) return;
-      AppState.screenSaverGame = AppState.bigBoxGames[Math.floor(Math.random() * AppState.bigBoxGames.length)];
-      $('screenSaver').style.backgroundImage = AppState.screenSaverGame.has_background ? `url('${media(AppState.screenSaverGame,'background')}')` : AppState.screenSaverGame.has_cover ? `url('${media(AppState.screenSaverGame,'cover')}')` : '';
-      $('screenSaverTitle').textContent = AppState.screenSaverGame.name;
-      $('screenSaverPlatform').textContent = AppState.screenSaverGame.platform || '';
-      if (AppState.screenSaverGame.has_video) {
-        $('screenSaverVideo').src = media(AppState.screenSaverGame,'video');
-        $('screenSaverVideo').play().catch(() => {});
-      } else {
-        $('screenSaverVideo').removeAttribute('src');
-        $('screenSaverVideo').load();
-      }
+      const visible = filteredBigBoxGames();
+      if (!visible.length) return;
+      const game = visible[Math.floor(Math.random() * visible.length)];
+      AppState.screenSaverGame = game;
+      $('screenSaverVideo').src = media(game,'video');
+      $('screenSaverTitle').textContent = game.name;
+      $('screenSaverPlatform').textContent = game.platform || 'Game';
       $('screenSaver').hidden = false;
-      clearTimeout(startScreenSaver.timer);
-      startScreenSaver.timer = setTimeout(startScreenSaver, 15000);
     }
     function stopScreenSaver() {
-      clearTimeout(startScreenSaver.timer);
+      if ($('screenSaver').hidden) return;
       $('screenSaver').hidden = true;
       $('screenSaverVideo').pause();
       $('screenSaverVideo').removeAttribute('src');
@@ -208,20 +200,22 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
       AppState.bigBoxLastInput = performance.now();
     }
     async function favoriteBigBox() {
-      const id = AppState.bigBoxGames[AppState.bigBoxIndex]?.id;
-      if (id === undefined) return;
-      try {
-        await api('/api/favorite',{method:'POST',body:JSON.stringify({id})});
-        await refresh();
-        AppState.bigBoxGames = filteredBigBoxGames();
-        if (!AppState.bigBoxGames.length) { closeBigBox(); notify('The current view is now empty'); return; }
-        AppState.bigBoxIndex = Math.max(0,AppState.bigBoxGames.findIndex(game => game.id === id));
-        renderBigBox();
-      } catch(error) { notify(error.message); }
+      const game = AppState.bigBoxGames[AppState.bigBoxIndex];
+      if (game) {
+        try {
+          await api('/api/favorite',{method:'POST',body:JSON.stringify({id:game.id})});
+          await refresh();
+          AppState.bigBoxGames = filteredBigBoxGames();
+          if (!AppState.bigBoxGames.length) { closeBigBox(); notify('The current view is now empty'); return; }
+          AppState.bigBoxIndex = Math.max(0,AppState.bigBoxGames.findIndex(g => g.id === game.id));
+          renderBigBox();
+        } catch(error) { notify(error.message); }
+      }
     }
     function pollGamepads() {
       if ($('bigBox').hidden) return;
-      const pad = navigator.getGamepads?.()[0];
+      const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+      const pad = pads[0];
       if (pad) {
         const mapping = {...defaultControllerMap,...AppState.appSettings.controller_map};
         const pressed = action => Boolean(pad.buttons[mapping[action]]?.pressed);
@@ -236,19 +230,32 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
           return;
         }
         if (!$('bigBoxMenu').hidden) {
-          const selects = [$('bigBoxFilter'),$('bigBoxSort')];
-          let active = Math.max(0,selects.indexOf(document.activeElement));
-          if (edge('up') || edge('down')) selects[active ? 0 : 1].focus();
+          const selects = [$('bigBoxFilter'),$('bigBoxSort'),$('bigBoxQuickPreset'),$('bigBoxRaFilter')].filter(Boolean);
+          let active = selects.indexOf(document.activeElement);
+          if (active < 0) active = 0;
+          if (edge('up')) {
+            active = (active - 1 + selects.length) % selects.length;
+            selects[active].focus();
+          }
+          if (edge('down')) {
+            active = (active + 1) % selects.length;
+            selects[active].focus();
+          }
           if (edge('left') || edge('right')) {
             const select = selects[active], change = edge('left') ? -1 : 1;
-            select.selectedIndex = (select.selectedIndex + change + select.options.length) % select.options.length;
+            if (select && select.options.length) {
+              select.selectedIndex = (select.selectedIndex + change + select.options.length) % select.options.length;
+            }
           }
           if (edge('play')) applyBigBoxMenu();
           if (edge('back') || edge('menu')) closeBigBoxMenu();
         } else {
           if (edge('left') || edge('up')) moveBigBox(-1);
           if (edge('right') || edge('down')) moveBigBox(1);
-          if (edge('play')) launch(AppState.bigBoxGames[AppState.bigBoxIndex].id);
+          if (edge('play')) {
+            const target = AppState.bigBoxGames[AppState.bigBoxIndex];
+            if (target) launch(target.id);
+          }
           if (edge('back')) closeBigBox();
           if (edge('favorite')) favoriteBigBox();
           if (edge('random')) { AppState.bigBoxIndex = Math.floor(Math.random() * AppState.bigBoxGames.length); renderBigBox(); }
