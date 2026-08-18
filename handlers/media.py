@@ -265,12 +265,17 @@ class MediaHandlers:
         self.send_json(200, {"path": path})
 
     def cleanup_media(self, payload):
-        groups = find_duplicate_media(load_state()["games"], allowed_roots=[DATA.parent])
+        platform = str(payload.get("platform", "")).strip()
+        state = load_state()
+        games = state.get("games", [])
+        if platform and platform != "all":
+            games = [g for g in games if str(g.get("platform", "")).strip() == platform]
+        groups = find_duplicate_media(games, allowed_roots=[DATA.parent])
         apply = bool(payload.get("apply"))
         deleted = cleanup_duplicates(groups, dry_run=not apply, allowed_roots=[DATA.parent])
         if apply and deleted:
             bump_media_epoch()
-        self.send_json(200, {"groups": len(groups), "paths": deleted, "applied": apply})
+        self.send_json(200, {"groups": len(groups), "paths": deleted, "applied": apply, "platform": platform or "all"})
 
     def take_screenshot(self, payload):
         state = load_state()

@@ -48,6 +48,7 @@ window.filteredGames = filteredGames;
       if (values.rating !== '') changes.rating = Number(values.rating);
       for (const field of ['favorite','hidden']) if (values[field]) changes[field] = values[field] === 'true';
       if (values.esrb) changes.esrb = values.esrb;
+      if (values.reset_stats) changes.reset_stats = true;
       try {
         const result = await api('/api/games/bulk-wizard',{method:'POST',body:JSON.stringify({ids:[...selectedIds],changes})});
         $('bulkDialog').close();
@@ -113,8 +114,8 @@ window.filteredGames = filteredGames;
     $('importVita3kStore').onclick = async () => { try { const result = await api('/api/import/vita3k',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} Vita3K games imported`); } catch(error) { notify(error.message); } };
     $('openThemeFolder').onclick = async () => { try { const result = await api('/api/themes/open-folder',{method:'POST',body:'{}'}); notify(`Opened ${result.path}`); } catch(error) { notify(error.message); } };
     $('injectRa').onclick = async () => { try { const result = await api('/api/ra/inject',{method:'POST',body:'{}'}); notify(`Updated ${result.updated.length} emulator config file${result.updated.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
-    $('cleanupMedia').onclick = async () => { try { const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({apply:false})}); AppState.duplicateMediaGroups = result.groups; $('applyCleanupMedia').hidden = !AppState.duplicateMediaGroups; notify(`${AppState.duplicateMediaGroups} duplicate media group${AppState.duplicateMediaGroups === 1 ? '' : 's'} found`); } catch(error) { notify(error.message); } };
-    $('applyCleanupMedia').onclick = async () => { if (!confirm('Delete duplicate media files listed by the cleanup scan?')) return; try { const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({apply:true})}); $('applyCleanupMedia').hidden = true; notify(`Removed ${result.paths.length} duplicate file${result.paths.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
+    $('cleanupMedia').onclick = async () => { try { const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({platform:AppState.platform,apply:false})}); AppState.duplicateMediaGroups = result.groups; $('applyCleanupMedia').hidden = !AppState.duplicateMediaGroups; notify(`${AppState.duplicateMediaGroups} duplicate media group${AppState.duplicateMediaGroups === 1 ? '' : 's'} found`); } catch(error) { notify(error.message); } };
+    $('applyCleanupMedia').onclick = async () => { if (!confirm('Delete duplicate media files listed by the cleanup scan?')) return; try { const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({platform:AppState.platform,apply:true})}); $('applyCleanupMedia').hidden = true; notify(`Removed ${result.paths.length} duplicate file${result.paths.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
     $('scanAllSaves').onclick = async () => { try { const result = await api('/api/saves/scan/apply',{method:'POST',body:'{}'}); await refresh(); notify(`Added save paths on ${result.updated} location${result.updated === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
     $('bigBoxPause').onclick = event => { if (event.target === $('bigBoxPause')) $('bigBoxPause').hidden = true; };
     $('loadStorefrontCatalog').onclick = loadStorefrontCatalog;
@@ -139,6 +140,19 @@ window.filteredGames = filteredGames;
     $('contextProgress').onclick = () => { const id = AppState.contextGameId; closeContextMenu(); if (id === null) return; const value = prompt('Progress value', AppState.games.find(game => game.id === id)?.progress || 'Playing'); if (value !== null) updateGameStatus(id, value); };
     $('contextAddPlaylist').onclick = () => { const name = $('contextPlaylist').value; const id = AppState.contextGameId; closeContextMenu(); if (name && id !== null) addGamesToPlaylist(name, [id]); };
     $('contextNewPlaylist').onclick = () => { const id = AppState.contextGameId; closeContextMenu(); if (id !== null) createManualPlaylist(id); };
+    $('contextResetStats').onclick = async () => {
+      const id = AppState.contextGameId;
+      closeContextMenu();
+      if (id === null) return;
+      const game = AppState.games.find(item => item.id === id);
+      if (!game) return;
+      if (!confirm(`Reset play count and last played date for "${game.name}"?`)) return;
+      try {
+        await api('/api/games/bulk-wizard', {method:'POST',body:JSON.stringify({ids:[id],changes:{reset_stats:true}})});
+        await refresh();
+        notify(`Reset play statistics for ${game.name}`);
+      } catch(error) { notify(error.message); }
+    };
     $('contextRemove').onclick = () => { const game = AppState.games.find(item => item.id === AppState.contextGameId); closeContextMenu(); if (game) removeGame(game.id, game.name); };
     document.addEventListener('contextmenu', event => {
       const target = event.target.closest?.('[data-game]');
@@ -197,6 +211,16 @@ window.filteredGames = filteredGames;
     window.addEventListener('beforeunload', event => { if (AppState.runningGames.length) { event.preventDefault(); gracefulShutdown(); } });
     document.addEventListener('keydown', event => {
       if ((event.ctrlKey || event.metaKey) && event.key === ',') { event.preventDefault(); openSettings(); }
+      if ((event.ctrlKey || event.metaKey) && event.altKey && (event.key.toLowerCase() === 'q' || event.key.toLowerCase() === 'r')) {
+        event.preventDefault();
+        const visible = filteredGames();
+        if (visible.length) {
+          AppState.selectedId = visible[Math.floor(Math.random() * visible.length)].id;
+          render();
+          const card = document.querySelector(`[data-game="${AppState.selectedId}"]`);
+          if (card) card.scrollIntoView({block:'nearest'});
+        }
+      }
       if (event.key === 'F11') { event.preventDefault(); nativeFullscreen().catch(() => {}); }
       if (event.key === 'Escape') {
         document.querySelectorAll('.topbar-tools[open]').forEach(menu => menu.removeAttribute('open'));

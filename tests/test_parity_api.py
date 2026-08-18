@@ -2,10 +2,14 @@
 
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
 from plugin_catalog import load_local_catalog
 
@@ -490,6 +494,48 @@ class ParityApiTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             Handler.apply_metadata(self.handler, {"id": 0, "database_id": 1, "media": ["manual"], "overwrite": False})
+
+    def test_bulk_wizard_reset_stats(self):
+        from openbox import load_state, save_state
+        from web_app import Handler
+
+        save_state({
+            "games": [
+                {"name": "Stat Game", "platform": "NES", "path": "/roms/stat.nes", "play_count": 8, "playtime_seconds": 1200, "last_played": "2026-08-01"},
+            ],
+            "profiles": {},
+            "history": [],
+            "settings": {},
+            "playlists": [],
+        })
+        Handler.bulk_wizard(self.handler, {"ids": [0], "changes": {"reset_stats": True}})
+        self.handler.send_json.assert_called()
+        self.assertEqual(self.handler.send_json.call_args[0][0], 200)
+        state = load_state()
+        self.assertEqual(state["games"][0]["play_count"], 0)
+        self.assertEqual(state["games"][0]["playtime_seconds"], 0)
+        self.assertEqual(state["games"][0]["last_played"], "")
+
+    def test_media_cleanup_platform_scoped(self):
+        from openbox import save_state
+        from web_app import Handler
+
+        save_state({
+            "games": [
+                {"game_id": "nes1", "name": "NES 1", "platform": "NES", "path": "", "cover": ""},
+                {"game_id": "snes1", "name": "SNES 1", "platform": "SNES", "path": "", "cover": ""},
+            ],
+            "profiles": {},
+            "history": [],
+            "settings": {},
+            "playlists": [],
+        })
+        Handler.cleanup_media(self.handler, {"platform": "NES", "apply": False})
+        self.handler.send_json.assert_called()
+        status, payload = self.handler.send_json.call_args[0]
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["platform"], "NES")
+        self.assertEqual(payload["applied"], False)
 
 
 if __name__ == "__main__":

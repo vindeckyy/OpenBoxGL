@@ -3,11 +3,15 @@
 
 import json
 import stat
+import sys
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
 from parity_backup import create_backup, restore_backup, rotate_backups
 from parity_deeplinks import build_launch_url, handle_cli, parse_uri
@@ -19,6 +23,7 @@ from parity_filter_presets import (
     game_matches_rules,
     save_preset,
 )
+from parity_gamescope import kiosk_command
 from parity_import_policy import add_exclusion, exclusion_key, filter_imported
 from parity_igdb import apply_to_game, search_games
 from parity_tracking import TRACKING_MODES, resolve_mode
@@ -43,6 +48,18 @@ class FilterPresetTests(unittest.TestCase):
         values = {item["value"] for item in facets}
         self.assertIn("Action", values)
         self.assertIn("RPG", values)
+
+    def test_acronym_match_search(self):
+        games = [
+            {"name": "The Legend of Zelda: Ocarina of Time", "platform": "N64"},
+            {"name": "Metal Gear Solid", "platform": "PS1"},
+            {"name": "Castlevania: Symphony of the Night", "platform": "PS1"},
+            {"name": "Final Fantasy VII", "platform": "PS1"},
+        ]
+        self.assertEqual([g["name"] for g in filter_games(games, {"query": "oot"})], ["The Legend of Zelda: Ocarina of Time"])
+        self.assertEqual([g["name"] for g in filter_games(games, {"query": "mgs"})], ["Metal Gear Solid"])
+        self.assertEqual([g["name"] for g in filter_games(games, {"query": "sotn"})], ["Castlevania: Symphony of the Night"])
+        self.assertEqual([g["name"] for g in filter_games(games, {"query": "ff"})], ["Final Fantasy VII"])
 
     def test_filter_games_with_category(self):
         games = [{"platform": "NES", "name": "Mario"}, {"platform": "PC", "name": "Doom"}]
@@ -200,6 +217,17 @@ class EmulatorDefinitionTests(unittest.TestCase):
         )
         self.assertEqual(command, ["dolphin-emu", "-b", "-e", "/tmp/My Games/demo.iso"])
 
+    def test_launch_command_expanded_variables(self):
+        command = build_launch_command(
+            {"id": "custom", "name": "Custom", "startup": "--dir {dir} --file {file} --stem {stem} --emu {EmulatorDir} {ImagePath}"},
+            "/roms/nes/mario.nes",
+            prefix=["/usr/bin/fceux"],
+        )
+        self.assertEqual(
+            command,
+            ["/usr/bin/fceux", "--dir", "/roms/nes", "--file", "mario.nes", "--stem", "mario", "--emu", "/usr/bin", "/roms/nes/mario.nes"],
+        )
+
     def test_load_definitions(self):
         definitions = load_definitions()
         self.assertTrue(any(item.get("id") == "retroarch" for item in definitions))
@@ -217,6 +245,18 @@ class EmulatorDefinitionTests(unittest.TestCase):
         platform, definition = platform_for_extension("nes")
         self.assertEqual(platform, "NES")
         self.assertIsNotNone(definition)
+
+
+class WindowResolutionTests(unittest.TestCase):
+    def test_kiosk_command_with_resolution(self):
+        cmd = kiosk_command(["google-chrome"], "http://127.0.0.1:8787/", width=1920, height=1080)
+        self.assertIn("--window-size=1920,1080", cmd)
+
+        ff_cmd = kiosk_command(["firefox"], "http://127.0.0.1:8787/", width=1280, height=720)
+        self.assertIn("--width", ff_cmd)
+        self.assertIn("1280", ff_cmd)
+        self.assertIn("--height", ff_cmd)
+        self.assertIn("720", ff_cmd)
 
 
 class BackupSafetyTests(unittest.TestCase):

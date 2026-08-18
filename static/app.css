@@ -253,6 +253,7 @@
     .metadata-result { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; padding:9px; border:1px solid var(--line); border-radius:6px; background:var(--surface-card); }
     .metadata-result small { display:block; color:#9f9182; }
     .dialog-actions { display:flex; justify-content:flex-end; gap:8px; padding:0 16px 16px; }
+    .dialog-nav { display:flex; gap:8px; margin-right:auto; }
     .primary { border:0; border-radius:4px; padding:9px 16px; background:var(--action); color:var(--action-ink); font-weight:800; }
     .error-banner { position:fixed; left:50%; bottom:60px; transform:translateX(-50%); display:flex; align-items:center; gap:8px; max-width:min(640px,calc(100vw - 32px)); background:var(--danger,#743f3f); color:var(--text); border:1px solid var(--border-control); border-radius:6px; padding:10px 12px; box-shadow:0 10px 30px #000c; z-index:400; font-size:13px; }
     .error-banner[hidden] { display:none; }

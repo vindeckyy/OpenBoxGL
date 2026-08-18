@@ -88,6 +88,14 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Game tags and tag filtering | done | Tags normalize, count, filter, and bulk-edit through the Web UI |
 | Notification Center | done | Persistent deduplicated notifications expose unread state and read/clear controls |
 | Signed webhook automation | done | Event subscriptions, HTTPS validation, bounded retries, test delivery, and secret redaction work locally |
+| Edit Game modal next/previous navigation | done | Previous and Next navigation controls in Game Edit modal rapidly cycle through active filtered library |
+| Platform-scoped media cleanup | done | Scoped duplicate media detection and cleanup for single platforms or entire library |
+| Reset play statistics | done | Context menu and bulk edit actions reset play count, play time, and last played date |
+| Smart capability playlist rules | done | Filter presets and playlists filter by save files, RetroAchievements, and missing media status |
+| Desktop random game shortcut | done | Ctrl+Alt+Q and Ctrl+Alt+R select and focus a random game in the desktop grid or list |
+| Acronym search matching | done | Search queries match game title initials and acronyms (e.g. oot, mgs, sotn, ff) |
+| Dynamic launch variables | done | Template expansion for {ImagePath}, {dir}, {file}, {stem}, {Platform}, {EmulatorDir}, and {DataDir} |
+| Window resolution CLI options | done | --fullscreen-width, --fullscreen-height, and --resolution flags control viewport sizing |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 

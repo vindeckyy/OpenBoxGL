@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Edit Game modal now features Previous (← Prev) and Next (Next →) navigation buttons to rapidly cycle and edit games in the active filtered/sorted library without reopening the modal.
+- Media cleanup can now be scoped to single platforms in addition to full library scans via `POST /api/media/cleanup`.
+- Added "Reset play statistics" to the game right-click context menu and bulk edit wizard, clearing `play_count`, `playtime_seconds`, and `last_played`.
+- Filter presets and smart filter playlists can now filter games by capability rules: `has_saves`, `has_achievements`, `has_missing_media`, and `has_highscores`.
+- Added `Ctrl+Alt+Q` (and `Ctrl+Alt+R`) global shortcut to shuffle and focus a random game in the desktop grid and list views.
+- Search and filter queries now support acronym matching for game titles (e.g., `oot` matches *The Legend of Zelda: Ocarina of Time*, `mgs` matches *Metal Gear Solid*, `sotn` matches *Castlevania: Symphony of the Night*).
+- Expanded dynamic launch variables for custom emulators and launch commands, supporting `{ImagePath}`, `{dir}`, `{Dir}`, `{file}`, `{File}`, `{stem}`, `{FileNameWithoutExtension}`, `{Platform}`, `{EmulatorDir}`, and `{DataDir}`.
+- Added `--fullscreen-width`, `--fullscreen-height`, and `--resolution <WxH>` CLI flags to control kiosk and native window viewport sizing.
+
 ## [1.4.0] - 2026-08-17
 
 ### Fixed

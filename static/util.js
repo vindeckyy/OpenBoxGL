@@ -45,7 +45,17 @@
         if (key === 'hide' || key === 'hidden') values.push(game.hidden ? 'yes' : 'no');
         if (key === 'broken') values.push(game.broken ? 'yes' : 'no');
         if (key === 'portable') values.push(game.portable ? 'yes' : 'no');
-        const matched = values.map(item => String(item).toLowerCase()).some(item => item.includes(value));
+        let matched = values.map(item => String(item).toLowerCase()).some(item => item.includes(value));
+        if (!matched && key === 'all' && value.length >= 2 && value.length <= 8 && /^[a-z0-9]+$/i.test(value)) {
+          const title = String(game.name || '').trim();
+          const words = title.match(/[A-Za-z0-9]+/g) || [];
+          const acronym = words.map(w => w[0].toLowerCase()).join('');
+          if (acronym === value || acronym.includes(value)) matched = true;
+          else if (words.length > 1 && ['the', 'a', 'an'].includes(words[0].toLowerCase())) {
+            const subAcronym = words.slice(1).map(w => w[0].toLowerCase()).join('');
+            if (subAcronym === value || subAcronym.includes(value)) matched = true;
+          }
+        }
         return negative ? !matched : matched;
       });
     }

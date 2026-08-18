@@ -1,9 +1,13 @@
 """Tests for LaunchBox parity helper modules."""
 
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
 from parity_discovery import discovery_lists, item_rating
 from parity_import import generate_m3u, group_multi_disc, recommend_emulators
@@ -142,6 +146,48 @@ class ParityFeatureTests(unittest.TestCase):
             build.assert_called_once()
             self.assertEqual(build.call_args.args[1], {"Linux": "custom {path}"})
             popen.assert_called_once()
+
+    def test_filter_presets_capabilities(self):
+        from parity_filter_presets import filter_games, normalize_rules
+        rules = normalize_rules({"has_saves": True, "has_achievements": True})
+        self.assertEqual(rules, {"has_saves": True, "has_achievements": True})
+
+        games = [
+            {"name": "Game A", "save_paths": ["/tmp/save.srm"], "ra_game_id": 1234, "cover": "/tmp/a.png", "background": "/tmp/bg.png"},
+            {"name": "Game B", "save_paths": [], "ra_game_id": None, "cover": "", "background": ""},
+            {"name": "Game C", "save_paths": ["/tmp/c.srm"], "ra_game_id": None, "has_missing_media": True},
+        ]
+        matched = filter_games(games, {"has_saves": True})
+        self.assertEqual([g["name"] for g in matched], ["Game A", "Game C"])
+
+        matched_ra = filter_games(games, {"has_achievements": True})
+        self.assertEqual([g["name"] for g in matched_ra], ["Game A"])
+
+        matched_missing_media = filter_games(games, {"has_missing_media": True})
+        self.assertEqual([g["name"] for g in matched_missing_media], ["Game B", "Game C"])
+
+    def test_bulk_update_reset_stats(self):
+        from catalog import bulk_update
+        from parity_premium import bulk_wizard_changes
+        games = [
+            {"game_id": "g1", "name": "Game 1", "play_count": 10, "playtime_seconds": 3600, "last_played": "2026-08-01T12:00:00"},
+            {"game_id": "g2", "name": "Game 2", "play_count": 5, "playtime_seconds": 1800, "last_played": "2026-08-02T12:00:00"},
+        ]
+        changes = bulk_wizard_changes({"reset_stats": True})
+        updated = bulk_update(games, ["g1", "g2"], changes)
+        self.assertEqual(updated, 2)
+        for game in games:
+            self.assertEqual(game["play_count"], 0)
+            self.assertEqual(game["playtime_seconds"], 0)
+            self.assertEqual(game["last_played"], "")
+
+    def test_bulk_update_explicit_stats(self):
+        from catalog import bulk_update
+        games = [{"game_id": "g1", "name": "Game 1", "play_count": 0, "playtime_seconds": 0, "last_played": ""}]
+        bulk_update(games, ["g1"], {"play_count": 42, "playtime_seconds": 2500, "last_played": "2026-08-18"})
+        self.assertEqual(games[0]["play_count"], 42)
+        self.assertEqual(games[0]["playtime_seconds"], 2500)
+        self.assertEqual(games[0]["last_played"], "2026-08-18")
 
 
 if __name__ == "__main__":

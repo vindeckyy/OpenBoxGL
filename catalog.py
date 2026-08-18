@@ -95,7 +95,11 @@ def related_game_ids(games, selected, limit=8):
     return [index for _, _, index in sorted(ranked)[:limit]]
 
 
-_BULK_ALLOWED = {"platform", "genre", "progress", "rating", "favorite", "hidden", "esrb", "custom_fields", "tags", "tags_add", "tags_remove"}
+_BULK_ALLOWED = {
+    "platform", "genre", "progress", "rating", "favorite", "hidden", "esrb",
+    "custom_fields", "tags", "tags_add", "tags_remove", "reset_stats",
+    "play_count", "playtime_seconds", "last_played",
+}
 
 
 def _validate_bulk_changes(ids, changes):
@@ -121,6 +125,20 @@ def _clean_bulk_fields(changes):
             if not isinstance(value, bool):
                 raise ValueError(f"{field.title()} must be true or false.")
             clean[field] = value
+        elif field == "reset_stats":
+            if not isinstance(value, bool):
+                raise ValueError("Reset stats must be true or false.")
+            clean[field] = value
+        elif field in ("play_count", "playtime_seconds"):
+            try:
+                num = int(value)
+                if num < 0:
+                    raise ValueError(f"{field} must be non-negative.")
+                clean[field] = num
+            except (ValueError, TypeError):
+                raise ValueError(f"{field} must be a valid integer.") from None
+        elif field == "last_played":
+            clean[field] = str(value).strip()
         elif field == "progress":
             if str(value) not in PROGRESS:
                 raise ValueError("Unknown progress value.")
@@ -166,7 +184,11 @@ def _resolve_bulk_indexes(games, ids):
 
 
 def _apply_bulk_patch(game, patch):
-    """Apply one cleaned patch dict to a game: custom_fields merge, tag changes, then the remaining fields."""
+    """Apply one cleaned patch dict to a game: custom_fields merge, tag changes, reset_stats, then the remaining fields."""
+    if patch.pop("reset_stats", False):
+        game["play_count"] = 0
+        game["playtime_seconds"] = 0
+        game["last_played"] = ""
     if "custom_fields" in patch:
         merged = game.get("custom_fields", {})
         if not isinstance(merged, dict):
