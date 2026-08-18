@@ -170,7 +170,8 @@ def _migrate_v4_to_v5(state: dict[str, Any]) -> None:
 
 def _migrate_v5_to_v6(state: dict[str, Any]) -> None:
     """Add active_sessions collection."""
-    state.setdefault("active_sessions", [])
+    if not isinstance(state.get("active_sessions"), list):
+        state["active_sessions"] = []
     state["schema_version"] = 6
 
 
@@ -184,7 +185,7 @@ MIGRATIONS: dict[int, Callable[[dict[str, Any]], None]] = {
 
 
 def _normalize_feature_fields(state: dict[str, Any]) -> bool:
-    """Repair feature collections and per-game tags; returns True if anything changed."""
+    """Repair feature collections, sessions, and per-game tags; returns True if changed."""
     changed = False
     for key, cap in (("queue", QUEUE_CAP), ("notifications", NOTIFICATIONS_CAP)):
         value = state.get(key)
@@ -193,6 +194,15 @@ def _normalize_feature_fields(state: dict[str, Any]) -> bool:
             changed = True
         elif len(value) > cap:
             state[key] = value[:cap]
+            changed = True
+    sessions = state.get("active_sessions")
+    if not isinstance(sessions, list):
+        state["active_sessions"] = []
+        changed = True
+    else:
+        valid_sessions = [session for session in sessions if isinstance(session, dict)]
+        if len(valid_sessions) != len(sessions):
+            state["active_sessions"] = valid_sessions
             changed = True
     for game in state.get("games", []):
         if isinstance(game, dict) and "tags" in game and not isinstance(game.get("tags"), list):
@@ -360,6 +370,8 @@ class JsonStateStore:
             and isinstance(raw.get("notifications"), list)
             and len(raw["notifications"]) <= NOTIFICATIONS_CAP
             and isinstance(raw.get("ui_state"), dict)
+            and isinstance(raw.get("active_sessions"), list)
+            and all(isinstance(session, dict) for session in raw["active_sessions"])
             and all(
                 isinstance(game, dict)
                 and str(game.get("game_id") or "").strip()

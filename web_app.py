@@ -41,6 +41,7 @@ from webapp_state import (
     approved_backup_file,
     auto_import_worker,
     control_game_session,
+    reattach_session,
     reconcile_sessions_on_startup,
     run_configured_commands,
     shutdown_webhooks,
@@ -548,42 +549,14 @@ def main():
                 LOGGER.info("Reattached %d active session(s) after restart", len(reattached))
             if abandoned:
                 LOGGER.info("Marked %d session(s) as abandoned (PID mismatch or gone)", len(abandoned))
-            # Reattach watchers for verified PIDs: poll identity until exit, then clean up active_sessions and restore perf profile.
+            # Re-register verified sessions so the running API and controls work
+            # after a server restart, then let the normal watcher finish them.
             for _sess in reattached:
-                _launch_id = _sess.get("launch_id", "")
-                _pid = _sess.get("pid")
-                _profile = _sess.get("perf_profile", "")
-                _start = _sess.get("proc_start_time")
-                _fp = _sess.get("command_fingerprint", "")
-                if not _launch_id or not _pid:
-                    continue
-                def _reattached_watcher(launch_id=_launch_id, pid=_pid, profile=_profile, proc_start=_start, fingerprint=_fp):
-                    from webapp_state import _verify_process_identity as _vpi
-                    import time as _time
-                    # Poll until the PID disappears or identity diverges.
-                    while True:
-                        try:
-                            os.kill(pid, 0)
-                        except OSError:
-                            break
-                        # Also verify identity to avoid PID-reuse false positives.
-                        if not _vpi({"pid": pid, "proc_start_time": proc_start, "command_fingerprint": fingerprint}):
-                            break
-                        _time.sleep(1.0)
-                    # Process gone or identity changed: remove from active_sessions and try to restore perf profile.
-                    try:
-                        def _remove_reattached(state):
-                            state["active_sessions"] = [s for s in state.get("active_sessions", []) if s.get("launch_id") != launch_id]
-                        update_state(_remove_reattached)
-                    except Exception:
-                        LOGGER.exception("Failed to clean up reattached session %s", launch_id)
-                    if profile:
-                        try:
-                            from pkg.parity.parity_perf import restore_perf_profile
-                            restore_perf_profile(profile, load_state())
-                        except Exception:
-                            LOGGER.exception("restore_perf failed for reattached session %s", launch_id)
-                threading.Thread(target=_reattached_watcher, daemon=True).start()
+                try:
+                    if not reattach_session(_sess, _reconcile_state):
+                        LOGGER.warning("Could not reattach persisted session %s", _sess.get("launch_id", ""))
+                except Exception:
+                    LOGGER.exception("Failed to reattach persisted session %s", _sess.get("launch_id", ""))
     except Exception:
         LOGGER.exception("Session reconciliation failed; continuing with empty active_sessions")
     WATCH_STOP.clear()

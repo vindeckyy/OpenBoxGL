@@ -202,7 +202,7 @@ def capture_screenshot(dest_path, window_hint=""):
     window = bool(window_hint)
     commands = []
     if shutil.which("gnome-screenshot"):
-        commands.append(["gnome-screenshot"] + (["-w", str(dest)] if window else ["-f", str(dest)]))
+        commands.append(["gnome-screenshot"] + (["-w", "-f", str(dest)] if window else ["-f", str(dest)]))
     if shutil.which("spectacle"):
         commands.append(["spectacle", "-a" if window else "-b", "-n", "-o", str(dest)])
     if shutil.which("scrot"):

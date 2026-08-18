@@ -79,6 +79,18 @@ class PolishRouteTests(unittest.TestCase):
         payload = json.loads(gzip.decompress(body))
         self.assertEqual(payload["games"][0]["name"], "Fixture")
 
+    def test_library_pagination_ignores_full_library_etag(self):
+        status, headers, _ = self.request("/api/library")
+        self.assertEqual(status, 200)
+        status, _, body = self.request(
+            "/api/library?offset=0&limit=0",
+            {"If-None-Match": headers["ETag"]},
+        )
+        self.assertEqual(status, 200)
+        payload = json.loads(body)
+        self.assertEqual(payload["games"], [])
+        self.assertEqual(payload["total_count"], 1)
+
     def test_library_delta_accepts_stable_game_ids(self):
         status, _, body = self.request("/api/library")
         self.assertEqual(status, 200)

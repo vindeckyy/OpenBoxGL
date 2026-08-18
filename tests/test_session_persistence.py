@@ -1,21 +1,24 @@
 import os
 import sys
 import time
+import tempfile
 import unittest
 from datetime import datetime
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import webapp_state
 from webapp_state import (
     _read_proc_start_time,
     _read_proc_cmdline,
     _verify_process_identity,
+    reattach_session,
     reconcile_sessions_on_startup,
     start_game,
     finish_session
 )
-from state_store import default_state, normalize_state
+from state_store import JsonStateStore, default_state, normalize_state
 from handlers.sessions import SessionHandlers
 from pkg.parity.parity_tracking import wait_for_exit
 
@@ -88,6 +91,17 @@ class TestSessionPersistence(unittest.TestCase):
         self.assertIn("active_sessions", normalized)
         self.assertEqual(normalized["active_sessions"], [])
 
+    def test_malformed_active_sessions_are_repaired_on_load(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "library.json")
+            state = default_state()
+            state["active_sessions"] = "invalid"
+            with open(path, "w", encoding="utf-8") as target:
+                import json
+                json.dump(state, target)
+            loaded = JsonStateStore(path).load()
+            self.assertEqual(loaded["active_sessions"], [])
+
     @patch('webapp_state._verify_process_identity')
     def test_reconcile_sessions_on_startup(self, mock_verify):
         mock_verify.side_effect = lambda s: s["pid"] == 1
@@ -109,6 +123,31 @@ class TestSessionPersistence(unittest.TestCase):
         self.assertEqual(abandoned[0]["status"], "abandoned")
 
         self.assertEqual(len(state["active_sessions"]), 2)
+
+    @patch("webapp_state.threading.Thread")
+    def test_reattach_registers_running_session(self, mock_thread):
+        pid = os.getpid()
+        state = default_state()
+        state["games"].append({"game_id": "game-1", "name": "Test Game", "path": "/bin/echo"})
+        session = {
+            "launch_id": "launch-1",
+            "game_id": "game-1",
+            "pid": pid,
+            "pgid": pid,
+            "proc_start_time": _read_proc_start_time(pid),
+            "command_fingerprint": _read_proc_cmdline(pid),
+            "start_time": datetime.now().isoformat(timespec="seconds"),
+            "perf_profile": "",
+        }
+        try:
+            self.assertTrue(reattach_session(session, state))
+            self.assertEqual(webapp_state.RUNNING["launch-1"]["game"], "Test Game")
+            self.assertEqual(webapp_state.PROCESSES["launch-1"].pid, pid)
+            mock_thread.assert_called_once()
+            mock_thread.return_value.start.assert_called_once()
+        finally:
+            webapp_state.RUNNING.pop("launch-1", None)
+            webapp_state.PROCESSES.pop("launch-1", None)
         
     @patch('webapp_state.threading.Thread')
     @patch('webapp_state.subprocess.Popen')
@@ -153,6 +192,38 @@ class TestSessionPersistence(unittest.TestCase):
             
             # Record should be removed
             self.assertEqual(len(state["active_sessions"]), 0)
+
+    @patch("webapp_state.wait_for_exit", side_effect=RuntimeError("watcher failed"))
+    @patch("webapp_state.update_state")
+    @patch("webapp_state.load_state")
+    def test_failed_watcher_removes_persisted_session(self, mock_load_state, mock_update_state, mock_wait):
+        state = default_state()
+        state["games"].append({"game_id": "game-1", "name": "Test Game", "path": "/bin/echo"})
+        state["active_sessions"] = [{"launch_id": "launch-1", "status": "active"}]
+        mock_load_state.return_value = state
+
+        def update_state_mock(mutator):
+            mutator(state)
+            return state
+
+        mock_update_state.side_effect = update_state_mock
+        webapp_state.RUNNING["launch-1"] = {
+            "stable_game_id": "game-1",
+            "game": "Test Game",
+        }
+        webapp_state.PROCESSES["launch-1"] = MockProcess()
+
+        class DummyLease:
+            def restore(self):
+                return None
+
+        try:
+            with self.assertRaises(RuntimeError):
+                finish_session("launch-1", 0, datetime.now(), MockProcess(), DummyLease())
+            self.assertEqual(state["active_sessions"], [])
+        finally:
+            webapp_state.RUNNING.pop("launch-1", None)
+            webapp_state.PROCESSES.pop("launch-1", None)
 
     @patch('handlers.sessions.load_state_view')
     def test_abandoned_sessions_in_running_response(self, mock_load_state_view):

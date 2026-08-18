@@ -1,37 +1,20 @@
 """Faugus Launcher import handlers."""
 
-from parity_faugus import find_faugus_data_dirs, scan_faugus_games
-
 try:
-    from pkg.parity.parity_faugus import find_faugus_data_dirs as _find, scan_faugus_games as _scan
-    HAS_FAUGUS = True
+    from pkg.parity.parity_faugus import find_faugus_data_dirs, scan_faugus_games
 except ImportError:
-    HAS_FAUGUS = False
+    from parity_faugus import find_faugus_data_dirs, scan_faugus_games
 
 
 class FaugusHandlers:
     def _api_get_api_faugus_status(self, parsed):
-        dirs = find_faugus_data_dirs() if HAS_FAUGUS else _find() if False else []
-        # Actually use the shim if pkg import failed
-        if not HAS_FAUGUS:
-            try:
-                from parity_faugus import find_faugus_data_dirs as f
-                dirs = f()
-            except Exception:
-                dirs = []
-        else:
-            dirs = _find()
+        dirs = find_faugus_data_dirs()
         self.send_json(200, {"installed": bool(dirs), "data_dirs": dirs})
         return
 
     def _api_get_api_faugus_scan(self, parsed):
         try:
-            games = scan_faugus_games() if HAS_FAUGUS else _scan() if False else []
-            if not HAS_FAUGUS:
-                from parity_faugus import scan_faugus_games as s
-                games = s()
-            else:
-                games = _scan()
+            games = scan_faugus_games()
         except Exception as e:
             self.send_json(200, {"games": [], "error": str(e)})
             return
@@ -40,12 +23,7 @@ class FaugusHandlers:
 
     def _api_post_api_faugus_import(self, payload):
         try:
-            games = scan_faugus_games() if HAS_FAUGUS else []
-            if not HAS_FAUGUS:
-                from parity_faugus import scan_faugus_games as s
-                games = s()
-            else:
-                games = _scan()
+            games = scan_faugus_games()
         except Exception as e:
             self.send_json(500, {"error": str(e)})
             return

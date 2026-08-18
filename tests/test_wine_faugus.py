@@ -34,6 +34,10 @@ class TestWine(unittest.TestCase):
         game = {"launch": "WINEPREFIX='/tmp/foo' wine game.exe"}
         self.assertEqual(get_prefix_for_game(game), "/tmp/foo")
 
+    def test_get_prefix_from_env_command(self):
+        game = {"launch": "env WINEPREFIX=\"/tmp/foo bar\" wine game.exe"}
+        self.assertEqual(get_prefix_for_game(game), "/tmp/foo bar")
+
 
 class TestFaugus(unittest.TestCase):
     def test_find_dirs_returns_list(self):
@@ -55,6 +59,27 @@ class TestFaugus(unittest.TestCase):
             self.assertEqual(len(games), 1)
             self.assertEqual(games[0]["faugus_id"], "test-game")
             self.assertEqual(games[0]["source_identity"], "faugus:test-game")
+
+    def test_scan_prefixes_only_when_drive_c_exists(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            valid = root / "valid-game"
+            (valid / "drive_c").mkdir(parents=True)
+            (root / "not-a-prefix").mkdir()
+            games = scan_faugus_games(data_dirs=[tmp])
+            self.assertEqual([game["faugus_id"] for game in games], ["valid-game"])
+            self.assertEqual(games[0]["prefix"], str(valid))
+
+    def test_scan_prefix_root_itself(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = Path(tmp) / "single-game"
+            (prefix / "drive_c").mkdir(parents=True)
+            games = scan_faugus_games(data_dirs=[str(prefix)])
+            self.assertEqual([game["faugus_id"] for game in games], ["single-game"])
 
 
 if __name__ == "__main__":

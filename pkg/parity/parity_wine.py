@@ -7,6 +7,7 @@ installations without network access.
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 from pathlib import Path
 
@@ -161,10 +162,14 @@ def get_prefix_for_game(game):
                 return str(p)
     launch = str(game.get("launch", ""))
     if "WINEPREFIX=" in launch:
-        # crude parse: WINEPREFIX='...' or WINEPREFIX="..." or WINEPREFIX=...
-        for part in launch.split():
+        try:
+            parts = shlex.split(launch)
+        except ValueError:
+            parts = []
+        for part in parts:
             if part.startswith("WINEPREFIX="):
-                val = part.split("=", 1)[1].strip().strip("'\"")
+                val = part.split("=", 1)[1]
+                val = os.path.expandvars(os.path.expanduser(val)).strip()
                 if val:
                     return val
     return ""

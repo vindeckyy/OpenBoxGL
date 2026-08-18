@@ -25,6 +25,15 @@ class TestIdentity(unittest.TestCase):
     def test_normalize_gameyfin(self):
         self.assertEqual(normalize_identity({"gameyfin_id": "xyz"}), "gameyfin:xyz")
 
+    def test_normalize_durable_source_identity(self):
+        self.assertEqual(
+            normalize_identity({"source_identity": "faugus:demo", "path": ""}),
+            "faugus:demo",
+        )
+
+    def test_normalize_faugus(self):
+        self.assertEqual(normalize_identity({"faugus_id": "demo"}), "faugus:demo")
+
     def test_normalize_generic_file(self):
         path = os.path.expanduser("~/games/doom.exe")
         ident = normalize_identity({"path": path})
@@ -60,6 +69,14 @@ class TestIdentity(unittest.TestCase):
         self.assertEqual(len(dupes), 1)
         self.assertEqual(dupes[0]["identity"], "steam:730")
         self.assertEqual(dupes[0]["games"], ["1", "2"])
+
+    def test_duplicate_detection_prefers_stable_game_id(self):
+        games = [
+            {"game_id": "stable-1", "source_identity": "faugus:demo"},
+            {"game_id": "stable-2", "source_identity": "faugus:demo"},
+        ]
+        dupes = detect_duplicate_identities(games)
+        self.assertEqual(dupes[0]["games"], ["stable-1", "stable-2"])
 
     def test_backfill(self):
         games = [
