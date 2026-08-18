@@ -126,8 +126,6 @@ window.filteredGames = filteredGames;
     document.querySelectorAll('[data-reader-theme]').forEach(button => button.onclick = () => {
       $('readerFrame').style.filter = button.dataset.readerTheme === 'dark' ? 'invert(1) hue-rotate(180deg)' : '';
     });
-    $('readerPrev').onclick = () => setReaderPage(readerPage - 1);
-    $('readerNext').onclick = () => setReaderPage(readerPage + 1);
     $('addButton').onclick = () => openGameDialog(); $('importButton').onclick = importFolder; $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
     $('closePlaylists').onclick = $('donePlaylists').onclick = () => $('playlistsDialog').close();
     $('newManualPlaylist').onclick = () => createManualPlaylist();
@@ -209,7 +207,7 @@ window.filteredGames = filteredGames;
     $('closeBigBoxMenu').onclick = closeBigBoxMenu;
     $('applyBigBoxMenu').onclick = applyBigBoxMenu;
     $('screenSaver').onclick = stopScreenSaver;
-    $('closeMedia').onclick = () => { $('mediaDialog').close(); $('fullScreenshot')?.remove(); };
+    $('closeMedia').onclick = () => { $('mediaDialog').close(); $('mediaDialog').querySelectorAll('img').forEach(el => el.remove()); };
     $('closeReader').onclick = () => { $('readerDialog').close(); $('readerFrame').removeAttribute('src'); AppState.readerUrl = ''; AppState.readerPage = 1; };
     $('bigBox').onkeydown = event => {
       if (!$('screenSaver').hidden) {
@@ -227,7 +225,10 @@ window.filteredGames = filteredGames;
       AppState.bigBoxLastInput = performance.now();
       if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') moveBigBox(-1);
       if (event.key === 'ArrowRight' || event.key === 'ArrowDown') moveBigBox(1);
-      if (event.key === 'Enter') launch(AppState.bigBoxGames[AppState.bigBoxIndex].id);
+      if (event.key === 'Enter') {
+        const target = AppState.bigBoxGames[AppState.bigBoxIndex];
+        if (target) launch(target.id);
+      }
       if (event.key.toLowerCase() === 'p' && AppState.runningGames.length) openBigBoxPause();
       if (event.key.toLowerCase() === 'm') openBigBoxMenu();
       if (event.key.toLowerCase() === 'r') { AppState.bigBoxIndex = Math.floor(Math.random() * AppState.bigBoxGames.length); renderBigBox(); }

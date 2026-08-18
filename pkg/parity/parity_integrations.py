@@ -383,10 +383,17 @@ def import_highscores(game, import_dir, home=None):
     target.mkdir(parents=True, exist_ok=True)
     rom = str(game.get("rom_name") or Path(game.get("path", "")).stem).strip()
     restored = []
+    folder_resolved = folder.resolve()
     for file_path in files:
         source = Path(file_path)
-        if not source.is_file():
-            source = folder / source.name
+        if not source.is_absolute():
+            source = (folder / source).resolve()
+        else:
+            source = source.resolve()
+        try:
+            source.relative_to(folder_resolved)
+        except ValueError:
+            continue
         if not source.is_file():
             continue
         destination = target / (source.name if rom in source.name else f"{rom}-{source.name}")

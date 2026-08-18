@@ -49,11 +49,14 @@ def read_limited(response, max_bytes=MAX_RESPONSE_BYTES) -> bytes:
 
 
 def fsync_directory(path: Path) -> None:
-    directory_fd = os.open(Path(path), os.O_RDONLY)
     try:
-        os.fsync(directory_fd)
-    finally:
-        os.close(directory_fd)
+        directory_fd = os.open(Path(path), os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    except OSError:
+        pass
 
 
 def atomic_write_bytes(path: Path, data: bytes, *, mode=0o600) -> Path:
@@ -126,6 +129,7 @@ def download_file(
     opener=urlopen,
     headers=None,
     sha256="",
+    mode=0o644,
 ) -> Path:
     url = validate_http_url(url)
     request = Request(url, headers={"User-Agent": "OpenBox/1", **(headers or {})})
@@ -167,6 +171,7 @@ def download_file(
                 os.fsync(output.fileno())
         if sha256 and digest.hexdigest().casefold() != str(sha256).casefold():
             raise ValueError("The downloaded file failed checksum verification.")
+        os.chmod(temporary_name, mode)
         os.replace(temporary_name, destination)
         fsync_directory(destination.parent)
         temporary_name = None

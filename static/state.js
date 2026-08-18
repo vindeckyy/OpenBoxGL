@@ -1,4 +1,5 @@
 import { escapeHtml, API_V1, badge, defaultBadges, sortGames, advancedQueryMatches, gameInstalled, $ } from './util.js';
+import { render } from './library.js';
 
 
 

@@ -159,6 +159,7 @@ def env_value(*names):
 
 
 def retroachievements_from_env():
+    ensure_env_loaded()
     username = env_value("RETROACHIEVEMENTS_USERNAME", "RA_USERNAME", "OPENBOX_RA_USERNAME")
     api_key = env_value(
         "RETROACHIEVEMENTS_API_KEY",
@@ -172,6 +173,7 @@ def retroachievements_from_env():
 
 
 def emumovies_from_env():
+    ensure_env_loaded()
     username = env_value("EMUMOVIES_USERNAME", "OPENBOX_EMUMOVIES_USERNAME")
     password = env_value("EMUMOVIES_PASSWORD", "OPENBOX_EMUMOVIES_PASSWORD")
     if username and password:

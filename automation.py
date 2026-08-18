@@ -569,8 +569,6 @@ def _validate_webhook_host(parsed, host: str, scheme: str, *, openbox_port=None,
             port = 0
         if openbox_port and int(openbox_port) == port:
             raise ValueError("Webhook URL may not point at the running OpenBox server.")
-        if _port_in_use(host, port):
-            raise ValueError("Webhook URL may not point at the running OpenBox server.")
     else:
         addresses = _resolve_addresses(host, resolver=resolver)
         if not addresses:

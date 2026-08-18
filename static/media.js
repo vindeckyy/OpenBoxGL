@@ -13,10 +13,11 @@ import { refresh } from './library.js';
         renderBulkMediaStatus(status.job);
       } catch(error) { notify(error.message); }
     }
-    function renderBulkMediaStatus(job) {
-      const manualMissing = job.manual_missing || 0;
-      $('bulkMediaStatus').textContent = job.state === 'running' ? `${job.current || 0} of ${job.total || 0} · ${job.updated || 0} games updated` : job.state === 'done' ? `${job.updated || 0} games updated${manualMissing ? ` · ${manualMissing} had no manual in their archive` : ''}${job.errors?.length ? ` · ${job.errors.length} errors` : ''}` : '';
-      $('startBulkMedia').disabled = job.state === 'running';
+    function renderBulkMediaStatus(job = {}) {
+      const manualMissing = job?.manual_missing || 0;
+      const state = job?.state || '';
+      $('bulkMediaStatus').textContent = state === 'running' ? `${job?.current || 0} of ${job?.total || 0} · ${job?.updated || 0} games updated` : state === 'done' ? `${job?.updated || 0} games updated${manualMissing ? ` · ${manualMissing} had no manual in their archive` : ''}${job?.errors?.length ? ` · ${job.errors.length} errors` : ''}` : '';
+      $('startBulkMedia').disabled = state === 'running';
     }
     $('startBulkMedia').onclick = async () => {
       const media = [['cover','bulkCover'],['background','bulkBackground'],['screenshots','bulkScreenshots'],['box_back','bulkBoxBack'],['box_spine','bulkBoxSpine'],['box_3d','bulkBox3d'],['clear_logo','bulkClearLogo'],['fanart','bulkFanart'],['banner','bulkBanner'],['icon','bulkIcon'],['title_screen','bulkTitleScreen'],['cart_front','bulkCartFront'],['cart_back','bulkCartBack'],['disc','bulkDisc'],['advertisement','bulkAdvertisement'],['manual','bulkManual']].filter(([,id]) => $(id).checked).map(([name]) => name);
@@ -29,7 +30,7 @@ import { refresh } from './library.js';
       try {
         const result = await api('/api/media/bulk/status');
         renderBulkMediaStatus(result.job);
-        if (result.job.state === 'running') return setTimeout(watchBulkMedia, 1200);
+        if (result?.job?.state === 'running') return setTimeout(watchBulkMedia, 1200);
         await refresh();
         await openMediaManager();
         notify('Bulk media download finished');

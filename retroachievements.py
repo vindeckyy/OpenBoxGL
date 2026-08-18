@@ -148,9 +148,11 @@ def match_game(game, credentials, cache_directory, fetch=api_get):
         Path(cache_directory) / "systems.json",
         lambda: fetch("API_GetConsoleIDs.php", {"a":1, "g":1}, credentials),
     )
+    if not isinstance(systems, list):
+        systems = []
     console = next((
         item for item in systems
-        if any(str(item.get("Name", "")).casefold() == name.casefold() for name in targets)
+        if isinstance(item, dict) and any(str(item.get("Name", "")).casefold() == name.casefold() for name in targets)
     ), None)
     if not console:
         raise ValueError("RetroAchievements did not return a matching system.")
@@ -159,7 +161,9 @@ def match_game(game, credentials, cache_directory, fetch=api_get):
         Path(cache_directory) / f"system-{console['ID']}.json",
         lambda: fetch("API_GetGameList.php", {"i":console["ID"], "h":1, "f":1}, credentials),
     )
-    match = next((item for item in games if digest in (item.get("Hashes") or [])), None)
+    if not isinstance(games, list):
+        games = []
+    match = next((item for item in games if isinstance(item, dict) and digest in (item.get("Hashes") or [])), None)
     if not match:
         raise ValueError("This ROM hash is not linked to a RetroAchievements game.")
     return int(match["ID"]), digest
