@@ -5,6 +5,7 @@ Dependency-free and never raises: failures degrade to a logged no-op.
 
 from __future__ import annotations
 
+from collections import namedtuple
 import glob
 import logging
 import shutil
@@ -61,29 +62,44 @@ def _tdp_args(tdp_w):
     return ["-stapm-limit=" + str(mw)]
 
 
+def _make_idempotent_restore(profile_name, state):
+    called = [False]
+    def restore():
+        if not called[0]:
+            called[0] = True
+            restore_perf_profile(profile_name, state)
+    return restore
+
+
+PerfLease = namedtuple('PerfLease', ['applied', 'profile_name', 'restore'])
+
 def apply_perf_profile(profile_name, state, environ=None):
-    """Apply the profile's TDP limit; never raises. Returns a result dict."""
+    """Apply the profile's TDP limit; never raises. Returns a PerfLease."""
     result = {"profile": profile_name, "applied": False, "reason": "", "tdp_w": 0}
     if not perf_should_apply(state, environ):
         mode = str(state.get("settings", {}).get("apply_perf", "auto")).strip().casefold()
         result["reason"] = "disabled" if mode == "off" else "auto-skipped"
-        return result
+        return PerfLease(applied=False, profile_name=profile_name, restore=lambda: None)
     perf = state.get("perf_profiles", {}).get(profile_name)
     if not perf or not perf.get("enabled") or not perf.get("tdp_w"):
         result["reason"] = "no-profile" if not perf else ("disabled" if not perf.get("enabled") else "bad-tdp")
-        return result
+        return PerfLease(applied=False, profile_name=profile_name, restore=lambda: None)
     try:
         args = _tdp_args(perf["tdp_w"])
     except (TypeError, ValueError):
         result["reason"] = "bad-tdp"
-        return result
+        return PerfLease(applied=False, profile_name=profile_name, restore=lambda: None)
     ok, message = _run_ryzenadj(args)
     result["applied"] = ok
     result["reason"] = message or "ok"
     result["tdp_w"] = float(perf["tdp_w"])
     if not ok:
         LOGGER.warning("apply_perf: %s (%s W): %s", profile_name, perf["tdp_w"], message)
-    return result
+    
+    if ok:
+        return PerfLease(applied=True, profile_name=profile_name, restore=_make_idempotent_restore(profile_name, state))
+    else:
+        return PerfLease(applied=False, profile_name=profile_name, restore=lambda: None)
 
 
 def restore_perf_profile(profile_name, state):

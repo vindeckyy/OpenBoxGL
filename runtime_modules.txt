@@ -77,3 +77,7 @@ handlers/data.py
 automation.py
 notifications.py
 play_queue.py
+parity_identity.py
+pkg/parity/parity_identity.py
+pkg/parity/parity_redact.py
+parity_redact.py

@@ -41,6 +41,7 @@ from webapp_state import (
     approved_backup_file,
     auto_import_worker,
     control_game_session,
+    reconcile_sessions_on_startup,
     run_configured_commands,
     shutdown_webhooks,
     SSE_MAX_EVENT_BYTES,
@@ -532,6 +533,57 @@ def main():
         profiles = state.setdefault("profiles", {})
         profiles.update(merge_profiles_from_definitions(profiles))
     update_state(bootstrap_state)
+    # Reconcile persisted active_sessions from previous run (Days 0-14, Task 3).
+    # Must run once before watchers/jobs start, inside a transaction so .bak/snapshots stay consistent.
+    try:
+        _reconcile_state = load_state()
+        reattached, abandoned = reconcile_sessions_on_startup(_reconcile_state)
+        if reattached or abandoned:
+            def _persist_reconciled(state):
+                state["active_sessions"] = reattached + abandoned
+            update_state(_persist_reconciled)
+            if reattached:
+                LOGGER.info("Reattached %d active session(s) after restart", len(reattached))
+            if abandoned:
+                LOGGER.info("Marked %d session(s) as abandoned (PID mismatch or gone)", len(abandoned))
+            # Reattach watchers for verified PIDs: poll identity until exit, then clean up active_sessions and restore perf profile.
+            for _sess in reattached:
+                _launch_id = _sess.get("launch_id", "")
+                _pid = _sess.get("pid")
+                _profile = _sess.get("perf_profile", "")
+                _start = _sess.get("proc_start_time")
+                _fp = _sess.get("command_fingerprint", "")
+                if not _launch_id or not _pid:
+                    continue
+                def _reattached_watcher(launch_id=_launch_id, pid=_pid, profile=_profile, proc_start=_start, fingerprint=_fp):
+                    from webapp_state import _verify_process_identity as _vpi
+                    import time as _time
+                    # Poll until the PID disappears or identity diverges.
+                    while True:
+                        try:
+                            os.kill(pid, 0)
+                        except OSError:
+                            break
+                        # Also verify identity to avoid PID-reuse false positives.
+                        if not _vpi({"pid": pid, "proc_start_time": proc_start, "command_fingerprint": fingerprint}):
+                            break
+                        _time.sleep(1.0)
+                    # Process gone or identity changed: remove from active_sessions and try to restore perf profile.
+                    try:
+                        def _remove_reattached(state):
+                            state["active_sessions"] = [s for s in state.get("active_sessions", []) if s.get("launch_id") != launch_id]
+                        update_state(_remove_reattached)
+                    except Exception:
+                        LOGGER.exception("Failed to clean up reattached session %s", launch_id)
+                    if profile:
+                        try:
+                            from pkg.parity.parity_perf import restore_perf_profile
+                            restore_perf_profile(profile, load_state())
+                        except Exception:
+                            LOGGER.exception("restore_perf failed for reattached session %s", launch_id)
+                threading.Thread(target=_reattached_watcher, daemon=True).start()
+    except Exception:
+        LOGGER.exception("Session reconciliation failed; continuing with empty active_sessions")
     WATCH_STOP.clear()
     JOB_MANAGER.submit("auto-import", auto_import_worker)
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -598,6 +650,7 @@ def main():
             ).start()
     def stop():
         """Graceful shutdown: stop sessions, then stop accepting requests."""
+        # Days 0-14, Task 3: mark sessions stopping, graceful stop, force-kill pgid if needed, persist before remove.
         with PROCESS_LOCK:
             launch_ids = list(RUNNING.keys())
         for launch_id in launch_ids:
@@ -605,6 +658,62 @@ def main():
                 control_game_session(launch_id, "stop")
             except ValueError:
                 pass
+        # Persist graceful shutdown for any remaining active_sessions (e.g., reattached ones not in RUNNING).
+        try:
+            _state = load_state()
+            _active = [s for s in _state.get("active_sessions", []) if s.get("status") == "active"]
+            if _active:
+                # Mark stopping and persist.
+                def _mark_stopping(state):
+                    for sess in state.get("active_sessions", []):
+                        if sess.get("status") == "active":
+                            sess["status"] = "stopping"
+                try:
+                    update_state(_mark_stopping)
+                except Exception:
+                    LOGGER.exception("Failed to mark sessions stopping")
+                # Give processes the shutdown window (2s) to exit gracefully, then force-kill known pgids.
+                import time as _time
+                _deadline = _time.monotonic() + 2.0
+                while _time.monotonic() < _deadline:
+                    _alive_any = False
+                    for sess in _active:
+                        _pid = sess.get("pid")
+                        if _pid:
+                            try:
+                                os.kill(_pid, 0)
+                                _alive_any = True
+                                break
+                            except OSError:
+                                pass
+                    if not _alive_any:
+                        break
+                    _time.sleep(0.2)
+                for sess in _active:
+                    _pid = sess.get("pid")
+                    _pgid = sess.get("pgid")
+                    if _pid:
+                        try:
+                            os.kill(_pid, 0)
+                        except OSError:
+                            continue
+                        # Still alive after window: force-kill pgid, fallback to pid.
+                        try:
+                            if _pgid:
+                                os.killpg(_pgid, signal.SIGKILL)
+                            else:
+                                os.kill(_pid, signal.SIGKILL)
+                        except OSError:
+                            pass
+                # Persist final state: remove stopping entries before shutdown.
+                def _remove_stopping(state):
+                    state["active_sessions"] = [s for s in state.get("active_sessions", []) if s.get("status") != "stopping"]
+                try:
+                    update_state(_remove_stopping)
+                except Exception:
+                    LOGGER.exception("Failed to remove stopping sessions on shutdown")
+        except Exception:
+            LOGGER.exception("Graceful shutdown session cleanup failed")
         shutdown_webhooks(wait_seconds=2.0)
 
     def request_shutdown(_signum, _frame):

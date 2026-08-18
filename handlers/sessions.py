@@ -16,9 +16,12 @@ class SessionHandlers:
             after = int(parse_qs(parsed.query).get("after", ["0"])[0])
         except ValueError:
             after = 0
+        state = load_state_view()
+        abandoned = [s for s in state.get('active_sessions', []) if s.get('status') == 'abandoned']
         with PROCESS_LOCK:
             payload = {
                 "running": list(RUNNING.values()),
+                "abandoned": abandoned,
                 "events": [event for event in SESSION_EVENTS if event["id"] > after],
                 "last_event": EVENT_SEQUENCE,
             }
@@ -40,6 +43,14 @@ class SessionHandlers:
 
     def _api_post_api_session_control(self, payload):
         self.control_session(payload)
+
+    def _api_post_api_session_cleanup(self, payload):
+        launch_id = payload.get("launch_id")
+        def mutate(state):
+            state["active_sessions"] = [s for s in state.get("active_sessions", []) if s.get("launch_id") != launch_id]
+        from openbox import update_state
+        update_state(mutate)
+        self.send_json(200, {"ok": True})
 
     def _api_post_api_bigbox_mode(self, payload):
         self.bigbox_mode_switch(payload)

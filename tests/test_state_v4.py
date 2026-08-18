@@ -4,9 +4,13 @@
 
 import copy
 import json
+import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from state_store import (
     NOTIFICATIONS_CAP,
@@ -39,7 +43,7 @@ class V3MigrationTests(unittest.TestCase):
     def test_v3_gains_collections_and_schema_5(self):
         state, changed = normalize_state(v3_state())
         self.assertTrue(changed)
-        self.assertEqual(state["schema_version"], 5)
+        self.assertEqual(state["schema_version"], STATE_SCHEMA_VERSION)
         self.assertEqual(state["queue"], [])
         self.assertEqual(state["notifications"], [])
         self.assertEqual(state["ui_state"], {})

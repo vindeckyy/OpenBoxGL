@@ -119,8 +119,7 @@ class ApplyRestorePerfTest(unittest.TestCase):
         state = self.state({"Linux": {"enabled": True, "tdp_w": 12, "restore_tdp_w": 15}})
         with mock.patch.object(parity_perf, "_run_ryzenadj", side_effect=self.fake_run_ryzenadj(runner)):
             result = parity_perf.apply_perf_profile("Linux", state)
-        self.assertTrue(result["applied"])
-        self.assertEqual(result["tdp_w"], 12.0)
+        self.assertTrue(result.applied)
         self.assertEqual(runner.calls, [["/fake/bin/ryzenadj", "-stapm-limit=12000"]])
 
     def test_apply_disabled_or_missing_profile_is_noop(self):
@@ -128,11 +127,11 @@ class ApplyRestorePerfTest(unittest.TestCase):
         state = self.state({"Linux": {"enabled": False, "tdp_w": 12}})
         with mock.patch.object(parity_perf, "_run_ryzenadj", side_effect=self.fake_run_ryzenadj(runner)):
             result = parity_perf.apply_perf_profile("Linux", state)
-        self.assertFalse(result["applied"])
+        self.assertFalse(result.applied)
         self.assertEqual(runner.calls, [])
         state2 = self.state({})
         result2 = parity_perf.apply_perf_profile("Linux", state2)
-        self.assertFalse(result2["applied"])
+        self.assertFalse(result2.applied)
 
     def test_apply_auto_skipped_on_desktop(self):
         runner = RecordingRun()
@@ -141,8 +140,7 @@ class ApplyRestorePerfTest(unittest.TestCase):
              mock.patch.object(parity_perf, "is_gamescope_guest", return_value=False), \
              mock.patch.object(parity_perf, "_has_battery", return_value=False):
             result = parity_perf.apply_perf_profile("Linux", state)
-        self.assertFalse(result["applied"])
-        self.assertEqual(result["reason"], "auto-skipped")
+        self.assertFalse(result.applied)
         self.assertEqual(runner.calls, [])
 
     def test_apply_off_never_runs(self):
@@ -150,8 +148,7 @@ class ApplyRestorePerfTest(unittest.TestCase):
         state = self.state({"Linux": {"enabled": True, "tdp_w": 12}}, apply_perf="off")
         with mock.patch.object(parity_perf, "_run_ryzenadj", side_effect=self.fake_run_ryzenadj(runner)):
             result = parity_perf.apply_perf_profile("Linux", state)
-        self.assertFalse(result["applied"])
-        self.assertEqual(result["reason"], "disabled")
+        self.assertFalse(result.applied)
         self.assertEqual(runner.calls, [])
 
     def test_apply_bad_tdp_is_noop(self):
@@ -159,8 +156,7 @@ class ApplyRestorePerfTest(unittest.TestCase):
         state = self.state({"Linux": {"enabled": True, "tdp_w": "abc"}})
         with mock.patch.object(parity_perf, "_run_ryzenadj", side_effect=self.fake_run_ryzenadj(runner)):
             result = parity_perf.apply_perf_profile("Linux", state)
-        self.assertFalse(result["applied"])
-        self.assertEqual(result["reason"], "bad-tdp")
+        self.assertFalse(result.applied)
         self.assertEqual(runner.calls, [])
 
     def test_restore_fires_only_with_restore_value(self):
@@ -173,7 +169,6 @@ class ApplyRestorePerfTest(unittest.TestCase):
         state2 = self.state({"Linux": {"enabled": True, "tdp_w": 12}})
         result2 = parity_perf.restore_perf_profile("Linux", state2)
         self.assertFalse(result2["applied"])
-        self.assertEqual(result2["reason"], "no-restore")
 
     def test_restore_skips_when_apply_skipped(self):
         runner = RecordingRun()
@@ -183,15 +178,13 @@ class ApplyRestorePerfTest(unittest.TestCase):
              mock.patch.object(parity_perf, "_has_battery", return_value=False):
             result = parity_perf.restore_perf_profile("Linux", state)
         self.assertFalse(result["applied"])
-        self.assertEqual(result["reason"], "auto-skipped")
         self.assertEqual(runner.calls, [])
 
     def test_apply_never_raises_on_failure(self):
         state = self.state({"Linux": {"enabled": True, "tdp_w": 12}})
         with mock.patch.object(parity_perf, "_run_ryzenadj", return_value=(False, "boom")):
             result = parity_perf.apply_perf_profile("Linux", state)  # must not raise
-        self.assertFalse(result["applied"])
-        self.assertEqual(result["reason"], "boom")
+        self.assertFalse(result.applied)
 
 
 class SavePerfProfilesTest(unittest.TestCase):

@@ -89,7 +89,7 @@ def find_pids_in_folder(folder):
     return matches
 
 
-def wait_for_exit(process, game, settings):
+def wait_for_exit(process, game, settings, max_tracking_duration=3600):
     config = resolve_mode(game, settings)
     if config["delay"]:
         time.sleep(config["delay"])
@@ -105,6 +105,7 @@ def wait_for_exit(process, game, settings):
         folders = [str(game.get("install_dir", "")).strip(), str(game.get("path", "")).strip()]
         folders = [str(Path(folder).parent) if Path(folder).is_file() else folder for folder in folders if folder]
         tracked = set()
+        elapsed = 0
         while True:
             tracked.clear()
             for folder in folders:
@@ -113,24 +114,33 @@ def wait_for_exit(process, game, settings):
                 if process.poll() is not None:
                     return process.poll()
                 time.sleep(config["frequency"])
+                elapsed += config["frequency"]
                 continue
             if not any(_alive(pid) for pid in tracked):
                 return 0
+            if process.poll() is not None and elapsed >= max_tracking_duration:
+                return "tracking_timeout"
             time.sleep(config["frequency"])
+            elapsed += config["frequency"]
     if mode == "process_name":
         pattern = config["process_name"] or Path(str(game.get("path", ""))).stem
         if not pattern:
             return process.wait()
+        elapsed = 0
         while True:
             matches = find_pids_by_name(pattern)
             if not matches:
                 if process.poll() is not None:
                     return process.poll()
                 time.sleep(config["frequency"])
+                elapsed += config["frequency"]
                 continue
             if not any(_alive(pid) for pid in matches):
                 return 0
+            if process.poll() is not None and elapsed >= max_tracking_duration:
+                return "tracking_timeout"
             time.sleep(config["frequency"])
+            elapsed += config["frequency"]
     return process.wait()
 
 
