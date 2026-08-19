@@ -4,11 +4,25 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.5.1] - 2026-08-19
+
+### Performance
+
+- Optimized state writes with dirty-field tracking, batched snapshot persistence, and cached library projections for large libraries.
+- Accelerated import scanning, metadata batching, and archive inspection throughput.
+- Streamlined BigBox CoverFlow rendering and indexed title search matching.
+- Improved native host startup responsiveness with non-blocking IPC polling.
 
 ### Changed
 
-- Improved large-library performance across state writes, public library projection, delta library lookups, import scanning, metadata batching, coverflow rendering, indexed title search, and native host startup waiting.
+- Enhanced cross-store import consolidation across Steam, Heroic, Lutris, Faugus, and ROMs using canonical identity normalization.
+- Hardened CLI help formatting and argument parsing for headless and native host invocations.
+- Updated parity compatibility shims and LaunchBox feature matrix documentation.
+
+### Fixed
+
+- Ensured completed background job futures are released synchronously to eliminate future and memory retention.
+- Hardened import endpoint error handling and input validation against malformed payload structures.
 
 ## [1.5.0] - 2026-08-18
 
@@ -557,6 +571,7 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
+[1.5.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.2.0...v1.3.0

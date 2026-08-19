@@ -15,6 +15,12 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="1.5.1" date="2026-08-19">
+      <description>
+        <p>Performance and consolidation release. Optimizes state persistence with dirty tracking and batched writes, speeds up library projections, delta lookups, import scanning, metadata batching, BigBox CoverFlow rendering, and native host startup.</p>
+        <p>Improves cross-store import consolidation across Steam, Heroic, Lutris, Faugus, and ROM collections, hardens CLI help output and import error handling, and ensures completed job futures are released synchronously.</p>
+      </description>
+    </release>
     <release version="1.5.0" date="2026-08-18">
       <description>
         <p>Parity and reliability release. Adds Proton/Wine prefix management, Faugus launcher scans, Eden Switch emulator support, canonical identity deduplication, Edit Game modal navigation, acronym search matching, capability filter rules, and scoped media cleanup.</p>
