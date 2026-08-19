@@ -1,6 +1,7 @@
 """Import installed game libraries from Linux storefronts."""
 
 import json
+import os
 import re
 import shlex
 import shutil
@@ -62,35 +63,49 @@ def import_steam(home=None):
     seen = set()
     for root in steam_roots(home):
         for library in steam_libraries(root):
-            for manifest in (library / "steamapps").glob("appmanifest_*.acf"):
-                values = vdf_values(manifest.read_text(errors="replace"))
-                app_id, name = values.get("appid"), values.get("name")
-                if not app_id or not name or app_id in seen:
-                    continue
-                seen.add(app_id)
-                games.append({
-                    "name": name,
-                    "platform": "PC",
-                    "source": "Steam",
-                    "collection": "Steam",
-                    "path": executable,
-                    "launch": command,
-                    "steam_app_id": app_id,
-                    "install_dir": str(library / "steamapps/common" / values.get("installdir", "")),
-                })
+            steamapps = library / "steamapps"
+            if not steamapps.is_dir():
+                continue
+            try:
+                with os.scandir(steamapps) as it:
+                    for entry in it:
+                        if entry.name.startswith("appmanifest_") and entry.name.endswith(".acf"):
+                            try:
+                                content = Path(entry.path).read_text(encoding="utf-8", errors="replace")
+                            except OSError:
+                                continue
+                            values = vdf_values(content)
+                            app_id, name = values.get("appid"), values.get("name")
+                            if not app_id or not name or app_id in seen:
+                                continue
+                            seen.add(app_id)
+                            games.append({
+                                "name": name,
+                                "platform": "PC",
+                                "source": "Steam",
+                                "collection": "Steam",
+                                "path": executable,
+                                "launch": command,
+                                "steam_app_id": app_id,
+                                "install_dir": str(library / "steamapps/common" / values.get("installdir", "")),
+                            })
+            except OSError:
+                continue
     return games
 
 
 def json_records(path):
     try:
-        data = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError):
+        content = Path(path).read_text(encoding="utf-8", errors="replace")
+        data = json.loads(content)
+    except (OSError, json.JSONDecodeError, ValueError):
         return []
     if isinstance(data, list):
         return [(str(index), value) for index, value in enumerate(data) if isinstance(value, dict)]
     if isinstance(data, dict):
         return [(str(key), value) for key, value in data.items() if isinstance(value, dict)]
     return []
+
 
 
 def heroic_bases(home=None):

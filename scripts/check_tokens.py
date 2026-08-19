@@ -4,14 +4,14 @@
 Counts color literals outside :root blocks in static/app.css and themes/*.css.
 Fails if count rises above baseline, which ratchets down as cleanup progresses.
 
-Baseline: 466 (measured 2026-08-13, originally 625). Decrease only.
+Baseline: 464 (measured 2026-08-19, originally 625). Decrease only.
 """
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-BASELINE = 466
+BASELINE = 464
 HEX_RE = re.compile(r"#(?:[0-9a-fA-F]{3}){1,2}\b")
 ROOT_BLOCK_RE = re.compile(r":root\s*\{[^}]*\}", re.DOTALL)
 

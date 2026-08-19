@@ -137,6 +137,56 @@ const puppeteer = require('./scripts/node_modules/puppeteer');
   const igdbPlatformParam = igdbResult !== 'NO IGDB REQUEST' && /[?&]platform=/.test(igdbResult);
   const igdbPayload = await page.evaluate(() => ({open: document.getElementById('metadataDialog').open, query: document.getElementById('metadataQuery').value}));
   console.log('igdb search:', JSON.stringify({igdbChecked, igdbResult, igdbPlatformParam, igdbPayload}));
+  const perfChecks = await page.evaluate(async () => {
+    const bigbox = await import('/static/bigbox.js');
+    const library = await import('/static/library.js');
+    const state = await import('/static/state.js');
+    const games = Array.from({length: 20000}, (_, i) => ({
+      id: i + 1000,
+      name: `Chrono Library Game ${i}`,
+      sort_title: `Chrono Library Game ${i}`,
+      platform: 'PC',
+      genre: 'RPG',
+      developer: 'Perf Harness',
+      path: '/bin/true',
+      path_exists: true,
+      versions: [],
+      applications: [],
+    }));
+    AppState.games = games;
+    AppState._refreshCounter = (AppState._refreshCounter || 0) + 1;
+    state.warmSearchIndex();
+    AppState.appSettings.library_view = 'grid';
+    AppState.appSettings.cover_grouping = 'shape';
+    document.getElementById('sidebarSearch').value = '';
+    library.renderGrid();
+    const visibleCount = filteredGames().length;
+    const gridNodeCount = document.querySelectorAll('#grid .card, #grid .list-row').length;
+    AppState.appSettings.bigbox_mode = 'coverflow';
+    AppState.bigBoxGames = games;
+    AppState.bigBoxIndex = 10000;
+    document.getElementById('bigBox').hidden = false;
+    bigbox.renderBigBox();
+    const coverflowNodes = document.querySelectorAll('.coverflow-card').length;
+    const target = [...document.querySelectorAll('.coverflow-card')].find(node => Number(node.dataset.coverflow) !== AppState.bigBoxIndex);
+    const clickTarget = target ? Number(target.dataset.coverflow) : null;
+    target?.click();
+    const delegatedClickOk = clickTarget !== null && AppState.bigBoxIndex === clickTarget;
+    document.getElementById('sidebarSearch').value = 'chrono 19999';
+    const start = performance.now();
+    const filtered = filteredGames();
+    const searchMs = performance.now() - start;
+    return {coverflowNodes, delegatedClickOk, gridNodeCount, visibleCount, filtered: filtered.map(game => game.name).slice(0, 3), searchMs, searchIndexStats: AppState.searchIndexStats};
+  });
+  console.log('perf ui checks:', JSON.stringify(perfChecks));
+  if (perfChecks.coverflowNodes > 11) process.exit(1);
+  if (!perfChecks.gridNodeCount) process.exit(1);
+  if (perfChecks.gridNodeCount >= perfChecks.visibleCount) process.exit(1);
+  if (perfChecks.gridNodeCount > 300) process.exit(1);
+  if (!perfChecks.delegatedClickOk) process.exit(1);
+  if (!perfChecks.filtered.includes('Chrono Library Game 19999')) process.exit(1);
+  if (!perfChecks.searchIndexStats || perfChecks.searchIndexStats.games !== 20000) process.exit(1);
+  if (perfChecks.searchMs > 20) process.exit(1);
   console.log('JS errors:', errors.length ? errors.join('\n') : 'none');
   await browser.close();
   if (errors.length) process.exit(1);

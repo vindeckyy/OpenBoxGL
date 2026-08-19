@@ -334,12 +334,12 @@
     .bigbox-platforms { display:grid; gap:4px; max-height:58vh; overflow:auto; padding-right:6px; }
     .bigbox-platform { width:100%; border:1px solid var(--line); border-radius:6px; padding:8px 10px; text-align:left; color:#d1c7ba; background:var(--surface-card); }
     .bigbox-platform.active { border-color:var(--active); box-shadow:0 0 0 1px #f0600044; color:var(--white); }
-    .coverflow-strip { display:flex; gap:14px; overflow:auto; padding:10px 0 18px; scroll-snap-type:x mandatory; }
-    .coverflow-card { flex:0 0 min(18vw,170px); scroll-snap-align:center; border:1px solid var(--border-card); border-radius:8px; overflow:visible; background:var(--surface-card); transform:perspective(900px) rotateY(-8deg); position:relative; }
-    .coverflow-card.jewel-case::before { content:''; position:absolute; left:-10px; top:4%; width:10px; height:92%; background:linear-gradient(180deg,#75634a,var(--surface-hover)); transform:rotateY(78deg); transform-origin:right center; border-radius:var(--radius-hairline) 0 0 var(--radius-hairline); box-shadow:inset 0 0 0 1px #8b7659; }
-    .coverflow-card.jewel-case::after { content:''; position:absolute; inset:0; border-radius:8px; box-shadow:inset 0 0 0 1px #ffffff18, 0 12px 24px #0006; pointer-events:none; }
-    .coverflow-card.active { transform:perspective(900px) rotateY(0deg) scale(1.04); border-color:var(--active); box-shadow:0 0 0 2px #f0600044; transition:transform .15s ease; }
-    .coverflow-card img { width:100%; height:auto; display:block; border-radius:8px; }
+    .coverflow-strip { display:flex; justify-content:center; align-items:center; gap:14px; overflow:hidden; padding:10px 0 18px; scroll-snap-type:x mandatory; contain:layout paint; perspective:900px; }
+    .coverflow-card { flex:0 0 min(18vw,170px); scroll-snap-align:center; border:1px solid var(--border-card); border-radius:8px; overflow:visible; background:var(--surface-card); transform:translate3d(calc(var(--coverflow-offset,0) * 4px),0,0) rotateY(-8deg); position:relative; aspect-ratio:.72; will-change:transform; contain:layout paint; }
+    .coverflow-card.jewel-case::before { content:''; position:absolute; left:-10px; top:4%; width:10px; height:92%; background:linear-gradient(180deg,var(--muted),var(--surface-hover)); transform:rotateY(78deg); transform-origin:right center; border-radius:var(--radius-hairline) 0 0 var(--radius-hairline); box-shadow:inset 0 0 0 1px var(--border-card); }
+    .coverflow-card.jewel-case::after { content:''; position:absolute; inset:0; border-radius:8px; box-shadow:inset 0 0 0 1px var(--line), 0 12px 24px var(--surface-deep); pointer-events:none; }
+    .coverflow-card.active { transform:translate3d(0,0,0) rotateY(0deg) scale(1.04); border-color:var(--active); box-shadow:0 0 0 2px var(--focus); transition:transform .15s ease; }
+    .coverflow-card img { width:100%; height:100%; display:block; border-radius:8px; object-fit:cover; }
     .reader-viewport { overflow:hidden; height:calc(92vh - 92px); background:#fff; }
     .reader-viewport.spread iframe { width:200%; max-width:none; }
     .reader-viewport iframe { width:100%; height:100%; border:0; background:#fff; }

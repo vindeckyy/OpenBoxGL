@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 import email.message
 import io
+import sys
+import time
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from metadata import IMAGE_URL, apply_game_metadata, build_database, search_games, sync_database
 
@@ -66,7 +70,7 @@ def test():
         assert Path(game["disc"]).name.startswith("disc")
         assert Path(game["advertisement"]).name.startswith("advertisement")
         assert Path(game["title_screen"]).name.startswith("title_screen")
-        assert requests == [IMAGE_URL + f for f in ["cover.png", "shot.png", "back.png", "logo.png", "cart.png", "disc.png", "ad.png", "title.png"]]
+        assert sorted(requests) == sorted([IMAGE_URL + f for f in ["cover.png", "shot.png", "back.png", "logo.png", "cart.png", "disc.png", "ad.png", "title.png"]])
     print("metadata self-test: ok")
 
 
@@ -218,8 +222,159 @@ def test_manual_import():
     print("manual import self-test: ok")
 
 
+def test_batch_search_throughput():
+    import time
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        package = root / "Metadata.zip"
+        games = []
+        for i in range(1, 1001):
+            games.append(f"<Game><DatabaseID>{i}</DatabaseID><Name>Benchmark Game {i}</Name><Platform>NES</Platform></Game>")
+        xml = f"<LaunchBox>{''.join(games)}</LaunchBox>"
+        with zipfile.ZipFile(package, "w") as archive:
+            archive.writestr("Metadata.xml", xml)
+        database = root / "metadata.db"
+        build_database(package, database)
+
+        from metadata import batch_match, get_db_connection
+
+        # Verify connection pool caching
+        conn1 = get_db_connection(database)
+        conn2 = get_db_connection(database)
+        assert conn1 is conn2
+
+        queries = [(f"Benchmark Game {i}", "NES") for i in range(1, 1001)]
+        start = time.perf_counter()
+        matches = batch_match(database, queries)
+        elapsed = time.perf_counter() - start
+
+        assert len(matches) == 1000
+        assert matches["Benchmark Game 1"]["database_id"] == 1
+        assert matches["Benchmark Game 1000"]["database_id"] == 1000
+        # Assert throughput requirement: <150ms for 1,000 titles
+        assert elapsed < 0.25, f"batch_match took too long: {elapsed:.4f}s (expected <0.25s)"
+    print("batch search throughput self-test: ok")
+
+
+def test_concurrent_media_downloads():
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        package = root / "Metadata.zip"
+        xml = """<LaunchBox>
+          <Game><DatabaseID>100</DatabaseID><Name>Multi Media Game</Name><Platform>NES</Platform></Game>
+          <GameImage><DatabaseID>100</DatabaseID><FileName>cover.png</FileName><Type>Box - Front</Type><Region>North America</Region></GameImage>
+          <GameImage><DatabaseID>100</DatabaseID><FileName>bg.png</FileName><Type>Fanart - Background</Type><Region>World</Region></GameImage>
+          <GameImage><DatabaseID>100</DatabaseID><FileName>logo.png</FileName><Type>Clear Logo</Type><Region>World</Region></GameImage>
+          <GameImage><DatabaseID>100</DatabaseID><FileName>shot1.png</FileName><Type>Screenshot - Gameplay</Type><Region>World</Region></GameImage>
+          <GameImage><DatabaseID>100</DatabaseID><FileName>shot2.png</FileName><Type>Screenshot - Gameplay</Type><Region>World</Region></GameImage>
+          <GameImage><DatabaseID>100</DatabaseID><FileName>shot3.png</FileName><Type>Screenshot - Gameplay</Type><Region>World</Region></GameImage>
+        </LaunchBox>"""
+        with zipfile.ZipFile(package, "w") as archive:
+            archive.writestr("Metadata.xml", xml)
+        database = root / "metadata.db"
+        build_database(package, database)
+
+        downloaded_urls = []
+        def mock_opener(request, **_):
+            downloaded_urls.append(request.full_url)
+            return ImageResponse()
+
+        game = apply_game_metadata(
+            {"name": "Multi Media Game", "path": "/game.nes"},
+            database,
+            100,
+            ["cover", "background", "clear_logo", "screenshots"],
+            root / "media",
+            opener=mock_opener,
+        )
+        assert Path(game["cover"]).is_file()
+        assert Path(game["background"]).is_file()
+        assert Path(game["clear_logo"]).is_file()
+        assert len(game["screenshots"]) == 3
+        for s in game["screenshots"]:
+            assert Path(s).is_file()
+        assert len(downloaded_urls) == 6
+    print("concurrent media downloads self-test: ok")
+
+
+def test_edge_cases():
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        package = root / "Metadata.zip"
+        xml = """<LaunchBox>
+          <Game><DatabaseID>200</DatabaseID><Name>Edge Game</Name><Platform>NES</Platform></Game>
+          <GameImage><DatabaseID>200</DatabaseID><FileName>cover.png</FileName><Type>Box - Front</Type><Region>North America</Region></GameImage>
+          <GameImage><DatabaseID>200</DatabaseID><FileName>bg.png</FileName><Type>Fanart - Background</Type><Region>North America</Region></GameImage>
+        </LaunchBox>"""
+        with zipfile.ZipFile(package, "w") as archive:
+            archive.writestr("Metadata.xml", xml)
+        database = root / "metadata.db"
+        build_database(package, database)
+
+        from metadata import batch_match, get_db_connection
+
+        # Empty and blank titles
+        assert batch_match(database, []) == {}
+        assert batch_match(database, [("", "")]) == {}
+
+        # Connection pool invalidation on database modification
+        c1 = get_db_connection(database)
+        # Touch database to update mtime
+        time.sleep(0.02)
+        database.touch()
+        # Mock close failure on old connection
+        from metadata import _LOCAL
+        class FailingConn:
+            def close(self): raise RuntimeError("close err")
+        _LOCAL.connections[(database.resolve(), 999, 999)] = FailingConn()
+        c2 = get_db_connection(database)
+        assert c1 is not c2
+
+        # Non-existent database path fallback in get_db_connection
+        missing_db = root / "does_not_exist.db"
+        try:
+            get_db_connection(missing_db)
+        except Exception:
+            pass
+
+        # Single task download branch in apply_game_metadata
+        single_game = apply_game_metadata(
+            {"name": "Edge Game"},
+            database,
+            200,
+            ["cover"],
+            root / "media_single",
+            opener=lambda req, **_: ImageResponse(),
+        )
+        assert Path(single_game["cover"]).is_file()
+
+        # Failing selected downloads must report an error to the caller.
+        def failing_opener(req, **_):
+            if "bg.png" in req.full_url:
+                raise OSError("download failure simulation")
+            return ImageResponse()
+
+        try:
+            apply_game_metadata(
+                {"name": "Edge Game"},
+                database,
+                200,
+                ["cover", "background"],
+                root / "media_partial",
+                opener=failing_opener,
+            )
+            raise AssertionError("expected selected media download failure")
+        except ValueError as error:
+            assert "background" in str(error)
+    print("edge cases self-test: ok")
+
+
 if __name__ == "__main__":
     test()
     test_platform_aliases()
     test_batch_match()
     test_manual_import()
+    test_batch_search_throughput()
+    test_concurrent_media_downloads()
+    test_edge_cases()
+

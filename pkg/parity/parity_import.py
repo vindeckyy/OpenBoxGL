@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import collections
 import configparser
+import os
 import re
 import struct
+import threading
+from collections.abc import Callable, Iterable
 from datetime import datetime
 from pathlib import Path
 
@@ -97,22 +101,92 @@ def generate_m3u(disc_paths, output_path):
     return output
 
 
-def _disc_base(path: Path):
-    stem = path.stem
+def parse_m3u(m3u_path: Path | str) -> list[Path]:
+    """Safely parse an M3U file, returning referenced paths resolved relative to the M3U."""
+    path = Path(m3u_path)
+    if not path.is_file():
+        return []
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    entries = []
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            line_path = Path(line)
+            target = (path.parent / line_path).resolve() if not line_path.is_absolute() else line_path
+            entries.append(target)
+        except (ValueError, OSError):
+            continue
+    return entries
+
+
+def parse_cue(cue_path: Path | str) -> list[Path]:
+    """Safely parse a CUE sheet, returning referenced FILE target paths."""
+    path = Path(cue_path)
+    if not path.is_file():
+        return []
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    entries = []
+    for match in re.finditer(r'FILE\s+["\']?([^"\']+)["\']?\s+BINARY', content, re.I):
+        filename = match.group(1).strip()
+        if filename:
+            try:
+                fn_path = Path(filename)
+                target = (path.parent / fn_path).resolve() if not fn_path.is_absolute() else fn_path
+                entries.append(target)
+            except (ValueError, OSError):
+                continue
+    return entries
+
+
+def _disc_base(path: Path | str) -> str:
+    p = path if isinstance(path, Path) else Path(path)
+    stem = p.stem
     cleaned = DISC_RE.sub("", stem).strip(" ._-\t")
     return cleaned or stem
 
 
-def group_multi_disc(paths):
-    groups = {}
-    singles = []
-    for path in sorted(Path(p) for p in paths):
-        if not DISC_RE.search(path.stem):
+DISC_TOKENS = ("disc", "disk", "cd", "dvd", "side")
+
+
+def group_multi_disc(paths: Iterable[Path | str]) -> list[list[Path]]:
+    groups: dict[tuple[Path, str, str], list[Path]] = {}
+    singles: list[Path] = []
+    for p in paths:
+        path = p if isinstance(p, Path) else Path(p)
+        name = path.name
+        idx = name.rfind(".")
+        if idx != -1:
+            stem = name[:idx]
+            suffix = name[idx:].casefold()
+        else:
+            stem = name
+            suffix = ""
+        stem_lower = stem.casefold()
+        if (
+            "disc" not in stem_lower
+            and "disk" not in stem_lower
+            and "cd" not in stem_lower
+            and "dvd" not in stem_lower
+            and "side" not in stem_lower
+        ):
             singles.append(path)
             continue
-        key = (_disc_base(path).casefold(), path.suffix.lower())
+        match = DISC_RE.search(stem)
+        if not match:
+            singles.append(path)
+            continue
+        base = stem[:match.start()].strip(" ._-\t").casefold() or stem_lower
+        key = (path.parent, base, suffix)
         groups.setdefault(key, []).append(path)
-    result = []
+    result: list[list[Path]] = []
     for paths_group in groups.values():
         if len(paths_group) > 1:
             result.append(sorted(paths_group, key=lambda p: p.name.casefold()))
@@ -122,17 +196,140 @@ def group_multi_disc(paths):
     return result
 
 
-def import_multi_platform(folder, extensions_set, platform_map):
+
+def _parallel_scandir(
+    folder: Path | str,
+    extensions_set: Iterable[str],
+    max_workers: int | None = None,
+    progress_callback: Callable | None = None,
+) -> list[Path]:
+    """Parallel multi-core directory crawler using os.scandir and worker pool."""
+    root = Path(folder).expanduser()
+    if not root.is_dir():
+        raise ValueError(f"Folder does not exist: {folder}")
+
+    ext_set = {
+        ext.casefold() if ext.startswith(".") else f".{ext.casefold()}"
+        for ext in extensions_set
+    }
+
+    found_paths: list[Path] = []
+    found_lock = threading.Lock()
+
+    seen_dirs: set[str] = set()
+    try:
+        seen_dirs.add(os.path.realpath(str(root)))
+    except OSError:
+        seen_dirs.add(str(root))
+
+    dirs_queue: collections.deque[str] = collections.deque([str(root)])
+    queue_lock = threading.Lock()
+    cv = threading.Condition(queue_lock)
+    active_workers = 0
+    done = False
+
+    workers_count = max_workers or min(16, max(2, (os.cpu_count() or 2) * 2))
+
+    def worker_loop():
+        nonlocal active_workers, done
+        while True:
+            with cv:
+                while not dirs_queue and not done:
+                    if active_workers == 0:
+                        done = True
+                        cv.notify_all()
+                        break
+                    cv.wait(timeout=0.05)
+                if done and not dirs_queue:
+                    break
+                if not dirs_queue:
+                    continue
+                current_dir = dirs_queue.popleft()
+                active_workers += 1
+
+            child_dirs: list[str] = []
+            child_files: list[Path] = []
+            try:
+                with os.scandir(current_dir) as it:
+                    for entry in it:
+                        try:
+                            if entry.is_dir(follow_symlinks=False):
+                                try:
+                                    real_path = os.path.realpath(entry.path)
+                                except OSError:
+                                    real_path = entry.path
+                                with queue_lock:
+                                    if real_path not in seen_dirs:
+                                        seen_dirs.add(real_path)
+                                        child_dirs.append(entry.path)
+                            elif entry.is_file(follow_symlinks=True):
+                                name = entry.name
+                                idx = name.rfind(".")
+                                if idx != -1 and name[idx:].casefold() in ext_set:
+                                    child_files.append(Path(entry.path))
+                        except OSError:
+                            continue
+            except OSError:
+                pass
+
+            with cv:
+                if child_dirs:
+                    dirs_queue.extend(child_dirs)
+                    cv.notify_all()
+                active_workers -= 1
+                if active_workers == 0 and not dirs_queue:
+                    done = True
+                    cv.notify_all()
+
+            if child_files:
+                with found_lock:
+                    found_paths.extend(child_files)
+                    if progress_callback:
+                        try:
+                            progress_callback(found_count=len(found_paths))
+                        except Exception:
+                            pass
+
+    threads = [threading.Thread(target=worker_loop, daemon=True) for _ in range(workers_count)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    return sorted(found_paths, key=lambda p: (str(p.parent), p.name.casefold()))
+
+
+def import_multi_platform(
+    folder: Path | str,
+    extensions_set: Iterable[str],
+    platform_map: dict[str, str],
+    progress_callback: Callable | None = None,
+) -> list[dict]:
     folder = Path(folder).expanduser()
     if not folder.is_dir():
         raise ValueError(f"Folder does not exist: {folder}")
-    found = sorted(
-        path for path in folder.rglob("*")
-        if path.is_file() and path.suffix.lower() in extensions_set
-    )
+    found = _parallel_scandir(folder, extensions_set, progress_callback=progress_callback)
+
+    m3u_referenced: set[str] = set()
+    for path in found:
+        if path.suffix.casefold() == ".m3u":
+            for ref in parse_m3u(path):
+                try:
+                    m3u_referenced.add(str(ref.resolve() if ref.exists() else ref))
+                except OSError:
+                    m3u_referenced.add(str(ref))
+
+    filtered_found = [
+        p for p in found
+        if str(p.resolve() if p.exists() else p) not in m3u_referenced
+    ] if m3u_referenced else found
+
     additions = []
     now = datetime.now().isoformat(timespec="seconds")
-    for group in group_multi_disc(found):
+    disc_groups = group_multi_disc(filtered_found)
+    total_groups = len(disc_groups)
+
+    for index, group in enumerate(disc_groups):
         if len(group) > 1:
             base = _disc_base(group[0])
             m3u = group[0].with_name(f"{base}.m3u")
@@ -153,17 +350,41 @@ def import_multi_platform(folder, extensions_set, platform_map):
             "added_at": now,
             "discs": [str(item) for item in group] if len(group) > 1 else [],
         })
+        if progress_callback and (index % 100 == 0 or index == total_groups - 1):
+            try:
+                progress_callback(processed_count=index + 1, total_count=total_groups)
+            except Exception:
+                pass
     return dedupe_ranked_imports(additions)
 
 
-def dedupe_ranked_imports(additions):
-    from parity_premium import pick_best_rom, rank_rom_group
+_ROM_TAGS_RE = re.compile(r"\(.*?\)|\[.*?\]")
+_NON_ALPHANUM = re.compile(r"[^a-z0-9]+")
 
-    buckets = {}
+
+def _clean_rom_title(name: str) -> str:
+    if "(" in name or "[" in name:
+        cleaned = _ROM_TAGS_RE.sub(" ", name)
+    else:
+        cleaned = name
+    norm = _NON_ALPHANUM.sub(" ", cleaned.casefold()).strip()
+    return norm or _NON_ALPHANUM.sub(" ", name.casefold()).strip()
+
+
+def dedupe_ranked_imports(additions: list[dict]) -> list[dict]:
+    from parity_premium import rank_rom_group
+
+    buckets: dict[tuple[str, str], list[dict]] = {}
+    title_cache: dict[str, str] = {}
     for item in additions:
+        name = str(item.get("name", ""))
+        norm_title = title_cache.get(name)
+        if norm_title is None:
+            norm_title = _clean_rom_title(name)
+            title_cache[name] = norm_title
         key = (
             item.get("platform", ""),
-            re.sub(r"[^a-z0-9]+", " ", str(item.get("name", "")).casefold()).strip(),
+            norm_title,
         )
         buckets.setdefault(key, []).append(item)
     result = []
@@ -172,11 +393,14 @@ def dedupe_ranked_imports(additions):
             result.append(items[0])
             continue
         paths = [entry["path"] for entry in items]
-        best = pick_best_rom(paths)
-        winner = next(entry for entry in items if entry["path"] == best)
-        winner["version_candidates"] = rank_rom_group(paths)
+        ranked = rank_rom_group(paths)
+        best = ranked[0] if ranked else paths[0]
+        winner = next((entry for entry in items if entry["path"] == best), items[0])
+        winner["version_candidates"] = ranked
         result.append(winner)
     return result
+
+
 
 
 def import_scummvm(home=None):

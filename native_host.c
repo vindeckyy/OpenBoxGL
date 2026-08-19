@@ -25,8 +25,10 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <sys/inotify.h>
 #include <sys/un.h>
 #include <time.h>
+#include <poll.h>
 #include <unistd.h>
 
 #define DEFAULT_DATA_DIR "/.local/share/openbox-game-launcher"
@@ -155,6 +157,58 @@ token_is_valid(const char *value)
 }
 
 static void stop_server(void);
+static gboolean
+boot_files_ready(const char *port_file, const char *token_file)
+{
+    return secure_file_ready(port_file) && secure_file_ready(token_file);
+}
+
+static gboolean
+wait_for_boot_files(const char *port_file, const char *token_file)
+{
+    gint64 deadline = g_get_monotonic_time() + ((gint64)BOOT_TIMEOUT_SECONDS * G_USEC_PER_SEC);
+    int notify_fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+    int watch_fd = -1;
+    if (notify_fd >= 0) {
+        watch_fd = inotify_add_watch(
+            notify_fd,
+            data_dir,
+            IN_ATTRIB | IN_CLOSE_WRITE | IN_CREATE | IN_MOVED_TO
+        );
+    }
+
+    while (g_get_monotonic_time() < deadline) {
+        if (boot_files_ready(port_file, token_file)) {
+            if (notify_fd >= 0) close(notify_fd);
+            return TRUE;
+        }
+        int child_status = 0;
+        pid_t child = waitpid(server_pid, &child_status, WNOHANG);
+        if (child == server_pid) {
+            server_pid = 0;
+            if (notify_fd >= 0) close(notify_fd);
+            return FALSE;
+        }
+
+
+        gint64 remaining = deadline - g_get_monotonic_time();
+        if (notify_fd >= 0 && watch_fd >= 0) {
+            struct pollfd pfd = { .fd = notify_fd, .events = POLLIN, .revents = 0 };
+            int timeout_ms = (int)CLAMP(remaining / 1000, 1, 50);
+            if (poll(&pfd, 1, timeout_ms) > 0 && (pfd.revents & POLLIN)) {
+                char buffer[4096];
+                while (read(notify_fd, buffer, sizeof(buffer)) > 0) {
+                }
+            }
+        } else {
+            g_usleep((gulong)MIN(remaining, 2 * 1000));
+        }
+    }
+
+    if (notify_fd >= 0) close(notify_fd);
+    return boot_files_ready(port_file, token_file);
+}
+
 
 static gboolean
 boot_server(void)
@@ -191,15 +245,7 @@ boot_server(void)
     }
 
     /* Parent: wait for the server to publish its port and token. */
-    int waited = 0;
-    while (waited < BOOT_TIMEOUT_SECONDS * 10) {
-        if (secure_file_ready(port_file) && secure_file_ready(token_file)) {
-            break;
-        }
-        g_usleep(100 * 1000);
-        waited++;
-    }
-    if (!secure_file_ready(port_file) || !secure_file_ready(token_file)) {
+    if (!wait_for_boot_files(port_file, token_file)) {
         g_printerr("native_host: server did not boot within %d seconds\n", BOOT_TIMEOUT_SECONDS);
         stop_server();
         g_free(port_file);
@@ -900,6 +946,15 @@ main(int argc, char **argv)
         return 1;
     }
 
+    /*
+     * WebKitGTK's dmabuf renderer can fail silently on AMD GPUs (Steam Deck),
+     * leaving a blank window; opt out before GTK/WebKit initialization unless
+     * the user explicitly opts in.
+     */
+    if (!g_getenv("OPENBOX_ENABLE_DMABUF")) {
+        g_setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", TRUE);
+    }
+
     gtk_init(&argc, &argv);
     load_geometry();
     load_tray_flags();
@@ -917,17 +972,13 @@ main(int argc, char **argv)
     /* Match app theme (#11100e) and enable smooth scrolling/GPU acceleration. */
     WebKitSettings *settings = webkit_web_view_get_settings(view);
     webkit_settings_set_enable_smooth_scrolling(settings, TRUE);
-    /*
-     * WebKitGTK's dmabuf renderer can fail silently on AMD GPUs (Steam Deck),
-     * leaving a blank window; opt out unless the user explicitly opts in.
-     */
-    if (!g_getenv("OPENBOX_ENABLE_DMABUF")) {
-        g_setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", TRUE);
-    }
-    /* ON_DEMAND is the WebKit default; ALWAYS forces accelerated compositing
-     * even on compositors that mishandle it. Let WebKit decide per-frame. */
+
+    const char *accel_policy = g_getenv("OPENBOX_WEBKIT_HARDWARE_ACCELERATION");
     webkit_settings_set_hardware_acceleration_policy(
-        settings, WEBKIT_HARDWARE_ACCELERATION_POLICY_ON_DEMAND);
+        settings,
+        g_strcmp0(accel_policy, "always") == 0
+            ? WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS
+            : WEBKIT_HARDWARE_ACCELERATION_POLICY_ON_DEMAND);
     G_GNUC_BEGIN_IGNORE_DEPRECATIONS
     webkit_settings_set_enable_accelerated_2d_canvas(settings, TRUE);
     G_GNUC_END_IGNORE_DEPRECATIONS

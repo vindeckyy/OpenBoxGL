@@ -2,10 +2,14 @@
 """Deterministic tests for the JobManager background worker pool."""
 
 import math
+import sys
 import threading
 import time
 import unittest
+from pathlib import Path
 from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from job_manager import JobManager, MAX_JOB_NAME_LENGTH
 
@@ -362,5 +366,67 @@ class BackoffClampTests(unittest.TestCase):
                 manager.shutdown(wait=True, cancel_futures=True)
 
 
+class ProgressStreamingTests(unittest.TestCase):
+    def setUp(self):
+        self.manager = JobManager(max_workers=2)
+        self.progress_events = []
+
+    def tearDown(self):
+        self.manager.shutdown(wait=True, cancel_futures=True)
+
+    def test_import_job_streaming_events(self):
+        self.manager.set_progress_observer(self.progress_events.append)
+
+        def import_worker(context):
+            self.assertEqual(context.job_name, "import-streaming")
+            self.assertTrue(context.job_id)
+            self.assertFalse(context.is_cancelled())
+            context.progress(found_count=10, processed_count=0)
+            context.progress(found_count=10, processed_count=5)
+            context.progress(found_count=10, processed_count=10, status="done")
+            return {"imported": 10}
+
+        self.manager.submit("import-streaming", import_worker)
+        finished = _wait_for(self.manager, "import-streaming", {"done"})
+        self.assertEqual(finished["state"], "done")
+        self.assertEqual(finished["imported"], 10)
+
+        # Verify progress observer captured events
+        self.assertGreaterEqual(len(self.progress_events), 3)
+        found_counts = [e.get("found_count") for e in self.progress_events]
+        self.assertIn(10, found_counts)
+        processed = [e.get("processed_count") for e in self.progress_events]
+        self.assertEqual(processed, [0, 5, 10])
+
+    def test_job_context_methods_and_edge_cases(self):
+        def worker(context):
+            # Update progress by job_id
+            self.manager.update_progress(context.job_id, custom_metric=42)
+            return {"ok": True}
+
+        self.manager.submit("context-test", worker)
+        finished = _wait_for(self.manager, "context-test", {"done"})
+        self.assertEqual(finished["state"], "done")
+
+        # Update progress on nonexistent or finished job
+        self.assertEqual(self.manager.update_progress("nonexistent"), {})
+        self.assertEqual(self.manager.update_progress("context-test"), {})
+
+    def test_progress_observer_exception_resilience(self):
+        def bad_observer(data):
+            raise RuntimeError("observer crash")
+
+        self.manager.set_progress_observer(bad_observer)
+
+        def worker(context):
+            context.progress(step=1)
+            return {"done": True}
+
+        self.manager.submit("resilient-job", worker)
+        finished = _wait_for(self.manager, "resilient-job", {"done"})
+        self.assertEqual(finished["state"], "done")
+
+
 if __name__ == "__main__":
     unittest.main()
+

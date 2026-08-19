@@ -9,6 +9,7 @@ import os
 import queue as queue_module
 import secrets
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -126,6 +127,11 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
     def setup(self):
         super().setup()
         self.connection.settimeout(self.REQUEST_TIMEOUT)
+        try:
+            self.connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1024 * 1024)
+        except (OSError, AttributeError):
+            pass
 
     def log_message(self, *_):
         pass
@@ -159,6 +165,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+        self.wfile.flush()
 
     def _cache_headers(self, path, stat_result):
         etag = f'"{stat_result.st_mtime_ns:x}-{stat_result.st_size:x}"'

@@ -177,6 +177,7 @@ class MediaHandlers:
                 MEDIA_JOB["total"] = len(targets)
             updated_count, errors = 0, []
             manual_missing = 0
+            all_changes = {}
             for current, (stable_id, database_id) in enumerate(targets, 1):
                 original = {}
                 try:
@@ -191,17 +192,28 @@ class MediaHandlers:
                         manual_missing += 1
                     changes = {key:value for key,value in updated.items() if original.get(key) != value}
                     if changes:
-                        def mutate(state, stable_id=stable_id, changes=changes):
-                            game_from_payload(state, {"game_id": stable_id}).update(changes)
-                        transact_state(mutate)
+                        all_changes[stable_id] = changes
                         updated_count += 1
                 except (OSError, ValueError, sqlite3.Error) as error:
                     errors.append(f"{original.get('name', stable_id)}: {error}")
                 with PROCESS_LOCK:
                     MEDIA_JOB.update({"current":current, "updated":updated_count, "errors":errors[-20:], "manual_missing":manual_missing})
+
+            if all_changes:
+                def mutate(state):
+                    for s_id, chgs in all_changes.items():
+                        try:
+                            game_from_payload(state, {"game_id": s_id}).update(chgs)
+                        except (IndexError, KeyError, ValueError):
+                            pass
+                try:
+                    transact_state(mutate)
+                except Exception as error:
+                    errors.append(f"Bulk state transaction error: {error}")
+
             bump_media_epoch()
             with PROCESS_LOCK:
-                MEDIA_JOB["state"] = "done"
+                MEDIA_JOB.update({"state": "done", "errors": errors[-20:]})
 
         JOB_MANAGER.submit("media-bulk", worker)
         self.send_json(202, {"state":"running"})

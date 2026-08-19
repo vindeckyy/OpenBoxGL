@@ -16,14 +16,33 @@ try:
             options |= _orjson.OPT_SORT_KEYS
         if kwargs.get("indent") == 2:
             options |= _orjson.OPT_INDENT_2
-        # orjson always uses compact separators without indent
         return _orjson.dumps(obj, option=options or None).decode("utf-8")
 
+    def _json_dumps_bytes(obj, **kwargs) -> bytes:
+        options = 0
+        if kwargs.get("sort_keys"):
+            options |= _orjson.OPT_SORT_KEYS
+        if kwargs.get("indent") == 2:
+            options |= _orjson.OPT_INDENT_2
+        return _orjson.dumps(obj, option=options or None)
+
     def _json_dump_file(obj, fp, **kwargs):
-        fp.write(_json_dumps(obj, **kwargs))
+        options = 0
+        if kwargs.get("sort_keys"):
+            options |= _orjson.OPT_SORT_KEYS
+        if kwargs.get("indent") == 2:
+            options |= _orjson.OPT_INDENT_2
+        data = _orjson.dumps(obj, option=options or None)
+        if "b" in getattr(fp, "mode", ""):
+            fp.write(data)
+        else:
+            fp.write(data.decode("utf-8"))
 
     def _json_load(fp):
-        return _orjson.loads(fp.read())
+        if "b" in getattr(fp, "mode", ""):
+            return _orjson.loads(fp.read())
+        content = fp.read()
+        return _orjson.loads(content.encode("utf-8") if isinstance(content, str) else content)
 
     _json_decode_error = _orjson.JSONDecodeError
 
@@ -32,6 +51,9 @@ except ImportError:
 
     def _json_dumps(obj, **kwargs):
         return _stdlib_json.dumps(obj, **kwargs)
+
+    def _json_dumps_bytes(obj, **kwargs) -> bytes:
+        return _stdlib_json.dumps(obj, **kwargs).encode("utf-8")
 
     def _json_dump_file(obj, fp, **kwargs):
         _stdlib_json.dump(obj, fp, **kwargs)
@@ -49,11 +71,14 @@ import secrets
 import shutil
 import tempfile
 import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from collections.abc import Callable
+
+from backend_io import fsync_directory
 
 LOGGER = logging.getLogger("openbox.state")
 
@@ -63,6 +88,7 @@ COMPACT_JSON_THRESHOLD = 1024 * 1024
 LEGACY_INDEXED_ID = re.compile(r"^game-[0-9a-f]{24}-\d+$")
 QUEUE_CAP = 500
 NOTIFICATIONS_CAP = 200
+SNAPSHOT_DEBOUNCE_DEFAULT = float(os.environ.get("OPENBOX_SNAPSHOT_DEBOUNCE", "0.0"))
 
 
 class StateCorruptError(RuntimeError):
@@ -215,6 +241,8 @@ def _normalize_game_ids(games: list[dict[str, Any]]) -> bool:
     changed = False
     used: set[str] = set()
     for game in games:
+        if not isinstance(game, dict):
+            continue
         if "legacy_game_ids" in game and not isinstance(game.get("legacy_game_ids"), list):
             game["legacy_game_ids"] = []
             changed = True
@@ -310,17 +338,21 @@ def normalize_state(raw: Any) -> tuple[dict[str, Any], bool]:
 
 
 class JsonStateStore:
-    """A small JSON store with atomic commits and a sidecar last-known-good copy."""
+    """A high-performance JSON store with in-memory caching, indexing, and atomic commits."""
 
-    def __init__(self, path: Path, snapshot_limit: int = 5):
+    def __init__(self, path: Path, snapshot_limit: int = 5, snapshot_debounce: float = SNAPSHOT_DEBOUNCE_DEFAULT):
         self.path = Path(path)
         self.lock_path = self.path.with_name(f".{self.path.name}.lock")
         self.backup_path = self.path.with_name(f"{self.path.name}.bak")
         self.snapshots_dir = self.path.with_name(f"{self.path.name}.snapshots")
         self.snapshot_limit = max(0, int(snapshot_limit))
+        self.snapshot_debounce = max(0.0, float(snapshot_debounce))
+        self._last_snapshot_time: float = 0.0
         self._thread_lock = threading.RLock()
         self._cached_state: dict[str, Any] | None = None
         self._cached_signature: tuple[int, int, int] | None = None
+        self._games_by_id: dict[str, dict[str, Any]] = {}
+        self._games_by_platform: dict[str, list[dict[str, Any]]] = {}
 
     def _signature(self) -> tuple[int, int, int] | None:
         try:
@@ -333,9 +365,88 @@ class JsonStateStore:
         """Return a cheap content signature; None when the primary file is absent."""
         return self._signature()
 
+    def _reindex(self, state: dict[str, Any] | None) -> None:
+        if state is None:
+            self._games_by_id = {}
+            self._games_by_platform = {}
+            return
+        games_by_id: dict[str, dict[str, Any]] = {}
+        games_by_platform: dict[str, list[dict[str, Any]]] = {}
+        games = state.get("games")
+        if isinstance(games, list):
+            for game in games:
+                if isinstance(game, dict):
+                    gid = str(game.get("game_id") or "").strip()
+                    if gid:
+                        games_by_id[gid] = game
+                    platform = str(game.get("platform") or "").strip()
+                    if platform:
+                        games_by_platform.setdefault(platform, []).append(game)
+        self._games_by_id = games_by_id
+        self._games_by_platform = games_by_platform
+
     def _remember(self, state: dict[str, Any], adopt: bool = False) -> None:
-        self._cached_state = state if adopt else copy.deepcopy(state)
+        if adopt:
+            games = state.get("games")
+            if isinstance(games, list):
+                self._cached_state = {
+                    **state,
+                    "games": [dict(g) if isinstance(g, dict) else g for g in games],
+                    "profiles": dict(state.get("profiles", {})),
+                    "settings": dict(state.get("settings", {})),
+                    "history": list(state.get("history", [])),
+                    "playlists": list(state.get("playlists", [])),
+                    "queue": list(state.get("queue", [])),
+                    "notifications": list(state.get("notifications", [])),
+                    "ui_state": dict(state.get("ui_state", {})),
+                    "active_sessions": list(state.get("active_sessions", [])),
+                }
+            else:
+                self._cached_state = copy.deepcopy(state)
+        else:
+            self._cached_state = copy.deepcopy(state)
         self._cached_signature = self._signature()
+        self._reindex(self._cached_state)
+
+    def _clear_cache(self) -> None:
+        self._cached_state = None
+        self._cached_signature = None
+        self._reindex(None)
+
+    @property
+    def games_by_id(self) -> dict[str, dict[str, Any]]:
+        """Return the primary index mapping game_id -> game dict."""
+        with self._thread_lock:
+            self._ensure_loaded()
+            return self._games_by_id
+
+    @property
+    def games_by_platform(self) -> dict[str, list[dict[str, Any]]]:
+        """Return the index mapping platform -> list of game dicts."""
+        with self._thread_lock:
+            self._ensure_loaded()
+            return self._games_by_platform
+
+    def get_game_by_id(self, game_id: str) -> dict[str, Any] | None:
+        """O(1) lookup of a game by game_id."""
+        with self._thread_lock:
+            self._ensure_loaded()
+            return self._games_by_id.get(str(game_id).strip())
+
+    def get_games_by_platform(self, platform: str) -> list[dict[str, Any]]:
+        """O(1) lookup of games by platform."""
+        with self._thread_lock:
+            self._ensure_loaded()
+            return list(self._games_by_platform.get(str(platform).strip(), []))
+
+    def _ensure_loaded(self) -> None:
+        signature = self._signature()
+        if self._cached_state is None or signature != self._cached_signature:
+            with self._file_lock(True):
+                state, changed = self._load_unlocked()
+                if changed:
+                    self._write_unlocked(state)
+                self._remember(state)
 
     @contextmanager
     def _file_lock(self, exclusive: bool):
@@ -348,8 +459,11 @@ class JsonStateStore:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def _read_unlocked(self, path: Path) -> Any:
+        if _orjson is not None:
+            with path.open("rb") as source:
+                return _orjson.loads(source.read())
         with path.open("r", encoding="utf-8") as source:
-            return _json_load(source)
+            return _stdlib_json.load(source)
 
     def _load_unlocked(self) -> tuple[dict[str, Any], bool]:
         if not self.path.exists():
@@ -393,7 +507,7 @@ class JsonStateStore:
                 if changed:
                     self._write_unlocked(state)
                 self._remember(state)
-                return state
+                return copy.deepcopy(state)
 
     def load_readonly(self) -> dict[str, Any]:
         """Return the cached state without copying. Callers must not mutate the result."""
@@ -416,8 +530,7 @@ class JsonStateStore:
                 state, _ = normalize_state(self._read_unlocked(self.backup_path))
             except (OSError, _json_decode_error, UnicodeDecodeError, StateCorruptError) as error:
                 raise StateCorruptError(f"The last-known-good state is also unusable: {self.backup_path}") from error
-            self._write_unlocked(state)
-            self._remember(state)
+            self._write_unlocked(state, adopt=True)
             return state
 
     def _write_unlocked(self, state: dict[str, Any], adopt: bool = False) -> None:
@@ -426,50 +539,69 @@ class JsonStateStore:
             prefix=f".{self.path.name}.", suffix=".tmp", dir=self.path.parent
         )
         temporary = Path(temporary_name)
-        compact = _json_dumps(state, separators=(",", ":"), ensure_ascii=False).encode()
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as output:
-                if len(compact) > COMPACT_JSON_THRESHOLD:
-                    output.write(compact.decode("utf-8"))
-                    output.write("\n")
+            games = state.get("games")
+            games_count = len(games) if isinstance(games, list) else 0
+            if _orjson is not None:
+                if games_count > 500:
+                    raw_bytes = _orjson.dumps(state)
                 else:
-                    _json_dump_file(state, output, indent=2, ensure_ascii=False)
-                    output.write("\n")
+                    pretty = _orjson.dumps(state, option=_orjson.OPT_INDENT_2)
+                    raw_bytes = _orjson.dumps(state) if len(pretty) > COMPACT_JSON_THRESHOLD else pretty
+            else:
+                if games_count > 500:
+                    raw_bytes = _stdlib_json.dumps(state, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+                else:
+                    pretty = _stdlib_json.dumps(state, indent=2, ensure_ascii=False).encode("utf-8")
+                    if len(pretty) > COMPACT_JSON_THRESHOLD:
+                        raw_bytes = _stdlib_json.dumps(state, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+                    else:
+                        raw_bytes = pretty
+
+            with os.fdopen(fd, "wb") as output:
+                output.write(raw_bytes)
+                output.write(b"\n")
                 output.flush()
                 os.fsync(output.fileno())
+
             os.chmod(temporary, 0o600)
-            # Backup first: a failure must not pair a fresh primary with a
-            # stale backup. The backup mirrors the latest committed state
-            # (previous versions live in snapshots); stage it atomically so
-            # an interrupted backup copy can never leave a corrupt file.
-            backup_tmp = self.backup_path.with_name(self.backup_path.name + ".tmp")
-            shutil.copy2(temporary, backup_tmp)
-            os.chmod(backup_tmp, 0o600)
-            os.replace(backup_tmp, self.backup_path)
-            os.chmod(self.backup_path, 0o600)
+            # Backup first with a separate inode: a failure or corruption of primary must not affect backup
+            backup_tmp = self.backup_path.with_name(f".{self.backup_path.name}.{secrets.token_hex(4)}.tmp")
+            try:
+                shutil.copy2(temporary, backup_tmp)
+                os.chmod(backup_tmp, 0o600)
+                os.replace(backup_tmp, self.backup_path)
+                os.chmod(self.backup_path, 0o600)
+            finally:
+                if backup_tmp.exists():
+                    backup_tmp.unlink(missing_ok=True)
+
             os.replace(temporary, self.path)
             os.chmod(self.path, 0o600)
-            directory_fd = os.open(self.path.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
-            self._remember(state, adopt=adopt)
+            fsync_directory(self.path.parent)
             self._rotate_snapshots()
+            self._remember(state, adopt=adopt)
         finally:
             if temporary.exists():
                 temporary.unlink()
 
-    def _rotate_snapshots(self) -> None:
-        """Keep the last N committed states as timestamped recovery copies; best-effort."""
+    def _rotate_snapshots(self, force: bool = False) -> None:
+        """Keep the last N committed states as recovery copies; debounced and zero-copy."""
         if not self.snapshot_limit:
+            return
+        now = time.monotonic()
+        if not force and self.snapshot_debounce > 0 and self._last_snapshot_time > 0 and (now - self._last_snapshot_time) < self.snapshot_debounce:
             return
         try:
             self.snapshots_dir.mkdir(parents=True, exist_ok=True)
             stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             target = self.snapshots_dir / f"{stamp}-{secrets.token_hex(4)}.json"
-            shutil.copy2(self.path, target)
+            try:
+                os.link(self.path, target)
+            except OSError:
+                shutil.copy2(self.path, target)
             os.chmod(target, 0o600)
+            self._last_snapshot_time = now
             existing = []
             for path in self.snapshots_dir.glob("*.json"):
                 try:
@@ -505,15 +637,18 @@ class JsonStateStore:
             raise StateCorruptError(f"Unknown snapshot: {name}")
         with self._thread_lock, self._file_lock(True):
             state, _ = normalize_state(self._read_unlocked(candidate))
-            self._write_unlocked(state)
-            self._remember(state)
+            self._write_unlocked(state, adopt=True)
             return state
 
     def save(self, state: dict[str, Any]) -> dict[str, Any]:
         with self._thread_lock, self._file_lock(True):
-            normalized, _ = normalize_state(state)
-            self._write_unlocked(normalized, adopt=True)
-            return normalized
+            try:
+                normalized, _ = normalize_state(state)
+                self._write_unlocked(normalized, adopt=True)
+                return normalized
+            except Exception:
+                self._clear_cache()
+                raise
 
     def update(self, mutator: Callable[[dict[str, Any]], Any]) -> dict[str, Any]:
         """Apply a mutation and return a detached snapshot of the committed state."""
@@ -523,31 +658,21 @@ class JsonStateStore:
     def update_with_result(self, mutator: Callable[[dict[str, Any]], Any]) -> tuple[dict[str, Any], Any]:
         """Apply a mutation under the process lock; the returned state is cache-owned, read-only for the caller."""
         with self._thread_lock, self._file_lock(True):
-            state, _ = self._load_unlocked()
-            result = mutator(state)
-            self._write_unlocked(state, adopt=True)
-            return state, result
+            signature = self._signature()
+            if self._cached_state is not None and signature == self._cached_signature:
+                state = self._cached_state
+            else:
+                state, _ = self._load_unlocked()
+            try:
+                result = mutator(state)
+                self._write_unlocked(state, adopt=True)
+                return state, result
+            except Exception:
+                self._clear_cache()
+                raise
 
 
 def secure_text_write(path: Path, value: str) -> None:
     """Write a credential or token file atomically with owner-only permissions."""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
-    temporary = Path(temporary_name)
-    try:
-        os.chmod(temporary, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as output:
-            output.write(value)
-            output.flush()
-            os.fsync(output.fileno())
-        os.replace(temporary, path)
-        os.chmod(path, 0o600)
-        directory_fd = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
+    from backend_io import atomic_write_text
+    atomic_write_text(path, value, mode=0o600)

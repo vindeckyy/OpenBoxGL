@@ -121,6 +121,36 @@ class SseTests(unittest.TestCase):
             for subscriber in registered:
                 webapp_state.unregister_event_subscriber(subscriber)
 
+    def test_delta_library_endpoint_concurrency(self):
+        import concurrent.futures
+        import json
+        from openbox import update_state
+
+        def populate(state):
+            state["games"] = [
+                {"game_id": f"game_{i}", "name": f"Game {i}", "path": f"/bin/{i}"}
+                for i in range(100)
+            ]
+        update_state(populate)
+
+        def fetch_delta(ids_param):
+            req = urllib.request.Request(
+                f"{self.origin}/api/library/delta?ids={ids_param}&token=sse-test-token"
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                self.assertEqual(resp.status, 200)
+                data = json.loads(resp.read().decode())
+                return len(data.get("games", []))
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            futures = [
+                pool.submit(fetch_delta, f"game_{i % 100},game_{(i + 1) % 100}")
+                for i in range(50)
+            ]
+            results = [f.result() for f in futures]
+            self.assertTrue(all(r == 2 for r in results))
+
 
 if __name__ == "__main__":
     unittest.main()
+

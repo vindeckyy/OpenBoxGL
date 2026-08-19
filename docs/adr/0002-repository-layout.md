@@ -4,7 +4,7 @@
 Accepted
 
 ## Context
-Root holds 97 Python files (48 runtime + 49 tests), 12 markdown docs, 4 shell scripts. For a machine grep is fine, for a human there is no entry point or visible boundary. Handlers/static/scripts/themes are already well organized, root is the exception. Theming token layer exists (--brand etc. in static/app.css :root) but 625 raw hex live outside :root, forcing each theme to redeclare 51-74 rules. Coverage floor (55% total) cannot see untested new features.
+Root held 97 Python files (48 runtime + 49 tests), 12 markdown docs, and 4 shell scripts before the layout work. For a machine grep was fine, for a human there was no entry point or visible boundary. Handlers/static/scripts/themes were already well organized, root was the exception. Theming token layer existed (`--brand` etc. in `static/app.css :root`) but 625 raw hex values lived outside `:root`, forcing each theme to redeclare 51-74 rules. The coverage floor at the time (55% total) could not see untested new features.
 
 ## Decision
 - Move docs except README.md/LICENSE to docs/
@@ -18,7 +18,7 @@ Root holds 97 Python files (48 runtime + 49 tests), 12 markdown docs, 4 shell sc
 
 ## Consequences
 - runtime_modules.txt, run_all_tests.sh, pyproject.toml, Makefile, build_appimage.sh updated to handle both layouts
-- Flat `import parity_*` continues to work via root copy, new code can use `from openbox.parity import *`
+- Flat `import parity_*` continues to work through root shim modules; new parity implementation lives under `pkg/parity/`.
 - Themes shrink to palette when token set widens
 
 ## Alternatives considered

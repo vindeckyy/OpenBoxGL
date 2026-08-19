@@ -1,5 +1,5 @@
 import { $, escapeHtml, duration, fact, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds } from './util.js';
-import { AppState, selectedIds, media, renderBadges, platformCategoryFor, filteredGames, api, notify, applyLocaleStrings, applySidebarVisibility, loadExplorerFacets, token, nativeReveal, nativeOpenExternal, nativePickFolder } from './state.js';
+import { token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePrompt, nativeConfirm, nativePickFolder, nativeReveal, nativeOpenExternal, notify, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets } from './state.js';
 import { maybeShowWelcome, loadTheme, deletePlaylist } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importDroppedFolder } from './imports.js';
 import { openGameDialog } from './dialogs.js';
@@ -27,6 +27,7 @@ let lastFacetsFingerprint = null;
       applySidebarVisibility();
       applyLocaleStrings();
       maybeShowWelcome();
+      setTimeout(() => { try { warmSearchIndex(); } catch(error) { AppState.searchIndexError = error.message; } }, 0);
       const fingerprint = `${AppState.games.length}:${AppState.games[0]?.id || ''}:${AppState.games.at(-1)?.id || ''}`;
       if (lastFacetsFingerprint !== fingerprint) {
         lastFacetsFingerprint = fingerprint;

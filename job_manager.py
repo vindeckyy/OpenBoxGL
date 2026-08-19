@@ -40,6 +40,35 @@ def _bounded_result(result):
     return result
 
 
+class JobContext(threading.Event):
+    """Execution context provided to background workers, supporting cancellation and progress updates."""
+
+    def __init__(self, manager: JobManager, job_name: str, job_id: str):
+        super().__init__()
+        self._manager = manager
+        self._job_name = job_name
+        self._job_id = job_id
+
+    @property
+    def job_name(self) -> str:
+        return self._job_name
+
+    @property
+    def job_id(self) -> str:
+        return self._job_id
+
+    @property
+    def manager(self) -> JobManager:
+        return self._manager
+
+    def is_cancelled(self) -> bool:
+        return self.is_set()
+
+    def progress(self, **kwargs) -> dict:
+        """Report incremental progress for this job."""
+        return self._manager.update_progress(self._job_name, **kwargs)
+
+
 class JobManager:
     """Run bounded backend jobs and prevent stale workers overwriting new jobs."""
 
@@ -55,11 +84,40 @@ class JobManager:
         workers = max(1, min(int(max_workers), MAX_JOB_WORKERS))
         self._executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="openbox-job")
         self._observer = None
+        self._progress_observer = None
 
     def set_observer(self, observer):
         """Register a callback `observer(job)` invoked after a job finishes."""
         with self._lock:
             self._observer = observer
+
+    def set_progress_observer(self, observer):
+        """Register a callback `observer(job)` invoked when a job reports progress."""
+        with self._lock:
+            self._progress_observer = observer
+
+    def update_progress(self, name, **kwargs):
+        """Update in-flight job progress metrics and notify the progress observer."""
+        notification = None
+        with self._lock:
+            current = self._jobs.get(name)
+            if not current:
+                for job in self._jobs.values():
+                    if job.get("job_id") == name:
+                        current = job
+                        break
+            if not current or current.get("state") not in {"queued", "running"}:
+                return {}
+            current.update(kwargs)
+            notification = dict(current)
+        if notification is not None:
+            observer = self._progress_observer
+            if observer is not None:
+                try:
+                    observer(notification)
+                except Exception:
+                    LOGGER.exception("Job progress observer failed")
+        return notification or {}
 
     def _notify(self, job):
         observer = self._observer
@@ -142,7 +200,7 @@ class JobManager:
                 "max_attempts": max_attempts,
                 "duration_seconds": 0,
             }
-            cancel_event = threading.Event()
+            cancel_event = JobContext(self, name, job_id)
             self._jobs[name] = job
             self._cancel_events[job_id] = cancel_event
             self._inflight.add(job_id)

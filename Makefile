@@ -26,7 +26,7 @@ dev-venv:
 check: dev-venv
 	python3 scripts/check_tests.py
 
-# A single test file, e.g. `make test-one TEST=test_saves.py`.
+# A single test file, e.g. `make test-one TEST=tests/test_saves.py`.
 test-one:
 	python3 -B $(TEST)
 
