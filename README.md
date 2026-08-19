@@ -357,7 +357,7 @@ OpenBox/
 ├── native_host.c           Native WebKitGTK host (spawns web_app.py)
 ├── handlers/               Route handler mixins (library, media, imports, settings, ...)
 ├── web_app.py              Loopback server + REST API (shared core)
-├── routes.py               GET/POST route tables (79 GET + 95 POST entries; 103/124 incl. v1 aliases; v1_contracts.json freezes 46 paths)
+├── routes.py               GET/POST route tables (109 GET + 126 POST entries; v1_contracts.json freezes 46 paths)
 ├── contracts.py            Frozen v1 API contract + legacy aliases
 ├── openbox.py              Shared core helpers (data paths, launch, profiles)
 ├── state_store.py          Schema-versioned state, atomic writes, snapshots
@@ -379,7 +379,7 @@ OpenBox/
 ├── themes/                 Stock themes (5 CSS files)
 ├── emulator_defs/          YAML definition packs
 ├── scripts/                Build, test, screenshot capture
-├── tests/test_*.py            Test suite (49 files)
+├── tests/test_*.py            Test suite (57 files)
 ```
 
 ### Run tests

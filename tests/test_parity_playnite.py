@@ -102,6 +102,15 @@ class DeeplinkTests(unittest.TestCase):
         self.assertEqual(code, 0)
         dispatch.assert_called_once()
 
+    def test_handle_cli_help(self):
+        with mock.patch("builtins.print") as mock_print:
+            code = handle_cli(["--help"], "/tmp")
+            self.assertEqual(code, 0)
+            mock_print.assert_called()
+        with mock.patch("builtins.print") as mock_print:
+            code = handle_cli(["-h"], "/tmp")
+            self.assertEqual(code, 0)
+            mock_print.assert_called()
 
 class BackupTests(unittest.TestCase):
     def test_create_and_restore(self):
