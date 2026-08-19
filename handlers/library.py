@@ -15,7 +15,7 @@ from parity_filter_presets import bigbox_quick_presets, delete_preset, explorer_
 from parity_media import normalize_video_fields
 from parity_premium import bulk_wizard_changes, custom_field_defs, normalize_custom_fields
 from play_queue import advance as advance_queue, enqueue as enqueue_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
-from webapp_state import FIELDS, MEDIA_PATH_FIELDS, _public_state_cached, approved_media_path, bump_media_epoch, clear_file_probe_cache, game_from_payload, game_from_query, game_identity, load_state_view, public_state, public_state_bytes, public_state_etag, public_settings, transact_state
+from webapp_state import FIELDS, MEDIA_PATH_FIELDS, _public_state_cached, approved_media_path, bump_media_epoch, clear_file_probe_cache, consolidate_existing_games, game_from_payload, game_from_query, game_identity, load_state_view, public_state, public_state_bytes, public_state_etag, public_settings, transact_state
 
 
 def _clean_game_fields(source):
@@ -521,26 +521,29 @@ class LibraryHandlers:
         state = load_state()
         # Use canonical identity when available, fallback to legacy game_identity
         try:
-            from pkg.parity.parity_identity import detect_duplicate_identities, normalize_identity
+            from pkg.parity.parity_identity import cross_source_identity, detect_duplicate_identities, normalize_identity
             has_canonical = True
         except ImportError:
             has_canonical = False
         seen, duplicates, issues = {}, [], []
-        # Canonical duplicate detection for cross-source consolidation (Steam/Heroic/Lutris/Faugus/ROM)
         if has_canonical:
-            dup_groups = detect_duplicate_identities(state["games"])
+            dup_groups = detect_duplicate_identities(state["games"], include_cross_source=True)
             dup_index_by_id = {}
             for grp in dup_groups:
                 for gid in grp["games"]:
                     dup_index_by_id[gid] = grp["identity"]
+        else:
+            dup_index_by_id = {}
         for index, game in enumerate(state["games"]):
             if has_canonical:
-                identity = normalize_identity(game) or game_identity(game)
+                identity = dup_index_by_id.get(game.get("game_id") or game.get("id"))
+                if not identity:
+                    identity = cross_source_identity(game) or normalize_identity(game) or game_identity(game)
             else:
                 identity = game_identity(game)
             if identity in seen:
                 duplicates.append(index)
-                issues.append({"id":index, "game":game.get("name", ""), "type":"Duplicate", "detail":f"Matches {state['games'][seen[identity]].get('name', '')} — identity {identity}"})
+                issues.append({"id":index, "game":game.get("name", ""), "type":"Duplicate", "detail":f"Matches {state['games'][seen[identity]].get('name', '')}; identity {identity}"})
             else:
                 seen[identity] = index
             path = Path(game.get("path", ""))
@@ -569,15 +572,7 @@ class LibraryHandlers:
 
     def dedupe(self):
         def mutate(state):
-            seen, kept, removed = set(), [], []
-            for game in state["games"]:
-                identity = game_identity(game)
-                if identity in seen:
-                    removed.append(game.get("name", ""))
-                else:
-                    seen.add(identity)
-                    kept.append(game)
-            state["games"] = kept
+            removed = consolidate_existing_games(state["games"])
             return removed
         _, removed = transact_state(mutate)
         self.send_json(200, {"removed": removed})

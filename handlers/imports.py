@@ -124,48 +124,24 @@ class ImportsHandlers:
 
     def import_steam_games(self):
         imported = import_steam()
-        def mutate(state):
-            existing = {str(game.get("steam_app_id")) for game in state["games"] if game.get("steam_app_id")}
-            new_games = [game for game in imported if game["steam_app_id"] not in existing]
-            timestamp = datetime.now().isoformat(timespec="seconds")
-            for game in new_games:
-                game["added_at"] = timestamp
-            state["games"].extend(new_games)
-            return len(new_games)
-        _, added = transact_state(mutate)
+        added, found = merge_imported_games(imported, lambda game: ("steam", str(game.get("steam_app_id", ""))))
         clear_file_probe_cache()
-        self.send_json(200, {"added": added, "found": len(imported)})
+        self.send_json(200, {"added": added, "found": found})
 
     def import_heroic_games(self):
         imported = import_heroic()
-        def mutate(state):
-            existing = {
-                (game.get("source"), str(game.get("heroic_app_id")))
-                for game in state["games"] if game.get("heroic_app_id")
-            }
-            new_games = [game for game in imported if (game["source"], game["heroic_app_id"]) not in existing]
-            timestamp = datetime.now().isoformat(timespec="seconds")
-            for game in new_games:
-                game["added_at"] = timestamp
-            state["games"].extend(new_games)
-            return len(new_games)
-        _, added = transact_state(mutate)
+        added, found = merge_imported_games(
+            imported,
+            lambda game: ("heroic", str(game.get("source", "")), str(game.get("heroic_app_id", ""))),
+        )
         clear_file_probe_cache()
-        self.send_json(200, {"added": added, "found": len(imported)})
+        self.send_json(200, {"added": added, "found": found})
 
     def import_lutris_games(self):
         imported = import_lutris()
-        def mutate(state):
-            existing = {str(game.get("lutris_id")) for game in state["games"] if game.get("lutris_id")}
-            new_games = [game for game in imported if game["lutris_id"] not in existing]
-            timestamp = datetime.now().isoformat(timespec="seconds")
-            for game in new_games:
-                game["added_at"] = timestamp
-            state["games"].extend(new_games)
-            return len(new_games)
-        _, added = transact_state(mutate)
+        added, found = merge_imported_games(imported, lambda game: ("lutris", str(game.get("lutris_id", ""))))
         clear_file_probe_cache()
-        self.send_json(200, {"added": added, "found": len(imported)})
+        self.send_json(200, {"added": added, "found": found})
 
     def import_arcade_games(self, payload):
         imported = import_arcade(
@@ -256,5 +232,3 @@ class ImportsHandlers:
             raise ValueError("Storefront source must be steam, heroic, lutris, or gameyfin.")
         added, found = merge_imported_games(imported, identity)
         self.send_json(200, {"added": added, "found": found, "imported": len(imported)})
-
-

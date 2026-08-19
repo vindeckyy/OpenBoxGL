@@ -43,6 +43,7 @@ from parity_gamescope import is_gamescope_guest, is_steam_launch, mark_process_w
 from parity_import import import_multi_platform, recommend_emulators
 from parity_import_policy import filter_imported, list_exclusions
 from parity_integrations import auto_attach_obs_recording, load_emumovies_credentials
+from parity_identity import cross_source_identity, source_family, source_identities
 from parity_media import REGION_PRIORITY_DEFAULT, active_video, enqueue_media_job, media_types_from_settings, normalize_video_fields
 from parity_perf import apply_perf_profile, effective_profile_name, restore_perf_profile
 from parity_premium import LIST_COLUMNS_DEFAULT, category_for_platform, custom_field_defs, import_with_emulator_choice, list_media_packs, platform_categories, strings_for
@@ -291,6 +292,157 @@ def game_identity(game):
     return "path", str(Path(game.get("path", "")).expanduser())
 
 
+def _launcher_label(game):
+    if game.get("steam_app_id"):
+        return "Steam"
+    if game.get("heroic_app_id"):
+        source = str(game.get("heroic_source") or game.get("source") or "").strip()
+        return f"Heroic ({source})" if source else "Heroic"
+    if game.get("lutris_id"):
+        return "Lutris"
+    if game.get("gameyfin_id"):
+        return "Gameyfin"
+    if game.get("faugus_id"):
+        return "Faugus"
+    return str(game.get("source") or "Imported").strip() or "Imported"
+
+
+def _filled_launch_command(game):
+    command = str(game.get("launch") or "").strip()
+    if not command:
+        return ""
+    path = str(game.get("path") or "")
+    rom_p = Path(path)
+    replacements = {
+        "{path}": path,
+        "{ImagePath}": path,
+        "{name}": str(game.get("name", "")),
+        "{Name}": str(game.get("name", "")),
+        "{dir}": str(rom_p.parent),
+        "{Dir}": str(rom_p.parent),
+        "{file}": rom_p.name,
+        "{File}": rom_p.name,
+        "{stem}": rom_p.stem,
+        "{FileNameWithoutExtension}": rom_p.stem,
+        "{platform}": str(game.get("platform", "")),
+        "{Platform}": str(game.get("platform", "")),
+        "{app_id}": str(game.get("steam_app_id", "")),
+        "{heroic_app_id}": str(game.get("heroic_app_id", "")),
+        "{lutris_id}": str(game.get("lutris_id", "")),
+        "{rom_name}": str(game.get("rom_name", "")),
+        "{DataDir}": str(DATA.parent),
+    }
+    for marker, value in replacements.items():
+        command = command.replace(marker, value)
+    return command
+
+
+def _application_for_game(game):
+    path = str(game.get("path") or "").strip()
+    if not path:
+        return None
+    return {
+        "name": f"Launch with {_launcher_label(game)}",
+        "path": path,
+        "command": _filled_launch_command(game),
+    }
+
+
+def _append_unique_application(target, application):
+    if not application:
+        return False
+    applications = target.setdefault("applications", [])
+    key = (application.get("path", ""), application.get("command", ""))
+    for existing in applications:
+        if (existing.get("path", ""), existing.get("command", "")) == key:
+            return False
+    applications.append(application)
+    return True
+
+
+def _merge_source_fields(target, source):
+    source_ids = set(source_identities(target))
+    source_ids.update(source_identities(source))
+    if source_ids:
+        target["source_identities"] = sorted(source_ids)
+    if source.get("heroic_app_id") and source.get("source") and not target.get("heroic_source"):
+        target["heroic_source"] = str(source.get("source"))
+    for field in (
+        "steam_app_id", "heroic_app_id", "lutris_id", "gameyfin_id", "gameyfin_provider",
+        "faugus_id", "install_dir",
+    ):
+        if source.get(field) and not target.get(field):
+            target[field] = source[field]
+    for flag in ("owned", "store_catalog", "store_installed"):
+        if source.get(flag):
+            target[flag] = source[flag]
+    alternate_names = target.get("alternate_names")
+    if not isinstance(alternate_names, list):
+        alternate_names = []
+    source_name = str(source.get("name") or "").strip()
+    if source_name and source_name != target.get("name") and source_name not in alternate_names:
+        alternate_names.append(source_name)
+        target["alternate_names"] = alternate_names[:20]
+
+
+def _merge_imported_game(target, source, *, add_launcher):
+    if add_launcher:
+        _append_unique_application(target, _application_for_game(source))
+    _merge_source_fields(target, source)
+    for field in ("cover", "background", "clear_logo", "fanart", "banner", "icon"):
+        if source.get(field) and not target.get(field):
+            target[field] = source[field]
+    if source.get("store_installed") and not target.get("store_installed"):
+        for field in ("path", "launch", "platform", "install_dir"):
+            if source.get(field):
+                target[field] = source[field]
+        target["store_installed"] = True
+
+
+def _index_existing_games(games):
+    exact, cross = {}, {}
+    for game in games:
+        for identity in source_identities(game):
+            exact.setdefault(identity, game)
+        title_identity = cross_source_identity(game)
+        if title_identity:
+            cross.setdefault(title_identity, game)
+    return exact, cross
+
+
+def consolidate_existing_games(games):
+    exact, cross = {}, {}
+    kept, removed = [], []
+    for game in games:
+        source_keys = source_identities(game)
+        target = next((exact[key] for key in source_keys if key in exact), None)
+        exact_match = target is not None
+        title_identity = cross_source_identity(game)
+        if (
+            target is None
+            and title_identity
+            and title_identity in cross
+            and source_family(cross[title_identity]) != source_family(game)
+        ):
+            target = cross.get(title_identity)
+        if target is None:
+            kept.append(game)
+            for key in source_keys:
+                exact.setdefault(key, game)
+            if title_identity:
+                cross.setdefault(title_identity, game)
+            continue
+        _merge_imported_game(target, game, add_launcher=not exact_match)
+        removed.append(game.get("name", ""))
+        for key in source_identities(target):
+            exact.setdefault(key, target)
+        title_identity = cross_source_identity(target)
+        if title_identity:
+            cross.setdefault(title_identity, target)
+    games[:] = kept
+    return removed
+
+
 def import_folder_path(folder, recommend=True, chosen_emulators=None):
     folder = Path(folder).expanduser()
     if not folder.is_dir():
@@ -352,15 +504,41 @@ def merge_imported_games(imported, identity_fn):
 
     def mutate(state):
         filtered = filter_imported(imported, state)
-        existing = {identity_fn(game) for game in state["games"]}
-        new_games = [game for game in filtered if identity_fn(game) not in existing]
+        exact, cross = _index_existing_games(state["games"])
+        legacy_existing = {identity_fn(game) for game in state["games"]}
+        new_games = []
         timestamp = datetime.now().isoformat(timespec="seconds")
         default_progress = state.get("settings", {}).get("progress_on_first_play", "Playing")
-        for game in new_games:
+        for game in filtered:
+            source_keys = source_identities(game)
+            target = next((exact[key] for key in source_keys if key in exact), None)
+            if target is not None or identity_fn(game) in legacy_existing:
+                if target is not None:
+                    _merge_imported_game(target, game, add_launcher=False)
+                    for key in source_identities(target):
+                        exact.setdefault(key, target)
+                continue
+            title_identity = cross_source_identity(game)
+            if (
+                title_identity
+                and title_identity in cross
+                and source_family(cross[title_identity]) != source_family(game)
+            ):
+                target = cross[title_identity]
+                _merge_imported_game(target, game, add_launcher=True)
+                for key in source_identities(target):
+                    exact.setdefault(key, target)
+                continue
             game["added_at"] = timestamp
             if default_progress and not game.get("progress"):
                 game["progress"] = default_progress
             normalize_video_fields(game)
+            new_games.append(game)
+            legacy_existing.add(identity_fn(game))
+            for key in source_identities(game):
+                exact.setdefault(key, game)
+            if title_identity:
+                cross.setdefault(title_identity, game)
         state["games"].extend(new_games)
         result.update({"added": len(new_games), "found": len(filtered)})
 
