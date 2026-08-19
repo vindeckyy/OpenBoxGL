@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -14,6 +15,8 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
 class ApiSweep(unittest.TestCase):
     @classmethod
@@ -255,6 +258,28 @@ class ApiSweep(unittest.TestCase):
             status, payload = self.request(path, {"app_id": ""})
             self.assertEqual(status, 400, f"Expected 400 for empty app_id on {path}")
 
+    def test_import_validation(self):
+        invalid_requests = (
+            ("/api/import", {"folder": ""}, "Folder path is required."),
+            ("/api/import/wizard", {"folder": ""}, "Folder path is required."),
+            ("/api/import/wizard", {"folder": "/tmp", "chosen_emulators": "invalid"}, "chosen_emulators must be an object."),
+            ("/api/import/xbox360", {"folder": ""}, "Folder path is required."),
+            ("/api/import/arcade", {"folder": ""}, "Folder path is required."),
+            ("/api/import/exclusions", {"source": ""}, "source and external_id are required."),
+            ("/api/import/exclusions/delete", {"source": ""}, "source and external_id are required."),
+            ("/api/storefront/import", {"source": "unsupported_store"}, "Storefront source must be steam, heroic, lutris, or gameyfin."),
+        )
+        for path, body, expected_error in invalid_requests:
+            status, payload = self.request(path, body)
+            self.assertEqual(status, 400, f"Expected 400 for {path}")
+            self.assertEqual(payload.get("code"), "BAD_REQUEST")
+            self.assertEqual(payload.get("error"), expected_error)
+        spaced_folder = Path(self.tempdir.name) / "roms "
+        spaced_folder.mkdir(exist_ok=True)
+        status, payload = self.request("/api/import", {"folder": str(spaced_folder)})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload.get("found"), 0)
+
 
 GROUPS = {
     "fixture": "test_fixture",
@@ -267,6 +292,7 @@ GROUPS = {
     "related": "test_related_rich_by_game_id",
     "preservation": "test_settings_preservation",
     "emulator_val": "test_emulator_validation",
+    "import_val": "test_import_validation",
 }
 
 if __name__ == "__main__":

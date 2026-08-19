@@ -4,6 +4,7 @@ import subprocess
 from datetime import datetime
 from urllib.parse import parse_qs
 
+from api_errors import BadRequest
 from arcade import import_arcade
 from emulators import install_emulator
 from importers import import_heroic, import_lutris, import_steam
@@ -13,6 +14,17 @@ from parity_import_policy import add_exclusion, list_exclusions, remove_exclusio
 from parity_premium import import_loose_arcade, import_xbox360_folder
 from parity_storefront import catalog_entries_to_games, storefront_catalog
 from webapp_state import clear_file_probe_cache, import_folder_path, load_state_view, merge_imported_games, transact_state
+
+SUPPORTED_STOREFRONT_IMPORT_SOURCES = {"steam", "heroic", "lutris", "gameyfin"}
+
+def _required_folder_path(payload):
+    value = payload.get("folder", "")
+    if value is None:
+        raise BadRequest("Folder path is required.")
+    folder = str(value)
+    if not folder.strip():
+        raise BadRequest("Folder path is required.")
+    return folder
 
 
 class ImportsHandlers:
@@ -74,18 +86,19 @@ class ImportsHandlers:
         self.remove_import_exclusion(payload)
 
     def import_folder(self, payload):
+        folder = _required_folder_path(payload)
         added, found, recommendations = import_folder_path(
-            str(payload.get("folder", "")),
+            folder,
             chosen_emulators=payload.get("chosen_emulators"),
         )
         clear_file_probe_cache()
         self.send_json(200, {"added": added, "found": found, "recommendations": recommendations})
 
     def import_wizard(self, payload):
-        folder = str(payload.get("folder", "")).strip()
+        folder = _required_folder_path(payload)
         chosen = payload.get("chosen_emulators", {})
         if not isinstance(chosen, dict):
-            raise ValueError("chosen_emulators must be an object.")
+            raise BadRequest("chosen_emulators must be an object.")
         added, found, recommendations = import_folder_path(folder, chosen_emulators=chosen)
         clear_file_probe_cache()
         installs = []
@@ -100,12 +113,14 @@ class ImportsHandlers:
         self.send_json(200, {"added": added, "found": found, "recommendations": recommendations, "installed": installs})
 
     def import_xbox360(self, payload):
-        imported = import_xbox360_folder(str(payload.get("folder", "")), str(payload.get("command", "")))
+        folder = _required_folder_path(payload)
+        imported = import_xbox360_folder(folder, str(payload.get("command", "")))
         added, found = merge_imported_games(imported, lambda game: ("path", game.get("path", "")))
         self.send_json(200, {"added": added, "found": found})
 
     def import_loose_arcade_route(self, payload):
-        imported = import_loose_arcade(str(payload.get("folder", "")), str(payload.get("command", "")))
+        folder = _required_folder_path(payload)
+        imported = import_loose_arcade(folder, str(payload.get("command", "")))
         added, found = merge_imported_games(imported, lambda game: ("path", game.get("path", "")))
         self.send_json(200, {"added": added, "found": found})
 
@@ -144,8 +159,9 @@ class ImportsHandlers:
         self.send_json(200, {"added": added, "found": found})
 
     def import_arcade_games(self, payload):
+        folder = _required_folder_path(payload)
         imported = import_arcade(
-            str(payload.get("folder", "")),
+            folder,
             str(payload.get("dat", "")),
             str(payload.get("command", "")),
             str(payload.get("source", "MAME")),
@@ -155,7 +171,7 @@ class ImportsHandlers:
                 (game.get("source"), str(game.get("rom_name")))
                 for game in state["games"] if game.get("rom_name")
             }
-            new_games = [game for game in imported if (game["source"], game["rom_name"]) not in existing]
+            new_games = [game for game in imported if (game.get("source"), game.get("rom_name")) not in existing]
             timestamp = datetime.now().isoformat(timespec="seconds")
             for game in new_games:
                 game["added_at"] = timestamp
@@ -169,6 +185,8 @@ class ImportsHandlers:
     def add_import_exclusion(self, payload):
         source = str(payload.get("source", "")).strip()
         external_id = str(payload.get("external_id", "")).strip()
+        if not source or not external_id:
+            raise BadRequest("source and external_id are required.")
         heroic_source = str(payload.get("heroic_source", "")).strip()
         def mutate(state):
             return add_exclusion(state, source, external_id, heroic_source=heroic_source)
@@ -178,6 +196,8 @@ class ImportsHandlers:
     def remove_import_exclusion(self, payload):
         source = str(payload.get("source", "")).strip()
         external_id = str(payload.get("external_id", "")).strip()
+        if not source or not external_id:
+            raise BadRequest("source and external_id are required.")
         def mutate(state):
             return remove_exclusion(state, source, external_id)
         _, count = transact_state(mutate)
@@ -209,6 +229,11 @@ class ImportsHandlers:
 
     def import_storefront_catalog(self, payload):
         source = str(payload.get("source", "")).strip()
+        if not source:
+            raise BadRequest("source is required.")
+        source_key = source.casefold()
+        if source_key not in SUPPORTED_STOREFRONT_IMPORT_SOURCES:
+            raise BadRequest("Storefront source must be steam, heroic, lutris, or gameyfin.")
         settings = load_state().get("settings", {})
         catalog = storefront_catalog(source, settings=settings)
         imported = catalog_entries_to_games(
@@ -216,19 +241,17 @@ class ImportsHandlers:
             uninstalled_only=bool(payload.get("uninstalled_only")),
             installed_only=bool(payload.get("installed_only")),
         )
-        if source.casefold() == "steam":
+        if source_key == "steam":
             def identity(game):
                 return ("steam", str(game.get("steam_app_id", "")))
-        elif source.casefold() == "heroic":
+        elif source_key == "heroic":
             def identity(game):
                 return ("heroic", str(game.get("source", "")), str(game.get("heroic_app_id", "")))
-        elif source.casefold() == "lutris":
+        elif source_key == "lutris":
             def identity(game):
                 return ("lutris", str(game.get("lutris_id", "")))
-        elif source.casefold() == "gameyfin":
+        else:
             def identity(game):
                 return ("gameyfin", str(game.get("gameyfin_id", "")))
-        else:
-            raise ValueError("Storefront source must be steam, heroic, lutris, or gameyfin.")
         added, found = merge_imported_games(imported, identity)
         self.send_json(200, {"added": added, "found": found, "imported": len(imported)})

@@ -159,6 +159,11 @@ if __name__ == "__main__":
         else:
             raise AssertionError("empty paths must not launch")
         print("openbox self-test: ok")
+    elif "--help" in sys.argv or "-h" in sys.argv:
+        print("openbox.py is a core library module providing shared state, launch commands, and path utilities.")
+        print("To run the OpenBox web server: python3 web_app.py")
+        print("To run tests: ./run_all_tests.sh or make check")
+        sys.exit(0)
     else:
         # Only the self-test above runs this module directly.
         sys.stderr.write("openbox.py is a library module. Run web_app.py or the native host.\n")

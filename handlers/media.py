@@ -62,7 +62,6 @@ class MediaHandlers:
         locked = query.get("locked", ["0"])[0] == "1"
         if not name:
             raise BadgeNotFound("Badge not found")
-            return
         try:
             badge = approved_media_path(DATA.parent / "media/retroachievements/badges" / f"{name}{'_lock' if locked else ''}.png")
             if not badge.is_file():

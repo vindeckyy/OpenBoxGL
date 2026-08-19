@@ -22,10 +22,10 @@ VENV = ROOT / ".venv-dev"
 RUFF = VENV / "bin" / "ruff"
 COVERAGE = VENV / "bin" / "coverage"
 
-# Coverage floors. Measured baseline on 2026-08-12: 55% total, 44% web_app.py.
+# Coverage floors. Ratcheted baseline: 60% total, 48% web_app.py.
 # Raise the floors as phases land; never lower them silently.
-COVERAGE_FLOOR = 55.0
-WEB_APP_FLOOR = 44.0
+COVERAGE_FLOOR = 60.0
+WEB_APP_FLOOR = 48.0
 
 
 def run(command):

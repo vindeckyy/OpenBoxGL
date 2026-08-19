@@ -90,6 +90,18 @@ def api_request(host, port, token, path, method="GET", body=None):
 def handle_cli(argv, data_dir):
     """Return exit code when argv handled; None to continue normal startup."""
     args = list(argv)
+    if "--help" in args or "-h" in args:
+        print("Usage: openbox [OPTIONS]")
+        print("       python3 web_app.py [OPTIONS]\n")
+        print("Options:")
+        print("  -h, --help                 Show this help message and exit")
+        print("  --web                      Launch loopback web server and open in browser")
+        print("  --game-mode                Force Steam Game Mode / Gamescope guest mode")
+        print("  --uri <uri>                Dispatch an openbox:// deep link URI")
+        print("  --launcher                 Run the keyboard quick launcher (rofi/wofi)")
+        print("  --backup [--items <list>]  Create a backup archive")
+        print("  --restore-backup <file>    Restore data from a backup archive")
+        return 0
     if "--uri" in args:
         index = args.index("--uri")
         if index + 1 >= len(args):
