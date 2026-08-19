@@ -168,7 +168,7 @@ class LibraryHandlers:
         return
 
     def _api_get_api_library_delta(self, parsed):
-        """Return only the specified games by ID for incremental updates."""
+        """Return only the specified games by ID for incremental updates in O(K) time."""
         query_params = parse_qs(parsed.query)
         ids_str = query_params.get("ids", [None])[0]
         
@@ -188,14 +188,28 @@ class LibraryHandlers:
             self.send_json(400, {"error": "Invalid IDs format"})
             return
         
-        payload = public_state()
-        games_by_id = {str(game.get("game_id")): game for game in payload["games"] if game.get("game_id")}
+        cached_info = _public_state_cached()
+        games_by_id = cached_info.get("games_by_id")
+        if games_by_id is None:
+            payload = cached_info["payload"]
+            games_by_id = {}
+            for game in payload["games"]:
+                gid = str(game.get("game_id") or "")
+                if gid:
+                    games_by_id[gid] = game
+                games_by_id[str(game.get("id"))] = game
         
-        delta_games = [games_by_id[id] for id in ids if id in games_by_id]
+        seen = set()
+        delta_games = []
+        for id_val in ids:
+            game = games_by_id.get(id_val)
+            if game is not None and id(game) not in seen:
+                seen.add(id(game))
+                delta_games.append(game)
         
         response_payload = {
             "games": delta_games,
-            "media_epoch": payload.get("media_epoch", 0),
+            "media_epoch": cached_info["payload"].get("media_epoch", 0),
         }
         self.send_json(200, response_payload)
         return

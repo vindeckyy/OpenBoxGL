@@ -27,6 +27,7 @@ scripts/node_modules/
 .coverage
 .coverage.*
 htmlcov/
+perf-results.json
 
 # Compiled native host binary (built from native_host.c)
 native_host

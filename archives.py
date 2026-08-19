@@ -276,10 +276,23 @@ def extract_game(archive_path, cache_root, member=""):
         staging = Path(tempfile.mkdtemp(prefix=f".{destination.name}.extracting-", dir=destination.parent))
         snapshot = None
         try:
-            snapshot = _snapshot_archive(archive, destination.parent)
             if archive.suffix.lower() == ".zip":
-                safe_zip_extract(snapshot, staging)
+                flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+                source_fd = os.open(archive, flags)
+                try:
+                    source_info = os.fstat(source_fd)
+                    if not stat.S_ISREG(source_info.st_mode):
+                        raise ValueError("Archive source must be a regular file.")
+                    if source_info.st_size > MAX_ARCHIVE_TOTAL_BYTES:
+                        raise ValueError("Archive source is too large.")
+                    with os.fdopen(source_fd, "rb") as source_file:
+                        source_fd = -1
+                        safe_zip_extract(source_file, staging)
+                finally:
+                    if source_fd >= 0:
+                        os.close(source_fd)
             else:
+                snapshot = _snapshot_archive(archive, destination.parent)
                 extractor = shutil.which("7z") or shutil.which("7zz")
                 if not extractor:
                     raise FileNotFoundError("7z or 7zz is required to extract this archive.")

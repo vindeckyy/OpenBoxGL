@@ -1,4 +1,4 @@
-import { escapeHtml, API_V1, badge, defaultBadges, sortGames, advancedQueryMatches, gameInstalled, $ } from './util.js';
+import { escapeHtml, API_V1, badge, defaultBadges, sortGames, advancedQueryMatches, parseQueryTokens, gameInstalled, $ } from './util.js';
 import { render } from './library.js';
 
 
@@ -196,6 +196,60 @@ const token = new URLSearchParams(location.search).get('token') || '';
         element.hidden = hidden.has(element.dataset.sidebarSection);
       });
     }
+    const SEARCH_INDEX_MAX_TERM = 32;
+    let _searchIndex = { games: null, refresh: null, title: new Map(), all: [] };
+    function indexValues(game) {
+      return [game.name, game.sort_title, ...(Array.isArray(game.alternate_names) ? game.alternate_names : [game.alternate_names])]
+        .filter(value => value !== undefined && value !== null && value !== '')
+        .map(value => String(value).toLowerCase());
+    }
+    function indexTerms(values) {
+      const terms = new Set();
+      values.forEach(value => {
+        (value.match(/[a-z0-9]+/g) || []).forEach(word => {
+          const limited = word.slice(0, SEARCH_INDEX_MAX_TERM);
+          for (let start = 0; start < limited.length; start++) {
+            for (let end = start + 2; end <= limited.length; end++) terms.add(limited.slice(start, end));
+          }
+        });
+        const words = value.match(/[a-z0-9]+/g) || [];
+        if (words.length > 1) terms.add(words.map(word => word[0]).join(''));
+        if (words.length > 2 && ['the', 'a', 'an'].includes(words[0])) terms.add(words.slice(1).map(word => word[0]).join(''));
+      });
+      return terms;
+    }
+    function buildSearchIndex() {
+      const refresh = AppState._refreshCounter || 0;
+      if (_searchIndex.games === AppState.games && _searchIndex.refresh === refresh) return _searchIndex;
+      const title = new Map();
+      AppState.games.forEach(game => {
+        for (const term of indexTerms(indexValues(game))) {
+          let bucket = title.get(term);
+          if (!bucket) title.set(term, bucket = []);
+          bucket.push(game);
+        }
+      });
+      _searchIndex = { games: AppState.games, refresh, title, all: AppState.games };
+      AppState.searchIndexStats = { terms: title.size, games: AppState.games.length };
+      return _searchIndex;
+    }
+    function indexedTitleCandidates(query) {
+      if (!query || /[:"]/.test(query)) return null;
+      const tokens = parseQueryTokens(query);
+      if (!tokens.length || tokens.some(token => token.negative || token.key !== 'title' || token.value.length < 2 || !/^[a-z0-9]+$/.test(token.value))) return null;
+      const index = buildSearchIndex();
+      let ids = null;
+      for (const token of tokens) {
+        const bucket = index.title.get(token.value.slice(0, SEARCH_INDEX_MAX_TERM)) || [];
+        const next = new Set(bucket.map(game => game.id));
+        ids = ids === null ? next : new Set([...ids].filter(id => next.has(id)));
+        if (!ids.size) break;
+      }
+      return ids.size ? index.all.filter(game => ids.has(game.id)) : [];
+    }
+    function warmSearchIndex() {
+      buildSearchIndex();
+    }
     let _filteredCache = { key: null, result: [] };
     function filteredGames() {
       const query = ($('sidebarSearch')?.value || '').toLowerCase().trim();
@@ -207,7 +261,9 @@ const token = new URLSearchParams(location.search).get('token') || '';
       const preset = AppState.filterPresets.find(item => item.name === AppState.activeFilterPreset);
       const presetRules = preset?.rules || {};
       const activePlaylistData = playlistFor(AppState.activePlaylist);
-      const visible = AppState.games.filter(game => {
+      const indexQuery = (presetRules.query || query).trim();
+      const sourceGames = indexedTitleCandidates(indexQuery) || AppState.games;
+      const visible = sourceGames.filter(game => {
         const completed = ['Beaten','Completed','Mastered'].includes(game.progress);
         const installed = gameInstalled(game);
         const ownedUninstalled = Boolean(game.owned || game.store_catalog || game.gameyfin_id) && !installed;
@@ -270,4 +326,4 @@ const token = new URLSearchParams(location.search).get('token') || '';
       }
     }
 
-export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, loadExplorerFacets };
+export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets };

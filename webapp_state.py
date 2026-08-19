@@ -34,6 +34,7 @@ from cloud_sync import sync_statistics
 from importers import import_heroic, import_lutris, import_steam
 from job_manager import JobManager
 from notifications import add_notification
+import openbox
 from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, STATE_STORE, build_launch, load_state, load_state_readonly, update_state, update_state_with_result
 from parity_discovery import discovery_lists, clear_discovery_cache
 from parity_emulator_defs import list_scan_configs, scan_folder as scan_emulator_folder
@@ -84,12 +85,21 @@ _PLUGIN_REFRESH_IN_PROGRESS = {"value": False}
 MEDIA_EPOCH = {"value": 0}
 MEDIA_EPOCH_LOCK = threading.Lock()
 PLUGIN_EPOCH = {"value": 0}
-PUBLIC_STATE_CACHE = {"signature": None, "payload": None, "raw": None, "raw_gzip": None}
+PUBLIC_STATE_CACHE = {"signature": None, "payload": None, "raw": None, "raw_gzip": None, "games_by_id": None}
 PUBLIC_STATE_LOCK = threading.Lock()
 PUBLIC_SETTINGS_CACHE = {"signature": None, "payload": None}
 PUBLIC_SETTINGS_LOCK = threading.Lock()
-_KNOWN_MEDIA_SET_CACHE = {"mtime_key": None, "result": None}
+_KNOWN_MEDIA_SET_CACHE = {"key": None, "result": None, "mtime_key": None}
 _KNOWN_MEDIA_SET_LOCK = threading.Lock()
+_GAME_PROJECTION_CACHE = {}
+_GAME_PROJECTION_LOCK = threading.Lock()
+_GAME_PROJECTION_MAX = 100000
+_SANITIZE_MEDIA_PATH_CACHE = {}
+_SANITIZE_MEDIA_PATH_LOCK = threading.Lock()
+_SANITIZE_MEDIA_PATH_MAX = 50000
+_PLATFORM_CATEGORY_CACHE = {}
+_PLATFORM_CATEGORY_LOCK = threading.Lock()
+_PLATFORM_CATEGORY_MAX = 5000
 STATE_VIEW_CACHE = {"signature": None, "state": None}
 STATE_VIEW_LOCK = threading.Lock()
 WATCH_STOP = threading.Event()
@@ -245,10 +255,19 @@ def sanitize_media_path(path):
     value = str(path or "").strip()
     if not value:
         return ""
+    with _SANITIZE_MEDIA_PATH_LOCK:
+        cached = _SANITIZE_MEDIA_PATH_CACHE.get(value)
+        if cached is not None:
+            return cached
     try:
-        return str(approved_media_path(value))
+        result = str(approved_media_path(value))
     except (OSError, ValueError, TypeError):
-        return ""
+        result = ""
+    with _SANITIZE_MEDIA_PATH_LOCK:
+        if len(_SANITIZE_MEDIA_PATH_CACHE) >= _SANITIZE_MEDIA_PATH_MAX:
+            _SANITIZE_MEDIA_PATH_CACHE.clear()
+        _SANITIZE_MEDIA_PATH_CACHE[value] = result
+    return result
 
 
 def sanitize_document_records(records):
@@ -726,101 +745,227 @@ def _public_settings_uncached(state):
 
 
 def _public_state_signature():
-    return (STATE_STORE.signature(), MEDIA_EPOCH["value"], PLUGIN_EPOCH["value"])
+    return (openbox.STATE_STORE.signature(), MEDIA_EPOCH["value"], PLUGIN_EPOCH["value"])
+
+
+def _project_game(game, index, media_set, save_indices, video_priority, settings, media_epoch):
+    ckey = (
+        id(game), index, media_epoch,
+        game.get("favorite"), game.get("hidden"), game.get("hide_in_bigbox"),
+        game.get("last_played"), game.get("play_count"), game.get("playtime_seconds"),
+        game.get("progress"), game.get("rating"), game.get("notes"),
+        game.get("name"), game.get("path"), game.get("cover"), game.get("background"),
+        game.get("platform"), index in save_indices,
+    )
+    with _GAME_PROJECTION_LOCK:
+        cached = _GAME_PROJECTION_CACHE.get(ckey)
+        if cached is not None:
+            return cached
+
+    cov = sanitize_media_path(game.get("cover", ""))
+    bg = sanitize_media_path(game.get("background", ""))
+    logo = sanitize_media_path(game.get("clear_logo", ""))
+    fanart = sanitize_media_path(game.get("fanart", ""))
+    banner = sanitize_media_path(game.get("banner", ""))
+    icon = sanitize_media_path(game.get("icon", ""))
+    bback = sanitize_media_path(game.get("box_back", ""))
+    bspine = sanitize_media_path(game.get("box_spine", ""))
+    b3d = sanitize_media_path(game.get("box_3d", ""))
+    tscreen = sanitize_media_path(game.get("title_screen", ""))
+    cfront = sanitize_media_path(game.get("cart_front", ""))
+    cback = sanitize_media_path(game.get("cart_back", ""))
+    disc = sanitize_media_path(game.get("disc", ""))
+    ad = sanitize_media_path(game.get("advertisement", ""))
+    man = sanitize_media_path(game.get("manual", ""))
+    mus = sanitize_media_path(game.get("music", ""))
+    
+    has_cov = _media_set_contains(media_set, cov)
+    vfield, vpath = active_video(dict(game), video_priority)
+    vpath_clean = sanitize_media_path(vpath) if vpath else ""
+    if not vpath_clean:
+        vfield = ""
+
+    raw_path = game.get("path", "")
+    path_exists = probe_path(str(raw_path), file_only=False) if raw_path else False
+    store_installed = bool(game["store_installed"]) if "store_installed" in game else path_exists
+
+    game_id = game.get("game_id", "")
+    steam_id = game.get("steam_app_id", "")
+    heroic_id = game.get("heroic_app_id", "")
+    lutris_id = game.get("lutris_id", "")
+    gameyfin_id = game.get("gameyfin_id", "")
+    store_catalog = bool(game.get("store_catalog"))
+
+    alt = game.get("alternate_names", [])
+    if not isinstance(alt, list):
+        alt = [n.strip() for n in str(alt or "").split(";") if n.strip()]
+
+    custom = game.get("custom_fields", {})
+    if not isinstance(custom, dict):
+        custom = {}
+
+    tags = game.get("tags", [])
+    if not isinstance(tags, list):
+        tags = []
+
+    documents = sanitize_document_records(game.get("documents", []))
+    raw_screenshots = game.get("screenshots", [])
+    if not isinstance(raw_screenshots, list):
+        raw_screenshots = []
+    screenshots = [safe_path for p in raw_screenshots for safe_path in [sanitize_media_path(p)] if safe_path]
+    available_screenshots = [i for i, p in enumerate(screenshots) if _media_set_contains(media_set, p)]
+
+    platform = str(game.get("platform", ""))
+    settings_id = id(settings)
+    with _PLATFORM_CATEGORY_LOCK:
+        cat_key = (platform, settings_id)
+        platform_cat = _PLATFORM_CATEGORY_CACHE.get(cat_key)
+        if platform_cat is None:
+            platform_cat = category_for_platform(platform, settings)
+            if len(_PLATFORM_CATEGORY_CACHE) >= _PLATFORM_CATEGORY_MAX:
+                _PLATFORM_CATEGORY_CACHE.clear()
+            _PLATFORM_CATEGORY_CACHE[cat_key] = platform_cat
+
+    proj = {
+        "name": game.get("name", ""),
+        "platform": platform,
+        "genre": game.get("genre", ""),
+        "year": game.get("year", ""),
+        "developer": game.get("developer", ""),
+        "publisher": game.get("publisher", ""),
+        "series": game.get("series", ""),
+        "collection": game.get("collection", ""),
+        "description": game.get("description", ""),
+        "path": raw_path,
+        "launch": game.get("launch", ""),
+        "launch_profile": game.get("launch_profile", ""),
+        "cover": cov,
+        "background": bg,
+        "clear_logo": logo,
+        "fanart": fanart,
+        "banner": banner,
+        "icon": icon,
+        "box_back": bback,
+        "box_spine": bspine,
+        "box_3d": b3d,
+        "title_screen": tscreen,
+        "cart_front": cfront,
+        "cart_back": cback,
+        "disc": disc,
+        "advertisement": ad,
+        "manual": man,
+        "source": game.get("source", ""),
+        "steam_app_id": steam_id,
+        "lutris_id": lutris_id,
+        "install_dir": game.get("install_dir", ""),
+        "heroic_app_id": heroic_id,
+        "rom_name": game.get("rom_name", ""),
+        "clone_of": game.get("clone_of", ""),
+        "set_type": game.get("set_type", ""),
+        "ra_game_id": game.get("ra_game_id", ""),
+        "ra_hash": game.get("ra_hash", ""),
+        "launchbox_db_id": game.get("launchbox_db_id", ""),
+        "archive_member": game.get("archive_member", ""),
+        "video": sanitize_media_path(game.get("video", "")),
+        "music": mus,
+        "video_snap": sanitize_media_path(game.get("video_snap", "")),
+        "video_theme": sanitize_media_path(game.get("video_theme", "")),
+        "video_trailer": sanitize_media_path(game.get("video_trailer", "")),
+        "video_recording": sanitize_media_path(game.get("video_recording", "")),
+        "progress": game.get("progress", ""),
+        "rating": game.get("rating", ""),
+        "notes": game.get("notes", ""),
+        "region": game.get("region", ""),
+        "play_mode": game.get("play_mode", ""),
+        "sort_title": game.get("sort_title", ""),
+        "added_at": game.get("added_at", ""),
+        "alternate_names": alt,
+        "max_players": game.get("max_players", ""),
+        "wikipedia_url": game.get("wikipedia_url", ""),
+        "video_url": game.get("video_url", ""),
+        "hide_in_bigbox": bool(game.get("hide_in_bigbox")),
+        "esrb": game.get("esrb", ""),
+        "broken": bool(game.get("broken")),
+        "portable": bool(game.get("portable")),
+        "controller_support": game.get("controller_support", ""),
+        "disc_count": game.get("disc_count", ""),
+        "gameyfin_id": gameyfin_id,
+        "gameyfin_provider": game.get("gameyfin_provider", ""),
+        "store_catalog": store_catalog,
+        "store_installed": store_installed,
+        "owned": bool(game.get("owned") or store_catalog or steam_id or heroic_id or lutris_id or gameyfin_id),
+        "tracking_mode": game.get("tracking_mode", ""),
+        "tracking_delay": game.get("tracking_delay", ""),
+        "tracking_frequency": game.get("tracking_frequency", ""),
+        "tracking_process_name": game.get("tracking_process_name", ""),
+        "igdb_id": game.get("igdb_id", ""),
+        "id": index,
+        "game_id": game_id,
+        "favorite": bool(game.get("favorite")),
+        "hidden": bool(game.get("hidden")),
+        "last_played": game.get("last_played", ""),
+        "play_count": game.get("play_count", 0),
+        "playtime_seconds": game.get("playtime_seconds", 0),
+        "path_exists": path_exists,
+        "has_cover": has_cov,
+        "has_background": _media_set_contains(media_set, bg),
+        "has_clear_logo": _media_set_contains(media_set, logo),
+        "has_fanart": _media_set_contains(media_set, fanart),
+        "has_banner": _media_set_contains(media_set, banner),
+        "has_icon": _media_set_contains(media_set, icon),
+        "has_box_back": _media_set_contains(media_set, bback),
+        "has_box_spine": _media_set_contains(media_set, bspine),
+        "has_box_3d": _media_set_contains(media_set, b3d),
+        "has_title_screen": _media_set_contains(media_set, tscreen),
+        "has_cart_front": _media_set_contains(media_set, cfront),
+        "has_cart_back": _media_set_contains(media_set, cback),
+        "has_disc": _media_set_contains(media_set, disc),
+        "has_advertisement": _media_set_contains(media_set, ad),
+        "has_manual": _media_set_contains(media_set, man),
+        "has_video": bool(vpath_clean),
+        "active_video_field": vfield,
+        "has_music": _media_set_contains(media_set, mus),
+        "has_saves": index in save_indices or bool(game.get("save_paths")),
+        "has_documents": bool(documents),
+        "has_versions": bool(game.get("versions")),
+        "has_achievements": bool(game.get("ra_game_id")),
+        "has_highscores": bool(game.get("rom_name")) and platform.casefold() in {"arcade", "mame", "finalburn neo"},
+        "has_missing_media": not has_cov,
+        "extract_archive": bool(game.get("extract_archive")),
+        "applications": game.get("applications", []),
+        "versions": game.get("versions", []),
+        "documents": documents,
+        "save_paths": game.get("save_paths", []),
+        "screenshots": screenshots,
+        "available_screenshots": available_screenshots,
+        "custom_fields": custom,
+        "platform_category": platform_cat,
+        "tags": tags,
+        "installable": bool(gameyfin_id) and not store_installed,
+        "legacy_game_ids": list(game.get("legacy_game_ids", [])) if isinstance(game.get("legacy_game_ids"), list) else [],
+    }
+    with _GAME_PROJECTION_LOCK:
+        if len(_GAME_PROJECTION_CACHE) >= _GAME_PROJECTION_MAX:
+            _GAME_PROJECTION_CACHE.clear()
+        _GAME_PROJECTION_CACHE[ckey] = proj
+    return proj
 
 
 def _build_public_state():
     with STATE_LOCK:
         state = load_state_readonly()
-        state_signature = STATE_STORE.signature()
+        state_signature = openbox.STATE_STORE.signature()
     save_indices = set(games_with_saves(state["games"]))
     media_set = _build_known_media_set()
-    _ms_contains = _media_set_contains
-    _sanitize = sanitize_media_path
-    _normalize_video = normalize_video_fields
-    _active_video = active_video
     video_priority = state.get("settings", {}).get("video_priority")
-    games = []
-    for index, game in enumerate(state["games"]):
-        projected = dict(game)
-        normalize_video_fields(projected)
-        for field in MEDIA_PATH_FIELDS:
-            raw_value = projected.get(field, "")
-            projected[field] = _sanitize(raw_value) if raw_value else ""
-        visible = {key: projected.get(key, "") for key in FIELDS}
-        for field in MEDIA_PATH_FIELDS:
-            visible[field] = projected[field]
-        visible["documents"] = sanitize_document_records(projected.get("documents", []))
-        screenshots = projected.get("screenshots", [])
-        if not isinstance(screenshots, list):
-            screenshots = []
-        visible["screenshots"] = [
-            safe_path for path in screenshots
-            for safe_path in [_sanitize(path)] if safe_path
-        ]
-        video_field, video_path = _active_video(projected, video_priority)
-        video_path = _sanitize(video_path) if video_path else ""
-        if not video_path:
-            video_field = ""
-        raw_path = projected.get("path", "")
-        path_exists = os.path.exists(str(raw_path)) if raw_path else False
-        store_installed = bool(projected["store_installed"]) if "store_installed" in projected else path_exists
-        visible.update({
-            "id": index,
-            "game_id": projected.get("game_id", ""),
-            "favorite": bool(projected.get("favorite")),
-            "hidden": bool(projected.get("hidden")),
-            "hide_in_bigbox": bool(projected.get("hide_in_bigbox")),
-            "last_played": projected.get("last_played", ""),
-            "play_count": projected.get("play_count", 0),
-            "playtime_seconds": projected.get("playtime_seconds", 0),
-            "path_exists": path_exists,
-            "has_cover": _ms_contains(media_set, visible.get("cover")),
-            "has_background": _ms_contains(media_set, visible.get("background")),
-            "has_clear_logo": _ms_contains(media_set, visible.get("clear_logo")),
-            "has_fanart": _ms_contains(media_set, visible.get("fanart")),
-            "has_banner": _ms_contains(media_set, visible.get("banner")),
-            "has_icon": _ms_contains(media_set, visible.get("icon")),
-            "has_box_back": _ms_contains(media_set, visible.get("box_back")),
-            "has_box_spine": _ms_contains(media_set, visible.get("box_spine")),
-            "has_box_3d": _ms_contains(media_set, visible.get("box_3d")),
-            "has_title_screen": _ms_contains(media_set, visible.get("title_screen")),
-            "has_cart_front": _ms_contains(media_set, visible.get("cart_front")),
-            "has_cart_back": _ms_contains(media_set, visible.get("cart_back")),
-            "has_disc": _ms_contains(media_set, visible.get("disc")),
-            "has_advertisement": _ms_contains(media_set, visible.get("advertisement")),
-            "has_manual": _ms_contains(media_set, visible.get("manual")),
-            "has_video": bool(video_path),
-            "active_video_field": video_field,
-            "has_music": _ms_contains(media_set, visible.get("music")),
-            "has_saves": index in save_indices or bool(projected.get("save_paths")),
-            "has_documents": bool(visible["documents"]),
-            "has_versions": bool(projected.get("versions")),
-            "has_achievements": bool(projected.get("ra_game_id")),
-            "has_highscores": bool(projected.get("rom_name")) and str(projected.get("platform", "")).casefold() in {"arcade", "mame", "finalburn neo"},
-            "has_missing_media": not _ms_contains(media_set, visible.get("cover")),
-            "extract_archive": bool(projected.get("extract_archive")),
-            "applications": projected.get("applications", []),
-            "versions": projected.get("versions", []),
-            "documents": visible["documents"],
-            "save_paths": projected.get("save_paths", []),
-            "screenshots": visible["screenshots"],
-            "alternate_names": projected.get("alternate_names", []) if isinstance(projected.get("alternate_names"), list) else [name for name in str(projected.get("alternate_names") or "").split(";") if name.strip()],
-            "available_screenshots": [
-                index for index, path in enumerate(visible["screenshots"])
-                if _ms_contains(media_set, path)
-            ],
-            "esrb": projected.get("esrb", ""),
-            "custom_fields": projected.get("custom_fields", {}) if isinstance(projected.get("custom_fields"), dict) else {},
-            "platform_category": category_for_platform(projected.get("platform", ""), state.get("settings", {})),
-            "tags": list(projected.get("tags", [])) if isinstance(projected.get("tags"), list) else [],
-            "store_catalog": bool(projected.get("store_catalog")),
-            "store_installed": store_installed,
-            "owned": bool(projected.get("owned") or projected.get("store_catalog") or projected.get("steam_app_id") or projected.get("heroic_app_id") or projected.get("lutris_id") or projected.get("gameyfin_id")),
-            "installable": bool(projected.get("gameyfin_id")) and not store_installed,
-            "gameyfin_id": projected.get("gameyfin_id", ""),
-        })
-        games.append(visible)
+    settings = state.get("settings", {})
+    media_epoch = MEDIA_EPOCH["value"]
+    raw_games = state["games"]
+
+    games = [
+        _project_game(game, index, media_set, save_indices, video_priority, settings, media_epoch)
+        for index, game in enumerate(raw_games)
+    ]
     decorated = games
     if not os.environ.get("OPENBOX_SAFE_MODE"):
         now = time.monotonic()
@@ -837,7 +982,7 @@ def _build_public_state():
                         try:
                             fresh = run_plugins(DATA.parent / "plugins", "library", {"games": games_snapshot})
                             with STATE_LOCK:
-                                if STATE_STORE.signature() != expected_signature:
+                                if openbox.STATE_STORE.signature() != expected_signature:
                                     return
                                 with PLUGIN_LIBRARY_LOCK:
                                     PLUGIN_LIBRARY_CACHE.update({
@@ -847,7 +992,7 @@ def _build_public_state():
                                     })
                                     PLUGIN_EPOCH["value"] += 1
                             with PUBLIC_STATE_LOCK:
-                                PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None, "raw_gzip": None})
+                                PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None, "raw_gzip": None, "games_by_id": None})
                         except Exception:
                             LOGGER.exception("Background plugin refresh failed")
                         finally:
@@ -871,7 +1016,7 @@ def _build_public_state():
         "ra_configured": bool(load_ra_credentials(DATA.parent)),
         "settings": public_settings(state),
         "discovery": discovery_lists(state["games"]),
-        "media_epoch": MEDIA_EPOCH["value"],
+        "media_epoch": media_epoch,
     }
 
 
@@ -883,10 +1028,25 @@ def _public_state_cached():
     payload = _build_public_state()
     raw = json.dumps(payload).encode()
     raw_gzip = gzip.compress(raw) if len(raw) >= GZIP_THRESHOLD else raw
+    games_by_id = {}
+    for game in payload["games"]:
+        gid = str(game.get("game_id") or "")
+        if gid:
+            games_by_id[gid] = game
+        for leg_id in game.get("legacy_game_ids", []):
+            if leg_id:
+                games_by_id[str(leg_id)] = game
+        games_by_id[str(game.get("id"))] = game
     with PUBLIC_STATE_LOCK:
         if PUBLIC_STATE_CACHE["raw"] is not None and PUBLIC_STATE_CACHE["signature"] == signature:
             return PUBLIC_STATE_CACHE
-        PUBLIC_STATE_CACHE.update({"signature": signature, "payload": payload, "raw": raw, "raw_gzip": raw_gzip})
+        PUBLIC_STATE_CACHE.update({
+            "signature": signature,
+            "payload": payload,
+            "raw": raw,
+            "raw_gzip": raw_gzip,
+            "games_by_id": games_by_id,
+        })
         return PUBLIC_STATE_CACHE
 
 
@@ -910,7 +1070,7 @@ def public_state_etag():
 def load_state_view():
     """Read-only library snapshot reused across requests until the file changes."""
     with STATE_VIEW_LOCK:
-        signature = STATE_STORE.signature()
+        signature = openbox.STATE_STORE.signature()
         if STATE_VIEW_CACHE["state"] is not None and STATE_VIEW_CACHE["signature"] == signature:
             return STATE_VIEW_CACHE["state"]
     state = load_state_readonly()
@@ -924,7 +1084,7 @@ def transact_state(mutator):
     with STATE_LOCK:
         result = update_state_with_result(mutator)
     with PUBLIC_STATE_LOCK:
-        PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None})
+        PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None, "raw_gzip": None, "games_by_id": None})
     with PUBLIC_SETTINGS_LOCK:
         PUBLIC_SETTINGS_CACHE.update({"signature": None, "payload": None})
     with STATE_VIEW_LOCK:
@@ -1597,28 +1757,40 @@ def _media_dir_mtime():
 def _build_known_media_set():
     """Pre-scan all media roots into a set of resolved absolute paths.
 
-    One directory walk replaces thousands of individual stat calls in
+    One fast directory walk replaces thousands of individual stat calls in
     _build_public_state for large libraries. Results are memoized keyed
-    on the media directories' mtime, and invalidated by bump_media_epoch().
+    on the media epoch, and invalidated by bump_media_epoch().
     """
-    mtime_key = _media_dir_mtime()
+    cache_key = (MEDIA_EPOCH["value"], os.environ.get(MEDIA_ROOTS_ENV, ""))
     with _KNOWN_MEDIA_SET_LOCK:
-        if _KNOWN_MEDIA_SET_CACHE["mtime_key"] == mtime_key and _KNOWN_MEDIA_SET_CACHE["result"] is not None:
+        if _KNOWN_MEDIA_SET_CACHE.get("key") == cache_key and _KNOWN_MEDIA_SET_CACHE.get("result") is not None:
             return _KNOWN_MEDIA_SET_CACHE["result"]
     known = set()
     capped = False
+
+    def _scan_dir(dir_path):
+        nonlocal capped
+        try:
+            with os.scandir(dir_path) as it:
+                for entry in it:
+                    try:
+                        if entry.is_file(follow_symlinks=False):
+                            known.add(entry.path)
+                            known.add(os.path.realpath(entry.path))
+                        elif entry.is_dir(follow_symlinks=False):
+                            _scan_dir(entry.path)
+                    except OSError:
+                        pass
+                    if len(known) > _KNOWN_MEDIA_MAX:
+                        capped = True
+                        break
+        except OSError:
+            pass
+
     try:
         media_dir = DATA.parent / "media"
         if media_dir.is_dir():
-            for entry in media_dir.rglob("*"):
-                try:
-                    if entry.is_file():
-                        known.add(os.path.realpath(str(entry)))
-                except OSError:
-                    pass
-                if len(known) > _KNOWN_MEDIA_MAX:
-                    capped = True
-                    break
+            _scan_dir(str(media_dir))
     except OSError:
         pass
     env_value = os.environ.get(MEDIA_ROOTS_ENV, "")
@@ -1630,15 +1802,7 @@ def _build_known_media_set():
             try:
                 root = Path(item).expanduser()
                 if root.is_dir():
-                    for entry in root.rglob("*"):
-                        try:
-                            if entry.is_file():
-                                known.add(os.path.realpath(str(entry)))
-                        except OSError:
-                            pass
-                        if len(known) > _KNOWN_MEDIA_MAX:
-                            capped = True
-                            break
+                    _scan_dir(str(root))
                 if capped:
                     break
             except OSError:
@@ -1646,7 +1810,7 @@ def _build_known_media_set():
     if capped:
         LOGGER.warning("Media set capped at %d entries; some media files may not be detected", _KNOWN_MEDIA_MAX)
     with _KNOWN_MEDIA_SET_LOCK:
-        _KNOWN_MEDIA_SET_CACHE.update({"mtime_key": mtime_key, "result": known})
+        _KNOWN_MEDIA_SET_CACHE.update({"key": cache_key, "result": known, "mtime_key": None})
     return known
 
 
@@ -1654,18 +1818,30 @@ def _media_set_contains(media_set, path_value):
     """O(1) check for whether a sanitized media path is in the pre-scanned set."""
     if not media_set or not path_value:
         return False
-    try:
-        return _fast_realpath(path_value) in media_set
-    except (TypeError, ValueError):
-        return False
+    p_str = str(path_value)
+    if p_str in media_set:
+        return True
+    if p_str.startswith("/"):
+        norm = os.path.normpath(p_str)
+        if norm in media_set:
+            return True
+    return False
 
 
 def bump_media_epoch():
     """Invalidate browser media caches by bumping the version suffix in media URLs."""
     with _KNOWN_MEDIA_SET_LOCK:
-        _KNOWN_MEDIA_SET_CACHE.update({"mtime_key": None, "result": None})
+        _KNOWN_MEDIA_SET_CACHE.update({"key": None, "result": None, "mtime_key": None})
+    with _GAME_PROJECTION_LOCK:
+        _GAME_PROJECTION_CACHE.clear()
+    with _SANITIZE_MEDIA_PATH_LOCK:
+        _SANITIZE_MEDIA_PATH_CACHE.clear()
+    with PLUGIN_LIBRARY_LOCK:
+        PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None, "state_signature": None})
     with MEDIA_EPOCH_LOCK:
         MEDIA_EPOCH["value"] += 1
+    with PUBLIC_STATE_LOCK:
+        PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None, "raw_gzip": None, "games_by_id": None})
     clear_file_probe_cache()
 
 

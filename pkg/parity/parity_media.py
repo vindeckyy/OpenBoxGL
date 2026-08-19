@@ -86,7 +86,7 @@ def _fingerprint(path: Path):
 
 def find_duplicate_media(games, allowed_roots=None):
     from catalog import MEDIA_FIELDS
-    buckets = {}
+    size_buckets = {}
     for game in games:
         paths = []
         for field in MEDIA_FIELDS:
@@ -98,6 +98,16 @@ def find_duplicate_media(games, allowed_roots=None):
             path = Path(raw).expanduser()
             if path.is_symlink() or not path.is_file():
                 continue
+            try:
+                size_buckets.setdefault(path.stat().st_size, []).append(path)
+            except OSError:
+                continue
+
+    buckets = {}
+    for paths in size_buckets.values():
+        if len(paths) <= 1:
+            continue
+        for path in paths:
             try:
                 key = _fingerprint(path)
             except OSError:
@@ -161,8 +171,20 @@ def active_video(game, priorities=None):
     for field in priorities or DEFAULT_VIDEO_PRIORITY:
         path = str(game.get(field) or "").strip()
         if path and Path(path).is_file():
+            try:
+                from webapp_state import sanitize_media_path
+                if not sanitize_media_path(path):
+                    continue
+            except Exception:
+                continue
             return field, path
     legacy = str(game.get("video") or "").strip()
     if legacy and Path(legacy).is_file():
+        try:
+            from webapp_state import sanitize_media_path
+            if not sanitize_media_path(legacy):
+                return "", ""
+        except Exception:
+            return "", ""
         return "video", legacy
     return "", ""

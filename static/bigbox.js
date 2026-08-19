@@ -100,6 +100,15 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
       closeBigBoxMenu();
       renderBigBox();
     }
+    function coverflowWindow(items, active, radius = 5) {
+      if (items.length <= radius * 2 + 1) return items.map((item, index) => ({ item, index }));
+      const window = [];
+      for (let offset = -radius; offset <= radius; offset++) {
+        const index = (active + offset + items.length) % items.length;
+        window.push({ item: items[index], index, offset });
+      }
+      return window;
+    }
     function moveBigBox(change) {
       AppState.bigBoxIndex = (AppState.bigBoxIndex + change % AppState.bigBoxGames.length + AppState.bigBoxGames.length) % AppState.bigBoxGames.length;
       AppState.selectedId = AppState.bigBoxGames[AppState.bigBoxIndex].id;
@@ -139,8 +148,15 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
         const canAct = (game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed);
         const ownedLabel = game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : '';
         const uninstallBtn = game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:10px">Uninstall</button>' : '';
-        $('bigBoxStage').innerHTML = `<div class="coverflow-strip">${AppState.bigBoxGames.map((item,index) => `<button class="coverflow-card jewel-case ${index === AppState.bigBoxIndex ? 'active' : ''}" data-coverflow="${index}" aria-label="Open ${escapeHtml(item.name)}">${item.has_cover ? `<img src="${media(item,'cover')}" alt="" loading="lazy" decoding="async">` : `<div class="cover-title">${escapeHtml(item.name)}</div>`}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}</div>`;
-        document.querySelectorAll('[data-coverflow]').forEach(button => button.onclick = () => { AppState.bigBoxIndex = Number(button.dataset.coverflow); AppState.selectedId = AppState.bigBoxGames[AppState.bigBoxIndex].id; renderBigBox(); });
+        const cards = coverflowWindow(AppState.bigBoxGames, AppState.bigBoxIndex);
+        $('bigBoxStage').innerHTML = `<div class="coverflow-strip" data-coverflow-strip>${cards.map(({item,index,offset = 0}) => `<button class="coverflow-card jewel-case ${index === AppState.bigBoxIndex ? 'active' : ''}" data-coverflow="${index}" style="--coverflow-offset:${offset}" aria-label="Open ${escapeHtml(item.name)}">${item.has_cover ? `<img src="${media(item,'cover')}" alt="" loading="lazy" decoding="async">` : `<div class="cover-title">${escapeHtml(item.name)}</div>`}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}</div>`;
+        document.querySelector('[data-coverflow-strip]')?.addEventListener('click', event => {
+          const button = event.target.closest('[data-coverflow]');
+          if (!button) return;
+          AppState.bigBoxIndex = Number(button.dataset.coverflow);
+          AppState.selectedId = AppState.bigBoxGames[AppState.bigBoxIndex].id;
+          renderBigBox();
+        });
       } else {
         $('bigBoxStage').className = 'bigbox-stage';
         $('bigBoxStage').innerHTML = `<div class="bigbox-cover${game.has_cover ? '' : ' no-image'}">${game.has_cover ? `<img src="${media(game,'cover')}" alt="">` : escapeHtml(game.name)}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : ''}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${(game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed) ? '' : 'disabled'}>${playLabel}</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:10px">Uninstall</button>' : ''}</div>`;

@@ -1,6 +1,7 @@
 """MAME and FinalBurn full-set import."""
 
 import io
+import os
 import shlex
 import shutil
 import subprocess
@@ -59,12 +60,13 @@ def load_catalog(dat_path="", source="MAME"):
 
 
 def zip_members(path):
-    if path.suffix.casefold() != ".zip":
+    p = path if isinstance(path, Path) else Path(path)
+    if p.suffix.casefold() != ".zip":
         return set()
     try:
-        with zipfile.ZipFile(path) as archive:
+        with zipfile.ZipFile(p) as archive:
             return {PurePosixPath(name).name for name in archive.namelist()}
-    except zipfile.BadZipFile:
+    except (zipfile.BadZipFile, OSError):
         return set()
 
 
@@ -73,11 +75,21 @@ def import_arcade(folder, dat_path="", command="", source="MAME", catalog=None):
     if not root.is_dir():
         raise FileNotFoundError("The arcade ROM folder does not exist.")
     source = "FinalBurn Neo" if source == "FinalBurn Neo" else "MAME"
-    archives = {
-        path.stem.casefold(): path
-        for path in root.iterdir()
-        if path.is_file() and path.suffix.casefold() in {".zip", ".7z"}
-    }
+    archives = {}
+    try:
+        with os.scandir(root) as it:
+            for entry in it:
+                try:
+                    if entry.is_file(follow_symlinks=True):
+                        name = entry.name
+                        idx = name.rfind(".")
+                        if idx != -1 and name[idx:].casefold() in {".zip", ".7z"}:
+                            stem = name[:idx].casefold()
+                            archives[stem] = Path(entry.path)
+                except OSError:
+                    continue
+    except OSError:
+        pass
     catalog = catalog if catalog is not None else load_catalog(dat_path, source)
     if not command:
         binary = shutil.which("mame" if source == "MAME" else "fbneo")
@@ -113,3 +125,4 @@ def import_arcade(folder, dat_path="", command="", source="MAME", catalog=None):
             "set_type": set_type,
         })
     return games
+

@@ -13,7 +13,15 @@ from parity_import import import_rpcs3_hdd, import_scummvm, import_vita3k
 from parity_import_policy import add_exclusion, list_exclusions, remove_exclusion
 from parity_premium import import_loose_arcade, import_xbox360_folder
 from parity_storefront import catalog_entries_to_games, storefront_catalog
-from webapp_state import clear_file_probe_cache, import_folder_path, load_state_view, merge_imported_games, transact_state
+from webapp_state import (
+    broadcast_event,
+    clear_file_probe_cache,
+    import_folder_path,
+    load_state_view,
+    merge_imported_games,
+    transact_state,
+)
+
 
 SUPPORTED_STOREFRONT_IMPORT_SOURCES = {"steam", "heroic", "lutris", "gameyfin"}
 
@@ -87,11 +95,13 @@ class ImportsHandlers:
 
     def import_folder(self, payload):
         folder = _required_folder_path(payload)
+        broadcast_event("job.progress", {"job": "import", "folder": folder, "state": "running"})
         added, found, recommendations = import_folder_path(
             folder,
             chosen_emulators=payload.get("chosen_emulators"),
         )
         clear_file_probe_cache()
+        broadcast_event("job.progress", {"job": "import", "folder": folder, "added": added, "found": found, "state": "done"})
         self.send_json(200, {"added": added, "found": found, "recommendations": recommendations})
 
     def import_wizard(self, payload):

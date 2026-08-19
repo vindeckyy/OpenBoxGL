@@ -57,7 +57,7 @@ Run the plain test suite without coverage when iterating:
 Run an individual module when iterating:
 
 ```bash
-make test-one TEST=test_catalog.py
+make test-one TEST=tests/test_catalog.py
 ```
 
 Check that the version in `updates.py` matches every published spot:
@@ -70,7 +70,7 @@ Packaging checks:
 
 ```bash
 ./build_appimage.sh
-python3 test_packaging.py
+python3 -B tests/test_packaging.py
 ```
 
 All tests must pass on CI before a PR can be merged.

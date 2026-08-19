@@ -128,20 +128,28 @@ class MetadataHandlers:
                 return
             titles = [(str(game["name"]).strip(), str(game.get("platform") or "")) for game in candidates]
             matches = batch_match(METADATA_DATABASE, titles)
-            matched = 0
-            errors = []
+            matched_records = {}
             for game in candidates:
                 stable_id = str(game.get("game_id"))
                 record = matches.get(str(game["name"]).strip())
-                if not record:
-                    continue
-                def mutate(state, stable_id=stable_id, record=record):
-                    game_from_payload(state, {"game_id": stable_id})["launchbox_db_id"] = str(record["database_id"])
+                if record:
+                    matched_records[stable_id] = (str(record["database_id"]), game.get("name", stable_id))
+
+            matched = 0
+            errors = []
+            if matched_records:
+                def mutate(state):
+                    nonlocal matched
+                    for stable_id, (db_id, name) in matched_records.items():
+                        try:
+                            game_from_payload(state, {"game_id": stable_id})["launchbox_db_id"] = db_id
+                            matched += 1
+                        except (IndexError, KeyError, ValueError) as error:
+                            errors.append(f"{name}: {error}")
                 try:
                     transact_state(mutate)
-                    matched += 1
-                except (KeyError, ValueError) as error:
-                    errors.append(f"{game.get('name', stable_id)}: {error}")
+                except Exception as error:
+                    errors.append(f"Batch state update error: {error}")
             with PROCESS_LOCK:
                 METADATA_JOB.update({"state":"done", "scanned":len(candidates), "matched":matched, "errors":errors[-20:]})
 

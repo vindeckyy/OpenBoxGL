@@ -1,9 +1,11 @@
 """LaunchBox Games Database sync, search, and media download. Independent open-source implementation not affiliated with LaunchBox or Unbroken Software, LLC."""
 
+import concurrent.futures
 import re
 import shutil
 import sqlite3
 import tempfile
+import threading
 import zipfile
 from pathlib import Path
 from urllib.request import urlopen
@@ -15,6 +17,43 @@ from backend_io import download_file
 DATABASE_URL = "https://gamesdb.launchbox-app.com/Metadata.zip"
 IMAGE_URL = "https://images.launchbox-app.com/"
 MANUAL_SUFFIXES = (".pdf", ".txt")
+
+_LOCAL = threading.local()
+
+
+def get_db_connection(database_path):
+    """Retrieve or create a thread-local cached SQLite connection for the LBDB."""
+    path = Path(database_path).resolve()
+    try:
+        st = path.stat()
+        key = (path, st.st_ino, st.st_mtime_ns)
+    except OSError:
+        key = (path, 0, 0)
+    conns = getattr(_LOCAL, "connections", None)
+    if conns is None:
+        conns = {}
+        _LOCAL.connections = conns
+
+    # Close stale connections for the same path if inode/mtime changed
+    for existing_key in list(conns.keys()):
+        if existing_key[0] == path and existing_key != key:
+            try:
+                conns[existing_key].close()
+            except Exception:
+                pass
+            conns.pop(existing_key, None)
+
+    conn = conns.get(key)
+    if conn is None:
+        conn = sqlite3.connect(str(path), timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
+        except sqlite3.Error:
+            pass
+        conns[key] = conn
+    return conn
 
 
 # LBDB image type strings mapped to OpenBox media fields, in preference order.
@@ -88,6 +127,8 @@ def build_database(metadata_zip, destination):
     temporary.unlink(missing_ok=True)
     database = sqlite3.connect(temporary)
     database.executescript("""
+        PRAGMA journal_mode=WAL;
+        PRAGMA synchronous=NORMAL;
         CREATE TABLE games (
             database_id INTEGER PRIMARY KEY, name TEXT, normalized TEXT, platform TEXT,
             release_date TEXT, developer TEXT, publisher TEXT, genre TEXT, overview TEXT,
@@ -154,8 +195,7 @@ def sync_database(destination, opener=urlopen):
 
 
 def search_games(database_path, title, platform="", limit=20):
-    database = sqlite3.connect(database_path)
-    database.row_factory = sqlite3.Row
+    database = get_db_connection(database_path)
     query = normalized(title)
     lbdb_platform = PLATFORM_ALIASES.get(platform, platform)
     rows = database.execute(
@@ -165,32 +205,36 @@ def search_games(database_path, title, platform="", limit=20):
            LIMIT ?""",
         (query, f"%{query}%", query, lbdb_platform, limit),
     ).fetchall()
-    database.close()
     return [dict(row) for row in rows]
+
 
 def batch_match(database_path, titles):
     """Match many (title, platform) pairs against LBDB in one pass.
 
     Only exact normalized-title hits qualify; auto-match never guesses fuzzy or partial titles.
+    Uses chunked parameterized IN queries and in-memory indexed ranking for high throughput.
     """
-    rows = {}
     if not titles:
-        return rows
-    database = sqlite3.connect(database_path)
-    database.row_factory = sqlite3.Row
-    try:
-        pairs = [(title, platform, normalized(title)) for title, platform in titles]
-        queries = sorted({query for _, _, query in pairs if query})
-        for query in queries:
-            for row in database.execute(
-                """SELECT database_id, name, platform, normalized FROM games
-                   WHERE normalized = ?
-                   ORDER BY length(name)""",
-                (query,),
-            ).fetchall():
-                rows.setdefault(query, []).append(dict(row))
-    finally:
-        database.close()
+        return {}
+    database = get_db_connection(database_path)
+    pairs = [(title, platform, normalized(title)) for title, platform in titles]
+    queries = sorted({query for _, _, query in pairs if query})
+    if not queries:
+        return {}
+
+    rows = {}
+    CHUNK_SIZE = 500
+    for i in range(0, len(queries), CHUNK_SIZE):
+        chunk = queries[i : i + CHUNK_SIZE]
+        placeholders = ",".join("?" for _ in chunk)
+        for row in database.execute(
+            f"""SELECT database_id, name, platform, normalized FROM games
+               WHERE normalized IN ({placeholders})
+               ORDER BY length(name)""",
+            chunk,
+        ).fetchall():
+            rows.setdefault(row["normalized"], []).append(dict(row))
+
     matched = {}
     for title, platform, query in pairs:
         candidates = rows.get(query)
@@ -211,7 +255,6 @@ def batch_match(database_path, titles):
 def best_match(database_path, title, platform=""):
     """Return the single most confident LBDB match for a title, or None."""
     return batch_match(database_path, [(title, platform)]).get(title)
-
 
 
 def download_image(filename, destination, opener=urlopen):
@@ -271,14 +314,11 @@ def find_archive_manual(game, media_root, opener=urlopen):
 def _load_metadata_record(database_path, database_id):
     """Open the LBDB and fetch the game row; raises if the game is missing.
 
-    Returns (database, record dict); the database stays open so the caller can
-    load images on the same connection, matching the original close timing.
+    Returns (database, record dict).
     """
-    database = sqlite3.connect(database_path)
-    database.row_factory = sqlite3.Row
+    database = get_db_connection(database_path) if not isinstance(database_path, sqlite3.Connection) else database_path
     record = database.execute("SELECT * FROM games WHERE database_id = ?", (int(database_id),)).fetchone()
     if not record:
-        database.close()
         raise ValueError("Metadata game not found.")
     return database, dict(record)
 
@@ -301,14 +341,13 @@ def _apply_metadata_fields(game, record, database_id, overwrite):
 
 
 def _load_media_images(database, database_id, region_priority):
-    """Load the game's images, region-sorted, and close the database."""
+    """Load the game's images, region-sorted."""
     from parity_media import REGION_PRIORITY_DEFAULT, sort_images_by_region
 
     images = sort_images_by_region(
         [dict(row) for row in database.execute("SELECT * FROM images WHERE database_id = ?", (int(database_id),))],
         region_priority or REGION_PRIORITY_DEFAULT,
     )
-    database.close()
     return images
 
 
@@ -360,6 +399,64 @@ def apply_game_metadata(game, database_path, database_id, media_types, media_roo
     images = _load_media_images(database, database_id, region_priority)
     images_by_type = _group_images_by_type(images)
     root = Path(media_root) / str(database_id)
+
+    download_tasks = []
     for media_type in media_types:
-        _download_media_for_type(game, media_type, images_by_type, root, overwrite, opener)
+        if media_type == "screenshots":
+            if overwrite or not game.get("screenshots"):
+                candidates = images_by_type.get("Screenshot - Gameplay", [])
+                for index, item in enumerate(candidates[:12], 1):
+                    target = root / f"screenshot-{index}{Path(item['filename']).suffix}"
+                    download_tasks.append(("screenshots", target, item["filename"], index))
+        elif media_type == "manual":
+            if overwrite or not game.get("manual"):
+                candidate = find_archive_manual(game, root, opener)
+                if candidate:
+                    game["manual"] = candidate
+                else:
+                    game["_media_notes"] = list(game.get("_media_notes") or []) + ["manual: no manual in this archive"]
+        else:
+            if overwrite or not game.get(media_type):
+                for lbdb_type in MEDIA_TYPE_MAP.get(media_type, ()):
+                    candidates = images_by_type.get(lbdb_type, [])
+                    if candidates:
+                        image = candidates[0]
+                        target = root / f"{media_type}{Path(image['filename']).suffix}"
+                        download_tasks.append((media_type, target, image["filename"], None))
+                        break
+
+    if not download_tasks:
+        return game
+
+    def _perform_download(task):
+        m_type, dest_path, fn, idx = task
+        try:
+            res_path = download_image(fn, dest_path, opener)
+            return (m_type, res_path, idx, None)
+        except Exception as exc:
+            return (m_type, None, idx, exc)
+
+    if len(download_tasks) == 1:
+        results = [_perform_download(download_tasks[0])]
+    else:
+        max_workers = min(8, len(download_tasks))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            results = list(executor.map(_perform_download, download_tasks))
+
+    failures = [(m_type, exc) for m_type, res_path, _idx, exc in results if res_path is None and exc is not None]
+    if failures:
+        details = ", ".join(f"{m_type}: {exc}" for m_type, exc in failures[:3])
+        raise ValueError(f"failed to download selected media: {details}")
+
+    screenshots_results = []
+    for m_type, res_path, idx, _exc in results:
+        if m_type == "screenshots":
+            screenshots_results.append((idx, res_path))
+        else:
+            game[m_type] = res_path
+
+    if screenshots_results:
+        screenshots_results.sort(key=lambda t: t[0])
+        game["screenshots"] = [p for _, p in screenshots_results]
+
     return game

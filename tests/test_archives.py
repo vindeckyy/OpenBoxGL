@@ -1,9 +1,12 @@
 import shutil
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import archives
 from archives import extract_game, safe_zip_extract, validate_7z_paths
@@ -112,5 +115,74 @@ def test():
     print("archive self-test: ok")
 
 
+def test_safe_streaming_extraction():
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        archive = root / "stream_game.zip"
+        with zipfile.ZipFile(archive, "w") as package:
+            package.writestr("manual.txt", "Manual content")
+            package.writestr("stream_game.rom", b"ROM payload data 12345")
+        
+        with mock.patch("archives._snapshot_archive") as mock_snapshot:
+            selected = extract_game(archive, root / "cache-stream")
+            # Snapshot must NOT be called for .zip extraction (direct safe streaming)
+            mock_snapshot.assert_not_called()
+        
+        assert selected.name == "stream_game.rom"
+        assert selected.read_bytes() == b"ROM payload data 12345"
+        # Verify no snapshot files exist in cache parent
+        snapshots = list((root / "cache-stream").parent.glob(".openbox-archive-*"))
+        assert len(snapshots) == 0
+    print("archive safe streaming extraction self-test: ok")
+
+
+def test_zip_stream_fd_and_bounds():
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        archive = root / "large_member.zip"
+        with zipfile.ZipFile(archive, "w") as package:
+            package.writestr("big.rom", b"1234567890")
+        
+        # Test max_member_bytes limit
+        with open(archive, "rb") as source:
+            try:
+                safe_zip_extract(source, root / "dest_big", max_member_bytes=5)
+                raise AssertionError("Expected member size limit ValueError")
+            except ValueError as error:
+                assert "large" in str(error)
+
+        # Test max_members limit
+        with open(archive, "rb") as source:
+            try:
+                safe_zip_extract(source, root / "dest_members", max_members=0)
+                raise AssertionError("Expected max members limit ValueError")
+            except ValueError as error:
+                assert "entries" in str(error)
+
+        # Test extract_game non-regular file and oversize bounds check
+        from archives import extract_game
+        from unittest.mock import patch
+
+        dir_as_file = root / "dir_as_file.zip"
+        dir_as_file.mkdir()
+        try:
+            extract_game(dir_as_file, root / "cache-dir")
+            raise AssertionError("Expected regular file check failure")
+        except ValueError as error:
+            assert "regular file" in str(error)
+
+        with patch("archives.MAX_ARCHIVE_TOTAL_BYTES", 5):
+            try:
+                extract_game(archive, root / "cache-oversize")
+                raise AssertionError("Expected archive too large error")
+            except ValueError as error:
+                assert "too large" in str(error)
+
+    print("archive zip stream fd and bounds self-test: ok")
+
+
 if __name__ == "__main__":
     test()
+    test_safe_streaming_extraction()
+    test_zip_stream_fd_and_bounds()
+
