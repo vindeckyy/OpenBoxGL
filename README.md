@@ -74,7 +74,7 @@ For ROMs, emulators, Big Box, RetroAchievements, and everything else, see [Getti
 
 ## Overview
 
-OpenBox Game Launcher is an open-source game library manager and launcher for Linux. It puts Steam, Heroic (Epic/GOG/Amazon), Lutris, Gameyfin, ROM folders, ScummVM, RPCS3 and Vita3K collections, and local executables in one searchable catalog with advanced search, ordered playlists, artwork galleries, session tracking, save and library backups, launch profiles, and controller-ready Big Box mode. No account, no cloud, no telemetry.
+OpenBox Game Launcher is an open-source game library manager and launcher for Linux. It puts Steam, Heroic (Epic/GOG/Amazon), Lutris, Faugus, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and Eden Switch collections, and local executables in one searchable catalog with advanced search, ordered playlists, artwork galleries, session tracking, save and library backups, launch profiles, and controller-ready Big Box mode. No account, no cloud, no telemetry.
 
 OpenBox Game Launcher is unrelated to [Openbox](https://openbox.org/), the open-source Linux window manager. The projects have different maintainers, codebases, and purposes.
 
@@ -291,7 +291,8 @@ The full user documentation is at [openboxgl.github.io](https://openboxgl.github
 | [Getting started](https://openboxgl.github.io/getting-started/) | First-run walkthrough with disposable folder |
 | [Installation](https://openboxgl.github.io/install/) | AppImage, Flatpak, source, troubleshooting |
 | [Library overview](https://openboxgl.github.io/guides/library/) | Browse, search, filters, health audit |
-| [Importing](https://openboxgl.github.io/guides/library/importing/) | Steam, Heroic, Lutris, ROM folders, arcade, Gameyfin |
+| [Importing](https://openboxgl.github.io/guides/library/importing/) | Steam, Heroic, Lutris, Faugus, ROM folders, arcade, Gameyfin |
+| [Proton & Wine](https://openboxgl.github.io/guides/wine-and-proton/) | Windows game runners, Wine prefixes, and Proton runtime environments |
 | [Emulators and launching](https://openboxgl.github.io/guides/emulators-and-launching/) | Profiles, tokens, archives, dependency checks |
 | [Big Box and handhelds](https://openboxgl.github.io/guides/big-box-and-handhelds/) | Layouts, gamepad, gamescope, TDP profiles |
 | [Sessions, saves, and backups](https://openboxgl.github.io/guides/sessions-saves-and-backups/) | History, save discovery, versioned backups |
@@ -379,7 +380,7 @@ OpenBox/
 ├── themes/                 Stock themes (5 CSS files)
 ├── emulator_defs/          YAML definition packs
 ├── scripts/                Build, test, screenshot capture
-├── tests/test_*.py            Test suite (57 files)
+├── tests/test_*.py            Test suite (58 files)
 ```
 
 ### Run tests
