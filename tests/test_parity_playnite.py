@@ -147,7 +147,7 @@ class BackupTests(unittest.TestCase):
             archive = create_backup(root, state, ["library", "settings"], keep=0)
             # Simulate the running library diverging after the backup.
             (root / "library.json").write_text(json.dumps({"settings": {"theme": "light"}, "games": []}))
-            restore_backup(archive, root)
+            restore_backup(archive, root, force=True)
             restored = json.loads((root / "library.json").read_text())
             # Archived settings are merged back into the restored state.
             self.assertEqual(restored["settings"]["theme"], "dark")
