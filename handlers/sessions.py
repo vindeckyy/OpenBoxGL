@@ -7,10 +7,12 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 from openbox import STATE_STORE, load_state, recover_state as recover_library_state
+from routes.registry import route
 from webapp_state import EVENT_SEQUENCE, PROCESS_LOCK, RUNNING, SESSION_EVENTS, STATE_LOCK, bump_media_epoch, control_game_session, game_from_payload, load_state_view, start_game
 
 
 class SessionHandlers:
+    @route("GET", "/api/running")
     def _api_get_api_running(self, parsed):
         try:
             after = int(parse_qs(parsed.query).get("after", ["0"])[0])
@@ -28,6 +30,7 @@ class SessionHandlers:
         self.send_json(200, payload)
         return
 
+    @route("GET", "/api/history")
     def _api_get_api_history(self, parsed):
         try:
             limit = min(500, max(1, int(parse_qs(parsed.query).get("limit", ["100"])[0])))
@@ -38,12 +41,15 @@ class SessionHandlers:
         self.send_json(200, {"history": history, "enabled": state_view.get("settings", {}).get("track_session_history", True)})
         return
 
+    @route("POST", "/api/launch")
     def _api_post_api_launch(self, payload):
         self.launch(payload)
 
+    @route("POST", "/api/session/control")
     def _api_post_api_session_control(self, payload):
         self.control_session(payload)
 
+    @route("POST", "/api/session/cleanup")
     def _api_post_api_session_cleanup(self, payload):
         launch_id = payload.get("launch_id")
         def mutate(state):
@@ -52,15 +58,19 @@ class SessionHandlers:
         update_state(mutate)
         self.send_json(200, {"ok": True})
 
+    @route("POST", "/api/bigbox/mode")
     def _api_post_api_bigbox_mode(self, payload):
         self.bigbox_mode_switch(payload)
 
+    @route("POST", "/api/state/recover")
     def _api_post_api_state_recover(self, payload):
         self.recover_state(payload)
 
+    @route("POST", "/api/shutdown")
     def _api_post_api_shutdown(self, payload):
         self.shutdown(payload)
 
+    @route("POST", "/api/extra/launch")
     def _api_post_api_extra_launch(self, payload):
         self.launch_extra(payload)
 

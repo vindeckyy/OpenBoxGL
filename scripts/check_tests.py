@@ -72,6 +72,7 @@ def main() -> int:
         if not path.is_file():
             print(f"runtime module missing: {module}")
             failures.append(f"runtime module missing: {module}")
+            compile_failed += 1
             continue
         if path.suffix != ".py":
             continue

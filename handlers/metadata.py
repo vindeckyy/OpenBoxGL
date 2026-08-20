@@ -9,10 +9,12 @@ from api_errors import BadRequest, Conflict
 from metadata import apply_game_metadata, batch_match, search_games, sync_database
 from openbox import load_state
 from parity_igdb import apply_to_game as apply_igdb_metadata, fetch_game as fetch_igdb_game, search_games as search_igdb_games
+from routes.registry import route
 from webapp_state import DATA, JOB_MANAGER, METADATA_DATABASE, METADATA_JOB, MEDIA_TYPES_ALL, PROCESS_LOCK, bump_media_epoch, game_from_payload, game_from_query, load_state_view, transact_state, update_steam_metadata
 
 
 class MetadataHandlers:
+    @route("GET", "/api/metadata/status")
     def _api_get_api_metadata_status(self, parsed):
         with PROCESS_LOCK:
             job = dict(METADATA_JOB)
@@ -31,6 +33,7 @@ class MetadataHandlers:
         self.send_json(200, {"ready":METADATA_DATABASE.is_file(), "job":job, "coverage":coverage})
         return
 
+    @route("GET", "/api/metadata/search")
     def _api_get_api_metadata_search(self, parsed):
         if not METADATA_DATABASE.is_file():
             raise Conflict("Download the LaunchBox metadata database first.")
@@ -44,6 +47,7 @@ class MetadataHandlers:
             raise BadRequest(str(error)) from None
         return
 
+    @route("GET", "/api/metadata/igdb/search")
     def _api_get_api_metadata_igdb_search(self, parsed):
         query = parse_qs(parsed.query).get("q", [""])[0]
         platform = parse_qs(parsed.query).get("platform", [""])[0]
@@ -54,18 +58,23 @@ class MetadataHandlers:
         self.send_json(200, {"results": results})
         return
 
+    @route("POST", "/api/metadata/steam")
     def _api_post_api_metadata_steam(self, payload):
         self.steam_metadata(payload)
 
+    @route("POST", "/api/metadata/sync")
     def _api_post_api_metadata_sync(self, payload):
         self.sync_metadata()
 
+    @route("POST", "/api/metadata/apply")
     def _api_post_api_metadata_apply(self, payload):
         self.apply_metadata(payload)
 
+    @route("POST", "/api/metadata/match")
     def _api_post_api_metadata_match(self, payload):
         self.match_metadata(payload)
 
+    @route("POST", "/api/metadata/igdb/apply")
     def _api_post_api_metadata_igdb_apply(self, payload):
         self.apply_igdb_metadata(payload)
 

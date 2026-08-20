@@ -53,6 +53,26 @@
   --dialog-close: #152033;
   --bigbox-foot: #4d5d75;
   --screensaver-text: #152033;
+  --black: #000;
+  --cover-gradient-end: #dde7f2;
+  --cover-title-end: #e8eef5;
+  --empty-muted: #66758c;
+  --hero-gradient-end: #f4f7fb;
+  --rating-badge-bg: #e8f4f9;
+  --media-player-bg: #0d1218;
+  --drop-border: #b8c5d6;
+  --drop-text: #66758c;
+  --drop-bg: #ffffff;
+  --drop-active-bg: #e8f4f9;
+  --nav-hover: #e8f4f9;
+  --badge-pending-border: #cfd8e6;
+  --badge-pending-fg: #3d4d66;
+  --badge-pending-bg: #f5f8fc;
+  --badge-progress-fg: #d53c1a;
+  --badge-danger-fg: #c0392b;
+  --badge-danger-border: #e25a3c;
+  --bigbox-head-muted: #66758c;
+  --shutdown-text: #5f6d83;
 }
 
 body {
@@ -285,8 +305,8 @@ dialog::backdrop {
   cursor: default;
 }
 
-.bigbox-head { color: #66758c; }
-.bigbox-head strong { color: #152033; }
+.bigbox-head { color: var(--bigbox-head-muted); }
+.bigbox-head strong { color: var(--text); }
 
 .bigbox-cover {
   border: 2px solid #0b7ea8;
@@ -304,9 +324,9 @@ dialog::backdrop {
   color: #152033;
 }
 
-.bigbox-copy p { color: #4d5d75; }
+.bigbox-copy p { color: var(--bigbox-copy); }
 .bigbox-play { border-radius: 10px; }
-.bigbox-foot { color: #66758c; }
+.bigbox-foot { color: var(--bigbox-foot); }
 
 .bigbox-menu-panel, .bigbox-pause-panel, .shutdown-panel {
   border: 1px solid #d5dde8;
@@ -329,10 +349,10 @@ dialog::backdrop {
 }
 
 .drop-zone {
-  border: 1px dashed #b8c5d6;
+  border: 1px dashed var(--drop-border);
   border-radius: 12px;
   background: #ffffffaa;
-  color: #66758c;
+  color: var(--drop-text);
 }
 
 .drop-zone.active {
@@ -345,11 +365,11 @@ dialog::backdrop {
 .list-row:hover, .list-row.selected { background: #e8f4f9; }
 .list-head { color: #7a889e; border-bottom: 1px solid #d5dde8; }
 
-.empty { color: #66758c; }
-.empty h2 { color: #152033; }
+.empty { color: var(--empty-muted); }
+.empty h2 { color: var(--text); }
 .empty button {
-  background: #0b7ea8;
-  color: #fff;
+  background: var(--empty-action);
+  color: var(--white);
   border-radius: 10px;
 }
 
@@ -365,7 +385,7 @@ dialog::backdrop {
   text-transform: none;
   color: #152033;
 }
-.lifecycle p { color: #66758c; }
+.lifecycle p { color: var(--text-soft); }
 
 .related-game, .coverflow-card {
   border-color: #d5dde8;
@@ -383,6 +403,6 @@ dialog::backdrop {
   background: #ffffff;
 }
 
-.screensaver-copy h2 { color: #fff; }
-.media-dialog { background: #0d1218; }
-.reader-viewport { background: #fff; }
+.screensaver-copy h2 { color: var(--white); }
+.media-dialog { background: var(--media-player-bg); }
+.reader-viewport { background: var(--white); }

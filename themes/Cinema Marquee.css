@@ -52,6 +52,26 @@
   --dialog-close: #f6efe4;
   --bigbox-foot: #c4b09a;
   --screensaver-text: #f6efe4;
+  --black: #000;
+  --cover-gradient-end: #100c0a;
+  --cover-title-end: #141010;
+  --empty-muted: #a8947e;
+  --hero-gradient-end: #120e0c;
+  --rating-badge-bg: #2a2018;
+  --media-player-bg: #100c0a;
+  --drop-border: #5a4634;
+  --drop-text: #a8947e;
+  --drop-bg: #141010;
+  --drop-active-bg: #241c16;
+  --nav-hover: #241c16;
+  --badge-pending-border: #4a3828;
+  --badge-pending-fg: #e8dcc8;
+  --badge-pending-bg: #1c1614;
+  --badge-progress-fg: #e8c46a;
+  --badge-danger-fg: #ff9d9d;
+  --badge-danger-border: #c95d4f;
+  --bigbox-head-muted: #a8947e;
+  --shutdown-text: #a8947e;
 }
 
 body {
@@ -237,7 +257,7 @@ input:focus, select:focus, textarea:focus {
   font-size: 36px;
   letter-spacing: 0.04em;
   font-weight: 400;
-  text-shadow: 0 4px 18px #000;
+  text-shadow: 0 4px 18px var(--black);
 }
 
 .detail-card, .emulator-item, .metadata-result, .history-item, .storefront-row {
@@ -248,9 +268,9 @@ input:focus, select:focus, textarea:focus {
 
 .rating { color: #e8c46a; }
 .rating strong {
-  background: #2a2018;
-  color: #f3e6c8;
-  border: 1px solid #4a3828;
+  background: var(--rating-badge-bg);
+  color: var(--brand);
+  border: 1px solid var(--border-control);
   border-radius: 3px;
 }
 
@@ -309,14 +329,14 @@ dialog::backdrop {
   line-height: 0.92;
 }
 
-.bigbox-copy p { color: #c4b09a; font-size: 17px; }
+.bigbox-copy p { color: var(--bigbox-copy); font-size: 17px; }
 .bigbox-play { border-radius: 4px; min-width: 280px; font-size: 24px; }
 
 .bigbox-menu-panel, .bigbox-pause-panel, .shutdown-panel {
   border: 1px solid #4a3828;
   border-radius: 8px;
   background: #141010;
-  box-shadow: 0 30px 90px #000, 0 0 40px #e8c46a18;
+  box-shadow: 0 30px 90px var(--black), 0 0 40px #e8c46a18;
 }
 
 .bigbox-menu-panel h2, .bigbox-pause-panel h2 {
@@ -326,15 +346,15 @@ dialog::backdrop {
 }
 
 .drop-zone {
-  border: 1px dashed #5a4634;
+  border: 1px dashed var(--drop-border);
   border-radius: 6px;
   background: #1a141088;
-  color: #a8947e;
+  color: var(--drop-text);
 }
 
 .drop-zone.active {
-  border-color: #e8c46a;
-  color: #f3e6c8;
+  border-color: var(--active);
+  color: var(--brand);
   background: #2a201888;
 }
 

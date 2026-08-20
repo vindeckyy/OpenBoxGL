@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from routes import GET_TABLE, POST_TABLE, V1_ALIASED_PREFIXES  # noqa: E402
-
+from routes.registry import all_routes  # noqa: E402
 
 def live_routes():
     routes = {}
@@ -35,6 +35,16 @@ def live_routes():
             methods.append("POST")
         routes[v1] = sorted(methods)
     return routes
+def check_registry_consistency():
+    registered = all_routes()
+    problems = []
+    for r in registered:
+        table = GET_TABLE if r.method == "GET" else POST_TABLE
+        if r.path not in table:
+            problems.append(f"MISSING {r.method} {r.path} in route table")
+        elif table[r.path] != r.spec:
+            problems.append(f"MISMATCH {r.method} {r.path}: {table[r.path]} != {r.spec}")
+    return problems
 
 
 def main():
@@ -47,8 +57,14 @@ def main():
 
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
     frozen = {entry["path"]: sorted(entry["methods"]) for entry in contract.get("routes", [])}
-    live = live_routes()
+    reg_problems = check_registry_consistency()
+    if reg_problems:
+        print("FAIL: route registry mismatch with route tables")
+        for line in reg_problems:
+            print("  " + line)
+        return 1
 
+    live = live_routes()
     problems = []
     for path in sorted(set(frozen) | set(live)):
         if path not in frozen:

@@ -12,11 +12,13 @@ from automation import DEFAULT_ATTEMPTS, DEFAULT_TIMEOUT, EVENT_TYPES, MAX_WEBHO
 from openbox import DATA, load_state
 from plugin_catalog import download_plugin_package, fetch_plugin_catalog
 from plugins import install_plugin, list_plugins, remove_plugin, set_plugin_enabled
+from routes.registry import route
 from stock_themes import ensure_stock_themes
 from webapp_state import PLUGIN_EPOCH, ROOT, game_from_payload, load_state_view, public_webhook_configs, transact_state, webhook_configs
 
 
 class ExtensionsHandlers:
+    @route("GET", "/api/theme.css")
     def _api_get_api_theme_css(self, parsed):
         name = parse_qs(parsed.query).get("name", [""])[0]
         theme = DATA.parent / "themes" / f"{Path(name).stem}.css"
@@ -33,6 +35,7 @@ class ExtensionsHandlers:
         )
         return
 
+    @route("GET", "/api/themes")
     def _api_get_api_themes(self, parsed):
         ensure_stock_themes(DATA.parent / "themes", ROOT)
         themes = sorted(path.stem for path in (DATA.parent / "themes").glob("*.css"))
@@ -47,49 +50,63 @@ class ExtensionsHandlers:
         })
         return
 
+    @route("GET", "/api/plugins")
     def _api_get_api_plugins(self, parsed):
         self.send_json(200, {"plugins":list_plugins(DATA.parent / "plugins")})
         return
 
+    @route("GET", "/api/plugins/catalog")
     def _api_get_api_plugins_catalog(self, parsed):
         self.send_json(200, {"catalog": fetch_plugin_catalog()})
         return
 
+    @route("GET", "/api/webhooks")
     def _api_get_api_webhooks(self, parsed):
         state = load_state_view()
         self.send_json(200, {"webhooks": public_webhook_configs(state), "events": list(EVENT_TYPES), "attempts": int(state.get("settings", {}).get("webhook_attempts") or DEFAULT_ATTEMPTS), "timeout": int(state.get("settings", {}).get("webhook_timeout") or DEFAULT_TIMEOUT)})
         return
 
+    @route("POST", "/api/webhooks")
     def _api_post_api_webhooks(self, payload):
         self.save_webhooks(payload)
 
+    @route("POST", "/api/webhooks/test")
     def _api_post_api_webhooks_test(self, payload):
         self.test_webhook(payload)
 
+    @route("POST", "/api/plugins/catalog/install")
     def _api_post_api_plugins_catalog_install(self, payload):
         self.install_catalog_plugin(payload)
 
+    @route("POST", "/api/themes/open-folder")
     def _api_post_api_themes_open_folder(self, payload):
         self.open_themes_folder()
 
+    @route("POST", "/api/plugins/install")
     def _api_post_api_plugins_install(self, payload):
         self.install_plugin(payload)
 
+    @route("POST", "/api/plugins/toggle")
     def _api_post_api_plugins_toggle(self, payload):
         self.toggle_plugin(payload)
 
+    @route("POST", "/api/plugins/remove")
     def _api_post_api_plugins_remove(self, payload):
         self.remove_plugin(payload)
 
+    @route("POST", "/api/themes/select")
     def _api_post_api_themes_select(self, payload):
         self.select_theme(payload)
 
+    @route("POST", "/api/themes/import")
     def _api_post_api_themes_import(self, payload):
         self.import_theme(payload)
 
+    @route("POST", "/api/playlists")
     def _api_post_api_playlists(self, payload):
         self.save_playlist(payload)
 
+    @route("POST", "/api/playlists/delete")
     def _api_post_api_playlists_delete(self, payload):
         self.delete_playlist(payload)
 

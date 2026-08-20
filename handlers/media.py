@@ -10,6 +10,7 @@ from urllib.parse import parse_qs
 from api_errors import BadgeNotFound, MediaNotFound
 from metadata import apply_game_metadata
 from openbox import load_state
+from routes.registry import route
 from parity_integrations import attach_recording, capture_screenshot, download_bezel, download_emumovies_media, load_emumovies_credentials, obs_recording_status, save_emumovies_credentials
 from parity_media import active_video, cleanup_duplicates, find_duplicate_media, load_media_queue
 from parity_premium import apply_media_pack, download_gog_media, download_steam_trailer, list_media_packs, platform_categories, strings_for
@@ -18,6 +19,7 @@ from webapp_state import DATA, JOB_MANAGER, MEDIA_JOB, MEDIA_TYPES_ALL, METADATA
 
 
 class MediaHandlers:
+    @route("GET", "/api/media/audit")
     def _api_get_api_media_audit(self, parsed):
         query = parse_qs(parsed.query)
         platform = query.get("platform", ["all"])[0]
@@ -50,12 +52,14 @@ class MediaHandlers:
         })
         return
 
+    @route("GET", "/api/media/bulk/status")
     def _api_get_api_media_bulk_status(self, parsed):
         with PROCESS_LOCK:
             job = dict(MEDIA_JOB)
         self.send_json(200, {"job":job})
         return
 
+    @route("GET", "/api/ra/badge")
     def _api_get_api_ra_badge(self, parsed):
         query = parse_qs(parsed.query)
         name = re.sub(r"[^A-Za-z0-9_-]", "", query.get("name", [""])[0])
@@ -71,6 +75,7 @@ class MediaHandlers:
             raise BadgeNotFound("Badge not found") from None
         return
 
+    @route("GET", "/api/media")
     def _api_get_api_media(self, parsed):
         query = parse_qs(parsed.query)
         try:
@@ -93,61 +98,78 @@ class MediaHandlers:
             raise MediaNotFound("Media not found") from None
         return
 
+    @route("GET", "/api/media/duplicates")
     def _api_get_api_media_duplicates(self, parsed):
         self.send_json(200, {"groups": find_duplicate_media(load_state_view()["games"])})
         return
 
+    @route("GET", "/api/media/queue")
     def _api_get_api_media_queue(self, parsed):
         self.send_json(200, {"queue": load_media_queue(DATA.parent / "media-queue.json")})
         return
 
+    @route("GET", "/api/obs/status")
     def _api_get_api_obs_status(self, parsed):
         self.send_json(200, obs_recording_status())
         return
 
+    @route("GET", "/api/premium/strings")
     def _api_get_api_premium_strings(self, parsed):
         locale = parse_qs(parsed.query).get("locale", ["en"])[0]
         self.send_json(200, {"locale": locale, "strings": strings_for(locale)})
         return
 
+    @route("GET", "/api/premium/media-packs")
     def _api_get_api_premium_media_packs(self, parsed):
         self.send_json(200, {"packs": list_media_packs(load_state_view().get("settings", {}))})
         return
 
+    @route("GET", "/api/premium/platform-categories")
     def _api_get_api_premium_platform_categories(self, parsed):
         self.send_json(200, {"categories": platform_categories(load_state_view().get("settings", {}))})
         return
 
+    @route("POST", "/api/premium/media-packs/apply")
     def _api_post_api_premium_media_packs_apply(self, payload):
         self.apply_media_pack_route(payload)
 
+    @route("POST", "/api/metadata/trailer")
     def _api_post_api_metadata_trailer(self, payload):
         self.download_trailer(payload)
 
+    @route("POST", "/api/metadata/gog")
     def _api_post_api_metadata_gog(self, payload):
         self.download_gog_route(payload)
 
+    @route("POST", "/api/media/bulk")
     def _api_post_api_media_bulk(self, payload):
         self.bulk_media(payload)
 
+    @route("POST", "/api/bezels/download")
     def _api_post_api_bezels_download(self, payload):
         self.download_bezels(payload)
 
+    @route("POST", "/api/emumovies/settings")
     def _api_post_api_emumovies_settings(self, payload):
         self.save_emumovies(payload)
 
+    @route("POST", "/api/emumovies/download")
     def _api_post_api_emumovies_download(self, payload):
         self.emumovies_download(payload)
 
+    @route("POST", "/api/media/cleanup")
     def _api_post_api_media_cleanup(self, payload):
         self.cleanup_media(payload)
 
+    @route("POST", "/api/screenshot")
     def _api_post_api_screenshot(self, payload):
         self.take_screenshot(payload)
 
+    @route("POST", "/api/obs/attach")
     def _api_post_api_obs_attach(self, payload):
         self.obs_attach(payload)
 
+    @route("POST", "/api/saves/scan/apply")
     def _api_post_api_saves_scan_apply(self, payload):
         self.apply_save_scan(payload)
 

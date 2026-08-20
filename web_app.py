@@ -28,6 +28,7 @@ from parity_emulator_defs import merge_profiles_from_definitions
 from parity_gameyfin import GameyfinError
 from parity_gamescope import OPENBOX_STEAM_GAME_ID, is_gamescope_guest, mark_process_windows, open_ui
 from routes import dispatch_get, dispatch_post
+from routes.registry import route
 from state_store import StateCorruptError, secure_text_write
 from stock_themes import ensure_stock_themes
 from webapp_state import (
@@ -391,6 +392,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
             LOGGER.warning("Request %s failed: %s", parsed.path, error)
             raise BadRequest(_sanitize_error_message(error)) from None
 
+    @route("GET", ["/", "/index.html"], public=True)
     def _api_get_index(self, parsed):
         if parsed.path in ("/", "/index.html"):
             html = (ROOT / "index.html").read_bytes().decode("utf-8")
@@ -399,6 +401,23 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
             # no token, so the shell itself carries no secrets.
             self.send_bytes(200, html.encode("utf-8"), "text/html; charset=utf-8")
             return
+    @route("GET", [
+        "/static/app.js",
+        "/static/util.js",
+        "/static/state.js",
+        "/static/library.js",
+        "/static/settings.js",
+        "/static/imports.js",
+        "/static/metadata.js",
+        "/static/media.js",
+        "/static/reader.js",
+        "/static/sessions.js",
+        "/static/bigbox.js",
+        "/static/storefront.js",
+        "/static/dialogs.js",
+        "/static/app.css",
+        "/static/logo.png",
+    ], public=True)
     def _api_get_static(self, parsed):
         # Static UI assets (app.js/app.css plus the ES-module chunks) live
         # next to index.html. Serve them with long-lived caching keyed on
@@ -419,6 +438,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         self.send_file(200, asset, content_type)
         return
 
+    @route("GET", ["/favicon.ico", "/favicon.svg"], public=True)
     def _api_get_favicon(self, parsed):
         if parsed.path in ("/favicon.svg", "/favicon.ico"):
             # Browsers request an icon on every initial load; serve the
@@ -428,6 +448,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
                 self.send_bytes(200, icon.read_bytes(), "image/svg+xml")
                 return
 
+    @route("GET", "/api/events")
     def _api_get_api_events(self, parsed):
         subscriber_queue = queue_module.Queue(maxsize=SSE_QUEUE_SIZE)
         if not register_event_subscriber(subscriber_queue):

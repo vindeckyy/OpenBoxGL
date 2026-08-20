@@ -11,6 +11,7 @@ from parity_media import REGION_PRIORITY_DEFAULT
 from parity_premium import LIST_COLUMNS_DEFAULT, custom_field_defs, enhanced_ra_profile, platform_categories
 from parity_tracking import TRACKING_MODES
 from retroachievements import api_get as ra_api_get, game_progress as ra_game_progress, load_credentials as load_ra_credentials, match_game as match_ra_game, save_credentials as save_ra_credentials
+from routes.registry import route
 from settings_schema import KNOWN_SETTINGS, sanitize_settings
 from webapp_state import DATA, LOGGER, MEDIA_TYPES_ALL, STATE_LOCK, clean_commands, game_from_payload, load_state_view, public_settings, transact_state
 
@@ -308,19 +309,23 @@ def clean_settings(merged):
 
 
 class SettingsHandlers:
+    @route("GET", "/api/profiles")
     def _api_get_api_profiles(self, parsed):
         state = load_state_view()
         self.send_json(200, {"profiles": state["profiles"], "detected": discover_profiles()})
         return
 
+    @route("GET", "/api/perf_profiles")
     def _api_get_api_perf_profiles(self, parsed):
         self.send_json(200, {"perf_profiles": load_state_view().get("perf_profiles", {})})
         return
 
+    @route("GET", "/api/settings")
     def _api_get_api_settings(self, parsed):
         self.send_json(200, public_settings())
         return
 
+    @route("GET", "/api/ra/settings")
     def _api_get_api_ra_settings(self, parsed):
         credentials = load_ra_credentials(DATA.parent)
         if not credentials:
@@ -338,21 +343,27 @@ class SettingsHandlers:
             self.send_json(400, {"error": str(error)})
         return
 
+    @route("POST", "/api/profiles")
     def _api_post_api_profiles(self, payload):
         self.save_profiles(payload)
 
+    @route("POST", "/api/perf_profiles")
     def _api_post_api_perf_profiles(self, payload):
         self.save_perf_profiles(payload)
 
+    @route("POST", "/api/settings")
     def _api_post_api_settings(self, payload):
         self.save_settings(payload)
 
+    @route("POST", "/api/ra/inject")
     def _api_post_api_ra_inject(self, payload):
         self.inject_ra()
 
+    @route("POST", "/api/ra/settings")
     def _api_post_api_ra_settings(self, payload):
         self.save_ra_settings(payload)
 
+    @route("POST", "/api/ra/game")
     def _api_post_api_ra_game(self, payload):
         self.ra_game(payload)
 

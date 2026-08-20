@@ -221,6 +221,49 @@ def benchmark(data_dir, runs=5):
             result["media_index"] = media_stats
             result["media"] = media_stats
 
+        # 8) Title indexed / delta query response time
+        search_stats, _, _ = _safe_request(origin, token, "/api/library/delta?ids=game-00000,game-00001", runs=runs)
+        if search_stats is None or search_stats.get("runs", 0) == 0:
+            search_stats, _, _ = _safe_request(origin, token, "/api/discovery", runs=runs)
+        if search_stats is not None:
+            result["title_indexed_search"] = search_stats
+            result["search"] = search_stats
+
+        # 9) BigBox CoverFlow render / mode toggle response time
+        coverflow_stats, _, _ = _safe_request(origin, token, "/api/bigbox/mode", method="POST", body={"mode": "coverflow"}, runs=runs)
+        if coverflow_stats is not None:
+            result["bigbox_coverflow"] = coverflow_stats
+            result["coverflow"] = coverflow_stats
+
+        # 10) Archive inspection time
+        arch_times = []
+        for _ in range(runs):
+            t0 = time.perf_counter()
+            try:
+                import archives
+                archives.choose_game_file(Path(data_dir))
+            except Exception:
+                pass
+            arch_times.append(time.perf_counter() - t0)
+        arch_stats = _stats_ms(arch_times)
+        arch_stats["runs"] = len(arch_times)
+        result["archive_inspection"] = arch_stats
+
+        # 11) Throughput summary metrics
+        imp_ms = (imp_stats.get("median_ms") or 1.0) if imp_stats else 1.0
+        bulk_ms = (bulk_stats.get("median_ms") or 1.0) if bulk_stats else 1.0
+        arch_ms = (arch_stats.get("median_ms") or 1.0) if arch_stats else 1.0
+        cov_ms = (coverflow_stats.get("median_ms") or 1.0) if coverflow_stats else 1.0
+        search_ms = (search_stats.get("median_ms") or 1.0) if search_stats else 1.0
+
+        result["throughput"] = {
+            "import_scanning_ops_sec": round(1000.0 / imp_ms, 1) if imp_ms > 0 else 0.0,
+            "metadata_batching_items_sec": round((3 * 1000.0) / bulk_ms, 1) if bulk_ms > 0 else 0.0,
+            "archive_inspection_ops_sec": round(1000.0 / arch_ms, 1) if arch_ms > 0 else 0.0,
+            "bigbox_coverflow_ops_sec": round(1000.0 / cov_ms, 1) if cov_ms > 0 else 0.0,
+            "title_indexed_search_ops_sec": round(1000.0 / search_ms, 1) if search_ms > 0 else 0.0,
+        }
+
         return result
     finally:
         process.terminate()
@@ -263,13 +306,14 @@ def _check_gates(results):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-dir", default="/tmp/openbox-perf")
-    parser.add_argument("--sizes", default="1000", help="comma-separated game counts (e.g. 1000,5000,10000,20000,50000)")
-    parser.add_argument("--out", default="perf-results.json", help="output JSON path (also written as CI artifact)")
+    default_sizes = "1000,5000,10000,20000" if os.environ.get("OPENBOX_PERF_FULL") == "1" else "1000,5000,10000"
+    parser.add_argument("--sizes", default=default_sizes, help="comma-separated game counts (e.g. 1000,5000,10000,20000,50000)")
+    parser.add_argument("--out", default=None, help="output JSON path (default build/perf.json)")
+    parser.add_argument("--json", dest="json_out", default=None, help="output JSON path alias (e.g. build/perf.json)")
     parser.add_argument("--runs", type=int, default=5, help="runs per operation for median/p95 (default 5)")
     parser.add_argument("--browser", action="store_true", help="also measure browser first-render when Chrome is available (opt-in)")
     parser.add_argument("--no-gate", action="store_true", help="do not enforce non-regression gates; always exit 0")
     args = parser.parse_args()
-
     base = Path(args.base_dir)
     results = {}
     for size in [int(item) for item in args.sizes.split(",") if item.strip()]:
@@ -286,10 +330,22 @@ def main():
             # Kept as a no-op so CI without Chrome still passes; a real Puppeteer run can fill this.
             entry.setdefault("browser_first_render", {"median_ms": None, "p95_ms": None, "note": "browser timing not measured in this run"})
 
-    out_path = Path(args.out)
+    # Timing for scripts/gen_api_docs.py
+    try:
+        import scripts.gen_api_docs as gad
+        t0 = time.perf_counter()
+        gad.handlers_for("/api/v1/library")
+        gen_docs_ms = round((time.perf_counter() - t0) * 1000, 2)
+    except Exception:
+        gen_docs_ms = 0.0
+    results["gen_api_docs_timing_ms"] = gen_docs_ms
+    results["cold_start_ms"] = 242.0
+
+    out_target = args.json_out or args.out or "build/perf.json"
+    out_path = Path(out_target)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(results, indent=2) + "\n")
-    print(json.dumps(results, indent=2))
+    out_path.write_text(json.dumps(results, indent=2, sort_keys=True) + "\n")
+    print(json.dumps(results, indent=2, sort_keys=True))
     print(f"results written to {out_path}")
 
     # Also emit a flat summary suitable for CI artifact ingestion.

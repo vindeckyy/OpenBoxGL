@@ -89,3 +89,8 @@ parity_wine.py
 pkg/parity/parity_wine.py
 parity_faugus.py
 pkg/parity/parity_faugus.py
+pkg/state/__init__.py
+pkg/state/cache.py
+pkg/state/media_probe.py
+pkg/state/launch.py
+pkg/state/sse.py

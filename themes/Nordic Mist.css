@@ -52,6 +52,26 @@
   --dialog-close: #e8eef4;
   --bigbox-foot: #a3b2c2;
   --screensaver-text: #e8eef4;
+  --black: #000;
+  --cover-gradient-end: #141b22;
+  --cover-title-end: #121820;
+  --empty-muted: #8b9aab;
+  --hero-gradient-end: #141b22;
+  --rating-badge-bg: #243140;
+  --media-player-bg: #0c1116;
+  --drop-border: #3d4d5e;
+  --drop-text: #8b9aab;
+  --drop-bg: #171e26;
+  --drop-active-bg: #1a2a38;
+  --nav-hover: #1a2a38;
+  --badge-pending-border: #344354;
+  --badge-pending-fg: #b8c5d4;
+  --badge-pending-bg: #1e2731;
+  --badge-progress-fg: #e2c36b;
+  --badge-danger-fg: #d66b6b;
+  --badge-danger-border: #d66b6b;
+  --bigbox-head-muted: #8b9aab;
+  --shutdown-text: #8b9aab;
 }
 
 body {
@@ -236,7 +256,7 @@ input:focus, select:focus, textarea:focus {
   background: rgba(30, 39, 49, 0.98);
 }
 
-.rating { color: #6eb5c9; }
+.rating { color: var(--rating); }
 .rating strong {
   background: rgba(110, 181, 201, 0.16);
   color: #b8e0ec;
@@ -295,7 +315,7 @@ dialog::backdrop {
   text-transform: none;
 }
 
-.bigbox-copy p { color: #a3b2c2; }
+.bigbox-copy p { color: var(--bigbox-copy); }
 .bigbox-play { border-radius: 14px; min-width: 260px; }
 
 .bigbox-menu-panel, .bigbox-pause-panel, .shutdown-panel {
@@ -317,14 +337,14 @@ dialog::backdrop {
 }
 
 .drop-zone {
-  border: 1px dashed #3d4d5e;
+  border: 1px dashed var(--drop-border);
   border-radius: 14px;
   background: rgba(30, 39, 49, 0.45);
-  color: #8b9aab;
+  color: var(--drop-text);
 }
 
 .drop-zone.active {
-  border-color: #6eb5c9;
+  border-color: var(--active);
   background: rgba(110, 181, 201, 0.12);
   color: #d5eef5;
 }
@@ -337,7 +357,7 @@ dialog::backdrop {
   background: radial-gradient(circle at 50% 40%, #243848, #0c1116 70%);
 }
 
-.lifecycle small { color: #6eb5c9; }
+.lifecycle small { color: var(--lifecycle-kicker); }
 .lifecycle h2 {
   font-family: "Fraunces", Georgia, serif;
   font-weight: 700;
@@ -349,7 +369,7 @@ dialog::backdrop {
 }
 
 .coverflow-card.active {
-  border-color: #6eb5c9;
+  border-color: var(--active);
   box-shadow: 0 0 0 2px #6eb5c955;
 }
 

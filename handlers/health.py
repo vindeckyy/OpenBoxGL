@@ -6,6 +6,7 @@ import zipfile
 from api_errors import BadRequest
 from crash_report import build_report
 from openbox import DATA, load_state
+from routes.registry import route
 from openbox_logging import read_diagnostic_log
 from parity_backup import BACKUP_ITEMS, create_backup, restore_backup
 from updates import check_update, install_desktop_entry, install_update
@@ -13,17 +14,21 @@ from webapp_state import JOB_MANAGER, RUNNING, approved_backup_file, bump_media_
 
 
 class HealthHandlers:
+    @route("GET", "/api/jobs")
     def _api_get_api_jobs(self, parsed):
         self.send_json(200, {"jobs": JOB_MANAGER.snapshots(), "history": JOB_MANAGER.history()})
 
+    @route("GET", "/api/log")
     def _api_get_api_log(self, parsed):
         self.send_json(200, {"log": read_diagnostic_log(DATA.parent)})
         return
 
+    @route("GET", "/api/diagnostic")
     def _api_get_api_diagnostic(self, parsed):
         self.send_json(200, {"report": build_report(DATA.parent)})
         return
 
+    @route("GET", "/api/update")
     def _api_get_api_update(self, parsed):
         try:
             payload = check_update()
@@ -33,6 +38,7 @@ class HealthHandlers:
         self.send_json(200, {**payload, "last_checked": last_checked})
         return
 
+    @route("GET", "/api/backup")
     def _api_get_api_backup(self, parsed):
         data = json.dumps(load_state_view(), indent=2).encode()
         self.send_response(200)
@@ -43,10 +49,12 @@ class HealthHandlers:
         self.wfile.write(data)
         return
 
+    @route("GET", "/api/backup/manifest")
     def _api_get_api_backup_manifest(self, parsed):
         self.send_json(200, {"items": sorted(BACKUP_ITEMS)})
         return
 
+    @route("GET", "/api/backups")
     def _api_get_api_backups(self, parsed):
         folder = DATA.parent / "backups"
         backups = []
@@ -67,19 +75,24 @@ class HealthHandlers:
         self.send_json(200, {"backups": backups})
         return
 
+    @route("POST", "/api/cloud/sync")
     def _api_post_api_cloud_sync(self, payload):
         self.send_json(200, sync_cloud())
 
+    @route("POST", "/api/update/install")
     def _api_post_api_update_install(self, payload):
         update = check_update()
         self.send_json(200, install_update(update))
 
+    @route("POST", "/api/desktop/install")
     def _api_post_api_desktop_install(self, payload):
         self.send_json(200, {"desktop": install_desktop_entry()})
 
+    @route("POST", "/api/backup/create")
     def _api_post_api_backup_create(self, payload):
         self.create_library_backup(payload)
 
+    @route("POST", "/api/backup/restore")
     def _api_post_api_backup_restore(self, payload):
         self.restore_library_backup(payload)
 
