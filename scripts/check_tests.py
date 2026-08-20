@@ -47,8 +47,7 @@ def main() -> int:
         if result.returncode != 0:
             failures.append("ruff")
 
-
-    # Stage 2.5: v1 route surface must match the frozen contract. The v1
+    # Stage 2.4: v1 route surface must match the frozen contract. The v1
     # surface is the native host's only contract; drift fails the gate.
     v1_contract = run([sys.executable, "-B", str(ROOT / "scripts" / "check_v1_contract.py")])
     if v1_contract.returncode != 0:
@@ -57,7 +56,15 @@ def main() -> int:
         if v1_contract.stderr.strip():
             print(v1_contract.stderr.strip())
         failures.append("v1_contract")
-    # Stage 2: compile every runtime module plus the tests themselves.
+
+    # Stage 2.5: version strings must stay in sync across published spots.
+    version_sync = run([sys.executable, "-B", str(ROOT / "scripts" / "check_version_sync.py")])
+    if version_sync.returncode != 0:
+        if version_sync.stdout.strip():
+            print(version_sync.stdout.strip())
+        if version_sync.stderr.strip():
+            print(version_sync.stderr.strip())
+        failures.append("version_sync")
     modules = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip()]
     compile_failed = 0
     for module in modules:
@@ -79,9 +86,14 @@ def main() -> int:
         except SyntaxError as error:
             print(f"compile failed: {test_file.name}: {error}")
             compile_failed += 1
+    for script_file in sorted((ROOT / "scripts").glob("*.py")):
+        try:
+            compile(script_file.read_bytes(), str(script_file), "exec")
+        except SyntaxError as error:
+            print(f"compile failed: scripts/{script_file.name}: {error}")
+            compile_failed += 1
     if compile_failed:
         failures.append("py_compile")
-
     # Stage 3+4: tests under coverage in parallel, then the floor checks.
     if not COVERAGE.is_file():
         print("Missing .venv-dev/bin/coverage. Run: make dev-venv")
@@ -115,15 +127,6 @@ def main() -> int:
         if failed_tests:
             failures.append("tests")
 
-        # The deck/gamescope tests spawn nested gamescope sessions that can
-        # outlive their parent process. Reap any that the suite left behind
-        # so local runs and CI runners do not accumulate X sessions.
-        cleanup = subprocess.run(
-            ["pkill", "-f", "OPENBOX_DECK_EMU_"],
-            capture_output=True, text=True, check=False,
-        )
-        if cleanup.returncode not in (0, 1):
-            print("gamescope orphan cleanup failed")
 
         combined = run([str(COVERAGE), "combine", "--quiet"])
         if combined.returncode != 0:

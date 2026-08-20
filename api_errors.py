@@ -57,3 +57,8 @@ class PlatformDocumentNotFound(NotFound):
 
 class RouteNotFound(NotFound):
     code = "ROUTE_NOT_FOUND"
+
+
+class Conflict(ApiError):
+    status = 409
+    code = "CONFLICT"

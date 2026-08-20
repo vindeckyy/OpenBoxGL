@@ -33,6 +33,11 @@ def _required_folder_path(payload):
     if not folder.strip():
         raise BadRequest("Folder path is required.")
     return folder
+def _send_import_result(handler, added, found, **extra):
+    clear_file_probe_cache()
+    payload = {"added": added, "found": found}
+    payload.update(extra)
+    handler.send_json(200, payload)
 
 
 class ImportsHandlers:
@@ -41,9 +46,8 @@ class ImportsHandlers:
         try:
             self.send_json(200, {"catalog": storefront_catalog(source, settings=load_state_view().get("settings", {}))})
         except (ValueError, OSError, FileNotFoundError, subprocess.SubprocessError) as error:
-            self.send_json(400, {"error": str(error)})
+            raise BadRequest(str(error)) from None
         return
-
     def _api_get_api_import_exclusions(self, parsed):
         self.send_json(200, {"exclusions": list_exclusions(load_state_view())})
         return
@@ -100,9 +104,8 @@ class ImportsHandlers:
             folder,
             chosen_emulators=payload.get("chosen_emulators"),
         )
-        clear_file_probe_cache()
         broadcast_event("job.progress", {"job": "import", "folder": folder, "added": added, "found": found, "state": "done"})
-        self.send_json(200, {"added": added, "found": found, "recommendations": recommendations})
+        _send_import_result(self, added, found, recommendations=recommendations)
 
     def import_wizard(self, payload):
         folder = _required_folder_path(payload)
@@ -110,7 +113,6 @@ class ImportsHandlers:
         if not isinstance(chosen, dict):
             raise BadRequest("chosen_emulators must be an object.")
         added, found, recommendations = import_folder_path(folder, chosen_emulators=chosen)
-        clear_file_probe_cache()
         installs = []
         for app_id in chosen.values():
             if not app_id:
@@ -120,20 +122,19 @@ class ImportsHandlers:
                 installs.append(str(app_id))
             except (OSError, ValueError, RuntimeError):
                 pass
-        self.send_json(200, {"added": added, "found": found, "recommendations": recommendations, "installed": installs})
+        _send_import_result(self, added, found, recommendations=recommendations, installed=installs)
 
     def import_xbox360(self, payload):
         folder = _required_folder_path(payload)
         imported = import_xbox360_folder(folder, str(payload.get("command", "")))
         added, found = merge_imported_games(imported, lambda game: ("path", game.get("path", "")))
-        self.send_json(200, {"added": added, "found": found})
+        _send_import_result(self, added, found)
 
     def import_loose_arcade_route(self, payload):
         folder = _required_folder_path(payload)
         imported = import_loose_arcade(folder, str(payload.get("command", "")))
         added, found = merge_imported_games(imported, lambda game: ("path", game.get("path", "")))
-        self.send_json(200, {"added": added, "found": found})
-
+        _send_import_result(self, added, found)
     def scan_watch_folders(self):
         folders = load_state().get("settings", {}).get("watch_folders", [])
         added = found = 0
@@ -150,8 +151,7 @@ class ImportsHandlers:
     def import_steam_games(self):
         imported = import_steam()
         added, found = merge_imported_games(imported, lambda game: ("steam", str(game.get("steam_app_id", ""))))
-        clear_file_probe_cache()
-        self.send_json(200, {"added": added, "found": found})
+        _send_import_result(self, added, found)
 
     def import_heroic_games(self):
         imported = import_heroic()
@@ -159,15 +159,12 @@ class ImportsHandlers:
             imported,
             lambda game: ("heroic", str(game.get("source", "")), str(game.get("heroic_app_id", ""))),
         )
-        clear_file_probe_cache()
-        self.send_json(200, {"added": added, "found": found})
+        _send_import_result(self, added, found)
 
     def import_lutris_games(self):
         imported = import_lutris()
         added, found = merge_imported_games(imported, lambda game: ("lutris", str(game.get("lutris_id", ""))))
-        clear_file_probe_cache()
-        self.send_json(200, {"added": added, "found": found})
-
+        _send_import_result(self, added, found)
     def import_arcade_games(self, payload):
         folder = _required_folder_path(payload)
         imported = import_arcade(
@@ -221,21 +218,21 @@ class ImportsHandlers:
             import_scummvm(),
             lambda game: ("scummvm", str(game.get("scummvm_id", ""))),
         )
-        self.send_json(200, {"added": added, "found": found})
+        _send_import_result(self, added, found)
 
     def import_rpcs3_games(self):
         added, found = self._merge_imported_games(
             import_rpcs3_hdd(),
             lambda game: ("rpcs3", str(game.get("path", ""))),
         )
-        self.send_json(200, {"added": added, "found": found})
+        _send_import_result(self, added, found)
 
     def import_vita3k_games(self):
         added, found = self._merge_imported_games(
             import_vita3k(),
             lambda game: ("vita3k", str(game.get("path", ""))),
         )
-        self.send_json(200, {"added": added, "found": found})
+        _send_import_result(self, added, found)
 
     def import_storefront_catalog(self, payload):
         source = str(payload.get("source", "")).strip()
@@ -264,4 +261,4 @@ class ImportsHandlers:
             def identity(game):
                 return ("gameyfin", str(game.get("gameyfin_id", "")))
         added, found = merge_imported_games(imported, identity)
-        self.send_json(200, {"added": added, "found": found, "imported": len(imported)})
+        _send_import_result(self, added, found, imported=len(imported))

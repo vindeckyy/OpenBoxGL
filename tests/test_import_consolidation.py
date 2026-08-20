@@ -88,6 +88,19 @@ def main():
             state = load_state()
             assert len(state["games"]) == 1
             assert state["games"][0]["applications"][0]["command"] == "xdg-open heroic://launch/gog/1207659022"
+
+            # Probe cache clearing assertions across import handlers
+            cleared = []
+            with mock.patch("handlers.imports.clear_file_probe_cache", side_effect=lambda: cleared.append(True)), \
+                 mock.patch("handlers.imports.storefront_catalog", return_value=[]), \
+                 mock.patch("handlers.imports.import_scummvm", return_value=[]), \
+                 mock.patch("handlers.imports.import_rpcs3_hdd", return_value=[]), \
+                 mock.patch("handlers.imports.import_vita3k", return_value=[]):
+                handler.import_storefront_catalog({"source": "steam"})
+                handler.import_scummvm_games()
+                handler.import_rpcs3_games()
+                handler.import_vita3k_games()
+            assert len(cleared) == 4, f"expected 4 probe cache clear calls, got {len(cleared)}"
         finally:
             if previous is None:
                 os.environ.pop("OPENBOX_DATA_DIR", None)

@@ -3,6 +3,7 @@
 import json
 import zipfile
 
+from api_errors import BadRequest
 from crash_report import build_report
 from openbox import DATA, load_state
 from openbox_logging import read_diagnostic_log
@@ -27,8 +28,7 @@ class HealthHandlers:
         try:
             payload = check_update()
         except (ValueError, OSError, TypeError, AttributeError) as error:
-            self.send_json(400, {"error": str(error)})
-            return
+            raise BadRequest(str(error)) from None
         last_checked = load_state_view().get("settings", {}).get("last_update_check", "")
         self.send_json(200, {**payload, "last_checked": last_checked})
         return

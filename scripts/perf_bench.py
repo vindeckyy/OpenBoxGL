@@ -143,20 +143,20 @@ def _safe_request(origin, token, path, method="GET", body=None, gzip=False, runs
     times = []
     last_bytes = None
     last_payload = None
+    last_error = None
     for _ in range(runs):
         try:
             elapsed, payload = _request(origin, token, path, method=method, body=body, gzip=gzip)
             times.append(elapsed)
             last_bytes = len(payload)
             last_payload = payload
-        except Exception:
-            # Record nothing for failed requests; caller decides whether to treat as unavailable.
-            pass
+        except Exception as error:
+            last_error = str(error)
     if not times:
-        return None, None, None
+        return {"runs": 0, "error": last_error or "request failed"}, None, None
     stats = _stats_ms(times)
     stats["bytes"] = last_bytes
-    # Keep raw p95/ms for gate checks
+    stats["runs"] = len(times)
     return stats, last_bytes, last_payload
 
 
@@ -172,86 +172,54 @@ def benchmark(data_dir, runs=5):
 
         result = {}
 
-        # 1) Summary / full library response (plain and gzip) — roadmap: summary page response time and compressed size.
-        lib_stats, _lb, _ = _safe_request(origin, token, "/api/library", runs=runs)
+        # 1) Summary / full library response (plain and gzip)
+        lib_stats, _, _ = _safe_request(origin, token, "/api/library", runs=runs)
         if lib_stats is not None:
-            lib_stats["runs"] = runs
             result["library"] = lib_stats
         gz_stats, _, _ = _safe_request(origin, token, "/api/library", gzip=True, runs=runs)
         if gz_stats is not None:
-            gz_stats["runs"] = runs
             result["library_gzip"] = gz_stats
 
-        # 2) Filtered query response time — use platform filter which is always applicable to synthetic data.
-        filtered_stats, _, _ = _safe_request(origin, token, "/api/library?platform=PC", runs=runs)
-        if filtered_stats is None:
-            # Fallback: try advanced search or generic query param
-            filtered_stats, _, _ = _safe_request(origin, token, "/api/library?search=Super", runs=runs)
-        if filtered_stats is not None:
-            filtered_stats["runs"] = runs
-            result["filtered_query"] = filtered_stats
+        # 2) Paginated library query response time
+        page_stats, _, _ = _safe_request(origin, token, "/api/library?offset=0&limit=500", runs=runs)
+        if page_stats is not None:
+            page_stats["operation"] = "library_page"
+            page_stats["note"] = "GET /api/library?offset=0&limit=500"
+            result["filtered_query"] = page_stats
+            result["library_page"] = page_stats
 
-        # 3) Facet response time — try known facet-adjacent endpoints, fall back to library with facet param.
-        facet_stats = None
-        for facet_path in ("/api/library?facets=1", "/api/facets", "/api/library/facets"):
-            facet_stats, _, _ = _safe_request(origin, token, facet_path, runs=runs)
-            if facet_stats is not None:
-                facet_stats["runs"] = runs
-                result["facet"] = facet_stats
-                break
-        if facet_stats is None:
-            # When facets have no dedicated endpoint yet, measure a cheap library variant as placeholder
-            facet_stats, _, _ = _safe_request(origin, token, "/api/library", runs=runs)
-            if facet_stats is not None:
-                facet_stats["runs"] = runs
-                result["facet"] = facet_stats
+        # 3) Explorer facets response time
+        facet_stats, _, _ = _safe_request(origin, token, "/api/explorer/facets?field=genre", runs=runs)
+        if facet_stats is not None:
+            result["facet"] = facet_stats
 
-        # 4) Single-game mutation time — favorite toggle (a full state-save cycle).
+        # 4) Single-game mutation time (favorite toggle)
         mut_stats, _, _ = _safe_request(origin, token, "/api/favorite", method="POST", body={"id": 0}, runs=runs)
-        if mut_stats is None:
-            mut_stats, _, _ = _safe_request(origin, token, "/api/favorite", method="POST", body={"game_id": "0"}, runs=runs)
+        if mut_stats is not None and mut_stats.get("runs", 0) == 0:
+            mut_stats, _, _ = _safe_request(origin, token, "/api/favorite", method="POST", body={"game_id": "game-00000"}, runs=runs)
         if mut_stats is not None:
-            mut_stats["runs"] = runs
             result["single_mutation"] = mut_stats
-            result["favorite_mutation"] = mut_stats  # compat alias for older consumers / gates
+            result["favorite_mutation"] = mut_stats
 
-        # 5) Bulk metadata mutation time — best-effort: if bulk endpoint exists, measure it; otherwise single mutation is fallback.
-        bulk_stats = None
-        for bulk_path, bulk_body in (
-            ("/api/bulk", {"ids": [0, 1, 2], "fields": {"notes": "bench"}}),
-            ("/api/library/bulk", {"ids": [0, 1, 2], "patch": {"notes": "bench"}}),
-        ):
-            bulk_stats, _, _ = _safe_request(origin, token, bulk_path, method="POST", body=bulk_body, runs=runs)
-            if bulk_stats is not None:
-                bulk_stats["runs"] = runs
-                result["bulk_mutation"] = bulk_stats
-                break
-        if bulk_stats is None and mut_stats is not None:
-            # No bulk endpoint yet: report single mutation as bulk placeholder so the matrix stays complete.
-            result["bulk_mutation"] = dict(mut_stats)
+        # 5) Bulk metadata mutation time
+        bulk_body = {"ids": ["game-00000", "game-00001", "game-00002"], "changes": {"favorite": True}}
+        bulk_stats, _, _ = _safe_request(origin, token, "/api/games/bulk", method="POST", body=bulk_body, runs=runs)
+        if bulk_stats is not None:
+            result["bulk_mutation"] = bulk_stats
 
-        # 6) Import preview and apply time — try to hit import endpoints with synthetic data, skip if unavailable.
-        for imp_path in ("/api/import/preview", "/api/imports/preview"):
-            imp_stats, _, _ = _safe_request(origin, token, imp_path, method="POST", body={"path": str(data_dir)}, runs=runs)
-            if imp_stats is not None:
-                imp_stats["runs"] = runs
-                result["import_preview"] = imp_stats
-                break
-        for imp_path in ("/api/import/apply", "/api/imports/apply"):
-            imp_stats, _, _ = _safe_request(origin, token, imp_path, method="POST", body={"path": str(data_dir)}, runs=runs)
-            if imp_stats is not None:
-                imp_stats["runs"] = runs
-                result["import_apply"] = imp_stats
-                break
+        # 6) Import check with an isolated empty folder
+        empty_import_dir = Path(data_dir) / ".bench-empty-import"
+        empty_import_dir.mkdir(parents=True, exist_ok=True)
+        imp_stats, _, _ = _safe_request(origin, token, "/api/import", method="POST", body={"folder": str(empty_import_dir)}, runs=runs)
+        if imp_stats is not None:
+            result["import_empty_folder"] = imp_stats
+            result["import_apply"] = imp_stats
 
-        # 7) Media index refresh time — cover fetch as proxy for media index.
+        # 7) Media index refresh proxy
         media_stats, _, _ = _safe_request(origin, token, "/api/media?id=0&kind=cover", runs=runs)
         if media_stats is not None:
-            media_stats["runs"] = runs
             result["media_index"] = media_stats
-            result["media"] = media_stats  # compat alias
-
-        # 8) Browser first-render is measured out-of-process when --browser is given (handled in main).
+            result["media"] = media_stats
 
         return result
     finally:
@@ -260,7 +228,6 @@ def benchmark(data_dir, runs=5):
             process.wait(timeout=10)
         except subprocess.TimeoutExpired:
             process.kill()
-
 
 def _check_gates(results):
     """Enforce non-regression gates for the 10,000-game entry when present."""
@@ -277,7 +244,12 @@ def _check_gates(results):
         ("facet", "p95_ms", "facet_ms_p95"),
     ]
     for op, field, gate_key in checks:
-        if op not in entry or field not in entry[op]:
+        if op not in entry:
+            failures.append(f"missing 10,000-game benchmark result: {op}")
+            continue
+        if entry[op].get("runs", 0) < 1 or field not in entry[op]:
+            detail = entry[op].get("error", "no successful runs")
+            failures.append(f"{op} missing {field} at 10,000 games: {detail}")
             continue
         gate = GATES_10K.get(gate_key)
         if gate is None:

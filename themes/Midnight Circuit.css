@@ -36,6 +36,23 @@
   --empty-action: #2dff9a;
   --cover-title-start: #1a2d4c;
   --white: #eef3ff;
+  --scrollbar-thumb: #24324d;
+  --nav-muted: #8490ab;
+  --top-status: #8490ab;
+  --label-muted: #8490ab;
+  --section-muted: #8490ab;
+  --platform-dot: #2a3c5c;
+  --platform-text: #eef3ff;
+  --icon-text: #eef3ff;
+  --card-muted: #8490ab;
+  --hero-subhead: #3de0ff;
+  --detail-head: #3de0ff;
+  --fact-label: #8490ab;
+  --fact-value: #eef3ff;
+  --text-soft: #8490ab;
+  --dialog-close: #eef3ff;
+  --bigbox-foot: #8490ab;
+  --screensaver-text: #eef3ff;
 }
 
 * { box-sizing: border-box; }

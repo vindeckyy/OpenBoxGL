@@ -39,6 +39,8 @@ parity_saves.py
 parity_save_tools.py
 parity_storefront.py
 parity_tracking.py
+pkg/__init__.py
+pkg/parity/__init__.py
 pkg/parity/parity_discovery.py
 pkg/parity/parity_import.py
 pkg/parity/parity_integrations.py

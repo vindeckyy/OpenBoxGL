@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from urllib.parse import parse_qs
 
-from api_errors import GameNotFound
+from api_errors import BadRequest, GameNotFound
 from catalog import PROGRESS, bulk_update, game_media_paths, related_game_ids, tag_counts
 from notifications import clear as clear_notifications, mark_read as mark_notifications_read, unread_count
 from openbox import load_state
@@ -129,9 +129,7 @@ class LibraryHandlers:
                 if offset < 0 or limit < 0 or limit > 5000:
                     raise ValueError("Invalid pagination parameters")
             except (ValueError, TypeError):
-                self.send_json(400, {"error": "Invalid pagination parameters"})
-                return
-            
+                raise BadRequest("Invalid pagination parameters") from None
             payload = public_state()
             total_count = len(payload["games"])
             paginated_games = payload["games"][offset:offset + limit]
@@ -173,20 +171,16 @@ class LibraryHandlers:
         ids_str = query_params.get("ids", [None])[0]
         
         if not ids_str:
-            self.send_json(400, {"error": "Missing ids parameter"})
-            return
+            raise BadRequest("Missing ids parameter")
         
         try:
             ids = [id_str.strip() for id_str in ids_str.split(",") if id_str.strip()]
             if not ids:
-                self.send_json(400, {"error": "Missing ids parameter"})
-                return
+                raise BadRequest("Missing ids parameter")
             if len(ids) > 1000:
-                self.send_json(400, {"error": "Too many IDs (max 1000)"})
-                return
+                raise BadRequest("Too many IDs (max 1000)")
         except (AttributeError, TypeError):
-            self.send_json(400, {"error": "Invalid IDs format"})
-            return
+            raise BadRequest("Invalid IDs format") from None
         
         cached_info = _public_state_cached()
         games_by_id = cached_info.get("games_by_id")

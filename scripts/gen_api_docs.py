@@ -18,6 +18,15 @@ from routes import GET_TABLE, POST_TABLE, V1_ALIASED_PREFIXES  # noqa: E402
 from contracts import V1_SCHEMA  # noqa: E402
 
 
+def handlers_for(v1_path):
+    entries = []
+    if v1_path in GET_TABLE:
+        entries.append(("GET", GET_TABLE[v1_path]))
+    if v1_path in POST_TABLE:
+        entries.append(("POST", POST_TABLE[v1_path]))
+    return entries
+
+
 def _describe(v1_path, handler):
     """Return a documented response shape when the route is in V1_SCHEMA."""
     schema = V1_SCHEMA.get(v1_path)
@@ -47,19 +56,16 @@ def main():
             continue
         seen.add(path)
         v1_path = f"/api/v1{path[len('/api'):]}"
-        handler = GET_TABLE.get(v1_path) or POST_TABLE.get(v1_path) or "-"
-        methods = []
-        if v1_path in GET_TABLE:
-            methods.append("GET")
-        if v1_path in POST_TABLE:
-            methods.append("POST")
-        response = _describe(v1_path, handler)
-        lines.append(f"| {' / '.join(methods)} | `{v1_path}` | `{handler}` | {response} |")
+        entries = handlers_for(v1_path)
+        methods = [method for method, _ in entries] or ["-"]
+        handlers_formatted = ", ".join(f"`{h}`" for _, h in entries) if entries else "`-`"
+        primary_handler = entries[0][1] if entries else "-"
+        response = _describe(v1_path, primary_handler)
+        lines.append(f"| {' / '.join(methods)} | `{v1_path}` | {handlers_formatted} | {response} |")
     lines.append("")
     lines.append("Generated from `routes.py` and `contracts.py`; do not edit by hand.")
     Path(args.out).write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"wrote {args.out} with {len(seen)} routes")
-
 
 if __name__ == "__main__":
     main()

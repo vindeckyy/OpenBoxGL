@@ -5,7 +5,7 @@ import sqlite3
 import zipfile
 from pathlib import Path
 from urllib.parse import parse_qs
-
+from api_errors import BadRequest, Conflict
 from metadata import apply_game_metadata, batch_match, search_games, sync_database
 from openbox import load_state
 from parity_igdb import apply_to_game as apply_igdb_metadata, fetch_game as fetch_igdb_game, search_games as search_igdb_games
@@ -33,8 +33,7 @@ class MetadataHandlers:
 
     def _api_get_api_metadata_search(self, parsed):
         if not METADATA_DATABASE.is_file():
-            self.send_json(409, {"error": "Download the LaunchBox metadata database first."})
-            return
+            raise Conflict("Download the LaunchBox metadata database first.")
         try:
             query = parse_qs(parsed.query)
             game = game_from_query(load_state_view(), query)
@@ -42,7 +41,7 @@ class MetadataHandlers:
             results = search_games(METADATA_DATABASE, title, game.get("platform", ""))
             self.send_json(200, {"results":results})
         except (KeyError, IndexError, ValueError, sqlite3.Error) as error:
-            self.send_json(400, {"error":str(error)})
+            raise BadRequest(str(error)) from None
         return
 
     def _api_get_api_metadata_igdb_search(self, parsed):
@@ -51,8 +50,7 @@ class MetadataHandlers:
         try:
             results = search_igdb_games(query, platform=platform)
         except (OSError, ValueError) as error:
-            self.send_json(400, {"error": str(error)})
-            return
+            raise BadRequest(str(error)) from None
         self.send_json(200, {"results": results})
         return
 
