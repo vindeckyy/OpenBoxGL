@@ -606,7 +606,6 @@ class LibraryHandlers:
 
     def dedupe(self):
         def mutate(state):
-            removed = consolidate_existing_games(state["games"])
-            return removed
+            return consolidate_existing_games(state["games"])
         _, removed = transact_state(mutate)
         self.send_json(200, {"removed": removed})

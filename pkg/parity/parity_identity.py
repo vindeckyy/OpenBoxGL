@@ -58,9 +58,7 @@ def normalize_rom_name(filename: str) -> str:
     # Lowercase, strip whitespace, and normalize multiple spaces to single
     name = name.lower().strip()
     name = re.sub(r"\s+", " ", name)
-    name = re.sub(r"\s+\.", ".", name)
-    
-    return name
+    return re.sub(r"\s+\.", ".", name)
 
 
 def normalize_title_identity(name: str) -> str:

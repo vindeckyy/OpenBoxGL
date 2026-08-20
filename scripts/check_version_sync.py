@@ -51,6 +51,15 @@ def main() -> int:
         print(f"README.md: release badge is {badge.group(1) if badge else 'missing'}, expected {version}")
         failures.append("README badge")
 
+    if f"Latest stable: v{version}" not in readme:
+        print(f"README.md: latest stable link does not mention v{version}")
+        failures.append("README latest stable")
+
+    readme_version = re.search(r"^VERSION=([0-9.]+)", readme, re.MULTILINE)
+    if not readme_version or readme_version.group(1) != version:
+        print(f"README.md: installer VERSION is {readme_version.group(1) if readme_version else 'missing'}, expected {version}")
+        failures.append("README installer VERSION")
+
     metainfo = (ROOT / "openbox.metainfo.xml").read_text(encoding="utf-8")
     latest = re.search(r'<release version="([0-9.]+)"', metainfo)
     if not latest or latest.group(1) != version:
@@ -73,6 +82,21 @@ def main() -> int:
         print(f"CHANGELOG.md: no entry mentions {version}")
         failures.append("CHANGELOG")
 
+
+    release_notes_path = _doc_path("RELEASE_NOTES.md")
+    if release_notes_path.is_file():
+        release_notes = release_notes_path.read_text(encoding="utf-8")
+        if f"...v{version}" not in release_notes and f"v{version}" not in release_notes:
+            print(f"RELEASE_NOTES.md: compare link does not mention v{version}")
+            failures.append("RELEASE_NOTES")
+
+    sbom_script_path = ROOT / "scripts" / "gen_sbom.py"
+    if sbom_script_path.is_file():
+        sbom_script = sbom_script_path.read_text(encoding="utf-8")
+        sbom_default = re.search(r'DEFAULT_VERSION\s*=\s*"([0-9.]+)"', sbom_script)
+        if not sbom_default or sbom_default.group(1) != version:
+            print(f"gen_sbom.py: fallback DEFAULT_VERSION is {sbom_default.group(1) if sbom_default else 'missing'}, expected {version}")
+            failures.append("gen_sbom DEFAULT_VERSION")
     if failures:
         print(f"version sync failed: {', '.join(failures)}")
         return 1

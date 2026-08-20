@@ -50,7 +50,7 @@ even when bridge injection is unavailable, and it is what the tests exercise.
 
 ## HTTP native surface
 
-All routes are v1-frozen and authenticated like every other route.
+All native routes are authenticated like every other route (and return capability fallbacks when the native host is absent).
 
 | Method | Path | Purpose |
 |---|---|---|

@@ -1,9 +1,15 @@
 """Settings whitelist boundary tests."""
 from __future__ import annotations
 
+import sys
+import tempfile
 import unittest
+from pathlib import Path
 
-from settings_schema import KNOWN_SETTINGS, sanitize_settings
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from handlers.settings import _clean_controller_map, _clean_screensaver_seconds, _clean_watch_folders  # noqa: E402
+from settings_schema import KNOWN_SETTINGS, sanitize_settings  # noqa: E402
 
 
 class SettingsSchemaTests(unittest.TestCase):
@@ -60,6 +66,55 @@ class SettingsSchemaTests(unittest.TestCase):
             "auto_close_store_clients",
         ):
             self.assertIn(key, KNOWN_SETTINGS, f"save-path key missing from whitelist: {key}")
+
+    def test_clean_watch_folders_over_50(self):
+        payload = {"watch_folders": [f"/tmp/folder_{i}" for i in range(51)]}
+        with self.assertRaises(ValueError) as ctx:
+            _clean_watch_folders(payload)
+        self.assertIn("at most 50 paths", str(ctx.exception))
+
+    def test_clean_watch_folders_non_list(self):
+        with self.assertRaises(ValueError) as ctx:
+            _clean_watch_folders({"watch_folders": "not_a_list"})
+        self.assertIn("at most 50 paths", str(ctx.exception))
+
+    def test_clean_watch_folders_valid_and_nonexistent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(_clean_watch_folders({"watch_folders": [tmp]}), [tmp])
+        with self.assertRaises(ValueError) as ctx:
+            _clean_watch_folders({"watch_folders": ["/nonexistent_openbox_test_path_xyz_123"]})
+        self.assertIn("Watch folder does not exist", str(ctx.exception))
+
+    def test_clean_screensaver_seconds_out_of_range(self):
+        for bad in (10, 29, 3601, -5):
+            with self.assertRaises(ValueError) as ctx:
+                _clean_screensaver_seconds({"screensaver_seconds": bad})
+            self.assertIn("Screensaver delay must be 0 or between 30 and 3600 seconds", str(ctx.exception))
+
+    def test_clean_screensaver_seconds_valid(self):
+        for val in (0, 30, 90, 3600):
+            self.assertEqual(_clean_screensaver_seconds({"screensaver_seconds": val}), val)
+        self.assertEqual(_clean_screensaver_seconds({}), 90)
+
+    def test_clean_controller_map_non_dict(self):
+        for bad in (["not", "dict"], "string", 123):
+            with self.assertRaises(ValueError) as ctx:
+                _clean_controller_map({"controller_map": bad})
+            self.assertIn("Controller mapping must be an object", str(ctx.exception))
+
+    def test_clean_controller_map_valid_and_invalid(self):
+        valid = {"play": 0, "back": 1, "menu": 31}
+        self.assertEqual(_clean_controller_map({"controller_map": valid}), valid)
+
+        for bad_map in (
+            {"invalid_action": 0},
+            {"play": -1},
+            {"play": 32},
+            {"play": "0"},
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                _clean_controller_map({"controller_map": bad_map})
+            self.assertIn("Controller button mappings must use buttons 0 through 31", str(ctx.exception))
 
 
 if __name__ == "__main__":

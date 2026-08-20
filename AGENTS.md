@@ -20,7 +20,7 @@ New integration goes in `pkg/parity/` or `handlers/` as appropriate, never at ro
 - Every color, spacing, and typography value comes from a token in `static/app.css` `:root` (`--brand`, `--focus`, `--surface-card`, `--font-heading`, etc.).
 - No raw hex in component rules outside `:root`. A new visual value means a new token plus its entry in each theme file.
 - Token names are the theme contract. Themes override `:root` and mostly nothing else.
-- `scripts/check_tokens.py` enforces this with a ratcheting baseline (starts at 625).
+- `scripts/check_tokens.py` enforces this with a ratcheting baseline (ratcheted to 343, originally 625).
 
 ## Non-negotiables
 - Runtime stays dependency-free. `pyproject.toml` dev deps are not installed in AppImage.

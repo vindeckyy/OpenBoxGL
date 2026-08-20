@@ -344,11 +344,10 @@ def _load_media_images(database, database_id, region_priority):
     """Load the game's images, region-sorted."""
     from parity_media import REGION_PRIORITY_DEFAULT, sort_images_by_region
 
-    images = sort_images_by_region(
+    return sort_images_by_region(
         [dict(row) for row in database.execute("SELECT * FROM images WHERE database_id = ?", (int(database_id),))],
         region_priority or REGION_PRIORITY_DEFAULT,
     )
-    return images
 
 
 def _group_images_by_type(images):

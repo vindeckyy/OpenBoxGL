@@ -2,7 +2,6 @@
 """Local browser UI for OpenBox. Independent open-source software not affiliated with LaunchBox or Unbroken Software, LLC."""
 
 import email.utils
-import gzip
 import json
 import mimetypes
 import os
@@ -32,7 +31,6 @@ from routes.registry import route
 from state_store import StateCorruptError, secure_text_write
 from stock_themes import ensure_stock_themes
 from webapp_state import (
-    GZIP_THRESHOLD,
     JOB_MANAGER,
     LOGGER,
     PROCESS_LOCK,
@@ -280,25 +278,6 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
     def send_json(self, status, payload, extra_headers=None):
         data = json.dumps(payload).encode()
         self.send_bytes(status, data, "application/json; charset=utf-8", extra_headers=extra_headers)
-
-    def send_json_compressed(self, status, payload):
-        """Send a JSON payload, gzipped for clients that accept it.
-
-        Loopback bandwidth is free but compression wins on two fronts:
-        large libraries make /api/library a multi-megabyte payload, and
-        gzip shrinks the JSON to a fraction of that while the CPU cost is
-        negligible on the local machine.
-        """
-        data = json.dumps(payload).encode()
-        if len(data) >= GZIP_THRESHOLD and "gzip" in self.headers.get("Accept-Encoding", ""):
-            compressed = gzip.compress(data)
-            if len(compressed) < len(data):
-                self.send_bytes(
-                    status, compressed, "application/json; charset=utf-8",
-                    extra_headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
-                )
-                return
-        self.send_bytes(status, data, "application/json; charset=utf-8")
 
     def _auth_client_ip(self):
         try:
