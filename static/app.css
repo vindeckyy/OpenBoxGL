@@ -2,12 +2,11 @@
       color-scheme: dark;
       --bg:#11100e; --panel:#1b1916; --panel2:#24211d; --line:#3d3932;
       --text:#f4efe6; --muted:#aaa094; --cyan:#72c9d4; --green:#8fbd8d;
-      --topbar:#171513; --surface-deep:#141311; --surface-header:#1c1916;
+      --topbar:#171513; --surface-deep:#141311;
       --surface-card:#211e1a; --surface-field:#27231e; --surface-hover:#342d23;
       --border-control:#4b4338; --border-card:#534a3d; --focus:#f06000;
       --brand:#f06000; --active:#f06000; --action:#e08a3c; --action-ink:#1c160d; --white:#fff;
       --gold:#e5b65c; --rating:#ef8c38; --launch-shadow:#e08a3c44; --danger:#743f3f;
-      --mark-start:#f0c36a; --mark-end:#ba593d; --mark-ink:#1c160d;
       --cover-title-start:#51412d; --empty-action:#e08a3c; --achievement:#eaa54f;
       --lifecycle-bg:#45351d; --lifecycle-kicker:#f0c36a; --bigbox-bg:#30261a;
       --bigbox-copy:#d0c0a5;

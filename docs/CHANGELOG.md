@@ -245,7 +245,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The two monolithic dispatch chains (a 613-line GET and a 195-line POST if-chain) became a route registry in `routes.py`: 109 GET and 126 POST entries, each a named `Handler` method or dotted handler spec, with zero behavior change during the mechanical extraction. The contract-frozen v1 surface is 46 routes (`v1_contracts.json`).
 - Structured errors in `api_errors.py`: every failure carries a stable machine code (`BAD_REQUEST`, `GAME_NOT_FOUND`, `MEDIA_NOT_FOUND`, `ROUTE_NOT_FOUND`, `MEDIA_JOB_RUNNING`, `STATE_UNAVAILABLE`, ...) and a per-request id that appears in the UI and the diagnostic log. POST handlers re-raise `ApiError` unchanged and convert legacy `ValueError`s into `400 BAD_REQUEST` instead of leaking them to the generic 500 path.
 - A versioned `/api/v1` surface aliases the stable routes; legacy paths keep working for older clients.
-- The library payload is gzip-compressed once per state change and served with a `private, no-cache` ETag, so polls get 304s when nothing changed: 5,000 games serve in about 2 ms at 638 KB instead of 13.8 MB (measured in [development/PERF.md](development/PERF.md)).
+- The library payload is gzip-compressed once per state change and served with a `private, no-cache` ETag, so polls get 304s when nothing changed: 5,000 games serve in about 2 ms at 638 KB instead of 13.8 MB (measured in `docs/development/PERF.md`).
 - Settings saves now drop unknown keys against the settings key registry (`settings_schema.py`) with a diagnostic warning, instead of persisting junk from a stale client.
 
 #### Reliability
@@ -293,7 +293,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Ran `make check`: lint, compile, tests, and coverage gates all pass (56% total, 44% `web_app.py`, against the then-current floors).
 - UI smoke test (`scripts/ui_smoke.sh`) boots a real server and drives the grid with no page errors.
 - `python3 scripts/check_version_sync.py` passes at 0.9.0.
-- Perf bench at 5,000 games: gzip library 1.9ms / 638KB vs 13.7ms / 13.8MB plain (see [development/PERF.md](development/PERF.md)).
+- Perf bench at 5,000 games: gzip library 1.9ms / 638KB vs 13.7ms / 13.8MB plain (see `docs/development/PERF.md`).
 
 ## [0.8.2] - 2026-08-12
 
@@ -580,6 +580,7 @@ If you jumped from an older build and skipped the last two releases:
 [1.0.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.0.0
 [0.9.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.9.0
+[0.8.2]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.2
 [0.8.1]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.1
 [0.8.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.8.0
 [0.7.0]: https://github.com/vindeckyy/OpenBoxGL/releases/tag/v0.7.0

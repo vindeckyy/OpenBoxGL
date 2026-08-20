@@ -24,7 +24,7 @@ timeout -k 5 180 "$GAMESCOPE_BIN" \
   --backend sdl \
   -- \
   env SteamDeck=1 SCB_GAMEMODE=1 SCB_NOSCOPE=1 OPENBOX_DECK_EMU_RC="$RC_FILE" \
-  python3 "$ROOT/test_gamescope_deck_emu.py"
+  python3 "$ROOT/tests/test_gamescope_deck_emu.py"
 gs_status=$?
 set -e
 

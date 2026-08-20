@@ -1,11 +1,14 @@
 import sys
 import os
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pkg.parity.parity_wine import list_wine_prefixes, list_proton_versions, get_prefix_for_game
+from api_errors import GameNotFound
+from handlers.wine import WineHandlers
 from pkg.parity.parity_faugus import find_faugus_data_dirs, scan_faugus_games
+from pkg.parity.parity_wine import get_prefix_for_game, list_proton_versions, list_wine_prefixes
 
 def _reset_openbox_modules():
     for name in ("openbox", "webapp_state", "web_app", "handlers.faugus"):
@@ -43,6 +46,96 @@ class TestWine(unittest.TestCase):
         game = {"launch": "env WINEPREFIX=\"/tmp/foo bar\" wine game.exe"}
         self.assertEqual(get_prefix_for_game(game), "/tmp/foo bar")
 
+
+
+class DummyWineHandler(WineHandlers):
+    def __init__(self, authorized=True):
+        self._authorized = authorized
+        self.status = None
+        self.payload = None
+
+    def authorized(self):
+        return self._authorized
+
+    def send_json(self, status, payload):
+        self.status = status
+        self.payload = payload
+
+    def send_error(self, status, msg=""):
+        self.status = status
+        self.payload = {"error": msg}
+
+
+class TestWineHandlers(unittest.TestCase):
+    def test_wine_prefixes_when_wine_available(self):
+        h = DummyWineHandler()
+        with mock.patch("handlers.wine.HAS_WINE", True), \
+             mock.patch("handlers.wine.list_wine_prefixes", return_value=["/tmp/prefix1"]):
+            h._api_get_api_wine_prefixes(mock.Mock())
+        self.assertEqual(h.status, 200)
+        self.assertEqual(h.payload, {"prefixes": ["/tmp/prefix1"], "available": True})
+
+    def test_wine_prefixes_when_wine_unavailable(self):
+        h = DummyWineHandler()
+        with mock.patch("handlers.wine.HAS_WINE", False):
+            h._api_get_api_wine_prefixes(mock.Mock())
+        self.assertEqual(h.status, 200)
+        self.assertEqual(h.payload, {"prefixes": [], "available": False})
+
+    def test_wine_protons_when_wine_available(self):
+        h = DummyWineHandler()
+        sample_protons = [{"name": "Proton 8.0", "path": "/opt/proton", "source": "steam"}]
+        with mock.patch("handlers.wine.HAS_WINE", True), \
+             mock.patch("handlers.wine.list_proton_versions", return_value=sample_protons):
+            h._api_get_api_wine_protons(mock.Mock())
+        self.assertEqual(h.status, 200)
+        self.assertEqual(h.payload, {"protons": sample_protons, "available": True})
+
+    def test_wine_protons_when_wine_unavailable(self):
+        h = DummyWineHandler()
+        with mock.patch("handlers.wine.HAS_WINE", False):
+            h._api_get_api_wine_protons(mock.Mock())
+        self.assertEqual(h.status, 200)
+        self.assertEqual(h.payload, {"protons": [], "available": False})
+
+    def test_wine_prefix_for_game_not_found(self):
+        h = DummyWineHandler()
+        parsed = mock.Mock(query="id=nonexistent-game")
+        with mock.patch("handlers.wine.load_state_view", return_value={"games": []}):
+            with self.assertRaises(GameNotFound):
+                h._api_get_api_wine_prefix_for_game(parsed)
+
+    def test_wine_prefix_for_game_when_wine_unavailable(self):
+        h = DummyWineHandler()
+        parsed = mock.Mock(query="id=0")
+        fake_state = {"games": [{"name": "Test Game"}]}
+        with mock.patch("handlers.wine.load_state_view", return_value=fake_state), \
+             mock.patch("handlers.wine.HAS_WINE", False):
+            h._api_get_api_wine_prefix_for_game(parsed)
+        self.assertEqual(h.status, 200)
+        self.assertEqual(h.payload, {"prefix": "", "available": False})
+
+    def test_wine_prefix_for_game_when_wine_available(self):
+        h = DummyWineHandler()
+        parsed = mock.Mock(query="id=0")
+        fake_state = {"games": [{"name": "Test Game", "wine_prefix": "/tmp/pfx"}]}
+        with mock.patch("handlers.wine.load_state_view", return_value=fake_state), \
+             mock.patch("handlers.wine.HAS_WINE", True), \
+             mock.patch("handlers.wine.get_prefix_for_game", return_value="/tmp/pfx"):
+            h._api_get_api_wine_prefix_for_game(parsed)
+        self.assertEqual(h.status, 200)
+        self.assertEqual(h.payload, {"prefix": "/tmp/pfx", "available": True})
+
+    def test_wine_prefix_for_game_empty_prefix(self):
+        h = DummyWineHandler()
+        parsed = mock.Mock(query="id=0")
+        fake_state = {"games": [{"name": "Test Game"}]}
+        with mock.patch("handlers.wine.load_state_view", return_value=fake_state), \
+             mock.patch("handlers.wine.HAS_WINE", True), \
+             mock.patch("handlers.wine.get_prefix_for_game", return_value=""):
+            h._api_get_api_wine_prefix_for_game(parsed)
+        self.assertEqual(h.status, 200)
+        self.assertEqual(h.payload, {"prefix": "", "available": False})
 
 class TestFaugus(unittest.TestCase):
     def test_find_dirs_returns_list(self):
