@@ -26,13 +26,31 @@ class ApiSweep(unittest.TestCase):
         cls.tempdir = tempfile.TemporaryDirectory()
         cls._prev_data_dir = os.environ.get("OPENBOX_DATA_DIR")
         os.environ["OPENBOX_DATA_DIR"] = cls.tempdir.name
-        import web_app
+        import openbox as _openbox
+        import pathlib as _pl
+        _data = _pl.Path(cls.tempdir.name) / "library.json"
+        _openbox.DATA = _data
+        _openbox.APP_DIR = _pl.Path(cls.tempdir.name)
+        import web_app as _web_app
+        import webapp_state as _ws
+        _ws.DATA = _data
+        _web_app.DATA = _data
+        try:
+            import pkg.state.cache as _cache
+            _cache.DATA = _data
+        except Exception:
+            pass
+        try:
+            import pkg.state.media_probe as _mp
+            _mp.DATA = _data
+        except Exception:
+            pass
         from openbox import save_state
 
-        cls.web_app = web_app
+        cls.web_app = _web_app
         cls.save_state = staticmethod(save_state)
-        web_app.TOKEN = "sweep-token"
-        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), web_app.Handler)
+        _web_app.TOKEN = "sweep-token"
+        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), _web_app.Handler)
         cls.port = cls.server.server_address[1]
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()

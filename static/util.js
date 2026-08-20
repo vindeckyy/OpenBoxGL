@@ -3,13 +3,51 @@
 
 
     const defaultControllerMap = {play:0,back:1,favorite:2,random:3,page_left:4,page_right:5,pause:8,menu:9};
+
+    /**
+     * Shorthand for document.getElementById.
+     * @param {string} id
+     * @returns {HTMLElement | null}
+     */
     const $ = id => document.getElementById(id);
+
+    /**
+     * Escape HTML special characters for safe markup interpolation.
+     * @param {unknown} value
+     * @returns {string}
+     */
     const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+
+    /**
+     * Format elapsed seconds into human-readable hours and minutes.
+     * @param {number} seconds
+     * @returns {string}
+     */
     const duration = seconds => { const minutes = Math.floor((seconds || 0) / 60), hours = Math.floor(minutes / 60); return hours ? `${hours}h ${minutes % 60}m` : `${minutes}m`; };
+
     const defaultBadges = ['favorite','installed','saves','documents','progress','storefront','achievements','rating'];
+
+    /**
+     * Check if a game is considered installed on the local system or storefront.
+     * @param {Record<string, any>} game
+     * @returns {boolean}
+     */
     const gameInstalled = game => game.store_installed !== false && (game.path_exists || game.store_installed);
+
+    /**
+     * Format bytes into human-readable KB or MB.
+     * @param {number | string} value
+     * @returns {string}
+     */
     const formatBytes = value => { const bytes = Number(value || 0); return bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`; };
+
     const queryTokenCache = new Map();
+
+    /**
+     * Parse an advanced search query string into structured key/value/negative tokens.
+     * @param {string} query
+     * @returns {Array<{negative: boolean, key: string, value: string}>}
+     */
     function parseQueryTokens(query) {
       const cached = queryTokenCache.get(query);
       if (cached) return cached;
@@ -26,6 +64,12 @@
       queryTokenCache.set(query, parsed);
       return parsed;
     }
+    /**
+     * Match a game object against an advanced search query.
+     * @param {Record<string, any>} game
+     * @param {string} query
+     * @returns {boolean}
+     */
     function advancedQueryMatches(game, query) {
       const parsedTokens = parseQueryTokens(query);
       const fields = {
@@ -59,6 +103,13 @@
         return negative ? !matched : matched;
       });
     }
+    /**
+     * Render an HTML badge tag if value is truthy.
+     * @param {string} label
+     * @param {unknown} value
+     * @param {string} [kind]
+     * @returns {string}
+     */
     function badge(label, value, kind = '') { return value ? `<span class="badge ${kind}" title="${escapeHtml(label)}">${escapeHtml(label)}</span>` : ''; }
     const artworkKinds = [['clear_logo','Clear logo','has_clear_logo'],['fanart','Fanart','has_fanart'],['banner','Banner','has_banner'],['icon','Icon','has_icon'],['box_back','Box back','has_box_back'],['box_spine','Box spine','has_box_spine'],['box_3d','3D box','has_box_3d'],['title_screen','Title screen','has_title_screen'],['cart_front','Cart front','has_cart_front'],['cart_back','Cart back','has_cart_back'],['disc','Disc','has_disc'],['advertisement','Advertisement / flyer','has_advertisement'],['manual','Manual','has_manual']];
     const API_V1 = {
@@ -82,11 +133,22 @@
       favorite: '/api/v1/favorite', plugins: '/api/v1/plugins', state_recover: '/api/v1/state/recover',
       filter_presets: '/api/v1/filter-presets',
     };
+    /**
+     * Compute the most recent timestamp for a game (last played or added).
+     * @param {Record<string, any>} game
+     * @returns {number}
+     */
     function recentActivityValue(game) {
       const played = Date.parse(game.last_played || '') || 0;
       const added = Date.parse(game.added_at || '') || 0;
       return Math.max(played, added);
     }
+    /**
+     * Sort game list according to specified sort field.
+     * @param {Array<Record<string, any>>} list
+     * @param {string} sort
+     * @returns {Array<Record<string, any>>}
+     */
     function sortGames(list, sort) {
       return list.sort((a, b) => sort === 'rating' ? Number(b.rating || 0) - Number(a.rating || 0) || String(a.name || '').localeCompare(String(b.name || ''))
         : sort === 'recent' ? String(b.last_played || '').localeCompare(String(a.last_played || '')) || String(a.sort_title || a.name || '').localeCompare(String(b.sort_title || b.name || ''))
@@ -99,7 +161,19 @@
     }
     const RATIO_BUCKETS = [['portrait','Portrait'],['square','Square'],['landscape','Landscape']];
     const RATIO_REP = {portrait:.72, square:1, landscape:16/9};
+    /**
+     * Classify aspect ratio into portrait, square, or landscape bucket.
+     * @param {number | null | undefined} ratio
+     * @returns {'portrait' | 'square' | 'landscape'}
+     */
     const coverBucketOf = ratio => ratio == null ? 'portrait' : ratio < .85 ? 'portrait' : ratio <= 1.15 ? 'square' : 'landscape';
+
+    /**
+     * Render a metadata fact row HTML snippet.
+     * @param {string} label
+     * @param {unknown} value
+     * @returns {string}
+     */
     const fact = (label,value) => `<div class="fact"><small>${escapeHtml(label)}</small><span>${escapeHtml(value ?? '-')}</span></div>`;
 
 export { $, escapeHtml, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches };

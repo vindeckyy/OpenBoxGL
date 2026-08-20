@@ -1,19 +1,21 @@
 """Faugus Launcher import handlers."""
 
 from api_errors import ApiError
+from routes.registry import route
 from webapp_state import clear_file_probe_cache, merge_imported_games
-
 try:
     from pkg.parity.parity_faugus import find_faugus_data_dirs, scan_faugus_games
 except ImportError:
     from parity_faugus import find_faugus_data_dirs, scan_faugus_games
 
 class FaugusHandlers:
+    @route("GET", "/api/faugus/status")
     def _api_get_api_faugus_status(self, parsed):
         dirs = find_faugus_data_dirs()
         self.send_json(200, {"installed": bool(dirs), "data_dirs": dirs})
         return
 
+    @route("GET", "/api/faugus/scan")
     def _api_get_api_faugus_scan(self, parsed):
         try:
             games = scan_faugus_games()
@@ -23,6 +25,7 @@ class FaugusHandlers:
         self.send_json(200, {"games": games, "count": len(games)})
         return
 
+    @route("POST", "/api/faugus/import")
     def _api_post_api_faugus_import(self, payload):
         try:
             candidates = scan_faugus_games()

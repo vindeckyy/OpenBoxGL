@@ -1,9 +1,11 @@
 """Route tables mapping HTTP paths to Handler method names."""
 
+from pathlib import Path
+
 from api_errors import RouteNotFound
 
+__path__ = [str(Path(__file__).resolve().parent / "routes")]
 
-# Token-free: the shell and assets the browser needs before it has a token.
 PUBLIC_GET_PATHS = frozenset({
     "/",
     "/index.html",
@@ -273,9 +275,16 @@ def _apply_v1_aliases(table, dispatcher_name):
     return table
 
 
-GET_TABLE = _apply_v1_aliases(GET_TABLE, "GET")
-POST_TABLE = _apply_v1_aliases(POST_TABLE, "POST")
+def _build_tables():
+    # Base tables plus v1 aliases only; @route registry is consulted at dispatch time
+    # so decorator-only routes do not need a build-time merge (which would run
+    # before handlers are imported and appear empty).
+    get_tbl = _apply_v1_aliases(dict(GET_TABLE), "GET")
+    post_tbl = _apply_v1_aliases(dict(POST_TABLE), "POST")
+    return get_tbl, post_tbl
 
+
+GET_TABLE, POST_TABLE = _build_tables()
 
 def _resolve(spec):
     """Resolve a route entry: a bare name is a Handler method, a dotted name a handlers-package function."""
@@ -304,8 +313,29 @@ def _is_public_path(path):
     return False
 
 
+def _lookup_registry(method, path):
+    """Check the decorator registry for a path not in the static tables."""
+    try:
+        from routes.registry import _REGISTRY
+
+        entry = _REGISTRY.get((method, path))
+        if entry is not None:
+            return entry.spec
+        # v1 alias fallback for registry entries
+        if path.startswith("/api/v1/"):
+            base = "/api" + path[len("/api/v1"):]
+            entry = _REGISTRY.get((method, base))
+            if entry is not None and base in V1_ALIASED_PREFIXES:
+                return entry.spec
+    except Exception:
+        pass
+    return None
+
+
 def dispatch_get(handler, parsed):
     spec = GET_TABLE.get(parsed.path)
+    if spec is None:
+        spec = _lookup_registry("GET", parsed.path)
     if spec is None:
         if _is_static_asset(parsed.path):
             spec = "_api_get_static"
@@ -322,6 +352,8 @@ def dispatch_get(handler, parsed):
 
 def dispatch_post(handler, route, payload):
     spec = POST_TABLE.get(route)
+    if spec is None:
+        spec = _lookup_registry("POST", route)
     if spec is None:
         raise RouteNotFound("Not found")
     if not handler.authorized():

@@ -19,7 +19,8 @@ select = ["E4", "E7", "E9", "F", "B", "PLW1510", "EXE001", "UP035", "E402"]
 [tool.ruff.lint.per-file-ignores]
 # The metadata self-test needs to import after env isolation.
 "test_demo_purge.py" = ["E402"]
-
+# webapp_state is the top-level compatibility re-export shim.
+"webapp_state.py" = ["F401"]
 [tool.coverage.run]
 source = ["."]
 omit = [

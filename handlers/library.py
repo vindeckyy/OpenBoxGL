@@ -9,6 +9,7 @@ from api_errors import BadRequest, GameNotFound
 from catalog import PROGRESS, bulk_update, game_media_paths, related_game_ids, tag_counts
 from notifications import clear as clear_notifications, mark_read as mark_notifications_read, unread_count
 from openbox import load_state
+from routes.registry import route
 from parity_deeplinks import launcher_menu_items
 from parity_discovery import discovery_lists, related_with_reasons
 from parity_filter_presets import bigbox_quick_presets, delete_preset, explorer_facets, list_presets, save_preset
@@ -101,6 +102,7 @@ def _save_game_mutate(state, payload, game):
 
 
 class LibraryHandlers:
+    @route("GET", "/api/library")
     def _api_get_api_library(self, parsed):
         # Check for pagination parameters before applying the full-library ETag.
         # A page is a different representation even when the underlying state
@@ -165,6 +167,7 @@ class LibraryHandlers:
         )
         return
 
+    @route("GET", "/api/library/delta")
     def _api_get_api_library_delta(self, parsed):
         """Return only the specified games by ID for incremental updates in O(K) time."""
         query_params = parse_qs(parsed.query)
@@ -208,6 +211,7 @@ class LibraryHandlers:
         self.send_json(200, response_payload)
         return
 
+    @route("GET", "/api/related")
     def _api_get_api_related(self, parsed):
         try:
             query = parse_qs(parsed.query)
@@ -219,10 +223,12 @@ class LibraryHandlers:
             raise GameNotFound("Game not found") from None
         return
 
+    @route("GET", "/api/discovery")
     def _api_get_api_discovery(self, parsed):
         self.send_json(200, discovery_lists(load_state_view()["games"]))
         return
 
+    @route("GET", "/api/related/rich")
     def _api_get_api_related_rich(self, parsed):
         state = load_state_view()
         query = parse_qs(parsed.query)
@@ -234,6 +240,7 @@ class LibraryHandlers:
             raise GameNotFound("Game not found") from None
         return
 
+    @route("GET", "/api/filter-presets")
     def _api_get_api_filter_presets(self, parsed):
         state = load_state()
         self.send_json(200, {
@@ -242,69 +249,88 @@ class LibraryHandlers:
         })
         return
 
+    @route("GET", "/api/explorer/facets")
     def _api_get_api_explorer_facets(self, parsed):
         field = parse_qs(parsed.query).get("field", ["genre"])[0]
         state = load_state_view()
         self.send_json(200, {"field": field, "facets": explorer_facets(state["games"], field)})
         return
 
+    @route("GET", "/api/launcher/menu")
     def _api_get_api_launcher_menu(self, parsed):
         payload = public_state()
         self.send_json(200, {"items": launcher_menu_items(payload["games"])})
         return
 
+    @route("GET", "/api/queue")
     def _api_get_api_queue(self, parsed):
         self.send_json(200, {"queue": resolve_queue(load_state_view())})
         return
 
+    @route("GET", "/api/notifications")
     def _api_get_api_notifications(self, parsed):
         state = load_state_view()
         self.send_json(200, {"notifications": state.get("notifications", []), "unread": unread_count(state)})
         return
 
+    @route("GET", "/api/tags")
     def _api_get_api_tags(self, parsed):
         self.send_json(200, {"tags": tag_counts(load_state_view()["games"])})
         return
 
+    @route("POST", "/api/favorite")
     def _api_post_api_favorite(self, payload):
         self.favorite(payload)
 
+    @route("POST", "/api/game")
     def _api_post_api_game(self, payload):
         self.save_game(payload)
 
+    @route("POST", "/api/game/delete")
     def _api_post_api_game_delete(self, payload):
         self.delete_game(payload)
 
+    @route("POST", "/api/games/delete-steam")
     def _api_post_api_games_delete_steam(self, payload):
         self.delete_steam_games(payload)
 
+    @route("POST", "/api/games/bulk")
     def _api_post_api_games_bulk(self, payload):
         self.bulk_edit(payload)
 
+    @route("POST", "/api/games/bulk-wizard")
     def _api_post_api_games_bulk_wizard(self, payload):
         self.bulk_wizard(payload)
 
+    @route("POST", "/api/queue")
     def _api_post_api_queue(self, payload):
         self.queue(payload)
 
+    @route("POST", "/api/notifications")
     def _api_post_api_notifications(self, payload):
         self.notifications(payload)
 
+    @route("POST", "/api/tags")
     def _api_post_api_tags(self, payload):
         self.tags(payload)
 
+    @route("POST", "/api/image-group")
     def _api_post_api_image_group(self, payload):
         self.save_image_group(payload)
 
+    @route("POST", "/api/filter-presets")
     def _api_post_api_filter_presets(self, payload):
         self.save_filter_preset(payload)
 
+    @route("POST", "/api/filter-presets/delete")
     def _api_post_api_filter_presets_delete(self, payload):
         self.delete_filter_preset(payload)
 
+    @route("POST", "/api/health")
     def _api_post_api_health(self, payload):
         self.health()
 
+    @route("POST", "/api/health/dedupe")
     def _api_post_api_health_dedupe(self, payload):
         self.dedupe()
 

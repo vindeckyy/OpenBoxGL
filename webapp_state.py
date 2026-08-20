@@ -7,24 +7,22 @@ so every reference resolves statically.
 """
 
 import copy
-from collections import OrderedDict
-import gzip
+from datetime import datetime
 import html
 import json
 import logging
 import os
+from pathlib import Path
 import queue
 import re
 import secrets
 import shlex
-import stat
 import signal
+import stat
 import subprocess
 import sys
 import threading
 import time
-from datetime import datetime
-from pathlib import Path
 from urllib.request import Request, urlopen
 
 from automation import MAX_WEBHOOKS, build_event, utc_now
@@ -36,267 +34,171 @@ from job_manager import JobManager
 from notifications import add_notification
 import openbox
 from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, STATE_STORE, build_launch, load_state, load_state_readonly, update_state, update_state_with_result
-from parity_discovery import discovery_lists, clear_discovery_cache
+from parity_discovery import clear_discovery_cache, discovery_lists
 from parity_emulator_defs import list_scan_configs, scan_folder as scan_emulator_folder
 from parity_filter_presets import list_presets
-from parity_gameyfin import GameyfinError, catalog_gameyfin
 from parity_gamescope import is_gamescope_guest, is_steam_launch, mark_process_windows, steam_game_id_for
-from parity_import import import_multi_platform, recommend_emulators
+from parity_gameyfin import GameyfinError, catalog_gameyfin
+from parity_identity import cross_source_identity, source_family, source_identities
+from parity_import import detect_dependencies, import_multi_platform, recommend_emulators
 from parity_import_policy import filter_imported, list_exclusions
 from parity_integrations import auto_attach_obs_recording, load_emumovies_credentials
-from parity_identity import cross_source_identity, source_family, source_identities
 from parity_media import REGION_PRIORITY_DEFAULT, active_video, enqueue_media_job, media_types_from_settings, normalize_video_fields
 from parity_perf import apply_perf_profile, effective_profile_name, restore_perf_profile
 from parity_premium import LIST_COLUMNS_DEFAULT, category_for_platform, custom_field_defs, import_with_emulator_choice, list_media_packs, platform_categories, strings_for
 from parity_saves import enforce_backup_limit, games_with_saves
 from parity_save_tools import save_tool_status
-from parity_storefront import catalog_entries_to_games
+from parity_storefront import catalog_entries_to_games, storefront_catalog
 from parity_tracking import close_store_client, wait_for_exit
 from plugins import run_plugins
 from retroachievements import load_credentials as load_ra_credentials
-from saves import backup_saves
+from saves import backup_saves, discover_save_paths, list_backups, restore_saves
 from updates import VERSION
+
+from pkg.state.cache import (
+    FILE_PROBE_CACHE,
+    FILE_PROBE_LOCK,
+    FILE_PROBE_MAX,
+    FILE_PROBE_TTL,
+    MEDIA_EPOCH,
+    MEDIA_EPOCH_LOCK,
+    PLUGIN_EPOCH,
+    PLUGIN_LIBRARY_CACHE,
+    PLUGIN_LIBRARY_LOCK,
+    PLUGIN_LIBRARY_TTL,
+    PUBLIC_SETTINGS_CACHE,
+    PUBLIC_SETTINGS_LOCK,
+    PUBLIC_STATE_CACHE,
+    PUBLIC_STATE_LOCK,
+    STATE_LOCK,
+    STATE_VIEW_CACHE,
+    STATE_VIEW_LOCK,
+    _GAME_PROJECTION_CACHE,
+    _GAME_PROJECTION_LOCK,
+    _GAME_PROJECTION_MAX,
+    _KNOWN_MEDIA_MAX,
+    _KNOWN_MEDIA_SET_CACHE,
+    _KNOWN_MEDIA_SET_LOCK,
+    _PLATFORM_CATEGORY_CACHE,
+    _PLATFORM_CATEGORY_LOCK,
+    _PLATFORM_CATEGORY_MAX,
+    _PLUGIN_REFRESH_IN_PROGRESS,
+    _SANITIZE_MEDIA_PATH_CACHE,
+    _SANITIZE_MEDIA_PATH_LOCK,
+    _SANITIZE_MEDIA_PATH_MAX,
+    _build_known_media_set,
+    _build_public_state,
+    _fast_realpath,
+    _media_dir_mtime,
+    _media_set_contains,
+    _project_game,
+    _public_settings_uncached,
+    _public_state_cached,
+    _public_state_signature,
+    bump_media_epoch,
+    clear_file_probe_cache,
+    load_state_view,
+    public_settings,
+    public_state,
+    public_state_bytes,
+    public_state_etag,
+    transact_state,
+)
+from pkg.state.launch import (
+    PROCESS_LOCK,
+    PROCESSES,
+    RUNNING,
+    SESSION_EVENTS,
+    _ReattachedLease,
+    _ReattachedProcess,
+    _annotate_gamescope_start,
+    _apply_start_plugins,
+    _contained_launch_cwd,
+    _make_start_mutator,
+    _match_fallback_index,
+    _match_path_and_name,
+    _match_storefront_ids,
+    _publish_start_events,
+    _read_proc_cmdline,
+    _read_proc_start_time,
+    _resolve_start_game,
+    _stable_id_match,
+    _start_launch_command,
+    _validate_start_command,
+    _verify_process_identity,
+    control_game_session,
+    finish_session,
+    game_from_payload,
+    game_from_query,
+    reattach_session,
+    reconcile_sessions_on_startup,
+    resolve_library_game,
+    start_game,
+)
+from pkg.state.media_probe import (
+    FIELDS,
+    MEDIA_PATH_FIELDS,
+    MEDIA_ROOTS_ENV,
+    MEDIA_TYPES_ALL,
+    _media_roots,
+    _reject_media_symlink_components,
+    approved_backup_file,
+    approved_media_path,
+    download_image,
+    game_media_paths,
+    media_probe_path,
+    probe_path,
+    safe_document_file,
+    sanitize_document_records,
+    sanitize_media_path,
+    update_steam_metadata,
+)
+from pkg.state.sse import (
+    EVENT_SEQUENCE,
+    EVENT_SUBSCRIBERS,
+    EVENT_SUBSCRIBERS_LOCK,
+    GZIP_THRESHOLD,
+    METADATA_DATABASE,
+    SSE_MAX_EVENT_BYTES,
+    SSE_MAX_SUBSCRIBERS,
+    SSE_QUEUE_SIZE,
+    SSE_WRITE_TIMEOUT,
+    WEBHOOK_DISPATCHER,
+    WEBHOOK_DISPATCHER_LOCK,
+    _close_sse_subscriber,
+    _commit_webhook_result,
+    _default_webhook_dispatcher_factory,
+    _emit_webhook_failure,
+    _publish_session_event,
+    _webhook_payload,
+    broadcast_event,
+    emit_notification,
+    event_matches,
+    get_webhook_dispatcher,
+    public_webhook_configs,
+    publish_event,
+    register_event_subscriber,
+    session_event,
+    shutdown_webhooks,
+    unregister_event_subscriber,
+    webhook_configs,
+)
 
 ROOT = Path(__file__).parent
 TOKEN = secrets.token_urlsafe(24)
-# JSON payloads at or above this size get gzip when the client accepts it.
-GZIP_THRESHOLD = 1024
 LOGGER = logging.getLogger("openbox")
-STATE_LOCK = threading.Lock()
-PROCESS_LOCK = threading.Lock()
-RUNNING = {}
-PROCESSES = {}
-SESSION_EVENTS = []
-EVENT_SEQUENCE = 0
+
 INSTALLS = {}
 METADATA_JOB = {}
 MEDIA_JOB = {}
 JOB_MANAGER = JobManager()
-JOB_MANAGER.set_observer(lambda job: broadcast_event("job.finished", job))
-FILE_PROBE_CACHE = OrderedDict()
-FILE_PROBE_LOCK = threading.Lock()
-FILE_PROBE_TTL = 120.0
-FILE_PROBE_MAX = 20000
-_KNOWN_MEDIA_MAX = 100000
-PLUGIN_LIBRARY_CACHE = {"at": 0.0, "payload": None, "state_signature": None}
-PLUGIN_LIBRARY_TTL = 30.0
-PLUGIN_LIBRARY_LOCK = threading.Lock()
-_PLUGIN_REFRESH_IN_PROGRESS = {"value": False}
-MEDIA_EPOCH = {"value": 0}
-MEDIA_EPOCH_LOCK = threading.Lock()
-PLUGIN_EPOCH = {"value": 0}
-PUBLIC_STATE_CACHE = {"signature": None, "payload": None, "raw": None, "raw_gzip": None, "games_by_id": None}
-PUBLIC_STATE_LOCK = threading.Lock()
-PUBLIC_SETTINGS_CACHE = {"signature": None, "payload": None}
-PUBLIC_SETTINGS_LOCK = threading.Lock()
-_KNOWN_MEDIA_SET_CACHE = {"key": None, "result": None, "mtime_key": None}
-_KNOWN_MEDIA_SET_LOCK = threading.Lock()
-_GAME_PROJECTION_CACHE = {}
-_GAME_PROJECTION_LOCK = threading.Lock()
-_GAME_PROJECTION_MAX = 100000
-_SANITIZE_MEDIA_PATH_CACHE = {}
-_SANITIZE_MEDIA_PATH_LOCK = threading.Lock()
-_SANITIZE_MEDIA_PATH_MAX = 50000
-_PLATFORM_CATEGORY_CACHE = {}
-_PLATFORM_CATEGORY_LOCK = threading.Lock()
-_PLATFORM_CATEGORY_MAX = 5000
-STATE_VIEW_CACHE = {"signature": None, "state": None}
-STATE_VIEW_LOCK = threading.Lock()
+try:
+    from pkg.state.sse import broadcast_event
+
+    JOB_MANAGER.set_observer(lambda job: broadcast_event("job.finished", job))
+except Exception:
+    pass
 WATCH_STOP = threading.Event()
-METADATA_DATABASE = DATA.parent / "metadata/launchbox.db"
-WEBHOOK_DISPATCHER = None
-WEBHOOK_DISPATCHER_LOCK = threading.Lock()
-EVENT_SUBSCRIBERS = set()
-EVENT_SUBSCRIBERS_LOCK = threading.Lock()
-SSE_MAX_SUBSCRIBERS = 16
-SSE_QUEUE_SIZE = 128
-SSE_MAX_EVENT_BYTES = 64 * 1024
-SSE_WRITE_TIMEOUT = 5
-FIELDS = {
-    "name", "platform", "genre", "year", "developer", "publisher", "series",
-    "collection", "description", "path", "launch", "launch_profile", "cover", "background",
-    "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen",
-    "cart_front", "cart_back", "disc", "advertisement", "manual",
-    "source", "steam_app_id", "lutris_id", "install_dir",
-    "heroic_app_id", "rom_name", "clone_of", "set_type", "ra_game_id", "ra_hash", "launchbox_db_id", "archive_member", "video", "music",
-    "video_snap", "video_theme", "video_trailer", "video_recording",
-    "progress", "rating", "notes", "region", "play_mode", "sort_title", "added_at",
-    "alternate_names", "max_players", "wikipedia_url", "video_url", "hide_in_bigbox", "esrb",
-    "broken", "portable", "controller_support", "disc_count",
-    "gameyfin_id", "gameyfin_provider", "store_catalog", "store_installed", "owned",
-    "tracking_mode", "tracking_delay", "tracking_frequency", "tracking_process_name", "igdb_id",
-}
-
-
-# Media fields that can be populated from the LaunchBox Games Database. Kept as
-# one set so metadata apply, bulk download, auto-import, and the audit all agree.
-MEDIA_TYPES_ALL = {
-    "cover", "background", "screenshots", "clear_logo", "fanart", "banner", "icon",
-    "box_back", "box_spine", "box_3d", "title_screen",
-    "cart_front", "cart_back", "disc", "advertisement", "manual",
-}
-MEDIA_ROOTS_ENV = "OPENBOX_MEDIA_ROOTS"
-MEDIA_PATH_FIELDS = {
-    "cover", "background", "clear_logo", "fanart", "banner", "icon",
-    "box_back", "box_spine", "box_3d", "title_screen", "cart_front",
-    "cart_back", "disc", "advertisement", "manual", "video", "music",
-    "video_snap", "video_theme", "video_trailer", "video_recording",
-}
-
-
-
-def probe_path(path, *, file_only=False):
-    value = str(path or "")
-    if not value:
-        return False
-    now = time.monotonic()
-    key = (value, file_only)
-    with FILE_PROBE_LOCK:
-        cached = FILE_PROBE_CACHE.get(key)
-        if cached is not None:
-            if now - cached[0] < FILE_PROBE_TTL:
-                FILE_PROBE_CACHE.move_to_end(key)
-                return cached[1]
-            FILE_PROBE_CACHE.pop(key, None)
-    try:
-        if file_only:
-            st = os.stat(value)
-            result = stat.S_ISREG(st.st_mode)
-        else:
-            os.stat(value)
-            result = True
-    except OSError:
-        result = False
-    with FILE_PROBE_LOCK:
-        FILE_PROBE_CACHE[key] = (now, result)
-        while len(FILE_PROBE_CACHE) > FILE_PROBE_MAX:
-            FILE_PROBE_CACHE.popitem(last=False)
-    return result
-
-
-def _reject_media_symlink_components(path):
-    cursor = Path(path)
-    while True:
-        try:
-            if cursor.is_symlink():
-                raise ValueError(f"Media paths may not contain symlinks: {cursor}")
-        except OSError as error:
-            raise ValueError(f"Could not inspect media path: {cursor}") from error
-        if cursor.parent == cursor:
-            return
-        cursor = cursor.parent
-
-
-def _media_roots():
-    values = [DATA.parent / "media"]
-    configured = os.environ.get(MEDIA_ROOTS_ENV, "")
-    if len(configured) > 16 * 4096:
-        raise ValueError(f"{MEDIA_ROOTS_ENV} is too long.")
-    for item in configured.split(os.pathsep):
-        item = item.strip()
-        if not item:
-            continue
-        candidate = Path(item).expanduser()
-        if not candidate.is_absolute():
-            raise ValueError(f"{MEDIA_ROOTS_ENV} entries must be absolute paths.")
-        values.append(candidate)
-    roots = []
-    if len(values) > 32:
-        raise ValueError(f"{MEDIA_ROOTS_ENV} contains too many roots.")
-    for value in values:
-        _reject_media_symlink_components(value)
-        try:
-            root = value.resolve(strict=False)
-        except (OSError, RuntimeError) as error:
-            raise ValueError(f"Could not resolve media root: {value}") from error
-        if root == Path("/"):
-            raise ValueError("Filesystem root is not an approved media root.")
-        if root not in roots:
-            roots.append(root)
-    return roots
-
-
-def approved_media_path(path, *, must_exist=False):
-    """Return a regular media path under DATA/media or explicit approved roots.
-
-    Existing libraries stored outside OpenBox must opt in with
-    ``OPENBOX_MEDIA_ROOTS`` (an absolute-path list separated by ``os.pathsep``).
-    Paths outside those roots, and any symlinked component, are rejected before
-    media or document handlers can use them.
-    """
-    raw = Path(str(path or "")).expanduser()
-    if not str(path or "").strip() or not raw.is_absolute():
-        raise ValueError("Media paths must be absolute paths under an approved media root.")
-    _reject_media_symlink_components(raw)
-    try:
-        candidate = raw.resolve(strict=False)
-    except (OSError, RuntimeError) as error:
-        raise ValueError(f"Could not resolve media path: {raw}") from error
-    roots = _media_roots()
-    if not any(candidate != root and root in candidate.parents for root in roots):
-        raise ValueError(f"Path is outside an approved OpenBox media directory: {candidate}")
-    if must_exist and not candidate.is_file():
-        raise FileNotFoundError(str(candidate))
-    return candidate
-
-
-def safe_document_file(path):
-    return approved_media_path(path, must_exist=True)
-
-
-def media_probe_path(path):
-    try:
-        return probe_path(approved_media_path(path), file_only=True)
-    except (OSError, ValueError, TypeError):
-        return False
-
-
-def sanitize_media_path(path):
-    value = str(path or "").strip()
-    if not value:
-        return ""
-    with _SANITIZE_MEDIA_PATH_LOCK:
-        cached = _SANITIZE_MEDIA_PATH_CACHE.get(value)
-        if cached is not None:
-            return cached
-    try:
-        result = str(approved_media_path(value))
-    except (OSError, ValueError, TypeError):
-        result = ""
-    with _SANITIZE_MEDIA_PATH_LOCK:
-        if len(_SANITIZE_MEDIA_PATH_CACHE) >= _SANITIZE_MEDIA_PATH_MAX:
-            _SANITIZE_MEDIA_PATH_CACHE.clear()
-        _SANITIZE_MEDIA_PATH_CACHE[value] = result
-    return result
-
-
-def sanitize_document_records(records):
-    if not isinstance(records, list):
-        return []
-    clean = []
-    for item in records[:100]:
-        if not isinstance(item, dict):
-            continue
-        path = str(item.get("path", "")).strip()
-        if not path:
-            continue
-        try:
-            safe_path = approved_media_path(path)
-        except (OSError, ValueError, TypeError):
-            continue
-        record = dict(item)
-        record["path"] = str(safe_path)
-        clean.append(record)
-    return clean
-
-
-def approved_backup_file(path):
-    candidate = Path(str(path or "")).expanduser()
-    if candidate.suffix.casefold() != ".zip":
-        raise ValueError("Backups must be ZIP archives.")
-    if candidate.is_symlink():
-        raise ValueError("Backup path may not be a symlink.")
-    return contained_path(candidate, [DATA.parent, DATA.parent / "backups"], must_exist=True)
 
 
 def game_identity(game):
@@ -463,6 +365,7 @@ def consolidate_existing_games(games):
 
 
 def import_folder_path(folder, recommend=True, chosen_emulators=None):
+
     folder = Path(folder).expanduser()
     if not folder.is_dir():
         raise ValueError(f"Folder does not exist: {folder}")
@@ -646,1495 +549,6 @@ def run_configured_commands(key):
             pass
 
 
-def public_settings(state=None):
-    state = state or load_state()
-    sig = STATE_STORE.signature()
-    with PUBLIC_SETTINGS_LOCK:
-        if sig and PUBLIC_SETTINGS_CACHE["signature"] == sig and PUBLIC_SETTINGS_CACHE["payload"] is not None:
-            return PUBLIC_SETTINGS_CACHE["payload"]
-    result = _public_settings_uncached(state)
-    # Recheck signature after computing to avoid caching stale data under a new signature
-    sig_after = STATE_STORE.signature()
-    if sig_after == sig:
-        with PUBLIC_SETTINGS_LOCK:
-            PUBLIC_SETTINGS_CACHE.update({"signature": sig, "payload": result})
-    return result
-
-
-def _public_settings_uncached(state):
-    settings = state.get("settings", {})
-    platform_documents = settings.get("platform_documents", {})
-    if not isinstance(platform_documents, dict):
-        platform_documents = {}
-    return {
-        "watch_folders": settings.get("watch_folders", []),
-        "screensaver_seconds": settings.get("screensaver_seconds", 90),
-        "controller_map": settings.get("controller_map", {}),
-        "badge_visibility": settings.get("badge_visibility", ["favorite", "installed", "saves", "documents", "progress", "storefront", "achievements", "rating"]),
-        "image_group": settings.get("image_group", "cover"),
-        "image_group_by_platform": settings.get("image_group_by_platform", {}),
-        "image_group_by_playlist": settings.get("image_group_by_playlist", {}),
-        "cloud_folder": settings.get("cloud_folder", ""),
-        "last_cloud_sync": settings.get("last_cloud_sync", ""),
-        "startup_commands": settings.get("startup_commands", []),
-        "shutdown_commands": settings.get("shutdown_commands", []),
-        "track_session_history": settings.get("track_session_history", True),
-        "backup_on_close": settings.get("backup_on_close", False),
-        "save_backup_limit": settings.get("save_backup_limit", 10),
-        "progress_automation_enabled": settings.get("progress_automation_enabled", False),
-        "progress_automation_play_minutes": settings.get("progress_automation_play_minutes", 30),
-        "progress_automation_idle_days": settings.get("progress_automation_idle_days", 30),
-        "welcome_completed": settings.get("welcome_completed", False),
-        "auto_import_media_types": sorted(media_types_from_settings(settings)),
-        "media_download_limit": settings.get("media_download_limit", 0),
-        "region_priority": settings.get("region_priority", list(REGION_PRIORITY_DEFAULT)),
-        "video_priority": settings.get("video_priority", ["video_snap", "video_theme", "video_trailer", "video_recording"]),
-        "library_music": settings.get("library_music", ""),
-        "video_bgm_mix": settings.get("video_bgm_mix", False),
-        "bigbox_mode": settings.get("bigbox_mode", "stage"),
-        "show_playlist_actions": settings.get("show_playlist_actions", True),
-        "sidebar_sections": settings.get("sidebar_sections", ["search", "view", "platforms", "playlists", "filters"]),
-        "hidden_sidebar_sections": settings.get("hidden_sidebar_sections", []),
-        "storefront_auto_import": settings.get("storefront_auto_import", {"steam": False, "heroic": False, "lutris": False, "gameyfin": False}),
-        "obs_auto_attach": settings.get("obs_auto_attach", True),
-        "obs_recording_path": settings.get("obs_recording_path", ""),
-        "dynamic_play_button": settings.get("dynamic_play_button", True),
-        "gameyfin_url": settings.get("gameyfin_url", ""),
-        "gameyfin_username": settings.get("gameyfin_username", ""),
-        "gameyfin_password_set": bool(settings.get("gameyfin_password")),
-        "gameyfin_install_dir": settings.get("gameyfin_install_dir", ""),
-        "gameyfin_provider": settings.get("gameyfin_provider", ""),
-        "ludusavi_backup_path": settings.get("ludusavi_backup_path", ""),
-        "save_tools": save_tool_status(),
-        "platform_documents": {
-            str(platform): sanitize_document_records(documents)
-            for platform, documents in platform_documents.items()
-        },
-        "custom_field_defs": custom_field_defs(settings),
-        "platform_categories": platform_categories(settings),
-        "list_columns": settings.get("list_columns", list(LIST_COLUMNS_DEFAULT)),
-        "library_view": settings.get("library_view", "grid"),
-        "cover_grouping": settings.get("cover_grouping", "shape"),
-        "locale": settings.get("locale", "en"),
-        "strings": strings_for(settings.get("locale", "en")),
-        "attract_mode_seconds": settings.get("attract_mode_seconds", settings.get("screensaver_seconds", 90)),
-        "bigbox_startup_video": settings.get("bigbox_startup_video", ""),
-        "bigbox_shutdown_commands": settings.get("bigbox_shutdown_commands", []),
-        "tray_enabled": settings.get("tray_enabled", False),
-        "minimize_to_tray": settings.get("minimize_to_tray", False),
-        "media_packs": list_media_packs(settings),
-        "controller_prompt_hint": settings.get("controller_prompt_hint", False),
-        "controller_prompt_pack": settings.get("controller_prompt_pack", "xbox"),
-        "premium_features_free": True,
-        "progress_on_first_play": settings.get("progress_on_first_play", "Playing"),
-        "tracking_mode": settings.get("tracking_mode", "default"),
-        "tracking_delay": settings.get("tracking_delay", 0),
-        "tracking_frequency": settings.get("tracking_frequency", 2),
-        "tracking_process_name": settings.get("tracking_process_name", ""),
-        "apply_perf": settings.get("apply_perf", "auto"),
-        "auto_close_store_clients": settings.get("auto_close_store_clients", False),
-        "filter_presets": list_presets(state),
-        "import_exclusions": list_exclusions(state),
-        "emulator_scan_configs": list_scan_configs(state),
-        "safe_mode": bool(os.environ.get("OPENBOX_SAFE_MODE")),
-        "emumovies_configured": bool(load_emumovies_credentials(DATA.parent).get("username")),
-        "version": VERSION,
-        "appimage": bool(os.environ.get("APPIMAGE")),
-        "gamescope_guest": is_gamescope_guest(force="--game-mode" in sys.argv),
-    }
-
-
-def _public_state_signature():
-    return (openbox.STATE_STORE.signature(), MEDIA_EPOCH["value"], PLUGIN_EPOCH["value"])
-
-
-def _project_game(game, index, media_set, save_indices, video_priority, settings, media_epoch):
-    ckey = (
-        id(game), index, media_epoch,
-        game.get("favorite"), game.get("hidden"), game.get("hide_in_bigbox"),
-        game.get("last_played"), game.get("play_count"), game.get("playtime_seconds"),
-        game.get("progress"), game.get("rating"), game.get("notes"),
-        game.get("name"), game.get("path"), game.get("cover"), game.get("background"),
-        game.get("platform"), index in save_indices,
-    )
-    with _GAME_PROJECTION_LOCK:
-        cached = _GAME_PROJECTION_CACHE.get(ckey)
-        if cached is not None:
-            return cached
-
-    cov = sanitize_media_path(game.get("cover", ""))
-    bg = sanitize_media_path(game.get("background", ""))
-    logo = sanitize_media_path(game.get("clear_logo", ""))
-    fanart = sanitize_media_path(game.get("fanart", ""))
-    banner = sanitize_media_path(game.get("banner", ""))
-    icon = sanitize_media_path(game.get("icon", ""))
-    bback = sanitize_media_path(game.get("box_back", ""))
-    bspine = sanitize_media_path(game.get("box_spine", ""))
-    b3d = sanitize_media_path(game.get("box_3d", ""))
-    tscreen = sanitize_media_path(game.get("title_screen", ""))
-    cfront = sanitize_media_path(game.get("cart_front", ""))
-    cback = sanitize_media_path(game.get("cart_back", ""))
-    disc = sanitize_media_path(game.get("disc", ""))
-    ad = sanitize_media_path(game.get("advertisement", ""))
-    man = sanitize_media_path(game.get("manual", ""))
-    mus = sanitize_media_path(game.get("music", ""))
-    
-    has_cov = _media_set_contains(media_set, cov)
-    vfield, vpath = active_video(dict(game), video_priority)
-    vpath_clean = sanitize_media_path(vpath) if vpath else ""
-    if not vpath_clean:
-        vfield = ""
-
-    raw_path = game.get("path", "")
-    path_exists = probe_path(str(raw_path), file_only=False) if raw_path else False
-    store_installed = bool(game["store_installed"]) if "store_installed" in game else path_exists
-
-    game_id = game.get("game_id", "")
-    steam_id = game.get("steam_app_id", "")
-    heroic_id = game.get("heroic_app_id", "")
-    lutris_id = game.get("lutris_id", "")
-    gameyfin_id = game.get("gameyfin_id", "")
-    store_catalog = bool(game.get("store_catalog"))
-
-    alt = game.get("alternate_names", [])
-    if not isinstance(alt, list):
-        alt = [n.strip() for n in str(alt or "").split(";") if n.strip()]
-
-    custom = game.get("custom_fields", {})
-    if not isinstance(custom, dict):
-        custom = {}
-
-    tags = game.get("tags", [])
-    if not isinstance(tags, list):
-        tags = []
-
-    documents = sanitize_document_records(game.get("documents", []))
-    raw_screenshots = game.get("screenshots", [])
-    if not isinstance(raw_screenshots, list):
-        raw_screenshots = []
-    screenshots = [safe_path for p in raw_screenshots for safe_path in [sanitize_media_path(p)] if safe_path]
-    available_screenshots = [i for i, p in enumerate(screenshots) if _media_set_contains(media_set, p)]
-
-    platform = str(game.get("platform", ""))
-    settings_id = id(settings)
-    with _PLATFORM_CATEGORY_LOCK:
-        cat_key = (platform, settings_id)
-        platform_cat = _PLATFORM_CATEGORY_CACHE.get(cat_key)
-        if platform_cat is None:
-            platform_cat = category_for_platform(platform, settings)
-            if len(_PLATFORM_CATEGORY_CACHE) >= _PLATFORM_CATEGORY_MAX:
-                _PLATFORM_CATEGORY_CACHE.clear()
-            _PLATFORM_CATEGORY_CACHE[cat_key] = platform_cat
-
-    proj = {
-        "name": game.get("name", ""),
-        "platform": platform,
-        "genre": game.get("genre", ""),
-        "year": game.get("year", ""),
-        "developer": game.get("developer", ""),
-        "publisher": game.get("publisher", ""),
-        "series": game.get("series", ""),
-        "collection": game.get("collection", ""),
-        "description": game.get("description", ""),
-        "path": raw_path,
-        "launch": game.get("launch", ""),
-        "launch_profile": game.get("launch_profile", ""),
-        "cover": cov,
-        "background": bg,
-        "clear_logo": logo,
-        "fanart": fanart,
-        "banner": banner,
-        "icon": icon,
-        "box_back": bback,
-        "box_spine": bspine,
-        "box_3d": b3d,
-        "title_screen": tscreen,
-        "cart_front": cfront,
-        "cart_back": cback,
-        "disc": disc,
-        "advertisement": ad,
-        "manual": man,
-        "source": game.get("source", ""),
-        "steam_app_id": steam_id,
-        "lutris_id": lutris_id,
-        "install_dir": game.get("install_dir", ""),
-        "heroic_app_id": heroic_id,
-        "rom_name": game.get("rom_name", ""),
-        "clone_of": game.get("clone_of", ""),
-        "set_type": game.get("set_type", ""),
-        "ra_game_id": game.get("ra_game_id", ""),
-        "ra_hash": game.get("ra_hash", ""),
-        "launchbox_db_id": game.get("launchbox_db_id", ""),
-        "archive_member": game.get("archive_member", ""),
-        "video": sanitize_media_path(game.get("video", "")),
-        "music": mus,
-        "video_snap": sanitize_media_path(game.get("video_snap", "")),
-        "video_theme": sanitize_media_path(game.get("video_theme", "")),
-        "video_trailer": sanitize_media_path(game.get("video_trailer", "")),
-        "video_recording": sanitize_media_path(game.get("video_recording", "")),
-        "progress": game.get("progress", ""),
-        "rating": game.get("rating", ""),
-        "notes": game.get("notes", ""),
-        "region": game.get("region", ""),
-        "play_mode": game.get("play_mode", ""),
-        "sort_title": game.get("sort_title", ""),
-        "added_at": game.get("added_at", ""),
-        "alternate_names": alt,
-        "max_players": game.get("max_players", ""),
-        "wikipedia_url": game.get("wikipedia_url", ""),
-        "video_url": game.get("video_url", ""),
-        "hide_in_bigbox": bool(game.get("hide_in_bigbox")),
-        "esrb": game.get("esrb", ""),
-        "broken": bool(game.get("broken")),
-        "portable": bool(game.get("portable")),
-        "controller_support": game.get("controller_support", ""),
-        "disc_count": game.get("disc_count", ""),
-        "gameyfin_id": gameyfin_id,
-        "gameyfin_provider": game.get("gameyfin_provider", ""),
-        "store_catalog": store_catalog,
-        "store_installed": store_installed,
-        "owned": bool(game.get("owned") or store_catalog or steam_id or heroic_id or lutris_id or gameyfin_id),
-        "tracking_mode": game.get("tracking_mode", ""),
-        "tracking_delay": game.get("tracking_delay", ""),
-        "tracking_frequency": game.get("tracking_frequency", ""),
-        "tracking_process_name": game.get("tracking_process_name", ""),
-        "igdb_id": game.get("igdb_id", ""),
-        "id": index,
-        "game_id": game_id,
-        "favorite": bool(game.get("favorite")),
-        "hidden": bool(game.get("hidden")),
-        "last_played": game.get("last_played", ""),
-        "play_count": game.get("play_count", 0),
-        "playtime_seconds": game.get("playtime_seconds", 0),
-        "path_exists": path_exists,
-        "has_cover": has_cov,
-        "has_background": _media_set_contains(media_set, bg),
-        "has_clear_logo": _media_set_contains(media_set, logo),
-        "has_fanart": _media_set_contains(media_set, fanart),
-        "has_banner": _media_set_contains(media_set, banner),
-        "has_icon": _media_set_contains(media_set, icon),
-        "has_box_back": _media_set_contains(media_set, bback),
-        "has_box_spine": _media_set_contains(media_set, bspine),
-        "has_box_3d": _media_set_contains(media_set, b3d),
-        "has_title_screen": _media_set_contains(media_set, tscreen),
-        "has_cart_front": _media_set_contains(media_set, cfront),
-        "has_cart_back": _media_set_contains(media_set, cback),
-        "has_disc": _media_set_contains(media_set, disc),
-        "has_advertisement": _media_set_contains(media_set, ad),
-        "has_manual": _media_set_contains(media_set, man),
-        "has_video": bool(vpath_clean),
-        "active_video_field": vfield,
-        "has_music": _media_set_contains(media_set, mus),
-        "has_saves": index in save_indices or bool(game.get("save_paths")),
-        "has_documents": bool(documents),
-        "has_versions": bool(game.get("versions")),
-        "has_achievements": bool(game.get("ra_game_id")),
-        "has_highscores": bool(game.get("rom_name")) and platform.casefold() in {"arcade", "mame", "finalburn neo"},
-        "has_missing_media": not has_cov,
-        "extract_archive": bool(game.get("extract_archive")),
-        "applications": game.get("applications", []),
-        "versions": game.get("versions", []),
-        "documents": documents,
-        "save_paths": game.get("save_paths", []),
-        "screenshots": screenshots,
-        "available_screenshots": available_screenshots,
-        "custom_fields": custom,
-        "platform_category": platform_cat,
-        "tags": tags,
-        "installable": bool(gameyfin_id) and not store_installed,
-        "legacy_game_ids": list(game.get("legacy_game_ids", [])) if isinstance(game.get("legacy_game_ids"), list) else [],
-    }
-    with _GAME_PROJECTION_LOCK:
-        if len(_GAME_PROJECTION_CACHE) >= _GAME_PROJECTION_MAX:
-            _GAME_PROJECTION_CACHE.clear()
-        _GAME_PROJECTION_CACHE[ckey] = proj
-    return proj
-
-
-def _build_public_state():
-    with STATE_LOCK:
-        state = load_state_readonly()
-        state_signature = openbox.STATE_STORE.signature()
-    save_indices = set(games_with_saves(state["games"]))
-    media_set = _build_known_media_set()
-    video_priority = state.get("settings", {}).get("video_priority")
-    settings = state.get("settings", {})
-    media_epoch = MEDIA_EPOCH["value"]
-    raw_games = state["games"]
-
-    games = [
-        _project_game(game, index, media_set, save_indices, video_priority, settings, media_epoch)
-        for index, game in enumerate(raw_games)
-    ]
-    decorated = games
-    if not os.environ.get("OPENBOX_SAFE_MODE"):
-        now = time.monotonic()
-        cached = PLUGIN_LIBRARY_CACHE
-        with PLUGIN_LIBRARY_LOCK:
-            if cached["payload"] is not None and cached.get("state_signature") == state_signature:
-                # Return cached result immediately; refresh in background if stale
-                result = cached["payload"]
-                if now - cached["at"] >= PLUGIN_LIBRARY_TTL and not _PLUGIN_REFRESH_IN_PROGRESS["value"]:
-                    _PLUGIN_REFRESH_IN_PROGRESS["value"] = True
-                    refresh_games = games
-                    refresh_signature = state_signature
-                    def _refresh_plugins(games_snapshot=refresh_games, expected_signature=refresh_signature):
-                        try:
-                            fresh = run_plugins(DATA.parent / "plugins", "library", {"games": games_snapshot})
-                            with STATE_LOCK:
-                                if openbox.STATE_STORE.signature() != expected_signature:
-                                    return
-                                with PLUGIN_LIBRARY_LOCK:
-                                    PLUGIN_LIBRARY_CACHE.update({
-                                        "at": time.monotonic(),
-                                        "payload": fresh,
-                                        "state_signature": expected_signature,
-                                    })
-                                    PLUGIN_EPOCH["value"] += 1
-                            with PUBLIC_STATE_LOCK:
-                                PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None, "raw_gzip": None, "games_by_id": None})
-                        except Exception:
-                            LOGGER.exception("Background plugin refresh failed")
-                        finally:
-                            with PLUGIN_LIBRARY_LOCK:
-                                _PLUGIN_REFRESH_IN_PROGRESS["value"] = False
-                    threading.Thread(target=_refresh_plugins, daemon=True).start()
-            else:
-                # First call or changed state: block and populate cache
-                result = run_plugins(DATA.parent / "plugins", "library", {"games": games})
-                cached.update({"at": now, "payload": result, "state_signature": state_signature})
-        decorated = result.get("games", games) if isinstance(result, dict) else games
-    if isinstance(decorated, list) and len(decorated) == len(games) and all(isinstance(game, dict) for game in decorated):
-        games = decorated
-        for index, game in enumerate(games):
-            game["id"] = index
-            game.setdefault("game_id", state["games"][index].get("game_id", ""))
-    return {
-        "games": games,
-        "playlists": state.get("playlists", []),
-        "filter_presets": list_presets(state),
-        "ra_configured": bool(load_ra_credentials(DATA.parent)),
-        "settings": public_settings(state),
-        "discovery": discovery_lists(state["games"]),
-        "media_epoch": media_epoch,
-    }
-
-
-def _public_state_cached():
-    with PUBLIC_STATE_LOCK:
-        signature = _public_state_signature()
-        if PUBLIC_STATE_CACHE["raw"] is not None and PUBLIC_STATE_CACHE["signature"] == signature:
-            return PUBLIC_STATE_CACHE
-    payload = _build_public_state()
-    raw = json.dumps(payload).encode()
-    raw_gzip = gzip.compress(raw) if len(raw) >= GZIP_THRESHOLD else raw
-    games_by_id = {}
-    for game in payload["games"]:
-        gid = str(game.get("game_id") or "")
-        if gid:
-            games_by_id[gid] = game
-        for leg_id in game.get("legacy_game_ids", []):
-            if leg_id:
-                games_by_id[str(leg_id)] = game
-        games_by_id[str(game.get("id"))] = game
-    with PUBLIC_STATE_LOCK:
-        if PUBLIC_STATE_CACHE["raw"] is not None and PUBLIC_STATE_CACHE["signature"] == signature:
-            return PUBLIC_STATE_CACHE
-        PUBLIC_STATE_CACHE.update({
-            "signature": signature,
-            "payload": payload,
-            "raw": raw,
-            "raw_gzip": raw_gzip,
-            "games_by_id": games_by_id,
-        })
-        return PUBLIC_STATE_CACHE
-
-
-def public_state():
-    """Return the full library projection, cached until library state changes."""
-    return _public_state_cached()["payload"]
-
-
-def public_state_bytes():
-    """Return the serialized library projection, cached until library state changes."""
-    return _public_state_cached()["raw"]
-
-
-def public_state_etag():
-    """Stable ETag for the library projection, derived from its signature."""
-    signature = _public_state_signature()
-    stat = signature[0] or (0, 0, 0)
-    return f'"{stat[0]:x}-{stat[1]:x}-{signature[1]}-{signature[2]}"'
-
-
-def load_state_view():
-    """Read-only library snapshot reused across requests until the file changes."""
-    with STATE_VIEW_LOCK:
-        signature = openbox.STATE_STORE.signature()
-        if STATE_VIEW_CACHE["state"] is not None and STATE_VIEW_CACHE["signature"] == signature:
-            return STATE_VIEW_CACHE["state"]
-    state = load_state_readonly()
-    with STATE_VIEW_LOCK:
-        if STATE_VIEW_CACHE["state"] is not None and STATE_VIEW_CACHE["signature"] == signature:
-            return STATE_VIEW_CACHE["state"]
-        STATE_VIEW_CACHE.update({"signature": signature, "state": state})
-        return state
-def transact_state(mutator):
-    """Run one read-modify-write transaction under the local and process lock."""
-    with STATE_LOCK:
-        result = update_state_with_result(mutator)
-    with PUBLIC_STATE_LOCK:
-        PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None, "raw_gzip": None, "games_by_id": None})
-    with PUBLIC_SETTINGS_LOCK:
-        PUBLIC_SETTINGS_CACHE.update({"signature": None, "payload": None})
-    with STATE_VIEW_LOCK:
-        STATE_VIEW_CACHE.update({"signature": None, "state": None})
-    with PLUGIN_LIBRARY_LOCK:
-        PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None, "state_signature": None})
-    clear_discovery_cache()
-    return result
-
-
-def webhook_configs(state=None):
-    """Return the persisted webhook configurations list (redacted when public)."""
-    state = state or load_state()
-    configs = state.get("settings", {}).get("webhooks", [])
-    if not isinstance(configs, list):
-        return []
-    return [config for config in configs[:MAX_WEBHOOKS] if isinstance(config, dict)]
-def emit_notification(*, kind="system", level="info", title="OpenBox", body="", source="", correlation_id="", dedupe_key=""):
-    def mutate(state):
-        return add_notification(state, kind=kind, level=level, title=title, body=body, source=source, correlation_id=correlation_id, dedupe_key=dedupe_key)
-    try:
-        transact_state(mutate)
-    except Exception:
-        LOGGER.exception("Could not persist notification")
-
-
-
-
-def public_webhook_configs(state=None):
-    """Return webhook configs with secrets replaced by a secret_set flag."""
-    configs = []
-    for config in webhook_configs(state):
-        public = {
-            key: value
-            for key, value in config.items()
-            if key != "secret"
-        }
-        public["secret_set"] = bool(config.get("secret"))
-        configs.append(public)
-    return configs
-
-
-def _webhook_payload(envelope, configs):
-    """Persist and enqueue one event envelope for matching webhook configs.
-
-    Never raises: webhook delivery is best-effort and must not change the
-    outcome of the originating operation. Returns the event id string.
-    """
-    event_id = str(envelope.get("id") or "")
-    try:
-        matched = [config for config in configs if config.get("enabled") and event_matches(config, envelope)]
-        dispatcher = get_webhook_dispatcher()
-        if dispatcher is None:
-            return event_id
-        if not dispatcher.enqueue(matched, envelope):
-            LOGGER.warning("Webhook queue is full; event %s was dropped", event_id)
-            _emit_webhook_failure(event_id, "Webhook delivery queue is full; the event was dropped.")
-    except Exception:
-        LOGGER.exception("Webhook delivery failed for event %s", event_id)
-    return event_id
-
-
-def event_matches(config, envelope):
-    events = config.get("events") or []
-    return isinstance(events, list) and str(envelope.get("type", "")) in events
-
-
-def _emit_webhook_failure(event_id, error):
-    """Surface a delivery failure through the Notification Center when present.
-
-    Uses getattr so this module works even before the notification module
-    lands in the same release; failures are logged when no emitter exists.
-    """
-    emitter = globals().get("emit_notification")
-    if emitter is None:
-        LOGGER.warning("Webhook event %s failed delivery: %s", event_id, error)
-        return
-    try:
-        emitter(
-            level="error",
-            source="webhook",
-            title="Webhook delivery failed",
-            body=error,
-            correlation_id=event_id,
-            dedupe_key=f"webhook:{event_id}",
-        )
-    except Exception:
-        LOGGER.exception("Failed to record webhook delivery failure notification")
-
-
-def _commit_webhook_result(webhook_id, event_id, status, error, sent_at, terminal):
-    """Persist the last delivery status for one webhook config.
-
-    Runs outside every dispatcher, process, and state lock; the callback
-    contract requires the worker to release all locks before invoking it.
-    """
-    try:
-        def mutate(state):
-            settings = state.setdefault("settings", {})
-            for config in settings.get("webhooks", []):
-                if not isinstance(config, dict):
-                    continue
-                if str(config.get("id") or "") != webhook_id:
-                    continue
-                config["last_status"] = status
-                config["last_error"] = error
-                if sent_at:
-                    config["last_sent_at"] = sent_at
-                if terminal:
-                    config["last_delivery_at"] = sent_at or utc_now()
-                return True
-            return False
-
-        _, updated = transact_state(mutate)
-        if not updated:
-            return
-        if terminal and (status is None or status >= 300 or status == 0):
-            _emit_webhook_failure(
-                event_id,
-                error or f"Webhook delivery failed with HTTP {status}." if status else (error or "Webhook delivery failed."),
-            )
-    except Exception:
-        LOGGER.exception("Failed to commit webhook delivery status for %s", webhook_id)
-
-
-def get_webhook_dispatcher():
-    """Return the lazily-created dispatcher singleton, or None in safe mode.
-
-    The dispatcher factory is replaceable under ``WEBHOOK_DISPATCHER_FACTORY``
-    so handler/session tests can inject a fake without running ``main()``.
-    """
-    global WEBHOOK_DISPATCHER
-    if os.environ.get("OPENBOX_SAFE_MODE"):
-        return None
-    factory = globals().get("WEBHOOK_DISPATCHER_FACTORY", _default_webhook_dispatcher_factory)
-    with WEBHOOK_DISPATCHER_LOCK:
-        if WEBHOOK_DISPATCHER is None:
-            WEBHOOK_DISPATCHER = factory()
-            WEBHOOK_DISPATCHER.start()
-        return WEBHOOK_DISPATCHER
-
-
-def _default_webhook_dispatcher_factory():
-    from automation import WebhookDispatcher
-    return WebhookDispatcher(on_result=_commit_webhook_result)
-
-
-def publish_event(event, data):
-    """Build and enqueue one webhook event for matching configs. Never raises.
-
-    Returns the event id string, or "" when the event could not be built.
-    """
-    try:
-        envelope = build_event(event, data)
-    except (ValueError, TypeError) as error:
-        LOGGER.warning("Skipped webhook event %s: %s", event, error)
-        return ""
-    try:
-        configs = webhook_configs(load_state())
-        _webhook_payload(envelope, configs)
-    except Exception:
-        LOGGER.exception("Webhook publish failed for event %s", event)
-    return str(envelope.get("id") or "")
-
-
-def shutdown_webhooks(wait_seconds=2.0):
-    """Stop and join the lazy webhook dispatcher singleton if it exists."""
-    global WEBHOOK_DISPATCHER
-    with WEBHOOK_DISPATCHER_LOCK:
-        dispatcher = WEBHOOK_DISPATCHER
-        WEBHOOK_DISPATCHER = None
-    if dispatcher is not None:
-        try:
-            dispatcher.shutdown(wait_seconds=wait_seconds)
-        except Exception:
-            LOGGER.exception("Webhook dispatcher shutdown failed")
-
-
-def _publish_session_event(envelope):
-    try:
-        publish_event(envelope["type"], envelope["data"])
-    except Exception:
-        LOGGER.exception("Failed to publish session webhook event")
-
-
-def register_event_subscriber(subscriber):
-    with EVENT_SUBSCRIBERS_LOCK:
-        if len(EVENT_SUBSCRIBERS) >= SSE_MAX_SUBSCRIBERS:
-            return False
-        EVENT_SUBSCRIBERS.add(subscriber)
-        return True
-
-
-def unregister_event_subscriber(subscriber):
-    with EVENT_SUBSCRIBERS_LOCK:
-        EVENT_SUBSCRIBERS.discard(subscriber)
-
-
-def _close_sse_subscriber(subscriber):
-    try:
-        while True:
-            subscriber.get_nowait()
-    except queue.Empty:
-        pass
-    except Exception:
-        return
-    try:
-        subscriber.put_nowait(None)
-    except Exception:
-        pass
-
-
-def broadcast_event(kind, payload):
-    """Push one bounded event to every connected SSE subscriber. Never blocks."""
-    try:
-        data = json.dumps(payload, ensure_ascii=False)
-        encoded = data.encode("utf-8")
-    except (TypeError, ValueError):
-        LOGGER.warning("Skipped non-serializable SSE event %s", kind)
-        return
-    if len(encoded) > SSE_MAX_EVENT_BYTES:
-        data = json.dumps({"truncated": True, "bytes": len(encoded)}, separators=(",", ":"))
-    event_kind = str(kind).replace("\r", "").replace("\n", "")[:64]
-    with EVENT_SUBSCRIBERS_LOCK:
-        subscribers = list(EVENT_SUBSCRIBERS)
-    for subscriber in subscribers:
-        try:
-            subscriber.put_nowait((event_kind, data))
-        except queue.Full:
-            unregister_event_subscriber(subscriber)
-            _close_sse_subscriber(subscriber)
-        except Exception:
-            LOGGER.exception("SSE subscriber queue failed")
-
-
-def session_event(kind, launch_id, game_name, exit_code=None, seconds=None):
-    global EVENT_SEQUENCE
-    with PROCESS_LOCK:
-        EVENT_SEQUENCE += 1
-        event = {
-            "id": EVENT_SEQUENCE,
-            "kind": kind,
-            "launch_id": launch_id,
-            "game": game_name,
-            "time": datetime.now().isoformat(timespec="seconds"),
-        }
-        if exit_code is not None:
-            event["exit_code"] = exit_code
-        if seconds is not None:
-            event["seconds"] = seconds
-        SESSION_EVENTS.append(event)
-        SESSION_EVENTS[:] = SESSION_EVENTS[-100:]
-    broadcast_event(kind, event)
-
-
-def _stable_id_match(game, stable_id):
-    """True when the game's current or legacy stable id equals stable_id."""
-    aliases = game.get("legacy_game_ids", [])
-    return (
-        str(game.get("game_id") or "") == stable_id
-        or isinstance(aliases, list) and stable_id in {str(value) for value in aliases}
-    )
-
-
-def _match_storefront_ids(games, identity):
-    """Return the first game whose storefront id matches, else None."""
-    for key in ("gameyfin_id", "steam_app_id", "heroic_app_id", "lutris_id"):
-        value = str(identity.get(key) or "").strip()
-        if not value:
-            continue
-        for game in games:
-            if str(game.get(key) or "") == value:
-                return game
-    return None
-
-
-def _match_path_and_name(games, path, name):
-    """Match by path, preferring an exact name when both are given."""
-    if path:
-        matches = [game for game in games if str(game.get("path", "")) == path]
-        if name:
-            named = [game for game in matches if str(game.get("name", "")) == name]
-            if named:
-                return named[0]
-        if len(matches) == 1:
-            return matches[0]
-    return None
-
-
-def _match_fallback_index(games, fallback_index, name, path):
-    """Resolve by array index with name/path sanity checks, else None."""
-    if fallback_index is not None:
-        try:
-            index = int(fallback_index)
-        except (TypeError, ValueError):
-            index = -1
-        if 0 <= index < len(games):
-            candidate = games[index]
-            if name and str(candidate.get("name", "")) != name:
-                return None
-            if path and str(candidate.get("path", "")) != path:
-                return None
-            return candidate
-    return None
-
-
-def resolve_library_game(state, identity, fallback_index=None):
-    """Find a library game by stable ids/path, not a stale array index."""
-    games = state.get("games") or []
-    if not isinstance(identity, dict):
-        identity = {}
-    stable_id = str(identity.get("stable_game_id") or identity.get("game_id") or "").strip()
-    if stable_id:
-        for game in games:
-            if _stable_id_match(game, stable_id):
-                return game
-    game = _match_storefront_ids(games, identity)
-    if game is not None:
-        return game
-    path = str(identity.get("game_path") or identity.get("path") or "")
-    name = str(identity.get("game_name") or identity.get("game") or identity.get("name") or "")
-    game = _match_path_and_name(games, path, name)
-    if game is not None:
-        return game
-    return _match_fallback_index(games, fallback_index, name, path)
-
-
-def game_from_payload(state, payload):
-    """Resolve additive stable IDs first, then retain the numeric frontend ID."""
-    if not isinstance(payload, dict):
-        raise ValueError("Request payload must be an object.")
-    stable_id = str(payload.get("game_id") or payload.get("stable_game_id") or "").strip()
-    games = state.get("games") or []
-    if stable_id:
-        for game in games:
-            if _stable_id_match(game, stable_id):
-                return game
-        raise IndexError("Game not found")
-    if payload.get("id") is None:
-        raise ValueError("Game id is required.")
-    try:
-        index = int(payload["id"])
-    except (TypeError, ValueError) as error:
-        raise ValueError("Game id must be a number or stable game id.") from error
-    if index < 0 or index >= len(games):
-        raise IndexError("Game not found")
-    return games[index]
-
-
-def game_from_query(state, query):
-    payload = {"id": query.get("id", [None])[0]}
-    if query.get("game_id", [""])[0]:
-        payload["game_id"] = query["game_id"][0]
-    return game_from_payload(state, payload)
-
-
-def _read_proc_start_time(pid):
-    """Read process start time from /proc/<pid>/stat."""
-    try:
-        with open(f'/proc/{pid}/stat') as f:
-            fields = f.read().rsplit(')', 1)[-1].split()
-            return fields[19]  # starttime (field 22, 0-indexed as 19 after rparen split)
-    except (OSError, IndexError):
-        return None
-
-def _read_proc_cmdline(pid):
-    """Read command fingerprint from /proc/<pid>/cmdline."""
-    try:
-        with open(f'/proc/{pid}/cmdline') as f:
-            return f.read().replace('\0', ' ')[:100]
-    except OSError:
-        return ''
-
-def _verify_process_identity(session):
-    """Check if a persisted session's process is still the same one."""
-    pid = session.get('pid')
-    if not pid:
-        return False
-    # Check PID exists
-    try:
-        os.kill(pid, 0)
-    except (OSError, ProcessLookupError):
-        return False
-    # Verify start time matches
-    current_start = _read_proc_start_time(pid)
-    if current_start != session.get('proc_start_time'):
-        return False
-    # Verify command fingerprint matches
-    current_cmd = _read_proc_cmdline(pid)
-    if session.get('command_fingerprint') and current_cmd:
-        # Fuzzy match — first 50 chars should match
-        if current_cmd[:50] != session['command_fingerprint'][:50]:
-            return False
-    return True
-
-def reconcile_sessions_on_startup(state):
-    """Called once during server startup to handle sessions from previous run."""
-    sessions = state.get('active_sessions', [])
-    reattached = []
-    abandoned = []
-    for session in sessions:
-        if _verify_process_identity(session):
-            # Reattach: start a watcher thread for this process
-            reattached.append(session)
-        else:
-            # Mark abandoned — DON'T kill the PID
-            session['status'] = 'abandoned'
-            abandoned.append(session)
-    # Update state: keep reattached + abandoned (abandoned shown in UI)
-    state['active_sessions'] = reattached + abandoned
-    return reattached, abandoned
-
-
-class _ReattachedProcess:
-    """Process-like view for a verified process from a previous server run."""
-
-    def __init__(self, session):
-        self.pid = int(session["pid"])
-        self.pgid = int(session.get("pgid") or self.pid)
-        self._identity = {
-            "pid": self.pid,
-            "proc_start_time": session.get("proc_start_time"),
-            "command_fingerprint": session.get("command_fingerprint", ""),
-        }
-
-    def poll(self):
-        return None if _verify_process_identity(self._identity) else 0
-
-    def wait(self):
-        while self.poll() is None:
-            time.sleep(1.0)
-        return 0
-
-
-class _ReattachedLease:
-    """Restore a performance profile once when a reattached session ends."""
-
-    def __init__(self, profile_name):
-        self.profile_name = str(profile_name or "").strip()
-        self._restored = False
-        self._lock = threading.Lock()
-
-    def restore(self):
-        with self._lock:
-            if self._restored:
-                return
-            self._restored = True
-        if self.profile_name:
-            restore_perf_profile(self.profile_name, load_state())
-
-
-def reattach_session(session, state=None):
-    """Register a verified persisted session and resume normal lifecycle cleanup."""
-    if not isinstance(session, dict):
-        return False
-    launch_id = str(session.get("launch_id") or "").strip()
-    try:
-        pid = int(session.get("pid"))
-    except (TypeError, ValueError):
-        return False
-    if not launch_id or pid <= 0:
-        return False
-
-    state = state or load_state()
-    stable_game_id = str(session.get("game_id") or "").strip()
-    game = resolve_library_game(state, {"stable_game_id": stable_game_id})
-    games = state.get("games", [])
-    game_index = games.index(game) if game in games else -1
-    game = game or {}
-    started_value = str(session.get("start_time") or "").strip()
-    try:
-        started = datetime.fromisoformat(started_value)
-    except ValueError:
-        started = datetime.now()
-    entry = {
-        "launch_id": launch_id,
-        "game_id": game_index,
-        "stable_game_id": stable_game_id,
-        "effective_profile": str(session.get("perf_profile") or ""),
-        "game": game.get("name", "Unknown game"),
-        "game_path": str(game.get("path", "")),
-        "steam_app_id": str(game.get("steam_app_id") or ""),
-        "heroic_app_id": str(game.get("heroic_app_id") or ""),
-        "lutris_id": str(game.get("lutris_id") or ""),
-        "gameyfin_id": str(game.get("gameyfin_id") or ""),
-        "started": started.isoformat(timespec="seconds"),
-        "pid": pid,
-        "paused": False,
-    }
-    process = _ReattachedProcess(session)
-    lease = _ReattachedLease(session.get("perf_profile", ""))
-    with PROCESS_LOCK:
-        RUNNING[launch_id] = entry
-        PROCESSES[launch_id] = process
-    threading.Thread(
-        target=finish_session,
-        args=(launch_id, game_index, started, process, lease),
-        daemon=True,
-    ).start()
-    return True
-
-
-def finish_session(launch_id, game_index, started, process, lease):
-    running = {}
-    running_snapshot = {}
-    game_name = "Untitled"
-    exit_code = 0
-    seconds = 1
-    session = {}
-    session_committed = False
-    try:
-        with PROCESS_LOCK:
-            running_snapshot = dict(RUNNING.get(launch_id, {}))
-        identity = {
-            "stable_game_id": running_snapshot.get("stable_game_id", ""),
-            "game_path": running_snapshot.get("game_path", ""),
-            "game_name": running_snapshot.get("game") or running_snapshot.get("game_name", ""),
-            "steam_app_id": running_snapshot.get("steam_app_id", ""),
-            "heroic_app_id": running_snapshot.get("heroic_app_id", ""),
-            "lutris_id": running_snapshot.get("lutris_id", ""),
-            "gameyfin_id": running_snapshot.get("gameyfin_id", ""),
-        }
-        state = load_state()
-        with STATE_LOCK:
-            settings = copy.deepcopy(state.get("settings", {}))
-            game = resolve_library_game(state, identity, fallback_index=game_index) or {}
-            game_snapshot = copy.deepcopy(game)
-            original_game_name = str(game_snapshot.get("name", "") or identity.get("game_name") or "Untitled")
-        exit_code = wait_for_exit(process, game_snapshot, settings)
-        seconds = max(1, int((datetime.now() - started).total_seconds()))
-        if game_snapshot:
-            if settings.get("backup_on_close") and game_snapshot.get("save_paths"):
-                try:
-                    backup_saves(game_snapshot, DATA.parent / "save-backups", label="on-close")
-                    enforce_backup_limit(game_snapshot, DATA.parent / "save-backups", settings.get("save_backup_limit", 10))
-                except (OSError, FileNotFoundError):
-                    pass
-            try:
-                auto_attach_obs_recording(game_snapshot, started, settings)
-            except (OSError, ValueError, FileNotFoundError):
-                pass
-            try:
-                close_store_client(game_snapshot, settings)
-            except (OSError, ValueError):
-                pass
-
-        session_result = {"game_name": original_game_name, "session": {}}
-
-        def mutate(state):
-            settings = state.get("settings", {})
-            game = resolve_library_game(state, identity, fallback_index=game_index)
-            if game is not None:
-                game["playtime_seconds"] = game.get("playtime_seconds", 0) + seconds
-                apply_progress_automation(game, settings)
-                for key in ("video_recording", "recording", "last_recording"):
-                    if key in game_snapshot:
-                        game[key] = game_snapshot[key]
-                game_name_local = game.get("name", "Untitled")
-            else:
-                game_name_local = original_game_name
-            session_local = {
-                "game": game_name_local,
-                "started": started.isoformat(timespec="seconds"),
-                "seconds": seconds,
-                "exit_code": exit_code,
-            }
-            if settings.get("track_session_history", True):
-                state["history"].append(session_local)
-                state["history"][:] = state["history"][-500:]
-            
-            # Remove from active_sessions
-            state["active_sessions"] = [s for s in state.get("active_sessions", []) if s.get("launch_id") != launch_id]
-            
-            session_result.update({"game_name": game_name_local, "session": session_local})
-        update_state(mutate)
-        session_committed = True
-        game_name = session_result["game_name"]
-        session = session_result["session"]
-    finally:
-        if not session_committed:
-            try:
-                def remove_failed_session(state):
-                    state["active_sessions"] = [
-                        item for item in state.get("active_sessions", [])
-                        if not isinstance(item, dict) or item.get("launch_id") != launch_id
-                    ]
-                update_state(remove_failed_session)
-            except Exception:
-                LOGGER.exception("Failed to clean up session %s after watcher failure", launch_id)
-        with PROCESS_LOCK:
-            running = RUNNING.pop(launch_id, {})
-            PROCESSES.pop(launch_id, None)
-        try:
-            lease.restore()
-        except Exception:  # never let performance tuning break session bookkeeping
-            LOGGER.exception("restore_perf failed")
-    session_event("stopped", launch_id, game_name, exit_code=exit_code, seconds=seconds)
-    _publish_session_event(build_event("session.stopped", {
-        "launch_id": launch_id,
-        "game_id": running_snapshot.get("stable_game_id", ""),
-        "name": game_name,
-        "seconds": seconds,
-        "exit_code": exit_code,
-        "started_at": session.get("started", ""),
-        "stopped_at": utc_now(),
-    }))
-    if not os.environ.get("OPENBOX_SAFE_MODE"):
-        run_plugins(DATA.parent / "plugins", "after_session", session)
-    try:
-        sync_cloud()
-    except (OSError, ValueError):
-        pass
-    if running.get("restart"):
-        state = load_state()
-        target = resolve_library_game(state, identity, fallback_index=game_index)
-        if target is not None:
-            index = state["games"].index(target)
-            try:
-                start_game(index, stable_game_id=target.get("game_id", ""))
-            except (OSError, ValueError, IndexError):
-                pass
-
-
-def clear_file_probe_cache():
-    with FILE_PROBE_LOCK:
-        FILE_PROBE_CACHE.clear()
-
-
-def _fast_realpath(value):
-    """Fast equivalent of str(Path(value).resolve(strict=False))."""
-    return os.path.realpath(os.path.expanduser(value))
-
-
-def _media_dir_mtime():
-    """Compute a combined mtime fingerprint for all media roots.
-    
-    Walks subdirectories to detect file additions/removals, which change
-    the parent directory mtime but not the root mtime.
-    """
-    combined = 0.0
-    try:
-        media_dir = DATA.parent / "media"
-        if media_dir.is_dir():
-            for dirpath, _dirnames, _filenames in os.walk(str(media_dir)):
-                try:
-                    combined += os.stat(dirpath).st_mtime
-                except OSError:
-                    pass
-    except OSError:
-        pass
-    env_value = os.environ.get(MEDIA_ROOTS_ENV, "")
-    if env_value:
-        for item in env_value.split(os.pathsep):
-            item = item.strip()
-            if not item:
-                continue
-            try:
-                root = Path(item).expanduser()
-                if root.is_dir():
-                    for dirpath, _dirnames, _filenames in os.walk(str(root)):
-                        try:
-                            combined += os.stat(dirpath).st_mtime
-                        except OSError:
-                            pass
-            except OSError:
-                pass
-    return combined
-
-
-def _build_known_media_set():
-    """Pre-scan all media roots into a set of resolved absolute paths.
-
-    One fast directory walk replaces thousands of individual stat calls in
-    _build_public_state for large libraries. Results are memoized keyed
-    on the media epoch, and invalidated by bump_media_epoch().
-    """
-    cache_key = (MEDIA_EPOCH["value"], os.environ.get(MEDIA_ROOTS_ENV, ""))
-    with _KNOWN_MEDIA_SET_LOCK:
-        if _KNOWN_MEDIA_SET_CACHE.get("key") == cache_key and _KNOWN_MEDIA_SET_CACHE.get("result") is not None:
-            return _KNOWN_MEDIA_SET_CACHE["result"]
-    known = set()
-    capped = False
-
-    def _scan_dir(dir_path):
-        nonlocal capped
-        try:
-            with os.scandir(dir_path) as it:
-                for entry in it:
-                    try:
-                        if entry.is_file(follow_symlinks=False):
-                            known.add(entry.path)
-                            known.add(os.path.realpath(entry.path))
-                        elif entry.is_dir(follow_symlinks=False):
-                            _scan_dir(entry.path)
-                    except OSError:
-                        pass
-                    if len(known) > _KNOWN_MEDIA_MAX:
-                        capped = True
-                        break
-        except OSError:
-            pass
-
-    try:
-        media_dir = DATA.parent / "media"
-        if media_dir.is_dir():
-            _scan_dir(str(media_dir))
-    except OSError:
-        pass
-    env_value = os.environ.get(MEDIA_ROOTS_ENV, "")
-    if env_value:
-        for item in env_value.split(os.pathsep):
-            item = item.strip()
-            if not item:
-                continue
-            try:
-                root = Path(item).expanduser()
-                if root.is_dir():
-                    _scan_dir(str(root))
-                if capped:
-                    break
-            except OSError:
-                pass
-    if capped:
-        LOGGER.warning("Media set capped at %d entries; some media files may not be detected", _KNOWN_MEDIA_MAX)
-    with _KNOWN_MEDIA_SET_LOCK:
-        _KNOWN_MEDIA_SET_CACHE.update({"key": cache_key, "result": known, "mtime_key": None})
-    return known
-
-
-def _media_set_contains(media_set, path_value):
-    """O(1) check for whether a sanitized media path is in the pre-scanned set."""
-    if not media_set or not path_value:
-        return False
-    p_str = str(path_value)
-    if p_str in media_set:
-        return True
-    if p_str.startswith("/"):
-        norm = os.path.normpath(p_str)
-        if norm in media_set:
-            return True
-    return False
-
-
-def bump_media_epoch():
-    """Invalidate browser media caches by bumping the version suffix in media URLs."""
-    with _KNOWN_MEDIA_SET_LOCK:
-        _KNOWN_MEDIA_SET_CACHE.update({"key": None, "result": None, "mtime_key": None})
-    with _GAME_PROJECTION_LOCK:
-        _GAME_PROJECTION_CACHE.clear()
-    with _SANITIZE_MEDIA_PATH_LOCK:
-        _SANITIZE_MEDIA_PATH_CACHE.clear()
-    with PLUGIN_LIBRARY_LOCK:
-        PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None, "state_signature": None})
-    with MEDIA_EPOCH_LOCK:
-        MEDIA_EPOCH["value"] += 1
-    with PUBLIC_STATE_LOCK:
-        PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None, "raw_gzip": None, "games_by_id": None})
-    clear_file_probe_cache()
-
-
-def download_image(url, destination):
-    result = str(download_file(
-        url,
-        destination,
-        expected_types=("image/",),
-        max_bytes=32 * 1024 * 1024,
-        timeout=15,
-        opener=urlopen,
-    ))
-    bump_media_epoch()
-    return result
-
-
-def update_steam_metadata(game):
-    app_id = str(game.get("steam_app_id", ""))
-    if not app_id.isdigit():
-        raise ValueError("This game has no Steam App ID.")
-    request = Request(
-        f"https://store.steampowered.com/api/appdetails?appids={app_id}",
-        headers={"User-Agent": "OpenBox/1"},
-    )
-    with urlopen(request, timeout=15) as response:
-        payload = json.loads(read_limited(response, 4 * 1024 * 1024))
-    record = payload.get(app_id, {})
-    if not record.get("success"):
-        raise ValueError("Steam did not return metadata for this game.")
-    data = record["data"]
-    game.update({
-        "name": data.get("name") or game.get("name", ""),
-        "developer": ", ".join(data.get("developers", [])),
-        "publisher": ", ".join(data.get("publishers", [])),
-        "genre": ", ".join(item["description"] for item in data.get("genres", [])),
-        "year": data.get("release_date", {}).get("date", ""),
-        "description": html.unescape(re.sub(r"<[^>]+>", "", data.get("short_description", ""))),
-    })
-    media = DATA.parent / "media" / "steam" / app_id
-    try:
-        game["cover"] = download_image(
-            f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/library_600x900_2x.jpg",
-            media / "cover.jpg",
-        )
-    except (OSError, ValueError):
-        pass
-    if data.get("header_image"):
-        try:
-            game["background"] = download_image(data["header_image"], media / "background.jpg")
-        except (OSError, ValueError):
-            pass
-
-
-def _contained_launch_cwd(cwd, game):
-    """True when a plugin-requested working directory stays inside the game or data directories."""
-    roots = [DATA.parent, DATA.parent / "cache" / "archives"]
-    game_path = str(game.get("path") or "").strip()
-    if game_path:
-        roots.append(str(Path(game_path).expanduser().parent))
-    try:
-        contained_path(cwd, roots)
-    except (OSError, ValueError):
-        return False
-    return True
-
-
-def _resolve_start_game(state, index, stable_game_id):
-    """Resolve the game to launch by stable id or index; returns (game, index)."""
-    if stable_game_id:
-        selected = resolve_library_game(state, {"stable_game_id": stable_game_id}, fallback_index=index)
-        if selected is None:
-            raise IndexError("Game not found")
-        index = state["games"].index(selected)
-    elif index is None or index < 0 or index >= len(state["games"]):
-        raise IndexError("Game not found")
-    return copy.deepcopy(state["games"][index]), index
-
-
-def _start_launch_command(game, profiles):
-    """Build the launch argv and cwd, rejecting games that cannot run."""
-    args, cwd = build_launch(game, profiles)
-    if (
-        len(args) == 1
-        and not shlex.split(str(game.get("launch", "")) or "")
-        and not shlex.split(str(profiles.get(game.get("platform", ""), "")) or "")
-        and not os.access(str(args[0]), os.X_OK)
-    ):
-        raise ValueError(
-            f"{game.get('name', 'This game')} has no launch command and its file is not executable. "
-            "Set a launch command for the platform in Emulator profiles, or per-game in Edit game."
-        )
-    return args, cwd
-
-
-def _apply_start_plugins(game, args, cwd):
-    """Run the before_launch hook and enforce its response contract."""
-    original_args, original_cwd = args, cwd
-    if not os.environ.get("OPENBOX_SAFE_MODE"):
-        result = run_plugins(DATA.parent / "plugins", "before_launch", {"game": game, "args": args, "cwd": cwd})
-        if not isinstance(result, dict):
-            raise ValueError("A plugin returned an invalid launch response.")
-        if result.get("cancel"):
-            raise ValueError(str(result.get("error") or "Launch canceled by a plugin."))
-        args, cwd = result.get("args"), result.get("cwd")
-        # The hook may adjust arguments, but it must not swap the binary or
-        # move the working directory outside the game or data directories.
-        if (
-            not isinstance(args, list) or not args
-            or not all(isinstance(part, str) and part for part in args)
-            or args[0] != original_args[0]
-            or (cwd is not None and not isinstance(cwd, str))
-            or (cwd is not None and not _contained_launch_cwd(cwd, game))
-        ):
-            LOGGER.warning(
-                "Ignoring before_launch result from plugin hook: invalid args/cwd (requested args=%r, cwd=%r); using the original launch command",
-                args, cwd,
-            )
-            args, cwd = original_args, original_cwd
-    return args, cwd
-
-
-def _validate_start_command(args, cwd):
-    """Reject plugin-adjusted launch commands that are not usable."""
-    if not isinstance(args, list) or not args or not all(isinstance(part, str) and part for part in args):
-        raise ValueError("A plugin returned an invalid launch command.")
-    if not isinstance(cwd, str) or not Path(cwd).is_dir():
-        raise ValueError("A plugin returned an invalid working directory.")
-
-
-def _make_start_mutator(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile):
-    """Build the state transaction that records a launched session."""
-    def mutate(state):
-        current = resolve_library_game(state, {"stable_game_id": stable_game_id}, fallback_index=index)
-        if current is None:
-            missing["value"] = True
-            return
-        current["last_played"] = started.isoformat(timespec="seconds")
-        current["play_count"] = current.get("play_count", 0) + 1
-        if not current.get("progress") and state.get("settings", {}).get("progress_on_first_play", "Playing"):
-            current["progress"] = state.get("settings", {}).get("progress_on_first_play", "Playing")
-        entry.update({
-            "launch_id": launch_id,
-            "game_id": index,
-            "stable_game_id": stable_game_id,
-            "effective_profile": effective_profile,
-            "game": current.get("name", "Untitled"),
-            "game_path": str(current.get("path", "")),
-            "steam_app_id": str(current.get("steam_app_id") or ""),
-            "heroic_app_id": str(current.get("heroic_app_id") or ""),
-            "lutris_id": str(current.get("lutris_id") or ""),
-            "gameyfin_id": str(current.get("gameyfin_id") or ""),
-            "started": started.isoformat(timespec="seconds"),
-            "pid": process.pid,
-            "paused": False,
-        })
-        
-        try:
-            pgid = os.getpgid(process.pid)
-        except OSError:
-            pgid = process.pid
-            
-        session_record = {
-            "game_id": stable_game_id,
-            "launch_id": launch_id,
-            "pid": process.pid,
-            "pgid": pgid,
-            "proc_start_time": _read_proc_start_time(process.pid),
-            "command_fingerprint": _read_proc_cmdline(process.pid),
-            "start_time": started.isoformat(timespec="seconds"),
-            "perf_profile": effective_profile,
-            "status": "active"
-        }
-        state.setdefault("active_sessions", []).append(session_record)
-        
-    return mutate
-
-
-def _annotate_gamescope_start(args, game, process):
-    """Tag the spawned process for gamescope guest mode when not a Steam launch."""
-    if is_gamescope_guest(force="--game-mode" in sys.argv) and not is_steam_launch(args):
-        window_class = Path(str(args[0])).name if args else None
-        threading.Thread(
-            target=mark_process_windows,
-            kwargs={
-                "pid": process.pid,
-                "app_id": steam_game_id_for(game),
-                "window_name": game.get("name") or None,
-                "window_class": window_class,
-            },
-            daemon=True,
-        ).start()
-
-
-def _publish_start_events(game, entry):
-    """Emit the started session events for one launch."""
-    session_event("started", entry["launch_id"], entry["game"])
-    _publish_session_event(build_event("session.started", {
-        "launch_id": entry.get("launch_id", ""),
-        "game_id": entry.get("stable_game_id", ""),
-        "name": entry.get("game", "Untitled"),
-        "platform": game.get("platform", ""),
-        "started_at": entry.get("started", ""),
-    }))
-
-
-def start_game(index=None, stable_game_id=""):
-    # Explicit 8-phase launch (Days 0-14, Task 2): each failure after phase 4 restores perf, no stale RUNNING.
-    # Phase 1: Resolve the game by stable ID.
-    state = load_state()
-    game, index = _resolve_start_game(state, index, stable_game_id)
-    stable_game_id = str(game.get("game_id") or stable_game_id)
-    # Phase 2: Resolve and validate the launch command and working directory.
-    profiles = dict(state["profiles"])
-    selected_profile = str(game.get("launch_profile", "")).strip()
-    if selected_profile and selected_profile in profiles:
-        profiles = {game.get("platform", ""): profiles[selected_profile]}
-    args, cwd = _start_launch_command(game, profiles)
-    # Phase 3: Create a launch record containing stable game ID, canonical game path, profile name, and expected process identity.
-    launch_id = secrets.token_urlsafe(8)
-    # Phase 4: Apply the performance profile and retain whether it actually changed system state.
-    effective_profile = effective_profile_name(game, state["profiles"])
-    lease = apply_perf_profile(effective_profile, state)
-    
-    try:
-        # Phase 5: Start the process (plugins + validation must succeed first).
-        args, cwd = _apply_start_plugins(game, args, cwd)
-        _validate_start_command(args, cwd)
-        process = subprocess.Popen(args, cwd=cwd, start_new_session=True)
-        started = datetime.now()
-        entry = {}
-        missing = {"value": False}
-        # Phase 6: Persist the active-session record.
-        try:
-            update_state(_make_start_mutator(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile))
-        except Exception:
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except (OSError, ProcessLookupError):
-                process.terminate()
-            raise
-        if missing["value"]:
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except (OSError, ProcessLookupError):
-                process.terminate()
-            raise IndexError("Game was removed while it was launching")
-        # Phase 7: Register the in-memory session and start the watcher.
-        with PROCESS_LOCK:
-            RUNNING[launch_id] = entry
-            PROCESSES[launch_id] = process
-        _annotate_gamescope_start(args, game, process)
-        _publish_start_events(game, entry)
-        threading.Thread(
-            target=finish_session,
-            args=(launch_id, index, started, process, lease),
-            daemon=True,
-        ).start()
-        return dict(entry)
-    except Exception:
-        # Phase 8: Restore the performance profile on every failure after phase 4 unless the watcher owns cleanup.
-        lease.restore()
-        raise
-
-
-def control_game_session(launch_id, action):
-    with PROCESS_LOCK:
-        process = PROCESSES.get(launch_id)
-        running = RUNNING.get(launch_id)
-        if not process or not running or process.poll() is not None:
-            raise ValueError("That game is no longer running.")
-        process_group = process.pgid if isinstance(process, _ReattachedProcess) else process.pid
-        try:
-            if action == "pause":
-                os.killpg(process_group, signal.SIGSTOP)
-                running["paused"] = True
-            elif action == "resume":
-                os.killpg(process_group, signal.SIGCONT)
-                running["paused"] = False
-            elif action in {"stop", "restart", "kill"}:
-                running["restart"] = action == "restart"
-                if running.get("paused") and action != "kill":
-                    os.killpg(process_group, signal.SIGCONT)
-                os.killpg(process_group, signal.SIGKILL if action == "kill" else signal.SIGTERM)
-            else:
-                raise ValueError("Unknown session action.")
-        except (ProcessLookupError, OSError):
-            pass
-        game = running["game"]
-    if action in {"pause", "resume"}:
-        session_event("paused" if action == "pause" else "resumed", launch_id, game)
-    return {"ok": True, "action": action}
-
-
 def sync_cloud():
     state = load_state()
     folder = state.get("settings", {}).get("cloud_folder", "")
@@ -2156,3 +570,4 @@ def sync_cloud():
 
     update_state(mutate)
     return result
+

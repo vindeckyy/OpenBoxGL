@@ -9,6 +9,7 @@ from urllib.parse import parse_qs
 
 from api_errors import BadRequest, DocumentNotFound, GameNotFound, PlatformDocumentNotFound
 from openbox import DATA, load_state
+from routes.registry import route
 from parity_gameyfin import GameyfinError, catalog_gameyfin, gameyfin_settings, install_gameyfin_game, test_gameyfin_connection, uninstall_gameyfin_game, validate_gameyfin_id
 from parity_integrations import export_highscores, import_highscores, read_local_highscores
 from parity_save_tools import run_hoard, run_ludusavi, save_tool_status
@@ -18,6 +19,7 @@ from webapp_state import INSTALLS, JOB_MANAGER, PROCESS_LOCK, approved_media_pat
 
 
 class DataHandlers:
+    @route("GET", "/api/saves")
     def _api_get_api_saves(self, parsed):
         try:
             query = parse_qs(parsed.query)
@@ -28,6 +30,7 @@ class DataHandlers:
             raise GameNotFound("Game not found") from None
         return
 
+    @route("GET", "/api/saves/discover")
     def _api_get_api_saves_discover(self, parsed):
         try:
             query = parse_qs(parsed.query)
@@ -42,6 +45,7 @@ class DataHandlers:
             raise GameNotFound("Game not found") from None
         return
 
+    @route("GET", "/api/document")
     def _api_get_api_document(self, parsed):
         query = parse_qs(parsed.query)
         try:
@@ -60,11 +64,13 @@ class DataHandlers:
             raise DocumentNotFound("Document not found") from None
         return
 
+    @route("GET", "/api/saves/scan")
     def _api_get_api_saves_scan(self, parsed):
         found = scan_all_saves(load_state_view()["games"])
         self.send_json(200, {"games": {str(key): value for key, value in found.items()}, "count": len(found)})
         return
 
+    @route("GET", "/api/highscores")
     def _api_get_api_highscores(self, parsed):
         try:
             game = game_from_query(load_state(), parse_qs(parsed.query))
@@ -73,6 +79,7 @@ class DataHandlers:
             raise GameNotFound("Game not found") from None
         return
 
+    @route("GET", "/api/platform/documents")
     def _api_get_api_platform_documents(self, parsed):
         platform = parse_qs(parsed.query).get("platform", [""])[0]
         docs = load_state_view().get("settings", {}).get("platform_documents", {})
@@ -86,6 +93,7 @@ class DataHandlers:
         self.send_json(200, {"documents": result})
         return
 
+    @route("GET", "/api/platform/document")
     def _api_get_api_platform_document(self, parsed):
         query = parse_qs(parsed.query)
         try:
@@ -105,6 +113,7 @@ class DataHandlers:
             raise PlatformDocumentNotFound("Platform document not found") from None
         return
 
+    @route("GET", "/api/gameyfin/install/status")
     def _api_get_api_gameyfin_install_status(self, parsed):
         query = parse_qs(parsed.query)
         raw_gameyfin_id = str(query.get("gameyfin_id", [""])[0]).strip()
@@ -116,6 +125,7 @@ class DataHandlers:
         self.send_json(200, job)
         return
 
+    @route("GET", "/api/gameyfin/providers")
     def _api_get_api_gameyfin_providers(self, parsed):
         try:
             _catalog, providers = catalog_gameyfin(load_state_view().get("settings", {}))
@@ -124,40 +134,52 @@ class DataHandlers:
             raise BadRequest(str(error)) from None
         return
 
+    @route("GET", "/api/save-tools/status")
     def _api_get_api_save_tools_status(self, parsed):
         self.send_json(200, save_tool_status())
         return
 
+    @route("POST", "/api/platform/documents")
     def _api_post_api_platform_documents(self, payload):
         self.save_platform_documents(payload)
 
+    @route("POST", "/api/gameyfin/test")
     def _api_post_api_gameyfin_test(self, payload):
         self.test_gameyfin(payload)
 
+    @route("POST", "/api/gameyfin/install")
     def _api_post_api_gameyfin_install(self, payload):
         self.install_gameyfin(payload)
 
+    @route("POST", "/api/gameyfin/uninstall")
     def _api_post_api_gameyfin_uninstall(self, payload):
         self.uninstall_gameyfin(payload)
 
+    @route("POST", "/api/save-tools/ludusavi")
     def _api_post_api_save_tools_ludusavi(self, payload):
         self.run_ludusavi_tool(payload)
 
+    @route("POST", "/api/save-tools/hoard")
     def _api_post_api_save_tools_hoard(self, payload):
         self.run_hoard_tool(payload)
 
+    @route("POST", "/api/highscores/export")
     def _api_post_api_highscores_export(self, payload):
         self.export_game_highscores(payload)
 
+    @route("POST", "/api/highscores/import")
     def _api_post_api_highscores_import(self, payload):
         self.import_game_highscores(payload)
 
+    @route("POST", "/api/saves/backup")
     def _api_post_api_saves_backup(self, payload):
         self.backup_game_saves(payload)
 
+    @route("POST", "/api/saves/restore")
     def _api_post_api_saves_restore(self, payload):
         self.restore_game_saves(payload)
 
+    @route("POST", "/api/saves/add")
     def _api_post_api_saves_add(self, payload):
         self.add_game_save_path(payload)
 

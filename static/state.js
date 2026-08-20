@@ -4,6 +4,10 @@ import { render } from './library.js';
 
 
 const token = new URLSearchParams(location.search).get('token') || '';
+    /**
+     * Central client application state container.
+     * @type {Record<string, any>}
+     */
     const AppState = {
       games: [], playlists: [], filterPresets: [], explorerField: 'genre', explorerRules: {}, activeFilterPreset: '', bigBoxGames: [], runningGames: [], raConfigured: false, selectedId: null, platform: 'all', activePlaylist: '', editingId: null, metadataGameId: null, bigBoxIndex: 0, gamepadState: {}, lastSessionEvent: 0, bulkMode: false, bigBoxLastInput: performance.now(), screenSaverGame: null, contextGameId: null, availableProfiles: {},
       appSettings: {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',cover_grouping:'shape',locale:'en'}, bigBoxFilter: 'all', bigBoxSort: 'title', bigBoxRaFilter: 'all', bigBoxPlatform: 'all', platformCategory: 'all', pendingUpdate: null, duplicateMediaGroups: 0, libraryBgm: null, readerPage: 1, readerUrl: '', bigBoxHybridQuery: '', mediaEpoch: 0, coverRatios: {},
@@ -38,6 +42,12 @@ const token = new URLSearchParams(location.search).get('token') || '';
         visible.has('controller') && badge(game.controller_support, Boolean(game.controller_support)),
       ].filter(Boolean).join('');
     }
+    /**
+     * Perform an authenticated API request to the OpenBox backend.
+     * @param {string} path
+     * @param {RequestInit} [options]
+     * @returns {Promise<any>}
+     */
     async function api(path, options = {}) {
       // The v1 surface is the stable contract; unmapped call sites keep the
       // legacy paths until they are migrated one by one.
@@ -251,6 +261,10 @@ const token = new URLSearchParams(location.search).get('token') || '';
       buildSearchIndex();
     }
     let _filteredCache = { key: null, result: [] };
+    /**
+     * Compute the filtered and sorted list of games for the active view.
+     * @returns {Array<Record<string, any>>}
+     */
     function filteredGames() {
       const query = ($('sidebarSearch')?.value || '').toLowerCase().trim();
       const view = $('view')?.value || 'all';

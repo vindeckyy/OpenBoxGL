@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Packaging acceptance tests for OpenBox Linux distribution."""
 
-import os
-import sys
 import ast
-import subprocess
-import tempfile
 import hashlib
+import json
+import os
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
 
 def _repo_root() -> Path:
     candidate = Path(__file__).resolve().parent
@@ -171,6 +172,71 @@ def test_sbom_artifact_inventory():
             pass
     print("  SBOM AppDir inventory: ok")
 
+
+def test_sbom_deterministic_output():
+    with tempfile.TemporaryDirectory() as directory:
+        out_path = Path(directory) / "sbom.json"
+        cmd = [sys.executable, str(ROOT / "scripts" / "gen_sbom.py"), str(out_path)]
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        assert out_path.is_file(), f"gen_sbom did not create {out_path}"
+        content = out_path.read_text(encoding="utf-8")
+        data = json.loads(content)
+        # Verify deterministic sorted keys at top level
+        assert list(data.keys()) == sorted(data.keys()), "top-level keys not sorted"
+        assert "components" in data
+        # Verify every component has sorted keys
+        for comp in data["components"]:
+            assert list(comp.keys()) == sorted(comp.keys()), f"component keys not sorted in {comp.get('name')}"
+        # Also verify build/sbom.json path execution
+        build_sbom_path = ROOT / "build" / "sbom.json"
+        cmd_build = [sys.executable, str(ROOT / "scripts" / "gen_sbom.py"), str(build_sbom_path)]
+        subprocess.run(cmd_build, capture_output=True, text=True, check=True)
+        assert build_sbom_path.is_file()
+        build_data = json.loads(build_sbom_path.read_text(encoding="utf-8"))
+        assert list(build_data.keys()) == sorted(build_data.keys())
+    print("  SBOM deterministic output: ok")
+
+def test_sbom_hash_verification():
+    from scripts.gen_sbom import build_sbom
+    sbom = build_sbom("1.5.1", include_stdlib=False)
+    for comp in sbom["components"]:
+        if comp.get("type") in ("library", "file") and "hashes" in comp:
+            file_path = ROOT / comp["name"]
+            if file_path.is_file():
+                expected_hash = hashlib.sha256(file_path.read_bytes()).hexdigest()
+                actual_hash = comp["hashes"][0]["content"]
+                assert actual_hash == expected_hash, f"Hash mismatch for {comp['name']}: {actual_hash} != {expected_hash}"
+    print("  SBOM hash verification: ok")
+
+
+def test_build_appimage_validation():
+    build_script = (ROOT / "build_appimage.sh").read_text(encoding="utf-8")
+    assert "runtime_modules.txt" in build_script
+    assert "missing runtime module" in build_script
+    assert "sbom-manifest.json" in build_script
+    assert "gen_sbom.py" in build_script
+
+    # Test validation failure on missing module in a mock loop
+    test_script = """
+set -e
+source_root="%s"
+while IFS= read -r file; do
+  file="$(echo "$file" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  [ -n "$file" ] || continue
+  [[ "$file" =~ ^# ]] && continue
+  if [ ! -f "$source_root/$file" ]; then
+    echo "missing runtime module: $file" >&2
+    exit 1
+  fi
+done <<'EOF'
+openbox.py
+nonexistent_test_module_xyz.py
+EOF
+""" % ROOT
+    res = subprocess.run(["bash", "-c", test_script], capture_output=True, text=True, check=False)
+    assert res.returncode != 0
+    assert "missing runtime module: nonexistent_test_module_xyz.py" in res.stderr
+    print("  Build AppImage validation: ok")
 
 def test_flatpak_manifest():
     manifest = ROOT / "io.openbox.GameLauncher.yml"
@@ -354,6 +420,7 @@ def main():
     test_runtime_manifest()
     test_runtime_import_closure()
     test_sbom_artifact_inventory()
+    test_sbom_deterministic_output()
     test_appdir_structure()
     test_version_consistency()
     test_update_verification()
@@ -361,6 +428,8 @@ def main():
     test_appimage_library_scope()
     test_release_appimage_workflow()
     test_markdown_locations()
+    test_sbom_hash_verification()
+    test_build_appimage_validation()
     print("packaging self-test: ok")
 
 

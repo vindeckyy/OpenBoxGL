@@ -7,6 +7,7 @@ from urllib.parse import parse_qs
 from api_errors import BadRequest
 from arcade import import_arcade
 from emulators import install_emulator
+from routes.registry import route
 from importers import import_heroic, import_lutris, import_steam
 from openbox import load_state
 from parity_import import import_rpcs3_hdd, import_scummvm, import_vita3k
@@ -41,6 +42,7 @@ def _send_import_result(handler, added, found, **extra):
 
 
 class ImportsHandlers:
+    @route("GET", "/api/storefront/catalog")
     def _api_get_api_storefront_catalog(self, parsed):
         source = parse_qs(parsed.query).get("source", [""])[0]
         try:
@@ -48,52 +50,68 @@ class ImportsHandlers:
         except (ValueError, OSError, FileNotFoundError, subprocess.SubprocessError) as error:
             raise BadRequest(str(error)) from None
         return
+    @route("GET", "/api/import/exclusions")
     def _api_get_api_import_exclusions(self, parsed):
         self.send_json(200, {"exclusions": list_exclusions(load_state_view())})
         return
 
+    @route("POST", "/api/import")
     def _api_post_api_import(self, payload):
         self.import_folder(payload)
 
+    @route("POST", "/api/import/wizard")
     def _api_post_api_import_wizard(self, payload):
         self.import_wizard(payload)
 
+    @route("POST", "/api/import/xbox360")
     def _api_post_api_import_xbox360(self, payload):
         self.import_xbox360(payload)
 
+    @route("POST", "/api/import/loose-arcade")
     def _api_post_api_import_loose_arcade(self, payload):
         self.import_loose_arcade_route(payload)
 
+    @route("POST", "/api/import/watch")
     def _api_post_api_import_watch(self, payload):
         self.scan_watch_folders()
 
+    @route("POST", "/api/import/steam")
     def _api_post_api_import_steam(self, payload):
         self.import_steam_games()
 
+    @route("POST", "/api/import/heroic")
     def _api_post_api_import_heroic(self, payload):
         self.import_heroic_games()
 
+    @route("POST", "/api/import/lutris")
     def _api_post_api_import_lutris(self, payload):
         self.import_lutris_games()
 
+    @route("POST", "/api/import/arcade")
     def _api_post_api_import_arcade(self, payload):
         self.import_arcade_games(payload)
 
+    @route("POST", "/api/import/scummvm")
     def _api_post_api_import_scummvm(self, payload):
         self.import_scummvm_games()
 
+    @route("POST", "/api/import/rpcs3")
     def _api_post_api_import_rpcs3(self, payload):
         self.import_rpcs3_games()
 
+    @route("POST", "/api/import/vita3k")
     def _api_post_api_import_vita3k(self, payload):
         self.import_vita3k_games()
 
+    @route("POST", "/api/storefront/import")
     def _api_post_api_storefront_import(self, payload):
         self.import_storefront_catalog(payload)
 
+    @route("POST", "/api/import/exclusions")
     def _api_post_api_import_exclusions(self, payload):
         self.add_import_exclusion(payload)
 
+    @route("POST", "/api/import/exclusions/delete")
     def _api_post_api_import_exclusions_delete(self, payload):
         self.remove_import_exclusion(payload)
 

@@ -52,6 +52,26 @@
   --dialog-close: #c8ffc8;
   --bigbox-foot: #6fb87a;
   --screensaver-text: #c8ffc8;
+  --black: #000;
+  --cover-gradient-end: #030805;
+  --cover-title-end: #061008;
+  --empty-muted: #5d9a68;
+  --hero-gradient-end: #030805;
+  --rating-badge-bg: #0a1c10;
+  --media-player-bg: #020402;
+  --drop-border: #234f32;
+  --drop-text: #5d9a68;
+  --drop-bg: #040a06;
+  --drop-active-bg: #0a1c10;
+  --nav-hover: #0a1c10;
+  --badge-pending-border: #234f32;
+  --badge-pending-fg: #8fd99a;
+  --badge-pending-bg: #061008;
+  --badge-progress-fg: #49ff7a;
+  --badge-danger-fg: #ff6b4a;
+  --badge-danger-border: #ff6b4a;
+  --bigbox-head-muted: #5d9a68;
+  --shutdown-text: #5d9a68;
 }
 
 body {
@@ -259,8 +279,8 @@ input:focus, select:focus, textarea:focus {
   background: #061008;
 }
 
-.rating { color: #49ff7a; }
-.rating strong { background: #0a1c10; border: 1px solid #234f32; border-radius: 2px; }
+.rating { color: var(--rating); }
+.rating strong { background: var(--rating-badge-bg); border: 1px solid var(--border-control); border-radius: 2px; }
 
 dialog {
   border: 1px solid #234f32;
@@ -281,14 +301,14 @@ dialog::backdrop {
   font-family: "Share Tech Mono", monospace;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #9dff9d;
+  color: var(--brand);
 }
 
 .toast {
-  border: 1px solid #234f32;
+  border: 1px solid var(--border-control);
   border-radius: 2px;
-  background: #061008;
-  color: #c8ffc8;
+  background: var(--surface-card);
+  color: var(--text);
   box-shadow: 0 0 24px #49ff7a33;
   font-family: "IBM Plex Mono", monospace;
 }
@@ -301,7 +321,7 @@ dialog::backdrop {
 .bigbox-head strong {
   font-family: "Share Tech Mono", monospace;
   letter-spacing: 0.2em;
-  color: #9dff9d;
+  color: var(--brand);
 }
 
 .bigbox-cover {
@@ -317,7 +337,7 @@ dialog::backdrop {
   text-shadow: 0 0 24px #49ff7a55;
 }
 
-.bigbox-copy p { color: #6fb87a; }
+.bigbox-copy p { color: var(--bigbox-copy); }
 .bigbox-play { border-radius: 2px; }
 
 .bigbox-menu-panel, .bigbox-pause-panel, .shutdown-panel {
@@ -328,15 +348,15 @@ dialog::backdrop {
 }
 
 .drop-zone {
-  border: 1px dashed #234f32;
+  border: 1px dashed var(--drop-border);
   border-radius: 2px;
   background: #06100888;
   font-family: "IBM Plex Mono", monospace;
 }
 
 .drop-zone.active {
-  border-color: #49ff7a;
-  color: #c8ffc8;
+  border-color: var(--active);
+  color: var(--text);
   box-shadow: 0 0 20px #49ff7a33;
 }
 
@@ -348,7 +368,7 @@ dialog::backdrop {
 }
 
 .lifecycle small {
-  color: #49ff7a;
+  color: var(--lifecycle-kicker);
   letter-spacing: 0.3em;
 }
 
@@ -363,5 +383,5 @@ dialog::backdrop {
 
 .achievement, .coverflow-card {
   border-radius: 2px;
-  border-color: #234f32;
+  border-color: var(--border-control);
 }

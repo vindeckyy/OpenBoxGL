@@ -6,10 +6,12 @@ from urllib.parse import parse_qs
 from emulators import emulator_status, install_all_emulators, install_emulator, launch_emulator, recommendations_for_platform, update_all_emulators, update_emulator
 from parity_emulator_defs import list_scan_configs, load_definitions, save_scan_config, scan_folder as scan_emulator_folder
 from parity_import import detect_dependencies
+from routes.registry import route
 from webapp_state import INSTALLS, JOB_MANAGER, PROCESS_LOCK, ROOT, clear_file_probe_cache, load_state_view, merge_imported_games, transact_state
 
 
 class EmulatorsHandlers:
+    @route("GET", "/api/emulators")
     def _api_get_api_emulators(self, parsed):
         emulators = emulator_status()
         with PROCESS_LOCK:
@@ -22,42 +24,53 @@ class EmulatorsHandlers:
         self.send_json(200, {"emulators": emulators, "install_all": install_all, "update_all": update_all})
         return
 
+    @route("GET", "/api/emulators/recommend")
     def _api_get_api_emulators_recommend(self, parsed):
         platform = parse_qs(parsed.query).get("platform", [""])[0]
         self.send_json(200, {"recommendations": recommendations_for_platform(platform)})
         return
 
+    @route("GET", "/api/emulators/dependencies")
     def _api_get_api_emulators_dependencies(self, parsed):
         name = parse_qs(parsed.query).get("name", [""])[0]
         self.send_json(200, detect_dependencies(name))
         return
 
+    @route("GET", "/api/emulators/definitions")
     def _api_get_api_emulators_definitions(self, parsed):
         self.send_json(200, {"definitions": load_definitions(ROOT / "emulator_defs")})
         return
 
+    @route("GET", "/api/emulators/scan-configs")
     def _api_get_api_emulators_scan_configs(self, parsed):
         self.send_json(200, {"configs": list_scan_configs(load_state_view())})
         return
 
+    @route("POST", "/api/emulators/install")
     def _api_post_api_emulators_install(self, payload):
         self.install_emulator(payload)
 
+    @route("POST", "/api/emulators/install-all")
     def _api_post_api_emulators_install_all(self, payload):
         self.install_all_emulators()
 
+    @route("POST", "/api/emulators/update")
     def _api_post_api_emulators_update(self, payload):
         self.update_one_emulator(payload)
 
+    @route("POST", "/api/emulators/update-all")
     def _api_post_api_emulators_update_all(self, payload):
         self.update_all_emulators_route()
 
+    @route("POST", "/api/emulators/open")
     def _api_post_api_emulators_open(self, payload):
         self.open_emulator(payload)
 
+    @route("POST", "/api/emulators/scan")
     def _api_post_api_emulators_scan(self, payload):
         self.scan_emulator_folder_route(payload)
 
+    @route("POST", "/api/emulators/scan-configs")
     def _api_post_api_emulators_scan_configs(self, payload):
         self.save_emulator_scan_config(payload)
 

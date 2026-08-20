@@ -43,7 +43,10 @@ class PerfBenchTests(unittest.TestCase):
         self.assertIn("bulk_mutation", results)
         self.assertIn("import_empty_folder", results)
         self.assertIn("media_index", results)
-
+        self.assertIn("title_indexed_search", results)
+        self.assertIn("bigbox_coverflow", results)
+        self.assertIn("archive_inspection", results)
+        self.assertIn("throughput", results)
         paths = [p for _, p in requested_paths]
         self.assertIn("/api/library", paths)
         self.assertIn("/api/library?offset=0&limit=500", paths)
@@ -52,7 +55,8 @@ class PerfBenchTests(unittest.TestCase):
         self.assertIn("/api/import", paths)
         self.assertIn("/api/favorite", paths)
         self.assertIn("/api/media?id=0&kind=cover", paths)
-
+        self.assertIn("/api/library/delta?ids=game-00000,game-00001", paths)
+        self.assertIn("/api/bigbox/mode", paths)
         # Legacy / placeholder routes must not be queried
         self.assertNotIn("/api/facets", paths)
         self.assertNotIn("/api/library/facets", paths)
@@ -113,6 +117,60 @@ class PerfBenchTests(unittest.TestCase):
         failed_failures = pb._check_gates(failed_results)
         self.assertTrue(any("library_gzip missing p95_ms" in item for item in failed_failures))
 
+
+    def test_state_store_dirty_field_path(self):
+        import tempfile
+        from state_store import JsonStateStore
+
+        with tempfile.TemporaryDirectory() as directory:
+            store_path = Path(directory) / "state.json"
+            store = JsonStateStore(store_path)
+            initial_state = {
+                "games": [
+                    {"id": "game-00000", "title": "Game 0", "rating": 3, "play_count": 5},
+                    {"id": "game-00001", "title": "Game 1", "rating": 4, "play_count": 10},
+                ],
+                "settings": {},
+                "playlists": [],
+            }
+            store.save(initial_state)
+
+            # Mutate rating and play_count
+            def update_rating(state):
+                state["games"][0]["rating"] = 5
+                state["games"][0]["play_count"] = 6
+
+            updated = store.update(update_rating)
+            self.assertEqual(updated["games"][0]["rating"], 5)
+            self.assertEqual(updated["games"][0]["play_count"], 6)
+            self.assertEqual(updated["games"][1]["rating"], 4)
+
+            # Verify reloaded state matches committed in-memory update
+            reloaded = store.load()
+            self.assertEqual(reloaded["games"][0]["rating"], 5)
+            self.assertEqual(reloaded["games"][0]["play_count"], 6)
+
+    def test_webapp_state_view_caching(self):
+        import tempfile
+        import openbox
+        from state_store import JsonStateStore
+        from webapp_state import load_state_view, STATE_VIEW_CACHE
+
+        with tempfile.TemporaryDirectory() as directory:
+            store_path = Path(directory) / "state.json"
+            store = JsonStateStore(store_path)
+            store.save({"games": [{"id": "game-00000", "title": "Game 0"}], "settings": {}})
+            
+            old_store = openbox.STATE_STORE
+            try:
+                openbox.STATE_STORE = store
+                STATE_VIEW_CACHE.update({"signature": None, "state": None})
+                
+                view1 = load_state_view()
+                view2 = load_state_view()
+                self.assertIs(view1, view2)
+            finally:
+                openbox.STATE_STORE = old_store
 
 if __name__ == "__main__":
     unittest.main()

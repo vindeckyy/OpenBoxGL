@@ -18,7 +18,13 @@ cp -a "$stdlib" "$appdir/usr/lib/python$python_version"
 find "$appdir/usr/lib/python$python_version" -type d -name __pycache__ -prune -exec rm -rf -- {} +
 
 while IFS= read -r file; do
+  file="$(echo "$file" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
   [ -n "$file" ] || continue
+  [[ "$file" =~ ^# ]] && continue
+  if [ ! -f "$source_root/$file" ]; then
+    echo "build_appimage.sh: missing runtime module: $file" >&2
+    exit 1
+  fi
   install -Dm644 "$source_root/$file" "$appdir/usr/share/openbox/$file"
 done < "$source_root/runtime_modules.txt"
 cp "$source_root/index.html" "$appdir/usr/share/openbox/index.html"
@@ -103,6 +109,29 @@ ln -s usr/share/applications/io.openbox.GameLauncher.desktop "$appdir/io.openbox
 ln -s usr/share/icons/hicolor/scalable/apps/io.openbox.GameLauncher.svg "$appdir/io.openbox.GameLauncher.svg"
 ln -s io.openbox.GameLauncher.svg "$appdir/.DirIcon"
 
+# Record manifest of bundled files and generate CycloneDX SBOM
+python3 - "$build_root/sbom-manifest.json" "$appdir" <<'PY'
+import hashlib, json, pathlib, sys
+out_path = pathlib.Path(sys.argv[1])
+appdir = pathlib.Path(sys.argv[2])
+records = []
+for p in sorted(appdir.rglob("*")):
+    if p.is_file() and not p.is_symlink():
+        rel = p.relative_to(appdir).as_posix()
+        digest = hashlib.sha256(p.read_bytes()).hexdigest()
+        records.append({
+            "path": rel,
+            "sha256": digest,
+            "size": p.stat().st_size
+        })
+manifest = {
+    "appdir": str(appdir.name),
+    "file_count": len(records),
+    "files": sorted(records, key=lambda x: x["path"])
+}
+out_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+python3 "$source_root/scripts/gen_sbom.py" --appdir "$appdir" --out "$build_root/sbom.json"
 if [ -n "${OPENBOX_APPDIR:-}" ]; then
   preserved_appdir="$OPENBOX_APPDIR"
   mkdir -p "$preserved_appdir"

@@ -169,15 +169,24 @@ def build_sbom(version, include_stdlib=True, appdir=None):
 
 
 def main():
+    try:
+        from updates import VERSION as DEFAULT_VERSION
+    except ImportError:
+        DEFAULT_VERSION = "1.5.1"
+
     parser = argparse.ArgumentParser(description="Generate a CycloneDX SBOM for OpenBox")
-    parser.add_argument("--version", required=True)
-    parser.add_argument("--out", default="sbom.json")
+    parser.add_argument("pos_out", nargs="?", default=None, help="output JSON path")
+    parser.add_argument("--version", default=DEFAULT_VERSION)
+    parser.add_argument("--out", default=None)
     parser.add_argument("--no-stdlib", action="store_true")
     parser.add_argument("--appdir", type=Path, help="include every file and symlink from a built AppDir")
     args = parser.parse_args()
+    out_path = args.pos_out or args.out or "sbom.json"
+    out_file = Path(out_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
     sbom = build_sbom(args.version, include_stdlib=not args.no_stdlib, appdir=args.appdir)
-    Path(args.out).write_text(json.dumps(sbom, indent=2) + "\n", encoding="utf-8")
-    print(f"wrote {args.out} ({len(sbom['components'])} components)")
+    out_file.write_text(json.dumps(sbom, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"wrote {out_path} ({len(sbom['components'])} components)")
 
 
 if __name__ == "__main__":
