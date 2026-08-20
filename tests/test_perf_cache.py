@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
+from api_errors import BadRequest
 
 def _parse_response(raw):
     head, _, body = raw.partition(b"\r\n\r\n")
@@ -284,20 +284,20 @@ class PerfCacheTests(unittest.TestCase):
         handler._api_get_api_library_delta = Handler._api_get_api_library_delta.__get__(handler, Handler)
 
         # 1) Missing ids parameter
-        handler._api_get_api_library_delta(urlparse("/api/library/delta?token=test"))
-        handler.send_json.assert_called_with(400, {"error": "Missing ids parameter"})
+        with self.assertRaises(BadRequest) as ctx:
+            handler._api_get_api_library_delta(urlparse("/api/library/delta?token=test"))
+        self.assertEqual(ctx.exception.message, "Missing ids parameter")
 
         # 2) Empty ids parameter
-        handler.send_json.reset_mock()
-        handler._api_get_api_library_delta(urlparse("/api/library/delta?ids=&token=test"))
-        handler.send_json.assert_called_with(400, {"error": "Missing ids parameter"})
+        with self.assertRaises(BadRequest) as ctx:
+            handler._api_get_api_library_delta(urlparse("/api/library/delta?ids=&token=test"))
+        self.assertEqual(ctx.exception.message, "Missing ids parameter")
 
         # 3) Too many IDs (>1000)
-        handler.send_json.reset_mock()
         too_many = ",".join(f"id_{i}" for i in range(1001))
-        handler._api_get_api_library_delta(urlparse(f"/api/library/delta?ids={too_many}&token=test"))
-        handler.send_json.assert_called_with(400, {"error": "Too many IDs (max 1000)"})
-
+        with self.assertRaises(BadRequest) as ctx:
+            handler._api_get_api_library_delta(urlparse(f"/api/library/delta?ids={too_many}&token=test"))
+        self.assertEqual(ctx.exception.message, "Too many IDs (max 1000)")
         # 4) Successful delta query by game_id and legacy_game_ids
         handler.send_json.reset_mock()
         handler._api_get_api_library_delta(urlparse("/api/library/delta?ids=legacy-g1,game-gamma,nonexistent&token=test"))

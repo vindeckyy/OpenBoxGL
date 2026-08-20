@@ -35,6 +35,23 @@
   --empty-action: #49ff7a;
   --cover-title-start: #061008;
   --white: #c8ffc8;
+  --scrollbar-thumb: #1a3a24;
+  --nav-muted: #5d9a68;
+  --top-status: #5d9a68;
+  --label-muted: #5d9a68;
+  --section-muted: #5d9a68;
+  --platform-dot: #234f32;
+  --platform-text: #c8ffc8;
+  --icon-text: #c8ffc8;
+  --card-muted: #5d9a68;
+  --hero-subhead: #49ff7a;
+  --detail-head: #49ff7a;
+  --fact-label: #5d9a68;
+  --fact-value: #c8ffc8;
+  --text-soft: #5d9a68;
+  --dialog-close: #c8ffc8;
+  --bigbox-foot: #6fb87a;
+  --screensaver-text: #c8ffc8;
 }
 
 body {

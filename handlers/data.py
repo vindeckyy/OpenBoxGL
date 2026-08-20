@@ -121,7 +121,7 @@ class DataHandlers:
             _catalog, providers = catalog_gameyfin(load_state_view().get("settings", {}))
             self.send_json(200, {"providers": providers})
         except (ValueError, OSError, TypeError, AttributeError) as error:
-            self.send_json(400, {"error": str(error)})
+            raise BadRequest(str(error)) from None
         return
 
     def _api_get_api_save_tools_status(self, parsed):

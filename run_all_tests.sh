@@ -5,6 +5,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 export PYTHONPATH="$ROOT:${PYTHONPATH:-}"
 
+TEMP_LOG_DIR="$(mktemp -d /tmp/openbox-test-logs.XXXXXX)"
+trap 'rm -rf "$TEMP_LOG_DIR"' EXIT
+
 # Support both flat and packaged layout: walk tests/ if it exists, otherwise root
 TEST_DIRS=("tests" ".")
 failures=0
@@ -16,11 +19,12 @@ for dir in "${TEST_DIRS[@]}"; do
     [ -e "$file" ] || continue
     found=1
     total=$((total + 1))
-    if python3 -B "$file" >/tmp/openbox-test-$(basename "$file").log 2>&1; then
+    log_file="$TEMP_LOG_DIR/$(basename "$file").log"
+    if python3 -B "$file" >"$log_file" 2>&1; then
       echo "PASS  $file"
     else
       echo "FAIL  $file"
-      cat /tmp/openbox-test-$(basename "$file").log
+      cat "$log_file"
       failures=$((failures + 1))
     fi
   done

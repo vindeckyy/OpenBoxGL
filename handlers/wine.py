@@ -1,5 +1,6 @@
 """Wine prefix and Proton discovery HTTP handlers."""
 
+from api_errors import GameNotFound
 from webapp_state import load_state_view
 
 try:
@@ -33,9 +34,8 @@ class WineHandlers:
         state = load_state_view()
         try:
             game = game_from_query(state, query)
-        except Exception as e:
-            self.send_json(404, {"error": str(e)})
-            return
+        except Exception:
+            raise GameNotFound("Game not found") from None
         if not HAS_WINE:
             self.send_json(200, {"prefix": "", "available": False})
             return

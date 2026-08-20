@@ -2,12 +2,12 @@
 """Packaging acceptance tests for OpenBox Linux distribution."""
 
 import os
+import sys
 import ast
 import subprocess
 import tempfile
 import hashlib
 from pathlib import Path
-
 
 def _repo_root() -> Path:
     candidate = Path(__file__).resolve().parent
@@ -18,6 +18,7 @@ def _repo_root() -> Path:
     return candidate
 
 ROOT = _repo_root()
+sys.path.insert(0, str(ROOT))
 PYTHON_MODULES = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
 DATA_FILES = ["index.html", "openbox.svg"] + [f"static/{p.name}" for p in sorted((ROOT / "static").glob("*.js"))] + [f"static/{p.name}" for p in sorted((ROOT / "static").glob("*.css"))]
 
@@ -104,10 +105,15 @@ def test_makefile_install():
 
 def test_runtime_manifest():
     manifest = ROOT / "runtime_modules.txt"
-    modules = [line.strip() for line in manifest.read_text().splitlines() if line.strip()]
+    modules = [line.strip() for line in manifest.read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
     assert len(modules) == len(set(modules)), "runtime module manifest contains duplicates"
     missing = [module for module in modules if not (ROOT / module).is_file()]
     assert not missing, f"runtime module manifest has missing files: {missing}"
+    assert "pkg/__init__.py" in modules, "missing pkg/__init__.py in runtime manifest"
+    assert "pkg/parity/__init__.py" in modules, "missing pkg/parity/__init__.py in runtime manifest"
+    for mod in modules:
+        assert not mod.endswith(".pyc"), f"manifest should not contain pyc files: {mod}"
+        assert not mod.startswith("build/"), f"manifest should not contain build files: {mod}"
     build_script = (ROOT / "build_appimage.sh").read_text()
     flatpak = (ROOT / "io.openbox.GameLauncher.yml").read_text()
     assert "runtime_modules.txt" in build_script
@@ -329,6 +335,13 @@ def test_release_appimage_workflow():
     assert "softprops/action-gh-release@" in content
     assert "contents: write" in content
     print("  Release AppImage workflow: ok")
+def test_markdown_locations():
+    root_md = {p.name for p in ROOT.glob("*.md")}
+    approved_root_md = {"README.md", "AGENTS.md", "CLAUDE.md", "ARCHITECTURE.md"}
+    assert root_md.issubset(approved_root_md), f"unexpected root markdown files: {root_md - approved_root_md}"
+    assert "RELEASE_NOTES.md" not in root_md, "RELEASE_NOTES.md must live in docs/ not at root"
+    assert (ROOT / "docs" / "RELEASE_NOTES.md").is_file(), "missing docs/RELEASE_NOTES.md"
+    print("  Markdown locations: ok")
 
 
 def main():
@@ -347,6 +360,7 @@ def main():
     test_appimage_update_info()
     test_appimage_library_scope()
     test_release_appimage_workflow()
+    test_markdown_locations()
     print("packaging self-test: ok")
 
 

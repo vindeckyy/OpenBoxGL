@@ -1,9 +1,9 @@
 """Adversarial real-HTTP API boundary regressions."""
 
 import argparse
+import http.client
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -17,6 +17,8 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
+
+from routes import GET_TABLE, POST_TABLE, _is_public_path
 
 class ApiSweep(unittest.TestCase):
     @classmethod
@@ -81,6 +83,22 @@ class ApiSweep(unittest.TestCase):
             payload = error.read()
             return error.code, json.loads(payload) if payload else {}
 
+    def raw_request(self, path, headers=None, body=None, method="GET"):
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=3)
+        request_headers = {"User-Agent": "OpenBoxTest/1.0"}
+        if headers:
+            request_headers.update(headers)
+        data = None
+        if body is not None:
+            data = body if isinstance(body, (bytes, bytearray)) else json.dumps(body).encode("utf-8")
+            request_headers.setdefault("Content-Type", "application/json")
+        connection.request(method, path, body=data, headers=request_headers)
+        response = connection.getresponse()
+        payload = response.read()
+        parsed_body = json.loads(payload) if payload else {}
+        connection.close()
+        return response.status, parsed_body, dict(response.getheaders())
+
     def assert_alive(self):
         status, payload = self.request("/api/health", {})
         self.assertEqual(status, 200)
@@ -95,12 +113,15 @@ class ApiSweep(unittest.TestCase):
         self.assert_alive()
 
     def test_auth(self):
-        source = Path("web_app.py").read_text()
-        get_source = source[source.index("    def do_GET"):source.index("    def do_POST")]
-        get_routes = sorted(set(re.findall(r'["\'](/api/[^"\']+)["\']', get_source)))
-        for route in get_routes:
+        for route in sorted(GET_TABLE):
+            if _is_public_path(route):
+                continue
+            with self.web_app._AUTH_FAILURES_LOCK:
+                self.web_app._AUTH_FAILURES.clear()
             status, _ = self.request(route, token=None)
             self.assertEqual(status, 403, route)
+            with self.web_app._AUTH_FAILURES_LOCK:
+                self.web_app._AUTH_FAILURES.clear()
             status, _ = self.request(route, token="wrong")
             self.assertEqual(status, 403, route)
         status, _ = self.request("/api/library?token=sweep-token", token=None)
@@ -108,15 +129,59 @@ class ApiSweep(unittest.TestCase):
         self.assert_alive()
 
     def test_post_auth(self):
-        from routes import POST_TABLE
-
         for route in sorted(POST_TABLE):
+            with self.web_app._AUTH_FAILURES_LOCK:
+                self.web_app._AUTH_FAILURES.clear()
             status, _ = self.request(route, {}, token=None)
             self.assertEqual(status, 403, route)
+            with self.web_app._AUTH_FAILURES_LOCK:
+                self.web_app._AUTH_FAILURES.clear()
             status, _ = self.request(route, {}, token="wrong")
             self.assertEqual(status, 403, route)
         self.assert_alive()
 
+    def test_host_filter(self):
+        status, payload, _ = self.raw_request(
+            "/api/library",
+            headers={"Host": "evil.example", "X-OpenBox-Token": "sweep-token"},
+        )
+        self.assertEqual(status, 403)
+        self.assertEqual(payload.get("code"), "BAD_HOST")
+        self.assertEqual(payload.get("error"), "Request host is not allowed.")
+        self.assertTrue(payload.get("request_id"))
+        self.assert_alive()
+
+    def test_auth_rate_limiting(self):
+        with self.web_app._AUTH_FAILURES_LOCK:
+            self.web_app._AUTH_FAILURES.clear()
+        last_status = None
+        last_payload = {}
+        for _ in range(15):
+            status, payload = self.request("/api/library", token="wrong")
+            last_status = status
+            last_payload = payload
+            if status == 429:
+                break
+        self.assertEqual(last_status, 429)
+        self.assertEqual(last_payload.get("code"), "RATE_LIMITED")
+        self.assertGreater(int(last_payload.get("retry_after", 0)), 0)
+        status, payload = self.request("/api/library", token="sweep-token")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["games"][0]["name"], "Fixture")
+        self.assert_alive()
+
+    def test_v1_live_routes(self):
+        status, payload = self.request("/api/v1/library")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["games"][0]["name"], "Fixture")
+        status, payload = self.request("/api/v1/health", {})
+        self.assertEqual(status, 200)
+        self.assertIn("issues", payload)
+        status, payload = self.request("/api/v1/import", {"folder": ""})
+        self.assertEqual(status, 400)
+        self.assertEqual(payload.get("code"), "BAD_REQUEST")
+        self.assertEqual(payload.get("error"), "Folder path is required.")
+        self.assert_alive()
     def test_validation(self):
         for body in (b"{", b"[]", b"null", b'"text"'):
             status, payload = self.request("/api/settings", body, raw=True)
@@ -284,9 +349,14 @@ class ApiSweep(unittest.TestCase):
 GROUPS = {
     "fixture": "test_fixture",
     "auth": "test_auth",
+    "post_auth": "test_post_auth",
+    "host_filter": "test_host_filter",
+    "rate_limit": "test_auth_rate_limiting",
+    "v1_live": "test_v1_live_routes",
     "validation": "test_validation",
     "exceptions": "test_exceptions",
     "settings": "test_settings",
+    "concurrent_settings": "test_concurrent_partial_settings_saves",
     "lifecycle": "test_lifecycle",
     "bigbox": "test_bigbox_mode_switch",
     "related": "test_related_rich_by_game_id",

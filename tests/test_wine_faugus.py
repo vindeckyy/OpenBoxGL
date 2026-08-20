@@ -7,6 +7,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pkg.parity.parity_wine import list_wine_prefixes, list_proton_versions, get_prefix_for_game
 from pkg.parity.parity_faugus import find_faugus_data_dirs, scan_faugus_games
 
+def _reset_openbox_modules():
+    for name in ("openbox", "webapp_state", "web_app", "handlers.faugus"):
+        sys.modules.pop(name, None)
+
+
 
 class TestWine(unittest.TestCase):
     def test_list_prefixes_returns_list(self):
@@ -81,6 +86,49 @@ class TestFaugus(unittest.TestCase):
             games = scan_faugus_games(data_dirs=[str(prefix)])
             self.assertEqual([game["faugus_id"] for game in games], ["single-game"])
 
+
+    def test_faugus_import_handler_deduplicates(self):
+        import tempfile
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            prev = os.environ.get("OPENBOX_DATA_DIR")
+            os.environ["OPENBOX_DATA_DIR"] = tmp
+            try:
+                _reset_openbox_modules()
+                from openbox import save_state, load_state
+                from web_app import Handler
+
+                save_state({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
+                handler = object.__new__(Handler)
+                responses = []
+                handler.send_json = lambda status, payload: responses.append((status, payload))
+                fake_scanned = [{
+                    "name": "Faugus Title",
+                    "faugus_id": "faugus-123",
+                    "path": "/bin/true",
+                    "prefix": "/tmp/pfx",
+                    "source_identity": "faugus:faugus-123",
+                }]
+                with mock.patch("handlers.faugus.scan_faugus_games", return_value=fake_scanned):
+                    handler._api_post_api_faugus_import({})
+                    self.assertEqual(responses[0][0], 200)
+                    self.assertEqual(responses[0][1]["added"], 1)
+                    self.assertEqual(responses[0][1]["found"], 1)
+
+                    # Second import with same candidate should deduplicate (0 added, 1 found)
+                    handler._api_post_api_faugus_import({})
+                    self.assertEqual(responses[1][0], 200)
+                    self.assertEqual(responses[1][1]["added"], 0)
+                    self.assertEqual(responses[1][1]["found"], 1)
+                state = load_state()
+                self.assertEqual(len(state["games"]), 1)
+                self.assertEqual(state["games"][0]["name"], "Faugus Title")
+            finally:
+                if prev is None:
+                    os.environ.pop("OPENBOX_DATA_DIR", None)
+                else:
+                    os.environ["OPENBOX_DATA_DIR"] = prev
+                _reset_openbox_modules()
 
 if __name__ == "__main__":
     unittest.main()

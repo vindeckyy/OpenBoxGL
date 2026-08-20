@@ -181,7 +181,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           target_commitish: ${{ github.sha }}
           name: OpenBox ${{ github.ref_name }}
-          body_path: RELEASE_NOTES.md
+          body_path: docs/RELEASE_NOTES.md
           generate_release_notes: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           fail_on_unmatched_files: true
