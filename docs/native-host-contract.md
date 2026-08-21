@@ -87,8 +87,8 @@ through the capability resolver with a browser fallback.
 | Browser API | Native mapping |
 |---|---|
 | `window.open(url)` (manuals, Wikipedia) | `openExternal(url)` |
-| `prompt(...)` (16 sites: import paths, playlist names, etc.) | `dialog("file"/"folder")` or a styled in-page prompt |
-| `confirm(...)` (13 sites: deletes, restores, force-close) | styled in-page confirm or native dialog |
+| `prompt(...)` (legacy; now styled in-page dialog for import paths, playlist names, etc. — previously 16 call sites across the 13-module frontend) | `dialog("file"/"folder")` or styled in-page prompt |
+| `confirm(...)` (legacy; now styled in-page confirm for deletes/restores — previously 13 sites) | styled in-page confirm or native dialog |
 | `localStorage` (UI prefs) | server-persisted `ui_state` when native; `localStorage` in browser |
 | `navigator.clipboard` | host clipboard; browser fallback |
 | `document.fullscreenElement` / request/exit | `windowAction("set-fullscreen"/"unset-fullscreen")` |

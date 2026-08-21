@@ -265,6 +265,20 @@ V1_ALIASED_PREFIXES = (
     "/api/plugins",
     "/api/state/recover",
     "/api/filter-presets",
+    "/api/premium/media-packs",
+    "/api/premium/media-packs/apply",
+    "/api/storefront/import",
+    "/api/gameyfin/test",
+    "/api/import/scummvm",
+    "/api/import/rpcs3",
+    "/api/import/vita3k",
+    "/api/themes/open-folder",
+    "/api/ra/inject",
+    "/api/media/cleanup",
+    "/api/saves/scan/apply",
+    "/api/bigbox/mode",
+    "/api/games/bulk-wizard",
+    "/api/extra/launch",
 )
 
 

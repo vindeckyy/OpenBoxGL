@@ -18,6 +18,7 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
       AppState.bigBoxIndex = Math.max(0,AppState.bigBoxGames.findIndex(game => game.id === AppState.selectedId));
       AppState.bigBoxLastInput = performance.now();
       AppState.gamepadState = {};
+      AppState.bigBoxBattery = undefined;
       $('bigBox').hidden = false;
       $('bigBox').focus();
       const startup = $('bigBoxStartupVideo');
@@ -120,11 +121,15 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
       if (!game) return;
       $('bigBoxCounter').textContent = `${AppState.bigBoxIndex + 1} / ${AppState.bigBoxGames.length}`;
       const hint = AppState.appSettings.controller_prompt_hint || 'A Play · B Back · M Menu';
-      navigator.getBattery?.().then(status => {
-        if (!$('bigBoxStatus')) return;
+      // Battery queried once per BigBox open; cached in AppState.bigBoxBattery to avoid per-frame promise.
+      if (AppState.bigBoxBattery === undefined) {
+        AppState.bigBoxBattery = null;
+        navigator.getBattery?.().then(status => { AppState.bigBoxBattery = status; renderBigBox(); }).catch(() => {});
+      }
+      if ($('bigBoxStatus')) {
+        const status = AppState.bigBoxBattery;
         $('bigBoxStatus').innerHTML = status ? `<strong>${Math.round(status.level * 100)}%</strong> battery · ${escapeHtml(hint)}` : escapeHtml(hint);
-      }).catch(() => { if ($('bigBoxStatus')) $('bigBoxStatus').textContent = hint; });
-      const mode = AppState.appSettings.bigbox_mode || 'stage';
+      }
       if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').hidden = mode !== 'hybrid';
       const playLabel = game.gameyfin_id && !game.store_installed
         ? '⬇ INSTALL'
