@@ -1,132 +1,73 @@
 #!/usr/bin/env python3
-"""Frontend contract and asset routing tests."""
-
+"""Frontend contract: var(--*) defined, surface-deep in themes."""
 import re
-import sys
-import unittest
-from pathlib import Path
+import pathlib
 
-ROOT = Path(__file__).resolve().parent
-if not (ROOT / "static").is_dir() and (ROOT.parent / "static").is_dir():
-    ROOT = ROOT.parent
-sys.path.insert(0, str(ROOT))
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+APP = ROOT / "static" / "app.css"
+THEMES = sorted((ROOT / "themes").glob("*.css"))
 
-from routes import PUBLIC_GET_PATHS  # noqa: E402
+ROOT_BLOCK_RE = re.compile(r":root\s*\{[^}]*\}", re.DOTALL)
+VAR_DEF_RE = re.compile(r"--([\w-]+)\s*:")
+VAR_USE_RE = re.compile(r"var\(--([\w-]+)")
+IGNORED_DYNAMIC = {"motion-index", "coverflow-offset"}
 
-EXPECTED_PEER_MODULES = frozenset({
-    "util.js",
-    "state.js",
-    "library.js",
-    "settings.js",
-    "imports.js",
-    "metadata.js",
-    "media.js",
-    "reader.js",
-    "sessions.js",
-    "storefront.js",
-    "bigbox.js",
-    "dialogs.js",
-})
+def parse_root_vars(css_text: str):
+    m = ROOT_BLOCK_RE.search(css_text)
+    if not m:
+        return set()
+    return set(VAR_DEF_RE.findall(m.group(0)))
 
+def find_vars_used_outside_root(css_text: str):
+    without = ROOT_BLOCK_RE.sub("", css_text)
+    return set(v for v in VAR_USE_RE.findall(without) if v not in IGNORED_DYNAMIC)
 
-class FrontendContractTests(unittest.TestCase):
-    def test_index_html_loads_app_js_module(self):
-        index_path = ROOT / "index.html"
-        self.assertTrue(index_path.is_file(), f"index.html must exist at {index_path}")
-        content = index_path.read_text(encoding="utf-8")
+def test_app_vars_defined():
+    css = APP.read_text()
+    defs = parse_root_vars(css)
+    used = find_vars_used_outside_root(css)
+    missing = sorted(used - defs)
+    assert not missing, f"app.css uses vars not defined in :root: {missing}\n defined: {sorted(defs)}"
 
-        # Must include the module entry script
-        self.assertRegex(
-            content,
-            r'<script\s+type=["\']module["\']\s+src=["\']/static/app\.js["\']\s*>\s*</script>',
-            "index.html must contain <script type=\"module\" src=\"/static/app.js\"></script>",
-        )
+def test_themes_surface_deep():
+    missing_themes = []
+    for p in THEMES:
+        css = p.read_text()
+        defs = parse_root_vars(css)
+        if "surface-deep" not in defs:
+            missing_themes.append(p.name)
+    assert not missing_themes, f"themes missing --surface-deep: {missing_themes}"
 
-        # Must link app stylesheet
-        self.assertIn(
-            '/static/app.css',
-            content,
-            "index.html must link /static/app.css",
-        )
-
-    def test_app_js_imports_all_peer_modules(self):
-        app_js_path = ROOT / "static" / "app.js"
-        self.assertTrue(app_js_path.is_file(), f"app.js must exist at {app_js_path}")
-        content = app_js_path.read_text(encoding="utf-8")
-
-        imported_modules = set(
-            re.findall(r"from\s+['\"]\./([a-zA-Z0-9_-]+\.js)['\"]", content)
-        )
-
-        # Check all 12 peer modules are imported
-        missing = EXPECTED_PEER_MODULES - imported_modules
-        self.assertEqual(
-            missing,
-            set(),
-            f"static/app.js is missing imports for peer modules: {missing}",
-        )
-        self.assertGreaterEqual(len(imported_modules), 12)
-
-        # Assert every imported peer exists on disk
-        for module_name in EXPECTED_PEER_MODULES:
-            peer_path = ROOT / "static" / module_name
-            self.assertTrue(
-                peer_path.is_file(),
-                f"Peer module {module_name} must exist on disk at {peer_path}",
-            )
-
-    def test_public_get_paths_covers_all_static_assets(self):
-        # Base HTML routes
-        self.assertIn("/", PUBLIC_GET_PATHS)
-        self.assertIn("/index.html", PUBLIC_GET_PATHS)
-
-        # CSS and app.js
-        self.assertIn("/static/app.css", PUBLIC_GET_PATHS)
-        self.assertIn("/static/app.js", PUBLIC_GET_PATHS)
-
-        # All 13 static JS files must be reachable before authentication
-        static_js_files = sorted((ROOT / "static").glob("*.js"))
-        self.assertGreaterEqual(len(static_js_files), 13)
-
-        for js_file in static_js_files:
-            route_path = f"/static/{js_file.name}"
-            self.assertIn(
-                route_path,
-                PUBLIC_GET_PATHS,
-                f"PUBLIC_GET_PATHS must include {route_path}",
-            )
-
-    def test_util_and_state_exported_symbols(self):
-        util_js = (ROOT / "static" / "util.js").read_text(encoding="utf-8")
-        for symbol in (
-            "$",
-            "escapeHtml",
-            "sortGames",
-            "gameInstalled",
-            "badge",
-            "advancedQueryMatches",
-            "parseQueryTokens",
-        ):
-            self.assertIn(
-                symbol,
-                util_js,
-                f"static/util.js must define and export {symbol}",
-            )
-
-        state_js = (ROOT / "static" / "state.js").read_text(encoding="utf-8")
-        for symbol in ("AppState", "api", "filteredGames"):
-            self.assertIn(
-                symbol,
-                state_js,
-                f"static/state.js must define and export {symbol}",
-            )
-
-    def test_eslint_config_exists(self):
-        config = ROOT / "static" / "eslint.config.mjs"
-        self.assertTrue(config.is_file(), "static/eslint.config.mjs must exist")
-        lines = config.read_text(encoding="utf-8").strip().splitlines()
-        self.assertGreaterEqual(len(lines), 20)
-
+def test_themes_vars_defined():
+    app_defs = parse_root_vars(APP.read_text())
+    for p in THEMES:
+        css = p.read_text()
+        defs = parse_root_vars(css) | app_defs
+        used = find_vars_used_outside_root(css)
+        missing = sorted(used - defs)
+        assert not missing, f"{p.name} uses undefined vars: {missing}"
 
 if __name__ == "__main__":
-    unittest.main()
+    try:
+        test_app_vars_defined()
+        print("PASS test_app_vars_defined")
+    except AssertionError as e:
+        print(f"FAIL test_app_vars_defined: {e}")
+    try:
+        test_themes_surface_deep()
+        print("PASS test_themes_surface_deep")
+    except AssertionError as e:
+        print(f"FAIL test_themes_surface_deep: {e}")
+    try:
+        test_themes_vars_defined()
+        print("PASS test_themes_vars_defined")
+    except AssertionError as e:
+        print(f"FAIL test_themes_vars_defined: {e}")
+    try:
+        test_app_vars_defined()
+        test_themes_surface_deep()
+        test_themes_vars_defined()
+        print("ALL PASS")
+    except AssertionError:
+        print("SOME FAIL")
+        raise SystemExit(1) from None

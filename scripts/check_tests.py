@@ -47,6 +47,15 @@ def main() -> int:
         if result.returncode != 0:
             failures.append("ruff")
 
+    # Stage 2.3: runtime_modules.txt must match the repository layout.
+    runtime_modules = run([sys.executable, "-B", str(ROOT / "scripts" / "check_runtime_modules.py")])
+    if runtime_modules.stdout.strip():
+        print(runtime_modules.stdout.strip())
+    if runtime_modules.stderr.strip():
+        print(runtime_modules.stderr.strip())
+    if runtime_modules.returncode != 0:
+        failures.append("runtime_modules")
+
     # Stage 2.4: v1 route surface must match the frozen contract. The v1
     # surface is the native host's only contract; drift fails the gate.
     v1_contract = run([sys.executable, "-B", str(ROOT / "scripts" / "check_v1_contract.py")])
@@ -65,6 +74,19 @@ def main() -> int:
         if version_sync.stderr.strip():
             print(version_sync.stderr.strip())
         failures.append("version_sync")
+
+    # Stage 2.6: frontend lint (eslint). Uses scripts/check_frontend.py which
+    # degrades to a warning when npm/eslint are absent locally but must pass
+    # in CI where npm is installed. On CI npm is always present.
+    frontend = run([sys.executable, "-B", str(ROOT / "scripts" / "check_frontend.py")])
+    if frontend.stdout.strip():
+        print(frontend.stdout.strip())
+    if frontend.stderr.strip():
+        print(frontend.stderr.strip())
+    if frontend.returncode != 0:
+        failures.append("frontend")
+
+
     modules = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip()]
     compile_failed = 0
     for module in modules:

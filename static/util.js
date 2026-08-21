@@ -132,6 +132,20 @@
       log: '/api/v1/log', diagnostic: '/api/v1/diagnostic', shutdown: '/api/v1/shutdown',
       favorite: '/api/v1/favorite', plugins: '/api/v1/plugins', state_recover: '/api/v1/state/recover',
       filter_presets: '/api/v1/filter-presets',
+      premium_media_packs: '/api/v1/premium/media-packs',
+      premium_media_packs_apply: '/api/v1/premium/media-packs/apply',
+      storefront_import: '/api/v1/storefront/import',
+      gameyfin_test: '/api/v1/gameyfin/test',
+      import_scummvm: '/api/v1/import/scummvm',
+      import_rpcs3: '/api/v1/import/rpcs3',
+      import_vita3k: '/api/v1/import/vita3k',
+      themes_open_folder: '/api/v1/themes/open-folder',
+      ra_inject: '/api/v1/ra/inject',
+      media_cleanup: '/api/v1/media/cleanup',
+      saves_scan_apply: '/api/v1/saves/scan/apply',
+      bigbox_mode: '/api/v1/bigbox/mode',
+      games_bulk_wizard: '/api/v1/games/bulk-wizard',
+      extra_launch: '/api/v1/extra/launch',
     };
     /**
      * Compute the most recent timestamp for a game (last played or added).

@@ -27,6 +27,12 @@
     },
     {
       "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/bigbox/mode"
+    },
+    {
+      "methods": [
         "GET"
       ],
       "path": "/api/v1/diagnostic"
@@ -42,6 +48,12 @@
         "POST"
       ],
       "path": "/api/v1/emulators/install"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/extra/launch"
     },
     {
       "methods": [
@@ -73,6 +85,18 @@
         "POST"
       ],
       "path": "/api/v1/games/bulk"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/games/bulk-wizard"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/gameyfin/test"
     },
     {
       "methods": [
@@ -120,7 +144,25 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v1/import/rpcs3"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/import/scummvm"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v1/import/steam"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/import/vita3k"
     },
     {
       "methods": [
@@ -168,6 +210,12 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v1/media/cleanup"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v1/metadata/apply"
     },
     {
@@ -209,6 +257,18 @@
     },
     {
       "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/premium/media-packs"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/premium/media-packs/apply"
+    },
+    {
+      "methods": [
         "GET",
         "POST"
       ],
@@ -223,6 +283,12 @@
     },
     {
       "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/ra/inject"
+    },
+    {
+      "methods": [
         "GET"
       ],
       "path": "/api/v1/running"
@@ -232,6 +298,12 @@
         "GET"
       ],
       "path": "/api/v1/saves"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/saves/scan/apply"
     },
     {
       "methods": [
@@ -254,6 +326,12 @@
     },
     {
       "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/storefront/import"
+    },
+    {
+      "methods": [
         "GET",
         "POST"
       ],
@@ -264,6 +342,12 @@
         "GET"
       ],
       "path": "/api/v1/themes"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/themes/open-folder"
     },
     {
       "methods": [

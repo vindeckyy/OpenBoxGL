@@ -1,15 +1,5 @@
-const token = new URLSearchParams(location.search).get('token') || '';
-// Scrub the token from browser history immediately after reading it: keep any
-// deeplink params, drop only 'token'.
-{
-  const qs = new URLSearchParams(location.search);
-  qs.delete('token');
-  const q = qs.toString();
-  history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
-}
-
 import { $, escapeHtml } from './util.js';
-import { AppState, api, notify, nativeFullscreen, detectNative, filteredGames, nativePickFile, selectedIds } from './state.js';
+import { token, AppState, api, notify, nativeFullscreen, detectNative, filteredGames, nativePickFile, selectedIds } from './state.js';
 import { refresh, render, renderGrid, favorite, updateGameStatus, removeGame } from './library.js';
 import { openSettings, openProfiles, openThemes, openAchievements, openPlugins, health, openBackups, openFeature, bulkAction, saveFilter, savePreset, openPlaylists, createManualPlaylist, createFilterPlaylist, createNamedBackup, completeWelcome, filterSettings, gracefulShutdown, loadTheme } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importArcade, runStartupStorefrontImports } from './imports.js';
@@ -20,6 +10,14 @@ import { openSessions, openHistory, launch, connectSessionEvents, pollSessions }
 import { openDiscovery, openStorefronts, saveStorefrontSettings, importStorefrontCatalog, loadStorefrontCatalog } from './storefront.js';
 import { openBigBox, closeBigBox, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, stopScreenSaver, favoriteBigBox, openBigBoxPause, filteredBigBoxGames, applyLibraryMusic } from './bigbox.js';
 import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from './dialogs.js';
+// Scrub the token from browser history immediately after reading it: keep any
+// deeplink params, drop only 'token'.
+{
+  const qs = new URLSearchParams(location.search);
+  qs.delete('token');
+  const q = qs.toString();
+  history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+}
 
 window.AppState = AppState;
 window.filteredGames = filteredGames;
@@ -163,11 +161,7 @@ window.filteredGames = filteredGames;
       const tools = event.target.closest?.('.topbar-tools');
       const closeToolsMenus = () => document.querySelectorAll('.topbar-tools[open]').forEach(menu => menu.removeAttribute('open'));
       if (!tools) { closeToolsMenus(); return; }
-      if (event.target.closest('summary')) {
-        event.preventDefault();
-        if (tools.hasAttribute('open')) closeToolsMenus();
-        else { closeToolsMenus(); tools.setAttribute('open', ''); }
-      } else if (event.target.closest('.tool-menu button')) {
+      if (event.target.closest('.tool-menu button')) {
         closeToolsMenus();
       }
     });

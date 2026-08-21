@@ -26,11 +26,11 @@ from routes.registry import (  # noqa: E402
 
 class RouteRegistryTests(unittest.TestCase):
     def test_route_table_sizes(self):
-        # 85 base GET + 24 v1 aliases = 109 total
-        # 97 base POST + 29 v1 aliases = 126 total
-        self.assertEqual(len(GET_TABLE), 109)
-        self.assertEqual(len(POST_TABLE), 126)
-        self.assertEqual(len(V1_ALIASED_PREFIXES), 46)
+        # 85 base GET + 25 v1 aliases = 110 total
+        # 97 base POST + 42 v1 aliases = 139 total
+        self.assertEqual(len(GET_TABLE), 110)
+        self.assertEqual(len(POST_TABLE), 139)
+        self.assertEqual(len(V1_ALIASED_PREFIXES), 60)
 
     def test_base_routes_count(self):
         base_get = [p for p in GET_TABLE if not p.startswith("/api/v1")]

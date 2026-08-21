@@ -24,8 +24,9 @@ def check_eslint(files: list[Path]) -> bool:
         print("warning: npx not found, skipping eslint check")
         return True
 
-    # Try running with static config or default
-    config_path = ROOT / "static" / "eslint.config.mjs"
+    config_path = ROOT / "scripts" / "eslint.config.mjs"
+    if not config_path.is_file():
+        config_path = ROOT / "static" / "eslint.config.mjs"
     cmd = [npx, "eslint"]
     if config_path.is_file():
         cmd.extend(["--config", str(config_path.relative_to(ROOT))])

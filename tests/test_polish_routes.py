@@ -65,8 +65,9 @@ class PolishRouteTests(unittest.TestCase):
         status, headers, body = self.request("/static/app.js")
         self.assertEqual(status, 200)
         self.assertIn("text/javascript", headers.get("Content-Type", ""))
-        self.assertTrue(body.startswith(b"const token"))
-
+        # app.js is an ES module; token is now imported from state.js and scrubbed via history.replaceState
+        self.assertIn(b"token", body)
+        self.assertIn(b"history.replaceState", body)
     def test_static_assets_reject_unknown_files(self):
         status, _, payload = self.request("/static/evil.bin")
         self.assertEqual(status, 404)

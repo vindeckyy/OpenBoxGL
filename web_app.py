@@ -114,7 +114,8 @@ _AUTH_WINDOW_SECONDS = 60.0
 
 # Security headers shared by every response (including the SSE stream) so the
 # policy can't drift between code paths.
-CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.bunny.net; font-src 'self' https://fonts.bunny.net; script-src 'self'; object-src 'none'; base-uri 'none'"
+CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.bunny.net; font-src 'self' https://fonts.bunny.net; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+
 
 
 class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, EmulatorsHandlers, DataHandlers, WineHandlers, FaugusHandlers, BaseHTTPRequestHandler):
@@ -138,13 +139,14 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
     def send_response(self, code, message=None):
         LOGGER.debug("HTTP %s %s -> %s", getattr(self, "command", "?"), urlparse(getattr(self, "path", "")).path, code)
         super().send_response(code, message)
-
     def headers_common(self, content_type, cache_control="no-store"):
         self.send_header("Content-Type", content_type)
         self.send_header("Cache-Control", cache_control)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Content-Security-Policy", CSP_DEFAULT)
+        self.send_header("X-Frame-Options", "DENY")
+
 
     def send_bytes(self, status, data, content_type, cache_control="no-store", etag=None, last_modified=None, extra_headers=None):
         if etag and self.headers.get("If-None-Match", "").strip() == etag:
@@ -425,14 +427,9 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
             icon = ROOT / "openbox.svg"
             if icon.is_file():
                 self.send_bytes(200, icon.read_bytes(), "image/svg+xml")
-                return
-
     @route("GET", "/api/events")
     def _api_get_api_events(self, parsed):
         subscriber_queue = queue_module.Queue(maxsize=SSE_QUEUE_SIZE)
-        if not register_event_subscriber(subscriber_queue):
-            self.send_json(503, {"error": "Too many event streams."})
-            return
         try:
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -442,7 +439,9 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Security-Policy", CSP_DEFAULT)
+            self.send_header("X-Frame-Options", "DENY")
             self.end_headers()
+            register_event_subscriber(subscriber_queue)
             self.connection.settimeout(SSE_WRITE_TIMEOUT)
             while True:
                 try:
@@ -465,6 +464,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         finally:
             unregister_event_subscriber(subscriber_queue)
 
+
     def _do_POST(self):
         try:
             payload = self.body()
@@ -484,7 +484,37 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         if not host:
             LOGGER.warning("Rejecting request with missing or empty Host header")
             return False
-        hostname = host.rsplit(":", 1)[0].strip("[]")
+        # Normalize Host: strip port, handle IPv6 brackets, lower-case.
+        # "LOCALHOST:8080" -> "localhost", "[::1]:8080" -> "::1", "::1" -> "::1"
+        host = host.strip()
+        # Extract host part without port; IPv6 in brackets
+        if host.startswith("["):
+            end = host.find("]")
+            if end != -1:
+                hostname = host[1:end]
+            else:
+                hostname = host.strip("[]")
+        else:
+            # Split on last colon only if the part after colon is numeric port
+            # and there is only one colon (avoid breaking bare IPv6 ::1 without brackets)
+            if host.count(":") == 1:
+                hostname = host.rsplit(":", 1)[0]
+            elif "::" in host and host.count(":") > 1:
+                # Bare IPv6 like ::1 without brackets and without port (rare)
+                hostname = host
+            else:
+                # Normal host or host:port with multiple colons (already handled bracket case)
+                # Fallback: if last segment after colon is digits and host looks like host:port
+                try:
+                    last = host.rsplit(":", 1)[1]
+                    if last.isdigit():
+                        hostname = host.rsplit(":", 1)[0]
+                    else:
+                        hostname = host
+                except IndexError:
+                    hostname = host
+                hostname = hostname.strip("[]")
+        hostname = hostname.lower().strip()
         return hostname in LOOPBACK_HOSTS
 
     def _handle_request(self, method):
