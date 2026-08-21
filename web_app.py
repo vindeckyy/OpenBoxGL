@@ -114,7 +114,7 @@ _AUTH_WINDOW_SECONDS = 60.0
 
 # Security headers shared by every response (including the SSE stream) so the
 # policy can't drift between code paths.
-CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.bunny.net; font-src 'self' https://fonts.bunny.net; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.bunny.net; font-src 'self' https://fonts.bunny.net; script-src 'self'; object-src 'none'; base-uri 'none'"
 
 
 
