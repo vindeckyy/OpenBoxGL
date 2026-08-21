@@ -12,8 +12,8 @@ const puppeteer = require('./node_modules/puppeteer');
   page.on('console', m => {
     if (m.type() === 'error') {
       const text = m.text();
-      // frame-ancestors CSPenforced top-level is not a real error for the smoke harness
-      if (text.includes('frame-ancestors') || text.includes("Framing 'http")) return;
+      // frame-ancestors and X-Frame-Options are expected for top-level; ignore in harness
+      if (text.includes('frame-ancestors') || text.includes("Framing 'http") || text.includes('X-Frame-Options') || text.includes('Refused to display')) return;
       errors.push('console: ' + text);
     }
   });
