@@ -119,7 +119,6 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
     function renderBigBox() {
       const game = AppState.bigBoxGames[AppState.bigBoxIndex];
       if (!game) return;
-      $('bigBoxCounter').textContent = `${AppState.bigBoxIndex + 1} / ${AppState.bigBoxGames.length}`;
       const hint = AppState.appSettings.controller_prompt_hint || 'A Play · B Back · M Menu';
       // Battery queried once per BigBox open; cached in AppState.bigBoxBattery to avoid per-frame promise.
       if (AppState.bigBoxBattery === undefined) {
@@ -130,6 +129,7 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
         const status = AppState.bigBoxBattery;
         $('bigBoxStatus').innerHTML = status ? `<strong>${Math.round(status.level * 100)}%</strong> battery · ${escapeHtml(hint)}` : escapeHtml(hint);
       }
+      const mode = AppState.appSettings.bigbox_mode || 'stage';
       if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').hidden = mode !== 'hybrid';
       const playLabel = game.gameyfin_id && !game.store_installed
         ? '⬇ INSTALL'
