@@ -358,7 +358,7 @@ OpenBox/
 ├── native_host.c           Native WebKitGTK host (spawns web_app.py)
 ├── handlers/               Route handler mixins (library, media, imports, settings, ...)
 ├── web_app.py              Loopback server + REST API (shared core)
-├── routes.py               GET/POST route tables (109 GET + 126 POST entries; v1_contracts.json freezes 46 paths)
+├── routes.py               GET/POST route tables (110 GET + 139 POST entries; v1_contracts.json freezes 60 paths)
 ├── contracts.py            Frozen v1 API contract + legacy aliases
 ├── openbox.py              Shared core helpers (data paths, launch, profiles)
 ├── state_store.py          Schema-versioned state, atomic writes, snapshots
