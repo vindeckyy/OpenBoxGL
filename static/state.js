@@ -208,6 +208,10 @@ const token = new URLSearchParams(location.search).get('token') || '';
     }
     const SEARCH_INDEX_MAX_TERM = 32;
     let _searchIndex = { games: null, refresh: null, title: new Map(), all: [] };
+    let _searchIndexDirty = true;
+    function markSearchIndexDirty() { _searchIndexDirty = true; }
+    let _filterVersion = 0;
+    function invalidateFilterCache() { _filterVersion++; }
     function indexValues(game) {
       return [game.name, game.sort_title, ...(Array.isArray(game.alternate_names) ? game.alternate_names : [game.alternate_names])]
         .filter(value => value !== undefined && value !== null && value !== '')
@@ -229,8 +233,9 @@ const token = new URLSearchParams(location.search).get('token') || '';
       return terms;
     }
     function buildSearchIndex() {
+      if (!_searchIndexDirty && _searchIndex.games) return _searchIndex;
       const refresh = AppState._refreshCounter || 0;
-      if (_searchIndex.games === AppState.games && _searchIndex.refresh === refresh) return _searchIndex;
+      if (_searchIndex.games === AppState.games && _searchIndex.refresh === refresh) { _searchIndexDirty = false; return _searchIndex; }
       const title = new Map();
       AppState.games.forEach(game => {
         for (const term of indexTerms(indexValues(game))) {
@@ -241,6 +246,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       });
       _searchIndex = { games: AppState.games, refresh, title, all: AppState.games };
       AppState.searchIndexStats = { terms: title.size, games: AppState.games.length };
+      _searchIndexDirty = false;
       return _searchIndex;
     }
     function indexedTitleCandidates(query) {
@@ -270,7 +276,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       const view = $('view')?.value || 'all';
       const sort = $('sort')?.value || 'name';
       const esrb = $('esrbFilter')?.value || '';
-      const key = JSON.stringify([AppState._refreshCounter || 0, query, view, sort, esrb, AppState.platform, AppState.platformCategory, AppState.activePlaylist, AppState.activeFilterPreset, AppState.explorerRules.progress, AppState.explorerRules]);
+      const key = `${_filterVersion}\0${query}\0${view}\0${sort}\0${esrb}\0${AppState.platform}\0${AppState.platformCategory}\0${AppState.activePlaylist}\0${AppState.activeFilterPreset}\0${AppState.explorerRules.progress}`;
       if (_filteredCache.key === key) return _filteredCache.result;
       const preset = AppState.filterPresets.find(item => item.name === AppState.activeFilterPreset);
       const presetRules = preset?.rules || {};
@@ -340,4 +346,4 @@ const token = new URLSearchParams(location.search).get('token') || '';
       }
     }
 
-export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets };
+export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty };

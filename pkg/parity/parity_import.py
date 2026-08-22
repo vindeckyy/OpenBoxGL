@@ -57,24 +57,30 @@ PLATFORM_EMULATORS = {
     "Sega Saturn": [("org.libretro.RetroArch", "RetroArch")],
 }
 
-BIOS_HINTS = {
-    "DuckStation": [
-        ("PSX BIOS (scph1001.bin)", Path.home() / ".local/share/duckstation/bios"),
-        ("PSX BIOS (scph1001.bin)", Path.home() / ".var/app/org.duckstation.DuckStation/data/duckstation/bios"),
-    ],
-    "PCSX2": [
-        ("PS2 BIOS folder", Path.home() / ".config/PCSX2/bios"),
-        ("PS2 BIOS folder", Path.home() / ".var/app/net.pcsx2.PCSX2/config/PCSX2/bios"),
-    ],
-    "RPCS3": [
-        ("PS3 firmware (dev_flash)", Path.home() / ".config/rpcs3/dev_flash"),
-        ("PS3 firmware (dev_flash)", Path.home() / ".var/app/net.rpcs3.RPCS3/config/rpcs3/dev_flash"),
-    ],
-    "RetroArch": [
-        ("System/BIOS directory", Path.home() / ".config/retroarch/system"),
-        ("System/BIOS directory", Path.home() / ".var/app/org.libretro.RetroArch/config/retroarch/system"),
-    ],
-}
+def _get_bios_hints():
+    """Return BIOS hints with runtime Path.home() calls (not frozen at import)."""
+    home = Path.home()
+    return {
+        "DuckStation": [
+            ("PSX BIOS (scph1001.bin)", home / ".local/share/duckstation/bios"),
+            ("PSX BIOS (scph1001.bin)", home / ".var/app/org.duckstation.DuckStation/data/duckstation/bios"),
+        ],
+        "PCSX2": [
+            ("PS2 BIOS folder", home / ".config/PCSX2/bios"),
+            ("PS2 BIOS folder", home / ".var/app/net.pcsx2.PCSX2/config/PCSX2/bios"),
+        ],
+        "RPCS3": [
+            ("PS3 firmware (dev_flash)", home / ".config/rpcs3/dev_flash"),
+            ("PS3 firmware (dev_flash)", home / ".var/app/net.rpcs3.RPCS3/config/rpcs3/dev_flash"),
+        ],
+        "RetroArch": [
+            ("System/BIOS directory", home / ".config/retroarch/system"),
+            ("System/BIOS directory", home / ".var/app/org.libretro.RetroArch/config/retroarch/system"),
+        ],
+    }
+
+
+BIOS_HINTS = _get_bios_hints()
 
 
 DISC_RE = re.compile(

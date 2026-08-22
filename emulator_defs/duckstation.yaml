@@ -8,6 +8,7 @@ extensions:
   - img
   - iso
   - pbp
+  - chd
 platforms:
   - PlayStation
 executable_patterns:

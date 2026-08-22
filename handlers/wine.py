@@ -1,8 +1,10 @@
 """Wine prefix and Proton discovery HTTP handlers."""
 
+from urllib.parse import parse_qs
+
 from api_errors import GameNotFound
 from routes.registry import route
-from webapp_state import load_state_view
+from webapp_state import game_from_query, load_state_view
 try:
     from pkg.parity.parity_wine import list_proton_versions, list_wine_prefixes, get_prefix_for_game
     HAS_WINE = True
@@ -31,8 +33,6 @@ class WineHandlers:
 
     @route("GET", "/api/wine/prefix-for-game")
     def _api_get_api_wine_prefix_for_game(self, parsed):
-        from urllib.parse import parse_qs
-        from webapp_state import game_from_query
         query = parse_qs(parsed.query)
         state = load_state_view()
         try:

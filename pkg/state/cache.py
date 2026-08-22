@@ -1,6 +1,7 @@
 """Cache structures and cached projection builders for OpenBox library state."""
 
 from collections import OrderedDict
+from dataclasses import dataclass
 import gzip
 import json
 import logging
@@ -202,21 +203,37 @@ def _media_set_contains(media_set, path_value):
     return False
 
 
+@dataclass
+class CacheEpoch:
+    """Centralized cache epoch for coordinated invalidation (ADR-0005)."""
+    media: int = 0
+
+    def bump(self) -> None:
+        """Increment media epoch and clear all epoch-sensitive caches."""
+        self.media += 1
+        with _KNOWN_MEDIA_SET_LOCK:
+            _KNOWN_MEDIA_SET_CACHE.update({"key": None, "result": None, "mtime_key": None})
+        with _GAME_PROJECTION_LOCK:
+            _GAME_PROJECTION_CACHE.clear()
+        with _SANITIZE_MEDIA_PATH_LOCK:
+            _SANITIZE_MEDIA_PATH_CACHE.clear()
+        with PLUGIN_LIBRARY_LOCK:
+            PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None, "state_signature": None})
+        with MEDIA_EPOCH_LOCK:
+            MEDIA_EPOCH["value"] += 1
+        with PUBLIC_STATE_LOCK:
+            PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None, "raw_gzip": None, "games_by_id": None})
+        with PUBLIC_SETTINGS_LOCK:
+            PUBLIC_SETTINGS_CACHE.update({"signature": None, "payload": None})
+        clear_file_probe_cache()
+
+
+CACHE_EPOCH = CacheEpoch()
+
+
 def bump_media_epoch():
     """Invalidate browser media caches by bumping the version suffix in media URLs."""
-    with _KNOWN_MEDIA_SET_LOCK:
-        _KNOWN_MEDIA_SET_CACHE.update({"key": None, "result": None, "mtime_key": None})
-    with _GAME_PROJECTION_LOCK:
-        _GAME_PROJECTION_CACHE.clear()
-    with _SANITIZE_MEDIA_PATH_LOCK:
-        _SANITIZE_MEDIA_PATH_CACHE.clear()
-    with PLUGIN_LIBRARY_LOCK:
-        PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None, "state_signature": None})
-    with MEDIA_EPOCH_LOCK:
-        MEDIA_EPOCH["value"] += 1
-    with PUBLIC_STATE_LOCK:
-        PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None, "raw_gzip": None, "games_by_id": None})
-    clear_file_probe_cache()
+    CACHE_EPOCH.bump()
 
 
 def public_settings(state=None):

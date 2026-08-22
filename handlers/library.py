@@ -7,6 +7,7 @@ from urllib.parse import parse_qs
 
 from api_errors import BadRequest, GameNotFound
 from catalog import PROGRESS, bulk_update, game_media_paths, related_game_ids, tag_counts
+from handlers._shared import clean_extras as _clean_extras_shared
 from notifications import clear as clear_notifications, mark_read as mark_notifications_read, unread_count
 from openbox import load_state
 from routes.registry import route
@@ -242,7 +243,7 @@ class LibraryHandlers:
 
     @route("GET", "/api/filter-presets")
     def _api_get_api_filter_presets(self, parsed):
-        state = load_state()
+        state = load_state_view()
         self.send_json(200, {
             "presets": list_presets(state),
             "bigbox_quick": bigbox_quick_presets(state),
@@ -369,9 +370,8 @@ class LibraryHandlers:
             elif action != "list":
                 raise ValueError("Unknown notification action.")
             return unread_count(state)
-        _, unread = transact_state(mutate)
-        state = load_state()
-        self.send_json(200, {"notifications": state.get("notifications", []), "unread": unread_count(state) if action == "list" else unread})
+        committed, unread = transact_state(mutate)
+        self.send_json(200, {"notifications": committed.get("notifications", []), "unread": unread})
 
     def tags(self, payload):
         ids = payload.get("ids")
@@ -491,20 +491,7 @@ class LibraryHandlers:
 
     @staticmethod
     def clean_extras(items, command):
-        if not isinstance(items, list):
-            raise ValueError("Game extras must be a list.")
-        clean = []
-        for item in items[:100]:
-            if not isinstance(item, dict):
-                continue
-            path = str(item.get("path", "")).strip()
-            if not path:
-                continue
-            record = {"name": str(item.get("name") or Path(path).stem).strip(), "path": path}
-            if command:
-                record["command"] = str(item.get("command", "")).strip()
-            clean.append(record)
-        return clean
+        return _clean_extras_shared(items, command)
 
     def save_image_group(self, payload):
         group = str(payload.get("group", ""))

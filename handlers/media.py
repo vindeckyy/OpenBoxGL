@@ -14,7 +14,6 @@ from routes.registry import route
 from parity_integrations import attach_recording, capture_screenshot, download_bezel, download_emumovies_media, load_emumovies_credentials, obs_recording_status, save_emumovies_credentials
 from parity_media import active_video, cleanup_duplicates, find_duplicate_media, load_media_queue
 from parity_premium import apply_media_pack, download_gog_media, download_steam_trailer, list_media_packs, platform_categories, strings_for
-from parity_saves import scan_all_saves
 from webapp_state import DATA, JOB_MANAGER, MEDIA_JOB, MEDIA_TYPES_ALL, METADATA_DATABASE, PROCESS_LOCK, approved_media_path, bump_media_epoch, download_image, game_from_payload, game_from_query, load_state_view, media_probe_path, public_settings, transact_state
 
 
@@ -168,10 +167,6 @@ class MediaHandlers:
     @route("POST", "/api/obs/attach")
     def _api_post_api_obs_attach(self, payload):
         self.obs_attach(payload)
-
-    @route("POST", "/api/saves/scan/apply")
-    def _api_post_api_saves_scan_apply(self, payload):
-        self.apply_save_scan(payload)
 
     def bulk_media(self, payload):
         media_types = payload.get("media", [])
@@ -335,27 +330,3 @@ class MediaHandlers:
         transact_state(mutate)
         bump_media_epoch()
         self.send_json(200, {"path": path, "obs": obs_recording_status()})
-
-    def apply_save_scan(self, payload):
-        state = load_state()
-        found = scan_all_saves(state["games"])
-        found_by_id = {
-            str(state["games"][index].get("game_id")): paths
-            for index, paths in found.items()
-            if 0 <= index < len(state["games"])
-        }
-        def mutate(state):
-            updated = 0
-            for stable_id, paths in found_by_id.items():
-                try:
-                    game = game_from_payload(state, {"game_id": stable_id})
-                except IndexError:
-                    continue
-                save_paths = game.setdefault("save_paths", [])
-                for path in paths:
-                    if path not in save_paths:
-                        save_paths.append(path)
-                        updated += 1
-            return updated
-        _, updated = transact_state(mutate)
-        self.send_json(200, {"updated": updated, "games": len(found)})

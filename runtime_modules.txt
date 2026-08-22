@@ -95,3 +95,5 @@ pkg/state/cache.py
 pkg/state/media_probe.py
 pkg/state/launch.py
 pkg/state/sse.py
+backend_subprocess.py
+handlers/_shared.py

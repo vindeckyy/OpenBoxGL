@@ -2,6 +2,7 @@
 
 import json
 import os
+import threading
 import time
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -11,6 +12,7 @@ from env_config import ensure_env_loaded
 
 IGDB_ENDPOINT = "https://api.igdb.com/v4"
 _TOKEN_CACHE = {"client_id": "", "value": "", "expires": 0.0}
+_TOKEN_LOCK = threading.Lock()
 
 
 def credentials():
@@ -23,14 +25,15 @@ def credentials():
 
 
 def access_token(client_id=None, client_secret=None):
-    now = time.time()
-    client_id = client_id or credentials()[0]
-    if (
-        _TOKEN_CACHE["client_id"] == client_id
-        and _TOKEN_CACHE["value"]
-        and _TOKEN_CACHE["expires"] > now + 30
-    ):
-        return _TOKEN_CACHE["value"]
+    with _TOKEN_LOCK:
+        now = time.time()
+        client_id = client_id or credentials()[0]
+        if (
+            _TOKEN_CACHE["client_id"] == client_id
+            and _TOKEN_CACHE["value"]
+            and _TOKEN_CACHE["expires"] > now + 30
+        ):
+            return _TOKEN_CACHE["value"]
     client_secret = client_secret or credentials()[1]
     body = urlencode({
         "client_id": client_id,
@@ -50,9 +53,10 @@ def access_token(client_id=None, client_secret=None):
     token = payload.get("access_token", "")
     if not token:
         raise ValueError("IGDB token request failed.")
-    _TOKEN_CACHE["client_id"] = client_id
-    _TOKEN_CACHE["value"] = token
-    _TOKEN_CACHE["expires"] = now + int(payload.get("expires_in", 3600))
+    with _TOKEN_LOCK:
+        _TOKEN_CACHE["client_id"] = client_id
+        _TOKEN_CACHE["value"] = token
+        _TOKEN_CACHE["expires"] = now + int(payload.get("expires_in", 3600))
     return token
 
 

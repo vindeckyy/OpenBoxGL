@@ -112,7 +112,7 @@ class MetadataHandlers:
     def match_metadata(self, payload):
         """Auto-match every unmatched game by exact title to the LBDB."""
         if not METADATA_DATABASE.is_file():
-            raise ValueError("Download the metadata database first.")
+            raise Conflict("Download the metadata database first.")
         platform = str(payload.get("platform", "all"))
         with PROCESS_LOCK:
             if METADATA_JOB.get("state") == "running":

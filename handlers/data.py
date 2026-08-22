@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 from api_errors import BadRequest, DocumentNotFound, GameNotFound, PlatformDocumentNotFound
+from handlers._shared import clean_extras
 from openbox import DATA, load_state
 from routes.registry import route
 from parity_gameyfin import GameyfinError, catalog_gameyfin, gameyfin_settings, install_gameyfin_game, test_gameyfin_connection, uninstall_gameyfin_game, validate_gameyfin_id
@@ -209,7 +210,7 @@ class DataHandlers:
         platform = str(payload.get("platform", "")).strip()
         if not platform:
             raise ValueError("Platform is required.")
-        documents = self.clean_extras(payload.get("documents", []), command=False)
+        documents = clean_extras(payload.get("documents", []), command=False)
         for document in documents:
             document["path"] = str(approved_media_path(document["path"], must_exist=False))
         def mutate(state):
@@ -332,3 +333,31 @@ class DataHandlers:
         game = game_from_payload(state, payload)
         restored = import_highscores(game, import_dir)
         self.send_json(200, {"restored": restored})
+
+    @route("POST", "/api/saves/scan/apply")
+    def _api_post_api_saves_scan_apply(self, payload):
+        self.apply_save_scan(payload)
+
+    def apply_save_scan(self, payload):
+        state = load_state()
+        found = scan_all_saves(state["games"])
+        found_by_id = {
+            str(state["games"][index].get("game_id")): paths
+            for index, paths in found.items()
+            if 0 <= index < len(state["games"])
+        }
+        def mutate(state):
+            updated = 0
+            for stable_id, paths in found_by_id.items():
+                try:
+                    game = game_from_payload(state, {"game_id": stable_id})
+                except IndexError:
+                    continue
+                save_paths = game.setdefault("save_paths", [])
+                for path in paths:
+                    if path not in save_paths:
+                        save_paths.append(path)
+                        updated += 1
+            return updated
+        _, updated = transact_state(mutate)
+        self.send_json(200, {"updated": updated, "games": len(found)})
