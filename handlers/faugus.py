@@ -1,6 +1,6 @@
 """Faugus Launcher import handlers."""
 
-from api_errors import ApiError
+from api_errors import BadRequest
 from routes.registry import route
 from webapp_state import clear_file_probe_cache, merge_imported_games
 try:
@@ -20,8 +20,7 @@ class FaugusHandlers:
         try:
             games = scan_faugus_games()
         except Exception as e:
-            self.send_json(200, {"games": [], "error": str(e)})
-            return
+            raise BadRequest(str(e)) from None
         self.send_json(200, {"games": games, "count": len(games)})
         return
 
@@ -30,7 +29,7 @@ class FaugusHandlers:
         try:
             candidates = scan_faugus_games()
         except Exception as e:
-            raise ApiError(str(e)) from None
+            raise BadRequest(str(e)) from None
         games = []
         for cand in candidates:
             game = {

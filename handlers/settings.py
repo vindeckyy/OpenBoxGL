@@ -340,7 +340,8 @@ class SettingsHandlers:
                 "motto": profile.get("Motto", ""),
             })
         except (OSError, ValueError, json.JSONDecodeError) as error:
-            self.send_json(400, {"error": str(error)})
+            from api_errors import BadRequest
+            raise BadRequest(str(error)) from None
         return
 
     @route("POST", "/api/profiles")

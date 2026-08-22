@@ -9,6 +9,7 @@ connected, so the web UI stays usable in a plain browser.
 from __future__ import annotations
 
 import os
+from api_errors import BadRequest
 from routes.registry import route
 
 
@@ -40,9 +41,10 @@ def capabilities(handler, parsed):
 @route("POST", "/api/native/dialog")
 def dialog(handler, payload):
     """Folder/file/save picker. No host -> cancelled, page falls back."""
+    if not handler.authorized():
+        return handler.send_json(401, {"error": "unauthorized"})
     kind = str(payload.get("kind") or "folder")
     if kind not in ("folder", "file", "save"):
-        from api_errors import BadRequest
         raise BadRequest("Native dialog kind must be folder, file, or save.")
     handler.send_json(200, {"path": None, "cancelled": True})
 
@@ -50,9 +52,10 @@ def dialog(handler, payload):
 @route("POST", "/api/native/open-external")
 def open_external(handler, payload):
     """Open a path or URL with the default handler. No host -> not ok."""
+    if not handler.authorized():
+        return handler.send_json(401, {"error": "unauthorized"})
     target = str(payload.get("path") or payload.get("url") or "").strip()
     if not target:
-        from api_errors import BadRequest
         raise BadRequest("Native open-external needs a path or url.")
     handler.send_json(200, {"ok": False, "error": None})
 
@@ -60,9 +63,10 @@ def open_external(handler, payload):
 @route("POST", "/api/native/reveal")
 def reveal(handler, payload):
     """Reveal a file in the file manager. No host -> not ok."""
+    if not handler.authorized():
+        return handler.send_json(401, {"error": "unauthorized"})
     path = str(payload.get("path") or "").strip()
     if not path:
-        from api_errors import BadRequest
         raise BadRequest("Native reveal needs a path.")
     handler.send_json(200, {"ok": False, "error": None})
 
@@ -70,8 +74,9 @@ def reveal(handler, payload):
 @route("POST", "/api/native/window")
 def window(handler, payload):
     """Window chrome actions. No host -> not ok."""
+    if not handler.authorized():
+        return handler.send_json(401, {"error": "unauthorized"})
     action = str(payload.get("action") or "")
     if action not in ("minimize", "toggle-maximize", "close", "set-fullscreen", "unset-fullscreen"):
-        from api_errors import BadRequest
         raise BadRequest("Native window action is not supported.")
     handler.send_json(200, {"ok": False})

@@ -290,7 +290,8 @@ class TestSessionPersistence(unittest.TestCase):
         result = wait_for_exit(mock_process, game, settings, max_tracking_duration=0.05)
         t1 = time.time()
         
-        self.assertEqual(result, "tracking_timeout")
+        self.assertEqual(result.exit_code, -1)
+        self.assertTrue(result.timed_out)
         self.assertTrue(t1 - t0 >= 0.05)
 
 if __name__ == "__main__":

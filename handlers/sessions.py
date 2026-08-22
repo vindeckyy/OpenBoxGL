@@ -77,7 +77,11 @@ class SessionHandlers:
     def launch(self, payload):
         if payload.get("id") is None and not payload.get("game_id"):
             raise ValueError("Game id is required.")
-        legacy_id = int(payload["id"]) if payload.get("id") is not None else int(payload.get("legacy_id", 0))
+        try:
+            legacy_id = int(payload["id"]) if payload.get("id") is not None else int(payload.get("legacy_id", 0))
+        except (KeyError, TypeError, ValueError):
+            from api_errors import BadRequest
+            raise BadRequest("missing or invalid game id") from None
         stable_game_id = str(payload.get("game_id") or "").strip()
         if stable_game_id:
             state = load_state()
@@ -131,7 +135,8 @@ class SessionHandlers:
                 args[0] = str(Path(args[0]).expanduser())
                 subprocess.Popen(args, start_new_session=True)
             except (OSError, ValueError, IndexError):
-                pass
+                import logging
+                logging.getLogger(__name__).debug('bigbox_mode_switch command failed', exc_info=True)
         self.send_json(200, {"ok": True, "entering": True})
 
     def launch_extra(self, payload):

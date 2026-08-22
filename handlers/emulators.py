@@ -123,10 +123,17 @@ class EmulatorsHandlers:
         app_id = str(payload.get("app_id", "")).strip()
         if not app_id:
             raise ValueError("app_id is required")
-        self.send_json(200, launch_emulator(app_id))
+        try:
+            self.send_json(200, launch_emulator(app_id))
+        except (OSError, ValueError) as e:
+            from api_errors import BadRequest
+            raise BadRequest(str(e)) from None
 
     def scan_emulator_folder_route(self, payload):
         folder = str(payload.get("folder", "")).strip()
+        if not folder:
+            from api_errors import BadRequest
+            raise BadRequest("folder required")
         imported = scan_emulator_folder(folder)
         added, found = merge_imported_games(imported, lambda game: ("path", str(game.get("path", ""))))
         clear_file_probe_cache()
@@ -135,6 +142,9 @@ class EmulatorsHandlers:
     def save_emulator_scan_config(self, payload):
         folder = str(payload.get("folder", "")).strip()
         emulator_id = str(payload.get("emulator_id", "")).strip()
+        if not folder or not emulator_id:
+            from api_errors import BadRequest
+            raise BadRequest("folder and emulator_id required")
         auto_update = bool(payload.get("auto_update", False))
         def mutate(state):
             return save_scan_config(state, folder, emulator_id, auto_update=auto_update)

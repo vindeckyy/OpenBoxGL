@@ -11,6 +11,11 @@ extensions:
   - gbc
   - n64
   - z64
+  - nds
+  - sms
+  - gg
+  - gen
+  - md
 platforms:
   - NES
   - SNES
@@ -18,6 +23,10 @@ platforms:
   - Game Boy Advance
   - Game Boy
   - Game Boy Color
+  - Nintendo DS
+  - Sega Master System
+  - Game Gear
+  - Sega Genesis
 executable_patterns:
   - retroarch
 startup: "-L /usr/lib/libretro/snes9x_libretro.so {path}"

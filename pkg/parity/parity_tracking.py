@@ -2,7 +2,10 @@
 
 import os
 import time
+from collections import namedtuple
 from pathlib import Path
+
+WaitResult = namedtuple('WaitResult', ['exit_code', 'timed_out'])
 
 TRACKING_MODES = ("default", "process", "original_process", "folder", "process_name")
 
@@ -95,12 +98,12 @@ def wait_for_exit(process, game, settings, max_tracking_duration=3600):
         time.sleep(config["delay"])
     mode = config["mode"]
     if mode in {"default", "process"}:
-        return process.wait()
+        return WaitResult(exit_code=process.wait(), timed_out=False)
     original = process.pid
     if mode == "original_process":
         while _alive(original):
             time.sleep(config["frequency"])
-        return process.poll() if process.poll() is not None else 0
+        return WaitResult(exit_code=process.poll() if process.poll() is not None else 0, timed_out=False)
     if mode == "folder":
         folders = [str(game.get("install_dir", "")).strip(), str(game.get("path", "")).strip()]
         folders = [str(Path(folder).parent) if Path(folder).is_file() else folder for folder in folders if folder]
@@ -112,36 +115,36 @@ def wait_for_exit(process, game, settings, max_tracking_duration=3600):
                 tracked.update(find_pids_in_folder(folder))
             if not tracked:
                 if process.poll() is not None:
-                    return process.poll()
+                    return WaitResult(exit_code=process.poll(), timed_out=False)
                 time.sleep(config["frequency"])
                 elapsed += config["frequency"]
                 continue
             if not any(_alive(pid) for pid in tracked):
-                return 0
+                return WaitResult(exit_code=0, timed_out=False)
             if process.poll() is not None and elapsed >= max_tracking_duration:
-                return "tracking_timeout"
+                return WaitResult(exit_code=-1, timed_out=True)
             time.sleep(config["frequency"])
             elapsed += config["frequency"]
     if mode == "process_name":
         pattern = config["process_name"] or Path(str(game.get("path", ""))).stem
         if not pattern:
-            return process.wait()
+            return WaitResult(exit_code=process.wait(), timed_out=False)
         elapsed = 0
         while True:
             matches = find_pids_by_name(pattern)
             if not matches:
                 if process.poll() is not None:
-                    return process.poll()
+                    return WaitResult(exit_code=process.poll(), timed_out=False)
                 time.sleep(config["frequency"])
                 elapsed += config["frequency"]
                 continue
             if not any(_alive(pid) for pid in matches):
-                return 0
+                return WaitResult(exit_code=0, timed_out=False)
             if process.poll() is not None and elapsed >= max_tracking_duration:
-                return "tracking_timeout"
+                return WaitResult(exit_code=-1, timed_out=True)
             time.sleep(config["frequency"])
             elapsed += config["frequency"]
-    return process.wait()
+    return WaitResult(exit_code=process.wait(), timed_out=False)
 
 
 def close_store_client(game, settings):

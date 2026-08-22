@@ -175,7 +175,7 @@ def active_video(game, priorities=None):
                 from webapp_state import sanitize_media_path
                 if not sanitize_media_path(path):
                     continue
-            except Exception:
+            except Exception:  # noqa: BLE001 - sanitize_media_path is external, may raise anything
                 continue
             return field, path
     legacy = str(game.get("video") or "").strip()
@@ -184,7 +184,7 @@ def active_video(game, priorities=None):
             from webapp_state import sanitize_media_path
             if not sanitize_media_path(legacy):
                 return "", ""
-        except Exception:
+        except Exception:  # noqa: BLE001 - sanitize_media_path is external, may raise anything
             return "", ""
         return "video", legacy
     return "", ""

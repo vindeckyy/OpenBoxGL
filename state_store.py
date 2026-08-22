@@ -6,6 +6,7 @@ import copy
 import fcntl
 import hashlib
 import json as _stdlib_json
+import types
 
 try:
     import orjson as _orjson
@@ -510,17 +511,17 @@ class JsonStateStore:
                 return copy.deepcopy(state)
 
     def load_readonly(self) -> dict[str, Any]:
-        """Return the cached state without copying. Callers must not mutate the result."""
+        """Return a shallow-frozen view of cached state. Callers cannot mutate top-level keys."""
         with self._thread_lock:
             signature = self._signature()
             if self._cached_state is not None and signature == self._cached_signature:
-                return self._cached_state
+                return types.MappingProxyType(self._cached_state)
             with self._file_lock(True):
                 state, changed = self._load_unlocked()
                 if changed:
                     self._write_unlocked(state)
                 self._remember(state)
-                return self._cached_state
+                return types.MappingProxyType(self._cached_state)
 
     def recover(self) -> dict[str, Any]:
         with self._thread_lock, self._file_lock(True):

@@ -1,7 +1,7 @@
 :root {
       color-scheme: dark;
-      --bg:#11100e; --panel:#1b1916; --panel2:#24211d; --line:#3d3932;
-      --text:#f4efe6; --muted:#aaa094; --cyan:#72c9d4; --green:#8fbd8d;
+      --bg:#11100e; --panel:#1b1916; --line:#3d3932;
+      --text:#f4efe6; --muted:#aaa094; --cyan:#72c9d4;
       --topbar:#171513; --surface-deep:#141311;
       --surface-card:#211e1a; --surface-field:#27231e; --surface-hover:#342d23;
       --border-control:#4b4338; --border-card:#534a3d; --focus:#f06000;
