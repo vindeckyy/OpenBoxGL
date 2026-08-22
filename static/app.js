@@ -19,8 +19,8 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
   history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
 }
 
-window.AppState = AppState;
-window.filteredGames = filteredGames;
+/** @type {any} */ (window).AppState = AppState;
+/** @type {any} */ (window).filteredGames = filteredGames;
 
     $('gameForm').onsubmit = async event => {
       event.preventDefault();

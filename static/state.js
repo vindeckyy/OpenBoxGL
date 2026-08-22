@@ -233,9 +233,8 @@ const token = new URLSearchParams(location.search).get('token') || '';
       return terms;
     }
     function buildSearchIndex() {
-      if (!_searchIndexDirty && _searchIndex.games) return _searchIndex;
       const refresh = AppState._refreshCounter || 0;
-      if (_searchIndex.games === AppState.games && _searchIndex.refresh === refresh) { _searchIndexDirty = false; return _searchIndex; }
+      if (_searchIndex.games === AppState.games && _searchIndex.refresh === refresh) return _searchIndex;
       const title = new Map();
       AppState.games.forEach(game => {
         for (const term of indexTerms(indexValues(game))) {
@@ -276,8 +275,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
       const view = $('view')?.value || 'all';
       const sort = $('sort')?.value || 'name';
       const esrb = $('esrbFilter')?.value || '';
-      const key = `${_filterVersion}\0${AppState._refreshCounter || 0}\0${query}\0${view}\0${sort}\0${esrb}\0${AppState.platform}\0${AppState.platformCategory}\0${AppState.activePlaylist}\0${AppState.activeFilterPreset}\0${AppState.explorerRules.progress}`;
-      if (_filteredCache.key === key) return _filteredCache.result;
+      const key = `${_filterVersion}\0${AppState._refreshCounter || 0}\0${query}\0${view}\0${sort}\0${esrb}\0${AppState.platform}\0${AppState.platformCategory}\0${AppState.activePlaylist}\0${AppState.activeFilterPreset}\0${JSON.stringify(AppState.explorerRules)}`;
       const preset = AppState.filterPresets.find(item => item.name === AppState.activeFilterPreset);
       const presetRules = preset?.rules || {};
       const activePlaylistData = playlistFor(AppState.activePlaylist);
