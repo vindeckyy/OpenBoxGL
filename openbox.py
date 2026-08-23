@@ -12,6 +12,7 @@ from pathlib import Path
 
 from archives import extract_game
 from parity_import import EXTENSIONS_EXTRA, PLATFORM_BY_EXTENSION_EXTRA
+from pkg.parity.launch_tokens import build_launch_args
 from state_store import JsonStateStore
 
 CUSTOM_DATA_DIR = os.environ.get("OPENBOX_DATA_DIR")
@@ -113,29 +114,7 @@ def build_launch(game, profiles):
     game_command = game.get("launch", "")
     command = game_command or profiles.get(game.get("platform", ""), "")
     if command:
-        rom_p = Path(launch_path)
-        replacements = {
-            "{path}": launch_path,
-            "{ImagePath}": launch_path,
-            "{name}": str(game.get("name", "")),
-            "{Name}": str(game.get("name", "")),
-            "{dir}": str(rom_p.parent),
-            "{Dir}": str(rom_p.parent),
-            "{file}": rom_p.name,
-            "{File}": rom_p.name,
-            "{stem}": rom_p.stem,
-            "{FileNameWithoutExtension}": rom_p.stem,
-            "{platform}": str(game.get("platform", "")),
-            "{Platform}": str(game.get("platform", "")),
-            "{app_id}": str(game.get("steam_app_id", "")),
-            "{heroic_app_id}": str(game.get("heroic_app_id", "")),
-            "{lutris_id}": str(game.get("lutris_id", "")),
-            "{rom_name}": str(game.get("rom_name", "")),
-            "{DataDir}": str(DATA.parent),
-        }
-        args = shlex.split(command)
-        for marker, value in replacements.items():
-            args = [part.replace(marker, value) for part in args]
+        args = build_launch_args(command, game, path=launch_path, data_dir=str(DATA.parent))
         if not game_command and "{path}" not in command and "{ImagePath}" not in command:
             args.append(launch_path)
     elif Path(launch_path).suffix.lower() == ".sh":

@@ -11,7 +11,7 @@ from pkg.parity.parity_faugus import find_faugus_data_dirs, scan_faugus_games
 from pkg.parity.parity_wine import get_prefix_for_game, list_proton_versions, list_wine_prefixes
 
 def _reset_openbox_modules():
-    for name in ("openbox", "webapp_state", "web_app", "handlers.faugus"):
+    for name in ("openbox", "webapp_state", "web_app", "handlers.faugus", "pkg.state.imports", "pkg.state.commands"):
         sys.modules.pop(name, None)
 
 

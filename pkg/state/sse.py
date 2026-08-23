@@ -12,6 +12,7 @@ from automation import MAX_WEBHOOKS, build_event, utc_now
 from notifications import add_notification
 from openbox import DATA, load_state
 from pkg.state.cache import GZIP_THRESHOLD  # noqa: F401  # re-exported via webapp_state shim
+from pkg.state.registry import EVENT_SEQUENCE  # noqa: F401  # re-exported via webapp_state shim
 
 LOGGER = logging.getLogger("openbox")
 METADATA_DATABASE = DATA.parent / "metadata/launchbox.db"
@@ -23,7 +24,6 @@ SSE_MAX_SUBSCRIBERS = 16
 SSE_QUEUE_SIZE = 128
 SSE_MAX_EVENT_BYTES = 64 * 1024
 SSE_WRITE_TIMEOUT = 5
-EVENT_SEQUENCE = 0
 
 
 def _ns(name, default):
@@ -236,12 +236,13 @@ def _close_sse_subscriber(subscriber):
             subscriber.get_nowait()
     except queue.Empty:
         pass
-    except Exception:
+    except (OSError, ValueError) as e:
+        LOGGER.warning("sse subscriber drain: %s", e)
         return
     try:
         subscriber.put_nowait(None)
-    except Exception:
-        pass
+    except (OSError, ValueError) as e:
+        LOGGER.warning("sse subscriber sentinel: %s", e)
 
 
 def broadcast_event(kind, payload):
@@ -268,16 +269,16 @@ def broadcast_event(kind, payload):
 
 
 def session_event(kind, launch_id, game_name, exit_code=None, seconds=None):
-    from pkg.state.launch import PROCESS_LOCK, SESSION_EVENTS
+    from pkg.state.registry import PROCESS_LOCK, SESSION_EVENTS
     proc_lock = _ns("PROCESS_LOCK", PROCESS_LOCK)
     sess_events = _ns("SESSION_EVENTS", SESSION_EVENTS)
     bcast = _ns("broadcast_event", broadcast_event)
 
-    global EVENT_SEQUENCE
+    import pkg.state.registry as _reg
     with proc_lock:
-        EVENT_SEQUENCE += 1
+        _reg.EVENT_SEQUENCE += 1
         event = {
-            "id": EVENT_SEQUENCE,
+            "id": _reg.EVENT_SEQUENCE,
             "kind": kind,
             "launch_id": launch_id,
             "game": game_name,

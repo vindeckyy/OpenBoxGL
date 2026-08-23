@@ -57,6 +57,8 @@ GATES_10K = {
     "favorite_mutation_ms_p95": 2000.0,
     "filtered_query_ms_p95": 1000.0,
     "facet_ms_p95": 1000.0,
+    # Write-path gate: 10k favorite write must stay under 500 ms.
+    "10k_write_ms_p95": 500.0,
 }
 
 
@@ -272,6 +274,42 @@ def benchmark(data_dir, runs=5):
         except subprocess.TimeoutExpired:
             process.kill()
 
+def benchmark_write_path(data_dir, runs=5):
+    """Measure write-path performance: favorite toggle on one game.
+
+    Spins up the real server against *data_dir* (which should already contain
+    a generated library) and times the POST /api/favorite endpoint that
+    triggers a full JSON save + fsync + backup rotation.
+
+    Returns a dict with median_ms, p95_ms, and runs.
+    """
+    process, origin, token = _start_server(data_dir)
+    try:
+        # Warm-up request so the server loads the library into memory.
+        try:
+            _request(origin, token, "/api/library")
+        except Exception:
+            pass
+
+        # Measure favorite toggle on game-00000.
+        stats, _, _ = _safe_request(
+            origin, token, "/api/favorite", method="POST",
+            body={"id": 0}, runs=runs,
+        )
+        if stats is not None and stats.get("runs", 0) == 0:
+            stats, _, _ = _safe_request(
+                origin, token, "/api/favorite", method="POST",
+                body={"game_id": "game-00000"}, runs=runs,
+            )
+        return stats or {"runs": 0, "error": "favorite toggle failed"}
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+
+
 def _check_gates(results):
     """Enforce non-regression gates for the 10,000-game entry when present."""
     if "10000" not in results:
@@ -300,6 +338,21 @@ def _check_gates(results):
         val = entry[op][field]
         if val > gate:
             failures.append(f"{op}.{field} {val} ms exceeds gate {gate_key} {gate} ms at 10,000 games")
+
+    # Write-path gate: 10k favorite write must be <500 ms.
+    write_key = "10k_write"
+    if write_key in entry:
+        wp = entry[write_key]
+        if wp.get("runs", 0) >= 1 and "p95_ms" in wp:
+            gate = GATES_10K.get("10k_write_ms_p95")
+            if gate is not None and wp["p95_ms"] > gate:
+                failures.append(
+                    f"{write_key}.p95_ms {wp['p95_ms']} ms exceeds gate 10k_write_ms_p95 {gate} ms"
+                )
+        else:
+            detail = wp.get("error", "no successful runs")
+            failures.append(f"{write_key} missing p95_ms at 10,000 games: {detail}")
+
     return failures
 
 
@@ -322,6 +375,22 @@ def main():
         generate(size, data_dir)
         print(f"benchmarking {size} games ({args.runs} runs per op) ...", flush=True)
         results[str(size)] = benchmark(data_dir, runs=args.runs)
+
+    # Write-path benchmark: measure favorite mutation at 10k (and 20k when FULL).
+    write_sizes = [10000]
+    if os.environ.get("OPENBOX_PERF_FULL") == "1":
+        write_sizes.append(20000)
+    for wsize in write_sizes:
+        wdir = base / f"write-{wsize}"
+        print(f"generating {wsize} games for write-path benchmark in {wdir} ...", flush=True)
+        generate(wsize, wdir)
+        print(f"write-path benchmark at {wsize} games ({args.runs} runs) ...", flush=True)
+        wp = benchmark_write_path(wdir, runs=args.runs)
+        results[f"{wsize}_write"] = wp
+        if wp.get("runs", 0) > 0:
+            print(f"  {wsize} write: median={wp.get('median_ms')}ms  p95={wp.get('p95_ms')}ms")
+        else:
+            print(f"  write-path benchmark at {wsize} failed: {wp.get('error', 'unknown')}")
 
     # Optional browser first-render timing (best-effort, not required for CI).
     if args.browser:

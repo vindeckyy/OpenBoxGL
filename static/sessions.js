@@ -140,4 +140,4 @@ import { refresh, launchExtra } from './library.js';
       } catch(error) { notify(error.message); }
     }
 
-export { launch, showLifecycle, connectSessionEvents, scheduleSessionPoll, pollSessions, openHistory, openSessions, renderSessions, loadBackups, backupSaves, restoreSaves, discoverSaves };
+export { launch, showLifecycle, connectSessionEvents, pollSessions, openHistory, openSessions, renderSessions, loadBackups, backupSaves, restoreSaves, discoverSaves };

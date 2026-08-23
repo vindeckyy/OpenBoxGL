@@ -28,10 +28,6 @@ from pkg.state.cache import (  # noqa: F401
     transact_state,
 )
 from pkg.state.launch import (  # noqa: F401
-    PROCESS_LOCK,
-    PROCESSES,
-    RUNNING,
-    SESSION_EVENTS,
     control_game_session,
     finish_session,
     game_from_payload,
@@ -40,6 +36,13 @@ from pkg.state.launch import (  # noqa: F401
     reconcile_sessions_on_startup,
     resolve_library_game,
     start_game,
+)
+from pkg.state.registry import (  # noqa: F401
+    EVENT_SEQUENCE,
+    PROCESS_LOCK,
+    PROCESSES,
+    RUNNING,
+    SESSION_EVENTS,
 )
 from pkg.state.media_probe import (  # noqa: F401
     FIELDS,
@@ -58,7 +61,6 @@ from pkg.state.media_probe import (  # noqa: F401
     update_steam_metadata,
 )
 from pkg.state.sse import (  # noqa: F401
-    EVENT_SEQUENCE,
     EVENT_SUBSCRIBERS,
     EVENT_SUBSCRIBERS_LOCK,
     GZIP_THRESHOLD,

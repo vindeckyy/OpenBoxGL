@@ -120,9 +120,9 @@ class ParityFeatureTests(unittest.TestCase):
             def fake_scan(folder):
                 scanned.append(folder)
                 return []
-            with mock.patch("webapp_state.scan_emulator_folder", side_effect=fake_scan):
-                with mock.patch("webapp_state.merge_imported_games", return_value=(0, 0)):
-                    with mock.patch("webapp_state.WATCH_STOP") as stop:
+            with mock.patch("pkg.state.imports.scan_emulator_folder", side_effect=fake_scan):
+                with mock.patch("pkg.state.imports.merge_imported_games", return_value=(0, 0)):
+                    with mock.patch("pkg.state.imports.WATCH_STOP") as stop:
                         stop.wait.side_effect = [False, True]  # one iteration then stop
                         webapp_state.auto_import_worker()
             self.assertEqual(scanned, ["/roms/nes"])

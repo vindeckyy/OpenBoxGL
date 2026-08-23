@@ -1,5 +1,5 @@
 import { $, escapeHtml, duration, fact, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds } from './util.js';
-import { token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePrompt, nativeConfirm, nativePickFolder, nativeReveal, nativeOpenExternal, notify, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets } from './state.js';
+import { token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePrompt, nativeConfirm, nativePickFolder, nativeReveal, nativeOpenExternal, notify, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch } from './state.js';
 import { maybeShowWelcome, loadTheme, deletePlaylist } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importDroppedFolder } from './imports.js';
 import { openGameDialog } from './dialogs.js';
@@ -163,8 +163,7 @@ let lastFacetsFingerprint = null;
       const available = imageGroup === 'screenshot' ? game.available_screenshots?.length : game[flag];
       if (available) {
         const index = imageGroup === 'screenshot' ? game.available_screenshots[0] : '';
-        const priority = game.id === AppState.selectedId ? 'high' : 'low';
-        return `<img src="${media(game,imageGroup,index)}" alt="" loading="lazy" decoding="async" fetchpriority="${priority}" data-gid="${game.id}">`;
+        return `<img src="${media(game,imageGroup,index)}" alt="" loading="lazy" decoding="async" data-gid="${game.id}">`;
       }
       return `<div class="cover-title">${escapeHtml(game.name)}</div>`;
     }
@@ -172,6 +171,7 @@ let lastFacetsFingerprint = null;
     // natural aspect ratio (w/h) per game id. Unknown covers default to the
     // .cover-title fallback shape (portrait, aspect-ratio .72).
     let ratioRegroupTimer = null;
+    let _coverRatiosRevision = 0;
     // Cover images load async; when a newly measured ratio moves a game into a
     // different bucket than the one the grid was rendered with, regroup once.
     // Debounced so lazy loads (which fire as covers scroll into view) batch
@@ -182,6 +182,7 @@ let lastFacetsFingerprint = null;
       const ratio = img.naturalWidth / img.naturalHeight;
       const prev = AppState.coverRatios[gid];
       AppState.coverRatios[gid] = ratio;
+      _coverRatiosRevision++;
       if (prev !== ratio && coverBucketOf(prev) !== coverBucketOf(ratio)) {
         clearTimeout(ratioRegroupTimer);
         ratioRegroupTimer = setTimeout(() => { ratioRegroupTimer = null; renderGrid(); }, 150);
@@ -202,8 +203,14 @@ let lastFacetsFingerprint = null;
       return [(grid.clientWidth - (cols - 1) * gap) / cols, cols];
     }
     let groupedGeo = null, textBlockH = 62, ratioHeadH = 30;
+    let _gridGeoCache = null;
     function gridRowsGeometry(sections) {
       const [cellW, cols] = gridCellWidth();
+      const grouping = AppState.appSettings.cover_grouping || 'shape';
+      // Lightweight fingerprint: section key + game count + first/last id.
+      const sectionFp = sections.map(s => `${s.key}:${s.games.length}:${s.games.length ? s.games[0].id : ''}:${s.games.length ? s.games[s.games.length - 1].id : ''}`).join('|');
+      const key = `${grouping}\0${cols}\0${cellW.toFixed(1)}\0${_coverRatiosRevision}\0${sectionFp}`;
+      if (_gridGeoCache && _gridGeoCache.key === key) return _gridGeoCache.result;
       const rowGap = parseFloat(getComputedStyle($('grid')).rowGap) || 0;
       const rows = [];
       let top = 0;
@@ -218,7 +225,9 @@ let lastFacetsFingerprint = null;
           top += cellW / minRatio + textBlockH + rowGap;
         }
       }
-      return {rows, cols, totalHeight: top};
+      const result = {rows, cols, totalHeight: top};
+      _gridGeoCache = { key, result };
+      return result;
     }
     function renderGroupedGrid(visible, imageGroup, fromScroll, motionClass) {
       const sections = groupedSections(visible);
@@ -346,6 +355,10 @@ let lastFacetsFingerprint = null;
       }
       $('grid').innerHTML = listView ? `<div class="list-head"><span>Title</span><span>Platform</span><span>Genre</span><span>ESRB</span><span>Progress</span><span>Plays</span><span>Rating</span></div>${topSpacer}${rendered}${bottomSpacer}` : `${topSpacer}${rendered}${bottomSpacer}`;
       document.querySelectorAll('#grid img[data-gid]').forEach(img => { if (img.complete) recordCoverRatio(img); });
+      // Set fetchPriority via DOM property to avoid per-render string churn.
+      if (typeof HTMLImageElement !== 'undefined' && 'fetchPriority' in HTMLImageElement.prototype) {
+        document.querySelectorAll('#grid img[data-gid]').forEach(img => { img.fetchPriority = Number(img.dataset.gid) === AppState.selectedId ? 'high' : 'low'; });
+      }
       document.querySelectorAll('[data-game]').forEach(card => card.onclick = event => {
         const id = Number(card.dataset.game);
         if (event.shiftKey || event.ctrlKey || event.metaKey || AppState.bulkMode) {
@@ -527,8 +540,7 @@ let lastFacetsFingerprint = null;
       try { await api('/api/game/delete',{method:'POST',body:JSON.stringify({id,delete_media:alsoDeleteMedia})}); AppState.selectedId = null; await refresh(); notify('Game removed from library'); } catch(error) { notify(error.message); }
     }
     async function launchExtra(id,kind,index) { try { await api('/api/extra/launch',{method:'POST',body:JSON.stringify({id,kind,index})}); notify('Opened'); } catch(error) { notify(error.message); } }
-    let searchTimer = null;
-    $('sidebarSearch').oninput = () => { AppState.activePlaylist = ''; clearTimeout(searchTimer); searchTimer = setTimeout(() => { renderPlaylists(); renderGrid(); }, 150); };
+    $('sidebarSearch').oninput = () => { AppState.activePlaylist = ''; scheduleSearch(() => { renderPlaylists(); renderGrid(); }); };
     $('view').onchange = () => { AppState.activePlaylist = ''; renderPlaylists(); renderGrid(); };
     $('sort').onchange = renderGrid;
     // load events do not bubble, so ratio tracking uses a capture-phase

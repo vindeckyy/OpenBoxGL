@@ -12,12 +12,14 @@ class TestStateSplit(unittest.TestCase):
         import pkg.state.cache
         import pkg.state.launch
         import pkg.state.media_probe
+        import pkg.state.registry
         import pkg.state.sse
 
         self.assertIsNotNone(pkg.state)
         self.assertIsNotNone(pkg.state.cache)
         self.assertIsNotNone(pkg.state.launch)
         self.assertIsNotNone(pkg.state.media_probe)
+        self.assertIsNotNone(pkg.state.registry)
         self.assertIsNotNone(pkg.state.sse)
 
     def test_cache_exports(self):
@@ -119,6 +121,23 @@ class TestStateSplit(unittest.TestCase):
         self.assertTrue(callable(game_from_payload))
         self.assertTrue(callable(game_from_query))
 
+    def test_registry_exports(self):
+        from pkg.state.registry import (
+            EVENT_SEQUENCE,
+            PROCESS_LOCK,
+            PROCESSES,
+            RUNNING,
+            SESSION_EVENTS,
+            Session,
+        )
+
+        self.assertIsInstance(EVENT_SEQUENCE, int)
+        self.assertIsNotNone(PROCESS_LOCK)
+        self.assertIsInstance(RUNNING, dict)
+        self.assertIsInstance(PROCESSES, dict)
+        self.assertIsInstance(SESSION_EVENTS, list)
+        self.assertTrue(callable(Session))
+
     def test_sse_exports(self):
         from pkg.state.sse import (
             EVENT_SEQUENCE,
@@ -160,6 +179,7 @@ class TestStateSplit(unittest.TestCase):
         import pkg.state.cache
         import pkg.state.launch
         import pkg.state.media_probe
+        import pkg.state.registry
         import pkg.state.sse
         import webapp_state
 
@@ -167,9 +187,16 @@ class TestStateSplit(unittest.TestCase):
         self.assertIs(webapp_state.PUBLIC_STATE_CACHE, pkg.state.cache.PUBLIC_STATE_CACHE)
         self.assertIs(webapp_state.MEDIA_EPOCH, pkg.state.cache.MEDIA_EPOCH)
         self.assertIs(webapp_state.FILE_PROBE_CACHE, pkg.state.cache.FILE_PROBE_CACHE)
-        self.assertIs(webapp_state.RUNNING, pkg.state.launch.RUNNING)
-        self.assertIs(webapp_state.PROCESSES, pkg.state.launch.PROCESSES)
-        self.assertIs(webapp_state.PROCESS_LOCK, pkg.state.launch.PROCESS_LOCK)
+        # Registry is the canonical source for process globals
+        self.assertIs(webapp_state.RUNNING, pkg.state.registry.RUNNING)
+        self.assertIs(webapp_state.PROCESSES, pkg.state.registry.PROCESSES)
+        self.assertIs(webapp_state.PROCESS_LOCK, pkg.state.registry.PROCESS_LOCK)
+        self.assertIs(webapp_state.SESSION_EVENTS, pkg.state.registry.SESSION_EVENTS)
+        self.assertIs(webapp_state.EVENT_SEQUENCE, pkg.state.registry.EVENT_SEQUENCE)
+        # Launch re-exports from registry (same object)
+        self.assertIs(pkg.state.launch.RUNNING, pkg.state.registry.RUNNING)
+        self.assertIs(pkg.state.launch.PROCESSES, pkg.state.registry.PROCESSES)
+        self.assertIs(pkg.state.launch.PROCESS_LOCK, pkg.state.registry.PROCESS_LOCK)
         self.assertIs(webapp_state.FIELDS, pkg.state.media_probe.FIELDS)
         self.assertIs(webapp_state.EVENT_SUBSCRIBERS, pkg.state.sse.EVENT_SUBSCRIBERS)
         self.assertIsNotNone(webapp_state.TOKEN)
