@@ -6,8 +6,7 @@ The files under this `docs/` folder are engineering and planning documents that 
 
 - `reliability.md` — edge case catalog of failure modes and expected behavior
 - `native-host-contract.md` — contract between the page and the WebKitGTK native host
-- `adr/0001-native-host.md` — accepted ADR for the native host decision
-- `adr/0002-repository-layout.md` — accepted ADR for repository layout, test reorg, parity package shims, token rules, and CI gates
-- `development/DESIGN.md`, `development/PERF.md`, `development/PRODUCT.md`, `development/COVERAGE.md`, `development/PLAN.md` — design, performance, product, coverage, and planning notes (local-only; kept out of git via `.gitignore`)
+- `adr/` — Architectural Decision Records (ADR 0001 through 0009) covering native host, repository layout, parity shims, theme tokens, cache hierarchy, gate completion, lock ordering, state decomposition, and dependency injection
+- `development/` — development, design, performance, and handler conventions (`DESIGN.md`, `PERF.md`, `PRODUCT.md`, `COVERAGE.md`, `HANDLER_CONVENTIONS.md`)
 
 Do not add user-facing markdown here. Edit the docs site repo instead.
