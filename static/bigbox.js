@@ -18,7 +18,9 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
       AppState.bigBoxIndex = Math.max(0,AppState.bigBoxGames.findIndex(game => game.id === AppState.selectedId));
       AppState.bigBoxLastInput = performance.now();
       AppState.gamepadState = {};
-      AppState.bigBoxBattery = undefined;
+      // Query battery once per BigBox open rather than per render frame.
+      AppState.bigBoxBattery = null;
+      if (navigator.getBattery) { navigator.getBattery().then(status => { AppState.bigBoxBattery = status; renderBigBox(); }).catch(() => {}); }
       $('bigBox').hidden = false;
       $('bigBox').focus();
       const startup = $('bigBoxStartupVideo');
@@ -120,11 +122,6 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
       const game = AppState.bigBoxGames[AppState.bigBoxIndex];
       if (!game) return;
       const hint = AppState.appSettings.controller_prompt_hint || 'A Play · B Back · M Menu';
-      // Battery queried once per BigBox open; cached in AppState.bigBoxBattery to avoid per-frame promise.
-      if (AppState.bigBoxBattery === undefined) {
-        AppState.bigBoxBattery = null;
-        navigator.getBattery?.().then(status => { AppState.bigBoxBattery = status; renderBigBox(); }).catch(() => {});
-      }
       if ($('bigBoxStatus')) {
         const status = AppState.bigBoxBattery;
         $('bigBoxStatus').innerHTML = status ? `<strong>${Math.round(status.level * 100)}%</strong> battery · ${escapeHtml(hint)}` : escapeHtml(hint);
@@ -177,7 +174,7 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
       const path = AppState.appSettings.library_music;
       if (!path) { if (AppState.libraryBgm) { AppState.libraryBgm.pause(); AppState.libraryBgm = null; } return; }
       if (!AppState.libraryBgm) { AppState.libraryBgm = new Audio(); AppState.libraryBgm.loop = true; AppState.libraryBgm.volume = AppState.appSettings.video_bgm_mix ? 0.35 : 0.6; }
-      if (AppState.libraryBgm.src !== location.origin + path && !AppState.libraryBgm.src.endsWith(path)) AppState.libraryBgm.src = path;
+      if (AppState.libraryBgm.src !== location.origin + path && !AppState.libraryBgm.src.endsWith(path)) { AppState.libraryBgm.pause(); AppState.libraryBgm.src = path; }
       if ($('bigBox').hidden) { AppState.libraryBgm.pause(); return; }
       AppState.libraryBgm.play().catch(() => {});
     }

@@ -207,6 +207,21 @@ const token = new URLSearchParams(location.search).get('token') || '';
       });
     }
     const SEARCH_INDEX_MAX_TERM = 32;
+    // LRU cache for parsed query tokens — caps at 64 entries to bound memory.
+    const QUERY_TOKEN_CACHE_MAX = 64;
+    const _queryTokenCache = new Map();
+    function cachedParseQueryTokens(query) {
+      let tokens = _queryTokenCache.get(query);
+      if (tokens !== undefined) { _queryTokenCache.delete(query); _queryTokenCache.set(query, tokens); return tokens; }
+      tokens = parseQueryTokens(query);
+      _queryTokenCache.set(query, tokens);
+      if (_queryTokenCache.size > QUERY_TOKEN_CACHE_MAX) { const oldest = _queryTokenCache.keys().next().value; _queryTokenCache.delete(oldest); }
+      return tokens;
+    }
+    // Abortable debounce for search — callers pass a callback; prior pending
+    // timeout is cancelled so only the last invocation within the delay fires.
+    let _searchTimer = null;
+    function scheduleSearch(callback, delay = 150) { clearTimeout(_searchTimer); _searchTimer = setTimeout(callback, delay); }
     let _searchIndex = { games: null, refresh: null, title: new Map(), all: [] };
     let _searchIndexDirty = true;
     function markSearchIndexDirty() { _searchIndexDirty = true; }
@@ -222,9 +237,12 @@ const token = new URLSearchParams(location.search).get('token') || '';
       values.forEach(value => {
         (value.match(/[a-z0-9]+/g) || []).forEach(word => {
           const limited = word.slice(0, SEARCH_INDEX_MAX_TERM);
-          for (let start = 0; start < limited.length; start++) {
-            for (let end = start + 2; end <= limited.length; end++) terms.add(limited.slice(start, end));
-          }
+          // Prefixes: up to 8 substrings anchored at the start (lengths 2–9).
+          for (let end = 2; end <= Math.min(limited.length, 9); end++) terms.add(limited.slice(0, end));
+          // Suffixes: up to 8 substrings anchored at the end (lengths 2–9).
+          for (let len = 2; len <= Math.min(limited.length, 9); len++) terms.add(limited.slice(limited.length - len));
+          // 2-grams: every bigram for short-token matching.
+          for (let i = 0; i <= limited.length - 2; i++) terms.add(limited.slice(i, i + 2));
         });
         const words = value.match(/[a-z0-9]+/g) || [];
         if (words.length > 1) terms.add(words.map(word => word[0]).join(''));
@@ -250,7 +268,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
     }
     function indexedTitleCandidates(query) {
       if (!query || /[:"]/.test(query)) return null;
-      const tokens = parseQueryTokens(query);
+      const tokens = cachedParseQueryTokens(query);
       if (!tokens.length || tokens.some(token => token.negative || token.key !== 'title' || token.value.length < 2 || !/^[a-z0-9]+$/.test(token.value))) return null;
       const index = buildSearchIndex();
       let ids = null;
@@ -344,4 +362,4 @@ const token = new URLSearchParams(location.search).get('token') || '';
       }
     }
 
-export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty };
+export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch };

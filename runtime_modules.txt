@@ -58,6 +58,7 @@ pkg/parity/parity_backup.py
 pkg/parity/parity_tracking.py
 pkg/parity/parity_igdb.py
 pkg/parity/parity_emulator_defs.py
+pkg/parity/launch_tokens.py
 pkg/parity/parity_import_policy.py
 pkg/parity/parity_gamescope.py
 pkg/parity/parity_perf.py
@@ -94,6 +95,9 @@ pkg/state/__init__.py
 pkg/state/cache.py
 pkg/state/media_probe.py
 pkg/state/launch.py
+pkg/state/registry.py
+pkg/state/commands.py
+pkg/state/imports.py
 pkg/state/sse.py
 backend_subprocess.py
 handlers/_shared.py

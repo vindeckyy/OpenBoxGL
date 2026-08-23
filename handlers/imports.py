@@ -1,5 +1,6 @@
 """ImportsHandlers capability handlers. Import sources, storefront catalogs, and import exclusions."""
 
+import logging
 import subprocess
 from datetime import datetime
 from urllib.parse import parse_qs
@@ -23,6 +24,7 @@ from webapp_state import (
     transact_state,
 )
 
+LOGGER = logging.getLogger("openbox")
 
 SUPPORTED_STOREFRONT_IMPORT_SOURCES = {"steam", "heroic", "lutris", "gameyfin"}
 
@@ -138,8 +140,8 @@ class ImportsHandlers:
             try:
                 install_emulator(str(app_id))
                 installs.append(str(app_id))
-            except (OSError, ValueError, RuntimeError):
-                pass
+            except (OSError, ValueError, RuntimeError) as e:
+                LOGGER.warning("install_emulator %s: %s", app_id, e)
         _send_import_result(self, added, found, recommendations=recommendations, installed=installs)
 
     def import_xbox360(self, payload):

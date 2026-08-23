@@ -22,34 +22,35 @@
       <button class="menu-button" id="queueButton">Queue</button>
     </nav>
     <nav class="topbar-zone topbar-zone-tools" aria-label="Tools">
-      <details class="topbar-tools">
-        <summary class="menu-button">Tools</summary>
-        <div class="tool-menu">
-          <button class="menu-button" id="steamButton">Import Steam</button>
-          <button class="menu-button" id="heroicButton">Import Heroic</button>
-          <button class="menu-button" id="lutrisButton">Import Lutris</button>
-          <button class="menu-button" id="arcadeButton">Import Arcade</button>
-          <button class="menu-button" id="emulatorsButton">Emulators</button>
-          <button class="menu-button" id="settingsButton">Settings</button>
-          <button class="menu-button" id="historyButton">History</button>
-          <button class="menu-button" id="themesButton">Themes</button>
-          <button class="menu-button" id="saveFilterButton">Save filter</button>
-          <button class="menu-button" id="savePresetButton">Save preset</button>
-          <button class="menu-button" id="playlistsButton">Playlists</button>
-          <button class="menu-button" id="achievementsButton">Achievements</button>
-          <button class="menu-button" id="pluginsButton">Plugins</button>
-          <button class="menu-button" id="discoveryButton">Discovery</button>
-          <button class="menu-button" id="storefrontButton">Storefronts</button>
-          <button class="menu-button" id="mediaButton">Media</button>
-          <button class="menu-button" id="healthButton">Health</button>
-          <button class="menu-button" id="bulkButton">Bulk edit</button>
-          <button class="menu-button" id="backupButton">Backup</button>
-          <button class="menu-button" id="fullscreenButton">Fullscreen</button>
-          <button class="menu-button" id="tagsButton">Tags</button>
-          <button class="menu-button" id="notificationsButton">Notifications</button>
-          <button class="menu-button" id="webhooksButton">Webhooks</button>
+      <noscript><details class="topbar-tools"><summary class="menu-button">Tools</summary></details></noscript>
+      <div class="topbar-tools" id="toolsWrap">
+        <button class="menu-button" id="toolsButton" aria-haspopup="menu" aria-expanded="false" aria-controls="toolMenu">Tools</button>
+        <div class="tool-menu" id="toolMenu" role="menu">
+          <button class="menu-button" id="steamButton" role="menuitem" tabindex="-1">Import Steam</button>
+          <button class="menu-button" id="heroicButton" role="menuitem" tabindex="-1">Import Heroic</button>
+          <button class="menu-button" id="lutrisButton" role="menuitem" tabindex="-1">Import Lutris</button>
+          <button class="menu-button" id="arcadeButton" role="menuitem" tabindex="-1">Import Arcade</button>
+          <button class="menu-button" id="emulatorsButton" role="menuitem" tabindex="-1">Emulators</button>
+          <button class="menu-button" id="settingsButton" role="menuitem" tabindex="-1">Settings</button>
+          <button class="menu-button" id="historyButton" role="menuitem" tabindex="-1">History</button>
+          <button class="menu-button" id="themesButton" role="menuitem" tabindex="-1">Themes</button>
+          <button class="menu-button" id="saveFilterButton" role="menuitem" tabindex="-1">Save filter</button>
+          <button class="menu-button" id="savePresetButton" role="menuitem" tabindex="-1">Save preset</button>
+          <button class="menu-button" id="playlistsButton" role="menuitem" tabindex="-1">Playlists</button>
+          <button class="menu-button" id="achievementsButton" role="menuitem" tabindex="-1">Achievements</button>
+          <button class="menu-button" id="pluginsButton" role="menuitem" tabindex="-1">Plugins</button>
+          <button class="menu-button" id="discoveryButton" role="menuitem" tabindex="-1">Discovery</button>
+          <button class="menu-button" id="storefrontButton" role="menuitem" tabindex="-1">Storefronts</button>
+          <button class="menu-button" id="mediaButton" role="menuitem" tabindex="-1">Media</button>
+          <button class="menu-button" id="healthButton" role="menuitem" tabindex="-1">Health</button>
+          <button class="menu-button" id="bulkButton" role="menuitem" tabindex="-1">Bulk edit</button>
+          <button class="menu-button" id="backupButton" role="menuitem" tabindex="-1">Backup</button>
+          <button class="menu-button" id="fullscreenButton" role="menuitem" tabindex="-1">Fullscreen</button>
+          <button class="menu-button" id="tagsButton" role="menuitem" tabindex="-1">Tags</button>
+          <button class="menu-button" id="notificationsButton" role="menuitem" tabindex="-1">Notifications</button>
+          <button class="menu-button" id="webhooksButton" role="menuitem" tabindex="-1">Webhooks</button>
         </div>
-      </details>
+      </div>
     </nav>
     <span class="top-status" id="status">Local library</span>
   </header>

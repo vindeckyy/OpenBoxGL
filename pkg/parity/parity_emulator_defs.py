@@ -4,6 +4,8 @@ import shlex
 import shutil
 from pathlib import Path
 
+from pkg.parity.launch_tokens import apply_tokens
+
 try:
     import yaml
 except ImportError:
@@ -139,28 +141,11 @@ def build_launch_command(definition, rom_path, prefix=None):
     except ValueError as error:
         raise ValueError(f"Invalid startup command for {definition.get('name', definition.get('id'))}.") from error
     rom = Path(rom_path)
-    stem = rom.stem
-    game_name = str(definition.get("name") or stem)
-    parent_dir = str(rom.parent)
-    file_name = rom.name
+    game_name = str(definition.get("name") or rom.stem)
     emu_dir = str(Path(prefix[0]).parent) if prefix else ""
-    replacements = {
-        "{path}": str(rom_path),
-        "{ImagePath}": str(rom_path),
-        "{name}": game_name,
-        "{Name}": game_name,
-        "{dir}": parent_dir,
-        "{Dir}": parent_dir,
-        "{file}": file_name,
-        "{File}": file_name,
-        "{stem}": stem,
-        "{FileNameWithoutExtension}": stem,
-        "{EmulatorDir}": emu_dir,
-    }
+    game_ctx = {"name": game_name}
     for value in template_args:
-        for marker, replacement in replacements.items():
-            value = value.replace(marker, replacement)
-        args.append(value)
+        args.append(apply_tokens(value, game_ctx, path=str(rom_path), emulator_dir=emu_dir))
     return args
 
 

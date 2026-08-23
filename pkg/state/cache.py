@@ -1,7 +1,7 @@
 """Cache structures and cached projection builders for OpenBox library state."""
 
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import gzip
 import json
 import logging
@@ -31,13 +31,11 @@ GZIP_THRESHOLD = 1024
 LOGGER = logging.getLogger("openbox")
 STATE_LOCK = threading.Lock()
 
-FILE_PROBE_CACHE = OrderedDict()
 FILE_PROBE_LOCK = threading.Lock()
 FILE_PROBE_TTL = 120.0
 FILE_PROBE_MAX = 20000
 _KNOWN_MEDIA_MAX = 100000
 
-PLUGIN_LIBRARY_CACHE = {"at": 0.0, "payload": None, "state_signature": None}
 PLUGIN_LIBRARY_TTL = 30.0
 PLUGIN_LIBRARY_LOCK = threading.Lock()
 _PLUGIN_REFRESH_IN_PROGRESS = {"value": False}
@@ -46,19 +44,14 @@ MEDIA_EPOCH = {"value": 0}
 MEDIA_EPOCH_LOCK = threading.Lock()
 PLUGIN_EPOCH = {"value": 0}
 
-PUBLIC_STATE_CACHE = {"signature": None, "payload": None, "raw": None, "raw_gzip": None, "games_by_id": None}
 PUBLIC_STATE_LOCK = threading.Lock()
-PUBLIC_SETTINGS_CACHE = {"signature": None, "payload": None}
 PUBLIC_SETTINGS_LOCK = threading.Lock()
 
-_KNOWN_MEDIA_SET_CACHE = {"key": None, "result": None, "mtime_key": None}
 _KNOWN_MEDIA_SET_LOCK = threading.Lock()
 
-_GAME_PROJECTION_CACHE = {}
 _GAME_PROJECTION_LOCK = threading.Lock()
 _GAME_PROJECTION_MAX = 100000
 
-_SANITIZE_MEDIA_PATH_CACHE = {}
 _SANITIZE_MEDIA_PATH_LOCK = threading.Lock()
 _SANITIZE_MEDIA_PATH_MAX = 50000
 
@@ -66,7 +59,6 @@ _PLATFORM_CATEGORY_CACHE = {}
 _PLATFORM_CATEGORY_LOCK = threading.Lock()
 _PLATFORM_CATEGORY_MAX = 5000
 
-STATE_VIEW_CACHE = {"signature": None, "state": None}
 STATE_VIEW_LOCK = threading.Lock()
 
 
@@ -205,35 +197,86 @@ def _media_set_contains(media_set, path_value):
 
 @dataclass
 class CacheEpoch:
-    """Centralized cache epoch for coordinated invalidation (ADR-0005)."""
-    media: int = 0
+    """Centralized cache epoch for coordinated invalidation (ADR-0005).
 
-    def bump(self) -> None:
-        """Increment media epoch and clear all epoch-sensitive caches."""
-        self.media += 1
+    Owns every mutable cache dict so that a single ``_invalidate_all`` call
+    clears them atomically, eliminating the risk of missed invalidation when
+    new caches are added.
+    """
+    media: int = 0
+    plugin: int = 0
+    state: dict = field(default_factory=lambda: {
+        "signature": None, "payload": None, "raw": None,
+        "raw_gzip": None, "games_by_id": None,
+    })
+    settings: dict = field(default_factory=lambda: {
+        "signature": None, "payload": None,
+    })
+    media_set: dict = field(default_factory=lambda: {
+        "key": None, "result": None, "mtime_key": None,
+    })
+    game_projection: dict = field(default_factory=dict)
+    sanitize_media_path: dict = field(default_factory=dict)
+    file_probe: dict = field(default_factory=OrderedDict)
+
+    # -- invalidation --------------------------------------------------------
+
+    def _invalidate_all(
+        self,
+        *,
+        bump_media: bool = False,
+        bump_plugin: bool = False,
+    ) -> None:
+        """Atomically clear every cache dict, optionally bumping epoch counters.
+
+        Lock acquisition order matches the original hand-written sequence to
+        avoid introducing deadlocks with code that holds a single cache lock.
+        """
+        if bump_media:
+            self.media += 1
+            with MEDIA_EPOCH_LOCK:
+                MEDIA_EPOCH["value"] += 1
+        if bump_plugin:
+            self.plugin += 1
+            PLUGIN_EPOCH["value"] += 1
         with _KNOWN_MEDIA_SET_LOCK:
-            _KNOWN_MEDIA_SET_CACHE.update({"key": None, "result": None, "mtime_key": None})
+            self.media_set.update({"key": None, "result": None, "mtime_key": None})
         with _GAME_PROJECTION_LOCK:
-            _GAME_PROJECTION_CACHE.clear()
+            self.game_projection.clear()
         with _SANITIZE_MEDIA_PATH_LOCK:
-            _SANITIZE_MEDIA_PATH_CACHE.clear()
+            self.sanitize_media_path.clear()
         with PLUGIN_LIBRARY_LOCK:
             PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None, "state_signature": None})
-        with MEDIA_EPOCH_LOCK:
-            MEDIA_EPOCH["value"] += 1
         with PUBLIC_STATE_LOCK:
-            PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None, "raw_gzip": None, "games_by_id": None})
+            self.state.update({
+                "signature": None, "payload": None, "raw": None,
+                "raw_gzip": None, "games_by_id": None,
+            })
         with PUBLIC_SETTINGS_LOCK:
-            PUBLIC_SETTINGS_CACHE.update({"signature": None, "payload": None})
+            self.settings.update({"signature": None, "payload": None})
+        with STATE_VIEW_LOCK:
+            STATE_VIEW_CACHE.update({"signature": None, "state": None})
         clear_file_probe_cache()
 
 
 CACHE_EPOCH = CacheEpoch()
 
+# -- module-level aliases (backward compat) ----------------------------------
+# These point to the same dict objects owned by CACHE_EPOCH so that existing
+# ``from pkg.state.cache import PUBLIC_STATE_CACHE`` imports keep working.
+FILE_PROBE_CACHE = CACHE_EPOCH.file_probe
+PLUGIN_LIBRARY_CACHE = {"at": 0.0, "payload": None, "state_signature": None}
+PUBLIC_STATE_CACHE = CACHE_EPOCH.state
+PUBLIC_SETTINGS_CACHE = CACHE_EPOCH.settings
+_KNOWN_MEDIA_SET_CACHE = CACHE_EPOCH.media_set
+_GAME_PROJECTION_CACHE = CACHE_EPOCH.game_projection
+_SANITIZE_MEDIA_PATH_CACHE = CACHE_EPOCH.sanitize_media_path
+STATE_VIEW_CACHE = {"signature": None, "state": None}
+
 
 def bump_media_epoch():
     """Invalidate browser media caches by bumping the version suffix in media URLs."""
-    CACHE_EPOCH.bump()
+    CACHE_EPOCH._invalidate_all(bump_media=True)
 
 
 def public_settings(state=None):
@@ -705,13 +748,6 @@ def transact_state(mutator):
     upd_res = _ns("update_state_with_result", update_state_with_result)
     with state_lock:
         result = upd_res(mutator)
-    with PUBLIC_STATE_LOCK:
-        PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None, "raw_gzip": None, "games_by_id": None})
-    with PUBLIC_SETTINGS_LOCK:
-        PUBLIC_SETTINGS_CACHE.update({"signature": None, "payload": None})
-    with STATE_VIEW_LOCK:
-        STATE_VIEW_CACHE.update({"signature": None, "state": None})
-    with PLUGIN_LIBRARY_LOCK:
-        PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None, "state_signature": None})
+    CACHE_EPOCH._invalidate_all()
     clear_discovery_cache()
     return result

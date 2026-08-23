@@ -14,6 +14,7 @@ import threading
 import time
 
 from automation import build_event
+from pkg.state.registry import EVENT_SEQUENCE, PROCESS_LOCK, PROCESSES, RUNNING, SESSION_EVENTS  # noqa: F401
 from backend_io import contained_path
 from catalog import apply_progress_automation
 from openbox import DATA, build_launch, load_state, update_state
@@ -26,10 +27,6 @@ from plugins import run_plugins
 from saves import backup_saves
 
 LOGGER = logging.getLogger("openbox")
-PROCESS_LOCK = threading.Lock()
-RUNNING = {}
-PROCESSES = {}
-SESSION_EVENTS = []
 
 
 def _ns(name, default):

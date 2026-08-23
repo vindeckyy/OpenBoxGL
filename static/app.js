@@ -120,6 +120,35 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
     $('importStorefrontInstalled').onclick = () => importStorefrontCatalog(false);
     $('importStorefrontUninstalled').onclick = () => importStorefrontCatalog(true);
     $('addButton').onclick = () => openGameDialog(); $('importButton').onclick = importFolder; $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
+    // ── Accessible Tools menu ──────────────────────────────────────────
+    const toolsWrap = $('toolsWrap');
+    const toolsButton = $('toolsButton');
+    const toolMenu = $('toolMenu');
+    const getToolItems = () => [...toolMenu.querySelectorAll('[role="menuitem"]:not(:disabled)')];
+    const toolsMenuOpen = () => toolsWrap.classList.contains('open');
+    function openToolsMenu() {
+      toolsWrap.classList.add('open');
+      toolsButton.setAttribute('aria-expanded', 'true');
+      const first = getToolItems()[0];
+      if (first) first.focus();
+    }
+    function closeToolsMenu(focusButton) {
+      toolsWrap.classList.remove('open');
+      toolsButton.setAttribute('aria-expanded', 'false');
+      if (focusButton) toolsButton.focus();
+    }
+    toolsButton.addEventListener('click', () => { toolsMenuOpen() ? closeToolsMenu(false) : openToolsMenu(); });
+    toolMenu.addEventListener('keydown', event => {
+      const items = getToolItems();
+      const idx = items.indexOf(document.activeElement);
+      if (event.key === 'ArrowDown') { event.preventDefault(); items[(idx + 1) % items.length]?.focus(); }
+      else if (event.key === 'ArrowUp') { event.preventDefault(); items[(idx - 1 + items.length) % items.length]?.focus(); }
+      else if (event.key === 'Home') { event.preventDefault(); items[0]?.focus(); }
+      else if (event.key === 'End') { event.preventDefault(); items[items.length - 1]?.focus(); }
+      else if (event.key === 'Escape') { event.preventDefault(); closeToolsMenu(true); }
+      else if (event.key === 'Tab') { closeToolsMenu(false); }
+    });
+    toolMenu.addEventListener('click', event => { if (event.target.closest('[role="menuitem"]')) closeToolsMenu(false); });
     $('closePlaylists').onclick = $('donePlaylists').onclick = () => $('playlistsDialog').close();
     $('newManualPlaylist').onclick = () => createManualPlaylist();
     $('newFilterPlaylist').onclick = createFilterPlaylist;
@@ -152,12 +181,7 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
     });
     document.addEventListener('click', event => {
       if (!event.target.closest?.('#contextMenu')) closeContextMenu();
-      const tools = event.target.closest?.('.topbar-tools');
-      const closeToolsMenus = () => document.querySelectorAll('.topbar-tools[open]').forEach(menu => menu.removeAttribute('open'));
-      if (!tools) { closeToolsMenus(); return; }
-      if (event.target.closest('.tool-menu button')) {
-        closeToolsMenus();
-      }
+      if (toolsMenuOpen() && !toolsWrap.contains(event.target)) closeToolsMenu(false);
     });
     if ($('scanEmulatorFolder')) $('scanEmulatorFolder').onclick = async () => {
       const folder = $('emulatorScanFolder').value.trim();
@@ -211,7 +235,7 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
       }
       if (event.key === 'F11') { event.preventDefault(); nativeFullscreen().catch(() => {}); }
       if (event.key === 'Escape') {
-        document.querySelectorAll('.topbar-tools[open]').forEach(menu => menu.removeAttribute('open'));
+        if (toolsMenuOpen()) closeToolsMenu(true);
         closeContextMenu();
       }
     });
