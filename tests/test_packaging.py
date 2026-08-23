@@ -198,7 +198,8 @@ def test_sbom_deterministic_output():
 
 def test_sbom_hash_verification():
     from scripts.gen_sbom import build_sbom
-    sbom = build_sbom("1.5.1", include_stdlib=False)
+    from updates import VERSION
+    sbom = build_sbom(VERSION, include_stdlib=False)
     for comp in sbom["components"]:
         if comp.get("type") in ("library", "file") and "hashes" in comp:
             file_path = ROOT / comp["name"]
