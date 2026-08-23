@@ -19,7 +19,6 @@
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.6.0"><img src="https://img.shields.io/badge/Release-v1.6.0-0052CC?style=for-the-badge" alt="Release v1.6.0"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-2EA44F?style=for-the-badge" alt="CI"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-yellow?style=for-the-badge" alt="License GPLv3"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux-lightgrey?style=for-the-badge" alt="Linux"></a>
   <br>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.6.0</strong></a>
@@ -379,7 +378,7 @@ OpenBox/
 ├── themes/                 Stock themes (5 CSS files)
 ├── emulator_defs/          YAML definition packs
 ├── scripts/                Build, test, screenshot capture
-├── tests/test_*.py            Test suite (62 files)
+├── tests/test_*.py            Test suite (69 files)
 ```
 
 ### Run tests
