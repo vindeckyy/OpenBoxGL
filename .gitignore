@@ -46,4 +46,6 @@ PRODUCT.md
 COVERAGE.md
 PERF.md
 .agents/
+.mimocode/
+local/
 

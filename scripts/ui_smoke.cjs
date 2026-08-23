@@ -46,7 +46,7 @@ const puppeteer = require('./node_modules/puppeteer');
     }, name, process.env.TOKEN);
     await page.goto(`http://127.0.0.1:${process.env.PORT}/?token=${process.env.TOKEN}`, {waitUntil: 'domcontentloaded', timeout: 20000});
     await new Promise(r => setTimeout(r, 1200));
-    await page.click('.topbar-tools summary');
+    await page.click('#toolsButton');
     await new Promise(r => setTimeout(r, 300));
     const ok = await page.evaluate(() => {
       const menu = document.querySelector('.topbar-tools .tool-menu');
@@ -56,7 +56,7 @@ const puppeteer = require('./node_modules/puppeteer');
       return menu.contains(topEl);
     });
     themeResults.push({name, ok});
-    await page.evaluate(() => document.querySelector('.topbar-tools')?.removeAttribute('open'));
+    await page.evaluate(() => document.querySelector('#toolsWrap')?.classList.remove('open'));
   }
   console.log('theme menus:', JSON.stringify(themeResults));
 
