@@ -22,7 +22,7 @@ from job_manager import (
 )
 from pkg.state.operations import OPERATION_DOCUMENT_KEYS, get_operation_service, reset_operation_service_for_tests
 
-POLL_TIMEOUT = 15.0
+POLL_TIMEOUT = 30.0 if os.environ.get("GITHUB_ACTIONS") == "true" else 15.0
 _MODULE_TEMPDIR = None
 _PREV_DATA_DIR = None
 

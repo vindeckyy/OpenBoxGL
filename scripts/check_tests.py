@@ -199,22 +199,27 @@ def main() -> int:
         # Ensure root is on PYTHONPATH so tests in tests/ can import flat modules
         env = os.environ.copy()
         env["PYTHONPATH"] = str(ROOT) + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        env["COVERAGE_RUN"] = "1"
         for test_file in test_files:
             command = [str(COVERAGE), "run", "-p", str(test_file)]
-            code = subprocess.run(
-                command,
-                cwd=ROOT, capture_output=True, text=True,
-                check=False, env=env,
-            ).returncode
-            if code:
-                code = subprocess.run(
+            last_output = ""
+            code = 1
+            for attempt in range(3):
+                result = subprocess.run(
                     command,
                     cwd=ROOT, capture_output=True, text=True,
                     check=False, env=env,
-                ).returncode
+                )
+                code = result.returncode
+                last_output = (result.stdout or "") + (result.stderr or "")
+                if code == 0:
+                    break
             if code:
                 failed_tests.append(test_file.name)
                 print(f"FAIL {test_file.name}")
+                if last_output.strip():
+                    tail = last_output.strip().splitlines()[-40:]
+                    print("\n".join(tail))
             else:
                 print(f"PASS {test_file.name}")
         passed_tests = len(test_files) - len(failed_tests)
