@@ -1,5 +1,7 @@
 """Tests for parity integration helpers."""
 
+import os
+import time
 import unittest
 import zipfile
 from datetime import datetime, timedelta
@@ -27,6 +29,9 @@ class IntegrationTests(unittest.TestCase):
             newer = root / "new.mp4"
             older.write_bytes(b"a")
             newer.write_bytes(b"b")
+            now = time.time()
+            os.utime(older, (now - 120, now - 120))
+            os.utime(newer, (now - 60, now - 60))
             since = datetime.now() - timedelta(minutes=5)
             self.assertEqual(find_latest_recording(root, since=since), str(newer))
 

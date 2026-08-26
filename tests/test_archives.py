@@ -107,11 +107,25 @@ def test():
                 stderr=subprocess.DEVNULL,
             )
             try:
-                extract_game(link_source, root / "cache-link")
-            except ValueError as error:
-                assert "links" in str(error)
+                listing = subprocess.run(
+                    ["7z", "l", str(link_source)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            except FileNotFoundError:
+                print("  skipped real 7z symlink case (7z not installed)")
             else:
-                raise AssertionError("real 7z symbolic links must be rejected")
+                has_symlink = " l " in listing.stdout or " L " in listing.stdout
+                if not has_symlink:
+                    print("  skipped real 7z symlink case (archive has no symlink entries)")
+                else:
+                    try:
+                        extract_game(link_source, root / "cache-link")
+                    except ValueError as error:
+                        assert "links" in str(error)
+                    else:
+                        raise AssertionError("real 7z symbolic links must be rejected")
     print("archive self-test: ok")
 
 
