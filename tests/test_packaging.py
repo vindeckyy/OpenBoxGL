@@ -322,8 +322,8 @@ def test_flatpak_manifest():
     assert manifest.exists(), "missing Flatpak manifest"
     content = manifest.read_text()
     assert "app-id: io.openbox.GameLauncher" in content
-    assert "runtime: org.freedesktop.Platform" in content
-    assert "runtime-version: '25.08'" in content
+    assert "runtime: org.gnome.Platform" in content
+    assert "runtime-version: '46'" in content
     assert "command: openbox" in content
     assert "openbox.sh" in content
     runtime_modules = (ROOT / "runtime_modules.txt").read_text()
