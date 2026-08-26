@@ -451,13 +451,9 @@ class JsonStateStore:
 
     def _ensure_data_parent(self) -> None:
         parent = self.path.parent
-        if parent.is_dir():
+        if parent.exists():
             return
-        try:
-            parent.mkdir(parents=True, exist_ok=True)
-        except FileExistsError:
-            if not parent.is_dir():
-                raise
+        parent.mkdir(parents=True, exist_ok=True)
 
     @contextmanager
     def _file_lock(self, exclusive: bool):
