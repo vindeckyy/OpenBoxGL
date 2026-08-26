@@ -59,7 +59,11 @@ jobs:
             grep -q 'type="homepage"' openbox.metainfo.xml
             grep -q 'type="bugtracker"' openbox.metainfo.xml
           fi
-          flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry io.openbox.GameLauncher.yml
+          if flatpak-builder --help 2>&1 | grep -q -- '--dry-run'; then
+            flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry io.openbox.GameLauncher.yml
+          else
+            python3 -B scripts/validate_flatpak_manifest.py
+          fi
 
       - name: Compile native host
         run: gcc -O2 native_host.c -o /tmp/native_host_check $(pkg-config --cflags --libs webkit2gtk-4.1)
