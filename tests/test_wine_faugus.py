@@ -13,6 +13,13 @@ from pkg.parity.parity_wine import get_prefix_for_game, list_proton_versions, li
 def _reset_openbox_modules():
     for name in ("openbox", "webapp_state", "web_app", "handlers.faugus", "pkg.state.imports", "pkg.state.commands"):
         sys.modules.pop(name, None)
+    try:
+        from routes.registry import _REGISTRY
+        for key in list(_REGISTRY):
+            if "/faugus" in key[1]:
+                del _REGISTRY[key]
+    except ImportError:
+        pass
 
 
 
@@ -188,6 +195,7 @@ class TestFaugus(unittest.TestCase):
             os.environ["OPENBOX_DATA_DIR"] = tmp
             try:
                 _reset_openbox_modules()
+                from api_errors import BadRequest
                 from openbox import save_state, load_state
                 from web_app import Handler
 
@@ -195,33 +203,71 @@ class TestFaugus(unittest.TestCase):
                 handler = object.__new__(Handler)
                 responses = []
                 handler.send_json = lambda status, payload: responses.append((status, payload))
+                with mock.patch("handlers.faugus.find_faugus_data_dirs", return_value=["/tmp/faugus"]):
+                    handler._api_get_api_faugus_status(mock.Mock())
+                self.assertEqual(responses[-1][0], 200)
+                self.assertTrue(responses[-1][1]["installed"])
+                with mock.patch("handlers.faugus.scan_faugus_games", return_value=[]):
+                    handler._api_get_api_faugus_scan(mock.Mock())
+                self.assertEqual(responses[-1][0], 200)
+                with mock.patch("handlers.faugus.scan_faugus_games", side_effect=RuntimeError("scan failed")):
+                    with self.assertRaises(BadRequest):
+                        handler._api_get_api_faugus_scan(mock.Mock())
+                with mock.patch("handlers.faugus.scan_faugus_games", side_effect=RuntimeError("scan failed")):
+                    with self.assertRaises(BadRequest):
+                        handler._api_post_api_faugus_import({})
+                import_start = len(responses)
                 fake_scanned = [{
                     "name": "Faugus Title",
                     "faugus_id": "faugus-123",
-                    "path": "/bin/true",
+                    "path": "/tmp/my spaced game.exe",
                     "prefix": "/tmp/pfx",
                     "source_identity": "faugus:faugus-123",
                 }]
                 with mock.patch("handlers.faugus.scan_faugus_games", return_value=fake_scanned):
                     handler._api_post_api_faugus_import({})
-                    self.assertEqual(responses[0][0], 200)
-                    self.assertEqual(responses[0][1]["added"], 1)
-                    self.assertEqual(responses[0][1]["found"], 1)
+                    self.assertEqual(responses[import_start][0], 200)
+                    self.assertEqual(responses[import_start][1]["added"], 1)
+                    self.assertEqual(responses[import_start][1]["found"], 1)
 
                     # Second import with same candidate should deduplicate (0 added, 1 found)
                     handler._api_post_api_faugus_import({})
-                    self.assertEqual(responses[1][0], 200)
-                    self.assertEqual(responses[1][1]["added"], 0)
-                    self.assertEqual(responses[1][1]["found"], 1)
+                    self.assertEqual(responses[import_start + 1][0], 200)
+                    self.assertEqual(responses[import_start + 1][1]["added"], 0)
+                    self.assertEqual(responses[import_start + 1][1]["found"], 1)
                 state = load_state()
                 self.assertEqual(len(state["games"]), 1)
                 self.assertEqual(state["games"][0]["name"], "Faugus Title")
+                self.assertEqual(state["games"][0]["launch"], "umu-run {path}")
+                import shlex
+                from pkg.state.imports import _filled_launch_command
+
+                args = shlex.split(_filled_launch_command(state["games"][0]))
+                self.assertEqual(args, ["umu-run", "/tmp/my spaced game.exe"])
             finally:
                 if prev is None:
                     os.environ.pop("OPENBOX_DATA_DIR", None)
                 else:
                     os.environ["OPENBOX_DATA_DIR"] = prev
                 _reset_openbox_modules()
+
+    def test_z_faugus_handler_import_fallback(self):
+        import builtins
+        import importlib
+
+        _reset_openbox_modules()
+        real_import = builtins.__import__
+
+        def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "pkg.parity.parity_faugus":
+                raise ImportError("forced for coverage")
+            return real_import(name, globals, locals, fromlist, level)
+
+        with mock.patch("builtins.__import__", fake_import):
+            module = importlib.import_module("handlers.faugus")
+        self.assertTrue(callable(module.find_faugus_data_dirs))
+        self.assertTrue(callable(module.scan_faugus_games))
+        _reset_openbox_modules()
 
 if __name__ == "__main__":
     unittest.main()

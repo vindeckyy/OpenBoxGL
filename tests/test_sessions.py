@@ -1,26 +1,50 @@
 import os
+import sys
 import tempfile
 import time
 from datetime import datetime
 from unittest import mock
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _wait_for_exit_code(*args, **kwargs):
+    from pkg.parity.parity_tracking import wait_for_exit
+
+    result = wait_for_exit(*args, **kwargs)
+    return result.exit_code
+
 
 def main():
-    with tempfile.TemporaryDirectory() as directory:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
         prev_data_dir = os.environ.get("OPENBOX_DATA_DIR")
         os.environ["OPENBOX_DATA_DIR"] = directory
+        hold_script = os.path.join(directory, "hold.sh")
+        with open(hold_script, "w", encoding="utf-8") as script_file:
+            script_file.write("#!/bin/sh\nexec sleep 30\n")
+        os.chmod(hold_script, 0o755)
         try:
             from openbox import load_state, save_state
             from web_app import RUNNING, control_game_session
             from webapp_state import STATE_LOCK, finish_session, start_game
 
-            save_state({"games":[{"name":"Session test", "path":"/bin/sleep", "launch":"sleep 30"}], "profiles":{}, "history":[]})
+            wait_patch = mock.patch("webapp_state.wait_for_exit", side_effect=_wait_for_exit_code)
+            wait_patch.start()
+
+            save_state({"games":[{"name":"Session test", "path":hold_script}], "profiles":{}, "history":[]})
             session = start_game(0)
             control_game_session(session["launch_id"], "pause")
             time.sleep(.03)
             with open(f"/proc/{session['pid']}/status", encoding="utf-8") as status_file:
                 assert "\nState:\tT" in status_file.read()
             control_game_session(session["launch_id"], "resume")
+            control_game_session(session["launch_id"], "resume")
+            with mock.patch("os.killpg", side_effect=OSError("No such process")):
+                try:
+                    control_game_session(session["launch_id"], "pause")
+                    raise AssertionError("expected ValueError for failed signal")
+                except ValueError:
+                    pass
             control_game_session(session["launch_id"], "stop")
             for _ in range(100):
                 if not RUNNING:
@@ -68,6 +92,7 @@ def main():
             assert state["games"][0]["playtime_seconds"] >= 1
             assert state["history"] and state["history"][-1]["game"] == "Running"
         finally:
+            wait_patch.stop()
             if prev_data_dir is None:
                 os.environ.pop("OPENBOX_DATA_DIR", None)
             else:

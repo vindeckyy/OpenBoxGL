@@ -1,0 +1,18 @@
+schema_version: 1
+adapter_id: eden-switch
+emulator_id: io.github.eden-emu.eden
+label: Eden
+platform: Nintendo Switch
+extensions:
+  - nsp
+  - xci
+  - nca
+  - nro
+native_exe: eden
+flatpak_app_id: io.github.eden-emu.eden
+startup_args:
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - eden

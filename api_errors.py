@@ -62,3 +62,51 @@ class RouteNotFound(NotFound):
 class Conflict(ApiError):
     status = 409
     code = "CONFLICT"
+
+
+class JobStateConflict(Conflict):
+    code = "JOB_STATE_CONFLICT"
+
+
+class JobNotCancellable(Conflict):
+    code = "JOB_NOT_CANCELLABLE"
+
+
+class JobNotResumable(Conflict):
+    code = "JOB_NOT_RESUMABLE"
+
+
+class PreviewNotFound(NotFound):
+    code = "PREVIEW_NOT_FOUND"
+
+
+class PreviewExpired(Conflict):
+    code = "PREVIEW_EXPIRED"
+
+
+class PreviewStale(Conflict):
+    code = "PREVIEW_STALE"
+
+
+class PreviewLibraryChanged(Conflict):
+    code = "PREVIEW_LIBRARY_CHANGED"
+
+
+class UnresolvedCandidates(Conflict):
+    code = "UNRESOLVED_CANDIDATES"
+
+
+class AmbiguousPlatform(BadRequest):
+    code = "AMBIGUOUS_PLATFORM"
+
+
+class EmulatorRequired(Conflict):
+    code = "EMULATOR_REQUIRED"
+
+
+class PreviewLimitExceeded(BadRequest):
+    code = "PREVIEW_LIMIT_EXCEEDED"
+
+
+class PreviewEntryLimitExceeded(BadRequest):
+    code = "PREVIEW_ENTRY_LIMIT_EXCEEDED"

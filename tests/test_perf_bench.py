@@ -82,28 +82,76 @@ class PerfBenchTests(unittest.TestCase):
                 "single_mutation": {"p95_ms": 300.0, "runs": 3},
                 "filtered_query": {"p95_ms": 50.0, "runs": 3},
                 "facet": {"p95_ms": 40.0, "runs": 3},
-            }
+                "10k_write": {"p95_ms": 400.0, "runs": 3},
+            },
+            "20000": {
+                "library": {"p95_ms": 3000.0, "runs": 3},
+                "library_gzip": {"p95_ms": 1500.0, "runs": 3},
+                "favorite_mutation": {"p95_ms": 3000.0, "runs": 3},
+                "single_mutation": {"p95_ms": 3000.0, "runs": 3},
+                "filtered_query": {"p95_ms": 1500.0, "runs": 3},
+                "facet": {"p95_ms": 1500.0, "runs": 3},
+                "20k_write": {"p95_ms": 900.0, "runs": 3},
+            },
         }
         self.assertEqual(pb._check_gates(passing_results), [])
 
         failing_results = {
             "10000": {
-                "library": {"p95_ms": 2500.0, "runs": 3},  # exceeds 2000.0 gate
+                "library": {"p95_ms": 2500.0, "runs": 3},
                 "library_gzip": {"p95_ms": 80.0, "runs": 3},
                 "favorite_mutation": {"p95_ms": 300.0, "runs": 3},
                 "single_mutation": {"p95_ms": 300.0, "runs": 3},
                 "filtered_query": {"p95_ms": 50.0, "runs": 3},
                 "facet": {"p95_ms": 40.0, "runs": 3},
+                "10k_write": {"p95_ms": 400.0, "runs": 3},
             }
         }
         failures = pb._check_gates(failing_results)
         self.assertEqual(len(failures), 1)
         self.assertIn("library.p95_ms", failures[0])
 
+    def test_gates_20k_constants(self):
+        self.assertEqual(pb.GATES_20K["library_ms_p95"], 4000.0)
+        self.assertEqual(pb.GATES_20K["library_gzip_ms_p95"], 2000.0)
+        self.assertEqual(pb.GATES_20K["favorite_mutation_ms_p95"], 4000.0)
+        self.assertEqual(pb.GATES_20K["filtered_query_ms_p95"], 2000.0)
+        self.assertEqual(pb.GATES_20K["facet_ms_p95"], 2000.0)
+        self.assertEqual(pb.GATES_20K["20k_write_ms_p95"], 1000.0)
+
+    def test_check_gates_20k_filtered_query(self):
+        failing_20k = {
+            "20000": {
+                "library": {"p95_ms": 150.0, "runs": 3},
+                "library_gzip": {"p95_ms": 80.0, "runs": 3},
+                "favorite_mutation": {"p95_ms": 300.0, "runs": 3},
+                "single_mutation": {"p95_ms": 300.0, "runs": 3},
+                "filtered_query": {"p95_ms": 2001.0, "runs": 3},
+                "facet": {"p95_ms": 40.0, "runs": 3},
+                "20k_write": {"p95_ms": 500.0, "runs": 3},
+            }
+        }
+        failures = pb._check_gates(failing_20k)
+        self.assertTrue(any("filtered_query.p95_ms" in item for item in failures))
+
+    def test_check_gates_10k_only_does_not_require_20k(self):
+        only_10k = {
+            "10000": {
+                "library": {"p95_ms": 150.0, "runs": 3},
+                "library_gzip": {"p95_ms": 80.0, "runs": 3},
+                "favorite_mutation": {"p95_ms": 300.0, "runs": 3},
+                "single_mutation": {"p95_ms": 300.0, "runs": 3},
+                "filtered_query": {"p95_ms": 50.0, "runs": 3},
+                "facet": {"p95_ms": 40.0, "runs": 3},
+                "10k_write": {"p95_ms": 400.0, "runs": 3},
+            }
+        }
+        self.assertEqual(pb._check_gates(only_10k), [])
+
     def test_check_gates_rejects_missing_or_failed_measurements(self):
         missing_results = {"10000": {"library": {"p95_ms": 150.0, "runs": 3}}}
         missing_failures = pb._check_gates(missing_results)
-        self.assertTrue(any("missing 10,000-game benchmark result: library_gzip" in item for item in missing_failures))
+        self.assertTrue(any("missing 10,000 games benchmark result: library_gzip" in item for item in missing_failures))
 
         failed_results = {
             "10000": {
@@ -168,7 +216,7 @@ class PerfBenchTests(unittest.TestCase):
                 
                 view1 = load_state_view()
                 view2 = load_state_view()
-                self.assertIs(view1, view2)
+                self.assertEqual(view1, view2)
             finally:
                 openbox.STATE_STORE = old_store
 

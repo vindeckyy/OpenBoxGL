@@ -64,3 +64,28 @@ def clear(state, ids=None):
             item for item in state.get("notifications", [])
             if isinstance(item, dict) and item.get("id") not in wanted
         ]
+
+
+CLOUD_SYNC_KIND = "cloud_sync"
+
+
+def record_cloud_sync_outcome(state, *, success, body, now=None):
+    """Keep only the latest cloud-sync success or failure notification."""
+    items = state.setdefault("notifications", [])
+    if not isinstance(items, list):
+        items = []
+        state["notifications"] = items
+    state["notifications"] = [
+        item for item in items
+        if not (isinstance(item, dict) and item.get("kind") == CLOUD_SYNC_KIND)
+    ]
+    return add_notification(
+        state,
+        kind=CLOUD_SYNC_KIND,
+        level="info" if success else "error",
+        title="Cloud sync succeeded" if success else "Cloud sync failed",
+        body=body,
+        source="cloud_sync",
+        dedupe_key="cloud_sync:last",
+        now=now,
+    )

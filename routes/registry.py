@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass
 from typing import Any
 from collections.abc import Callable, Sequence
@@ -62,7 +63,10 @@ def register(
         public=public,
         v1=v1,
     )
-    _REGISTRY[(method_upper, path)] = route_obj
+    key = (method_upper, path)
+    if key in _REGISTRY:
+        raise ValueError(f"Duplicate route registration: {method_upper} {path}")
+    _REGISTRY[key] = route_obj
     return route_obj
 
 
@@ -99,7 +103,6 @@ def route(
 
 def _ensure_handlers_loaded() -> None:
     """Load all handler modules and web_app to trigger @route registrations."""
-    import importlib
     modules = (
         "handlers.library",
         "handlers.imports",
@@ -110,6 +113,9 @@ def _ensure_handlers_loaded() -> None:
         "handlers.extensions",
         "handlers.health",
         "handlers.emulators",
+        "handlers.launch",
+        "handlers.jobs",
+        "handlers.setup",
         "handlers.data",
         "handlers.wine",
         "handlers.faugus",
@@ -117,10 +123,7 @@ def _ensure_handlers_loaded() -> None:
         "web_app",
     )
     for mod in modules:
-        try:
-            importlib.import_module(mod)
-        except Exception:
-            pass
+        importlib.import_module(mod)
 
 
 def all_routes() -> list[Route]:

@@ -97,6 +97,31 @@ All tests must pass on CI before a PR can be merged.
 - Preserve existing UI patterns and accessibility conventions.
 - Test dialog flows, Big Box navigation, and settings persistence manually when touching frontend logic.
 
+## Release process
+
+OpenBox v1.7 follows **artifact-first** gates (ADR 0013). Stable publication requires exact-artifact CI green, not source-only checks.
+
+### Repository and release authority
+
+- Git tags and [GitHub Releases](https://github.com/vindeckyy/OpenBoxGL/releases) on this repository are the canonical publication channel for AppImage, Flatpak bundle, SBOM, and install scripts.
+- Version strings are declared once in `updates.py`; `make version-check` (`scripts/check_version_sync.py`) must pass before tagging.
+- Changelog, `openbox.metainfo.xml`, README badge, and issue templates must agree with `updates.py`.
+
+### RC soak (48–72 hours)
+
+Before a **stable** tag:
+
+1. Publish a prerelease artifact from CI (AppImage + Flatpak on x86_64).
+2. Soak **48–72 hours** on supported distros.
+3. Run Setup Center, Activity, Launch Doctor, and launch flows on the binary—not just from source.
+4. Confirm `make check`, `tests/test_packaging.py`, and `./scripts/ui_smoke.sh` on the release commit.
+
+See [RELEASE_NOTES.md](RELEASE_NOTES.md) for the full RC checklist.
+
+### No telemetry
+
+OpenBox does not add telemetry in v1.7. Diagnostics (`/api/diagnostic`), artifacts, and Flatpak `finish-args` must not upload usage data. Do not introduce phone-home, analytics SDKs, or crash reporters that exfiltrate library contents.
+
 ## Pull request process
 
 1. Fork the repository and create a feature branch from `master`.

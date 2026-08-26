@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 from openbox import STATE_STORE, load_state, recover_state as recover_library_state
+from pkg.parity.launch_tokens import build_launch_args
 from routes.registry import route
 from webapp_state import EVENT_SEQUENCE, PROCESS_LOCK, RUNNING, SESSION_EVENTS, STATE_LOCK, bump_media_epoch, control_game_session, game_from_payload, load_state_view, start_game
 
@@ -155,7 +156,7 @@ class SessionHandlers:
                 raise FileNotFoundError("xdg-open is required to open documents.")
             args = [opener, str(path)]
         elif extra.get("command"):
-            args = [part.replace("{path}", str(path)) for part in shlex.split(extra["command"])]
+            args = build_launch_args(extra["command"], {}, path=str(path))
         else:
             args = [str(path)]
         subprocess.Popen(args, cwd=str(path.parent))

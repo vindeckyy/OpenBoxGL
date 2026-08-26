@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.6.0**, the state architecture, accessibility, and security hardening release described in the CHANGELOG.
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.7.0**, the guided Setup Center, Activity, Launch Doctor, and durable operations release described in the CHANGELOG.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -42,7 +42,9 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Backups and restore | done | The web UI lists archives, shows manifests, restores selected archives, and creates a pre-restore safety copy |
 | Library audit and missing-file checks | done | Files, provider-aware duplicates, media, extras, saves, and emulator configuration are audited |
 | Linux packaging and updates | done | AppImage build, Flatpak manifest, Makefile install/uninstall, desktop entry, and verified update mechanism |
-| Welcome wizard and first-run setup | done | Staged setup wizard with media limits and persistent import queues |
+| Welcome wizard and first-run setup | done | Setup Center eight-step stepper with preview-before-commit imports, emulator readiness, metadata match review, and Launch Doctor batch preflight |
+| Durable background operations | done | Activity drawer with SSE progress, cancellation, retry/resume, and `operations.json` persistence |
+| Launch readiness preflight | done | Launch Doctor validates paths, adapters, Flatpak/native executables, BIOS/firmware, and tokenized arguments before launch |
 | Searchable settings pages | done | Settings dialog filters fields by name and related terms |
 | Session history toggle and viewer | done | Play sessions can be disabled and are browsable from the History menu |
 | Arrange-by scrollbar | done | Large sorted views expose a jump bar with group markers |

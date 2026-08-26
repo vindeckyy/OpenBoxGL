@@ -318,14 +318,60 @@ def _resolve_start_game(state, index, stable_game_id):
     return copy.deepcopy(state["games"][index]), index
 
 
+def _terminate_owned_process(process):
+    """Send SIGTERM to a launched or reattached process group."""
+    if process is None:
+        return
+    if isinstance(process, _ReattachedProcess):
+        process_group = process.pgid
+    else:
+        try:
+            process_group = os.getpgid(process.pid)
+        except (OSError, ProcessLookupError):
+            process_group = getattr(process, "pid", None)
+    if not process_group:
+        return
+    try:
+        os.killpg(process_group, signal.SIGTERM)
+    except (OSError, ProcessLookupError):
+        try:
+            process.terminate()
+        except (OSError, ProcessLookupError, AttributeError):
+            pass
+
+
+def _rollback_failed_launch(launch_id, process=None):
+    """Undo phases 5-7 after a post-spawn failure."""
+    upd_st = _ns("update_state", update_state)
+    _terminate_owned_process(process)
+    with PROCESS_LOCK:
+        RUNNING.pop(launch_id, None)
+        PROCESSES.pop(launch_id, None)
+
+    def mutate(state):
+        state["active_sessions"] = [
+            item for item in state.get("active_sessions", [])
+            if not isinstance(item, dict) or item.get("launch_id") != launch_id
+        ]
+
+    try:
+        upd_st(mutate)
+    except Exception:
+        LOGGER.exception("Failed to clear persisted session %s during launch rollback", launch_id)
+
+
 def _start_launch_command(game, profiles):
     """Build the launch argv and cwd, rejecting games that cannot run."""
     bld_launch = _ns("build_launch", build_launch)
     args, cwd = bld_launch(game, profiles)
+    game_command = shlex.split(str(game.get("launch", "")) or "")
+    profile_command = shlex.split(str(profiles.get(game.get("platform", ""), "")) or "")
+    has_adapter = bool(str(game.get("emulator_adapter_id", "") or game.get("emulator_id", "")).strip())
     if (
         len(args) == 1
-        and not shlex.split(str(game.get("launch", "")) or "")
-        and not shlex.split(str(profiles.get(game.get("platform", ""), "")) or "")
+        and not game_command
+        and not profile_command
+        and not has_adapter
         and not os.access(str(args[0]), os.X_OK)
     ):
         raise ValueError(
@@ -487,6 +533,7 @@ def start_game(index=None, stable_game_id=""):
     # Phase 4: Apply the performance profile and retain whether it actually changed system state.
     effective_profile = eff_prof_fn(game, state["profiles"])
     lease = app_perf(effective_profile, state)
+    process = None
 
     try:
         # Phase 5: Start the process (plugins + validation must succeed first).
@@ -497,19 +544,8 @@ def start_game(index=None, stable_game_id=""):
         entry = {}
         missing = {"value": False}
         # Phase 6: Persist the active-session record.
-        try:
-            upd_st(make_mut(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile))
-        except Exception:
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except (OSError, ProcessLookupError):
-                process.terminate()
-            raise
+        upd_st(make_mut(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile))
         if missing["value"]:
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except (OSError, ProcessLookupError):
-                process.terminate()
             raise IndexError("Game was removed while it was launching")
         # Phase 7: Register the in-memory session and start the watcher.
         with PROCESS_LOCK:
@@ -524,7 +560,10 @@ def start_game(index=None, stable_game_id=""):
         ).start()
         return dict(entry)
     except Exception:
-        # Phase 8: Restore the performance profile on every failure after phase 4 unless the watcher owns cleanup.
+        # Phase 8: Roll back post-spawn state and restore the performance lease.
+        if process is not None:
+            roll_back = _ns("_rollback_failed_launch", _rollback_failed_launch)
+            roll_back(launch_id, process)
         lease.restore()
         raise
 
@@ -553,8 +592,8 @@ def control_game_session(launch_id, action):
                 os.killpg(process_group, signal.SIGKILL if action == "kill" else signal.SIGTERM)
             else:
                 raise ValueError("Unknown session action.")
-        except (ProcessLookupError, OSError):
-            pass
+        except (ProcessLookupError, OSError) as error:
+            raise ValueError("Could not signal the game process.") from error
         game = running["game"]
     if action in {"pause", "resume"}:
         sess_ev("paused" if action == "pause" else "resumed", launch_id, game)

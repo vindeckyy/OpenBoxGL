@@ -22,15 +22,80 @@ VENV = ROOT / ".venv-dev"
 RUFF = VENV / "bin" / "ruff"
 COVERAGE = VENV / "bin" / "coverage"
 
-# Coverage floors. Ratcheted baseline: 60% total, 48% web_app.py.
+# Coverage floors. Ratcheted baseline: 70% total, 54% web_app.py.
 # Raise the floors as phases land; never lower them silently.
-COVERAGE_FLOOR = 60.0
-WEB_APP_FLOOR = 48.0
+COVERAGE_FLOOR = 70.0
+WEB_APP_FLOOR = 54.0
+CHANGED_LINE_FLOOR = 80.0
+NEW_MODULE_FLOOR = 85.0
 
 
 def run(command):
     print(f"$ {' '.join(str(part) for part in command)}")
     return subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
+
+
+def _git_diff_base() -> str:
+    upstream = run(["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
+    if upstream.returncode == 0 and upstream.stdout.strip():
+        merge = run(["git", "merge-base", "HEAD", upstream.stdout.strip()])
+        if merge.returncode == 0 and merge.stdout.strip():
+            return merge.stdout.strip()
+    head = run(["git", "rev-parse", "HEAD"])
+    return head.stdout.strip() if head.returncode == 0 else "HEAD"
+
+
+def _runtime_modules_at(ref: str) -> set[str]:
+    show = run(["git", "show", f"{ref}:runtime_modules.txt"])
+    if show.returncode != 0:
+        return set()
+    return {
+        line.strip()
+        for line in show.stdout.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+
+
+def _check_new_module_coverage(coverage_bin: Path, failures: list[str]) -> None:
+    base = _git_diff_base()
+    current = {
+        line.strip()
+        for line in (ROOT / "runtime_modules.txt").read_text().splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+    previous = _runtime_modules_at(base)
+    new_modules = sorted(module for module in current - previous if module.endswith(".py"))
+    if not new_modules:
+        print("new runtime modules: none since diff base")
+        return
+    include = ",".join(new_modules)
+    result = run([str(coverage_bin), "report", f"--include={include}", f"--fail-under={int(NEW_MODULE_FLOOR)}"])
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    if result.stderr.strip():
+        print(result.stderr.strip())
+    if result.returncode != 0:
+        failures.append(f"new runtime module coverage floor {NEW_MODULE_FLOOR:.0f}%")
+    else:
+        print(f"new runtime modules ({len(new_modules)}): >= {NEW_MODULE_FLOOR:.0f}% coverage")
+
+
+def _check_changed_line_floor(coverage_bin: Path, failures: list[str]) -> None:
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from scripts.check_changed_coverage import measure_changed_lines
+
+    hit, total, changed_files = measure_changed_lines()
+    if not changed_files:
+        print(f"changed-line coverage: no Python changes since diff base; pass (floor {CHANGED_LINE_FLOOR:.0f}%)")
+        return
+    if total == 0:
+        print(f"changed-line coverage: no executable changed lines; pass (floor {CHANGED_LINE_FLOOR:.0f}%)")
+        return
+    pct = 100.0 * hit / total
+    print(f"changed-line coverage: {hit}/{total} = {pct:.1f}% (floor {CHANGED_LINE_FLOOR:.0f}%)")
+    if pct < CHANGED_LINE_FLOOR:
+        failures.append(f"changed-line coverage floor {CHANGED_LINE_FLOOR:.0f}%")
 
 
 def main() -> int:
@@ -175,6 +240,9 @@ def main() -> int:
             print(f"web_app.py coverage: {web_total:.1f}% (floor {WEB_APP_FLOOR:.1f}%)")
             if web_total < WEB_APP_FLOOR:
                 failures.append("web_app coverage floor")
+
+            _check_changed_line_floor(COVERAGE, failures)
+            _check_new_module_coverage(COVERAGE, failures)
 
             # Token hygiene: raw hex outside :root must not rise
             token = run([sys.executable, "scripts/check_tokens.py"])

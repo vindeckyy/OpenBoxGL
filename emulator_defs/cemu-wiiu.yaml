@@ -1,0 +1,19 @@
+schema_version: 1
+adapter_id: cemu-wiiu
+emulator_id: info.cemu.Cemu
+label: Cemu
+platform: Wii U
+extensions:
+  - wud
+  - wux
+  - rpx
+  - elf
+native_exe: cemu
+flatpak_app_id: info.cemu.Cemu
+startup_args:
+  - -g
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - cemu

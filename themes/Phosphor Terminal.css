@@ -1,386 +1,166 @@
-/* OpenBox Stock Theme v2: Phosphor Terminal */
-@import url("https://fonts.bunny.net/css?family=ibm-plex-mono:400,500,600,700|share-tech-mono:400");
+/* OpenBox Stock Theme v3: Phosphor Terminal */
 
 :root {
   color-scheme: dark;
-  --bg: #020402;
-  --panel: #061008;
-  --line: #1a3a24;
-  --text: #c8ffc8;
-  --muted: #5d9a68;
-  --cyan: #49ff7a;
-  --green: #33ff66;
+  --activity-cancelled-fg: var(--nav-muted);
+  --activity-count-bg: var(--danger);
+  --activity-count-fg: var(--white);
+  --activity-done-bg: var(--surface-field);
+  --activity-done-border: var(--border-card);
+  --activity-done-fg: var(--gold);
+  --activity-drawer-body-bg: var(--surface-deep);
+  --activity-drawer-width: min(720px,94vw);
+  --activity-elapsed-fg: var(--section-muted);
+  --activity-label-fg: var(--nav-muted);
+  --activity-partial-bg: var(--lifecycle-bg);
+  --activity-partial-border: var(--badge-pending-border);
+  --activity-partial-fg: var(--badge-progress-fg);
+  --activity-row-bg: var(--surface-card);
+  --activity-row-type-fg: var(--detail-head);
+  --activity-section-fg: var(--section-muted);
+  --editor-nav-active: var(--active);
+  --editor-nav-bg: var(--surface-card);
+  --filter-drawer-bg: var(--panel);
+  --font-action: 15px;
+  --font-bigbox: 21px;
+  --font-bigbox-display: clamp(38px,5vw,72px);
+  --font-body: 14px;
+  --font-body-small: 13px;
+  --font-brand: 0.9375rem;
+  --font-dialog: 16px;
+  --font-heading: 24px;
+  --font-label: 12px;
+  --font-meta: 12px;
+  --font-micro: 10px;
+  --font-nav: 0.8125rem;
+  --font-panel-title: 28px;
+  --font-screensaver: clamp(44px,8vw,110px);
+  --font-subtitle: 19px;
+  --font-title-large: 18px;
+  --match-review-class-fg: var(--detail-head);
+  --match-review-current-bg: var(--surface-field);
+  --match-review-proposed-bg: var(--surface-hover);
+  --match-review-score-fg: var(--section-muted);
+  --match-review-tab-active: var(--active);
+  --path-browse-bg: var(--surface-field);
+  --path-browse-border: var(--border-control);
+  --query-chip-bg: var(--surface-card);
+  --query-chip-border: var(--border-control);
+  --radius-cover: 5px;
+  --radius-hairline: 2px;
+  --radius-panel: 12px;
+  --radius-pill-large: 28px;
+  --settings-nav-active-bg: var(--surface-hover);
+  --settings-nav-bg: var(--surface-card);
+  --settings-nav-width: 11rem;
+  --setup-center-body-bg: var(--surface-deep);
+  --setup-center-width: min(920px,94vw);
+  --setup-finish-bg: var(--surface-card);
+  --setup-merge-current-bg: var(--surface-field);
+  --setup-merge-proposed-bg: var(--surface-hover);
+  --setup-preview-row-bg: var(--surface-card);
+  --setup-source-bg: var(--surface-card);
+  --setup-source-border: var(--border-control);
+  --setup-source-selected-border: var(--active);
+  --setup-stale-fg: var(--badge-danger-fg);
+  --setup-stat-bg: var(--surface-card);
+  --setup-stat-border: var(--border-card);
+  --setup-stat-label-fg: var(--section-muted);
+  --setup-step-active: var(--active);
+  --setup-step-done-fg: var(--gold);
+  --setup-step-label-fg: var(--nav-muted);
+  --shell-group-gap: 0.375rem;
+  --shell-group-label: var(--section-muted);
+  --topbar: #040a06;
+  --topbar-min-height: 3rem;
   --accent: #49ff7a;
-  --danger: #ff6b4a;
-  --focus: #49ff7a;
-  --active: #49ff7a;
+  --accent-ghost: #f0600055;
+  --accent-ghost-faint: #f060002e;
+  --accent-ghost-soft: #f0600044;
+  --achievement: #49ff7a;
   --action: #49ff7a;
   --action-ink: #021006;
-  --surface-card: #061008;
-  --surface-field: #020804;
-  --surface-hover: #0a1c10;
-  --border-control: #234f32;
-  --border-card: #234f32;
-  --surface-deep: #020402;
-  --topbar: #040a06;
-  --gold: #49ff7a;
-  --rating: #49ff7a;
-  --launch-shadow: #49ff7a33;
-  --achievement: #49ff7a;
-  --lifecycle-bg: #020402;
-  --lifecycle-kicker: #49ff7a;
-  --bigbox-bg: #020402;
-  --bigbox-copy: #6fb87a;
-  --empty-action: #49ff7a;
-  --cover-title-start: #061008;
-  --white: #c8ffc8;
-  --scrollbar-thumb: #1a3a24;
-  --nav-muted: #5d9a68;
-  --top-status: #5d9a68;
-  --label-muted: #5d9a68;
-  --section-muted: #5d9a68;
-  --platform-dot: #234f32;
-  --platform-text: #c8ffc8;
-  --icon-text: #c8ffc8;
-  --card-muted: #5d9a68;
-  --hero-subhead: #49ff7a;
-  --detail-head: #49ff7a;
-  --fact-label: #5d9a68;
-  --fact-value: #c8ffc8;
-  --text-soft: #5d9a68;
-  --dialog-close: #c8ffc8;
-  --bigbox-foot: #6fb87a;
-  --screensaver-text: #c8ffc8;
-  --black: #000;
-  --cover-gradient-end: #030805;
-  --cover-title-end: #061008;
-  --empty-muted: #5d9a68;
-  --hero-gradient-end: #030805;
-  --rating-badge-bg: #0a1c10;
-  --media-player-bg: #020402;
-  --drop-border: #234f32;
-  --drop-text: #5d9a68;
-  --drop-bg: #040a06;
-  --drop-active-bg: #0a1c10;
-  --nav-hover: #0a1c10;
+  --active: #49ff7a;
+  --badge-danger-border: #ff6b4a;
+  --badge-danger-fg: #ff6b4a;
+  --badge-pending-bg: #061008;
   --badge-pending-border: #234f32;
   --badge-pending-fg: #8fd99a;
-  --badge-pending-bg: #061008;
   --badge-progress-fg: #49ff7a;
-  --badge-danger-fg: #ff6b4a;
-  --badge-danger-border: #ff6b4a;
+  --bg: #020402;
+  --bigbox-bg: #020402;
+  --bigbox-copy: #6fb87a;
+  --bigbox-foot: #6fb87a;
   --bigbox-head-muted: #5d9a68;
+  --black: #000;
+  --border-card: #234f32;
+  --border-control: #234f32;
+  --border-sheet: #ffffff55;
+  --brand: #49ff7a;
+  --card-muted: #5d9a68;
+  --cover-gradient-end: #030805;
+  --cover-title-end: #061008;
+  --cover-title-start: #061008;
+  --cyan: #49ff7a;
+  --danger: #ff6b4a;
+  --detail-head: #49ff7a;
+  --details-resize-bg: var(--line);
+  --dialog-close: #c8ffc8;
+  --drop-active-bg: #0a1c10;
+  --drop-bg: #040a06;
+  --drop-border: #234f32;
+  --drop-text: #5d9a68;
+  --empty-action: #49ff7a;
+  --empty-muted: #5d9a68;
+  --fact-label: #5d9a68;
+  --fact-value: #c8ffc8;
+  --focus: #49ff7a;
+  --gold: #49ff7a;
+  --green: #33ff66;
+  --hero-gradient-end: #030805;
+  --hero-scrim: #0d0b0815;
+  --hero-subhead: #49ff7a;
+  --icon-text: #c8ffc8;
+  --label-muted: #5d9a68;
+  --launch-shadow: #49ff7a33;
+  --lifecycle-bg: #020402;
+  --lifecycle-kicker: #49ff7a;
+  --line: #1a3a24;
+  --media-player-bg: #020402;
+  --muted: #5d9a68;
+  --nav-hover: #0a1c10;
+  --nav-muted: #5d9a68;
+  --overlay-backdrop: #050403d9;
+  --overlay-backdrop-soft: #05070bcc;
+  --overlay-backdrop-strong: #05070bd9;
+  --overlay-screensaver-mid: #05070b1f;
+  --overlay-screensaver-start: #05070bcf;
+  --panel: #061008;
+  --platform-dot: #234f32;
+  --platform-text: #c8ffc8;
+  --rating: #49ff7a;
+  --rating-badge-bg: #0a1c10;
+  --screensaver-text: #c8ffc8;
+  --scrollbar-thumb: #1a3a24;
+  --section-muted: #5d9a68;
+  --shadow-cover: #0006;
+  --shadow-cover-selected: #000a;
+  --shadow-cover-strong: #0007;
+  --shadow-dialog: #000c;
+  --shadow-elevated: #0009;
+  --shadow-empty: #0005;
   --shutdown-text: #5d9a68;
+  --surface-card: #061008;
+  --surface-deep: #020402;
+  --surface-field: #020804;
+  --surface-hover: #0a1c10;
+  --surface-sheet: #171513dd;
+  --text: #c8ffc8;
+  --text-soft: #5d9a68;
+  --top-status: #5d9a68;
+  --white: #c8ffc8;
 }
 
-body {
-  margin: 0;
-  color: var(--text);
-  font: 12px/1.5 "IBM Plex Mono", ui-monospace, monospace;
-  background:
-    radial-gradient(ellipse at 50% 0%, #0a2a14 0%, transparent 55%),
-    #020402;
-  text-shadow: 0 0 1px #49ff7a44;
-}
-
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 50;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    #00000018 2px,
-    #00000018 4px
-  );
-  mix-blend-mode: multiply;
-}
-
-.topbar {
-  min-height: 32px;
-  background: #040a06;
-  border-bottom: 1px solid #1f4a2c;
-  box-shadow: 0 0 24px #49ff7a22;
-}
-
-.brand {
-  font-family: "Share Tech Mono", monospace;
-  font-weight: 400;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #9dff9d;
-}
-
-.menu-button {
-  color: #6fb87a;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 9px;
-}
-
-.menu-button:hover {
-  color: #c8ffc8;
-  background: #0a1c10;
-  box-shadow: inset 0 -1px 0 #49ff7a;
-}
-
-.top-status { color: #538d5e; letter-spacing: 0.08em; }
-
-.sidebar, .details {
-  background: linear-gradient(180deg, #061008f5, #030805f8);
-  border-color: #1a3a24;
-  backdrop-filter: none;
-}
-
-.sidebar { border-right: 1px solid #1a3a24; }
-.details { border-left: 1px solid #1a3a24; box-shadow: none; }
-
-.field span, .section-title, .fact small, .detail-card h3 {
-  color: #4f8a5a;
-  letter-spacing: 0.14em;
-  font-weight: 600;
-}
-
-input, select, textarea {
-  border: 1px solid #234f32;
-  border-radius: 2px;
-  background: #020804;
-  color: #c8ffc8;
-  font-family: "IBM Plex Mono", monospace;
-  caret-color: #49ff7a;
-}
-
-input:focus, select:focus, textarea:focus {
-  border-color: #49ff7a;
-  box-shadow: 0 0 0 1px #49ff7a55, 0 0 18px #49ff7a22;
-  outline: none;
-}
-
-.platform {
-  border-radius: 2px;
-  color: #8fd99a;
-  font-size: 11px;
-}
-
-.platform::before {
-  border-radius: 0;
-  background: #234f32;
-}
-
-.platform:hover, .platform.active {
-  background: #0a1c10;
-  color: #c8ffc8;
-}
-
-.platform.active::before {
-  background: #49ff7a;
-  box-shadow: 0 0 8px #49ff7a;
-}
-
-.library {
-  background: #030805ee;
-}
-
-.library-head {
-  background: #040a06f5;
-  border-bottom: 1px solid #1a3a2444;
-}
-
-.library-head h1 {
-  font-family: "Share Tech Mono", monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 16px;
-  color: #9dff9d;
-}
-
-.library-head p { color: #5d9a68; }
-
-.icon-button {
-  border: 1px solid #234f32;
-  border-radius: 2px;
-  background: #061008;
-  color: #9dff9d;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 10px;
-}
-
-.icon-button:hover {
-  border-color: #49ff7a;
-  background: #0a1c10;
-  box-shadow: 0 0 12px #49ff7a33;
-}
-
-.cover {
-  border: 1px solid #234f32;
-  border-radius: 2px;
-  background: #061008;
-  box-shadow: 0 0 0 1px #49ff7a11, 0 10px 24px #000a;
-  filter: contrast(1.05) saturate(0.85);
-}
-
-.card:hover .cover, .card.selected .cover {
-  transform: none;
-  border-color: #49ff7a;
-  box-shadow: 0 0 0 1px #49ff7a, 0 0 24px #49ff7a44;
-}
-
-.card h3 {
-  font-family: "IBM Plex Mono", monospace;
-  font-weight: 600;
-  font-size: 10px;
-  color: #b8ffb8;
-}
-
-.card p { color: #5d9a68; }
-.badges { color: #49ff7a; }
-
-.play, .primary, .bigbox-play {
-  border: 1px solid #49ff7a;
-  border-radius: 2px;
-  background: #0a2212;
-  color: #9dff9d;
-  font-family: "Share Tech Mono", monospace;
-  font-weight: 400;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  box-shadow: 0 0 20px #49ff7a33, inset 0 0 20px #49ff7a11;
-}
-
-.play:hover, .primary:hover, .bigbox-play:hover {
-  background: #49ff7a;
-  color: #021006;
-  text-shadow: none;
-}
-
-.hero {
-  background: linear-gradient(180deg, #0a2212, #030805);
-}
-
-.hero::after {
-  background: linear-gradient(180deg, transparent 30%, #061008 100%);
-}
-
-.hero-kicker { color: #49ff7a; letter-spacing: 0.2em; }
-.hero h2 {
-  font-family: "Share Tech Mono", monospace;
-  letter-spacing: 0.04em;
-  text-shadow: 0 0 18px #49ff7a66;
-}
-
-.detail-card, .emulator-item, .metadata-result, .history-item, .storefront-row {
-  border: 1px solid #1a3a24;
-  border-radius: 2px;
-  background: #061008;
-}
-
-.rating { color: var(--rating); }
-.rating strong { background: var(--rating-badge-bg); border: 1px solid var(--border-control); border-radius: 2px; }
-
-dialog {
-  border: 1px solid #234f32;
-  border-radius: 2px;
-  background: #040a06;
-  box-shadow: 0 0 0 1px #49ff7a33, 0 30px 80px #000d;
-}
-
-dialog::backdrop {
-  background: #000000cc;
-}
-
-.dialog-head {
-  border-bottom: 1px solid #1a3a24;
-}
-
-.dialog-head h2 {
-  font-family: "Share Tech Mono", monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--brand);
-}
-
-.toast {
-  border: 1px solid var(--border-control);
-  border-radius: 2px;
-  background: var(--surface-card);
-  color: var(--text);
-  box-shadow: 0 0 24px #49ff7a33;
-  font-family: "IBM Plex Mono", monospace;
-}
-
-.bigbox {
-  background: #020402;
-  cursor: none;
-}
-
-.bigbox-head strong {
-  font-family: "Share Tech Mono", monospace;
-  letter-spacing: 0.2em;
-  color: var(--brand);
-}
-
-.bigbox-cover {
-  border: 2px solid #49ff7a;
-  border-radius: 2px;
-  background: #061008;
-  box-shadow: 0 0 0 4px #49ff7a22, 0 0 50px #49ff7a33;
-}
-
-.bigbox-copy h2 {
-  font-family: "Share Tech Mono", monospace;
-  letter-spacing: 0.02em;
-  text-shadow: 0 0 24px #49ff7a55;
-}
-
-.bigbox-copy p { color: var(--bigbox-copy); }
-.bigbox-play { border-radius: 2px; }
-
-.bigbox-menu-panel, .bigbox-pause-panel, .shutdown-panel {
-  border: 1px solid #234f32;
-  border-radius: 2px;
-  background: #040a06;
-  box-shadow: 0 0 40px #49ff7a22;
-}
-
-.drop-zone {
-  border: 1px dashed var(--drop-border);
-  border-radius: 2px;
-  background: #06100888;
-  font-family: "IBM Plex Mono", monospace;
-}
-
-.drop-zone.active {
-  border-color: var(--active);
-  color: var(--text);
-  box-shadow: 0 0 20px #49ff7a33;
-}
-
-.list-row { border-bottom: 1px solid #1a3a24; }
-.list-row:hover, .list-row.selected { background: #0a1c10; }
-
-.lifecycle {
-  background: #020402;
-}
-
-.lifecycle small {
-  color: var(--lifecycle-kicker);
-  letter-spacing: 0.3em;
-}
-
-.lifecycle h2 {
-  font-family: "Share Tech Mono", monospace;
-  text-shadow: 0 0 30px #49ff7a66;
-}
-
-.screensaver::after {
-  background: linear-gradient(90deg, #020402ee, #02040233 70%), linear-gradient(0deg, #020402ee, transparent 60%);
-}
-
-.achievement, .coverflow-card {
-  border-radius: 2px;
-  border-color: var(--border-control);
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion-duration: 0ms; }
 }

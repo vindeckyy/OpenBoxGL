@@ -1,0 +1,17 @@
+schema_version: 1
+adapter_id: xemu-xbox
+emulator_id: app.xemu.xemu
+label: xemu
+platform: Xbox
+extensions:
+  - iso
+  - xiso
+native_exe: xemu
+flatpak_app_id: app.xemu.xemu
+startup_args:
+  - -dvd_path
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - xemu

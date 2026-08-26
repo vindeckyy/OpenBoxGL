@@ -666,8 +666,9 @@ class JsonStateStore:
                 state, _ = self._load_unlocked()
             try:
                 result = mutator(state)
-                self._write_unlocked(state, adopt=True)
-                return state, result
+                normalized, _ = normalize_state(state)
+                self._write_unlocked(normalized, adopt=True)
+                return normalized, result
             except Exception:
                 self._clear_cache()
                 raise

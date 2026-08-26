@@ -8,10 +8,32 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
 
 
 
+    let gamepadFrame = null;
+
+    async function activateCurrentGame(game, trigger) {
+      if (!game) return;
+      if (game.gameyfin_id && !game.store_installed) {
+        await installGameyfin(game);
+        return;
+      }
+      await launch(game, trigger || $('bigBoxPlay') || $('playButton'));
+    }
+
+    function stopGamepadPoll() {
+      if (gamepadFrame) cancelAnimationFrame(gamepadFrame);
+      gamepadFrame = null;
+    }
+
+    function bigBoxTypingActive() {
+      const search = $('bigBoxHybridSearch');
+      return search && !search.hidden && document.activeElement === search;
+    }
+
     function openBigBox() {
       AppState.bigBoxFilter = 'all';
       AppState.bigBoxSort = 'title';
       AppState.bigBoxHybridQuery = '';
+      AppState.bigBoxSearchMode = false;
       if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').value = '';
       AppState.bigBoxGames = filteredBigBoxGames();
       if (!AppState.bigBoxGames.length) { notify('No games are available in the current view'); return; }
@@ -40,6 +62,7 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
     }
     function closeBigBox() {
       stopScreenSaver();
+      stopGamepadPoll();
       $('bigBoxMenu').hidden = true;
       $('bigBox').hidden = true;
       if ($('bigBoxStartupVideo')) { $('bigBoxStartupVideo').pause(); $('bigBoxStartupVideo').hidden = true; }
@@ -144,7 +167,12 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
         const ownedLabel = game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : '';
         const uninstallBtn = game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:10px">Uninstall</button>' : '';
         $('bigBoxStage').innerHTML = `<div class="bigbox-platforms">${platforms.map(name => `<button class="bigbox-platform ${AppState.bigBoxPlatform === name ? 'active' : ''}" data-bigbox-platform="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}</div>`;
-        document.querySelectorAll('[data-bigbox-platform]').forEach(button => button.onclick = () => { AppState.bigBoxPlatform = button.dataset.bigboxPlatform; AppState.bigBoxIndex = 0; renderBigBox(); });
+        document.querySelectorAll('[data-bigbox-platform]').forEach(button => button.onclick = () => {
+          AppState.bigBoxPlatform = button.dataset.bigboxPlatform;
+          AppState.bigBoxGames = filteredBigBoxGames();
+          AppState.bigBoxIndex = 0;
+          renderBigBox();
+        });
       } else if (mode === 'coverflow') {
         $('bigBoxStage').className = 'bigbox-stage';
         const canAct = (game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed);
@@ -163,10 +191,7 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
         $('bigBoxStage').className = 'bigbox-stage';
         $('bigBoxStage').innerHTML = `<div class="bigbox-cover${game.has_cover ? '' : ' no-image'}">${game.has_cover ? `<img src="${media(game,'cover')}" alt="">` : escapeHtml(game.name)}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : ''}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${(game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed) ? '' : 'disabled'}>${playLabel}</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:10px">Uninstall</button>' : ''}</div>`;
       }
-      $('bigBoxPlay').onclick = () => {
-        if (game.gameyfin_id && !game.store_installed) installGameyfin(game);
-        else launch(game.id);
-      };
+      $('bigBoxPlay').onclick = () => activateCurrentGame(game);
       if ($('bigBoxUninstall')) $('bigBoxUninstall').onclick = () => uninstallGameyfin(game);
       applyLibraryMusic();
     }
@@ -204,7 +229,14 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
       if (!visible.length) return;
       const game = visible[Math.floor(Math.random() * visible.length)];
       AppState.screenSaverGame = game;
-      $('screenSaverVideo').src = media(game,'video');
+      const video = media(game, 'video');
+      if (video) {
+        $('screenSaverVideo').src = video;
+      } else if (game.has_cover) {
+        $('screenSaverVideo').src = media(game, 'cover');
+      } else {
+        $('screenSaverVideo').removeAttribute('src');
+      }
       $('screenSaverTitle').textContent = game.name;
       $('screenSaverPlatform').textContent = game.platform || 'Game';
       $('screenSaver').hidden = false;
@@ -231,7 +263,10 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
       }
     }
     function pollGamepads() {
-      if ($('bigBox').hidden) return;
+      if ($('bigBox').hidden || document.hidden || !document.hasFocus()) {
+        stopGamepadPoll();
+        return;
+      }
       const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
       const pad = pads[0];
       if (pad) {
@@ -239,12 +274,17 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
         const pressed = action => Boolean(pad.buttons[mapping[action]]?.pressed);
         const current = {left:pad.buttons[14]?.pressed || pad.axes[0] < -.6,right:pad.buttons[15]?.pressed || pad.axes[0] > .6,up:pad.buttons[12]?.pressed || pad.axes[1] < -.6,down:pad.buttons[13]?.pressed || pad.axes[1] > .6,play:pressed('play'),back:pressed('back'),favorite:pressed('favorite'),random:pressed('random'),pageLeft:pressed('page_left'),pageRight:pressed('page_right'),pause:pressed('pause'),menu:pressed('menu')};
         const edge = action => current[action] && !AppState.gamepadState[action];
+        if (bigBoxTypingActive()) {
+          AppState.gamepadState = current;
+          gamepadFrame = requestAnimationFrame(pollGamepads);
+          return;
+        }
         if (!$('screenSaver').hidden && Object.keys(current).some(edge)) {
           const game = AppState.screenSaverGame;
           stopScreenSaver();
-          if (edge('play') && game) launch(game.id);
+          if (edge('play') && game) activateCurrentGame(game);
           AppState.gamepadState = current;
-          requestAnimationFrame(pollGamepads);
+          gamepadFrame = requestAnimationFrame(pollGamepads);
           return;
         }
         if (!$('bigBoxMenu').hidden) {
@@ -272,7 +312,7 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
           if (edge('right') || edge('down')) moveBigBox(1);
           if (edge('play')) {
             const target = AppState.bigBoxGames[AppState.bigBoxIndex];
-            if (target) launch(target.id);
+            if (target) activateCurrentGame(target);
           }
           if (edge('back')) closeBigBox();
           if (edge('favorite')) favoriteBigBox();
@@ -289,7 +329,22 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
         const delay = Number(AppState.appSettings.attract_mode_seconds ?? AppState.appSettings.screensaver_seconds ?? 0);
         return delay && performance.now() - AppState.bigBoxLastInput >= delay * 1000;
       })()) startScreenSaver();
-      requestAnimationFrame(pollGamepads);
+      gamepadFrame = requestAnimationFrame(pollGamepads);
     }
 
-export { openBigBox, closeBigBox, filteredBigBoxGames, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, applyLibraryMusic, openBigBoxPause, startScreenSaver, stopScreenSaver, favoriteBigBox, pollGamepads };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden || $('bigBox')?.hidden) stopGamepadPoll();
+        else if ($('bigBox') && !$('bigBox').hidden) pollGamepads();
+      });
+      $('bigBoxHybridSearch')?.addEventListener('focus', () => { AppState.bigBoxSearchMode = true; });
+      $('bigBoxHybridSearch')?.addEventListener('blur', () => { AppState.bigBoxSearchMode = false; });
+      $('bigBoxHybridSearch')?.addEventListener('input', event => {
+        AppState.bigBoxHybridQuery = event.target.value.trim();
+        AppState.bigBoxGames = filteredBigBoxGames();
+        AppState.bigBoxIndex = 0;
+        renderBigBox();
+      });
+    }
+
+export { openBigBox, closeBigBox, filteredBigBoxGames, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, applyLibraryMusic, openBigBoxPause, startScreenSaver, stopScreenSaver, favoriteBigBox, pollGamepads, activateCurrentGame, stopGamepadPoll, bigBoxTypingActive };

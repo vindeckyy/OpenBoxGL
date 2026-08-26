@@ -1,0 +1,17 @@
+schema_version: 1
+adapter_id: ppsspp-psp
+emulator_id: org.ppsspp.PPSSPP
+label: PPSSPP
+platform: PSP
+extensions:
+  - pbp
+  - iso
+  - cso
+native_exe: ppsspp
+flatpak_app_id: org.ppsspp.PPSSPP
+startup_args:
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - ppsspp

@@ -451,9 +451,10 @@ class PerfCacheTests(unittest.TestCase):
 
         st1 = load_state_view()
         self.assertIsNotNone(st1)
-        # Second call hits cache
+        # Second call hits cache but returns a detached copy (F09 snapshot safety)
         st2 = load_state_view()
-        self.assertIs(st1, st2)
+        self.assertEqual(st1, st2)
+        self.assertIsNot(st1, st2)
 
     def test_handler_setup_oserror_handled(self):
         from web_app import Handler

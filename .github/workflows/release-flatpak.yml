@@ -1,0 +1,111 @@
+name: Release Flatpak
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-flatpak
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate release tag
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] || {
+            echo "invalid release tag: $GITHUB_REF_NAME" >&2
+            exit 1
+          }
+          expected_version="$(python3 -c 'import updates; print(updates.VERSION)')"
+          test "$GITHUB_REF_NAME" = "v$expected_version" || {
+            echo "tag $GITHUB_REF_NAME does not match updates.py version $expected_version" >&2
+            exit 1
+          }
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            flatpak-builder \
+            appstream \
+            desktop-file-utils \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev \
+            gcc \
+            pkg-config
+
+      - name: Validate packaging metadata
+        run: |
+          desktop-file-validate openbox.desktop
+          appstreamcli validate --no-net openbox.metainfo.xml
+          flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry io.openbox.GameLauncher.yml
+
+      - name: Compile native host
+        run: gcc -O2 native_host.c -o /tmp/native_host_check $(pkg-config --cflags --libs webkit2gtk-4.1)
+
+      - name: Run packaging tests
+        run: python3 -B tests/test_packaging.py
+
+      - name: Build Flatpak bundle
+        run: |
+          flatpak-builder --force-clean --repo=repo build-dir io.openbox.GameLauncher.yml
+          flatpak build-bundle repo "OpenBox-x86_64.flatpak" io.openbox.GameLauncher --arch=x86_64
+
+      - name: Upload Flatpak artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # actions/upload-artifact@v7.0.1
+        with:
+          name: openbox-flatpak
+          if-no-files-found: error
+          retention-days: 7
+          path: OpenBox-x86_64.flatpak
+
+  publish:
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout exact tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download Flatpak artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # actions/download-artifact@v8.0.1
+        with:
+          name: openbox-flatpak
+
+      - name: Create release and upload Flatpak
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # softprops/action-gh-release@v3.0.2
+        with:
+          tag_name: ${{ github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          name: OpenBox ${{ github.ref_name }}
+          generate_release_notes: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          overwrite_files: false
+          files: |
+            OpenBox-x86_64.flatpak

@@ -77,7 +77,12 @@ handlers/settings.py
 handlers/extensions.py
 handlers/health.py
 handlers/emulators.py
+handlers/launch.py
+handlers/jobs.py
+handlers/setup.py
 handlers/data.py
+parity_launch_doctor.py
+pkg/parity/parity_launch_doctor.py
 handlers/wine.py
 handlers/faugus.py
 automation.py
@@ -99,5 +104,8 @@ pkg/state/registry.py
 pkg/state/commands.py
 pkg/state/imports.py
 pkg/state/sse.py
+pkg/parity/parity_setup_preview.py
+parity_setup_preview.py
+pkg/state/operations.py
 backend_subprocess.py
 handlers/_shared.py

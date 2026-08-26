@@ -9,10 +9,14 @@ client reads stays present in the projected games.
 import json
 import os
 import re
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 
 class PerfStateTests(unittest.TestCase):
@@ -145,7 +149,8 @@ class PerfStateTests(unittest.TestCase):
 
         first = load_state_view()
         second = load_state_view()
-        self.assertIs(first, second)
+        self.assertEqual(first, second)
+        self.assertIsNot(first, second)
         self.assertEqual(len(first["games"]), 2)
 
         self.save_state({

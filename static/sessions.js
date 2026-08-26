@@ -4,10 +4,39 @@ import { refresh, launchExtra } from './library.js';
 
 
 
-    async function launch(id, trigger = $('playButton')) {
+    function resolveGameId(gameOrId) {
+      if (gameOrId && typeof gameOrId === 'object') {
+        return gameOrId.game_id || String(gameOrId.id ?? '');
+      }
+      const game = AppState.games.find(item => item.id === gameOrId || item.game_id === gameOrId);
+      return game?.game_id || String(gameOrId ?? '');
+    }
+
+    async function launch(gameOrId, trigger = $('playButton')) {
+      const game_id = resolveGameId(gameOrId);
+      if (!game_id) return;
       setButtonBusy(trigger, true);
       try {
-        const result = await api('/api/launch',{method:'POST',body:JSON.stringify({id})});
+        const preflight = await api('/api/v2/launch/preflight', {
+          method: 'POST',
+          body: JSON.stringify({ game_id, candidate: null }),
+        });
+        if (preflight.status === 'blocked') {
+          const messages = (preflight.checks || []).map(check => check.message).filter(Boolean);
+          notify(messages.join(' · ') || 'Launch blocked');
+          return;
+        }
+        if (preflight.status === 'warning') {
+          const { confirmAction } = await import('./dialogs.js');
+          const warnings = (preflight.checks || []).filter(check => check.severity === 'warning').map(check => check.message).filter(Boolean);
+          const ok = await confirmAction({
+            title: 'Launch warning',
+            message: warnings.join('\n') || 'Some launch checks reported warnings.',
+            consequence: 'Continue launching anyway?',
+          });
+          if (!ok) return;
+        }
+        const result = await api('/api/launch', { method: 'POST', body: JSON.stringify({ game_id }) });
         showLifecycle('Starting', result.game, 'The game process is running', 1800);
         await refresh();
       } catch(error) { notify(error.message); }
@@ -104,7 +133,15 @@ import { refresh, launchExtra } from './library.js';
       }).join('') : '<p class="description">No games are running.</p>';
       document.querySelectorAll('[data-session-action]').forEach(button => button.onclick = async () => {
         const [launch_id,action] = button.dataset.sessionAction.split(':');
-        if (action === 'kill' && !confirm('Force close this game? Unsaved progress may be lost.')) return;
+        if (action === 'kill') {
+          const { confirmAction } = await import('./dialogs.js');
+          const ok = await confirmAction({
+            title: 'Force close game',
+            message: 'Force close this game?',
+            consequence: 'Unsaved progress may be lost.',
+          });
+          if (!ok) return;
+        }
         try {
           await api('/api/session/control',{method:'POST',body:JSON.stringify({launch_id,action})});
           notify(action === 'pause' ? 'Game paused' : action === 'resume' ? 'Game resumed' : action === 'restart' ? 'Restarting game' : 'Closing game');
@@ -127,7 +164,13 @@ import { refresh, launchExtra } from './library.js';
     }
     async function backupSaves(id) { try { const result = await api('/api/saves/backup',{method:'POST',body:JSON.stringify({id})}); notify(`Created ${result.backup}`); loadBackups(id); } catch(error) { notify(error.message); } }
     async function restoreSaves(id,backup) {
-      if (!confirm(`Restore ${backup}? Current saves will be backed up first.`)) return;
+      const { confirmAction } = await import('./dialogs.js');
+      const ok = await confirmAction({
+        title: 'Restore saves',
+        message: `Restore ${backup}?`,
+        consequence: 'Current saves will be backed up first.',
+      });
+      if (!ok) return;
       try { await api('/api/saves/restore',{method:'POST',body:JSON.stringify({id,backup})}); notify('Save restored'); loadBackups(id); } catch(error) { notify(error.message); }
     }
     async function discoverSaves(id) {

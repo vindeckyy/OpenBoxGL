@@ -1,0 +1,18 @@
+schema_version: 1
+adapter_id: dolphin-wii
+emulator_id: org.DolphinEmu.dolphin-emu
+label: Dolphin
+platform: Wii
+extensions:
+  - wbfs
+  - wad
+native_exe: dolphin-emu
+flatpak_app_id: org.DolphinEmu.dolphin-emu
+startup_args:
+  - -b
+  - -e
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - dolphin-emu

@@ -1,7 +1,9 @@
 """Tests for pkg.state.imports — extracted import/merge/sync domain logic."""
 
 import sys
+import threading
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -64,6 +66,96 @@ class TestStateImports(unittest.TestCase):
     def test_auto_import_worker_exported(self):
         from pkg.state.imports import auto_import_worker
         self.assertTrue(callable(auto_import_worker))
+
+    def test_auto_import_worker_passes_emulator_id(self):
+        from pkg.state.imports import auto_import_worker
+
+        state = {
+            "settings": {
+                "emulator_scan_configs": [
+                    {"folder": "/tmp/roms", "emulator_id": "org.DolphinEmu.dolphin-emu", "auto_update": True},
+                ],
+            },
+        }
+        with mock.patch("pkg.state.imports.load_state", return_value=state), \
+             mock.patch("pkg.state.imports.scan_emulator_folder", return_value=[]) as scan, \
+             mock.patch("pkg.state.imports.merge_imported_games", return_value=(0, 0)), \
+             mock.patch("pkg.state.imports.WATCH_STOP") as watch_stop:
+            watch_stop.wait.side_effect = [False, True]
+            auto_import_worker()
+        scan.assert_called_once_with("/tmp/roms", emulator_id="org.DolphinEmu.dolphin-emu")
+
+    def test_auto_import_worker_runs_storefront_and_watch_paths(self):
+        from pkg.state.imports import auto_import_worker
+
+        state = {
+            "settings": {
+                "watch_folders": ["/tmp/watch"],
+                "storefront_auto_import": {"steam": True, "heroic": True, "lutris": True, "gameyfin": True},
+                "emulator_scan_configs": [],
+            },
+        }
+        with mock.patch("pkg.state.imports.load_state", return_value=state), \
+             mock.patch("pkg.state.imports.import_folder_path") as folder_import, \
+             mock.patch("pkg.state.imports.import_steam", return_value=[]), \
+             mock.patch("pkg.state.imports.import_heroic", return_value=[]), \
+             mock.patch("pkg.state.imports.import_lutris", return_value=[]), \
+             mock.patch("pkg.state.imports.catalog_gameyfin", return_value=([], [])), \
+             mock.patch("pkg.state.imports.catalog_entries_to_games", return_value=[]), \
+             mock.patch("pkg.state.imports.merge_imported_games", return_value=(0, 0)), \
+             mock.patch("pkg.state.imports.WATCH_STOP") as watch_stop:
+            watch_stop.wait.side_effect = [False, True]
+            auto_import_worker()
+        folder_import.assert_called_once_with("/tmp/watch")
+
+    def test_auto_import_worker_handles_load_failure(self):
+        from pkg.state.imports import auto_import_worker
+
+        with mock.patch("pkg.state.imports.load_state", side_effect=OSError("bad state")), \
+             mock.patch("pkg.state.imports.WATCH_STOP") as watch_stop:
+            watch_stop.wait.side_effect = [False, True]
+            auto_import_worker()
+
+    def test_auto_import_worker_honors_cancel_event(self):
+        from pkg.state.imports import auto_import_worker
+
+        cancel = threading.Event()
+        cancel.set()
+        with mock.patch("pkg.state.imports.WATCH_STOP") as watch_stop:
+            watch_stop.wait.return_value = False
+            auto_import_worker(cancel_event=cancel)
+
+    def test_auto_import_worker_warns_on_import_errors(self):
+        from pkg.state.imports import auto_import_worker
+        from parity_gameyfin import GameyfinError
+
+        state = {
+            "settings": {
+                "watch_folders": ["/bad"],
+                "storefront_auto_import": {
+                    "steam": True,
+                    "heroic": True,
+                    "lutris": True,
+                    "gameyfin": True,
+                },
+                "emulator_scan_configs": [
+                    {"folder": "", "emulator_id": "emu", "auto_update": True},
+                    {"folder": "/roms", "emulator_id": "emu", "auto_update": False},
+                    {"folder": "/roms", "emulator_id": "emu", "auto_update": True},
+                ],
+            },
+        }
+        with mock.patch("pkg.state.imports.load_state", return_value=state), \
+             mock.patch("pkg.state.imports.import_folder_path", side_effect=OSError("bad folder")), \
+             mock.patch("pkg.state.imports.import_steam", side_effect=ValueError("bad steam")), \
+             mock.patch("pkg.state.imports.import_heroic", side_effect=ValueError("bad heroic")), \
+             mock.patch("pkg.state.imports.import_lutris", side_effect=ValueError("bad lutris")), \
+             mock.patch("pkg.state.imports.catalog_gameyfin", side_effect=GameyfinError("bad gameyfin")), \
+             mock.patch("pkg.state.imports.scan_emulator_folder", side_effect=ValueError("bad scan")), \
+             mock.patch("pkg.state.imports.merge_imported_games", return_value=(0, 0)), \
+             mock.patch("pkg.state.imports.WATCH_STOP") as watch_stop:
+            watch_stop.wait.side_effect = [False, True]
+            auto_import_worker()
 
     def test_sync_cloud_exported(self):
         from pkg.state.imports import sync_cloud

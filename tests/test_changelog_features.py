@@ -1,11 +1,24 @@
 import os
+import sys
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+CHANGELOG = ROOT / "docs" / "CHANGELOG.md"
+
+
+def assert_released_170_heading():
+    text = CHANGELOG.read_text(encoding="utf-8")
+    assert "## [1.7.0]" in text, (
+        "docs/CHANGELOG.md must include a [1.7.0] release section heading"
+    )
+
 
 def main():
+    assert_released_170_heading()
     with tempfile.TemporaryDirectory() as directory:
         prev_data_dir = os.environ.get("OPENBOX_DATA_DIR")
         os.environ["OPENBOX_DATA_DIR"] = directory

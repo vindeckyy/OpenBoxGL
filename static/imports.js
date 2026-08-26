@@ -1,8 +1,25 @@
+import './setup.js';
 import { $ } from './util.js';
 import { api, notify, nativePickFolder, nativePickFile, AppState } from './state.js';
 import { refresh } from './library.js';
+import { promptChoice, promptInput } from './dialogs.js';
 
-
+async function pickEmulatorForPlatform(platform, items) {
+  if (!items?.length) return null;
+  if (items.length === 1) return items[0].app_id;
+  const choice = await promptChoice({
+    title: `Emulators for ${platform}`,
+    message: 'Choose an emulator to install, or cancel to skip this platform.',
+    choices: items.map((item, index) => ({
+      value: String(index),
+      label: item.name || item.app_id || `Option ${index + 1}`,
+    })),
+    defaultValue: '0',
+  });
+  if (choice == null || choice === '') return null;
+  const index = Number(choice);
+  return items[index]?.app_id || null;
+}
 
     async function importFolder() {
       const folder = await nativePickFolder('Enter the absolute path of the folder to import.');
@@ -12,11 +29,8 @@ import { refresh } from './library.js';
         const chosen = {};
         for (const [platform, items] of Object.entries(preview.recommendations || {})) {
           if (!items?.length) continue;
-          if (items.length === 1) { chosen[platform] = items[0].app_id; continue; }
-          const labels = items.map((item,index) => `${index + 1}. ${item.name}`).join('\n');
-          const pick = prompt(`Multiple emulators for ${platform}:\n${labels}\nEnter number to install, or leave blank to skip`, '1');
-          const index = Number(pick) - 1;
-          if (pick && items[index]) chosen[platform] = items[index].app_id;
+          const appId = await pickEmulatorForPlatform(platform, items);
+          if (appId) chosen[platform] = appId;
         }
         const result = Object.keys(chosen).length
           ? await api('/api/import/wizard',{method:'POST',body:JSON.stringify({folder,chosen_emulators:chosen})})
@@ -49,10 +63,19 @@ import { refresh } from './library.js';
     async function importArcade() {
       const folder = await nativePickFolder('Absolute path of the arcade ROM folder');
       if (!folder) return;
-      const source = prompt('Set type: MAME or FinalBurn Neo', 'MAME');
+      const source = await promptChoice({
+        title: 'Arcade set type',
+        message: 'Choose the arcade set type.',
+        choices: [{value: 'MAME', label: 'MAME'}, {value: 'FinalBurn Neo', label: 'FinalBurn Neo'}],
+        defaultValue: 'MAME',
+      });
       if (!source) return;
       const dat = (await nativePickFile('Absolute DAT/XML path. Leave blank to use installed MAME metadata.')) ?? '';
-      const command = prompt('Launch command. Leave blank for the detected emulator. You can use {rom_name} and {path}.', '') ?? '';
+      const command = (await promptInput({
+        title: 'Launch command',
+        message: 'Leave blank for the detected emulator. You can use {rom_name} and {path}.',
+        defaultValue: '',
+      })) ?? '';
       try {
         const result = await api('/api/import/arcade',{method:'POST',body:JSON.stringify({folder,source,dat,command})});
         await refresh();
@@ -65,11 +88,8 @@ import { refresh } from './library.js';
         const chosen = {};
         for (const [platformName, items] of Object.entries(preview.recommendations || {})) {
           if (!items?.length) continue;
-          if (items.length === 1) { chosen[platformName] = items[0].app_id; continue; }
-          const labels = items.map((item,index) => `${index + 1}. ${item.name}`).join('\n');
-          const pick = prompt(`Multiple emulators for ${platformName}:\n${labels}\nEnter number to install, or leave blank to skip`, '1');
-          const index = Number(pick) - 1;
-          if (pick && items[index]) chosen[platformName] = items[index].app_id;
+          const appId = await pickEmulatorForPlatform(platformName, items);
+          if (appId) chosen[platformName] = appId;
         }
         const result = Object.keys(chosen).length
           ? await api('/api/import/wizard',{method:'POST',body:JSON.stringify({folder,chosen_emulators:chosen})})

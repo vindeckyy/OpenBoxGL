@@ -1,0 +1,15 @@
+schema_version: 1
+adapter_id: vita3k-vita
+emulator_id: org.vita3k.Vita3K
+label: Vita3K
+platform: PlayStation Vita
+extensions:
+  - vpk
+native_exe: Vita3K
+flatpak_app_id: org.vita3k.Vita3K
+startup_args:
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - Vita3K

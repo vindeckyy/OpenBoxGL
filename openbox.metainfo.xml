@@ -15,6 +15,12 @@
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
   <releases>
+    <release version="1.7.0" date="2026-08-26">
+      <description>
+        <p>Guided Setup Center, Activity drawer with durable operations, Launch Doctor preflight, additive v2 API, and 20k-scale performance gates.</p>
+        <p>Setup Center previews every import and enrichment step before commit. Activity shows long-running work with SSE progress and recovery. Launch Doctor explains launch readiness. x86_64 AppImage and Flatpak bundles ship without telemetry.</p>
+      </description>
+    </release>
     <release version="1.6.0" date="2026-08-23">
       <description>
         <p>State decomposition, launch token centralization, accessible navigation tools menu, search index memoization, and security hardening.</p>

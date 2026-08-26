@@ -198,6 +198,13 @@ class ReadonlyStateTests(unittest.TestCase):
             parsed = json.loads(serialized)
             self.assertEqual(parsed["games"][0]["name"], "Doom")
 
+    def test_load_readonly_after_missing_file_uses_defaults(self):
+        with tempfile.TemporaryDirectory() as d:
+            store = self._make_store(d)
+            view = store.load_readonly()
+            self.assertEqual(view["schema_version"], 6)
+            self.assertEqual(view["games"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

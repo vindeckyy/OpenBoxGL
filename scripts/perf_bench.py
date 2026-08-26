@@ -15,8 +15,8 @@ reliability and scale roadmap:
   * browser first-render (optional, when --browser is given)
 
 Records median and p95 for each operation, per library size. Supports
-deterministic runs for 1,000 / 5,000 / 10,000 / 20,000 / 50,000 games.
-Enforces the current 10,000-game non-regression gates during transition.
+deterministic runs for 1,000 / 5,000 / 10,000 / 20,000 games.
+Enforces 10,000- and 20,000-game non-regression gates when those sizes are measured.
 Exits non-zero when a gate fails (unless --no-gate is given).
 
 Benchmark output is written as a JSON artifact (suitable for CI artifacts)
@@ -59,6 +59,15 @@ GATES_10K = {
     "facet_ms_p95": 1000.0,
     # Write-path gate: 10k favorite write must stay under 500 ms.
     "10k_write_ms_p95": 500.0,
+}
+
+GATES_20K = {
+    "library_ms_p95": 4000.0,
+    "library_gzip_ms_p95": 2000.0,
+    "favorite_mutation_ms_p95": 4000.0,
+    "filtered_query_ms_p95": 2000.0,
+    "facet_ms_p95": 2000.0,
+    "20k_write_ms_p95": 1000.0,
 }
 
 
@@ -310,12 +319,15 @@ def benchmark_write_path(data_dir, runs=5):
             process.kill()
 
 
-def _check_gates(results):
-    """Enforce non-regression gates for the 10,000-game entry when present."""
-    if "10000" not in results:
-        return []
-    entry = results["10000"]
-    failures = []
+def _write_gate_key(size: int) -> str:
+    return f"{size // 1000}k_write"
+
+
+def _check_size_gates(results, size_key: str, gates: dict, label: str) -> list[str]:
+    if size_key not in results:
+        return [f"missing {label} benchmark results"]
+    entry = results[size_key]
+    failures: list[str] = []
     checks = [
         ("library", "p95_ms", "library_ms_p95"),
         ("library_gzip", "p95_ms", "library_gzip_ms_p95"),
@@ -326,41 +338,56 @@ def _check_gates(results):
     ]
     for op, field, gate_key in checks:
         if op not in entry:
-            failures.append(f"missing 10,000-game benchmark result: {op}")
+            failures.append(f"missing {label} benchmark result: {op}")
             continue
         if entry[op].get("runs", 0) < 1 or field not in entry[op]:
             detail = entry[op].get("error", "no successful runs")
-            failures.append(f"{op} missing {field} at 10,000 games: {detail}")
+            failures.append(f"{op} missing {field} at {label}: {detail}")
             continue
-        gate = GATES_10K.get(gate_key)
+        gate = gates.get(gate_key)
         if gate is None:
             continue
         val = entry[op][field]
         if val > gate:
-            failures.append(f"{op}.{field} {val} ms exceeds gate {gate_key} {gate} ms at 10,000 games")
+            failures.append(f"{op}.{field} {val} ms exceeds gate {gate_key} {gate} ms at {label}")
 
-    # Write-path gate: 10k favorite write must be <500 ms.
-    write_key = "10k_write"
+    write_key = _write_gate_key(int(size_key))
     if write_key in entry:
         wp = entry[write_key]
+        write_gate_key = f"{size_key[:-3]}k_write_ms_p95" if size_key.endswith("000") else f"{size_key}_write_ms_p95"
+        if size_key == "10000":
+            write_gate_key = "10k_write_ms_p95"
+        elif size_key == "20000":
+            write_gate_key = "20k_write_ms_p95"
         if wp.get("runs", 0) >= 1 and "p95_ms" in wp:
-            gate = GATES_10K.get("10k_write_ms_p95")
+            gate = gates.get(write_gate_key)
             if gate is not None and wp["p95_ms"] > gate:
                 failures.append(
-                    f"{write_key}.p95_ms {wp['p95_ms']} ms exceeds gate 10k_write_ms_p95 {gate} ms"
+                    f"{write_key}.p95_ms {wp['p95_ms']} ms exceeds gate {write_gate_key} {gate} ms at {label}"
                 )
         else:
             detail = wp.get("error", "no successful runs")
-            failures.append(f"{write_key} missing p95_ms at 10,000 games: {detail}")
+            failures.append(f"{write_key} missing p95_ms at {label}: {detail}")
+    else:
+        failures.append(f"missing {label} write-path benchmark: {write_key}")
 
+    return failures
+
+
+def _check_gates(results):
+    """Enforce non-regression gates for 10k and 20k library sizes when present."""
+    failures: list[str] = []
+    if "10000" in results:
+        failures.extend(_check_size_gates(results, "10000", GATES_10K, "10,000 games"))
+    if "20000" in results:
+        failures.extend(_check_size_gates(results, "20000", GATES_20K, "20,000 games"))
     return failures
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-dir", default="/tmp/openbox-perf")
-    default_sizes = "1000,5000,10000,20000" if os.environ.get("OPENBOX_PERF_FULL") == "1" else "1000,5000,10000"
-    parser.add_argument("--sizes", default=default_sizes, help="comma-separated game counts (e.g. 1000,5000,10000,20000,50000)")
+    parser.add_argument("--sizes", default="1000,5000,10000,20000", help="comma-separated game counts (e.g. 1000,5000,10000,20000)")
     parser.add_argument("--out", default=None, help="output JSON path (default build/perf.json)")
     parser.add_argument("--json", dest="json_out", default=None, help="output JSON path alias (e.g. build/perf.json)")
     parser.add_argument("--runs", type=int, default=5, help="runs per operation for median/p95 (default 5)")
@@ -376,17 +403,15 @@ def main():
         print(f"benchmarking {size} games ({args.runs} runs per op) ...", flush=True)
         results[str(size)] = benchmark(data_dir, runs=args.runs)
 
-    # Write-path benchmark: measure favorite mutation at 10k (and 20k when FULL).
-    write_sizes = [10000]
-    if os.environ.get("OPENBOX_PERF_FULL") == "1":
-        write_sizes.append(20000)
-    for wsize in write_sizes:
+    # Write-path benchmark: measure favorite mutation at 10k and 20k.
+    for wsize in (10000, 20000):
         wdir = base / f"write-{wsize}"
         print(f"generating {wsize} games for write-path benchmark in {wdir} ...", flush=True)
         generate(wsize, wdir)
         print(f"write-path benchmark at {wsize} games ({args.runs} runs) ...", flush=True)
         wp = benchmark_write_path(wdir, runs=args.runs)
-        results[f"{wsize}_write"] = wp
+        size_key = str(wsize)
+        results.setdefault(size_key, {})[_write_gate_key(wsize)] = wp
         if wp.get("runs", 0) > 0:
             print(f"  {wsize} write: median={wp.get('median_ms')}ms  p95={wp.get('p95_ms')}ms")
         else:
@@ -424,8 +449,8 @@ def main():
         for line in failures:
             print(f"  - {line}", file=sys.stderr)
         sys.exit(1)
-    if not args.no_gate and "10000" in results:
-        print("GATE PASSED: 10,000-game non-regression gates satisfied")
+    if not args.no_gate and ("10000" in results or "20000" in results):
+        print("GATE PASSED: performance non-regression gates satisfied")
 
 
 if __name__ == "__main__":

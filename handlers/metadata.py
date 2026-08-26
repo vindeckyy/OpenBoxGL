@@ -5,12 +5,55 @@ import sqlite3
 import zipfile
 from pathlib import Path
 from urllib.parse import parse_qs
-from api_errors import BadRequest, Conflict
-from metadata import apply_game_metadata, batch_match, search_games, sync_database
+
+from api_errors import BadRequest, Conflict, PreviewExpired, PreviewNotFound
+from metadata import (
+    DEFAULT_MATCH_ITEMS_LIMIT,
+    MAX_MATCH_ITEMS_LIMIT,
+    apply_game_metadata,
+    apply_match_decisions,
+    apply_match_preview,
+    batch_match,
+    create_match_preview_record,
+    list_match_preview_items,
+    load_match_preview,
+    match_preview_document,
+    persist_never_rejections,
+    run_match_preview_job,
+    save_match_preview,
+    search_games,
+    sync_database,
+)
 from openbox import load_state
+from parity_backup import create_backup
 from parity_igdb import apply_to_game as apply_igdb_metadata, fetch_game as fetch_igdb_game, search_games as search_igdb_games
+from pkg.state.operations import get_operation_service
 from routes.registry import route
-from webapp_state import DATA, JOB_MANAGER, METADATA_DATABASE, METADATA_JOB, MEDIA_TYPES_ALL, PROCESS_LOCK, bump_media_epoch, game_from_payload, game_from_query, load_state_view, transact_state, update_steam_metadata
+from webapp_state import DATA, JOB_MANAGER, METADATA_DATABASE, METADATA_JOB, MEDIA_TYPES_ALL, PROCESS_LOCK, RUNNING, bump_media_epoch, game_from_payload, game_from_query, load_state_view, transact_state, update_steam_metadata
+
+
+def _parse_limit(raw, *, default: int, maximum: int) -> int:
+    if raw in (None, ""):
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as error:
+        raise BadRequest("limit must be an integer.") from error
+    return max(1, min(value, maximum))
+
+
+def _match_preview_state_for_job(job_id: str | None) -> str:
+    if not job_id:
+        return "ready"
+    operation = get_operation_service().get(job_id)
+    if not operation:
+        return "ready"
+    state = str(operation.get("state") or "ready")
+    if state in {"queued", "running", "cancelling"}:
+        return state
+    if state in {"done", "partial", "error"}:
+        return "ready"
+    return state
 
 
 class MetadataHandlers:
@@ -78,6 +121,170 @@ class MetadataHandlers:
     def _api_post_api_metadata_igdb_apply(self, payload):
         self.apply_igdb_metadata(payload)
 
+    @route("POST", "/api/v2/metadata/matches/preview")
+    def _api_post_api_v2_metadata_matches_preview(self, payload):
+        if not METADATA_DATABASE.is_file():
+            raise Conflict("Download the metadata database first.")
+        payload = payload or {}
+        game_ids = payload.get("game_ids")
+        import_batch_id = payload.get("import_batch_id")
+        if game_ids is not None and not isinstance(game_ids, list):
+            raise BadRequest("game_ids must be an array or null.")
+        if game_ids and import_batch_id:
+            raise BadRequest("Provide either game_ids or import_batch_id.")
+        has_games = bool(game_ids)
+        has_batch = bool(str(import_batch_id or "").strip())
+        if has_games == has_batch:
+            raise BadRequest("Provide either game_ids or import_batch_id.")
+        preview = create_match_preview_record(
+            game_ids=game_ids if has_games else None,
+            import_batch_id=str(import_batch_id or "").strip() or None,
+        )
+
+        def worker(cancel_event):
+            checkpoint = None
+            operation = get_operation_service().get(preview.get("job_id") or "")
+            if operation:
+                checkpoint = operation.get("checkpoint")
+            return run_match_preview_job(
+                preview["preview_id"],
+                database_path=METADATA_DATABASE,
+                transact_state=transact_state,
+                cancel_event=cancel_event,
+                checkpoint=checkpoint,
+            )
+
+        job = JOB_MANAGER.submit(
+            f"metadata-match-preview:{preview['preview_id']}",
+            worker,
+            replace=True,
+            operation_type="metadata.match_preview",
+            input_data={"preview_id": preview["preview_id"]},
+        )
+        preview = load_match_preview(preview["preview_id"], allow_expired=True)
+        preview["job_id"] = job["job_id"]
+        preview["state"] = "queued"
+        save_match_preview(preview)
+        state = _match_preview_state_for_job(job["job_id"])
+        self.send_json(
+            202,
+            {
+                "preview_id": preview["preview_id"],
+                "revision": preview["revision"],
+                "job_id": job["job_id"],
+                "state": state,
+            },
+        )
+
+    @route("GET", "/api/v2/metadata/matches/preview")
+    def _api_get_api_v2_metadata_matches_preview(self, parsed):
+        query = parse_qs(parsed.query)
+        preview_id = str(query.get("preview_id", [""])[0]).strip()
+        if not preview_id:
+            raise BadRequest("preview_id is required.")
+        try:
+            preview = load_match_preview(preview_id)
+        except PreviewNotFound:
+            raise
+        except PreviewExpired:
+            raise
+        doc = match_preview_document(preview)
+        doc["state"] = _match_preview_state_for_job(preview.get("job_id"))
+        if preview.get("state") == "ready":
+            doc["state"] = "ready"
+        self.send_json(200, doc)
+
+    @route("GET", "/api/v2/metadata/matches/items")
+    def _api_get_api_v2_metadata_matches_items(self, parsed):
+        query = parse_qs(parsed.query)
+        preview_id = str(query.get("preview_id", [""])[0]).strip()
+        if not preview_id:
+            raise BadRequest("preview_id is required.")
+        cursor = query.get("cursor", [None])[0]
+        limit = _parse_limit(query.get("limit", [None])[0], default=DEFAULT_MATCH_ITEMS_LIMIT, maximum=MAX_MATCH_ITEMS_LIMIT)
+        match_class = query.get("class", [None])[0]
+        if match_class and match_class not in {"exact_review", "likely", "possible", "unmatched"}:
+            raise BadRequest("Invalid class filter.")
+        payload = list_match_preview_items(
+            preview_id,
+            cursor=cursor,
+            limit=limit,
+            match_class=match_class,
+        )
+        self.send_json(200, payload)
+
+    @route("POST", "/api/v2/metadata/matches/decisions")
+    def _api_post_api_v2_metadata_matches_decisions(self, payload):
+        payload = payload or {}
+        preview_id = str(payload.get("preview_id") or "").strip()
+        if not preview_id:
+            raise BadRequest("preview_id is required.")
+        items = payload.get("items")
+        if not isinstance(items, list) or not items:
+            raise BadRequest("items must be a non-empty array.")
+        result, never_rejections = apply_match_decisions(preview_id, items)
+        persist_never_rejections(transact_state, never_rejections)
+        self.send_json(200, {"preview_id": preview_id, **result})
+
+    @route("POST", "/api/v2/metadata/matches/apply")
+    def _api_post_api_v2_metadata_matches_apply(self, payload):
+        if not METADATA_DATABASE.is_file():
+            raise Conflict("Download the metadata database first.")
+        payload = payload or {}
+        preview_id = str(payload.get("preview_id") or "").strip()
+        if not preview_id:
+            raise BadRequest("preview_id is required.")
+        revision = payload.get("revision")
+        if revision is None:
+            raise BadRequest("revision is required.")
+        game_ids = payload.get("game_ids")
+        if game_ids is not None and not isinstance(game_ids, list):
+            raise BadRequest("game_ids must be an array or null.")
+        field_allow_list = payload.get("field_allow_list")
+        media_allow_list = payload.get("media_allow_list")
+        replace_existing = bool(payload.get("replace_existing"))
+        if replace_existing and not field_allow_list and not media_allow_list:
+            raise BadRequest("replace_existing requires a non-empty allow-list.")
+        try:
+            load_match_preview(preview_id)
+        except PreviewNotFound:
+            raise
+        except PreviewExpired:
+            raise
+
+        def worker(cancel_event):
+            return apply_match_preview(
+                preview_id,
+                revision=int(revision),
+                game_ids=game_ids,
+                field_allow_list=field_allow_list,
+                media_allow_list=media_allow_list,
+                replace_existing=replace_existing,
+                database_path=METADATA_DATABASE,
+                data_dir=DATA,
+                transact_state=transact_state,
+                create_backup=create_backup,
+                data_parent=DATA.parent,
+                running_map=RUNNING,
+                cancel_event=cancel_event,
+            )
+
+        job = JOB_MANAGER.submit(
+            f"metadata-match-apply:{preview_id}",
+            worker,
+            replace=True,
+            operation_type="metadata.apply",
+            input_data={"preview_id": preview_id, "revision": int(revision)},
+        )
+        self.send_json(
+            202,
+            {
+                "job_id": job["job_id"],
+                "preview_id": preview_id,
+                "revision": int(revision),
+            },
+        )
+
     def steam_metadata(self, payload):
         state = load_state()
         target = copy.deepcopy(game_from_payload(state, payload))
@@ -138,7 +345,8 @@ class MetadataHandlers:
             matched_records = {}
             for game in candidates:
                 stable_id = str(game.get("game_id"))
-                record = matches.get(str(game["name"]).strip())
+                key = (str(game["name"]).strip(), str(game.get("platform") or ""))
+                record = matches.get(key)
                 if record:
                     matched_records[stable_id] = (str(record["database_id"]), game.get("name", stable_id))
 
@@ -200,5 +408,3 @@ class MetadataHandlers:
             return game.get("name", "")
         _, name = transact_state(mutate)
         self.send_json(200, {"applied": True, "game": name})
-
-

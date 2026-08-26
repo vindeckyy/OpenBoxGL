@@ -4,6 +4,38 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-08-26
+
+### Library Setup Center
+
+- Guided **Set up library** workflow with preview-before-commit imports, paginated review, emulator readiness, metadata enrichment, and completion actions.
+- Side-effect-free scan previews with idempotent commit, stale-preview guards, and `import_batch_id` tagging for post-import filtering.
+
+### Activity Center
+
+- Durable operation service backed by `operations.json` with queued/running/cancelling/done/partial/error/cancelled/interrupted states.
+- Persistent top-bar Activity control, SSE progress, cancellation, retry/resume, and legacy `/api/jobs` compatibility.
+
+### Launch Doctor
+
+- Preflight validation for game paths, adapters, Flatpak/native executables, BIOS/firmware, and tokenized launch arguments.
+- Registry-driven emulator detection with explicit ambiguity handling and launch precedence rules.
+
+### Additive v2 API
+
+- Exact `/api/v2/*` routes for setup preview/commit, emulator registry, launch preflight, metadata match review, and durable jobs (see ADR 0010).
+- Stable error codes for preview staleness, unresolved candidates, job conflicts, and cloud sync failures.
+- Canonical `library.json` schema remains version **6**; previews and operations use separate disposable storage.
+
+### Performance & scale
+
+- Formal support target of **20,000** games with query-cache correctness, bounded index fallback, and performance gates.
+
+### Packaging
+
+- Release-gated **x86_64** artifacts: Ubuntu 22.04 **AppImage** and **Flatpak** (runtime 25.08).
+- No Flathub store submission in this release; no telemetry added.
+
 ## [1.6.0] - 2026-08-23
 
 ### Architecture & State Management
@@ -593,6 +625,7 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
+[1.7.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.4.0...v1.5.0

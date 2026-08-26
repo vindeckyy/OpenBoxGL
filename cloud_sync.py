@@ -7,9 +7,25 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from backend_io import atomic_write_text
+from notifications import record_cloud_sync_outcome
 
 STAT_FIELDS = ("play_count", "playtime_seconds", "last_played", "progress", "rating", "favorite")
 PROGRESS = {"", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned"}
+
+
+class CloudSyncError(Exception):
+    """Base error for cloud statistics sync."""
+
+    code = "CLOUD_SYNC_ERROR"
+
+    def __init__(self, message, *, code=None):
+        super().__init__(message)
+        self.message = str(message)
+        self.code = code or self.__class__.code
+
+
+class CloudRemoteInvalid(CloudSyncError):
+    code = "CLOUD_REMOTE_INVALID"
 
 
 def nonnegative_int(value):
@@ -58,11 +74,17 @@ def _sync_lock(target):
 
 
 def _load_remote_state(target):
+    if not target.is_file():
+        return {}, {}
     try:
-        remote = json.loads(target.read_text()) if target.is_file() else {}
-    except (OSError, json.JSONDecodeError):
-        remote = {}
-    remote_games = remote.get("games", {}) if isinstance(remote, dict) and isinstance(remote.get("games", {}), dict) else {}
+        remote = json.loads(target.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise CloudRemoteInvalid("Remote cloud statistics file is invalid or unreadable.") from error
+    if not isinstance(remote, dict):
+        raise CloudRemoteInvalid("Remote cloud statistics file is invalid or unreadable.")
+    remote_games = remote.get("games", {})
+    if not isinstance(remote_games, dict):
+        raise CloudRemoteInvalid("Remote cloud statistics file is invalid or unreadable.")
     return remote, remote_games
 
 
@@ -81,35 +103,72 @@ def _resolve_saved_record(remote_games, game, key):
     return saved, remote_key
 
 
-def _merge_game_stats(game, saved, remote_newer_overall):
-    local_played = _timestamp(game.get("last_played"))
-    remote_played = _timestamp(saved.get("last_played"))
-    if local_played or remote_played:
-        # The side with the newer last_played is authoritative.
-        remote_wins = remote_played > local_played
-    else:
-        # No play timestamps on either side: defer to file freshness.
-        remote_wins = remote_newer_overall
+def _local_progress_missing(game):
+    progress = str(game.get("progress", ""))
+    return progress == "" or progress not in PROGRESS
+
+
+def _local_rating_missing(game):
+    try:
+        return float(game.get("rating", 0)) == 0
+    except (TypeError, ValueError):
+        return True
+
+
+def _local_favorite_missing(game):
+    return "favorite" not in game
+
+
+def _pick_last_played(local_value, remote_value):
+    local_text = str(local_value or "")
+    remote_text = str(remote_value or "")
+    local_ts = _timestamp(local_text)
+    remote_ts = _timestamp(remote_text)
+    if local_ts > remote_ts:
+        return local_text
+    if remote_ts > local_ts:
+        return remote_text
+    return remote_text or local_text
+
+
+def _fill_progress(game, saved):
+    if not _local_progress_missing(game):
+        return
+    progress = str(saved.get("progress", ""))
+    if progress in PROGRESS and progress:
+        game["progress"] = progress
+
+
+def _fill_rating(game, saved):
+    if not _local_rating_missing(game):
+        return
+    try:
+        rating = float(saved.get("rating", 0))
+    except (TypeError, ValueError):
+        return
+    if 0 <= rating <= 5:
+        game["rating"] = rating
+
+
+def _fill_favorite(game, saved):
+    if not _local_favorite_missing(game):
+        return
+    if isinstance(saved.get("favorite"), bool):
+        game["favorite"] = saved["favorite"]
+
+
+def _merge_game_stats(game, saved):
     before = {field: game.get(field) for field in STAT_FIELDS}
     game["play_count"] = max(nonnegative_int(game.get("play_count")), nonnegative_int(saved.get("play_count")))
-    game["playtime_seconds"] = max(nonnegative_int(game.get("playtime_seconds")), nonnegative_int(saved.get("playtime_seconds")))
-    game["last_played"] = max(str(game.get("last_played", "")), str(saved.get("last_played", "")))
-    if remote_wins:
-        if str(saved.get("progress", "")) in PROGRESS:
-            game["progress"] = str(saved.get("progress", ""))
-        try:
-            rating = float(saved.get("rating", game.get("rating", 0)))
-            if 0 <= rating <= 5:
-                game["rating"] = rating
-        except (TypeError, ValueError):
-            pass
-        if isinstance(saved.get("favorite"), bool):
-            game["favorite"] = saved["favorite"]
-    elif saved:
-        # Local changes win; keep newer per-field values from the remote.
-        for field in ("progress", "rating", "favorite"):
-            if saved.get(field) is not None and str(saved.get(field)) != "":
-                game[field] = saved[field]
+    game["playtime_seconds"] = max(
+        nonnegative_int(game.get("playtime_seconds")),
+        nonnegative_int(saved.get("playtime_seconds")),
+    )
+    game["last_played"] = _pick_last_played(game.get("last_played", ""), saved.get("last_played", ""))
+    if saved:
+        _fill_progress(game, saved)
+        _fill_rating(game, saved)
+        _fill_favorite(game, saved)
     changed = before != {field: game.get(field) for field in STAT_FIELDS}
     merged = {
         field: game.get(field, 0 if field in {"play_count", "playtime_seconds", "rating"} else "")
@@ -120,10 +179,8 @@ def _merge_game_stats(game, saved, remote_newer_overall):
 
 def _resolve_generated_at(remote, remote_generated, last_sync, timestamp):
     if remote_generated and last_sync >= remote_generated:
-        # Local state is newer; bump the remote timestamp to now.
         generated_at = timestamp
     else:
-        # Keep the remote timestamp when newer or first sync, so the next sync can still compare.
         generated_at = remote.get("generated_at", timestamp)
     return generated_at
 
@@ -133,28 +190,37 @@ def sync_statistics(state, folder, now=None):
     if not folder.is_dir():
         raise ValueError(f"Cloud sync folder does not exist: {folder}")
     target = folder / "openbox-statistics.json"
-    with _sync_lock(target):
-        remote, remote_games = _load_remote_state(target)
-        remote_generated = _timestamp(remote.get("generated_at", ""))
-        last_sync = _timestamp(state.get("settings", {}).get("last_cloud_sync", ""))
-        remote_newer_overall = remote_generated > last_sync
-        merged = {}
-        changed = 0
-        for game in state["games"]:
-            key = game_key(game)
-            saved, remote_key = _resolve_saved_record(remote_games, game, key)
-            merged_record, record_changed = _merge_game_stats(game, saved, remote_newer_overall)
-            changed += record_changed
-            merged[key] = merged_record
-            if remote_key != key:
-                merged.pop(remote_key, None)
-        timestamp = now or datetime.now().astimezone().isoformat(timespec="seconds")
-        generated_at = _resolve_generated_at(remote, remote_generated, last_sync, timestamp)
-        payload = {
-            "format": 1,
-            "generated_at": generated_at,
-            "games": merged,
-        }
-        atomic_write_text(target, json.dumps(payload, indent=2), mode=0o600)
+    timestamp = now or datetime.now().astimezone().isoformat(timespec="seconds")
+    try:
+        with _sync_lock(target):
+            remote, remote_games = _load_remote_state(target)
+            remote_generated = _timestamp(remote.get("generated_at", ""))
+            last_sync = _timestamp(state.get("settings", {}).get("last_cloud_sync", ""))
+            merged = {}
+            changed = 0
+            for game in state["games"]:
+                key = game_key(game)
+                saved, remote_key = _resolve_saved_record(remote_games, game, key)
+                merged_record, record_changed = _merge_game_stats(game, saved)
+                changed += record_changed
+                merged[key] = merged_record
+                if remote_key != key:
+                    merged.pop(remote_key, None)
+            generated_at = _resolve_generated_at(remote, remote_generated, last_sync, timestamp)
+            payload = {
+                "format": 1,
+                "generated_at": generated_at,
+                "games": merged,
+            }
+            atomic_write_text(target, json.dumps(payload, indent=2), mode=0o600)
+    except CloudSyncError as error:
+        record_cloud_sync_outcome(state, success=False, body=error.message, now=timestamp)
+        raise
     state.setdefault("settings", {})["last_cloud_sync"] = timestamp
+    record_cloud_sync_outcome(
+        state,
+        success=True,
+        body=f"Synced {len(state.get('games', []))} game(s).",
+        now=timestamp,
+    )
     return {"path": str(target), "games": len(payload["games"]), "merged": changed, "synced_at": timestamp}

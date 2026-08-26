@@ -16,13 +16,24 @@ import { refresh } from './library.js';
     function renderBulkMediaStatus(job = {}) {
       const manualMissing = job?.manual_missing || 0;
       const state = job?.state || '';
-      $('bulkMediaStatus').textContent = state === 'running' ? `${job?.current || 0} of ${job?.total || 0} · ${job?.updated || 0} games updated` : state === 'done' ? `${job?.updated || 0} games updated${manualMissing ? ` · ${manualMissing} had no manual in their archive` : ''}${job?.errors?.length ? ` · ${job.errors.length} errors` : ''}` : '';
+      const completed = job?.completed_game_ids?.length || 0;
+      const failed = job?.failed_game_ids?.length || 0;
+      const checkpointText = completed || failed ? ` · ${completed} completed · ${failed} failed` : '';
+      $('bulkMediaStatus').textContent = state === 'running' ? `${job?.current || 0} of ${job?.total || 0} · ${job?.updated || 0} games updated${checkpointText}` : state === 'done' || state === 'partial' ? `${job?.updated || 0} games updated${checkpointText}${manualMissing ? ` · ${manualMissing} had no manual in their archive` : ''}${job?.errors?.length ? ` · ${job.errors.length} errors` : ''}` : '';
       $('startBulkMedia').disabled = state === 'running';
+      if ($('retryBulkMedia')) $('retryBulkMedia').disabled = state === 'running' || !failed;
     }
     $('startBulkMedia').onclick = async () => {
       const media = [['cover','bulkCover'],['background','bulkBackground'],['screenshots','bulkScreenshots'],['box_back','bulkBoxBack'],['box_spine','bulkBoxSpine'],['box_3d','bulkBox3d'],['clear_logo','bulkClearLogo'],['fanart','bulkFanart'],['banner','bulkBanner'],['icon','bulkIcon'],['title_screen','bulkTitleScreen'],['cart_front','bulkCartFront'],['cart_back','bulkCartBack'],['disc','bulkDisc'],['advertisement','bulkAdvertisement'],['manual','bulkManual']].filter(([,id]) => $(id).checked).map(([name]) => name);
       try {
         await api('/api/media/bulk',{method:'POST',body:JSON.stringify({platform:AppState.platform,media,overwrite:$('bulkOverwrite').checked})});
+        watchBulkMedia();
+      } catch(error) { notify(error.message); }
+    };
+    if ($('retryBulkMedia')) $('retryBulkMedia').onclick = async () => {
+      const media = [['cover','bulkCover'],['background','bulkBackground'],['screenshots','bulkScreenshots'],['box_back','bulkBoxBack'],['box_spine','bulkBoxSpine'],['box_3d','bulkBox3d'],['clear_logo','bulkClearLogo'],['fanart','bulkFanart'],['banner','bulkBanner'],['icon','bulkIcon'],['title_screen','bulkTitleScreen'],['cart_front','bulkCartFront'],['cart_back','bulkCartBack'],['disc','bulkDisc'],['advertisement','bulkAdvertisement'],['manual','bulkManual']].filter(([,id]) => $(id).checked).map(([name]) => name);
+      try {
+        await api('/api/media/bulk',{method:'POST',body:JSON.stringify({platform:AppState.platform,media,overwrite:$('bulkOverwrite').checked,retry_failed:true})});
         watchBulkMedia();
       } catch(error) { notify(error.message); }
     };

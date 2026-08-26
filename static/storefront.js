@@ -88,7 +88,13 @@ import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
       } catch(error) { notify(error.message); }
     }
     async function uninstallGameyfin(game) {
-      if (!confirm(`Remove the local Gameyfin install for ${game.name}? The server copy stays intact.`)) return;
+      const { confirmAction } = await import('./dialogs.js');
+      const ok = await confirmAction({
+        title: 'Uninstall Gameyfin game',
+        message: `Remove the local Gameyfin install for ${game.name}?`,
+        consequence: 'The server copy stays intact.',
+      });
+      if (!ok) return;
       try {
         await api('/api/gameyfin/uninstall',{method:'POST',body:JSON.stringify({id:game.id})});
         await refresh();

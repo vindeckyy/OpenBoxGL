@@ -434,13 +434,24 @@ class ParityApiTests(unittest.TestCase):
         self.assertEqual(settings["badge_visibility"], ["favorite", "missing_media", "controller"])
 
     def test_backup_listing_reports_created_manifest(self):
+        import time
+
         from openbox import save_state
         from web_app import Handler
+        from webapp_state import JOB_MANAGER
 
         save_state({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
         create_handler = object.__new__(Handler)
         create_handler.send_json = mock.Mock()
         Handler.create_library_backup(create_handler, {"items": ["library", "settings"], "keep": 7})
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            snapshot = JOB_MANAGER.snapshot("library-backup")
+            if snapshot.get("state") in {"done", "error"}:
+                break
+            time.sleep(0.05)
+        else:
+            self.fail("library-backup job did not finish")
 
         list_handler = object.__new__(Handler)
         list_handler.authorized = mock.Mock(return_value=True)

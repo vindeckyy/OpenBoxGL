@@ -1,0 +1,16 @@
+schema_version: 1
+adapter_id: xenia-xbox360
+emulator_id: org.xenia.Xenia
+label: Xenia
+platform: Xbox 360
+extensions:
+  - xex
+  - iso
+native_exe: xenia
+flatpak_app_id: org.xenia.Xenia
+startup_args:
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - xenia
