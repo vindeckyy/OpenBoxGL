@@ -204,7 +204,7 @@ def main() -> int:
             command = [str(COVERAGE), "run", "-p", str(test_file)]
             last_output = ""
             code = 1
-            for attempt in range(3):
+            for _attempt in range(3):
                 result = subprocess.run(
                     command,
                     cwd=ROOT, capture_output=True, text=True,
