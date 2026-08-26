@@ -935,7 +935,14 @@ class ParitySetupPreviewTests(unittest.TestCase):
         self.assertTrue(file_fingerprint("/missing/file").startswith("missing:"))
         folder = self.data_dir / "fp2"
         folder.mkdir()
-        with mock.patch.object(Path, "stat", side_effect=OSError("nope")):
+        original_path_stat = Path.stat
+
+        def selective_stat(self_path, *args, **kwargs):
+            if self_path == folder:
+                raise OSError("nope")
+            return original_path_stat(self_path, *args, **kwargs)
+
+        with mock.patch.object(Path, "stat", selective_stat):
             self.assertTrue(folder_fingerprint(folder))
         with mock.patch("shutil.which", return_value=None):
             self.assertFalse(_flatpak_installed("org.test.App"))

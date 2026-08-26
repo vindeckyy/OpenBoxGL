@@ -738,12 +738,12 @@ class StoreInternalsTests(unittest.TestCase):
             store.save(default_state())
             store.update(lambda state: state["settings"].update({"n": 1}))
             stale = next(store.snapshots_dir.glob("*.json"))
-            original_stat = stale.stat
+            original_path_stat = Path.stat
 
-            def selective_stat(self_path):
+            def selective_stat(self_path, *args, **kwargs):
                 if self_path == stale:
                     raise OSError("stat")
-                return original_stat()
+                return original_path_stat(self_path, *args, **kwargs)
 
             with mock.patch.object(Path, "stat", selective_stat):
                 store.update(lambda state: state["settings"].update({"n": 2}))

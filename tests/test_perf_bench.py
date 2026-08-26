@@ -1,5 +1,6 @@
 """Unit tests for performance benchmark harness."""
 
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -23,6 +24,20 @@ class FakeProcess:
 
 
 class PerfBenchTests(unittest.TestCase):
+    def setUp(self):
+        self._saved_env = {
+            "GITHUB_ACTIONS": os.environ.pop("GITHUB_ACTIONS", None),
+            "OPENBOX_PERF_STRICT": os.environ.pop("OPENBOX_PERF_STRICT", None),
+            "OPENBOX_PERF_CI_MULT": os.environ.pop("OPENBOX_PERF_CI_MULT", None),
+        }
+
+    def tearDown(self):
+        for key, value in self._saved_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
     def test_benchmark_routes_and_structure(self):
         requested_paths = []
 
