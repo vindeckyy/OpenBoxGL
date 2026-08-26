@@ -88,6 +88,17 @@ def _blocked_worker(started, release):
     return worker
 
 
+def _blocked_worker_hold_until_release(started, release):
+    """Like _blocked_worker but ignores cancel until `release` is set."""
+
+    def worker(cancel_event):
+        started.set()
+        while not release.is_set():
+            time.sleep(0.005)
+
+    return worker
+
+
 class SubmitValidationTests(unittest.TestCase):
     def setUp(self):
         _reset_operations()
@@ -146,7 +157,7 @@ class SubmitSemanticsTests(unittest.TestCase):
     def test_replace_true_with_running_job_sets_old_cancel_event(self):
         started = threading.Event()
         release = threading.Event()
-        old = self.manager.submit("replace", _blocked_worker(started, release))
+        old = self.manager.submit("replace", _blocked_worker_hold_until_release(started, release))
         self.assertTrue(started.wait(POLL_TIMEOUT))
         self.assertEqual(_wait_for(self.manager, "replace", {"running"})["state"], "running")
         replacement = self.manager.submit("replace", lambda: {"replaced": True}, replace=True)
@@ -331,8 +342,11 @@ class ObserverAndHistoryTests(unittest.TestCase):
 
         self.manager.submit("obs-done", lambda: {"ok": True})
         self.manager.submit("obs-error", explode, max_attempts=1)
-        _wait_for(self.manager, "obs-done", {"done"})
-        _wait_for(self.manager, "obs-error", {"error"})
+        self.assertEqual(_wait_for(self.manager, "obs-done", {"done"})["state"], "done")
+        self.assertEqual(_wait_for(self.manager, "obs-error", {"error"})["state"], "error")
+        self.assertTrue(
+            _wait_until(lambda: {"obs-done", "obs-error"} <= {entry["name"] for entry in self.captured})
+        )
         states = {entry["name"]: entry["state"] for entry in self.captured}
         self.assertEqual(states["obs-done"], "done")
         self.assertEqual(states["obs-error"], "error")
@@ -389,6 +403,9 @@ class PruneTests(unittest.TestCase):
             manager.submit("finish", lambda: None)
             self.assertEqual(_wait_for(manager, "finish", {"done"})["state"], "done")
             self.assertEqual(manager.snapshot("keep")["state"], "running")
+            self.assertTrue(
+                _wait_until(lambda: len(manager._inflight) < manager._max_jobs)
+            )
             manager.submit("after", lambda: None)
             self.assertEqual(_wait_for(manager, "after", {"done"})["state"], "done")
             # The finished entry must have been pruned to make room.
