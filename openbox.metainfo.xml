@@ -13,7 +13,7 @@
   <launchable type="desktop-id">io.openbox.GameLauncher.desktop</launchable>
   <url type="homepage">https://openboxgl.github.io/</url>
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
-  <url type="vcs-browser">https://github.com/vindeckyy/OpenBoxGL</url>
+  <url type="vcs-git">https://github.com/vindeckyy/OpenBoxGL.git</url>
   <releases>
     <release version="1.7.0" date="2026-08-26">
       <description>
