@@ -272,6 +272,8 @@ def test_ci_desktop_appstream_job():
 
 
 def _flatpak_dry_run_supported() -> bool:
+    if shutil.which("flatpak-builder") is None:
+        return False
     probe = subprocess.run(
         ["flatpak-builder", "--dry-run"],
         capture_output=True,
