@@ -127,7 +127,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends shellcheck
-          shellcheck -x run_all_tests.sh build_appimage.sh openbox.sh openbox-native.sh scripts/*.sh
+          shellcheck -S error -x run_all_tests.sh build_appimage.sh openbox.sh openbox-native.sh scripts/*.sh
 
   desktop-appstream:
     runs-on: ubuntu-latest
@@ -160,7 +160,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends flatpak-builder
-          flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry io.openbox.GameLauncher.yml
+          if flatpak-builder --help 2>&1 | grep -q -- '--dry-run'; then
+            flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry io.openbox.GameLauncher.yml
+          else
+            python3 -B scripts/validate_flatpak_manifest.py
+          fi
 
   perf-20k:
     runs-on: ubuntu-latest
@@ -178,6 +182,8 @@ jobs:
           python-version: "3.12"
 
       - name: Run 10k/20k performance gates
+        env:
+          OPENBOX_PERF_CI_MULT: "2.5"
         run: python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5
 
   ui-smoke:

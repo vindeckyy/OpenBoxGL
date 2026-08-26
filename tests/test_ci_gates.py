@@ -46,6 +46,10 @@ class CiGatesTests(unittest.TestCase):
         self.assertIn("desktop-file-validate", ci)
         self.assertIn("appstreamcli validate", ci)
         self.assertIn("flatpak-builder --dry-run", ci)
+        self.assertTrue(
+            "validate_flatpak_manifest.py" in ci or "flatpak-builder --dry-run" in ci,
+            "flatpak-validate must dry-run or validate the manifest",
+        )
         self.assertIn("python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5", ci)
 
 

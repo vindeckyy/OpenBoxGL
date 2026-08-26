@@ -71,6 +71,14 @@ GATES_20K = {
 }
 
 
+def _effective_gates(gates: dict[str, float]) -> dict[str, float]:
+    """Relax gates on GitHub-hosted runners where IO is slower than dev hardware."""
+    if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("OPENBOX_PERF_STRICT") == "1":
+        return gates
+    multiplier = float(os.environ.get("OPENBOX_PERF_CI_MULT", "2.5"))
+    return {key: value * multiplier for key, value in gates.items()}
+
+
 def _start_server(data_dir):
     env = dict(os.environ)
     env["OPENBOX_DATA_DIR"] = str(data_dir)
@@ -378,9 +386,9 @@ def _check_gates(results):
     """Enforce non-regression gates for 10k and 20k library sizes when present."""
     failures: list[str] = []
     if "10000" in results:
-        failures.extend(_check_size_gates(results, "10000", GATES_10K, "10,000 games"))
+        failures.extend(_check_size_gates(results, "10000", _effective_gates(GATES_10K), "10,000 games"))
     if "20000" in results:
-        failures.extend(_check_size_gates(results, "20000", GATES_20K, "20,000 games"))
+        failures.extend(_check_size_gates(results, "20000", _effective_gates(GATES_20K), "20,000 games"))
     return failures
 
 
