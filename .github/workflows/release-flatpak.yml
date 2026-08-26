@@ -71,6 +71,11 @@ jobs:
       - name: Run packaging tests
         run: python3 -B tests/test_packaging.py
 
+      - name: Install Flatpak runtime and SDK
+        run: |
+          flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install -y --user flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08
+
       - name: Build Flatpak bundle
         run: |
           flatpak-builder --force-clean --repo=repo build-dir io.openbox.GameLauncher.yml
