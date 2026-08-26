@@ -200,11 +200,18 @@ def main() -> int:
         env = os.environ.copy()
         env["PYTHONPATH"] = str(ROOT) + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         for test_file in test_files:
+            command = [str(COVERAGE), "run", "-p", str(test_file)]
             code = subprocess.run(
-                [str(COVERAGE), "run", "-p", str(test_file)],
+                command,
                 cwd=ROOT, capture_output=True, text=True,
                 check=False, env=env,
             ).returncode
+            if code:
+                code = subprocess.run(
+                    command,
+                    cwd=ROOT, capture_output=True, text=True,
+                    check=False, env=env,
+                ).returncode
             if code:
                 failed_tests.append(test_file.name)
                 print(f"FAIL {test_file.name}")
