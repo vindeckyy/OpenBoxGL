@@ -245,6 +245,11 @@ def _close_sse_subscriber(subscriber):
         LOGGER.warning("sse subscriber sentinel: %s", e)
 
 
+def emit_operation_event(event_name, payload):
+    """Emit durable-operation SSE events (job.queued, job.progress, job.finished, ...)."""
+    broadcast_event(event_name, payload)
+
+
 def broadcast_event(kind, payload):
     """Push one bounded event to every connected SSE subscriber. Never blocks."""
     try:

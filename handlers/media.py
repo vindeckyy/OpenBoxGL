@@ -176,26 +176,52 @@ class MediaHandlers:
             raise ValueError("Download the metadata database first.")
         platform = str(payload.get("platform", "all"))
         overwrite = bool(payload.get("overwrite"))
+        retry_failed = bool(payload.get("retry_failed"))
+        explicit_game_ids = payload.get("game_ids")
+        if explicit_game_ids is not None and not isinstance(explicit_game_ids, list):
+            raise ValueError("game_ids must be an array.")
         with PROCESS_LOCK:
             if MEDIA_JOB.get("state") == "running":
                 self.send_json(200, MEDIA_JOB)
                 return
+            completed_ids = list(MEDIA_JOB.get("completed_game_ids") or []) if retry_failed else []
+            failed_ids = list(MEDIA_JOB.get("failed_game_ids") or []) if retry_failed else []
             MEDIA_JOB.clear()
-            MEDIA_JOB.update({"state":"running", "current":0, "total":0, "updated":0, "errors":[]})
+            MEDIA_JOB.update({
+                "state": "running",
+                "current": 0,
+                "total": 0,
+                "updated": 0,
+                "errors": [],
+                "completed_game_ids": completed_ids,
+                "failed_game_ids": failed_ids,
+            })
 
-        def worker():
+        def worker(cancel_event=None):
             state = load_state()
             targets = [
                 (str(game.get("game_id")), str(game.get("launchbox_db_id")))
                 for game in state["games"]
                 if game.get("launchbox_db_id") and (platform == "all" or game.get("platform") == platform)
             ]
+            if retry_failed:
+                wanted = set(str(game_id) for game_id in failed_ids)
+                targets = [target for target in targets if target[0] in wanted]
+            elif explicit_game_ids:
+                wanted = {str(game_id) for game_id in explicit_game_ids}
+                targets = [target for target in targets if target[0] in wanted]
+            completed_set = set(MEDIA_JOB.get("completed_game_ids") or [])
+            failed_set = set(MEDIA_JOB.get("failed_game_ids") or [])
             with PROCESS_LOCK:
                 MEDIA_JOB["total"] = len(targets)
-            updated_count, errors = 0, []
+            updated_count = 0
+            errors = []
             manual_missing = 0
-            all_changes = {}
             for current, (stable_id, database_id) in enumerate(targets, 1):
+                if cancel_event is not None and cancel_event.is_set():
+                    break
+                if stable_id in completed_set:
+                    continue
                 original = {}
                 try:
                     state = load_state()
@@ -207,33 +233,38 @@ class MediaHandlers:
                     notes = updated.pop("_media_notes") if "_media_notes" in updated else None
                     if notes:
                         manual_missing += 1
-                    changes = {key:value for key,value in updated.items() if original.get(key) != value}
+                    changes = {key: value for key, value in updated.items() if original.get(key) != value}
                     if changes:
-                        all_changes[stable_id] = changes
+                        def mutate(state, stable_id=stable_id, changes=changes):
+                            game_from_payload(state, {"game_id": stable_id}).update(changes)
+                        transact_state(mutate)
                         updated_count += 1
-                except (OSError, ValueError, sqlite3.Error) as error:
+                    completed_set.add(stable_id)
+                    failed_set.discard(stable_id)
+                except (OSError, ValueError, sqlite3.Error, Exception) as error:
                     errors.append(f"{original.get('name', stable_id)}: {error}")
+                    failed_set.add(stable_id)
                 with PROCESS_LOCK:
-                    MEDIA_JOB.update({"current":current, "updated":updated_count, "errors":errors[-20:], "manual_missing":manual_missing})
-
-            if all_changes:
-                def mutate(state):
-                    for s_id, chgs in all_changes.items():
-                        try:
-                            game_from_payload(state, {"game_id": s_id}).update(chgs)
-                        except (IndexError, KeyError, ValueError):
-                            pass
-                try:
-                    transact_state(mutate)
-                except Exception as error:
-                    errors.append(f"Bulk state transaction error: {error}")
+                    MEDIA_JOB.update({
+                        "current": current,
+                        "updated": updated_count,
+                        "errors": errors[-20:],
+                        "manual_missing": manual_missing,
+                        "completed_game_ids": sorted(completed_set),
+                        "failed_game_ids": sorted(failed_set),
+                    })
 
             bump_media_epoch()
+            final_state = "done"
+            if failed_set and completed_set:
+                final_state = "partial"
+            elif failed_set and not completed_set:
+                final_state = "error"
             with PROCESS_LOCK:
-                MEDIA_JOB.update({"state": "done", "errors": errors[-20:]})
+                MEDIA_JOB.update({"state": final_state, "errors": errors[-20:]})
 
         JOB_MANAGER.submit("media-bulk", worker)
-        self.send_json(202, {"state":"running"})
+        self.send_json(202, {"state": "running"})
 
     def apply_media_pack_route(self, payload):
         pack_id = str(payload.get("id", "")).strip()

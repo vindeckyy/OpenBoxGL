@@ -11,8 +11,38 @@ Measured by `scripts/perf_bench.py` against a synthetic library served by the re
 | 10,000 games | ~28ms (29MB est) | ~3.8ms (1.3MB) | ~2.8ms | ~310ms |
 
 - Native host cold start (launch to server ready): 242 ms; server files published 182 ms after spawn. The WebKitGTK window then loads the token-bearing URL, so the full handshake stays under the 2s target.
-- Gates enforced: `COVERAGE_FLOOR=60` total, `WEB_APP_FLOOR=48` (scripts/check_tests.py). JSON store ceiling acknowledged; SQLite read model remains the escape hatch for >50k.
-- Previous baselines retained below for regression comparison; 20k and 50k legs gated behind `OPENBOX_PERF_FULL=1` in CI.
+- Coverage gates enforced in `scripts/check_tests.py`: `COVERAGE_FLOOR=70` total, `WEB_APP_FLOOR=54`, changed-line `80%`, new runtime modules `85%`.
+- JSON store ceiling acknowledged; SQLite read model remains the escape hatch beyond 20k.
+
+## 20,000-game gates (blocking CI job `perf-20k`)
+
+| key (20k) | p95 max ms |
+|---|---|
+| `library_ms_p95` | 4000 |
+| `library_gzip_ms_p95` | 2000 |
+| `favorite_mutation_ms_p95` | 4000 |
+| `filtered_query_ms_p95` | 2000 |
+| `facet_ms_p95` | 2000 |
+| `20k_write_ms_p95` | 1000 |
+
+CI command:
+
+```bash
+python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5
+```
+
+Default local `--sizes` is `1000,5000,10000,20000`. Write-path benchmarks always include 10k and 20k.
+
+## 10,000-game gates
+
+| key (10k) | p95 max ms |
+|---|---|
+| `library_ms_p95` | 2000 |
+| `library_gzip_ms_p95` | 1000 |
+| `favorite_mutation_ms_p95` | 2000 |
+| `filtered_query_ms_p95` | 1000 |
+| `facet_ms_p95` | 1000 |
+| `10k_write_ms_p95` | 500 |
 
 ## Baseline (2026-08-13, v1.0.0)
 
@@ -34,7 +64,6 @@ Notes:
 
 - Gzip is produced once per state change and cached, so the polled endpoint serves compressed bytes at plain-server speed with a 96% payload cut.
 - The favorite mutation is the worst-case write: full JSON serialize + fsync + backup copy + snapshot rotation.
-- 50k-game figures are pending; the JSON store is the known ceiling and an SQLite read model is the escape hatch if they miss targets.
 
 ## Targets
 
@@ -47,7 +76,8 @@ Notes:
 | Operation | Target | Status |
 |---|---|---|
 | 10k favorite write | <500ms | measured |
+| 20k favorite write | <1000ms | gated in CI |
 
 ## Gate
 
-CI runs the 10k benchmark as a non-blocking job; it becomes blocking once two weeks of stable numbers exist.
+CI job `perf-20k` is blocking on pull requests and pushes to master.

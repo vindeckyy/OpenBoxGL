@@ -33,29 +33,10 @@ PLATFORM_BY_EXTENSION_EXTRA = {
     ".iso": "Disc image", ".m3u": "Disc image",
 }
 
-PLATFORM_EMULATORS = {
-    "NES": [("org.libretro.RetroArch", "RetroArch")],
-    "SNES": [("org.libretro.RetroArch", "RetroArch")],
-    "Nintendo 64": [("org.libretro.RetroArch", "RetroArch")],
-    "Game Boy": [("org.libretro.RetroArch", "RetroArch")],
-    "Game Boy Color": [("org.libretro.RetroArch", "RetroArch")],
-    "Game Boy Advance": [("org.libretro.RetroArch", "RetroArch")],
-    "Nintendo DS": [("net.kuribo64.melonDS", "melonDS"), ("org.libretro.RetroArch", "RetroArch")],
-    "GameCube": [("org.DolphinEmu.dolphin-emu", "Dolphin")],
-    "Wii": [("org.DolphinEmu.dolphin-emu", "Dolphin")],
-    "WiiWare": [("org.DolphinEmu.dolphin-emu", "Dolphin")],
-    "Wii U": [("info.cemu.Cemu", "Cemu")],
-    "PSP": [("org.ppsspp.PPSSPP", "PPSSPP"), ("org.libretro.RetroArch", "RetroArch")],
-    "PlayStation": [("org.duckstation.DuckStation", "DuckStation"), ("org.libretro.RetroArch", "RetroArch")],
-    "PlayStation 2": [("net.pcsx2.PCSX2", "PCSX2")],
-    "PlayStation 3": [("net.rpcs3.RPCS3", "RPCS3")],
-    "PlayStation Vita": [("org.vita3k.Vita3K", "Vita3K")],
-    "Arcade": [("org.mamedev.MAME", "MAME"), ("org.libretro.RetroArch", "RetroArch")],
-    "Xbox": [("app.xemu.xemu", "xemu")],
-    "Xbox 360": [("org.xenia.Xenia", "Xenia"), ("org.libretro.RetroArch", "RetroArch")],
-    "ScummVM": [("org.scummvm.ScummVM", "ScummVM")],
-    "Sega Saturn": [("org.libretro.RetroArch", "RetroArch")],
-}
+from pkg.parity.parity_emulator_defs import PLATFORM_EMULATORS as _PLATFORM_EMULATORS  # noqa: E402
+
+PLATFORM_EMULATORS = _PLATFORM_EMULATORS
+
 
 def _get_bios_hints():
     """Return BIOS hints with runtime Path.home() calls (not frozen at import)."""
@@ -92,6 +73,12 @@ DISC_RE = re.compile(
 def recommend_emulators(platform: str):
     items = PLATFORM_EMULATORS.get(platform, [])
     return [{"app_id": app_id, "name": name, "platform": platform} for app_id, name in items]
+
+
+def generated_m3u_dir() -> Path:
+    from openbox import APP_DIR
+
+    return APP_DIR / "generated"
 
 
 def generate_m3u(disc_paths, output_path):
@@ -310,6 +297,9 @@ def import_multi_platform(
     extensions_set: Iterable[str],
     platform_map: dict[str, str],
     progress_callback: Callable | None = None,
+    *,
+    write_m3u: bool = True,
+    m3u_dir: Path | None = None,
 ) -> list[dict]:
     folder = Path(folder).expanduser()
     if not folder.is_dir():
@@ -338,9 +328,17 @@ def import_multi_platform(
     for index, group in enumerate(disc_groups):
         if len(group) > 1:
             base = _disc_base(group[0])
-            m3u = group[0].with_name(f"{base}.m3u")
-            generate_m3u(group, m3u)
-            path = m3u
+            if write_m3u:
+                if m3u_dir is not None:
+                    target_dir = Path(m3u_dir)
+                    target_dir.mkdir(parents=True, exist_ok=True)
+                    m3u = target_dir / f"{base}.m3u"
+                else:
+                    m3u = group[0].with_name(f"{base}.m3u")
+                generate_m3u(group, m3u)
+                path = m3u
+            else:
+                path = group[0]
             name = base
         else:
             path = group[0]

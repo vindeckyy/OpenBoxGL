@@ -38,7 +38,7 @@ class FaugusHandlers:
                 "path": cand.get("path", ""),
                 "source": "Faugus",
                 "faugus_id": cand.get("faugus_id", ""),
-                "launch": f"umu-run {cand.get('path','')}" if cand.get("path") else "",
+                "launch": "umu-run {path}" if cand.get("path") else "",
                 "wine_prefix": cand.get("prefix", ""),
                 "source_identity": cand.get("source_identity", ""),
             }

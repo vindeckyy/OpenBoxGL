@@ -147,11 +147,12 @@ def dispatch_uri(uri, data_dir, host="127.0.0.1", port=None, token=None, open_br
         return 1
     try:
         if action in {"showgame", "game", "launch"}:
-            game_id = parsed.get("id", "")
-            if not str(game_id).isdigit():
+            game_id = str(parsed.get("id", "")).strip()
+            if not game_id:
                 raise ValueError("Game id is required.")
             if action == "launch":
-                api_request(host, port, token, "/api/launch", "POST", {"id": int(game_id)})
+                body = {"id": int(game_id)} if game_id.isdigit() else {"game_id": game_id}
+                api_request(host, port, token, "/api/launch", "POST", body)
             else:
                 url = build_launch_url(f"http://{host}:{port}", "showgame", id=game_id)
                 if open_browser:

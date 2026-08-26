@@ -12,7 +12,7 @@ from pathlib import Path
 
 from archives import extract_game
 from parity_import import EXTENSIONS_EXTRA, PLATFORM_BY_EXTENSION_EXTRA
-from pkg.parity.launch_tokens import build_launch_args
+from parity_emulator_defs import build_platform_by_extension, resolve_launch
 from state_store import JsonStateStore
 
 CUSTOM_DATA_DIR = os.environ.get("OPENBOX_DATA_DIR")
@@ -29,6 +29,7 @@ EXTENSIONS = {".sh", ".appimage", ".exe", ".iso", ".rom", ".nes", ".sfc", ".smc"
 PLATFORM_BY_EXTENSION = {
     ".nes": "NES", ".sfc": "SNES", ".smc": "SNES", ".gba": "Game Boy Advance",
     ".gb": "Game Boy", ".gbc": "Game Boy Color", ".iso": "Disc image",
+    **build_platform_by_extension(),
     **PLATFORM_BY_EXTENSION_EXTRA,
 }
 
@@ -90,18 +91,34 @@ def format_duration(seconds):
 
 
 def discover_profiles(which=shutil.which):
+    from parity_emulator_defs import _registry, build_adapter_argv, detect_adapter_prefix
+
+    profiles = {}
+    for platform, adapters in _registry()["by_platform"].items():
+        for adapter in adapters:
+            prefix = detect_adapter_prefix(adapter, which=which)
+            if not prefix:
+                continue
+            try:
+                command = build_adapter_argv(
+                    adapter,
+                    {"name": adapter["label"]},
+                    "{path}",
+                    prefix=prefix,
+                    which=which,
+                )
+            except FileNotFoundError:
+                continue
+            profiles.setdefault(platform, shlex.join(command))
+            break
     candidates = {
         "DOSBox": ("dosbox", "dosbox {path}"),
         "Windows": ("wine", "wine {path}"),
-        "Arcade": ("mame", "mame {path}"),
-        "GameCube": ("dolphin-emu", "dolphin-emu -b -e {path}"),
-        "Wii": ("dolphin-emu", "dolphin-emu -b -e {path}"),
-        "PlayStation 2": ("pcsx2-qt", "pcsx2-qt {path}"),
-        "PSP": ("ppsspp", "ppsspp {path}"),
-        "PlayStation 3": ("rpcs3", "rpcs3 {path}"),
-        "PlayStation": ("duckstation-qt", "duckstation-qt -batch {path}"),
     }
-    return {platform: command for platform, (binary, command) in candidates.items() if which(binary)}
+    for platform, (binary, command) in candidates.items():
+        if which(binary):
+            profiles.setdefault(platform, command)
+    return profiles
 
 
 def build_launch(game, profiles):
@@ -110,18 +127,15 @@ def build_launch(game, profiles):
         raise ValueError(f"{game.get('name', 'This game')} has no launch path.")
     if not Path(path).exists():
         raise FileNotFoundError(f"The configured path no longer exists:\n{path}")
-    launch_path = str(extract_game(path, DATA.parent / "cache/archives", game.get("archive_member", ""))) if game.get("extract_archive") else path
-    game_command = game.get("launch", "")
-    command = game_command or profiles.get(game.get("platform", ""), "")
-    if command:
-        args = build_launch_args(command, game, path=launch_path, data_dir=str(DATA.parent))
-        if not game_command and "{path}" not in command and "{ImagePath}" not in command:
-            args.append(launch_path)
-    elif Path(launch_path).suffix.lower() == ".sh":
-        args = ["bash", launch_path]
-    else:
-        args = [launch_path]
-    return args, str(Path(launch_path).parent)
+    launch_path = (
+        str(extract_game(path, DATA.parent / "cache/archives", game.get("archive_member", "")))
+        if game.get("extract_archive")
+        else path
+    )
+    launch_game = dict(game)
+    launch_game["path"] = launch_path
+    resolved = resolve_launch(launch_game, profiles, which=shutil.which, data_dir=str(DATA.parent))
+    return resolved["args"], resolved["cwd"]
 
 
 if __name__ == "__main__":

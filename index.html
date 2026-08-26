@@ -13,6 +13,7 @@
     <div class="brand"><img class="mark" src="/static/logo.png" alt="OpenBox">OpenBox</div>
     <nav class="topbar-zone" aria-label="Library">
       <button class="menu-button primary-nav" id="libraryButton">Library</button>
+      <button class="menu-button primary-nav" id="setupLibraryButton">Set up library</button>
       <button class="menu-button primary-nav" id="addButton">Add game</button>
       <button class="menu-button primary-nav" id="importButton">Import folder</button>
     </nav>
@@ -20,35 +21,45 @@
       <button class="menu-button" id="bigBoxButton">Big Box</button>
       <button class="menu-button" id="sessionsButton">Running</button>
       <button class="menu-button" id="queueButton">Queue</button>
+      <button class="menu-button activity-button" id="activityButton" aria-label="Activity"><span class="activity-label">Activity</span><span class="activity-count" id="activityCount" aria-live="polite">0</span></button>
     </nav>
     <nav class="topbar-zone topbar-zone-tools" aria-label="Tools">
       <noscript><details class="topbar-tools"><summary class="menu-button">Tools</summary></details></noscript>
       <div class="topbar-tools" id="toolsWrap">
         <button class="menu-button" id="toolsButton" aria-haspopup="menu" aria-expanded="false" aria-controls="toolMenu">Tools</button>
         <div class="tool-menu" id="toolMenu" role="menu">
-          <button class="menu-button" id="steamButton" role="menuitem" tabindex="-1">Import Steam</button>
-          <button class="menu-button" id="heroicButton" role="menuitem" tabindex="-1">Import Heroic</button>
-          <button class="menu-button" id="lutrisButton" role="menuitem" tabindex="-1">Import Lutris</button>
-          <button class="menu-button" id="arcadeButton" role="menuitem" tabindex="-1">Import Arcade</button>
-          <button class="menu-button" id="emulatorsButton" role="menuitem" tabindex="-1">Emulators</button>
-          <button class="menu-button" id="settingsButton" role="menuitem" tabindex="-1">Settings</button>
-          <button class="menu-button" id="historyButton" role="menuitem" tabindex="-1">History</button>
-          <button class="menu-button" id="themesButton" role="menuitem" tabindex="-1">Themes</button>
-          <button class="menu-button" id="saveFilterButton" role="menuitem" tabindex="-1">Save filter</button>
-          <button class="menu-button" id="savePresetButton" role="menuitem" tabindex="-1">Save preset</button>
-          <button class="menu-button" id="playlistsButton" role="menuitem" tabindex="-1">Playlists</button>
-          <button class="menu-button" id="achievementsButton" role="menuitem" tabindex="-1">Achievements</button>
-          <button class="menu-button" id="pluginsButton" role="menuitem" tabindex="-1">Plugins</button>
-          <button class="menu-button" id="discoveryButton" role="menuitem" tabindex="-1">Discovery</button>
-          <button class="menu-button" id="storefrontButton" role="menuitem" tabindex="-1">Storefronts</button>
-          <button class="menu-button" id="mediaButton" role="menuitem" tabindex="-1">Media</button>
-          <button class="menu-button" id="healthButton" role="menuitem" tabindex="-1">Health</button>
-          <button class="menu-button" id="bulkButton" role="menuitem" tabindex="-1">Bulk edit</button>
-          <button class="menu-button" id="backupButton" role="menuitem" tabindex="-1">Backup</button>
-          <button class="menu-button" id="fullscreenButton" role="menuitem" tabindex="-1">Fullscreen</button>
-          <button class="menu-button" id="tagsButton" role="menuitem" tabindex="-1">Tags</button>
-          <button class="menu-button" id="notificationsButton" role="menuitem" tabindex="-1">Notifications</button>
-          <button class="menu-button" id="webhooksButton" role="menuitem" tabindex="-1">Webhooks</button>
+          <div role="group" aria-label="Library" data-tool-group="library">
+            <button class="menu-button" id="metadataButton" role="menuitem" tabindex="-1">Metadata</button>
+            <button class="menu-button" id="mediaButton" role="menuitem" tabindex="-1">Media</button>
+            <button class="menu-button" id="healthButton" role="menuitem" tabindex="-1">Health</button>
+            <button class="menu-button" id="bulkButton" role="menuitem" tabindex="-1">Bulk edit</button>
+            <button class="menu-button" id="tagsButton" role="menuitem" tabindex="-1">Tags</button>
+            <button class="menu-button" id="playlistsButton" role="menuitem" tabindex="-1">Playlists</button>
+            <button class="menu-button" id="backupButton" role="menuitem" tabindex="-1">Backup</button>
+            <button class="menu-button" id="historyButton" role="menuitem" tabindex="-1">History</button>
+            <button class="menu-button" id="achievementsButton" role="menuitem" tabindex="-1">Achievements</button>
+            <button class="menu-button" id="saveFilterButton" role="menuitem" tabindex="-1">Save filter</button>
+            <button class="menu-button" id="savePresetButton" role="menuitem" tabindex="-1">Save preset</button>
+          </div>
+          <div role="group" aria-label="Sources" data-tool-group="sources">
+            <button class="menu-button" id="storefrontButton" role="menuitem" tabindex="-1">Storefronts</button>
+            <button class="menu-button" id="emulatorsButton" role="menuitem" tabindex="-1">Emulators</button>
+            <button class="menu-button" id="steamButton" role="menuitem" tabindex="-1">Import Steam</button>
+            <button class="menu-button" id="heroicButton" role="menuitem" tabindex="-1">Import Heroic</button>
+            <button class="menu-button" id="lutrisButton" role="menuitem" tabindex="-1">Import Lutris</button>
+            <button class="menu-button" id="arcadeButton" role="menuitem" tabindex="-1">Import Arcade</button>
+            <button class="menu-button" id="discoveryButton" role="menuitem" tabindex="-1">Discovery</button>
+          </div>
+          <div role="group" aria-label="Personalize" data-tool-group="personalize">
+            <button class="menu-button" id="themesButton" role="menuitem" tabindex="-1">Themes</button>
+            <button class="menu-button" id="pluginsButton" role="menuitem" tabindex="-1">Plugins</button>
+            <button class="menu-button" id="settingsButton" role="menuitem" tabindex="-1">Settings</button>
+            <button class="menu-button" id="fullscreenButton" role="menuitem" tabindex="-1">Fullscreen</button>
+          </div>
+          <div role="group" aria-label="Automation" data-tool-group="automation">
+            <button class="menu-button" id="webhooksButton" role="menuitem" tabindex="-1">Webhooks</button>
+            <button class="menu-button" id="notificationsButton" role="menuitem" tabindex="-1">Notifications</button>
+          </div>
         </div>
       </div>
     </nav>
@@ -56,7 +67,7 @@
   </header>
 
   <div class="workspace">
-    <aside class="sidebar">
+    <aside class="sidebar" aria-label="Library filters">
       <label class="field" data-sidebar-section="search"><span>Search</span><input id="sidebarSearch" type="search" aria-label="Search library"></label>
       <label class="field" data-sidebar-section="view"><span>View</span><select id="view"><option value="all">All games</option><option value="favorites">Favorites</option><option value="recent">Recently played</option><option value="never">Never played</option><option value="playing">In progress</option><option value="completed">Completed</option><option value="installed">Installed only</option><option value="owned">Owned / not installed</option><option value="saves">Has saves</option><option value="hidden">Hidden</option><option value="missing">Missing files</option></select></label>
       <label class="field" data-sidebar-section="filters"><span>ESRB</span><select id="esrbFilter"><option value="">Any rating</option><option>E</option><option>E10+</option><option>T</option><option>M</option><option>AO</option><option>RP</option><option>Unrated</option></select></label>
@@ -72,12 +83,14 @@
       <nav class="platforms" id="explorerFacets" data-sidebar-section="filters"></nav>
     </aside>
 
-    <main class="library">
+    <main class="library" aria-label="Game library">
       <div class="library-head">
         <div><h1 id="libraryTitle">All Games</h1><p id="libraryMeta">0 games</p></div>
+        <div class="query-chips" id="queryChips" aria-label="Active filters"></div>
         <select class="search" id="sort" aria-label="Sort games"><option value="title">Title</option><option value="rating">Rating</option><option value="recent">Recently played</option><option value="recent_activity">Recent activity</option><option value="playtime">Play time</option><option value="added">Date added</option><option value="platform">Platform</option><option value="genre">Genre</option></select>
         <select class="search" id="imageGroup" aria-label="Image group"><option value="default">Use default</option><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option><option value="clear_logo">Clear logos</option><option value="fanart">Fanart</option><option value="banner">Banners</option><option value="box_back">Box backs</option><option value="box_spine">Box spines</option><option value="box_3d">3D boxes</option><option value="title_screen">Title screens</option><option value="cart_front">Cart fronts</option><option value="cart_back">Cart backs</option><option value="disc">Discs</option><option value="advertisement">Ads / flyers</option><option value="manual">Manuals</option></select>
         <select class="search" id="grouping" aria-label="Group covers"><option value="shape">Group by shape</option><option value="none">No grouping</option></select>
+        <button class="icon-button" id="filterDrawerButton" aria-haspopup="dialog" aria-controls="filterDrawer">Filters</button>
         <button class="icon-button" id="viewToggleButton">List view</button>
         <button class="icon-button" id="surpriseButton">Surprise me</button>
       </div>
@@ -88,13 +101,27 @@
       </div>
     </main>
 
-    <aside class="details" id="details"><div class="detail-empty">Select a game to inspect its real metadata and artwork.</div></aside>
+    <aside class="details" id="details" aria-label="Game details"><div class="details-resize-handle" id="detailsResizeHandle" role="separator" aria-orientation="vertical" aria-label="Resize details pane" tabindex="0"></div><div class="detail-empty">Select a game to inspect its real metadata and artwork.</div></aside>
   </div>
+
+  <dialog id="filterDrawer" aria-modal="true" aria-labelledby="filterDrawerTitle">
+    <div class="dialog-head"><h2 id="filterDrawerTitle">Filters</h2><button type="button" id="closeFilterDrawer" aria-label="Close filters">×</button></div>
+    <div class="filter-drawer-body" id="filterDrawerBody"></div>
+  </dialog>
 
   <dialog id="gameDialog" aria-modal="true" aria-labelledby="dialogTitle">
     <form id="gameForm">
-      <div class="dialog-head"><h2 id="dialogTitle">Add game</h2><button type="button" id="closeDialog" aria-label="Close Add game dialog">×</button></div>
-      <div class="form-grid">
+      <div class="dialog-head game-editor-head"><h2 id="dialogTitle">Add game</h2><button type="button" id="closeDialog" aria-label="Close Add game dialog">×</button></div>
+      <nav class="game-editor-nav" id="gameEditorNav" aria-label="Editor sections">
+        <button type="button" class="game-editor-nav-item active" data-game-section="basics">Basics</button>
+        <button type="button" class="game-editor-nav-item" data-game-section="launch">Launch</button>
+        <button type="button" class="game-editor-nav-item" data-game-section="media">Media</button>
+        <button type="button" class="game-editor-nav-item" data-game-section="saves">Saves &amp; Documents</button>
+        <button type="button" class="game-editor-nav-item" data-game-section="advanced">Advanced</button>
+      </nav>
+      <div class="form-grid game-editor-sections">
+        <section class="wide game-editor-section" data-game-section="basics" aria-labelledby="gameSectionBasics">
+          <h3 id="gameSectionBasics">Basics</h3>
         <label class="field"><span>Name</span><input name="name" required></label>
         <label class="field"><span>Platform</span><input name="platform"></label>
         <label class="field"><span>Genre</span><input name="genre"></label>
@@ -112,32 +139,14 @@
         <label class="field"><span>Wikipedia URL</span><input name="wikipedia_url"></label>
         <label class="field"><span>Video URL</span><input name="video_url"></label>
         <label class="field wide"><span>Alternate names, semicolon separated</span><input name="alternate_names"></label>
-        <label class="field wide"><span>Video snap path</span><input name="video_snap"></label>
-        <label class="field wide"><span>Theme video path</span><input name="video_theme"></label>
-        <label class="field wide"><span>Trailer path</span><input name="video_trailer"></label>
-        <label class="field wide"><span>Recording path</span><input name="video_recording"></label>
-        <label class="field wide"><span>Game or ROM path</span><input name="path" required></label>
-        <label class="field wide"><span>Cover image path</span><input name="cover"></label>
-        <label class="field wide"><span>Background image path</span><input name="background"></label>
-        <label class="field wide"><span>Video path</span><input name="video"></label>
-        <label class="field wide"><span>Music path</span><input name="music"></label>
+        <label class="field wide"><span>Description</span><textarea name="description"></textarea></label>
+        <label class="field wide"><span>Private notes</span><textarea name="notes"></textarea></label>
+        </section>
+        <section class="wide game-editor-section" data-game-section="launch" aria-labelledby="gameSectionLaunch" hidden>
+          <h3 id="gameSectionLaunch">Launch</h3>
+        <label class="field wide path-field"><span>Game or ROM path</span><span class="path-input-row"><input name="path" required><button type="button" class="path-browse" data-browse-for="path" data-browse-kind="file">Browse</button></span></label>
         <label class="field"><span>Controller support</span><input name="controller_support" placeholder="Gamepad, keyboard"></label>
         <label class="field"><span>Disc count</span><input name="disc_count" type="number" min="0" max="99"></label>
-        <label class="field wide"><span>Clear logo path</span><input name="clear_logo"></label>
-        <label class="field wide"><span>Fanart path</span><input name="fanart"></label>
-        <label class="field wide"><span>Banner path</span><input name="banner"></label>
-        <label class="field wide"><span>Icon path</span><input name="icon"></label>
-        <label class="field wide"><span>Box back path</span><input name="box_back"></label>
-        <label class="field wide"><span>Box spine path</span><input name="box_spine"></label>
-        <label class="field wide"><span>3D box path</span><input name="box_3d"></label>
-        <label class="field wide"><span>Title screen path</span><input name="title_screen"></label>
-        <label class="field wide"><span>Cart front path</span><input name="cart_front"></label>
-        <label class="field wide"><span>Cart back path</span><input name="cart_back"></label>
-        <label class="field wide"><span>Disc path</span><input name="disc"></label>
-        <label class="field wide"><span>Advertisement / flyer path</span><input name="advertisement"></label>
-        <label class="field wide"><span>Manual path</span><input name="manual"></label>
-        <label class="field wide"><span>Screenshot paths, one per line</span><textarea name="screenshots"></textarea></label>
-        <label class="field wide"><span>RetroAchievements Game ID, optional manual match</span><input name="ra_game_id" inputmode="numeric"></label>
         <label class="field wide"><span>Launch command, optional override</span><input name="launch"></label>
         <label class="field wide"><span>Launch profile override</span><select name="launch_profile"><option value="">Default platform profile</option></select></label>
         <label class="check"><input type="checkbox" name="extract_archive">Extract archive before launch</label>
@@ -146,15 +155,46 @@
         <label class="check"><input type="checkbox" name="broken"> Mark as broken</label>
         <label class="check"><input type="checkbox" name="portable"> Mark as portable</label>
         <label class="field"><span>Archive member</span><input name="archive_member"></label>
-        <label class="field wide"><span>Additional applications, one per line: Name | Path | Command</span><textarea name="applications"></textarea></label>
-        <label class="field wide"><span>Alternate versions, one per line: Name | Path | Command</span><textarea name="versions"></textarea></label>
-        <label class="field wide"><span>Documents, one per line: Name | Path</span><textarea name="documents"></textarea></label>
-        <label class="field wide"><span>Save paths, one per line</span><textarea name="save_paths"></textarea></label>
-        <label class="field wide"><span>Description</span><textarea name="description"></textarea></label>
-        <label class="field wide"><span>Private notes</span><textarea name="notes"></textarea></label>
+        <label class="field wide path-field"><span>Additional applications, one per line: Name | Path | Command</span><span class="path-input-row"><textarea name="applications"></textarea><button type="button" class="path-browse" data-browse-for="applications" data-browse-kind="multi">Browse</button></span></label>
+        <label class="field wide path-field"><span>Alternate versions, one per line: Name | Path | Command</span><span class="path-input-row"><textarea name="versions"></textarea><button type="button" class="path-browse" data-browse-for="versions" data-browse-kind="multi">Browse</button></span></label>
+        </section>
+        <section class="wide game-editor-section" data-game-section="media" aria-labelledby="gameSectionMedia" hidden>
+          <h3 id="gameSectionMedia">Media</h3>
+        <label class="field wide path-field"><span>Video snap path</span><span class="path-input-row"><input name="video_snap"><button type="button" class="path-browse" data-browse-for="video_snap" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Theme video path</span><span class="path-input-row"><input name="video_theme"><button type="button" class="path-browse" data-browse-for="video_theme" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Trailer path</span><span class="path-input-row"><input name="video_trailer"><button type="button" class="path-browse" data-browse-for="video_trailer" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Recording path</span><span class="path-input-row"><input name="video_recording"><button type="button" class="path-browse" data-browse-for="video_recording" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Cover image path</span><span class="path-input-row"><input name="cover"><button type="button" class="path-browse" data-browse-for="cover" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Background image path</span><span class="path-input-row"><input name="background"><button type="button" class="path-browse" data-browse-for="background" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Video path</span><span class="path-input-row"><input name="video"><button type="button" class="path-browse" data-browse-for="video" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Music path</span><span class="path-input-row"><input name="music"><button type="button" class="path-browse" data-browse-for="music" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Clear logo path</span><span class="path-input-row"><input name="clear_logo"><button type="button" class="path-browse" data-browse-for="clear_logo" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Fanart path</span><span class="path-input-row"><input name="fanart"><button type="button" class="path-browse" data-browse-for="fanart" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Banner path</span><span class="path-input-row"><input name="banner"><button type="button" class="path-browse" data-browse-for="banner" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Icon path</span><span class="path-input-row"><input name="icon"><button type="button" class="path-browse" data-browse-for="icon" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Box back path</span><span class="path-input-row"><input name="box_back"><button type="button" class="path-browse" data-browse-for="box_back" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Box spine path</span><span class="path-input-row"><input name="box_spine"><button type="button" class="path-browse" data-browse-for="box_spine" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>3D box path</span><span class="path-input-row"><input name="box_3d"><button type="button" class="path-browse" data-browse-for="box_3d" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Title screen path</span><span class="path-input-row"><input name="title_screen"><button type="button" class="path-browse" data-browse-for="title_screen" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Cart front path</span><span class="path-input-row"><input name="cart_front"><button type="button" class="path-browse" data-browse-for="cart_front" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Cart back path</span><span class="path-input-row"><input name="cart_back"><button type="button" class="path-browse" data-browse-for="cart_back" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Disc path</span><span class="path-input-row"><input name="disc"><button type="button" class="path-browse" data-browse-for="disc" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Advertisement / flyer path</span><span class="path-input-row"><input name="advertisement"><button type="button" class="path-browse" data-browse-for="advertisement" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Manual path</span><span class="path-input-row"><input name="manual"><button type="button" class="path-browse" data-browse-for="manual" data-browse-kind="file">Browse</button></span></label>
+        <label class="field wide path-field"><span>Screenshot paths, one per line</span><span class="path-input-row"><textarea name="screenshots"></textarea><button type="button" class="path-browse" data-browse-for="screenshots" data-browse-kind="multi">Browse</button></span></label>
+        </section>
+        <section class="wide game-editor-section" data-game-section="saves" aria-labelledby="gameSectionSaves" hidden>
+          <h3 id="gameSectionSaves">Saves &amp; Documents</h3>
+        <label class="field wide path-field"><span>Documents, one per line: Name | Path</span><span class="path-input-row"><textarea name="documents"></textarea><button type="button" class="path-browse" data-browse-for="documents" data-browse-kind="multi">Browse</button></span></label>
+        <label class="field wide path-field"><span>Save paths, one per line</span><span class="path-input-row"><textarea name="save_paths"></textarea><button type="button" class="path-browse" data-browse-for="save_paths" data-browse-kind="multi">Browse</button></span></label>
+        </section>
+        <section class="wide game-editor-section" data-game-section="advanced" aria-labelledby="gameSectionAdvanced" hidden>
+          <h3 id="gameSectionAdvanced">Advanced</h3>
+        <label class="field wide"><span>RetroAchievements Game ID, optional manual match</span><input name="ra_game_id" inputmode="numeric"></label>
         <div class="wide form-grid" id="customFieldInputs"></div>
+        </section>
       </div>
-      <div class="dialog-actions">
+      <div class="dialog-actions game-editor-actions">
         <div class="dialog-nav" id="gameDialogNav">
           <button type="button" class="icon-button" id="prevGameDialog" aria-label="Previous game">← Previous</button>
           <button type="button" class="icon-button" id="nextGameDialog" aria-label="Next game">Next →</button>
@@ -326,17 +366,11 @@
     <div class="form-grid"><div class="wide history-list" id="historyList"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneHistory">Done</button></div>
   </dialog>
-  <dialog id="welcomeDialog" aria-modal="true" aria-labelledby="welcomeDialogTitle">
-    <div class="dialog-head"><h2 id="welcomeDialogTitle">Welcome to OpenBox</h2><button type="button" id="closeWelcome" aria-label="Close Welcome to OpenBox dialog">×</button></div>
-    <div class="form-grid welcome-steps">
-      <p class="wide description">Bring your games into OpenBox. Pick a starting point and the library fills in as imports finish.</p>
-      <button type="button" class="primary" id="welcomeImportFolder">Import a ROM or game folder</button>
-      <button type="button" class="icon-button" id="welcomeImportSteam">Import Steam games</button>
-      <button type="button" class="icon-button" id="welcomeImportHeroic">Import Heroic games</button>
-      <button type="button" class="icon-button" id="welcomeImportLutris">Import Lutris games</button>
-      <button type="button" class="icon-button" id="welcomeSyncMetadata">Sync LaunchBox metadata database</button>
-      <button type="button" class="icon-button" id="welcomeOpenSettings">Configure watched folders and startup apps</button>
-      <button type="button" class="primary" id="welcomeDone">Finish setup</button>
+  <dialog id="welcomeDialog" hidden aria-hidden="true"></dialog>
+  <dialog id="setupCenter" aria-modal="true" aria-labelledby="setupCenterTitle" class="setup-center-dialog">
+    <div class="dialog-head setup-center-head"><h2 id="setupCenterTitle">Library Setup Center</h2><button type="button" id="closeSetupCenter" aria-label="Close Library Setup Center">×</button></div>
+    <div class="setup-center-body" id="setupCenterBody" role="region" aria-label="Setup workflow">
+      <p class="description">Guided library setup loads here.</p>
     </div>
   </dialog>
   <dialog id="featureDialog" aria-modal="true" aria-labelledby="featureDialogTitle">
@@ -354,12 +388,24 @@
   <dialog id="settingsDialog" aria-modal="true" aria-labelledby="settingsDialogTitle">
     <form id="settingsForm">
       <div class="dialog-head"><h2 id="settingsDialogTitle">OpenBox Settings</h2><button type="button" id="closeSettings" aria-label="Close OpenBox Settings dialog">×</button></div>
-      <div class="form-grid">
+      <div class="settings-shell">
+        <nav class="settings-nav" id="settingsNav" aria-label="Settings categories">
+          <button type="button" class="settings-nav-item active" data-settings-category="library">Library</button>
+          <button type="button" class="settings-nav-item" data-settings-category="imports">Imports</button>
+          <button type="button" class="settings-nav-item" data-settings-category="metadata">Metadata &amp; Media</button>
+          <button type="button" class="settings-nav-item" data-settings-category="launching">Launching</button>
+          <button type="button" class="settings-nav-item" data-settings-category="sessions">Sessions &amp; Saves</button>
+          <button type="button" class="settings-nav-item" data-settings-category="bigbox">Big Box</button>
+          <button type="button" class="settings-nav-item" data-settings-category="integrations">Integrations</button>
+          <button type="button" class="settings-nav-item" data-settings-category="appearance">Appearance</button>
+          <button type="button" class="settings-nav-item" data-settings-category="advanced">Advanced</button>
+        </nav>
+      <div class="form-grid settings-panels">
         <label class="field wide settings-field" data-setting="search watched folders cloud screensaver startup shutdown session history backup progress automation image group controller gamepad"><span>Search settings</span><input id="settingsSearch" class="settings-search" type="search" placeholder="Type to filter settings"></label>
-        <label class="field wide settings-field" data-setting="watched folders import auto"><span>Automatically watched game folders, one absolute path per line</span><textarea id="watchFolders"></textarea></label>
+        <label class="field wide settings-field settings-panel" data-settings-panel="library imports" data-setting="watched folders import auto"><span>Automatically watched game folders, one absolute path per line</span><span class="path-input-row"><textarea id="watchFolders"></textarea><button type="button" class="path-browse" data-browse-for="watchFolders" data-browse-kind="folder">Browse</button></span></label>
         <div class="wide settings-field" data-setting="library cleanup remove steam imports"><button type="button" class="icon-button" id="removeSteamGames">Remove all imported Steam games</button><span class="description">Removes library entries only. Game files and media stay on disk.</span></div>
         <div class="wide settings-field" data-setting="diagnostic support troubleshooting logs"><button type="button" class="icon-button" id="copyDiagnosticLog">Copy diagnostic log</button><span class="description">Review it before sharing because it can include game names and local file paths.</span></div>
-        <label class="field wide settings-field" data-setting="cloud sync syncthing dropbox nextcloud"><span>Mounted Nextcloud, Syncthing, Dropbox, or other cloud folder for game-stat syncing</span><input id="cloudFolder"></label>
+        <label class="field wide settings-field settings-panel" data-settings-panel="integrations" data-setting="cloud sync syncthing dropbox nextcloud"><span>Mounted Nextcloud, Syncthing, Dropbox, or other cloud folder for game-stat syncing</span><span class="path-input-row"><input id="cloudFolder"><button type="button" class="path-browse" data-browse-for="cloudFolder" data-browse-kind="folder">Browse</button></span></label>
         <div class="wide settings-field" data-setting="cloud sync"><button type="button" class="icon-button" id="syncCloud">Sync statistics now</button><span class="description" id="cloudStatus"></span></div>
         <label class="field wide settings-field" data-setting="default image group viewing cover background screenshot clear logo fanart banner icon box back box spine 3d box title screen cart front cart back disc ads flyers manuals"><span>Default image group</span><select id="defaultImageGroup"><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option><option value="clear_logo">Clear logos</option><option value="fanart">Fanart</option><option value="banner">Banners</option><option value="icon">Icons</option><option value="box_back">Box backs</option><option value="box_spine">Box spines</option><option value="box_3d">3D boxes</option><option value="title_screen">Title screens</option><option value="cart_front">Cart fronts</option><option value="cart_back">Cart backs</option><option value="disc">Discs</option><option value="advertisement">Ads / flyers</option><option value="manual">Manuals</option></select></label>
         <div class="wide settings-field" data-setting="badges favorite installed missing media saves documents versions storefront achievements high scores progress rating broken portable controller"><span>Visible game badges</span><div class="badge-row">
@@ -384,12 +430,12 @@
         <label class="check settings-field" data-setting="session history tracking data play time"><input type="checkbox" id="trackSessionHistory" checked> Track play session history</label>
         <label class="check settings-field" data-setting="backup on close saves"><input type="checkbox" id="backupOnClose"> Back up saves when a game session ends</label>
         <label class="check settings-field" data-setting="obs recording attach auto"><input type="checkbox" id="obsAutoAttach" checked> Auto-attach latest OBS recording when a session ends</label>
-        <label class="field wide settings-field" data-setting="obs recording folder path"><span>OBS recording folder, optional override</span><input id="obsRecordingPath" placeholder="~/Videos"></label>
+        <label class="field wide settings-field settings-panel" data-settings-panel="sessions bigbox" data-setting="obs recording folder path"><span>OBS recording folder, optional override</span><span class="path-input-row"><input id="obsRecordingPath" placeholder="~/Videos"><button type="button" class="path-browse" data-browse-for="obsRecordingPath" data-browse-kind="folder">Browse</button></span></label>
         <label class="field settings-field" data-setting="save backup limit retention"><span>Save backup retention limit, 0 keeps all</span><input id="saveBackupLimit" type="number" min="0" max="500"></label>
         <label class="field settings-field" data-setting="media download limit queue welcome wizard"><span>Media download limit during imports, 0 unlimited</span><input id="mediaDownloadLimit" type="number" min="0" max="10000"></label>
         <label class="field wide settings-field" data-setting="auto import media types cover background screenshots box back spine 3d clear logo fanart banner icon title screen cart front cart back disc ads flyers manuals"><span>Auto-import media types, comma separated</span><input id="autoImportMediaTypes" placeholder="cover, background, screenshots"></label>
         <label class="field wide settings-field" data-setting="region priority metadata images"><span>Region priority, comma separated</span><input id="regionPriority"></label>
-        <label class="field wide settings-field" data-setting="library music background big box"><span>Library background music path</span><input id="libraryMusic"></label>
+        <label class="field wide settings-field settings-panel" data-settings-panel="appearance bigbox" data-setting="library music background big box"><span>Library background music path</span><span class="path-input-row"><input id="libraryMusic"><button type="button" class="path-browse" data-browse-for="libraryMusic" data-browse-kind="file">Browse</button></span></label>
         <label class="check settings-field" data-setting="video bgm mix background music"><input type="checkbox" id="videoBgmMix"> Mix video audio with background music</label>
         <label class="field settings-field" data-setting="big box mode hybrid coverflow stage"><span>Big Box layout</span><select id="bigBoxMode"><option value="stage">Stage</option><option value="hybrid">Hybrid</option><option value="coverflow">CoverFlow</option></select></label>
         <label class="check settings-field" data-setting="show playlist actions big box menu"><input type="checkbox" id="showPlaylistActions" checked> Show playlist actions in Big Box</label>
@@ -406,18 +452,18 @@
         <label class="field settings-field" data-setting="tracking delay seconds launch"><span>Tracking start delay in seconds</span><input id="trackingDelay" type="number" min="0" max="600"></label>
         <label class="field settings-field" data-setting="tracking frequency poll seconds"><span>Tracking poll frequency in seconds</span><input id="trackingFrequency" type="number" min="0.5" max="60" step="0.5"></label>
         <label class="check settings-field" data-setting="auto close steam heroic lutris storefront"><input type="checkbox" id="autoCloseStoreClients"> Close storefront clients after a session ends</label>
-        <label class="field wide settings-field" data-setting="emulator scan folder rom wizard"><span>ROM scan folder for emulator definitions</span><input id="emulatorScanFolder" placeholder="/path/to/roms"></label>
+        <label class="field wide settings-field settings-panel" data-settings-panel="imports launching" data-setting="emulator scan folder rom wizard"><span>ROM scan folder for emulator definitions</span><span class="path-input-row"><input id="emulatorScanFolder" placeholder="/path/to/roms"><button type="button" class="path-browse" data-browse-for="emulatorScanFolder" data-browse-kind="folder">Browse</button></span></label>
         <div class="wide settings-field" data-setting="emulator scan folder rom wizard"><button type="button" class="icon-button" id="scanEmulatorFolder">Scan ROM folder</button></div>
         <label class="field settings-field" data-setting="localization"><span>Interface language</span><select id="localeSetting"><option value="en">English</option></select><small>Localization is planned for a future release.</small></label>
         <label class="field settings-field" data-setting="library view list grid columns"><span>Default library view</span><select id="libraryViewSetting"><option value="grid">Grid</option><option value="list">List</option></select></label>
         <label class="field settings-field" data-setting="library view grid grouping cover aspect ratio shape none"><span>Group covers by shape</span><select id="groupingSetting"><option value="shape">Group by cover shape</option><option value="none">No grouping</option></select></label>
         <label class="field wide settings-field" data-setting="custom fields metadata premium"><span>Custom fields, one per line: Name|Option1,Option2</span><textarea id="customFieldDefs" placeholder="Cabinet|Upright,Cocktail"></textarea></label>
-        <label class="field wide settings-field" data-setting="big box startup video attract"><span>Big Box startup video path</span><input id="bigboxStartupVideo"></label>
+        <label class="field wide settings-field settings-panel" data-settings-panel="bigbox appearance" data-setting="big box startup video attract"><span>Big Box startup video path</span><span class="path-input-row"><input id="bigboxStartupVideo"><button type="button" class="path-browse" data-browse-for="bigboxStartupVideo" data-browse-kind="file">Browse</button></span></label>
         <label class="field wide settings-field" data-setting="big box shutdown applications switch"><span>Applications to run when switching into Big Box, one command per line</span><textarea id="bigboxShutdownCommands"></textarea></label>
         <label class="field settings-field" data-setting="attract mode screensaver big box"><span>Attract mode delay in seconds</span><input id="attractModeSeconds" type="number" min="0" max="3600"></label>
         <label class="check settings-field" data-setting="system tray minimize close"><input type="checkbox" id="trayEnabled"> Enable desktop tray integration</label>
         <label class="check settings-field" data-setting="system tray minimize close"><input type="checkbox" id="minimizeToTray"> Minimize to tray when window closes</label>
-        <label class="field wide settings-field" data-setting="ludusavi hoard saves backup"><span>Ludusavi backup path, optional</span><input id="ludusaviBackupPath" placeholder="Leave blank for Ludusavi default"></label>
+        <label class="field wide settings-field settings-panel" data-settings-panel="sessions advanced" data-setting="ludusavi hoard saves backup"><span>Ludusavi backup path, optional</span><span class="path-input-row"><input id="ludusaviBackupPath" placeholder="Leave blank for Ludusavi default"><button type="button" class="path-browse" data-browse-for="ludusaviBackupPath" data-browse-kind="folder">Browse</button></span></label>
         <div class="wide settings-field" data-setting="media packs themes badges controller"><button type="button" class="icon-button" id="applyMediaPack">Apply bundled media pack</button><span class="description" id="mediaPackStatus"></span></div>
         <div class="wide section-title settings-field" data-setting="controller gamepad mapping">Standard Gamepad Button Mapping</div>
         <label class="field"><span>Play</span><input data-controller="play" class="settings-field" data-setting="controller gamepad play" type="number" min="0" max="31"></label>
@@ -429,8 +475,9 @@
         <label class="field"><span>Running-game menu</span><input data-controller="pause" class="settings-field" data-setting="controller gamepad pause" type="number" min="0" max="31"></label>
         <label class="field"><span>Filter and sort menu</span><input data-controller="menu" class="settings-field" data-setting="controller gamepad menu filter sort" type="number" min="0" max="31"></label>
         <button type="button" class="icon-button settings-field" data-setting="watched folders import scan" id="scanWatched">Scan watched folders now</button>
-        <button type="button" class="icon-button settings-field" data-setting="welcome wizard setup" id="reopenWelcome">Reopen welcome wizard</button>
-        <div class="wide detail-card"><h3>Application</h3><p class="description" id="updateStatus"></p><div class="extras"><button type="button" class="icon-button" id="checkUpdate">Check for updates</button><button type="button" class="primary" id="installUpdate" hidden>Install verified update</button><button type="button" class="icon-button" id="installDesktop">Install desktop shortcut</button></div></div>
+        <button type="button" class="icon-button settings-field" data-setting="welcome wizard setup" id="reopenWelcome">Reopen setup</button>
+        <div class="wide detail-card settings-panel" data-settings-panel="advanced"><h3>Application</h3><p class="description" id="updateStatus"></p><div class="extras"><button type="button" class="icon-button" id="checkUpdate">Check for updates</button><button type="button" class="primary" id="installUpdate" hidden>Install verified update</button><button type="button" class="icon-button" id="installDesktop">Install desktop shortcut</button></div></div>
+      </div>
       </div>
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelSettings">Cancel</button><button class="primary">Save</button></div>
     </form>
@@ -474,16 +521,16 @@
     <button type="button" class="icon-button" id="errorBannerCopy">Copy details</button>
     <button type="button" class="icon-button" id="errorBannerDismiss" aria-label="Dismiss error">×</button>
   </div>
-  <div class="context-menu" id="contextMenu" hidden>
-    <button type="button" class="icon-button" id="contextPlay">Play</button>
-    <button type="button" class="icon-button" id="contextFavorite">Toggle favorite</button>
-    <button type="button" class="icon-button" id="contextEdit">Edit metadata</button>
-    <button type="button" class="icon-button" id="contextProgress">Mark progress</button>
-    <select id="contextPlaylist" aria-label="Playlist"><option value="">Add to playlist...</option></select>
-    <button type="button" class="icon-button" id="contextAddPlaylist">Add selected game</button>
-    <button type="button" class="icon-button" id="contextNewPlaylist">New playlist from game</button>
-    <button type="button" class="icon-button" id="contextResetStats">Reset play statistics</button>
-    <button type="button" class="icon-button" id="contextRemove">Remove from library</button>
+  <div class="context-menu" id="contextMenu" role="menu" hidden>
+    <button type="button" class="icon-button" id="contextPlay" role="menuitem">Play</button>
+    <button type="button" class="icon-button" id="contextFavorite" role="menuitem">Toggle favorite</button>
+    <button type="button" class="icon-button" id="contextEdit" role="menuitem">Edit metadata</button>
+    <button type="button" class="icon-button" id="contextProgress" role="menuitem">Mark progress</button>
+    <select id="contextPlaylist" role="menuitem" aria-label="Playlist"><option value="">Add to playlist...</option></select>
+    <button type="button" class="icon-button" id="contextAddPlaylist" role="menuitem">Add selected game</button>
+    <button type="button" class="icon-button" id="contextNewPlaylist" role="menuitem">New playlist from game</button>
+    <button type="button" class="icon-button" id="contextResetStats" role="menuitem">Reset play statistics</button>
+    <button type="button" class="icon-button" id="contextRemove" role="menuitem">Remove from library</button>
   </div>
   <section class="lifecycle" id="lifecycle" role="status" aria-live="polite" hidden><div><small id="lifecycleKind"></small><h2 id="lifecycleGame"></h2><p id="lifecycleMessage"></p></div></section>
   <section class="bigbox" id="bigBox" hidden tabindex="0">

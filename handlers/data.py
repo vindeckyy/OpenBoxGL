@@ -186,14 +186,31 @@ class DataHandlers:
 
     def backup_game_saves(self, payload):
         game = game_from_payload(load_state(), payload)
-        archive = backup_saves(game, DATA.parent / "save-backups")
-        removed = enforce_backup_limit(game, DATA.parent / "save-backups", load_state().get("settings", {}).get("save_backup_limit", 10))
-        self.send_json(200, {"backup": archive.name, "trimmed": removed})
+        game_id = str(game.get("game_id") or "")
+
+        def worker(_cancel_event):
+            archive = backup_saves(game, DATA.parent / "save-backups")
+            removed = enforce_backup_limit(
+                game,
+                DATA.parent / "save-backups",
+                load_state().get("settings", {}).get("save_backup_limit", 10),
+            )
+            return {"backup": archive.name, "trimmed": removed, "game_id": game_id}
+
+        job = JOB_MANAGER.submit(f"saves-backup:{game_id or 'game'}", worker)
+        self.send_json(202, {"state": "queued", "job_id": job["job_id"]})
 
     def restore_game_saves(self, payload):
         game = game_from_payload(load_state(), payload)
-        archive = restore_saves(game, DATA.parent / "save-backups", str(payload["backup"]))
-        self.send_json(200, {"restored": archive.name})
+        game_id = str(game.get("game_id") or "")
+        backup_name = str(payload["backup"])
+
+        def worker(_cancel_event):
+            archive = restore_saves(game, DATA.parent / "save-backups", backup_name)
+            return {"restored": archive.name, "game_id": game_id}
+
+        job = JOB_MANAGER.submit(f"saves-restore:{game_id or 'game'}", worker)
+        self.send_json(202, {"state": "queued", "job_id": job["job_id"]})
 
     def add_game_save_path(self, payload):
         path = Path(str(payload.get("path", ""))).expanduser()
@@ -283,8 +300,8 @@ class DataHandlers:
             with PROCESS_LOCK:
                 INSTALLS[job_key] = result
 
-        JOB_MANAGER.submit(job_key, worker)
-        self.send_json(202, {"state": "installing", "gameyfin_id": game_id})
+        job = JOB_MANAGER.submit(job_key, worker)
+        self.send_json(202, {"state": "installing", "gameyfin_id": game_id, "job_id": job["job_id"]})
 
     def uninstall_gameyfin(self, payload):
         state = load_state()
@@ -339,25 +356,31 @@ class DataHandlers:
         self.apply_save_scan(payload)
 
     def apply_save_scan(self, payload):
-        state = load_state()
-        found = scan_all_saves(state["games"])
-        found_by_id = {
-            str(state["games"][index].get("game_id")): paths
-            for index, paths in found.items()
-            if 0 <= index < len(state["games"])
-        }
-        def mutate(state):
-            updated = 0
-            for stable_id, paths in found_by_id.items():
-                try:
-                    game = game_from_payload(state, {"game_id": stable_id})
-                except IndexError:
-                    continue
-                save_paths = game.setdefault("save_paths", [])
-                for path in paths:
-                    if path not in save_paths:
-                        save_paths.append(path)
-                        updated += 1
-            return updated
-        _, updated = transact_state(mutate)
-        self.send_json(200, {"updated": updated, "games": len(found)})
+        def worker(_cancel_event):
+            state = load_state()
+            found = scan_all_saves(state["games"])
+            found_by_id = {
+                str(state["games"][index].get("game_id")): paths
+                for index, paths in found.items()
+                if 0 <= index < len(state["games"])
+            }
+
+            def mutate(state):
+                updated = 0
+                for stable_id, paths in found_by_id.items():
+                    try:
+                        game = game_from_payload(state, {"game_id": stable_id})
+                    except IndexError:
+                        continue
+                    save_paths = game.setdefault("save_paths", [])
+                    for path in paths:
+                        if path not in save_paths:
+                            save_paths.append(path)
+                            updated += 1
+                return updated
+
+            _, updated = transact_state(mutate)
+            return {"updated": updated, "games": len(found)}
+
+        job = JOB_MANAGER.submit("saves-scan", worker)
+        self.send_json(202, {"state": "queued", "job_id": job["job_id"]})

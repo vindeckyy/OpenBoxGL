@@ -1,0 +1,15 @@
+schema_version: 1
+adapter_id: rpcs3-ps3
+emulator_id: net.rpcs3.RPCS3
+label: RPCS3
+platform: PlayStation 3
+extensions:
+  - iso
+native_exe: rpcs3
+flatpak_app_id: net.rpcs3.RPCS3
+startup_args:
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - rpcs3

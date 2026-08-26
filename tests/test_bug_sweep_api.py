@@ -322,10 +322,11 @@ class ApiSweep(unittest.TestCase):
         self.assertIn("items", payload)
 
     def test_settings_preservation(self):
+        hint = "A Play · B Back · M Menu"
         status, _ = self.request("/api/settings", {
             "tracking_process_name": "custom_proc",
             "sidebar_sections": ["favorites", "recent"],
-            "controller_prompt_hint": True,
+            "controller_prompt_hint": hint,
             "controller_prompt_pack": "playstation",
         })
         self.assertEqual(status, 200)
@@ -333,8 +334,16 @@ class ApiSweep(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(settings.get("tracking_process_name"), "custom_proc")
         self.assertEqual(settings.get("sidebar_sections"), ["favorites", "recent"])
-        self.assertEqual(settings.get("controller_prompt_hint"), True)
+        self.assertEqual(settings.get("controller_prompt_hint"), hint)
+        self.assertIsInstance(settings.get("controller_prompt_hint"), str)
         self.assertEqual(settings.get("controller_prompt_pack"), "playstation")
+
+    def test_controller_prompt_hint_bool_coerces_to_string(self):
+        status, _ = self.request("/api/settings", {"controller_prompt_hint": True})
+        self.assertEqual(status, 200)
+        status, settings = self.request("/api/settings")
+        self.assertEqual(settings.get("controller_prompt_hint"), "A Play · B Back · M Menu")
+        self.assertIsInstance(settings.get("controller_prompt_hint"), str)
 
     def test_emulator_validation(self):
         for path in ("/api/emulators/install", "/api/emulators/open", "/api/emulators/update"):

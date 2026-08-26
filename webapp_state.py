@@ -168,13 +168,100 @@ ROOT = Path(__file__).parent
 TOKEN = secrets.token_urlsafe(24)
 LOGGER = logging.getLogger("openbox")
 
-INSTALLS = {}
-METADATA_JOB = {}
-MEDIA_JOB = {}
+
+def _installs_job_name(key: str) -> str:
+    if key.startswith("gameyfin:"):
+        return key
+    if key.startswith("update:"):
+        return key
+    if key == "__all__":
+        return "emulator-install-all"
+    if key == "__update_all__":
+        return "emulator-update-all"
+    return f"emulator-install:{key}"
+
+
+def _sync_facade_to_operation(job_name: str, data: dict) -> None:
+    job_id = JOB_MANAGER.get_operation_id(job_name)
+    if not job_id:
+        return
+    from pkg.state.operations import get_operation_service
+
+    service = get_operation_service()
+    state = str(data.get("state") or "")
+    progress = {}
+    for key in ("current", "total", "message", "phase"):
+        if key in data:
+            progress[key] = data[key]
+    checkpoint = {}
+    for key in ("completed_game_ids", "failed_game_ids"):
+        if key in data:
+            checkpoint[key] = list(data.get(key) or [])
+    if checkpoint:
+        progress["checkpoint"] = checkpoint
+    if state in {"installing", "updating", "downloading", "running"}:
+        try:
+            service.mark_running(job_id, message=str(data.get("message") or state))
+        except Exception:
+            LOGGER.exception("Failed to mark facade operation running for %s", job_name)
+    if progress:
+        try:
+            service.update_progress(job_id, **progress)
+        except Exception:
+            LOGGER.exception("Failed to sync facade progress for %s", job_name)
+
+
+class _InstallsFacade(dict):
+    def __getitem__(self, key):
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        return super().get(key, default)
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        if isinstance(value, dict):
+            _sync_facade_to_operation(_installs_job_name(str(key)), value)
+
+    def update(self, *args, **kwargs):
+        super().update(*args, **kwargs)
+        for key, value in dict(*args, **kwargs).items():
+            if isinstance(value, dict):
+                _sync_facade_to_operation(_installs_job_name(str(key)), value)
+
+
+class _SingleJobFacade(dict):
+    def __init__(self, job_name: str, *, alternate_names=()):
+        super().__init__()
+        self._job_name = job_name
+        self._alternate_names = tuple(alternate_names)
+
+    def clear(self):
+        super().clear()
+
+    def _resolve_job_name(self) -> str:
+        for name in (self._job_name, *self._alternate_names):
+            if JOB_MANAGER.get_operation_id(name):
+                return name
+        return self._job_name
+
+    def update(self, *args, **kwargs):
+        super().update(*args, **kwargs)
+        _sync_facade_to_operation(self._resolve_job_name(), dict(self))
+
+
+INSTALLS = _InstallsFacade()
+METADATA_JOB = _SingleJobFacade("metadata", alternate_names=("metadata-match",))
+MEDIA_JOB = _SingleJobFacade("media-bulk")
 JOB_MANAGER = JobManager()
 try:
-    from pkg.state.sse import broadcast_event
+    from pkg.state.operations import get_operation_service
+    from pkg.state.sse import broadcast_event, emit_operation_event
 
+    def _operation_sse_observer(event_name, payload):
+        emit_operation_event(event_name, payload)
+
+    get_operation_service().set_event_observer(_operation_sse_observer)
     JOB_MANAGER.set_observer(lambda job: broadcast_event("job.finished", job))
 except Exception:
     pass

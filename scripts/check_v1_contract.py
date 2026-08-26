@@ -20,6 +20,13 @@ sys.path.insert(0, str(ROOT))
 from routes import GET_TABLE, POST_TABLE, V1_ALIASED_PREFIXES  # noqa: E402
 from routes.registry import all_routes  # noqa: E402
 
+V1_ALIAS_PREFIX = "/api/v1/"
+
+
+def _is_v1_alias_path(path: str) -> bool:
+    return path.startswith(V1_ALIAS_PREFIX)
+
+
 def live_routes():
     routes = {}
     seen = set()
@@ -35,15 +42,37 @@ def live_routes():
             methods.append("POST")
         routes[v1] = sorted(methods)
     return routes
+
+
 def check_registry_consistency():
-    registered = all_routes()
+    registered = {(r.method, r.path): r.spec for r in all_routes()}
     problems = []
-    for r in registered:
-        table = GET_TABLE if r.method == "GET" else POST_TABLE
-        if r.path not in table:
-            problems.append(f"MISSING {r.method} {r.path} in route table")
-        elif table[r.path] != r.spec:
-            problems.append(f"MISMATCH {r.method} {r.path}: {table[r.path]} != {r.spec}")
+    for (method, path), spec in registered.items():
+        table = GET_TABLE if method == "GET" else POST_TABLE
+        if path not in table:
+            problems.append(f"MISSING {method} {path} in route table")
+        elif table[path] != spec:
+            problems.append(f"MISMATCH {method} {path}: {table[path]} != {spec}")
+    for path, spec in GET_TABLE.items():
+        if _is_v1_alias_path(path):
+            continue
+        key = ("GET", path)
+        if key not in registered:
+            problems.append(f"MISSING GET {path} in route registry")
+        elif registered[key] != spec:
+            problems.append(
+                f"MISMATCH GET {path}: registry {registered[key]} != table {spec}"
+            )
+    for path, spec in POST_TABLE.items():
+        if _is_v1_alias_path(path):
+            continue
+        key = ("POST", path)
+        if key not in registered:
+            problems.append(f"MISSING POST {path} in route registry")
+        elif registered[key] != spec:
+            problems.append(
+                f"MISMATCH POST {path}: registry {registered[key]} != table {spec}"
+            )
     return problems
 
 

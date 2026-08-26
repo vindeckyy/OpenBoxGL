@@ -1,0 +1,19 @@
+schema_version: 1
+adapter_id: retroarch-n64
+emulator_id: org.libretro.RetroArch
+label: RetroArch
+platform: Nintendo 64
+extensions:
+  - n64
+  - z64
+  - v64
+native_exe: retroarch
+flatpak_app_id: org.libretro.RetroArch
+startup_args:
+  - -L
+  - /usr/lib/libretro/mupen64plus_next_libretro.so
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - retroarch

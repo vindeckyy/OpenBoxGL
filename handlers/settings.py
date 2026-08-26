@@ -50,6 +50,17 @@ def _clean_controller_map(merged):
     return clean_mapping
 
 
+def _clean_controller_prompt_hint(merged):
+    value = merged.get("controller_prompt_hint", "")
+    if isinstance(value, bool):
+        return "A Play · B Back · M Menu" if value else ""
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ValueError("controller_prompt_hint must be a string.")
+    return value.strip()[:200]
+
+
 def _clean_cloud_folder(merged):
     cloud_folder = str(merged.get("cloud_folder", "")).strip()
     if cloud_folder:
@@ -249,6 +260,7 @@ def clean_settings(merged):
     progress_on_first_play = _clean_progress_first_play(merged)
     apply_perf = _clean_apply_perf(merged)
     gameyfin_password = _clean_password(merged)
+    controller_prompt_hint = _clean_controller_prompt_hint(merged)
     return {
             "watch_folders": clean_folders,
             "screensaver_seconds": seconds,
@@ -300,7 +312,7 @@ def clean_settings(merged):
             "tracking_frequency": tracking_frequency,
             "tracking_process_name": str(merged.get("tracking_process_name", "")).strip()[:100],
             "sidebar_sections": [str(item) for item in merged.get("sidebar_sections", [])][:20] if isinstance(merged.get("sidebar_sections"), list) else [],
-            "controller_prompt_hint": bool(merged.get("controller_prompt_hint", False)),
+            "controller_prompt_hint": controller_prompt_hint,
             "controller_prompt_pack": str(merged.get("controller_prompt_pack", "xbox")).strip()[:20],
             "apply_perf": apply_perf,
             "progress_on_first_play": progress_on_first_play,

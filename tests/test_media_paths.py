@@ -181,7 +181,7 @@ class MediaPathTests(unittest.TestCase):
         self.assertFalse(f2.is_file())
         self.assertTrue(f1.is_file())
 
-    def test_bulk_media_batched_transaction(self):
+    def test_bulk_media_per_game_transaction(self):
         state = {
             "games": [
                 {"game_id": "g1", "name": "Game 1", "launchbox_db_id": "1"},
@@ -201,23 +201,193 @@ class MediaPathTests(unittest.TestCase):
 
         with mock.patch("handlers.media.load_state", return_value=state), \
              mock.patch("handlers.media.METADATA_DATABASE") as mock_db, \
-             mock.patch("handlers.media.apply_game_metadata", side_effect=lambda g, *a, **k: {**g, "cover": "/media/c.png"}), \
+             mock.patch("handlers.media.apply_game_metadata", side_effect=lambda g, *a, **k: {**g, "cover": f"/media/{g['game_id']}.png"}), \
              mock.patch("handlers.media.transact_state", side_effect=fake_transact), \
              mock.patch("handlers.media.JOB_MANAGER") as mock_jm:
             mock_db.is_file.return_value = True
-            
-            # Execute worker directly
+
             def run_job(name, worker):
                 worker()
             mock_jm.submit.side_effect = run_job
 
             handler.bulk_media({"media": ["cover"]})
 
-        # All 3 games should be committed in a SINGLE transact_state transaction
+        self.assertEqual(len(transact_calls), 3)
+        self.assertEqual(state["games"][0]["cover"], "/media/g1.png")
+        self.assertEqual(state["games"][1]["cover"], "/media/g2.png")
+        self.assertEqual(state["games"][2]["cover"], "/media/g3.png")
+
+    def test_bulk_media_retry_failed_skips_completed(self):
+        state = {
+            "games": [
+                {"game_id": "g1", "name": "Game 1", "launchbox_db_id": "1"},
+                {"game_id": "g2", "name": "Game 2", "launchbox_db_id": "2"},
+            ],
+            "settings": {},
+        }
+        handler = object.__new__(MediaHandlers)
+        handler.send_json = mock.Mock()
+        apply_calls = []
+
+        def fake_apply(game, *args, **kwargs):
+            apply_calls.append(game["game_id"] if isinstance(game, dict) else game.get("game_id"))
+            if str(game.get("game_id")) == "g2":
+                raise ValueError("download failed")
+            return {**game, "cover": "/media/c.png"}
+
+        transact_calls = []
+        def fake_transact(mutator):
+            transact_calls.append(mutator)
+            mutator(state)
+            return state, None
+
+        import handlers.media as hmed
+        hmed.MEDIA_JOB.clear()
+        hmed.MEDIA_JOB.update({
+            "failed_game_ids": ["g2"],
+            "completed_game_ids": ["g1"],
+        })
+
+        with mock.patch("handlers.media.load_state", return_value=state), \
+             mock.patch("handlers.media.METADATA_DATABASE") as mock_db, \
+             mock.patch("handlers.media.apply_game_metadata", side_effect=fake_apply), \
+             mock.patch("handlers.media.transact_state", side_effect=fake_transact), \
+             mock.patch("handlers.media.JOB_MANAGER") as mock_jm:
+            mock_db.is_file.return_value = True
+            mock_jm.submit.side_effect = lambda name, worker: worker()
+
+            handler.bulk_media({"media": ["cover"], "retry_failed": True})
+
+        self.assertEqual(apply_calls, ["g2"])
+        self.assertEqual(len(transact_calls), 0)
+
+    def test_bulk_media_explicit_game_ids_and_no_change(self):
+        state = {
+            "games": [
+                {"game_id": "g1", "name": "Game 1", "launchbox_db_id": "1"},
+                {"game_id": "g2", "name": "Game 2", "launchbox_db_id": "2"},
+            ],
+            "settings": {},
+        }
+        handler = object.__new__(MediaHandlers)
+        handler.send_json = mock.Mock()
+
+        with mock.patch("handlers.media.load_state", return_value=state), \
+             mock.patch("handlers.media.METADATA_DATABASE") as mock_db, \
+             mock.patch("handlers.media.apply_game_metadata", side_effect=lambda g, *a, **k: dict(g)), \
+             mock.patch("handlers.media.transact_state") as mock_transact, \
+             mock.patch("handlers.media.JOB_MANAGER") as mock_jm:
+            mock_db.is_file.return_value = True
+            mock_jm.submit.side_effect = lambda name, worker: worker()
+
+            handler.bulk_media({"media": ["cover"], "game_ids": ["g2"]})
+
+        mock_transact.assert_not_called()
+        import handlers.media as hmed
+        self.assertEqual(hmed.MEDIA_JOB.get("completed_game_ids"), ["g2"])
+
+    def test_bulk_media_invalid_game_ids(self):
+        handler = object.__new__(MediaHandlers)
+        handler.send_json = mock.Mock()
+        with mock.patch("handlers.media.METADATA_DATABASE") as mock_db:
+            mock_db.is_file.return_value = True
+            with self.assertRaises(ValueError):
+                handler.bulk_media({"media": ["cover"], "game_ids": "bad"})
+
+    def test_bulk_media_validation_and_running_job(self):
+        import handlers.media as hmed
+
+        handler = object.__new__(MediaHandlers)
+        handler.send_json = mock.Mock()
+        with mock.patch("handlers.media.METADATA_DATABASE") as mock_db:
+            mock_db.is_file.return_value = False
+            with self.assertRaises(ValueError):
+                handler.bulk_media({"media": ["cover"]})
+            mock_db.is_file.return_value = True
+            with self.assertRaises(ValueError):
+                handler.bulk_media({"media": []})
+        hmed.MEDIA_JOB.clear()
+        hmed.MEDIA_JOB.update({"state": "running", "current": 1, "total": 3})
+        with mock.patch("handlers.media.METADATA_DATABASE") as mock_db:
+            mock_db.is_file.return_value = True
+            handler.bulk_media({"media": ["cover"]})
+        handler.send_json.assert_called_with(200, hmed.MEDIA_JOB)
+
+    def test_bulk_media_cancel_skip_and_manual_notes(self):
+        import threading
+
+        import handlers.media as hmed
+
+        state = {
+            "games": [
+                {"game_id": "g1", "name": "Game 1", "launchbox_db_id": "1"},
+                {"game_id": "g2", "name": "Game 2", "launchbox_db_id": "2"},
+            ],
+            "settings": {},
+        }
+        handler = object.__new__(MediaHandlers)
+        handler.send_json = mock.Mock()
+        cancel = threading.Event()
+        transact_calls = []
+
+        def fake_transact(mutator):
+            transact_calls.append(mutator)
+            mutator(state)
+            return state, None
+
+        def fake_apply(game, *args, **kwargs):
+            game_id = str(game.get("game_id"))
+            if game_id == "g1":
+                cancel.set()
+                return {**game, "cover": "/media/g1.png"}
+            return {**game, "cover": "/media/g2.png", "_media_notes": ["manual: no manual in this archive"]}
+
+        hmed.MEDIA_JOB.clear()
+
+        with mock.patch("handlers.media.load_state", return_value=state), \
+             mock.patch("handlers.media.METADATA_DATABASE") as mock_db, \
+             mock.patch("handlers.media.apply_game_metadata", side_effect=fake_apply), \
+             mock.patch("handlers.media.transact_state", side_effect=fake_transact), \
+             mock.patch("handlers.media.JOB_MANAGER") as mock_jm, \
+             mock.patch("handlers.media.bump_media_epoch"):
+            mock_db.is_file.return_value = True
+            mock_jm.submit.side_effect = lambda name, worker: worker(cancel)
+            handler.bulk_media({"media": ["cover", "manual"]})
+
         self.assertEqual(len(transact_calls), 1)
-        self.assertEqual(state["games"][0]["cover"], "/media/c.png")
-        self.assertEqual(state["games"][1]["cover"], "/media/c.png")
-        self.assertEqual(state["games"][2]["cover"], "/media/c.png")
+        self.assertEqual(hmed.MEDIA_JOB.get("manual_missing"), 0)
+
+        hmed.MEDIA_JOB.clear()
+        hmed.MEDIA_JOB.update({"failed_game_ids": ["g1", "g2"], "completed_game_ids": ["g2"]})
+        transact_calls.clear()
+
+        with mock.patch("handlers.media.load_state", return_value=state), \
+             mock.patch("handlers.media.METADATA_DATABASE") as mock_db, \
+             mock.patch("handlers.media.apply_game_metadata", side_effect=lambda g, *a, **k: {**g, "cover": "/media/x.png"}), \
+             mock.patch("handlers.media.transact_state", side_effect=fake_transact), \
+             mock.patch("handlers.media.JOB_MANAGER") as mock_jm, \
+             mock.patch("handlers.media.bump_media_epoch"):
+            mock_db.is_file.return_value = True
+            mock_jm.submit.side_effect = lambda name, worker: worker()
+            handler.bulk_media({"media": ["cover"], "retry_failed": True})
+
+        self.assertEqual(len(transact_calls), 1)
+        self.assertEqual(hmed.MEDIA_JOB.get("completed_game_ids"), ["g1", "g2"])
+
+        hmed.MEDIA_JOB.clear()
+        transact_calls.clear()
+
+        with mock.patch("handlers.media.load_state", return_value=state), \
+             mock.patch("handlers.media.METADATA_DATABASE") as mock_db, \
+             mock.patch("handlers.media.apply_game_metadata", side_effect=lambda g, *a, **k: {**g, "_media_notes": ["manual: no manual in this archive"]}), \
+             mock.patch("handlers.media.transact_state", side_effect=fake_transact), \
+             mock.patch("handlers.media.JOB_MANAGER") as mock_jm, \
+             mock.patch("handlers.media.bump_media_epoch"):
+            mock_db.is_file.return_value = True
+            mock_jm.submit.side_effect = lambda name, worker: worker()
+            handler.bulk_media({"media": ["manual"], "game_ids": ["g1"]})
+
+        self.assertEqual(hmed.MEDIA_JOB.get("manual_missing"), 1)
 
     def test_match_metadata_batched_transaction(self):
         from handlers.metadata import MetadataHandlers
@@ -239,7 +409,7 @@ class MediaPathTests(unittest.TestCase):
 
         with mock.patch("handlers.metadata.load_state", return_value=state), \
              mock.patch("handlers.metadata.METADATA_DATABASE") as mock_db, \
-             mock.patch("handlers.metadata.batch_match", return_value={"Game A": {"database_id": 10}, "Game B": {"database_id": 20}}), \
+             mock.patch("handlers.metadata.batch_match", return_value={("Game A", ""): {"database_id": 10}, ("Game B", ""): {"database_id": 20}}), \
              mock.patch("handlers.metadata.transact_state", side_effect=fake_transact), \
              mock.patch("handlers.metadata.JOB_MANAGER") as mock_jm:
             mock_db.is_file.return_value = True
@@ -265,7 +435,7 @@ class MediaPathTests(unittest.TestCase):
 
         with mock.patch("handlers.metadata.load_state", return_value=state), \
              mock.patch("handlers.metadata.METADATA_DATABASE") as mock_db, \
-             mock.patch("handlers.metadata.batch_match", return_value={"Game A": {"database_id": 10}}), \
+             mock.patch("handlers.metadata.batch_match", return_value={("Game A", ""): {"database_id": 10}}), \
              mock.patch("handlers.metadata.transact_state", side_effect=RuntimeError("db error")), \
              mock.patch("handlers.metadata.JOB_MANAGER") as mock_jm:
             mock_db.is_file.return_value = True
@@ -276,7 +446,7 @@ class MediaPathTests(unittest.TestCase):
         # Test mutate inner KeyError handling
         with mock.patch("handlers.metadata.load_state", return_value=state), \
              mock.patch("handlers.metadata.METADATA_DATABASE") as mock_db, \
-             mock.patch("handlers.metadata.batch_match", return_value={"Game A": {"database_id": 10}}), \
+             mock.patch("handlers.metadata.batch_match", return_value={("Game A", ""): {"database_id": 10}}), \
              mock.patch("handlers.metadata.transact_state", side_effect=lambda mutator: mutator({"games": []})), \
              mock.patch("handlers.metadata.JOB_MANAGER") as mock_jm:
             mock_db.is_file.return_value = True
@@ -288,6 +458,7 @@ class MediaPathTests(unittest.TestCase):
         state_media = {"games": [{"game_id": "g1", "name": "Game A", "launchbox_db_id": "100"}], "settings": {}}
         handler_media = object.__new__(MediaHandlers)
         handler_media.send_json = mock.Mock()
+        hmed.MEDIA_JOB.clear()
         with mock.patch("handlers.media.load_state", return_value=state_media), \
              mock.patch("handlers.media.METADATA_DATABASE") as mock_db, \
              mock.patch("handlers.media.apply_game_metadata", return_value={"game_id": "g1", "cover": "/media/c.png"}), \
@@ -296,7 +467,8 @@ class MediaPathTests(unittest.TestCase):
             mock_db.is_file.return_value = True
             mock_jm.submit.side_effect = lambda name, worker: worker()
             handler_media.bulk_media({"media": ["cover"]})
-            self.assertTrue(any("Bulk state transaction error" in err for err in hmed.MEDIA_JOB.get("errors", [])))
+            self.assertIn("g1", hmed.MEDIA_JOB.get("failed_game_ids", []))
+            self.assertTrue(any("transact error" in err for err in hmed.MEDIA_JOB.get("errors", [])))
 
         # Test bulk_media mutate inner KeyError
         with mock.patch("handlers.media.load_state", return_value=state_media), \

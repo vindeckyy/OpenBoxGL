@@ -4,7 +4,7 @@ import subprocess
 from urllib.parse import parse_qs
 
 from emulators import emulator_status, install_all_emulators, install_emulator, launch_emulator, recommendations_for_platform, update_all_emulators, update_emulator
-from parity_emulator_defs import list_scan_configs, load_definitions, save_scan_config, scan_folder as scan_emulator_folder
+from parity_emulator_defs import list_scan_configs, load_definitions, load_registry, save_scan_config, scan_folder as scan_emulator_folder
 from parity_import import detect_dependencies
 from routes.registry import route
 from webapp_state import INSTALLS, JOB_MANAGER, PROCESS_LOCK, ROOT, clear_file_probe_cache, load_state_view, merge_imported_games, transact_state
@@ -44,6 +44,11 @@ class EmulatorsHandlers:
     @route("GET", "/api/emulators/scan-configs")
     def _api_get_api_emulators_scan_configs(self, parsed):
         self.send_json(200, {"configs": list_scan_configs(load_state_view())})
+        return
+
+    @route("GET", "/api/v2/emulators/registry")
+    def _api_get_api_v2_emulators_registry(self, parsed):
+        self.send_json(200, load_registry(ROOT / "emulator_defs"))
         return
 
     @route("POST", "/api/emulators/install")
@@ -134,7 +139,8 @@ class EmulatorsHandlers:
         if not folder:
             from api_errors import BadRequest
             raise BadRequest("folder required")
-        imported = scan_emulator_folder(folder)
+        emulator_id = str(payload.get("emulator_id", "")).strip() or None
+        imported = scan_emulator_folder(folder, emulator_id=emulator_id)
         added, found = merge_imported_games(imported, lambda game: ("path", str(game.get("path", ""))))
         clear_file_probe_cache()
         self.send_json(200, {"added": added, "found": found})

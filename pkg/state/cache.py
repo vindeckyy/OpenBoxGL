@@ -1,6 +1,7 @@
 """Cache structures and cached projection builders for OpenBox library state."""
 
 from collections import OrderedDict
+import copy
 from dataclasses import dataclass, field
 import gzip
 import json
@@ -361,7 +362,13 @@ def _public_settings_uncached(state):
         "tray_enabled": settings.get("tray_enabled", False),
         "minimize_to_tray": settings.get("minimize_to_tray", False),
         "media_packs": list_media_packs(settings),
-        "controller_prompt_hint": settings.get("controller_prompt_hint", False),
+        "controller_prompt_hint": (
+            "A Play · B Back · M Menu"
+            if settings.get("controller_prompt_hint") is True
+            else ""
+            if settings.get("controller_prompt_hint") is False
+            else str(settings.get("controller_prompt_hint") or "")
+        ),
         "controller_prompt_pack": settings.get("controller_prompt_pack", "xbox"),
         "premium_features_free": True,
         "progress_on_first_play": settings.get("progress_on_first_play", "Playing"),
@@ -733,13 +740,14 @@ def load_state_view():
     with STATE_VIEW_LOCK:
         signature = openbox.STATE_STORE.signature()
         if STATE_VIEW_CACHE["state"] is not None and STATE_VIEW_CACHE["signature"] == signature:
-            return STATE_VIEW_CACHE["state"]
-    state = load_ro()
+            return copy.deepcopy(STATE_VIEW_CACHE["state"])
+    raw = load_ro()
+    detached = copy.deepcopy(dict(raw))
     with STATE_VIEW_LOCK:
         if STATE_VIEW_CACHE["state"] is not None and STATE_VIEW_CACHE["signature"] == signature:
-            return STATE_VIEW_CACHE["state"]
-        STATE_VIEW_CACHE.update({"signature": signature, "state": state})
-        return state
+            return copy.deepcopy(STATE_VIEW_CACHE["state"])
+        STATE_VIEW_CACHE.update({"signature": signature, "state": detached})
+        return copy.deepcopy(detached)
 
 
 def transact_state(mutator):

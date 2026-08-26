@@ -10,7 +10,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
      */
     const AppState = {
       games: [], playlists: [], filterPresets: [], explorerField: 'genre', explorerRules: {}, activeFilterPreset: '', bigBoxGames: [], runningGames: [], raConfigured: false, selectedId: null, platform: 'all', activePlaylist: '', editingId: null, metadataGameId: null, bigBoxIndex: 0, gamepadState: {}, lastSessionEvent: 0, bulkMode: false, bigBoxLastInput: performance.now(), screenSaverGame: null, contextGameId: null, availableProfiles: {},
-      appSettings: {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',cover_grouping:'shape',locale:'en'}, bigBoxFilter: 'all', bigBoxSort: 'title', bigBoxRaFilter: 'all', bigBoxPlatform: 'all', platformCategory: 'all', pendingUpdate: null, duplicateMediaGroups: 0, libraryBgm: null, readerPage: 1, readerUrl: '', bigBoxHybridQuery: '', mediaEpoch: 0, coverRatios: {},
+      appSettings: {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',cover_grouping:'shape',locale:'en'}, bigBoxFilter: 'all', bigBoxSort: 'title', bigBoxRaFilter: 'all', bigBoxPlatform: 'all', platformCategory: 'all', pendingUpdate: null, duplicateMediaGroups: 0, libraryBgm: null, readerPage: 1, readerUrl: '', bigBoxHybridQuery: '', mediaEpoch: 0, coverRatios: {}, importBatchId: '',
     };
 
     const selectedIds = new Set();
@@ -81,12 +81,11 @@ const token = new URLSearchParams(location.search).get('token') || '';
     }
     function nativeEnabled(feature) { return Boolean(nativeCaps[feature]); }
     function nativePrompt(message, defaultValue = '') {
-      // The host has no text input; its native dialogs are file/folder pickers
-      // only, so plain text prompts always stay browser-side.
-      return prompt(message, defaultValue);
+      return import('./dialogs.js').then(({ promptInput }) => promptInput({ message, defaultValue }));
     }
-    function nativeConfirm(message) {
-      return confirm(message);
+    async function nativeConfirm(message) {
+      const { confirmAction } = await import('./dialogs.js');
+      return await confirmAction({ message, target: message });
     }
     async function nativePickFolder(message) {
       if (nativeBridge?.dialog) {
@@ -95,7 +94,8 @@ const token = new URLSearchParams(location.search).get('token') || '';
           return result?.path || null;
         } catch { return null; }
       }
-      return prompt(message);
+      const { promptInput } = await import('./dialogs.js');
+      return await promptInput({ message, label: 'Folder path', defaultValue: '' });
     }
     async function nativePickFile(message) {
       if (nativeBridge?.dialog) {
@@ -104,7 +104,8 @@ const token = new URLSearchParams(location.search).get('token') || '';
           return result?.path || null;
         } catch { return null; }
       }
-      return prompt(message);
+      const { promptInput } = await import('./dialogs.js');
+      return await promptInput({ message, label: 'File path', defaultValue: '' });
     }
     async function nativeReveal(path) {
       if (!path) return false;
@@ -145,7 +146,40 @@ const token = new URLSearchParams(location.search).get('token') || '';
       }
       return document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
     }
-    function notify(message) { $('toast').textContent = message; $('toast').classList.add('show'); clearTimeout(notify.timer); notify.timer = setTimeout(() => $('toast').classList.remove('show'), 2800); }
+    const NOTIFY_LEVELS = new Set(['success', 'info', 'warning', 'error']);
+    function notify(levelOrMessage, message, options) {
+      let level, text, opts;
+      if (arguments.length === 1 && NOTIFY_LEVELS.has(levelOrMessage)) {
+        level = levelOrMessage;
+        text = '';
+        opts = {};
+      } else if (arguments.length === 1) {
+        level = 'info';
+        text = String(levelOrMessage ?? '');
+        opts = {};
+      } else {
+        level = levelOrMessage;
+        text = String(message ?? '');
+        opts = options || {};
+      }
+      const toast = $('toast');
+      if (toast) {
+        toast.textContent = text;
+        toast.dataset.notifyLevel = level;
+        toast.classList.add('show');
+        clearTimeout(notify.timer);
+        notify.timer = setTimeout(() => toast.classList.remove('show'), 2800);
+      }
+      if (level === 'error' && opts.actionable) {
+        const banner = $('errorBanner');
+        if (banner) {
+          $('errorBannerText').textContent = text;
+          lastBannerDetails = [text, opts.code ? `code: ${opts.code}` : '', opts.requestId ? `request id: ${opts.requestId}` : '', opts.detail ? String(opts.detail) : ''].filter(Boolean).join('\n');
+          banner.hidden = false;
+          clearTimeout(showErrorBanner.timer);
+        }
+      }
+    }
     let lastBannerDetails = '';
     function showErrorBanner(error) {
       const text = error?.message || String(error || 'Something went wrong.');
@@ -157,8 +191,12 @@ const token = new URLSearchParams(location.search).get('token') || '';
         error?.detail ? String(error.detail) : '',
       ].filter(Boolean).join('\n');
       $('errorBanner').hidden = false;
-      clearTimeout(showErrorBanner.timer);
-      showErrorBanner.timer = setTimeout(() => { $('errorBanner').hidden = true; }, 10000);
+      if (!error?.actionable) {
+        clearTimeout(showErrorBanner.timer);
+        showErrorBanner.timer = setTimeout(() => { $('errorBanner').hidden = true; }, 10000);
+      } else {
+        clearTimeout(showErrorBanner.timer);
+      }
     }
     function copyDiagnostics() {
       try {
@@ -266,14 +304,18 @@ const token = new URLSearchParams(location.search).get('token') || '';
       _searchIndexDirty = false;
       return _searchIndex;
     }
+    const INDEX_PREFIX_MAX = 9;
     function indexedTitleCandidates(query) {
       if (!query || /[:"]/.test(query)) return null;
       const tokens = cachedParseQueryTokens(query);
       if (!tokens.length || tokens.some(token => token.negative || token.key !== 'title' || token.value.length < 2 || !/^[a-z0-9]+$/.test(token.value))) return null;
+      if (tokens.some(token => token.value.length > INDEX_PREFIX_MAX)) return null;
       const index = buildSearchIndex();
       let ids = null;
       for (const token of tokens) {
-        const bucket = index.title.get(token.value.slice(0, SEARCH_INDEX_MAX_TERM)) || [];
+        const prefixKey = token.value.slice(0, SEARCH_INDEX_MAX_TERM);
+        if (!index.title.has(prefixKey)) return null;
+        const bucket = index.title.get(prefixKey) || [];
         const next = new Set(bucket.map(game => game.id));
         ids = ids === null ? next : new Set([...ids].filter(id => next.has(id)));
         if (!ids.size) break;
@@ -282,6 +324,26 @@ const token = new URLSearchParams(location.search).get('token') || '';
     }
     function warmSearchIndex() {
       buildSearchIndex();
+    }
+    function resetQuery() {
+      if ($('sidebarSearch')) $('sidebarSearch').value = '';
+      if ($('view')) $('view').value = 'all';
+      AppState.platform = 'all';
+      AppState.platformCategory = 'all';
+      if ($('esrbFilter')) $('esrbFilter').value = '';
+      AppState.activePlaylist = '';
+      AppState.activeFilterPreset = '';
+      AppState.explorerRules = {};
+      AppState.importBatchId = '';
+      invalidateFilterCache();
+    }
+    function resolveDeeplinkGameId(id) {
+      if (!id) return null;
+      const stable = AppState.games.find(game => String(game.game_id) === String(id));
+      if (stable) return stable.id;
+      const index = Number(id);
+      if (Number.isInteger(index) && index >= 0 && index < AppState.games.length) return AppState.games[index]?.id ?? null;
+      return null;
     }
     let _filteredCache = { key: null, result: [] };
     /**
@@ -293,7 +355,8 @@ const token = new URLSearchParams(location.search).get('token') || '';
       const view = $('view')?.value || 'all';
       const sort = $('sort')?.value || 'name';
       const esrb = $('esrbFilter')?.value || '';
-      const key = `${_filterVersion}\0${AppState._refreshCounter || 0}\0${query}\0${view}\0${sort}\0${esrb}\0${AppState.platform}\0${AppState.platformCategory}\0${AppState.activePlaylist}\0${AppState.activeFilterPreset}\0${JSON.stringify(AppState.explorerRules)}`;
+      const key = `${_filterVersion}\0${AppState._refreshCounter || 0}\0${query}\0${view}\0${sort}\0${esrb}\0${AppState.platform}\0${AppState.platformCategory}\0${AppState.activePlaylist}\0${AppState.activeFilterPreset}\0${AppState.importBatchId}\0${JSON.stringify(AppState.explorerRules)}`;
+      if (_filteredCache.key === key) return _filteredCache.result;
       const preset = AppState.filterPresets.find(item => item.name === AppState.activeFilterPreset);
       const presetRules = preset?.rules || {};
       const activePlaylistData = playlistFor(AppState.activePlaylist);
@@ -313,6 +376,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
         const esrbMatch = !esrb || (game.esrb || 'Unrated') === esrb;
         const effectiveQuery = (presetRules.query || query).trim();
         const queryMatch = !effectiveQuery || advancedQueryMatches(game, effectiveQuery);
+        const batchMatch = !AppState.importBatchId || String(game.import_batch_id) === AppState.importBatchId;
         const progressMatch = !presetRules.progress || game.progress === presetRules.progress;
         const favoriteMatch = presetRules.favorite === undefined || Boolean(game.favorite) === Boolean(presetRules.favorite);
         const genreMatch = !presetRules.genre || String(game.genre || '').toLowerCase().includes(String(presetRules.genre).toLowerCase());
@@ -325,7 +389,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
           || installedRule === 'uninstalled' && !installed;
         const hiddenMatch = presetRules.hidden === undefined || Boolean(game.hidden) === Boolean(presetRules.hidden);
         const playlistMatch = !activePlaylistData || gameInPlaylist(game, activePlaylistData);
-        return viewMatch && platformMatch && categoryMatch && esrbMatch && queryMatch && progressMatch && explorerProgressMatch && favoriteMatch && genreMatch && developerMatch && publisherMatch && installedMatch && hiddenMatch && playlistMatch;
+        return viewMatch && platformMatch && categoryMatch && esrbMatch && queryMatch && batchMatch && progressMatch && explorerProgressMatch && favoriteMatch && genreMatch && developerMatch && publisherMatch && installedMatch && hiddenMatch && playlistMatch;
       });
       const sorted = sortGames(visible, sort);
       _filteredCache = { key, result: sorted };
@@ -346,11 +410,11 @@ const token = new URLSearchParams(location.search).get('token') || '';
               AppState.activeFilterPreset = '';
               AppState.activePlaylist = '';
               AppState.explorerRules = {};
-              if (button.dataset.explorerField === 'genre') $('sidebarSearch').value = button.dataset.explorerValue;
-              else if (button.dataset.explorerField === 'developer') $('sidebarSearch').value = button.dataset.explorerValue;
+              if (button.dataset.explorerField === 'genre') $('sidebarSearch').value = `genre:"${button.dataset.explorerValue}"`;
+              else if (button.dataset.explorerField === 'developer') $('sidebarSearch').value = `developer:"${button.dataset.explorerValue}"`;
               else if (button.dataset.explorerField === 'platform') AppState.platform = button.dataset.explorerValue;
               else if (button.dataset.explorerField === 'progress') AppState.explorerRules = {progress:button.dataset.explorerValue === 'Unset' ? '__unset' : button.dataset.explorerValue};
-              else if (button.dataset.explorerField === 'esrb' && $('esrbFilter')) $('esrbFilter').value = button.dataset.explorerValue === 'Unrated' ? '' : button.dataset.explorerValue;
+              else if (button.dataset.explorerField === 'esrb' && $('esrbFilter')) $('esrbFilter').value = button.dataset.explorerValue === 'Unrated' ? 'Unrated' : button.dataset.explorerValue;
               render();
             };
           } else {
@@ -362,4 +426,4 @@ const token = new URLSearchParams(location.search).get('token') || '';
       }
     }
 
-export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch };
+export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId };

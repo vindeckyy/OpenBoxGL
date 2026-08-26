@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from handlers.settings import _clean_controller_map, _clean_screensaver_seconds, _clean_watch_folders  # noqa: E402
+from handlers.settings import _clean_controller_map, _clean_controller_prompt_hint, _clean_screensaver_seconds, _clean_watch_folders  # noqa: E402
 from settings_schema import KNOWN_SETTINGS, sanitize_settings  # noqa: E402
 
 
@@ -105,6 +105,13 @@ class SettingsSchemaTests(unittest.TestCase):
     def test_clean_controller_map_valid_and_invalid(self):
         valid = {"play": 0, "back": 1, "menu": 31}
         self.assertEqual(_clean_controller_map({"controller_map": valid}), valid)
+
+    def test_clean_controller_prompt_hint_string_and_bool(self):
+        self.assertEqual(_clean_controller_prompt_hint({"controller_prompt_hint": "A · B"}), "A · B")
+        self.assertEqual(_clean_controller_prompt_hint({"controller_prompt_hint": True}), "A Play · B Back · M Menu")
+        self.assertEqual(_clean_controller_prompt_hint({"controller_prompt_hint": False}), "")
+        with self.assertRaises(ValueError):
+            _clean_controller_prompt_hint({"controller_prompt_hint": 42})
 
         for bad_map in (
             {"invalid_action": 0},

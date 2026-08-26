@@ -4,75 +4,8 @@ import shlex
 import shutil
 import subprocess
 
-from parity_import import PLATFORM_EMULATORS, recommend_emulators
-
-
-EMULATORS = {
-    "org.DolphinEmu.dolphin-emu": {
-        "name": "Dolphin",
-        "native": "dolphin-emu",
-        "profiles": {"GameCube": "-b -e {path}", "Wii": "-b -e {path}", "WiiWare": "-b -e {path}"},
-    },
-    "org.ppsspp.PPSSPP": {
-        "name": "PPSSPP",
-        "native": "ppsspp",
-        "profiles": {"PSP": "{path}"},
-    },
-    "net.pcsx2.PCSX2": {
-        "name": "PCSX2",
-        "native": "pcsx2-qt",
-        "profiles": {"PlayStation 2": "-batch {path}"},
-    },
-    "net.rpcs3.RPCS3": {
-        "name": "RPCS3",
-        "native": "rpcs3",
-        "profiles": {"PlayStation 3": "{path}"},
-    },
-    "info.cemu.Cemu": {
-        "name": "Cemu",
-        "native": "cemu",
-        "profiles": {"Wii U": "-g {path}"},
-    },
-    "org.mamedev.MAME": {
-        "name": "MAME",
-        "native": "mame",
-        "profiles": {"Arcade": "{path}"},
-    },
-    "app.xemu.xemu": {
-        "name": "xemu",
-        "native": "xemu",
-        "profiles": {"Xbox": "-dvd_path {path}"},
-    },
-    "org.scummvm.ScummVM": {
-        "name": "ScummVM",
-        "native": "scummvm",
-        "profiles": {"ScummVM": "{path}"},
-    },
-    "org.libretro.RetroArch": {
-        "name": "RetroArch",
-        "native": "retroarch",
-        "profiles": {
-            "NES": "{path}",
-            "SNES": "{path}",
-            "Nintendo 64": "{path}",
-            "Game Boy": "{path}",
-            "Game Boy Color": "{path}",
-            "Game Boy Advance": "{path}",
-            "Sega Saturn": "{path}",
-            "Arcade": "{path}",
-        },
-    },
-    "org.duckstation.DuckStation": {
-        "name": "DuckStation",
-        "native": "duckstation-qt",
-        "profiles": {"PlayStation": "-batch {path}"},
-    },
-    "net.kuribo64.melonDS": {
-        "name": "melonDS",
-        "native": "melonDS",
-        "profiles": {"Nintendo DS": "{path}"},
-    },
-}
+from pkg.parity.parity_emulator_defs import EMULATORS, PLATFORM_EMULATORS
+from parity_import import recommend_emulators
 
 
 def commands_for(app_id, prefix):

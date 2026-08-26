@@ -3,6 +3,7 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -20,33 +21,35 @@ from routes.registry import (  # noqa: E402
     _REGISTRY,
     all_routes,
     get_routes_for_method,
+    register,
     route,
 )  # noqa: E402
+from scripts import check_v1_contract  # noqa: E402
 
 
 class RouteRegistryTests(unittest.TestCase):
     def test_route_table_sizes(self):
-        # 85 base GET + 25 v1 aliases = 110 total
-        # 97 base POST + 42 v1 aliases = 139 total
-        self.assertEqual(len(GET_TABLE), 110)
-        self.assertEqual(len(POST_TABLE), 139)
+        # 95 base GET + 25 v1 aliases = 120 total
+        # 109 base POST + 42 v1 aliases = 151 total
+        self.assertEqual(len(GET_TABLE), 120)
+        self.assertEqual(len(POST_TABLE), 151)
         self.assertEqual(len(V1_ALIASED_PREFIXES), 60)
 
     def test_base_routes_count(self):
         base_get = [p for p in GET_TABLE if not p.startswith("/api/v1")]
         base_post = [p for p in POST_TABLE if not p.startswith("/api/v1")]
-        self.assertEqual(len(base_get), 85)
-        self.assertEqual(len(base_post), 97)
-        self.assertEqual(len(base_get) + len(base_post), 182)
+        self.assertEqual(len(base_get), 95)
+        self.assertEqual(len(base_post), 109)
+        self.assertEqual(len(base_get) + len(base_post), 204)
 
     def test_all_routes_registered(self):
         routes = all_routes()
-        self.assertEqual(len(routes), 182)
-        
+        self.assertEqual(len(routes), 205)
+
         get_routes = [r for r in routes if r.method == "GET"]
         post_routes = [r for r in routes if r.method == "POST"]
-        self.assertEqual(len(get_routes), 85)
-        self.assertEqual(len(post_routes), 97)
+        self.assertEqual(len(get_routes), 96)
+        self.assertEqual(len(post_routes), 109)
 
     def test_every_registered_route_matches_live_table(self):
         routes = all_routes()
@@ -98,9 +101,73 @@ class RouteRegistryTests(unittest.TestCase):
         self.assertTrue(_is_public_path("/"))
         self.assertTrue(_is_public_path("/index.html"))
         self.assertTrue(_is_public_path("/static/app.js"))
+        self.assertTrue(_is_public_path("/static/setup.js"))
+        self.assertTrue(_is_public_path("/static/activity.js"))
         self.assertTrue(_is_static_asset("/static/app.js"))
+        self.assertTrue(_is_static_asset("/static/setup.js"))
+        self.assertTrue(_is_static_asset("/static/activity.js"))
+        self.assertIn("/static/setup.js", GET_TABLE)
+        self.assertIn("/static/activity.js", GET_TABLE)
         self.assertFalse(_is_static_asset("/api/library"))
         self.assertFalse(_is_public_path("/api/library"))
+
+    def test_register_requires_spec_or_func(self):
+        with self.assertRaises(ValueError) as ctx:
+            register("GET", "/api/test/no-spec-or-func")
+        self.assertIn("Either spec or func", str(ctx.exception))
+
+    def test_duplicate_register_raises(self):
+        test_path = "/api/test/duplicate-endpoint"
+        register("GET", test_path, spec="first_handler")
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                register("GET", test_path, spec="second_handler")
+            self.assertIn("Duplicate", str(ctx.exception))
+        finally:
+            del _REGISTRY[("GET", test_path)]
+
+    def test_broken_handler_import_fails_load(self):
+        from routes.registry import _ensure_handlers_loaded
+
+        with patch("routes.registry.importlib.import_module", side_effect=ImportError("broken")):
+            with self.assertRaises(ImportError):
+                _ensure_handlers_loaded()
+
+    def test_missing_base_table_entry_fails_check(self):
+        routes = all_routes()
+        orphan = Route(
+            method="GET",
+            path="/api/test/orphan-registry",
+            spec="orphan_handler",
+        )
+        with patch("scripts.check_v1_contract.all_routes", return_value=[*routes, orphan]):
+            problems = check_v1_contract.check_registry_consistency()
+        self.assertTrue(
+            any("MISSING GET /api/test/orphan-registry" in p for p in problems)
+        )
+
+    def test_missing_registry_entry_fails_check(self):
+        routes = all_routes()
+        trimmed = [r for r in routes if r.path != "/api/library"]
+        with patch("scripts.check_v1_contract.all_routes", return_value=trimmed):
+            problems = check_v1_contract.check_registry_consistency()
+        self.assertTrue(any("MISSING GET /api/library in route registry" in p for p in problems))
+
+    def test_reverse_table_check_ignores_v1_aliases(self):
+        routes = all_routes()
+        alias_only_get = {
+            path: spec
+            for path, spec in GET_TABLE.items()
+            if path.startswith("/api/v1/")
+        }
+        self.assertTrue(alias_only_get, "expected v1 alias rows in GET_TABLE")
+        with patch("scripts.check_v1_contract.all_routes", return_value=routes):
+            problems = check_v1_contract.check_registry_consistency()
+        for path in alias_only_get:
+            self.assertFalse(
+                any(path in problem for problem in problems),
+                f"v1 alias {path} should not appear in registry consistency errors",
+            )
 
 
 if __name__ == "__main__":

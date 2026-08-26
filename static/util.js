@@ -79,9 +79,14 @@
         store:['source'], storefront:['source'], status:['status'], progress:['progress'], rating:['rating'],
         favorite:['favorite'], fav:['favorite'], installed:['installed'], hide:['hidden'], hidden:['hidden'],
         broken:['broken'], portable:['portable'], controller:['controller_support'], tag:['tags'], tags:['tags'],
+        import_batch_id:['import_batch_id'], import_batch:['import_batch_id'],
         all:['name','sort_title','alternate_names','platform','genre','developer','publisher','series','region','notes','source','play_mode','status','progress','controller_support','tags']
       };
       return parsedTokens.every(({ negative, key, value }) => {
+        if (key === 'import_batch_id' || key === 'import_batch') {
+          const matched = String(game.import_batch_id || '').toLowerCase() === value;
+          return negative ? !matched : matched;
+        }
         const names = fields[key] || fields.all;
         const values = names.flatMap(name => Array.isArray(game[name]) ? game[name] : [game[name]]).filter(item => item !== undefined && item !== null && item !== '');
         if (key === 'installed') values.push(gameInstalled(game) ? 'yes' : 'no');

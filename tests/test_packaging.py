@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -239,12 +240,77 @@ EOF
     assert "missing runtime module: nonexistent_test_module_xyz.py" in res.stderr
     print("  Build AppImage validation: ok")
 
+def _ci_job_block(job_name: str) -> str:
+    content = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert f"{job_name}:" in content, f"missing CI job {job_name}"
+    block = content.split(f"{job_name}:", 1)[1]
+    next_job = re.search(r"\n  [a-z0-9-]+:\n", block)
+    if next_job:
+        block = block[: next_job.start()]
+    assert "continue-on-error: true" not in block, f"{job_name} must not use continue-on-error"
+    return block
+
+
+def test_desktop_and_appstream_validate_subprocess():
+    subprocess.run(["desktop-file-validate", str(ROOT / "openbox.desktop")], check=True)
+    subprocess.run(
+        ["appstreamcli", "validate", "--no-net", str(ROOT / "openbox.metainfo.xml")],
+        check=True,
+    )
+    print("  Desktop/AppStream validators: ok")
+
+
+def test_ci_desktop_appstream_job():
+    block = _ci_job_block("desktop-appstream")
+    assert "desktop-file-validate openbox.desktop" in block
+    assert "appstreamcli validate --no-net openbox.metainfo.xml" in block
+    print("  CI desktop-appstream job: ok")
+
+
+def _flatpak_dry_run_supported() -> bool:
+    probe = subprocess.run(
+        ["flatpak-builder", "--dry-run"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return probe.returncode != 1 or "Unknown option" not in (probe.stderr or "")
+
+
+def test_flatpak_validate_subprocess():
+    if _flatpak_dry_run_supported():
+        subprocess.run(
+            [
+                "flatpak-builder",
+                "--dry-run",
+                "--force-clean",
+                "/tmp/ob-flatpak-dry",
+                str(ROOT / "io.openbox.GameLauncher.yml"),
+            ],
+            check=True,
+        )
+    else:
+        print("  Flatpak dry-run: skipped locally (unsupported; CI flatpak-validate is required gate)")
+    subprocess.run(
+        ["appstreamcli", "validate", "--no-net", str(ROOT / "openbox.metainfo.xml")],
+        check=True,
+    )
+    print("  Flatpak dry-run validator: ok")
+
+
+def test_ci_flatpak_validate_job():
+    block = _ci_job_block("flatpak-validate")
+    assert "flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry io.openbox.GameLauncher.yml" in block
+    print("  CI flatpak-validate job: ok")
+
+
 def test_flatpak_manifest():
     manifest = ROOT / "io.openbox.GameLauncher.yml"
     assert manifest.exists(), "missing Flatpak manifest"
     content = manifest.read_text()
     assert "app-id: io.openbox.GameLauncher" in content
     assert "runtime: org.freedesktop.Platform" in content
+    assert "runtime-version: '25.08'" in content
     assert "command: openbox" in content
     assert "openbox.sh" in content
     runtime_modules = (ROOT / "runtime_modules.txt").read_text()
@@ -253,6 +319,16 @@ def test_flatpak_manifest():
     assert "runtime_modules.txt" in content
     assert "openbox.svg" in content
     print("  Flatpak manifest: ok")
+
+
+def test_release_flatpak_workflow():
+    workflow = ROOT / ".github" / "workflows" / "release-flatpak.yml"
+    assert workflow.is_file(), "missing release Flatpak workflow"
+    content = workflow.read_text(encoding="utf-8")
+    assert "ubuntu-22.04" in content
+    assert "io.openbox.GameLauncher.yml" in content
+    assert "flatpak build-bundle" in content
+    print("  Release Flatpak workflow: ok")
 
 
 def test_desktop_entry():
@@ -386,6 +462,8 @@ def test_release_appimage_workflow():
     workflow = ROOT / ".github" / "workflows" / "release-appimage.yml"
     assert workflow.is_file(), "missing release AppImage workflow"
     content = workflow.read_text()
+    assert "ubuntu-22.04" in content
+    assert "ubuntu-latest" not in content
     assert "tags:" in content and '"v*"' in content
     assert "./build_appimage.sh" in content
     assert "target_commitish: ${{ github.sha }}" in content
@@ -415,6 +493,11 @@ def main():
     print("packaging self-test:")
     test_desktop_entry()
     test_metainfo()
+    test_desktop_and_appstream_validate_subprocess()
+    test_ci_desktop_appstream_job()
+    test_flatpak_validate_subprocess()
+    test_ci_flatpak_validate_job()
+    test_release_flatpak_workflow()
     test_legal_policy()
     test_flatpak_manifest()
     test_makefile_install()

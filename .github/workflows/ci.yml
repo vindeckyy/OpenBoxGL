@@ -68,17 +68,12 @@ jobs:
       - name: Lint
         run: .venv-dev/bin/ruff check .
 
-      - name: JS lint
+      - name: JS lint and typecheck
         env:
           PUPPETEER_SKIP_DOWNLOAD: "true"
         run: |
-          # ESLint only, no Chromium is needed for this step. The lockfile
-          # install skips lifecycle scripts, and this variable documents that
-          # no browser download is expected in the gate job.
           npm ci --ignore-scripts --prefix scripts
-          # Flat config's base path is the cwd, so lint static/ from the root
-          # (npx eslint ../static/ from scripts/ would silently ignore files).
-          ./scripts/node_modules/.bin/eslint --config scripts/eslint.config.mjs static/
+          python3 -B scripts/check_frontend.py
 
       - name: Audit JavaScript dependencies
         run: npm audit --prefix scripts --audit-level=high
@@ -95,7 +90,6 @@ jobs:
             esac
           done < runtime_modules.txt
           python3 -m py_compile scripts/*.py
-          # Support both flat and tests/ layout after reorg
           if compgen -G "test_*.py" > /dev/null; then python3 -m py_compile test_*.py; fi
           if compgen -G "tests/test_*.py" > /dev/null; then python3 -m py_compile tests/test_*.py; fi
 
@@ -108,6 +102,9 @@ jobs:
       - name: Full gate (coverage)
         run: python3 scripts/check_tests.py
 
+      - name: Changed-line coverage (95%)
+        run: python3 -B scripts/check_changed_coverage.py --fail-under=95
+
       - name: Whitespace hygiene
         run: |
           git diff --check
@@ -115,6 +112,73 @@ jobs:
             echo "generated artifacts tracked by git"
             exit 1
           fi
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends shellcheck
+          shellcheck -x run_all_tests.sh build_appimage.sh openbox.sh openbox-native.sh scripts/*.sh
+
+  desktop-appstream:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate desktop and AppStream metadata
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils appstream
+          desktop-file-validate openbox.desktop
+          appstreamcli validate --no-net openbox.metainfo.xml
+
+  flatpak-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Dry-run Flatpak build
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak-builder
+          flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry io.openbox.GameLauncher.yml
+
+  perf-20k:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Run 10k/20k performance gates
+        run: python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5
 
   ui-smoke:
     runs-on: ubuntu-latest

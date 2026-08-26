@@ -1,25 +1,63 @@
 import { $, escapeHtml, formatBytes, defaultBadges, defaultControllerMap, fact } from './util.js';
-import { AppState, api, notify, token, selectedIds, playlistFor, applySidebarVisibility, nativePickFile } from './state.js';
+import { AppState, api, notify, token, selectedIds, playlistFor, applySidebarVisibility, nativePickFile, nativePickFolder } from './state.js';
 import { refresh, render, renderGrid } from './library.js';
 import { applyLibraryMusic } from './bigbox.js';
+import { confirmAction, promptInput } from './dialogs.js';
 
 
 
-    function filterSettings() {
+    let settingsCategory = 'library';
+
+    function applySettingsVisibility() {
       const query = $('settingsSearch').value.toLowerCase().trim();
       document.querySelectorAll('.settings-field').forEach(field => {
+        const panels = (field.dataset.settingsPanel || '').split(/\s+/).filter(Boolean);
+        const inCategory = !panels.length || panels.includes(settingsCategory);
         const haystack = `${field.dataset.setting || ''} ${field.textContent || ''}`.toLowerCase();
-        field.hidden = query && !haystack.includes(query);
+        const matchesSearch = !query || haystack.includes(query);
+        field.hidden = !inCategory || !matchesSearch;
       });
+    }
+
+    function showSettingsCategory(category) {
+      settingsCategory = category;
+      document.querySelectorAll('.settings-nav-item').forEach(button => {
+        button.classList.toggle('active', button.dataset.settingsCategory === category);
+      });
+      applySettingsVisibility();
+    }
+
+    function bindSettingsBrowse() {
+      const dialog = $('settingsDialog');
+      if (!dialog) return;
+      dialog.querySelectorAll('button.path-browse').forEach(button => {
+        button.onclick = async () => {
+          const fieldId = button.dataset.browseFor;
+          const kind = button.dataset.browseKind || 'file';
+          const field = $(fieldId);
+          if (!field) return;
+          const title = `Choose ${fieldId.replace(/([A-Z])/g, ' $1').trim()}`;
+          const path = kind === 'folder' ? await nativePickFolder(title) : await nativePickFile(title);
+          if (!path) return;
+          if (field.tagName === 'TEXTAREA') {
+            const current = field.value.trim();
+            field.value = current ? `${current}\n${path}` : path;
+          } else field.value = path;
+        };
+      });
+    }
+
+    function filterSettings() {
+      applySettingsVisibility();
     }
     async function completeWelcome() {
       try {
         AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify({...collectSettings(),welcome_completed:true})});
-        $('welcomeDialog').close();
+        $('setupCenter').close();
       } catch(error) { notify(error.message); }
     }
     function maybeShowWelcome() {
-      if (!AppState.appSettings.welcome_completed && !AppState.games.length) $('welcomeDialog').showModal();
+      if (!AppState.appSettings.welcome_completed && !AppState.games.length) $('setupCenter').showModal();
     }
     function collectSettings() {
       return {
@@ -88,7 +126,11 @@ import { applyLibraryMusic } from './bigbox.js';
         AppState.appSettings = await api('/api/settings');
         $('watchFolders').value = AppState.appSettings.watch_folders.join('\n');
         $('cloudFolder').value = AppState.appSettings.cloud_folder || '';
-        $('cloudStatus').textContent = AppState.appSettings.last_cloud_sync ? ` Last synced ${AppState.appSettings.last_cloud_sync.replace('T',' ')}` : '';
+        const cloudBeta = AppState.appSettings.cloud_sync_beta ? ' (beta)' : ' (beta)';
+        const cloudLast = AppState.appSettings.last_cloud_sync
+          ? `Last synced ${AppState.appSettings.last_cloud_sync.replace('T', ' ')}`
+          : (AppState.appSettings.last_cloud_sync_error ? `Last sync failed: ${AppState.appSettings.last_cloud_sync_error}` : 'Not synced yet');
+        $('cloudStatus').textContent = `${cloudBeta} · ${cloudLast}`;
         $('screensaverSeconds').value = AppState.appSettings.screensaver_seconds;
         $('startupCommands').value = (AppState.appSettings.startup_commands || []).join('\n');
         $('shutdownCommands').value = (AppState.appSettings.shutdown_commands || []).join('\n');
@@ -131,6 +173,11 @@ import { applyLibraryMusic } from './bigbox.js';
         $('mediaPackStatus').textContent = (AppState.appSettings.media_packs || []).filter(item => item.active).map(item => item.name).join(', ');
         $('viewToggleButton').textContent = (AppState.appSettings.library_view || 'grid') === 'list' ? 'Grid view' : 'List view';
         $('settingsSearch').value = '';
+        showSettingsCategory('library');
+        bindSettingsBrowse();
+        document.querySelectorAll('.settings-nav-item').forEach(button => {
+          button.onclick = () => showSettingsCategory(button.dataset.settingsCategory);
+        });
         filterSettings();
         const mapping = {...defaultControllerMap,...AppState.appSettings.controller_map};
         document.querySelectorAll('[data-controller]').forEach(input => input.value = mapping[input.dataset.controller]);
@@ -276,7 +323,12 @@ import { applyLibraryMusic } from './bigbox.js';
           } catch(error) { notify(error.message); }
         });
         document.querySelectorAll('[data-remove-plugin]').forEach(button => button.onclick = async () => {
-          if (!confirm(`Remove ${button.dataset.removePlugin}? A recoverable copy will be retained.`)) return;
+          const ok = await confirmAction({
+            title: 'Remove plugin',
+            message: `Remove ${button.dataset.removePlugin}?`,
+            consequence: 'A recoverable copy will be retained.',
+          });
+          if (!ok) return;
           try { await api('/api/plugins/remove',{method:'POST',body:JSON.stringify({id:button.dataset.removePlugin})}); await openPlugins(); notify('Plugin removed'); } catch(error) { notify(error.message); }
         });
         if (!$('pluginsDialog').open) $('pluginsDialog').showModal();
@@ -300,7 +352,10 @@ import { applyLibraryMusic } from './bigbox.js';
     async function health() {
       try {
         const result = await api('/api/health',{method:'POST',body:'{}'});
-        $('healthSummary').innerHTML = `<h3>Audit summary</h3><div class="facts">${fact('Games',result.games)}${fact('Missing games',result.missing)}${fact('Duplicates',result.duplicates)}${fact('Missing box fronts',result.missing_media)}</div>`;
+        const cloudLine = AppState.appSettings.last_cloud_sync
+          ? `Last cloud sync: ${AppState.appSettings.last_cloud_sync.replace('T', ' ')}`
+          : (AppState.appSettings.last_cloud_sync_error ? `Last cloud sync failed: ${AppState.appSettings.last_cloud_sync_error}` : 'Cloud sync (beta): not synced yet');
+        $('healthSummary').innerHTML = `<h3>Audit summary</h3><div class="facts">${fact('Games',result.games)}${fact('Missing games',result.missing)}${fact('Duplicates',result.duplicates)}${fact('Missing box fronts',result.missing_media)}${fact('Cloud sync (beta)',cloudLine)}</div>`;
         $('healthIssues').innerHTML = result.issues.length ? result.issues.map(issue => `<button type="button" class="metadata-result icon-button" data-audit-game="${issue.id}"><div><strong>${escapeHtml(issue.game)}</strong><small>${escapeHtml(issue.type)} · ${escapeHtml(issue.detail)}</small></div></button>`).join('') : '<p class="description">No library issues found.</p>';
         document.querySelectorAll('[data-audit-game]').forEach(button => button.onclick = () => { AppState.selectedId = Number(button.dataset.auditGame); $('healthDialog').close(); render(); });
         $('dedupeButton').disabled = !result.duplicates;
@@ -309,9 +364,12 @@ import { applyLibraryMusic } from './bigbox.js';
       } catch(error) { notify(error.message); }
     }
     async function savePreset() {
-      const name = prompt('Filter preset name', AppState.activeFilterPreset || AppState.activePlaylist);
+      const name = await promptInput('Filter preset name', AppState.activeFilterPreset || AppState.activePlaylist);
       if (!name?.trim()) return;
-      const bigbox_quick = confirm('Pin this preset to Big Box quick-switch?');
+      const bigbox_quick = await confirmAction({
+        title: 'Pin to Big Box',
+        message: 'Pin this preset to Big Box quick-switch?',
+      });
       const rules = {
         platform: AppState.platform,
         platform_category: AppState.platformCategory,
@@ -329,7 +387,7 @@ import { applyLibraryMusic } from './bigbox.js';
       } catch(error) { notify(error.message); }
     }
     async function saveFilter() {
-      const name = prompt('Playlist name', AppState.activePlaylist);
+      const name = await promptInput('Playlist name', AppState.activePlaylist);
       if (!name?.trim()) return;
       const rules = {platform: AppState.platform,platform_category:AppState.platformCategory,view:$('view').value,query:$('sidebarSearch').value.trim(),esrb:$('esrbFilter')?.value || '',progress:AppState.explorerRules.progress || ''};
       try {
@@ -350,9 +408,9 @@ import { applyLibraryMusic } from './bigbox.js';
       } catch(error) { notify(error.message); return false; }
     }
     async function createManualPlaylist(seedId = null) {
-      const name = prompt('Manual playlist name');
+      const name = await promptInput('Manual playlist name');
       if (!name?.trim()) return;
-      const parent = prompt('Parent playlist, optional', '') || '';
+      const parent = await promptInput('Parent playlist, optional', '') || '';
       await saveManualPlaylist(name, seedId === null ? [] : [seedId], parent);
     }
     async function addGamesToPlaylist(name, ids) {
@@ -373,10 +431,10 @@ import { applyLibraryMusic } from './bigbox.js';
         return `<div class="playlist-manager-item"><div><strong>${escapeHtml(item.name)}</strong><small>${item.type === 'manual' ? `${members.length} ordered games` : 'Filter playlist'}${item.parent ? ` · under ${escapeHtml(item.parent)}` : ''}</small>${memberRows}</div><div class="playlist-manager-actions"><button type="button" class="icon-button" data-edit-playlist="${escapeHtml(item.name)}">Edit</button><button type="button" class="playlist-delete" data-manager-delete-playlist="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div></div>`;
       }).join('') : '<p class="description">No playlists yet.</p>';
       document.querySelectorAll('[data-manager-delete-playlist]').forEach(button => button.onclick = () => deletePlaylist(button.dataset.managerDeletePlaylist).then(openPlaylists));
-      document.querySelectorAll('[data-edit-playlist]').forEach(button => button.onclick = () => {
+      document.querySelectorAll('[data-edit-playlist]').forEach(button => button.onclick = async () => {
         const item = playlistFor(button.dataset.editPlaylist);
         if (!item) return;
-        const notes = prompt('Playlist notes', item.notes || '');
+        const notes = await promptInput('Playlist notes', item.notes || '');
         if (notes === null) return;
         if (item.type === 'manual') updateManualPlaylist(item, item.members || []);
         else api('/api/playlists',{method:'POST',body:JSON.stringify({...item,notes})}).then(refresh).then(openPlaylists).catch(error => notify(error.message));
@@ -399,7 +457,12 @@ import { applyLibraryMusic } from './bigbox.js';
         const result = await api('/api/backups');
         $('backupList').innerHTML = result.backups.length ? result.backups.map(item => `<div class="backup-item"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.created || 'Unknown date')} · ${formatBytes(item.size)} · ${(item.items || []).join(', ') || 'Unknown contents'}</small></div><button type="button" class="icon-button" data-restore-backup="${escapeHtml(item.path)}" ${item.invalid ? 'disabled' : ''}>Restore</button></div>`).join('') : '<p class="description">No backups have been created yet.</p>';
         document.querySelectorAll('[data-restore-backup]').forEach(button => button.onclick = async () => {
-          if (!confirm('Restore this backup? A safety copy of the current library will be created first.')) return;
+          const ok = await confirmAction({
+            title: 'Restore backup',
+            message: 'Restore this backup?',
+            consequence: 'A safety copy of the current library will be created first.',
+          });
+          if (!ok) return;
           try { const result = await api('/api/backup/restore',{method:'POST',body:JSON.stringify({path:button.dataset.restoreBackup})}); await refresh(); notify(`Restored ${result.restored.join(', ')}`); } catch(error) { notify(error.message); }
         });
         if (!$('backupDialog').open) $('backupDialog').showModal();
@@ -409,7 +472,11 @@ import { applyLibraryMusic } from './bigbox.js';
       try { const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7})}); notify(`Backup saved to ${result.name}`); openBackups(); } catch(error) { notify(error.message); }
     }
     async function deletePlaylist(name) {
-      if (!confirm(`Delete playlist "${name}"?`)) return;
+      const ok = await confirmAction({
+        title: 'Delete playlist',
+        message: `Delete playlist "${name}"?`,
+      });
+      if (!ok) return;
       try {
         await api('/api/playlists/delete',{method:'POST',body:JSON.stringify({name})});
         if (AppState.activePlaylist === name) AppState.activePlaylist = '';
@@ -459,7 +526,12 @@ import { applyLibraryMusic } from './bigbox.js';
       } catch(error) { notify(error.message); }
     };
     $('removeSteamGames').onclick = async () => {
-      if (!confirm('Remove every imported Steam game from OpenBox? Game files and media will stay on disk.')) return;
+      const ok = await confirmAction({
+        title: 'Remove Steam games',
+        message: 'Remove every imported Steam game from OpenBox?',
+        consequence: 'Game files and media will stay on disk.',
+      });
+      if (!ok) return;
       try {
         const result = await api('/api/games/delete-steam',{method:'POST',body:'{}'});
         AppState.selectedId = null;
@@ -469,23 +541,33 @@ import { applyLibraryMusic } from './bigbox.js';
     };
     $('copyDiagnosticLog').onclick = async () => {
       try {
-        const result = await api('/api/log');
+        const preview = await api('/api/diagnostic');
+        const text = JSON.stringify(preview, null, 2);
+        const ok = await confirmAction({
+          title: 'Copy diagnostic summary',
+          message: 'Review this redacted preview before copying. It excludes secrets and the full log.',
+          consequence: text.length > 1200 ? `${text.slice(0, 1200)}\n…` : text,
+        });
+        if (!ok) return;
         const copy = document.createElement('textarea');
-        copy.value = result.log;
+        copy.value = text;
         document.body.append(copy);
         copy.select();
         document.execCommand('copy');
         copy.remove();
-        notify('Diagnostic log copied. Review it before sharing.');
+        notify('Diagnostic summary copied. Review it before sharing.');
       } catch(error) { notify(error.message); }
     };
     $('syncCloud').onclick = async () => {
       try {
         AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
         const result = await api('/api/cloud/sync',{method:'POST',body:'{}'});
-        $('cloudStatus').textContent = ` Synced ${result.games} games, merged ${result.merged} remote changes`;
+        $('cloudStatus').textContent = ` (beta) · Synced ${result.games} games, merged ${result.merged} remote changes`;
         await refresh();
-      } catch(error) { notify(error.message); }
+      } catch(error) {
+        $('cloudStatus').textContent = ` (beta) · Sync failed: ${error.message}`;
+        notify(error.message);
+      }
     };
     $('checkUpdate').onclick = async () => {
       try {
@@ -496,7 +578,13 @@ import { applyLibraryMusic } from './bigbox.js';
       } catch(error) { $('updateStatus').textContent = error.message; }
     };
     $('installUpdate').onclick = async () => {
-      if (!AppState.pendingUpdate?.available || !confirm(`Install OpenBox ${AppState.pendingUpdate.latest}? The current AppImage will be retained as a backup.`)) return;
+      if (!AppState.pendingUpdate?.available) return;
+      const ok = await confirmAction({
+        title: 'Install update',
+        message: `Install OpenBox ${AppState.pendingUpdate.latest}?`,
+        consequence: 'The current AppImage will be retained as a backup.',
+      });
+      if (!ok) return;
       try {
         $('installUpdate').disabled = true;
         const result = await api('/api/update/install',{method:'POST',body:'{}'});
@@ -564,7 +652,12 @@ import { applyLibraryMusic } from './bigbox.js';
       try { await api('/api/themes/import',{method:'POST',body:JSON.stringify({path})}); await openThemes(); notify('Theme imported'); } catch(error) { notify(error.message); }
     };
     $('dedupeButton').onclick = async () => {
-      if (!confirm('Remove duplicate library entries? Game files will not be deleted.')) return;
+      const ok = await confirmAction({
+        title: 'Remove duplicates',
+        message: 'Remove duplicate library entries?',
+        consequence: 'Game files will not be deleted.',
+      });
+      if (!ok) return;
       try { const result = await api('/api/health/dedupe',{method:'POST',body:'{}'}); await refresh(); await health(); notify(`${result.removed.length} duplicate entries removed`); } catch(error) { notify(error.message); }
     };
     let featureMode = '';

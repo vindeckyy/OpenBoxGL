@@ -1,0 +1,15 @@
+schema_version: 1
+adapter_id: melonds-nds
+emulator_id: net.kuribo64.melonDS
+label: melonDS
+platform: Nintendo DS
+extensions:
+  - nds
+native_exe: melonDS
+flatpak_app_id: net.kuribo64.melonDS
+startup_args:
+  - "{path}"
+recommended: true
+priority: 5
+executable_patterns:
+  - melonDS

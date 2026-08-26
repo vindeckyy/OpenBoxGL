@@ -1,0 +1,19 @@
+schema_version: 1
+adapter_id: dolphin-gamecube
+emulator_id: org.DolphinEmu.dolphin-emu
+label: Dolphin
+platform: GameCube
+extensions:
+  - gcm
+  - gcz
+  - rvz
+native_exe: dolphin-emu
+flatpak_app_id: org.DolphinEmu.dolphin-emu
+startup_args:
+  - -b
+  - -e
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - dolphin-emu

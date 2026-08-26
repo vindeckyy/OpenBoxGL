@@ -1,10 +1,13 @@
 """State store hardening: snapshot rotation and dry-run recovery."""
 
+import sys
 import unittest
 import tempfile
 from pathlib import Path
 
-from state_store import JsonStateStore
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from state_store import JsonStateStore, StateCorruptError, default_state
 
 
 class SnapshotTests(unittest.TestCase):
@@ -35,6 +38,44 @@ class SnapshotTests(unittest.TestCase):
             from state_store import StateCorruptError
             with self.assertRaises(StateCorruptError):
                 store.restore_snapshot("../../etc/passwd")
+
+    def test_recover_restores_backup_after_corruption(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonStateStore(Path(directory) / "library.json")
+            store.save(default_state())
+            store.update(lambda state: state["settings"].update({"saved": True}))
+            store.path.write_text("{broken", encoding="utf-8")
+            with self.assertRaises(StateCorruptError):
+                store.load()
+            recovered = store.recover()
+            self.assertTrue(recovered["settings"]["saved"])
+
+    def test_corrupt_primary_raises_without_clobbering_backup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonStateStore(Path(directory) / "library.json")
+            store.save(default_state())
+            backup_before = store.backup_path.read_text()
+            store.path.write_text("{broken", encoding="utf-8")
+            with self.assertRaises(StateCorruptError):
+                store.load()
+            self.assertEqual(store.backup_path.read_text(), backup_before)
+
+    def test_snapshot_debounce_skips_extra_rotations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonStateStore(
+                Path(directory) / "library.json",
+                snapshot_limit=5,
+                snapshot_debounce=3600.0,
+            )
+            store.save(default_state())
+            store.update(lambda state: state["settings"].update({"n": 1}))
+            self.assertEqual(len(store.snapshots()), 1)
+
+    def test_recover_without_backup_raises(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonStateStore(Path(directory) / "library.json")
+            with self.assertRaises(StateCorruptError):
+                store.recover()
 
 
 if __name__ == "__main__":

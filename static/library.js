@@ -1,15 +1,287 @@
 import { $, escapeHtml, duration, fact, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds } from './util.js';
-import { token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePrompt, nativeConfirm, nativePickFolder, nativeReveal, nativeOpenExternal, notify, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch } from './state.js';
-import { maybeShowWelcome, loadTheme, deletePlaylist } from './settings.js';
+import { token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
+import { loadTheme, deletePlaylist } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importDroppedFolder } from './imports.js';
-import { openGameDialog } from './dialogs.js';
+import { openGameDialog, confirmAction, promptInput } from './dialogs.js';
 import { openMetadata, steamMetadata, loadAchievements } from './metadata.js';
 import { captureScreenshot, downloadBezel } from './media.js';
 import { launch, backupSaves, discoverSaves, loadBackups } from './sessions.js';
 import { installGameyfin, uninstallGameyfin, ludusaviAction, hoardAction } from './storefront.js';
 import { openReader } from './reader.js';
 
+const DETAILS_WIDTH_KEY = 'openbox-details-width';
+const DETAILS_COLLAPSED_KEY = 'openbox-details-collapsed';
 let lastFacetsFingerprint = null;
+let detailsDragActive = false;
+let detailSheetScrollTop = 0;
+
+function leaveActivePreset() {
+  if (AppState.activeFilterPreset) AppState.activeFilterPreset = '';
+}
+function ensureSmartFilterRules() {
+  if (!AppState.smartFilterRules) AppState.smartFilterRules = {};
+  return AppState.smartFilterRules;
+}
+function visibleGames() {
+  const rules = AppState.smartFilterRules || {};
+  let games = filteredGames();
+  if (rules.has_achievements) games = games.filter(game => game.has_achievements);
+  if (rules.has_missing_media) games = games.filter(game => game.has_missing_media);
+  if (rules.has_highscores) games = games.filter(game => game.has_highscores);
+  return games;
+}
+function openManualReader(game) {
+  if (!game?.has_manual) return;
+  openReader({...game, documents: [{name: 'Manual', path: game.manual || 'manual'}]}, 0, media(game, 'manual'));
+}
+function currentPresetRules() {
+  const preset = AppState.filterPresets.find(item => item.name === AppState.activeFilterPreset);
+  return preset?.rules || {};
+}
+function effectiveQueryState() {
+  const presetRules = currentPresetRules();
+  return {
+    view: presetRules.view || $('view')?.value || 'all',
+    platform: presetRules.platform || AppState.platform,
+    platformCategory: presetRules.platform_category || AppState.platformCategory,
+    esrb: presetRules.esrb || $('esrbFilter')?.value || '',
+    query: (presetRules.query || $('sidebarSearch')?.value || '').trim(),
+    playlist: AppState.activePlaylist,
+    preset: AppState.activeFilterPreset,
+    explorer: {...AppState.explorerRules},
+    importBatchId: AppState.importBatchId,
+    smart: {...(AppState.smartFilterRules || {})},
+  };
+}
+function applyDetailsLayout() {
+  const workspace = document.querySelector('.workspace');
+  const details = $('details');
+  if (!workspace || !details) return;
+  const narrow = window.matchMedia('(max-width:760px)').matches;
+  const collapsed = localStorage.getItem(DETAILS_COLLAPSED_KEY) === '1';
+  const width = Math.min(640, Math.max(280, Number(localStorage.getItem(DETAILS_WIDTH_KEY)) || 410));
+  details.classList.toggle('details-collapsed', collapsed && !narrow);
+  if (narrow) {
+    workspace.style.gridTemplateColumns = '';
+    details.style.width = '';
+    details.classList.toggle('detail-sheet-open', AppState.selectedId !== null);
+    if (AppState.selectedId !== null) {
+      details.style.position = 'fixed';
+      details.style.left = '0';
+      details.style.right = '0';
+      details.style.bottom = '0';
+      details.style.maxHeight = '72vh';
+      details.style.zIndex = '8';
+      details.style.borderTop = '1px solid var(--line)';
+    } else {
+      details.style.position = '';
+      details.style.left = '';
+      details.style.right = '';
+      details.style.bottom = '';
+      details.style.maxHeight = '';
+      details.style.zIndex = '';
+      details.style.borderTop = '';
+    }
+    return;
+  }
+  details.classList.remove('detail-sheet-open');
+  details.style.position = '';
+  details.style.left = '';
+  details.style.right = '';
+  details.style.bottom = '';
+  details.style.maxHeight = '';
+  details.style.zIndex = '';
+  details.style.borderTop = '';
+  if (collapsed) {
+    workspace.style.gridTemplateColumns = '190px minmax(520px,1fr) 0';
+    details.style.width = '0';
+    details.style.overflow = 'hidden';
+  } else {
+    workspace.style.gridTemplateColumns = `190px minmax(520px,1fr) ${width}px`;
+    details.style.width = `${width}px`;
+    details.style.overflow = '';
+  }
+}
+function bindDetailsResize() {
+  const handle = $('detailsResizeHandle');
+  if (!handle || handle.dataset.bound) return;
+  handle.dataset.bound = '1';
+  const onMove = event => {
+    if (!detailsDragActive) return;
+    const workspace = document.querySelector('.workspace');
+    if (!workspace) return;
+    const width = Math.min(640, Math.max(280, workspace.getBoundingClientRect().right - event.clientX));
+    localStorage.setItem(DETAILS_WIDTH_KEY, String(width));
+    applyDetailsLayout();
+  };
+  const stopDrag = () => {
+    if (!detailsDragActive) return;
+    detailsDragActive = false;
+    document.body.style.userSelect = '';
+  };
+  handle.addEventListener('mousedown', event => {
+    if (window.matchMedia('(max-width:760px)').matches) return;
+    detailsDragActive = true;
+    document.body.style.userSelect = 'none';
+    event.preventDefault();
+  });
+  handle.addEventListener('keydown', event => {
+    if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+    event.preventDefault();
+    const delta = event.key === 'ArrowLeft' ? 24 : -24;
+    const width = Math.min(640, Math.max(280, Number(localStorage.getItem(DETAILS_WIDTH_KEY) || 410) + delta));
+    localStorage.setItem(DETAILS_WIDTH_KEY, String(width));
+    applyDetailsLayout();
+  });
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', stopDrag);
+  handle.addEventListener('dblclick', () => {
+    const collapsed = localStorage.getItem(DETAILS_COLLAPSED_KEY) === '1';
+    localStorage.setItem(DETAILS_COLLAPSED_KEY, collapsed ? '0' : '1');
+    applyDetailsLayout();
+  });
+}
+function bindFilterDrawer() {
+  const drawer = $('filterDrawer');
+  const body = $('filterDrawerBody');
+  const openBtn = $('filterDrawerButton');
+  if (!drawer || !body || body.dataset.bound) return;
+  body.dataset.bound = '1';
+  body.innerHTML = `<div class="platforms smart-filter-grid">${[
+    ['favorite', 'Favorites'],
+    ['installed', 'Installed'],
+    ['progress', 'In progress'],
+    ['save', 'Has saves'],
+    ['achievement', 'Achievements'],
+    ['missing-media', 'Missing media'],
+    ['high-score', 'High scores'],
+  ].map(([key, label]) => `<button type="button" class="platform" data-smart-filter="${key}">${escapeHtml(label)}</button>`).join('')}</div>
+    <label class="field"><span>Developer contains</span><input id="smartFilterDeveloper" type="search" placeholder="Developer"></label>
+    <label class="field"><span>Publisher contains</span><input id="smartFilterPublisher" type="search" placeholder="Publisher"></label>
+    <div class="extras"><button type="button" class="primary" id="applySmartFilters">Apply smart filters</button></div>
+    <details class="advanced-search-help"><summary>Advanced search help</summary><p class="description">Use typed tokens in search: <code>developer:"Name"</code>, <code>publisher:"Name"</code>, <code>favorite:yes</code>, <code>installed:yes</code>, <code>progress:Playing</code>, <code>import_batch_id:"id"</code>. Prefix with <code>-</code> to exclude.</p></details>`;
+  body.querySelectorAll('[data-smart-filter]').forEach(button => {
+    const key = button.dataset.smartFilter;
+    const actions = {
+      favorite: () => { $('view').value = 'favorites'; },
+      installed: () => { $('view').value = 'installed'; },
+      progress: () => { $('view').value = 'playing'; },
+      save: () => { $('view').value = 'saves'; },
+      achievement: () => { ensureSmartFilterRules().has_achievements = true; },
+      'missing-media': () => { ensureSmartFilterRules().has_missing_media = true; },
+      'high-score': () => { ensureSmartFilterRules().has_highscores = true; },
+    };
+    button.onclick = () => {
+      leaveActivePreset();
+      actions[key]?.();
+      render();
+      drawer.close();
+    };
+  });
+  $('applySmartFilters').onclick = () => {
+    leaveActivePreset();
+    const dev = $('smartFilterDeveloper')?.value.trim();
+    const pub = $('smartFilterPublisher')?.value.trim();
+    const parts = [];
+    if (dev) parts.push(`developer:"${dev.replace(/"/g, '')}"`);
+    if (pub) parts.push(`publisher:"${pub.replace(/"/g, '')}"`);
+    if (parts.length) $('sidebarSearch').value = parts.join(' ');
+    drawer.close();
+    render();
+  };
+  if (openBtn) openBtn.onclick = () => drawer.showModal();
+  if ($('closeFilterDrawer')) $('closeFilterDrawer').onclick = () => drawer.close();
+}
+async function updateActivePreset() {
+  const name = AppState.activeFilterPreset;
+  if (!name) return;
+  const preset = AppState.filterPresets.find(item => item.name === name);
+  const rules = {
+    platform: AppState.platform,
+    platform_category: AppState.platformCategory,
+    view: $('view').value,
+    query: $('sidebarSearch').value.trim(),
+    esrb: $('esrbFilter')?.value || '',
+    progress: AppState.explorerRules.progress || ($('view').value === 'playing' ? 'Playing' : ''),
+  };
+  try {
+    await api('/api/filter-presets', {method: 'POST', body: JSON.stringify({name, rules, bigbox_quick: preset?.bigbox_quick || false})});
+    await refresh();
+    notify('Filter preset updated');
+  } catch (error) { notify(error.message); }
+}
+function renderQueryChips() {
+  const container = $('queryChips');
+  if (!container) return;
+  const state = effectiveQueryState();
+  const chips = [];
+  const addChip = (key, label, remove) => chips.push(`<button type="button" class="platform query-chip" data-chip-remove="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(label)}">${escapeHtml(label)} ×</button>`);
+  if (state.preset) addChip('preset', `Preset: ${state.preset}`, () => { AppState.activeFilterPreset = ''; });
+  if (state.playlist) addChip('playlist', `Playlist: ${state.playlist}`, () => { AppState.activePlaylist = ''; });
+  if (state.platform !== 'all') addChip('platform', `Platform: ${state.platform}`, () => { AppState.platform = 'all'; });
+  if (state.platformCategory !== 'all') addChip('category', `Category: ${state.platformCategory}`, () => { AppState.platformCategory = 'all'; });
+  if (state.view !== 'all') addChip('view', `View: ${$('view').selectedOptions[0]?.text || state.view}`, () => { $('view').value = 'all'; });
+  if (state.esrb) addChip('esrb', `ESRB: ${state.esrb}`, () => { if ($('esrbFilter')) $('esrbFilter').value = ''; });
+  if (state.query) addChip('search', `Search: ${state.query}`, () => { $('sidebarSearch').value = ''; invalidateFilterCache(); });
+  if (state.explorer.progress) addChip('explorer', `Progress: ${state.explorer.progress === '__unset' ? 'Unset' : state.explorer.progress}`, () => { AppState.explorerRules = {}; });
+  if (state.importBatchId) addChip('import_batch', `Import batch: ${state.importBatchId}`, () => { AppState.importBatchId = ''; invalidateFilterCache(); });
+  if (state.smart.has_achievements) addChip('smart_achievements', 'Achievements', () => { delete AppState.smartFilterRules.has_achievements; });
+  if (state.smart.has_missing_media) addChip('smart_missing_media', 'Missing media', () => { delete AppState.smartFilterRules.has_missing_media; });
+  if (state.smart.has_highscores) addChip('smart_highscores', 'High scores', () => { delete AppState.smartFilterRules.has_highscores; });
+  const hasFilters = chips.length > 0;
+  const actions = [];
+  if (state.preset) actions.push('<button type="button" class="platform query-chip" id="updateActivePreset">Update preset</button>');
+  if (hasFilters) actions.push('<button type="button" class="platform query-chip" data-chip="clear-all">Clear all</button>');
+  container.innerHTML = actions.join('') + chips.join('');
+  container.querySelector('[data-chip="clear-all"]')?.addEventListener('click', () => {
+    AppState.smartFilterRules = {};
+    resetQuery();
+    render();
+  });
+  if ($('updateActivePreset')) $('updateActivePreset').onclick = () => updateActivePreset();
+  container.querySelectorAll('[data-chip-remove]').forEach(button => {
+    button.onclick = () => {
+      leaveActivePreset();
+      const key = button.dataset.chipRemove;
+      if (key === 'preset') AppState.activeFilterPreset = '';
+      else if (key === 'playlist') AppState.activePlaylist = '';
+      else if (key === 'platform') AppState.platform = 'all';
+      else if (key === 'category') AppState.platformCategory = 'all';
+      else if (key === 'view') $('view').value = 'all';
+      else if (key === 'esrb' && $('esrbFilter')) $('esrbFilter').value = '';
+      else if (key === 'search') { $('sidebarSearch').value = ''; invalidateFilterCache(); }
+      else if (key === 'explorer') AppState.explorerRules = {};
+      else if (key === 'import_batch') { AppState.importBatchId = ''; invalidateFilterCache(); }
+      else if (key === 'smart_achievements') delete AppState.smartFilterRules.has_achievements;
+      else if (key === 'smart_missing_media') delete AppState.smartFilterRules.has_missing_media;
+      else if (key === 'smart_highscores') delete AppState.smartFilterRules.has_highscores;
+      render();
+    };
+  });
+}
+function markFilterAria() {
+  document.querySelectorAll('#platformCategories [data-platform-category]').forEach(button => {
+    const active = button.classList.contains('active');
+    button.setAttribute('aria-current', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('#platforms [data-platform]').forEach(button => {
+    const active = button.classList.contains('active');
+    button.setAttribute('aria-current', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('[data-playlist]').forEach(button => {
+    const active = button.classList.contains('active');
+    button.setAttribute('aria-current', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('[data-filter-preset]').forEach(button => {
+    const active = button.classList.contains('active');
+    button.setAttribute('aria-current', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('[data-game]').forEach(card => {
+    const id = Number(card.dataset.game);
+    const selected = AppState.selectedId === id || selectedIds.has(id);
+    card.setAttribute('aria-selected', selected ? 'true' : 'false');
+  });
+}
 
     async function refresh() {
       const state = await api('/api/library');
@@ -26,7 +298,7 @@ let lastFacetsFingerprint = null;
       render();
       applySidebarVisibility();
       applyLocaleStrings();
-      maybeShowWelcome();
+      if (!AppState.appSettings.welcome_completed && !AppState.games.length) $('setupCenter').showModal();
       setTimeout(() => { try { warmSearchIndex(); } catch(error) { AppState.searchIndexError = error.message; } }, 0);
       const fingerprint = `${AppState.games.length}:${AppState.games[0]?.id || ''}:${AppState.games.at(-1)?.id || ''}`;
       if (lastFacetsFingerprint !== fingerprint) {
@@ -36,7 +308,7 @@ let lastFacetsFingerprint = null;
     }
     function renderArtwork(game) {
       const items = artworkKinds.filter(([, , flag]) => game[flag]);
-      return items.length ? `<div class="detail-card"><h3>Artwork</h3><div class="screenshot-grid">${items.map(([kind,label]) => kind === 'manual' ? `<button data-manual="${media(game,'manual')}" aria-label="Open ${escapeHtml(label)}"><div class="cover-title">${escapeHtml(label)}</div></button>` : `<button data-artwork="${kind}" aria-label="Open ${escapeHtml(label)}"><img src="${media(game,kind)}" alt="${escapeHtml(label)}" loading="lazy" decoding="async"></button>`).join('')}</div></div>` : '';
+      return items.length ? `<div class="detail-card"><h3>Artwork</h3><div class="screenshot-grid">${items.map(([kind,label]) => kind === 'manual' ? `<button type="button" data-manual aria-label="Open ${escapeHtml(label)}"><div class="cover-title">${escapeHtml(label)}</div></button>` : `<button data-artwork="${kind}" aria-label="Open ${escapeHtml(label)}"><img src="${media(game,kind)}" alt="${escapeHtml(label)}" loading="lazy" decoding="async"></button>`).join('')}</div></div>` : '';
     }
     function arrangeGroups(visible) {
       const sort = $('sort').value;
@@ -92,20 +364,21 @@ let lastFacetsFingerprint = null;
       const items = [['all',`All (${AppState.games.length})`], ...[...counts].sort((a,b) => a[0].localeCompare(b[0])).map(([name,count]) => [name,`${name} (${count})`])];
       if (!$('platformCategories')) return;
       $('platformCategories').innerHTML = items.map(([value,label]) => `<button class="platform ${AppState.platformCategory === value ? 'active' : ''}" data-platform-category="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join('');
-      document.querySelectorAll('[data-platform-category]').forEach(button => button.onclick = () => { AppState.activePlaylist = ''; AppState.platformCategory = button.dataset.platformCategory; AppState.selectedId = null; render(); loadTheme(); });
+      document.querySelectorAll('[data-platform-category]').forEach(button => button.onclick = () => { leaveActivePreset(); AppState.activePlaylist = ''; AppState.platformCategory = button.dataset.platformCategory; AppState.selectedId = null; render(); loadTheme(); });
     }
     function renderPlatforms() {
       const counts = new Map();
       AppState.games.forEach(game => counts.set(game.platform || 'Unspecified', (counts.get(game.platform || 'Unspecified') || 0) + 1));
       const items = [['all',`All (${AppState.games.length})`], ...[...counts].sort((a,b) => a[0].localeCompare(b[0])).map(([name,count]) => [name,`${name} (${count})`])];
       $('platforms').innerHTML = items.map(([value,label]) => `<button class="platform ${AppState.platform === value ? 'active' : ''}" data-platform="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join('');
-      document.querySelectorAll('[data-platform]').forEach(button => button.onclick = () => { AppState.activePlaylist = ''; AppState.platform = button.dataset.platform; AppState.selectedId = null; render(); loadTheme(); });
+      $('platforms').querySelectorAll('[data-platform]').forEach(button => button.onclick = () => { leaveActivePreset(); AppState.activePlaylist = ''; AppState.platform = button.dataset.platform; AppState.selectedId = null; render(); loadTheme(); });
     }
     function renderPlaylists() {
       $('playlists').innerHTML = AppState.playlists.length ? AppState.playlists.map(item => `<div class="playlist-row"><button class="platform ${AppState.activePlaylist === item.name ? 'active' : ''}" data-playlist="${escapeHtml(item.name)}">${escapeHtml(item.name)} <small>${item.type === 'manual' ? `(${(item.members || []).length})` : '↻'}</small></button><button class="playlist-delete" data-delete-playlist="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '<span class="description">Create a playlist to pin one here.</span>';
       document.querySelectorAll('[data-playlist]').forEach(button => button.onclick = () => {
         const item = AppState.playlists.find(playlist => playlist.name === button.dataset.playlist);
         if (!item) return;
+        leaveActivePreset();
         AppState.activePlaylist = item.name;
         AppState.platform = item.rules.platform || 'all';
         $('view').value = [...$('view').options].some(option => option.value === item.rules.view) ? item.rules.view : 'all';
@@ -135,7 +408,16 @@ let lastFacetsFingerprint = null;
         loadTheme();
       });
       document.querySelectorAll('[data-delete-preset]').forEach(button => button.onclick = async () => {
-        if (!confirm(`Delete preset "${button.dataset.deletePreset}"?`)) return;
+        const ok = await confirmAction({
+          title: 'Delete preset',
+          target: button.dataset.deletePreset,
+          consequence: 'This filter preset will be removed from the library.',
+          retained: 'Saved games and other presets remain.',
+          recovery: 'Save a new preset from the current filters.',
+          destructive: true,
+          confirmLabel: 'Delete',
+        });
+        if (!ok) return;
         try {
           await api('/api/filter-presets/delete',{method:'POST',body:JSON.stringify({name:button.dataset.deletePreset})});
           if (AppState.activeFilterPreset === button.dataset.deletePreset) AppState.activeFilterPreset = '';
@@ -150,6 +432,8 @@ let lastFacetsFingerprint = null;
       }
     }
     function selectGame(id) {
+      const pane = gridPane();
+      if (pane) detailSheetScrollTop = pane.scrollTop;
       AppState.selectedId = id;
       document.querySelectorAll('[data-game]').forEach(item => {
         const row = item.closest('.card,.list-row') || item;
@@ -161,6 +445,10 @@ let lastFacetsFingerprint = null;
       const flags = {cover:'has_cover',background:'has_background',screenshot:'available_screenshots',clear_logo:'has_clear_logo',fanart:'has_fanart',banner:'has_banner',icon:'has_icon',box_back:'has_box_back',box_spine:'has_box_spine',box_3d:'has_box_3d',title_screen:'has_title_screen',cart_front:'has_cart_front',cart_back:'has_cart_back',disc:'has_disc',advertisement:'has_advertisement',manual:'has_manual'};
       const flag = flags[imageGroup];
       const available = imageGroup === 'screenshot' ? game.available_screenshots?.length : game[flag];
+      if (imageGroup === 'manual') {
+        if (available) return `<div class="cover manual-tile" data-manual-tile="${game.id}" role="button" tabindex="0" aria-label="Open manual for ${escapeHtml(game.name)}"><div class="cover-title">Manual</div></div>`;
+        return `<div class="cover-title">${escapeHtml(game.name)}</div>`;
+      }
       if (available) {
         const index = imageGroup === 'screenshot' ? game.available_screenshots[0] : '';
         return `<img src="${media(game,imageGroup,index)}" alt="" loading="lazy" decoding="async" data-gid="${game.id}">`;
@@ -297,7 +585,7 @@ let lastFacetsFingerprint = null;
     function renderGrid({fromScroll} = {}) {
       const pane = gridPane();
       if (pane) gridScrollTop = pane.scrollTop;
-      const visible = filteredGames();
+      const visible = visibleGames();
       const explicitImageGroup = AppState.activePlaylist ? AppState.appSettings.image_group_by_playlist?.[AppState.activePlaylist] : AppState.platform !== 'all' ? AppState.appSettings.image_group_by_platform?.[AppState.platform] : AppState.appSettings.image_group;
       const effectiveImageGroup = explicitImageGroup || (AppState.platform === 'all' && !AppState.activePlaylist ? 'cover' : 'default');
       const imageGroup = effectiveImageGroup === 'default' ? AppState.appSettings.image_group || 'cover' : effectiveImageGroup;
@@ -317,7 +605,8 @@ let lastFacetsFingerprint = null;
         $('grid').className = 'grid';
         $('grid').innerHTML = AppState.games.length
           ? `<div class="empty"><div><h2>No games match this view</h2><p>Change the active filters or search the library again.</p></div></div>`
-          : `<div class="empty"><div><h2>Start your library</h2><p>Bring your games into OpenBox, then search, filter, and launch them from one collection.</p><div class="empty-actions"><button id="emptyAdd">Add game</button><button class="empty-secondary" id="emptyImport">Import folder</button><button class="empty-secondary" id="emptySteam">Import Steam</button><button class="empty-secondary" id="emptyHeroic">Import Heroic</button><button class="empty-secondary" id="emptyLutris">Import Lutris</button></div></div></div>`;
+          : `<div class="empty"><div><h2>Start your library</h2><p>Bring your games into OpenBox, then search, filter, and launch them from one collection.</p><div class="empty-actions"><button id="emptySetupLibrary">Set up library</button><button id="emptyAdd">Add game</button><button class="empty-secondary" id="emptyImport">Import folder</button><button class="empty-secondary" id="emptySteam">Import Steam</button><button class="empty-secondary" id="emptyHeroic">Import Heroic</button><button class="empty-secondary" id="emptyLutris">Import Lutris</button></div></div></div>`;
+        if ($('emptySetupLibrary')) $('emptySetupLibrary').onclick = () => $('setupCenter').showModal();
         if ($('emptyAdd')) $('emptyAdd').onclick = () => openGameDialog();
         if ($('emptyImport')) $('emptyImport').onclick = () => importFolder();
         if ($('emptySteam')) $('emptySteam').onclick = () => importSteam();
@@ -381,7 +670,15 @@ let lastFacetsFingerprint = null;
         input.checked ? selectedIds.add(id) : selectedIds.delete(id);
         input.closest('.card')?.classList.toggle('selected', input.checked || AppState.selectedId === id);
       });
+      document.querySelectorAll('[data-manual-tile]').forEach(tile => {
+        const game = AppState.games.find(item => item.id === Number(tile.dataset.manualTile));
+        if (!game) return;
+        const open = event => { event.stopPropagation(); openManualReader(game); };
+        tile.onclick = open;
+        tile.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(event); } };
+      });
       renderArrangeBar(visible);
+      markFilterAria();
       const measuredBefore = gridRowHeight;
       measureGridLayout();
       if (!measuredBefore && gridRowHeight && total) renderGrid({fromScroll});
@@ -389,12 +686,23 @@ let lastFacetsFingerprint = null;
     function renderDetails() {
       const game = AppState.games.find(item => item.id === AppState.selectedId);
       if (!game && (AppState.platform !== 'all' || AppState.platformCategory !== 'all' || AppState.activePlaylist)) {
-        if (AppState.activePlaylist) renderCollectionDetails(AppState.activePlaylist, filteredGames(), 'Playlist');
+        if (AppState.activePlaylist) renderCollectionDetails(AppState.activePlaylist, visibleGames(), 'Playlist');
         else if (AppState.platformCategory !== 'all') renderCollectionDetails(AppState.platformCategory, AppState.games.filter(item => platformCategoryFor(item) === AppState.platformCategory), 'Category');
         else renderPlatformDetails(AppState.platform);
         return;
       }
-      if (!game) { $('details').innerHTML = '<div class="detail-empty">Select a game to inspect its real metadata and artwork.</div>'; return; }
+      if (!game) {
+        const pane = gridPane();
+        if (pane && detailSheetScrollTop) pane.scrollTop = detailSheetScrollTop;
+        $('details').innerHTML = '<div class="detail-empty">Select a game to inspect its real metadata and artwork.</div>';
+        applyDetailsLayout();
+        return;
+      }
+      const applications = game.applications || [];
+      const versions = game.versions || [];
+      const documents = game.documents || [];
+      const screenshots = game.available_screenshots || [];
+      const savePaths = game.save_paths || [];
       const heroStyle = game.has_background ? `style="background-image:url('${media(game,'background')}')"` : '';
       $('details').innerHTML = `<div class="hero motion-enter" ${heroStyle}><div class="hero-copy"><div class="hero-kicker">${escapeHtml(game.platform || 'Unspecified platform')}</div><h2>${escapeHtml(game.name)}</h2></div></div>
         <div class="detail-body">
@@ -405,14 +713,14 @@ let lastFacetsFingerprint = null;
             ${fact('Release date',game.year)}${fact('Developer',game.developer)}${fact('Publisher',game.publisher)}${fact('ESRB',game.esrb)}${fact('Source',game.source)}${fact('Category',platformCategoryFor(game))}${Object.entries(game.custom_fields || {}).map(([key,value]) => fact(key,value)).join('')}${fact('Max players',game.max_players)}${fact('Controller support',game.controller_support)}${fact('Disc count',game.disc_count)}${fact('Play time',duration(game.playtime_seconds))}
             ${fact('Launches',game.play_count)}${fact('Last played',game.last_played ? game.last_played.replace('T',' ') : '')}${fact('Progress',game.progress)}${fact('Rating',game.rating ? `${game.rating} / 5` : '')}${fact('Region',game.region)}${fact('Play mode',game.play_mode)}${fact('Wikipedia',game.wikipedia_url)}${fact('Video URL',game.video_url)}
           </div>${game.description ? `<p class="description">${escapeHtml(game.description)}</p>` : ''}${game.notes ? `<p class="description"><strong>Notes</strong><br>${escapeHtml(game.notes)}</p>` : ''}
-          ${game.applications.length || game.versions.length || game.documents.length ? `<div class="extras">${game.applications.map((item,index) => `<button class="icon-button" data-extra="applications:${index}">App · ${escapeHtml(item.name)}</button>`).join('')}${game.versions.map((item,index) => `<button class="icon-button" data-extra="versions:${index}">Version · ${escapeHtml(item.name)}</button>`).join('')}${game.documents.map((item,index) => `<button class="icon-button" data-document="${index}">Read ${escapeHtml(item.name)}</button><button class="icon-button" data-extra="documents:${index}" aria-label="Open ${escapeHtml(item.name)} externally">↗</button>`).join('')}</div>` : ''}</div>
+          ${applications.length || versions.length || documents.length ? `<div class="extras">${applications.map((item,index) => `<button class="icon-button" data-extra="applications:${index}">App · ${escapeHtml(item.name)}</button>`).join('')}${versions.map((item,index) => `<button class="icon-button" data-extra="versions:${index}">Version · ${escapeHtml(item.name)}</button>`).join('')}${documents.map((item,index) => `<button class="icon-button" data-document="${index}">Read ${escapeHtml(item.name)}</button><button class="icon-button" data-extra="documents:${index}" aria-label="Open ${escapeHtml(item.name)} externally">↗</button>`).join('')}</div>` : ''}</div>
           ${game.has_video ? `<div class="detail-card"><h3>Video</h3><video class="media-player" controls preload="metadata" src="${media(game,'video')}"></video></div>` : ''}
           ${game.has_music ? `<div class="detail-card"><h3>Music</h3><audio class="media-player" controls preload="metadata" src="${media(game,'music')}"></audio></div>` : ''}
-          ${game.available_screenshots.length ? `<div class="detail-card"><h3>Screenshots</h3><div class="screenshot-grid">${game.available_screenshots.map(index => `<button data-screenshot="${index}" aria-label="Open screenshot ${index + 1}"><img src="${media(game,'screenshot',index)}" alt="" loading="lazy" decoding="async"></button>`).join('')}</div></div>` : ''}
+          ${screenshots.length ? `<div class="detail-card"><h3>Screenshots</h3><div class="screenshot-grid">${screenshots.map(index => `<button data-screenshot="${index}" aria-label="Open screenshot ${index + 1}"><img src="${media(game,'screenshot',index)}" alt="" loading="lazy" decoding="async"></button>`).join('')}</div></div>` : ''}
           ${renderArtwork(game)}
           <div class="detail-card"><h3>Related Games</h3><div class="related-grid" id="relatedGames"><span class="description">Finding matches...</span></div></div>
           ${AppState.raConfigured ? `<div class="detail-card"><h3>RetroAchievements</h3><div id="achievementContent"><p class="description">${game.ra_game_id ? `Matched to game ${escapeHtml(game.ra_game_id)}.` : 'Match this ROM to load achievements.'}</p><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}<button class="icon-button" id="openBrowser">Open Wikipedia</button></div><button class="icon-button" id="loadAchievements">Load achievements</button><div id="achievementStats"></div></div></div>` : ''}
-          <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${game.save_paths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${AppState.appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}${game.platform === 'Arcade' || game.rom_name ? '<button class="icon-button" id="exportHighscores">Export high scores</button>' : ''}</div><div class="description" id="saveDiscovery">${game.save_paths.length ? `${game.save_paths.length} configured location${game.save_paths.length === 1 ? '' : 's'}` : 'No save location configured.'}${AppState.appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
+          <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${savePaths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${AppState.appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}${game.platform === 'Arcade' || game.rom_name ? '<button class="icon-button" id="exportHighscores">Export high scores</button>' : ''}</div><div class="description" id="saveDiscovery">${savePaths.length ? `${savePaths.length} configured location${savePaths.length === 1 ? '' : 's'}` : 'No save location configured.'}${AppState.appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
         </div>`;
       $('playButton').onclick = () => {
         if (game.gameyfin_id && !game.store_installed) installGameyfin(game);
@@ -452,9 +760,8 @@ let lastFacetsFingerprint = null;
         $('mediaDialog').append(image);
         $('mediaDialog').showModal();
       });
-      document.querySelectorAll('[data-manual]').forEach(button => button.onclick = () => {
-        nativeOpenExternal(button.dataset.manual);
-      });
+      document.querySelectorAll('[data-manual]').forEach(button => button.onclick = () => openManualReader(game));
+      document.querySelectorAll('[data-manual-tile]').forEach(button => button.onclick = () => openManualReader(game));
       document.querySelectorAll('[data-document]').forEach(button => button.onclick = () => openReader(game, Number(button.dataset.document)));
       if ($('loadAchievements')) $('loadAchievements').onclick = () => loadAchievements(game.id);
       if ($('downloadTrailer')) $('downloadTrailer').onclick = async () => { try { await api('/api/metadata/trailer',{method:'POST',body:JSON.stringify({id:game.id})}); await refresh(); renderDetails(); notify('Steam trailer downloaded'); } catch(error) { notify(error.message); } };
@@ -479,7 +786,7 @@ let lastFacetsFingerprint = null;
         document.querySelectorAll('[data-related]').forEach(button => button.onclick = () => selectGame(Number(button.dataset.related)));
       } catch(error) { if ($('relatedGames')) $('relatedGames').textContent = error.message; }
     }
-    function render() { renderPlatformCategories(); renderPlatforms(); renderPlaylists(); renderFilterPresets(); renderGrid(); renderDetails(); applySidebarVisibility(); $('status').textContent = `${AppState.games.length} games · local library`; }
+    function render() { renderQueryChips(); renderPlatformCategories(); renderPlatforms(); renderPlaylists(); renderFilterPresets(); renderGrid(); renderDetails(); markFilterAria(); applyDetailsLayout(); applySidebarVisibility(); $('status').textContent = `${AppState.games.length} games · local library`; }
     function collectionStats(items) {
       const completed = items.filter(game => ['Beaten','Completed','Mastered'].includes(game.progress)).length;
       const playtime = items.reduce((total, game) => total + Number(game.playtime_seconds || 0), 0);
@@ -512,7 +819,12 @@ let lastFacetsFingerprint = null;
       if (most && $('platformMost')) $('platformMost').onclick = () => selectGame(most.id);
       $('editPlatformDocuments').onclick = async () => {
         const current = (AppState.appSettings.platform_documents?.[platformName] || documents).map(item => `${item.name} | ${item.path}`).join('\n');
-        const value = prompt(`Platform documents for ${platformName}, one per line: Name | Path`, current);
+        const value = await promptInput({
+          title: `Platform documents for ${platformName}`,
+          message: 'One per line: Name | Path',
+          label: 'Documents',
+          defaultValue: current,
+        });
         if (value === null) return;
         const rows = value.split('\n').map(line => line.trim()).filter(Boolean).map(line => { const [name,...rest] = line.split('|'); return {name:(name || '').trim(), path:rest.join('|').trim()}; }).filter(item => item.name && item.path);
         try {
@@ -535,13 +847,30 @@ let lastFacetsFingerprint = null;
       try { await api('/api/game',{method:'POST',body:JSON.stringify({id,game:{...game,progress}})}); await refresh(); notify(`Progress set to ${progress || 'Not set'}`); } catch(error) { notify(error.message); }
     }
     async function removeGame(id,name) {
-      if (!confirm(`Remove "${name}" from OpenBox? Game files will not be deleted.`)) return;
-      const alsoDeleteMedia = confirm('Also delete associated media files listed in this game entry?');
+      const ok = await confirmAction({
+        title: 'Remove game',
+        target: name,
+        consequence: 'This game will be removed from OpenBox.',
+        retained: 'Game files on disk are not deleted.',
+        recovery: 'Re-import the folder or add the game again.',
+        destructive: true,
+        confirmLabel: 'Remove',
+      });
+      if (!ok) return;
+      const alsoDeleteMedia = await confirmAction({
+        title: 'Delete media files',
+        target: name,
+        consequence: 'Associated media files listed in this game entry will be deleted.',
+        retained: 'ROM and save files outside the media list remain.',
+        recovery: 'Re-download metadata media later.',
+        destructive: true,
+        confirmLabel: 'Delete media',
+      });
       try { await api('/api/game/delete',{method:'POST',body:JSON.stringify({id,delete_media:alsoDeleteMedia})}); AppState.selectedId = null; await refresh(); notify('Game removed from library'); } catch(error) { notify(error.message); }
     }
     async function launchExtra(id,kind,index) { try { await api('/api/extra/launch',{method:'POST',body:JSON.stringify({id,kind,index})}); notify('Opened'); } catch(error) { notify(error.message); } }
-    $('sidebarSearch').oninput = () => { AppState.activePlaylist = ''; scheduleSearch(() => { renderPlaylists(); renderGrid(); }); };
-    $('view').onchange = () => { AppState.activePlaylist = ''; renderPlaylists(); renderGrid(); };
+    $('sidebarSearch').oninput = () => { leaveActivePreset(); AppState.activePlaylist = ''; scheduleSearch(() => { renderPlaylists(); renderGrid(); }); };
+    $('view').onchange = () => { leaveActivePreset(); AppState.activePlaylist = ''; renderPlaylists(); renderGrid(); };
     $('sort').onchange = renderGrid;
     // load events do not bubble, so ratio tracking uses a capture-phase
     // listener on #grid that survives innerHTML rebuilds without re-attaching.
@@ -555,7 +884,7 @@ let lastFacetsFingerprint = null;
       renderGrid();
       await api('/api/settings',{method:'POST',body:JSON.stringify({cover_grouping:AppState.appSettings.cover_grouping})}).catch(() => {});
     };
-    if ($('esrbFilter')) $('esrbFilter').onchange = renderGrid;
+    if ($('esrbFilter')) $('esrbFilter').onchange = () => { leaveActivePreset(); renderGrid(); };
     const libraryPaneElement = document.querySelector('main.library');
     let scrollFramePending = false;
     if (libraryPaneElement) {
@@ -574,7 +903,7 @@ let lastFacetsFingerprint = null;
           renderGrid({fromScroll:true});
         });
       }, { passive: true });
-      window.addEventListener('resize', () => { gridRowHeight = 0; renderGrid(); });
+      window.addEventListener('resize', () => { gridRowHeight = 0; applyDetailsLayout(); renderGrid(); });
     }
     $('viewToggleButton').onclick = async () => {
       AppState.appSettings.library_view = (AppState.appSettings.library_view || 'grid') === 'list' ? 'grid' : 'list';
@@ -589,12 +918,13 @@ let lastFacetsFingerprint = null;
       $('dropZone').addEventListener('drop', async event => {
         event.preventDefault();
         $('dropZone').classList.remove('active');
-        const names = [...event.dataTransfer.items].map(item => item.getAsFile?.()?.name).filter(Boolean);
-        const hint = names.length ? `\n\nDropped: ${names.slice(0, 3).join(', ')}` : '';
-        const folder = await nativePickFolder(`Enter the absolute path of the folder to import.${hint}`);
+        const folder = await nativePickFolder('Enter the absolute path of the folder to import.');
         if (folder) importDroppedFolder(folder.trim());
       });
       $('dropZone').onclick = () => importFolder();
     }
+    bindDetailsResize();
+    bindFilterDrawer();
+    applyDetailsLayout();
 
-export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated };
+export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated };

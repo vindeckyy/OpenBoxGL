@@ -6,14 +6,15 @@ Extracted from webapp_state.py to keep that module a thin re-export shim.
 import copy
 from datetime import datetime
 import logging
-from pathlib import Path
+import shlex
 import threading
+from pathlib import Path
 
 from cloud_sync import sync_statistics
 from importers import import_heroic, import_lutris, import_steam
 from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, load_state, update_state
 from parity_emulator_defs import list_scan_configs, scan_folder as scan_emulator_folder
-from pkg.parity.launch_tokens import apply_tokens
+from pkg.parity.launch_tokens import build_launch_args
 from parity_gameyfin import GameyfinError, catalog_gameyfin
 from parity_identity import cross_source_identity, source_family, source_identities
 from parity_import import import_multi_platform, recommend_emulators
@@ -58,7 +59,8 @@ def _filled_launch_command(game):
     command = str(game.get("launch") or "").strip()
     if not command:
         return ""
-    return apply_tokens(command, game, data_dir=str(DATA.parent))
+    args = build_launch_args(command, game, data_dir=str(DATA.parent))
+    return shlex.join(args)
 
 
 def _application_for_game(game):
@@ -323,7 +325,10 @@ def auto_import_worker(cancel_event=None):
             if not folder:
                 continue
             try:
-                imported = scan_emulator_folder(folder)
+                imported = scan_emulator_folder(
+                    folder,
+                    emulator_id=str(config.get("emulator_id", "")).strip() or None,
+                )
                 merge_imported_games(imported, lambda game: ("path", str(game.get("path", ""))))
             except (OSError, ValueError) as error:
                 LOGGER.warning("Emulator scan auto-update failed for %s: %s", folder, error)

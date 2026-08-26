@@ -117,7 +117,7 @@ class ParityFeatureTests(unittest.TestCase):
                 "playlists": [],
             })
             scanned = []
-            def fake_scan(folder):
+            def fake_scan(folder, emulator_id=None):
                 scanned.append(folder)
                 return []
             with mock.patch("pkg.state.imports.scan_emulator_folder", side_effect=fake_scan):

@@ -1,0 +1,18 @@
+schema_version: 1
+adapter_id: pcsx2-ps2
+emulator_id: net.pcsx2.PCSX2
+label: PCSX2
+platform: PlayStation 2
+extensions:
+  - iso
+  - chd
+  - ciso
+native_exe: pcsx2-qt
+flatpak_app_id: net.pcsx2.PCSX2
+startup_args:
+  - -batch
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - pcsx2-qt

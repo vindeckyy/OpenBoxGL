@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 35
     permissions:
       contents: read
@@ -89,7 +89,7 @@ jobs:
 
   attest:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
     permissions:
       actions: read
@@ -111,7 +111,7 @@ jobs:
 
   publish:
     needs: [build, attest]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     environment: release
     permissions:

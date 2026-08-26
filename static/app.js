@@ -1,15 +1,16 @@
 import { $, escapeHtml } from './util.js';
-import { token, AppState, api, notify, nativeFullscreen, detectNative, filteredGames, nativePickFile, selectedIds } from './state.js';
+import { token, AppState, api, notify, nativeFullscreen, detectNative, filteredGames, nativePickFile, selectedIds, resetQuery, resolveDeeplinkGameId } from './state.js';
 import { refresh, render, renderGrid, favorite, updateGameStatus, removeGame } from './library.js';
-import { openSettings, openProfiles, openThemes, openAchievements, openPlugins, health, openBackups, openFeature, bulkAction, saveFilter, savePreset, openPlaylists, createManualPlaylist, createFilterPlaylist, createNamedBackup, completeWelcome, filterSettings, gracefulShutdown, loadTheme } from './settings.js';
+import { openSettings, openProfiles, openThemes, openAchievements, openPlugins, health, openBackups, openFeature, bulkAction, saveFilter, savePreset, openPlaylists, createManualPlaylist, createFilterPlaylist, createNamedBackup, filterSettings, gracefulShutdown, loadTheme } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importArcade, runStartupStorefrontImports } from './imports.js';
 import { watchMetadata } from './metadata.js';
 import { openMediaManager } from './media.js';
 import { setReaderPage } from './reader.js';
 import { openSessions, openHistory, launch, connectSessionEvents, pollSessions } from './sessions.js';
 import { openDiscovery, openStorefronts, saveStorefrontSettings, importStorefrontCatalog, loadStorefrontCatalog } from './storefront.js';
-import { openBigBox, closeBigBox, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, stopScreenSaver, favoriteBigBox, openBigBoxPause, filteredBigBoxGames, applyLibraryMusic } from './bigbox.js';
-import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from './dialogs.js';
+import { openBigBox, closeBigBox, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, stopScreenSaver, favoriteBigBox, openBigBoxPause, filteredBigBoxGames, applyLibraryMusic, activateCurrentGame, bigBoxTypingActive } from './bigbox.js';
+import { closeDialog, openGameDialog, closeContextMenu, bindContextMenuA11y, promptChoice, promptInput, confirmAction } from './dialogs.js';
+import './activity.js';
 // Scrub the token from browser history immediately after reading it: keep any
 // deeplink params, drop only 'token'.
 {
@@ -21,6 +22,26 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
 
 /** @type {any} */ (window).AppState = AppState;
 /** @type {any} */ (window).filteredGames = filteredGames;
+
+    const welcomeShim = $('welcomeDialog');
+    if (welcomeShim) {
+      welcomeShim.showModal = () => $('setupCenter').showModal();
+      welcomeShim.close = () => $('setupCenter').close();
+    }
+    const openSetupCenter = () => $('setupCenter').showModal();
+    if ($('setupLibraryButton')) $('setupLibraryButton').onclick = openSetupCenter;
+    if ($('reopenWelcome')) $('reopenWelcome').onclick = openSetupCenter;
+    if ($('closeSetupCenter')) $('closeSetupCenter').onclick = () => $('setupCenter').close();
+
+    document.querySelectorAll('.game-editor-nav-item').forEach(button => {
+      button.onclick = () => {
+        document.querySelectorAll('.game-editor-nav-item').forEach(item => item.classList.toggle('active', item === button));
+        const target = button.dataset.gameSection;
+        document.querySelectorAll('.game-editor-section').forEach(panel => {
+          panel.hidden = panel.dataset.gameSection !== target;
+        });
+      };
+    });
 
     $('gameForm').onsubmit = async event => {
       event.preventDefault();
@@ -69,8 +90,17 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
         const catalog = await api('/api/premium/media-packs');
         const packs = catalog.packs || [];
         if (!packs.length) return notify('No bundled media packs are available');
-        const labels = packs.map((pack,index) => `${index + 1}. ${pack.name}${pack.active ? ' (active)' : ''}`).join('\n');
-        const pick = prompt(`Choose a bundled media pack:\n${labels}`, '1');
+        const pick = await promptChoice({
+          title: 'Choose media pack',
+          message: 'Select a bundled media pack to apply.',
+          label: 'Media pack',
+          defaultValue: '1',
+          choices: packs.map((pack, index) => ({
+            value: String(index + 1),
+            label: `${index + 1}. ${pack.name}${pack.active ? ' (active)' : ''}`,
+          })),
+        });
+        if (!pick) return;
         const pack = packs[Number(pick) - 1];
         if (!pack) return;
         const result = await api('/api/premium/media-packs/apply',{method:'POST',body:JSON.stringify({id:pack.id})});
@@ -79,7 +109,7 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
         notify(`Applied ${pack.name}`);
       } catch(error) { notify(error.message); }
     };
-    $('libraryButton').onclick = () => { AppState.activePlaylist = ''; AppState.platform = 'all'; $('view').value = 'all'; $('sidebarSearch').value = ''; AppState.selectedId = null; render(); loadTheme(); };
+    $('libraryButton').onclick = () => { resetQuery(); AppState.selectedId = null; render(); loadTheme(); };
     $('discoveryButton').onclick = openDiscovery;
     $('storefrontButton').onclick = openStorefronts;
     $('closeDiscovery').onclick = $('doneDiscovery').onclick = () => $('discoveryDialog').close();
@@ -113,13 +143,28 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
     $('openThemeFolder').onclick = async () => { try { const result = await api('/api/themes/open-folder',{method:'POST',body:'{}'}); notify(`Opened ${result.path}`); } catch(error) { notify(error.message); } };
     $('injectRa').onclick = async () => { try { const result = await api('/api/ra/inject',{method:'POST',body:'{}'}); notify(`Updated ${result.updated.length} emulator config file${result.updated.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
     $('cleanupMedia').onclick = async () => { try { const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({platform:AppState.platform,apply:false})}); AppState.duplicateMediaGroups = result.groups; $('applyCleanupMedia').hidden = !AppState.duplicateMediaGroups; notify(`${AppState.duplicateMediaGroups} duplicate media group${AppState.duplicateMediaGroups === 1 ? '' : 's'} found`); } catch(error) { notify(error.message); } };
-    $('applyCleanupMedia').onclick = async () => { if (!confirm('Delete duplicate media files listed by the cleanup scan?')) return; try { const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({platform:AppState.platform,apply:true})}); $('applyCleanupMedia').hidden = true; notify(`Removed ${result.paths.length} duplicate file${result.paths.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
+    $('applyCleanupMedia').onclick = async () => {
+      if (!await confirmAction({
+        title: 'Delete duplicate media',
+        target: 'Duplicate media files from the cleanup scan',
+        consequence: 'Listed duplicate files will be deleted from disk.',
+        retained: 'One copy of each media asset remains in your library.',
+        recovery: 'Deleted files cannot be restored automatically.',
+        confirmLabel: 'Delete duplicates',
+        destructive: true,
+      })) return;
+      try {
+        const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({platform:AppState.platform,apply:true})});
+        $('applyCleanupMedia').hidden = true;
+        notify(`Removed ${result.paths.length} duplicate file${result.paths.length === 1 ? '' : 's'}`);
+      } catch(error) { notify(error.message); }
+    };
     $('scanAllSaves').onclick = async () => { try { const result = await api('/api/saves/scan/apply',{method:'POST',body:'{}'}); await refresh(); notify(`Added save paths on ${result.updated} location${result.updated === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
     $('bigBoxPause').onclick = event => { if (event.target === $('bigBoxPause')) $('bigBoxPause').hidden = true; };
     $('loadStorefrontCatalog').onclick = loadStorefrontCatalog;
     $('importStorefrontInstalled').onclick = () => importStorefrontCatalog(false);
     $('importStorefrontUninstalled').onclick = () => importStorefrontCatalog(true);
-    $('addButton').onclick = () => openGameDialog(); $('importButton').onclick = importFolder; $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
+    $('addButton').onclick = () => openGameDialog(); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => $('metadataDialog').showModal(); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
     // ── Accessible Tools menu ──────────────────────────────────────────
     const toolsWrap = $('toolsWrap');
     const toolsButton = $('toolsButton');
@@ -155,10 +200,17 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
     $('closeBackups').onclick = $('doneBackups').onclick = () => $('backupDialog').close();
     $('refreshBackups').onclick = openBackups;
     $('createNamedBackup').onclick = createNamedBackup;
-    $('contextPlay').onclick = () => { const id = AppState.contextGameId; closeContextMenu(); if (id !== null) launch(id); };
+    $('contextPlay').onclick = () => { const id = AppState.contextGameId; closeContextMenu(); if (id !== null) { const game = AppState.games.find(item => item.id === id); activateCurrentGame(game); } };
     $('contextFavorite').onclick = () => { const id = AppState.contextGameId; closeContextMenu(); if (id !== null) favorite(id); };
     $('contextEdit').onclick = () => { const game = AppState.games.find(item => item.id === AppState.contextGameId); closeContextMenu(); if (game) openGameDialog(game); };
-    $('contextProgress').onclick = () => { const id = AppState.contextGameId; closeContextMenu(); if (id === null) return; const value = prompt('Progress value', AppState.games.find(game => game.id === id)?.progress || 'Playing'); if (value !== null) updateGameStatus(id, value); };
+    $('contextProgress').onclick = async () => {
+      const id = AppState.contextGameId;
+      closeContextMenu();
+      if (id === null) return;
+      const current = AppState.games.find(game => game.id === id)?.progress || 'Playing';
+      const value = await promptInput({ title: 'Progress value', label: 'Progress', defaultValue: current });
+      if (value !== null) updateGameStatus(id, value);
+    };
     $('contextAddPlaylist').onclick = () => { const name = $('contextPlaylist').value; const id = AppState.contextGameId; closeContextMenu(); if (name && id !== null) addGamesToPlaylist(name, [id]); };
     $('contextNewPlaylist').onclick = () => { const id = AppState.contextGameId; closeContextMenu(); if (id !== null) createManualPlaylist(id); };
     $('contextResetStats').onclick = async () => {
@@ -167,7 +219,15 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
       if (id === null) return;
       const game = AppState.games.find(item => item.id === id);
       if (!game) return;
-      if (!confirm(`Reset play count and last played date for "${game.name}"?`)) return;
+      if (!await confirmAction({
+        title: 'Reset play statistics',
+        target: game.name,
+        consequence: 'Play count and last played date will be cleared.',
+        retained: 'All other game metadata and media stay unchanged.',
+        recovery: 'Play statistics cannot be restored after reset.',
+        confirmLabel: 'Reset statistics',
+        destructive: true,
+      })) return;
       try {
         await api('/api/games/bulk-wizard', {method:'POST',body:JSON.stringify({ids:[id],changes:{reset_stats:true}})});
         await refresh();
@@ -175,12 +235,8 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
       } catch(error) { notify(error.message); }
     };
     $('contextRemove').onclick = () => { const game = AppState.games.find(item => item.id === AppState.contextGameId); closeContextMenu(); if (game) removeGame(game.id, game.name); };
-    document.addEventListener('contextmenu', event => {
-      const target = event.target.closest?.('[data-game]');
-      if (target) openContextMenu(event, Number(target.dataset.game));
-    });
+    bindContextMenuA11y();
     document.addEventListener('click', event => {
-      if (!event.target.closest?.('#contextMenu')) closeContextMenu();
       if (toolsMenuOpen() && !toolsWrap.contains(event.target)) closeToolsMenu(false);
     });
     if ($('scanEmulatorFolder')) $('scanEmulatorFolder').onclick = async () => {
@@ -202,22 +258,7 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
         renderGrid();
       } catch(error) { notify(error.message); }
     };
-    $('closeWelcome').onclick = () => closeDialog($('welcomeDialog'));
-    $('welcomeImportFolder').onclick = () => { $('welcomeDialog').close(); importFolder(); };
-    $('welcomeImportSteam').onclick = () => { $('welcomeDialog').close(); importSteam(); };
-    $('welcomeImportHeroic').onclick = () => { $('welcomeDialog').close(); importHeroic(); };
-    $('welcomeImportLutris').onclick = () => { $('welcomeDialog').close(); importLutris(); };
-    $('welcomeSyncMetadata').onclick = async () => {
-      $('welcomeDialog').close();
-      try {
-        await api('/api/metadata/sync',{method:'POST',body:'{}'});
-        notify('Metadata sync started');
-        watchMetadata();
-      } catch(error) { notify(error.message); }
-    };
-    $('welcomeOpenSettings').onclick = () => { $('welcomeDialog').close(); openSettings(); };
-    $('welcomeDone').onclick = completeWelcome;
-    $('reopenWelcome').onclick = () => $('welcomeDialog').showModal();
+
     $('settingsSearch').oninput = filterSettings;
     $('forceShutdown').onclick = () => gracefulShutdown(true);
     window.addEventListener('beforeunload', event => { if (AppState.runningGames.length) { event.preventDefault(); gracefulShutdown(); } });
@@ -236,7 +277,6 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
       if (event.key === 'F11') { event.preventDefault(); nativeFullscreen().catch(() => {}); }
       if (event.key === 'Escape') {
         if (toolsMenuOpen()) closeToolsMenu(true);
-        closeContextMenu();
       }
     });
     $('closeSettings').onclick = $('cancelSettings').onclick = () => $('settingsDialog').close();
@@ -246,10 +286,14 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
     $('closeMedia').onclick = () => { $('mediaDialog').close(); $('mediaDialog').querySelectorAll('img').forEach(el => el.remove()); };
     $('closeReader').onclick = () => { $('readerDialog').close(); $('readerFrame').removeAttribute('src'); AppState.readerUrl = ''; AppState.readerPage = 1; };
     $('bigBox').onkeydown = event => {
+      if (bigBoxTypingActive()) {
+        if (event.key === 'Escape') $('bigBoxHybridSearch').blur();
+        return;
+      }
       if (!$('screenSaver').hidden) {
         const game = AppState.screenSaverGame;
         stopScreenSaver();
-        if (event.key === 'Enter' && game) launch(game.id);
+        if (event.key === 'Enter' && game) activateCurrentGame(game);
         event.preventDefault();
         return;
       }
@@ -263,7 +307,7 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
       if (event.key === 'ArrowRight' || event.key === 'ArrowDown') moveBigBox(1);
       if (event.key === 'Enter') {
         const target = AppState.bigBoxGames[AppState.bigBoxIndex];
-        if (target) launch(target.id);
+        if (target) activateCurrentGame(target);
       }
       if (event.key.toLowerCase() === 'p' && AppState.runningGames.length) openBigBoxPause();
       if (event.key.toLowerCase() === 'm') openBigBoxMenu();
@@ -274,7 +318,6 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
 
     const deeplink = new URLSearchParams(location.search);
     if (deeplink.get('deeplink') === 'search') $('sidebarSearch').value = deeplink.get('q') || '';
-    if (deeplink.get('deeplink') === 'showgame') AppState.selectedId = Number(deeplink.get('id'));
     Promise.all([refresh(),loadTheme()]).then(async () => {
 
     $('queueButton').onclick = () => openFeature('queue');
@@ -289,5 +332,11 @@ import { closeDialog, openGameDialog, openContextMenu, closeContextMenu } from '
       if (deeplink.get('deeplink') === 'bigbox') openBigBox();
       else if (AppState.appSettings.gamescope_guest) openBigBox();
       if (deeplink.get('deeplink') === 'settings') openSettings();
-      if (deeplink.get('deeplink') === 'showgame' && AppState.selectedId !== null) render();
+      if (deeplink.get('deeplink') === 'showgame') {
+        const resolved = resolveDeeplinkGameId(deeplink.get('id'));
+        if (resolved !== null) {
+          AppState.selectedId = resolved;
+          render();
+        }
+      }
     }).catch(error => notify(error.message));

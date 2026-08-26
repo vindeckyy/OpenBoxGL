@@ -1,17 +1,67 @@
 #!/usr/bin/env python3
-"""Stock theme packaging and install tests."""
+"""Stock theme packaging, offline, contrast, and install tests."""
 
+import re
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from stock_themes import ensure_stock_themes, is_stock_theme, stock_theme_sources
-
-
 ROOT = Path(__file__).resolve().parent
-# Handle both flat and tests/ layout
 if not (ROOT / "themes").is_dir() and (ROOT.parent / "themes").is_dir():
     ROOT = ROOT.parent
+sys.path.insert(0, str(ROOT))
+
+from stock_themes import ensure_stock_themes, is_stock_theme, stock_theme_sources  # noqa: E402
+
+APP_CSS = ROOT / "static" / "app.css"
+ROOT_BLOCK_RE = re.compile(r":root\s*\{[^}]*\}", re.DOTALL)
+VAR_DEF_RE = re.compile(r"--([\w-]+)\s*:\s*([^;]+);")
+HEX_RE = re.compile(r"#(?:[0-9a-fA-F]{3}){1,2}\b")
+
+
+def _parse_root_vars(css_text: str):
+    match = ROOT_BLOCK_RE.search(css_text)
+    if not match:
+        return {}
+    return {name: value.strip() for name, value in VAR_DEF_RE.findall(match.group(0))}
+
+
+def _hex_to_rgb(value: str):
+    value = value.strip().lower()
+    if not value.startswith("#"):
+        return None
+    if len(value) == 4:
+        value = "#" + "".join(ch * 2 for ch in value[1:])
+    if len(value) != 7:
+        return None
+    return tuple(int(value[i:i + 2], 16) for i in (1, 3, 5))
+
+
+def _relative_luminance(rgb):
+    channels = []
+    for channel in rgb:
+        scaled = channel / 255
+        channels.append(scaled / 12.92 if scaled <= 0.03928 else ((scaled + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+def _contrast_ratio(fg_hex: str, bg_hex: str) -> float:
+    fg = _relative_luminance(_hex_to_rgb(fg_hex))
+    bg = _relative_luminance(_hex_to_rgb(bg_hex))
+    lighter = max(fg, bg)
+    darker = min(fg, bg)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _resolve_color(token_map, name):
+    value = token_map.get(name, "").strip()
+    if value.startswith("var(--"):
+        ref = value[6:value.index(")")].strip()
+        return _resolve_color(token_map, ref)
+    if value.startswith("#"):
+        return value
+    return None
 
 
 class StockThemesTests(unittest.TestCase):
@@ -70,7 +120,7 @@ class StockThemesTests(unittest.TestCase):
             installed = ensure_stock_themes(destination, ROOT)
             self.assertIn("Cinema Marquee", installed)
             refreshed = stale.read_text(encoding="utf-8")
-            self.assertIn("v2", refreshed)
+            self.assertIn("v3", refreshed)
             self.assertNotIn("backdrop-filter: blur(8px)", refreshed)
             # A second run with the current version is a no-op.
             self.assertEqual(ensure_stock_themes(destination, ROOT), [])
@@ -95,6 +145,30 @@ class StockThemesTests(unittest.TestCase):
                             self.fail(
                                 f"{path.name}: {overlay} must not be forced to position:relative"
                             )
+
+    def test_stock_themes_are_offline_and_token_only(self):
+        app_tokens = set(_parse_root_vars(APP_CSS.read_text()).keys())
+        for path in stock_theme_sources(ROOT):
+            css = path.read_text(encoding="utf-8")
+            self.assertNotIn("http", css.lower(), f"{path.name} must not request remote assets")
+            self.assertNotIn("@import", css, f"{path.name} must not import remote fonts")
+            outside = ROOT_BLOCK_RE.sub("", css)
+            self.assertEqual(len(HEX_RE.findall(outside)), 0, f"{path.name} must be token-only outside :root")
+            theme_tokens = set(_parse_root_vars(css).keys())
+            missing = sorted(app_tokens - theme_tokens)
+            self.assertFalse(missing, f"{path.name} missing :root tokens: {missing[:8]}")
+
+    def test_stock_themes_meet_wcag_aa_contrast(self):
+        for path in stock_theme_sources(ROOT):
+            tokens = _parse_root_vars(path.read_text(encoding="utf-8"))
+            text = _resolve_color(tokens, "text")
+            bg = _resolve_color(tokens, "bg")
+            muted = _resolve_color(tokens, "muted")
+            self.assertIsNotNone(text, f"{path.name} needs resolvable --text")
+            self.assertIsNotNone(bg, f"{path.name} needs resolvable --bg")
+            self.assertGreaterEqual(_contrast_ratio(text, bg), 4.5, f"{path.name} text/bg contrast")
+            if muted:
+                self.assertGreaterEqual(_contrast_ratio(muted, bg), 4.5, f"{path.name} muted/bg contrast")
 
 
 def _css_blocks(css):

@@ -158,6 +158,155 @@ class TestBuildLaunchArgs(unittest.TestCase):
         args = build_launch_args("", self.GAME)
         self.assertEqual(args, [])
 
+    def test_path_with_spaces_stays_one_argument(self):
+        game = {"path": "/tmp/my game.iso", "name": "Spaced"}
+        args = build_launch_args("emu {path}", game)
+        self.assertEqual(args, ["emu", "/tmp/my game.iso"])
+
+    def test_flag_after_path_stays_separate(self):
+        game = {"path": "/tmp/my game.iso", "name": "Spaced"}
+        args = build_launch_args("emu {path} --flag", game)
+        self.assertEqual(args, ["emu", "/tmp/my game.iso", "--flag"])
+
+    def test_quoted_path_template(self):
+        game = {"path": "/tmp/my game.iso", "name": "Spaced"}
+        args = build_launch_args('emu "{path}" --flag', game)
+        self.assertEqual(args, ["emu", "/tmp/my game.iso", "--flag"])
+
+    def test_unmatched_quotes_falls_back(self):
+        args = build_launch_args('emu "unclosed', {"path": "/rom.iso"})
+        self.assertEqual(args, ['emu', '"unclosed'])
+
+
+class TestLaunchExtra(unittest.TestCase):
+    """launch_extra uses split-then-substitute for command templates."""
+
+    def test_quoted_path_command_splits_before_substitute(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        from handlers.sessions import SessionHandlers
+
+        with tempfile.TemporaryDirectory() as tmp:
+            spaced = Path(tmp) / "my game.iso"
+            spaced.write_text("x")
+            handler = SessionHandlers()
+            handler.send_json = mock.Mock()
+            state = {
+                "games": [{
+                    "name": "Test",
+                    "applications": [{
+                        "path": str(spaced),
+                        "command": 'emu "{path}" --flag',
+                    }],
+                }],
+            }
+            with mock.patch("handlers.sessions.load_state", return_value=state), \
+                 mock.patch("handlers.sessions.subprocess.Popen") as popen:
+                handler.launch_extra({
+                    "id": 0,
+                    "kind": "applications",
+                    "index": 0,
+                })
+            popen.assert_called_once()
+            self.assertEqual(popen.call_args[0][0], ["emu", str(spaced), "--flag"])
+
+    def test_direct_path_without_command(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        from handlers.sessions import SessionHandlers
+
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = Path(tmp) / "game.bin"
+            exe.write_text("x")
+            handler = SessionHandlers()
+            handler.send_json = mock.Mock()
+            state = {
+                "games": [{
+                    "name": "Test",
+                    "versions": [{"path": str(exe)}],
+                }],
+            }
+            with mock.patch("handlers.sessions.load_state", return_value=state), \
+                 mock.patch("handlers.sessions.subprocess.Popen") as popen:
+                handler.launch_extra({
+                    "id": 0,
+                    "kind": "versions",
+                    "index": 0,
+                })
+            self.assertEqual(popen.call_args[0][0], [str(exe)])
+
+    def test_documents_use_xdg_open(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        from handlers.sessions import SessionHandlers
+
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = Path(tmp) / "manual.pdf"
+            doc.write_text("x")
+            handler = SessionHandlers()
+            handler.send_json = mock.Mock()
+            state = {
+                "games": [{
+                    "name": "Test",
+                    "documents": [{"path": str(doc)}],
+                }],
+            }
+            with mock.patch("handlers.sessions.load_state", return_value=state), \
+                 mock.patch("handlers.sessions.shutil.which", return_value="/usr/bin/xdg-open"), \
+                 mock.patch("handlers.sessions.subprocess.Popen") as popen:
+                handler.launch_extra({
+                    "id": 0,
+                    "kind": "documents",
+                    "index": 0,
+                })
+            self.assertEqual(popen.call_args[0][0], ["/usr/bin/xdg-open", str(doc)])
+
+    def test_unknown_kind_raises(self):
+        from unittest import mock
+
+        from handlers.sessions import SessionHandlers
+
+        handler = SessionHandlers()
+        with mock.patch("handlers.sessions.load_state", return_value={"games": [{"name": "Test"}]}):
+            with self.assertRaises(ValueError):
+                handler.launch_extra({"id": 0, "kind": "bad", "index": 0})
+
+    def test_missing_extra_file_raises(self):
+        from unittest import mock
+
+        from handlers.sessions import SessionHandlers
+
+        handler = SessionHandlers()
+        state = {"games": [{"name": "Test", "applications": [{"path": "/missing/file.bin"}]}]}
+        with mock.patch("handlers.sessions.load_state", return_value=state):
+            with self.assertRaises(FileNotFoundError):
+                handler.launch_extra({"id": 0, "kind": "applications", "index": 0})
+
+
+class TestFilledLaunchCommand(unittest.TestCase):
+    """_filled_launch_command splits templates before substituting paths."""
+
+    def test_spaced_path_and_trailing_flag(self):
+        import shlex
+
+        from pkg.state.imports import _filled_launch_command
+
+        game = {"launch": "emu {path} --flag", "path": "/tmp/my game.iso"}
+        args = shlex.split(_filled_launch_command(game))
+        self.assertEqual(args, ["emu", "/tmp/my game.iso", "--flag"])
+
+    def test_empty_command(self):
+        from pkg.state.imports import _filled_launch_command
+
+        self.assertEqual(_filled_launch_command({}), "")
+        self.assertEqual(_filled_launch_command({"launch": "   "}), "")
+
 
 if __name__ == "__main__":
     unittest.main()

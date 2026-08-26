@@ -57,6 +57,9 @@ from handlers.extensions import ExtensionsHandlers
 from handlers.faugus import FaugusHandlers
 from handlers.health import HealthHandlers
 from handlers.imports import ImportsHandlers
+from handlers.jobs import JobsHandlers
+from handlers.launch import LaunchHandlers
+from handlers.setup import SetupHandlers
 from handlers.library import LibraryHandlers
 from handlers.media import MediaHandlers
 from handlers.metadata import MetadataHandlers
@@ -118,7 +121,7 @@ CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsaf
 
 
 
-class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, EmulatorsHandlers, DataHandlers, WineHandlers, FaugusHandlers, BaseHTTPRequestHandler):
+class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, LaunchHandlers, SetupHandlers, DataHandlers, WineHandlers, FaugusHandlers, BaseHTTPRequestHandler):
     server_version = "OpenBox/1"
     protocol_version = "HTTP/1.1"
     MAX_BODY = 65536
@@ -396,6 +399,8 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         "/static/bigbox.js",
         "/static/storefront.js",
         "/static/dialogs.js",
+        "/static/setup.js",
+        "/static/activity.js",
         "/static/app.css",
         "/static/logo.png",
     ], public=True)

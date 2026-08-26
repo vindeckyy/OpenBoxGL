@@ -1,0 +1,21 @@
+schema_version: 1
+adapter_id: duckstation-psx
+emulator_id: org.duckstation.DuckStation
+label: DuckStation
+platform: PlayStation
+extensions:
+  - bin
+  - cue
+  - img
+  - iso
+  - pbp
+  - chd
+native_exe: duckstation-qt
+flatpak_app_id: org.duckstation.DuckStation
+startup_args:
+  - -batch
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - duckstation-qt
