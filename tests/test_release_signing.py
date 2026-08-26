@@ -24,11 +24,20 @@ class VerifyReleaseTests(unittest.TestCase):
             artifact.write_bytes(b"fake release bytes\n")
             key_path = root / "ed25519.key"
             try:
+                from cryptography.hazmat.primitives import serialization
                 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
             except ImportError:
                 self.skipTest("cryptography not installed")
             key = Ed25519PrivateKey.generate()
-            key_path.write_bytes(key.private_bytes_raw())
+            if hasattr(key, "private_bytes_raw"):
+                raw_key = key.private_bytes_raw()
+            else:
+                raw_key = key.private_bytes(
+                    encoding=serialization.Encoding.Raw,
+                    format=serialization.PrivateFormat.Raw,
+                    encryption_algorithm=serialization.NoEncryption(),
+                )
+            key_path.write_bytes(raw_key)
 
             sign = subprocess.run(
                 [sys.executable, str(ROOT / "scripts/sign_release.py"),
@@ -43,7 +52,7 @@ class VerifyReleaseTests(unittest.TestCase):
             # Text key encodings are accepted for CI secrets, and signing
             # without --public-key-out must not overwrite a working-tree key.
             encoded_key = root / "encoded.key"
-            encoded_key.write_text(base64.b64encode(key.private_bytes_raw()).decode("ascii"))
+            encoded_key.write_text(base64.b64encode(raw_key).decode("ascii"))
             encoded_sig = root / "encoded.sig"
             encoded = subprocess.run(
                 [sys.executable, str(ROOT / "scripts/sign_release.py"),

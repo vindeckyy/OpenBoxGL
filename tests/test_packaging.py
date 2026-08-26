@@ -301,6 +301,9 @@ def test_flatpak_validate_subprocess():
             [sys.executable, "-B", str(ROOT / "scripts" / "validate_flatpak_manifest.py")],
             check=True,
         )
+    if shutil.which("appstreamcli") is None:
+        print("  Flatpak dry-run validator: skipped (appstreamcli not installed)")
+        return
     subprocess.run(
         ["appstreamcli", "validate", "--no-net", str(ROOT / "openbox.metainfo.xml")],
         check=True,
