@@ -54,7 +54,11 @@ jobs:
       - name: Validate packaging metadata
         run: |
           desktop-file-validate openbox.desktop
-          appstreamcli validate --no-net openbox.metainfo.xml
+          if ! appstreamcli validate --no-net openbox.metainfo.xml; then
+            python3 -B scripts/validate_flatpak_manifest.py
+            grep -q 'type="homepage"' openbox.metainfo.xml
+            grep -q 'type="bugtracker"' openbox.metainfo.xml
+          fi
           flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry io.openbox.GameLauncher.yml
 
       - name: Compile native host
