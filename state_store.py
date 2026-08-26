@@ -449,9 +449,19 @@ class JsonStateStore:
                     self._write_unlocked(state)
                 self._remember(state)
 
+    def _ensure_data_parent(self) -> None:
+        parent = self.path.parent
+        if parent.is_dir():
+            return
+        try:
+            parent.mkdir(parents=True, exist_ok=True)
+        except FileExistsError:
+            if not parent.is_dir():
+                raise
+
     @contextmanager
     def _file_lock(self, exclusive: bool):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._ensure_data_parent()
         with self.lock_path.open("a+", encoding="utf-8") as lock_file:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
             try:

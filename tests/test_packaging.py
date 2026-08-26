@@ -291,6 +291,10 @@ def test_flatpak_validate_subprocess():
         )
     else:
         print("  Flatpak dry-run: skipped locally (unsupported; CI flatpak-validate is required gate)")
+        subprocess.run(
+            [sys.executable, "-B", str(ROOT / "scripts" / "validate_flatpak_manifest.py")],
+            check=True,
+        )
     subprocess.run(
         ["appstreamcli", "validate", "--no-net", str(ROOT / "openbox.metainfo.xml")],
         check=True,
