@@ -6,7 +6,7 @@ Read this before writing code. A convention that lives only in a human's head is
 - `openbox.py` is the launcher entry point, stays at root.
 - `handlers/` - HTTP handlers, one module per domain (library, imports, media, etc.).
 - `pkg/parity/` - parity_* modules (clear names, cohesive cluster). New parity code goes there, with shim at root for compat.
-- `static/` - 13 JS modules split by domain (library.js, imports.js, etc.) plus app.js/app.css.
+- `static/` - 17 JS modules split by domain (library.js, insights.js, etc.) plus worker.search.js, app.js, and app.css.
 - `themes/` - theme CSS files, each overrides `:root` tokens only.
 - `emulator_defs/` - YAML definitions.
 - `tests/` - one test_*.py per module, mirroring package layout, standalone `python3 -B file.py` style, run via `./run_all_tests.sh`.
@@ -20,7 +20,7 @@ New integration goes in `pkg/parity/` or `handlers/` as appropriate, never at ro
 - Every color, spacing, and typography value comes from a token in `static/app.css` `:root` (`--brand`, `--focus`, `--surface-card`, `--font-heading`, etc.).
 - No raw hex in component rules outside `:root`. A new visual value means a new token plus its entry in each theme file.
 - Token names are the theme contract. Themes override `:root` and mostly nothing else.
-- `scripts/check_tokens.py` enforces this with a ratcheting baseline (ratcheted to 343, originally 625).
+- `scripts/check_tokens.py` enforces this with a ratcheting baseline (ratcheted to 0, originally 625).
 
 ## Non-negotiables
 - Runtime stays dependency-free. `pyproject.toml` dev deps are not installed in AppImage.

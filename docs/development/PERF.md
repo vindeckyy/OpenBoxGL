@@ -78,6 +78,13 @@ Notes:
 | 10k favorite write | <500ms | measured |
 | 20k favorite write | <1000ms | gated in CI |
 
+## 1.7.1 Performance Architecture
+
+- **Virtual Spacer-Window Grid**: `#grid` uses spacer-window virtualization (`IntersectionObserver`, `contain-intrinsic-size`, rAF coalescing) rendering only visible cards + overscan buffer. Enables 60 FPS scrolling at 20,000 games while maintaining full DOM a11y focus restoration. Can be bypassed via `localStorage['openbox-virtual-grid'] = 'false'`.
+- **Search Offloading**: Search indexing and query evaluation run off the main thread in `static/worker.search.js` using trigram index + acronym matching with synchronous fallback.
+- **FacetCache**: LRU facet cache (capacity 64) with epoch bumping on state changes, preventing repeated facet recalculations on large libraries.
+- **Write Coalescing**: `state_store.py` micro-batches writes within a 50ms window with single fsync, minimizing disk write amplification during bulk mutations.
+
 ## Gate
 
 CI job `perf-20k` is blocking on pull requests and pushes to master.

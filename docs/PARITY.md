@@ -45,6 +45,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Welcome wizard and first-run setup | done | Setup Center eight-step stepper with preview-before-commit imports, emulator readiness, metadata match review, and Launch Doctor batch preflight |
 | Durable background operations | done | Activity drawer with SSE progress, cancellation, retry/resume, and `operations.json` persistence |
 | Launch readiness preflight | done | Launch Doctor validates paths, adapters, Flatpak/native executables, BIOS/firmware, and tokenized arguments before launch |
+| Play Insights local analytics | done | Local 366-day playtime heatmap (levels 0–4), streaks, momentum, top platforms/genres with zero telemetry |
 | Searchable settings pages | done | Settings dialog filters fields by name and related terms |
 | Session history toggle and viewer | done | Play sessions can be disabled and are browsable from the History menu |
 | Arrange-by scrollbar | done | Large sorted views expose a jump bar with group markers |

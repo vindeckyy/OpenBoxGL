@@ -34,9 +34,17 @@ colors:
   empty-action: "#e08a3c"
   achievement: "#eaa54f"
   lifecycle-bg: "#45351d"
-  lifecycle-kicker: "#f0c36a"
   bigbox-bg: "#30261a"
   bigbox-copy: "#d0c0a5"
+  overlay-insight-cell-0: "#1c1915"
+  overlay-insight-cell-1: "#4a2c0a"
+  overlay-insight-cell-2: "#8a4f10"
+  overlay-insight-cell-3: "#c97316"
+  overlay-insight-cell-4: "#f06000"
+  border-insight: "#3d3932"
+  shadow-insight: "#00000066"
+  surface-insight-card: "#1b1916"
+  focus-ring: "#f06000"
 typography:
   display:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
