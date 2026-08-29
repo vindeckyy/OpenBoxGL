@@ -17,7 +17,8 @@
     <release version="1.7.1" date="2026-08-29">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.7.1</url>
       <description>
-        <p>Polish, Performance &amp; Play Insights: virtual grid, worker search, Play Insights heatmap, Setup copy polish, Launch Doctor fix actions, token-complete themes.</p>
+        <p>Polish, Performance &amp; Play Insights release introducing local play analytics, 20k-scale responsiveness, and actionable one-click launch fixes.</p>
+        <p>Adds local-first Play Insights dashboard with a 366-day activity heatmap, streak tracking, and playtime momentum with zero telemetry. Optimizes large libraries via spacer-window grid virtualization, off-thread Web Worker trigram search, LRU facet caching, and 50 ms micro-batch disk writes. Equips Launch Doctor with actionable fix buttons and enhances Setup Center with human progress storytelling.</p>
       </description>
     </release>
     <release version="1.7.0" date="2026-08-26">
