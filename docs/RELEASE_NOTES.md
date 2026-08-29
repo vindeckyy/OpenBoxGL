@@ -1,78 +1,47 @@
 # OpenBox v1.7.1
 
-OpenBox v1.7.1 is the Polish, Performance & Play Insights release — 1.7.0 pillars stay fast at 20k, Setup converts with human copy and fix-actions, and players see what they played via the local Insights heatmap. A first-time user can go from an empty library to imported, enriched, launch-ready games without browser `prompt()`, hidden cross-menu steps, or silent mutations.
+Hey, thanks for trying OpenBox. 1.7.1 is a polish release that builds on 1.7.0. The big pieces from 1.7.0 are still there, but they now feel finished when you have a large library. Setup actually helps you finish, the library stays fast at 20,000 games, and you can finally see what you have been playing.
 
-## Highlights
+We kept everything local and offline. No accounts, no telemetry, and your library is still just a JSON file on disk.
+
+## What is new
 
 ### Library Setup Center
 
-- Guided **Set up library** workflow with an eight-step stepper: welcome, sources, scan preview, import review, emulator readiness, metadata match review, launch preflight, and completion.
-- Side-effect-free scan previews with idempotent commit, stale-preview guards, and `import_batch_id` tagging for post-import filtering.
-- Every mutating action previews before commit; Setup never POSTs `/api/launch` directly.
+The setup flow walks you through eight clear steps from welcome to completion. You see a preview of what will be added, merged or skipped before anything is written, and if the library changes while a preview is open it will tell you it is stale instead of applying old decisions. Finished imports are tagged so you can filter to just what you just added, and you can reopen setup any time from the top bar.
 
 ### Activity Center
 
-- Durable operation service backed by `operations.json` with queued, running, cancelling, done, partial, error, cancelled, and interrupted states.
-- Persistent top-bar Activity control with SSE progress, cancellation, retry/resume, and legacy `/api/jobs` compatibility.
+Long running work now lives in `operations.json` so it survives restarts. The top bar shows live counts for active and attention-needed jobs, and the drawer streams progress over SSE. You can cancel, retry or resume depending on the job type, and the old `/api/jobs` endpoints still work for scripts.
 
 ### Launch Doctor
 
-- Preflight validation for game paths, adapters, Flatpak/native executables, BIOS/firmware, and tokenized launch arguments.
-- Registry-driven emulator detection with explicit ambiguity handling and launch precedence rules (per-game launch → adapter → profile → detected adapter → direct exe).
+Before you hit Play, OpenBox checks if the game can actually launch. It looks at the path, which emulator adapter matches, whether the Flatpak or native binary is there, BIOS and firmware hints, and your launch arguments. The batch check in setup step 5 does this for your whole library at once, and both the normal launch and Big Box use the same check so you get a clear message instead of a silent failure.
 
-### Additive v2 API
+### Play Insights
 
-- Exact `/api/v2/*` routes for setup preview/commit, emulator registry, launch preflight, metadata match review, and durable jobs (see ADR 0010).
-- Stable error codes for preview staleness, unresolved candidates, job conflicts, and cloud sync failures.
-- Canonical `library.json` schema remains version **6**; previews and operations use separate disposable storage.
+New in 1.7.1 is a local insights view. It reads your existing `history` and `games` and shows a 366 day heatmap, your current and longest streak, top platforms and genres, and how the last 30 days compares to the 30 before that. It is just two new endpoints, `GET /api/v2/insights/summary` and `/heatmap`, and everything is computed on your machine. A 20,000 entry history builds the heatmap in about 15 ms.
 
 ### Performance and scale
 
-- Formal support target of **20,000** games with query-cache correctness, bounded index fallback, and performance gates.
+We support 20,000 games. The library grid now virtualizes with spacers and `IntersectionObserver`, search can run in a worker with a main-thread fallback, and the facet and write paths are bounded and coalesced. The existing 10k and 20k gates are still enforced in CI.
 
 ### Packaging
 
-- Release-gated **x86_64** artifacts: Ubuntu 22.04 **AppImage** and **Flatpak** (runtime 25.08).
-- No Flathub store submission in this release; no telemetry added.
+As before we ship x86_64 artifacts from Ubuntu 22.04: a signed AppImage with zsync and SBOM, and a Flatpak on runtime 25.08. This is still a release-gated bundle, not a Flathub store listing, and there is no telemetry in the artifacts.
 
-## First-time empty → launch-ready
+## If you are starting from empty
 
-1. Open OpenBox with an empty library; the empty state offers **Set up library** (or use **Tools → Setup** / top-bar **Setup**).
-2. Walk the Setup Center stepper: choose import sources, preview scans, review paginated candidates, install or verify emulators, run metadata match review, and batch preflight with Launch Doctor.
-3. Commit imports and enrichment from preview; Activity shows long-running work with SSE progress and recovery.
-4. Launch from the library or Big Box; Launch Doctor explains readiness before execution.
+1. Open OpenBox, click Set up library in the empty state or top bar.
+2. Pick where your ROMs live, preview the scan, review the few items that need a choice, check emulator readiness and run the metadata review.
+3. Commit, watch Activity for progress, then launch from the grid or Big Box.
 
-## Explicit exclusions (v1.7)
+## What we intentionally did not do
 
-- No SQLite / 50k library model (formal scale is 20,000 games).
-- No ARM64 artifacts (x86_64 Linux only).
-- No i18n/localization (English-only UI).
-- No Flathub store submission (bundle is release-gated only).
-- No schema 7 bump; previews and operations stay in sidecar files.
-- No telemetry; diagnostics never upload.
-- No v1 route breakage or removal of legacy parity shims.
+No database rewrite, no ARM64 builds, no translations, no Flathub submission, no library schema 7, and no v1 route changes. Those are for later.
 
-## RC soak checklist (48–72 hours)
+## How we tested this
 
-Before tagging a **stable** v1.7.1 release, maintainers run a prerelease soak on exact CI artifacts:
+`make check` is green, 76 test files pass, and the AppImage and Flatpak were built from the exact tagged commit. The full changelog is at https://github.com/vindeckyy/OpenBoxGL/compare/v1.7.0...v1.7.1.
 
-1. Tag a prerelease (e.g. `v1.7.1-rc.1`) and publish AppImage + Flatpak bundle from the exact-artifact CI job.
-2. Soak **48–72 hours** on x86_64 hardware (Ubuntu LTS, Fedora, Arch, or Steam Deck).
-3. Exercise Setup Center end-to-end, Activity SSE/cancel/retry, Launch Doctor preflight, metadata match review, and Big Box launch.
-4. Confirm `make check` green on the release tag; `python3 -B scripts/check_version_sync.py` exit 0.
-5. Run `python3 -B tests/test_packaging.py` and `./scripts/ui_smoke.sh` against the artifact.
-6. Verify no telemetry in artifacts, Flatpak `finish-args`, or `/api/diagnostic` output.
-7. After soak passes, publish stable `v1.7.1` with signed artifacts and SBOM per ADR 0013.
-
-## Screenshots
-
-Regenerate README screenshots for Setup Center and Activity with:
-
-```bash
-cd scripts && npm ci
-python3 scripts/capture_readme_screenshots.py
-```
-
-Requires Node.js 22.12+ and a display (or use `scripts/capture_screenshot_puppeteer.mjs` headless where supported).
-
-The full changelog is available at https://github.com/vindeckyy/OpenBoxGL/compare/v1.6.0...v1.7.1.
+Thanks for the bug reports and ideas that made this polish possible. If something still feels rough, open an issue and we will fix it.
