@@ -155,6 +155,15 @@
   --surface-field: #0c1116;
   --surface-hover: #1a2a38;
   --surface-sheet: #171513dd;
+  --overlay-insight-cell-0: #1b1916;
+  --overlay-insight-cell-1: #3d2b1f;
+  --overlay-insight-cell-2: #7a4a1f;
+  --overlay-insight-cell-3: #c46a1f;
+  --overlay-insight-cell-4: #f06000;
+  --border-insight: #4b4338;
+  --shadow-insight: #0007;
+  --surface-insight-card: #211e1a;
+  --focus-ring: #f06000;
   --text: #e8eef4;
   --text-soft: #8b9aab;
   --top-status: #8b9aab;

@@ -62,6 +62,124 @@ _PLATFORM_CATEGORY_MAX = 5000
 
 STATE_VIEW_LOCK = threading.Lock()
 
+FACET_CACHE_MAX = 64
+FACET_BUDGET_MS = 50.0
+FACET_DEGRADED = "DEGRADED"
+
+
+class FacetCache:
+    """LRU facet cache with time.monotonic budget and epoch tracking.
+
+    - LRU eviction when max_size exceeded.
+    - Budget via time.monotonic(): if facet aggregation exceeds budget_ms,
+      return partial facets with degraded=True and code=DEGRADED.
+    - Epoch bumps on CACHE_EPOCH._invalidate_all().
+    """
+
+    def __init__(self, max_size: int = FACET_CACHE_MAX, budget_ms: float = FACET_BUDGET_MS):
+        self.max_size = int(max_size)
+        self.budget_ms = float(budget_ms)
+        self._store: OrderedDict = OrderedDict()
+        self.epoch: int = 0
+        self._lock = threading.Lock()
+
+    def get(self, key):
+        with self._lock:
+            if key in self._store:
+                value = self._store.pop(key)
+                self._store[key] = value
+                return value
+            return None
+
+    def set(self, key, value):
+        with self._lock:
+            if key in self._store:
+                self._store.pop(key)
+            self._store[key] = value
+            if len(self._store) > self.max_size:
+                self._store.popitem(last=False)
+
+    def clear(self):
+        with self._lock:
+            self._store.clear()
+            self.epoch += 1
+
+    def _explorer_counts(self, games, field: str, start: float, effective: float):
+        """Count facets with budget check every iteration. Returns (counts, degraded)."""
+        counts: dict[str, int] = {}
+        degraded = False
+        for game in games:
+            # budget check before processing next game
+            if (time.monotonic() - start) * 1000.0 > effective:
+                degraded = True
+                break
+            if not isinstance(game, dict):
+                continue
+            if game.get("hidden"):
+                continue
+            if field == "genre":
+                for part in str(game.get("genre", "")).split(","):
+                    label = part.strip()
+                    if label:
+                        counts[label] = counts.get(label, 0) + 1
+            elif field == "developer":
+                label = str(game.get("developer", "")).strip()
+                if label:
+                    counts[label] = counts.get(label, 0) + 1
+            elif field == "publisher":
+                label = str(game.get("publisher", "")).strip()
+                if label:
+                    counts[label] = counts.get(label, 0) + 1
+            elif field == "platform":
+                label = str(game.get("platform", "Unspecified")).strip() or "Unspecified"
+                counts[label] = counts.get(label, 0) + 1
+            elif field == "progress":
+                label = str(game.get("progress", "")).strip() or "Unset"
+                counts[label] = counts.get(label, 0) + 1
+            elif field == "esrb":
+                label = str(game.get("esrb", "")).strip() or "Unrated"
+                counts[label] = counts.get(label, 0) + 1
+        return counts, degraded
+
+    def compute_facets(self, games, field: str, limit: int = 40, budget_ms: float | None = None):
+        """Compute facets with caching and budget. Returns dict with facets/degraded/code/epoch."""
+        try:
+            limit = max(0, int(limit))
+        except (TypeError, ValueError):
+            limit = 40
+        if field not in {"genre", "developer", "publisher", "platform", "progress", "esrb"}:
+            return {"facets": [], "degraded": False, "code": "OK", "epoch": self.epoch}
+        # cache key includes epoch so invalidation naturally misses
+        # use len + first/last ids for fingerprint to avoid collisions on same len
+        try:
+            first_id = str(games[0].get("game_id") or games[0].get("id") or "") if games else ""
+            last_id = str(games[-1].get("game_id") or games[-1].get("id") or "") if games else ""
+        except Exception:
+            first_id = ""
+            last_id = ""
+        key = (field, limit, len(games), first_id, last_id, self.epoch)
+        cached = self.get(key)
+        if cached is not None:
+            return cached
+        effective = float(budget_ms) if budget_ms is not None else float(self.budget_ms)
+        start = time.monotonic()
+        counts, degraded = self._explorer_counts(games, field, start, effective)
+        # final budget check if not already degraded but over budget after loop
+        if not degraded and (time.monotonic() - start) * 1000.0 > effective:
+            degraded = True
+        items = sorted(counts.items(), key=lambda pair: (-pair[1], pair[0].casefold()))
+        facets = [{"value": value, "count": count} for value, count in items[:limit]]
+        result = {"facets": facets, "degraded": degraded, "code": FACET_DEGRADED if degraded else "OK", "epoch": self.epoch}
+        self.set(key, result)
+        return result
+
+    def get_facets(self, games, field: str, limit: int = 40, budget_ms: float | None = None):
+        """Alias for compute_facets."""
+        return self.compute_facets(games, field, limit=limit, budget_ms=budget_ms)
+
+
+FACET_CACHE = FacetCache()
+
 
 def _ns(name, default):
     mod = sys.modules.get("webapp_state")
@@ -257,6 +375,11 @@ class CacheEpoch:
             self.settings.update({"signature": None, "payload": None})
         with STATE_VIEW_LOCK:
             STATE_VIEW_CACHE.update({"signature": None, "state": None})
+        # Facet cache epoch bump and clear
+        try:
+            FACET_CACHE.clear()
+        except NameError:
+            pass
         clear_file_probe_cache()
 
 

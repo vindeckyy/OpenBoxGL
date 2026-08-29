@@ -4,6 +4,34 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] - 2026-08-29
+
+### Play Insights
+
+- Local-first **Play Insights** dashboard: 366-day heatmap (levels 0-4), current/longest streak, top platforms/genres, momentum (last 30 vs previous 30) from `history` + `games` — no new storage, no telemetry. `GET /api/v2/insights/summary` + `GET /api/v2/insights/heatmap?days=&end_date=`.
+
+### Performance
+
+- Virtual spacer-window library grid with `localStorage['openbox-virtual-grid']` kill-switch, `IntersectionObserver` + `contain-intrinsic-size`, rAF coalescing preserved.
+- Trigram search off main thread via `static/worker.search.js` with main-thread fallback; identical results.
+- `pkg/state/cache.py` `FacetCache` LRU (64) + budget + epoch bump on `_invalidate_all()`; `state_store.py` 50 ms micro-batch coalesce, single fsync.
+- `scripts/perf_bench.py` now supports `--json-out` alias and artifact-friendly JSON; gates remain 10k/20k (20k <15 ms for insights heatmap).
+
+### Setup & Launch Doctor Polish
+
+- Setup preview `preview_document` now includes human `message` (“Found 342 games — 12 need your pick →”) for progress storytelling.
+- Launch Doctor every blocking check now carries `fix_action {kind, label, payload}` (`flatpak_install`, `reveal_bios_path`, `pick_core`, `explain_token`) — actionable buttons instead of red badge only.
+
+### Frontend & Themes
+
+- New tokens in `static/app.css` `:root`: `--overlay-insight-cell-0`…`--overlay-insight-cell-4`, `--border-insight`, `--shadow-insight`, `--surface-insight-card`, `--focus-ring`; all 5 themes updated.
+- Insights panel CSS: cards, heatmap grid 53×7, ranked lists, streak, legend; lazy-loaded via `static/insights.js`.
+
+### Gates
+
+- `runtime_modules.txt` + shim `parity_insights.py`, `handlers/insights.py` wired; `routes.py` 4 new GETs; `v1_contracts.json` unchanged (frozen).
+- `make check` green: ruff, py_compile, `check_tokens` 0, `check_v1_contract` 60 routes, `check_runtime` 114, `check_frontend` eslint/tsc.
+
 ## [1.7.0] - 2026-08-26
 
 ### Library Setup Center

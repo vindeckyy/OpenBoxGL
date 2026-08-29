@@ -337,6 +337,22 @@ def save_preview(preview: dict, *, data_dir: Path | None = None) -> None:
     atomic_write_text(path, json.dumps(preview, ensure_ascii=False))
 
 
+def _human_preview_message(preview: dict) -> str:
+    counts = preview.get("counts") or {}
+    scanned = int(preview.get("scanned_entries") or 0)
+    total = scanned or sum(int(v or 0) for v in counts.values() if isinstance(v, int))
+    # Pending picks: ambiguities and unsupported need explicit user decision
+    pending = int(counts.get("ambiguities") or 0) + int(counts.get("unsupported") or 0)
+    # Fallback to legacy keys for backwards compat
+    if not pending:
+        pending = int(counts.get("pending") or counts.get("needs_review") or 0)
+    if pending:
+        return f"Found {total} games — {pending} need your pick"
+    if total:
+        return f"Found {total} games — review and commit"
+    return "Preview ready — review items and commit"
+
+
 def preview_document(preview: dict) -> dict:
     doc = {
         "preview_id": preview["preview_id"],
@@ -349,6 +365,7 @@ def preview_document(preview: dict) -> dict:
         "job_id": preview.get("job_id"),
         "sources": list(preview.get("sources") or []),
         "options": dict(preview.get("options") or {}),
+        "message": _human_preview_message(preview),
     }
     if preview.get("revalidated"):
         doc["revalidated"] = True

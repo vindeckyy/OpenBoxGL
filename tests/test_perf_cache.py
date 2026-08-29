@@ -488,6 +488,153 @@ class PerfCacheTests(unittest.TestCase):
             _build_public_state()
             time.sleep(0.1)
 
+class FacetCacheTests(unittest.TestCase):
+    """F1: FacetCache LRU + budget + epoch bump on _invalidate_all."""
+
+    def setUp(self):
+        from pkg.state.cache import FACET_CACHE
+        FACET_CACHE._store.clear()
+        FACET_CACHE.epoch = 0
+        FACET_CACHE.max_size = 64
+        FACET_CACHE.budget_ms = 50.0
+
+    def test_facet_lru_evicts_oldest(self):
+        from pkg.state.cache import FacetCache
+        fc = FacetCache(max_size=2, budget_ms=50.0)
+        fc.set("a", {"facets": [1]})
+        fc.set("b", {"facets": [2]})
+        # access a to make b LRU
+        self.assertEqual(fc.get("a"), {"facets": [1]})
+        fc.set("c", {"facets": [3]})
+        self.assertIsNone(fc.get("b"), "LRU should evict b")
+        self.assertEqual(fc.get("a"), {"facets": [1]})
+        self.assertEqual(fc.get("c"), {"facets": [3]})
+        # max_size bound
+        self.assertLessEqual(len(fc._store), 2)
+
+    def test_facet_lru_budget_degraded(self):
+        from pkg.state.cache import FACET_CACHE
+        # 10k games with tiny budget should degrade
+        games = [{"game_id": f"g{i}", "platform": f"P{i%5}", "genre": "Action", "hidden": False} for i in range(8000)]
+        result = FACET_CACHE.compute_facets(games, "platform", limit=10, budget_ms=0.001)
+        self.assertTrue(result["degraded"])
+        self.assertEqual(result["code"], "DEGRADED")
+        self.assertIn("facets", result)
+        # normal budget should not degrade and return full counts
+        FACET_CACHE._store.clear()
+        result2 = FACET_CACHE.compute_facets(games, "platform", limit=10, budget_ms=1000.0)
+        self.assertFalse(result2["degraded"])
+        self.assertEqual(result2["code"], "OK")
+        self.assertGreater(len(result2["facets"]), 0)
+        # degraded result is partial vs full
+        self.assertLessEqual(len(result["facets"]), len(result2["facets"]))
+
+    def test_facet_cache_uses_time_monotonic_budget(self):
+        import time
+        from pkg.state.cache import FACET_CACHE
+        games = [{"game_id": f"g{i}", "platform": "PC", "hidden": False} for i in range(5000)]
+        # patch time.monotonic to simulate budget exceed after 100 games
+        start = time.monotonic()
+        call_count = {"n": 0}
+
+        def fake_mono():
+            call_count["n"] += 1
+            # after 5 calls, pretend 100ms has passed
+            if call_count["n"] > 5:
+                return start + 0.1
+            return start + 0.001 * call_count["n"]
+
+        with mock.patch("pkg.state.cache.time.monotonic", side_effect=fake_mono):
+            r = FACET_CACHE.compute_facets(games, "platform", limit=10, budget_ms=5.0)
+            self.assertTrue(r["degraded"])
+            self.assertEqual(r["code"], "DEGRADED")
+
+        # restore budget
+        FACET_CACHE.budget_ms = 50.0
+
+    def test_facet_epoch_bump_on_invalidate_all(self):
+        from pkg.state.cache import FACET_CACHE, CACHE_EPOCH
+        FACET_CACHE.set("k1", {"facets": []})
+        old_epoch = FACET_CACHE.epoch
+        self.assertIn("k1", FACET_CACHE._store)
+        CACHE_EPOCH._invalidate_all()
+        self.assertNotIn("k1", FACET_CACHE._store)
+        self.assertEqual(FACET_CACHE.epoch, old_epoch + 1)
+        # second bump
+        old2 = FACET_CACHE.epoch
+        CACHE_EPOCH._invalidate_all(bump_media=True)
+        self.assertEqual(FACET_CACHE.epoch, old2 + 1)
+
+    def test_facet_cache_get_facets_cached_and_lru(self):
+        from pkg.state.cache import FACET_CACHE
+        games = [{"game_id": "g1", "platform": "PC", "hidden": False}, {"game_id": "g2", "platform": "PC", "hidden": False}]
+        r1 = FACET_CACHE.get_facets(games, "platform", limit=10)
+        r2 = FACET_CACHE.get_facets(games, "platform", limit=10)
+        self.assertIs(r1, r2, "cached result should be same object")
+        # different field should be separate key
+        r3 = FACET_CACHE.get_facets(games, "genre", limit=10)
+        self.assertIsNot(r1, r3)
+
+    def test_facet_invalid_field_returns_empty(self):
+        from pkg.state.cache import FACET_CACHE
+        games = [{"game_id": "g1", "platform": "PC"}]
+        r = FACET_CACHE.compute_facets(games, "invalid_field", limit=10)
+        self.assertEqual(r["facets"], [])
+        self.assertFalse(r["degraded"])
+
+    def test_facet_all_fields_and_hidden_and_limits(self):
+        from pkg.state.cache import FACET_CACHE
+        FACET_CACHE._store.clear()
+        games = [
+            {"game_id": "g1", "genre": "Action, Adventure", "developer": "Nintendo", "publisher": "Sega", "platform": "NES", "progress": "Playing", "esrb": "E", "hidden": False},
+            {"game_id": "g2", "genre": "Action", "developer": "  ", "publisher": "", "platform": "", "progress": "", "esrb": "", "hidden": True},
+            {"game_id": "g3", "genre": "", "developer": "Capcom", "publisher": "Capcom", "platform": "SNES", "progress": "Beaten", "esrb": "T", "hidden": False},
+            {"game_id": "g4", "genre": "RPG", "developer": "Square", "publisher": "Square", "platform": "PlayStation", "progress": "", "esrb": "M", "hidden": False},
+        ]
+        for field in ["genre", "developer", "publisher", "platform", "progress", "esrb"]:
+            r = FACET_CACHE.compute_facets(games, field, limit=2, budget_ms=1000.0)
+            self.assertIn("facets", r)
+            self.assertFalse(r["degraded"])
+            self.assertLessEqual(len(r["facets"]), 2)
+        # genre should count Action once (hidden excluded), Adventure once, RPG once
+        FACET_CACHE._store.clear()
+        r_genre = FACET_CACHE.compute_facets(games, "genre", limit=10, budget_ms=1000.0)
+        vals = {x["value"]: x["count"] for x in r_genre["facets"]}
+        self.assertEqual(vals.get("Action"), 1)
+        self.assertEqual(vals.get("Adventure"), 1)
+        self.assertEqual(vals.get("RPG"), 1)
+        # limit TypeError path and empty games handling
+        FACET_CACHE._store.clear()
+        r_limit_bad = FACET_CACHE.compute_facets(games, "platform", limit="bad", budget_ms=1000.0)
+        self.assertIsNotNone(r_limit_bad)
+        r_empty = FACET_CACHE.compute_facets([], "platform", limit=10, budget_ms=1000.0)
+        self.assertEqual(r_empty["facets"], [])
+        # exception in first_id/last_id (games not list of dicts with get)
+        FACET_CACHE._store.clear()
+        r_exc = FACET_CACHE.compute_facets([None, None], "platform", limit=10, budget_ms=1000.0)
+        self.assertIn("facets", r_exc)
+        # progress Unset and platform Unspecified handling already covered via empty strings
+        # esrb Unrated via empty
+
+    def test_facet_final_budget_check(self):
+        import time
+        from pkg.state.cache import FACET_CACHE
+        FACET_CACHE._store.clear()
+        games = [{"game_id": f"g{i}", "platform": "PC", "hidden": False} for i in range(100)]
+        start = time.monotonic()
+        # fake monotonic where loop itself doesn't exceed but final check does
+        calls = {"n": 0}
+        def fake_mono():
+            calls["n"] += 1
+            if calls["n"] <= 101:  # during loop, stay under
+                return start
+            # final check after loop: exceed
+            return start + 0.2
+        with mock.patch("pkg.state.cache.time.monotonic", side_effect=fake_mono):
+            r = FACET_CACHE.compute_facets(games, "platform", limit=10, budget_ms=5.0)
+            # loop degraded false but final check true => degraded true
+            self.assertTrue(r["degraded"])
+
 
 if __name__ == "__main__":
     unittest.main()

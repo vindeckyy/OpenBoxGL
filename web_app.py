@@ -57,6 +57,7 @@ from handlers.extensions import ExtensionsHandlers
 from handlers.faugus import FaugusHandlers
 from handlers.health import HealthHandlers
 from handlers.imports import ImportsHandlers
+from handlers.insights import InsightsHandlers
 from handlers.jobs import JobsHandlers
 from handlers.launch import LaunchHandlers
 from handlers.setup import SetupHandlers
@@ -121,7 +122,7 @@ CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsaf
 
 
 
-class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, LaunchHandlers, SetupHandlers, DataHandlers, WineHandlers, FaugusHandlers, BaseHTTPRequestHandler):
+class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, LaunchHandlers, SetupHandlers, DataHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, BaseHTTPRequestHandler):
     server_version = "OpenBox/1"
     protocol_version = "HTTP/1.1"
     MAX_BODY = 65536
@@ -401,6 +402,8 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         "/static/dialogs.js",
         "/static/setup.js",
         "/static/activity.js",
+        "/static/insights.js",
+        "/static/worker.search.js",
         "/static/app.css",
         "/static/logo.png",
     ], public=True)

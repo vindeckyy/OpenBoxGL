@@ -47,7 +47,26 @@ class JobsHandlers:
         query = parse_qs(parsed.query)
         cursor = query.get("cursor", [None])[0]
         limit = _parse_limit(query.get("limit", [None])[0], default=50, maximum=100)
-        payload = get_operation_service().list_jobs(cursor=cursor, limit=limit)
+        type_filter = (query.get("type", [None])[0] or query.get("type_filter", [None])[0])
+        state_filter = (query.get("state", [None])[0] or query.get("state_filter", [None])[0])
+        root_job_id = query.get("root_job_id", [None])[0]
+        if type_filter == "":
+            type_filter = None
+        if state_filter == "":
+            state_filter = None
+        if root_job_id == "":
+            root_job_id = None
+        payload = get_operation_service().list_jobs(
+            cursor=cursor,
+            limit=limit,
+            type_filter=type_filter,
+            state_filter=state_filter,
+            root_job_id=root_job_id,
+        )
+        # Expose grouping helper for clients that request it
+        if query.get("group_by", [None])[0] == "root_job_id":
+            grouped = get_operation_service().group_jobs_by_root(payload.get("jobs") or [])
+            payload["grouped_by_root"] = grouped
         self.send_json(200, payload)
 
     @route("GET", "/api/v2/jobs/items")

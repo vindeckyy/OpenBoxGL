@@ -90,6 +90,8 @@ LEGACY_INDEXED_ID = re.compile(r"^game-[0-9a-f]{24}-\d+$")
 QUEUE_CAP = 500
 NOTIFICATIONS_CAP = 200
 SNAPSHOT_DEBOUNCE_DEFAULT = float(os.environ.get("OPENBOX_SNAPSHOT_DEBOUNCE", "0.0"))
+WRITE_COALESCE_WINDOW = 0.05
+WRITE_COALESCE_MS = 50
 
 
 class StateCorruptError(RuntimeError):
@@ -354,6 +356,12 @@ class JsonStateStore:
         self._cached_signature: tuple[int, int, int] | None = None
         self._games_by_id: dict[str, dict[str, Any]] = {}
         self._games_by_platform: dict[str, list[dict[str, Any]]] = {}
+        # Write coalesce: 50ms micro-batch, single fsync per batch
+        self._coalesce_window = WRITE_COALESCE_WINDOW
+        self._coalesce_lock = threading.Lock()
+        self._coalesce_pending_state: dict[str, Any] | None = None
+        self._coalesce_timer: threading.Timer | None = None
+        self._coalesce_last_flush: float = 0.0
 
     def _signature(self) -> tuple[int, int, int] | None:
         try:
@@ -662,6 +670,62 @@ class JsonStateStore:
         state, _ = self.update_with_result(mutator)
         return copy.deepcopy(state)
 
+    def _flush_coalesced(self) -> None:
+        """Flush the pending coalesced state with a single fsync."""
+        with self._coalesce_lock:
+            state = self._coalesce_pending_state
+            self._coalesce_pending_state = None
+            self._coalesce_timer = None
+            self._coalesce_last_flush = time.monotonic()
+        if state is not None:
+            with self._thread_lock, self._file_lock(True):
+                self._write_unlocked(state, adopt=True)
+
+    def flush_coalesced(self) -> None:
+        """For testing: immediately flush any pending coalesced write."""
+        if self._coalesce_pending_state is not None:
+            if self._coalesce_timer is not None:
+                try:
+                    self._coalesce_timer.cancel()
+                except Exception:
+                    pass
+            self._flush_coalesced()
+
+    def coalesced_update(self, mutator: Callable[[dict[str, Any]], Any]) -> Any:
+        """Apply mutation via 50ms micro-batch coalesce; single fsync per batch."""
+        with self._thread_lock:
+            self._ensure_loaded()
+            # mutator works on the cached state directly (like update_with_result)
+            result = mutator(self._cached_state)
+            normalized, _ = normalize_state(self._cached_state)
+            # keep in-memory state updated immediately for read-your-writes
+            self._remember(normalized, adopt=True)
+            pending = copy.deepcopy(normalized)
+        with self._coalesce_lock:
+            self._coalesce_pending_state = pending
+            if self._coalesce_timer is None or not self._coalesce_timer.is_alive():
+                # schedule flush after window
+                self._coalesce_timer = threading.Timer(self._coalesce_window, self._flush_coalesced)
+                self._coalesce_timer.daemon = True
+                self._coalesce_timer.start()
+        return result
+
+    def coalesced_update_with_result(self, mutator: Callable[[dict[str, Any]], Any]) -> tuple[dict[str, Any], Any]:
+        """Coalesced variant that returns state snapshot and mutator result."""
+        with self._thread_lock:
+            self._ensure_loaded()
+            result = mutator(self._cached_state)
+            normalized, _ = normalize_state(self._cached_state)
+            self._remember(normalized, adopt=True)
+            pending = copy.deepcopy(normalized)
+        with self._coalesce_lock:
+            self._coalesce_pending_state = pending
+            if self._coalesce_timer is None or not self._coalesce_timer.is_alive():
+                self._coalesce_timer = threading.Timer(self._coalesce_window, self._flush_coalesced)
+                self._coalesce_timer.daemon = True
+                self._coalesce_timer.start()
+        return copy.deepcopy(normalized), result
+
     def update_with_result(self, mutator: Callable[[dict[str, Any]], Any]) -> tuple[dict[str, Any], Any]:
         """Apply a mutation under the process lock; the returned state is cache-owned, read-only for the caller."""
         with self._thread_lock, self._file_lock(True):
@@ -674,6 +738,7 @@ class JsonStateStore:
                 result = mutator(state)
                 normalized, _ = normalize_state(state)
                 self._write_unlocked(normalized, adopt=True)
+                self._coalesce_last_flush = time.monotonic()
                 return normalized, result
             except Exception:
                 self._clear_cache()

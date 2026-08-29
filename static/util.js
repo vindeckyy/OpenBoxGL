@@ -200,4 +200,34 @@
      */
     const fact = (label,value) => `<div class="fact"><small>${escapeHtml(label)}</small><span>${escapeHtml(value ?? '-')}</span></div>`;
 
-export { $, escapeHtml, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches };
+    // Shared trigram helpers for worker.search.js parity (identical logic in worker)
+    const SEARCH_TRIGRAM_MAX_TERM = 32;
+    function trigramsOf(value) {
+      const s = String(value || '').toLowerCase();
+      const out = new Set();
+      for (let i = 0; i <= s.length - 3; i++) out.add(s.slice(i, i + 3));
+      for (let i = 0; i <= s.length - 2; i++) out.add(s.slice(i, i + 2));
+      return out;
+    }
+    function expandTrigrams(query) {
+      const terms = new Set();
+      const words = String(query || '').toLowerCase().match(/[a-z0-9]+/g) || [];
+      words.forEach(word => {
+        for (const tri of trigramsOf(word)) terms.add(tri);
+        const limited = word.slice(0, SEARCH_TRIGRAM_MAX_TERM);
+        for (let end = 2; end <= Math.min(limited.length, 9); end++) terms.add(limited.slice(0, end));
+        for (let len = 2; len <= Math.min(limited.length, 9); len++) terms.add(limited.slice(limited.length - len));
+      });
+      if (words.length === 1 && words[0].length >= 2 && words[0].length <= 8) terms.add(words[0]);
+      return [...terms];
+    }
+    function trigramScore(query, haystack) {
+      const q = trigramsOf(String(query || '').toLowerCase());
+      const h = trigramsOf(String(haystack || '').toLowerCase());
+      if (!q.size) return 0;
+      let common = 0;
+      for (const t of q) if (h.has(t)) common++;
+      return common / q.size;
+    }
+
+export { $, escapeHtml, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches, trigramsOf, expandTrigrams, trigramScore };

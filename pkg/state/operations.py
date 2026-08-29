@@ -378,10 +378,25 @@ class OperationService:
             record = self._operations.get(job_id)
             return dict(record) if record else None
 
-    def list_jobs(self, *, cursor: str | None = None, limit: int = DEFAULT_LIST_LIMIT) -> dict:
+    def list_jobs(
+        self,
+        *,
+        cursor: str | None = None,
+        limit: int = DEFAULT_LIST_LIMIT,
+        type_filter: str | None = None,
+        state_filter: str | None = None,
+        root_job_id: str | None = None,
+    ) -> dict:
         limit = max(1, min(int(limit or DEFAULT_LIST_LIMIT), MAX_LIST_LIMIT))
         with self._lock:
             ordered = [self._operations[job_id] for job_id in self._order if job_id in self._operations]
+        # Apply filters before pagination
+        if type_filter:
+            ordered = [doc for doc in ordered if doc.get("type") == type_filter]
+        if state_filter:
+            ordered = [doc for doc in ordered if doc.get("state") == state_filter]
+        if root_job_id:
+            ordered = [doc for doc in ordered if doc.get("root_job_id") == root_job_id]
         start = 0
         if cursor:
             for index, doc in enumerate(ordered):
@@ -395,6 +410,55 @@ class OperationService:
             "next_cursor": next_cursor,
             "jobs": [dict(doc) for doc in page],
         }
+
+    def group_jobs_by_root(self, jobs: list[dict] | None = None) -> dict[str, list[dict]]:
+        """Group jobs by root_job_id for Activity center display."""
+        if jobs is None:
+            with self._lock:
+                jobs = [self._operations[job_id] for job_id in self._order if job_id in self._operations]
+        grouped: dict[str, list[dict]] = {}
+        for job in jobs:
+            root = str(job.get("root_job_id") or job.get("job_id") or "")
+            grouped.setdefault(root, []).append(dict(job))
+        # Sort each group by updated_at descending for stable display
+        for root in grouped:
+            grouped[root].sort(key=lambda j: j.get("updated_at") or "", reverse=True)
+        return grouped
+
+    def filter_jobs(
+        self,
+        jobs: list[dict],
+        *,
+        type_filter: str | None = None,
+        state_filter: str | None = None,
+    ) -> list[dict]:
+        """Filter jobs by type and/or state (client-side helper)."""
+        result = jobs
+        if type_filter:
+            result = [j for j in result if j.get("type") == type_filter]
+        if state_filter:
+            result = [j for j in result if j.get("state") == state_filter]
+        return [dict(j) for j in result]
+
+    def job_summary_line(self, job: dict) -> str:
+        """Human-readable summary line for finished jobs (job.finished SSE)."""
+        state = job.get("state")
+        result = job.get("result") or {}
+        error = job.get("error") or {}
+        if state == "done" and result:
+            parts = []
+            for key in ("added", "merged", "skipped", "excluded", "completed", "downloaded"):
+                if key in result:
+                    parts.append(f"{result[key]} {key}")
+            if parts:
+                return "Finished — " + ", ".join(parts)
+            return "Finished successfully"
+        if state in {"error", "partial", "interrupted"} and error:
+            msg = error.get("message") or error.get("code") or ""
+            return f"Finished with {state}: {msg}".strip()
+        if state == "cancelled":
+            return "Cancelled"
+        return f"Finished — {state}"
 
     def mark_running(self, job_id: str, *, phase: str | None = None, message: str = "") -> dict:
         with self._lock:
@@ -652,6 +716,53 @@ class OperationService:
 
 _SERVICE: OperationService | None = None
 _SERVICE_LOCK = threading.Lock()
+
+
+def group_jobs_by_root(jobs: list[dict]) -> dict[str, list[dict]]:
+    """Module-level helper: group jobs by root_job_id."""
+    grouped: dict[str, list[dict]] = {}
+    for job in jobs:
+        root = str(job.get("root_job_id") or job.get("job_id") or "")
+        grouped.setdefault(root, []).append(dict(job))
+    for root in grouped:
+        grouped[root].sort(key=lambda j: j.get("updated_at") or "", reverse=True)
+    return grouped
+
+
+def filter_jobs_by_type_state(
+    jobs: list[dict],
+    *,
+    type_filter: str | None = None,
+    state_filter: str | None = None,
+) -> list[dict]:
+    """Module-level filter helper for type/state."""
+    result = jobs
+    if type_filter:
+        result = [j for j in result if j.get("type") == type_filter]
+    if state_filter:
+        result = [j for j in result if j.get("state") == state_filter]
+    return [dict(j) for j in result]
+
+
+def job_summary_line(job: dict) -> str:
+    """Module-level human summary for finished jobs."""
+    state = job.get("state")
+    result = job.get("result") or {}
+    error = job.get("error") or {}
+    if state == "done" and result:
+        parts = []
+        for key in ("added", "merged", "skipped", "excluded", "completed", "downloaded"):
+            if key in result:
+                parts.append(f"{result[key]} {key}")
+        if parts:
+            return "Finished — " + ", ".join(parts)
+        return "Finished successfully"
+    if state in {"error", "partial", "interrupted"} and error:
+        msg = error.get("message") or error.get("code") or ""
+        return f"Finished with {state}: {msg}".strip() if msg else f"Finished with {state}"
+    if state == "cancelled":
+        return "Cancelled"
+    return f"Finished — {state}" if state else "Finished"
 
 
 def get_operation_service(data_path: Path | None = None) -> OperationService:

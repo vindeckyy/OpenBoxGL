@@ -12,6 +12,7 @@ flatpak_app_id: net.pcsx2.PCSX2
 startup_args:
   - -batch
   - "{path}"
+bios_path: ~/.config/PCSX2/bios
 recommended: true
 priority: 10
 executable_patterns:

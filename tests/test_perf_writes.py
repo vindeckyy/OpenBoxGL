@@ -503,6 +503,74 @@ class PerfWriteTests(unittest.TestCase):
                 store.save({"games": games})
                 self.assertEqual(len(store.load()["games"]), 600)
 
+class WriteCoalesceTests(unittest.TestCase):
+    """F1: 50ms micro-batch coalesce, single fsync per batch."""
+
+    def test_coalesce_window_is_50ms(self):
+        from state_store import WRITE_COALESCE_WINDOW, WRITE_COALESCE_MS
+        self.assertEqual(WRITE_COALESCE_MS, 50)
+        self.assertAlmostEqual(WRITE_COALESCE_WINDOW, 0.05)
+
+    def test_coalesce_single_fsync_when_window_not_exceeded(self):
+        from state_store import JsonStateStore
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonStateStore(Path(directory) / "library.json", snapshot_debounce=0)
+            store.save({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
+            with mock.patch("state_store.os.fsync") as m_fsync, mock.patch("state_store.fsync_directory") as m_fdir:
+                store.coalesced_update(lambda s: s["games"].append({"game_id": "g1", "name": "A"}))
+                store.coalesced_update(lambda s: s["games"].append({"game_id": "g2", "name": "B"}))
+                time.sleep(0.07)
+                store.flush_coalesced()
+                self.assertEqual(m_fsync.call_count, 1, "two rapid coalesced writes should result in single fsync")
+                self.assertEqual(m_fdir.call_count, 1)
+                # data should be persisted
+                reloaded = store.load()
+                self.assertEqual(len(reloaded["games"]), 2)
+
+    def test_coalesce_two_fsyncs_when_window_exceeded(self):
+        from state_store import JsonStateStore
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonStateStore(Path(directory) / "library.json", snapshot_debounce=0)
+            store.save({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
+            with mock.patch("state_store.os.fsync") as m_fsync, mock.patch("state_store.fsync_directory") as m_fdir:
+                store.coalesced_update(lambda s: s["games"].append({"game_id": "g1", "name": "A"}))
+                time.sleep(0.07)
+                store.flush_coalesced()
+                # first batch flushed
+                self.assertEqual(m_fsync.call_count, 1)
+                m_fsync.reset_mock()
+                m_fdir.reset_mock()
+                store.coalesced_update(lambda s: s["games"].append({"game_id": "g2", "name": "B"}))
+                time.sleep(0.07)
+                store.flush_coalesced()
+                self.assertEqual(m_fsync.call_count, 1, "second batch after window should be separate fsync")
+                reloaded = store.load()
+                self.assertEqual(len(reloaded["games"]), 2)
+
+    def test_coalesced_update_with_result_returns_state(self):
+        from state_store import JsonStateStore
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonStateStore(Path(directory) / "library.json", snapshot_debounce=0)
+            store.save({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
+            state, result = store.coalesced_update_with_result(lambda s: s["games"].append({"game_id": "g1", "name": "A"}) or "ok")
+            self.assertEqual(result, "ok")
+            self.assertEqual(len(state["games"]), 1)
+            # in-memory should already reflect
+            self.assertEqual(len(store._cached_state["games"]), 1)
+            store.flush_coalesced()
+            self.assertEqual(len(store.load()["games"]), 1)
+
+    def test_coalesce_preserves_read_your_writes(self):
+        from state_store import JsonStateStore
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonStateStore(Path(directory) / "library.json", snapshot_debounce=0)
+            store.save({"games": [{"game_id": "g0", "name": "Zero"}]})
+            store.coalesced_update(lambda s: s["games"].append({"game_id": "g1", "name": "One"}))
+            # without flush, in-memory should already have both
+            self.assertEqual(len(store._cached_state["games"]), 2)
+            store.flush_coalesced()
+            self.assertEqual(len(store.load()["games"]), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

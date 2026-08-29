@@ -14,6 +14,12 @@
   <url type="homepage">https://openboxgl.github.io/</url>
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <releases>
+    <release version="1.7.1" date="2026-08-29">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.7.1</url>
+      <description>
+        <p>Polish, Performance &amp; Play Insights: virtual grid, worker search, Play Insights heatmap, Setup copy polish, Launch Doctor fix actions, token-complete themes.</p>
+      </description>
+    </release>
     <release version="1.7.0" date="2026-08-26">
       <description>
         <p>Guided Setup Center, Activity drawer with durable operations, Launch Doctor preflight, additive v2 API, and 20k-scale performance gates.</p>

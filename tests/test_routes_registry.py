@@ -29,26 +29,26 @@ from scripts import check_v1_contract  # noqa: E402
 
 class RouteRegistryTests(unittest.TestCase):
     def test_route_table_sizes(self):
-        # 95 base GET + 25 v1 aliases = 120 total
+        # 99 base GET + 25 v1 aliases = 124 total (1.7.1 adds 4: 2 insights + 2 static)
         # 109 base POST + 42 v1 aliases = 151 total
-        self.assertEqual(len(GET_TABLE), 120)
+        self.assertEqual(len(GET_TABLE), 124)
         self.assertEqual(len(POST_TABLE), 151)
         self.assertEqual(len(V1_ALIASED_PREFIXES), 60)
 
     def test_base_routes_count(self):
         base_get = [p for p in GET_TABLE if not p.startswith("/api/v1")]
         base_post = [p for p in POST_TABLE if not p.startswith("/api/v1")]
-        self.assertEqual(len(base_get), 95)
+        self.assertEqual(len(base_get), 99)
         self.assertEqual(len(base_post), 109)
-        self.assertEqual(len(base_get) + len(base_post), 204)
+        self.assertEqual(len(base_get) + len(base_post), 208)
 
     def test_all_routes_registered(self):
         routes = all_routes()
-        self.assertEqual(len(routes), 205)
+        self.assertEqual(len(routes), 209)
 
         get_routes = [r for r in routes if r.method == "GET"]
         post_routes = [r for r in routes if r.method == "POST"]
-        self.assertEqual(len(get_routes), 96)
+        self.assertEqual(len(get_routes), 100)
         self.assertEqual(len(post_routes), 109)
 
     def test_every_registered_route_matches_live_table(self):

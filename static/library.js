@@ -1,4 +1,4 @@
-import { $, escapeHtml, duration, fact, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds } from './util.js';
+import { $, escapeHtml, duration, fact, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds, trigramsOf, expandTrigrams } from './util.js';
 import { token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
 import { loadTheme, deletePlaylist } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importDroppedFolder } from './imports.js';
@@ -11,9 +11,129 @@ import { openReader } from './reader.js';
 
 const DETAILS_WIDTH_KEY = 'openbox-details-width';
 const DETAILS_COLLAPSED_KEY = 'openbox-details-collapsed';
+const VIRTUAL_GRID_KEY = 'openbox-virtual-grid';
 let lastFacetsFingerprint = null;
 let detailsDragActive = false;
 let detailSheetScrollTop = 0;
+
+// Virtual grid feature flag: localStorage['openbox-virtual-grid'] !== '0' enables windowing.
+// When disabled, grid renders all items without spacers or IntersectionObserver.
+function isVirtualEnabled() {
+  try { return localStorage.getItem(VIRTUAL_GRID_KEY) !== '0'; } catch { return true; }
+}
+
+// Trigram Worker: offload trigram expansion/search when Worker is available, fallback to main thread otherwise.
+// Shared trigram logic lives in util.js (trigramsOf/expandTrigrams) and worker.search.js for parity.
+let _searchWorker = null;
+let _workerSeq = 0;
+const _workerPending = new Map();
+function getSearchWorker() {
+  if (_searchWorker) return _searchWorker;
+  try {
+    if (typeof Worker !== 'function') return null;
+    const w = new Worker('./static/worker.search.js');
+    w.onmessage = e => {
+      const data = e.data || {};
+      const pending = _workerPending.get(data.id);
+      if (pending) {
+        _workerPending.delete(data.id);
+        if (data.error) pending.reject(new Error(data.error));
+        else pending.resolve(data);
+      }
+    };
+    w.onerror = e => {
+      // Worker failed: clear pending with fallback
+      for (const [, pending] of _workerPending) pending.reject(new Error(e.message || 'Worker error'));
+      _workerPending.clear();
+    };
+    _searchWorker = w;
+    return w;
+  } catch { return null; }
+}
+function workerSearch(query, games) {
+  const w = getSearchWorker();
+  if (!w) return null;
+  const id = String(++_workerSeq);
+  return new Promise((resolve, reject) => {
+    _workerPending.set(id, { resolve, reject });
+    try { w.postMessage({ id, type: 'search', query, games }); } catch (err) { _workerPending.delete(id); reject(err); }
+    // fallback timeout: if worker doesn't respond in 200ms, reject to fallback
+    setTimeout(() => {
+      if (_workerPending.has(id)) { _workerPending.delete(id); reject(new Error('Worker timeout')); }
+    }, 200);
+  });
+}
+async function searchWithFallback(query, games) {
+  // Try worker first, fallback to main-thread advancedQueryMatches + trigramScore
+  try {
+    const res = await workerSearch(query, games);
+    if (res && Array.isArray(res.results)) return res.results;
+  } catch { /* fallback */ }
+  // Main-thread fallback: identical logic to worker.search.js searchGames
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return games.slice();
+  const qTrigrams = trigramsOf(q);
+  return games.filter(game => {
+    const hay = [game.name, game.sort_title, ...(Array.isArray(game.alternate_names) ? game.alternate_names : [])].filter(Boolean).join(' ').toLowerCase();
+    if (hay.includes(q)) return true;
+    if (qTrigrams.size >= 3) {
+      const hayTri = trigramsOf(hay);
+      let common = 0;
+      for (const t of qTrigrams) if (hayTri.has(t)) common++;
+      if (common / qTrigrams.size >= 0.5) return true;
+    }
+    if (q.length >= 2 && q.length <= 8 && /^[a-z0-9]+$/i.test(q)) {
+      const words = String(game.name || '').trim().match(/[A-Za-z0-9]+/g) || [];
+      const acronym = words.map(w => w[0].toLowerCase()).join('');
+      if (acronym === q || acronym.includes(q)) return true;
+      if (words.length > 1 && ['the', 'a', 'an'].includes(words[0].toLowerCase())) {
+        const sub = words.slice(1).map(w => w[0].toLowerCase()).join('');
+        if (sub === q || sub.includes(q)) return true;
+      }
+    }
+    return false;
+  });
+}
+// Expose for testing that worker and main produce identical results (F1 acceptance)
+async function verifyWorkerParity(query, games) {
+  const main = await searchWithFallback(query, games);
+  try {
+    const w = getSearchWorker();
+    if (!w) return { parity: true, reason: 'no-worker-fallback' };
+    const id = String(++_workerSeq);
+    const workerRes = await new Promise((resolve, reject) => {
+      _workerPending.set(id, { resolve, reject });
+      w.postMessage({ id, type: 'search', query, games });
+      setTimeout(() => { if (_workerPending.has(id)) { _workerPending.delete(id); reject(new Error('timeout')); } }, 500);
+    });
+    const wResults = workerRes.results || [];
+    const same = main.length === wResults.length && main.every((g, i) => g.id === wResults[i].id);
+    return { parity: same, main: main.length, worker: wResults.length };
+  } catch (e) { return { parity: false, error: String(e.message || e) }; }
+}
+
+// IntersectionObserver for virtual spacer windowing
+let _virtualObserver = null;
+function ensureVirtualObserver() {
+  if (!isVirtualEnabled()) return;
+  if (typeof IntersectionObserver === 'undefined') return;
+  const pane = document.querySelector('main.library');
+  if (!pane) return;
+  if (_virtualObserver) _virtualObserver.disconnect();
+  _virtualObserver = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (entry.isIntersecting && entry.intersectionRatio > 0) {
+        // Spacer became visible: expand window by rendering with updated scroll
+        renderGrid({ fromScroll: true });
+      }
+    }
+  }, { root: pane, threshold: 0, rootMargin: '400px' });
+  // Observe current spacers after next render
+  requestAnimationFrame(() => {
+    const spacers = document.querySelectorAll('#grid .grid-spacer');
+    spacers.forEach(el => _virtualObserver.observe(el));
+  });
+}
 
 function leaveActivePreset() {
   if (AppState.activeFilterPreset) AppState.activeFilterPreset = '';
@@ -520,6 +640,13 @@ function markFilterAria() {
     function renderGroupedGrid(visible, imageGroup, fromScroll, motionClass) {
       const sections = groupedSections(visible);
       const {rows, cols, totalHeight} = gridRowsGeometry(sections);
+      if (!isVirtualEnabled()) {
+        let cardIndex = 0;
+        const rendered = rows.map(row => row.kind === 'header'
+          ? `<div class="ratio-head">${row.label}<span class="ratio-count">${row.count}</span></div>`
+          : row.games.map(game => gridCardHTML(game, cardIndex++, imageGroup, fromScroll, motionClass, row.section.key)).join('')).join('');
+        return {topSpacer:'', bottomSpacer:'', rendered, geometry:{rows, cols, totalHeight}};
+      }
       const pane = gridPane();
       const paneHeight = pane ? pane.clientHeight : 0;
       const maxRow = Math.max(200, ...rows.map(row => row.height));
@@ -531,7 +658,7 @@ function markFilterAria() {
       const rendered = windowRows.map(row => row.kind === 'header'
         ? `<div class="ratio-head">${row.label}<span class="ratio-count">${row.count}</span></div>`
         : row.games.map(game => gridCardHTML(game, cardIndex++, imageGroup, fromScroll, motionClass, row.section.key)).join('')).join('');
-      return {topSpacer:`<div class="grid-spacer" style="height:${firstTop}px"></div>`, bottomSpacer:`<div class="grid-spacer" style="height:${Math.max(0, totalHeight - lastBottom)}px"></div>`, rendered, geometry:{rows, cols, totalHeight}};
+      return {topSpacer:`<div class="grid-spacer" style="height:${firstTop}px;contain-intrinsic-size:auto ${firstTop}px"></div>`, bottomSpacer:`<div class="grid-spacer" style="height:${Math.max(0, totalHeight - lastBottom)}px;contain-intrinsic-size:auto ${Math.max(0, totalHeight - lastBottom)}px"></div>`, rendered, geometry:{rows, cols, totalHeight}};
     }
     function gridCardHTML(game, index, imageGroup, fromScroll, motionClass, bucketKey = '') {
       return `<article class="card${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${bucketKey ? ` data-ratio="${bucketKey}"` : ''}${fromScroll ? '' : ` style="--motion-index:${Math.min(index,10)}"`}>
@@ -574,6 +701,7 @@ function markFilterAria() {
       gridRowHeight = rowHeight + rowGap;
     }
     function gridWindow(total) {
+      if (!isVirtualEnabled()) return [0, total];
       if (!gridRowHeight) return [0, total];
       const pane = gridPane();
       const paneHeight = pane ? pane.clientHeight : 0;
@@ -618,6 +746,9 @@ function markFilterAria() {
       }
       const listView = (AppState.appSettings.library_view || 'grid') === 'list';
       $('grid').className = listView ? 'list-view' : 'grid';
+      // contain-intrinsic-size bookkeeping for virtual rows (skip when virtual disabled)
+      if (isVirtualEnabled()) $('grid').style.containIntrinsicSize = 'auto 800px';
+      else $('grid').style.containIntrinsicSize = '';
       const total = visible.length;
       const grouped = !listView && (AppState.appSettings.cover_grouping || 'shape') === 'shape';
       // Entrance animation only runs on full (state-driven) renders; scroll
@@ -635,14 +766,20 @@ function markFilterAria() {
         const rows = Math.ceil(total / Math.max(gridCols, 1));
         const topHeight = Math.floor(start / Math.max(gridCols, 1)) * gridRowHeight;
         const bottomHeight = gridRowHeight ? Math.max(0, rows - Math.ceil(end / Math.max(gridCols, 1))) * gridRowHeight : 0;
-        topSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${topHeight}px"></div>` : '';
-        bottomSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${bottomHeight}px"></div>` : '';
-        const chunk = visible.slice(start, end);
+        if (!isVirtualEnabled()) {
+          topSpacer = ''; bottomSpacer = '';
+        } else {
+          topSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${topHeight}px;contain-intrinsic-size:auto ${topHeight}px"></div>` : '';
+          bottomSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${bottomHeight}px;contain-intrinsic-size:auto ${bottomHeight}px"></div>` : '';
+        }
+        const chunk = isVirtualEnabled() ? visible.slice(start, end) : visible;
         rendered = chunk.map((game,index) => listView
            ? `<button type="button" class="list-row${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${fromScroll ? '' : ` style="--motion-index:${Math.min(index,10)}"`} data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
            : gridCardHTML(game, index, imageGroup, fromScroll, motionClass)).join('');
       }
       $('grid').innerHTML = listView ? `<div class="list-head"><span>Title</span><span>Platform</span><span>Genre</span><span>ESRB</span><span>Progress</span><span>Plays</span><span>Rating</span></div>${topSpacer}${rendered}${bottomSpacer}` : `${topSpacer}${rendered}${bottomSpacer}`;
+      // After virtual render, observe spacers via IntersectionObserver
+      if (isVirtualEnabled()) ensureVirtualObserver();
       document.querySelectorAll('#grid img[data-gid]').forEach(img => { if (img.complete) recordCoverRatio(img); });
       // Set fetchPriority via DOM property to avoid per-render string churn.
       if (typeof HTMLImageElement !== 'undefined' && 'fetchPriority' in HTMLImageElement.prototype) {
@@ -721,6 +858,7 @@ function markFilterAria() {
           <div class="detail-card"><h3>Related Games</h3><div class="related-grid" id="relatedGames"><span class="description">Finding matches...</span></div></div>
           ${AppState.raConfigured ? `<div class="detail-card"><h3>RetroAchievements</h3><div id="achievementContent"><p class="description">${game.ra_game_id ? `Matched to game ${escapeHtml(game.ra_game_id)}.` : 'Match this ROM to load achievements.'}</p><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}<button class="icon-button" id="openBrowser">Open Wikipedia</button></div><button class="icon-button" id="loadAchievements">Load achievements</button><div id="achievementStats"></div></div></div>` : ''}
           <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${savePaths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${AppState.appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}${game.platform === 'Arcade' || game.rom_name ? '<button class="icon-button" id="exportHighscores">Export high scores</button>' : ''}</div><div class="description" id="saveDiscovery">${savePaths.length ? `${savePaths.length} configured location${savePaths.length === 1 ? '' : 's'}` : 'No save location configured.'}${AppState.appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
+          <div class="detail-card doctor-card" id="doctorCard" style="border:1px solid var(--border-card)"><h3>Launch Doctor</h3><div id="doctorChecks" class="description">Checking launch readiness…</div></div>
         </div>`;
       $('playButton').onclick = () => {
         if (game.gameyfin_id && !game.store_installed) installGameyfin(game);
@@ -776,6 +914,84 @@ function markFilterAria() {
       if ($('hoardBackup')) $('hoardBackup').onclick = () => hoardAction(game.id, 'backup');
       $('discoverSaves').onclick = () => discoverSaves(game.id);
       loadRelated(game.id);
+      loadDoctor(game);
+    }
+    async function loadDoctor(game) {
+      const container = document.getElementById('doctorChecks');
+      if (!container || !game?.game_id) { if (container) container.textContent = 'No game selected.'; return; }
+      try {
+        const pre = await api('/api/v2/launch/preflight', {method:'POST', body: JSON.stringify({game_id: game.game_id})});
+        renderDoctorChecks(container, pre, game);
+      } catch (error) {
+        container.innerHTML = `<span class="description">Doctor unavailable: ${escapeHtml(error.message)}</span>`;
+      }
+    }
+    function renderDoctorChecks(container, preflight, game) {
+      const checks = preflight.checks || [];
+      if (!checks.length) {
+        container.innerHTML = '<span class="description" style="color:var(--brand)">Ready to launch ✓</span>';
+        return;
+      }
+      container.innerHTML = checks.map(check => {
+        const fix = check.fix_action || {};
+        const kind = fix.kind || '';
+        const payload = fix.payload || {};
+        let fixBtn = '';
+        if (kind === 'flatpak_install') {
+          const app = payload.app_id || payload.flatpak_app_id || '';
+          fixBtn = `<button type="button" class="primary" data-fix="flatpak" data-app="${escapeHtml(app)}" style="background:var(--brand);border:1px solid var(--focus);color:var(--white)">Install ${escapeHtml(app || 'emulator')}</button>`;
+        } else if (kind === 'reveal_bios_path') {
+          const p = payload.path || payload.name || '';
+          fixBtn = `<button type="button" class="icon-button" data-fix="reveal" data-path="${escapeHtml(p)}" style="border:1px solid var(--focus);color:var(--focus)">Show BIOS folder</button>`;
+        } else if (kind === 'pick_core') {
+          const platforms = payload.platforms || payload.candidates || [];
+          if (check.code === 'AMBIGUOUS_PLATFORM' && platforms.length) {
+            const chips = platforms.map(pl => `<button type="button" class="platform" data-pick-platform="${escapeHtml(pl)}" data-game-id="${escapeHtml(game.game_id)}" style="border-color:var(--focus);color:var(--focus);background:var(--surface-card)">${escapeHtml(pl)}</button>`).join('');
+            fixBtn = `<div class="extras" style="gap:0.4rem;flex-wrap:wrap">${chips}</div>`;
+          } else if (payload.core) {
+            fixBtn = `<button type="button" class="icon-button" data-fix="pick-core" data-core="${escapeHtml(payload.core)}" style="border:1px solid var(--brand);color:var(--brand)">Choose core</button>`;
+          } else {
+            fixBtn = `<button type="button" class="icon-button" data-fix="pick" style="border:1px solid var(--brand);color:var(--brand)">Choose emulator</button>`;
+          }
+        } else if (kind === 'explain_token') {
+          const inv = (payload.invalid_tokens || []).join(', ');
+          fixBtn = `<button type="button" class="icon-button" data-fix="explain" data-tokens="${escapeHtml(inv)}" style="border:1px solid var(--focus);color:var(--focus)">Explain token</button>`;
+        } else {
+          fixBtn = `<span class="description">${escapeHtml(fix.label || '')}</span>`;
+        }
+        const severityColor = check.severity === 'error' ? 'var(--danger)' : 'var(--gold)';
+        return `<div class="doctor-row" style="border-left:3px solid ${severityColor};padding:0.5rem;margin:0.5rem 0;background:var(--surface-card)"><div><strong>${escapeHtml(check.code)}</strong>: ${escapeHtml(check.message)}</div><div style="margin-top:0.4rem">${fixBtn}</div></div>`;
+      }).join('');
+      // Bind fix actions
+      container.querySelectorAll('[data-fix="flatpak"]').forEach(btn => btn.onclick = async () => {
+        const app = btn.dataset.app;
+        if (!app) return;
+        try { await api('/api/emulators/install', {method:'POST', body: JSON.stringify({app_id: app})}); notify('Installing ' + app); } catch (e) { notify(e.message); }
+      });
+      container.querySelectorAll('[data-fix="reveal"]').forEach(btn => btn.onclick = () => {
+        const p = btn.dataset.path;
+        if (p) { try { nativeReveal(p); } catch (e) { notify('BIOS path: ' + p); } }
+        else notify('No path to reveal');
+      });
+      container.querySelectorAll('[data-pick-platform]').forEach(btn => btn.onclick = async () => {
+        const platform = btn.dataset.pickPlatform;
+        const gid = btn.dataset.gameId;
+        try {
+          const g = AppState.games.find(x => String(x.game_id) === String(gid));
+          if (!g) return notify('Game not found');
+          await api('/api/game', {method:'POST', body: JSON.stringify({id: g.id, game: {...g, platform}})} );
+          await refresh();
+          notify('Platform set to ' + platform);
+        } catch (e) { notify(e.message); }
+      });
+      container.querySelectorAll('[data-fix="pick-core"], [data-fix="pick"]').forEach(btn => btn.onclick = () => {
+        // Open profiles/emulator catalog for picking
+        try { document.getElementById('profilesDialog')?.showModal(); } catch (e) { notify('Open Emulator profiles to choose'); }
+      });
+      container.querySelectorAll('[data-fix="explain"]').forEach(btn => btn.onclick = () => {
+        const toks = btn.dataset.tokens || '';
+        notify('Unknown tokens: ' + toks + '. Valid: {path} {name} {platform} etc. See launch_tokens docs.');
+      });
     }
     async function loadRelated(id) {
       try {
@@ -927,4 +1143,4 @@ function markFilterAria() {
     bindFilterDrawer();
     applyDetailsLayout();
 
-export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated };
+export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated, isVirtualEnabled, getSearchWorker, workerSearch, searchWithFallback, verifyWorkerParity, ensureVirtualObserver };

@@ -605,5 +605,145 @@ class TestLaunchModuleCoverage(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 webapp_state.finish_session("fin-4", 0, started, process, broken_lease)
 
+
+class TestF4HealthAndDoctorIntegration(unittest.TestCase):
+    """F4: health pass BIOS SHA1/firmware/core drift via registry?health=1 and actionable preflight."""
+
+    def test_registry_health_fields(self):
+        import tempfile
+        from pathlib import Path
+        from pkg.parity.parity_emulator_defs import load_registry
+        from handlers.emulators import EmulatorsHandlers
+
+        # Use real defs dir but health=True should add bios_ok/core_ok/firmware_ok
+        registry = load_registry(health=True)
+        self.assertIn("adapters", registry)
+        for adapter in registry["adapters"]:
+            self.assertIn("bios_ok", adapter)
+            self.assertIn("core_ok", adapter)
+            self.assertIn("firmware_ok", adapter)
+            self.assertIsInstance(adapter["bios_ok"], bool)
+            self.assertIsInstance(adapter["core_ok"], bool)
+            self.assertIsInstance(adapter["firmware_ok"], bool)
+
+        # Check that at least one retroarch core is currently missing (core_ok False) in CI
+        retro = [a for a in registry["adapters"] if a["adapter_id"] == "retroarch-nes"]
+        self.assertTrue(retro)
+        # core path exists? In CI, /usr/lib/libretro/fceumm_libretro.so likely missing, so core_ok False
+        # But we don't assert specific, just that field exists.
+
+        # Test handler health=1 returns same
+        h = EmulatorsHandlers()
+        h.send_json = lambda status, payload: setattr(h, "_captured", (status, payload))
+        # Simulate parsed with health=1
+        class Parsed:
+            query = "health=1"
+        h._api_get_api_v2_emulators_registry(Parsed())
+        status, payload = h._captured
+        self.assertEqual(status, 200)
+        for a in payload["adapters"]:
+            self.assertIn("bios_ok", a)
+            self.assertIn("core_ok", a)
+            self.assertIn("firmware_ok", a)
+
+        # health=0 should not include bios_ok
+        h2 = EmulatorsHandlers()
+        h2.send_json = lambda status, payload: setattr(h2, "_captured2", (status, payload))
+        class Parsed2:
+            query = "health=0"
+        h2._api_get_api_v2_emulators_registry(Parsed2())
+        status2, payload2 = h2._captured2
+        # When health=0, bios_ok may still be absent or present? Our impl only adds when health=True
+        # So check absence
+        for a in payload2["adapters"]:
+            # Should not have bios_ok when not requested
+            self.assertNotIn("bios_ok", a)
+
+        # health with temp defs containing bios_sha1
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # Create BIOS file with known content
+            bios_file = root / "bios.bin"
+            bios_file.write_bytes(b"bios-content")
+            import hashlib
+            sha = hashlib.sha1(b"bios-content").hexdigest()
+            (root / "test-bios.yaml").write_text(
+                f"schema_version: 1\nadapter_id: test-bios\nemulator_id: test.emu\nlabel: TestEmu\nplatform: TestPlat\n"
+                f"extensions:\n  - testbios\nnative_exe: testemu\nflatpak_app_id: test.emu\n"
+                f"startup_args:\n  - \"{{path}}\"\n"
+                f"bios_path: {bios_file}\n"
+                f"bios_sha1: {sha}\n",
+                encoding="utf-8",
+            )
+            reg = load_registry(root, health=True)
+            self.assertEqual(len(reg["adapters"]), 1)
+            self.assertTrue(reg["adapters"][0]["bios_ok"])
+            # drift: change sha
+            (root / "test-bios.yaml").write_text(
+                f"schema_version: 1\nadapter_id: test-bios2\nemulator_id: test.emu2\nlabel: TestEmu2\nplatform: TestPlat2\n"
+                f"extensions:\n  - testbios2\nnative_exe: testemu2\nflatpak_app_id: test.emu2\n"
+                f"startup_args:\n  - \"{{path}}\"\n"
+                f"bios_path: {bios_file}\n"
+                f"bios_sha1: deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n",
+                encoding="utf-8",
+            )
+            # need to clear cache? load_registry uses defs_dir, not cache
+            reg2 = load_registry(root, health=True)
+            # one of them should be bios_ok False due to drift
+            bios_oks = [a["bios_ok"] for a in reg2["adapters"]]
+            self.assertIn(False, bios_oks)
+
+    def test_adapter_health_helpers(self):
+        from pkg.parity.parity_emulator_defs import _bios_ok_for_adapter, _core_ok_for_adapter, _firmware_ok_for_adapter
+
+        # No bios path -> bios ok depends on hints, but for non-BIOS platform should be true
+        adapter = {"label": "MAME", "adapter_id": "mame-arcade", "startup_args": ["{path}"], "platform": "Arcade"}
+        self.assertTrue(_bios_ok_for_adapter(adapter))
+        self.assertTrue(_firmware_ok_for_adapter(adapter))
+        self.assertTrue(_core_ok_for_adapter(adapter))
+
+        # Core path missing -> false
+        adapter2 = {"label": "RetroArch", "adapter_id": "retroarch-nes", "core_path": "/no/such/core.so", "startup_args": ["-L", "/no/such/core.so", "{path}"]}
+        self.assertFalse(_core_ok_for_adapter(adapter2))
+        # BIOS path present but file missing -> false
+        adapter3 = {"label": "DuckStation", "bios_path": "/tmp/missing-bios.bin", "bios_sha1": None}
+        self.assertFalse(_bios_ok_for_adapter(adapter3))
+
+    def test_preflight_surfaces_fix_action_via_handler(self):
+        import tempfile
+        import os
+        from pathlib import Path
+        from handlers.launch import LaunchHandlers
+        from openbox import save_state
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["OPENBOX_DATA_DIR"] = tmp
+            rom = Path(tmp) / "game.iso"
+            rom.write_bytes(b"ISO")
+            save_state({"games": [{"name": "Iso", "path": str(rom), "platform": "", "game_id": "game-0123456789abcdef01234567-9"}], "profiles": {}, "history": [], "settings": {}, "playlists": []})
+            h = LaunchHandlers()
+            h.send_json = lambda status, payload, **k: setattr(h, "_cap", (status, payload))
+            h.launch_preflight({"game_id": "game-0123456789abcdef01234567-9"})
+            status, payload = h._cap
+            self.assertEqual(status, 200)
+            # For ambiguous iso, should be blocked with AMBIGUOUS_PLATFORM and fix_action
+            self.assertEqual(payload["status"], "blocked")
+            self.assertTrue(any(c["code"] == "AMBIGUOUS_PLATFORM" for c in payload["checks"]))
+            for c in payload["checks"]:
+                if c["severity"] == "error":
+                    self.assertIn("fix_action", c)
+            # Batch also actionable
+            h2 = LaunchHandlers()
+            h2.send_json = lambda status, payload, **k: setattr(h2, "_cap2", (status, payload))
+            h2.launch_preflight_batch({"items": [{"game_id": "game-0123456789abcdef01234567-9"}]})
+            status2, payload2 = h2._cap2
+            self.assertIn("totals", payload2)
+            self.assertGreater(payload2["totals"]["blocked"], 0)
+            for res in payload2["results"]:
+                for chk in res["checks"]:
+                    if chk["severity"] == "error":
+                        self.assertIn("fix_action", chk)
+            os.environ.pop("OPENBOX_DATA_DIR", None)
+
 if __name__ == "__main__":
     unittest.main()

@@ -9,6 +9,8 @@ native_exe: rpcs3
 flatpak_app_id: net.rpcs3.RPCS3
 startup_args:
   - "{path}"
+firmware_path: ~/.config/rpcs3/dev_flash
+firmware_sha1: 4a35230bdd60d2bc2c03e1f636a3da0b1e1c3a79
 recommended: true
 priority: 10
 executable_patterns:
