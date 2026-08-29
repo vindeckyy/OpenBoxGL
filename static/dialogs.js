@@ -189,8 +189,21 @@ function closeContextMenu(restoreFocus = false) {
   $('contextMenu').hidden = true;
   AppState.contextGameId = null;
   if (restoreFocus && contextMenuTrigger?.isConnected) {
-    contextMenuTrigger.focus();
+    const trigger = contextMenuTrigger;
     contextMenuTrigger = null;
+    try {
+      if (trigger && typeof trigger.focus === 'function') {
+        if (!trigger.hasAttribute('tabindex') && trigger.tabIndex === -1) trigger.tabIndex = 0;
+        trigger.focus({ preventScroll: true });
+        if (document.activeElement !== trigger) {
+          const focusable = trigger.closest?.('[data-game]') || trigger;
+          if (focusable && focusable !== trigger && typeof focusable.focus === 'function') {
+            if (!focusable.hasAttribute('tabindex') && focusable.tabIndex === -1) focusable.tabIndex = 0;
+            focusable.focus({ preventScroll: true });
+          }
+        }
+      }
+    } catch {}
   }
 }
 function openContextMenu(event, id) {
