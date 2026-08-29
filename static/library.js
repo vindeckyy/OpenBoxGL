@@ -124,6 +124,9 @@ function ensureVirtualObserver() {
     for (const entry of entries) {
       if (entry.isIntersecting && entry.intersectionRatio > 0) {
         // Spacer became visible: expand window by rendering with updated scroll
+        const top = pane.scrollTop;
+        if (gridRowHeight && Math.abs(top - gridScrollTop) < 1) return;
+        gridScrollTop = top;
         renderGrid({ fromScroll: true });
       }
     }
@@ -777,6 +780,8 @@ function markFilterAria() {
            ? `<button type="button" class="list-row${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${fromScroll ? '' : ` style="--motion-index:${Math.min(index,10)}"`} data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
            : gridCardHTML(game, index, imageGroup, fromScroll, motionClass)).join('');
       }
+      const focusedGameId = $('grid')?.contains(document.activeElement) ? document.activeElement?.closest?.('[data-game]')?.dataset.game : null;
+      const focusedPickerId = $('grid')?.contains(document.activeElement) ? document.activeElement?.closest?.('[data-game-picker]')?.dataset.gamePicker : null;
       $('grid').innerHTML = listView ? `<div class="list-head"><span>Title</span><span>Platform</span><span>Genre</span><span>ESRB</span><span>Progress</span><span>Plays</span><span>Rating</span></div>${topSpacer}${rendered}${bottomSpacer}` : `${topSpacer}${rendered}${bottomSpacer}`;
       // After virtual render, observe spacers via IntersectionObserver
       if (isVirtualEnabled()) ensureVirtualObserver();
@@ -816,6 +821,11 @@ function markFilterAria() {
       });
       renderArrangeBar(visible);
       markFilterAria();
+      if (focusedGameId && (!document.activeElement || document.activeElement === document.body)) {
+        document.querySelector(`[data-game="${focusedGameId}"]`)?.focus({ preventScroll: true });
+      } else if (focusedPickerId && (!document.activeElement || document.activeElement === document.body)) {
+        document.querySelector(`[data-game-picker="${focusedPickerId}"]`)?.focus({ preventScroll: true });
+      }
       const measuredBefore = gridRowHeight;
       measureGridLayout();
       if (!measuredBefore && gridRowHeight && total) renderGrid({fromScroll});

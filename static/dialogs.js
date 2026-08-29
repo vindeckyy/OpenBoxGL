@@ -187,10 +187,14 @@ function contextMenuItems() {
 }
 function closeContextMenu(restoreFocus = false) {
   $('contextMenu').hidden = true;
+  const gameId = AppState.contextGameId;
   AppState.contextGameId = null;
-  if (restoreFocus && contextMenuTrigger?.isConnected) {
-    const trigger = contextMenuTrigger;
+  if (restoreFocus) {
+    let trigger = contextMenuTrigger;
     contextMenuTrigger = null;
+    if (!trigger?.isConnected && gameId !== null && gameId !== undefined) {
+      trigger = document.querySelector(`[data-game="${gameId}"]`);
+    }
     try {
       if (trigger && typeof trigger.focus === 'function') {
         if (!trigger.hasAttribute('tabindex') && trigger.tabIndex === -1) trigger.tabIndex = 0;
