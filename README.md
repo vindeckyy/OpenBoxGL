@@ -17,7 +17,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.7.1"><img src="https://img.shields.io/badge/Release-v1.7.1-0052CC?style=for-the-badge" alt="Release v1.7.0"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.7.1"><img src="https://img.shields.io/badge/Release-v1.7.1-0052CC?style=for-the-badge" alt="Release v1.7.1"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-2EA44F?style=for-the-badge" alt="CI"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux-lightgrey?style=for-the-badge" alt="Linux"></a>
   <br>
@@ -137,6 +137,10 @@ Tokens: `{path}`, `{name}`, `{rom_name}`, `{app_id}`, `{heroic_app_id}`, `{lutri
 ### Sessions & Saves
 
 Play time tracking, session history, save discovery (Steam Cloud, RetroArch, PCSX2, PPSSPP, RPCS3, Dolphin, Cemu), versioned backups with retention limits, Ludusavi/Hoard CLI hooks, RetroAchievements (hardcore, beaten, mastered, badge injection).
+
+### Play Insights
+
+Local-first playtime analytics with a 366-day activity heatmap (levels 0–4), current and longest play streaks, 30-day play momentum, and top platforms/genres. Computed entirely locally from library history with zero telemetry.
 
 ### Big Box & Handhelds
 
@@ -356,15 +360,16 @@ OpenBox/
 ├── native_host.c           Native WebKitGTK host (spawns web_app.py)
 ├── handlers/               Route handler mixins (library, media, imports, settings, ...)
 ├── web_app.py              Loopback server + REST API (shared core)
-├── routes.py               GET/POST route tables (110 GET + 139 POST entries; v1_contracts.json freezes 60 paths)
+├── routes.py               GET/POST route tables (frozen v1 surface + additive v2 routes)
 ├── contracts.py            Frozen v1 API contract + legacy aliases
 ├── openbox.py              Shared core helpers (data paths, launch, profiles)
 ├── state_store.py          Schema-versioned state, atomic writes, snapshots
 ├── settings_schema.py      Settings key whitelist
 ├── api_errors.py           Structured API error codes
-├── job_manager.py          Background job lifecycle
+├── job_manager.py          Background job lifecycle adapter
 ├── importers.py            Steam, Heroic, Lutris, ROM imports
-├── pkg/parity/parity_*.py     Parity modules (shim at root for compat)
+├── pkg/state/              Modularized state, caches, launch, and operations
+├── pkg/parity/parity_*.py  Parity modules (shim at root for compat)
 ├── emulators.py            Emulator profiles + Flathub management
 ├── metadata.py             LaunchBox DB sync + media scraping
 ├── retroachievements.py    RA matching + badge injection
@@ -378,7 +383,7 @@ OpenBox/
 ├── themes/                 Stock themes (5 CSS files)
 ├── emulator_defs/          YAML definition packs
 ├── scripts/                Build, test, screenshot capture
-├── tests/test_*.py            Test suite (69 files)
+├── tests/test_*.py         Test suite (76 files)
 ```
 
 ### Run tests

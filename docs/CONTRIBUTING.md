@@ -116,7 +116,7 @@ Before a **stable** tag:
 3. Run Setup Center, Activity, Launch Doctor, and launch flows on the binary—not just from source.
 4. Confirm `make check`, `tests/test_packaging.py`, and `./scripts/ui_smoke.sh` on the release commit.
 
-See [RELEASE_NOTES.md](RELEASE_NOTES.md) for the full RC checklist.
+See [ADR 0013 (Artifact Gates & Release Criteria)](adr/0013-artifact-gates.md) for the full RC and release gate requirements.
 
 ### No telemetry
 

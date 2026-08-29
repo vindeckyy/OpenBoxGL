@@ -629,7 +629,7 @@ class JobManagerCoverageTests(unittest.TestCase):
         self.manager.set_observer(bad_observer)
         with mock.patch.object(self.manager, "_sync_operation_finish", side_effect=RuntimeError("sync fail")):
             self.manager.submit("obs-sync-fail", lambda: None)
-            _wait_for(self.manager, "obs-sync-fail", {"done"})
+            self.assertTrue(_wait_until(lambda: self.manager._jobs.get("obs-sync-fail", {}).get("state") == "done"))
 
     def test_snapshot_without_operation_id(self):
         with self.manager._lock:
@@ -873,10 +873,13 @@ class FacadeSyncTests(unittest.TestCase):
         release = threading.Event()
         self.manager.submit(_installs_job_name("update:ra"), _blocked_worker(started, release))
         self.assertTrue(started.wait(POLL_TIMEOUT))
-        INSTALLS["update:ra"] = {"state": "updating", "message": "patching"}
-        INSTALLS.update({"pcsx2": {"state": "installing"}})
-        self.assertEqual(INSTALLS["pcsx2"]["state"], "installing")
-        release.set()
+        try:
+            INSTALLS["update:ra"] = {"state": "updating", "message": "patching"}
+            INSTALLS.update({"pcsx2": {"state": "installing"}})
+            self.assertEqual(INSTALLS["pcsx2"]["state"], "installing")
+        finally:
+            release.set()
+        _wait_for(self.manager, "update:ra", {"done", "error", "cancelled"})
 
     def test_metadata_facade_uses_alternate_job_name(self):
         from webapp_state import METADATA_JOB
@@ -885,11 +888,14 @@ class FacadeSyncTests(unittest.TestCase):
         release = threading.Event()
         self.manager.submit("metadata-match", _blocked_worker(started, release))
         self.assertTrue(started.wait(POLL_TIMEOUT))
-        METADATA_JOB.update({"state": "running", "current": 2, "total": 5})
-        job_id = self.manager.get_operation_id("metadata-match")
-        op = get_operation_service().get(job_id)
-        self.assertEqual(op["current"], 2)
-        release.set()
+        try:
+            METADATA_JOB.update({"state": "running", "current": 2, "total": 5})
+            job_id = self.manager.get_operation_id("metadata-match")
+            op = get_operation_service().get(job_id)
+            self.assertEqual(op["current"], 2)
+        finally:
+            release.set()
+        _wait_for(self.manager, "metadata-match", {"done", "error", "cancelled"})
 
 
 class JobsAdapterTests(unittest.TestCase):
@@ -1138,12 +1144,11 @@ class JobsAdapterTests(unittest.TestCase):
         })
         backup_status, backup_payload = self.request("POST", "/api/saves/backup", {"id": 0})
         self.assertEqual(backup_status, 202)
-        self.assertIn("job_id", backup_payload)
-        scan_status, scan_payload = self.request("POST", "/api/saves/scan/apply", {})
-        self.assertEqual(scan_status, 202)
-        self.assertIn("job_id", scan_payload)
         import webapp_state
         with mock.patch("handlers.data.scan_all_saves", return_value={0: ["/tmp/scan-save"]}):
+            scan_status, scan_payload = self.request("POST", "/api/saves/scan/apply", {})
+            self.assertEqual(scan_status, 202)
+            self.assertIn("job_id", scan_payload)
             _wait_for(webapp_state.JOB_MANAGER, "saves-scan", {"done"})
 
     def test_gameyfin_install_creates_operation(self):
@@ -1215,9 +1220,9 @@ class JobsAdapterTests(unittest.TestCase):
         with mock.patch("handlers.health.check_update", return_value={"version": "9.9.9"}), \
              mock.patch("handlers.health.install_update", return_value={"installed": True}):
             status, payload = self.request("POST", "/api/update/install", {})
-        self.assertEqual(status, 202)
-        self.assertIn("job_id", payload)
-        _wait_for(webapp_state.JOB_MANAGER, "updater-install", {"done"})
+            self.assertEqual(status, 202)
+            self.assertIn("job_id", payload)
+            _wait_for(webapp_state.JOB_MANAGER, "updater-install", {"done"})
         op = get_operation_service().get(payload["job_id"])
         self.assertEqual(op["type"], "updater.install")
 
@@ -1329,11 +1334,13 @@ class JobsAdapterTests(unittest.TestCase):
         release = threading.Event()
         webapp_state.JOB_MANAGER.submit("gameyfin:99", _blocked_worker(started, release))
         self.assertTrue(started.wait(POLL_TIMEOUT))
-        with mock.patch("pkg.state.operations.get_operation_service") as mock_service:
-            mock_service.return_value.mark_running.side_effect = RuntimeError("sync fail")
-            mock_service.return_value.update_progress.side_effect = RuntimeError("sync fail")
-            INSTALLS["gameyfin:99"] = {"state": "installing", "current": 1, "total": 2}
-        release.set()
+        try:
+            with mock.patch("pkg.state.operations.get_operation_service") as mock_service:
+                mock_service.return_value.mark_running.side_effect = RuntimeError("sync fail")
+                mock_service.return_value.update_progress.side_effect = RuntimeError("sync fail")
+                INSTALLS["gameyfin:99"] = {"state": "installing", "current": 1, "total": 2}
+        finally:
+            release.set()
 
 
 class DataHandlersStreamTests(unittest.TestCase):
