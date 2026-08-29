@@ -1,81 +1,48 @@
-# OpenBox v1.7.1: Polish, Performance & Play Insights
+# OpenBox v1.7.1: Play Insights & Performance Polish
 
-**OpenBox v1.7.1** is a refinement and performance release built on top of 1.7.0. It delivers local-first gaming analytics, fluid responsiveness at 20,000-game scale, actionable one-click launch fixes, and human-friendly setup storytelling—all while upholding OpenBox's core design tenets: **100% offline, zero accounts, zero telemetry, and zero runtime dependencies**.
-
----
-
-## 🌟 Highlights
-
-### 📊 Local-First Play Insights Dashboard
-Gain rich visual insights into your gaming patterns without sending a single byte over the network. The new Play Insights panel computes real-time statistics directly from your existing local play logs:
-
-* **366-Day Activity Heatmap**: A GitHub-style activity grid across 5 intensity levels (0–4) visualizing your gaming cadence over the past year.
-* **Streak & Momentum Tracking**: Monitor your current active streak, all-time longest streak, and 30-day playtime momentum (comparing hours played in the last 30 days against the previous 30 days).
-* **Platform & Genre Breakdown**: Dynamic ranked breakdown of your most-played systems and favorite genres.
-* **Lightning Fast & Lightweight**: Computes the full 366-day heatmap across 20,000 history entries in under **15 ms** with zero extra database storage.
-* **Accessibility First**: Features lazy-loaded UI components (`static/insights.js`) and a semantic HTML table fallback for screen readers.
-* **Additive REST Endpoints**: Backed by `GET /api/v2/insights/summary` and `GET /api/v2/insights/heatmap?days=&end_date=`.
+**OpenBox v1.7.1** focuses strictly on performance optimizations, the brand-new local Play Insights dashboard, and actionable polish for Setup and Launch Doctor.
 
 ---
 
-### ⚡ 20,000-Game Performance Engine
-OpenBox is built to remain snappy, smooth, and lightweight even with massive ROM collections:
-
-* **Spacer-Window Virtual Grid**: The library grid now virtualizes rendering using an `IntersectionObserver` window with `contain-intrinsic-size`, drastically cutting DOM overhead for 20k+ libraries while preserving smooth rAF scrolling, context menus, and active keyboard/card focus. *(Includes a `localStorage['openbox-virtual-grid']` kill-switch fallback).*
-* **Off-Thread Worker Search**: Trigram title search indexing and querying now execute asynchronously off the main UI thread via `static/worker.search.js`, ensuring zero input lag when typing. Automatically falls back to the main thread if Web Workers are unavailable.
-* **LRU Facet Caching**: `FacetCache` now features a 64-entry LRU cache with strict time-budget guards and atomic cache epoch invalidation (`pkg/state/cache.py`).
-* **Micro-Batch Persistence**: State updates coalesce across 50 ms micro-batches with single-`fsync` persistence in `state_store.py`, eliminating disk thrashing during rapid operations.
-
----
-
-### 🩺 Actionable Launch Doctor
-Launch Doctor transitions from passive preflight inspection to active, one-click troubleshooting for missing emulators and misconfigurations:
-
-* **Direct Fix Actions**: Every blocking preflight check now provides an interactive `fix_action` button directly in the detail pane:
-  * `flatpak_install`: Install missing emulator Flatpaks with a single click.
-  * `reveal_bios_path`: Immediately reveal the target folder for missing BIOS and firmware files.
-  * `pick_core`: Seamlessly select and assign compatible emulator cores or launch adapters.
-  * `explain_token`: View contextual guidance and fixes for invalid launch token parameters.
-* **Platform Chips & Disambiguation**: Clear platform badges and registry health endpoints (`GET /api/v2/emulators/registry?health=1`) eliminate guesswork before launching.
+### 📊 Local-First Play Insights
+* **366-Day Activity Heatmap**: Visualizes your daily play sessions across 5 intensity levels (0–4).
+* **Streaks & 30-Day Momentum**: Tracks your current streak, longest streak, and compares playtime over the last 30 days against the prior 30.
+* **Top Platforms & Genres**: Instant breakdown of your most-played systems and genres.
+* **Instant & Private**: Computes stats on-the-fly from existing `history` and `games` data in under **15 ms** for 20,000 entries with zero telemetry and no database migrations.
+* **Accessible & Lazy-Loaded**: Loaded on demand (`static/insights.js`) with an accessible HTML table fallback for screen readers. Backed by `GET /api/v2/insights/summary` and `GET /api/v2/insights/heatmap`.
 
 ---
 
-### 🧙 Setup Center & Storytelling Polish
-* **Human-Centric Progress Messages**: Import scan previews now provide clear, human progress storytelling (e.g., *"Found 342 games — 12 need your pick →"*).
-* **Safe, Idempotent Imports**: Previews remain completely side-effect free, feature stale-preview guards if files change mid-scan, and tag imports with `import_batch_id` for quick post-import filtering.
+### ⚡ 20k Performance Engine
+* **Virtual Spacer-Window Grid**: Library grid now renders through a virtualized `IntersectionObserver` window with `contain-intrinsic-size`, dramatically reducing DOM node overhead during fast scrolling while preserving card focus and context menus. Includes a `localStorage['openbox-virtual-grid']` fallback switch.
+* **Off-Thread Trigram Search**: Search indexing and query evaluation run in a background Web Worker (`static/worker.search.js`) to eliminate typing stutter, with automatic fallback to the main thread.
+* **Bounded Facet LRU Cache**: `pkg/state/cache.py` adds a 64-entry `FacetCache` with execution time budgeting and cache-epoch bumps on invalidation.
+* **Micro-Batch Write Coalescing**: `state_store.py` coalesces disk writes within 50 ms windows into a single `fsync` to eliminate disk churn during rapid state mutations.
+* **CI Benchmark Suite**: Added `--json-out` support to `scripts/perf_bench.py` to continuously enforce <15 ms query gates at 20,000 games.
 
 ---
 
-### 🎨 Design System & Theme Harmony
-* **Comprehensive Token Contract**: Added 9 new design tokens to `static/app.css` `:root` (`--overlay-insight-cell-0` through `--overlay-insight-cell-4`, `--border-insight`, `--shadow-insight`, `--surface-insight-card`, `--focus-ring`).
-* **All 5 Stock Themes Updated**: Flawless, token-accurate styling across every stock theme with zero raw hex values outside `:root`.
+### 🩺 Actionable Launch Doctor Fixes
+* **Interactive Fix Actions**: Blocking preflight checks now attach actionable `fix_action` triggers (`{kind, label, payload}`) to render direct buttons instead of static error badges:
+  * `flatpak_install`: One-click button to install missing emulator Flatpaks.
+  * `reveal_bios_path`: Direct assistance showing the exact destination folder for missing BIOS/firmware files.
+  * `pick_core`: Instant selector to pick emulator cores and launch adapters.
+  * `explain_token`: Contextual explanations for misconfigured launch tokens.
+* **Platform Disambiguation**: Renders platform chips and registry health status (`GET /api/v2/emulators/registry?health=1`) to resolve ambiguous launcher targets.
 
 ---
 
-## 🛡️ Non-Negotiables & Guarantees
-
-* **Zero Telemetry**: No tracking, no analytics, no remote phone-home. Your data never leaves your machine.
-* **Dependency-Free Runtime**: Pure Python 3.10+ standard library backend and vanilla JavaScript frontend.
-* **Frozen v1 API Surface**: 100% backward compatibility preserved across all 60 v1 route endpoints.
-* **Strict Quality Gates**: 76 test suites passing at 100% with enforced coverage and sub-15ms query benchmarks.
+### 🧙 Setup Center Progress Polish
+* **Human Progress Storytelling**: Scan previews now generate contextual status messages in `preview_document` (e.g. *"Found 342 games — 12 need your pick →"*) to clearly communicate scan state during candidate review.
 
 ---
 
-## 📦 Getting OpenBox v1.7.1
+### 🎨 Design System Tokens
+* **9 New Tokens in `static/app.css`**: Added `--overlay-insight-cell-0` through `--overlay-insight-cell-4`, `--border-insight`, `--shadow-insight`, `--surface-insight-card`, and `--focus-ring`.
+* **5 Stock Themes Updated**: Full token coverage with zero raw hex values across all themes.
 
-OpenBox v1.7.1 is distributed as standalone, release-gated Linux packages for x86_64:
+---
 
-* **AppImage**: Standalone, portable executable built on Ubuntu 22.04 LTS with integrated `zsync` delta updates and SBOM.
-* **Flatpak**: Sandboxed Flatpak bundle built against the Freedesktop 25.08 runtime.
+**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.7.0...v1.7.1
 
-### Upgrade & Changelog
-
-To upgrade your existing installation, download the latest package or pull the tagged commit:
-
-```bash
-git fetch --tags
-git checkout v1.7.1
-```
-
-For the complete list of commits and file diffs, view the [Full v1.7.0...v1.7.1 Comparison](https://github.com/vindeckyy/OpenBoxGL/compare/v1.7.0...v1.7.1).
 
