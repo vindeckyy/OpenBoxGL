@@ -398,6 +398,7 @@ def main():
     parser.add_argument("--sizes", default="1000,5000,10000,20000", help="comma-separated game counts (e.g. 1000,5000,10000,20000)")
     parser.add_argument("--out", default=None, help="output JSON path (default build/perf.json)")
     parser.add_argument("--json", dest="json_out", default=None, help="output JSON path alias (e.g. build/perf.json)")
+    parser.add_argument("--json-out", dest="json_out", default=None, help="output JSON path alias (e.g. build/perf.json)")
     parser.add_argument("--runs", type=int, default=5, help="runs per operation for median/p95 (default 5)")
     parser.add_argument("--browser", action="store_true", help="also measure browser first-render when Chrome is available (opt-in)")
     parser.add_argument("--no-gate", action="store_true", help="do not enforce non-regression gates; always exit 0")

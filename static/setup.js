@@ -102,12 +102,22 @@ function ensureSetupShell() {
 function renderStepList() {
   const list = $('setupStepList');
   if (!list) return;
-  list.innerHTML = STEPS.map(step => `
+  const progressByStep = {
+    3: state.previewDoc?.message || (state.previewDoc?.scanned_entries ? `Found ${state.previewDoc.scanned_entries} games` : ''),
+    4: state.previewItems.length ? `${state.previewItems.filter(i => (state.decisions.get(i.candidate_id)?.action || i.intended_action) === 'review').length} need review` : '',
+    5: state.preflight?.totals ? `Ready ${state.preflight.totals.ready ?? 0} · Blocked ${state.preflight.totals.blocked ?? 0}` : '',
+    7: state.previewDoc?.message || '',
+  };
+  list.innerHTML = STEPS.map(step => {
+    const progress = progressByStep[step.id] || '';
+    return `
     <li class="setup-step-item${step.id === state.step ? ' active' : ''}${step.id < state.step ? ' done' : ''}" data-setup-step="${step.id}">
       <span class="setup-step-num">${step.id}</span>
       <span class="setup-step-label">${escapeHtml(step.label)}</span>
+      ${progress ? `<span class="setup-step-progress">${escapeHtml(progress)}</span>` : ''}
     </li>
-  `).join('');
+  `;
+  }).join('');
   const help = $('setupHelp');
   if (help) help.textContent = STEPS.find(s => s.id === state.step)?.help || '';
 }
@@ -311,11 +321,22 @@ function renderPreview() {
   const doc = state.previewDoc || {};
   const counts = doc.counts || {};
   const countText = Object.entries(counts).map(([k, v]) => `${escapeHtml(k)}: ${v}`).join(' · ') || 'No counts yet';
-  const rows = state.previewItems.map(renderPreviewRow).join('');
+  const humanMessage = doc.message ? `<p class="setup-preview-message" data-preview-message>${escapeHtml(doc.message)}</p>` : '';
+  const progressCopy = doc.scanned_entries
+    ? `<p class="setup-progress-copy">Found ${doc.scanned_entries} games${counts.ambiguities ? ` — ${counts.ambiguities} need your pick` : ''}${counts.unsupported ? ` · ${counts.unsupported} unsupported` : ''}</p>`
+    : '';
+  const rows = state.previewItems.map(item => {
+    const chips = (item.emulator_choices || []).filter(c => c.flatpak_app_id).map(choice => `
+      <button type="button" class="setup-install-chip" data-install-chip="${escapeHtml(choice.flatpak_app_id)}" data-candidate-id="${escapeHtml(item.candidate_id)}" data-adapter-id="${escapeHtml(choice.adapter_id)}" data-emulator-id="${escapeHtml(choice.emulator_id)}">Install ${escapeHtml(choice.label || choice.adapter_id)} →</button>
+    `).join('');
+    return renderPreviewRow(item) + (chips ? `<div class="setup-preview-chips">${chips}</div>` : '');
+  }).join('');
   const status = state.busy ? '<p class="setup-status">Scan in progress…</p>' : '';
   return `
     <div class="setup-preview" data-setup-panel="preview">
       ${status}
+      ${humanMessage}
+      ${progressCopy}
       <p class="setup-preview-counts">${countText}</p>
       <div class="setup-preview-list">${rows || '<p class="description setup-empty">No preview items yet. Continue to start a scan.</p>'}</div>
       ${state.previewCursor ? '<button type="button" class="setup-load-more" id="setupLoadMorePreview">Load more</button>' : ''}
@@ -354,6 +375,7 @@ function renderReadiness() {
   const preflight = state.preflight || {};
   const totals = preflight.totals || {};
   const byPlatform = (preflight.by_platform || []).map(row => `${escapeHtml(row.platform || 'Unknown')}: ${row.ready ?? 0}/${row.total ?? 0}`).join(' · ');
+  const progressCopy = state.previewDoc?.message ? `<p class="setup-readiness-progress">${escapeHtml(state.previewDoc.message)}</p>` : '';
   const results = (preflight.results || []).map(result => {
     const checks = (result.checks || []).map(check => `
       <li class="setup-check" data-check-code="${escapeHtml(check.code || '')}">
@@ -369,6 +391,9 @@ function renderReadiness() {
     }).join('');
     const flatpakChoice = (item?.emulator_choices || []).find(c => c.flatpak_app_id);
     const installSelected = state.emulatorChoices.get(result.candidate_id)?.launch_setup === 'install_flatpak';
+    const recommendChips = (item?.emulator_choices || []).map((choice, index) => `
+      <button type="button" class="setup-emulator-chip" data-emulator-chip="${escapeHtml(choice.adapter_id)}" data-candidate-id="${escapeHtml(result.candidate_id || '')}" data-choice-index="${index}">Install ${escapeHtml(choice.label || choice.adapter_id)}</button>
+    `).join('');
     return `
       <article class="setup-readiness-row" data-candidate-id="${escapeHtml(result.candidate_id || '')}" data-preflight-status="${escapeHtml(result.status || '')}">
         <div class="setup-readiness-head">
@@ -376,6 +401,7 @@ function renderReadiness() {
           <span class="setup-readiness-status">${escapeHtml(result.status || '')}</span>
         </div>
         <ul class="setup-check-list">${checks || '<li>No checks</li>'}</ul>
+        ${recommendChips ? `<div class="setup-recommend-chips">${recommendChips}</div>` : ''}
         <label class="field">Emulator choice
           <select class="setup-emulator-choice" data-candidate-id="${escapeHtml(result.candidate_id || '')}">
             <option value="">—</option>
@@ -390,6 +416,7 @@ function renderReadiness() {
   }).join('');
   return `
     <div class="setup-readiness" data-setup-panel="readiness">
+      ${progressCopy}
       <div class="setup-preflight-totals">
         <span>Ready ${totals.ready ?? 0}</span>
         <span>Warning ${totals.warning ?? 0}</span>
@@ -431,17 +458,21 @@ function renderOptions() {
 
 function renderConfirm() {
   const doc = state.previewDoc || {};
-  const stale = state.stale ? '<p class="setup-stale" role="alert">Preview is stale. Revalidate before committing.</p>' : '';
+  const humanMessage = doc.message ? `<p class="setup-confirm-message">${escapeHtml(doc.message)}</p>` : '';
+  const staleNudge = state.stale
+    ? '<p class="setup-stale" role="alert">Preview is stale — sources or library changed since scan. Revalidate to sync before committing.</p><p class="description setup-revalidate-nudge">Revalidating re-scans your sources and checks the library fingerprint. It takes a moment but prevents surprises.</p>'
+    : '<p class="description setup-revalidate-hint">Tip: revalidate if you added files or changed your library since scanning.</p>';
   return `
     <div class="setup-confirm" data-setup-panel="confirm">
-      ${stale}
+      ${humanMessage}
+      ${staleNudge}
       <p class="description">Revalidate scans sources again, then commit writes imported games to your library.</p>
       <div class="setup-confirm-summary">
         <p>Preview <strong>${escapeHtml(state.previewId || '—')}</strong> revision <strong>${doc.revision ?? state.revision}</strong></p>
         <p>Candidates: <strong>${state.previewItems.length}</strong></p>
         <p>Import actions: <strong>${selectedImportCandidates().length}</strong></p>
       </div>
-      ${state.stale ? '<button type="button" class="primary setup-revalidate" id="setupRevalidate">Revalidate preview</button>' : ''}
+      ${state.stale ? '<button type="button" class="primary setup-revalidate" id="setupRevalidate">Revalidate preview</button>' : '<button type="button" class="icon-button setup-revalidate" id="setupRevalidate">Revalidate preview</button>'}
       ${state.busy ? '<p class="setup-status">Operation in progress…</p>' : ''}
     </div>
   `;
@@ -523,6 +554,12 @@ function bindPanelEvents() {
   if (runPreflight) runPreflight.onclick = () => runReadinessStep({manual: true});
   document.querySelectorAll('.setup-emulator-choice').forEach(select => {
     select.onchange = () => applyEmulatorChoice(select.dataset.candidateId, select.value);
+  });
+  document.querySelectorAll('[data-install-chip]').forEach(btn => {
+    btn.onclick = () => applyEmulatorChoice(btn.dataset.candidateId, `adapter:${[...(state.previewItems.find(i => i.candidate_id === btn.dataset.candidateId)?.emulator_choices || [])].findIndex(c => c.adapter_id === btn.dataset.adapterId)}`);
+  });
+  document.querySelectorAll('[data-emulator-chip]').forEach(btn => {
+    btn.onclick = () => applyEmulatorChoice(btn.dataset.candidateId, `adapter:${btn.dataset.choiceIndex}`);
   });
   const metadataSync = $('setupMetadataSync');
   if (metadataSync) metadataSync.onchange = () => { state.options.metadata_sync = metadataSync.checked; };

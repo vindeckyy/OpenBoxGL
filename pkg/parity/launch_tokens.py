@@ -111,3 +111,43 @@ def build_launch_args(template, game, *, path=None, data_dir="", emulator_dir=""
             part = part.replace(token, extractor(ctx))
         result.append(part)
     return result
+
+
+def extract_tokens(template):
+    """Return set of ``{token}`` strings found in *template*."""
+    import re
+
+    if not template:
+        return set()
+    return set(re.findall(r"\{[A-Za-z0-9_]+\}", str(template)))
+
+
+def find_invalid_tokens(template):
+    """Return list of tokens in *template* not in :data:`PLACEHOLDERS`."""
+    return [tok for tok in extract_tokens(template) if tok not in PLACEHOLDERS]
+
+
+def validate_tokens(template):
+    """Return issue dict if *template* contains unknown tokens, else None.
+
+    Returned payload contains ``kind`` explain_token style.
+    """
+    invalid = find_invalid_tokens(template)
+    if invalid:
+        return {
+            "kind": "explain_token",
+            "label": f"Unknown token: {', '.join(sorted(invalid))}",
+            "payload": {"invalid_tokens": sorted(invalid), "known_tokens": sorted(PLACEHOLDERS.keys())},
+        }
+    return None
+
+
+def validate_startup_args(startup_args):
+    """Validate a list of startup_args strings.
+
+    Returns list of invalid tokens across all args, or empty if all known.
+    """
+    if not startup_args:
+        return []
+    joined = " ".join(str(arg) for arg in startup_args)
+    return find_invalid_tokens(joined)

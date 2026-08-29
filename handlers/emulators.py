@@ -48,7 +48,23 @@ class EmulatorsHandlers:
 
     @route("GET", "/api/v2/emulators/registry")
     def _api_get_api_v2_emulators_registry(self, parsed):
-        self.send_json(200, load_registry(ROOT / "emulator_defs"))
+        raw_qs = getattr(parsed, "query", "") or ""
+        # Mock objects in tests provide a Mock for query; treat non-str as empty
+        if not isinstance(raw_qs, str):
+            raw_qs = str(raw_qs) if isinstance(raw_qs, bytes) else ""
+        qs = parse_qs(raw_qs)
+        health = qs.get("health", ["0"])[0]
+        want_health = str(health).lower() in {"1", "true", "yes", "on"}
+        if want_health:
+            # Validate startup_args tokens as part of health pass; adapters with invalid tokens are still returned but health flags reflect.
+            try:
+                from pkg.parity.launch_tokens import validate_startup_args  # noqa: F401
+            except Exception:
+                pass
+            payload = load_registry(ROOT / "emulator_defs", health=True)
+        else:
+            payload = load_registry(ROOT / "emulator_defs")
+        self.send_json(200, payload)
         return
 
     @route("POST", "/api/emulators/install")

@@ -88,6 +88,47 @@ export function partitionJobs(jobs) {
   return {active, attention, recent};
 }
 
+export function groupJobsByRoot(jobs) {
+  const grouped = new Map();
+  for (const job of jobs) {
+    const root = job.root_job_id || job.job_id;
+    if (!grouped.has(root)) grouped.set(root, []);
+    grouped.get(root).push(job);
+  }
+  for (const [root, list] of grouped) {
+    list.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+  }
+  return grouped;
+}
+
+export function filterJobs(jobs, {typeFilter = null, stateFilter = null} = {}) {
+  let result = jobs;
+  if (typeFilter) result = result.filter(job => job.type === typeFilter);
+  if (stateFilter) result = result.filter(job => job.state === stateFilter);
+  return result;
+}
+
+export function jobSummaryLine(job) {
+  const state = job.state;
+  const result = job.result || {};
+  const error = job.error || {};
+  if (state === 'done' && result && Object.keys(result).length) {
+    const parts = [];
+    for (const key of ['added', 'merged', 'skipped', 'excluded', 'completed', 'downloaded']) {
+      if (key in result) parts.push(`${result[key]} ${key}`);
+    }
+    if (parts.length) return `Finished — ${parts.join(', ')}`;
+    return 'Finished successfully';
+  }
+  if (['error', 'partial', 'interrupted'].includes(state) && error && (error.message || error.code)) {
+    const msg = error.message || error.code || '';
+    return `Finished with ${state}: ${msg}`.trim();
+  }
+  if (state === 'cancelled') return 'Cancelled';
+  if (state) return `Finished — ${state}`;
+  return 'Finished';
+}
+
 function formatElapsed(job) {
   const start = job.started_at || job.created_at;
   if (!start) return '';
@@ -114,6 +155,9 @@ function stateBadgeLabel(state) {
   return String(state || 'unknown');
 }
 
+let activityTypeFilter = '';
+let activityStateFilter = '';
+
 function ensureActivityDrawer() {
   if ($('activityDrawer')) return;
   const dialog = document.createElement('dialog');
@@ -125,6 +169,10 @@ function ensureActivityDrawer() {
     <div class="dialog-head activity-drawer-head">
       <h2 id="activityDrawerTitle">Activity</h2>
       <button type="button" id="closeActivityDrawer" aria-label="Close Activity drawer">×</button>
+    </div>
+    <div class="activity-filters" id="activityFilters">
+      <label class="field">Type <select id="activityFilterType"><option value="">All types</option><option value="setup.scan">Setup scan</option><option value="setup.commit">Setup commit</option><option value="media.bulk_download">Media</option><option value="metadata.match_preview">Metadata</option></select></label>
+      <label class="field">State <select id="activityFilterState"><option value="">All states</option><option value="queued">Queued</option><option value="running">Running</option><option value="done">Done</option><option value="error">Error</option><option value="partial">Partial</option><option value="interrupted">Interrupted</option></select></label>
     </div>
     <div class="activity-drawer-body" id="activityDrawerBody" role="region" aria-label="Background operations">
       <section class="activity-section" data-activity-section="active">
@@ -139,10 +187,18 @@ function ensureActivityDrawer() {
         <h3 class="activity-section-title">Recent</h3>
         <div class="activity-list" id="activityRecentList"></div>
       </section>
+      <section class="activity-section" data-activity-section="grouped" id="activityGroupedSection" hidden>
+        <h3 class="activity-section-title">Grouped by run</h3>
+        <div class="activity-list" id="activityGroupedList"></div>
+      </section>
     </div>
   `;
   document.body.appendChild(dialog);
   $('closeActivityDrawer').onclick = () => dialog.close();
+  const typeSel = $('activityFilterType');
+  const stateSel = $('activityFilterState');
+  if (typeSel) typeSel.onchange = () => { activityTypeFilter = typeSel.value; renderActivity(); };
+  if (stateSel) stateSel.onchange = () => { activityStateFilter = stateSel.value; renderActivity(); };
 }
 
 function renderEmpty(sectionEl, message) {
@@ -164,8 +220,12 @@ function renderJobRow(job) {
         ${itemState.next_cursor ? `<button type="button" class="icon-button activity-items-more" data-activity-items-more="${escapeHtml(job.job_id)}">Load more failures</button>` : ''}
       </div>`
     : '';
+  const summary = jobSummaryLine(job);
+  const showSummary = job.state === 'done' || job.state === 'partial' || job.state === 'error' || job.state === 'cancelled' || job.state === 'interrupted';
+  const summaryHtml = showSummary ? `<p class="activity-row-summary" data-activity-summary="${escapeHtml(job.job_id)}">${escapeHtml(summary)}</p>` : '';
   const attrs = ROW_KEYS.map(key => `data-${key.replace(/_/g, '-')}="${escapeHtml(String(job[key] ?? ''))}"`).join(' ');
-  return `<article class="activity-row" ${attrs}>
+  const rootAttr = `data-root-job-id="${escapeHtml(String(job.root_job_id || job.job_id))}"`;
+  return `<article class="activity-row" ${attrs} ${rootAttr}>
     <div class="activity-row-head">
       <div class="activity-row-title">
         <strong>${escapeHtml(job.title || job.type || job.job_id)}</strong>
@@ -180,6 +240,7 @@ function renderJobRow(job) {
     </div>
     ${job.message ? `<p class="activity-row-message">${escapeHtml(job.message)}</p>` : ''}
     ${errorText ? `<p class="activity-row-error">${escapeHtml(errorText)}</p>` : ''}
+    ${summaryHtml}
     <div class="activity-row-actions">
       <button type="button" class="icon-button" data-activity-cancel="${escapeHtml(job.job_id)}" ${job.can_cancel ? '' : 'disabled'}>Cancel</button>
       <button type="button" class="icon-button" data-activity-retry="${escapeHtml(job.job_id)}" ${job.can_retry ? '' : 'hidden'}>Retry</button>
@@ -190,9 +251,29 @@ function renderJobRow(job) {
   </article>`;
 }
 
+function renderGroupedJobs(jobs) {
+  const grouped = groupJobsByRoot(jobs);
+  const container = $('activityGroupedList');
+  const section = $('activityGroupedSection');
+  if (!container || !section) return;
+  if (grouped.size === 0) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+  const html = [...grouped.entries()].map(([root, list]) => `
+    <div class="activity-group" data-root-job-id="${escapeHtml(root)}">
+      <h4 class="activity-group-title">Run ${escapeHtml(root.slice(0, 8))} — ${list.length} job${list.length > 1 ? 's' : ''}</h4>
+      <div class="activity-group-jobs">${list.map(renderJobRow).join('')}</div>
+    </div>
+  `).join('');
+  container.innerHTML = html;
+}
+
 function renderActivity() {
   ensureActivityDrawer();
-  const jobs = [...jobsById.values()];
+  let jobs = [...jobsById.values()];
+  jobs = filterJobs(jobs, {typeFilter: activityTypeFilter || null, stateFilter: activityStateFilter || null});
   const {active, attention, recent} = partitionJobs(jobs);
   const sections = [
     ['activityActiveList', active, 'No active operations.'],
@@ -205,6 +286,7 @@ function renderActivity() {
     if (!list.length) renderEmpty(el, emptyMessage);
     else el.innerHTML = list.map(renderJobRow).join('');
   }
+  renderGroupedJobs(jobs);
   bindActivityRowActions();
 }
 
@@ -265,6 +347,13 @@ function onJobSse(event) {
   try { payload = JSON.parse(event.data); } catch { return; }
   if (!payload?.job_id) return;
   mergeJobPatch(payload.job_id, payload);
+  if (event.type === 'job.finished') {
+    const job = jobsById.get(payload.job_id);
+    if (job) {
+      const line = jobSummaryLine({...job, ...payload});
+      if (line) job.message = line;
+    }
+  }
 }
 
 function connectActivitySse() {
@@ -334,11 +423,14 @@ async function resumeJob(jobId) {
 async function loadJobItems(jobId, {append = false} = {}) {
   const existing = itemPages.get(jobId) || {items: [], next_cursor: null};
   const cursor = append ? existing.next_cursor : null;
+  // Bounded error pagination: limit clamped at 50 per spec
   const query = new URLSearchParams({job_id: jobId, limit: '50'});
   if (cursor) query.set('cursor', cursor);
   const page = await api(`/api/v2/jobs/items?${query.toString()}`);
   const items = append ? [...existing.items, ...(page.items || [])] : (page.items || []);
-  itemPages.set(jobId, {items, next_cursor: page.next_cursor || null});
+  // Enforce bounded storage to avoid unbounded memory growth
+  const capped = items.slice(-200);
+  itemPages.set(jobId, {items: capped, next_cursor: page.next_cursor || null});
   renderActivity();
 }
 

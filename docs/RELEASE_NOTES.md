@@ -1,6 +1,6 @@
-# OpenBox v1.7.0
+# OpenBox v1.7.1
 
-OpenBox v1.7.0 is the guided-setup and durable-operations release. A first-time user can go from an empty library to imported, enriched, launch-ready games without browser `prompt()`, hidden cross-menu steps, or silent mutations.
+OpenBox v1.7.1 is the Polish, Performance & Play Insights release — 1.7.0 pillars stay fast at 20k, Setup converts with human copy and fix-actions, and players see what they played via the local Insights heatmap. A first-time user can go from an empty library to imported, enriched, launch-ready games without browser `prompt()`, hidden cross-menu steps, or silent mutations.
 
 ## Highlights
 
@@ -54,15 +54,15 @@ OpenBox v1.7.0 is the guided-setup and durable-operations release. A first-time 
 
 ## RC soak checklist (48–72 hours)
 
-Before tagging a **stable** v1.7.0 release, maintainers run a prerelease soak on exact CI artifacts:
+Before tagging a **stable** v1.7.1 release, maintainers run a prerelease soak on exact CI artifacts:
 
-1. Tag a prerelease (e.g. `v1.7.0-rc.1`) and publish AppImage + Flatpak bundle from the exact-artifact CI job.
+1. Tag a prerelease (e.g. `v1.7.1-rc.1`) and publish AppImage + Flatpak bundle from the exact-artifact CI job.
 2. Soak **48–72 hours** on x86_64 hardware (Ubuntu LTS, Fedora, Arch, or Steam Deck).
 3. Exercise Setup Center end-to-end, Activity SSE/cancel/retry, Launch Doctor preflight, metadata match review, and Big Box launch.
 4. Confirm `make check` green on the release tag; `python3 -B scripts/check_version_sync.py` exit 0.
 5. Run `python3 -B tests/test_packaging.py` and `./scripts/ui_smoke.sh` against the artifact.
 6. Verify no telemetry in artifacts, Flatpak `finish-args`, or `/api/diagnostic` output.
-7. After soak passes, publish stable `v1.7.0` with signed artifacts and SBOM per ADR 0013.
+7. After soak passes, publish stable `v1.7.1` with signed artifacts and SBOM per ADR 0013.
 
 ## Screenshots
 
@@ -75,4 +75,4 @@ python3 scripts/capture_readme_screenshots.py
 
 Requires Node.js 22.12+ and a display (or use `scripts/capture_screenshot_puppeteer.mjs` headless where supported).
 
-The full changelog is available at https://github.com/vindeckyy/OpenBoxGL/compare/v1.6.0...v1.7.0.
+The full changelog is available at https://github.com/vindeckyy/OpenBoxGL/compare/v1.6.0...v1.7.1.

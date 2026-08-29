@@ -110,6 +110,32 @@ def _normalize_adapter(raw):
         extensions = [extensions]
     native_exe = raw.get("native_exe", raw.get("native"))
     flatpak_app_id = raw.get("flatpak_app_id", raw.get("flatpak"))
+    startup_args = _compile_startup_args(raw)
+    # Validate startup_args tokens against canonical launch_tokens table
+    try:
+        from pkg.parity.launch_tokens import validate_startup_args
+
+        invalid = validate_startup_args(startup_args)
+        if invalid:
+            raise ValueError(f"Adapter {adapter_id} startup_args contains unknown tokens: {', '.join(invalid)}")
+    except ValueError:
+        raise
+    except Exception:
+        pass
+    # Optional BIOS / firmware / core metadata for health checks
+    bios_path = raw.get("bios_path") or raw.get("bios") or None
+    bios_sha1 = raw.get("bios_sha1") or None
+    firmware_path = raw.get("firmware_path") or None
+    firmware_sha1 = raw.get("firmware_sha1") or None
+    core_path = raw.get("core_path") or None
+    if core_path is None:
+        # auto-detect core from startup_args -L pattern
+        for idx, arg in enumerate(startup_args):
+            if arg == "-L" and idx + 1 < len(startup_args):
+                cand = startup_args[idx + 1]
+                if cand.startswith("/"):
+                    core_path = cand
+                    break
     return {
         "adapter_id": adapter_id,
         "emulator_id": emulator_id,
@@ -118,11 +144,16 @@ def _normalize_adapter(raw):
         "extensions": [ext.lower().lstrip(".") for ext in extensions],
         "native_exe": str(native_exe).strip() if native_exe else None,
         "flatpak_app_id": str(flatpak_app_id).strip() if flatpak_app_id else None,
-        "startup_args": _compile_startup_args(raw),
+        "startup_args": startup_args,
         "recommended": _as_bool(raw.get("recommended"), default=True),
         "priority": _as_int(raw.get("priority"), default=100),
         "executable_patterns": [str(item) for item in (raw.get("executable_patterns") or [])],
         "schema_version": _as_int(raw.get("schema_version"), default=SCHEMA_VERSION),
+        "bios_path": str(bios_path).strip() if bios_path else None,
+        "bios_sha1": str(bios_sha1).strip().lower() if bios_sha1 else None,
+        "firmware_path": str(firmware_path).strip() if firmware_path else None,
+        "firmware_sha1": str(firmware_sha1).strip().lower() if firmware_sha1 else None,
+        "core_path": str(core_path).strip() if core_path else None,
     }
 
 
@@ -149,26 +180,154 @@ def load_adapters(defs_dir=None):
     return list(_load_raw_adapters(defs_dir))
 
 
-def load_registry(defs_dir=None):
+def _file_sha1(path):
+    import hashlib
+
+    try:
+        h = hashlib.sha1()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                h.update(chunk)
+        return h.hexdigest().lower()
+    except OSError:
+        return None
+
+
+def _bios_ok_for_adapter(adapter, home=None):
+    # Use parity_import detect_dependencies for BIOS hints, plus YAML bios_path if present
+    from pathlib import Path as _Path
+
+    # If YAML specifies bios_path, check that path (and SHA if provided)
+    bios_path = adapter.get("bios_path")
+    if bios_path:
+        p = _Path(bios_path).expanduser()
+        if not p.exists():
+            return False
+        expected = adapter.get("bios_sha1")
+        if expected:
+            actual = _file_sha1(p)
+            return actual == expected.lower() if actual else False
+        # if path is dir, check not empty
+        if p.is_dir():
+            try:
+                return any(p.iterdir())
+            except OSError:
+                return False
+        return True
+    # Fallback to parity_import BIOS_HINTS via detect_dependencies
+    try:
+        from pkg.parity.parity_import import detect_dependencies
+
+        label = adapter.get("label", "").split(" (")[0]
+        deps = detect_dependencies(label, home=home)
+        # If no hints for this emulator, bios_ok is True (no BIOS required)
+        if not deps.get("required"):
+            return True
+        # Filter bios items (exclude firmware?)
+        bios_missing = [m for m in deps.get("missing", []) if "firmware" not in m.get("name", "").lower()]
+        # If there are no bios-specific missing but there were required bios entries, still check
+        # Actually if missing empty -> bios ok
+        if not bios_missing:
+            # If all missing are firmware, bios is ok
+            # Check if any bios required at all? We consider bios ok if no bios missing
+            return True
+        return False
+    except Exception:
+        return True
+
+
+def _firmware_ok_for_adapter(adapter, home=None):
+    from pathlib import Path as _Path
+
+    fw_path = adapter.get("firmware_path")
+    if fw_path:
+        p = _Path(fw_path).expanduser()
+        if not p.exists():
+            return False
+        expected = adapter.get("firmware_sha1")
+        if expected:
+            actual = _file_sha1(p)
+            return actual == expected.lower() if actual else False
+        if p.is_dir():
+            try:
+                return any(p.iterdir())
+            except OSError:
+                return False
+        return True
+    try:
+        from pkg.parity.parity_import import detect_dependencies
+
+        label = adapter.get("label", "").split(" (")[0]
+        deps = detect_dependencies(label, home=home)
+        if not deps.get("required"):
+            return True
+        fw_missing = [m for m in deps.get("missing", []) if "firmware" in m.get("name", "").lower()]
+        # If no firmware missing -> ok. If there are firmware hints and none missing -> ok.
+        # If there are no firmware hints at all, also ok.
+        # Determine if firmware is required for this adapter
+        fw_required = [r for r in deps.get("required", []) if "firmware" in r.get("name", "").lower()]
+        if not fw_required:
+            return True
+        return len(fw_missing) == 0
+    except Exception:
+        return True
+
+
+def _core_ok_for_adapter(adapter, which=None):
+    which = which or shutil.which
+    core = adapter.get("core_path")
+    if not core:
+        # No core requirement (e.g., dolphin, pcsx2)
+        return True
+    # Core path is absolute; check existence
+    # Also consider that RetroArch itself may not be installed; but core drift is separate from emulator install
+    try:
+        return Path(core).is_file()
+    except Exception:
+        return False
+
+
+def adapter_health(adapter, which=None, home=None):
+    return {
+        "bios_ok": _bios_ok_for_adapter(adapter, home=home),
+        "firmware_ok": _firmware_ok_for_adapter(adapter, home=home),
+        "core_ok": _core_ok_for_adapter(adapter, which=which),
+    }
+
+
+def load_registry(defs_dir=None, health=False, which=None, home=None):
     adapters = load_adapters(defs_dir)
     schema_version = adapters[0]["schema_version"] if adapters else SCHEMA_VERSION
+    out_adapters = []
+    for item in adapters:
+        entry = {
+            "adapter_id": item["adapter_id"],
+            "emulator_id": item["emulator_id"],
+            "label": item["label"],
+            "platform": item["platform"],
+            "extensions": list(item["extensions"]),
+            "native_exe": item["native_exe"],
+            "flatpak_app_id": item["flatpak_app_id"],
+            "startup_args": list(item["startup_args"]),
+            "recommended": item["recommended"],
+            "priority": item["priority"],
+        }
+        if health:
+            h = adapter_health(item, which=which, home=home)
+            entry.update(h)
+            # also include SHA1 drift info if bios_path present
+            if item.get("bios_path"):
+                entry["bios_sha1"] = item.get("bios_sha1")
+                entry["bios_path"] = item.get("bios_path")
+            if item.get("firmware_path"):
+                entry["firmware_sha1"] = item.get("firmware_sha1")
+                entry["firmware_path"] = item.get("firmware_path")
+            if item.get("core_path"):
+                entry["core_path"] = item.get("core_path")
+        out_adapters.append(entry)
     return {
         "schema_version": schema_version,
-        "adapters": [
-            {
-                "adapter_id": item["adapter_id"],
-                "emulator_id": item["emulator_id"],
-                "label": item["label"],
-                "platform": item["platform"],
-                "extensions": list(item["extensions"]),
-                "native_exe": item["native_exe"],
-                "flatpak_app_id": item["flatpak_app_id"],
-                "startup_args": list(item["startup_args"]),
-                "recommended": item["recommended"],
-                "priority": item["priority"],
-            }
-            for item in adapters
-        ],
+        "adapters": out_adapters,
     }
 
 

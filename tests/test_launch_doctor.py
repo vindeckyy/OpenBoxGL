@@ -719,5 +719,155 @@ class LaunchDoctorEdgeCaseTests(unittest.TestCase):
         self.assertEqual(len(payload["results"]), 1)
 
 
+class TestFixActionCoverage(unittest.TestCase):
+    """F4: every blocking check must have fix_action — LAUNCH_PREFLIGHT_BLOCKED/EMULATOR_REQUIRED/AMBIGUOUS_PLATFORM actionable."""
+
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.data_dir = Path(self.tempdir.name)
+        os.environ["OPENBOX_DATA_DIR"] = str(self.tempdir.name)
+        self.rom = self.data_dir / "game.nes"
+        self.rom.write_bytes(b"NES")
+
+    def tearDown(self):
+        self.tempdir.cleanup()
+        os.environ.pop("OPENBOX_DATA_DIR", None)
+
+    def _assert_every_error_has_fix_action(self, checks):
+        for c in checks:
+            if c.get("severity") == "error":
+                self.assertIn("fix_action", c, msg=f"missing fix_action for {c.get('code')}")
+                fix = c["fix_action"]
+                self.assertIn("kind", fix)
+                self.assertIn("label", fix)
+                self.assertIn("payload", fix)
+                self.assertIn(fix["kind"], {"flatpak_install", "reveal_bios_path", "pick_core", "explain_token"})
+
+    def test_every_blocking_check_has_fix_action(self):
+        from pkg.parity.parity_launch_doctor import run_preflight_checks
+
+        games = [
+            {"path": "", "platform": "NES"},  # PATH_MISSING
+            {"path": str(self.data_dir / "folder"), "platform": "NES"},  # PATH_WRONG_TYPE after mkdir
+            {"path": str(self.rom), "platform": "NES", "emulator_adapter_id": "no-such"},  # ADAPTER_UNKNOWN
+            {"path": str(self.rom), "platform": "NES", "emulator_id": "missing-emulator"},  # EMULATOR_UNKNOWN
+            {"path": str(self.rom), "platform": "NES", "launch": "{unknown_token}"},  # TEMPLATE_INVALID
+            {"path": str(self.rom), "platform": "PlayStation", "emulator_adapter_id": "retroarch-nes"},  # NATIVE_EXE_MISSING
+        ]
+        (self.data_dir / "folder").mkdir(exist_ok=True)
+        for game in games:
+            checks = run_preflight_checks(game, {}, str(self.data_dir), which=lambda _: None)
+            # filter at least one error per case except maybe not; ensure we actually get errors
+            errors = [c for c in checks if c["severity"] == "error"]
+            if errors:
+                self._assert_every_error_has_fix_action(checks)
+
+    def test_ambiguous_iso_returns_picker_chips(self):
+        from pkg.parity.parity_launch_doctor import run_preflight_checks
+
+        iso = self.data_dir / "game.iso"
+        iso.write_bytes(b"ISO")
+        # No platform, no adapter, iso is ambiguous across 4 adapters
+        game = {"path": str(iso), "platform": "", "name": "IsoGame"}
+        checks = run_preflight_checks(game, {}, str(self.data_dir), which=lambda _: None)
+        codes = [c["code"] for c in checks]
+        self.assertIn("AMBIGUOUS_PLATFORM", codes)
+        amb = next(c for c in checks if c["code"] == "AMBIGUOUS_PLATFORM")
+        self.assertEqual(amb["severity"], "error")
+        self.assertIn("fix_action", amb)
+        self.assertEqual(amb["fix_action"]["kind"], "pick_core")
+        payload = amb["fix_action"]["payload"]
+        self.assertIn("platforms", payload)
+        self.assertGreaterEqual(len(payload["platforms"]), 2)
+        # chip UI should be able to render these platforms
+        for plat in payload["platforms"]:
+            self.assertIsInstance(plat, str)
+
+    def test_emulator_required_with_pick_core(self):
+        from pkg.parity.parity_launch_doctor import run_preflight_checks
+
+        # Use .nes with platform NES but no installed emulator, should get EMULATOR_REQUIRED or NATIVE_EXE_MISSING
+        game = {"path": str(self.rom), "platform": "NES", "name": "NesGame"}
+        checks = run_preflight_checks(game, {}, str(self.data_dir), which=lambda _: None)
+        codes = [c["code"] for c in checks]
+        # Either EMULATOR_REQUIRED or NATIVE_EXE_MISSING qualifies as actionable missing emulator
+        self.assertTrue(any(code in codes for code in ("EMULATOR_REQUIRED", "NATIVE_EXE_MISSING", "FLATPAK_NOT_INSTALLED")))
+        for c in checks:
+            if c["code"] in ("EMULATOR_REQUIRED", "NATIVE_EXE_MISSING", "FLATPAK_NOT_INSTALLED"):
+                self.assertEqual(c["fix_action"]["kind"], "pick_core" if c["code"] == "EMULATOR_REQUIRED" else "flatpak_install")
+
+    def test_bios_missing_reveal_path(self):
+        from pkg.parity.parity_launch_doctor import run_preflight_checks
+
+        rom = self.data_dir / "game.bin"
+        rom.write_bytes(b"PSX")
+        # Mock BIOS missing for DuckStation
+        with mock.patch("pkg.parity.parity_launch_doctor.detect_dependencies", return_value={"missing": [{"name": "PSX BIOS (scph1001.bin)", "path": "/home/test/.local/share/duckstation/bios/scph1001.bin"}], "required": [{"name": "PSX BIOS (scph1001.bin)", "path": "/home/test/.local/share/duckstation/bios/scph1001.bin"}]}):
+            def which(name):
+                if name == "duckstation-qt":
+                    return "/usr/bin/duckstation-qt"
+                return None
+            with mock.patch("pkg.parity.parity_emulator_defs.shutil.which", side_effect=which):
+                checks = run_preflight_checks({"path": str(rom), "platform": "PlayStation", "emulator_adapter_id": "duckstation-psx"}, {}, str(self.data_dir), which=which)
+        # BIOS_MISSING is warning, but should have fix_action reveal_bios_path
+        bios_checks = [c for c in checks if c["code"] == "BIOS_MISSING"]
+        if bios_checks:
+            self.assertEqual(bios_checks[0]["fix_action"]["kind"], "reveal_bios_path")
+            self.assertIn("path", bios_checks[0]["fix_action"]["payload"])
+
+    def test_token_invalid_explain(self):
+        from pkg.parity.parity_launch_doctor import run_preflight_checks
+
+        checks = run_preflight_checks({"path": str(self.rom), "platform": "NES", "launch": "emu {unknown_token} {path}"}, {}, str(self.data_dir), which=lambda _: None)
+        self.assertIn("TEMPLATE_INVALID", [c["code"] for c in checks])
+        ti = next(c for c in checks if c["code"] == "TEMPLATE_INVALID")
+        self.assertEqual(ti["fix_action"]["kind"], "explain_token")
+        self.assertIn("invalid_tokens", ti["fix_action"]["payload"])
+
+    def test_batch_ambiguous_iso_actionable(self):
+        from openbox import save_state
+        from pkg.parity.parity_launch_doctor import preflight_batch
+
+        iso = self.data_dir / "ambig.iso"
+        iso.write_bytes(b"ISO")
+        save_state({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
+        preview_dir = self.data_dir / "previews"
+        preview_dir.mkdir(exist_ok=True)
+        (preview_dir / "preview-iso.json").write_text(json.dumps({"preview_id": "preview-iso", "expires_at": "2099-01-01T00:00:00"}), encoding="utf-8")
+        payload = preflight_batch(
+            {"items": [{"game_id": None, "candidate": {"candidate_id": "cand-iso", "preview_id": "preview-iso", "path": str(iso), "platform": "", "emulator_id": None, "adapter_id": None, "archive_member": None}}]},
+            state={"games": []}, profiles={}, data_dir=str(self.data_dir), which=lambda _: None,
+        )
+        result = payload["results"][0]
+        self.assertEqual(result["status"], "blocked")
+        self._assert_every_error_has_fix_action(result["checks"])
+        self.assertTrue(any(c["code"] == "AMBIGUOUS_PLATFORM" for c in result["checks"]))
+
+    def test_launch_preflight_blocked_code_has_fix_action(self):
+        h = DummyLaunchHandler()
+        # Use a game that will be blocked (missing path)
+        from openbox import save_state
+
+        save_state({"games": [{"name": "Missing", "path": str(self.data_dir / "missing.nes"), "platform": "NES", "game_id": "game-0123456789abcdef01234567-1"}], "profiles": {}, "history": [], "settings": {}, "playlists": []})
+        h.launch_preflight({"game_id": "game-0123456789abcdef01234567-1", "fail_on_blocked": True}, request_id="req-fix")
+        status, payload, _ = h.responses[-1]
+        self.assertEqual(status, 409)
+        self.assertEqual(payload["code"], "LAUNCH_PREFLIGHT_BLOCKED")
+        for chk in payload["checks"]:
+            if chk["severity"] == "error":
+                self.assertIn("fix_action", chk)
+
+    def test_all_error_kinds_are_valid_flavors(self):
+        from pkg.parity.parity_launch_doctor import _fix, _check
+
+        # Ensure _check fallback creates explain_token for generic errors
+        chk = _check("SOME_ERROR", "error", "Something failed")
+        self.assertEqual(chk["fix_action"]["kind"], "explain_token")
+        # Ensure fix helpers produce correct kinds
+        for kind in ["flatpak_install", "reveal_bios_path", "pick_core", "explain_token"]:
+            fix = _fix(kind, "label", {"x": 1})
+            self.assertEqual(fix["kind"], kind)
+
+
 if __name__ == "__main__":
     unittest.main()

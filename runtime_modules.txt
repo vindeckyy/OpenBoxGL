@@ -109,3 +109,6 @@ parity_setup_preview.py
 pkg/state/operations.py
 backend_subprocess.py
 handlers/_shared.py
+pkg/parity/parity_insights.py
+parity_insights.py
+handlers/insights.py

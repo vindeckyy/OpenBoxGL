@@ -308,5 +308,70 @@ class TestFilledLaunchCommand(unittest.TestCase):
         self.assertEqual(_filled_launch_command({"launch": "   "}), "")
 
 
+class TestTokenValidation(unittest.TestCase):
+    """F4: validate startup_args via canonical token table — explain_token fix."""
+
+    def test_extract_and_invalid_detection(self):
+        from pkg.parity.launch_tokens import extract_tokens, find_invalid_tokens, validate_tokens
+
+        self.assertEqual(extract_tokens("{path} {unknown}"), {"{path}", "{unknown}"})
+        self.assertIn("{unknown}", find_invalid_tokens("{path} {unknown} {Platform}"))
+        self.assertEqual(find_invalid_tokens("{path} {Platform}"), [])
+        issue = validate_tokens("emu {bad_token} {path}")
+        self.assertIsNotNone(issue)
+        self.assertEqual(issue["kind"], "explain_token")
+        self.assertIn("bad_token", issue["payload"]["invalid_tokens"][0])
+        self.assertIsNone(validate_tokens("retroarch -L core.so {path}"))
+
+    def test_validate_startup_args(self):
+        from pkg.parity.launch_tokens import validate_startup_args
+
+        self.assertEqual(validate_startup_args(["{path}", "-L", "/core.so"]), [])
+        self.assertIn("{bad}", validate_startup_args(["{bad}", "{path}"]))
+        self.assertEqual(validate_startup_args([]), [])
+        self.assertEqual(validate_startup_args(None), [])
+
+    def test_registry_rejects_invalid_tokens(self):
+        import tempfile
+        from pathlib import Path
+        from pkg.parity.parity_emulator_defs import load_registry
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "bad.yaml").write_text(
+                "schema_version: 1\nadapter_id: bad-adapter\nemulator_id: bad.emu\nlabel: Bad\nplatform: Test\n"
+                "extensions:\n  - bad\nstartup_args:\n  - \"{unknown_token}\"\n  - \"{path}\"\n",
+                encoding="utf-8",
+            )
+            (root / "good.yaml").write_text(
+                "schema_version: 1\nadapter_id: good-adapter\nemulator_id: good.emu\nlabel: Good\nplatform: Test2\n"
+                "extensions:\n  - good\nstartup_args:\n  - \"{path}\"\n",
+                encoding="utf-8",
+            )
+            registry = load_registry(root)
+            # Bad adapter should be skipped due to invalid tokens
+            ids = [a["adapter_id"] for a in registry["adapters"]]
+            self.assertNotIn("bad-adapter", ids)
+            self.assertIn("good-adapter", ids)
+
+    def test_handler_uses_canonical_table(self):
+        # Ensure doctor surfaces explain_token for unknown launch tokens
+        import tempfile
+        from pathlib import Path
+        from pkg.parity.parity_launch_doctor import run_preflight_checks
+
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = Path(tmp) / "game.nes"
+            rom.write_bytes(b"NES")
+            checks = run_preflight_checks(
+                {"path": str(rom), "platform": "NES", "launch": "bad {not_a_token} {path}"},
+                {}, tmp, which=lambda _: None,
+            )
+            codes = [c["code"] for c in checks]
+            self.assertIn("TEMPLATE_INVALID", codes)
+            ti = next(c for c in checks if c["code"] == "TEMPLATE_INVALID")
+            self.assertEqual(ti["fix_action"]["kind"], "explain_token")
+
+
 if __name__ == "__main__":
     unittest.main()

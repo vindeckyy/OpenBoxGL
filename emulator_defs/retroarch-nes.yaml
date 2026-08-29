@@ -11,6 +11,7 @@ startup_args:
   - -L
   - /usr/lib/libretro/fceumm_libretro.so
   - "{path}"
+core_path: /usr/lib/libretro/fceumm_libretro.so
 recommended: true
 priority: 10
 executable_patterns:

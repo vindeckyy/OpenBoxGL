@@ -10,6 +10,7 @@ import { openSessions, openHistory, launch, connectSessionEvents, pollSessions }
 import { openDiscovery, openStorefronts, saveStorefrontSettings, importStorefrontCatalog, loadStorefrontCatalog } from './storefront.js';
 import { openBigBox, closeBigBox, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, stopScreenSaver, favoriteBigBox, openBigBoxPause, filteredBigBoxGames, applyLibraryMusic, activateCurrentGame, bigBoxTypingActive } from './bigbox.js';
 import { closeDialog, openGameDialog, closeContextMenu, bindContextMenuA11y, promptChoice, promptInput, confirmAction } from './dialogs.js';
+import { loadInsights, bindInsights } from './insights.js';
 import './activity.js';
 // Scrub the token from browser history immediately after reading it: keep any
 // deeplink params, drop only 'token'.

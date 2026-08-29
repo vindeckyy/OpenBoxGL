@@ -209,8 +209,43 @@ import { confirmAction, promptInput } from './dialogs.js';
         document.querySelectorAll('[data-perf-tdp]').forEach(input => input.oninput = () => { const entry = perfDraft[input.dataset.perfTdp] ||= {enabled:false,tdp_w:0,restore_tdp_w:0}; entry.tdp_w = Number(input.value) || 0; });
         document.querySelectorAll('[data-perf-restore]').forEach(input => input.oninput = () => { const entry = perfDraft[input.dataset.perfRestore] ||= {enabled:false,tdp_w:0,restore_tdp_w:0}; entry.restore_tdp_w = Number(input.value) || 0; });
         renderEmulators(emulators.emulators);
+        // Health pass: BIOS SHA1 / firmware / core drift via ?health=1
+        try {
+          const health = await api('/api/v2/emulators/registry?health=1');
+          renderRegistryHealth(health.adapters || []);
+        } catch (e) { /* health best-effort */ }
         $('profilesDialog').showModal();
       } catch(error) { notify(error.message); }
+    }
+    function renderRegistryHealth(adapters) {
+      const catalog = $('emulatorCatalog');
+      if (!catalog) return;
+      let container = document.getElementById('emulatorHealth');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'emulatorHealth';
+        container.className = 'emulator-health';
+        catalog.parentNode.insertBefore(container, catalog.nextSibling);
+      }
+      if (!adapters.length) { container.innerHTML = ''; return; }
+      const rows = adapters.slice(0, 8).map(a => {
+        const bios = a.bios_ok ? '<span style="color:var(--brand)">BIOS ✓</span>' : '<span style="color:var(--danger)">BIOS ✗</span>';
+        const firm = a.firmware_ok ? '<span style="color:var(--brand)">FW ✓</span>' : '<span style="color:var(--danger)">FW ✗</span>';
+        const core = a.core_ok ? '<span style="color:var(--brand)">Core ✓</span>' : '<span style="color:var(--danger)">Core ✗</span>';
+        // fix-action buttons inline with tokens --focus/--brand
+        let fixBtn = '';
+        if (!a.bios_ok && a.bios_path) {
+          fixBtn = `<button type="button" class="icon-button" data-bios-path="${escapeHtml(a.bios_path)}" style="border:1px solid var(--focus);color:var(--focus)">Show BIOS folder</button>`;
+        } else if (!a.core_ok && a.core_path) {
+          fixBtn = `<button type="button" class="icon-button" data-core-path="${escapeHtml(a.core_path)}" style="border:1px solid var(--brand);color:var(--brand)">Choose core</button>`;
+        } else if (!a.firmware_ok) {
+          fixBtn = `<button type="button" class="icon-button" style="border:1px solid var(--focus);color:var(--focus)">Firmware help</button>`;
+        }
+        return `<div class="emulator-health-row" style="border:1px solid var(--border-card);padding:0.5rem;margin:0.3rem 0;display:flex;justify-content:space-between;align-items:center"><div><strong>${escapeHtml(a.label)}</strong> <small>${escapeHtml(a.platform)}</small><div class="health-badges" style="display:flex;gap:0.5rem;font-size:0.85rem">${bios} ${firm} ${core}</div></div><div>${fixBtn}</div></div>`;
+      }).join('');
+      container.innerHTML = `<div class="section-title">Emulator Health <small style="color:var(--muted)">BIOS SHA1 / firmware / core drift</small></div>${rows}`;
+      container.querySelectorAll('[data-bios-path]').forEach(btn => btn.onclick = () => { const p = btn.dataset.biosPath; if (p) { try { notify('BIOS expected at ' + p); } catch (e) {} } });
+      container.querySelectorAll('[data-core-path]').forEach(btn => btn.onclick = () => { const p = btn.dataset.corePath; notify('Core missing: ' + p + ' — pick alternative core'); });
     }
     function renderEmulators(emulators) {
       $('emulatorCatalog').innerHTML = `<div class="extras"><button type="button" class="primary" id="installAllEmulators">Install all available emulators</button><button type="button" class="icon-button" id="updateAllEmulators">Update installed emulators</button></div>` + emulators.map(emulator => {

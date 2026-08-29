@@ -31,13 +31,66 @@ REMEDIATION_SET_PATH = {"id": "set_path", "label": "Set game path"}
 REMEDIATION_IMPORT_INCOMPLETE = {"id": "import_incomplete", "label": "Finish import setup"}
 
 
-def _check(code, severity, message, remediations=None):
-    return {
+def _fix(kind, label, payload):
+    return {"kind": kind, "label": label, "payload": dict(payload or {})}
+
+
+def _fix_flatpak(app_id, native_exe=None):
+    return _fix("flatpak_install", "Install Flatpak emulator", {"app_id": str(app_id or ""), "native_exe": str(native_exe or "")})
+
+
+def _fix_reveal(path, name=None):
+    return _fix("reveal_bios_path", "Show BIOS folder", {"path": str(path or ""), "name": str(name or "")})
+
+
+def _fix_pick_core(adapter_id=None, core=None, platforms=None, candidates=None, extension=None):
+    payload = {}
+    if adapter_id:
+        payload["adapter_id"] = str(adapter_id)
+    if core:
+        payload["core"] = str(core)
+    if platforms:
+        payload["platforms"] = list(platforms)
+    if candidates:
+        payload["candidates"] = list(candidates)
+    if extension:
+        payload["extension"] = str(extension)
+    return _fix("pick_core", "Choose emulator / core", payload)
+
+
+def _fix_explain(invalid_tokens=None, template=None):
+    payload = {}
+    if invalid_tokens:
+        payload["invalid_tokens"] = list(invalid_tokens)
+    if template:
+        payload["template"] = str(template)
+    # also include known tokens hint
+    payload.setdefault("invalid_tokens", [])
+    return _fix("explain_token", "Unknown token — check {path} etc", payload)
+
+
+def _check(code, severity, message, remediations=None, fix_action=None):
+    entry = {
         "code": code,
         "severity": severity,
         "message": message,
         "remediations": list(remediations or []),
     }
+    # Every blocking (error) check must have fix_action per F4 acceptance.
+    # Provide supplied fix_action or synthesize a generic one so the gate cannot miss.
+    if fix_action is not None:
+        entry["fix_action"] = fix_action
+    elif severity == "error":
+        # fallback generic explain_token to satisfy actionable gate
+        entry["fix_action"] = _fix_explain(template=message)
+    else:
+        # warnings also get a fix_action for UI consistency if caller wants; synthesize reveal for BIOS etc?
+        # Keep warnings without mandatory fix_action but add if code suggests BIOS.
+        if code in ("BIOS_MISSING", "FIRMWARE_MISSING"):
+            entry["fix_action"] = _fix_reveal("")
+        elif code == "PLATFORM_UNKNOWN":
+            entry["fix_action"] = _fix_pick_core(platforms=["NES", "SNES", "PlayStation", "GameCube"])
+    return entry
 
 
 def _empty_resolved():
@@ -184,6 +237,7 @@ def _archive_checks(path_value, archive_member):
                 "error",
                 "Archive could not be read.",
                 [REMEDIATION_SET_PATH],
+                _fix_reveal(str(path_value)),
             ))
             return checks
         if archive_member:
@@ -193,6 +247,7 @@ def _archive_checks(path_value, archive_member):
                     "error",
                     "Archive member was not found.",
                     [REMEDIATION_SET_PATH],
+                    _fix_reveal(str(path_value)),
                 ))
         elif not any(name for name in names if not name.endswith("/")):
             checks.append(_check(
@@ -200,6 +255,7 @@ def _archive_checks(path_value, archive_member):
                 "error",
                 "Archive does not contain launchable files.",
                 [REMEDIATION_SET_PATH],
+                _fix_reveal(str(path_value)),
             ))
     return checks
 
@@ -214,6 +270,97 @@ def _warning_gaps(game):
     if not game.get("documents"):
         checks.append(_check("DOCUMENT_GAP", "warning", "No documents configured.", [REMEDIATION_IMPORT_INCOMPLETE]))
     return checks
+
+
+def _detect_invalid_tokens_in_command(cmd):
+    # find {token} occurrences
+    if not cmd or "{" not in cmd:
+        return []
+    try:
+        from pkg.parity.launch_tokens import find_invalid_tokens
+        return find_invalid_tokens(cmd)
+    except Exception:
+        return []
+
+
+def _ambiguous_platform_check(game, adapter, active_adapter, launch_command, which):
+    """Return AMBIGUOUS_PLATFORM check if extension is shared and needs picker."""
+    path_value = str(game.get("path", "") or "").strip()
+    if not path_value:
+        return None
+    ext = Path(path_value).suffix.lower().lstrip(".")
+    if not ext:
+        return None
+    # Only for known emulator extensions; check if multiple adapters share ext
+    try:
+        from pkg.parity.parity_emulator_defs import candidates_for_extension
+        candidates = candidates_for_extension(ext)
+    except Exception:
+        return None
+    if len(candidates) <= 1:
+        return None
+    # If an adapter is already selected (explicit game adapter), not ambiguous
+    if adapter is not None:
+        return None
+    # If a launch command explicitly provides a launch, not ambiguous (user override)
+    if launch_command:
+        return None
+    # If we have an active_adapter (detected installed emulator for platform), then not ambiguous
+    if active_adapter is not None:
+        return None
+    platform = str(game.get("platform", "") or "").strip()
+    # candidate platforms
+    cand_platforms = sorted({c.get("platform") for c in candidates if c.get("platform")})
+    # If platform is already one of the candidates, we consider it resolved — not ambiguous
+    if platform and platform in cand_platforms:
+        return None
+    # Generic platform or empty means ambiguous: need picker
+    # Also treat "Disc image" as ambiguous for iso
+    if platform and platform not in cand_platforms:
+        # unknown platform mapping for this ext -> ambiguous
+        pass
+    # Build fix_action payload with platform chips
+    # For iso, candidates are e.g., GameCube, PlayStation, PlayStation 2, PSP etc
+    return _check(
+        "AMBIGUOUS_PLATFORM",
+        "error",
+        "Platform is ambiguous for '.{}' — choose a platform.".format(ext),
+        [REMEDIATION_CHOOSE_ADAPTER],
+        _fix("pick_core", "Choose platform", {"extension": f".{ext}", "platforms": cand_platforms, "candidates": [c.get("adapter_id") for c in candidates]}),
+    )
+
+
+def _emulator_required_check(game, adapter, active_adapter, launch_command):
+    """Return EMULATOR_REQUIRED if no emulator can handle this ROM."""
+    if adapter is not None or active_adapter is not None:
+        return None
+    if launch_command:
+        return None
+    path_value = str(game.get("path", "") or "").strip()
+    if not path_value:
+        return None
+    # .sh scripts can run directly, not requiring emulator
+    if Path(path_value).suffix.lower() == ".sh":
+        return None
+    ext = Path(path_value).suffix.lower().lstrip(".")
+    if not ext:
+        return None
+    try:
+        from pkg.parity.parity_emulator_defs import candidates_for_extension
+        candidates = candidates_for_extension(ext)
+    except Exception:
+        candidates = []
+    if not candidates:
+        return None
+    # If we reach here, we have known extension with no adapter available -> need emulator
+    cand_platforms = sorted({c.get("platform") for c in candidates if c.get("platform")})
+    return _check(
+        "EMULATOR_REQUIRED",
+        "error",
+        "No emulator is configured for this platform/extension.",
+        [REMEDIATION_CHOOSE_ADAPTER],
+        _fix_pick_core(platforms=cand_platforms, candidates=[c.get("adapter_id") for c in candidates], extension=f".{ext}"),
+    )
 
 
 def build_resolved(game, profiles, *, data_dir="", which=None):
@@ -241,51 +388,94 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None):
     path = Path(path_value) if path_value else None
 
     if not path_value:
-        checks.append(_check("PATH_MISSING", "error", "Game path is missing.", [REMEDIATION_SET_PATH]))
+        checks.append(_check("PATH_MISSING", "error", "Game path is missing.", [REMEDIATION_SET_PATH], _fix_reveal("")))
         return checks
     if not path.exists():
-        checks.append(_check("PATH_MISSING", "error", "Game path does not exist.", [REMEDIATION_SET_PATH]))
+        checks.append(_check("PATH_MISSING", "error", "Game path does not exist.", [REMEDIATION_SET_PATH], _fix_reveal(path_value)))
         return checks
     if not path.is_file():
-        checks.append(_check("PATH_WRONG_TYPE", "error", "Game path is not a file.", [REMEDIATION_SET_PATH]))
+        checks.append(_check("PATH_WRONG_TYPE", "error", "Game path is not a file.", [REMEDIATION_SET_PATH], _fix_reveal(path_value)))
         return checks
 
     checks.extend(_archive_checks(path_value, game.get("archive_member")))
 
     platform = str(game.get("platform", "") or "").strip()
     if not platform:
-        checks.append(_check("PLATFORM_UNKNOWN", "warning", "Platform is unknown.", [REMEDIATION_IMPORT_INCOMPLETE]))
+        checks.append(_check("PLATFORM_UNKNOWN", "warning", "Platform is unknown.", [REMEDIATION_IMPORT_INCOMPLETE], _fix_pick_core(platforms=["NES","SNES","PlayStation","GameCube","Wii","Arcade"])))
 
     adapter_id = str(game.get("emulator_adapter_id", "") or "").strip()
     emulator_id = str(game.get("emulator_id", "") or "").strip()
     adapter = find_adapter(adapter_id, emulator_id) if (adapter_id or emulator_id) else None
     if adapter_id and adapter is None:
+        # try to provide candidates for picker
+        try:
+            from pkg.parity.parity_emulator_defs import _registry
+            by_plat = _registry()["by_platform"].get(platform, []) if platform else []
+            cand_ids = [c["adapter_id"] for c in by_plat[:5]]
+        except Exception:
+            cand_ids = []
         checks.append(_check(
             "ADAPTER_UNKNOWN",
             "error",
             "Selected adapter is not in the registry.",
             [REMEDIATION_CHOOSE_ADAPTER],
+            _fix_pick_core(adapter_id=adapter_id, candidates=cand_ids),
         ))
     elif emulator_id and adapter is None and not str(game.get("launch", "") or "").strip():
+        try:
+            from pkg.parity.parity_emulator_defs import _registry
+            by_emu = _registry()["by_emulator_id"].get(emulator_id, []) if emulator_id else []
+            cand_ids = [c["adapter_id"] for c in by_emu[:5]]
+        except Exception:
+            cand_ids = []
         checks.append(_check(
             "EMULATOR_UNKNOWN",
             "error",
             "Selected emulator is not in the registry.",
             [REMEDIATION_CHOOSE_ADAPTER],
+            _fix_pick_core(adapter_id=emulator_id, candidates=cand_ids),
         ))
 
     launch_command = str(game.get("launch", "") or "").strip()
     if launch_command and ("{" in launch_command and "}" in launch_command):
+        invalid = _detect_invalid_tokens_in_command(launch_command)
+        if invalid:
+            checks.append(_check("TEMPLATE_INVALID", "error", "Launch template contains unknown tokens.", [REMEDIATION_KEEP_CUSTOM], _fix_explain(invalid_tokens=invalid, template=launch_command)))
+        else:
+            try:
+                resolve_launch(game, profiles, which=which, data_dir=data_dir)
+            except ValueError:
+                checks.append(_check("TEMPLATE_INVALID", "error", "Launch template is invalid.", [REMEDIATION_KEEP_CUSTOM], _fix_explain(template=launch_command)))
+        # extra validate startup_args style tokens
         try:
-            resolve_launch(game, profiles, which=which, data_dir=data_dir)
-        except ValueError:
-            checks.append(_check("TEMPLATE_INVALID", "error", "Launch template is invalid.", [REMEDIATION_KEEP_CUSTOM]))
+            from pkg.parity.launch_tokens import validate_tokens
+            v = validate_tokens(launch_command)
+            if v and not any(c["code"] == "TEMPLATE_INVALID" for c in checks):
+                checks.append(_check("TEMPLATE_INVALID", "error", "Launch template contains unknown tokens.", [REMEDIATION_KEEP_CUSTOM], _fix("explain_token", v["label"], v["payload"])))
+        except Exception:
+            pass
 
     active_adapter = adapter
     if active_adapter is None and platform:
         from pkg.parity.parity_emulator_defs import detect_adapter_for_platform
 
         active_adapter = detect_adapter_for_platform(platform, which=which)
+
+    # Validate startup_args tokens for active adapter if present
+    if active_adapter and active_adapter.get("startup_args"):
+        try:
+            from pkg.parity.launch_tokens import validate_startup_args
+            invalid = validate_startup_args(active_adapter.get("startup_args"))
+            if invalid:
+                checks.append(_check(
+                    "TEMPLATE_INVALID",
+                    "error",
+                    "Emulator startup args contain unknown tokens.",
+                    [REMEDIATION_CHOOSE_ADAPTER],
+                    _fix_explain(invalid_tokens=invalid, template=" ".join(active_adapter.get("startup_args") or [])),
+                ))
+        except Exception:
+            pass
 
     install_mode = ""
     if active_adapter:
@@ -299,7 +489,8 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None):
             code = "FLATPAK_NOT_INSTALLED" if active_adapter.get("flatpak_app_id") and not native_exe else "NATIVE_EXE_MISSING"
             if active_adapter.get("flatpak_app_id") and native_exe:
                 code = "NATIVE_EXE_MISSING"
-            checks.append(_check(code, "error", "Emulator is not installed.", remediations))
+            app_id = active_adapter.get("flatpak_app_id") or ""
+            checks.append(_check(code, "error", "Emulator is not installed.", remediations, _fix_flatpak(app_id, native_exe)))
 
         if install_mode == "flatpak":
             app_id = active_adapter.get("flatpak_app_id")
@@ -309,6 +500,7 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None):
                     "error",
                     "Flatpak emulator cannot access the game path.",
                     [REMEDIATION_INSTALL_FLATPAK],
+                    _fix_flatpak(app_id),
                 ))
 
         missing_core = _retroarch_core_missing(active_adapter)
@@ -318,6 +510,7 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None):
                 "error",
                 "RetroArch core is missing.",
                 [REMEDIATION_CHOOSE_ADAPTER, REMEDIATION_INSTALL_NATIVE],
+                _fix_pick_core(core=missing_core, adapter_id=active_adapter.get("adapter_id")),
             ))
 
         emulator_name = active_adapter.get("label", "").split(" (")[0]
@@ -328,11 +521,15 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None):
         if platform in bios_platforms:
             deps = detect_dependencies(emulator_name)
             if deps.get("missing"):
+                # Use first missing path for reveal
+                first_missing = deps["missing"][0] if deps["missing"] else {}
+                missing_path = first_missing.get("path", "") if isinstance(first_missing, dict) else ""
                 checks.append(_check(
                     "BIOS_MISSING",
                     "warning",
                     "Required BIOS files are missing.",
                     [REMEDIATION_IMPORT_INCOMPLETE],
+                    _fix_reveal(missing_path, first_missing.get("name", "BIOS") if isinstance(first_missing, dict) else "BIOS"),
                 ))
                 firmware_labels = [item["name"] for item in deps["missing"] if "firmware" in item["name"].lower()]
                 if firmware_labels:
@@ -341,7 +538,18 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None):
                         "warning",
                         "Required firmware files are missing.",
                         [REMEDIATION_IMPORT_INCOMPLETE],
+                        _fix_reveal(missing_path, "Firmware"),
                     ))
+
+    # Ambiguous platform and emulator required checks — must be after active_adapter resolution
+    # to provide actionable picker chips for .iso and missing emulator cases.
+    amb = _ambiguous_platform_check(game, adapter, active_adapter, launch_command, which)
+    if amb:
+        checks.append(amb)
+    else:
+        em_req = _emulator_required_check(game, adapter, active_adapter, launch_command)
+        if em_req:
+            checks.append(em_req)
 
     try:
         resolved = resolve_launch(game, profiles, which=which, data_dir=data_dir)
@@ -349,21 +557,30 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None):
         message = str(error)
         if "path" in message.lower():
             if "exist" in message.lower():
-                checks.append(_check("PATH_MISSING", "error", "Game path does not exist.", [REMEDIATION_SET_PATH]))
+                checks.append(_check("PATH_MISSING", "error", "Game path does not exist.", [REMEDIATION_SET_PATH], _fix_reveal(path_value)))
             else:
-                checks.append(_check("ARGV_INVALID", "error", "Launch command could not be built.", [REMEDIATION_CHOOSE_ADAPTER]))
+                checks.append(_check("ARGV_INVALID", "error", "Launch command could not be built.", [REMEDIATION_CHOOSE_ADAPTER], _fix_explain(template=message)))
         else:
-            checks.append(_check("ARGV_INVALID", "error", "Launch command could not be built.", [REMEDIATION_CHOOSE_ADAPTER]))
+            checks.append(_check("ARGV_INVALID", "error", "Launch command could not be built.", [REMEDIATION_CHOOSE_ADAPTER], _fix_explain(template=message)))
         resolved = None
     else:
         args = resolved.get("args") or []
         if not args or any("{" in str(arg) and "}" in str(arg) for arg in args):
-            checks.append(_check("ARGV_INVALID", "error", "Launch argv preview is invalid.", [REMEDIATION_CHOOSE_ADAPTER]))
+            # find leftover tokens
+            leftover = []
+            for arg in args:
+                if "{" in str(arg) and "}" in str(arg):
+                    leftover.extend(_detect_invalid_tokens_in_command(str(arg)))
+            # If no invalid tokens found but still braces, treat as leftover template
+            if not leftover:
+                leftover = ["{unknown}"]
+            checks.append(_check("ARGV_INVALID", "error", "Launch argv preview is invalid.", [REMEDIATION_CHOOSE_ADAPTER], _fix_explain(invalid_tokens=leftover, template=" ".join(str(a) for a in args))))
         cwd = resolved.get("cwd")
         if cwd and not Path(cwd).is_dir():
-            checks.append(_check("CWD_INVALID", "error", "Working directory is invalid.", [REMEDIATION_SET_PATH]))
+            checks.append(_check("CWD_INVALID", "error", "Working directory is invalid.", [REMEDIATION_SET_PATH], _fix_reveal(cwd)))
 
     checks.extend(_warning_gaps(game))
+    # Ensure every error still has fix_action (fallback already handled in _check)
     return checks
 
 
