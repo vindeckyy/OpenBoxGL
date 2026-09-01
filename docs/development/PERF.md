@@ -88,3 +88,13 @@ Notes:
 ## Gate
 
 CI job `perf-20k` is blocking on pull requests and pushes to master.
+
+## 1.7.2 SQLite Read Model
+
+- **Optional Acceleration**: `pkg/state/sqlite_readmodel.py` provides an alternative read path using stdlib `sqlite3`, enabled via `OPENBOX_ENABLE_SQLITE_READ=1` env flag.
+- **FTS5 Search**: Full-text search via SQLite FTS5 virtual tables with automatic LIKE fallback for builds without FTS5 support.
+- **Indexed Queries**: Filtered lookups on platform, genre, favorite, hidden, installed with limit/offset pagination via SQL WHERE clauses.
+- **GROUP BY Facets**: Facet computation via SQL `GROUP BY` instead of in-memory iteration.
+- **Signature-Based Rebuild**: `ensure_fresh(state, signature)` rebuilds only when the state signature changes, avoiding unnecessary rebuilds.
+- **Zero Impact When Off**: Disabled by default; all methods are no-ops returning empty results.
+- **Parity Verification**: `query_parity_check()` verifies SQLite results match the JSON read path.
