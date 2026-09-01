@@ -126,7 +126,7 @@ LaunchBox Games Database sync (covers, backgrounds, screenshots, box backs, spin
 
 ### Emulators & Launching
 
-Auto-detect emulators on `$PATH`, Flathub install/update, YAML definition packs, archive extraction (ZIP/7z/RAR), safe tokenized commands, per-game launch overrides. Example emulator profile:
+Auto-detect emulators on `$PATH`, Flathub install/update, YAML definition packs, archive extraction (ZIP/7z/RAR), safe tokenized commands, per-game launch overrides, BIOS SHA1 drift detection in Launch Doctor. Example emulator profile:
 
 ```
 SNES = retroarch -L /usr/lib/libretro/snes9x_libretro.so "{path}"
@@ -144,7 +144,11 @@ Local-first playtime analytics with a 366-day activity heatmap (levels 0–4), c
 
 ### Big Box & Handhelds
 
-Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attract mode, optional startup video, library BGM, Steam Game Mode guest (`--game-mode`), localization (English, Spanish, German, French, Portuguese).
+Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attract mode, optional startup video, library BGM, Steam Game Mode guest (`--game-mode`), gamescope presets (Steam Deck, 1080p, 1440p, 4K, integer scale, stretch, borderless), MangoHud performance overlay toggle, controller bench with live gamepad SVG visualization, localization (English, Spanish, German, French, Portuguese).
+
+### Scale & Backups
+
+Optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) with FTS5 full-text search and GROUP BY facets for 50k+ libraries. Backup diff API (`GET /api/v2/backup/diff`) to compare current library against archives. Visual chip builder for smart collection filter presets.
 
 ### Extensibility
 

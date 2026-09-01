@@ -37,15 +37,19 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Playlists, auto-filters, and saved filters | done | Platform, view, search rules, ordered manual members, parent playlists, and notes save, apply, update, and delete |
 | Big Box controller-first navigation | done | Stage, hybrid, and CoverFlow layouts; filter/sort/RA filters; pause overlay; screensaver launch |
 | Steam Game Mode / gamescope guest | done | `--game-mode` opens Big Box; guest detection; Steam launches keep Input; non-Steam windows get best-effort STEAM_GAME props |
+| Gamescope presets | done | 8 deck/display profiles (Steam Deck, HD, 1080p, 1440p, 4K, integer, stretch, borderless) selectable from Settings → Controller (1.7.2) |
+| MangoHud performance overlay | done | Optional on-screen performance overlay via `MANGOHUD=1` env on launch; toggle in Settings → Controller (1.7.2) |
 | Themes and per-platform themes | done | Five stock CSS themes ship with the Web UI; import, persist, apply live, and open-folder access work |
 | Plugin manager and extension API | done | Local packages install and run hooks; curated community catalog is bundled |
-| Backups and restore | done | The web UI lists archives, shows manifests, restores selected archives, and creates a pre-restore safety copy |
+| Backups and restore | done | The web UI lists archives, shows manifests, restores selected archives, and creates a pre-restore safety copy. Backup diff API (`GET /api/v2/backup/diff`) compares current library against archives (1.7.2) |
 | Library audit and missing-file checks | done | Files, provider-aware duplicates, media, extras, saves, and emulator configuration are audited |
 | Linux packaging and updates | done | AppImage build, Flatpak manifest, Makefile install/uninstall, desktop entry, and verified update mechanism |
 | Welcome wizard and first-run setup | done | Setup Center eight-step stepper with preview-before-commit imports, emulator readiness, metadata match review, and Launch Doctor batch preflight |
 | Durable background operations | done | Activity drawer with SSE progress, cancellation, retry/resume, and `operations.json` persistence |
-| Launch readiness preflight | done | Launch Doctor validates paths, adapters, Flatpak/native executables, BIOS/firmware, and tokenized arguments before launch |
+| Launch readiness preflight | done | Launch Doctor validates paths, adapters, Flatpak/native executables, BIOS/firmware, and tokenized arguments before launch. BIOS SHA1 drift detection reports `BIOS_SHA1_DRIFT` when a BIOS file exists but its hash doesn't match the expected value (1.7.2) |
 | Play Insights local analytics | done | Local 366-day playtime heatmap (levels 0–4), streaks, momentum, top platforms/genres with zero telemetry |
+| Optional SQLite read model | done | `OPENBOX_ENABLE_SQLITE_READ=1` enables FTS5 search, indexed queries, and GROUP BY facets for 50k+ libraries; JSON remains source of truth (1.7.2) |
+| Visual chip builder for collections | done | Filter presets render as visual chips via `rules_to_chips`/`chips_to_rules` round-trip conversion (1.7.2) |
 | Searchable settings pages | done | Settings dialog filters fields by name and related terms |
 | Session history toggle and viewer | done | Play sessions can be disabled and are browsable from the History menu |
 | Arrange-by scrollbar | done | Large sorted views expose a jump bar with group markers |
