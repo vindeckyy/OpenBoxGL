@@ -1,6 +1,7 @@
 """HealthHandlers capability handlers. Log, diagnostic, backup, and update endpoints."""
 
 import json
+import urllib.parse
 import zipfile
 
 from api_errors import BadRequest
@@ -8,7 +9,7 @@ from crash_report import build_preview
 from openbox import DATA, load_state
 from routes.registry import route
 from openbox_logging import read_diagnostic_log
-from parity_backup import BACKUP_ITEMS, create_backup, restore_backup
+from parity_backup import BACKUP_ITEMS, create_backup, restore_backup, diff_manifests
 from pkg.parity.parity_redact import detach_state_view, redact_state_for_export
 from updates import check_update, install_desktop_entry, install_update
 from webapp_state import JOB_MANAGER, RUNNING, approved_backup_file, bump_media_epoch, load_state_view, sync_cloud
@@ -105,6 +106,27 @@ class HealthHandlers:
     @route("POST", "/api/backup/restore")
     def _api_post_api_backup_restore(self, payload):
         self.restore_library_backup(payload)
+
+    @route("GET", "/api/v2/backup/diff")
+    def _api_get_api_v2_backup_diff(self, parsed):
+        """Compare current library state against a backup archive (1.7.2)."""
+        qs = getattr(parsed, "query", "") or ""
+        params = urllib.parse.parse_qs(qs)
+        archive_name = (params.get("archive", [""])[0] or "").strip()
+        if not archive_name:
+            self.send_json(400, {"error": "archive parameter required"})
+            return
+        archive = approved_backup_file(archive_name)
+        if not archive:
+            self.send_json(404, {"error": "backup archive not found"})
+            return
+        try:
+            state = load_state_view()
+            result = diff_manifests(state, archive)
+            self.send_json(200, result)
+        except ValueError as error:
+            self.send_json(400, {"error": str(error)})
+        return
 
     def create_library_backup(self, payload):
         items = payload.get("items", ["library", "settings"])
