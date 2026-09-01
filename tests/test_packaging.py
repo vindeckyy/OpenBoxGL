@@ -23,7 +23,7 @@ def _repo_root() -> Path:
 ROOT = _repo_root()
 sys.path.insert(0, str(ROOT))
 PYTHON_MODULES = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
-DATA_FILES = ["index.html", "openbox.svg"] + [f"static/{p.name}" for p in sorted((ROOT / "static").glob("*.js"))] + [f"static/{p.name}" for p in sorted((ROOT / "static").glob("*.css"))]
+DATA_FILES = ["index.html", "openbox.svg"] + [f"static/{p.name}" for p in sorted((ROOT / "static").glob("*.js"))] + [f"static/{p.name}" for p in sorted((ROOT / "static").glob("*.css"))] + [f"locales/{p.name}" for p in sorted((ROOT / "locales").glob("*.json"))]
 
 def _doc_path(name: str) -> Path:
     # Support both flat (docs at root) and docs/ layouts after reorg

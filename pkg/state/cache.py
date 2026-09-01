@@ -17,7 +17,7 @@ from openbox import DATA, load_state, load_state_readonly, update_state_with_res
 from parity_discovery import clear_discovery_cache, discovery_lists
 from parity_emulator_defs import list_scan_configs
 from parity_filter_presets import list_presets
-from parity_gamescope import is_gamescope_guest
+from parity_gamescope import is_gamescope_guest, list_gamescope_presets, is_mangohud_available
 from parity_import_policy import list_exclusions
 from parity_integrations import load_emumovies_credentials
 from parity_media import REGION_PRIORITY_DEFAULT, active_video, media_types_from_settings
@@ -47,6 +47,15 @@ PLUGIN_EPOCH = {"value": 0}
 
 PUBLIC_STATE_LOCK = threading.Lock()
 PUBLIC_SETTINGS_LOCK = threading.Lock()
+
+# Available locales for the i18n system (1.7.2).
+AVAILABLE_LOCALES = [
+    {"code": "en", "name": "English", "native": "English"},
+    {"code": "es", "name": "Spanish", "native": "Español"},
+    {"code": "de", "name": "German", "native": "Deutsch"},
+    {"code": "fr", "name": "French", "native": "Français"},
+    {"code": "pt", "name": "Portuguese", "native": "Português"},
+]
 
 _KNOWN_MEDIA_SET_LOCK = threading.Lock()
 
@@ -478,6 +487,7 @@ def _public_settings_uncached(state):
         "library_view": settings.get("library_view", "grid"),
         "cover_grouping": settings.get("cover_grouping", "shape"),
         "locale": settings.get("locale", "en"),
+        "available_locales": AVAILABLE_LOCALES,
         "strings": strings_for(settings.get("locale", "en")),
         "attract_mode_seconds": settings.get("attract_mode_seconds", settings.get("screensaver_seconds", 90)),
         "bigbox_startup_video": settings.get("bigbox_startup_video", ""),
@@ -509,6 +519,10 @@ def _public_settings_uncached(state):
         "version": VERSION,
         "appimage": bool(os.environ.get("APPIMAGE")),
         "gamescope_guest": is_gamescope_guest(force="--game-mode" in sys.argv),
+        "gamescope_presets": list_gamescope_presets(),
+        "mangohud_available": is_mangohud_available(),
+        "gamescope_preset": settings.get("gamescope_preset", ""),
+        "mangohud_enabled": settings.get("mangohud_enabled", False),
     }
 
 

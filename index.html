@@ -12,97 +12,97 @@
   <header class="topbar">
     <div class="brand"><img class="mark" src="/static/logo.png" alt="OpenBox">OpenBox</div>
     <nav class="topbar-zone" aria-label="Library">
-      <button class="menu-button primary-nav" id="libraryButton">Library</button>
-      <button class="menu-button primary-nav" id="setupLibraryButton">Set up library</button>
-      <button class="menu-button primary-nav" id="addButton">Add game</button>
-      <button class="menu-button primary-nav" id="importButton">Import folder</button>
+      <button class="menu-button primary-nav" id="libraryButton" data-i18n="nav.library">Library</button>
+      <button class="menu-button primary-nav" id="setupLibraryButton" data-i18n="nav.setup_library">Set up library</button>
+      <button class="menu-button primary-nav" id="addButton" data-i18n="nav.add_game">Add game</button>
+      <button class="menu-button primary-nav" id="importButton" data-i18n="nav.import_folder">Import folder</button>
     </nav>
     <nav class="topbar-zone" aria-label="Actions">
-      <button class="menu-button" id="bigBoxButton">Big Box</button>
-      <button class="menu-button" id="sessionsButton">Running</button>
-      <button class="menu-button" id="queueButton">Queue</button>
-      <button class="menu-button activity-button" id="activityButton" aria-label="Activity"><span class="activity-label">Activity</span><span class="activity-count" id="activityCount" aria-live="polite">0</span></button>
+      <button class="menu-button" id="bigBoxButton" data-i18n="nav.big_box">Big Box</button>
+      <button class="menu-button" id="sessionsButton" data-i18n="nav.running">Running</button>
+      <button class="menu-button" id="queueButton" data-i18n="nav.queue">Queue</button>
+      <button class="menu-button activity-button" id="activityButton" aria-label="Activity" data-i18n-aria-label="nav.activity" data-i18n="nav.activity"><span class="activity-label">Activity</span><span class="activity-count" id="activityCount" aria-live="polite">0</span></button>
     </nav>
     <nav class="topbar-zone topbar-zone-tools" aria-label="Tools">
       <noscript><details class="topbar-tools"><summary class="menu-button">Tools</summary></details></noscript>
       <div class="topbar-tools" id="toolsWrap">
-        <button class="menu-button" id="toolsButton" aria-haspopup="menu" aria-expanded="false" aria-controls="toolMenu">Tools</button>
+        <button class="menu-button" id="toolsButton" aria-haspopup="menu" aria-expanded="false" aria-controls="toolMenu" data-i18n="nav.tools">Tools</button>
         <div class="tool-menu" id="toolMenu" role="menu">
           <div role="group" aria-label="Library" data-tool-group="library">
-            <button class="menu-button" id="metadataButton" role="menuitem" tabindex="-1">Metadata</button>
-            <button class="menu-button" id="mediaButton" role="menuitem" tabindex="-1">Media</button>
-            <button class="menu-button" id="healthButton" role="menuitem" tabindex="-1">Health</button>
-            <button class="menu-button" id="bulkButton" role="menuitem" tabindex="-1">Bulk edit</button>
-            <button class="menu-button" id="tagsButton" role="menuitem" tabindex="-1">Tags</button>
-            <button class="menu-button" id="playlistsButton" role="menuitem" tabindex="-1">Playlists</button>
-            <button class="menu-button" id="backupButton" role="menuitem" tabindex="-1">Backup</button>
-            <button class="menu-button" id="historyButton" role="menuitem" tabindex="-1">History</button>
-            <button class="menu-button" id="achievementsButton" role="menuitem" tabindex="-1">Achievements</button>
-            <button class="menu-button" id="saveFilterButton" role="menuitem" tabindex="-1">Save filter</button>
-            <button class="menu-button" id="savePresetButton" role="menuitem" tabindex="-1">Save preset</button>
+            <button class="menu-button" id="metadataButton" role="menuitem" tabindex="-1" data-i18n="tools.metadata">Metadata</button>
+            <button class="menu-button" id="mediaButton" role="menuitem" tabindex="-1" data-i18n="tools.media">Media</button>
+            <button class="menu-button" id="healthButton" role="menuitem" tabindex="-1" data-i18n="tools.health">Health</button>
+            <button class="menu-button" id="bulkButton" role="menuitem" tabindex="-1" data-i18n="tools.bulk_edit">Bulk edit</button>
+            <button class="menu-button" id="tagsButton" role="menuitem" tabindex="-1" data-i18n="tools.tags">Tags</button>
+            <button class="menu-button" id="playlistsButton" role="menuitem" tabindex="-1" data-i18n="tools.playlists">Playlists</button>
+            <button class="menu-button" id="backupButton" role="menuitem" tabindex="-1" data-i18n="tools.backup">Backup</button>
+            <button class="menu-button" id="historyButton" role="menuitem" tabindex="-1" data-i18n="tools.history">History</button>
+            <button class="menu-button" id="achievementsButton" role="menuitem" tabindex="-1" data-i18n="tools.achievements">Achievements</button>
+            <button class="menu-button" id="saveFilterButton" role="menuitem" tabindex="-1" data-i18n="tools.save_filter">Save filter</button>
+            <button class="menu-button" id="savePresetButton" role="menuitem" tabindex="-1" data-i18n="tools.save_preset">Save preset</button>
           </div>
           <div role="group" aria-label="Sources" data-tool-group="sources">
-            <button class="menu-button" id="storefrontButton" role="menuitem" tabindex="-1">Storefronts</button>
-            <button class="menu-button" id="emulatorsButton" role="menuitem" tabindex="-1">Emulators</button>
-            <button class="menu-button" id="steamButton" role="menuitem" tabindex="-1">Import Steam</button>
-            <button class="menu-button" id="heroicButton" role="menuitem" tabindex="-1">Import Heroic</button>
-            <button class="menu-button" id="lutrisButton" role="menuitem" tabindex="-1">Import Lutris</button>
-            <button class="menu-button" id="arcadeButton" role="menuitem" tabindex="-1">Import Arcade</button>
-            <button class="menu-button" id="discoveryButton" role="menuitem" tabindex="-1">Discovery</button>
+            <button class="menu-button" id="storefrontButton" role="menuitem" tabindex="-1" data-i18n="tools.storefronts">Storefronts</button>
+            <button class="menu-button" id="emulatorsButton" role="menuitem" tabindex="-1" data-i18n="tools.emulators">Emulators</button>
+            <button class="menu-button" id="steamButton" role="menuitem" tabindex="-1" data-i18n="tools.import_steam">Import Steam</button>
+            <button class="menu-button" id="heroicButton" role="menuitem" tabindex="-1" data-i18n="tools.import_heroic">Import Heroic</button>
+            <button class="menu-button" id="lutrisButton" role="menuitem" tabindex="-1" data-i18n="tools.import_lutris">Import Lutris</button>
+            <button class="menu-button" id="arcadeButton" role="menuitem" tabindex="-1" data-i18n="tools.import_arcade">Import Arcade</button>
+            <button class="menu-button" id="discoveryButton" role="menuitem" tabindex="-1" data-i18n="tools.discovery">Discovery</button>
           </div>
           <div role="group" aria-label="Personalize" data-tool-group="personalize">
-            <button class="menu-button" id="themesButton" role="menuitem" tabindex="-1">Themes</button>
-            <button class="menu-button" id="pluginsButton" role="menuitem" tabindex="-1">Plugins</button>
-            <button class="menu-button" id="settingsButton" role="menuitem" tabindex="-1">Settings</button>
-            <button class="menu-button" id="fullscreenButton" role="menuitem" tabindex="-1">Fullscreen</button>
+            <button class="menu-button" id="themesButton" role="menuitem" tabindex="-1" data-i18n="tools.themes">Themes</button>
+            <button class="menu-button" id="pluginsButton" role="menuitem" tabindex="-1" data-i18n="tools.plugins">Plugins</button>
+            <button class="menu-button" id="settingsButton" role="menuitem" tabindex="-1" data-i18n="tools.settings">Settings</button>
+            <button class="menu-button" id="fullscreenButton" role="menuitem" tabindex="-1" data-i18n="nav.fullscreen">Fullscreen</button>
           </div>
           <div role="group" aria-label="Automation" data-tool-group="automation">
-            <button class="menu-button" id="webhooksButton" role="menuitem" tabindex="-1">Webhooks</button>
-            <button class="menu-button" id="notificationsButton" role="menuitem" tabindex="-1">Notifications</button>
+            <button class="menu-button" id="webhooksButton" role="menuitem" tabindex="-1" data-i18n="tools.webhooks">Webhooks</button>
+            <button class="menu-button" id="notificationsButton" role="menuitem" tabindex="-1" data-i18n="tools.notifications">Notifications</button>
           </div>
         </div>
       </div>
     </nav>
-    <span class="top-status" id="status">Local library</span>
+    <span class="top-status" id="status" data-i18n="library.local_library">Local library</span>
   </header>
 
   <div class="workspace">
-    <aside class="sidebar" aria-label="Library filters">
-      <label class="field" data-sidebar-section="search"><span>Search</span><input id="sidebarSearch" type="search" aria-label="Search library"></label>
-      <label class="field" data-sidebar-section="view"><span>View</span><select id="view"><option value="all">All games</option><option value="favorites">Favorites</option><option value="recent">Recently played</option><option value="never">Never played</option><option value="playing">In progress</option><option value="completed">Completed</option><option value="installed">Installed only</option><option value="owned">Owned / not installed</option><option value="saves">Has saves</option><option value="hidden">Hidden</option><option value="missing">Missing files</option></select></label>
-      <label class="field" data-sidebar-section="filters"><span>ESRB</span><select id="esrbFilter"><option value="">Any rating</option><option>E</option><option>E10+</option><option>T</option><option>M</option><option>AO</option><option>RP</option><option>Unrated</option></select></label>
-      <div class="section-title" data-sidebar-section="filters">Categories</div>
+    <aside class="sidebar" aria-label="Library filters" data-i18n-aria-label="library.library_filters">
+      <label class="field" data-sidebar-section="search"><span data-i18n="sidebar.search">Search</span><input id="sidebarSearch" type="search" aria-label="Search library" data-i18n-aria-label="sidebar.search"></label>
+      <label class="field" data-sidebar-section="view"><span data-i18n="sidebar.view">View</span><select id="view"><option value="all" data-i18n="sidebar.all_games">All games</option><option value="favorites" data-i18n="sidebar.favorites">Favorites</option><option value="recent" data-i18n="sidebar.recently_played">Recently played</option><option value="never" data-i18n="sidebar.never_played">Never played</option><option value="playing" data-i18n="sidebar.in_progress">In progress</option><option value="completed" data-i18n="sidebar.completed">Completed</option><option value="installed" data-i18n="sidebar.installed_only">Installed only</option><option value="owned" data-i18n="sidebar.owned_not_installed">Owned / not installed</option><option value="saves" data-i18n="sidebar.has_saves">Has saves</option><option value="hidden" data-i18n="sidebar.hidden">Hidden</option><option value="missing" data-i18n="sidebar.missing_files">Missing files</option></select></label>
+      <label class="field" data-sidebar-section="filters"><span data-i18n="sidebar.esrb">ESRB</span><select id="esrbFilter"><option value="" data-i18n="sidebar.any_rating">Any rating</option><option>E</option><option>E10+</option><option>T</option><option>M</option><option>AO</option><option>RP</option><option data-i18n="sidebar.unrated">Unrated</option></select></label>
+      <div class="section-title" data-sidebar-section="filters" data-i18n="sidebar.categories">Categories</div>
       <nav class="platforms" id="platformCategories" data-sidebar-section="filters"></nav>
-      <div class="section-title" data-sidebar-section="platforms">Platforms</div>
+      <div class="section-title" data-sidebar-section="platforms" data-i18n="sidebar.platforms">Platforms</div>
       <nav class="platforms" id="platforms" data-sidebar-section="platforms"></nav>
-      <div class="section-title" data-sidebar-section="playlists">Playlists</div>
+      <div class="section-title" data-sidebar-section="playlists" data-i18n="sidebar.playlists">Playlists</div>
       <nav class="platforms" id="playlists" data-sidebar-section="playlists"></nav>
-      <div class="section-title" data-sidebar-section="filters">Filter presets</div>
+      <div class="section-title" data-sidebar-section="filters" data-i18n="sidebar.filter_presets">Filter presets</div>
       <nav class="platforms" id="filterPresets" data-sidebar-section="filters"></nav>
-      <div class="section-title" data-sidebar-section="filters">Explorer</div>
+      <div class="section-title" data-sidebar-section="filters" data-i18n="sidebar.explorer">Explorer</div>
       <nav class="platforms" id="explorerFacets" data-sidebar-section="filters"></nav>
     </aside>
 
-    <main class="library" aria-label="Game library">
+    <main class="library" aria-label="Game library" data-i18n-aria-label="library.game_library">
       <div class="library-head">
-        <div><h1 id="libraryTitle">All Games</h1><p id="libraryMeta">0 games</p></div>
-        <div class="query-chips" id="queryChips" aria-label="Active filters"></div>
-        <select class="search" id="sort" aria-label="Sort games"><option value="title">Title</option><option value="rating">Rating</option><option value="recent">Recently played</option><option value="recent_activity">Recent activity</option><option value="playtime">Play time</option><option value="added">Date added</option><option value="platform">Platform</option><option value="genre">Genre</option></select>
-        <select class="search" id="imageGroup" aria-label="Image group"><option value="default">Use default</option><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option><option value="clear_logo">Clear logos</option><option value="fanart">Fanart</option><option value="banner">Banners</option><option value="box_back">Box backs</option><option value="box_spine">Box spines</option><option value="box_3d">3D boxes</option><option value="title_screen">Title screens</option><option value="cart_front">Cart fronts</option><option value="cart_back">Cart backs</option><option value="disc">Discs</option><option value="advertisement">Ads / flyers</option><option value="manual">Manuals</option></select>
-        <select class="search" id="grouping" aria-label="Group covers"><option value="shape">Group by shape</option><option value="none">No grouping</option></select>
-        <button class="icon-button" id="filterDrawerButton" aria-haspopup="dialog" aria-controls="filterDrawer">Filters</button>
-        <button class="icon-button" id="viewToggleButton">List view</button>
-        <button class="icon-button" id="surpriseButton">Surprise me</button>
+        <div><h1 id="libraryTitle" data-i18n="library.all_games">All Games</h1><p id="libraryMeta">0 games</p></div>
+        <div class="query-chips" id="queryChips" aria-label="Active filters" data-i18n-aria-label="library.active_filters"></div>
+        <select class="search" id="sort" aria-label="Sort games"><option value="title" data-i18n="library.sort_title">Title</option><option value="rating" data-i18n="library.sort_rating">Rating</option><option value="recent" data-i18n="library.sort_recent">Recently played</option><option value="recent_activity" data-i18n="library.sort_recent_activity">Recent activity</option><option value="playtime" data-i18n="library.sort_playtime">Play time</option><option value="added" data-i18n="library.sort_added">Date added</option><option value="platform" data-i18n="library.sort_platform">Platform</option><option value="genre" data-i18n="library.sort_genre">Genre</option></select>
+        <select class="search" id="imageGroup" aria-label="Image group"><option value="default" data-i18n="library.image_group_default">Use default</option><option value="cover" data-i18n="library.image_group_cover">Box fronts</option><option value="background" data-i18n="library.image_group_background">Backgrounds</option><option value="screenshot" data-i18n="library.image_group_screenshot">Screenshots</option><option value="clear_logo" data-i18n="library.image_group_clear_logo">Clear logos</option><option value="fanart" data-i18n="library.image_group_fanart">Fanart</option><option value="banner" data-i18n="library.image_group_banner">Banners</option><option value="box_back" data-i18n="library.image_group_box_back">Box backs</option><option value="box_spine" data-i18n="library.image_group_box_spine">Box spines</option><option value="box_3d" data-i18n="library.image_group_box_3d">3D boxes</option><option value="title_screen" data-i18n="library.image_group_title_screen">Title screens</option><option value="cart_front" data-i18n="library.image_group_cart_front">Cart fronts</option><option value="cart_back" data-i18n="library.image_group_cart_back">Cart backs</option><option value="disc" data-i18n="library.image_group_disc">Discs</option><option value="advertisement" data-i18n="library.image_group_advertisement">Ads / flyers</option><option value="manual" data-i18n="library.image_group_manual">Manuals</option></select>
+        <select class="search" id="grouping" aria-label="Group covers"><option value="shape" data-i18n="library.group_by_shape">Group by shape</option><option value="none" data-i18n="library.no_grouping">No grouping</option></select>
+        <button class="icon-button" id="filterDrawerButton" aria-haspopup="dialog" aria-controls="filterDrawer" data-i18n="library.filters">Filters</button>
+        <button class="icon-button" id="viewToggleButton" data-i18n="library.list_view">List view</button>
+        <button class="icon-button" id="surpriseButton" data-i18n="library.surprise_me">Surprise me</button>
       </div>
-      <button type="button" class="drop-zone" id="dropZone">Drop ROM folders or game files here to import</button>
-      <section id="insightsPanel" class="insights-panel" aria-label="Play insights"></section>
+      <button type="button" class="drop-zone" id="dropZone" data-i18n="library.drop_zone">Drop ROM folders or game files here to import</button>
+      <section id="insightsPanel" class="insights-panel" aria-label="Play insights" data-i18n-aria-label="library.play_insights"></section>
       <div class="arrange-wrap">
         <section class="grid" id="grid"></section>
-        <div class="arrange-bar" id="arrangeBar" hidden role="button" tabindex="0" aria-label="Jump through the current view"></div>
+        <div class="arrange-bar" id="arrangeBar" hidden role="button" tabindex="0" aria-label="Jump through the current view" data-i18n-aria-label="library.jump_view"></div>
       </div>
     </main>
 
-    <aside class="details" id="details" aria-label="Game details"><div class="details-resize-handle" id="detailsResizeHandle" role="separator" aria-orientation="vertical" aria-label="Resize details pane" tabindex="0"></div><div class="detail-empty">Select a game to inspect its real metadata and artwork.</div></aside>
+    <aside class="details" id="details" aria-label="Game details" data-i18n-aria-label="library.game_details"><div class="details-resize-handle" id="detailsResizeHandle" role="separator" aria-orientation="vertical" aria-label="Resize details pane" tabindex="0" data-i18n-aria-label="library.resize_details"></div><div class="detail-empty" data-i18n="library.select_game_prompt">Select a game to inspect its real metadata and artwork.</div></aside>
   </div>
 
   <dialog id="filterDrawer" aria-modal="true" aria-labelledby="filterDrawerTitle">
@@ -398,8 +398,9 @@
           <button type="button" class="settings-nav-item" data-settings-category="sessions">Sessions &amp; Saves</button>
           <button type="button" class="settings-nav-item" data-settings-category="bigbox">Big Box</button>
           <button type="button" class="settings-nav-item" data-settings-category="integrations">Integrations</button>
-          <button type="button" class="settings-nav-item" data-settings-category="appearance">Appearance</button>
-          <button type="button" class="settings-nav-item" data-settings-category="advanced">Advanced</button>
+          <button type="button" class="settings-nav-item" data-settings-category="appearance" data-i18n="settings.appearance">Appearance</button>
+          <button type="button" class="settings-nav-item" data-settings-category="controller" data-i18n="tools.health">Controller</button>
+          <button type="button" class="settings-nav-item" data-settings-category="advanced" data-i18n="settings.advanced">Advanced</button>
         </nav>
       <div class="form-grid settings-panels">
         <label class="field wide settings-field" data-setting="search watched folders cloud screensaver startup shutdown session history backup progress automation image group controller gamepad"><span>Search settings</span><input id="settingsSearch" class="settings-search" type="search" placeholder="Type to filter settings"></label>
@@ -455,7 +456,7 @@
         <label class="check settings-field" data-setting="auto close steam heroic lutris storefront"><input type="checkbox" id="autoCloseStoreClients"> Close storefront clients after a session ends</label>
         <label class="field wide settings-field settings-panel" data-settings-panel="imports launching" data-setting="emulator scan folder rom wizard"><span>ROM scan folder for emulator definitions</span><span class="path-input-row"><input id="emulatorScanFolder" placeholder="/path/to/roms"><button type="button" class="path-browse" data-browse-for="emulatorScanFolder" data-browse-kind="folder">Browse</button></span></label>
         <div class="wide settings-field" data-setting="emulator scan folder rom wizard"><button type="button" class="icon-button" id="scanEmulatorFolder">Scan ROM folder</button></div>
-        <label class="field settings-field" data-setting="localization"><span>Interface language</span><select id="localeSetting"><option value="en">English</option></select><small>Localization is planned for a future release.</small></label>
+        <label class="field settings-field" data-setting="localization"><span data-i18n="settings.interface_language">Interface language</span><select id="localeSetting"><option value="en">English</option></select></label>
         <label class="field settings-field" data-setting="library view list grid columns"><span>Default library view</span><select id="libraryViewSetting"><option value="grid">Grid</option><option value="list">List</option></select></label>
         <label class="field settings-field" data-setting="library view grid grouping cover aspect ratio shape none"><span>Group covers by shape</span><select id="groupingSetting"><option value="shape">Group by cover shape</option><option value="none">No grouping</option></select></label>
         <label class="field wide settings-field" data-setting="custom fields metadata premium"><span>Custom fields, one per line: Name|Option1,Option2</span><textarea id="customFieldDefs" placeholder="Cabinet|Upright,Cocktail"></textarea></label>
@@ -475,6 +476,10 @@
         <label class="field"><span>Next page</span><input data-controller="page_right" class="settings-field" data-setting="controller gamepad page" type="number" min="0" max="31"></label>
         <label class="field"><span>Running-game menu</span><input data-controller="pause" class="settings-field" data-setting="controller gamepad pause" type="number" min="0" max="31"></label>
         <label class="field"><span>Filter and sort menu</span><input data-controller="menu" class="settings-field" data-setting="controller gamepad menu filter sort" type="number" min="0" max="31"></label>
+        <div class="wide section-title settings-panel" data-settings-panel="controller" data-setting="gamescope preset steam deck">Gamescope Presets</div>
+        <label class="field wide settings-field settings-panel" data-settings-panel="controller" data-setting="gamescope preset steam deck"><span>Gamescope preset</span><select id="gamescopePreset"><option value="">None</option></select></label>
+        <label class="check settings-field settings-panel" data-settings-panel="controller" data-setting="mangohud overlay performance fps"><input type="checkbox" id="mangohudEnabled"> Enable MangoHud performance overlay</label>
+        <div class="wide settings-field settings-panel" data-settings-panel="controller" data-setting="controller gamepad test"><div class="controller-bench" id="controllerBench"><svg class="gamepad-svg" viewBox="0 0 200 120" aria-label="Gamepad test"><rect x="10" y="30" width="180" height="60" rx="30" class="gamepad-body"/><circle cx="50" cy="60" r="12" class="gamepad-stick"/><circle cx="150" cy="60" r="12" class="gamepad-stick"/><circle cx="80" cy="50" r="5" class="gamepad-btn"/><circle cx="120" cy="50" r="5" class="gamepad-btn"/><circle cx="100" cy="65" r="5" class="gamepad-btn"/><circle cx="100" cy="40" r="5" class="gamepad-btn"/></svg><p class="description" id="controllerBenchStatus">Connect a controller to test inputs.</p></div></div>
         <button type="button" class="icon-button settings-field" data-setting="watched folders import scan" id="scanWatched">Scan watched folders now</button>
         <button type="button" class="icon-button settings-field" data-setting="welcome wizard setup" id="reopenWelcome">Reopen setup</button>
         <div class="wide detail-card settings-panel" data-settings-panel="advanced"><h3>Application</h3><p class="description" id="updateStatus"></p><div class="extras"><button type="button" class="icon-button" id="checkUpdate">Check for updates</button><button type="button" class="primary" id="installUpdate" hidden>Install verified update</button><button type="button" class="icon-button" id="installDesktop">Install desktop shortcut</button></div></div>

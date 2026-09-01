@@ -11,7 +11,34 @@ import { openDiscovery, openStorefronts, saveStorefrontSettings, importStorefron
 import { openBigBox, closeBigBox, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, stopScreenSaver, favoriteBigBox, openBigBoxPause, filteredBigBoxGames, applyLibraryMusic, activateCurrentGame, bigBoxTypingActive } from './bigbox.js';
 import { closeDialog, openGameDialog, closeContextMenu, bindContextMenuA11y, promptChoice, promptInput, confirmAction } from './dialogs.js';
 import { loadInsights, bindInsights } from './insights.js';
+import { init as i18nInit, setLocale, getSupportedLocales, t } from './i18n.js';
 import './activity.js';
+
+// Initialize i18n as early as possible so the UI renders in the user's locale.
+i18nInit().catch(() => {});
+
+// Populate the locale selector with available locales.
+(async () => {
+  try {
+    const resp = await fetch('/api/settings');
+    if (resp.ok) {
+      const data = await resp.json();
+      const locales = data.available_locales || [{ code: 'en', name: 'English', native: 'English' }];
+      const sel = $('localeSetting');
+      if (sel) {
+        sel.innerHTML = '';
+        for (const loc of locales) {
+          const opt = document.createElement('option');
+          opt.value = loc.code;
+          opt.textContent = loc.native || loc.name || loc.code;
+          sel.appendChild(opt);
+        }
+        sel.value = data.locale || 'en';
+        sel.onchange = () => { setLocale(sel.value).catch(() => {}); };
+      }
+    }
+  } catch { /* settings not ready yet — non-fatal */ }
+})();
 // Scrub the token from browser history immediately after reading it: keep any
 // deeplink params, drop only 'token'.
 {
