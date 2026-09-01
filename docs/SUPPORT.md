@@ -4,7 +4,7 @@
 
 - **Formal library scale:** 20,000 games (performance gates enforce 10k/20k scenarios).
 - **CPU architecture:** **x86_64 only** for v1.7 release artifacts (AppImage and Flatpak). ARM64 is deferred.
-- **Interface language:** English only; localization is not available in v1.7.
+- **Interface language:** English, Spanish, German, French, and Portuguese (v1.7.2+).
 
 ## Supported platforms
 

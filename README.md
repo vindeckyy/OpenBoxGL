@@ -144,7 +144,7 @@ Local-first playtime analytics with a 366-day activity heatmap (levels 0–4), c
 
 ### Big Box & Handhelds
 
-Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attract mode, optional startup video, library BGM, Steam Game Mode guest (`--game-mode`), localization (English; more languages planned).
+Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attract mode, optional startup video, library BGM, Steam Game Mode guest (`--game-mode`), localization (English, Spanish, German, French, Portuguese).
 
 ### Extensibility
 
