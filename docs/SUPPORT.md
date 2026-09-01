@@ -2,7 +2,7 @@
 
 ## Scale and architecture
 
-- **Formal library scale:** 20,000 games (performance gates enforce 10k/20k scenarios).
+- **Formal library scale:** 20,000 games (performance gates enforce 10k/20k scenarios). Optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) extends search and facet performance for 50k+ libraries.
 - **CPU architecture:** **x86_64 only** for v1.7 release artifacts (AppImage and Flatpak). ARM64 is deferred.
 - **Interface language:** English, Spanish, German, French, and Portuguese (v1.7.2+).
 
