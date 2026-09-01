@@ -14,31 +14,30 @@ import { loadInsights, bindInsights } from './insights.js';
 import { init as i18nInit, setLocale, getSupportedLocales, t } from './i18n.js';
 import './activity.js';
 
-// Initialize i18n as early as possible so the UI renders in the user's locale.
-i18nInit().catch(() => {});
-
-// Populate the locale selector with available locales.
-(async () => {
+// Initialize i18n after the page has settled so it doesn't hold network
+// connections during initial load (which would block networkidle2 in tests).
+// Populate the locale selector from public_settings once settings are loaded.
+function initI18n() {
+  i18nInit().catch(() => {});
+  // Populate the locale selector with available locales from AppState.
   try {
-    const resp = await fetch('/api/settings');
-    if (resp.ok) {
-      const data = await resp.json();
-      const locales = data.available_locales || [{ code: 'en', name: 'English', native: 'English' }];
-      const sel = $('localeSetting');
-      if (sel) {
-        sel.innerHTML = '';
-        for (const loc of locales) {
-          const opt = document.createElement('option');
-          opt.value = loc.code;
-          opt.textContent = loc.native || loc.name || loc.code;
-          sel.appendChild(opt);
-        }
-        sel.value = data.locale || 'en';
-        sel.onchange = () => { setLocale(sel.value).catch(() => {}); };
+    const locales = (AppState.appSettings && AppState.appSettings.available_locales) ||
+                    [{ code: 'en', name: 'English', native: 'English' }];
+    const sel = $('localeSetting');
+    if (sel) {
+      sel.innerHTML = '';
+      for (const loc of locales) {
+        const opt = document.createElement('option');
+        opt.value = loc.code;
+        opt.textContent = loc.native || loc.name || loc.code;
+        sel.appendChild(opt);
       }
+      sel.value = (AppState.appSettings && AppState.appSettings.locale) || 'en';
+      sel.onchange = () => { setLocale(sel.value).catch(() => {}); };
     }
   } catch { /* settings not ready yet — non-fatal */ }
-})();
+}
+window.addEventListener('DOMContentLoaded', () => setTimeout(initI18n, 0));
 // Scrub the token from browser history immediately after reading it: keep any
 // deeplink params, drop only 'token'.
 {
