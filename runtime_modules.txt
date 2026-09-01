@@ -112,3 +112,4 @@ handlers/_shared.py
 pkg/parity/parity_insights.py
 parity_insights.py
 handlers/insights.py
+pkg/state/sqlite_readmodel.py
