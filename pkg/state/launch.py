@@ -18,7 +18,7 @@ from pkg.state.registry import EVENT_SEQUENCE, PROCESS_LOCK, PROCESSES, RUNNING,
 from backend_io import contained_path
 from catalog import apply_progress_automation
 from openbox import DATA, build_launch, load_state, update_state
-from parity_gamescope import is_gamescope_guest, is_steam_launch, mark_process_windows, steam_game_id_for
+from parity_gamescope import is_gamescope_guest, is_steam_launch, mark_process_windows, steam_game_id_for, apply_mangohud_env
 from parity_integrations import auto_attach_obs_recording
 from parity_perf import apply_perf_profile, effective_profile_name, restore_perf_profile
 from parity_saves import enforce_backup_limit
@@ -27,6 +27,12 @@ from plugins import run_plugins
 from saves import backup_saves
 
 LOGGER = logging.getLogger("openbox")
+
+
+def _apply_mangohud_from_state(state):
+    """Return an env dict with MangoHud enabled if the setting is on (1.7.2)."""
+    settings = state.get("settings", {}) if isinstance(state, dict) else {}
+    return apply_mangohud_env(enabled=bool(settings.get("mangohud_enabled", False)))
 
 
 def _ns(name, default):
@@ -539,7 +545,9 @@ def start_game(index=None, stable_game_id=""):
         # Phase 5: Start the process (plugins + validation must succeed first).
         args, cwd = app_plug(game, args, cwd)
         val_cmd(args, cwd)
-        process = subprocess.Popen(args, cwd=cwd, start_new_session=True)
+        # Apply MangoHud env if enabled in settings (1.7.2).
+        launch_env = _apply_mangohud_from_state(state)
+        process = subprocess.Popen(args, cwd=cwd, start_new_session=True, env=launch_env)
         started = datetime.now()
         entry = {}
         missing = {"value": False}

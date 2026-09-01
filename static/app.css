@@ -63,6 +63,21 @@
       --shadow-insight: #0007;
       --surface-insight-card: #211e1a;
       --focus-ring: #f06000;
+      --surface-gamepad-body: #2a2722;
+      --surface-gamepad-stick: #4a4438;
+      --surface-gamepad-btn: #6b6354;
+      --surface-gamepad-btn-active: #f06000;
+      --border-gamepad: #3a3530;
+      --text-controller-status: #8a8270;
+      --surface-health-ok: #2d4a2d;
+      --surface-health-warn: #4a4030;
+      --surface-health-fail: #4a2d2d;
+      --border-health-ok: #4a8a4a;
+      --border-health-warn: #8a7a4a;
+      --border-health-fail: #8a4a4a;
+      --text-health-ok: #6abf6a;
+      --text-health-warn: #c4a84a;
+      --text-health-fail: #c46a6a;
       --font-micro:10px; --font-label:12px; --font-meta:12px; --font-body-small:13px;
       --font-body:14px; --font-action:15px; --font-dialog:16px; --font-title-large:18px;
       --font-heading:24px; --font-brand:0.9375rem; --font-nav:0.8125rem;      --font-subtitle:19px; --font-bigbox:21px; --font-panel-title:28px;
@@ -641,3 +656,18 @@
     .insight-streak-current { font-weight:700; color:var(--brand); }
     .insight-heatmap-table.sr-only { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
     @media(max-width:760px) { .insight-cards { grid-template-columns:repeat(2,1fr); } .insight-two-col { grid-template-columns:1fr; } .insight-heatmap { grid-template-columns:repeat(26, minmax(0,1fr)); } }
+
+    /* Controller bench (1.7.2) */
+    .controller-bench { display:flex; flex-direction:column; align-items:center; gap:8px; padding:12px; background:var(--surface-field); border-radius:8px; }
+    .gamepad-svg { width:200px; height:120px; }
+    .gamepad-body { fill:var(--surface-gamepad-body); stroke:var(--border-gamepad); stroke-width:1; }
+    .gamepad-stick { fill:var(--surface-gamepad-stick); stroke:var(--border-gamepad); stroke-width:1; }
+    .gamepad-btn { fill:var(--surface-gamepad-btn); }
+    .gamepad-btn.active { fill:var(--surface-gamepad-btn-active); }
+    .gamepad-stick.active { fill:var(--surface-gamepad-btn-active); }
+
+    /* Emulator health badges (1.7.2) */
+    .health-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:4px; font-size:var(--font-label); border:1px solid; }
+    .health-badge.ok { background:var(--surface-health-ok); border-color:var(--border-health-ok); color:var(--text-health-ok); }
+    .health-badge.warn { background:var(--surface-health-warn); border-color:var(--border-health-warn); color:var(--text-health-warn); }
+    .health-badge.fail { background:var(--surface-health-fail); border-color:var(--border-health-fail); color:var(--text-health-fail); }
