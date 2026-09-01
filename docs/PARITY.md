@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.7.1**, the guided Setup Center, Activity, Launch Doctor, and durable operations release described in the CHANGELOG.
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.7.2**, the Localization, Scale Foundation &amp; Deck Polish release described in the CHANGELOG.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -78,7 +78,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Big Box hybrid scoped search | done | Hybrid mode exposes platform-scoped search while browsing |
 | Attract mode and startup video | done | Separate attract delay, optional Big Box startup video, and screensaver launch |
 | Bundled media packs (free) | done | Platform logos, controller prompts, and badge packs apply without a subscription |
-| Localization | partial | Interface is English-only; the five partial translations were removed until real localization lands |
+| Localization | done | Full i18n for English, Spanish, German, French, and Portuguese via data-i18n attributes and JSON locale files (1.7.2) |
 | Big Box shutdown apps on mode switch | done | Configurable commands run when entering Big Box (not when leaving) |
 | Xbox 360 and loose arcade import | done | default.xex folder scan and Hypseus/Singe loose file import |
 | Vita3K title resolution | done | Title IDs resolve to readable game names on import |

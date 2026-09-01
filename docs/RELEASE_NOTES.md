@@ -1,48 +1,58 @@
-# OpenBox v1.7.1: Play Insights & Performance Polish
+# OpenBox v1.7.2: Localization, Scale Foundation & Deck Polish
 
-**OpenBox v1.7.1** focuses strictly on performance optimizations, the brand-new local Play Insights dashboard, and actionable polish for Setup and Launch Doctor.
-
----
-
-### 📊 Local-First Play Insights
-* **366-Day Activity Heatmap**: Visualizes your daily play sessions across 5 intensity levels (0–4).
-* **Streaks & 30-Day Momentum**: Tracks your current streak, longest streak, and compares playtime over the last 30 days against the prior 30.
-* **Top Platforms & Genres**: Instant breakdown of your most-played systems and genres.
-* **Instant & Private**: Computes stats on-the-fly from existing `history` and `games` data in under **15 ms** for 20,000 entries with zero telemetry and no database migrations.
-* **Accessible & Lazy-Loaded**: Loaded on demand (`static/insights.js`) with an accessible HTML table fallback for screen readers. Backed by `GET /api/v2/insights/summary` and `GET /api/v2/insights/heatmap`.
+**OpenBox v1.7.2** introduces full internationalization, an optional SQLite read model for large libraries, gamescope presets and MangoHud for Steam Deck users, BIOS SHA1 drift detection, and a backup diff endpoint.
 
 ---
 
-### ⚡ 20k Performance Engine
-* **Virtual Spacer-Window Grid**: Library grid now renders through a virtualized `IntersectionObserver` window with `contain-intrinsic-size`, dramatically reducing DOM node overhead during fast scrolling while preserving card focus and context menus. Includes a `localStorage['openbox-virtual-grid']` fallback switch.
-* **Off-Thread Trigram Search**: Search indexing and query evaluation run in a background Web Worker (`static/worker.search.js`) to eliminate typing stutter, with automatic fallback to the main thread.
-* **Bounded Facet LRU Cache**: `pkg/state/cache.py` adds a 64-entry `FacetCache` with execution time budgeting and cache-epoch bumps on invalidation.
-* **Micro-Batch Write Coalescing**: `state_store.py` coalesces disk writes within 50 ms windows into a single `fsync` to eliminate disk churn during rapid state mutations.
-* **CI Benchmark Suite**: Added `--json-out` support to `scripts/perf_bench.py` to continuously enforce <15 ms query gates at 20,000 games.
+### 🌍 Full Localization
+* **5 Languages**: Complete translations for English, Spanish, German, French, and Portuguese via JSON locale files in `locales/`.
+* **data-i18n System**: HTML elements use `data-i18n` attributes; JS uses `t(key)` from `static/i18n.js` with automatic fallback to English.
+* **Live Language Switching**: Settings → Interface language re-translates the UI without a page reload.
+* **Gate Coverage**: `scripts/check_i18n.py` enforces 100% key coverage across all locale files; wired into `make check`.
 
 ---
 
-### 🩺 Actionable Launch Doctor Fixes
-* **Interactive Fix Actions**: Blocking preflight checks now attach actionable `fix_action` triggers (`{kind, label, payload}`) to render direct buttons instead of static error badges:
-  * `flatpak_install`: One-click button to install missing emulator Flatpaks.
-  * `reveal_bios_path`: Direct assistance showing the exact destination folder for missing BIOS/firmware files.
-  * `pick_core`: Instant selector to pick emulator cores and launch adapters.
-  * `explain_token`: Contextual explanations for misconfigured launch tokens.
-* **Platform Disambiguation**: Renders platform chips and registry health status (`GET /api/v2/emulators/registry?health=1`) to resolve ambiguous launcher targets.
+### 📦 SQLite Read Model (Optional)
+* **Behind a Flag**: `OPENBOX_ENABLE_SQLITE_READ=1` enables an alternative read path using stdlib `sqlite3`.
+* **FTS5 Search**: Full-text search via FTS5 with automatic LIKE fallback when FTS5 is unavailable.
+* **Indexed Queries**: Filtered lookups on platform, genre, favorite, hidden, installed with limit/offset pagination.
+* **GROUP BY Facets**: Facet computation via SQL GROUP BY for platform, genre, developer, and more.
+* **Zero Impact When Off**: Disabled by default; all methods are no-ops and the JSON read path is unchanged.
 
 ---
 
-### 🧙 Setup Center Progress Polish
-* **Human Progress Storytelling**: Scan previews now generate contextual status messages in `preview_document` (e.g. *"Found 342 games — 12 need your pick →"*) to clearly communicate scan state during candidate review.
+### 🎮 Deck Polish: Gamescope Presets & MangoHud
+* **8 Gamescope Presets**: Steam Deck, HD, 1080p, 1440p, 4K, integer scale, stretch, and borderless window profiles.
+* **MangoHud Toggle**: Enable the MangoHud performance overlay from Settings → Controller; `MANGOHUD=1` is set on game launch.
+* **Controller Bench**: Settings → Controller tab with a live gamepad SVG visualization.
 
 ---
 
-### 🎨 Design System Tokens
-* **9 New Tokens in `static/app.css`**: Added `--overlay-insight-cell-0` through `--overlay-insight-cell-4`, `--border-insight`, `--shadow-insight`, `--surface-insight-card`, and `--focus-ring`.
-* **5 Stock Themes Updated**: Full token coverage with zero raw hex values across all themes.
+### 🩺 Emulator Health & BIOS Drift Detection
+* **BIOS SHA1 Drift**: Launch Doctor now reports `BIOS_SHA1_DRIFT` when a BIOS file exists but its SHA1 hash doesn't match the expected value in `emulator_defs/*.yaml`.
+* **Health Badges**: CSS badge classes (ok/warn/fail) with design tokens in `static/app.css` and all 5 themes.
+* **Registry Health API**: `GET /api/v2/emulators/registry?health=1` returns `bios_ok`, `firmware_ok`, and `core_ok` per adapter.
 
 ---
 
-**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.7.0...v1.7.1
+### 🏷️ Smart Collections & Backup Diff
+* **Visual Chip Builder**: `rules_to_chips()` and `chips_to_rules()` convert between filter preset rules and UI chip descriptors for visual collection editing.
+* **Backup Diff API**: `GET /api/v2/backup/diff?archive=<name>` compares the current library against a backup archive, returning added/removed/changed game IDs and settings change status.
 
+---
 
+### 🎨 Design System
+* **15 New Tokens**: 6 gamepad/controller tokens + 9 health badge tokens in `static/app.css` `:root`.
+* **5 Stock Themes Updated**: All new tokens covered across Cinema Marquee, Harbor Light, Midnight Circuit, Nordic Mist, and Phosphor Terminal.
+
+---
+
+### 📋 Gates & Release
+* New runtime module `pkg/state/sqlite_readmodel.py` (90% coverage, floor 85%).
+* 7 new GET routes (1 static + 5 locale JSONs + 1 backup diff v2).
+* `scripts/check_i18n.py` wired into `make check` as a strict gate.
+* ADRs: `0014-sqlite-read-model.md`, `0015-i18n-system.md`.
+
+---
+
+**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.7.1...v1.7.2

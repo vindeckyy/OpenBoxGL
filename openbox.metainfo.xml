@@ -14,6 +14,13 @@
   <url type="homepage">https://openboxgl.github.io/</url>
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
   <releases>
+    <release version="1.7.2" date="2026-09-01">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.7.2</url>
+      <description>
+        <p>Localization, Scale Foundation &amp; Deck Polish release introducing full i18n support, an optional SQLite read model, gamescope presets, and emulator health checks.</p>
+        <p>Adds complete localization for English, Spanish, German, French, and Portuguese with data-i18n attributes and a locale selector. Introduces an optional SQLite read model behind OPENBOX_ENABLE_SQLITE_READ=1 for large-library performance. Adds gamescope preset profiles and MangoHud toggle for Steam Deck users. Enhances Launch Doctor with BIOS SHA1 drift detection and emulator health badges.</p>
+      </description>
+    </release>
     <release version="1.7.1" date="2026-08-29">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.7.1</url>
       <description>
