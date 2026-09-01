@@ -151,6 +151,16 @@ def main() -> int:
     if frontend.returncode != 0:
         failures.append("frontend")
 
+    # Stage 2.7: i18n key coverage (1.7.2). All locale files must have
+    # 100% key coverage and all data-i18n keys must exist in en.json.
+    i18n_check = run([sys.executable, "-B", str(ROOT / "scripts" / "check_i18n.py")])
+    if i18n_check.stdout.strip():
+        print(i18n_check.stdout.strip())
+    if i18n_check.stderr.strip():
+        print(i18n_check.stderr.strip())
+    if i18n_check.returncode != 0:
+        failures.append("i18n")
+
 
     modules = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip()]
     compile_failed = 0

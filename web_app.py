@@ -404,6 +404,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         "/static/activity.js",
         "/static/insights.js",
         "/static/worker.search.js",
+        "/static/i18n.js",
         "/static/app.css",
         "/static/logo.png",
     ], public=True)
@@ -425,6 +426,16 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
             raise RouteNotFound("Not found")
         content_type = "text/javascript; charset=utf-8" if name.endswith(".js") else "text/css; charset=utf-8"
         self.send_file(200, asset, content_type)
+        return
+
+    @route("GET", ["/locales/en.json", "/locales/es.json", "/locales/de.json", "/locales/fr.json", "/locales/pt.json"], public=True)
+    def _api_get_locale(self, parsed):
+        """Serve locale JSON files for the i18n system (1.7.2)."""
+        name = Path(parsed.path).name
+        asset = ROOT / "locales" / name
+        if not asset.is_file():
+            raise RouteNotFound("Not found")
+        self.send_file(200, asset, "application/json; charset=utf-8")
         return
 
     @route("GET", ["/favicon.ico", "/favicon.svg"], public=True)
