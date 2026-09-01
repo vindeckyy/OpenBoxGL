@@ -540,6 +540,29 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None):
                         [REMEDIATION_IMPORT_INCOMPLETE],
                         _fix_reveal(missing_path, "Firmware"),
                     ))
+            # SHA1 drift check: BIOS exists but wrong hash (1.7.2)
+            if active_adapter and active_adapter.get("bios_path") and active_adapter.get("bios_sha1"):
+                from pathlib import Path as _Path
+                import hashlib as _hashlib
+                bios_p = _Path(active_adapter["bios_path"]).expanduser()
+                if bios_p.is_file():
+                    try:
+                        h = _hashlib.sha1()
+                        with open(bios_p, "rb") as bf:
+                            for chunk in iter(lambda: bf.read(8192), b""):
+                                h.update(chunk)
+                        actual = h.hexdigest().lower()
+                        expected = str(active_adapter["bios_sha1"]).lower()
+                        if actual != expected:
+                            checks.append(_check(
+                                "BIOS_SHA1_DRIFT",
+                                "warning",
+                                f"BIOS hash mismatch: expected {expected[:12]}..., got {actual[:12]}...",
+                                [REMEDIATION_IMPORT_INCOMPLETE],
+                                _fix_reveal(str(bios_p), "BIOS"),
+                            ))
+                    except OSError:
+                        pass
 
     # Ambiguous platform and emulator required checks — must be after active_adapter resolution
     # to provide actionable picker chips for .iso and missing emulator cases.
