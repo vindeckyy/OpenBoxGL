@@ -442,3 +442,91 @@ def is_steam_launch(args):
     if first == "xdg-open" and len(args) > 1 and "steam://" in str(args[1]).casefold():
         return True
     return False
+
+
+# ---------------------------------------------------------------------------
+# Gamescope presets and MangoHud support (1.7.2)
+# ---------------------------------------------------------------------------
+
+GAMESCOPE_PRESETS = {
+    "deck": {
+        "label": "Steam Deck",
+        "args": ["-W", "1280", "-H", "800", "-w", "1280", "-h", "800", "-F", "fsr", "--fsr-sharpness", "2"],
+    },
+    "deck_hd": {
+        "label": "Steam Deck (HD)",
+        "args": ["-W", "1280", "-H", "800", "-w", "1920", "-h", "1080", "-F", "fsr", "--fsr-sharpness", "2"],
+    },
+    "1080p": {
+        "label": "1080p Full HD",
+        "args": ["-W", "1920", "-H", "1080", "-w", "1920", "-h", "1080", "-F", "fsr", "--fsr-sharpness", "2"],
+    },
+    "1440p": {
+        "label": "1440p QHD",
+        "args": ["-W", "2560", "-H", "1440", "-w", "2560", "-h", "1440", "-F", "fsr", "--fsr-sharpness", "2"],
+    },
+    "4k": {
+        "label": "4K UHD",
+        "args": ["-W", "3840", "-H", "2160", "-w", "3840", "-h", "2160", "-F", "fsr", "--fsr-sharpness", "2"],
+    },
+    "integer": {
+        "label": "Integer Scale",
+        "args": ["-F", "integer"],
+    },
+    "stretch": {
+        "label": "Stretch to Fit",
+        "args": ["-F", "stretch"],
+    },
+    "borderless": {
+        "label": "Borderless Window",
+        "args": ["-b"],
+    },
+}
+
+
+def get_gamescope_preset(name):
+    """Return the preset dict for *name*, or None if not found."""
+    if not name:
+        return None
+    return GAMESCOPE_PRESETS.get(str(name).strip().lower())
+
+
+def list_gamescope_presets():
+    """Return a list of [name, label] pairs for all presets (JSON-serializable)."""
+    return [[name, preset["label"]] for name, preset in GAMESCOPE_PRESETS.items()]
+
+
+def merge_gamescope_preset(name, extra_args=None):
+    """Return gamescope args for a preset, merged with any extra args.
+
+    Returns an empty list if the preset is not found.
+    """
+    preset = get_gamescope_preset(name)
+    if not preset:
+        return []
+    args = list(preset.get("args", []))
+    if extra_args:
+        args.extend(str(a) for a in extra_args if a)
+    return args
+
+
+def apply_mangohud_env(env=None, enabled=False):
+    """Return a copy of *env* with MangoHud enabled or disabled.
+
+    When enabled, sets MANGOHUD=1 and MANGOHUD_CONFIG=font_size=24,no_display.
+    When disabled, removes both keys.
+    """
+    base = dict(env if env is not None else os.environ)
+    if enabled:
+        base["MANGOHUD"] = "1"
+        base["MANGOHUD_CONFIG"] = "font_size=24,no_display"
+    else:
+        base.pop("MANGOHUD", None)
+        base.pop("MANGOHUD_CONFIG", None)
+    return base
+
+
+def is_mangohud_available(which=None):
+    """Check if MangoHud is installed and on PATH."""
+    finder = which or shutil.which
+    return finder("mangohud") is not None

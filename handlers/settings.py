@@ -317,6 +317,8 @@ def clean_settings(merged):
             "apply_perf": apply_perf,
             "progress_on_first_play": progress_on_first_play,
             "auto_close_store_clients": bool(merged.get("auto_close_store_clients", False)),
+            "gamescope_preset": str(merged.get("gamescope_preset", "")).strip()[:30],
+            "mangohud_enabled": bool(merged.get("mangohud_enabled", False)),
     }
 
 
