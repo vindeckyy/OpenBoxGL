@@ -374,3 +374,81 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None, force=F
     except zipfile.BadZipFile as error:
         raise ValueError("Backup archive is invalid.") from error
     return restore_items
+
+
+# ---------------------------------------------------------------------------
+# Backup diff (1.7.2)
+# ---------------------------------------------------------------------------
+
+
+def diff_manifests(current_state, archive_path):
+    """Compare the current library state against a backup archive.
+
+    Returns a dict with:
+      - added: game_ids in current but not in backup
+      - removed: game_ids in backup but not in current
+      - changed: game_ids present in both but with differing content
+      - settings_changed: bool
+      - summary: {added, removed, changed, total}
+
+    Raises ValueError if the archive is invalid.
+    """
+    current_games = {}
+    if isinstance(current_state, dict):
+        for game in current_state.get("games", []):
+            if isinstance(game, dict):
+                gid = str(game.get("game_id") or "").strip()
+                if gid:
+                    current_games[gid] = game
+
+    backup_games = {}
+    backup_settings = {}
+    try:
+        with zipfile.ZipFile(str(archive_path), "r") as package:
+            _load_backup_manifest(package)  # validate manifest exists
+            if "library.json" in package.namelist():
+                try:
+                    backup_state = json.loads(package.read("library.json"))
+                    if isinstance(backup_state, dict):
+                        for game in backup_state.get("games", []):
+                            if isinstance(game, dict):
+                                gid = str(game.get("game_id") or "").strip()
+                                if gid:
+                                    backup_games[gid] = game
+                        backup_settings = backup_state.get("settings", {})
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    pass
+    except zipfile.BadZipFile as error:
+        raise ValueError("Backup archive is invalid.") from error
+
+    current_ids = set(current_games.keys())
+    backup_ids = set(backup_games.keys())
+
+    added = sorted(current_ids - backup_ids)
+    removed = sorted(backup_ids - current_ids)
+
+    changed = []
+    for gid in sorted(current_ids & backup_ids):
+        cur = current_games.get(gid, {})
+        bak = backup_games.get(gid, {})
+        # Compare key fields
+        for field in ("title", "platform", "genre", "rating", "progress", "favorite", "hidden", "play_count", "playtime_seconds"):
+            if cur.get(field) != bak.get(field):
+                changed.append(gid)
+                break
+
+    current_settings = current_state.get("settings", {}) if isinstance(current_state, dict) else {}
+    settings_changed = bool(current_settings) and bool(backup_settings) and current_settings != backup_settings
+
+    return {
+        "added": added,
+        "removed": removed,
+        "changed": changed,
+        "settings_changed": settings_changed,
+        "summary": {
+            "added": len(added),
+            "removed": len(removed),
+            "changed": len(changed),
+            "total": len(current_ids),
+        },
+    }

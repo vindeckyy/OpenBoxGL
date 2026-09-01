@@ -259,3 +259,72 @@ def explorer_facets(games, field, limit=40):
     items = sorted(counts.items(), key=lambda pair: (-pair[1], pair[0].casefold()))
     return [{"value": value, "count": count} for value, count in items[:limit]]
 
+
+# ---------------------------------------------------------------------------
+# Visual chip builder for Smart Collections (1.7.2)
+# ---------------------------------------------------------------------------
+
+CHIP_LABELS = {
+    "platform": "Platform",
+    "genre": "Genre",
+    "view": "View",
+    "esrb": "ESRB",
+    "progress": "Progress",
+    "developer": "Developer",
+    "publisher": "Publisher",
+    "favorite": "Favorite",
+    "hidden": "Hidden",
+    "installed": "Installed",
+    "has_saves": "Has saves",
+    "has_achievements": "Has achievements",
+    "has_missing_media": "Missing media",
+    "has_highscores": "Has high scores",
+    "query": "Search",
+}
+
+
+def rules_to_chips(rules):
+    """Convert preset rules into visual chip descriptors for the UI.
+
+    Returns a list of {key, label, value, display} dicts.
+    """
+    if not isinstance(rules, dict):
+        return []
+    chips = []
+    for key, value in rules.items():
+        if key not in CHIP_LABELS:
+            continue
+        label = CHIP_LABELS[key]
+        if isinstance(value, bool):
+            display = "Yes" if value else "No"
+        else:
+            display = str(value)
+        chips.append({"key": key, "label": label, "value": value, "display": display})
+    return chips
+
+
+def chips_to_rules(chips):
+    """Convert visual chip descriptors back into preset rules.
+
+    Returns a normalized rules dict.
+    """
+    rules = {}
+    if not isinstance(chips, list):
+        return rules
+    for chip in chips:
+        if not isinstance(chip, dict):
+            continue
+        key = str(chip.get("key") or "").strip()
+        if not key or key not in CHIP_LABELS:
+            continue
+        value = chip.get("value")
+        if key in ("favorite", "hidden", "has_saves", "has_achievements", "has_missing_media", "has_highscores"):
+            rules[key] = bool(value)
+        elif key == "installed":
+            rules[key] = str(value).strip() if value else "all"
+        else:
+            text = str(value).strip()
+            if text and text != "all":
+                rules[key] = text
+    return rules
+
