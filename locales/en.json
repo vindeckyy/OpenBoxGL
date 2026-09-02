@@ -459,7 +459,8 @@
     "application": "Application",
     "check_updates": "Check for updates",
     "install_update": "Install verified update",
-    "install_desktop": "Install desktop shortcut"
+    "install_desktop": "Install desktop shortcut",
+    "show_insights": "Show Play Insights in the library"
   },
   "storefront": {
     "title": "Storefront Manager",
@@ -538,5 +539,38 @@
   "errors": {
     "copy_details": "Copy details",
     "dismiss": "Dismiss error"
+  },
+  "insights": {
+    "heatmap_label": "Play heatmap, last {days} days",
+    "col_date": "Date",
+    "col_sessions": "Sessions",
+    "col_playtime": "Playtime",
+    "col_level": "Level",
+    "games": "Games",
+    "played": "Played",
+    "playtime": "Playtime",
+    "sessions": "Sessions",
+    "no_data": "No data yet — play something!",
+    "top_games": "Most played games",
+    "top_platforms": "Top platforms",
+    "top_genres": "Top genres",
+    "streak_title": "Streak & momentum",
+    "day_streak": "-day streak",
+    "longest": "Longest",
+    "days": "days",
+    "last": "Last",
+    "last_30d": "Last 30d",
+    "momentum_same": "same as previous 30d",
+    "momentum_vs_prev": "vs previous 30d",
+    "last_year": "Activity",
+    "less": "Less",
+    "more": "More",
+    "loading": "Loading insights…",
+    "unavailable": "Insights unavailable",
+    "range_label": "Insights date range",
+    "range_30": "Last 30 days",
+    "range_90": "Last 90 days",
+    "range_365": "Last 365 days",
+    "refresh": "Refresh insights"
   }
 }

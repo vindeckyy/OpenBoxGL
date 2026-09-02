@@ -129,6 +129,7 @@ import { confirmAction, promptInput } from './dialogs.js';
         bigbox_mode:$('bigBoxMode').value,
         show_playlist_actions:$('showPlaylistActions').checked,
         dynamic_play_button:$('dynamicPlayButton').checked,
+        show_insights:$('showInsights').checked,
         hidden_sidebar_sections:$('hiddenSidebarSections').value.split(',').map(value => value.trim()).filter(Boolean),
         obs_auto_attach:$('obsAutoAttach').checked,
         obs_recording_path:$('obsRecordingPath').value.trim(),
@@ -211,6 +212,7 @@ import { confirmAction, promptInput } from './dialogs.js';
         $('bigBoxMode').value = AppState.appSettings.bigbox_mode || 'stage';
         $('showPlaylistActions').checked = AppState.appSettings.show_playlist_actions !== false;
         $('dynamicPlayButton').checked = AppState.appSettings.dynamic_play_button !== false;
+        $('showInsights').checked = AppState.appSettings.show_insights !== false;
         $('hiddenSidebarSections').value = (AppState.appSettings.hidden_sidebar_sections || []).join(', ');
         $('obsAutoAttach').checked = AppState.appSettings.obs_auto_attach !== false;
         $('obsRecordingPath').value = AppState.appSettings.obs_recording_path || '';

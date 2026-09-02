@@ -22,7 +22,20 @@ class InsightsHandlers:
                 from api_errors import BadRequest
 
                 raise BadRequest("end_date must be YYYY-MM-DD") from error
-        payload = summarize(state, end_date=end_date)
+        days_raw = qs.get("days", [""])[0].strip() if qs.get("days") else ""
+        days = 366
+        if days_raw:
+            try:
+                days = int(days_raw)
+            except (TypeError, ValueError) as error:
+                from api_errors import BadRequest
+
+                raise BadRequest("days must be an integer") from error
+            if not 1 <= days <= 366:
+                from api_errors import BadRequest
+
+                raise BadRequest("days must be between 1 and 366")
+        payload = summarize(state, end_date=end_date, days=days)
         self.send_json(200, payload)
         return
 

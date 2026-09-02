@@ -38,6 +38,19 @@ function initI18n() {
   } catch { /* settings not ready yet — non-fatal */ }
 }
 window.addEventListener('DOMContentLoaded', () => setTimeout(initI18n, 0));
+window.addEventListener('DOMContentLoaded', () => {
+  bindInsights();
+  document.addEventListener('app:show-game', event => {
+    const gameId = String(event.detail?.gameId || '');
+    if (!gameId) return;
+    const game = AppState.games.find(item => item.game_id === gameId) ||
+                 AppState.games.find(item => String(item.id) === gameId);
+    if (!game) return;
+    AppState.selectedId = game.id;
+    render();
+    document.querySelector(`[data-game="${game.id}"]`)?.scrollIntoView({ block: 'nearest' });
+  });
+});
 // Scrub the token from browser history immediately after reading it: keep any
 // deeplink params, drop only 'token'.
 {

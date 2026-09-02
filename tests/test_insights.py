@@ -15,6 +15,7 @@ from pkg.parity.parity_insights import (  # noqa: E402
     compute_streak,
     compute_top_platforms,
     compute_top_genres,
+    compute_top_games,
     compute_momentum,
     compute_totals,
     summarize,
@@ -126,6 +127,36 @@ class TopGenresTest(unittest.TestCase):
         self.assertEqual(top[0]["count"], 2)
 
 
+class TopGamesTest(unittest.TestCase):
+    def test_top_games_sorted_and_skips_zero(self):
+        games = [
+            {"game_id": "game-a", "name": "Alpha", "platform": "PC", "playtime_seconds": 100, "play_count": 2},
+            {"game_id": "game-b", "name": "Beta", "platform": "SNES", "playtime_seconds": 500, "play_count": 1},
+            {"game_id": "game-c", "name": "Gamma", "platform": "PC", "playtime_seconds": 0},
+        ]
+        top = compute_top_games(games, limit=2)
+        self.assertEqual(len(top), 2)
+        self.assertEqual(top[0]["game_id"], "game-b")
+        self.assertEqual(top[0]["playtime_seconds"], 500)
+        self.assertEqual(top[1]["name"], "Alpha")
+        self.assertNotIn("game-c", [item["game_id"] for item in top])
+
+    def test_top_games_limit_and_tiebreak(self):
+        games = [
+            {"game_id": "game-a", "name": "Alpha", "playtime_seconds": 100, "play_count": 1},
+            {"game_id": "game-b", "name": "Beta", "playtime_seconds": 100, "play_count": 5},
+            {"game_id": "game-c", "name": "Gamma", "playtime_seconds": 100, "play_count": 5},
+        ]
+        top = compute_top_games(games, limit=10)
+        self.assertEqual([item["game_id"] for item in top[:2]], ["game-b", "game-c"])
+
+    def test_top_games_garbage_values(self):
+        games = [{"name": "Weird", "playtime_seconds": "not-a-number", "play_count": None}]
+        top = compute_top_games(games)
+        self.assertEqual(top, [])
+        self.assertEqual(compute_top_games("not-a-list"), [])
+
+
 class MomentumTest(unittest.TestCase):
     def test_momentum(self):
         base = datetime.date(2026, 8, 28)
@@ -144,10 +175,23 @@ class SummarizeTest(unittest.TestCase):
     def test_summarize_keys(self):
         state = {"games": [], "history": []}
         result = summarize(state, end_date=datetime.date(2026, 8, 28))
-        for key in ("heatmap", "streak", "totals", "top_platforms", "top_genres", "momentum", "last_30_days"):
+        for key in ("heatmap", "streak", "totals", "top_platforms", "top_genres", "top_games", "momentum", "last_30_days", "days"):
             self.assertIn(key, result)
         self.assertEqual(len(result["heatmap"]), 366)
         self.assertEqual(len(result["last_30_days"]), 30)
+
+    def test_summarize_days_scopes_heatmap(self):
+        state = {"games": [], "history": []}
+        result = summarize(state, end_date=datetime.date(2026, 8, 28), days=30)
+        self.assertEqual(result["days"], 30)
+        self.assertEqual(len(result["heatmap"]), 30)
+
+    def test_summarize_days_out_of_range_falls_back(self):
+        state = {"games": [], "history": []}
+        for bad in (0, -5, 999, "30"):
+            result = summarize(state, days=bad)
+            self.assertEqual(len(result["heatmap"]), 366)
+            self.assertEqual(result["days"], 366)
 
     def test_performance_20k(self):
         import time
@@ -221,6 +265,29 @@ class InsightsHandlerTest(unittest.TestCase):
         payload = h.responses[0][1]
         self.assertIn("heatmap", payload)
         self.assertEqual(len(payload["heatmap"]), 366)
+
+    def test_summary_days_param(self):
+        from urllib.parse import urlparse
+
+        h = self.handler()
+        parsed = urlparse("/api/v2/insights/summary?days=30&end_date=2026-08-28")
+        h._api_get_api_v2_insights_summary(parsed)
+        self.assertEqual(h.responses[0][0], 200)
+        payload = h.responses[0][1]
+        self.assertEqual(payload["days"], 30)
+        self.assertEqual(len(payload["heatmap"]), 30)
+        self.assertIn("top_games", payload)
+
+    def test_summary_bad_days(self):
+        from urllib.parse import urlparse
+
+        from api_errors import BadRequest
+
+        h = self.handler()
+        for query in ("days=999", "days=abc"):
+            parsed = urlparse(f"/api/v2/insights/summary?{query}&end_date=2026-08-28")
+            with self.assertRaises(BadRequest):
+                h._api_get_api_v2_insights_summary(parsed)
 
     def test_heatmap_days_param(self):
         from urllib.parse import urlparse
