@@ -654,6 +654,19 @@ import { confirmAction, promptInput } from './dialogs.js';
       container.querySelector(`[data-preset-row="${container.querySelectorAll('[data-preset-row]').length - 1}"] .preset-delete`).onclick = event => event.target.closest('[data-preset-row]').remove();
     };
     // ── Library export (1.8.0) ─────────────────────────────────────────────
+    if ($('testScreenscraper')) $('testScreenscraper').onclick = async () => {
+      const status = $('screenscraperStatus');
+      try {
+        const result = await api('/api/v2/screenscraper/test',{method:'POST',body:'{}'});
+        const quota = result.user?.quota || result.user?.requeststoday || '';
+        if (status) status.textContent = `Connected${quota ? ` · quota ${quota}` : ''}`;
+        notify('ScreenScraper credentials work');
+      } catch(error) {
+        if (status) status.textContent = error.message;
+        notify(error.message);
+      }
+    };
+
     async function waitForExportJob(jobId) {
       for (let attempt = 0; attempt < 40; attempt++) {
         await new Promise(resolve => setTimeout(resolve, 750));

@@ -423,6 +423,32 @@ $('autoMatchMetadata').onclick = async () => {
   } catch(error) { notify(error.message); }
   finally { $('autoMatchMetadata').disabled = false; }
 };
+$('searchScreenscraper').onclick = async () => {
+  const game = AppState.games.find(item => item.id === AppState.metadataGameId);
+  try {
+    const result = await api(`/api/v2/screenscraper/search?q=${encodeURIComponent($('metadataQuery').value)}&platform=${encodeURIComponent(game?.platform || '')}`);
+    $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.system_name || '')}${item.year ? ` · ${escapeHtml(item.year)}` : ''}</small></div><button type="button" class="primary" data-apply-ss="${Number(item.id) || ''}">Use</button></div>`).join('') : '<p class="description">No ScreenScraper matches found.</p>';
+    document.querySelectorAll('[data-apply-ss]').forEach(button => button.onclick = async () => {
+      try {
+        await api('/api/v2/screenscraper/apply',{method:'POST',body:JSON.stringify({id:AppState.games.find(item => item.id === AppState.metadataGameId)?.game_id,scraper_id:Number(button.dataset.applySs),media:['cover','screenshots','fanart','clear_logo']})});
+        closeDialog($('metadataDialog'));
+        await refresh();
+        notify('ScreenScraper metadata applied');
+      } catch(error) { notify(error.message); }
+    });
+  } catch(error) { notify(error.message); }
+};
+$('hashMatchScreenscraper').onclick = async () => {
+  const game = AppState.games.find(item => item.id === AppState.metadataGameId);
+  if (!game) return notify('Open a game first, then hash-match it.');
+  if (!game.path) return notify('This game has no ROM file to hash.');
+  try {
+    // The apply route hashes the ROM and matches by hash server-side.
+    await api('/api/v2/screenscraper/apply',{method:'POST',body:JSON.stringify({id:game.game_id,rom_path:game.path,fields:['description','year','genre','developer','publisher'],media:['cover','screenshots','clear_logo']})});
+    closeDialog($('metadataDialog'));
+    notify('ScreenScraper hash-match queued — progress in the Activity Center');
+  } catch(error) { notify(error.message); }
+};
 $('searchIgdb').onclick = async () => {
   const game = AppState.games.find(item => item.id === AppState.metadataGameId);
   try {

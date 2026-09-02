@@ -66,6 +66,7 @@ from handlers.library import LibraryHandlers
 from handlers.media import MediaHandlers
 from handlers.metadata import MetadataHandlers
 from handlers.sessions import SessionHandlers
+from handlers.screenscraper import ScreenScraperHandlers
 from handlers.settings import SettingsHandlers
 from handlers.wine import WineHandlers
 
@@ -123,7 +124,7 @@ CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsaf
 
 
 
-class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, ExportHandlers, LaunchHandlers, SetupHandlers, DataHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, BaseHTTPRequestHandler):
+class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, ExportHandlers, LaunchHandlers, SetupHandlers, DataHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, ScreenScraperHandlers, BaseHTTPRequestHandler):
     server_version = "OpenBox/1"
     protocol_version = "HTTP/1.1"
     MAX_BODY = 65536
