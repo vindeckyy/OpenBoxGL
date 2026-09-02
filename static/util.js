@@ -171,17 +171,19 @@
      * Sort game list according to specified sort field.
      * @param {Array<Record<string, any>>} list
      * @param {string} sort
+     * @param {string} [dir] 'reversed' flips the comparator (list-view toggle)
      * @returns {Array<Record<string, any>>}
      */
-    function sortGames(list, sort) {
-      return list.sort((a, b) => sort === 'rating' ? Number(b.rating || 0) - Number(a.rating || 0) || String(a.name || '').localeCompare(String(b.name || ''))
+    function sortGames(list, sort, dir) {
+      const cmp = (a, b) => sort === 'rating' ? Number(b.rating || 0) - Number(a.rating || 0) || String(a.name || '').localeCompare(String(b.name || ''))
         : sort === 'recent' ? String(b.last_played || '').localeCompare(String(a.last_played || '')) || String(a.sort_title || a.name || '').localeCompare(String(b.sort_title || b.name || ''))
         : sort === 'recent_activity' ? recentActivityValue(b) - recentActivityValue(a) || String(a.name || '').localeCompare(String(b.name || ''))
         : sort === 'playtime' ? Number(b.playtime_seconds || 0) - Number(a.playtime_seconds || 0) || String(a.sort_title || a.name || '').localeCompare(String(b.sort_title || b.name || ''))
         : sort === 'added' ? String(b.added_at || '').localeCompare(String(a.added_at || '')) || String(a.sort_title || a.name || '').localeCompare(String(b.sort_title || b.name || ''))
         : sort === 'platform' ? String(a.platform || '').localeCompare(String(b.platform || '')) || String(a.sort_title || a.name || '').localeCompare(String(b.sort_title || b.name || ''))
         : sort === 'genre' ? String(a.genre || '').localeCompare(String(b.genre || '')) || String(a.sort_title || a.name || '').localeCompare(String(b.sort_title || b.name || ''))
-        : String(a.sort_title || a.name || '').localeCompare(String(b.sort_title || b.name || '')));
+        : String(a.sort_title || a.name || '').localeCompare(String(b.sort_title || b.name || ''));
+      return list.sort((a, b) => dir === 'reversed' ? -cmp(a, b) : cmp(a, b));
     }
     const RATIO_BUCKETS = [['portrait','Portrait'],['square','Square'],['landscape','Landscape']];
     const RATIO_REP = {portrait:.72, square:1, landscape:16/9};

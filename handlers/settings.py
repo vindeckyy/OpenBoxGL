@@ -293,6 +293,8 @@ def clean_settings(merged):
             "custom_field_defs": custom_field_defs({"custom_field_defs": merged.get("custom_field_defs", [])}),
             "platform_categories": platform_categories({"platform_categories": merged.get("platform_categories", {})}),
             "list_columns": [str(item) for item in merged.get("list_columns", list(LIST_COLUMNS_DEFAULT))][:12],
+            "list_sort": str(merged.get("list_sort", "title")).strip()[:20],
+            "list_sort_dir": str(merged.get("list_sort_dir", "")).strip()[:10],
             "library_view": str(merged.get("library_view", "grid")),
             "cover_grouping": str(merged.get("cover_grouping", "shape")),
             "locale": str(merged.get("locale", "en"))[:5],

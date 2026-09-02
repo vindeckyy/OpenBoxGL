@@ -3,6 +3,7 @@ import { token, AppState, selectedIds, media, badgeVisibility, renderBadges, api
 import { loadTheme, deletePlaylist } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importDroppedFolder } from './imports.js';
 import { openGameDialog, confirmAction, promptInput } from './dialogs.js';
+import { syncHash } from './router.js';
 import { openMetadata, steamMetadata, loadAchievements } from './metadata.js';
 import { captureScreenshot, downloadBezel } from './media.js';
 import { launch, backupSaves, discoverSaves, loadBackups } from './sessions.js';
@@ -421,6 +422,7 @@ function markFilterAria() {
       render();
       applySidebarVisibility();
       applyLocaleStrings();
+      applyStoredSort();
       dispatchStateRefreshed();
       if (!AppState.appSettings.welcome_completed && !AppState.games.length) $('setupCenter').showModal();
       setTimeout(() => { try { warmSearchIndex(); } catch(error) { AppState.searchIndexError = error.message; } }, 0);
@@ -585,7 +587,7 @@ function markFilterAria() {
       }
       if (available) {
         const index = imageGroup === 'screenshot' ? game.available_screenshots[0] : '';
-        return `<img src="${media(game,imageGroup,index)}" alt="" loading="lazy" decoding="async" data-gid="${game.id}">`;
+        return `<img class="cover-skeleton" src="${media(game,imageGroup,index)}" alt="" loading="lazy" decoding="async" data-gid="${game.id}">`;
       }
       return `<div class="cover-title">${escapeHtml(game.name)}</div>`;
     }
@@ -684,6 +686,52 @@ function markFilterAria() {
     }
     let gridScrollTop = 0, gridRowHeight = 0, gridCols = 1;
     const gridPane = () => document.querySelector('main.library');
+    // ── Navigation support (static/navigation.js, 1.8.0) ────────────────────
+    function visibleGameIds() {
+      return visibleGames().map(game => game.id);
+    }
+    function gridMetrics() {
+      const pane = gridPane();
+      const rows = gridRowHeight ? Math.max(1, Math.floor((pane ? pane.clientHeight : 600) / gridRowHeight)) : 6;
+      return { cols: Math.max(gridCols, 1), page: Math.max(rows * Math.max(gridCols, 1), 1) };
+    }
+    // Focus the game at *index* in the current view, revealing it when the
+    // virtual window has scrolled it out of the DOM, and syncing the details
+    // pane. Returns the game id (or null for an empty view).
+    function focusGameIndex(index) {
+      const ids = visibleGameIds();
+      if (!ids.length) return null;
+      const clamped = Math.max(0, Math.min(ids.length - 1, index));
+      const id = ids[clamped];
+      selectGame(id);
+      const pane = gridPane();
+      const card = document.querySelector(`[data-game="${id}"]`);
+      if (card) {
+        card.focus();
+        return id;
+      }
+      if (!pane) return id;
+      // Not rendered: scroll its row into view and re-render the window.
+      if (groupedGeo) {
+        let count = 0;
+        for (const row of groupedGeo.rows) {
+          if (row.kind === 'header') continue;
+          if (count + row.games.length > clamped) {
+            pane.scrollTop = row.top;
+            break;
+          }
+          count += row.games.length;
+        }
+      } else if (gridRowHeight) {
+        const cols = Math.max(gridCols, 1);
+        const row = Math.floor(clamped / cols);
+        const rows = Math.ceil(ids.length / cols);
+        pane.scrollTop = Math.min(row * gridRowHeight, Math.max(0, rows * gridRowHeight - pane.clientHeight));
+      }
+      renderGrid({ fromScroll: true });
+      document.querySelector(`[data-game="${id}"]`)?.focus();
+      return id;
+    }
     function measureGridLayout() {
       const grid = $('grid');
       if (!grid) return;
@@ -793,10 +841,14 @@ function markFilterAria() {
       }
       const focusedGameId = $('grid')?.contains(document.activeElement) ? document.activeElement?.closest?.('[data-game]')?.dataset.game : null;
       const focusedPickerId = $('grid')?.contains(document.activeElement) ? document.activeElement?.closest?.('[data-game-picker]')?.dataset.gamePicker : null;
-      $('grid').innerHTML = listView ? `<div class="list-head"><span>Title</span><span>Platform</span><span>Genre</span><span>ESRB</span><span>Progress</span><span>Plays</span><span>Rating</span></div>${topSpacer}${rendered}${bottomSpacer}` : `${topSpacer}${rendered}${bottomSpacer}`;
+      const listHeadCell = (key, label) => key
+        ? `<button type="button" class="list-head-cell" data-list-sort="${key}" aria-sort="${(AppState.appSettings.list_sort || 'title') === key ? (AppState.appSettings.list_sort_dir === 'reversed' ? 'descending' : 'ascending') : 'none'}">${label}${(AppState.appSettings.list_sort || 'title') === key ? (AppState.appSettings.list_sort_dir === 'reversed' ? ' ↓' : ' ↑') : ''}</button>`
+        : `<span>${label}</span>`;
+      const listHead = `<div class="list-head">${listHeadCell('title','Title')}${listHeadCell('platform','Platform')}${listHeadCell('genre','Genre')}<span>ESRB</span><span>Progress</span><span>Plays</span>${listHeadCell('rating','Rating')}</div>`;
+      $('grid').innerHTML = listView ? `${listHead}${topSpacer}${rendered}${bottomSpacer}` : `${topSpacer}${rendered}${bottomSpacer}`;
       // After virtual render, observe spacers via IntersectionObserver
       if (isVirtualEnabled()) ensureVirtualObserver();
-      document.querySelectorAll('#grid img[data-gid]').forEach(img => { if (img.complete) recordCoverRatio(img); });
+      document.querySelectorAll('#grid img[data-gid]').forEach(img => { if (img.complete) { img.classList.remove('cover-skeleton'); recordCoverRatio(img); } });
       // Set fetchPriority via DOM property to avoid per-render string churn.
       if (typeof HTMLImageElement !== 'undefined' && 'fetchPriority' in HTMLImageElement.prototype) {
         document.querySelectorAll('#grid img[data-gid]').forEach(img => { img.fetchPriority = Number(img.dataset.gid) === AppState.selectedId ? 'high' : 'low'; });
@@ -823,6 +875,7 @@ function markFilterAria() {
         input.checked ? selectedIds.add(id) : selectedIds.delete(id);
         input.closest('.card')?.classList.toggle('selected', input.checked || AppState.selectedId === id);
       });
+      document.querySelectorAll('[data-list-sort]').forEach(button => button.onclick = () => toggleListSort(button.dataset.listSort));
       document.querySelectorAll('[data-manual-tile]').forEach(tile => {
         const game = AppState.games.find(item => item.id === Number(tile.dataset.manualTile));
         if (!game) return;
@@ -840,6 +893,7 @@ function markFilterAria() {
       const measuredBefore = gridRowHeight;
       measureGridLayout();
       if (!measuredBefore && gridRowHeight && total) renderGrid({fromScroll});
+      syncHash();
     }
     function renderDetails() {
       const game = AppState.games.find(item => item.id === AppState.selectedId);
@@ -899,26 +953,8 @@ function markFilterAria() {
         const [kind,index] = button.dataset.extra.split(':');
         launchExtra(game.id,kind,Number(index));
       });
-      document.querySelectorAll('[data-screenshot]').forEach(button => button.onclick = () => {
-        const image = document.createElement('img');
-        image.id = 'fullScreenshot';
-        image.alt = 'Game screenshot';
-        image.decoding = 'async';
-        image.src = media(game,'screenshot',button.dataset.screenshot);
-        $('mediaDialog').querySelectorAll('img').forEach(el => el.remove());
-        $('mediaDialog').append(image);
-        $('mediaDialog').showModal();
-      });
-      document.querySelectorAll('[data-artwork]').forEach(button => button.onclick = () => {
-        const image = document.createElement('img');
-        image.id = 'fullScreenshot';
-        image.alt = button.getAttribute('aria-label') || 'Game artwork';
-        image.decoding = 'async';
-        image.src = media(game,button.dataset.artwork);
-        $('mediaDialog').querySelectorAll('img').forEach(el => el.remove());
-        $('mediaDialog').append(image);
-        $('mediaDialog').showModal();
-      });
+      document.querySelectorAll('[data-screenshot]').forEach(button => button.onclick = () => openLightbox(game, 'screenshot', Number(button.dataset.screenshot)));
+      document.querySelectorAll('[data-artwork]').forEach(button => button.onclick = () => openLightbox(game, button.dataset.artwork, 0));
       document.querySelectorAll('[data-manual]').forEach(button => button.onclick = () => openManualReader(game));
       document.querySelectorAll('[data-manual-tile]').forEach(button => button.onclick = () => openManualReader(game));
       document.querySelectorAll('[data-document]').forEach(button => button.onclick = () => openReader(game, Number(button.dataset.document)));
@@ -1023,7 +1059,7 @@ function markFilterAria() {
         document.querySelectorAll('[data-related]').forEach(button => button.onclick = () => selectGame(Number(button.dataset.related)));
       } catch(error) { if ($('relatedGames')) $('relatedGames').textContent = error.message; }
     }
-    function render() { renderQueryChips(); renderPlatformCategories(); renderPlatforms(); renderPlaylists(); renderFilterPresets(); renderGrid(); renderDetails(); markFilterAria(); applyDetailsLayout(); applySidebarVisibility(); $('status').textContent = `${AppState.games.length} games · local library`; }
+    function render() { renderQueryChips(); renderPlatformCategories(); renderPlatforms(); renderPlaylists(); renderFilterPresets(); renderGrid(); renderDetails(); markFilterAria(); applyDetailsLayout(); applySidebarVisibility(); syncHash(); $('status').textContent = `${AppState.games.length} games · local library`; }
     function collectionStats(items) {
       const completed = items.filter(game => ['Beaten','Completed','Mastered'].includes(game.progress)).length;
       const playtime = items.reduce((total, game) => total + Number(game.playtime_seconds || 0), 0);
@@ -1108,12 +1144,86 @@ function markFilterAria() {
     async function launchExtra(id,kind,index) { try { await api('/api/extra/launch',{method:'POST',body:JSON.stringify({id,kind,index})}); notify('Opened'); } catch(error) { notify(error.message); } }
     $('sidebarSearch').oninput = () => { leaveActivePreset(); AppState.activePlaylist = ''; scheduleSearch(() => { renderPlaylists(); renderGrid(); }); };
     $('view').onchange = () => { leaveActivePreset(); AppState.activePlaylist = ''; renderPlaylists(); renderGrid(); };
-    $('sort').onchange = renderGrid;
+    $('sort').onchange = () => {
+      AppState.appSettings.list_sort = $('sort').value;
+      AppState.appSettings.list_sort_dir = '';
+      renderGrid();
+      persistListSort();
+    };
+    // List-view header sorting (1.8.0): clicking a sortable column cycles its
+    // direction; the sort select and the persisted setting stay in sync.
+    let listSortApplied = false;
+    function toggleListSort(key) {
+      if ((AppState.appSettings.list_sort || 'title') === key) {
+        AppState.appSettings.list_sort_dir = AppState.appSettings.list_sort_dir === 'reversed' ? '' : 'reversed';
+      } else {
+        AppState.appSettings.list_sort = key;
+        AppState.appSettings.list_sort_dir = '';
+      }
+      $('sort').value = AppState.appSettings.list_sort;
+      renderGrid();
+      persistListSort();
+    }
+    function persistListSort() {
+      api('/api/settings',{method:'POST',body:JSON.stringify({list_sort:AppState.appSettings.list_sort || 'title',list_sort_dir:AppState.appSettings.list_sort_dir || ''})}).catch(() => {});
+    }
+    function applyStoredSort() {
+      if (listSortApplied) return;
+      listSortApplied = true;
+      const sort = $('sort');
+      if (sort && AppState.appSettings.list_sort && sort.querySelector(`option[value="${CSS.escape(AppState.appSettings.list_sort)}"]`)) {
+        sort.value = AppState.appSettings.list_sort;
+      }
+    }
+    // ── Media lightbox (1.8.0): prev/next + counter + zoom for screenshots ──
+    let lightbox = null; // {kind, sources:[url], index}
+    function lightboxSources(game, kind) {
+      if (kind === 'screenshot') return (game.available_screenshots || []).map(index => media(game, 'screenshot', index));
+      return [media(game, kind)];
+    }
+    function openLightbox(game, kind, index) {
+      const sources = lightboxSources(game, kind);
+      if (!sources.length) return;
+      lightbox = { kind, sources, index: Math.max(0, Math.min(index, sources.length - 1)) };
+      renderLightbox();
+      $('mediaDialog').showModal();
+    }
+    function renderLightbox() {
+      const dialog = $('mediaDialog');
+      if (!lightbox || !dialog) return;
+      dialog.classList.toggle('has-single', lightbox.sources.length < 2);
+      dialog.querySelectorAll('img').forEach(el => el.remove());
+      const image = document.createElement('img');
+      image.id = 'fullScreenshot';
+      image.alt = lightbox.kind === 'screenshot' ? 'Game screenshot' : 'Game artwork';
+      image.decoding = 'async';
+      image.src = lightbox.sources[lightbox.index];
+      dialog.querySelector('.media-stage')?.append(image);
+      const counter = dialog.querySelector('#mediaCounter');
+      if (counter) counter.textContent = lightbox.sources.length > 1 ? `${lightbox.index + 1} / ${lightbox.sources.length}` : '';
+    }
+    function lightboxStep(delta) {
+      if (!lightbox || lightbox.sources.length < 2) return;
+      lightbox.index = (lightbox.index + delta + lightbox.sources.length) % lightbox.sources.length;
+      renderLightbox();
+    }
+    $('mediaDialog').addEventListener('keydown', event => {
+      if (event.key === 'ArrowLeft') { event.preventDefault(); lightboxStep(-1); }
+      else if (event.key === 'ArrowRight') { event.preventDefault(); lightboxStep(1); }
+    });
+    $('mediaPrev').onclick = () => lightboxStep(-1);
+    $('mediaNext').onclick = () => lightboxStep(1);
+    $('mediaDialog').addEventListener('click', event => {
+      if (event.target.tagName === 'IMG') event.target.classList.toggle('lightbox-zoom');
+    });
     // load events do not bubble, so ratio tracking uses a capture-phase
     // listener on #grid that survives innerHTML rebuilds without re-attaching.
     $('grid').addEventListener('load', event => {
       const img = event.target;
-      if (img.tagName === 'IMG' && img.dataset.gid) recordCoverRatio(img);
+      if (img.tagName === 'IMG' && img.dataset.gid) {
+        img.classList.remove('cover-skeleton');
+        recordCoverRatio(img);
+      }
     }, true);
     $('grouping').onchange = async () => {
       AppState.appSettings.cover_grouping = $('grouping').value;
@@ -1164,4 +1274,4 @@ function markFilterAria() {
     bindFilterDrawer();
     applyDetailsLayout();
 
-export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated, isVirtualEnabled, getSearchWorker, workerSearch, searchWithFallback, verifyWorkerParity, ensureVirtualObserver };
+export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated, isVirtualEnabled, getSearchWorker, workerSearch, searchWithFallback, verifyWorkerParity, ensureVirtualObserver, visibleGameIds, focusGameIndex, gridMetrics };
