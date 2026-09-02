@@ -40,7 +40,14 @@ OPENBOX_APPDIR="$temporary/OpenBox.AppDir" bash build_appimage.sh "$PWD/$appimag
 VERSION="$(python3 -c 'import re; print(re.search(r"^VERSION\s*=\s*\"([^\"]+)\"", open("updates.py").read(), re.M).group(1))')"
 
 echo "== 4/6 SBOM =="
-python3 scripts/gen_sbom.py --version "$VERSION" --appdir "$temporary/OpenBox.AppDir" --out "OpenBox-$VERSION-$arch-sbom.json"
+# x86_64 keeps the legacy unprefixed SBOM name matching prior releases;
+# aarch64 gets an arch-suffixed name so the two are distinct (ADR 0024).
+if [ "$arch" = "x86_64" ]; then
+  sbom_name="OpenBox-$VERSION-sbom.json"
+else
+  sbom_name="OpenBox-$VERSION-$arch-sbom.json"
+fi
+python3 scripts/gen_sbom.py --version "$VERSION" --appdir "$temporary/OpenBox.AppDir" --out "$sbom_name"
 
 echo "== 5/6 checksum + signature =="
 sha256sum "$appimage" | tee "$appimage.sha256"
@@ -76,7 +83,7 @@ $(sed -n '/^## Unreleased/,/^## \[/p' "$CHANGELOG_FILE" | sed '1d;$d')
 ## Verification
 
 - \`make check\`: lint, compile, $({ ls test_*.py tests/test_*.py 2>/dev/null | wc -l; }) test files, coverage floors green.
-- SBOM: \`OpenBox-$VERSION-$arch-sbom.json\` (CycloneDX 1.4)
+- SBOM: \`$sbom_name\` (CycloneDX 1.4)
 - SHA-256: \`$(cut -d' ' -f1 "$appimage.sha256")\`
 - Ed25519 signature: \`$appimage.sig\` (verified against openbox-release.pub)
 
@@ -85,4 +92,4 @@ NOTES
 
 echo
 echo "Pipeline complete. Review release-notes-$VERSION.md, then run:"
-echo "  gh release create v$VERSION $appimage $appimage.zsync $appimage.sha256 $appimage.sig openbox-release.pub scripts/install.sh OpenBox-$VERSION-$arch-sbom.json --notes-file release-notes-$VERSION.md"
+echo "  gh release create v$VERSION $appimage $appimage.zsync $appimage.sha256 $appimage.sig openbox-release.pub scripts/install.sh $sbom_name --notes-file release-notes-$VERSION.md"
