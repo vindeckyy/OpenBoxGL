@@ -106,7 +106,7 @@ jobs:
       - name: Compile native host
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev xdg-utils
           gcc -O2 native_host.c -o /tmp/native_host_check $(pkg-config --cflags --libs webkit2gtk-4.1)
 
       - name: Full gate (coverage)
