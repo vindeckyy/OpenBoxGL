@@ -387,7 +387,7 @@ OpenBox/
 ├── themes/                 Stock themes (5 CSS files)
 ├── emulator_defs/          YAML definition packs
 ├── scripts/                Build, test, screenshot capture
-├── tests/test_*.py         Test suite (76 files)
+├── tests/test_*.py         Test suite (82 files)
 ```
 
 ### Run tests

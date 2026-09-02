@@ -28,6 +28,7 @@ while IFS= read -r file; do
   install -Dm644 "$source_root/$file" "$appdir/usr/share/openbox/$file"
 done < "$source_root/runtime_modules.txt"
 cp "$source_root/index.html" "$appdir/usr/share/openbox/index.html"
+cp "$source_root/openbox.svg" "$appdir/usr/share/openbox/openbox.svg"
 mkdir -p "$appdir/usr/share/openbox/static"
 cp "$source_root"/static/*.js "$source_root"/static/*.css "$appdir/usr/share/openbox/static/"
 mkdir -p "$appdir/usr/share/openbox/locales"

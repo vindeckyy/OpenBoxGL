@@ -8,6 +8,56 @@ import { confirmAction, promptInput } from './dialogs.js';
 
     let settingsCategory = 'library';
 
+    // Controller bench gamepad polling (1.7.2)
+    let benchRAF = 0;
+    let benchSticks = [];
+    let benchButtons = [];
+
+    function startControllerBench() {
+      const svg = document.querySelector('#controllerBench .gamepad-svg');
+      if (!svg) return;
+      benchSticks = [...svg.querySelectorAll('.gamepad-stick')];
+      benchButtons = [...svg.querySelectorAll('.gamepad-btn')];
+      stopControllerBench();
+      pollControllerBench();
+    }
+
+    function stopControllerBench() {
+      if (benchRAF) { cancelAnimationFrame(benchRAF); benchRAF = 0; }
+      benchSticks.forEach(s => { s.classList.remove('active'); s.setAttribute('transform', ''); });
+      benchButtons.forEach(b => b.classList.remove('active'));
+      const status = $('controllerBenchStatus');
+      if (status) status.textContent = 'Connect a controller to test inputs.';
+    }
+
+    function pollControllerBench() {
+      const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+      const status = $('controllerBenchStatus');
+      if (!pads.length) {
+        benchSticks.forEach(s => { s.classList.remove('active'); s.setAttribute('transform', ''); });
+        benchButtons.forEach(b => b.classList.remove('active'));
+        if (status) status.textContent = 'Connect a controller to test inputs.';
+      } else {
+        const pad = pads[0];
+        if (status) status.textContent = `${pad.id || 'Controller'} · ${pad.buttons.length} buttons · ${pad.axes.length} axes`;
+        // Map buttons 0-3 to the 4 SVG buttons
+        benchButtons.forEach((btn, i) => {
+          const pressed = pad.buttons[i] && pad.buttons[i].pressed;
+          btn.classList.toggle('active', Boolean(pressed));
+        });
+        // Map axes to sticks: axes[0,1] → left stick, axes[2,3] → right stick
+        benchSticks.forEach((stick, i) => {
+          const ax = pad.axes[i * 2] || 0;
+          const ay = pad.axes[i * 2 + 1] || 0;
+          const mag = Math.hypot(ax, ay);
+          stick.classList.toggle('active', mag > 0.15);
+          if (mag > 0.05) stick.setAttribute('transform', `translate(${(ax * 6).toFixed(1)} ${(ay * 6).toFixed(1)})`);
+          else stick.setAttribute('transform', '');
+        });
+      }
+      benchRAF = requestAnimationFrame(pollControllerBench);
+    }
+
     function applySettingsVisibility() {
       const query = $('settingsSearch').value.toLowerCase().trim();
       document.querySelectorAll('.settings-field').forEach(field => {
@@ -25,6 +75,8 @@ import { confirmAction, promptInput } from './dialogs.js';
         button.classList.toggle('active', button.dataset.settingsCategory === category);
       });
       applySettingsVisibility();
+      if (category === 'controller') startControllerBench();
+      else stopControllerBench();
     }
 
     function bindSettingsBrowse() {
@@ -103,6 +155,8 @@ import { confirmAction, promptInput } from './dialogs.js';
         tray_enabled:$('trayEnabled').checked,
         minimize_to_tray:$('minimizeToTray').checked,
         ludusavi_backup_path:$('ludusaviBackupPath')?.value.trim() || '',
+        gamescope_preset:$('gamescopePreset')?.value || '',
+        mangohud_enabled:$('mangohudEnabled')?.checked || false,
       };
     }
     async function saveEmumoviesSettings() {
@@ -170,6 +224,15 @@ import { confirmAction, promptInput } from './dialogs.js';
         $('trayEnabled').checked = Boolean(AppState.appSettings.tray_enabled);
         $('minimizeToTray').checked = Boolean(AppState.appSettings.minimize_to_tray);
         if ($('ludusaviBackupPath')) $('ludusaviBackupPath').value = AppState.appSettings.ludusavi_backup_path || '';
+        // Gamescope presets (1.7.2): populate select from server-provided preset list
+        const gsSelect = $('gamescopePreset');
+        if (gsSelect) {
+          const presets = AppState.appSettings.gamescope_presets || [];
+          gsSelect.innerHTML = '<option value="">None</option>' + presets.map(([name, label]) => `<option value="${escapeHtml(name)}">${escapeHtml(label)}</option>`).join('');
+          gsSelect.value = AppState.appSettings.gamescope_preset || '';
+        }
+        // MangoHud toggle (1.7.2)
+        if ($('mangohudEnabled')) $('mangohudEnabled').checked = Boolean(AppState.appSettings.mangohud_enabled);
         $('mediaPackStatus').textContent = (AppState.appSettings.media_packs || []).filter(item => item.active).map(item => item.name).join(', ');
         $('viewToggleButton').textContent = (AppState.appSettings.library_view || 'grid') === 'list' ? 'Grid view' : 'List view';
         $('settingsSearch').value = '';
@@ -546,12 +609,14 @@ import { confirmAction, promptInput } from './dialogs.js';
         await saveEmumoviesSettings().catch(() => {});
         AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
         $('settingsDialog').close();
+        stopControllerBench();
         notify('Settings saved');
         applyLibraryMusic();
         applySidebarVisibility();
         renderGrid();
       } catch(error) { notify(error.message); }
     };
+    $('settingsDialog').addEventListener('close', stopControllerBench);
     $('scanWatched').onclick = async () => {
       try {
         AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
@@ -728,4 +793,4 @@ import { confirmAction, promptInput } from './dialogs.js';
       } catch (error) { notify(error.message); }
     }
 
-export { filterSettings, completeWelcome, maybeShowWelcome, collectSettings, saveEmumoviesSettings, shuttingDown, gracefulShutdown, openSettings, openProfiles, renderEmulators, watchEmulator, watchInstallAll, perfDraft, loadTheme, openThemes, openAchievements, openPlugins, renderJobsPanel, health, savePreset, saveFilter, saveManualPlaylist, createManualPlaylist, addGamesToPlaylist, updateManualPlaylist, openPlaylists, createFilterPlaylist, openBackups, createNamedBackup, deletePlaylist, backup, bulkAction, featureMode, openFeature };
+export { filterSettings, completeWelcome, maybeShowWelcome, collectSettings, saveEmumoviesSettings, shuttingDown, gracefulShutdown, openSettings, openProfiles, renderEmulators, watchEmulator, watchInstallAll, perfDraft, loadTheme, openThemes, openAchievements, openPlugins, renderJobsPanel, health, savePreset, saveFilter, saveManualPlaylist, createManualPlaylist, addGamesToPlaylist, updateManualPlaylist, openPlaylists, createFilterPlaylist, openBackups, createNamedBackup, deletePlaylist, backup, bulkAction, featureMode, openFeature, startControllerBench, stopControllerBench };
