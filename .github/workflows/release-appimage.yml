@@ -80,10 +80,18 @@ jobs:
       - name: Generate SBOM
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          # x86_64 keeps the legacy unprefixed SBOM name (OpenBox-<ver>-sbom.json)
+          # matching all prior releases; aarch64 gets an arch-suffixed name so the
+          # two SBOMs in a multi-arch release are distinct (ADR 0024).
+          if [ "${{ matrix.arch }}" = "x86_64" ]; then
+            sbom_name="OpenBox-$VERSION-sbom.json"
+          else
+            sbom_name="OpenBox-$VERSION-${{ matrix.arch }}-sbom.json"
+          fi
           python3 scripts/gen_sbom.py \
             --version "$VERSION" \
             --appdir "${RUNNER_TEMP}/OpenBox.AppDir" \
-            --out "OpenBox-$VERSION-${{ matrix.arch }}-sbom.json"
+            --out "$sbom_name"
 
       - name: Verify zsync metadata
         run: test -f "OpenBox-${{ matrix.arch }}.AppImage.zsync"
@@ -98,7 +106,7 @@ jobs:
             OpenBox-${{ matrix.arch }}.AppImage
             OpenBox-${{ matrix.arch }}.AppImage.zsync
             OpenBox-${{ matrix.arch }}.AppImage.sha256
-            OpenBox-*-${{ matrix.arch }}-sbom.json
+            OpenBox-*-sbom.json
 
   attest:
     needs: build
