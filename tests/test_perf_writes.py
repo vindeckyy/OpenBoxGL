@@ -134,7 +134,10 @@ class PerfWriteTests(unittest.TestCase):
                 load_spy.assert_not_called()
                 avg_ms = (elapsed_total / 5.0) * 1000.0
                 # Coverage and shared CI runners add overhead; keep the check about avoiding reloads.
-                limit_ms = 200.0 if os.environ.get("GITHUB_ACTIONS") == "true" else 80.0
+                # `make check` always runs tests under coverage (COVERAGE_RUN=1, set by
+                # scripts/check_tests.py), so give local-coverage runs the same headroom as CI.
+                under_overhead = os.environ.get("GITHUB_ACTIONS") == "true" or os.environ.get("COVERAGE_RUN") == "1"
+                limit_ms = 200.0 if under_overhead else 80.0
                 self.assertLess(avg_ms, limit_ms, f"Average mutation latency {avg_ms:.2f}ms should be < {limit_ms:.0f}ms")
     def test_snapshot_rotation_debounce(self):
         with tempfile.TemporaryDirectory() as directory:
