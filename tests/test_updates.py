@@ -136,6 +136,37 @@ def main():
         except ValueError:
             result = False
         assert result is False
+
+    # Architecture-aware updater: ASSET follows the host arch, and a release
+    # without the matching-arch artifact is refused (ADR 0024).
+    from updates import _arch_asset, _current_arch
+    assert _arch_asset("x86_64") == "OpenBox-x86_64.AppImage"
+    assert _arch_asset("aarch64") == "OpenBox-aarch64.AppImage"
+    assert _current_arch("x86_64") == "x86_64"
+    assert _current_arch("amd64") == "x86_64"
+    assert _current_arch("aarch64") == "aarch64"
+    assert _current_arch("arm64") == "aarch64"
+    # ASSET is bound at import time from the host arch, so an aarch64 host is
+    # simulated by patching ASSET/SIGNATURE_ASSET directly. A release shipping
+    # only the x86_64 AppImage must then be refused (matching asset absent).
+    x86_only_release = {
+        "tag_name": tag,
+        "html_url": f"https://github.com/vindeckyy/OpenBoxGL/releases/tag/{tag}",
+        "assets": [
+            {
+                "name": "OpenBox-x86_64.AppImage",
+                "browser_download_url": f"https://github.com/vindeckyy/OpenBoxGL/releases/download/{tag}/OpenBox-x86_64.AppImage",
+                "digest": f"sha256:{digest}",
+            },
+        ],
+    }
+    with mock.patch("updates.ASSET", "OpenBox-aarch64.AppImage"), \
+         mock.patch("updates.SIGNATURE_ASSET", "OpenBox-aarch64.AppImage.sig"):
+        try:
+            check_update(lambda request, timeout=0: Response(json.dumps(x86_only_release).encode()))
+            raise AssertionError("aarch64 host should refuse an x86_64-only release")
+        except ValueError as error:
+            assert "asset" in str(error).casefold()
     print("update self-test: ok")
 
 

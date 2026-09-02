@@ -39,7 +39,17 @@ jobs:
         run: ./run_all_tests.sh
 
   gate:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # x86_64 on the standard runner; aarch64 on GitHub's arm image
+          # (ubuntu-22.04-arm deprecates 2026-09-17, so use 24.04-arm). ADR 0024.
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
 
     steps:

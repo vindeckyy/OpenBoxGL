@@ -2,7 +2,15 @@
 set -euo pipefail
 
 source_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-output="${1:-$source_root/OpenBox-x86_64.AppImage}"
+# Bundle the host interpreter and libraries, so the artifact arch follows the
+# build host. OPENBOX_ARCH overrides detection (CI cross-builds set it).
+arch="${OPENBOX_ARCH:-$(uname -m)}"
+case "$arch" in
+  x86_64|amd64) arch="x86_64" ;;
+  aarch64|arm64) arch="aarch64" ;;
+  *) echo "build_appimage.sh: unsupported architecture: $arch" >&2; exit 1 ;;
+esac
+output="${1:-$source_root/OpenBox-$arch.AppImage}"
 build_root="$source_root/build"
 mkdir -p "$build_root/tools"
 temporary="$(mktemp -d "$build_root/appimage.XXXXXX")"
@@ -141,11 +149,20 @@ if [ -n "${OPENBOX_APPDIR:-}" ]; then
   cp -a "$appdir"/. "$preserved_appdir"/
 fi
 
-tool="$build_root/tools/appimagetool-x86_64.AppImage"
-tool_url="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
-tool_sha256="a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0"
+tool="$build_root/tools/appimagetool-$arch.AppImage"
+case "$arch" in
+  x86_64)
+    tool_url="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+    tool_sha256="a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0"
+    ;;
+  aarch64)
+    tool_url="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-aarch64.AppImage"
+    # Pinned 2026-09-02 from the continuous release; recompute when bumping.
+    tool_sha256="1b00524ba8c6b678dc15ef88a5c25ec24def36cdfc7e3abb32ddcd068e8007fe"
+    ;;
+esac
 if [ ! -x "$tool" ]; then
-  downloaded_tool="$temporary/appimagetool-x86_64.AppImage"
+  downloaded_tool="$temporary/appimagetool-$arch.AppImage"
   curl --proto '=https' --tlsv1.2 --location --fail --silent --show-error --output "$downloaded_tool" "$tool_url"
   downloaded_hash="$(sha256sum "$downloaded_tool" | awk '{print $1}')"
   [ "$downloaded_hash" = "$tool_sha256" ] || {
@@ -160,7 +177,7 @@ tool_hash="$(sha256sum "$tool" | awk '{print $1}')"
   echo "build_appimage.sh: cached appimagetool checksum mismatch" >&2
   exit 1
 }
-update_information="${OPENBOX_UPDATE_INFORMATION:-gh-releases-zsync|vindeckyy|OpenBoxGL|latest|OpenBox-x86_64.AppImage.zsync}"
+update_information="${OPENBOX_UPDATE_INFORMATION:-gh-releases-zsync|vindeckyy|OpenBoxGL|latest|OpenBox-$arch.AppImage.zsync}"
 arguments=(-n -u "$update_information" "$appdir" "$output")
-ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$tool" "${arguments[@]}"
+ARCH=$arch APPIMAGE_EXTRACT_AND_RUN=1 "$tool" "${arguments[@]}"
 chmod +x "$output"

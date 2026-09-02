@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+import platform
 import re
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -16,8 +17,27 @@ logger = logging.getLogger("openbox")
 
 VERSION = "1.7.2"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
-ASSET = "OpenBox-x86_64.AppImage"
 TRUSTED_RELEASE_PREFIX = "https://github.com/vindeckyy/OpenBoxGL/releases/download/"
+
+
+def _current_arch(machine=None):
+    """Map the host CPU to the OpenBox artifact architecture tag."""
+    machine = machine or platform.machine().lower()
+    if machine in ("x86_64", "amd64", "x64"):
+        return "x86_64"
+    if machine in ("aarch64", "arm64"):
+        return "aarch64"
+    return machine
+
+
+def _arch_asset(arch):
+    """The AppImage asset name for a given artifact architecture."""
+    return f"OpenBox-{arch}.AppImage"
+
+
+# The updater only ever installs an artifact matching the running architecture;
+# a release without that asset is treated as unavailable (see check_update).
+ASSET = _arch_asset(_current_arch())
 
 # Legacy bootstrap key. Releases signed with this value are rejected.
 PLACEHOLDER_PUBLIC_KEY = bytes.fromhex(

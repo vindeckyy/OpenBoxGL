@@ -2,6 +2,7 @@
 
 Date: 2026-08-25
 Status: Accepted
+Amended: 2026-09-02 by ADR 0024 (ARM64 un-deferred for 1.8.0).
 
 ## Context
 
@@ -17,15 +18,15 @@ OpenBox v1.7 is a flagship release for new Linux users. Shipping requires reprod
 
 ### Platform matrix
 
-| Dimension | v1.7 support |
-|---|---|
-| CPU architecture | **x86_64 only** |
-| ARM64 | Deferred |
-| Formal library scale | **20,000** games |
+| Dimension | v1.7 support | 1.8.0 support |
+|---|---|---|
+| CPU architecture | **x86_64 only** | **x86_64 + aarch64** (ADR 0024) |
+| ARM64 | Deferred | Accepted (ADR 0024) |
+| Formal library scale | **20,000** games | **20,000** games |
 
 ### AppImage
 
-- Build and gate on **Ubuntu 22.04** runner targeting **x86_64** AppImage artifacts.
+- Build and gate on **Ubuntu 22.04** runner targeting **x86_64** AppImage artifacts. (1.8.0 adds an **aarch64** artifact built on `ubuntu-24.04-arm`; see ADR 0024.)
 - AppImage is a release-gated deliverable, not an best-effort side build.
 
 ### Flatpak
@@ -47,6 +48,6 @@ OpenBox v1.7 is a flagship release for new Linux users. Shipping requires reprod
 
 ## Consequences
 
-- Users receive tested x86_64 AppImage and Flatpak bundles or the release does not ship.
-- Support expectations are explicit: x86_64, 20k games, Ubuntu 22.04-built AppImage, Flatpak 25.08 runtime.
+- Users receive tested x86_64 and aarch64 AppImages and a Flatpak bundle, or the release does not ship.
+- Support expectations are explicit: x86_64 + aarch64, 20k games, Ubuntu 22.04-built x86_64 AppImage (aarch64 on ubuntu-24.04-arm), Flatpak 25.08 runtime.
 - Flathub submission remains a future, separate decision.

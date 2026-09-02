@@ -13,6 +13,28 @@
   <launchable type="desktop-id">io.openbox.GameLauncher.desktop</launchable>
   <url type="homepage">https://openboxgl.github.io/</url>
   <url type="bugtracker">https://github.com/vindeckyy/OpenBoxGL/issues</url>
+  <developer id="io.openboxgl">
+    <name>OpenBoxGL</name>
+  </developer>
+  <content_rating type="oars-1.1">
+    <!-- The launcher itself ships no mature content; it does contact online
+         metadata/achievement services on the user's behalf. -->
+    <content_attribute id="social-info">mild</content_attribute>
+  </content_rating>
+  <screenshots>
+    <screenshot type="default">
+      <image type="source">https://openboxgl.github.io/assets/openbox-screenshot.png</image>
+      <caption>The library grid with cover art, filters, and the top bar.</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://openboxgl.github.io/assets/openbox-game-detail.png</image>
+      <caption>Game detail pane with metadata, artwork, and launch actions.</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://openboxgl.github.io/assets/openbox-bigbox.png</image>
+      <caption>Big Box fullscreen mode for controller-driven couch use.</caption>
+    </screenshot>
+  </screenshots>
   <releases>
     <release version="1.7.2" date="2026-09-01">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.7.2</url>

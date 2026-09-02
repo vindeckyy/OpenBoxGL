@@ -13,7 +13,7 @@ MANIFEST = ROOT / "io.openbox.GameLauncher.yml"
 REQUIRED_SNIPPETS = (
     "app-id: io.openbox.GameLauncher",
     "runtime: org.gnome.Platform",
-    "runtime-version: '46'",
+    "runtime-version: '49'",
     "sdk: org.gnome.Sdk",
     "command: openbox",
 )

@@ -14,7 +14,19 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # x86_64 stays on Ubuntu 22.04 to match the v1.7-built artifact line.
+          # aarch64 uses ubuntu-24.04-arm: ubuntu-22.04-arm deprecates 2026-09-17
+          # (ADR 0024). Each AppImage bundles its host interpreter, so the
+          # artifact arch follows the runner arch.
+          - arch: x86_64
+            runner: ubuntu-22.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     permissions:
       contents: read
@@ -59,10 +71,11 @@ jobs:
       - name: Build AppImage
         env:
           OPENBOX_APPDIR: ${{ runner.temp }}/OpenBox.AppDir
-        run: ./build_appimage.sh "$PWD/OpenBox-x86_64.AppImage"
+          OPENBOX_ARCH: ${{ matrix.arch }}
+        run: ./build_appimage.sh "$PWD/OpenBox-${{ matrix.arch }}.AppImage"
 
       - name: Write SHA-256 checksum
-        run: sha256sum OpenBox-x86_64.AppImage | tee OpenBox-x86_64.AppImage.sha256
+        run: sha256sum "OpenBox-${{ matrix.arch }}.AppImage" | tee "OpenBox-${{ matrix.arch }}.AppImage.sha256"
 
       - name: Generate SBOM
         run: |
@@ -70,25 +83,31 @@ jobs:
           python3 scripts/gen_sbom.py \
             --version "$VERSION" \
             --appdir "${RUNNER_TEMP}/OpenBox.AppDir" \
-            --out "OpenBox-$VERSION-sbom.json"
+            --out "OpenBox-$VERSION-${{ matrix.arch }}-sbom.json"
 
       - name: Verify zsync metadata
-        run: test -f OpenBox-x86_64.AppImage.zsync
+        run: test -f "OpenBox-${{ matrix.arch }}.AppImage.zsync"
 
       - name: Upload unsigned build outputs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # actions/upload-artifact@v7.0.1
         with:
-          name: openbox-release-assets
+          name: openbox-release-assets-${{ matrix.arch }}
           if-no-files-found: error
           retention-days: 7
           path: |
-            OpenBox-x86_64.AppImage
-            OpenBox-x86_64.AppImage.zsync
-            OpenBox-x86_64.AppImage.sha256
-            OpenBox-*-sbom.json
+            OpenBox-${{ matrix.arch }}.AppImage
+            OpenBox-${{ matrix.arch }}.AppImage.zsync
+            OpenBox-${{ matrix.arch }}.AppImage.sha256
+            OpenBox-*-${{ matrix.arch }}-sbom.json
 
   attest:
     needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+          - arch: aarch64
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     permissions:
@@ -101,13 +120,13 @@ jobs:
       - name: Download build output
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # actions/download-artifact@v8.0.1
         with:
-          name: openbox-release-assets
+          name: openbox-release-assets-${{ matrix.arch }}
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # actions/attest-build-provenance@v4.2.2
         with:
-          subject-name: OpenBox-x86_64.AppImage
-          subject-path: OpenBox-x86_64.AppImage
+          subject-name: OpenBox-${{ matrix.arch }}.AppImage
+          subject-path: OpenBox-${{ matrix.arch }}.AppImage
 
   publish:
     needs: [build, attest]
@@ -129,7 +148,8 @@ jobs:
       - name: Download build outputs
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # actions/download-artifact@v8.0.1
         with:
-          name: openbox-release-assets
+          pattern: openbox-release-assets-*
+          merge-multiple: true
 
       - name: Validate annotated tag points at the build commit
         run: |
@@ -144,7 +164,7 @@ jobs:
       - name: Install signing dependency
         run: python3 -m pip install --disable-pip-version-check cryptography==50.0.0
 
-      - name: Sign and verify release
+      - name: Sign and verify release artifacts
         env:
           OPENBOX_SIGNING_KEY: ${{ secrets.OPENBOX_SIGNING_KEY }}
         run: |
@@ -159,20 +179,27 @@ jobs:
           trap 'rm -f -- "$key_file" "$public_key_file"' EXIT
           printf '%s' "$OPENBOX_SIGNING_KEY" > "$key_file"
           unset OPENBOX_SIGNING_KEY
-          python3 scripts/sign_release.py \
-            --key "$key_file" \
-            --public-key-out "$public_key_file" \
-            --out OpenBox-x86_64.AppImage.sig \
-            OpenBox-x86_64.AppImage
-          cmp -s "$public_key_file" openbox-release.pub || {
-            echo "OPENBOX_SIGNING_KEY does not match the committed release public key" >&2
-            exit 1
-          }
-          sha256sum --check --strict OpenBox-x86_64.AppImage.sha256
-          python3 scripts/verify_release.py \
-            --key openbox-release.pub \
-            OpenBox-x86_64.AppImage \
-            OpenBox-x86_64.AppImage.sig
+          for arch in x86_64 aarch64; do
+            appimage="OpenBox-$arch.AppImage"
+            [ -f "$appimage" ] || {
+              echo "missing build artifact: $appimage" >&2
+              exit 1
+            }
+            python3 scripts/sign_release.py \
+              --key "$key_file" \
+              --public-key-out "$public_key_file" \
+              --out "$appimage.sig" \
+              "$appimage"
+            cmp -s "$public_key_file" openbox-release.pub || {
+              echo "OPENBOX_SIGNING_KEY does not match the committed release public key" >&2
+              exit 1
+            }
+            sha256sum --check --strict "$appimage.sha256"
+            python3 scripts/verify_release.py \
+              --key openbox-release.pub \
+              "$appimage" \
+              "$appimage.sig"
+          done
           cp scripts/install.sh install.sh
 
       - name: Create release and upload signed assets
@@ -191,6 +218,10 @@ jobs:
             OpenBox-x86_64.AppImage.zsync
             OpenBox-x86_64.AppImage.sha256
             OpenBox-x86_64.AppImage.sig
+            OpenBox-aarch64.AppImage
+            OpenBox-aarch64.AppImage.zsync
+            OpenBox-aarch64.AppImage.sha256
+            OpenBox-aarch64.AppImage.sig
             openbox-release.pub
             install.sh
             OpenBox-*-sbom.json
