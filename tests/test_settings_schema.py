@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from handlers.settings import _clean_controller_map, _clean_controller_prompt_hint, _clean_screensaver_seconds, _clean_watch_folders  # noqa: E402
+from handlers.settings import _clean_controller_map, _clean_controller_prompt_hint, _clean_screensaver_seconds, _clean_watch_folders, clean_settings  # noqa: E402
 from settings_schema import KNOWN_SETTINGS, sanitize_settings  # noqa: E402
 
 
@@ -45,6 +45,14 @@ class SettingsSchemaTests(unittest.TestCase):
         self.assertEqual(clean, {})
         self.assertEqual(dropped, [])
 
+    def test_registry_covers_every_key_clean_settings_emits(self):
+        # Structural regression: any key clean_settings can normalize but the
+        # whitelist drops would silently never persist (the 1.7.2
+        # gamescope_preset/mangohud_enabled bug). Defaults must be side-effect
+        # free, so clean_settings({}) is a safe probe of the full key set.
+        self.assertEqual(set(clean_settings({})), set(clean_settings({})) & KNOWN_SETTINGS)
+        self.assertLessEqual(set(clean_settings({})), KNOWN_SETTINGS)
+
     def test_registry_contains_every_key_the_save_path_writes(self):
         # The save handler normalizes and writes these keys; the whitelist
         # must cover them or a fresh settings save would drop them.
@@ -63,7 +71,8 @@ class SettingsSchemaTests(unittest.TestCase):
             "gameyfin_username", "gameyfin_password", "gameyfin_install_dir",
             "gameyfin_provider", "ludusavi_backup_path", "tracking_mode", "tracking_delay",
             "tracking_frequency", "apply_perf", "progress_on_first_play",
-            "auto_close_store_clients",
+            "auto_close_store_clients", "gamescope_preset", "mangohud_enabled",
+            "show_insights",
         ):
             self.assertIn(key, KNOWN_SETTINGS, f"save-path key missing from whitelist: {key}")
 

@@ -78,6 +78,14 @@
       --text-health-ok: #6abf6a;
       --text-health-warn: #c4a84a;
       --text-health-fail: #c46a6a;
+      --toast-success-border: #4a8a4a;
+      --toast-success-fg: #6abf6a;
+      --toast-info-border: #4a6a8a;
+      --toast-info-fg: #7aa8c4;
+      --toast-warning-border: #8a7a4a;
+      --toast-warning-fg: #c4a84a;
+      --toast-error-border: #8a4a4a;
+      --toast-error-fg: #c46a6a;
       --font-micro:10px; --font-label:12px; --font-meta:12px; --font-body-small:13px;
       --font-body:14px; --font-action:15px; --font-dialog:16px; --font-title-large:18px;
       --font-heading:24px; --font-brand:0.9375rem; --font-nav:0.8125rem;      --font-subtitle:19px; --font-bigbox:21px; --font-panel-title:28px;
@@ -496,6 +504,15 @@
     .error-banner span { flex:1; }
     .toast { position:fixed; z-index:20; right:18px; bottom:18px; max-width:360px; padding:11px 14px; border:1px solid var(--border-card); border-radius:6px; background:var(--surface-card); color:var(--text); box-shadow:0 12px 30px var(--shadow-elevated); opacity:0; transform:translateY(8px); pointer-events:none; transition:opacity .2s ease, transform .2s ease; }
     .toast.show { opacity:1; transform:none; }
+    .toast[data-notify-level] { border-left-width:3px; }
+    .toast[data-notify-level="success"] { border-color:var(--toast-success-border); color:var(--toast-success-fg); }
+    .toast[data-notify-level="info"] { border-color:var(--toast-info-border); color:var(--toast-info-fg); }
+    .toast[data-notify-level="warning"] { border-color:var(--toast-warning-border); color:var(--toast-warning-fg); }
+    .toast[data-notify-level="error"] { border-color:var(--toast-error-border); color:var(--toast-error-fg); }
+    .muted { color:var(--muted); }
+    .emulator-health { display:grid; gap:0.35rem; }
+    .setup-install-chip { padding:4px 10px; border:1px solid var(--focus); border-radius:999px; background:var(--surface-hover); color:var(--focus); font-size:var(--font-label); cursor:pointer; }
+    .setup-install-chip:hover { background:var(--nav-hover); }
     .context-menu { position:fixed; z-index:60; width:min(280px,calc(100vw - 20px)); padding:6px; border:1px solid var(--border-card); border-radius:7px; background:var(--panel); box-shadow:0 18px 50px var(--shadow-dialog); }
     .context-menu[hidden] { display:none; }
     .context-menu button,.context-menu select { width:100%; margin:2px 0; }

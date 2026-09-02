@@ -85,9 +85,11 @@ function applyTranslations() {
   html.setAttribute('lang', _locale);
 }
 
+const LOCALE_STORAGE_KEY = 'openbox-locale';
+
 async function setLocale(locale) {
   await loadLocale(locale);
-  try { AppState.set('locale', locale); } catch { /* settings may not be ready */ }
+  try { localStorage.setItem(LOCALE_STORAGE_KEY, locale); } catch { /* storage unavailable */ }
 }
 
 function getLocale() { return _locale; }
@@ -96,9 +98,19 @@ function getSupportedLocales() {
   return SUPPORTED_LOCALES.slice();
 }
 
+function storedLocale() {
+  try {
+    const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+    if (stored && SUPPORTED_LOCALES.includes(stored)) return stored;
+  } catch { /* storage unavailable */ }
+  return '';
+}
+
 async function init() {
-  let locale = 'en';
-  try { locale = AppState.get('locale') || 'en'; } catch { /* ignore */ }
+  // Priority: explicit choice (localStorage) > server setting > browser language > en.
+  const fallback = (AppState.appSettings && AppState.appSettings.locale) ||
+    (typeof navigator !== 'undefined' && (navigator.language || '').slice(0, 2)) || '';
+  const locale = storedLocale() || (SUPPORTED_LOCALES.includes(fallback) ? fallback : 'en');
   await loadLocale(locale);
 }
 

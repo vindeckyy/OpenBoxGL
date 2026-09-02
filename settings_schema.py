@@ -80,6 +80,8 @@ KNOWN_SETTINGS = {
     "controller_map",
     "controller_prompt_hint",
     "controller_prompt_pack",
+    "gamescope_preset",
+    "mangohud_enabled",
     # window and tray
     "tray_enabled",
     "minimize_to_tray",
@@ -89,6 +91,7 @@ KNOWN_SETTINGS = {
     "show_playlist_actions",
     "dynamic_play_button",
     "gamescope_guest",
+    "show_insights",
 }
 
 

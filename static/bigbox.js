@@ -4,6 +4,7 @@ import { refresh } from './library.js';
 import { launch, openSessions } from './sessions.js';
 import { openReader } from './reader.js';
 import { loadAchievements } from './metadata.js';
+import { openAchievements } from './settings.js';
 import { installGameyfin, uninstallGameyfin } from './storefront.js';
 
 

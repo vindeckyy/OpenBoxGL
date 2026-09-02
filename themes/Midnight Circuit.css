@@ -179,6 +179,14 @@
   --text-health-ok: #6abf6a;
   --text-health-warn: #c4a84a;
   --text-health-fail: #c46a6a;
+  --toast-success-border: #4a8a4a;
+  --toast-success-fg: #6abf6a;
+  --toast-info-border: #4a6a8a;
+  --toast-info-fg: #7aa8c4;
+  --toast-warning-border: #8a7a4a;
+  --toast-warning-fg: #c4a84a;
+  --toast-error-border: #8a4a4a;
+  --toast-error-fg: #c46a6a;
   --text: #eef3ff;
   --text-soft: #8490ab;
   --top-status: #8490ab;
