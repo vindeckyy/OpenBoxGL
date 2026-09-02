@@ -18,7 +18,7 @@ from pkg.state.registry import EVENT_SEQUENCE, PROCESS_LOCK, PROCESSES, RUNNING,
 from backend_io import contained_path
 from catalog import apply_progress_automation
 from openbox import DATA, build_launch, load_state, update_state
-from parity_gamescope import is_gamescope_guest, is_steam_launch, mark_process_windows, steam_game_id_for, apply_mangohud_env
+from parity_gamescope import is_gamescope_guest, is_steam_launch, mark_process_windows, steam_game_id_for, apply_mangohud_env, merge_gamescope_preset, should_nest_gamescope
 from parity_integrations import auto_attach_obs_recording
 from parity_perf import apply_perf_profile, effective_profile_name, restore_perf_profile
 from parity_saves import enforce_backup_limit
@@ -33,6 +33,26 @@ def _apply_mangohud_from_state(state):
     """Return an env dict with MangoHud enabled if the setting is on (1.7.2)."""
     settings = state.get("settings", {}) if isinstance(state, dict) else {}
     return apply_mangohud_env(enabled=bool(settings.get("mangohud_enabled", False)))
+
+
+def _apply_gamescope_preset_from_state(state, args):
+    """Wrap *args* with gamescope when a preset is set and nesting is safe (1.7.2).
+
+    Returns the (possibly wrapped) args list.  When already inside a gamescope
+    guest session the preset is skipped to avoid nested gamescope.
+    """
+    if not args:
+        return args
+    settings = state.get("settings", {}) if isinstance(state, dict) else {}
+    preset = str(settings.get("gamescope_preset", "")).strip()
+    if not preset:
+        return args
+    if not should_nest_gamescope(force="--game-mode" in sys.argv):
+        return args
+    gs_args = merge_gamescope_preset(preset)
+    if not gs_args:
+        return args
+    return ["gamescope"] + gs_args + ["--"] + list(args)
 
 
 def _ns(name, default):
@@ -544,6 +564,8 @@ def start_game(index=None, stable_game_id=""):
     try:
         # Phase 5: Start the process (plugins + validation must succeed first).
         args, cwd = app_plug(game, args, cwd)
+        # Apply gamescope preset if set and not already a gamescope guest (1.7.2).
+        args = _apply_gamescope_preset_from_state(state, args)
         val_cmd(args, cwd)
         # Apply MangoHud env if enabled in settings (1.7.2).
         launch_env = _apply_mangohud_from_state(state)

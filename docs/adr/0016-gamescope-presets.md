@@ -15,7 +15,7 @@ Add a **gamescope preset system** in `pkg/parity/parity_gamescope.py` that:
 
 1. Defines 8 named presets as structured data (width, height, scaling mode, fullscreen mode).
 2. Exposes `list_gamescope_presets()` returning JSON-serializable preset descriptors.
-3. Exposes `apply_gamescope_preset(name)` returning the gamescope command-line arguments for the selected preset.
+3. Exposes `merge_gamescope_preset(name, extra_args=None)` returning the gamescope command-line arguments for the selected preset, merged with any extra args.
 4. Integrates with the Settings → Controller tab for preset selection.
 5. Preserves existing `--game-mode` guest detection and nested-gamescope prevention.
 
