@@ -24,6 +24,6 @@ Presets are stored as Python data, not user state, keeping the feature dependenc
 ## Consequences
 
 - Users can switch display profiles from the UI without editing launch commands.
-- The preset list is fixed at 8; custom presets are a future consideration.
+- ~~The preset list is fixed at 8; custom presets are a future consideration.~~ **Resolved in 1.8.0:** custom presets ship as `settings.gamescope_custom_presets` (≤16, validated in `clean_settings`), resolved by `get/merge/list_gamescope_presets(..., custom_presets=)` with custom names shadowing stock ones, applied at launch (per-game `gamescope_preset` game field wins over the global setting), and editable in Settings → Controller.
 - Existing gamescope guest behavior is unchanged.
 - `list_gamescope_presets()` returns lists (not tuples) to ensure JSON serialization parity between Python and HTTP responses.

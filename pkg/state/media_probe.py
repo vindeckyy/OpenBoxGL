@@ -39,6 +39,7 @@ FIELDS = {
     "broken", "portable", "controller_support", "disc_count",
     "gameyfin_id", "gameyfin_provider", "store_catalog", "store_installed", "owned",
     "tracking_mode", "tracking_delay", "tracking_frequency", "tracking_process_name", "igdb_id",
+    "gamescope_preset",
 }
 
 # Media fields that can be populated from the LaunchBox Games Database. Kept as

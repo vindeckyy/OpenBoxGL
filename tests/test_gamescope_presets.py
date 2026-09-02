@@ -108,6 +108,59 @@ def test_apply_mangohud_disabled():
     assert env["PATH"] == "/usr/bin"
 
 
+def test_custom_preset_resolution():
+    """get_gamescope_preset() should resolve custom presets and build args."""
+    custom = [{"name": "My Deck", "width": 1920, "height": 1080, "fsr": True, "fsr_sharpness": 3}]
+    preset = get_gamescope_preset("my deck", custom_presets=custom)
+    assert preset is not None and preset.get("custom") is True, "custom preset not resolved"
+    assert preset["args"][:6] == ["-W", "1920", "-H", "1080", "-F", "fsr"], preset["args"]
+    assert "--fsr-sharpness" in preset["args"] and "3" in preset["args"]
+    assert get_gamescope_preset("deck", custom_presets=custom)["custom"] is False
+
+
+def test_custom_preset_shadows_stock_name():
+    """A custom preset named like a stock one must win."""
+    custom = [{"name": "deck", "width": 640, "height": 480, "borderless": True}]
+    preset = get_gamescope_preset("deck", custom_presets=custom)
+    assert preset is not None and preset.get("custom") is True
+    assert preset["args"] == ["-W", "640", "-H", "480", "-b"], preset["args"]
+
+
+def test_custom_preset_full_args():
+    """All custom preset knobs map to gamescope flags."""
+    custom = [{
+        "name": "full", "width": 2560, "height": 1440, "inner_width": 1920, "inner_height": 1080,
+        "refresh": 120, "integer": True, "borderless": True, "extra_args": ["--adaptive-sync"],
+    }]
+    args = get_gamescope_preset("full", custom_presets=custom)["args"]
+    assert args[:8] == ["-W", "2560", "-H", "1440", "-w", "1920", "-h", "1080"], args
+    assert args[8:10] == ["-r", "120"]
+    assert ["-F", "integer", "-b", "--adaptive-sync"] == args[10:], args
+
+
+def test_custom_preset_garbage_values_degrade_safely():
+    """Non-numeric knobs are ignored instead of raising."""
+    custom = [{"name": "broken", "width": "abc", "height": None, "fsr": True}]
+    preset = get_gamescope_preset("broken", custom_presets=custom)
+    assert preset is not None and preset["args"] == ["-F", "fsr", "--fsr-sharpness", "2"], preset["args"]
+
+
+def test_list_presets_includes_custom():
+    """list_gamescope_presets() should append custom presets with a custom label."""
+    custom = [{"name": "Deck 90Hz", "refresh": 90}]
+    items = list_gamescope_presets(custom)
+    assert ["deck", "Steam Deck"] in items
+    assert ["Deck 90Hz", "Deck 90Hz (custom)"] in items
+
+
+def test_merge_preset_custom():
+    """merge_gamescope_preset() merges custom preset args with extras."""
+    custom = [{"name": "c", "width": 1280, "height": 720}]
+    args = merge_gamescope_preset("c", extra_args=["-e"], custom_presets=custom)
+    assert args == ["-W", "1280", "-H", "720", "-e"], args
+    assert merge_gamescope_preset("missing-custom", custom_presets=custom) == []
+
+
 def test_apply_mangohud_default_env():
     """apply_mangohud_env() should use os.environ when env is None."""
     env = apply_mangohud_env(None, enabled=True)
@@ -168,6 +221,12 @@ def run_all_tests():
         test_is_mangohud_available_with_fake_which,
         test_deck_preset_has_fsr,
         test_all_presets_have_unique_labels,
+        test_custom_preset_resolution,
+        test_custom_preset_shadows_stock_name,
+        test_custom_preset_full_args,
+        test_custom_preset_garbage_values_degrade_safely,
+        test_list_presets_includes_custom,
+        test_merge_preset_custom,
     ]
     failures = 0
     for test in tests:
