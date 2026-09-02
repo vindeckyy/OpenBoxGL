@@ -60,7 +60,8 @@ jobs:
             libjavascriptcoregtk-4.1-dev \
             curl \
             file \
-            binutils
+            binutils \
+            xdg-utils
 
       - name: Compile native host
         run: gcc -O2 native_host.c -o /tmp/native_host_check $(pkg-config --cflags --libs webkit2gtk-4.1)
