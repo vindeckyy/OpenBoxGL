@@ -150,6 +150,7 @@
         <label class="field"><span>Disc count</span><input name="disc_count" type="number" min="0" max="99"></label>
         <label class="field wide"><span>Launch command, optional override</span><input name="launch"></label>
         <label class="field wide"><span>Launch profile override</span><select name="launch_profile"><option value="">Default platform profile</option></select></label>
+        <label class="field wide"><span>Gamescope preset override</span><select name="gamescope_preset"><option value="">Global setting</option></select></label>
         <label class="check"><input type="checkbox" name="extract_archive">Extract archive before launch</label>
         <label class="check"><input type="checkbox" name="hide_in_bigbox"> Hide in Big Box</label>
         <label class="check"><input type="checkbox" name="hidden">Hide from normal views</label>
@@ -479,6 +480,11 @@
         <label class="field"><span>Filter and sort menu</span><input data-controller="menu" class="settings-field" data-setting="controller gamepad menu filter sort" type="number" min="0" max="31"></label>
         <div class="wide section-title settings-panel" data-settings-panel="controller" data-setting="gamescope preset steam deck">Gamescope Presets</div>
         <label class="field wide settings-field settings-panel" data-settings-panel="controller" data-setting="gamescope preset steam deck"><span>Gamescope preset</span><select id="gamescopePreset"><option value="">None</option></select></label>
+        <div class="wide settings-field settings-panel" data-settings-panel="controller" data-setting="gamescope custom presets editor">
+          <span>Custom gamescope presets</span>
+          <div id="gamescopeCustomPresets" class="gamescope-preset-list"></div>
+          <button type="button" class="icon-button" id="addGamescopePreset">Add custom preset</button>
+        </div>
         <label class="check settings-field settings-panel" data-settings-panel="controller" data-setting="mangohud overlay performance fps"><input type="checkbox" id="mangohudEnabled"> Enable MangoHud performance overlay</label>
         <div class="wide settings-field settings-panel" data-settings-panel="controller" data-setting="controller gamepad test"><div class="controller-bench" id="controllerBench"><svg class="gamepad-svg" viewBox="0 0 200 120" aria-label="Gamepad test"><rect x="10" y="30" width="180" height="60" rx="30" class="gamepad-body"/><circle cx="50" cy="60" r="12" class="gamepad-stick"/><circle cx="150" cy="60" r="12" class="gamepad-stick"/><circle cx="80" cy="50" r="5" class="gamepad-btn"/><circle cx="120" cy="50" r="5" class="gamepad-btn"/><circle cx="100" cy="65" r="5" class="gamepad-btn"/><circle cx="100" cy="40" r="5" class="gamepad-btn"/></svg><p class="description" id="controllerBenchStatus">Connect a controller to test inputs.</p></div></div>
         <button type="button" class="icon-button settings-field" data-setting="watched folders import scan" id="scanWatched">Scan watched folders now</button>

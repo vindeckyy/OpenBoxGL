@@ -103,12 +103,18 @@ def measure_changed_lines(base: str | None = None, include: set[str] | None = No
         return 0, 0, changed_files
 
     cov = _load_coverage()
+    measured = {str(path) for path in cov.get_data().measured_files()}
     total_changed = 0
     total_hit = 0
     for rel_path in changed_files:
         abs_path = str((ROOT / rel_path).resolve())
         changed_lines = _changed_line_numbers(resolved_base, rel_path)
         if not changed_lines:
+            continue
+        if abs_path not in measured:
+            # Files omitted from measurement (tests/* and scripts/* per the
+            # omit config) have no coverage data. Counting their lines as
+            # misses would make this floor unpassable for any test edit.
             continue
         try:
             _filename, statements, _excluded, missing, _missing_formatted = cov.analysis2(abs_path)

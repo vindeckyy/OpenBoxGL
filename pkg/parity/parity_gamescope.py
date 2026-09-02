@@ -484,24 +484,83 @@ GAMESCOPE_PRESETS = {
 }
 
 
-def get_gamescope_preset(name):
-    """Return the preset dict for *name*, or None if not found."""
+def _custom_preset_args(preset):
+    """Build gamescope args from a user-defined preset dict (1.8.0).
+
+    Mirrors the stock preset vocabulary: outer/inner resolution, refresh,
+    one scaling mode (integer > stretch > fsr), borderless, plus raw extra args.
+    """
+    args = []
+    try:
+        width = int(preset.get("width") or 0)
+        height = int(preset.get("height") or 0)
+    except (TypeError, ValueError):
+        width = height = 0
+    if width > 0 and height > 0:
+        args += ["-W", str(width), "-H", str(height)]
+        try:
+            inner_w = int(preset.get("inner_width") or 0)
+            inner_h = int(preset.get("inner_height") or 0)
+        except (TypeError, ValueError):
+            inner_w = inner_h = 0
+        if inner_w > 0 and inner_h > 0:
+            args += ["-w", str(inner_w), "-h", str(inner_h)]
+    try:
+        refresh = int(preset.get("refresh") or 0)
+    except (TypeError, ValueError):
+        refresh = 0
+    if refresh > 0:
+        args += ["-r", str(refresh)]
+    if preset.get("integer"):
+        args += ["-F", "integer"]
+    elif preset.get("stretch"):
+        args += ["-F", "stretch"]
+    elif preset.get("fsr"):
+        args += ["-F", "fsr"]
+        try:
+            sharpness = int(preset.get("fsr_sharpness") or 2)
+        except (TypeError, ValueError):
+            sharpness = 2
+        args += ["--fsr-sharpness", str(max(0, min(5, sharpness)))]
+    if preset.get("borderless"):
+        args += ["-b"]
+    extra = preset.get("extra_args")
+    if extra:
+        args.extend(str(a) for a in extra if a)
+    return args
+
+
+def get_gamescope_preset(name, custom_presets=None):
+    """Return the preset dict for *name*, or None if not found.
+
+    Custom presets (settings.gamescope_custom_presets) win over the stock
+    eight when names collide; stock lookups stay case-insensitive.
+    """
     if not name:
         return None
-    return GAMESCOPE_PRESETS.get(str(name).strip().lower())
+    key = str(name).strip().casefold()
+    for preset in custom_presets or []:
+        if isinstance(preset, dict) and str(preset.get("name", "")).strip().casefold() == key:
+            return {"label": str(preset.get("name") or key), "args": _custom_preset_args(preset), "custom": True}
+    preset = GAMESCOPE_PRESETS.get(str(name).strip().lower())
+    return dict(preset, custom=False) if preset else None
 
 
-def list_gamescope_presets():
+def list_gamescope_presets(custom_presets=None):
     """Return a list of [name, label] pairs for all presets (JSON-serializable)."""
-    return [[name, preset["label"]] for name, preset in GAMESCOPE_PRESETS.items()]
+    items = [[name, preset["label"]] for name, preset in GAMESCOPE_PRESETS.items()]
+    for preset in custom_presets or []:
+        if isinstance(preset, dict) and str(preset.get("name", "")).strip():
+            items.append([str(preset["name"]).strip(), f"{preset['name'].strip()} (custom)"])
+    return items
 
 
-def merge_gamescope_preset(name, extra_args=None):
+def merge_gamescope_preset(name, extra_args=None, custom_presets=None):
     """Return gamescope args for a preset, merged with any extra args.
 
     Returns an empty list if the preset is not found.
     """
-    preset = get_gamescope_preset(name)
+    preset = get_gamescope_preset(name, custom_presets=custom_presets)
     if not preset:
         return []
     args = list(preset.get("args", []))

@@ -519,7 +519,7 @@ def _public_settings_uncached(state):
         "version": VERSION,
         "appimage": bool(os.environ.get("APPIMAGE")),
         "gamescope_guest": is_gamescope_guest(force="--game-mode" in sys.argv),
-        "gamescope_presets": list_gamescope_presets(),
+        "gamescope_presets": list_gamescope_presets(settings.get("gamescope_custom_presets")),
         "mangohud_available": is_mangohud_available(),
         "gamescope_preset": settings.get("gamescope_preset", ""),
         "mangohud_enabled": settings.get("mangohud_enabled", False),

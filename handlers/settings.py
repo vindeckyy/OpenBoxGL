@@ -237,6 +237,63 @@ def _clean_password(merged):
     return str(merged.get("gameyfin_password", "")).strip()
 
 
+def _preset_opt_int(preset, name, field, maximum):
+    """Parse an optional non-negative int for a custom gamescope preset."""
+    try:
+        value = int(preset.get(field) or 0)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"Invalid {field} for gamescope preset {name}.") from error
+    if value < 0 or value > maximum:
+        raise ValueError(f"{field} for gamescope preset {name} must be between 0 and {maximum}.")
+    return value
+
+
+def _clean_gamescope_presets(merged):
+    """Validate settings.gamescope_custom_presets (1.8.0, ADR 0016 follow-up)."""
+    presets = merged.get("gamescope_custom_presets", [])
+    if not isinstance(presets, list):
+        raise ValueError("Custom gamescope presets must be a list.")
+    if len(presets) > 16:
+        raise ValueError("At most 16 custom gamescope presets are allowed.")
+    clean = []
+    seen = set()
+    for preset in presets:
+        if not isinstance(preset, dict):
+            raise ValueError("Custom gamescope presets must be objects.")
+        name = str(preset.get("name", "")).strip()
+        if not name:
+            raise ValueError("Custom gamescope presets need a name.")
+        key = name.casefold()
+        if key in seen:
+            raise ValueError(f"Duplicate gamescope preset name: {name}")
+        seen.add(key)
+        entry = {"name": name[:30]}
+        width = _preset_opt_int(preset, name, "width", 7680)
+        height = _preset_opt_int(preset, name, "height", 4320)
+        if width and height:
+            entry["width"], entry["height"] = width, height
+            inner_w = _preset_opt_int(preset, name, "inner_width", 7680)
+            inner_h = _preset_opt_int(preset, name, "inner_height", 4320)
+            if inner_w and inner_h:
+                entry["inner_width"], entry["inner_height"] = inner_w, inner_h
+        refresh = _preset_opt_int(preset, name, "refresh", 1000)
+        if refresh:
+            entry["refresh"] = refresh
+        for flag in ("integer", "stretch", "fsr", "borderless"):
+            if preset.get(flag):
+                entry[flag] = True
+        sharpness = _preset_opt_int(preset, name, "fsr_sharpness", 5)
+        if entry.get("fsr"):
+            entry["fsr_sharpness"] = sharpness or 2
+        extra = preset.get("extra_args")
+        if isinstance(extra, str) and extra.strip():
+            entry["extra_args"] = extra.strip().split()[:20]
+        elif isinstance(extra, list) and extra:
+            entry["extra_args"] = [str(item) for item in extra if str(item).strip()][:20]
+        clean.append(entry)
+    return clean
+
+
 def clean_settings(merged):
     clean_folders = _clean_watch_folders(merged)
     seconds = _clean_screensaver_seconds(merged)
@@ -320,6 +377,7 @@ def clean_settings(merged):
             "progress_on_first_play": progress_on_first_play,
             "auto_close_store_clients": bool(merged.get("auto_close_store_clients", False)),
             "gamescope_preset": str(merged.get("gamescope_preset", "")).strip()[:30],
+            "gamescope_custom_presets": _clean_gamescope_presets(merged),
             "mangohud_enabled": bool(merged.get("mangohud_enabled", False)),
     }
 

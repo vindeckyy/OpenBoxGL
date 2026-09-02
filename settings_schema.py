@@ -83,6 +83,7 @@ KNOWN_SETTINGS = {
     "controller_prompt_hint",
     "controller_prompt_pack",
     "gamescope_preset",
+    "gamescope_custom_presets",
     "mangohud_enabled",
     # window and tray
     "tray_enabled",

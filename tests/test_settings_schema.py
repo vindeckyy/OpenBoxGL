@@ -8,7 +8,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from handlers.settings import _clean_controller_map, _clean_controller_prompt_hint, _clean_screensaver_seconds, _clean_watch_folders, clean_settings  # noqa: E402
+from handlers.settings import (  # noqa: E402
+    _clean_controller_map,
+    _clean_controller_prompt_hint,
+    _clean_gamescope_presets,
+    _clean_screensaver_seconds,
+    _clean_watch_folders,
+    clean_settings,
+)
 from settings_schema import KNOWN_SETTINGS, sanitize_settings  # noqa: E402
 
 
@@ -75,6 +82,32 @@ class SettingsSchemaTests(unittest.TestCase):
             "show_insights", "list_sort", "list_sort_dir",
         ):
             self.assertIn(key, KNOWN_SETTINGS, f"save-path key missing from whitelist: {key}")
+
+    def test_clean_gamescope_presets_valid(self):
+        clean = _clean_gamescope_presets({"gamescope_custom_presets": [
+            {"name": "Deck 90", "width": 1280, "height": 800, "refresh": 90, "fsr": True, "fsr_sharpness": 4},
+            {"name": "crt", "integer": True, "extra_args": "--adaptive-sync -e"},
+        ]})
+        self.assertEqual(clean[0], {"name": "Deck 90", "width": 1280, "height": 800, "refresh": 90, "fsr": True, "fsr_sharpness": 4})
+        self.assertEqual(clean[1], {"name": "crt", "integer": True, "extra_args": ["--adaptive-sync", "-e"]})
+
+    def test_clean_gamescope_presets_rejects_bad_input(self):
+        for payload, message in (
+            ({"gamescope_custom_presets": "nope"}, "must be a list"),
+            ({"gamescope_custom_presets": [{"name": ""}]}, "need a name"),
+            ({"gamescope_custom_presets": [{"name": "a"}, {"name": "A"}]}, "Duplicate"),
+            ({"gamescope_custom_presets": [{"name": "x", "width": 99999, "height": 10}]}, "width"),
+            ({"gamescope_custom_presets": [{"name": "x", "refresh": -1}]}, "refresh"),
+            ({"gamescope_custom_presets": [{"name": "x", "fsr_sharpness": 9}]}, "fsr_sharpness"),
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                _clean_gamescope_presets(payload)
+            self.assertIn(message, str(ctx.exception))
+
+    def test_clean_gamescope_presets_caps_count(self):
+        with self.assertRaises(ValueError) as ctx:
+            _clean_gamescope_presets({"gamescope_custom_presets": [{"name": f"p{i}"} for i in range(17)]})
+        self.assertIn("At most 16", str(ctx.exception))
 
     def test_clean_watch_folders_over_50(self):
         payload = {"watch_folders": [f"/tmp/folder_{i}" for i in range(51)]}

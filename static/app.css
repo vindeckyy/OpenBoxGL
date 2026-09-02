@@ -522,6 +522,12 @@
     .toast[data-notify-level="error"] { border-color:var(--toast-error-border); color:var(--toast-error-fg); }
     .muted { color:var(--muted); }
     .gamepad-hint { position:fixed; z-index:70; left:50%; bottom:18px; transform:translateX(-50%); padding:8px 14px; border:1px solid var(--border-card); border-radius:999px; background:var(--surface-sheet); color:var(--nav-muted); font-size:var(--font-label); }
+    .gamescope-preset-list { display:grid; gap:8px; margin:8px 0; }
+    .gamescope-preset-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px; border:1px solid var(--border-card); border-radius:6px; background:var(--surface-field); }
+    .gamescope-preset-row .preset-name { width:11rem; }
+    .gamescope-preset-row .preset-width,.gamescope-preset-row .preset-height,.gamescope-preset-row .preset-refresh { width:5.5rem; }
+    .gamescope-preset-row .preset-extra { flex:1; min-width:12rem; }
+    .gamescope-preset-row .preset-flag { display:inline-flex; align-items:center; gap:4px; font-size:var(--font-label); color:var(--card-muted); }
     .emulator-health { display:grid; gap:0.35rem; }
     .setup-install-chip { padding:4px 10px; border:1px solid var(--focus); border-radius:999px; background:var(--surface-hover); color:var(--focus); font-size:var(--font-label); cursor:pointer; }
     .setup-install-chip:hover { background:var(--nav-hover); }

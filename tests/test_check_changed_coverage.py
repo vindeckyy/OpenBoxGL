@@ -12,6 +12,14 @@ sys.path.insert(0, str(ROOT))
 from scripts import check_changed_coverage as ccc  # noqa: E402
 
 
+class FakeCoverageData:
+    def __init__(self, executed: dict[str, set[int]]):
+        self.executed = executed
+
+    def measured_files(self):
+        return [str((ROOT / key).resolve()) for key in self.executed]
+
+
 class FakeCoverage:
     def __init__(self, executed: dict[str, set[int]], module_pct: dict[str, float] | None = None):
         self.executed = executed
@@ -19,6 +27,9 @@ class FakeCoverage:
 
     def load(self):
         return None
+
+    def get_data(self):
+        return FakeCoverageData(self.executed)
 
     def analysis2(self, abs_path: str):
         rel = None
@@ -46,6 +57,18 @@ class CheckChangedCoverageTests(unittest.TestCase):
         self.assertEqual(files, ["sample.py"])
         self.assertEqual(total, 10)
         self.assertEqual(hit, 9)
+
+    def test_measure_changed_lines_skips_unmeasured_files(self):
+        # Files omitted from coverage (tests/*, scripts/*) must not count as
+        # misses; otherwise any test edit would fail the floor.
+        with mock.patch.object(ccc, "_diff_base", return_value="base"), \
+             mock.patch.object(ccc, "_changed_python_files", return_value=["sample.py", "tests/test_sample.py"]), \
+             mock.patch.object(ccc, "_changed_line_numbers", side_effect=lambda base, rel: {5, 6, 7}), \
+             mock.patch.object(ccc, "_load_coverage", return_value=FakeCoverage({"sample.py": set(range(1, 30))})):
+            hit, total, files = ccc.measure_changed_lines()
+        self.assertEqual(files, ["sample.py", "tests/test_sample.py"])
+        self.assertEqual(total, 3)
+        self.assertEqual(hit, 3)
 
     def test_main_fails_under_95_with_nine_of_ten(self):
         with mock.patch.object(ccc, "_diff_base", return_value="base"), \

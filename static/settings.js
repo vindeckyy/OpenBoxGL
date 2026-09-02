@@ -8,6 +8,45 @@ import { confirmAction, promptInput } from './dialogs.js';
 
     let settingsCategory = 'library';
 
+    // ── Custom gamescope presets editor (1.8.0) ────────────────────────────
+    function gamescopePresetRow(preset, index) {
+      return `<div class="gamescope-preset-row" data-preset-row="${index}">
+        <input class="preset-name" placeholder="Name" value="${escapeHtml(preset.name || '')}" aria-label="Preset name">
+        <input class="preset-width" type="number" min="0" max="7680" placeholder="Width" value="${preset.width || ''}" aria-label="Width">
+        <input class="preset-height" type="number" min="0" max="4320" placeholder="Height" value="${preset.height || ''}" aria-label="Height">
+        <input class="preset-refresh" type="number" min="0" max="1000" placeholder="Hz" value="${preset.refresh || ''}" aria-label="Refresh rate">
+        <label class="check preset-flag"><input type="checkbox" class="preset-fsr" ${preset.fsr ? 'checked' : ''}> FSR</label>
+        <label class="check preset-flag"><input type="checkbox" class="preset-integer" ${preset.integer ? 'checked' : ''}> Int</label>
+        <label class="check preset-flag"><input type="checkbox" class="preset-stretch" ${preset.stretch ? 'checked' : ''}> Stretch</label>
+        <label class="check preset-flag"><input type="checkbox" class="preset-borderless" ${preset.borderless ? 'checked' : ''}> Borderless</label>
+        <input class="preset-extra" placeholder="Extra gamescope args" value="${escapeHtml((preset.extra_args || []).join(' '))}" aria-label="Extra gamescope arguments">
+        <button type="button" class="icon-button preset-delete" aria-label="Remove preset">×</button>
+      </div>`;
+    }
+
+    function renderGamescopePresets(presets) {
+      const container = $('gamescopeCustomPresets');
+      if (!container) return;
+      container.innerHTML = (presets || []).map((preset, index) => gamescopePresetRow(preset, index)).join('');
+      container.querySelectorAll('.preset-delete').forEach(button => button.onclick = () => {
+        button.closest('[data-preset-row]').remove();
+      });
+    }
+
+    function collectGamescopePresets() {
+      return [...document.querySelectorAll('#gamescopeCustomPresets [data-preset-row]')].map(row => ({
+        name: row.querySelector('.preset-name').value.trim(),
+        width: Number(row.querySelector('.preset-width').value) || 0,
+        height: Number(row.querySelector('.preset-height').value) || 0,
+        refresh: Number(row.querySelector('.preset-refresh').value) || 0,
+        fsr: row.querySelector('.preset-fsr').checked,
+        integer: row.querySelector('.preset-integer').checked,
+        stretch: row.querySelector('.preset-stretch').checked,
+        borderless: row.querySelector('.preset-borderless').checked,
+        extra_args: row.querySelector('.preset-extra').value.trim(),
+      }));
+    }
+
     // Controller bench gamepad polling (1.7.2)
     let benchRAF = 0;
     let benchSticks = [];
@@ -157,6 +196,7 @@ import { confirmAction, promptInput } from './dialogs.js';
         minimize_to_tray:$('minimizeToTray').checked,
         ludusavi_backup_path:$('ludusaviBackupPath')?.value.trim() || '',
         gamescope_preset:$('gamescopePreset')?.value || '',
+        gamescope_custom_presets: collectGamescopePresets(),
         mangohud_enabled:$('mangohudEnabled')?.checked || false,
       };
     }
@@ -233,6 +273,7 @@ import { confirmAction, promptInput } from './dialogs.js';
           gsSelect.innerHTML = '<option value="">None</option>' + presets.map(([name, label]) => `<option value="${escapeHtml(name)}">${escapeHtml(label)}</option>`).join('');
           gsSelect.value = AppState.appSettings.gamescope_preset || '';
         }
+        renderGamescopePresets(AppState.appSettings.gamescope_custom_presets || []);
         // MangoHud toggle (1.7.2)
         if ($('mangohudEnabled')) $('mangohudEnabled').checked = Boolean(AppState.appSettings.mangohud_enabled);
         $('mediaPackStatus').textContent = (AppState.appSettings.media_packs || []).filter(item => item.active).map(item => item.name).join(', ');
@@ -605,6 +646,13 @@ import { confirmAction, promptInput } from './dialogs.js';
         renderGrid();
       }
     }
+    if ($('addGamescopePreset')) $('addGamescopePreset').onclick = () => {
+      const container = $('gamescopeCustomPresets');
+      if (!container) return;
+      if (container.querySelectorAll('[data-preset-row]').length >= 16) return notify('At most 16 custom gamescope presets are allowed.');
+      container.insertAdjacentHTML('beforeend', gamescopePresetRow({}, container.querySelectorAll('[data-preset-row]').length));
+      container.querySelector(`[data-preset-row="${container.querySelectorAll('[data-preset-row]').length - 1}"] .preset-delete`).onclick = event => event.target.closest('[data-preset-row]').remove();
+    };
     $('settingsForm').onsubmit = async event => {
       event.preventDefault();
       try {

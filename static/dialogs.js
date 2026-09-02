@@ -424,6 +424,12 @@ async function openGameDialog(game = null) {
     profileSelect.innerHTML = '<option value="">Default platform profile</option>' + Object.keys(AppState.availableProfiles).filter(name => !platformName || name === platformName).map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
     profileSelect.value = currentProfile;
   }
+  const gamescopeSelect = $('gameForm').elements.gamescope_preset;
+  if (gamescopeSelect) {
+    const currentPreset = game?.gamescope_preset || '';
+    gamescopeSelect.innerHTML = '<option value="">Global setting</option>' + (AppState.appSettings.gamescope_presets || []).map(([name, label]) => `<option value="${escapeHtml(name)}">${escapeHtml(label)}</option>`).join('');
+    gamescopeSelect.value = currentPreset;
+  }
   const visible = typeof filteredGames === 'function' ? filteredGames() : (AppState.games || []);
   const currentIndex = game ? visible.findIndex(g => g.id === game.id) : -1;
   const prevBtn = $('prevGameDialog');

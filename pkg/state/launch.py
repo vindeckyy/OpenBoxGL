@@ -35,21 +35,26 @@ def _apply_mangohud_from_state(state):
     return apply_mangohud_env(enabled=bool(settings.get("mangohud_enabled", False)))
 
 
-def _apply_gamescope_preset_from_state(state, args):
+def _apply_gamescope_preset_from_state(state, game, args):
     """Wrap *args* with gamescope when a preset is set and nesting is safe (1.7.2).
 
-    Returns the (possibly wrapped) args list.  When already inside a gamescope
-    guest session the preset is skipped to avoid nested gamescope.
+    A per-game ``gamescope_preset`` field (1.8.0) wins over the global setting;
+    custom presets from ``settings.gamescope_custom_presets`` (1.8.0) resolve
+    first and may shadow stock names.  When already inside a gamescope guest
+    session the preset is skipped to avoid nested gamescope.
     """
     if not args:
         return args
     settings = state.get("settings", {}) if isinstance(state, dict) else {}
-    preset = str(settings.get("gamescope_preset", "")).strip()
+    custom_presets = settings.get("gamescope_custom_presets") or []
+    preset = str(game.get("gamescope_preset") or "").strip() if isinstance(game, dict) else ""
+    if not preset:
+        preset = str(settings.get("gamescope_preset", "")).strip()
     if not preset:
         return args
     if not should_nest_gamescope(force="--game-mode" in sys.argv):
         return args
-    gs_args = merge_gamescope_preset(preset)
+    gs_args = merge_gamescope_preset(preset, custom_presets=custom_presets)
     if not gs_args:
         return args
     return ["gamescope"] + gs_args + ["--"] + list(args)
@@ -565,7 +570,7 @@ def start_game(index=None, stable_game_id=""):
         # Phase 5: Start the process (plugins + validation must succeed first).
         args, cwd = app_plug(game, args, cwd)
         # Apply gamescope preset if set and not already a gamescope guest (1.7.2).
-        args = _apply_gamescope_preset_from_state(state, args)
+        args = _apply_gamescope_preset_from_state(state, game, args)
         val_cmd(args, cwd)
         # Apply MangoHud env if enabled in settings (1.7.2).
         launch_env = _apply_mangohud_from_state(state)
