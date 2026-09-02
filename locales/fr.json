@@ -459,7 +459,8 @@
     "application": "Application",
     "check_updates": "Rechercher des mises à jour",
     "install_update": "Installer la mise à jour vérifiée",
-    "install_desktop": "Installer le raccourci sur le bureau"
+    "install_desktop": "Installer le raccourci sur le bureau",
+    "show_insights": "Afficher les statistiques de jeu dans la bibliothèque"
   },
   "storefront": {
     "title": "Gestionnaire de boutiques",
@@ -538,5 +539,38 @@
   "errors": {
     "copy_details": "Copier les détails",
     "dismiss": "Ignorer l'erreur"
+  },
+  "insights": {
+    "heatmap_label": "Carte de jeu, {days} derniers jours",
+    "col_date": "Date",
+    "col_sessions": "Sessions",
+    "col_playtime": "Temps de jeu",
+    "col_level": "Niveau",
+    "games": "Jeux",
+    "played": "Joués",
+    "playtime": "Temps de jeu",
+    "sessions": "Sessions",
+    "no_data": "Pas encore de données — jouez !",
+    "top_games": "Jeux les plus joués",
+    "top_platforms": "Plateformes principales",
+    "top_genres": "Genres principaux",
+    "streak_title": "Série et dynamique",
+    "day_streak": " jours d'affilée",
+    "longest": "Plus longue",
+    "days": "jours",
+    "last": "Dernière",
+    "last_30d": "30 derniers jours",
+    "momentum_same": "identique aux 30 jours précédents",
+    "momentum_vs_prev": "par rapport aux 30 jours précédents",
+    "last_year": "Activité",
+    "less": "Moins",
+    "more": "Plus",
+    "loading": "Chargement des statistiques…",
+    "unavailable": "Statistiques indisponibles",
+    "range_label": "Période",
+    "range_30": "30 derniers jours",
+    "range_90": "90 derniers jours",
+    "range_365": "365 derniers jours",
+    "refresh": "Actualiser les statistiques"
   }
 }

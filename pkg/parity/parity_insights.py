@@ -189,6 +189,36 @@ def compute_top_genres(games: list[dict[str, Any]], limit: int = 8) -> list[dict
     return items[:limit]
 
 
+def compute_top_games(games: list[dict[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
+    items = []
+    for game in games if isinstance(games, list) else []:
+        if not isinstance(game, dict):
+            continue
+        try:
+            pt = int(game.get("playtime_seconds", 0) or 0)
+        except (TypeError, ValueError):
+            pt = 0
+        pt = max(0, pt)
+        if pt <= 0:
+            continue
+        try:
+            plays = int(game.get("play_count", 0) or 0)
+        except (TypeError, ValueError):
+            plays = 0
+        items.append(
+            {
+                "game_id": str(game.get("game_id", "") or ""),
+                "name": str(game.get("name", "") or ""),
+                "platform": str(game.get("platform", "") or ""),
+                "playtime_seconds": pt,
+                "play_count": plays,
+                "last_played": str(game.get("last_played", "") or ""),
+            }
+        )
+    items.sort(key=lambda x: (-x["playtime_seconds"], -x["play_count"], x["name"]))
+    return items[:limit]
+
+
 def compute_momentum(
     heatmap: list[dict[str, Any]],
 ) -> dict[str, int]:
@@ -208,26 +238,35 @@ def compute_momentum(
     }
 
 
-def summarize(state: dict[str, Any], end_date: datetime.date | None = None) -> dict[str, Any]:
+def summarize(
+    state: dict[str, Any],
+    end_date: datetime.date | None = None,
+    days: int = 366,
+) -> dict[str, Any]:
     games = state.get("games", []) if isinstance(state, dict) else []
     history = state.get("history", []) if isinstance(state, dict) else []
     if not isinstance(games, list):
         games = []
     if not isinstance(history, list):
         history = []
-    heatmap = compute_heatmap(history, days=366, end_date=end_date)
+    if not isinstance(days, int) or not 1 <= days <= 366:
+        days = 366
+    heatmap = compute_heatmap(history, days=days, end_date=end_date)
     streak = compute_streak(heatmap)
     totals = compute_totals(games, history)
     top_platforms = compute_top_platforms(games, limit=8)
     top_genres = compute_top_genres(games, limit=8)
+    top_games = compute_top_games(games, limit=10)
     momentum = compute_momentum(heatmap)
     last_30_days = heatmap[-30:]
     return {
         "heatmap": heatmap,
+        "days": days,
         "streak": streak,
         "totals": totals,
         "top_platforms": top_platforms,
         "top_genres": top_genres,
+        "top_games": top_games,
         "momentum": momentum,
         "last_30_days": last_30_days,
     }

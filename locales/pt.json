@@ -459,7 +459,8 @@
     "application": "Aplicativo",
     "check_updates": "Verificar atualizações",
     "install_update": "Instalar atualização verificada",
-    "install_desktop": "Instalar atalho na área de trabalho"
+    "install_desktop": "Instalar atalho na área de trabalho",
+    "show_insights": "Mostrar estatísticas de jogo na biblioteca"
   },
   "storefront": {
     "title": "Gerenciador de Lojas",
@@ -538,5 +539,38 @@
   "errors": {
     "copy_details": "Copiar detalhes",
     "dismiss": "Descartar erro"
+  },
+  "insights": {
+    "heatmap_label": "Mapa de jogo, últimos {days} dias",
+    "col_date": "Data",
+    "col_sessions": "Sessões",
+    "col_playtime": "Tempo de jogo",
+    "col_level": "Nível",
+    "games": "Jogos",
+    "played": "Jogados",
+    "playtime": "Tempo de jogo",
+    "sessions": "Sessões",
+    "no_data": "Ainda sem dados — jogue algo!",
+    "top_games": "Jogos mais jogados",
+    "top_platforms": "Plataformas principais",
+    "top_genres": "Gêneros principais",
+    "streak_title": "Sequência e ritmo",
+    "day_streak": " dias seguidos",
+    "longest": "Mais longa",
+    "days": "dias",
+    "last": "Última",
+    "last_30d": "Últimos 30 dias",
+    "momentum_same": "igual aos 30 dias anteriores",
+    "momentum_vs_prev": "em relação aos 30 dias anteriores",
+    "last_year": "Atividade",
+    "less": "Menos",
+    "more": "Mais",
+    "loading": "Carregando estatísticas…",
+    "unavailable": "Estatísticas indisponíveis",
+    "range_label": "Período",
+    "range_30": "Últimos 30 dias",
+    "range_90": "Últimos 90 dias",
+    "range_365": "Últimos 365 dias",
+    "refresh": "Atualizar estatísticas"
   }
 }

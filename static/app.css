@@ -669,6 +669,12 @@
     .insight-rank-row { display:flex; justify-content:space-between; gap:8px; padding:6px 8px; background:var(--surface-field); border-radius:6px; }
     .insight-rank-label { font-size:var(--font-body-small); color:var(--text); }
     .insight-rank-count { font-size:var(--font-label); color:var(--muted); }
+    .insights-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius-panel); background:var(--surface-card); }
+    .insights-title { margin:0; font-size:var(--font-body); font-weight:600; color:var(--text); }
+    .insights-head-actions { display:flex; align-items:center; gap:8px; }
+    .insights-range { min-width:9rem; }
+    .insight-game-link { display:flex; justify-content:space-between; gap:8px; width:100%; padding:0; border:none; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+    .insight-game-link:hover .insight-rank-label { color:var(--focus); }
     .insight-streak { display:flex; flex-wrap:wrap; gap:10px; font-size:var(--font-body-small); }
     .insight-streak-current { font-weight:700; color:var(--brand); }
     .insight-heatmap-table.sr-only { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }

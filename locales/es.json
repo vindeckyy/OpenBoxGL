@@ -459,7 +459,8 @@
     "application": "Aplicación",
     "check_updates": "Comprobar actualizaciones",
     "install_update": "Instalar actualización verificada",
-    "install_desktop": "Instalar acceso directo de escritorio"
+    "install_desktop": "Instalar acceso directo de escritorio",
+    "show_insights": "Mostrar estadísticas de juego en la biblioteca"
   },
   "storefront": {
     "title": "Gestor de tiendas",
@@ -538,5 +539,38 @@
   "errors": {
     "copy_details": "Copiar detalles",
     "dismiss": "Descartar error"
+  },
+  "insights": {
+    "heatmap_label": "Mapa de juego, últimos {days} días",
+    "col_date": "Fecha",
+    "col_sessions": "Sesiones",
+    "col_playtime": "Tiempo de juego",
+    "col_level": "Nivel",
+    "games": "Juegos",
+    "played": "Jugados",
+    "playtime": "Tiempo de juego",
+    "sessions": "Sesiones",
+    "no_data": "Aún no hay datos: ¡juega algo!",
+    "top_games": "Juegos más jugados",
+    "top_platforms": "Plataformas principales",
+    "top_genres": "Géneros principales",
+    "streak_title": "Racha y ritmo",
+    "day_streak": " días seguidos",
+    "longest": "Más larga",
+    "days": "días",
+    "last": "Última",
+    "last_30d": "Últimos 30 días",
+    "momentum_same": "igual que los 30 días anteriores",
+    "momentum_vs_prev": "frente a los 30 días anteriores",
+    "last_year": "Actividad",
+    "less": "Menos",
+    "more": "Más",
+    "loading": "Cargando estadísticas…",
+    "unavailable": "Estadísticas no disponibles",
+    "range_label": "Rango de fechas",
+    "range_30": "Últimos 30 días",
+    "range_90": "Últimos 90 días",
+    "range_365": "Últimos 365 días",
+    "refresh": "Actualizar estadísticas"
   }
 }

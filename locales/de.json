@@ -459,7 +459,8 @@
     "application": "Anwendung",
     "check_updates": "Nach Updates suchen",
     "install_update": "Verifiziertes Update installieren",
-    "install_desktop": "Desktop-Verknüpfung installieren"
+    "install_desktop": "Desktop-Verknüpfung installieren",
+    "show_insights": "Spielstatistiken in der Bibliothek anzeigen"
   },
   "storefront": {
     "title": "Storefront-Manager",
@@ -538,5 +539,38 @@
   "errors": {
     "copy_details": "Details kopieren",
     "dismiss": "Fehler verwerfen"
+  },
+  "insights": {
+    "heatmap_label": "Spiel-Heatmap, letzte {days} Tage",
+    "col_date": "Datum",
+    "col_sessions": "Sitzungen",
+    "col_playtime": "Spielzeit",
+    "col_level": "Stufe",
+    "games": "Spiele",
+    "played": "Gespielt",
+    "playtime": "Spielzeit",
+    "sessions": "Sitzungen",
+    "no_data": "Noch keine Daten — spiel etwas!",
+    "top_games": "Meistgespielte Spiele",
+    "top_platforms": "Top-Plattformen",
+    "top_genres": "Top-Genres",
+    "streak_title": "Serie & Entwicklung",
+    "day_streak": "-Tage-Serie",
+    "longest": "Längste",
+    "days": "Tage",
+    "last": "Zuletzt",
+    "last_30d": "Letzte 30 Tage",
+    "momentum_same": "wie die vorherigen 30 Tage",
+    "momentum_vs_prev": "gegenüber den vorherigen 30 Tagen",
+    "last_year": "Aktivität",
+    "less": "Weniger",
+    "more": "Mehr",
+    "loading": "Statistiken werden geladen…",
+    "unavailable": "Statistiken nicht verfügbar",
+    "range_label": "Zeitraum",
+    "range_30": "Letzte 30 Tage",
+    "range_90": "Letzte 90 Tage",
+    "range_365": "Letzte 365 Tage",
+    "refresh": "Statistiken aktualisieren"
   }
 }
