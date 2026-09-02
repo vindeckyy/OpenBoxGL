@@ -3,12 +3,12 @@
 ## Scale and architecture
 
 - **Formal library scale:** 20,000 games (performance gates enforce 10k/20k scenarios). Optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) extends search and facet performance for 50k+ libraries.
-- **CPU architecture:** **x86_64 only** for v1.7 release artifacts (AppImage and Flatpak). ARM64 is deferred.
+- **CPU architecture:** **x86_64 and aarch64** for 1.8.0 release artifacts (AppImage and Flatpak). The self-updater installs only the artifact matching the running architecture.
 - **Interface language:** English, Spanish, German, French, and Portuguese (v1.7.2+).
 
 ## Supported platforms
 
-OpenBox targets Linux on **x86_64**. The maintainers test these environments per release:
+OpenBox targets Linux on **x86_64 and aarch64**. The maintainers test these environments per release:
 
 | Environment | Status |
 |---|---|
@@ -16,6 +16,7 @@ OpenBox targets Linux on **x86_64**. The maintainers test these environments per
 | Fedora (latest stable) | Tested |
 | Arch Linux | Tested |
 | SteamOS / Steam Deck | Tested (gamescope guest mode) |
+| aarch64 desktops / handhelds | Tested (AppImage built on ubuntu-24.04-arm) |
 | Other glibc distributions | Best effort |
 
 ## Supported runtimes

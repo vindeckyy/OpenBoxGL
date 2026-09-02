@@ -244,11 +244,11 @@ Omit `OPENBOX_RELEASE_TAG` only when you intentionally want the latest stable re
 
 ### AppImage (manual)
 
-Download the latest release from [GitHub Releases](https://github.com/vindeckyy/OpenBoxGL/releases/latest).
+Download the latest release from [GitHub Releases](https://github.com/vindeckyy/OpenBoxGL/releases/latest). Release artifacts are built for both **x86_64** and **aarch64**; pick the one matching your CPU (`uname -m`).
 
 ```bash
-chmod +x OpenBox-x86_64.AppImage
-./OpenBox-x86_64.AppImage
+chmod +x OpenBox-$(uname -m).AppImage
+./OpenBox-$(uname -m).AppImage
 ```
 
 The AppImage opens the native window by default. To use the loopback web UI instead, pass `--web`:

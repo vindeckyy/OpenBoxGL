@@ -323,7 +323,7 @@ def test_flatpak_manifest():
     content = manifest.read_text()
     assert "app-id: io.openbox.GameLauncher" in content
     assert "runtime: org.gnome.Platform" in content
-    assert "runtime-version: '46'" in content
+    assert "runtime-version: '49'" in content
     assert "command: openbox" in content
     assert "openbox.sh" in content
     runtime_modules = (ROOT / "runtime_modules.txt").read_text()
@@ -480,11 +480,21 @@ def test_release_appimage_workflow():
     assert "tags:" in content and '"v*"' in content
     assert "./build_appimage.sh" in content
     assert "target_commitish: ${{ github.sha }}" in content
+    # Two-arch build matrix (ADR 0024): x86_64 on ubuntu-22.04, aarch64 on
+    # ubuntu-24.04-arm (ubuntu-22.04-arm deprecates 2026-09-17).
+    assert "matrix.arch" in content
+    assert "ubuntu-24.04-arm" in content
+    assert "OPENBOX_ARCH:" in content
+    assert 'sha256sum "OpenBox-${{ matrix.arch }}.AppImage"' in content
+    # Both arches are published as signed release assets.
     assert "OpenBox-x86_64.AppImage" in content
     assert "OpenBox-x86_64.AppImage.zsync" in content
     assert "OpenBox-x86_64.AppImage.sha256" in content
-    assert "sha256sum OpenBox-x86_64.AppImage" in content
     assert "OpenBox-x86_64.AppImage.sig" in content
+    assert "OpenBox-aarch64.AppImage" in content
+    assert "OpenBox-aarch64.AppImage.zsync" in content
+    assert "OpenBox-aarch64.AppImage.sha256" in content
+    assert "OpenBox-aarch64.AppImage.sig" in content
     assert "openbox-release.pub" in content
     assert "OPENBOX_SIGNING_KEY is required" in content
     assert "persist-credentials: false" in content
