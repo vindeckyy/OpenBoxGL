@@ -653,6 +653,57 @@ import { confirmAction, promptInput } from './dialogs.js';
       container.insertAdjacentHTML('beforeend', gamescopePresetRow({}, container.querySelectorAll('[data-preset-row]').length));
       container.querySelector(`[data-preset-row="${container.querySelectorAll('[data-preset-row]').length - 1}"] .preset-delete`).onclick = event => event.target.closest('[data-preset-row]').remove();
     };
+    // ── Library export (1.8.0) ─────────────────────────────────────────────
+    async function waitForExportJob(jobId) {
+      for (let attempt = 0; attempt < 40; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 750));
+        const jobs = await api('/api/jobs');
+        const entry = Object.values(jobs || {}).find(job => job && job.job_id === jobId);
+        if (!entry) continue;
+        if (entry.state === 'done') return entry.result || {};
+        if (entry.state === 'error') throw new Error(entry.error || 'Export failed');
+      }
+      throw new Error('Export timed out');
+    }
+
+    async function exportLibrary() {
+      const status = $('exportStatus');
+      const scope = $('exportScope').value;
+      const scopeName = $('exportScopeName').value.trim();
+      if ((scope === 'platform' || scope === 'playlist') && !scopeName) return notify('Enter the platform or playlist name to export.');
+      if ($('exportLibrary').disabled) return;
+      $('exportLibrary').disabled = true;
+      if (status) status.textContent = 'Exporting…';
+      try {
+        const queued = await api('/api/v2/library/export',{method:'POST',body:JSON.stringify({
+          format:$('exportFormat').value,
+          scope,
+          scope_name:scopeName,
+          include_media_paths:$('exportMediaPaths').checked,
+        })});
+        const result = await waitForExportJob(queued.job_id);
+        if (status) status.textContent = `Exported ${result.count} games to ${result.file}`;
+        notify(`Exported ${result.count} game${result.count === 1 ? '' : 's'}`);
+        const link = document.createElement('a');
+        link.href = `/api/v2/library/export/download?file=${encodeURIComponent(result.file)}&token=${encodeURIComponent(token)}`;
+        link.download = result.file;
+        document.body.append(link);
+        link.click();
+        link.remove();
+      } catch(error) {
+        if (status) status.textContent = '';
+        notify(error.message);
+      } finally {
+        $('exportLibrary').disabled = false;
+      }
+    }
+
+    if ($('exportScope')) $('exportScope').onchange = () => {
+      const needsName = ['platform', 'playlist'].includes($('exportScope').value);
+      if ($('exportScopeName')) $('exportScopeName').hidden = !needsName;
+    };
+    if ($('exportLibrary')) $('exportLibrary').onclick = exportLibrary;
+
     $('settingsForm').onsubmit = async event => {
       event.preventDefault();
       try {

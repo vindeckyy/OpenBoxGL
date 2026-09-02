@@ -62,6 +62,7 @@ pkg/parity/launch_tokens.py
 pkg/parity/parity_import_policy.py
 pkg/parity/parity_gamescope.py
 pkg/parity/parity_perf.py
+pkg/parity/parity_export.py
 routes.py
 routes/registry.py
 api_errors.py
@@ -77,6 +78,7 @@ handlers/settings.py
 handlers/extensions.py
 handlers/health.py
 handlers/emulators.py
+handlers/export.py
 handlers/launch.py
 handlers/jobs.py
 handlers/setup.py

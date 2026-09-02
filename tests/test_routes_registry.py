@@ -29,27 +29,27 @@ from scripts import check_v1_contract  # noqa: E402
 
 class RouteRegistryTests(unittest.TestCase):
     def test_route_table_sizes(self):
-        # 106 base GET + 25 v1 aliases = 131 total (1.7.2 adds 7: 1 static i18n.js + 5 locale JSONs + 1 backup diff)
-        # 109 base POST + 42 v1 aliases = 151 total
-        self.assertEqual(len(GET_TABLE), 131)
-        self.assertEqual(len(POST_TABLE), 151)
+        # 108 base GET + 25 v1 aliases = 133 total (1.8.0 adds 2 export GETs)
+        # 110 base POST + 42 v1 aliases = 152 total (1.8.0 adds 1 export POST)
+        self.assertEqual(len(GET_TABLE), 133)
+        self.assertEqual(len(POST_TABLE), 152)
         self.assertEqual(len(V1_ALIASED_PREFIXES), 60)
 
     def test_base_routes_count(self):
         base_get = [p for p in GET_TABLE if not p.startswith("/api/v1")]
         base_post = [p for p in POST_TABLE if not p.startswith("/api/v1")]
-        self.assertEqual(len(base_get), 106)
-        self.assertEqual(len(base_post), 109)
-        self.assertEqual(len(base_get) + len(base_post), 215)
+        self.assertEqual(len(base_get), 108)
+        self.assertEqual(len(base_post), 110)
+        self.assertEqual(len(base_get) + len(base_post), 218)
 
     def test_all_routes_registered(self):
         routes = all_routes()
-        self.assertEqual(len(routes), 216)
+        self.assertEqual(len(routes), 219)
 
         get_routes = [r for r in routes if r.method == "GET"]
         post_routes = [r for r in routes if r.method == "POST"]
-        self.assertEqual(len(get_routes), 107)
-        self.assertEqual(len(post_routes), 109)
+        self.assertEqual(len(get_routes), 109)
+        self.assertEqual(len(post_routes), 110)
 
     def test_every_registered_route_matches_live_table(self):
         routes = all_routes()

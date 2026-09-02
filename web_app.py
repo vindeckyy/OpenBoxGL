@@ -53,6 +53,7 @@ from webapp_state import (
 )
 from handlers.data import DataHandlers
 from handlers.emulators import EmulatorsHandlers
+from handlers.export import ExportHandlers
 from handlers.extensions import ExtensionsHandlers
 from handlers.faugus import FaugusHandlers
 from handlers.health import HealthHandlers
@@ -122,7 +123,7 @@ CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsaf
 
 
 
-class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, LaunchHandlers, SetupHandlers, DataHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, BaseHTTPRequestHandler):
+class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, ExportHandlers, LaunchHandlers, SetupHandlers, DataHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, BaseHTTPRequestHandler):
     server_version = "OpenBox/1"
     protocol_version = "HTTP/1.1"
     MAX_BODY = 65536
