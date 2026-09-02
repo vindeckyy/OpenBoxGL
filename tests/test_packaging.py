@@ -338,7 +338,7 @@ def test_release_flatpak_workflow():
     workflow = ROOT / ".github" / "workflows" / "release-flatpak.yml"
     assert workflow.is_file(), "missing release Flatpak workflow"
     content = workflow.read_text(encoding="utf-8")
-    assert "ubuntu-22.04" in content
+    assert "ubuntu-24.04" in content
     assert "io.openbox.GameLauncher.yml" in content
     assert "flatpak build-bundle" in content
     print("  Release Flatpak workflow: ok")
