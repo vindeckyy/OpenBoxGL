@@ -172,7 +172,7 @@ def main():
     try:
         from updates import VERSION as DEFAULT_VERSION
     except ImportError:
-        DEFAULT_VERSION = "1.7.2"
+        DEFAULT_VERSION = "1.8.0"
 
     parser = argparse.ArgumentParser(description="Generate a CycloneDX SBOM for OpenBox")
     parser.add_argument("pos_out", nargs="?", default=None, help="output JSON path")

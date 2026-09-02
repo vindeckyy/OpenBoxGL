@@ -4,6 +4,40 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-09-02
+
+### Navigation & Routing
+- **Keyboard and gamepad navigation** for the library grid and list view (arrows/Home/End/Page, `f` favorite, Escape clear, gamepad via configurable controller map with edge detection) (ADR 0021).
+- **Hash routing**: refresh and shared links restore platform/playlist/preset/query/selection/sort via `#/key/value` hash fragments (ADR 0021).
+- **Sortable list-view columns** with persisted direction (`list_sort`/`list_sort_dir` settings); screenshot lightbox with prev/next/zoom; cover skeleton loading shimmer.
+
+### ScreenScraper Provider
+- **Per-ROM-hash metadata and media scraping** with credentials in `~/.env`, 1 req/s throttle, 429/5xx backoff, 30-day disk cache, region-priority media selection, and an https-only URL guard (ADR 0022).
+- Additive v2 routes: status/test/search/info/match (batch, cancellable)/apply (durable job, downloads outside the state lock).
+- Deliberately not wired into the LaunchBox match-review pipeline (ADR).
+
+### Custom Gamescope Presets
+- **User-defined presets** (≤16, unique names, bounded ints) with per-game override; per-game `gamescope_preset` wins over global (completes ADR 0016).
+
+### Library Export
+- **JSON/CSV export** with `all`/`platform`/`playlist` scopes, shareable-by-construction field projection, media paths opt-in, collision-safe filenames, and newest-10 rotation (ADR 0023).
+- Additive v2 routes: queue durable job, download with Content-Disposition, list exports.
+
+### ARM64 & Flathub Prep
+- **aarch64 AppImage** release artifacts alongside x86_64; architecture-aware self-update refuses non-matching-arch releases (ADR 0024, un-defers ADR 0013).
+- CI matrices build/attest/publish both arches (aarch64 on `ubuntu-24.04-arm`).
+- Flatpak manifest runtime bumped `org.gnome.Platform 46` → `49`; AppStream `<content_rating>`, `<developer>`, and `<screenshots>` added; `docs/flathub-checklist.md` (submission stays a maintainer decision).
+
+### Play Insights (Library)
+- Play Insights now renders in the library with 30/90/365-day ranges, lazy IntersectionObserver load, debounced reload, and top-games deep links.
+
+### Fixed
+- `gamescope_preset`/`mangohud_enabled`/`show_insights` settings persisted instead of silently dropped (M0 whitelist bug).
+- Context-menu "add to playlist" (`addGamesToPlaylist`) and Big Box "Achievements" (`openAchievements`) no longer throw ReferenceErrors.
+- Chosen UI language now survives reload via `openbox-locale` localStorage.
+- `app:state-refreshed` event dispatched (debounced) from `library.js refresh()`.
+- Changed-line coverage gate skips unmeasured test/script files (ADR 0025).
+
 ## [1.7.2] - 2026-09-01
 
 ### Localization

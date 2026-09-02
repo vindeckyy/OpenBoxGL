@@ -36,6 +36,13 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.8.0" date="2026-09-02">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.8.0</url>
+      <description>
+        <p>Navigation, Scraping &amp; ARM64 release introducing keyboard/gamepad library navigation, hash routing, ScreenScraper per-ROM-hash scraping, custom gamescope presets, library export, and aarch64 AppImage builds.</p>
+        <p>Adds keyboard and gamepad navigation across the library grid and list with a configurable controller map, hash routing that restores platform/playlist/preset/query/selection/sort on refresh and shared links, sortable list-view columns, a screenshot lightbox, and cover skeleton loading. Introduces a ScreenScraper provider with per-ROM-hash metadata and media scraping, request throttling, and a 30-day disk cache. Adds custom user-defined gamescope presets with per-game override, library export to JSON/CSV with platform/playlist scopes, and aarch64 AppImage release artifacts alongside x86_64.</p>
+      </description>
+    </release>
     <release version="1.7.2" date="2026-09-01">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.7.2</url>
       <description>

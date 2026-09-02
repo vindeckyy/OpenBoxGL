@@ -22,9 +22,9 @@ VENV = ROOT / ".venv-dev"
 RUFF = VENV / "bin" / "ruff"
 COVERAGE = VENV / "bin" / "coverage"
 
-# Coverage floors. Ratcheted baseline: 70% total, 54% web_app.py.
+# Coverage floors. Ratcheted baseline: 72% total, 54% web_app.py.
 # Raise the floors as phases land; never lower them silently.
-COVERAGE_FLOOR = 70.0
+COVERAGE_FLOOR = 72.0
 WEB_APP_FLOOR = 54.0
 CHANGED_LINE_FLOOR = 80.0
 NEW_MODULE_FLOOR = 85.0
