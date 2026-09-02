@@ -56,7 +56,7 @@ class CiGatesTests(unittest.TestCase):
     def test_check_tests_floor_constants(self):
         from scripts import check_tests
 
-        self.assertEqual(check_tests.COVERAGE_FLOOR, 70.0)
+        self.assertEqual(check_tests.COVERAGE_FLOOR, 72.0)
         self.assertEqual(check_tests.WEB_APP_FLOOR, 54.0)
         self.assertEqual(check_tests.CHANGED_LINE_FLOOR, 80.0)
         self.assertEqual(check_tests.NEW_MODULE_FLOOR, 85.0)

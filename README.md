@@ -17,11 +17,11 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.7.2"><img src="https://img.shields.io/badge/Release-v1.7.2-0052CC?style=for-the-badge" alt="Release v1.7.2"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.8.0"><img src="https://img.shields.io/badge/Release-v1.8.0-0052CC?style=for-the-badge" alt="Release v1.8.0"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-2EA44F?style=for-the-badge" alt="CI"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux-lightgrey?style=for-the-badge" alt="Linux"></a>
   <br>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.7.2</strong></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.8.0</strong></a>
 </p>
 
 <p align="center">
@@ -118,11 +118,11 @@ The full capability matrix with acceptance checks lives in [PARITY.md](docs/PARI
 
 ### Library & Discovery
 
-One catalog for Steam, Heroic, Lutris, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and local executables. Advanced search, collections, playlists, tags, bulk edits, custom fields, ESRB filtering, list view, and Surprise Me random selection.
+One catalog for Steam, Heroic, Lutris, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and local executables. Advanced search, collections, playlists, tags, bulk edits, custom fields, ESRB filtering, list view, and Surprise Me random selection. **Keyboard and gamepad navigation** across the grid and list (arrows/Home/End/Page, `f` favorite, Escape clear, configurable controller map), **hash routing** so refresh and shared links restore platform/playlist/preset/query/selection/sort, sortable list-view columns with persisted direction, screenshot lightbox with prev/next/zoom, and cover skeleton loading.
 
 ### Metadata & Media
 
-LaunchBox Games Database sync (covers, backgrounds, screenshots, box backs, spines, 3D boxes, clear logos, fanart, banners, title screens, carts, discs, and advertisement flyers), IGDB search, Steam/GOG media, EmuMovies, Bezel Project, bundled media packs (platform logos, controller prompts, badges), duplicate cleanup, region priority, download limits.
+LaunchBox Games Database sync (covers, backgrounds, screenshots, box backs, spines, 3D boxes, clear logos, fanart, banners, title screens, carts, discs, and advertisement flyers), IGDB search, Steam/GOG media, EmuMovies, Bezel Project, **ScreenScraper** per-ROM-hash scraping (credentials in `~/.env`, 1 req/s throttle, 30-day cache), bundled media packs (platform logos, controller prompts, badges), duplicate cleanup, region priority, download limits.
 
 ### Emulators & Launching
 
@@ -144,11 +144,11 @@ Local-first playtime analytics with a 366-day activity heatmap (levels 0–4), c
 
 ### Big Box & Handhelds
 
-Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attract mode, optional startup video, library BGM, Steam Game Mode guest (`--game-mode`), gamescope presets (Steam Deck, 1080p, 1440p, 4K, integer scale, stretch, borderless), MangoHud performance overlay toggle, controller bench with live gamepad SVG visualization, localization (English, Spanish, German, French, Portuguese).
+Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attract mode, optional startup video, library BGM, Steam Game Mode guest (`--game-mode`), gamescope presets (Steam Deck, 1080p, 1440p, 4K, integer scale, stretch, borderless) plus **custom user-defined presets with per-game override**, MangoHud performance overlay toggle, controller bench with live gamepad SVG visualization, localization (English, Spanish, German, French, Portuguese).
 
 ### Scale & Backups
 
-Optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) with FTS5 full-text search and GROUP BY facets for 50k+ libraries. Backup diff API (`GET /api/v2/backup/diff`) to compare current library against archives. Visual chip builder for smart collection filter presets.
+Optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) with FTS5 full-text search and GROUP BY facets for 50k+ libraries. Backup diff API (`GET /api/v2/backup/diff`) to compare current library against archives. Visual chip builder for smart collection filter presets. **Library export** to JSON or CSV with platform/playlist scopes, shareable-by-construction field projection, and automatic newest-10 rotation.
 
 ### Extensibility
 
@@ -226,7 +226,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 Download the installer from a specific signed release, inspect it, then run it. The installer verifies the release public-key pin, SHA-256 checksum, and Ed25519 signature before installing to `~/.local/bin`:
 
 ```bash
-VERSION=1.7.2
+VERSION=1.8.0
 curl --proto '=https' --tlsv1.2 --fail --location \
   --output install.sh \
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install.sh"
@@ -387,7 +387,7 @@ OpenBox/
 ├── themes/                 Stock themes (5 CSS files)
 ├── emulator_defs/          YAML definition packs
 ├── scripts/                Build, test, screenshot capture
-├── tests/test_*.py         Test suite (82 files)
+├── tests/test_*.py         Test suite (85 files)
 ```
 
 ### Run tests
