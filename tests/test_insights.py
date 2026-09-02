@@ -151,10 +151,15 @@ class TopGamesTest(unittest.TestCase):
         self.assertEqual([item["game_id"] for item in top[:2]], ["game-b", "game-c"])
 
     def test_top_games_garbage_values(self):
-        games = [{"name": "Weird", "playtime_seconds": "not-a-number", "play_count": None}]
+        games = [{"name": "Weird", "playtime_seconds": "not-a-number", "play_count": None}, None, "not-a-dict"]
         top = compute_top_games(games)
         self.assertEqual(top, [])
         self.assertEqual(compute_top_games("not-a-list"), [])
+
+    def test_top_games_play_count_garbage_falls_back(self):
+        games = [{"game_id": "game-a", "name": "Alpha", "playtime_seconds": 100, "play_count": "not-a-number"}]
+        top = compute_top_games(games)
+        self.assertEqual(top[0]["play_count"], 0)
 
 
 class MomentumTest(unittest.TestCase):
