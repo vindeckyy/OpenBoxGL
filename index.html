@@ -516,13 +516,14 @@
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="saveStorefront">Save storefront settings</button></div>
   </dialog>
-  <dialog class="media-dialog" id="mediaDialog" aria-label="Media viewer"><button type="button" id="closeMedia" aria-label="Close screenshot">×</button></dialog>
+  <dialog class="media-dialog" id="mediaDialog" aria-label="Media viewer"><span class="media-counter" id="mediaCounter" aria-live="polite"></span><button type="button" class="media-nav" id="mediaPrev" aria-label="Previous screenshot">‹</button><button type="button" class="media-nav" id="mediaNext" aria-label="Next screenshot">›</button><div class="media-stage"></div><button type="button" id="closeMedia" aria-label="Close screenshot">×</button></dialog>
   <dialog class="reader-dialog" id="readerDialog" aria-labelledby="readerTitle">
     <div class="dialog-head"><h2 id="readerTitle">Document</h2><button type="button" id="closeReader" aria-label="Close Document reader">×</button></div>
     <div class="reader-toolbar"><button type="button" class="icon-button" id="readerPrev">Previous page</button><button type="button" class="icon-button" id="readerNext">Next page</button><span class="description" id="readerPageLabel">Page 1</span><button type="button" class="icon-button" data-reader-layout="single">Single page</button><button type="button" class="icon-button" data-reader-layout="spread">Two-page spread</button><button type="button" class="icon-button" data-reader-theme="light">Light</button><button type="button" class="icon-button" data-reader-theme="dark">Dark</button></div>
     <div class="reader-viewport" id="readerViewport"><iframe id="readerFrame" title="Document reader"></iframe></div>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div class="gamepad-hint" id="gamepadHint" role="status" hidden></div>
   <div class="error-banner" id="errorBanner" role="alert" hidden>
     <span id="errorBannerText"></span>
     <button type="button" class="icon-button" id="errorBannerCopy">Copy details</button>

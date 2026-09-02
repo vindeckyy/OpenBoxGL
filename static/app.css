@@ -353,8 +353,15 @@
     .screenshot-grid button { aspect-ratio:16/9; overflow:hidden; border:1px solid var(--border-control); border-radius:var(--radius-cover); padding:0; background:var(--surface-deep); }
     .screenshot-grid img { width:100%; height:100%; display:block; object-fit:cover; }
     .media-dialog { width:min(1100px,94vw); background:var(--surface-deep); }
-    .media-dialog img { display:block; width:100%; max-height:88vh; object-fit:contain; }
+    .media-dialog img { display:block; width:100%; max-height:88vh; object-fit:contain; cursor:zoom-in; }
     .media-dialog button { position:absolute; top:8px; right:8px; z-index:1; width:34px; height:34px; border:1px solid var(--border-sheet); border-radius:50%; background:var(--surface-sheet); color:var(--text); font-size:var(--font-bigbox); }
+    .media-dialog .media-stage { display:grid; place-items:center; overflow:auto; max-height:92vh; }
+    .media-dialog .media-nav { top:50%; transform:translateY(-50%); }
+    .media-dialog .media-nav#mediaPrev { left:8px; right:auto; }
+    .media-dialog .media-nav#mediaNext { right:8px; }
+    .media-dialog .media-counter { position:absolute; left:12px; top:10px; z-index:1; padding:2px 8px; border-radius:999px; background:var(--surface-sheet); color:var(--text); font-size:var(--font-label); }
+    .media-dialog.has-single .media-nav,.media-dialog.has-single .media-counter { display:none; }
+    .media-dialog img.lightbox-zoom { transform:scale(1.75); cursor:zoom-out; }
     .reader-dialog { width:min(1100px,95vw); height:92vh; }
     .reader-dialog iframe { width:100%; height:calc(92vh - 48px); border:0; background:var(--white); }
     dialog { width:min(680px,90vw); border:1px solid var(--border-card); border-radius:8px; padding:0; color:var(--text); background:var(--panel); box-shadow:0 30px 80px var(--shadow-dialog); }
@@ -382,6 +389,10 @@
     .list-row:hover,.list-row.selected,.list-row:focus-visible { background:var(--surface-hover); }
     .list-row:focus-visible { outline:2px solid var(--focus); outline-offset:-2px; }
     .list-head { display:grid; grid-template-columns:2fr 1fr 1fr 90px 90px 70px 70px; gap:8px; padding:7px 10px; color:var(--section-muted); font-size:var(--font-label); text-transform:uppercase; border-bottom:1px solid var(--line); }
+    .list-head-cell { padding:0; border:none; background:none; color:var(--section-muted); font:inherit; text-transform:inherit; text-align:left; cursor:pointer; }
+    .list-head-cell:hover,.list-head-cell[aria-sort="ascending"],.list-head-cell[aria-sort="descending"] { color:var(--text); }
+    .cover img.cover-skeleton { background:var(--surface-field) linear-gradient(100deg, transparent 30%, var(--accent-ghost-faint) 50%, transparent 70%); background-size:200% 100%; animation:cover-shimmer 1.2s linear infinite; }
+    @keyframes cover-shimmer { from { background-position:200% 0; } to { background-position:-200% 0; } }
     .drop-zone { width:100%; margin:0 0 14px; padding:16px; border:1px dashed var(--drop-border); border-radius:6px; color:var(--drop-text); text-align:left; background:var(--drop-bg); font:inherit; }
     .drop-zone.active { border-color:var(--active); color:var(--text); background:var(--drop-active-bg); }
     .primary-nav { color:var(--text); background:var(--surface-hover); }
@@ -510,6 +521,7 @@
     .toast[data-notify-level="warning"] { border-color:var(--toast-warning-border); color:var(--toast-warning-fg); }
     .toast[data-notify-level="error"] { border-color:var(--toast-error-border); color:var(--toast-error-fg); }
     .muted { color:var(--muted); }
+    .gamepad-hint { position:fixed; z-index:70; left:50%; bottom:18px; transform:translateX(-50%); padding:8px 14px; border:1px solid var(--border-card); border-radius:999px; background:var(--surface-sheet); color:var(--nav-muted); font-size:var(--font-label); }
     .emulator-health { display:grid; gap:0.35rem; }
     .setup-install-chip { padding:4px 10px; border:1px solid var(--focus); border-radius:999px; background:var(--surface-hover); color:var(--focus); font-size:var(--font-label); cursor:pointer; }
     .setup-install-chip:hover { background:var(--nav-hover); }
@@ -642,6 +654,7 @@
       .motion-enter,.topbar-tools.open .tool-menu,dialog[open],dialog[open]::backdrop,
       .lifecycle:not([hidden]),.bigbox:not([hidden]),.bigbox-menu:not([hidden]),.bigbox-pause:not([hidden]),.screensaver:not([hidden]),
       [aria-busy="true"]::after { animation:none !important; }
+      .cover img.cover-skeleton { animation:none; }
       .coverflow-card,.card-main:hover .cover,.card.selected .cover,.card-main:focus-visible .cover { transform:none; }
       .bigbox-startup-video,.screensaver video { display:none; }
       html { scroll-behavior:auto; }

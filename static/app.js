@@ -11,6 +11,8 @@ import { openDiscovery, openStorefronts, saveStorefrontSettings, importStorefron
 import { openBigBox, closeBigBox, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, stopScreenSaver, favoriteBigBox, openBigBoxPause, filteredBigBoxGames, applyLibraryMusic, activateCurrentGame, bigBoxTypingActive } from './bigbox.js';
 import { closeDialog, openGameDialog, closeContextMenu, bindContextMenuA11y, promptChoice, promptInput, confirmAction } from './dialogs.js';
 import { loadInsights, bindInsights } from './insights.js';
+import { initNavigation } from './navigation.js';
+import { applyHash } from './router.js';
 import { init as i18nInit, setLocale, getSupportedLocales, t } from './i18n.js';
 import './activity.js';
 
@@ -358,6 +360,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const deeplink = new URLSearchParams(location.search);
     if (deeplink.get('deeplink') === 'search') $('sidebarSearch').value = deeplink.get('q') || '';
+    // Restore the view context from the URL hash before the first render.
+    applyHash();
+    window.addEventListener('hashchange', () => { if (applyHash()) render(); });
+    initNavigation();
     Promise.all([refresh(),loadTheme()]).then(async () => {
 
     $('queueButton').onclick = () => openFeature('queue');

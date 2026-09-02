@@ -25,6 +25,8 @@ KNOWN_SETTINGS = {
     "library_view",
     "cover_grouping",
     "list_columns",
+    "list_sort",
+    "list_sort_dir",
     "image_group",
     "image_group_by_platform",
     "image_group_by_playlist",
