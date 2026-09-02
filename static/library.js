@@ -421,6 +421,7 @@ function markFilterAria() {
       render();
       applySidebarVisibility();
       applyLocaleStrings();
+      dispatchStateRefreshed();
       if (!AppState.appSettings.welcome_completed && !AppState.games.length) $('setupCenter').showModal();
       setTimeout(() => { try { warmSearchIndex(); } catch(error) { AppState.searchIndexError = error.message; } }, 0);
       const fingerprint = `${AppState.games.length}:${AppState.games[0]?.id || ''}:${AppState.games.at(-1)?.id || ''}`;
@@ -428,6 +429,16 @@ function markFilterAria() {
         lastFacetsFingerprint = fingerprint;
         (typeof requestIdleCallback === 'function' ? requestIdleCallback : setTimeout)(() => loadExplorerFacets().catch(() => {}));
       }
+    }
+    // Cross-module reactivity bus: modules that need to react to a library
+    // refresh (Play Insights, future dashboards) listen on document.
+    let stateRefreshTimer = 0;
+    function dispatchStateRefreshed() {
+      if (stateRefreshTimer) clearTimeout(stateRefreshTimer);
+      stateRefreshTimer = setTimeout(() => {
+        stateRefreshTimer = 0;
+        document.dispatchEvent(new CustomEvent('app:state-refreshed'));
+      }, 250);
     }
     function renderArtwork(game) {
       const items = artworkKinds.filter(([, , flag]) => game[flag]);
