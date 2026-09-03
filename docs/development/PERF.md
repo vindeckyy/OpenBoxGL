@@ -11,7 +11,7 @@ Measured by `scripts/perf_bench.py` against a synthetic library served by the re
 | 10,000 games | ~28ms (29MB est) | ~3.8ms (1.3MB) | ~2.8ms | ~310ms |
 
 - Native host cold start (launch to server ready): 242 ms; server files published 182 ms after spawn. The WebKitGTK window then loads the token-bearing URL, so the full handshake stays under the 2s target.
-- Coverage gates enforced in `scripts/check_tests.py`: `COVERAGE_FLOOR=70` total, `WEB_APP_FLOOR=54`, changed-line `80%`, new runtime modules `85%`.
+- Coverage gates enforced in `scripts/check_tests.py`: `COVERAGE_FLOOR=72.0` total, `WEB_APP_FLOOR=54.0`, changed-line `80%`, new runtime modules `85%`.
 - JSON store ceiling acknowledged; SQLite read model remains the escape hatch beyond 20k.
 
 ## 20,000-game gates (blocking CI job `perf-20k`)

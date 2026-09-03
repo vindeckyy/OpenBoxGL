@@ -3,7 +3,8 @@
 
 The v1 surface is the native host's only contract. A route that appears,
 disappears, or changes its methods must be reflected in v1_contracts.json in
-the same PR. Run from the repo root:
+the same PR. The contract pins path + methods only; query/body params are
+documented per route and manually verified, not gate-enforced. Run from the repo root:
 
   python3 scripts/check_v1_contract.py
 

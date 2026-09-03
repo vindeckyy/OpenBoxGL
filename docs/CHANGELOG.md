@@ -338,7 +338,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 #### State and API contract
 
 - Schema v5 adds a host-owned `ui_state` block; existing games, settings, playlists, and history migrate untouched.
-- The v1 API contract is frozen: `contracts.py` + `v1_contracts.json` (46 routes) with `scripts/check_v1_contract.py` wired into the coverage gate and CI, and `test_v1_aliases.py` pinning legacy aliases.
+- The v1 API contract is frozen: `contracts.py` + `v1_contracts.json` (60 routes) with `scripts/check_v1_contract.py` wired into the coverage gate and CI, and `test_v1_aliases.py` pinning legacy aliases.
 
 #### Batch metadata auto-match
 
@@ -392,13 +392,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 #### Engineering gates
 
-- `make check` runs ruff lint, compile checks over every runtime module and test, the full test suite under coverage, and coverage floors in one command. CI enforces it on push, pull requests, and a weekly schedule. Current floors live in `scripts/check_tests.py`: 60% total and 48% for `web_app.py`, and the floors fail the build when coverage regresses.
+- `make check` runs ruff lint, compile checks over every runtime module and test, the full test suite under coverage, and coverage floors in one command. CI enforces it on push, pull requests, and a weekly schedule. At the time, floors in `scripts/check_tests.py` were 60% total and 48% for `web_app.py` (now ratcheted higher; see `scripts/check_tests.py`), and the floors fail the build when coverage regresses.
 - A version-sync check (`scripts/check_version_sync.py`) fails when `updates.py` disagrees with the README badge, metainfo, PARITY.md, the bug report template, or CHANGELOG, so a release can no longer ship with a stale version claim.
 - Dev-only tooling (ruff, coverage) is pinned in `pyproject.toml` and lives in `.venv-dev`; the runtime app still has zero third-party dependencies.
 
 #### HTTP layer
 
-- The two monolithic dispatch chains (a 613-line GET and a 195-line POST if-chain) became a route registry in `routes.py`: 109 GET and 126 POST entries, each a named `Handler` method or dotted handler spec, with zero behavior change during the mechanical extraction. The contract-frozen v1 surface is 46 routes (`v1_contracts.json`).
+- The two monolithic dispatch chains (a 613-line GET and a 195-line POST if-chain) became a route registry in `routes.py`: 109 GET and 126 POST entries, each a named `Handler` method or dotted handler spec, with zero behavior change during the mechanical extraction. The contract-frozen v1 surface is 60 routes (`v1_contracts.json`).
 - Structured errors in `api_errors.py`: every failure carries a stable machine code (`BAD_REQUEST`, `GAME_NOT_FOUND`, `MEDIA_NOT_FOUND`, `ROUTE_NOT_FOUND`, `MEDIA_JOB_RUNNING`, `STATE_UNAVAILABLE`, ...) and a per-request id that appears in the UI and the diagnostic log. POST handlers re-raise `ApiError` unchanged and convert legacy `ValueError`s into `400 BAD_REQUEST` instead of leaking them to the generic 500 path.
 - A versioned `/api/v1` surface aliases the stable routes; legacy paths keep working for older clients.
 - The library payload is gzip-compressed once per state change and served with a `private, no-cache` ETag, so polls get 304s when nothing changed: 5,000 games serve in about 2 ms at 638 KB instead of 13.8 MB (measured in `docs/development/PERF.md`).

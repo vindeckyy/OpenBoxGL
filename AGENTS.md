@@ -30,8 +30,8 @@ New integration goes in `pkg/parity/` or `handlers/` as appropriate, never at ro
 
 ## Tests
 - One `test_*.py` per module, standalone-script style.
-- Run all with `./run_all_tests.sh` (walks `tests/` then root for compat).
-- Full gate with `make check` (ruff, py_compile, tests, coverage).
+- Run all with `./run_all_tests.sh` (walks `tests/` preferentially; root `test_*.py` only run when `tests/` has none).
+- Full gate with `make check` → `scripts/check_tests.py`: ruff, runtime_modules, v1_contract, version_sync, frontend, i18n, py_compile, tests under coverage, coverage floors (total + web_app), changed-line, new-module, tokens.
 
 ## Before opening a PR
 - `make check` must pass locally.
