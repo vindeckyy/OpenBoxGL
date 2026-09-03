@@ -8,7 +8,8 @@ export PYTHONPATH="$ROOT:${PYTHONPATH:-}"
 TEMP_LOG_DIR="$(mktemp -d /tmp/openbox-test-logs.XXXXXX)"
 trap 'rm -rf "$TEMP_LOG_DIR"' EXIT
 
-# Support both flat and packaged layout: walk tests/ if it exists, otherwise root
+# Layout: run tests/ when it contains test files, otherwise fall back to root test_*.py.
+# When tests/ yields files the root walk is skipped (early break below).
 TEST_DIRS=("tests" ".")
 failures=0
 total=0
