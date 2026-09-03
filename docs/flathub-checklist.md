@@ -13,7 +13,7 @@ OpenBox 1.8.0 prepares the Flatpak manifest and AppStream metadata for Flathub. 
 
 ## Remaining manual steps (at submission time)
 
-- [ ] **Screenshot hosting.** `openbox.metainfo.xml` references `https://openboxgl.github.io/assets/openbox-*.png`. Confirm those URLs resolve, or move the screenshots into the Flathub app repo and point `<image>` at its raw GitHub URLs (the Flathub convention).
+- [x] **Screenshot hosting.** `openbox.metainfo.xml` screenshot URLs now point at the live docs-site paths (`https://openboxgl.github.io/openbox-*.png`); all three resolve with `image/png`. (The original `/assets/` prefix 404'd.) At Flathub submission, prefer moving the screenshots into the app repo and pointing `<image>` at its raw GitHub URLs (the Flathub convention).
 - [ ] **Runtime re-verify.** Re-confirm `org.gnome.Platform//49` still ships `webkit2gtk-4.1` (the native host builds with `pkg-config webkit2gtk-4.1`). The CI `flatpak-validate` job's `flatpak-builder --dry-run` is the gate; if a future GNOME runtime drops the GTK3 WebKit, either pin the last runtime that has it or build webkit2gtk-4.1 in the manifest.
 - [ ] **Flathub repo setup.** Create `flathub/io.openbox.GameLauncher`, add the maintainers, transfer the manifest + screenshots.
 - [ ] **flathubbot PR.** Open the initial submission PR; flathubbot runs validation and review.

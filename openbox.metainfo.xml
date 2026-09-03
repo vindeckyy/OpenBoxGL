@@ -23,15 +23,15 @@
   </content_rating>
   <screenshots>
     <screenshot type="default">
-      <image type="source">https://openboxgl.github.io/assets/openbox-screenshot.png</image>
+      <image type="source">https://openboxgl.github.io/openbox-screenshot.png</image>
       <caption>The library grid with cover art, filters, and the top bar.</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://openboxgl.github.io/assets/openbox-game-detail.png</image>
+      <image type="source">https://openboxgl.github.io/openbox-game-detail.png</image>
       <caption>Game detail pane with metadata, artwork, and launch actions.</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://openboxgl.github.io/assets/openbox-bigbox.png</image>
+      <image type="source">https://openboxgl.github.io/openbox-bigbox.png</image>
       <caption>Big Box fullscreen mode for controller-driven couch use.</caption>
     </screenshot>
   </screenshots>
