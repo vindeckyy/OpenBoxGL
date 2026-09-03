@@ -8,7 +8,7 @@ OpenBox 1.8.0 prepares the Flatpak manifest and AppStream metadata for Flathub. 
 - [x] `scripts/validate_flatpak_manifest.py` and `tests/test_packaging.py::test_flatpak_manifest` updated to `'49'`.
 - [x] AppStream `<content_rating type="oars-1.1">` added (`social-info=mild`; the launcher itself ships no mature content).
 - [x] AppStream `<developer id="io.openboxgl">` and `<screenshots>` block added (three 1920×1080 16:9 screenshots).
-- [x] `openbox.metainfo.xml` release history current through 1.7.2 (1.8.0 block lands in M8).
+- [x] `openbox.metainfo.xml` release history current through 1.8.0.
 - [x] `scripts/capture_readme_screenshots.py` already produces 1920×1080 16:9 screenshots (no extension needed).
 
 ## Remaining manual steps (at submission time)
