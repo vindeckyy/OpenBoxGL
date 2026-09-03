@@ -112,12 +112,16 @@ jobs:
         with:
           name: openbox-flatpak
 
+      - name: Compute release name
+        id: relname
+        run: echo "name=OpenBox ${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
       - name: Create release and upload Flatpak
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # softprops/action-gh-release@v3.0.2
         with:
           tag_name: ${{ github.ref_name }}
           target_commitish: ${{ github.sha }}
-          name: OpenBox ${{ github.ref_name }}
+          name: ${{ steps.relname.outputs.name }}
           generate_release_notes: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           fail_on_unmatched_files: true
