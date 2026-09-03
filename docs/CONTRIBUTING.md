@@ -28,7 +28,7 @@ cd OpenBoxGL
 python3 web_app.py
 ```
 
-Optional local configuration can be loaded from `~/.env` or a project `.env` file. See `.env.example`. Never commit secrets, tokens, or personal credentials.
+Optional local configuration can be loaded from an explicit `OPENBOX_ENV_FILE`, the data directory (or its parent), `~/.env`, or `~/.config/openbox-game-launcher/.env`. See `.env.example`. Never commit secrets, tokens, or personal credentials.
 
 ### Native window
 
@@ -99,7 +99,7 @@ All tests must pass on CI before a PR can be merged.
 
 ## Release process
 
-OpenBox v1.7 follows **artifact-first** gates (ADR 0013). Stable publication requires exact-artifact CI green, not source-only checks.
+OpenBox follows **artifact-first** gates (ADR 0013). Stable publication requires exact-artifact CI green, not source-only checks.
 
 ### Repository and release authority
 
@@ -120,7 +120,7 @@ See [ADR 0013 (Artifact Gates & Release Criteria)](adr/0013-artifact-gates.md) f
 
 ### No telemetry
 
-OpenBox does not add telemetry in v1.7. Diagnostics (`/api/diagnostic`), artifacts, and Flatpak `finish-args` must not upload usage data. Do not introduce phone-home, analytics SDKs, or crash reporters that exfiltrate library contents.
+OpenBox does not add telemetry. Diagnostics (`/api/diagnostic`), artifacts, and Flatpak `finish-args` must not upload usage data. Do not introduce phone-home, analytics SDKs, or crash reporters that exfiltrate library contents.
 
 ## Pull request process
 

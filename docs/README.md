@@ -6,7 +6,7 @@ The files under this `docs/` folder are engineering and planning documents that 
 
 - `reliability.md` — edge case catalog of failure modes and expected behavior
 - `native-host-contract.md` — contract between the page and the WebKitGTK native host
-- `adr/` — Architectural Decision Records (ADR 0001 through 0020) covering native host, repository layout, parity shims, theme tokens, cache hierarchy, gate completion, lock ordering, state decomposition, namespace migration, setup preview, durable operations, emulator registry, artifact gates, SQLite read model, i18n system, gamescope presets, controller settings UI, BIOS SHA1 drift detection, backup diff API, and smart collection chips
+- `adr/` — Architectural Decision Records (ADR 0001 through 0025) covering native host, repository layout, parity shims, theme tokens, cache hierarchy, gate completion, lock ordering, state decomposition, namespace migration, setup preview, durable operations, emulator registry, artifact gates, SQLite read model, i18n system, gamescope presets, controller settings UI, BIOS SHA1 drift detection, backup diff API, smart collection chips, hash routing, ScreenScraper, library export, aarch64 artifacts, and changed-line coverage
 - `development/` — development and handler conventions (`HANDLER_CONVENTIONS.md`, `PERF.md`)
 
 Do not add user-facing markdown here. Edit the docs site repo instead.

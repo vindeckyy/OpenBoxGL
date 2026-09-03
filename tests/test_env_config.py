@@ -104,6 +104,19 @@ class EnvConfigTests(unittest.TestCase):
             with mock.patch("env_config.Path.cwd", return_value=current):
                 self.assertNotIn(env, discover_env_files())
 
+    def test_load_dotenv_loads_screenscraper_credentials(self):
+        with tempfile.TemporaryDirectory() as folder:
+            env = Path(folder) / ".env"
+            env.write_text("SCREENSCRAPER_USER=u\nSCREENSCRAPER_PASSWORD=p\n")
+            env.chmod(0o600)
+            load_dotenv(env)
+            try:
+                self.assertEqual(os.environ.get("SCREENSCRAPER_USER"), "u")
+                self.assertEqual(os.environ.get("SCREENSCRAPER_PASSWORD"), "p")
+            finally:
+                os.environ.pop("SCREENSCRAPER_USER", None)
+                os.environ.pop("SCREENSCRAPER_PASSWORD", None)
+
 
 if __name__ == "__main__":
     unittest.main()

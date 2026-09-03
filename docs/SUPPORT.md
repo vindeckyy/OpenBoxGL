@@ -3,7 +3,7 @@
 ## Scale and architecture
 
 - **Formal library scale:** 20,000 games (performance gates enforce 10k/20k scenarios). Optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) extends search and facet performance for 50k+ libraries.
-- **CPU architecture:** **x86_64 and aarch64** for 1.8.0 release artifacts (AppImage and Flatpak). The self-updater installs only the artifact matching the running architecture.
+- **CPU architecture:** **x86_64 and aarch64** for 1.8.0 AppImage artifacts (the Flatpak bundle is x86_64 only). The self-updater installs only the artifact matching the running architecture.
 - **Interface language:** English, Spanish, German, French, and Portuguese (v1.7.2+).
 
 ## Supported platforms
