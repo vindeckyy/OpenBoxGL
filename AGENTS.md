@@ -6,7 +6,7 @@ Read this before writing code. A convention that lives only in a human's head is
 - `openbox.py` is the launcher entry point, stays at root.
 - `handlers/` - HTTP handlers, one module per domain (library, imports, media, etc.).
 - `pkg/parity/` - parity_* modules (clear names, cohesive cluster). New parity code goes there, with shim at root for compat.
-- `static/` - 20 JS modules split by domain (library.js, insights.js, etc.) plus worker.search.js, app.js, and app.css.
+- `static/` - 20 JS modules (18 domain modules plus app.js and worker.search.js) and app.css.
 - `themes/` - theme CSS files, each overrides `:root` tokens only.
 - `emulator_defs/` - YAML definitions.
 - `tests/` - one test_*.py per module, mirroring package layout, standalone `python3 -B file.py` style, run via `./run_all_tests.sh`.
