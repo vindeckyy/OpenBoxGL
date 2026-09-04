@@ -88,6 +88,10 @@ class PreviewStale(Conflict):
     code = "PREVIEW_STALE"
 
 
+class SyncNeedsConfirm(Conflict):
+    code = "SYNC_NEEDS_CONFIRM"
+
+
 class PreviewLibraryChanged(Conflict):
     code = "PREVIEW_LIBRARY_CHANGED"
 

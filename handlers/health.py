@@ -194,7 +194,25 @@ class HealthHandlers:
             self.send_json(400, {"error": "Configure a mounted cloud sync folder first."})
             return
         device_id = str(payload.get("device_id") or "local")
-        result = pull_library(state, folder, device_id=device_id)
+        confirm = bool(payload.get("confirm"))
+        result = pull_library(state, folder, device_id=device_id, confirm=confirm)
+
+        if result.get("needs_confirm"):
+            self.send_json(409, {
+                "error": (
+                    f"Pull would delete {result['deleted']} of "
+                    f"{result.get('local_count', 0)} games. Resend with confirm:true to apply."
+                ),
+                "code": "SYNC_NEEDS_CONFIRM",
+                "needs_confirm": True,
+                "added": result["added"],
+                "updated": result["updated"],
+                "deleted": result["deleted"],
+                "skipped": result["skipped"],
+                "local_count": result.get("local_count", 0),
+                "synced_at": result["synced_at"],
+            })
+            return
 
         from webapp_state import transact_state
 
@@ -209,6 +227,8 @@ class HealthHandlers:
             "deleted": result["deleted"],
             "skipped": result["skipped"],
             "synced_at": result["synced_at"],
+            "needs_confirm": False,
+            "conflicts": result.get("conflicts", []),
         })
 
 

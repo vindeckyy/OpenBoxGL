@@ -476,7 +476,14 @@
     "install_desktop": "Install desktop shortcut",
     "show_insights": "Show Play Insights in the library",
     "mood_match": "Adaptive cover theming",
-    "mood_match_bigbox": "Adaptive theming in Big Box"
+    "mood_match_bigbox": "Adaptive theming in Big Box",
+    "sync_library_publish": "Publish library now",
+    "sync_library_pull": "Pull library now",
+    "sync_conflicts_title": "Sync conflicts (newest kept, review below)",
+    "sync_media_notice": "Media stays per-device and is never synced.",
+    "sync_conflict_detail": "Winner: {winner} · fields differ: {fields}",
+    "sync_publish_done": "Published {count} games",
+    "sync_pull_done": "Pulled: {added} added, {updated} updated, {deleted} deleted"
   },
   "picker": {
     "title": "What should I play?",

@@ -476,7 +476,14 @@
     "install_desktop": "Desktop-Verknüpfung installieren",
     "show_insights": "Spielstatistiken in der Bibliothek anzeigen",
     "mood_match": "Adaptive Cover-Gestaltung",
-    "mood_match_bigbox": "Adaptive Gestaltung in Big Box"
+    "mood_match_bigbox": "Adaptive Gestaltung in Big Box",
+    "sync_library_publish": "Bibliothek jetzt veröffentlichen",
+    "sync_library_pull": "Bibliothek jetzt abrufen",
+    "sync_conflicts_title": "Sync-Konflikte (neueste behalten, unten prüfen)",
+    "sync_media_notice": "Medien bleiben pro Gerät und werden nie synchronisiert.",
+    "sync_conflict_detail": "Gewinner: {winner} · abweichende Felder: {fields}",
+    "sync_publish_done": "{count} Spiele veröffentlicht",
+    "sync_pull_done": "Abgerufen: {added} hinzugefügt, {updated} aktualisiert, {deleted} gelöscht"
   },
   "picker": {
     "title": "Was soll ich spielen?",

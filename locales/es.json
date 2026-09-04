@@ -476,7 +476,14 @@
     "install_desktop": "Instalar acceso directo de escritorio",
     "show_insights": "Mostrar estadísticas de juego en la biblioteca",
     "mood_match": "Tematización adaptativa de la portada",
-    "mood_match_bigbox": "Tematización adaptativa en Big Box"
+    "mood_match_bigbox": "Tematización adaptativa en Big Box",
+    "sync_library_publish": "Publicar la biblioteca ahora",
+    "sync_library_pull": "Recibir la biblioteca ahora",
+    "sync_conflicts_title": "Conflictos de sincronización (se conserva lo más reciente)",
+    "sync_media_notice": "Los medios permanecen por dispositivo y nunca se sincronizan.",
+    "sync_conflict_detail": "Ganador: {winner} · campos diferentes: {fields}",
+    "sync_publish_done": "{count} juegos publicados",
+    "sync_pull_done": "Recibidos: {added} añadidos, {updated} actualizados, {deleted} eliminados"
   },
   "picker": {
     "title": "¿Qué debería jugar?",

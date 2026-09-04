@@ -476,7 +476,14 @@
     "install_desktop": "Instalar atalho na área de trabalho",
     "show_insights": "Mostrar estatísticas de jogo na biblioteca",
     "mood_match": "Tema adaptativo da capa",
-    "mood_match_bigbox": "Tema adaptativo no Big Box"
+    "mood_match_bigbox": "Tema adaptativo no Big Box",
+    "sync_library_publish": "Publicar a biblioteca agora",
+    "sync_library_pull": "Receber a biblioteca agora",
+    "sync_conflicts_title": "Conflitos de sincronização (o mais recente é mantido)",
+    "sync_media_notice": "A mídia permanece por dispositivo e nunca é sincronizada.",
+    "sync_conflict_detail": "Vencedor: {winner} · campos diferentes: {fields}",
+    "sync_publish_done": "{count} jogos publicados",
+    "sync_pull_done": "Recebidos: {added} adicionados, {updated} atualizados, {deleted} excluídos"
   },
   "picker": {
     "title": "O que devo jogar?",

@@ -66,7 +66,12 @@ def _sync_lock(target):
     lock_path = Path(target).with_name(f".{Path(target).name}.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+", encoding="utf-8") as lock_file:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (BlockingIOError, OSError) as error:
+            raise CloudSyncError(
+                f"Sync folder is busy (another sync is holding the lock): {target}"
+            ) from error
         try:
             yield
         finally:
@@ -234,6 +239,31 @@ def sync_statistics(state, folder, now=None):
 
 LIBRARY_SYNC_FILE = "openbox-library.json"
 TOMBSTONE_FIELDS = frozenset({"deleted_at", "device_id"})
+TOMBSTONE_GC_DAYS = 90
+TOMBSTONE_GC_SECONDS = TOMBSTONE_GC_DAYS * 86400
+MASS_DELETE_THRESHOLD = 0.10
+
+
+def _fields_differ(local_game, remote_game):
+    """Field names whose values differ between local and remote copies."""
+    keys = set(local_game) | set(remote_game)
+    keys.discard("_sync_updated_at")
+    return sorted(key for key in keys if local_game.get(key) != remote_game.get(key))
+
+
+def _gc_tombstones(tombstones, now_ts):
+    """Drop tombstones older than 90 days. Returns (kept, gc_count)."""
+    kept = {}
+    gc_count = 0
+    for key, record in tombstones.items():
+        if not isinstance(record, dict) or not record.get("deleted_at"):
+            continue
+        deleted_ts = _timestamp(record.get("deleted_at"))
+        if deleted_ts and now_ts - deleted_ts > TOMBSTONE_GC_SECONDS:
+            gc_count += 1
+            continue
+        kept[key] = record
+    return kept, gc_count
 
 
 def publish_library(state, folder, device_id="local", now=None):
@@ -281,10 +311,14 @@ def publish_library(state, folder, device_id="local", now=None):
                 # Game was re-added locally; clear tombstone
                 tombstones.pop(key, None)
 
+        # 90-day garbage collection for stale tombstones (ADR 0038)
+        tombstones, tombstones_gc = _gc_tombstones(tombstones, _timestamp(timestamp))
+
         payload = {
             "format": 2,
             "generated_at": timestamp,
             "device_id": device_id,
+            "media_synced": False,
             "games": games_map,
             "tombstones": tombstones,
         }
@@ -293,11 +327,13 @@ def publish_library(state, folder, device_id="local", now=None):
         "path": str(target),
         "published_games": len(games_map),
         "tombstones": len(tombstones),
+        "tombstones_gc": tombstones_gc,
+        "media_synced": False,
         "synced_at": timestamp,
     }
 
 
-def pull_library(state, folder, device_id="local", now=None):
+def pull_library(state, folder, device_id="local", now=None, confirm=False):
     """Pull the remote library and merge into local state.
 
     Returns a merge result dict with added/updated/deleted/skipped counts and
@@ -305,7 +341,15 @@ def pull_library(state, folder, device_id="local", now=None):
     transact_state.
 
     Conflict resolution: last-writer-wins by ``updated_at`` timestamp.
-    Tombstones delete local games that match the tombstone key.
+    Concurrent edits are reported in ``conflicts[]`` (game_key,
+    local/remote updated_at, winner, fields_differ) without changing the
+    winner. Tombstones delete local games that match the tombstone key.
+    Pulls that would delete more than 10% of the local library require
+    ``confirm=True``; without it the call returns ``needs_confirm`` with
+    counts and leaves the library unmutated. Media is never synced
+    (``media_synced`` stays False). Manual/shelf entries merge with
+    ``path_usable`` so the receiving device renders a shelf badge instead
+    of a missing-file error.
     """
     folder = Path(folder).expanduser()
     if not folder.is_dir():
@@ -313,7 +357,7 @@ def pull_library(state, folder, device_id="local", now=None):
     target = folder / LIBRARY_SYNC_FILE
     timestamp = now or datetime.now().astimezone().isoformat(timespec="seconds")
     if not target.is_file():
-        return {"added": 0, "updated": 0, "deleted": 0, "skipped": 0, "games": state.get("games", []), "synced_at": timestamp}
+        return {"added": 0, "updated": 0, "deleted": 0, "skipped": 0, "games": state.get("games", []), "synced_at": timestamp, "needs_confirm": False, "conflicts": []}
 
     with _sync_lock(target):
         try:
@@ -340,6 +384,25 @@ def pull_library(state, folder, device_id="local", now=None):
     updated = 0
     deleted = 0
     skipped = 0
+    conflicts = []
+
+    # Mass-delete gate: pulls deleting >10% of the local library need confirm.
+    pending_deleted = sum(
+        1 for tkey, tombstone in remote_tombstones.items()
+        if isinstance(tombstone, dict) and tombstone.get("deleted_at") and tkey in local_by_key
+    )
+    if pending_deleted and local_games and pending_deleted / len(local_games) > MASS_DELETE_THRESHOLD and not confirm:
+        return {
+            "added": 0,
+            "updated": 0,
+            "deleted": pending_deleted,
+            "skipped": 0,
+            "games": list(state.get("games", [])),
+            "synced_at": timestamp,
+            "needs_confirm": True,
+            "local_count": len(local_games),
+            "conflicts": [],
+        }
 
     # Apply tombstones: delete local games that are tombstoned remotely
     for tkey, tombstone in remote_tombstones.items():
@@ -367,13 +430,26 @@ def pull_library(state, folder, device_id="local", now=None):
             idx = local_by_key[rkey]
             local_game = local_games[idx]
             local_updated = _timestamp(local_game.get("_sync_updated_at", "0"))
+            differ = _fields_differ(local_game, remote_game)
+            if differ:
+                conflicts.append({
+                    "game_key": rkey,
+                    "local_updated_at": local_game.get("_sync_updated_at", ""),
+                    "remote_updated_at": record.get("updated_at", ""),
+                    "winner": "remote" if remote_updated > local_updated else "local",
+                    "fields_differ": differ,
+                })
             if remote_updated > local_updated:
+                if remote_game.get("manual_entry"):
+                    remote_game["path_usable"] = True
                 remote_game["_sync_updated_at"] = record.get("updated_at", "")
                 local_games[idx] = remote_game
                 updated += 1
             else:
                 skipped += 1
         else:
+            if remote_game.get("manual_entry"):
+                remote_game["path_usable"] = True
             remote_game["_sync_updated_at"] = record.get("updated_at", "")
             local_games.append(remote_game)
             local_by_key[rkey] = len(local_games) - 1
@@ -386,4 +462,6 @@ def pull_library(state, folder, device_id="local", now=None):
         "skipped": skipped,
         "games": local_games,
         "synced_at": timestamp,
+        "needs_confirm": False,
+        "conflicts": conflicts,
     }

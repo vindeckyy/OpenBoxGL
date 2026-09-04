@@ -476,7 +476,14 @@
     "install_desktop": "Installer le raccourci sur le bureau",
     "show_insights": "Afficher les statistiques de jeu dans la bibliothèque",
     "mood_match": "Thème adaptatif de la jaquette",
-    "mood_match_bigbox": "Thème adaptatif dans Big Box"
+    "mood_match_bigbox": "Thème adaptatif dans Big Box",
+    "sync_library_publish": "Publier la bibliothèque",
+    "sync_library_pull": "Récupérer la bibliothèque",
+    "sync_conflicts_title": "Conflits de synchro (le plus récent est conservé)",
+    "sync_media_notice": "Les médias restent par appareil et ne sont jamais synchronisés.",
+    "sync_conflict_detail": "Gagnant : {winner} · champs différents : {fields}",
+    "sync_publish_done": "{count} jeux publiés",
+    "sync_pull_done": "Reçus : {added} ajoutés, {updated} mis à jour, {deleted} supprimés"
   },
   "picker": {
     "title": "À quoi devrais-je jouer ?",

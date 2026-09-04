@@ -1,4 +1,5 @@
 import { $, escapeHtml, formatBytes, defaultBadges, defaultControllerMap, fact } from './util.js';
+import { t } from './i18n.js';
 import { AppState, api, notify, token, selectedIds, playlistFor, applySidebarVisibility, nativePickFile, nativePickFolder } from './state.js';
 import { refresh, render, renderGrid } from './library.js';
 import { applyLibraryMusic } from './bigbox.js';
@@ -787,6 +788,58 @@ import { confirmAction, promptInput } from './dialogs.js';
         notify(error.message);
       }
     };
+    // ── Library sync v2 (1.10.0, ADR 0038) ──────────────────────────────
+    // Full-library publish/pull via the mounted folder. Pulls report
+    // conflicts[] (last-writer-wins winners, listed for review only) and
+    // mass deletes gate on confirm. Media stays per-device, never synced.
+    function renderSyncConflicts(conflicts) {
+      const box = $('syncConflicts');
+      if (!box) return;
+      if (!conflicts || !conflicts.length) { box.innerHTML = ''; box.hidden = true; return; }
+      box.hidden = false;
+      box.innerHTML = `<h3>${escapeHtml(t('settings.sync_conflicts_title'))}</h3><p class="description">${escapeHtml(t('settings.sync_media_notice'))}</p><div class="emulator-list">${conflicts.map(entry => `<div class="detail-card"><strong>${escapeHtml(entry.game_key || '')}</strong><p class="description">${escapeHtml(t('settings.sync_conflict_detail', { winner: entry.winner || '', fields: (entry.fields_differ || []).join(', ') }))}</p></div>`).join('')}</div>`;
+    }
+    function ensureLibrarySyncControls() {
+      if ($('pullLibrarySync') || !$('syncCloud') || !$('syncCloud').parentNode) return;
+      const anchor = $('syncCloud').parentNode;
+      const publish = document.createElement('button');
+      publish.type = 'button'; publish.className = 'icon-button'; publish.id = 'publishLibrarySync';
+      publish.textContent = t('settings.sync_library_publish');
+      const pull = document.createElement('button');
+      pull.type = 'button'; pull.className = 'icon-button'; pull.id = 'pullLibrarySync';
+      pull.textContent = t('settings.sync_library_pull');
+      const box = document.createElement('div');
+      box.id = 'syncConflicts'; box.className = 'wide'; box.hidden = true;
+      anchor.append(publish); anchor.append(pull); anchor.append(box);
+      pull.onclick = () => pullLibrarySync(false);
+      publish.onclick = publishLibrarySync;
+    }
+    async function publishLibrarySync() {
+      try {
+        AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
+        const result = await api('/api/v2/library/sync/publish',{method:'POST',body:'{}'});
+        $('cloudStatus').textContent = ` (beta) · ${t('settings.sync_publish_done', { count: result.published_games })}`;
+        await refresh();
+      } catch(error) { notify(error.message); }
+    }
+    async function pullLibrarySync(confirmed) {
+      try {
+        AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
+        const result = await api('/api/v2/library/sync/pull',{method:'POST',body:JSON.stringify({ confirm: Boolean(confirmed) })});
+        renderSyncConflicts(result.conflicts);
+        $('cloudStatus').textContent = ` (beta) · ${t('settings.sync_pull_done', { added: result.added, updated: result.updated, deleted: result.deleted })}`;
+        await refresh();
+      } catch(error) {
+        if (error && error.code === 'SYNC_NEEDS_CONFIRM') {
+          const ok = await confirmAction({ title: t('settings.sync_conflicts_title'), message: error.message, consequence: t('settings.sync_media_notice') });
+          if (ok) return pullLibrarySync(true);
+          return;
+        }
+        $('cloudStatus').textContent = ` (beta) · Sync failed: ${error.message}`;
+        notify(error.message);
+      }
+    }
+    ensureLibrarySyncControls();
     $('checkUpdate').onclick = async () => {
       try {
         $('updateStatus').textContent = 'Checking the verified GitHub release channel...';
@@ -911,4 +964,4 @@ import { confirmAction, promptInput } from './dialogs.js';
       } catch (error) { notify(error.message); }
     }
 
-export { filterSettings, completeWelcome, maybeShowWelcome, collectSettings, saveEmumoviesSettings, shuttingDown, gracefulShutdown, openSettings, openProfiles, renderEmulators, watchEmulator, watchInstallAll, perfDraft, loadTheme, openThemes, openAchievements, openPlugins, renderJobsPanel, health, savePreset, saveFilter, saveManualPlaylist, createManualPlaylist, addGamesToPlaylist, updateManualPlaylist, openPlaylists, createFilterPlaylist, openBackups, createNamedBackup, deletePlaylist, backup, bulkAction, featureMode, openFeature, startControllerBench, stopControllerBench };
+export { filterSettings, completeWelcome, maybeShowWelcome, collectSettings, saveEmumoviesSettings, shuttingDown, gracefulShutdown, openSettings, openProfiles, renderEmulators, watchEmulator, watchInstallAll, perfDraft, loadTheme, openThemes, openAchievements, openPlugins, renderJobsPanel, health, savePreset, saveFilter, saveManualPlaylist, createManualPlaylist, addGamesToPlaylist, updateManualPlaylist, openPlaylists, createFilterPlaylist, openBackups, createNamedBackup, deletePlaylist, backup, bulkAction, featureMode, openFeature, startControllerBench, stopControllerBench, renderSyncConflicts, publishLibrarySync, pullLibrarySync };
