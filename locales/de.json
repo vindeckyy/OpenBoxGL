@@ -589,7 +589,8 @@
     "ra_not_matched": "Nicht zugeordnet",
     "screensaver_prompt": "Play drücken zum Starten oder eine andere Taste zum Zurückkehren.",
     "running_game": "Laufendes Spiel",
-    "search_platform": "Diese Plattform durchsuchen"
+    "search_platform": "Diese Plattform durchsuchen",
+    "video_snaps": "Video-Snaps"
   },
   "errors": {
     "copy_details": "Details kopieren",
@@ -684,6 +685,9 @@
     "spinning": "Dreht…",
     "winner": "Gewinner spielt",
     "launch": "Starten",
-    "only_one": "Nur ein Spiel in der Warteschlange."
+    "only_one": "Nur ein Spiel in der Warteschlange.",
+    "resume": "Runde {n} von {total} fortsetzen?",
+    "resume_action": "Fortsetzen",
+    "excluded": "{count} von {total} Spielen ausgeschlossen (Einzelspieler, versteckt oder fehlend)."
   }
 }

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from openbox import load_state
-from pkg.parity.parity_party import build_party_queue
+from pkg.parity.parity_party import build_party_report, should_offer_resume
 from routes.registry import route
 from webapp_state import transact_state
 
@@ -50,7 +50,9 @@ class PartyHandlers:
 
         state = load_state()
         games = [g for g in state.get("games", []) if isinstance(g, dict)]
-        queue = build_party_queue(games, players=players, minutes=minutes)
+        report = build_party_report(games, players=players, minutes=minutes)
+        queue = report["queue"]
+        excluded = report["excluded"]
 
         def mutate(live):
             settings = live.setdefault("settings", {})
@@ -59,7 +61,7 @@ class PartyHandlers:
             settings["party_index"] = 0
 
         transact_state(mutate)
-        self.send_json(200, {"queue": queue, "count": len(queue)})
+        self.send_json(200, {"queue": queue, "count": len(queue), "excluded": excluded})
         return
 
     @route("GET", "/api/v2/party/queue")
@@ -67,7 +69,7 @@ class PartyHandlers:
         state = load_state()
         settings = state.get("settings", {}) if isinstance(state, dict) else {}
         queue, _players, index = _queue_from_settings(settings if isinstance(settings, dict) else {})
-        self.send_json(200, {"queue": queue, "index": index if queue else 0})
+        self.send_json(200, {"queue": queue, "index": index if queue else 0, "resume": should_offer_resume(queue, index)})
         return
 
     @route("POST", "/api/v2/party/next")

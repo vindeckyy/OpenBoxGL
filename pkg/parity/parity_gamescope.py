@@ -589,3 +589,65 @@ def is_mangohud_available(which=None):
     """Check if MangoHud is installed and on PATH."""
     finder = which or shutil.which
     return finder("mangohud") is not None
+
+
+# ---------------------------------------------------------------------------
+# Big Box + Game Night polish (1.10.0, B4)
+# ---------------------------------------------------------------------------
+
+# Per-game MangoHud tri-state: "on"/"off" win, anything else inherits global.
+MANGOHUD_MODES = ("inherit", "on", "off")
+
+# Video snaps: preload the visible snap plus one lookahead, then stop.
+SNAP_PRELOAD_BUDGET = 2
+
+# BGM duck level while a snap plays; restore goes back to full volume so a
+# missing video can never leave BGM stuck quiet.
+SNAP_DUCK_VOLUME = 0.1
+
+
+def clean_mangohud_mode(value) -> str:
+    """Normalize a per-game MangoHud mode to inherit/on/off."""
+    text = str(value or "").strip().casefold()
+    if text in ("on", "off"):
+        return text
+    return "inherit"
+
+
+def resolve_mangohud_enabled(game=None, settings=None) -> bool:
+    """Effective MangoHud flag: per-game mode wins, inherit falls back global."""
+    mode = clean_mangohud_mode((game or {}).get("mangohud") if isinstance(game, dict) else "inherit")
+    if mode == "on":
+        return True
+    if mode == "off":
+        return False
+    scope = settings if isinstance(settings, dict) else {}
+    return bool(scope.get("mangohud_enabled", False))
+
+
+def should_play_snaps(settings=None, reduced_motion=False) -> bool:
+    """Video snaps default on; explicit off sticks; reduced-motion forces off."""
+    if reduced_motion:
+        return False
+    scope = settings if isinstance(settings, dict) else {}
+    return bool(scope.get("bigbox_video_snaps", True))
+
+
+def select_snap_preloads(current_id, ordered_ids, budget=SNAP_PRELOAD_BUDGET) -> list:
+    """Return at most `budget` snap ids starting at the visible one (visible+1)."""
+    ids = [str(item) for item in ordered_ids or []]
+    try:
+        at = ids.index(str(current_id))
+    except ValueError:
+        return []
+    try:
+        count = max(1, int(budget))
+    except (TypeError, ValueError):
+        count = SNAP_PRELOAD_BUDGET
+    return ids[at:at + count]
+
+
+def restore_bgm_volume(settings=None) -> float:
+    """Full BGM volume after a snap stops or fails (never the ducked level)."""
+    scope = settings if isinstance(settings, dict) else {}
+    return 0.35 if scope.get("video_bgm_mix") else 0.6

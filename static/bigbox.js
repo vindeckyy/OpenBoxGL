@@ -149,14 +149,40 @@ import { openParty, partyOverlayOpen, partyGamepad } from './party.js';
 
     // --- Video snap player (1.9.0) ---
     // ponytail: single reused <video> element, 600ms debounce, ducks BGM,
-    // respects prefers-reduced-motion, falls back to static cover.
+    // respects prefers-reduced-motion and the Big Box video-snaps toggle,
+    // preloads visible+1, falls back to static cover, never sticks the duck.
+    const SNAP_PRELOAD_BUDGET = 2;
     let _videoSnapEl = null;
     let _videoSnapTimer = 0;
     let _videoSnapGameId = null;
+    let _snapPreloadEl = null;
     const _reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    const _snapsEnabled = () => AppState.appSettings.bigbox_video_snaps !== false && !_reducedMotion();
+
+    function clearSnapPreload() {
+      if (_snapPreloadEl) { _snapPreloadEl.remove(); _snapPreloadEl = null; }
+    }
+
+    function preloadSnapBudget(game) {
+      clearSnapPreload();
+      if (!_snapsEnabled() || !game) return;
+      const order = AppState.bigBoxGames || [];
+      const at = order.findIndex(item => item.id === game.id);
+      const next = at >= 0 ? order.slice(at, at + SNAP_PRELOAD_BUDGET)[1] : null;
+      if (!next) return;
+      const nextUrl = media(next, 'video');
+      if (!nextUrl || nextUrl === media(game, 'video')) return;
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'video';
+      link.href = nextUrl;
+      document.head.appendChild(link);
+      _snapPreloadEl = link;
+    }
 
     function clearVideoSnap() {
       if (_videoSnapTimer) { clearTimeout(_videoSnapTimer); _videoSnapTimer = 0; }
+      clearSnapPreload();
       if (_videoSnapEl) { _videoSnapEl.pause(); _videoSnapEl.removeAttribute('src'); _videoSnapEl.load(); _videoSnapEl = null; }
       _videoSnapGameId = null;
       if (AppState.libraryBgm && AppState.libraryBgm.volume < 0.4) {
@@ -165,26 +191,29 @@ import { openParty, partyOverlayOpen, partyGamepad } from './party.js';
     }
 
     function scheduleVideoSnap(game) {
-      if (_reducedMotion()) return;
+      if (!_snapsEnabled()) { clearVideoSnap(); return; }
       if (_videoSnapTimer) clearTimeout(_videoSnapTimer);
       const videoUrl = media(game, 'video');
       if (!videoUrl) { clearVideoSnap(); return; }
       _videoSnapTimer = setTimeout(() => {
         _videoSnapTimer = 0;
-        if (_videoSnapGameId === game.id && _videoSnapEl) return; // already playing
+        if (_videoSnapGameId === game.id && _videoSnapEl) { preloadSnapBudget(game); return; } // already playing
         clearVideoSnap();
         const el = document.createElement('video');
         el.muted = true;
         el.loop = true;
         el.playsInline = true;
         el.className = 'bigbox-video-snap';
+        // Missing video (404): release the BGM duck, keep the static cover.
+        el.addEventListener('error', () => clearVideoSnap());
         el.src = videoUrl;
         const coverEl = document.querySelector('.bigbox-cover');
-        if (!coverEl) return;
+        if (!coverEl) { clearVideoSnap(); return; }
         coverEl.appendChild(el);
-        el.play().catch(() => {});
+        el.play().catch(() => clearVideoSnap());
         _videoSnapEl = el;
         _videoSnapGameId = game.id;
+        preloadSnapBudget(game);
         // Duck BGM while video plays
         if (AppState.libraryBgm) AppState.libraryBgm.volume = 0.1;
       }, 600);

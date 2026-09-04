@@ -52,6 +52,7 @@ KNOWN_SETTINGS = {
     "bigbox_quick",
     "bigbox_startup_video",
     "bigbox_shutdown_commands",
+    "bigbox_video_snaps",
     "attract_mode_seconds",
     "screensaver_seconds",
     "locale",

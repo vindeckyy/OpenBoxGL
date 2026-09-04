@@ -589,7 +589,8 @@
     "ra_not_matched": "Não correspondentes",
     "screensaver_prompt": "Pressione Jogar para iniciar, ou qualquer outro controle para retornar.",
     "running_game": "Jogo em execução",
-    "search_platform": "Pesquisar nesta plataforma"
+    "search_platform": "Pesquisar nesta plataforma",
+    "video_snaps": "Clipes de vídeo"
   },
   "errors": {
     "copy_details": "Copiar detalhes",
@@ -684,6 +685,9 @@
     "spinning": "Girando…",
     "winner": "O vencedor joga",
     "launch": "Jogar",
-    "only_one": "Apenas um jogo na fila."
+    "only_one": "Apenas um jogo na fila.",
+    "resume": "Retomar a rodada {n} de {total}?",
+    "resume_action": "Retomar",
+    "excluded": "{count} de {total} jogos excluídos (um jogador, ocultos ou ausentes)."
   }
 }

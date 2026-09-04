@@ -17,6 +17,10 @@ let spun = false;
 let spinning = false;
 let currentRotation = 0;
 let keyHandler = null;
+let excludedCount = 0;
+let excludedTotal = 0;
+
+const _reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
 function partyOverlayOpen() {
   return Boolean($('partyOverlay') && !$('partyOverlay').hidden && !$('bigBox').hidden);
@@ -46,8 +50,11 @@ function openParty() {
   queueGames = [];
   spun = false;
   spinning = false;
+  excludedCount = 0;
+  excludedTotal = 0;
   $('partyOverlay').hidden = false;
   renderSetup();
+  offerResume();
   if (!keyHandler) {
     keyHandler = event => partyKeydown(event);
     // Capture phase: the overlay swallows keys so Big Box navigation
@@ -55,6 +62,41 @@ function openParty() {
     document.addEventListener('keydown', keyHandler, true);
   }
   $('partyBuild')?.focus();
+}
+
+/* Crash/restart recovery: when the server persisted a mid-round queue
+ * (round_index > 0), offer to resume it instead of rebuilding silently. */
+async function offerResume() {
+  let saved = null;
+  try {
+    saved = await api('/api/v2/party/queue');
+  } catch {
+    return;
+  }
+  if (!saved || saved.resume !== true || !Array.isArray(saved.queue) || !saved.queue.length) return;
+  queue = saved.queue.map(String);
+  queueIndex = Number(saved.index) || 0;
+  spun = true;
+  resolveQueueGames();
+  if (!queueGames.length) {
+    queue = [];
+    queueIndex = 0;
+    return;
+  }
+  const total = queueGames.length;
+  const round = queueIndex + 1;
+  $('partyOverlay').innerHTML = `<div class="party-panel" role="dialog" aria-label="${escapeHtml(t('party.title'))}">
+    <div class="dialog-head"><h2>${escapeHtml(t('party.title'))}</h2><button type="button" id="closeParty" aria-label="${escapeHtml(t('party.close'))}">×</button></div>
+    <p class="description">${escapeHtml(t('party.resume', { n: round, total }))}</p>
+    <div class="dialog-actions">
+      <button type="button" class="icon-button" id="partyFresh">${escapeHtml(t('party.rebuild'))}</button>
+      <button type="button" class="primary" id="partyResume">${escapeHtml(t('party.resume_action'))}</button>
+    </div>
+  </div>`;
+  $('closeParty').onclick = closeParty;
+  $('partyFresh').onclick = () => { queue = []; queueIndex = 0; spun = false; renderSetup(); $('partyBuild')?.focus(); };
+  $('partyResume').onclick = () => { spun = false; renderWheel(); renderWinner(); spun = true; };
+  $('partyResume')?.focus();
 }
 
 function closeParty() {
@@ -76,6 +118,23 @@ function partyKeydown(event) {
   if (event.key === 'Escape') {
     event.preventDefault();
     closeParty();
+    return;
+  }
+  // Focus trap: Tab cycles inside the overlay while it is open.
+  if (event.key === 'Tab') {
+    const focusables = [...($('partyOverlay')?.querySelectorAll('button, select, input, [tabindex]') || [])]
+      .filter(el => !el.disabled && el.offsetParent !== null);
+    if (focusables.length) {
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
     return;
   }
   const tag = (document.activeElement?.tagName || '').toUpperCase();
@@ -184,6 +243,7 @@ function wheelHtml() {
       <div class="party-side">
         <div id="partyWinner" class="party-winner"></div>
         <div class="party-upnext"><h3>${escapeHtml(t('party.up_next'))}</h3><div id="partyUpNext" class="party-upnext-strip"></div></div>
+        <div id="partyExcluded" class="description"></div>
         <div class="dialog-actions party-actions">
           <button type="button" class="icon-button" id="partyRebuild">${escapeHtml(t('party.rebuild'))}</button>
           <button type="button" class="icon-button" id="partyNext">${escapeHtml(t('party.next_round'))}</button>
@@ -218,8 +278,12 @@ async function buildQueue() {
     queue = Array.isArray(result.queue) ? result.queue.map(String) : [];
     queueIndex = 0;
     spun = false;
+    excludedCount = Number(result.excluded) || 0;
+    excludedTotal = queue.length + excludedCount;
     if (!queue.length) {
-      if (status) status.textContent = t('party.empty');
+      if (status) status.textContent = excludedCount
+        ? t('party.excluded', { count: excludedCount, total: excludedTotal })
+        : t('party.empty');
       return;
     }
     resolveQueueGames();
@@ -266,6 +330,7 @@ function renderWheel() {
   currentRotation = 0;
   renderHub();
   renderUpNext();
+  renderExcluded();
   setPrimary(t('party.spin'));
   $('partyPrimary')?.focus();
 }
@@ -296,6 +361,14 @@ function renderUpNext() {
   strip.innerHTML = html || `<span class="description">${escapeHtml(t('party.only_one'))}</span>`;
 }
 
+function renderExcluded() {
+  const el = $('partyExcluded');
+  if (!el) return;
+  el.textContent = excludedCount > 0
+    ? t('party.excluded', { count: excludedCount, total: excludedTotal })
+    : '';
+}
+
 function setPrimary(label) {
   const btn = $('partyPrimary');
   if (btn) btn.textContent = label;
@@ -313,6 +386,13 @@ function renderWinner() {
 
 function spinWheel() {
   if (spinning || spun || !queueGames.length) return;
+  // prefers-reduced-motion: resolve statically, no animation.
+  if (_reducedMotion()) {
+    spinning = false;
+    spun = true;
+    renderWinner();
+    return;
+  }
   spinning = true;
   setPrimary(t('party.spinning'));
   const n = queueGames.length;

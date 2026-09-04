@@ -589,7 +589,8 @@
     "ra_not_matched": "Not matched",
     "screensaver_prompt": "Press Play to launch, or any other control to return.",
     "running_game": "Running game",
-    "search_platform": "Search this platform"
+    "search_platform": "Search this platform",
+    "video_snaps": "Video snaps"
   },
   "errors": {
     "copy_details": "Copy details",
@@ -684,6 +685,9 @@
     "spinning": "Spinning…",
     "winner": "Winner plays",
     "launch": "Launch",
-    "only_one": "Only one game in the queue."
+    "only_one": "Only one game in the queue.",
+    "resume": "Resume round {n} of {total}?",
+    "resume_action": "Resume",
+    "excluded": "Excluded {count} of {total} games (single-player, hidden, or missing)."
   }
 }

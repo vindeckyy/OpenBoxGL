@@ -127,3 +127,35 @@ def build_party_queue(
     scored = [(-rating_of(game), random.random(), str(game.get("game_id") or game.get("id") or "")) for game in candidates]
     scored.sort(key=lambda item: (item[0], item[1]))
     return [game_id for _, _, game_id in scored[:limit] if game_id]
+
+
+def should_offer_resume(queue, index) -> bool:
+    """True when a persisted queue stopped mid-round: non-empty with 0 < index < len.
+
+    After a restart the client offers to resume the round instead of
+    silently rebuilding from index 0.
+    """
+    if not isinstance(queue, list) or not queue:
+        return False
+    try:
+        current = int(index)
+    except (TypeError, ValueError):
+        return False
+    return 0 < current < len(queue)
+
+
+def build_party_report(
+    games: list[dict[str, Any]],
+    *,
+    players: int = 2,
+    minutes: int = 0,
+    limit: int = PARTY_QUEUE_LIMIT,
+) -> dict[str, Any]:
+    """Build the queue plus transparency counts for the "Excluded N" line.
+
+    `excluded` is every input game that did not make the queue
+    (single-player, hidden, missing path, over budget, or over the cap).
+    """
+    queue = build_party_queue(games, players=players, minutes=minutes, limit=limit)
+    total = len([game for game in games or [] if isinstance(game, dict)])
+    return {"queue": queue, "excluded": max(0, total - len(queue)), "total": total}

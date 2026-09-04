@@ -100,14 +100,16 @@ class PartyHandlerTest(unittest.TestCase):
         h._api_get_api_v2_party_queue(urlparse("/api/v2/party/queue"))
         status, payload = h.responses[0]
         self.assertEqual(status, 200)
-        self.assertEqual(payload, {"queue": ["g-1", "g-2"], "index": 0})
+        self.assertEqual(payload["queue"], ["g-1", "g-2"])
+        self.assertEqual(payload["index"], 0)
+        self.assertFalse(payload["resume"])
 
     def test_get_queue_empty(self):
         h = self.handler()
         h._api_get_api_v2_party_queue(urlparse("/api/v2/party/queue"))
         status, payload = h.responses[0]
         self.assertEqual(status, 200)
-        self.assertEqual(payload, {"queue": [], "index": 0})
+        self.assertEqual(payload, {"queue": [], "index": 0, "resume": False})
 
     def test_next_advances_and_wraps(self):
         self.build({"players": 2})
@@ -139,6 +141,35 @@ class PartyHandlerTest(unittest.TestCase):
         h = self.handler()
         h._api_post_api_v2_party_next({})
         self.assertEqual(h.responses[0][1], {"game_id": "g-zzz", "name": "g-zzz", "index": 0})
+
+    def test_post_returns_excluded_count(self):
+        status, payload = self.build({"players": 2, "minutes": 0})
+        self.assertEqual(status, 200)
+        # g-3 is single-player only: excluded from the queue but counted.
+        self.assertEqual(payload["excluded"], 1)
+        self.assertEqual(payload["count"], len(payload["queue"]))
+
+    def test_get_queue_resume_offered_mid_queue(self):
+        self.store["state"]["settings"] = {
+            "party_queue": ["g-1", "g-2"],
+            "party_players": 2,
+            "party_index": 1,
+        }
+        h = self.handler()
+        h._api_get_api_v2_party_queue(urlparse("/api/v2/party/queue"))
+        status, payload = h.responses[0]
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["queue"], ["g-1", "g-2"])
+        self.assertEqual(payload["index"], 1)
+        self.assertTrue(payload["resume"])
+
+    def test_get_queue_no_resume_fresh(self):
+        self.build({"players": 2})
+        h = self.handler()
+        h._api_get_api_v2_party_queue(urlparse("/api/v2/party/queue"))
+        status, payload = h.responses[0]
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["resume"])
 
 
 if __name__ == "__main__":

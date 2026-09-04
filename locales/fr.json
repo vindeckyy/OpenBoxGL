@@ -589,7 +589,8 @@
     "ra_not_matched": "Non correspondants",
     "screensaver_prompt": "Appuyez sur Jouer pour lancer, ou sur toute autre commande pour revenir.",
     "running_game": "Jeu en cours",
-    "search_platform": "Rechercher dans cette plateforme"
+    "search_platform": "Rechercher dans cette plateforme",
+    "video_snaps": "Extraits vidéo"
   },
   "errors": {
     "copy_details": "Copier les détails",
@@ -684,6 +685,9 @@
     "spinning": "Ça tourne…",
     "winner": "Le gagnant joue",
     "launch": "Lancer",
-    "only_one": "Un seul jeu dans la file."
+    "only_one": "Un seul jeu dans la file.",
+    "resume": "Reprendre la manche {n} sur {total} ?",
+    "resume_action": "Reprendre",
+    "excluded": "{count} jeux sur {total} exclus (solo, masqués ou manquants)."
   }
 }
