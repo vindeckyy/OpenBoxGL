@@ -225,6 +225,7 @@ POST_TABLE = {
     "/api/v2/library/export": "_api_post_api_v2_library_export",
     "/api/v2/library/pick": "_api_post_api_v2_library_pick",
     "/api/v2/import/launchbox/preview": "_api_post_api_v2_import_launchbox_preview",
+    "/api/v2/import/launchbox/resolve": "_api_post_api_v2_import_launchbox_resolve",
     "/api/v2/import/launchbox/apply": "_api_post_api_v2_import_launchbox_apply",
     "/api/v2/library/sync/publish": "_api_post_api_v2_library_sync_publish",
     "/api/v2/library/sync/pull": "_api_post_api_v2_library_sync_pull",

@@ -120,16 +120,35 @@ class ImportsHandlers:
 
     @route("POST", "/api/v2/import/launchbox/preview")
     def _api_post_api_v2_import_launchbox_preview(self, payload):
-        from pkg.parity.parity_launchbox_import import preview_import
+        from pkg.parity.parity_launchbox_import import create_launchbox_preview
 
+        payload = payload or {}
         xml_path = str(payload.get("xml_path", "")).strip()
         if not xml_path:
             raise BadRequest("xml_path is required.")
         if not Path(xml_path).is_file():
             raise BadRequest(f"LaunchBox XML not found: {xml_path}")
         state = load_state_view()
-        report = preview_import(xml_path, state["games"])
+        report = create_launchbox_preview(xml_path, state.get("games", []))
         self.send_json(200, report)
+
+    @route("POST", "/api/v2/import/launchbox/resolve")
+    def _api_post_api_v2_import_launchbox_resolve(self, payload):
+        from pkg.parity.parity_launchbox_import import resolve_launchbox_preview
+
+        payload = payload or {}
+        preview_id = str(payload.get("preview_id") or "").strip()
+        if not preview_id:
+            raise BadRequest("preview_id is required.")
+        mappings = payload.get("mappings") or {}
+        if not isinstance(mappings, dict):
+            raise BadRequest("mappings must be an object.")
+        path_remap = payload.get("path_remap")
+        if path_remap is not None and not isinstance(path_remap, dict):
+            raise BadRequest("path_remap must be an object.")
+        state = load_state_view()
+        result = resolve_launchbox_preview(preview_id, mappings, path_remap, state.get("games", []))
+        self.send_json(200, result)
 
     @route("POST", "/api/v2/import/launchbox/apply")
     def _api_post_api_v2_import_launchbox_apply(self, payload):

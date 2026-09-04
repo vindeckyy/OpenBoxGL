@@ -31,25 +31,26 @@ class RouteRegistryTests(unittest.TestCase):
     def test_route_table_sizes(self):
         # 122 base GET + 25 v1 aliases = 147 total (1.9.0 adds mastery + party queue/static)
         # 122 base POST + 42 v1 aliases = 164 total (1.9.0 adds manual-entry)
+        # 1.10.0 adds POST /api/v2/import/launchbox/resolve (+1 POST, v1 frozen at 60).
         self.assertEqual(len(GET_TABLE), 148)
-        self.assertEqual(len(POST_TABLE), 164)
+        self.assertEqual(len(POST_TABLE), 165)
         self.assertEqual(len(V1_ALIASED_PREFIXES), 60)
 
     def test_base_routes_count(self):
         base_get = [p for p in GET_TABLE if not p.startswith("/api/v1")]
         base_post = [p for p in POST_TABLE if not p.startswith("/api/v1")]
         self.assertEqual(len(base_get), 123)
-        self.assertEqual(len(base_post), 122)
-        self.assertEqual(len(base_get) + len(base_post), 245)
+        self.assertEqual(len(base_post), 123)
+        self.assertEqual(len(base_get) + len(base_post), 246)
 
     def test_all_routes_registered(self):
         routes = all_routes()
-        self.assertEqual(len(routes), 246)
+        self.assertEqual(len(routes), 247)
 
         get_routes = [r for r in routes if r.method == "GET"]
         post_routes = [r for r in routes if r.method == "POST"]
         self.assertEqual(len(get_routes), 124)
-        self.assertEqual(len(post_routes), 122)
+        self.assertEqual(len(post_routes), 123)
 
     def test_every_registered_route_matches_live_table(self):
         routes = all_routes()
