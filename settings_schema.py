@@ -95,6 +95,8 @@ KNOWN_SETTINGS = {
     "dynamic_play_button",
     "gamescope_guest",
     "show_insights",
+    "mood_match_enabled",
+    "mood_match_bigbox",
 }
 
 

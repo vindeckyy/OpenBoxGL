@@ -191,6 +191,23 @@
   --text-soft: #8b9aab;
   --top-status: #8b9aab;
   --white: #e8eef4;
+  --mood-primary: var(--brand);
+  --mood-ink: var(--white);
+  --mood-secondary: var(--accent);
+  --mood-glow: var(--accent-ghost);
+  --mood-tint: transparent;
+  --mood-transition: 240ms;
+  --constellation-edge-series: #5e8c6a;
+  --constellation-edge-developer: #6c91b6;
+  --constellation-edge-publisher: #a27cb6;
+  --constellation-edge-genre: #d6b36a;
+  --constellation-edge-platform_family: #b87c6a;
+  --constellation-edge-co_played: #8b8b8b;
+  --mastery-never: #5a4d3d;
+  --mastery-played: #6c91b6;
+  --mastery-beaten: #d6b36a;
+  --mastery-completed: #5e8c6a;
+  --mastery-mastered: #f06000;
 }
 
 @media (prefers-reduced-motion: reduce) {

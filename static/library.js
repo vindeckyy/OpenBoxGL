@@ -9,6 +9,7 @@ import { captureScreenshot, downloadBezel } from './media.js';
 import { launch, backupSaves, discoverSaves, loadBackups } from './sessions.js';
 import { installGameyfin, uninstallGameyfin, ludusaviAction, hoardAction } from './storefront.js';
 import { openReader } from './reader.js';
+import { applyMoodForGame, clearMood } from './mood.js';
 
 const DETAILS_WIDTH_KEY = 'openbox-details-width';
 const DETAILS_COLLAPSED_KEY = 'openbox-details-collapsed';
@@ -897,6 +898,7 @@ function markFilterAria() {
     }
     function renderDetails() {
       const game = AppState.games.find(item => item.id === AppState.selectedId);
+      applyMoodForGame(game).catch(() => {});
       if (!game && (AppState.platform !== 'all' || AppState.platformCategory !== 'all' || AppState.activePlaylist)) {
         if (AppState.activePlaylist) renderCollectionDetails(AppState.activePlaylist, visibleGames(), 'Playlist');
         else if (AppState.platformCategory !== 'all') renderCollectionDetails(AppState.platformCategory, AppState.games.filter(item => platformCategoryFor(item) === AppState.platformCategory), 'Category');

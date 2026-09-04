@@ -6,6 +6,7 @@ import { openReader } from './reader.js';
 import { loadAchievements } from './metadata.js';
 import { openAchievements } from './settings.js';
 import { installGameyfin, uninstallGameyfin } from './storefront.js';
+import { applyMoodForGame, clearMood } from './mood.js';
 
 
 
@@ -67,6 +68,8 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
       $('bigBoxMenu').hidden = true;
       $('bigBox').hidden = true;
       if ($('bigBoxStartupVideo')) { $('bigBoxStartupVideo').pause(); $('bigBoxStartupVideo').hidden = true; }
+      const game = AppState.games.find(item => item.id === AppState.selectedId);
+      applyMoodForGame(game).catch(() => {});
       api('/api/bigbox/mode',{method:'POST',body:JSON.stringify({entering:false})}).catch(() => {});
       if (document.fullscreenElement || nativeFullscreenOn) nativeFullscreen().catch(() => {});
     }
@@ -144,6 +147,7 @@ import { installGameyfin, uninstallGameyfin } from './storefront.js';
     }
     function renderBigBox() {
       const game = AppState.bigBoxGames[AppState.bigBoxIndex];
+      applyMoodForGame(game).catch(() => {});
       if (!game) return;
       const hint = AppState.appSettings.controller_prompt_hint || 'A Play · B Back · M Menu';
       if ($('bigBoxStatus')) {

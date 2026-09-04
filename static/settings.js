@@ -169,6 +169,8 @@ import { confirmAction, promptInput } from './dialogs.js';
         show_playlist_actions:$('showPlaylistActions').checked,
         dynamic_play_button:$('dynamicPlayButton').checked,
         show_insights:$('showInsights').checked,
+        mood_match_enabled:$('moodMatchEnabled').checked,
+        mood_match_bigbox:$('moodMatchBigbox').checked,
         hidden_sidebar_sections:$('hiddenSidebarSections').value.split(',').map(value => value.trim()).filter(Boolean),
         obs_auto_attach:$('obsAutoAttach').checked,
         obs_recording_path:$('obsRecordingPath').value.trim(),
@@ -253,6 +255,8 @@ import { confirmAction, promptInput } from './dialogs.js';
         $('showPlaylistActions').checked = AppState.appSettings.show_playlist_actions !== false;
         $('dynamicPlayButton').checked = AppState.appSettings.dynamic_play_button !== false;
         $('showInsights').checked = AppState.appSettings.show_insights !== false;
+        if ($('moodMatchEnabled')) $('moodMatchEnabled').checked = Boolean(AppState.appSettings.mood_match_enabled);
+        if ($('moodMatchBigbox')) $('moodMatchBigbox').checked = Boolean(AppState.appSettings.mood_match_bigbox);
         $('hiddenSidebarSections').value = (AppState.appSettings.hidden_sidebar_sections || []).join(', ');
         $('obsAutoAttach').checked = AppState.appSettings.obs_auto_attach !== false;
         $('obsRecordingPath').value = AppState.appSettings.obs_recording_path || '';

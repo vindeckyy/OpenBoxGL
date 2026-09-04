@@ -67,7 +67,21 @@
     "plugins": "Plugins",
     "settings": "Settings",
     "webhooks": "Webhooks",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "constellation": "Constellation",
+    "mastery": "Mastery"
+  },
+  "constellation": {
+    "title": "Constellation",
+    "limit": "Limit",
+    "relayout": "Re-layout",
+    "empty": "No connections yet — run a metadata sync first.",
+    "kind_series": "Series",
+    "kind_developer": "Developer",
+    "kind_publisher": "Publisher",
+    "kind_genre": "Genre",
+    "kind_platform_family": "Platform family",
+    "kind_co_played": "Co-played"
   },
   "sidebar": {
     "search": "Search",
@@ -460,7 +474,41 @@
     "check_updates": "Check for updates",
     "install_update": "Install verified update",
     "install_desktop": "Install desktop shortcut",
-    "show_insights": "Show Play Insights in the library"
+    "show_insights": "Show Play Insights in the library",
+    "mood_match": "Adaptive cover theming",
+    "mood_match_bigbox": "Adaptive theming in Big Box"
+  },
+  "picker": {
+    "title": "What should I play?",
+    "time": "Time I have",
+    "time_any": "Any",
+    "mood": "Mood",
+    "mood_any": "Any",
+    "mood_action": "Action",
+    "mood_chill": "Chill",
+    "mood_story": "Story",
+    "mood_retro": "Retro",
+    "mood_party": "Party",
+    "familiarity": "Familiarity",
+    "familiarity_any": "Either",
+    "familiarity_new": "Something new",
+    "familiarity_favorite": "A favorite",
+    "players": "Players",
+    "spin": "Pick",
+    "again": "Another",
+    "launch": "Launch",
+    "details": "Details",
+    "random": "Just surprise me",
+    "empty": "No games match — loosen a filter.",
+    "reason": {
+      "never_played": "You added {name} but never launched it.",
+      "long_time": "It's been {days} days since you played {name}.",
+      "mood": "{name} fits your {mood} mood.",
+      "rated": "You rated {name} {rating} stars.",
+      "fits_session": "{name} fits in about {minutes} minutes.",
+      "favorite": "{name} is a favorite you haven't touched in {days} days.",
+      "random": "A random pick from your library."
+    }
   },
   "storefront": {
     "title": "Storefront Manager",
@@ -572,5 +620,44 @@
     "range_90": "Last 90 days",
     "range_365": "Last 365 days",
     "refresh": "Refresh insights"
+  },
+  "wrapped": {
+    "title": "Your Year in Games",
+    "open": "Wrapped",
+    "year": "Year",
+    "print": "Print",
+    "total_playtime": "Total playtime",
+    "sessions": "Sessions",
+    "games_played": "Games played",
+    "new_games": "New games",
+    "longest_streak": "Longest streak",
+    "beaten": "Beaten",
+    "completed": "Completed",
+    "mastered": "Mastered",
+    "top_game": "Top game",
+    "top_platform": "Top platform",
+    "top_genre": "Top genre",
+    "first_play": "First play",
+    "oldest_played": "Oldest played",
+    "co_play_pairs": "Co-play pairs"
+  },
+  "timeline": {
+    "list": "List",
+    "timeline": "Timeline",
+    "empty": "No sessions in this range.",
+    "recording": "REC"
+  },
+  "mastery": {
+    "title": "Mastery",
+    "decade": "Decade",
+    "all": "All",
+    "pre_1980": "pre-1980",
+    "never": "Never played",
+    "played": "Played",
+    "beaten": "Beaten",
+    "completed": "Completed",
+    "mastered": "Mastered",
+    "ra_progress": "RA progress",
+    "empty": "No games to rank yet."
   }
 }

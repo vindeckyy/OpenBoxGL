@@ -80,6 +80,7 @@ class SettingsSchemaTests(unittest.TestCase):
             "tracking_frequency", "apply_perf", "progress_on_first_play",
             "auto_close_store_clients", "gamescope_preset", "mangohud_enabled",
             "show_insights", "list_sort", "list_sort_dir",
+            "mood_match_enabled", "mood_match_bigbox",
         ):
             self.assertIn(key, KNOWN_SETTINGS, f"save-path key missing from whitelist: {key}")
 
