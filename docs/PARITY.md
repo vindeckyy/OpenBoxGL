@@ -137,5 +137,5 @@ These LaunchBox features have no practical Linux equivalent and are documented r
 | Teknoparrot arcade launcher | Use Lutris/Wine launch profiles for supported titles |
 | Native Xbox PC package scanning | Use Heroic/Lutris/Xbox Cloud entries instead |
 | Bundled proprietary media packs | Replaced by free bundled media packs in OpenBox |
-| LaunchBox Premium account cloud library | Replaced by mounted-folder sync plus local backups |
+| LaunchBox Premium account cloud library | Replaced by OpenBox's own mounted-folder sync plus local backups (no LaunchBox account involved; "cloud sync" rows above mean your folder, not their service) |
 | LaunchBox online theme storefront | Replaced by local CSS theme import and open-folder workflow |

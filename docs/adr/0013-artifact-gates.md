@@ -31,7 +31,7 @@ OpenBox v1.7 is a flagship release for new Linux users. Shipping requires reprod
 
 ### Flatpak
 
-- Target Flatpak runtime **25.08**.
+- ~~Target Flatpak runtime **25.08**.~~ Target Flatpak runtime **org.gnome.Platform 49** (bumped 46 → 49 in 1.8.0; see CHANGELOG).
 - Produce and release-gate an installable Flatpak bundle aligned with the AppImage feature set.
 - **No Flathub store submission** in v1.7; producing the bundle is separate from publishing to Flathub.
 
@@ -49,5 +49,5 @@ OpenBox v1.7 is a flagship release for new Linux users. Shipping requires reprod
 ## Consequences
 
 - Users receive tested x86_64 and aarch64 AppImages and a Flatpak bundle, or the release does not ship.
-- Support expectations are explicit: x86_64 + aarch64, 20k games, Ubuntu 22.04-built x86_64 AppImage (aarch64 on ubuntu-24.04-arm), Flatpak 25.08 runtime.
+- Support expectations are explicit: x86_64 + aarch64, 20k games, Ubuntu 22.04-built x86_64 AppImage (aarch64 on ubuntu-24.04-arm), Flatpak org.gnome.Platform 49 runtime.
 - Flathub submission remains a future, separate decision.

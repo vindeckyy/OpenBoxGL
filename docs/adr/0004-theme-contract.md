@@ -2,6 +2,7 @@
 
 Date: 2026-08-20
 Status: Accepted
+Updated: 2026-09-04 — token baseline ratcheted 343 → 0 on 2026-08-26 (`scripts/check_tokens.py:7`); all 5 themes are token-only `:root` files. Line refs below (`app.css:1-45`, `library.js:155`) are historical.
 
 ## Context
 
@@ -21,7 +22,7 @@ Visual output must not change, but token hygiene must ratchet.
 
 ## Consequences
 
-- `tests/test_frontend_contract.py` now guards theme contract; `python3 scripts/check_tokens.py` stays at 343 (baseline ratchet deferred until 6-digit theme outside hexes are also tokenized). Next sweep can ratchet baseline down.
+- `tests/test_frontend_contract.py` now guards theme contract; ~~`python3 scripts/check_tokens.py` stays at 343 (baseline ratchet deferred until 6-digit theme outside hexes are also tokenized). Next sweep can ratchet baseline down.~~ Ratcheted to 0 on 2026-08-26 after token-only themes landed.
 
 - No visual regression: hex values preserved via indirection, verified by `content-visibility` and `contain-intrinsic-size` unchanged.
 

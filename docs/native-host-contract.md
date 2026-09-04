@@ -40,7 +40,9 @@ window.openboxNative = {
   // "set-fullscreen" | "unset-fullscreen".
   windowAction(action) -> Promise<{ ok: boolean }>,
 
-  // Host feeds gamepad state as events instead of the Web Gamepad API.
+  // No-op stub: the host never feeds gamepad state, so the page must keep
+  // using the Web Gamepad API (`pollGamepads` edge detection). `gamepad`
+  // in capabilities is always "webkit".
   onGamepad(callback) -> void,
 };
 ```
@@ -50,7 +52,7 @@ even when bridge injection is unavailable, and it is what the tests exercise.
 
 ## HTTP native surface
 
-All native routes are authenticated like every other route (and return capability fallbacks when the native host is absent).
+All native routes are authenticated like every other route: unauthenticated calls get `403` (`GET /api/native/capabilities`) or `401` (all other native routes). Authorized calls when no native host is attached return capability-absent fallbacks (never an error that blocks the browser fallback).
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -68,7 +70,7 @@ All native routes are authenticated like every other route (and return capabilit
   "dialogs": true,
   "tray": true,
   "single_instance": true,
-  "gamepad": "sdl" | "webkit" | "none",
+  "gamepad": "webkit",
   "fullscreen": true,
   "clipboard": true
 }
@@ -87,13 +89,13 @@ through the capability resolver with a browser fallback.
 | Browser API | Native mapping |
 |---|---|
 | `window.open(url)` (manuals, Wikipedia) | `openExternal(url)` |
-| `prompt(...)` (legacy; now styled in-page dialog for import paths, playlist names, etc. — previously 16 call sites across the 13-module frontend) | `dialog("file"/"folder")` or styled in-page prompt |
-| `confirm(...)` (legacy; now styled in-page confirm for deletes/restores — previously 13 sites) | styled in-page confirm or native dialog |
+| `prompt(...)` (removed; was 16 call sites across the 27-module frontend, now styled in-page dialogs) | `dialog("file"/"folder")` or styled in-page prompt |
+| `confirm(...)` (removed; was 13 sites, now styled in-page confirms) | styled in-page confirm or native dialog |
 | `localStorage` (UI prefs) | server-persisted `ui_state` when native; `localStorage` in browser |
 | `navigator.clipboard` | host clipboard; browser fallback |
 | `document.fullscreenElement` / request/exit | `windowAction("set-fullscreen"/"unset-fullscreen")` |
 | `navigator.getBattery` | optional; hide status when absent |
-| `navigator.getGamepads` | `onGamepad` events when host reports `sdl` |
+| `navigator.getGamepads` | Web Gamepad API always (host `onGamepad` is a no-op stub; capabilities report `"webkit"`) |
 | `location.search` (token, deeplink) | unchanged; the host loads the same URL |
 | `beforeunload` (shutdown) | host calls `/api/shutdown` on window close |
 

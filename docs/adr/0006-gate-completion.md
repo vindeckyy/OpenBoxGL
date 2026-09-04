@@ -2,10 +2,11 @@
 
 Date: 2026-08-20
 Status: Accepted
+Updated: 2026-09-04 — `API_V1` now lives at `static/util.js:120` (not :115); the v1 surface is frozen at 60 contract entries (`v1_contracts.json`). The stale `check_tests.py` "parallel workers" comment flagged below is fixed as of this update.
 
 ## Context
 
-`scripts/check_tests.py` ran ruff, v1 contract, version sync, py_compile, coverage, and tokens, but not frontend lint (`scripts/check_frontend.py` was orphaned, zero refs) and not runtime module drift (`runtime_modules.txt` manual). CI duplicated eslint inline (`ci.yml:71`) while `make check` never linted JS. `API_V1` in `static/util.js:115` covered 38 routes while 15 legacy paths (`/api/premium/media-packs`, `/api/gameyfin/test`, `/api/themes/open-folder`, `/api/media/cleanup`, `/api/bigbox/mode`, etc.) stayed on fallback via `state.js:54 target=API_V1[..]||path`.
+`scripts/check_tests.py` ran ruff, v1 contract, version sync, py_compile, coverage, and tokens, but not frontend lint (`scripts/check_frontend.py` was orphaned, zero refs) and not runtime module drift (`runtime_modules.txt` manual). CI duplicated eslint inline (`ci.yml:71`) while `make check` never linted JS. `API_V1` in `static/util.js:115` (now :120) covered 38 routes while 15 legacy paths (`/api/premium/media-packs`, `/api/gameyfin/test`, `/api/themes/open-folder`, `/api/media/cleanup`, `/api/bigbox/mode`, etc.) stayed on fallback via `state.js:54 target=API_V1[..]||path`. The v1 surface is now frozen at 60 contract entries.
 
 ## Decision
 

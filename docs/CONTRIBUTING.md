@@ -40,7 +40,7 @@ Build the native host with `make native-host`, then run `./openbox-native.sh`.
 
 ## Testing
 
-Run the full verification gate before submitting a pull request. This covers lint, compile checks, the full test suite, and coverage floors:
+Run the full verification gate before submitting a pull request. This covers ruff lint, runtime-module drift, the frozen v1 contract, version sync, frontend lint, i18n key coverage, compile checks, the full test suite under coverage, coverage floors (72.0% total, 54.0% `web_app.py`, 80% changed-line, 85% new-module), and design-token hygiene. Note CI additionally enforces a stricter 95% changed-line floor (`check_changed_coverage.py --fail-under=95` in `ci.yml`):
 
 ```bash
 make check
@@ -179,7 +179,7 @@ Update relevant docs when behavior changes:
 - [CHANGELOG.md](CHANGELOG.md) for release-visible changes
 - [openbox.metainfo.xml](../openbox.metainfo.xml) and [SECURITY.md](SECURITY.md) when releases or support policy change
 
-Parity-related modules live in `pkg/parity/` (e.g. `parity_import.py`, `parity_premium.py`, `parity_storefront.py`, `parity_discovery.py`, `parity_media.py`, `parity_saves.py`, `parity_integrations.py`, `parity_gamescope.py`, `parity_wine.py`, `parity_faugus.py`) with root compatibility shims.
+Parity-related modules live in `pkg/parity/` (e.g. `parity_import.py`, `parity_premium.py`, `parity_storefront.py`, `parity_discovery.py`, `parity_media.py`, `parity_saves.py`, `parity_integrations.py`, `parity_gamescope.py`, `parity_wine.py`, `parity_faugus.py`). Flat `import parity_*` keeps working through the `_ParityFlatFinder` bridge in `pkg/parity/__init__.py` (registered by `openbox.py`); there are no root shim files since 1.9.0 (ADR 0003).
 
 ## Documentation site
 

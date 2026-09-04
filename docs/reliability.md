@@ -15,7 +15,7 @@ Each row is a failure mode a real user can hit. Status means:
 | 5 | Game binary disappears between render and launch | Launch fails with the concrete missing path, session error names it | Tested (test_sessions.py) |
 | 6 | Game spawns children then exits fast | finish_session records the parent exit without killing unrelated process groups | Tested (test_sessions.py) |
 | 7 | Game still running when OpenBox closes | SIGINT/SIGTERM triggers graceful stop of sessions; shutdown drains webhooks | Tested (web_app stop() + test_sessions.py) |
-| 8 | Two quick launches of the same game | Launch button disables while starting; second click is a no-op until the first resolves | Manual (procedure: rapid double-click Play in test_sessions.py launch dedupe) |
+| 8 | Two quick launches of the same game | Each launch resolves independently; no launch-dedupe guard exists yet | Manual (procedure: rapid double-click Play, verify both sessions behave sanely) |
 | 9 | Emulator install fails mid-download | Temp staging is cleaned; no half-installed emulator dir; retry works | Tested (test_emulators.py) |
 | 10 | Non-UTF8 filename in game path | Import survives; UI renders replacement chars; launch still works | Documented |
 | 11 | Offline metadata sync | LBDB sync surfaces an offline state in the job panel with retry | Manual (procedure: disconnect network, trigger metadata sync, verify job panel offline + retry) |
@@ -27,7 +27,7 @@ Each row is a failure mode a real user can hit. Status means:
 | 17 | Manual PDF inside a password-protected zip | find_archive_manual returns None and records the no-manual note; no crash | Tested (test_metadata.py) |
 | 18 | Duplicate covers from two metadata sources | Media dedupe reports per-field counts; cleanup removes the extras | Tested (test_changelog_features.py) |
 | 19 | Broken symlink as media path | /api/media 404s cleanly, no traceback | Tested (test_media_paths.py approved_media_path symlink rejection) |
-| 20 | 20,000-game library | Grid virtualizes; sidebar counts compute once; search debounces | Manual (perf bench with 10k gzip <50ms, 20k artifact under OPENBOX_PERF_FULL=1) |
+| 20 | 20,000-game library | Grid virtualizes; sidebar counts compute once; search debounces | Gated (blocking CI job `perf-20k`: `scripts/perf_bench.py --sizes 10000,20000`, write/gzip p95 budgets in `GATES_20K`) |
 | 21 | 300+ character game names | Ellipsis everywhere; no layout break | Manual (procedure: game name 400 chars, verify grid ellipsis, detail ellipsis) |
 | 22 | Selected game deleted while a dialog is open | Dialogs close or rebind; no stale selectedId crash | Manual (procedure: open game dialog, delete via bulk, verify dialogs close) |
 | 23 | Rapid filter switching during render | No half-rendered state; render reads one consistent AppState snapshot | Manual (procedure: rapid filter toggle 10x, verify no half-render) |

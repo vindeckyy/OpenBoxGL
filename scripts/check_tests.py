@@ -3,9 +3,12 @@
 
 Stages:
   1. ruff lint (gate rule set from pyproject.toml)
-  2. py_compile over all runtime modules and test files
-  3. full test suite under coverage, run in parallel workers
-  4. coverage floor checks (total + web_app.py)
+  2. runtime_modules drift, v1 contract, version sync, frontend lint, i18n keys
+  3. py_compile over all runtime modules, test files, and scripts
+  4. full test suite under coverage, run serially (gamescope/X tests collide
+     in parallel workers)
+  5. coverage floor checks (72.0 total + 54.0 web_app.py + 80 changed-line +
+     85 new-module) and design-token hygiene
 
 Exits non-zero when any stage fails. Used by `make check` and CI.
 

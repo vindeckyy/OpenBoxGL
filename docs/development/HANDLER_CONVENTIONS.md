@@ -18,13 +18,16 @@ How handlers are structured, validated, and wired in OpenBox.
 
 ## Route registration
 
-Routes are registered via the `@route(method, path)` decorator from `routes.registry`. The method name follows the pattern `_api_{method}_{path_underscored}`.
+Routes are registered via the `@route(method, path)` decorator from `routes.registry`. Two styles exist:
+
+- **Class-style** (`handlers/library.py`: `class LibraryHandlers`): the method name follows the pattern `_api_{method}_{path_underscored}`.
+- **Function-style** (`handlers/native.py`: plain `def capabilities(handler, parsed)`): the function name is free-form; the decorator carries the method + path.
 
 ## Input validation
 
 Follow the `_clean_*` function pattern from `handlers/settings.py`:
 - Extract validation into a `_clean_field(merged)` function.
-- Raise `ValueError` for validation failures (framework maps to 400).
+- Raise `BadRequest` for validation failures (machine-readable code). Legacy `_clean_*` helpers raise `ValueError`, which the framework also maps to 400 — keep that working, but prefer `BadRequest` in new code.
 - Return the cleaned value.
 
 ## Async jobs

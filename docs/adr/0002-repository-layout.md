@@ -18,7 +18,7 @@ Root held 97 Python files (48 runtime + 49 tests), 12 markdown docs, and 4 shell
 
 ## Consequences
 - runtime_modules.txt, run_all_tests.sh, pyproject.toml, Makefile, build_appimage.sh updated to handle both layouts
-- Flat `import parity_*` continues to work through root shim modules; new parity implementation lives under `pkg/parity/`.
+- ~~Flat `import parity_*` continues to work through root shim modules; new parity implementation lives under `pkg/parity/`.~~ Root shims deleted in 1.9.0; flat `import parity_*` now resolves through the `_ParityFlatFinder` bridge in `pkg/parity/__init__.py` (ADR 0003). Token baseline ratcheted 625 → 0; coverage floors since raised (72.0 total / 54.0 web_app / 80 changed-line / 85 new-module).
 - Themes shrink to palette when token set widens
 
 ## Alternatives considered
