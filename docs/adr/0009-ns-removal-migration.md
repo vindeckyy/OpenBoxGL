@@ -1,6 +1,7 @@
 # ADR-0009: Removal of `_ns()` late-binding pattern via dependency injection
 
 Status: accepted
+Updated: 2026-09-04 — Phase 1 landed in 1.9.0: `pkg/state/_deps.py` central registry created, `webapp_state._populate_deps()` registers all exported names at import time, the 4 `_ns()` helpers now delegate to `_deps.get()` with `webapp_state` patching as a backward-compat first check.
 Date: 2026-08-22
 
 ## Context

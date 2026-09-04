@@ -265,3 +265,24 @@ try:
     JOB_MANAGER.set_observer(lambda job: broadcast_event("job.finished", job))
 except Exception:
     pass
+
+
+def _populate_deps():
+    """Register all exported names into the central _deps registry (ADR 0009).
+
+    Called at import time so pkg.state.* modules can resolve shared
+    dependencies via _deps.get() instead of each carrying a private _ns().
+    """
+    from pkg.state import _deps
+
+    _skip = frozenset({
+        "__builtins__", "__file__", "__name__", "__doc__",
+        "__package__", "__loader__", "__spec__", "__cached__",
+        "__annotations__",
+    })
+    for name, value in list(globals().items()):
+        if name not in _skip:
+            _deps.register(name, value)
+
+
+_populate_deps()
