@@ -3,25 +3,48 @@ import { $, escapeHtml } from './util.js';
 import { t } from './i18n.js';
 import { AppState, api, media } from './state.js';
 
-    const KIND_LABELS = {
-      series: t('constellation.kind_series'),
-      developer: t('constellation.kind_developer'),
-      publisher: t('constellation.kind_publisher'),
-      genre: t('constellation.kind_genre'),
-      platform_family: t('constellation.kind_platform_family'),
-      co_played: t('constellation.kind_co_played'),
-    };
-    const KIND_COLORS = {
-      series: 'var(--constellation-edge-series)',
-      developer: 'var(--constellation-edge-developer)',
-      publisher: 'var(--constellation-edge-publisher)',
-      genre: 'var(--constellation-edge-genre)',
-      platform_family: 'var(--constellation-edge-platform_family)',
-      co_played: 'var(--constellation-edge-co_played)',
-    };
+    // ponytail: labels resolve at render time (not module load) because the
+    // locale dictionary is fetched asynchronously after boot; a frozen map
+    // would keep raw keys when the dialog opens before the locale arrives.
+    function kindLabels() {
+      return {
+        series: t('constellation.kind_series'),
+        developer: t('constellation.kind_developer'),
+        publisher: t('constellation.kind_publisher'),
+        genre: t('constellation.kind_genre'),
+        platform_family: t('constellation.kind_platform_family'),
+        co_played: t('constellation.kind_co_played'),
+      };
+    }
+    // ponytail: canvas 2d does not resolve CSS var() — an invalid color
+    // assignment is silently ignored (keeps black), which rendered the whole
+    // graph invisible on dark themes. Resolve tokens to computed values once
+    // per render; keyword fallbacks keep headless/test contexts working.
+    function cssToken(name, fallback) {
+      try {
+        const value = getComputedStyle(canvas || document.documentElement).getPropertyValue(name).trim();
+        if (value) return value;
+      } catch { /* no computed style available */ }
+      return fallback;
+    }
+    function resolveColors() {
+      return {
+        series: cssToken('--constellation-edge-series', 'white'),
+        developer: cssToken('--constellation-edge-developer', 'white'),
+        publisher: cssToken('--constellation-edge-publisher', 'white'),
+        genre: cssToken('--constellation-edge-genre', 'white'),
+        platform_family: cssToken('--constellation-edge-platform_family', 'white'),
+        co_played: cssToken('--constellation-edge-co_played', 'white'),
+        nodeFill: cssToken('--surface-card', 'black'),
+        nodeStroke: cssToken('--border-card', 'white'),
+        nodeText: cssToken('--text', 'white'),
+      };
+    }
+    let palette = null;
     const DEFAULT_KINDS = ['series','developer','publisher','genre','platform_family','co_played'];
 
     let canvas, ctx, dialog, container;
+    let cssW = 0, cssH = 0;
     let data = { nodes: [], edges: [] };
     let camera = { x: 0, y: 0, zoom: 1 };
     let dragging = null;
@@ -32,8 +55,14 @@ import { AppState, api, media } from './state.js';
 
     function openConstellation() {
       if (!dialog) initDom();
+      renderKindLabels();
       dialog.showModal();
       loadAndRender();
+    }
+
+    function renderKindLabels() {
+      const labels = kindLabels();
+      $('constellationKinds').innerHTML = DEFAULT_KINDS.map(k => `<label class="chip"><input type="checkbox" value="${k}" checked> <span>${labels[k]}</span></label>`).join('');
     }
 
     function initDom() {
@@ -44,7 +73,7 @@ import { AppState, api, media } from './state.js';
 
       $('closeConstellation').onclick = () => dialog.close();
       $('constellationRelayout').onclick = () => { startSim(); };
-      $('constellationKinds').innerHTML = DEFAULT_KINDS.map(k => `<label class="chip"><input type="checkbox" value="${k}" checked> <span>${KIND_LABELS[k]}</span></label>`).join('');
+      renderKindLabels();
       $('constellationLimit').onchange = () => loadAndRender();
       $('constellationKinds').onchange = () => loadAndRender();
 
@@ -131,7 +160,9 @@ import { AppState, api, media } from './state.js';
           const r = 10 + i * 2;
           return { x: Math.cos(angle) * r, y: Math.sin(angle) * r };
         });
+        palette = resolveColors();
         resizeCanvas();
+        $('constellationLoading').hidden = true;
         startSim();
       } catch(error) { console.error(error); }
     }
@@ -139,6 +170,8 @@ import { AppState, api, media } from './state.js';
     function resizeCanvas() {
       const rect = container.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
+      cssW = rect.width;
+      cssH = rect.height;
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
       canvas.style.width = rect.width + 'px';
@@ -147,6 +180,18 @@ import { AppState, api, media } from './state.js';
     }
 
     function startSim() {
+      palette = resolveColors();
+      // ponytail: O(n²) per tick with clamped steps. If libraries grow past
+      // the 1000-node cap or layout feels slow, graduate to Barnes-Hut.
+      const MAX_STEP = 24;
+      function clampStep(fx, fy) {
+        const len = Math.hypot(fx, fy);
+        if (len > MAX_STEP && len > 0) {
+          const scale = MAX_STEP / len;
+          return [fx * scale, fy * scale];
+        }
+        return [fx, fy];
+      }
       let alpha = 1.0;
       const k = Math.sqrt((canvas.width * canvas.height) / data.nodes.length) * 0.5;
       const repel = k * k;
@@ -159,13 +204,16 @@ import { AppState, api, media } from './state.js';
             let dx = a.x - b.x;
             let dy = a.y - b.y;
             let dist2 = dx * dx + dy * dy || 1;
-            let f = repel / dist2;
             const d = Math.sqrt(dist2);
+            // Fruchterman-Reingold repulsion k²/d (linear decay pairs with
+            // the d²/k attraction below so pairs settle near distance k).
+            let f = repel / d;
             dx /= d; dy /= d;
-            a.x += dx * f * alpha;
-            a.y += dy * f * alpha;
-            b.x -= dx * f * alpha;
-            b.y -= dy * f * alpha;
+            const [sx, sy] = clampStep(dx * f * alpha, dy * f * alpha);
+            a.x += sx;
+            a.y += sy;
+            b.x -= sx;
+            b.y -= sy;
           }
         }
         // Attraction along edges
@@ -176,15 +224,30 @@ import { AppState, api, media } from './state.js';
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
           const f = (dist * dist) / k * edge.w;
           const nx = dx / dist, ny = dy / dist;
-          a.x -= nx * f * alpha;
-          a.y -= ny * f * alpha;
-          b.x += nx * f * alpha;
-          b.y += ny * f * alpha;
+          const [sx, sy] = clampStep(nx * f * alpha, ny * f * alpha);
+          a.x -= sx;
+          a.y -= sy;
+          b.x += sx;
+          b.y += sy;
         }
         // Centering
         for (const p of nodePos) {
           p.x -= p.x * 0.01 * alpha;
           p.y -= p.y * 0.01 * alpha;
+        }
+        // Bound: edgeless graphs have no attraction to balance repulsion,
+        // so pairs drift far apart. Clamp into the largest circle that fits
+        // inside the viewport (pan/zoom still available for crowded graphs).
+        if (cssW > 0 && cssH > 0) {
+          const boundR = Math.min(cssW, cssH) / 2 * 0.95;
+          for (const p of nodePos) {
+            const dist = Math.hypot(p.x, p.y);
+            if (dist > boundR && dist > 0) {
+              const s = boundR / dist;
+              p.x *= s;
+              p.y *= s;
+            }
+          }
         }
         alpha *= 0.985;
         draw();
@@ -202,12 +265,13 @@ import { AppState, api, media } from './state.js';
       ctx.scale(camera.zoom, camera.zoom);
 
       // Edges
+      const colors = palette || resolveColors();
       for (const edge of data.edges) {
         const a = nodePos[edge.s], b = nodePos[edge.t];
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
-        ctx.strokeStyle = KIND_COLORS[edge.kind] || 'var(--text-muted)';
+        ctx.strokeStyle = colors[edge.kind] || colors.genre;
         ctx.globalAlpha = 0.2 + 0.5 * (edge.w || 0.3);
         ctx.lineWidth = 1;
         ctx.stroke();
@@ -219,18 +283,18 @@ import { AppState, api, media } from './state.js';
         const p = nodePos[node.i];
         ctx.beginPath();
         ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
-        ctx.fillStyle = 'var(--surface-card)';
+        ctx.fillStyle = colors.nodeFill;
         ctx.fill();
-        ctx.strokeStyle = 'var(--border)';
+        ctx.strokeStyle = colors.nodeStroke;
         ctx.lineWidth = 2;
         ctx.stroke();
         if (node.has_cover) {
           // draw cover as small image; if not loaded, fallback to initial
         }
-        ctx.fillStyle = 'var(--text)';
+        ctx.fillStyle = colors.nodeText;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.font = '10px var(--font-body)';
+        ctx.font = '10px sans-serif';
         ctx.fillText(node.name.slice(0, 1).toUpperCase(), p.x, p.y);
       }
 

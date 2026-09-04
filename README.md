@@ -17,11 +17,11 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.8.0"><img src="https://img.shields.io/badge/Release-v1.8.0-0052CC?style=for-the-badge" alt="Release v1.8.0"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.9.0"><img src="https://img.shields.io/badge/Release-v1.9.0-0052CC?style=for-the-badge" alt="Release v1.9.0"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-2EA44F?style=for-the-badge" alt="CI"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux-lightgrey?style=for-the-badge" alt="Linux"></a>
   <br>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.8.0</strong></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.9.0</strong></a>
 </p>
 
 <p align="center">
@@ -118,7 +118,7 @@ The full capability matrix with acceptance checks lives in [PARITY.md](docs/PARI
 
 ### Library & Discovery
 
-One catalog for Steam, Heroic, Lutris, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and local executables. Advanced search, collections, playlists, tags, bulk edits, custom fields, ESRB filtering, list view, and Surprise Me random selection. **Keyboard and gamepad navigation** across the grid and list (arrows/Home/End/Page, `f` favorite, Escape clear, configurable controller map), **hash routing** so refresh and shared links restore platform/playlist/preset/query/selection/sort, sortable list-view columns with persisted direction, screenshot lightbox with prev/next/zoom, and cover skeleton loading.
+One catalog for Steam, Heroic, Lutris, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and local executables. Advanced search, collections, playlists, tags, bulk edits, custom fields, ESRB filtering, list view, **"What should I play?" smart picker** (time, mood, familiarity, players) plus Surprise Me random selection, and a pan/zoomable **Library Constellation** relationship graph. **Keyboard and gamepad navigation** across the grid and list (arrows/Home/End/Page, `f` favorite, Escape clear, configurable controller map), **hash routing** so refresh and shared links restore platform/playlist/preset/query/selection/sort, sortable list-view columns with persisted direction, screenshot lightbox with prev/next/zoom, cover skeleton loading, and **Mood Match adaptive cover theming** that tints accents from the selected game.
 
 ### Metadata & Media
 
@@ -140,11 +140,11 @@ Play time tracking, session history, save discovery (Steam Cloud, RetroArch, PCS
 
 ### Play Insights
 
-Local-first playtime analytics with a 366-day activity heatmap (levels 0–4), current and longest play streaks, 30-day play momentum, and top platforms/genres. Computed entirely locally from library history with zero telemetry.
+Local-first playtime analytics with a 366-day activity heatmap (levels 0–4), current and longest play streaks, 30-day play momentum, and top platforms/genres. **OpenBox Wrapped** prints your year in games (playtime, streaks, progress, busiest month), the **History Timeline** tab groups sessions by day, and the **Mastery Map** dashboard breaks the library into per-platform and per-decade progress bars with RetroAchievements columns. Computed entirely locally from library history with zero telemetry.
 
 ### Big Box & Handhelds
 
-Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attract mode, optional startup video, library BGM, Steam Game Mode guest (`--game-mode`), gamescope presets (Steam Deck, Steam Deck HD, 1080p, 1440p, 4K, integer scale, stretch, borderless) plus **custom user-defined presets with per-game override**, MangoHud performance overlay toggle, controller bench with live gamepad SVG visualization, localization (English, Spanish, German, French, Portuguese).
+Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attract mode, optional startup video, library BGM, **Game Night party mode** (couch-multiplayer queue, spinning wheel, up-next strip, persistent rounds), Steam Game Mode guest (`--game-mode`), gamescope presets (Steam Deck, Steam Deck HD, 1080p, 1440p, 4K, integer scale, stretch, borderless) plus **custom user-defined presets with per-game override**, MangoHud performance overlay toggle, controller bench with live gamepad SVG visualization, localization (English, Spanish, German, French, Portuguese).
 
 ### Scale & Backups
 
@@ -206,6 +206,21 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 </p>
 
 <p align="center">
+  <strong>Constellation</strong>: library relationship graph with series, developer, and genre edges
+</p>
+
+<p align="center">
+  <a href="assets/openbox-constellation.png">
+    <img
+      src="assets/openbox-constellation.png"
+      alt="OpenBox Library Constellation graph showing connected game nodes"
+      width="96%"
+      style="border-radius: 10px; border: 1px solid #1e293b;"
+    >
+  </a>
+</p>
+
+<p align="center">
   <sub>Screenshots use real LaunchBox metadata and cover art. Regenerate with <code>python3 scripts/capture_readme_screenshots.py</code> (requires Node.js 22.12+; run <code>cd scripts && npm ci</code> first for Puppeteer).</sub>
 </p>
 
@@ -226,7 +241,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 Download the installer from a specific signed release, inspect it, then run it. The installer verifies the release public-key pin, SHA-256 checksum, and Ed25519 signature before installing to `~/.local/bin`:
 
 ```bash
-VERSION=1.8.0
+VERSION=1.9.0
 curl --proto '=https' --tlsv1.2 --fail --location \
   --output install.sh \
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install.sh"

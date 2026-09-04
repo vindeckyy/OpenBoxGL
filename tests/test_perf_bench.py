@@ -97,6 +97,8 @@ class PerfBenchTests(unittest.TestCase):
                 "single_mutation": {"p95_ms": 300.0, "runs": 3},
                 "filtered_query": {"p95_ms": 50.0, "runs": 3},
                 "facet": {"p95_ms": 40.0, "runs": 3},
+                "picker_score": {"p95_ms": 100.0, "runs": 3},
+                "constellation_build": {"p95_ms": 300.0, "runs": 3},
                 "10k_write": {"p95_ms": 400.0, "runs": 3},
             },
             "20000": {
@@ -106,6 +108,8 @@ class PerfBenchTests(unittest.TestCase):
                 "single_mutation": {"p95_ms": 3000.0, "runs": 3},
                 "filtered_query": {"p95_ms": 1500.0, "runs": 3},
                 "facet": {"p95_ms": 1500.0, "runs": 3},
+                "picker_score": {"p95_ms": 150.0, "runs": 3},
+                "constellation_build": {"p95_ms": 500.0, "runs": 3},
                 "20k_write": {"p95_ms": 900.0, "runs": 3},
             },
         }
@@ -119,6 +123,8 @@ class PerfBenchTests(unittest.TestCase):
                 "single_mutation": {"p95_ms": 300.0, "runs": 3},
                 "filtered_query": {"p95_ms": 50.0, "runs": 3},
                 "facet": {"p95_ms": 40.0, "runs": 3},
+                "picker_score": {"p95_ms": 100.0, "runs": 3},
+                "constellation_build": {"p95_ms": 300.0, "runs": 3},
                 "10k_write": {"p95_ms": 400.0, "runs": 3},
             }
         }
@@ -133,6 +139,28 @@ class PerfBenchTests(unittest.TestCase):
         self.assertEqual(pb.GATES_20K["filtered_query_ms_p95"], 2000.0)
         self.assertEqual(pb.GATES_20K["facet_ms_p95"], 2000.0)
         self.assertEqual(pb.GATES_20K["20k_write_ms_p95"], 1000.0)
+        self.assertEqual(pb.GATES_20K["picker_score_ms_p95"], 200.0)
+        self.assertEqual(pb.GATES_20K["constellation_build_ms_p95"], 1500.0)
+        self.assertEqual(pb.GATES_10K["picker_score_ms_p95"], 200.0)
+        self.assertEqual(pb.GATES_10K["constellation_build_ms_p95"], 1500.0)
+
+    def test_check_gates_20k_discovery_ops(self):
+        slow_discovery = {
+            "20000": {
+                "library": {"p95_ms": 150.0, "runs": 3},
+                "library_gzip": {"p95_ms": 80.0, "runs": 3},
+                "favorite_mutation": {"p95_ms": 300.0, "runs": 3},
+                "single_mutation": {"p95_ms": 300.0, "runs": 3},
+                "filtered_query": {"p95_ms": 50.0, "runs": 3},
+                "facet": {"p95_ms": 40.0, "runs": 3},
+                "picker_score": {"p95_ms": 250.0, "runs": 3},
+                "constellation_build": {"p95_ms": 1600.0, "runs": 3},
+                "20k_write": {"p95_ms": 500.0, "runs": 3},
+            }
+        }
+        failures = pb._check_gates(slow_discovery)
+        self.assertTrue(any("picker_score.p95_ms" in item for item in failures))
+        self.assertTrue(any("constellation_build.p95_ms" in item for item in failures))
 
     def test_check_gates_20k_filtered_query(self):
         failing_20k = {
@@ -158,6 +186,8 @@ class PerfBenchTests(unittest.TestCase):
                 "single_mutation": {"p95_ms": 300.0, "runs": 3},
                 "filtered_query": {"p95_ms": 50.0, "runs": 3},
                 "facet": {"p95_ms": 40.0, "runs": 3},
+                "picker_score": {"p95_ms": 100.0, "runs": 3},
+                "constellation_build": {"p95_ms": 300.0, "runs": 3},
                 "10k_write": {"p95_ms": 400.0, "runs": 3},
             }
         }

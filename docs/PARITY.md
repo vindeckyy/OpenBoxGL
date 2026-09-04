@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.8.0**, the Navigation, Scraping &amp; ARM64 release described in the CHANGELOG.
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.9.0**, the Look, Discover, Play release described in the CHANGELOG.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -113,6 +113,12 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Custom gamescope presets | done | User-defined presets with per-game override, completing ADR 0016 |
 | Library export | done | JSON/CSV export with platform/playlist scopes and automatic rotation (ADR 0023) |
 | ARM64 (aarch64) AppImage | done | Release-gated aarch64 artifact alongside x86_64 with architecture-aware self-update (ADR 0024) |
+| Adaptive cover theming (Mood Match) | done | Selecting a game tints accents from its cover palette via --mood-* tokens; off by default (1.9.0, ADR 0026) |
+| Play assistant ("What should I play?") | done | Scored recommendations by time, mood, familiarity, and players via POST /api/v2/library/pick (1.9.0, ADR 0028) |
+| Library relationship graph | done | Pan/zoomable Constellation canvas of series/developer/genre/co-play edges via GET /api/v2/library/constellation (1.9.0, ADR 0027) |
+| Year-in-review report and session timeline | done | Printable Wrapped aggregates via GET /api/v2/insights/wrapped plus a History Timeline tab (1.9.0, ADR 0029) |
+| Mastery completionist dashboard | done | Per-platform/decade progress bars with RetroAchievements cache columns via GET /api/v2/insights/mastery (1.9.0, ADR 0030) |
+| Big Box party mode (Game Night) | done | Couch-multiplayer queue builder, spinning wheel, up-next strip, gamepad/keyboard control, persistent rounds (1.9.0, ADR 0031) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 

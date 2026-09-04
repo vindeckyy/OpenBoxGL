@@ -21,3 +21,14 @@ M3 asks for a "wow" visualization of the library as a relationship graph. It sho
 - No new persistent state; the graph is computed on demand from `games` and `history`.
 - Co-play is bounded by a 7-day window and capped at 5 shared sessions per edge.
 - Big real libraries remain responsive because only the ranked subset is laid out.
+
+## Amendment 2026-09-04 (release QA)
+
+First-look screenshots showed a blank canvas with raw kind labels. Three renderer defects, all fixed in `static/constellation.js`:
+
+1. **Canvas ignores CSS `var()`**: invalid `fillStyle`/`strokeStyle` assignments are silently dropped (black kept), so nodes and edges were invisible on dark themes. Tokens are now resolved through `getComputedStyle` once per render, with keyword fallbacks.
+2. **Layout explosion**: unclamped spring-electric steps (repulsion up to ~7500 px/tick for close pairs) teleported every node off-canvas on the first tick. Per-tick displacement is clamped to 24 px and repulsion corrected to Fruchterman-Reingold `k²/d` so pairs settle near distance `k`.
+3. **Frozen kind labels**: the label map evaluated `t()` at module load, before the async locale arrived. Labels resolve lazily on every dialog open; the loading indicator now hides after a successful render.
+4. **Edgeless drift**: graphs with no shared attributes have no attraction, so repulsion scattered nodes thousands of px apart. Positions clamp into the largest circle fitting the viewport.
+
+Regression cover: `scripts/ui_smoke.cjs` opens the dialog and asserts non-blank canvas pixels, translated labels, and a hidden loading indicator.

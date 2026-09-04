@@ -40,6 +40,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `static/party.js` wheel, "Up next" cover strip, gamepad support via the existing `pollGamepads` edge detection, and keyboard fallback (arrows/Enter/N/Escape).
 - Fixed M2 latent bug: `POST /api/v2/library/pick` hung on a live server because the handler re-read the already-consumed request body; POST handlers now take the parsed `payload` argument (ADR 0031).
 
+### Fixed
+- **Constellation canvas was blank for all users**: canvas 2D ignores CSS `var()` colors (assignments silently keep black), so nodes and edges were invisible on dark themes. Colors now resolve via `getComputedStyle` with keyword fallbacks (ADR 0027).
+- **Constellation layout exploded**: unclamped spring-electric steps teleported nodes off-canvas on tick one. Steps are clamped and repulsion corrected to Fruchterman-Reingold `k²/d` so pairs settle near distance `k` (ADR 0027).
+- **Raw i18n keys in freshly opened UI**: module-level `t()` maps froze before the async locale arrived (Constellation kind labels), and the Insights panel rendered before it. Label maps resolve lazily and the panel re-renders on `localechange`.
+- Constellation loading indicator now hides after a successful render.
+
 ## [1.8.0] - 2026-09-02
 
 ### Navigation & Routing
