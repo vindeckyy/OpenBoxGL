@@ -30,7 +30,8 @@ def _ns(name, default):
     mod = sys.modules.get("webapp_state")
     if mod is not None and hasattr(mod, name):
         return getattr(mod, name)
-    return default
+    from pkg.state._deps import get
+    return get(name, default)
 
 
 def webhook_configs(state=None):
