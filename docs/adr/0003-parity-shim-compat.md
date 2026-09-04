@@ -2,6 +2,7 @@
 
 Date: 2026-08-20
 Status: Accepted
+Updated: 2026-09-04 — shim deletion landed in 1.9.0; the `_ParityFlatFinder` is the sole flat-import bridge.
 
 ## Context
 
@@ -15,7 +16,7 @@ Runtime and tests continue to use both `import parity_*` (flat) and `from pkg.pa
 
 ## Consequences
 
-- `runtime_modules.txt` retains both shim and canonical entries (96 lines) for this release.
-- `pkg/parity/__init__.py` remains a minimal comment-only package init (no eager import loop) to avoid the `parity_perf -> parity_gamescope` circular import that an eager `for p in glob(...): import_module(...)` would cause.
-- Next release will implement a lazy `MetaPathFinder` (`_ParityFlatFinder`) in `pkg/parity/__init__.py` and delete shims after updating all internal imports to `pkg.parity` and ensuring entry points (`openbox.py`, `web_app.py`) import `pkg.parity` early.
+- ~~`runtime_modules.txt` retains both shim and canonical entries (96 lines) for this release.~~ Shims deleted in 1.9.0; `runtime_modules.txt` retains only canonical `pkg/parity/parity_*.py` entries (100 lines).
+- `pkg/parity/__init__.py` remains a minimal package init (no eager import loop) to avoid the `parity_perf -> parity_gamescope` circular import that an eager `for p in glob(...): import_module(...)` would cause.
+- ~~Next release will implement a lazy `MetaPathFinder` (`_ParityFlatFinder`) in `pkg/parity/__init__.py` and delete shims after updating all internal imports to `pkg.parity` and ensuring entry points (`openbox.py`, `web_app.py`) import `pkg.parity` early.~~ Done in 1.9.0: the `_ParityFlatFinder` is the sole flat-import bridge. Entry points (`openbox.py`) and test files import `pkg.parity` early to register the finder before any `import parity_*`.
 - No functional regression; `make check` verifies flat imports still resolve.

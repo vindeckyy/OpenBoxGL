@@ -11,6 +11,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
+import pkg.parity  # noqa: F401,E402  # register flat-import finder
+
 from parity_import import (
     dedupe_ranked_imports,
     group_multi_disc,

@@ -8,11 +8,14 @@ exact ryzenadj argv can be asserted.
 
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import pkg.parity  # noqa: F401,E402  # register flat-import finder
 import parity_perf
 
 

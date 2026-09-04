@@ -11,6 +11,8 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
+import pkg.parity  # noqa: F401,E402  # register flat-import finder
+
 import importers
 from arcade import import_arcade, parse_catalog, zip_members
 from importers import (

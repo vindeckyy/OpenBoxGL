@@ -13,6 +13,8 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
+import pkg.parity  # noqa: F401,E402  # register flat-import finder
+
 from parity_backup import create_backup, restore_backup, rotate_backups
 from parity_deeplinks import build_launch_url, handle_cli, parse_uri
 from parity_emulator_defs import (
