@@ -48,7 +48,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Durable background operations | done | Activity drawer with SSE progress, cancellation, retry/resume, and `operations.json` persistence |
 | Launch readiness preflight | done | Launch Doctor validates paths, adapters, Flatpak/native executables, BIOS/firmware, and tokenized arguments before launch. BIOS SHA1 drift detection reports `BIOS_SHA1_DRIFT` when a BIOS file exists but its hash doesn't match the expected value (1.7.2) |
 | Play Insights local analytics | done | Local 366-day playtime heatmap (levels 0–4), streaks, momentum, top platforms/genres with zero telemetry |
-| Optional SQLite read model | done | `OPENBOX_ENABLE_SQLITE_READ=1` enables FTS5 search, indexed queries, and GROUP BY facets for 50k+ libraries; JSON remains source of truth (1.7.2) |
+| Optional SQLite read model | done | `OPENBOX_ENABLE_SQLITE_READ=1` enables FTS5 search, indexed queries, and GROUP BY facets for 50k+ libraries; JSON remains source of truth. Wired into facets and `/api/v2/library/search` in 1.9.0 (ADR 0032) |
 | Visual chip builder for collections | done | Filter presets render as visual chips via `rules_to_chips`/`chips_to_rules` round-trip conversion (1.7.2) |
 | Searchable settings pages | done | Settings dialog filters fields by name and related terms |
 | Session history toggle and viewer | done | Play sessions can be disabled and are browsable from the History menu |
@@ -70,7 +70,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | ScummVM / RPCS3 / Vita3K library import | done | Dedicated import endpoints scan common emulator libraries |
 | MAME community high scores | done | Local high-score discovery plus export/import bundles for sharing |
 | OBS recording attach | done | Latest OBS recording auto-attaches on session close; manual attach remains available |
-| Premium cloud sync | done | Mounted-folder statistics sync is the Linux equivalent to LaunchBox Premium cloud stats |
+| Premium cloud sync | done | Mounted-folder statistics sync plus full library sync with tombstones via `POST /api/v2/library/sync/publish` and `/pull` (ADR 0035) |
 | Custom fields and bulk metadata wizard | done | Define custom fields in Settings, edit per game, and bulk update selected games |
 | ESRB ratings filter and metadata | done | ESRB from LaunchBox database imports, sidebar filter, list view column, and bulk edit |
 | List view and library columns | done | Grid/list toggle with sortable list columns including ESRB and progress |
@@ -119,6 +119,10 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Year-in-review report and session timeline | done | Printable Wrapped aggregates via GET /api/v2/insights/wrapped plus a History Timeline tab (1.9.0, ADR 0029) |
 | Mastery completionist dashboard | done | Per-platform/decade progress bars with RetroAchievements cache columns via GET /api/v2/insights/mastery (1.9.0, ADR 0030) |
 | Big Box party mode (Game Night) | done | Couch-multiplayer queue builder, spinning wheel, up-next strip, gamepad/keyboard control, persistent rounds (1.9.0, ADR 0031) |
+| LaunchBox XML library migration | done | `POST /api/v2/import/launchbox/preview` and `/apply` parse LaunchBox XML exports with dedup and emulator reporting (1.9.0, ADR 0033) |
+| Big Box video snaps | done | Stage mode shows looping gameplay videos with debounce, BGM duck, reduced-motion support (1.9.0, ADR 0034) |
+| Full library cloud sync | done | `POST /api/v2/library/sync/publish` and `/pull` with tombstones and last-writer-wins (1.9.0, ADR 0035) |
+| Manual/shelf entries | done | `POST /api/v2/library/manual-entry` for games without local files (1.9.0, ADR 0036) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 

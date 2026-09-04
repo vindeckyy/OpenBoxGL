@@ -46,6 +46,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Raw i18n keys in freshly opened UI**: module-level `t()` maps froze before the async locale arrived (Constellation kind labels), and the Insights panel rendered before it. Label maps resolve lazily and the panel re-renders on `localechange`.
 - Constellation loading indicator now hides after a successful render.
 
+### Architecture — Parity Shims & State Registry
+- Deleted all 28 root-level `parity_*.py` compatibility shims; the `MetaPathFinder` in `pkg/parity/__init__.py` is now the sole flat-import bridge (ADR 0003).
+- Central `pkg/state/_deps.py` registry replaces 4 private `_ns()` helpers in `pkg/state/{cache,launch,media_probe,sse}.py`; `webapp_state._populate_deps()` registers all exported names at import time (ADR 0009).
+
+### SQLite Read Model Graduation
+- `OPENBOX_ENABLE_SQLITE_READ=1` now actually changes behavior: `GET /api/explorer/facets` uses SQLite GROUP BY with `query_parity_check()` safety net; new `GET /api/v2/library/search?q=&limit=` uses FTS5 (or LIKE fallback). Default off = byte-identical behavior (ADR 0032, amends 0014).
+
+### LaunchBox Library Migration
+- New `POST /api/v2/import/launchbox/preview` and `POST /api/v2/import/launchbox/apply` parse LaunchBox XML exports and merge via `merge_imported_games`. Emulator mappings are reported, not silently applied (ADR 0033).
+
+### Big Box Video Snaps
+- Big Box stage mode now shows looping gameplay videos when available, with 600ms debounce, BGM ducking, and `prefers-reduced-motion` support. Falls back to static covers (ADR 0034).
+
+### Library Sync via Mounted Folder
+- New `POST /api/v2/library/sync/publish` and `POST /api/v2/library/sync/pull` extend cloud sync to the full library with tombstones for deletions and last-writer-wins conflict resolution. Stats sync remains separate (ADR 0035).
+
+### Manual/Shelf Entries
+- New `POST /api/v2/library/manual-entry` adds games without a local file path (physical media, board games, console games). Marked with `manual_entry: true` (ADR 0036).
+
+### Gate & Hygiene
+- `scripts/check_tests.py` now auto-wraps itself under `xvfb-run -a` when available, guarded by `OPENBOX_HEADLESS_GATE=1`.
+- Corrected stale JS module count in `AGENTS.md` (27, not 20).
+
 ## [1.8.0] - 2026-09-02
 
 ### Navigation & Routing

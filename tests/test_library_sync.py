@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -134,6 +135,76 @@ class RouteRegistrationTest(unittest.TestCase):
         from routes import POST_TABLE
         self.assertIn("/api/v2/library/sync/publish", POST_TABLE)
         self.assertIn("/api/v2/library/sync/pull", POST_TABLE)
+
+
+class HandlerTest(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        os.environ["OPENBOX_DATA_DIR"] = str(self._tmp.name)
+        import openbox
+        openbox.STATE_STORE.save({"games": [{"game_id": "1", "name": "Quake"}], "settings": {"cloud_folder": str(self._tmp.name)}, "profiles": {}})
+
+    def tearDown(self):
+        self._tmp.cleanup()
+        os.environ.pop("OPENBOX_DATA_DIR", None)
+
+    def test_publish_handler(self):
+        from handlers.health import HealthHandlers
+
+        class MockHandler(HealthHandlers):
+            def __init__(self):
+                self._sent = None
+            def send_json(self, code, body):
+                self._sent = (code, body)
+
+        handler = MockHandler()
+        handler._api_post_api_v2_library_sync_publish({"device_id": "test-dev"})
+        self.assertEqual(handler._sent[0], 200)
+        self.assertIn("published_games", handler._sent[1])
+
+    def test_pull_handler(self):
+        from handlers.health import HealthHandlers
+
+        class MockHandler(HealthHandlers):
+            def __init__(self):
+                self._sent = None
+            def send_json(self, code, body):
+                self._sent = (code, body)
+
+        handler = MockHandler()
+        handler._api_post_api_v2_library_sync_pull({"device_id": "test-dev"})
+        self.assertEqual(handler._sent[0], 200)
+        self.assertIn("synced_at", handler._sent[1])
+
+    def test_publish_handler_no_folder(self):
+        import openbox
+        openbox.STATE_STORE.save({"games": [], "settings": {}, "profiles": {}})
+        from handlers.health import HealthHandlers
+
+        class MockHandler(HealthHandlers):
+            def __init__(self):
+                self._sent = None
+            def send_json(self, code, body):
+                self._sent = (code, body)
+
+        handler = MockHandler()
+        handler._api_post_api_v2_library_sync_publish({})
+        self.assertEqual(handler._sent[0], 400)
+
+    def test_pull_handler_no_folder(self):
+        import openbox
+        openbox.STATE_STORE.save({"games": [], "settings": {}, "profiles": {}})
+        from handlers.health import HealthHandlers
+
+        class MockHandler(HealthHandlers):
+            def __init__(self):
+                self._sent = None
+            def send_json(self, code, body):
+                self._sent = (code, body)
+
+        handler = MockHandler()
+        handler._api_post_api_v2_library_sync_pull({})
+        self.assertEqual(handler._sent[0], 400)
 
 
 if __name__ == "__main__":
