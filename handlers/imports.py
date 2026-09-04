@@ -3,6 +3,7 @@
 import logging
 import subprocess
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import parse_qs
 
 from api_errors import BadRequest
@@ -116,6 +117,34 @@ class ImportsHandlers:
     @route("POST", "/api/import/exclusions/delete")
     def _api_post_api_import_exclusions_delete(self, payload):
         self.remove_import_exclusion(payload)
+
+    @route("POST", "/api/v2/import/launchbox/preview")
+    def _api_post_api_v2_import_launchbox_preview(self, payload):
+        from pkg.parity.parity_launchbox_import import preview_import
+
+        xml_path = str(payload.get("xml_path", "")).strip()
+        if not xml_path:
+            raise BadRequest("xml_path is required.")
+        if not Path(xml_path).is_file():
+            raise BadRequest(f"LaunchBox XML not found: {xml_path}")
+        state = load_state_view()
+        report = preview_import(xml_path, state["games"])
+        self.send_json(200, report)
+
+    @route("POST", "/api/v2/import/launchbox/apply")
+    def _api_post_api_v2_import_launchbox_apply(self, payload):
+        from pkg.parity.parity_launchbox_import import apply_import
+
+        xml_path = str(payload.get("xml_path", "")).strip()
+        if not xml_path:
+            raise BadRequest("xml_path is required.")
+        if not Path(xml_path).is_file():
+            raise BadRequest(f"LaunchBox XML not found: {xml_path}")
+        state = load_state_view()
+        result = apply_import(xml_path, state["games"], merge_imported_games)
+        clear_file_probe_cache()
+        broadcast_event("library.imported", {"source": "launchbox", "added": result.get("added", 0)})
+        self.send_json(200, result)
 
     def import_folder(self, payload):
         folder = _required_folder_path(payload)
