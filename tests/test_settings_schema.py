@@ -12,6 +12,7 @@ from handlers.settings import (  # noqa: E402
     _clean_controller_map,
     _clean_controller_prompt_hint,
     _clean_gamescope_presets,
+    _clean_party,
     _clean_screensaver_seconds,
     _clean_watch_folders,
     clean_settings,
@@ -81,6 +82,7 @@ class SettingsSchemaTests(unittest.TestCase):
             "auto_close_store_clients", "gamescope_preset", "mangohud_enabled",
             "show_insights", "list_sort", "list_sort_dir",
             "mood_match_enabled", "mood_match_bigbox",
+            "party_queue", "party_players", "party_index",
         ):
             self.assertIn(key, KNOWN_SETTINGS, f"save-path key missing from whitelist: {key}")
 
@@ -109,6 +111,42 @@ class SettingsSchemaTests(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             _clean_gamescope_presets({"gamescope_custom_presets": [{"name": f"p{i}"} for i in range(17)]})
         self.assertIn("At most 16", str(ctx.exception))
+
+    def test_clean_party_round_trip(self):
+        queue, players, index = _clean_party({
+            "party_queue": ["g-1", "g-2", "g-1", "", "g-3"],
+            "party_players": 4,
+            "party_index": 1,
+        })
+        self.assertEqual(queue, ["g-1", "g-2", "g-3"])
+        self.assertEqual(players, 4)
+        self.assertEqual(index, 1)
+
+    def test_clean_party_defaults(self):
+        self.assertEqual(_clean_party({}), ([], 2, 0))
+
+    def test_clean_party_caps_queue_and_clamps_index(self):
+        queue, players, index = _clean_party({
+            "party_queue": [f"g-{i}" for i in range(60)],
+            "party_players": 2,
+            "party_index": 99,
+        })
+        self.assertEqual(len(queue), 50)
+        self.assertEqual(index, 49)
+        self.assertEqual(players, 2)
+
+    def test_clean_party_rejects_bad_input(self):
+        for payload, message in (
+            ({"party_queue": "g-1"}, "must be a list"),
+            ({"party_players": 1}, "between 2 and 8"),
+            ({"party_players": 9}, "between 2 and 8"),
+            ({"party_players": "many"}, "must be an integer"),
+            ({"party_index": -1}, "must be >= 0"),
+            ({"party_index": "first"}, "must be an integer"),
+        ):
+            with self.assertRaises(ValueError, msg=str(payload)) as ctx:
+                _clean_party(payload)
+            self.assertIn(message, str(ctx.exception))
 
     def test_clean_watch_folders_over_50(self):
         payload = {"watch_folders": [f"/tmp/folder_{i}" for i in range(51)]}

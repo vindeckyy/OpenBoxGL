@@ -33,6 +33,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `GET /api/v2/insights/mastery` returns platform/overall/decade aggregates read from the existing RA disk cache — zero new network calls (ADR 0030).
 - `static/mastery.js` renders tokenized `--mastery-*` segments (defined in all five stock themes); clicking a segment filters the library to that platform.
 
+### Game Night
+- New **Big Box → Game Night** party mode: set players (2–8) and session length, build a couch-multiplayer queue, spin the wheel, launch, and advance rounds.
+- `pkg/parity/parity_party.py` filters by `max_players`, couch platforms / `controller_support`, path usability, and a 3x session-length budget; sorts rating-first with a random tiebreak (ADR 0031).
+- Additive routes `POST /api/v2/party/queue`, `GET /api/v2/party/queue`, `POST /api/v2/party/next`; queue + round index persist in settings and survive restarts.
+- `static/party.js` wheel, "Up next" cover strip, gamepad support via the existing `pollGamepads` edge detection, and keyboard fallback (arrows/Enter/N/Escape).
+- Fixed M2 latent bug: `POST /api/v2/library/pick` hung on a live server because the handler re-read the already-consumed request body; POST handlers now take the parsed `payload` argument (ADR 0031).
+
 ## [1.8.0] - 2026-09-02
 
 ### Navigation & Routing

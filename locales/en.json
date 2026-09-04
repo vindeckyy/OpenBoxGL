@@ -659,5 +659,24 @@
     "mastered": "Mastered",
     "ra_progress": "RA progress",
     "empty": "No games to rank yet."
+  },
+  "party": {
+    "title": "Game Night",
+    "open": "Game Night",
+    "hint": "Set the couch size and session length — OpenBox builds a multiplayer queue and spins the wheel.",
+    "players": "Players",
+    "minutes": "Session length",
+    "minutes_any": "Any length",
+    "build": "Build queue",
+    "close": "Close",
+    "empty": "No couch-multiplayer games found — check player count or add max players to your games.",
+    "up_next": "Up next",
+    "rebuild": "New setup",
+    "next_round": "Next round",
+    "spin": "Spin",
+    "spinning": "Spinning…",
+    "winner": "Winner plays",
+    "launch": "Launch",
+    "only_one": "Only one game in the queue."
   }
 }

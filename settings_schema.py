@@ -97,6 +97,9 @@ KNOWN_SETTINGS = {
     "show_insights",
     "mood_match_enabled",
     "mood_match_bigbox",
+    "party_queue",
+    "party_players",
+    "party_index",
 }
 
 

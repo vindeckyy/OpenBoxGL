@@ -659,5 +659,24 @@
     "mastered": "Maîtrisé",
     "ra_progress": "Progression RA",
     "empty": "Pas encore de jeux à classer."
+  },
+  "party": {
+    "title": "Soirée jeux",
+    "open": "Soirée jeux",
+    "hint": "Choisissez le nombre de joueurs et la durée — OpenBox prépare une file multijoueur et tourne la roue.",
+    "players": "Joueurs",
+    "minutes": "Durée de session",
+    "minutes_any": "Indifférente",
+    "build": "Créer la file",
+    "close": "Fermer",
+    "empty": "Aucun jeu multijoueur canapé trouvé — vérifiez le nombre de joueurs ou renseignez le max de joueurs de vos jeux.",
+    "up_next": "À suivre",
+    "rebuild": "Nouvelle config",
+    "next_round": "Manche suivante",
+    "spin": "Tourner",
+    "spinning": "Ça tourne…",
+    "winner": "Le gagnant joue",
+    "launch": "Lancer",
+    "only_one": "Un seul jeu dans la file."
   }
 }

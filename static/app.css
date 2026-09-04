@@ -205,7 +205,7 @@
     .topbar-tools.open .tool-menu { animation:none; }
     dialog[open] { animation:dialog-in .22s cubic-bezier(.2,.8,.2,1) both; }
     dialog[open]::backdrop { animation:overlay-in .18s ease both; }
-    .lifecycle:not([hidden]),.bigbox:not([hidden]),.bigbox-menu:not([hidden]),.bigbox-pause:not([hidden]),.screensaver:not([hidden]) { animation:overlay-in .22s ease both; }
+    .lifecycle:not([hidden]),.bigbox:not([hidden]),.bigbox-menu:not([hidden]),.bigbox-pause:not([hidden]),.screensaver:not([hidden]),.party-overlay:not([hidden]) { animation:overlay-in .22s ease both; }
     .motion-enter { animation:surface-in .24s cubic-bezier(.2,.8,.2,1) both; will-change:transform, opacity; }
     .motion-enter[style*="--motion-index"] { animation-delay:calc(var(--motion-index) * 20ms); }
     @media (prefers-reduced-motion:reduce) { .motion-enter { animation:none; } .activity-button,.path-browse,.settings-nav-item,.game-editor-nav-item { transition:none !important; } }
@@ -676,8 +676,9 @@
       .cover,.card-main .cover,.coverflow-card,.toast,.play,.bigbox-play,.icon-button,.menu-button,
       .activity-button,.path-browse,.settings-nav-item,.game-editor-nav-item { transition:none !important; }
       .motion-enter,.topbar-tools.open .tool-menu,dialog[open],dialog[open]::backdrop,
-      .lifecycle:not([hidden]),.bigbox:not([hidden]),.bigbox-menu:not([hidden]),.bigbox-pause:not([hidden]),.screensaver:not([hidden]),
+      .lifecycle:not([hidden]),.bigbox:not([hidden]),.bigbox-menu:not([hidden]),.bigbox-pause:not([hidden]),.screensaver:not([hidden]),.party-overlay:not([hidden]),
       [aria-busy="true"]::after { animation:none !important; }
+      .party-wheel { transition:none !important; }
       .cover img.cover-skeleton { animation:none; }
       .coverflow-card,.card-main:hover .cover,.card.selected .cover,.card-main:focus-visible .cover { transform:none; }
       .bigbox-startup-video,.screensaver video { display:none; }
@@ -798,6 +799,28 @@
     .mastery-segment:hover { filter:brightness(1.1); }
     .mastery-ra { font-size:var(--font-meta); color:var(--text-soft); }
     .mastery-overall { margin-bottom:1rem; }
+
+    /* Game Night party mode (1.9.0) */
+    .party-overlay { position:fixed; z-index:33; inset:0; display:grid; place-items:center; background:var(--overlay-backdrop-strong); }
+    .party-overlay[hidden] { display:none; }
+    .party-panel { width:min(880px,94vw); max-height:92vh; overflow:auto; padding:26px; border:1px solid var(--border-card); border-radius:var(--radius-panel); background:var(--panel); box-shadow:0 30px 90px var(--black); }
+    .party-setup { display:flex; flex-wrap:wrap; gap:1rem; margin:1rem 0; }
+    .party-stepper { display:inline-flex; align-items:center; gap:.75rem; }
+    .party-stepper strong { min-width:2ch; text-align:center; font-size:var(--font-panel-title); }
+    .party-stage { display:flex; flex-wrap:wrap; gap:1.5rem; margin-top:1rem; }
+    .party-wheel-wrap { position:relative; width:22rem; height:22rem; max-width:80vw; max-height:80vw; flex:none; }
+    .party-wheel { position:absolute; inset:0; border-radius:50%; border:2px solid var(--border-card); overflow:hidden; }
+    .party-pointer { position:absolute; top:-.6rem; left:50%; transform:translateX(-50%); z-index:2; width:0; height:0; border-left:.7rem solid transparent; border-right:.7rem solid transparent; border-top:1.2rem solid var(--brand); }
+    .party-hub { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:9rem; height:9rem; border-radius:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.25rem; text-align:center; padding:.75rem; background:var(--panel); border:1px solid var(--border-card); }
+    .party-hub strong { font-size:var(--font-body); }
+    .party-hub small { color:var(--text-soft); }
+    .party-slice-label { position:absolute; left:50%; top:50%; margin-left:-4rem; width:8rem; text-align:center; font-size:var(--font-meta); font-weight:600; color:var(--white); text-shadow:0 1px 2px var(--black); pointer-events:none; }
+    .party-side { flex:1 1 16rem; display:flex; flex-direction:column; gap:1rem; }
+    .party-winner h3 { margin:.25rem 0 0; }
+    .party-upnext h3 { margin:0 0 .5rem; font-size:var(--font-body); }
+    .party-upnext-strip { display:flex; gap:.5rem; }
+    .party-cover { width:4.5rem; flex:none; }
+    .party-actions { justify-content:flex-start; }
 
     @media (prefers-reduced-motion:reduce) {
       .mood-active .card.selected .cover,.mood-active .hero-kicker,.mood-active .detail-card h3,
