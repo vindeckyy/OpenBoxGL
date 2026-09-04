@@ -45,4 +45,31 @@
 
 ---
 
+### Architecture & Performance
+* **Parity shim cleanup**: All 28 root-level `parity_*.py` shims deleted; `MetaPathFinder` is the sole flat-import bridge (ADR 0003).
+* **Central dependency registry**: `pkg/state/_deps.py` replaces 4 private `_ns()` helpers (ADR 0009).
+* **SQLite read model graduated**: `OPENBOX_ENABLE_SQLITE_READ=1` now serves facets via GROUP BY and adds `GET /api/v2/library/search` with FTS5. Default off = no behavior change (ADR 0032).
+
+---
+
+### LaunchBox Migration
+* Import your LaunchBox library via `POST /api/v2/import/launchbox/preview` and `/apply`. Emulator mappings are reported for manual resolution (ADR 0033).
+
+---
+
+### Big Box Video Snaps
+* Stage mode shows looping gameplay videos with 600ms debounce, BGM ducking, and reduced-motion support (ADR 0034).
+
+---
+
+### Library Sync
+* `POST /api/v2/library/sync/publish` and `/pull` sync the full library via a mounted folder with tombstones for deletions (ADR 0035).
+
+---
+
+### Manual/Shelf Entries
+* `POST /api/v2/library/manual-entry` adds games without a local file path — physical media, board games, console games (ADR 0036).
+
+---
+
 **Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.8.0...v1.9.0

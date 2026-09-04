@@ -144,11 +144,11 @@ Local-first playtime analytics with a 366-day activity heatmap (levels 0–4), c
 
 ### Big Box & Handhelds
 
-Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attract mode, optional startup video, library BGM, **Game Night party mode** (couch-multiplayer queue, spinning wheel, up-next strip, persistent rounds), Steam Game Mode guest (`--game-mode`), gamescope presets (Steam Deck, Steam Deck HD, 1080p, 1440p, 4K, integer scale, stretch, borderless) plus **custom user-defined presets with per-game override**, MangoHud performance overlay toggle, controller bench with live gamepad SVG visualization, localization (English, Spanish, German, French, Portuguese).
+Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attract mode, optional startup video, library BGM, **video snaps** (looping gameplay videos in Stage mode with debounce and BGM ducking), **Game Night party mode** (couch-multiplayer queue, spinning wheel, up-next strip, persistent rounds), Steam Game Mode guest (`--game-mode`), gamescope presets (Steam Deck, Steam Deck HD, 1080p, 1440p, 4K, integer scale, stretch, borderless) plus **custom user-defined presets with per-game override**, MangoHud performance overlay toggle, controller bench with live gamepad SVG visualization, localization (English, Spanish, German, French, Portuguese).
 
 ### Scale & Backups
 
-Optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) with FTS5 full-text search and GROUP BY facets for 50k+ libraries. Backup diff API (`GET /api/v2/backup/diff`) to compare current library against archives. Visual chip builder for smart collection filter presets. **Library export** to JSON or CSV with platform/playlist scopes, shareable-by-construction field projection, and automatic newest-10 rotation.
+Optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) with FTS5 full-text search and GROUP BY facets for 50k+ libraries, wired into the facets endpoint and `/api/v2/library/search`. Backup diff API (`GET /api/v2/backup/diff`) to compare current library against archives. Visual chip builder for smart collection filter presets. **Library export** to JSON or CSV with platform/playlist scopes, shareable-by-construction field projection, and automatic newest-10 rotation. **Full library sync** via mounted folder with tombstones (`POST /api/v2/library/sync/publish` and `/pull`). **LaunchBox XML migration** import (`POST /api/v2/import/launchbox/preview` and `/apply`). **Manual/shelf entries** for games without local files.
 
 ### Extensibility
 

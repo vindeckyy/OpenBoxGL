@@ -313,7 +313,7 @@ def pull_library(state, folder, device_id="local", now=None):
     target = folder / LIBRARY_SYNC_FILE
     timestamp = now or datetime.now().astimezone().isoformat(timespec="seconds")
     if not target.is_file():
-        return {"added": 0, "updated": 0, "deleted": 0, "skipped": 0, "games": state.get("games", [])}
+        return {"added": 0, "updated": 0, "deleted": 0, "skipped": 0, "games": state.get("games", []), "synced_at": timestamp}
 
     with _sync_lock(target):
         try:

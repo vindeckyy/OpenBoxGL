@@ -45,6 +45,7 @@
       <description>
         <p>Look, Discover, Play release introducing adaptive cover theming, a smart play picker, a library relationship graph, a printable year-in-review report, a completionist dashboard, and a Big Box party mode.</p>
         <p>Adds Mood Match adaptive theming that tints accents from the selected cover, a What should I play picker scored by time/mood/familiarity/players, a pan/zoomable Library Constellation graph, OpenBox Wrapped annual aggregates with a History Timeline tab, a Mastery Map of per-platform progress with RetroAchievements columns, and Game Night couch-multiplayer queues with a spinning wheel and persistent rounds.</p>
+        <p>Also: 28 root parity shims replaced by a single MetaPathFinder bridge, central _deps registry, SQLite read model graduated from dead code to wired query path, LaunchBox XML library migration import, Big Box video snaps with debounce and BGM ducking, full library sync via mounted folder with tombstones, and manual/shelf entries for games without local files.</p>
       </description>
     </release>
     <release version="1.8.0" date="2026-09-02">
