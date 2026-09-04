@@ -40,6 +40,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.10.0" date="2026-09-04">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.10.0</url>
+      <description>
+        <p>Solid and Fast consolidation release: SQLite observability with an opt-in filtered-query flag, library sync conflict review with a mass-delete guard and tombstone expiry, LaunchBox emulator resolve with Windows path remap and streaming preview, Game Night resume with per-game MangoHud, picker Constellation Mastery Wrapped and Timeline follow-ups, and four reliability promotions from manual to tested.</p>
+      </description>
+    </release>
     <release version="1.9.0" date="2026-09-04">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.9.0</url>
       <description>

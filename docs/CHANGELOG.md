@@ -4,6 +4,44 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-09-04
+
+Solid and Fast consolidation release: observability and opt-in scale for SQLite, conflict-visible library sync with a mass-delete guard, a completable LaunchBox migration path, Game Night and Discover follow-ups, a POST-payload lint gate, and four reliability promotions from manual to tested. Additive `/api/v2/*` only; the v1 route surface stays frozen.
+
+### Added
+- SQLite observability: `GET /api/explorer/facets` and `GET /api/v2/library/search` report `source` (`sqlite`/`json`), `parity_ok`, and `timings_ms` when `OPENBOX_ENABLE_SQLITE_READ=1` is on; parity mismatches log one counts-only warning and fall back to JSON, with `OPENBOX_SQLITE_PARITY_LOG=1` for verbose ids (ADR 0037).
+- Opt-in SQLite filtered queries: `OPENBOX_ENABLE_SQLITE_QUERY=1` runs platform/genre/favorite/hidden/installed plus offset filters as one indexed query (limit still clamped to 200); text `q` intersects FTS5/LIKE hits. Flag off is byte-identical to before; `GET /api/library` stays JSON by design (ADR 0037).
+- Library sync conflict review: pulls append `conflicts[]` (`game_key`, timestamps, LWW winner, `fields_differ`) and the settings dialog lists them next to a "media stays per-device" notice (`media_synced: false` manifest). Manual entries pulled to a second device render as shelf rows via `path_usable` (ADR 0038).
+- Sync mass-delete guard: a pull that would delete more than 10% of the local library returns 409 `SYNC_NEEDS_CONFIRM` with counts and mutates nothing; resend with `confirm: true` to apply (ADR 0038).
+- 90-day tombstone garbage collection on publish, reported as `tombstones_gc`; re-added games still clear their tombstone (ADR 0038).
+- `POST /api/v2/import/launchbox/resolve`: map LaunchBox `EmulatorId` values to OpenBox adapters (validated against the emulator-defs registry, unknowns reported in `unresolved`) and remap Windows path prefixes (`C:\Games\...` to a shelf dir). Unresolvable paths become `needs_path` shelf rows; `launch` stays tokenized, never synthesized shell (ADR 0039).
+- Streaming LaunchBox previews: `ET.iterparse` XML parsing with 5k-row pagination keeps 20k-game exports bounded; resolve recounts by re-streaming without mutating the stored preview and rejects drift with `PREVIEW_STALE` (ADR 0039).
+- Game Night resume: `GET /api/v2/party/queue` reports `resume` when a persisted queue stopped mid-round, and the dialog offers "Resume round {n} of {total}?" Queue builds now return an "Excluded {count} of {total} games" transparency line (B4).
+- Per-game MangoHud tri-state (`inherit`/`on`/`off`); per-game mode wins over the global toggle. Video snaps default on via Settings → Big Box → Video snaps, force off under reduced-motion, preload only visible-plus-one, and release the BGM duck when a video is missing (B4).
+- Picker `excluded_ids[]` (up to 10): "Again" sends the last shown ids and the server enforces exclusion, so repeats are impossible; pick reasons are localized (D5).
+- Constellation `?focus=<game_id>&depth=1|2` ego-graph: double-click a node to focus its neighborhood, double-click empty canvas to clear; unknown focus returns an honest empty graph instead of a blank canvas (D5).
+- Mastery `ra_available` flag with a "local progress only" notice when the RetroAchievements cache is unavailable; Timeline recording basenames now handle Windows separators too (D5).
+- New lint gate `scripts/check_handlers_payload.py`: every `POST` handler must take the parsed `payload` argument and must not re-read the consumed request body, making the v1.9.0 pick-hang class impossible (D5).
+
+### Fixed
+- Second Play within 1s of a launch now returns 409 `SESSION_ALREADY_STARTING` naming the running launch instead of starting a conflicting session (reliability #8, Tested).
+- Offline metadata sync finishes the operation as an error naming the offline state with retry, mirrored in the job panel, instead of a quiet "done" (reliability #11, Tested).
+- Wrong RetroAchievements or EmuMovies credentials surface 401 `INVALID_CREDENTIALS` ("check credentials in settings") instead of a generic error (reliability #13, Tested).
+- Deleting the selected game while a dialog is open closes or rebinds the dialog instead of crashing on a stale id (reliability #22, Tested).
+- Sync lock contention returns a readable "busy (another sync is holding the lock)" error naming the target instead of blocking indefinitely.
+
+### Hardened
+- Changed-line coverage floor ratcheted 80% to 95%: every lane must land at least 95% on its own diff, no waivers (ADR 0040).
+- Shutdown drains webhooks and stops sessions on SIGINT/SIGTERM (reliability #7, Tested).
+- Launch pipeline resolves the effective MangoHud flag and gamescope preset per game through centralized helpers; locale coverage stays 100% across all five languages with the new sync/party/mastery/snaps strings.
+
+### Verification
+- `python3 scripts/check_version_sync.py` green at 1.10.0; `python3 scripts/validate_flatpak_manifest.py` ok (runtime 49); release chain (`scripts/release.sh`: version sync, `make check`, AppImage build, CycloneDX SBOM, Ed25519 sign/verify, notes draft) reviewed ready with publish left to the maintainer.
+- New tests: `test_sqlite_readmodel.py` (observability matrix, flag-off byte-identity, filtered queries), `test_library_sync.py` (conflicts, confirm gate, GC), `test_launchbox_import.py` (resolve, remap, streaming, pagination), `test_bigbox_snaps.py`, `test_launch_mangohud.py`, `test_dialog_delete_race.py`, `test_reliability_credentials.py`, `test_reliability_offline_sync.py`, `test_reliability_shutdown.py`, `test_sessions.py` lease cases, picker/constellation/mastery/wrapped follow-up cases.
+
+### Deferred
+- Frontend decomposition (splitting `library.js`/`settings.js`/`setup.js` and large parity modules with zero behavior change) cut to 1.11 to protect the gate; no decomposition is promised in this release.
+
 ## [1.9.0] - 2026-09-04
 
 ### Mood Match — Adaptive Cover Theming

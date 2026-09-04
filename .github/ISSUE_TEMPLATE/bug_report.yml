@@ -7,14 +7,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report an issue. Please search [existing issues](https://github.com/vindeckyy/OpenBoxGL/issues) first. The current release is [v1.9.0](https://github.com/vindeckyy/OpenBoxGL/releases/latest).
+        Thanks for taking the time to report an issue. Please search [existing issues](https://github.com/vindeckyy/OpenBoxGL/issues) first. The current release is [v1.10.0](https://github.com/vindeckyy/OpenBoxGL/releases/latest).
 
   - type: input
     id: version
     attributes:
       label: OpenBox version
       description: Release tag, AppImage version, or git commit hash
-      placeholder: v1.9.0
+      placeholder: v1.10.0
     validations:
       required: true
 
