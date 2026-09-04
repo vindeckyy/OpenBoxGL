@@ -225,6 +225,32 @@ function openContextMenu(event, id) {
   items[0]?.focus();
 }
 
+function rebindOpenDialogsToLibrary() {
+  const ids = new Set((AppState.games || []).map(game => game.id));
+  let rebound = false;
+  if (AppState.selectedId !== null && !ids.has(AppState.selectedId)) {
+    AppState.selectedId = null;
+    rebound = true;
+  }
+  if (AppState.editingId !== null && AppState.editingId !== undefined && !ids.has(AppState.editingId)) {
+    AppState.editingId = null;
+    rebound = true;
+    if ($('gameDialog')?.open) closeDialog($('gameDialog'));
+  }
+  if (AppState.metadataGameId !== null && AppState.metadataGameId !== undefined && !ids.has(AppState.metadataGameId)) {
+    AppState.metadataGameId = null;
+    rebound = true;
+    if ($('metadataDialog')?.open) closeDialog($('metadataDialog'));
+  }
+  if (AppState.contextGameId !== null && AppState.contextGameId !== undefined && !ids.has(AppState.contextGameId)) {
+    AppState.contextGameId = null;
+    rebound = true;
+    closeContextMenu();
+  }
+  return rebound;
+}
+document.addEventListener('app:state-refreshed', () => rebindOpenDialogsToLibrary());
+
 function bindContextMenuA11y() {
   const menu = $('contextMenu');
   if (!menu) return;
@@ -466,6 +492,7 @@ export {
   openGameDialog,
   openContextMenu,
   closeContextMenu,
+  rebindOpenDialogsToLibrary,
   bindContextMenuA11y,
   promptInput,
   promptChoice,

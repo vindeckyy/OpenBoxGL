@@ -15,6 +15,45 @@ def _wait_for_exit_code(*args, **kwargs):
     return result.exit_code
 
 
+def test_double_launch_lease(save_state, start_game, control_game_session, RUNNING, hold_script):
+    """Reliability #8: rapid double Play dedupes via launch lease (SESSION_ALREADY_STARTING)."""
+    import pkg.state.launch as launch_mod
+
+    leases = getattr(launch_mod, "_LAUNCH_LEASES", None)
+    assert leases is not None, "launch lease registry missing: second Play must be deduped"
+    leases.clear()
+    try:
+        save_state({"games": [{"name": "Lease test", "path": hold_script}], "profiles": {}, "history": []})
+        first = start_game(0)
+        try:
+            start_game(0)
+        except Exception as error:
+            assert getattr(error, "code", "") == "SESSION_ALREADY_STARTING", f"expected SESSION_ALREADY_STARTING, got {error!r}"
+            assert getattr(error, "status", None) == 409, f"expected status 409, got {error!r}"
+            detail = getattr(error, "detail", None) or {}
+            assert detail.get("launch_id") == first["launch_id"], "lease must name the session to focus"
+        else:
+            raise AssertionError("rapid second Play must return SESSION_ALREADY_STARTING, started a duplicate")
+        assert len(RUNNING) == 1, f"double launch must never create two sessions: {sorted(RUNNING)}"
+        control_game_session(first["launch_id"], "stop")
+        for _ in range(100):
+            if not RUNNING:
+                break
+            time.sleep(0.01)
+        assert not RUNNING
+        # Lease expiry (simulated) allows launching again.
+        leases.clear()
+        second = start_game(0)
+        control_game_session(second["launch_id"], "stop")
+        for _ in range(100):
+            if not RUNNING:
+                break
+            time.sleep(0.01)
+        assert not RUNNING
+    finally:
+        leases.clear()
+
+
 def main():
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
         prev_data_dir = os.environ.get("OPENBOX_DATA_DIR")
@@ -91,6 +130,7 @@ def main():
             assert state["games"][0]["name"] == "Running"
             assert state["games"][0]["playtime_seconds"] >= 1
             assert state["history"] and state["history"][-1]["game"] == "Running"
+            test_double_launch_lease(save_state, start_game, control_game_session, RUNNING, hold_script)
         finally:
             wait_patch.stop()
             if prev_data_dir is None:

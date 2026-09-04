@@ -2,7 +2,7 @@ import { $, escapeHtml, duration, fact, RATIO_BUCKETS, RATIO_REP, coverBucketOf,
 import { token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
 import { loadTheme, deletePlaylist } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importDroppedFolder } from './imports.js';
-import { openGameDialog, confirmAction, promptInput } from './dialogs.js';
+import { openGameDialog, confirmAction, promptInput, rebindOpenDialogsToLibrary } from './dialogs.js';
 import { syncHash } from './router.js';
 import { openMetadata, steamMetadata, loadAchievements } from './metadata.js';
 import { captureScreenshot, downloadBezel } from './media.js';
@@ -420,6 +420,7 @@ function markFilterAria() {
       if (AppState.activePlaylist && !AppState.playlists.some(item => item.name === AppState.activePlaylist)) AppState.activePlaylist = '';
       if (AppState.selectedId !== null && !AppState.games.some(game => game.id === AppState.selectedId)) AppState.selectedId = null;
       for (const id of selectedIds) if (!AppState.games.some(game => game.id === id)) selectedIds.delete(id);
+      rebindOpenDialogsToLibrary();
       render();
       applySidebarVisibility();
       applyLocaleStrings();

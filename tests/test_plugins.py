@@ -130,6 +130,12 @@ def test():
                 hook.assert_called_once()
                 launched = popen.call_args[0][0]
                 assert launched == ["bash", str(game_file)], launched
+                # Independent scenario, not a double-click of the first launch:
+                # clear the reliability-#8 launch lease so the second start is
+                # not deduped as SESSION_ALREADY_STARTING (same convention as
+                # tests/test_sessions.py and tests/test_launch_mangohud.py).
+                import pkg.state.launch as _launch_mod
+                _launch_mod._LAUNCH_LEASES.clear()
                 # Original cwd is the game directory; a valid plugin result is kept.
                 with mock.patch("webapp_state.subprocess.Popen", return_value=process) as popen:
                     with mock.patch("webapp_state.run_plugins", side_effect=lambda _directory, _hook, payload: {

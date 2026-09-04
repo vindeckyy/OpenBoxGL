@@ -7,11 +7,11 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs
 
-from api_errors import BadgeNotFound, MediaNotFound
+from api_errors import BadgeNotFound, InvalidCredentials, MediaNotFound
 from metadata import apply_game_metadata
 from openbox import load_state
 from routes.registry import route
-from parity_integrations import attach_recording, capture_screenshot, download_bezel, download_emumovies_media, load_emumovies_credentials, obs_recording_status, save_emumovies_credentials
+from parity_integrations import attach_recording, capture_screenshot, download_bezel, download_emumovies_media, is_emumovies_auth_failure, load_emumovies_credentials, obs_recording_status, save_emumovies_credentials
 from parity_media import active_video, cleanup_duplicates, find_duplicate_media, load_media_queue
 from parity_premium import apply_media_pack, download_gog_media, download_steam_trailer, list_media_packs, platform_categories, strings_for
 from webapp_state import DATA, JOB_MANAGER, MEDIA_JOB, MEDIA_TYPES_ALL, METADATA_DATABASE, PROCESS_LOCK, approved_media_path, bump_media_epoch, download_image, game_from_payload, game_from_query, load_state_view, media_probe_path, public_settings, transact_state
@@ -313,9 +313,14 @@ class MediaHandlers:
         credentials = load_emumovies_credentials(DATA.parent)
         state = load_state()
         target = copy.deepcopy(game_from_payload(state, payload))
-        path = download_emumovies_media(
-            target, credentials, DATA.parent / "media", str(payload.get("type", "box")),
-        )
+        try:
+            path = download_emumovies_media(
+                target, credentials, DATA.parent / "media", str(payload.get("type", "box")),
+            )
+        except ValueError as error:
+            if is_emumovies_auth_failure(error):
+                raise InvalidCredentials("Check EmuMovies credentials in Settings.") from error
+            raise
         def mutate(state):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)

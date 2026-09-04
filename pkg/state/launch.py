@@ -18,7 +18,7 @@ from pkg.state.registry import EVENT_SEQUENCE, PROCESS_LOCK, PROCESSES, RUNNING,
 from backend_io import contained_path
 from catalog import apply_progress_automation
 from openbox import DATA, build_launch, load_state, update_state
-from parity_gamescope import is_gamescope_guest, is_steam_launch, mark_process_windows, steam_game_id_for, apply_mangohud_env, merge_gamescope_preset, should_nest_gamescope
+from parity_gamescope import is_gamescope_guest, is_steam_launch, mark_process_windows, steam_game_id_for, apply_mangohud_env, merge_gamescope_preset, resolve_mangohud_enabled, should_nest_gamescope
 from parity_integrations import auto_attach_obs_recording
 from parity_perf import apply_perf_profile, effective_profile_name, restore_perf_profile
 from parity_saves import enforce_backup_limit
@@ -28,11 +28,47 @@ from saves import backup_saves
 
 LOGGER = logging.getLogger("openbox")
 
+# Double-Play lease (reliability #8): a launch claimed for a game within the
+# window means a second Play is a duplicate click, not a new session.
+_LAUNCH_LEASE_WINDOW = 1.0
+_LAUNCH_LEASES = {}
+_LAUNCH_LEASE_LOCK = threading.Lock()
 
-def _apply_mangohud_from_state(state):
-    """Return an env dict with MangoHud enabled if the setting is on (1.7.2)."""
+
+def _lease_key(index, stable_game_id):
+    """Stable lease key for a game; index-scoped when no stable id exists."""
+    stable = str(stable_game_id or "").strip()
+    return stable or f"index:{index}"
+
+
+def _claim_launch_lease(key, launch_id):
+    """Record a launch claim; return the prior launch_id when one is still fresh."""
+    now = time.monotonic()
+    with _LAUNCH_LEASE_LOCK:
+        for stale in [name for name, (_, claimed_at) in _LAUNCH_LEASES.items() if now - claimed_at >= _LAUNCH_LEASE_WINDOW]:
+            _LAUNCH_LEASES.pop(stale, None)
+        prior = _LAUNCH_LEASES.get(key)
+        if prior is not None and now - prior[1] < _LAUNCH_LEASE_WINDOW:
+            return prior[0]
+        _LAUNCH_LEASES[key] = (launch_id, now)
+        return None
+
+
+def _release_launch_lease(key, launch_id):
+    """Drop a claim owned by a failed launch so an immediate retry can proceed."""
+    with _LAUNCH_LEASE_LOCK:
+        if _LAUNCH_LEASES.get(key, (None, 0.0))[0] == launch_id:
+            _LAUNCH_LEASES.pop(key, None)
+
+
+def _apply_mangohud_from_state(state, game=None):
+    """Return an env dict with MangoHud resolved per game (1.10.0).
+
+    A per-game ``mangohud`` tri-state (on/off) wins over the global
+    ``mangohud_enabled`` setting; inherit (or no game) falls back to global.
+    """
     settings = state.get("settings", {}) if isinstance(state, dict) else {}
-    return apply_mangohud_env(enabled=bool(settings.get("mangohud_enabled", False)))
+    return apply_mangohud_env(enabled=resolve_mangohud_enabled(game, settings))
 
 
 def _apply_gamescope_preset_from_state(state, game, args):
@@ -562,6 +598,15 @@ def start_game(index=None, stable_game_id=""):
     args, cwd = start_cmd(game, profiles)
     # Phase 3: Create a launch record containing stable game ID, canonical game path, profile name, and expected process identity.
     launch_id = secrets.token_urlsafe(8)
+    lease_key = _lease_key(index, stable_game_id)
+    prior_launch_id = _claim_launch_lease(lease_key, launch_id)
+    if prior_launch_id is not None:
+        from api_errors import SessionAlreadyStarting
+
+        raise SessionAlreadyStarting(
+            "This game is already starting. Use the running session instead of launching again.",
+            detail={"launch_id": prior_launch_id},
+        )
     # Phase 4: Apply the performance profile and retain whether it actually changed system state.
     effective_profile = eff_prof_fn(game, state["profiles"])
     lease = app_perf(effective_profile, state)
@@ -574,7 +619,7 @@ def start_game(index=None, stable_game_id=""):
         args = _apply_gamescope_preset_from_state(state, game, args)
         val_cmd(args, cwd)
         # Apply MangoHud env if enabled in settings (1.7.2).
-        launch_env = _apply_mangohud_from_state(state)
+        launch_env = _apply_mangohud_from_state(state, game)
         process = subprocess.Popen(args, cwd=cwd, start_new_session=True, env=launch_env)
         started = datetime.now()
         entry = {}
@@ -597,6 +642,7 @@ def start_game(index=None, stable_game_id=""):
         return dict(entry)
     except Exception:
         # Phase 8: Roll back post-spawn state and restore the performance lease.
+        _release_launch_lease(lease_key, launch_id)
         if process is not None:
             roll_back = _ns("_rollback_failed_launch", _rollback_failed_launch)
             roll_back(launch_id, process)

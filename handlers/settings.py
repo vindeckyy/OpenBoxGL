@@ -10,7 +10,7 @@ from parity_integrations import inject_retroachievements
 from parity_media import REGION_PRIORITY_DEFAULT
 from parity_premium import LIST_COLUMNS_DEFAULT, custom_field_defs, enhanced_ra_profile, platform_categories
 from parity_tracking import TRACKING_MODES
-from retroachievements import api_get as ra_api_get, game_progress as ra_game_progress, load_credentials as load_ra_credentials, match_game as match_ra_game, save_credentials as save_ra_credentials
+from retroachievements import api_get as ra_api_get, game_progress as ra_game_progress, is_auth_failure as is_ra_auth_failure, load_credentials as load_ra_credentials, match_game as match_ra_game, save_credentials as save_ra_credentials
 from routes.registry import route
 from settings_schema import KNOWN_SETTINGS, sanitize_settings
 from webapp_state import DATA, LOGGER, MEDIA_TYPES_ALL, STATE_LOCK, clean_commands, game_from_payload, load_state_view, public_settings, transact_state
@@ -465,7 +465,9 @@ class SettingsHandlers:
                 "motto": profile.get("Motto", ""),
             })
         except (OSError, ValueError, json.JSONDecodeError) as error:
-            from api_errors import BadRequest
+            from api_errors import BadRequest, InvalidCredentials
+            if is_ra_auth_failure(error):
+                raise InvalidCredentials("Check RetroAchievements credentials in Settings.") from error
             raise BadRequest(str(error)) from None
         return
 
@@ -564,12 +566,19 @@ class SettingsHandlers:
         self.send_json(200, public_settings(state))
 
     def save_ra_settings(self, payload):
+        from api_errors import InvalidCredentials
+
         existing = load_ra_credentials(DATA.parent)
-        profile = save_ra_credentials(
-            DATA.parent,
-            str(payload.get("username", "")),
-            str(payload.get("api_key", "") or existing.get("api_key", "")),
-        )
+        try:
+            profile = save_ra_credentials(
+                DATA.parent,
+                str(payload.get("username", "")),
+                str(payload.get("api_key", "") or existing.get("api_key", "")),
+            )
+        except (OSError, ValueError) as error:
+            if is_ra_auth_failure(error):
+                raise InvalidCredentials("Check RetroAchievements credentials in Settings.") from error
+            raise
         self.send_json(200, {
             "configured": True,
             "username": profile.get("User", ""),

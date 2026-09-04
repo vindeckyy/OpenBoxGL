@@ -48,6 +48,21 @@ def api_get(endpoint, params, credentials, opener=urlopen):
         return json.loads(read_limited(response, 8 * 1024 * 1024))
 
 
+def is_auth_failure(error) -> bool:
+    """True when *error* looks like rejected RetroAchievements credentials.
+
+    HTTP 401/403 from the API (or a rejection message) means the user must
+    check credentials in settings; anything else is a generic failure.
+    """
+    try:
+        if int(getattr(error, "code", 0) or 0) in (401, 403):
+            return True
+    except (TypeError, ValueError):
+        pass
+    text = f"{getattr(error, 'reason', '')} {error}".casefold()
+    return any(marker in text for marker in ("401", "403", "unauthorized", "forbidden", "rejected those credentials"))
+
+
 def load_credentials(directory):
     try:
         data = json.loads((Path(directory) / "retroachievements.json").read_text())

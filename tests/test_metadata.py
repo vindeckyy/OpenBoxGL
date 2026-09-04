@@ -975,9 +975,12 @@ class MetadataHandlerRouteTests(MatchPreviewV2Tests):
         with mock.patch("handlers.metadata.METADATA_DATABASE", self.db_path), \
              mock.patch("handlers.metadata.sync_database", side_effect=OSError("network")) as mock_sync, \
              mock.patch("handlers.metadata.JOB_MANAGER") as mock_jm:
+            # Inline submit runs the worker synchronously, so the failure that
+            # production records into the durable operation (reliability #11)
+            # propagates here; the facade still carries the error first.
             mock_jm.submit.side_effect = lambda name, worker: worker()
-            handler.sync_metadata()
-            self.assertEqual(handler.responses[-1][0], 202)
+            with self.assertRaises(OSError):
+                handler.sync_metadata()
             self.assertEqual(hm.METADATA_JOB.get("state"), "error")
             mock_sync.assert_called_once()
 

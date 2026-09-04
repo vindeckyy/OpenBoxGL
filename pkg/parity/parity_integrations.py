@@ -163,6 +163,22 @@ def save_emumovies_credentials(data_dir, username, password):
     return {"configured": True}
 
 
+def is_emumovies_auth_failure(error) -> bool:
+    """True when *error* looks like rejected EmuMovies credentials.
+
+    download_emumovies_media wraps transport failures in ValueError chained
+    from the original HTTP error, so both the message and the cause are
+    inspected for 401/403 markers.
+    """
+    parts = [str(error)]
+    cause = getattr(error, "__cause__", None) or getattr(error, "__context__", None)
+    if cause is not None and cause is not error:
+        parts.append(str(cause))
+        parts.append(str(getattr(cause, "code", "")))
+    text = " ".join(parts).casefold()
+    return any(marker in text for marker in ("401", "403", "unauthorized", "forbidden", "invalid credentials"))
+
+
 def download_emumovies_media(game, credentials, media_root, media_type="box"):
     username = str((credentials or {}).get("username") or "").strip()
     password = str((credentials or {}).get("password") or "").strip()

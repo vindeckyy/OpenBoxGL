@@ -64,6 +64,19 @@ class Conflict(ApiError):
     code = "CONFLICT"
 
 
+class SessionAlreadyStarting(Conflict):
+    code = "SESSION_ALREADY_STARTING"
+
+
+class Unauthorized(ApiError):
+    status = 401
+    code = "UNAUTHORIZED"
+
+
+class InvalidCredentials(Unauthorized):
+    code = "INVALID_CREDENTIALS"
+
+
 class JobStateConflict(Conflict):
     code = "JOB_STATE_CONFLICT"
 

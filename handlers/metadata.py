@@ -309,6 +309,13 @@ class MetadataHandlers:
                 job = {"state":"done"}
             except (OSError, ValueError, zipfile.BadZipFile, sqlite3.Error) as error:
                 job = {"state":"error", "error":str(error)}
+                with PROCESS_LOCK:
+                    METADATA_JOB.clear()
+                    METADATA_JOB.update(job)
+                # Propagate so JobManager records the terminal error into the
+                # durable operation (reliability #11): the job panel then shows
+                # the offline state with retry instead of a quiet "done".
+                raise
             with PROCESS_LOCK:
                 METADATA_JOB.clear()
                 METADATA_JOB.update(job)
