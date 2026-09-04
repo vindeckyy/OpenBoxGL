@@ -12,6 +12,9 @@ Verifies:
   - FTS5 unavailable: LIKE fallback works.
 """
 
+import contextlib
+import logging
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -281,6 +284,553 @@ def test_search_route_registered():
     assert "/api/v2/library/search" in GET_TABLE, "search route not registered"
 
 
+# ---------------------------------------------------------------------------
+# S1 phase 2 (ADR 0037): observability + second-flag filtered queries.
+# ---------------------------------------------------------------------------
+
+def _s1_state(n=60):
+    """State with both title (sqlite) and name (JSON search) keys populated."""
+    games = []
+    for i in range(n):
+        games.append({
+            "game_id": "s1-%04d" % i,
+            "title": "S1 Game %d" % i,
+            "name": "S1 Game %d" % i,
+            "platform": ["PC", "Steam", "GOG"][i % 3],
+            "genre": ["Action", "RPG"][i % 2],
+            "favorite": i % 5 == 0,
+            "hidden": i % 11 == 0,
+            "installed": i % 2 == 0,
+        })
+    return {"games": games, "settings": {}, "profiles": {}}
+
+
+class _StubHandler:
+    """Minimal handler stub: facet/search methods only use send_json."""
+
+    def __init__(self):
+        self.captured = []
+        self.headers = {}
+
+    def send_json(self, status, payload):
+        self.captured.append((status, payload))
+
+
+class _Parsed:
+    def __init__(self, query):
+        self.query = query
+
+
+@contextlib.contextmanager
+def _patched_handler_env(state, sig, enabled=True, query_env=None, parity_env=None):
+    """Swap the SQLITE_READ_MODEL singleton for a temp-db model.
+
+    Handler methods resolve the singleton at call time, so patching the
+    module attribute is sufficient. Rebuilds from *state* when enabled.
+    """
+    import openbox
+    import pkg.state.cache as cache_mod
+    import handlers.library as libmod
+    with tempfile.TemporaryDirectory() as tmp:
+        rm = SqliteReadModel(Path(tmp) / "t.db")
+        rm._enabled = enabled
+        if enabled:
+            rm.rebuild(state)
+        orig_rm = cache_mod.SQLITE_READ_MODEL
+        orig_view = libmod.load_state_view
+        orig_sig = openbox.STATE_STORE.signature
+        old_q = os.environ.get("OPENBOX_ENABLE_SQLITE_QUERY")
+        old_p = os.environ.get("OPENBOX_SQLITE_PARITY_LOG")
+        try:
+            cache_mod.SQLITE_READ_MODEL = rm
+            libmod.load_state_view = lambda: state
+            openbox.STATE_STORE.signature = lambda: sig
+            if query_env is None:
+                os.environ.pop("OPENBOX_ENABLE_SQLITE_QUERY", None)
+            else:
+                os.environ["OPENBOX_ENABLE_SQLITE_QUERY"] = query_env
+            if parity_env is None:
+                os.environ.pop("OPENBOX_SQLITE_PARITY_LOG", None)
+            else:
+                os.environ["OPENBOX_SQLITE_PARITY_LOG"] = parity_env
+            yield rm
+        finally:
+            cache_mod.SQLITE_READ_MODEL = orig_rm
+            libmod.load_state_view = orig_view
+            openbox.STATE_STORE.signature = orig_sig
+            if old_q is None:
+                os.environ.pop("OPENBOX_ENABLE_SQLITE_QUERY", None)
+            else:
+                os.environ["OPENBOX_ENABLE_SQLITE_QUERY"] = old_q
+            if old_p is None:
+                os.environ.pop("OPENBOX_SQLITE_PARITY_LOG", None)
+            else:
+                os.environ["OPENBOX_SQLITE_PARITY_LOG"] = old_p
+            rm.close()
+
+
+class _CapLog(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.records = []
+
+    def emit(self, record):
+        self.records.append(record)
+
+
+@contextlib.contextmanager
+def _capture_sqlite_logs():
+    logger = logging.getLogger("openbox.sqlite_readmodel")
+    cap = _CapLog()
+    old_level = logger.level
+    logger.addHandler(cap)
+    logger.setLevel(logging.DEBUG)
+    try:
+        yield cap
+    finally:
+        logger.removeHandler(cap)
+        logger.setLevel(old_level)
+
+
+def _expected_filtered(state):
+    """Independent expectation for the combined-filter query test."""
+    out = []
+    for game in state["games"]:
+        if game["platform"] != "PC":
+            continue
+        if game["genre"] != "Action":
+            continue
+        if not game["favorite"]:
+            continue
+        if game["hidden"]:
+            continue
+        if not game["installed"]:
+            continue
+        out.append(game)
+    out.sort(key=lambda game: game["title"])
+    return out
+
+
+def test_query_combined_filters():
+    """query() must honor filters together with limit/offset."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rm = SqliteReadModel(Path(tmp) / "test.db")
+        rm._enabled = True
+        state = _s1_state(60)
+        rm.rebuild(state)
+        pool = [g for g in state["games"]
+                if g["platform"] == "PC" and g["genre"] == "Action" and g["installed"]]
+        pool.sort(key=lambda game: game["title"])
+        assert len(pool) == 10, "expected 10 PC/Action/installed games, got %d" % len(pool)
+        expected = pool[2:9]
+        got = rm.query(platform="PC", genre="Action", installed=True, limit=7, offset=2)
+        assert [g["game_id"] for g in got] == [g["game_id"] for g in expected], (
+            "combined filtered query mismatch: %r" % ([g["game_id"] for g in got],)
+        )
+        # favorite/hidden participate in combined filtering.
+        fav_visible = rm.query(favorite=True, hidden=False, limit=100000)
+        assert fav_visible, "expected favorite+visible games"
+        assert all(g["favorite"] and not g["hidden"] for g in fav_visible)
+        rm.close()
+
+
+def test_query_flag_defaults_off():
+    """Second flag defaults off; query_enabled requires both flags."""
+    old = os.environ.get("OPENBOX_ENABLE_SQLITE_QUERY")
+    os.environ.pop("OPENBOX_ENABLE_SQLITE_QUERY", None)
+    try:
+        from pkg.state.sqlite_readmodel import is_query_enabled
+        assert is_query_enabled() is False, "query flag must default off"
+        with tempfile.TemporaryDirectory() as tmp:
+            rm = SqliteReadModel(Path(tmp) / "test.db")
+            rm._enabled = True
+            assert rm.query_enabled is False, "query_enabled must be False without env flag"
+            rm.close()
+            rm2 = SqliteReadModel(Path(tmp) / "test2.db")
+            rm2._enabled = False
+            os.environ["OPENBOX_ENABLE_SQLITE_QUERY"] = "1"
+            try:
+                assert is_query_enabled() is True
+                assert rm2.query_enabled is False, "query_enabled needs read flag too"
+            finally:
+                os.environ.pop("OPENBOX_ENABLE_SQLITE_QUERY", None)
+            rm2.close()
+    finally:
+        if old is None:
+            os.environ.pop("OPENBOX_ENABLE_SQLITE_QUERY", None)
+        else:
+            os.environ["OPENBOX_ENABLE_SQLITE_QUERY"] = old
+
+
+def test_parse_optional_bool():
+    """parse_optional_bool() maps query-string flags to True/False/None."""
+    from pkg.state.sqlite_readmodel import parse_optional_bool
+    assert parse_optional_bool(None) is None
+    for raw in ("1", "true", "True", "TRUE", "yes", "on"):
+        assert parse_optional_bool(raw) is True, raw
+    for raw in ("0", "false", "False", "FALSE", "no", "off"):
+        assert parse_optional_bool(raw) is False, raw
+    assert parse_optional_bool("banana") is None
+    assert parse_optional_bool("") is None
+
+
+def test_apply_json_filters():
+    """apply_json_filters() mirrors sqlite query() filter semantics."""
+    from pkg.state.sqlite_readmodel import apply_json_filters
+    state = _s1_state(60)
+    got = apply_json_filters(
+        state["games"], platform="PC", genre="Action",
+        favorite=True, hidden=False, installed=True,
+    )
+    assert [g["game_id"] for g in got] == [g["game_id"] for g in _expected_filtered(state)]
+    assert len(apply_json_filters(state["games"])) == 60
+    assert apply_json_filters(state["games"], platform="Nope") == []
+    assert all(g["platform"] == "Steam" for g in apply_json_filters(state["games"], platform="Steam"))
+    assert all(not g["hidden"] for g in apply_json_filters(state["games"], hidden=False))
+    assert "not a dict" not in apply_json_filters(["not a dict"] + state["games"][:1])
+
+
+def test_parity_mismatch_message_counts_only():
+    """Mismatch message carries signature + counts, never per-game ids."""
+    from pkg.state.sqlite_readmodel import parity_mismatch_message
+    msg = parity_mismatch_message((1, 2, 3), 10, 60)
+    assert "json_count=10" in msg
+    assert "sqlite_count=60" in msg
+    assert "(1, 2, 3)" in msg
+    assert "s1-" not in msg
+
+
+def test_log_parity_mismatch_warns_counts_only():
+    """Mismatch logs one warning with counts and no per-game dump."""
+    from pkg.state.sqlite_readmodel import log_parity_mismatch
+    with _capture_sqlite_logs() as cap:
+        msg = log_parity_mismatch((4, 5, 6), 10, 60, details=["s1-0001", "s1-0002"])
+    warnings = [r for r in cap.records if r.levelno >= logging.WARNING]
+    assert warnings, "expected a parity-mismatch warning"
+    text = " ".join(r.getMessage() for r in warnings)
+    assert "json_count=10" in text
+    assert "sqlite_count=60" in text
+    assert "s1-0001" not in text, "warning must be counts-only without verbose flag"
+    assert msg in text
+
+
+def test_log_parity_verbose_includes_details():
+    """OPENBOX_SQLITE_PARITY_LOG=1 reveals per-game details (escape hatch)."""
+    from pkg.state.sqlite_readmodel import log_parity_mismatch
+    old = os.environ.get("OPENBOX_SQLITE_PARITY_LOG")
+    os.environ["OPENBOX_ENABLE_SQLITE_QUERY"] = "0"  # unrelated flag untouched
+    os.environ["OPENBOX_SQLITE_PARITY_LOG"] = "1"
+    try:
+        with _capture_sqlite_logs() as cap:
+            log_parity_mismatch((7, 8, 9), 10, 60, details=["s1-0001", "s1-0002"])
+        text = " ".join(r.getMessage() for r in cap.records)
+        assert "s1-0001" in text, "verbose flag must reveal per-game details"
+    finally:
+        if old is None:
+            os.environ.pop("OPENBOX_SQLITE_PARITY_LOG", None)
+        else:
+            os.environ["OPENBOX_SQLITE_PARITY_LOG"] = old
+        os.environ.pop("OPENBOX_ENABLE_SQLITE_QUERY", None)
+
+
+def test_filtered_query_single_ensure_fresh():
+    """Filtered queries reuse one ensure_fresh call (no double-invalidate)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rm = SqliteReadModel(Path(tmp) / "test.db")
+        rm._enabled = True
+        state = _s1_state(30)
+        calls = []
+        orig = rm.ensure_fresh
+
+        def counting(state_arg, sig):
+            calls.append(sig)
+            return orig(state_arg, sig)
+
+        rm.ensure_fresh = counting
+        try:
+            got = rm.filtered_query(state, (9, 9, 9), platform="PC", limit=5)
+        finally:
+            rm.ensure_fresh = orig
+        assert len(calls) == 1, "expected exactly one ensure_fresh call, got %d" % len(calls)
+        assert all(g["platform"] == "PC" for g in got)
+        assert len(got) == 5
+        rm.close()
+
+
+def test_facet_handler_observability_fields():
+    """Enabled facets carry source/parity_ok/timings_ms (additive)."""
+    import handlers.library as libmod
+    state = _s1_state(60)
+    with _patched_handler_env(state, (11, 22, 33), enabled=True):
+        handler = _StubHandler()
+        libmod.LibraryHandlers._api_get_api_explorer_facets(handler, _Parsed("field=platform"))
+        assert len(handler.captured) == 1
+        status, payload = handler.captured[0]
+        assert status == 200
+        assert payload["source"] == "sqlite"
+        assert payload["parity_ok"] is True
+        assert payload["field"] == "platform"
+        assert isinstance(payload["facets"], list) and payload["facets"]
+        timings = payload["timings_ms"]
+        assert set(timings.keys()) == {"sqlite", "json"}
+        assert timings["sqlite"] >= 0.0
+
+
+def test_facet_handler_parity_mismatch_fallback():
+    """Parity mismatch falls back to JSON with warning (counts-only)."""
+    import handlers.library as libmod
+    from parity_filter_presets import explorer_facets
+    state = _s1_state(60)
+    with _patched_handler_env(state, (1, 2, 3), enabled=True) as rm:
+        rm.ensure_fresh(state, (1, 2, 3))
+        # Same signature but swapped games => stale projection, mismatch.
+        state["games"] = _s1_state(10)["games"]
+        with _capture_sqlite_logs() as cap:
+            handler = _StubHandler()
+            libmod.LibraryHandlers._api_get_api_explorer_facets(handler, _Parsed("field=platform"))
+        assert len(handler.captured) == 1
+        status, payload = handler.captured[0]
+        assert status == 200
+        assert payload["source"] == "json"
+        assert payload["parity_ok"] is False
+        assert "timings_ms" in payload
+        assert payload["facets"] == explorer_facets(state["games"], "platform")
+        warnings = [r for r in cap.records if r.levelno >= logging.WARNING]
+        assert warnings, "expected a parity-mismatch warning"
+        text = " ".join(r.getMessage() for r in warnings)
+        assert "json_count=10" in text
+        assert "sqlite_count=60" in text
+        assert "s1-" not in text, "warning must be counts-only without verbose flag"
+
+
+def test_facet_handler_verbose_mismatch_details():
+    """Verbose flag reveals mismatch ids on the facet path."""
+    import handlers.library as libmod
+    state = _s1_state(60)
+    with _patched_handler_env(state, (2, 3, 4), enabled=True, parity_env="1") as rm:
+        rm.ensure_fresh(state, (2, 3, 4))
+        state["games"] = _s1_state(10)["games"]
+        with _capture_sqlite_logs() as cap:
+            handler = _StubHandler()
+            libmod.LibraryHandlers._api_get_api_explorer_facets(handler, _Parsed("field=genre"))
+        status, payload = handler.captured[0]
+        assert payload["source"] == "json"
+        assert payload["parity_ok"] is False
+        text = " ".join(r.getMessage() for r in cap.records)
+        assert "s1-" in text, "verbose flag must reveal mismatch ids"
+
+
+def test_facet_handler_flag_off_byte_identical():
+    """Flag-off facets return exactly the legacy shape (byte-identical)."""
+    import handlers.library as libmod
+    from parity_filter_presets import explorer_facets
+    state = _s1_state(30)
+    with _patched_handler_env(state, (7, 7, 7), enabled=False):
+        handler = _StubHandler()
+        libmod.LibraryHandlers._api_get_api_explorer_facets(handler, _Parsed("field=genre"))
+        assert len(handler.captured) == 1
+        status, payload = handler.captured[0]
+        assert status == 200
+        assert set(payload.keys()) == {"field", "facets"}
+        assert payload == {"field": "genre", "facets": explorer_facets(state["games"], "genre")}
+
+
+def test_search_handler_observability_fields():
+    """Enabled search carries source/parity_ok/timings_ms (additive)."""
+    import handlers.library as libmod
+    state = _s1_state(60)
+    with _patched_handler_env(state, (21, 22, 23), enabled=True):
+        handler = _StubHandler()
+        libmod.LibraryHandlers._api_get_api_v2_library_search(handler, _Parsed("q=S1+Game+5&limit=50"))
+        assert len(handler.captured) == 1
+        status, payload = handler.captured[0]
+        assert status == 200
+        assert payload["source"] == "sqlite"
+        assert payload["parity_ok"] is True
+        assert payload["count"] == len(payload["results"])
+        assert payload["results"], "expected sqlite text search hits"
+        timings = payload["timings_ms"]
+        assert set(timings.keys()) == {"sqlite", "json"}
+
+
+def test_search_handler_parity_mismatch_fallback():
+    """Search parity mismatch falls back to JSON title match + warning."""
+    import handlers.library as libmod
+    state = _s1_state(60)
+    with _patched_handler_env(state, (5, 5, 5), enabled=True) as rm:
+        rm.ensure_fresh(state, (5, 5, 5))
+        state["games"] = _s1_state(10)["games"]
+        with _capture_sqlite_logs() as cap:
+            handler = _StubHandler()
+            libmod.LibraryHandlers._api_get_api_v2_library_search(handler, _Parsed("q=s1+game&limit=50"))
+        assert len(handler.captured) == 1
+        status, payload = handler.captured[0]
+        assert status == 200
+        assert payload["source"] == "json"
+        assert payload["parity_ok"] is False
+        assert "timings_ms" in payload
+        assert payload["results"], "JSON fallback must still match titles"
+        assert all("s1 game" in str(g.get("name", "")).lower() for g in payload["results"])
+        warnings = [r for r in cap.records if r.levelno >= logging.WARNING]
+        assert warnings, "expected a parity-mismatch warning"
+        text = " ".join(r.getMessage() for r in warnings)
+        assert "s1-" not in text
+
+
+def test_search_handler_flag_off_byte_identical():
+    """Flag-off search returns exactly the legacy 3-key shape."""
+    import handlers.library as libmod
+    state = _s1_state(30)
+    with _patched_handler_env(state, (8, 8, 8), enabled=False):
+        handler = _StubHandler()
+        libmod.LibraryHandlers._api_get_api_v2_library_search(handler, _Parsed("q=S1+Game+1&limit=50"))
+        assert len(handler.captured) == 1
+        status, payload = handler.captured[0]
+        assert status == 200
+        assert set(payload.keys()) == {"results", "source", "count"}
+        assert payload["source"] == "json"
+        assert payload["count"] == len(payload["results"])
+        assert payload["results"]
+
+
+def test_search_handler_flag_off_with_filters():
+    """Flag-off search honors filter params via the JSON path (old shape)."""
+    import handlers.library as libmod
+    state = _s1_state(60)
+    with _patched_handler_env(state, (80, 80, 80), enabled=False):
+        handler = _StubHandler()
+        libmod.LibraryHandlers._api_get_api_v2_library_search(
+            handler, _Parsed("platform=Steam&limit=100"))
+        status, payload = handler.captured[0]
+        assert set(payload.keys()) == {"results", "source", "count"}
+        assert payload["source"] == "json"
+        assert payload["results"]
+        assert all(g["platform"] == "Steam" for g in payload["results"])
+
+
+def test_search_handler_empty_query_unchanged():
+    """Empty query without filters keeps the exact legacy response."""
+    import handlers.library as libmod
+    state = _s1_state(10)
+    with _patched_handler_env(state, (9, 9, 9), enabled=True, query_env="1"):
+        handler = _StubHandler()
+        libmod.LibraryHandlers._api_get_api_v2_library_search(handler, _Parsed("q=+&limit=50"))
+        assert handler.captured[0][1] == {"results": [], "source": "json"}
+
+
+def test_search_handler_query_flag_filtered():
+    """QUERY=1 serves structured filters from sqlite with limit/offset."""
+    import handlers.library as libmod
+    state = _s1_state(60)
+    with _patched_handler_env(state, (31, 32, 33), enabled=True, query_env="1") as rm:
+        calls = []
+        orig = rm.ensure_fresh
+
+        def counting(state_arg, sig):
+            calls.append(sig)
+            return orig(state_arg, sig)
+
+        rm.ensure_fresh = counting
+        try:
+            handler = _StubHandler()
+            libmod.LibraryHandlers._api_get_api_v2_library_search(
+                handler,
+                _Parsed("platform=PC&favorite=true&installed=true&limit=5&offset=0"),
+            )
+        finally:
+            rm.ensure_fresh = orig
+        assert len(calls) == 1, "expected one ensure_fresh per request, got %d" % len(calls)
+        status, payload = handler.captured[0]
+        assert status == 200
+        assert payload["source"] == "sqlite"
+        assert payload["parity_ok"] is True
+        pool = [g for g in state["games"]
+                if g["platform"] == "PC" and g["favorite"] and g["installed"]]
+        pool.sort(key=lambda game: game["title"])
+        assert [g["game_id"] for g in payload["results"]] == [g["game_id"] for g in pool[:5]]
+        assert len(payload["results"]) == 2
+        # hidden filter participates end to end.
+        handler_hidden = _StubHandler()
+        libmod.LibraryHandlers._api_get_api_v2_library_search(
+            handler_hidden, _Parsed("hidden=false&limit=100"))
+        _, payload_hidden = handler_hidden.captured[0]
+        assert len(payload_hidden["results"]) == 54
+        assert all(not g["hidden"] for g in payload_hidden["results"])
+        # Garbage booleans are ignored (treated as absent).
+        handler2 = _StubHandler()
+        libmod.LibraryHandlers._api_get_api_v2_library_search(
+            handler2, _Parsed("platform=PC&favorite=banana&limit=100"))
+        _, payload2 = handler2.captured[0]
+        assert all(g["platform"] == "PC" for g in payload2["results"])
+        assert len(payload2["results"]) == 20
+        # Text + filters intersect on the sqlite path.
+        handler3 = _StubHandler()
+        libmod.LibraryHandlers._api_get_api_v2_library_search(
+            handler3, _Parsed("q=S1+Game+1&platform=PC&limit=100"))
+        _, payload3 = handler3.captured[0]
+        assert payload3["results"]
+        assert all(g["platform"] == "PC" for g in payload3["results"])
+
+
+def test_search_handler_query_flag_off_python_filter():
+    """READ on + QUERY off honors filters via Python over sqlite results."""
+    import handlers.library as libmod
+    state = _s1_state(60)
+    with _patched_handler_env(state, (41, 42, 43), enabled=True, query_env=None):
+        handler = _StubHandler()
+        libmod.LibraryHandlers._api_get_api_v2_library_search(
+            handler, _Parsed("platform=GOG&installed=true&limit=100"))
+        status, payload = handler.captured[0]
+        assert status == 200
+        assert payload["source"] == "sqlite"
+        assert payload["parity_ok"] is True
+        assert "timings_ms" in payload
+        assert payload["results"]
+        assert all(g["platform"] == "GOG" and g["installed"] for g in payload["results"])
+
+
+def test_transact_single_invalidate():
+    """transact_state() invalidates the read model exactly once per write."""
+    import pkg.state.cache as cache_mod
+    calls = []
+
+    class _CountingRM:
+        def invalidate(self):
+            calls.append(1)
+
+    orig_rm = cache_mod.SQLITE_READ_MODEL
+    orig_update = cache_mod.update_state_with_result
+    orig_epoch = cache_mod.CACHE_EPOCH._invalidate_all
+    orig_clear = cache_mod.clear_discovery_cache
+    fake_state = {"games": []}
+    try:
+        cache_mod.SQLITE_READ_MODEL = _CountingRM()
+        cache_mod.update_state_with_result = lambda mutator: (fake_state, mutator(fake_state))
+        cache_mod.CACHE_EPOCH._invalidate_all = lambda **kwargs: None
+        cache_mod.clear_discovery_cache = lambda: None
+        try:
+            import webapp_state as webapp_state_mod
+            has_ws = True
+        except ImportError:
+            webapp_state_mod = None
+            has_ws = False
+        orig_ws_update = None
+        if has_ws:
+            orig_ws_update = webapp_state_mod.update_state_with_result
+            webapp_state_mod.update_state_with_result = cache_mod.update_state_with_result
+        try:
+            cache_mod.transact_state(lambda state: "marker")
+        finally:
+            if has_ws:
+                webapp_state_mod.update_state_with_result = orig_ws_update
+    finally:
+        cache_mod.SQLITE_READ_MODEL = orig_rm
+        cache_mod.update_state_with_result = orig_update
+        cache_mod.CACHE_EPOCH._invalidate_all = orig_epoch
+        cache_mod.clear_discovery_cache = orig_clear
+    assert calls == [1], "expected exactly one invalidate per transact, got %r" % (calls,)
+
+
 def run_all_tests():
     tests = [
         test_rebuild_and_count,
@@ -301,6 +851,26 @@ def run_all_tests():
         test_runtime_modules_has_sqlite,
         test_singleton_exists,
         test_search_route_registered,
+        test_query_combined_filters,
+        test_query_flag_defaults_off,
+        test_parse_optional_bool,
+        test_apply_json_filters,
+        test_parity_mismatch_message_counts_only,
+        test_log_parity_mismatch_warns_counts_only,
+        test_log_parity_verbose_includes_details,
+        test_filtered_query_single_ensure_fresh,
+        test_facet_handler_observability_fields,
+        test_facet_handler_parity_mismatch_fallback,
+        test_facet_handler_verbose_mismatch_details,
+        test_facet_handler_flag_off_byte_identical,
+        test_search_handler_observability_fields,
+        test_search_handler_parity_mismatch_fallback,
+        test_search_handler_flag_off_byte_identical,
+        test_search_handler_flag_off_with_filters,
+        test_search_handler_empty_query_unchanged,
+        test_search_handler_query_flag_filtered,
+        test_search_handler_query_flag_off_python_filter,
+        test_transact_single_invalidate,
     ]
     failures = 0
     for test in tests:

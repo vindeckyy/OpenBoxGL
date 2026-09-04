@@ -27,7 +27,14 @@ from typing import Any
 
 LOGGER = logging.getLogger("openbox.sqlite_readmodel")
 
-_ENABLED = os.environ.get("OPENBOX_ENABLE_SQLITE_READ", "").strip() in ("1", "true", "yes")
+READ_FLAG = "OPENBOX_ENABLE_SQLITE_READ"
+QUERY_FLAG = "OPENBOX_ENABLE_SQLITE_QUERY"
+PARITY_LOG_FLAG = "OPENBOX_SQLITE_PARITY_LOG"
+
+_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+_FALSE_VALUES = frozenset({"0", "false", "no", "off"})
+
+_ENABLED = os.environ.get(READ_FLAG, "").strip() in ("1", "true", "yes")
 _FTS5_AVAILABLE: bool | None = None
 
 _SCHEMA = """
@@ -112,6 +119,116 @@ def _check_fts5() -> bool:
     return _FTS5_AVAILABLE
 
 
+def _env_flag(name: str) -> bool:
+    """Dynamic env check so tests and operators can toggle flags per process."""
+    return os.environ.get(name, "").strip().lower() in _TRUE_VALUES
+
+
+def is_query_enabled() -> bool:
+    """Second-flag gate: structured sqlite queries need OPENBOX_ENABLE_SQLITE_QUERY=1."""
+    return _env_flag(QUERY_FLAG)
+
+
+def is_parity_verbose() -> bool:
+    """Verbose escape hatch: OPENBOX_SQLITE_PARITY_LOG=1 reveals per-game mismatch ids."""
+    return _env_flag(PARITY_LOG_FLAG)
+
+
+def parity_mismatch_message(signature: tuple[int, int, int], json_count: int, sqlite_count: int) -> str:
+    """Counts-only mismatch summary. Never includes per-game ids (log-spam guard)."""
+    return (
+        "SQLite read-model parity mismatch signature=%s json_count=%d sqlite_count=%d; "
+        "falling back to JSON path" % (signature, json_count, sqlite_count)
+    )
+
+
+def log_parity_mismatch(
+    signature: tuple[int, int, int],
+    json_count: int,
+    sqlite_count: int,
+    details: list[str] | None = None,
+) -> str:
+    """Log one warning with signature + counts; per-game details only when verbose."""
+    message = parity_mismatch_message(signature, json_count, sqlite_count)
+    LOGGER.warning(message)
+    if is_parity_verbose() and details:
+        LOGGER.info("sqlite parity details (verbose): %s", list(details)[:10])
+    return message
+
+
+def parse_optional_bool(raw: Any) -> bool | None:
+    """Map a query-string flag to True/False; None (absent) or unparseable -> None."""
+    if raw is None:
+        return None
+    text = str(raw).strip().lower()
+    if not text:
+        return None
+    if text in _TRUE_VALUES:
+        return True
+    if text in _FALSE_VALUES:
+        return False
+    return None
+
+
+def apply_json_filters(
+    games: list[Any],
+    platform: str | None = None,
+    genre: str | None = None,
+    favorite: bool | None = None,
+    hidden: bool | None = None,
+    installed: bool | None = None,
+) -> list[dict[str, Any]]:
+    """Filter JSON games with the same semantics as SqliteReadModel.query()."""
+    out: list[dict[str, Any]] = []
+    for game in games:
+        if not isinstance(game, dict):
+            continue
+        if platform is not None and str(game.get("platform") or "") != platform:
+            continue
+        if genre is not None and str(game.get("genre") or "") != genre:
+            continue
+        if favorite is not None and bool(game.get("favorite")) != favorite:
+            continue
+        if hidden is not None and bool(game.get("hidden")) != hidden:
+            continue
+        if installed is not None and bool(game.get("installed")) != installed:
+            continue
+        out.append(game)
+    return out
+
+
+def json_search(
+    games: list[Any],
+    query_text: str,
+    platform: str | None = None,
+    genre: str | None = None,
+    favorite: bool | None = None,
+    hidden: bool | None = None,
+    installed: bool | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """JSON fallback for library search: title substring + filters + paging."""
+    text = (query_text or "").strip()
+    if text:
+        lowered = text.lower()
+        base = [g for g in games if isinstance(g, dict) and lowered in str(g.get("name", "")).lower()]
+    else:
+        base = [g for g in games if isinstance(g, dict)]
+    base = apply_json_filters(
+        base, platform=platform, genre=genre,
+        favorite=favorite, hidden=hidden, installed=installed,
+    )
+    return base[offset:offset + limit]
+
+
+def mismatch_details(state_games: list[Any], read_model: SqliteReadModel) -> list[str]:
+    """Symmetric-difference game ids, for verbose parity logging only."""
+    json_ids = {str(g.get("game_id") or "") for g in state_games if isinstance(g, dict)}
+    sqlite_ids = {str(g.get("game_id") or "") for g in read_model.query(limit=100000) if isinstance(g, dict)}
+    return sorted(json_ids ^ sqlite_ids)[:10]
+
+
 class SqliteReadModel:
     """Optional SQLite-backed read model for the game library."""
 
@@ -125,6 +242,11 @@ class SqliteReadModel:
     @property
     def enabled(self) -> bool:
         return self._enabled
+
+    @property
+    def query_enabled(self) -> bool:
+        """Second-flag gate: structured sqlite queries need READ and QUERY flags."""
+        return self._enabled and is_query_enabled()
 
     def _connect(self) -> sqlite3.Connection:
         if self._conn is not None:
@@ -213,6 +335,29 @@ class SqliteReadModel:
         self.rebuild(state)
         with self._lock:
             self._signature = signature
+
+    def filtered_query(
+        self,
+        state: dict[str, Any],
+        signature: tuple[int, int, int],
+        platform: str | None = None,
+        genre: str | None = None,
+        favorite: bool | None = None,
+        hidden: bool | None = None,
+        installed: bool | None = None,
+        limit: int = 10000,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Single ensure_fresh then an indexed filtered query.
+
+        Invalidation stays with transact_state(); this path never invalidates,
+        so one request performs exactly one freshness check.
+        """
+        self.ensure_fresh(state, signature)
+        return self.query(
+            platform=platform, genre=genre, favorite=favorite,
+            hidden=hidden, installed=installed, limit=limit, offset=offset,
+        )
 
     def query(
         self,

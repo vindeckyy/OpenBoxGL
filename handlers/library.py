@@ -255,14 +255,36 @@ class LibraryHandlers:
         field = parse_qs(parsed.query).get("field", ["genre"])[0]
         state = load_state_view()
         from pkg.state.cache import SQLITE_READ_MODEL
-        if SQLITE_READ_MODEL.enabled:
-            import openbox
-            SQLITE_READ_MODEL.ensure_fresh(state, openbox.STATE_STORE.signature())
-            if SQLITE_READ_MODEL.query_parity_check(state["games"]):
-                facets = SQLITE_READ_MODEL.facets(field)
-                self.send_json(200, {"field": field, "facets": [{"value": v, "count": c} for v, c in facets]})
-                return
-        self.send_json(200, {"field": field, "facets": explorer_facets(state["games"], field)})
+        if not SQLITE_READ_MODEL.enabled:
+            self.send_json(200, {"field": field, "facets": explorer_facets(state["games"], field)})
+            return
+        import time
+        import openbox
+        from pkg.state.sqlite_readmodel import is_parity_verbose, log_parity_mismatch, mismatch_details
+        sig = openbox.STATE_STORE.signature()
+        start_sqlite = time.perf_counter()
+        SQLITE_READ_MODEL.ensure_fresh(state, sig)
+        sqlite_facets = SQLITE_READ_MODEL.facets(field)
+        parity_ok = SQLITE_READ_MODEL.query_parity_check(state["games"])
+        sqlite_ms = (time.perf_counter() - start_sqlite) * 1000.0
+        if parity_ok:
+            served = [{"value": value, "count": count} for value, count in sqlite_facets]
+            source = "sqlite"
+            json_ms = 0.0
+        else:
+            start_json = time.perf_counter()
+            served = explorer_facets(state["games"], field)
+            details = mismatch_details(state["games"], SQLITE_READ_MODEL) if is_parity_verbose() else None
+            log_parity_mismatch(sig, len(state["games"]), SQLITE_READ_MODEL.count(), details=details)
+            json_ms = (time.perf_counter() - start_json) * 1000.0
+            source = "json"
+        self.send_json(200, {
+            "field": field,
+            "facets": served,
+            "source": source,
+            "parity_ok": parity_ok,
+            "timings_ms": {"sqlite": round(sqlite_ms, 2), "json": round(json_ms, 2)},
+        })
         return
 
     @route("GET", "/api/launcher/menu")
@@ -634,23 +656,88 @@ class LibraryHandlers:
 
     @route("GET", "/api/v2/library/search")
     def _api_get_api_v2_library_search(self, parsed):
+        from pkg.state.sqlite_readmodel import (
+            apply_json_filters,
+            is_parity_verbose,
+            json_search,
+            log_parity_mismatch,
+            mismatch_details,
+            parse_optional_bool,
+        )
         params = parse_qs(parsed.query)
         query = params.get("q", [""])[0]
         limit = min(int(params.get("limit", ["50"])[0]), 200)
-        if not query.strip():
+        offset = max(0, int(params.get("offset", ["0"])[0]))
+        platform = params.get("platform", [None])[0]
+        genre = params.get("genre", [None])[0]
+        favorite = parse_optional_bool(params.get("favorite", [None])[0])
+        hidden = parse_optional_bool(params.get("hidden", [None])[0])
+        installed = parse_optional_bool(params.get("installed", [None])[0])
+        has_filters = (
+            platform is not None or genre is not None or favorite is not None
+            or hidden is not None or installed is not None
+        )
+        if not query.strip() and not has_filters:
             self.send_json(200, {"results": [], "source": "json"})
             return
         from pkg.state.cache import SQLITE_READ_MODEL
-        if SQLITE_READ_MODEL.enabled:
-            state = load_state_view()
-            import openbox
-            SQLITE_READ_MODEL.ensure_fresh(state, openbox.STATE_STORE.signature())
-            results = SQLITE_READ_MODEL.search(query, limit=limit)
-            self.send_json(200, {"results": results[:limit], "source": "sqlite", "count": len(results)})
-            return
-        # JSON fallback: simple title substring match
         state = load_state_view()
-        q_lower = query.lower()
-        results = [g for g in state["games"] if q_lower in str(g.get("name", "")).lower()][:limit]
-        self.send_json(200, {"results": results, "source": "json", "count": len(results)})
+        if not SQLITE_READ_MODEL.enabled:
+            results = json_search(
+                state["games"], query, platform=platform, genre=genre,
+                favorite=favorite, hidden=hidden, installed=installed,
+                limit=limit, offset=offset,
+            )
+            self.send_json(200, {"results": results, "source": "json", "count": len(results)})
+            return
+        import time
+        import openbox
+        sig = openbox.STATE_STORE.signature()
+        start_sqlite = time.perf_counter()
+        if has_filters and SQLITE_READ_MODEL.query_enabled:
+            base = SQLITE_READ_MODEL.filtered_query(
+                state, sig, platform=platform, genre=genre, favorite=favorite,
+                hidden=hidden, installed=installed, limit=100000,
+            )
+            if query.strip():
+                text_ids = {
+                    str(g.get("game_id") or "") for g in SQLITE_READ_MODEL.search(query, limit=100000)
+                    if isinstance(g, dict)
+                }
+                base = [g for g in base if str(g.get("game_id") or "") in text_ids]
+        else:
+            SQLITE_READ_MODEL.ensure_fresh(state, sig)
+            if query.strip():
+                base = SQLITE_READ_MODEL.search(query, limit=100000)
+            else:
+                base = SQLITE_READ_MODEL.query(limit=100000)
+            if has_filters:
+                base = apply_json_filters(
+                    base, platform=platform, genre=genre,
+                    favorite=favorite, hidden=hidden, installed=installed,
+                )
+        parity_ok = SQLITE_READ_MODEL.query_parity_check(state["games"])
+        sqlite_ms = (time.perf_counter() - start_sqlite) * 1000.0
+        if parity_ok:
+            page = base[offset:offset + limit]
+            source = "sqlite"
+            json_ms = 0.0
+        else:
+            start_json = time.perf_counter()
+            page = json_search(
+                state["games"], query, platform=platform, genre=genre,
+                favorite=favorite, hidden=hidden, installed=installed,
+                limit=limit, offset=offset,
+            )
+            details = mismatch_details(state["games"], SQLITE_READ_MODEL) if is_parity_verbose() else None
+            log_parity_mismatch(sig, len(state["games"]), SQLITE_READ_MODEL.count(), details=details)
+            json_ms = (time.perf_counter() - start_json) * 1000.0
+            source = "json"
+        self.send_json(200, {
+            "results": page,
+            "source": source,
+            "count": len(page),
+            "parity_ok": parity_ok,
+            "timings_ms": {"sqlite": round(sqlite_ms, 2), "json": round(json_ms, 2)},
+        })
         return
