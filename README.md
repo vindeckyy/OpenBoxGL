@@ -388,7 +388,7 @@ OpenBox/
 ├── job_manager.py          Background job lifecycle adapter
 ├── importers.py            Steam, Heroic, Lutris, ROM imports
 ├── pkg/state/              Modularized state, caches, launch, and operations
-├── pkg/parity/parity_*.py  Parity modules (shim at root for compat)
+├── pkg/parity/              Parity modules (flat `import parity_*` via MetaPathFinder bridge)
 ├── emulators.py            Emulator profiles + Flathub management
 ├── metadata.py             LaunchBox DB sync + media scraping
 ├── retroachievements.py    RA matching + badge injection
@@ -402,7 +402,7 @@ OpenBox/
 ├── themes/                 Stock themes (5 CSS files)
 ├── emulator_defs/          YAML definition packs
 ├── scripts/                Build, test, screenshot capture
-├── tests/test_*.py         Test suite (85 files)
+├── tests/test_*.py         Test suite (100 files)
 ```
 
 ### Run tests

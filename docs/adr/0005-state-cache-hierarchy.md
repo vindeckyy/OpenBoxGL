@@ -2,6 +2,7 @@
 
 Date: 2026-08-20
 Status: Accepted
+Updated: 2026-09-04 — landed pieces: `pkg/parity/launch_tokens.py` exists (launch-token centralization done, no longer "future"); `pkg/state/imports.py` and `pkg/state/commands.py` exist (deferred moves done); `pkg/state/registry.py` exists (process-registry extraction done). `webapp_state.py` is now a 288-line thin re-export shim. "573-line hybrid" refs below are historical.
 
 ## Context
 
@@ -11,9 +12,9 @@ State supervision is split across `pkg/state/cache.py` (7 dicts, 5 locks, file p
 
 - Canonical owner is `pkg/state/*`; `webapp_state.py` becomes a thin re-export shim retaining `TOKEN`, `ROOT`, `JOB_MANAGER`, `PROCESS_LOCK`, `RUNNING`, `SSE_*` for one release via `from pkg.state.X import`.
 
-- Introduce `pkg/state/imports.py` (future) for `consolidate_existing_games`, `import_folder_path`, `merge_imported_games`, `auto_import_worker`, `sync_cloud` and `pkg/state/commands.py` for launch commands; defer move to a dedicated PR to avoid import-graph churn.
+- ~~Introduce `pkg/state/imports.py` (future) for `consolidate_existing_games`, `import_folder_path`, `merge_imported_games`, `auto_import_worker`, `sync_cloud` and `pkg/state/commands.py` for launch commands; defer move to a dedicated PR to avoid import-graph churn.~~ Done: both modules exist; identity/merge helpers live in `pkg/state/imports.py` (no separate `game_identity.py`, see ADR 0008 update).
 
-- Centralize launch token table in `pkg/parity/launch_tokens.py` (future) deduplicating `openbox.py:102`, `webapp_state.py:119`, `pkg/state/launch.py:302`, `parity_emulator_defs.py:112`.
+- ~~Centralize launch token table in `pkg/parity/launch_tokens.py` (future) deduplicating `openbox.py:102`, `webapp_state.py:119`, `pkg/state/launch.py:302`, `parity_emulator_defs.py:112`.~~ Done: `pkg/parity/launch_tokens.py` exists.
 
 - Harden `load_state_readonly` toward `MappingProxyType` or copy-on-write detection; add `CacheEpoch` dataclass to group epochs and single `_invalidate_all()` replacing manual 6-lock sequence.
 

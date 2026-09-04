@@ -4,6 +4,7 @@
 
 | Version | Supported |
 | --- | --- |
+| 1.9.x | Yes |
 | 1.8.x | Yes |
 | 1.7.x | Yes |
 | 1.6.x | Yes |
@@ -21,7 +22,7 @@
 | 0.4.x | Best effort |
 | < 0.4.0 | No |
 
-Security fixes are provided for the latest release on the `master` branch.
+Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them.
 
 ## Reporting a vulnerability
 

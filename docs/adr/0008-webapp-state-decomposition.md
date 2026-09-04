@@ -1,7 +1,8 @@
 # ADR-0008: Decomposition of webapp_state.py into focused state modules
 
-Status: accepted
+Status: accepted (implementation diverged — see note)
 Date: 2026-08-22
+Updated: 2026-09-04 — implemented differently than specified below: `pkg/state/game_identity.py` and `pkg/state/cloud.py` were never created. Identity/merge helpers (`game_identity`, `consolidate_existing_games`, …) and `sync_cloud` live in `pkg/state/imports.py`; `clean_commands`/`run_configured_commands` live in `pkg/state/commands.py`. `pkg/state/` now holds 11 modules (cache, commands, _deps, imports, launch, media_probe, operations, registry, sqlite_readmodel, sse, __init__) and `webapp_state.py` is a 288-line thin re-export shim (not ~80 lines). The module table, file diagram, and "573 → ~80 lines" claims below describe the proposal, not the outcome.
 
 ## Context
 
