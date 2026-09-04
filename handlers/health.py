@@ -169,4 +169,46 @@ class HealthHandlers:
         job = JOB_MANAGER.submit("updater-install", worker)
         self.send_json(202, {"state": "queued", "job_id": job["job_id"]})
 
+    @route("POST", "/api/v2/library/sync/publish")
+    def _api_post_api_v2_library_sync_publish(self, payload):
+        from cloud_sync import publish_library
+        import openbox
+
+        state = openbox.load_state()
+        folder = state.get("settings", {}).get("cloud_folder", "")
+        if not folder:
+            self.send_json(400, {"error": "Configure a mounted cloud sync folder first."})
+            return
+        device_id = str(payload.get("device_id") or "local")
+        result = publish_library(state, folder, device_id=device_id)
+        self.send_json(200, result)
+
+    @route("POST", "/api/v2/library/sync/pull")
+    def _api_post_api_v2_library_sync_pull(self, payload):
+        from cloud_sync import pull_library
+        import openbox
+
+        state = openbox.load_state()
+        folder = state.get("settings", {}).get("cloud_folder", "")
+        if not folder:
+            self.send_json(400, {"error": "Configure a mounted cloud sync folder first."})
+            return
+        device_id = str(payload.get("device_id") or "local")
+        result = pull_library(state, folder, device_id=device_id)
+
+        from webapp_state import transact_state
+
+        def mutate(current):
+            current["games"] = result["games"]
+            current.setdefault("settings", {})["last_library_sync"] = result["synced_at"]
+
+        transact_state(mutate)
+        self.send_json(200, {
+            "added": result["added"],
+            "updated": result["updated"],
+            "deleted": result["deleted"],
+            "skipped": result["skipped"],
+            "synced_at": result["synced_at"],
+        })
+
 

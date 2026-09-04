@@ -224,3 +224,166 @@ def sync_statistics(state, folder, now=None):
         now=timestamp,
     )
     return {"path": str(target), "games": len(payload["games"]), "merged": changed, "synced_at": timestamp}
+
+
+# --- Full library sync (1.9.0) ---
+# Extends cloud_sync beyond stats: publish/pull the entire game library via
+# a mounted folder (Syncthing-style). Tombstones track deletions.
+# ponytail: last-writer-wins conflict resolution by timestamp; no vector clocks.
+# Upgrade path: add version vectors if multi-device conflicts become common.
+
+LIBRARY_SYNC_FILE = "openbox-library.json"
+TOMBSTONE_FIELDS = frozenset({"deleted_at", "device_id"})
+
+
+def publish_library(state, folder, device_id="local", now=None):
+    """Publish the full library to the mounted folder.
+
+    Writes a JSON file with all games keyed by game_key, plus tombstones for
+    games that were deleted since the last publish. Other devices pull this
+    to merge into their local library.
+    """
+    folder = Path(folder).expanduser()
+    if not folder.is_dir():
+        raise ValueError(f"Cloud sync folder does not exist: {folder}")
+    target = folder / LIBRARY_SYNC_FILE
+    timestamp = now or datetime.now().astimezone().isoformat(timespec="seconds")
+    with _sync_lock(target):
+        # Load existing remote to preserve tombstones from other devices
+        existing_tombstones = {}
+        if target.is_file():
+            try:
+                remote = json.loads(target.read_text())
+                if isinstance(remote, dict):
+                    for key, record in (remote.get("tombstones") or {}).items():
+                        if isinstance(record, dict) and record.get("deleted_at"):
+                            existing_tombstones[key] = record
+            except (OSError, json.JSONDecodeError):
+                pass
+
+        games_map = {}
+        for game in state.get("games", []):
+            if not isinstance(game, dict):
+                continue
+            key = game_key(game)
+            if not key:
+                continue
+            games_map[key] = {
+                "game": game,
+                "updated_at": timestamp,
+                "device_id": device_id,
+            }
+
+        # Carry forward tombstones for games not in local library
+        tombstones = dict(existing_tombstones)
+        for key in existing_tombstones:
+            if key in games_map:
+                # Game was re-added locally; clear tombstone
+                tombstones.pop(key, None)
+
+        payload = {
+            "format": 2,
+            "generated_at": timestamp,
+            "device_id": device_id,
+            "games": games_map,
+            "tombstones": tombstones,
+        }
+        atomic_write_text(target, json.dumps(payload, indent=2), mode=0o600)
+    return {
+        "path": str(target),
+        "published_games": len(games_map),
+        "tombstones": len(tombstones),
+        "synced_at": timestamp,
+    }
+
+
+def pull_library(state, folder, device_id="local", now=None):
+    """Pull the remote library and merge into local state.
+
+    Returns a merge result dict with added/updated/deleted/skipped counts and
+    the mutated games list. Caller is responsible for persisting via
+    transact_state.
+
+    Conflict resolution: last-writer-wins by ``updated_at`` timestamp.
+    Tombstones delete local games that match the tombstone key.
+    """
+    folder = Path(folder).expanduser()
+    if not folder.is_dir():
+        raise ValueError(f"Cloud sync folder does not exist: {folder}")
+    target = folder / LIBRARY_SYNC_FILE
+    timestamp = now or datetime.now().astimezone().isoformat(timespec="seconds")
+    if not target.is_file():
+        return {"added": 0, "updated": 0, "deleted": 0, "skipped": 0, "games": state.get("games", [])}
+
+    with _sync_lock(target):
+        try:
+            remote = json.loads(target.read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            raise CloudRemoteInvalid("Remote library file is invalid or unreadable.") from error
+        if not isinstance(remote, dict):
+            raise CloudRemoteInvalid("Remote library file is invalid or unreadable.")
+
+    remote_games = remote.get("games") or {}
+    remote_tombstones = remote.get("tombstones") or {}
+    if not isinstance(remote_games, dict):
+        remote_games = {}
+    if not isinstance(remote_tombstones, dict):
+        remote_tombstones = {}
+
+    local_games = list(state.get("games", []))
+    local_by_key = {}
+    for i, game in enumerate(local_games):
+        if isinstance(game, dict):
+            local_by_key[game_key(game)] = i
+
+    added = 0
+    updated = 0
+    deleted = 0
+    skipped = 0
+
+    # Apply tombstones: delete local games that are tombstoned remotely
+    for tkey, tombstone in remote_tombstones.items():
+        if not isinstance(tombstone, dict) or not tombstone.get("deleted_at"):
+            continue
+        if tkey in local_by_key:
+            idx = local_by_key[tkey]
+            if idx < len(local_games):
+                local_games.pop(idx)
+                deleted += 1
+                # Rebuild index after deletion
+                local_by_key = {}
+                for i, game in enumerate(local_games):
+                    if isinstance(game, dict):
+                        local_by_key[game_key(game)] = i
+
+    # Merge remote games
+    for rkey, record in remote_games.items():
+        if not isinstance(record, dict) or not isinstance(record.get("game"), dict):
+            skipped += 1
+            continue
+        remote_game = record["game"]
+        remote_updated = _timestamp(record.get("updated_at", ""))
+        if rkey in local_by_key:
+            idx = local_by_key[rkey]
+            local_game = local_games[idx]
+            local_updated = _timestamp(local_game.get("_sync_updated_at", "0"))
+            if remote_updated > local_updated:
+                remote_game["_sync_updated_at"] = record.get("updated_at", "")
+                local_games[idx] = remote_game
+                updated += 1
+            else:
+                skipped += 1
+        else:
+            remote_game["_sync_updated_at"] = record.get("updated_at", "")
+            local_games.append(remote_game)
+            local_by_key[rkey] = len(local_games) - 1
+            added += 1
+
+    return {
+        "added": added,
+        "updated": updated,
+        "deleted": deleted,
+        "skipped": skipped,
+        "games": local_games,
+        "synced_at": timestamp,
+    }
