@@ -61,6 +61,13 @@ def _clean_controller_prompt_hint(merged):
     return value.strip()[:200]
 
 
+def _clean_mood(merged):
+    enabled = bool(merged.get("mood_match_enabled", False))
+    bigbox = bool(merged.get("mood_match_bigbox", False))
+    # Big Box mood only matters when desktop mood is on.
+    return enabled, enabled and bigbox
+
+
 def _clean_cloud_folder(merged):
     cloud_folder = str(merged.get("cloud_folder", "")).strip()
     if cloud_folder:
@@ -318,6 +325,7 @@ def clean_settings(merged):
     apply_perf = _clean_apply_perf(merged)
     gameyfin_password = _clean_password(merged)
     controller_prompt_hint = _clean_controller_prompt_hint(merged)
+    mood_match_enabled, mood_match_bigbox = _clean_mood(merged)
     return {
             "watch_folders": clean_folders,
             "screensaver_seconds": seconds,
@@ -379,6 +387,8 @@ def clean_settings(merged):
             "gamescope_preset": str(merged.get("gamescope_preset", "")).strip()[:30],
             "gamescope_custom_presets": _clean_gamescope_presets(merged),
             "mangohud_enabled": bool(merged.get("mangohud_enabled", False)),
+            "mood_match_enabled": mood_match_enabled,
+            "mood_match_bigbox": mood_match_bigbox,
     }
 
 

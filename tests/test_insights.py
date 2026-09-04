@@ -323,6 +323,18 @@ class InsightsHandlerTest(unittest.TestCase):
         with self.assertRaises(BadRequest):
             h._api_get_api_v2_insights_summary(parsed)
 
+    def test_mastery_ok(self):
+        from urllib.parse import urlparse
+
+        h = self.handler()
+        parsed = urlparse("/api/v2/insights/mastery")
+        h._api_get_api_v2_insights_mastery(parsed)
+        self.assertEqual(h.responses[0][0], 200)
+        payload = h.responses[0][1]
+        for key in ("platforms", "overall", "decades"):
+            self.assertIn(key, payload)
+        self.assertIn("total", payload["overall"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

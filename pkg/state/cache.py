@@ -523,6 +523,8 @@ def _public_settings_uncached(state):
         "mangohud_available": is_mangohud_available(),
         "gamescope_preset": settings.get("gamescope_preset", ""),
         "mangohud_enabled": settings.get("mangohud_enabled", False),
+        "mood_match_enabled": settings.get("mood_match_enabled", False),
+        "mood_match_bigbox": settings.get("mood_match_bigbox", False),
     }
 
 

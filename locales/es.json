@@ -67,7 +67,21 @@
     "plugins": "Plugins",
     "settings": "Ajustes",
     "webhooks": "Webhooks",
-    "notifications": "Notificaciones"
+    "notifications": "Notificaciones",
+    "constellation": "Constelación",
+    "mastery": "Dominio"
+  },
+  "constellation": {
+    "title": "Constelación",
+    "limit": "Límite",
+    "relayout": "Reorganizar",
+    "empty": "Aún no hay conexiones — ejecuta una sincronización de metadatos primero.",
+    "kind_series": "Saga",
+    "kind_developer": "Desarrollador",
+    "kind_publisher": "Distribuidor",
+    "kind_genre": "Género",
+    "kind_platform_family": "Familia de plataforma",
+    "kind_co_played": "Co-jugado"
   },
   "sidebar": {
     "search": "Buscar",
@@ -460,7 +474,41 @@
     "check_updates": "Comprobar actualizaciones",
     "install_update": "Instalar actualización verificada",
     "install_desktop": "Instalar acceso directo de escritorio",
-    "show_insights": "Mostrar estadísticas de juego en la biblioteca"
+    "show_insights": "Mostrar estadísticas de juego en la biblioteca",
+    "mood_match": "Tematización adaptativa de la portada",
+    "mood_match_bigbox": "Tematización adaptativa en Big Box"
+  },
+  "picker": {
+    "title": "¿Qué debería jugar?",
+    "time": "Tiempo que tengo",
+    "time_any": "Cualquiera",
+    "mood": "Estado de ánimo",
+    "mood_any": "Cualquiera",
+    "mood_action": "Acción",
+    "mood_chill": "Tranquilo",
+    "mood_story": "Historia",
+    "mood_retro": "Retro",
+    "mood_party": "Fiesta",
+    "familiarity": "Familiaridad",
+    "familiarity_any": "Cualquiera",
+    "familiarity_new": "Algo nuevo",
+    "familiarity_favorite": "Un favorito",
+    "players": "Jugadores",
+    "spin": "Elegir",
+    "again": "Otro",
+    "launch": "Lanzar",
+    "details": "Detalles",
+    "random": "Sorpréndeme",
+    "empty": "Ningún juego coincide — relaja un filtro.",
+    "reason": {
+      "never_played": "Agregaste {name} pero nunca lo lanzaste.",
+      "long_time": "Hace {days} días que no juegas {name}.",
+      "mood": "{name} encaja con tu estado de ánimo {mood}.",
+      "rated": "Calificaste {name} con {rating} estrellas.",
+      "fits_session": "{name} cabe en unos {minutes} minutos.",
+      "favorite": "{name} es un favorito que no tocas hace {days} días.",
+      "random": "Una elección aleatoria de tu biblioteca."
+    }
   },
   "storefront": {
     "title": "Gestor de tiendas",
@@ -572,5 +620,44 @@
     "range_90": "Últimos 90 días",
     "range_365": "Últimos 365 días",
     "refresh": "Actualizar estadísticas"
+  },
+  "wrapped": {
+    "title": "Tu año en juegos",
+    "open": "Wrapped",
+    "year": "Año",
+    "print": "Imprimir",
+    "total_playtime": "Tiempo total",
+    "sessions": "Sesiones",
+    "games_played": "Jugados",
+    "new_games": "Nuevos",
+    "longest_streak": "Racha más larga",
+    "beaten": "Terminados",
+    "completed": "Completados",
+    "mastered": "Dominados",
+    "top_game": "Juego top",
+    "top_platform": "Plataforma top",
+    "top_genre": "Género top",
+    "first_play": "Primera partida",
+    "oldest_played": "Más antiguo jugado",
+    "co_play_pairs": "Parejas co-jugadas"
+  },
+  "timeline": {
+    "list": "Lista",
+    "timeline": "Cronología",
+    "empty": "No hay sesiones en este rango.",
+    "recording": "REC"
+  },
+  "mastery": {
+    "title": "Dominio",
+    "decade": "Década",
+    "all": "Todas",
+    "pre_1980": "pre-1980",
+    "never": "Nunca jugado",
+    "played": "Jugado",
+    "beaten": "Terminado",
+    "completed": "Completado",
+    "mastered": "Dominado",
+    "ra_progress": "Progreso RA",
+    "empty": "Aún no hay juegos para clasificar."
   }
 }

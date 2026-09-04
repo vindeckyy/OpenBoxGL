@@ -32,6 +32,8 @@
             <button class="menu-button" id="metadataButton" role="menuitem" tabindex="-1" data-i18n="tools.metadata">Metadata</button>
             <button class="menu-button" id="mediaButton" role="menuitem" tabindex="-1" data-i18n="tools.media">Media</button>
             <button class="menu-button" id="healthButton" role="menuitem" tabindex="-1" data-i18n="tools.health">Health</button>
+            <button class="menu-button" id="constellationButton" role="menuitem" tabindex="-1" data-i18n="tools.constellation">Constellation</button>
+            <button class="menu-button" id="masteryButton" role="menuitem" tabindex="-1" data-i18n="tools.mastery">Mastery</button>
             <button class="menu-button" id="bulkButton" role="menuitem" tabindex="-1" data-i18n="tools.bulk_edit">Bulk edit</button>
             <button class="menu-button" id="tagsButton" role="menuitem" tabindex="-1" data-i18n="tools.tags">Tags</button>
             <button class="menu-button" id="playlistsButton" role="menuitem" tabindex="-1" data-i18n="tools.playlists">Playlists</button>
@@ -367,7 +369,12 @@
   </dialog>
   <dialog id="historyDialog" aria-modal="true" aria-labelledby="historyDialogTitle">
     <div class="dialog-head"><h2 id="historyDialogTitle">Play Session History</h2><button type="button" id="closeHistory" aria-label="Close Play Session History dialog">×</button></div>
-    <div class="form-grid"><div class="wide history-list" id="historyList"></div></div>
+    <div class="dialog-tabs" role="tablist" aria-label="History tabs">
+      <button type="button" class="dialog-tab active" role="tab" id="historyTabList" aria-selected="true" data-i18n="timeline.list">List</button>
+      <button type="button" class="dialog-tab" role="tab" id="historyTabTimeline" aria-selected="false" data-i18n="timeline.timeline">Timeline</button>
+    </div>
+    <div class="form-grid" id="historyListPane"><div class="wide history-list" id="historyList"></div></div>
+    <div class="form-grid" id="historyTimelinePane" hidden><div class="wide timeline" id="timelineContainer"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneHistory">Done</button></div>
   </dialog>
   <dialog id="welcomeDialog" hidden aria-hidden="true"></dialog>
@@ -447,6 +454,8 @@
         <label class="check settings-field" data-setting="show playlist actions big box menu"><input type="checkbox" id="showPlaylistActions" checked> Show playlist actions in Big Box</label>
         <label class="check settings-field" data-setting="dynamic play button launch"><input type="checkbox" id="dynamicPlayButton" checked> Use dynamic Play button labels</label>
         <label class="check settings-field settings-panel" data-settings-panel="appearance library" data-setting="insights play dashboard heatmap show"><input type="checkbox" id="showInsights" checked> Show Play Insights in the library</label>
+        <label class="check settings-field settings-panel" data-settings-panel="appearance" data-setting="mood match cover adaptive theming color"><input type="checkbox" id="moodMatchEnabled"> <span data-i18n="settings.mood_match">Adaptive cover theming</span></label>
+        <label class="check settings-field settings-panel" data-settings-panel="appearance bigbox" data-setting="mood match big box adaptive theming color"><input type="checkbox" id="moodMatchBigbox"> <span data-i18n="settings.mood_match_bigbox">Adaptive theming in Big Box</span></label>
         <label class="field wide settings-field" data-setting="hidden sidebar sections filters platforms playlists"><span>Hidden sidebar sections, comma separated</span><input id="hiddenSidebarSections" placeholder="platforms, playlists"></label>
         <label class="field wide settings-field" data-setting="emumovies credentials media"><span>EmuMovies username</span><input id="emumoviesUsername"></label>
         <label class="field settings-field" data-setting="emumovies credentials media"><span>EmuMovies password</span><input id="emumoviesPassword" type="password" autocomplete="off"></label>
@@ -569,6 +578,72 @@
     <div class="screensaver" id="screenSaver" hidden><video id="screenSaverVideo" muted autoplay loop></video><div class="screensaver-copy"><div class="hero-kicker" id="screenSaverPlatform"></div><h2 id="screenSaverTitle"></h2><p>Press Play to launch, or any other control to return.</p></div></div>
     <div class="bigbox-pause" id="bigBoxPause" hidden><div class="bigbox-pause-panel"><h2 id="bigBoxPauseTitle">Running game</h2><p class="description" id="bigBoxPauseMeta"></p><div class="extras" id="bigBoxPauseActions"></div></div></div>
   </section>
+
+  <dialog id="pickerDialog" aria-modal="true" aria-labelledby="pickerDialogTitle">
+    <form id="pickerForm" onsubmit="return false;">
+      <div class="dialog-head"><h2 id="pickerDialogTitle" data-i18n="picker.title">What should I play?</h2><button type="button" id="closePicker" aria-label="Close picker dialog">×</button></div>
+      <div class="form-grid picker-grid">
+        <label class="field"><span data-i18n="picker.time">Time I have</span><select id="pickerTime"><option value="0" data-i18n="picker.time_any">Any</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">1 h</option><option value="90">1.5 h</option><option value="120">2 h</option></select></label>
+        <label class="field"><span data-i18n="picker.mood">Mood</span><select id="pickerMood"><option value="any" data-i18n="picker.mood_any">Any</option><option value="action" data-i18n="picker.mood_action">Action</option><option value="chill" data-i18n="picker.mood_chill">Chill</option><option value="story" data-i18n="picker.mood_story">Story</option><option value="retro" data-i18n="picker.mood_retro">Retro</option><option value="party" data-i18n="picker.mood_party">Party</option></select></label>
+        <label class="field"><span data-i18n="picker.familiarity">Familiarity</span><select id="pickerFamiliarity"><option value="any" data-i18n="picker.familiarity_any">Either</option><option value="new" data-i18n="picker.familiarity_new">Something new</option><option value="favorite" data-i18n="picker.familiarity_favorite">A favorite</option></select></label>
+        <label class="field"><span data-i18n="picker.players">Players</span><input id="pickerPlayers" type="number" min="1" max="8" value="1"></label>
+        <div class="wide" id="pickerSpinning" hidden><p class="description" data-i18n="common.loading">Loading...</p></div>
+        <div class="wide" id="pickerResult" hidden>
+          <div class="picker-card" id="pickerResultCard"></div>
+        </div>
+        <div class="wide" id="pickerResultEmpty" hidden><p class="description" data-i18n="picker.empty">No games match — loosen a filter.</p></div>
+        <div class="dialog-actions wide">
+          <button type="button" class="icon-button" id="pickerRandom" data-i18n="picker.random">Just surprise me</button>
+          <button type="button" class="icon-button" id="closePicker2">Cancel</button>
+          <button type="button" class="primary" id="pickerSpin" data-i18n="picker.spin">Pick</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="wrappedDialog" aria-modal="true" aria-labelledby="wrappedDialogTitle" class="wide-dialog">
+    <form onsubmit="return false;">
+      <div class="dialog-head wrapped-head">
+        <h2 id="wrappedDialogTitle" data-i18n="wrapped.title">Your Year in Games</h2>
+        <div class="wrapped-actions">
+          <label class="field inline"><span data-i18n="wrapped.year">Year</span><select id="wrappedYear"></select></label>
+          <button type="button" class="icon-button" id="wrappedPrint" data-i18n="wrapped.print">Print</button>
+          <button type="button" id="closeWrapped" aria-label="Close wrapped dialog">×</button>
+        </div>
+      </div>
+      <div id="wrappedBody" class="dialog-body"></div>
+    </form>
+  </dialog>
+
+  <dialog id="masteryDialog" aria-modal="true" aria-labelledby="masteryDialogTitle">
+    <form onsubmit="return false;">
+      <div class="dialog-head"><h2 id="masteryDialogTitle" data-i18n="mastery.title">Mastery</h2><button type="button" id="closeMastery" aria-label="Close mastery dialog">×</button></div>
+      <div class="mastery-wrap">
+        <label class="field inline"><span data-i18n="mastery.decade">Decade</span><select id="masteryDecadeFilter"><option value="" data-i18n="mastery.all">All</option><option value="pre-1980" data-i18n="mastery.pre_1980">pre-1980</option><option value="1980s">1980s</option><option value="1990s">1990s</option><option value="2000s">2000s</option><option value="2010s">2010s</option><option value="2020s">2020s</option></select></label>
+        <div id="masteryOverall"></div>
+        <div id="masteryBody"></div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="constellationDialog" aria-modal="true" aria-labelledby="constellationDialogTitle">
+    <form onsubmit="return false;">
+      <div class="dialog-head"><h2 id="constellationDialogTitle" data-i18n="constellation.title">Constellation</h2><button type="button" id="closeConstellation" aria-label="Close constellation dialog">×</button></div>
+      <div class="constellation-wrap">
+        <div class="constellation-controls">
+          <label class="field"><span data-i18n="constellation.limit">Limit</span><select id="constellationLimit"><option value="200">200</option><option value="400" selected>400</option><option value="800">800</option><option value="1000">1000</option></select></label>
+          <div class="constellation-legend" id="constellationKinds"></div>
+          <button type="button" class="icon-button" id="constellationRelayout" data-i18n="constellation.relayout">Re-layout</button>
+        </div>
+        <div class="constellation-canvas" id="constellationCanvasWrap">
+          <canvas id="constellationCanvas" class="constellation-canvas" aria-label="Library relationship graph"></canvas>
+          <div id="constellationTooltip" class="constellation-tooltip" hidden></div>
+        </div>
+        <p id="constellationLoading" class="description" data-i18n="common.loading">Loading...</p>
+        <p id="constellationEmpty" class="description" data-i18n="constellation.empty" hidden>No connections yet — run a metadata sync first.</p>
+      </div>
+    </form>
+  </dialog>
 
   <script type="module" src="/static/app.js"></script>
 </body>

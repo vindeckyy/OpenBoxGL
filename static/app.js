@@ -9,10 +9,14 @@ import { setReaderPage } from './reader.js';
 import { openSessions, openHistory, launch, connectSessionEvents, pollSessions } from './sessions.js';
 import { openDiscovery, openStorefronts, saveStorefrontSettings, importStorefrontCatalog, loadStorefrontCatalog } from './storefront.js';
 import { openBigBox, closeBigBox, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, stopScreenSaver, favoriteBigBox, openBigBoxPause, filteredBigBoxGames, applyLibraryMusic, activateCurrentGame, bigBoxTypingActive } from './bigbox.js';
+import { openPicker } from './picker.js';
+import { openConstellation } from './constellation.js';
+import { openMastery } from './mastery.js';
 import { closeDialog, openGameDialog, closeContextMenu, bindContextMenuA11y, promptChoice, promptInput, confirmAction } from './dialogs.js';
 import { loadInsights, bindInsights } from './insights.js';
 import { initNavigation } from './navigation.js';
 import { applyHash } from './router.js';
+import { initMood } from './mood.js';
 import { init as i18nInit, setLocale, getSupportedLocales, t } from './i18n.js';
 import './activity.js';
 
@@ -206,7 +210,7 @@ window.addEventListener('DOMContentLoaded', () => {
     $('loadStorefrontCatalog').onclick = loadStorefrontCatalog;
     $('importStorefrontInstalled').onclick = () => importStorefrontCatalog(false);
     $('importStorefrontUninstalled').onclick = () => importStorefrontCatalog(true);
-    $('addButton').onclick = () => openGameDialog(); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => $('metadataDialog').showModal(); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
+    $('addButton').onclick = () => openGameDialog(); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => $('metadataDialog').showModal(); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('constellationButton').onclick = openConstellation; $('masteryButton').onclick = openMastery; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
     // ── Accessible Tools menu ──────────────────────────────────────────
     const toolsWrap = $('toolsWrap');
     const toolsButton = $('toolsButton');
@@ -291,7 +295,7 @@ window.addEventListener('DOMContentLoaded', () => {
       } catch(error) { notify(error.message); }
     };
     $('fullscreenButton').onclick = () => nativeFullscreen().catch(() => {});
-    $('surpriseButton').onclick = () => { const visible = filteredGames(); if (visible.length) { AppState.selectedId = visible[Math.floor(Math.random() * visible.length)].id; render(); } };
+    $('surpriseButton').onclick = openPicker;
     $('imageGroup').onchange = async () => {
       const scope = AppState.activePlaylist ? 'playlist' : AppState.platform !== 'all' ? 'platform' : 'global';
       const name = AppState.activePlaylist || (AppState.platform === 'all' ? '' : AppState.platform);
@@ -365,7 +369,7 @@ window.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('hashchange', () => { if (applyHash()) render(); });
     initNavigation();
     Promise.all([refresh(),loadTheme()]).then(async () => {
-
+      initMood();
     $('queueButton').onclick = () => openFeature('queue');
     $('tagsButton').onclick = () => openFeature('tags');
     $('notificationsButton').onclick = () => openFeature('notifications');

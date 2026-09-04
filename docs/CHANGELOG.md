@@ -4,6 +4,35 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - Unreleased
+
+### Mood Match — Adaptive Cover Theming
+- New **Settings → Appearance** toggles "Adaptive cover theming" and "Adaptive theming in Big Box" (`mood_match_enabled`/`mood_match_bigbox`), off by default.
+- `static/mood.js` extracts a live 5-color palette (primary, ink, secondary, glow, tint) from the selected/focused cover and applies it to the selected card, detail hero, play button hover, and Big Box background/cover ring via `--mood-*` CSS tokens.
+- New tokens added to `static/app.css :root` and all five stock themes; palette extraction is a fast 4×4×4 RGB bin quantizer with a documented upgrade path (ADR 0026).
+
+### Picker
+- New **"What should I play?"** picker replaces the random "Surprise me" button. Pick by available time, mood (action/chill/story/retro/party), familiarity (new/favorite), and number of players.
+- `static/picker.js` dialog renders the top pick with an explanatory reason, quick Launch / Details / Again actions, and a "Just surprise me" fallback.
+- `POST /api/v2/library/pick` returns scored, scoped recommendations via `pkg/parity/parity_picker.py` and `handlers/picker.py` (ADR 0028).
+
+### Constellation
+- New **Tools → Constellation** opens a full-screen, pan/zoomable relationship graph of the library.
+- Backend `GET /api/v2/library/constellation` returns capped, deterministic nodes/edges by series, developer, publisher, genre, platform family, and co-play history.
+- `static/constellation.js` runs a client-side spring-electric layout on a canvas; clicking a node dispatches `app:show-game` to select it in the library.
+- Edge colors are tokenized as `--constellation-edge-*` and defined in all five stock themes (ADR 0028).
+
+### Wrapped + Timeline
+- New **Insights → Wrapped** opens a printable "Your Year in Games" report with playtime, sessions, streaks, progress, and top game/platform/genre.
+- `GET /api/v2/insights/wrapped?year=YYYY` returns privacy-safe annual aggregates.
+- New **History → Timeline** tab shows sessions grouped by day with covers and recording badges.
+- `GET /api/v2/history/timeline?days=90` returns grouped sessions; recording values are basenames only (ADR 0029).
+
+### Mastery
+- New **Tools → Mastery** opens a completionist dashboard with stacked per-platform and per-decade bars over local progress states (never/played/beaten/completed/mastered), plus a RetroAchievements column.
+- `GET /api/v2/insights/mastery` returns platform/overall/decade aggregates read from the existing RA disk cache — zero new network calls (ADR 0030).
+- `static/mastery.js` renders tokenized `--mastery-*` segments (defined in all five stock themes); clicking a segment filters the library to that platform.
+
 ## [1.8.0] - 2026-09-02
 
 ### Navigation & Routing

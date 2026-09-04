@@ -1,10 +1,11 @@
 """InsightsHandlers — Play Insights dashboard (1.7.1)."""
 
 import datetime
+from pathlib import Path
 from urllib.parse import parse_qs
 
 from openbox import load_state
-from pkg.parity.parity_insights import compute_heatmap, summarize
+from pkg.parity.parity_insights import compute_heatmap, mastery_summary, summarize, wrapped_summary
 from routes.registry import route
 
 
@@ -70,4 +71,35 @@ class InsightsHandlers:
             history = []
         heatmap = compute_heatmap(history, days=days, end_date=end_date)
         self.send_json(200, {"heatmap": heatmap, "days": days})
+        return
+
+    @route("GET", "/api/v2/insights/wrapped")
+    def _api_get_api_v2_insights_wrapped(self, parsed):
+        from api_errors import BadRequest
+
+        qs = parse_qs(parsed.query or "")
+        year_raw = qs.get("year", [""])[0].strip() if qs.get("year") else ""
+        if not year_raw:
+            raise BadRequest("year is required")
+        try:
+            year = int(year_raw)
+        except (TypeError, ValueError) as error:
+            raise BadRequest("year must be an integer") from error
+        if not 1970 <= year <= 2100:
+            raise BadRequest("year must be between 1970 and 2100")
+        state = load_state()
+        self.send_json(200, wrapped_summary(state, year))
+        return
+
+    @route("GET", "/api/v2/insights/mastery")
+    def _api_get_api_v2_insights_mastery(self, parsed):
+        state = load_state()
+        games = state.get("games", []) if isinstance(state, dict) else []
+        ra_dir = None
+        settings = state.get("settings", {}) if isinstance(state, dict) else {}
+        if settings.get("retroachievements_enabled"):
+            cache = state.get("settings", {}).get("state_dir")
+            if cache:
+                ra_dir = str(Path(cache) / "retroachievements")
+        self.send_json(200, mastery_summary(games, ra_cache_dir=ra_dir))
         return

@@ -622,6 +622,23 @@ const puppeteer = require('./node_modules/puppeteer');
   });
   console.log('gamepad loop lifecycle:', {gamepadLoopStopped});
 
+  // M5 Mastery Map: dialog opens and renders platform/decade bars (or empty state).
+  const masterySmoke = await page.evaluate(async () => {
+    const masteryMod = await import('/static/mastery.js');
+    masteryMod.openMastery();
+    await new Promise(r => setTimeout(r, 300));
+    const dialog = document.getElementById('masteryDialog');
+    const open = dialog?.open === true;
+    let rendered = false;
+    for (let i = 0; i < 25 && !rendered; i++) {
+      await new Promise(r => setTimeout(r, 200));
+      rendered = Boolean(document.querySelector('#masteryBody .mastery-row, #masteryBody .description, #masteryOverall p, #masteryOverall .mastery-overall'));
+    }
+    document.getElementById('closeMastery')?.click();
+    return {open, rendered};
+  });
+  console.log('mastery dialog:', masterySmoke);
+
   // F23 Big Box correctness: viewport matrix, activation, preflight launch
   const bigboxCorrectness = { viewportCases: [], activateExported: false, appUsesActivate: false, preflightLaunch: false, noConfirmSessions: false, noConfirmStorefront: false, shortcutWhileTyping: false };
   const staticChecks = await page.evaluate(async () => {
@@ -1235,6 +1252,8 @@ const puppeteer = require('./node_modules/puppeteer');
   if (!libraryWorkspace.manualUsesReader) process.exit(1);
   if (!libraryWorkspace.manualNoNativeExternal) process.exit(1);
   if (!libraryWorkspace.detailsResizeNoLibraryPost) process.exit(1);
+  if (!masterySmoke.open) process.exit(1);
+  if (!masterySmoke.rendered) process.exit(1);
   if (!dropHonesty.pickerOpened) process.exit(1);
   if (!dropHonesty.libraryUnchanged) process.exit(1);
   if (!dropHonesty.noRomBinFolder) process.exit(1);
@@ -1243,7 +1262,7 @@ const puppeteer = require('./node_modules/puppeteer');
   if (!dropEmptyHonesty.libraryUnchanged) process.exit(1);
   if (!dropEmptyHonesty.noImport) process.exit(1);
   const expectedGroups = {
-    library: ['metadataButton','mediaButton','healthButton','bulkButton','tagsButton','playlistsButton','backupButton','historyButton','achievementsButton','saveFilterButton','savePresetButton'],
+    library: ['metadataButton','mediaButton','healthButton','constellationButton','masteryButton','bulkButton','tagsButton','playlistsButton','backupButton','historyButton','achievementsButton','saveFilterButton','savePresetButton'],
     sources: ['storefrontButton','emulatorsButton','steamButton','heroicButton','lutrisButton','arcadeButton','discoveryButton'],
     personalize: ['themesButton','pluginsButton','settingsButton','fullscreenButton'],
     automation: ['webhooksButton','notificationsButton'],

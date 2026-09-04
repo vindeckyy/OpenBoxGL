@@ -64,6 +64,7 @@ pkg/parity/parity_gamescope.py
 pkg/parity/parity_perf.py
 pkg/parity/parity_export.py
 pkg/parity/parity_screenscraper.py
+pkg/parity/parity_picker.py
 routes.py
 routes/registry.py
 api_errors.py
@@ -81,6 +82,7 @@ handlers/health.py
 handlers/emulators.py
 handlers/export.py
 handlers/screenscraper.py
+handlers/picker.py
 handlers/launch.py
 handlers/jobs.py
 handlers/setup.py
@@ -116,4 +118,8 @@ handlers/_shared.py
 pkg/parity/parity_insights.py
 parity_insights.py
 handlers/insights.py
+parity_picker.py
+pkg/parity/parity_constellation.py
+parity_constellation.py
+handlers/constellation.py
 pkg/state/sqlite_readmodel.py

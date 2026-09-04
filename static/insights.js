@@ -7,6 +7,7 @@
 import { $, escapeHtml } from './util.js';
 import { api, AppState } from './state.js';
 import { t } from './i18n.js';
+import { openWrapped } from './wrapped.js';
 
 const LEVEL_CLASS = ['level-0', 'level-1', 'level-2', 'level-3', 'level-4'];
 const RANGE_KEY = 'openbox-insights-range';
@@ -144,6 +145,7 @@ function ensurePanelHeader() {
     <div class="insights-head">
       <h3 class="insights-title">${escapeHtml(t('library.play_insights'))}</h3>
       <div class="insights-head-actions">
+        <button type="button" class="icon-button" id="insightsWrapped" data-i18n="wrapped.open">${t('wrapped.open')}</button>
         <select class="search insights-range" id="insightsRange" aria-label="${escapeHtml(t('insights.range_label'))}">
           <option value="30">${escapeHtml(t('insights.range_30'))}</option>
           <option value="90">${escapeHtml(t('insights.range_90'))}</option>
@@ -161,6 +163,7 @@ function ensurePanelHeader() {
     loadInsights();
   };
   $('insightsRefresh').onclick = () => loadInsights();
+  $('insightsWrapped').onclick = () => openWrapped();
   panel.addEventListener('click', event => {
     const link = event.target.closest('[data-insight-game]');
     if (!link) return;

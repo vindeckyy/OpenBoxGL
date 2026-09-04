@@ -8,6 +8,7 @@ from urllib.parse import parse_qs
 
 from openbox import STATE_STORE, load_state, recover_state as recover_library_state
 from pkg.parity.launch_tokens import build_launch_args
+from pkg.parity.parity_insights import timeline_groups
 from routes.registry import route
 from webapp_state import EVENT_SEQUENCE, PROCESS_LOCK, RUNNING, SESSION_EVENTS, STATE_LOCK, bump_media_epoch, control_game_session, game_from_payload, load_state_view, start_game
 
@@ -139,6 +140,24 @@ class SessionHandlers:
                 import logging
                 logging.getLogger(__name__).debug('bigbox_mode_switch command failed', exc_info=True)
         self.send_json(200, {"ok": True, "entering": True})
+
+    @route("GET", "/api/v2/history/timeline")
+    def _api_get_api_v2_history_timeline(self, parsed):
+        from api_errors import BadRequest
+
+        qs = parse_qs(parsed.query or "")
+        days_raw = qs.get("days", [""])[0].strip() if qs.get("days") else ""
+        days = 90
+        if days_raw:
+            try:
+                days = int(days_raw)
+            except (TypeError, ValueError) as error:
+                raise BadRequest("days must be an integer") from error
+            if not 1 <= days <= 366:
+                raise BadRequest("days must be between 1 and 366")
+        state = load_state()
+        self.send_json(200, timeline_groups(state, days=days))
+        return
 
     def launch_extra(self, payload):
         state = load_state()

@@ -10,7 +10,7 @@ THEMES = sorted((ROOT / "themes").glob("*.css"))
 
 TOOL_GROUPS = {
     "library": [
-        "metadataButton", "mediaButton", "healthButton", "bulkButton", "tagsButton",
+        "metadataButton", "mediaButton", "healthButton", "constellationButton", "masteryButton", "bulkButton", "tagsButton",
         "playlistsButton", "backupButton", "historyButton", "achievementsButton",
         "saveFilterButton", "savePresetButton",
     ],

@@ -1,6 +1,7 @@
 import { $, escapeHtml, duration } from './util.js';
 import { api, notify, AppState, token, setButtonBusy } from './state.js';
 import { refresh, launchExtra } from './library.js';
+import { renderTimelineTab } from './timeline.js';
 
 
 
@@ -113,8 +114,31 @@ import { refresh, launchExtra } from './library.js';
         $('historyList').innerHTML = result.enabled
           ? (result.history.length ? result.history.map(session => `<div class="history-item"><strong>${escapeHtml(session.game)}</strong><br>${escapeHtml(String(session.started || '').replace('T',' '))} · ${duration(session.seconds)} · exit ${session.exit_code}</div>`).join('') : '<p class="description">No sessions recorded yet.</p>')
           : '<p class="description">Session history tracking is disabled in Settings.</p>';
+        // tab init
+        $('historyTabList').onclick = () => switchHistoryTab('list');
+        $('historyTabTimeline').onclick = () => switchHistoryTab('timeline');
+        switchHistoryTab('list');
         if (!$('historyDialog').open) $('historyDialog').showModal();
       } catch(error) { notify(error.message); }
+    }
+    function switchHistoryTab(tab) {
+      const listPane = $('historyListPane');
+      const timelinePane = $('historyTimelinePane');
+      const listTab = $('historyTabList');
+      const timelineTab = $('historyTabTimeline');
+      if (!listPane || !timelinePane) return;
+      if (tab === 'timeline') {
+        listPane.hidden = true;
+        timelinePane.hidden = false;
+        listTab.classList.remove('active'); listTab.setAttribute('aria-selected', 'false');
+        timelineTab.classList.add('active'); timelineTab.setAttribute('aria-selected', 'true');
+        renderTimelineTab($('timelineContainer'));
+      } else {
+        listPane.hidden = false;
+        timelinePane.hidden = true;
+        listTab.classList.add('active'); listTab.setAttribute('aria-selected', 'true');
+        timelineTab.classList.remove('active'); timelineTab.setAttribute('aria-selected', 'false');
+      }
     }
     async function openSessions() {
       try {

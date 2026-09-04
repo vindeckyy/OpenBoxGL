@@ -67,7 +67,21 @@
     "plugins": "Plugins",
     "settings": "Einstellungen",
     "webhooks": "Webhooks",
-    "notifications": "Benachrichtigungen"
+    "notifications": "Benachrichtigungen",
+    "constellation": "Konstellation",
+    "mastery": "Meisterschaft"
+  },
+  "constellation": {
+    "title": "Konstellation",
+    "limit": "Limit",
+    "relayout": "Neu anordnen",
+    "empty": "Noch keine Verbindungen — führe zuerst eine Metadaten-Synchronisation durch.",
+    "kind_series": "Serie",
+    "kind_developer": "Entwickler",
+    "kind_publisher": "Publisher",
+    "kind_genre": "Genre",
+    "kind_platform_family": "Plattform-Familie",
+    "kind_co_played": "Gemeinsam gespielt"
   },
   "sidebar": {
     "search": "Suchen",
@@ -460,7 +474,41 @@
     "check_updates": "Nach Updates suchen",
     "install_update": "Verifiziertes Update installieren",
     "install_desktop": "Desktop-Verknüpfung installieren",
-    "show_insights": "Spielstatistiken in der Bibliothek anzeigen"
+    "show_insights": "Spielstatistiken in der Bibliothek anzeigen",
+    "mood_match": "Adaptive Cover-Gestaltung",
+    "mood_match_bigbox": "Adaptive Gestaltung in Big Box"
+  },
+  "picker": {
+    "title": "Was soll ich spielen?",
+    "time": "Zeit, die ich habe",
+    "time_any": "Beliebig",
+    "mood": "Stimmung",
+    "mood_any": "Beliebig",
+    "mood_action": "Action",
+    "mood_chill": "Entspannt",
+    "mood_story": "Story",
+    "mood_retro": "Retro",
+    "mood_party": "Party",
+    "familiarity": "Vertrautheit",
+    "familiarity_any": "Beliebig",
+    "familiarity_new": "Etwas Neues",
+    "familiarity_favorite": "Ein Favorit",
+    "players": "Spieler",
+    "spin": "Wählen",
+    "again": "Nochmal",
+    "launch": "Starten",
+    "details": "Details",
+    "random": "Überrasche mich",
+    "empty": "Keine Spiele passen — Filter lockern.",
+    "reason": {
+      "never_played": "Du hast {name} hinzugefügt, aber noch nie gestartet.",
+      "long_time": "Du hast {name} seit {days} Tagen nicht gespielt.",
+      "mood": "{name} passt zu deiner {mood}-Stimmung.",
+      "rated": "Du hast {name} mit {rating} Sternen bewertet.",
+      "fits_session": "{name} passt in ca. {minutes} Minuten.",
+      "favorite": "{name} ist ein Favorit, den du seit {days} Tagen nicht gespielt hast.",
+      "random": "Eine zufällige Auswahl aus deiner Bibliothek."
+    }
   },
   "storefront": {
     "title": "Storefront-Manager",
@@ -572,5 +620,44 @@
     "range_90": "Letzte 90 Tage",
     "range_365": "Letzte 365 Tage",
     "refresh": "Statistiken aktualisieren"
+  },
+  "wrapped": {
+    "title": "Dein Jahr im Spiel",
+    "open": "Wrapped",
+    "year": "Jahr",
+    "print": "Drucken",
+    "total_playtime": "Gesamtspielzeit",
+    "sessions": "Sitzungen",
+    "games_played": "Gespielt",
+    "new_games": "Neu",
+    "longest_streak": "Längste Serie",
+    "beaten": "Beendet",
+    "completed": "Abgeschlossen",
+    "mastered": "Gemeistert",
+    "top_game": "Top-Spiel",
+    "top_platform": "Top-Plattform",
+    "top_genre": "Top-Genre",
+    "first_play": "Erste Sitzung",
+    "oldest_played": "Ältestes gespielt",
+    "co_play_pairs": "Co-Play-Paare"
+  },
+  "timeline": {
+    "list": "Liste",
+    "timeline": "Zeitstrahl",
+    "empty": "Keine Sitzungen in diesem Zeitraum.",
+    "recording": "REC"
+  },
+  "mastery": {
+    "title": "Meisterschaft",
+    "decade": "Jahrzehnt",
+    "all": "Alle",
+    "pre_1980": "vor 1980",
+    "never": "Nie gespielt",
+    "played": "Gespielt",
+    "beaten": "Beendet",
+    "completed": "Abgeschlossen",
+    "mastered": "Gemeistert",
+    "ra_progress": "RA-Fortschritt",
+    "empty": "Noch keine Spiele zum Einordnen."
   }
 }

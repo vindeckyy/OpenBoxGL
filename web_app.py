@@ -61,6 +61,8 @@ from handlers.imports import ImportsHandlers
 from handlers.insights import InsightsHandlers
 from handlers.jobs import JobsHandlers
 from handlers.launch import LaunchHandlers
+from handlers.picker import PickerHandlers
+from handlers.constellation import ConstellationHandlers
 from handlers.setup import SetupHandlers
 from handlers.library import LibraryHandlers
 from handlers.media import MediaHandlers
@@ -124,7 +126,7 @@ CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsaf
 
 
 
-class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, ExportHandlers, LaunchHandlers, SetupHandlers, DataHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, ScreenScraperHandlers, BaseHTTPRequestHandler):
+class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, ExportHandlers, LaunchHandlers, SetupHandlers, DataHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, ScreenScraperHandlers, PickerHandlers, ConstellationHandlers, BaseHTTPRequestHandler):
     server_version = "OpenBox/1"
     protocol_version = "HTTP/1.1"
     MAX_BODY = 65536
@@ -405,6 +407,12 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         "/static/setup.js",
         "/static/activity.js",
         "/static/insights.js",
+        "/static/mood.js",
+        "/static/picker.js",
+        "/static/constellation.js",
+        "/static/wrapped.js",
+        "/static/timeline.js",
+        "/static/mastery.js",
         "/static/worker.search.js",
         "/static/i18n.js",
         "/static/app.css",

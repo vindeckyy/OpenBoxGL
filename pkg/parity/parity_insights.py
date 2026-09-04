@@ -8,8 +8,21 @@ top platforms/genres, momentum.
 from __future__ import annotations
 
 import datetime
+import json
 from collections import Counter
+from pathlib import Path
 from typing import Any
+
+
+def _basename(value: Any) -> str:
+    if not value:
+        return ""
+    return Path(str(value)).name
+
+
+def _in_year(date_value: Any, year: int) -> bool:
+    d = _parse_date(date_value)
+    return d is not None and d.year == year
 
 
 def _parse_date(value: str) -> datetime.date | None:
@@ -278,3 +291,284 @@ def heatmap_for_range(
     end_date: datetime.date | None = None,
 ) -> list[dict[str, Any]]:
     return compute_heatmap(history, days=days, end_date=end_date)
+
+
+def _load_ra_cache(ra_cache_dir: str) -> dict[str, dict[str, Any]]:
+    """Load RA game caches keyed by game_id. Returns empty on missing dir."""
+    by_game: dict[str, dict[str, Any]] = {}
+    if not ra_cache_dir:
+        return by_game
+    base = Path(ra_cache_dir)
+    if not base.is_dir():
+        return by_game
+    for path in base.glob("*.json"):
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        game_id = str(data.get("game_id") or "").strip()
+        if game_id:
+            by_game[game_id] = data
+    return by_game
+
+
+def mastery_summary(games, ra_cache_dir=None):
+    """Platform and overall completionist breakdown.
+
+    Uses local `progress` and optional RetroAchievements cache only.
+    """
+    states = ("never", "played", "beaten", "completed", "mastered")
+    ra_cache = _load_ra_cache(ra_cache_dir or "")
+
+    def bucket(items):
+        total = len(items)
+        counts: dict[str, int] = {s: 0 for s in states}
+        ra_tracked = 0
+        ra_mastered = 0
+        ra_progress_total = 0
+        for g in items:
+            prog = str(g.get("progress", "") or "").lower()
+            if "mastered" in prog:
+                counts["mastered"] += 1
+            elif "completed" in prog:
+                counts["completed"] += 1
+            elif "beaten" in prog:
+                counts["beaten"] += 1
+            elif int(g.get("playtime_seconds") or 0) or int(g.get("play_count") or 0):
+                counts["played"] += 1
+            else:
+                counts["never"] += 1
+            game_id = str(g.get("game_id") or "")
+            ra = ra_cache.get(game_id) or {}
+            if ra.get("game_id"):
+                ra_tracked += 1
+                if ra.get("mastered"):
+                    ra_mastered += 1
+                ra_progress_total += float(ra.get("progress_pct", 0) or 0)
+        return {
+            **{s: counts[s] for s in states},
+            "ra_tracked": ra_tracked,
+            "ra_mastered": ra_mastered,
+            "ra_avg_progress": round(ra_progress_total / ra_tracked, 2) if ra_tracked else 0.0,
+            "total": total,
+        }
+
+    # Per platform
+    by_platform: dict[str, list[dict[str, Any]]] = {}
+    for g in games:
+        if not isinstance(g, dict):
+            continue
+        platform = str(g.get("platform", "") or "Unspecified").strip() or "Unspecified"
+        by_platform.setdefault(platform, []).append(g)
+
+    platforms = {p: bucket(items) for p, items in by_platform.items()}
+    overall = bucket([g for g in games if isinstance(g, dict)])
+
+    # Decades
+    decade_buckets: dict[str, list[dict[str, Any]]] = {}
+    for g in games:
+        if not isinstance(g, dict):
+            continue
+        try:
+            year = int(g.get("year", 0) or 0)
+        except (TypeError, ValueError):
+            year = 0
+        if year < 1980:
+            key = "pre-1980"
+        else:
+            key = f"{year // 10 * 10}s"
+        decade_buckets.setdefault(key, []).append(g)
+    decades = {d: bucket(items) for d, items in decade_buckets.items()}
+
+    return {"platforms": platforms, "overall": overall, "decades": decades}
+
+
+def _wrapped_year_range(year: int) -> tuple[datetime.date, datetime.date]:
+    """Inclusive start/end for a year; handles leap years."""
+    start = datetime.date(year, 1, 1)
+    end = datetime.date(year, 12, 31)
+    return start, end
+
+
+def wrapped_summary(state: dict[str, Any], year: int) -> dict[str, Any]:
+    """Generate an annual gaming summary from local state.
+
+    Returns only game names, covers, and aggregates — no paths, settings,
+    or credentials. Privacy invariant is enforced by construction.
+    """
+    games = state.get("games", []) if isinstance(state, dict) else []
+    history = state.get("history", []) if isinstance(state, dict) else []
+    if not isinstance(games, list):
+        games = []
+    if not isinstance(history, list):
+        history = []
+
+    game_by_id = {str(g.get("game_id", "")): g for g in games if isinstance(g, dict)}
+    in_year = [e for e in history if isinstance(e, dict) and _in_year(e.get("started"), year)]
+
+    played_ids: set[str] = set()
+    new_games = 0
+    playtime = 0
+    sessions = 0
+    month_seconds = [0] * 12
+    weekday_seconds: Counter[int] = Counter()
+    first: dict[str, Any] | None = None
+    oldest_year: int | None = None
+    oldest_game: dict[str, Any] | None = None
+
+    progress_fields = ("beaten", "completed", "mastered")
+    progress: dict[str, int] = {k: 0 for k in progress_fields}
+
+    for entry in in_year:
+        game_id = str(entry.get("game_id", ""))
+        game = game_by_id.get(game_id) or {}
+        started = entry.get("started", "")
+        d = _parse_date(started)
+        if d is None:
+            continue
+        seconds = max(0, int(entry.get("seconds", 0) or 0))
+        playtime += seconds
+        sessions += 1
+        played_ids.add(game_id)
+        month_seconds[d.month - 1] += seconds
+        weekday_seconds[d.weekday()] += seconds
+
+        if first is None or (d < _parse_date(first["date"])):
+            first = {"date": started, "game_id": game_id, "name": str(game.get("name", ""))}
+
+        added = _parse_date(game.get("added_at") or "")
+        if added and added.year == year:
+            new_games += 1
+
+        gy = game.get("year")
+        if gy:
+            try:
+                gy_int = int(gy)
+            except (TypeError, ValueError):
+                gy_int = None
+            if gy_int and (oldest_year is None or gy_int < oldest_year):
+                oldest_year = gy_int
+                oldest_game = {"game_id": game_id, "name": str(game.get("name", "")), "year": gy_int}
+
+        note = str(entry.get("note", "") or "").lower()
+        for field in progress_fields:
+            if field in note:
+                progress[field] += 1
+
+    if not in_year:
+        for game in games:
+            if not isinstance(game, dict):
+                continue
+            p = str(game.get("progress", "") or "").lower()
+            for field in progress_fields:
+                if field in p:
+                    progress[field] += 1
+
+    year_games = [game_by_id[gid] for gid in played_ids if game_by_id.get(gid)]
+    top_game = compute_top_games(year_games, limit=1)
+    top_platform = compute_top_platforms(year_games, limit=1)
+    top_genre = compute_top_genres(year_games, limit=1)
+
+    start, end = _wrapped_year_range(year)
+    in_year_heatmap = compute_heatmap(in_year, days=(end - start).days + 1, end_date=end)
+    streak = compute_streak(in_year_heatmap)
+
+    by_day: dict[datetime.date, list[str]] = {}
+    for entry in in_year:
+        d = _parse_date(entry.get("started"))
+        if d is None:
+            continue
+        gid = str(entry.get("game_id", ""))
+        by_day.setdefault(d, []).append(gid)
+    pairs = set()
+    for gids in by_day.values():
+        local = sorted(set(gids))
+        for i in range(len(local)):
+            for j in range(i + 1, len(local)):
+                pairs.add((local[i], local[j]))
+
+    busiest_month = None
+    if any(month_seconds):
+        m_idx = max(range(12), key=lambda i: month_seconds[i])
+        busiest_month = {"month": m_idx + 1, "seconds": month_seconds[m_idx]}
+
+    busiest_weekday = None
+    if weekday_seconds:
+        wd = weekday_seconds.most_common(1)[0][0]
+        names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        busiest_weekday = {"weekday": names[wd], "seconds": weekday_seconds[wd]}
+
+    return {
+        "year": year,
+        "totals": {
+            "playtime_seconds": playtime,
+            "sessions": sessions,
+            "games_played": len(played_ids),
+            "new_games": new_games,
+        },
+        "progress": progress,
+        "streak": {"longest": streak["longest"]},
+        "top": {
+            "game": top_game[0] if top_game else None,
+            "platform": top_platform[0] if top_platform else None,
+            "genre": top_genre[0] if top_genre else None,
+        },
+        "oldest_played": oldest_game,
+        "first_play": first,
+        "busiest_month": busiest_month,
+        "busiest_weekday": busiest_weekday,
+        "per_month": month_seconds,
+        "co_play_pairs": len(pairs),
+    }
+
+
+def timeline_groups(state: dict[str, Any], days: int = 90) -> dict[str, Any]:
+    """Group history entries by date desc for a timeline UI.
+
+    Exposes only names, cover bool, durations, and basenames for recordings.
+    Never exposes filesystem paths.
+    """
+    games = state.get("games", []) if isinstance(state, dict) else []
+    history = state.get("history", []) if isinstance(state, dict) else []
+    if not isinstance(games, list):
+        games = []
+    if not isinstance(history, list):
+        history = []
+
+    game_by_id = {str(g.get("game_id", "")): g for g in games if isinstance(g, dict)}
+    end_date = datetime.date.today()
+    start_date = end_date - datetime.timedelta(days=days - 1)
+
+    by_date: dict[datetime.date, list[dict[str, Any]]] = {}
+    for entry in history:
+        if not isinstance(entry, dict):
+            continue
+        d = _parse_date(entry.get("started"))
+        if d is None or d < start_date or d > end_date:
+            continue
+        game_id = str(entry.get("game_id", ""))
+        game = game_by_id.get(game_id) or {}
+        seconds = max(0, int(entry.get("seconds", 0) or 0))
+        recording = _basename(entry.get("recording"))
+        started = str(entry.get("started", "") or "")
+        ended = str(entry.get("ended", "") or "")
+        by_date.setdefault(d, []).append({
+            "game_id": game_id,
+            "name": str(game.get("name", "")),
+            "cover": bool(game.get("has_cover")),
+            "seconds": seconds,
+            "started": started,
+            "ended": ended,
+            "recording": recording,
+        })
+
+    groups = []
+    for d in sorted(by_date, reverse=True):
+        groups.append({
+            "date": d.isoformat(),
+            "entries": sorted(by_date[d], key=lambda x: x.get("started", ""), reverse=True),
+        })
+
+    return {"days": days, "groups": groups}
