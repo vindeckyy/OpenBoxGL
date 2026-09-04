@@ -265,6 +265,22 @@ def test_runtime_modules_has_sqlite():
     assert "sqlite_readmodel.py" in content, "sqlite_readmodel.py not in runtime_modules.txt"
 
 
+def test_singleton_exists():
+    """SQLITE_READ_MODEL singleton is importable from pkg.state.cache."""
+    from pkg.state.cache import SQLITE_READ_MODEL
+    assert SQLITE_READ_MODEL is not None
+    assert hasattr(SQLITE_READ_MODEL, "enabled")
+    assert hasattr(SQLITE_READ_MODEL, "invalidate")
+    assert hasattr(SQLITE_READ_MODEL, "facets")
+    assert hasattr(SQLITE_READ_MODEL, "search")
+
+
+def test_search_route_registered():
+    """GET /api/v2/library/search is in the route table."""
+    from routes import GET_TABLE
+    assert "/api/v2/library/search" in GET_TABLE, "search route not registered"
+
+
 def run_all_tests():
     tests = [
         test_rebuild_and_count,
@@ -283,6 +299,8 @@ def run_all_tests():
         test_fts5_check,
         test_query_limit_offset,
         test_runtime_modules_has_sqlite,
+        test_singleton_exists,
+        test_search_route_registered,
     ]
     failures = 0
     for test in tests:

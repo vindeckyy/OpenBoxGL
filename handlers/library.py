@@ -254,6 +254,14 @@ class LibraryHandlers:
     def _api_get_api_explorer_facets(self, parsed):
         field = parse_qs(parsed.query).get("field", ["genre"])[0]
         state = load_state_view()
+        from pkg.state.cache import SQLITE_READ_MODEL
+        if SQLITE_READ_MODEL.enabled:
+            import openbox
+            SQLITE_READ_MODEL.ensure_fresh(state, openbox.STATE_STORE.signature())
+            if SQLITE_READ_MODEL.query_parity_check(state["games"]):
+                facets = SQLITE_READ_MODEL.facets(field)
+                self.send_json(200, {"field": field, "facets": [{"value": v, "count": c} for v, c in facets]})
+                return
         self.send_json(200, {"field": field, "facets": explorer_facets(state["games"], field)})
         return
 
@@ -596,3 +604,26 @@ class LibraryHandlers:
             return consolidate_existing_games(state["games"])
         _, removed = transact_state(mutate)
         self.send_json(200, {"removed": removed})
+
+    @route("GET", "/api/v2/library/search")
+    def _api_get_api_v2_library_search(self, parsed):
+        params = parse_qs(parsed.query)
+        query = params.get("q", [""])[0]
+        limit = min(int(params.get("limit", ["50"])[0]), 200)
+        if not query.strip():
+            self.send_json(200, {"results": [], "source": "json"})
+            return
+        from pkg.state.cache import SQLITE_READ_MODEL
+        if SQLITE_READ_MODEL.enabled:
+            state = load_state_view()
+            import openbox
+            SQLITE_READ_MODEL.ensure_fresh(state, openbox.STATE_STORE.signature())
+            results = SQLITE_READ_MODEL.search(query, limit=limit)
+            self.send_json(200, {"results": results[:limit], "source": "sqlite", "count": len(results)})
+            return
+        # JSON fallback: simple title substring match
+        state = load_state_view()
+        q_lower = query.lower()
+        results = [g for g in state["games"] if q_lower in str(g.get("name", "")).lower()][:limit]
+        self.send_json(200, {"results": results, "source": "json", "count": len(results)})
+        return

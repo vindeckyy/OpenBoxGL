@@ -77,6 +77,7 @@ GET_TABLE = {
     "/api/v2/insights/mastery": "_api_get_api_v2_insights_mastery",
     "/api/v2/history/timeline": "_api_get_api_v2_history_timeline",
     "/api/v2/library/constellation": "_api_get_api_v2_library_constellation",
+    "/api/v2/library/search": "_api_get_api_v2_library_search",
     "/api/v2/party/queue": "_api_get_api_v2_party_queue",
     "/api/v2/backup/diff": "_api_get_api_v2_backup_diff",
     "/api/v2/screenscraper/search": "_api_get_api_v2_screenscraper_search",
