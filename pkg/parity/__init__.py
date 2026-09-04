@@ -8,10 +8,10 @@ import sys
 class _ParityFlatFinder(importlib.abc.MetaPathFinder):
     """Resolve `import parity_*` to `pkg.parity.parity_*` when the flat shim is absent.
 
-    Kept for one release alongside the 22 root `parity_*.py` shims per ADR 0003.
-    When the shims are removed next release this finder becomes the sole flat
-    import bridge. Registering it now proves the path without breaking the
-    current shim layout.
+    This is the sole flat-import bridge since 1.9.0 when the 28 root
+    `parity_*.py` shims were deleted (ADR 0003).  Entry points
+    (`openbox.py`, `web_app.py`) import `pkg.parity` early to register
+    this finder before any `import parity_*` is attempted.
     """
 
     def find_spec(self, fullname, path, target=None):

@@ -9,6 +9,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import pkg.parity  # noqa: F401,E402  # register flat-import finder
+
 from parity_integrations import (
     auto_attach_obs_recording,
     capture_screenshot,

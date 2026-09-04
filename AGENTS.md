@@ -5,7 +5,7 @@ Read this before writing code. A convention that lives only in a human's head is
 ## Where things go
 - `openbox.py` is the launcher entry point, stays at root.
 - `handlers/` - HTTP handlers, one module per domain (library, imports, media, etc.).
-- `pkg/parity/` - parity_* modules (clear names, cohesive cluster). New parity code goes there, with shim at root for compat.
+- `pkg/parity/` - parity_* modules (clear names, cohesive cluster). New parity code goes there. Flat `import parity_x` still resolves via the MetaPathFinder in `pkg/parity/__init__.py`.
 - `static/` - 27 JS modules (25 domain modules plus app.js and worker.search.js) and app.css.
 - `themes/` - theme CSS files, each overrides `:root` tokens only.
 - `emulator_defs/` - YAML definitions.

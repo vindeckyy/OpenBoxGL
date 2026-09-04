@@ -4,6 +4,11 @@
 import unittest
 from unittest import mock
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import pkg.parity  # noqa: F401,E402  # register flat-import finder
+
 from parity_gamescope import (
     OPENBOX_STEAM_GAME_ID,
     game_mode_url,

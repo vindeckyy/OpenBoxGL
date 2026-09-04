@@ -8,6 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
 from metadata import IMAGE_URL, apply_game_metadata, build_database, search_games, sync_database
 

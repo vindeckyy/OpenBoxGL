@@ -4,10 +4,14 @@ import hashlib
 import io
 import json
 import stat
+import sys
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
 from backend_io import download_file, read_limited
 from catalog import bulk_update

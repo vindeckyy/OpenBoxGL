@@ -5,6 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import pkg.parity  # noqa: F401,E402  # register flat-import finder
+
 from parity_premium import (
     custom_field_defs,
     enhanced_ra_profile,

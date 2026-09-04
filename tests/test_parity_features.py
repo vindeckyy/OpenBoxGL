@@ -9,6 +9,8 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
+import pkg.parity  # noqa: F401,E402  # register flat-import finder
+
 from parity_discovery import discovery_lists, item_rating
 from parity_import import generate_m3u, group_multi_disc, recommend_emulators
 from parity_media import load_media_queue, media_types_from_settings, normalize_video_fields, save_media_queue, sort_images_by_region

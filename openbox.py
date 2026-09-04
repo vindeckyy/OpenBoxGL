@@ -10,6 +10,7 @@ import shutil
 import sys
 from pathlib import Path
 
+import pkg.parity  # noqa: F401  # register flat-import finder before parity_* imports
 from archives import extract_game
 from parity_import import EXTENSIONS_EXTRA, PLATFORM_BY_EXTENSION_EXTRA
 from parity_emulator_defs import build_platform_by_extension, resolve_launch
