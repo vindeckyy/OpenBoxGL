@@ -83,6 +83,20 @@ if (mode === "bigbox") {
   );
   // One extra frame for the compositor after the animation end.
   await new Promise((resolve) => setTimeout(resolve, 400));
+} else if (mode === "constellation") {
+  // Open the Library Constellation graph, then let the spring-electric
+  // layout settle so nodes rest before capturing.
+  await page.evaluate(() => import('/static/constellation.js').then((m) => m.openConstellation()));
+  await page.waitForFunction(
+    () => {
+      const dlg = document.querySelector('#constellationDialog');
+      if (!dlg || !dlg.open) return false;
+      const canvas = document.querySelector('#constellationCanvas');
+      return canvas && canvas.width > 0;
+    },
+    { timeout: 60000 },
+  );
+  await new Promise((resolve) => setTimeout(resolve, 6000));
 } else if (mode === "detail" || detailGameId !== "") {
   const gameId = detailGameId || mode;
   await page.click(`[data-game="${gameId}"]`);

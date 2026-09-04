@@ -721,6 +721,38 @@ const puppeteer = require('./node_modules/puppeteer');
   }
   fs.rmSync(partySeedDir, {recursive: true, force: true});
 
+  // 1.9.0 regression (M3 fixes): the constellation canvas must paint
+  // non-blank pixels with translated kind labels — canvas var() colors,
+  // frozen module-level labels, unclamped layout steps, and a stuck
+  // loading indicator each blanked it in turn.
+  const constellationSmoke = await page.evaluate(async () => {
+    const libraryMod = await import('/static/library.js');
+    await libraryMod.refresh();
+    const constMod = await import('/static/constellation.js');
+    constMod.openConstellation();
+    await new Promise(r => setTimeout(r, 500));
+    const open = document.getElementById('constellationDialog')?.open === true;
+    let rendered = false;
+    for (let i = 0; i < 40 && !rendered; i++) {
+      await new Promise(r => setTimeout(r, 200));
+      const canvas = document.getElementById('constellationCanvas');
+      const loadingDone = document.getElementById('constellationLoading')?.hidden === true;
+      if (canvas && loadingDone) {
+        const ctx = canvas.getContext('2d');
+        const px = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        for (let p = 0; p < px.length; p += 400) {
+          if (px[p] > 8 || px[p + 1] > 8 || px[p + 2] > 8) { rendered = true; break; }
+        }
+      }
+    }
+    const labels = [...document.querySelectorAll('#constellationKinds label')].map(l => l.textContent.trim());
+    document.getElementById('closeConstellation')?.click();
+    await new Promise(r => setTimeout(r, 200));
+    const closed = document.getElementById('constellationDialog')?.open !== true;
+    return {open, rendered, labels, closed};
+  });
+  console.log('constellation dialog:', JSON.stringify(constellationSmoke));
+
   // F23 Big Box correctness: viewport matrix, activation, preflight launch
   const bigboxCorrectness = { viewportCases: [], activateExported: false, appUsesActivate: false, preflightLaunch: false, noConfirmSessions: false, noConfirmStorefront: false, shortcutWhileTyping: false };
   const staticChecks = await page.evaluate(async () => {
@@ -1344,6 +1376,10 @@ const puppeteer = require('./node_modules/puppeteer');
   if (!(partySmoke.upNext >= 1)) process.exit(1);
   if (!partySmoke.closedByKeyboard) process.exit(1);
   if (!partySmoke.bigBoxStillOpen) process.exit(1);
+  if (!constellationSmoke.open) process.exit(1);
+  if (!constellationSmoke.rendered) process.exit(1);
+  if (constellationSmoke.labels[0] !== 'Series') process.exit(1);
+  if (!constellationSmoke.closed) process.exit(1);
   if (!dropHonesty.pickerOpened) process.exit(1);
   if (!dropHonesty.libraryUnchanged) process.exit(1);
   if (!dropHonesty.noRomBinFolder) process.exit(1);

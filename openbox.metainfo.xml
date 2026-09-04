@@ -34,8 +34,19 @@
       <image type="source">https://openboxgl.github.io/openbox-bigbox.png</image>
       <caption>Big Box fullscreen mode for controller-driven couch use.</caption>
     </screenshot>
+    <screenshot>
+      <image type="source">https://openboxgl.github.io/openbox-constellation.png</image>
+      <caption>Library Constellation relationship graph with series, developer, and genre edges.</caption>
+    </screenshot>
   </screenshots>
   <releases>
+    <release version="1.9.0" date="2026-09-04">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.9.0</url>
+      <description>
+        <p>Look, Discover, Play release introducing adaptive cover theming, a smart play picker, a library relationship graph, a printable year-in-review report, a completionist dashboard, and a Big Box party mode.</p>
+        <p>Adds Mood Match adaptive theming that tints accents from the selected cover, a What should I play picker scored by time/mood/familiarity/players, a pan/zoomable Library Constellation graph, OpenBox Wrapped annual aggregates with a History Timeline tab, a Mastery Map of per-platform progress with RetroAchievements columns, and Game Night couch-multiplayer queues with a spinning wheel and persistent rounds.</p>
+      </description>
+    </release>
     <release version="1.8.0" date="2026-09-02">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.8.0</url>
       <description>

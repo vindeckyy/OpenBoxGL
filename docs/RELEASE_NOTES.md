@@ -1,58 +1,48 @@
-# OpenBox v1.8.0: Navigation, Scraping & ARM64
+# OpenBox v1.9.0: Look, Discover, Play
 
-**OpenBox v1.8.0** introduces keyboard and gamepad library navigation, hash routing, a ScreenScraper per-ROM-hash scraping provider, custom gamescope presets with per-game override, library export to JSON/CSV, and aarch64 AppImage release artifacts alongside x86_64.
-
----
-
-### Keyboard & Gamepad Navigation
-* **Grid and List Navigation**: Arrows/Home/End/Page-Up/Down move the focus with virtualization-aware reveal; `f` favorites, Escape clears, and gamepad input runs through a configurable controller map with edge detection.
-* **Hash Routing**: Refresh and shared links restore platform/playlist/preset/query/selection/sort via `#/key/value` hash fragments (ADR 0021).
-* **Sortable List Columns**: Click list-view headers to cycle sort direction; the choice persists via `list_sort`/`list_sort_dir` settings.
-* **Lightbox & Skeletons**: Screenshot lightbox with prev/next/zoom and a counter; cover skeleton shimmer removed on load.
+**OpenBox v1.9.0** introduces adaptive cover theming, a smart "What should I play?" picker, a Library Constellation relationship graph, an OpenBox Wrapped year-in-review report with a session Timeline, a Mastery Map completionist dashboard, and a Game Night Big Box party mode.
 
 ---
 
-### ScreenScraper Provider
-* **Per-ROM-Hash Scraping**: `pkg/parity/parity_screenscraper.py` hashes ROMs (md5/sha1/crc, 512 MB cap) and matches them against ScreenScraper's jeuRecherche/jeuInfos endpoints (ADR 0022).
-* **Throttled & Cached**: 1 req/s thread-locked throttle, 429/5xx backoff, and a 30-day disk cache under `cache/screenscraper/`.
-* **Region-Priority Media**: `choose_media()` picks media by `settings.region_priority`; `clean_media_url()` enforces https-only URLs.
-* **Additive v2 Routes**: status/test/search/info/match (batch ≤100, cancellable)/apply (durable job that downloads media outside the state lock).
-* **UI**: Search and hash-match actions in the metadata dialog; credential check card in Settings → Integrations. Credentials live in `~/.env` (`SCREENSCRAPER_USER`/`PASSWORD`).
+### Mood Match — Adaptive Cover Theming
+* **Live Palette**: Selecting a game extracts a 5-color palette (primary, ink, secondary, glow, tint) from its cover with a fast 4×4×4 RGB bin quantizer and applies it to the selected card, detail hero, play button hover, and Big Box background (ADR 0026).
+* **Off by Default**: Toggles in Settings → Appearance (`mood_match_enabled`/`mood_match_bigbox`); decorative accents only, text and focus tokens untouched.
 
 ---
 
-### Custom Gamescope Presets
-* **User-Defined Presets**: Up to 16 custom presets with unique names and bounded integer args; custom names shadow stock presets.
-* **Per-Game Override**: A per-game `gamescope_preset` field wins over the global preset at launch (completes ADR 0016).
-* **Editor UI**: Settings → Controller editor plus a per-game select in the game editor Launch tab.
+### "What Should I Play?" Picker
+* **Scored Suggestions**: Pick by available time, mood (action/chill/story/retro/party), familiarity (new/favorite), and player count via `POST /api/v2/library/pick` (`pkg/parity/parity_picker.py`, ADR 0028).
+* **Reasons**: Every pick explains itself ("You added this 2 years ago and never launched it"); Launch / Details / Again actions plus a "Just surprise me" fallback.
 
 ---
 
-### Library Export
-* **JSON & CSV**: `POST /api/v2/library/export` queues a durable job (Activity Center, cancellable) with `all`/`platform`/`playlist` scopes (ADR 0023).
-* **Shareable by Construction**: Only the game-field projection is exported; settings, credentials, webhooks, and history are never included. Media paths are opt-in.
-* **Rotation**: Files land in `<data dir>/exports/`, newest 10 kept; download validated by name regex + directory containment.
+### Library Constellation
+* **Star Map**: Tools → Constellation renders a pan/zoomable canvas graph of series, developer, publisher, genre, platform-family, and co-play edges via `GET /api/v2/library/constellation` (ADR 0027).
+* **Deterministic & Capped**: Nodes ranked by playtime (200/400/800/1000), one strongest edge per pair, chunked spring-electric layout; clicking a node selects it in the library.
 
 ---
 
-### ARM64 & Flathub Prep
-* **aarch64 AppImage**: Release-gated aarch64 artifact built on `ubuntu-24.04-arm` alongside the x86_64 build (ADR 0024, un-defers ADR 0013).
-* **Architecture-Aware Self-Update**: The updater derives its asset name from the host arch and refuses a release lacking the matching-arch artifact.
-* **Flathub Prep**: Manifest runtime bumped `org.gnome.Platform 46` → `49`; AppStream `<content_rating>`, `<developer>`, and `<screenshots>` added. Submission remains a maintainer decision.
+### Wrapped + Replay Timeline
+* **Your Year in Games**: Insights → Wrapped opens a printable report with playtime, sessions, streaks, progress, top game/platform/genre, oldest played, and busiest month via `GET /api/v2/insights/wrapped?year=YYYY` (ADR 0029).
+* **Timeline Tab**: History → Timeline groups sessions by day with covers and recording badges via `GET /api/v2/history/timeline?days=90`. Privacy-safe by construction: names, covers, and aggregates only.
 
 ---
 
-### Play Insights in the Library
-* **30/90/365-Day Ranges**: Insights render in the library pane with a range selector, lazy IntersectionObserver load, and debounced reload.
-* **Top-Games Deep Links**: Clicking a top game opens its detail.
+### Mastery Map
+* **Completionist Dashboard**: Tools → Mastery shows stacked per-platform and per-decade bars over local progress states with a RetroAchievements column fed exclusively from the on-disk cache — zero new network calls (ADR 0030).
+* **Route**: `GET /api/v2/insights/mastery`; clicking a segment filters the library to that platform.
+
+---
+
+### Game Night Party Mode
+* **Couch Flow**: Big Box → Game Night builds a multiplayer queue from player count and session length, spins a wheel for the round winner, shows an "Up next" strip, and persists rounds across restarts (`POST`/`GET /api/v2/party/queue`, `POST /api/v2/party/next`, ADR 0031).
+* **Controls**: Gamepad via the existing `pollGamepads` edge detection plus keyboard fallback (arrows/Enter/N/Escape).
 
 ---
 
 ### Fixes
-* `gamescope_preset`/`mangohud_enabled`/`show_insights` settings now persist instead of being silently dropped by the settings whitelist.
-* Context-menu "add to playlist" and Big Box "Achievements" no longer throw ReferenceErrors.
-* Chosen UI language survives reload via `openbox-locale` localStorage; `app:state-refreshed` is dispatched (debounced) from `library.js refresh()`.
+* `POST /api/v2/library/pick` no longer hangs on a live server: POST handlers take the parsed `payload` argument instead of re-reading the consumed request body (ADR 0031).
 
 ---
 
-**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.7.2...v1.8.0
+**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.8.0...v1.9.0

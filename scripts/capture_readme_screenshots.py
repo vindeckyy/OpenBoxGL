@@ -6,7 +6,7 @@ Usage:
   python3 scripts/capture_readme_screenshots.py
 
 Writes assets/openbox-screenshot.png, assets/openbox-game-detail.png,
-and assets/openbox-bigbox.png (1920x1080).
+assets/openbox-bigbox.png, and assets/openbox-constellation.png (1920x1080).
 Requires LaunchBox metadata under ~/.local/share/openbox-game-launcher/ (or network sync).
 """
 
@@ -309,20 +309,25 @@ def main() -> None:
     library_out = FIXTURE_ROOT / "openbox-screenshot.png"
     detail_out = FIXTURE_ROOT / "openbox-game-detail.png"
     bigbox_out = FIXTURE_ROOT / "openbox-bigbox.png"
+    constellation_out = FIXTURE_ROOT / "openbox-constellation.png"
     try:
         capture_with_puppeteer(app_url, library_out)
         capture_with_puppeteer(app_url, detail_out, mode="detail", detail_game_id=1)
         capture_with_puppeteer(app_url, bigbox_out, mode="bigbox")
+        capture_with_puppeteer(app_url, constellation_out, mode="constellation")
         assert_dimensions(library_out)
         assert_dimensions(detail_out)
         assert_dimensions(bigbox_out)
+        assert_dimensions(constellation_out)
         ASSETS_DIR.mkdir(exist_ok=True)
         shutil.copy2(library_out, ASSETS_DIR / "openbox-screenshot.png")
         shutil.copy2(detail_out, ASSETS_DIR / "openbox-game-detail.png")
         shutil.copy2(bigbox_out, ASSETS_DIR / "openbox-bigbox.png")
+        shutil.copy2(constellation_out, ASSETS_DIR / "openbox-constellation.png")
         print(f"Wrote {ASSETS_DIR / 'openbox-screenshot.png'}")
         print(f"Wrote {ASSETS_DIR / 'openbox-game-detail.png'}")
         print(f"Wrote {ASSETS_DIR / 'openbox-bigbox.png'}")
+        print(f"Wrote {ASSETS_DIR / 'openbox-constellation.png'}")
     finally:
         server.terminate()
         try:

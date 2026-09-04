@@ -138,9 +138,9 @@ async function loadInsights() {
   }
 }
 
-function ensurePanelHeader() {
+function ensurePanelHeader(force) {
   const panel = $('insightsPanel');
-  if (!panel || $('insightsBody')) return;
+  if (!panel || ($('insightsBody') && !force)) return;
   panel.innerHTML = `
     <div class="insights-head">
       <h3 class="insights-title">${escapeHtml(t('library.play_insights'))}</h3>
@@ -190,6 +190,14 @@ function bindInsights() {
       const target = $('insightsPanel');
       if (target && target.offsetParent !== null && loaded) loadInsights();
     }, REFRESH_DEBOUNCE_MS);
+  });
+  // The locale dictionary arrives after boot; re-render strings that were
+  // built with raw keys before it landed.
+  document.addEventListener('localechange', () => {
+    if ($('insightsBody')) {
+      ensurePanelHeader(true);
+      if (loaded) loadInsights();
+    }
   });
 }
 

@@ -59,6 +59,9 @@ GATES_10K = {
     "facet_ms_p95": 1000.0,
     # Write-path gate: 10k favorite write must stay under 500 ms.
     "10k_write_ms_p95": 500.0,
+    # 1.9.0 discovery gates: picker scoring and constellation graph build.
+    "picker_score_ms_p95": 200.0,
+    "constellation_build_ms_p95": 1500.0,
 }
 
 GATES_20K = {
@@ -68,6 +71,8 @@ GATES_20K = {
     "filtered_query_ms_p95": 2000.0,
     "facet_ms_p95": 2000.0,
     "20k_write_ms_p95": 1000.0,
+    "picker_score_ms_p95": 200.0,
+    "constellation_build_ms_p95": 1500.0,
 }
 
 
@@ -254,6 +259,26 @@ def benchmark(data_dir, runs=5):
             result["bigbox_coverflow"] = coverflow_stats
             result["coverflow"] = coverflow_stats
 
+        # 9b) Smart picker scoring time (1.9.0 gate < 200 ms p95)
+        pick_stats, _, _ = _safe_request(
+            origin, token, "/api/v2/library/pick", method="POST",
+            body={"minutes": 45, "mood": "any", "familiarity": "any", "players": 1},
+            runs=runs,
+        )
+        if pick_stats is not None:
+            pick_stats["operation"] = "picker_score"
+            pick_stats["note"] = "POST /api/v2/library/pick"
+            result["picker_score"] = pick_stats
+
+        # 9c) Constellation graph build time (1.9.0 gate < 1500 ms p95)
+        const_stats, _, _ = _safe_request(
+            origin, token, "/api/v2/library/constellation?limit=400", runs=runs
+        )
+        if const_stats is not None:
+            const_stats["operation"] = "constellation_build"
+            const_stats["note"] = "GET /api/v2/library/constellation?limit=400"
+            result["constellation_build"] = const_stats
+
         # 10) Archive inspection time
         arch_times = []
         for _ in range(runs):
@@ -343,6 +368,8 @@ def _check_size_gates(results, size_key: str, gates: dict, label: str) -> list[s
         ("single_mutation", "p95_ms", "favorite_mutation_ms_p95"),
         ("filtered_query", "p95_ms", "filtered_query_ms_p95"),
         ("facet", "p95_ms", "facet_ms_p95"),
+        ("picker_score", "p95_ms", "picker_score_ms_p95"),
+        ("constellation_build", "p95_ms", "constellation_build_ms_p95"),
     ]
     for op, field, gate_key in checks:
         if op not in entry:
