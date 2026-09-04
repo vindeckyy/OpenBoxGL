@@ -605,6 +605,33 @@ class LibraryHandlers:
         _, removed = transact_state(mutate)
         self.send_json(200, {"removed": removed})
 
+    @route("POST", "/api/v2/library/manual-entry")
+    def _api_post_api_v2_library_manual_entry(self, payload):
+        """Add a manual/shelf entry for a game without a local file path.
+
+        Reuses the existing game field infrastructure. Only name is required;
+        platform, genre, developer, etc. are optional. The entry is marked
+        with ``manual_entry: true`` so it can be filtered or displayed
+        differently in the UI.
+        """
+        source = payload.get("game", {})
+        game = _clean_game_fields(source)
+        if not game.get("name"):
+            raise BadRequest("Name is required.")
+        game["manual_entry"] = True
+        game["path"] = ""  # manual entries have no executable path
+        _clean_game_lists(game, source)
+        _apply_game_misc(game, source)
+
+        def mutate(state):
+            if "games" not in state:
+                state["games"] = []
+            state["games"].append(game)
+
+        transact_state(mutate)
+        clear_file_probe_cache()
+        self.send_json(200, {"ok": True, "name": game.get("name")})
+
     @route("GET", "/api/v2/library/search")
     def _api_get_api_v2_library_search(self, parsed):
         params = parse_qs(parsed.query)
