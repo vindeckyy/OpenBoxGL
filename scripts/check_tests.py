@@ -26,11 +26,11 @@ VENV = ROOT / ".venv-dev"
 RUFF = VENV / "bin" / "ruff"
 COVERAGE = VENV / "bin" / "coverage"
 
-# Coverage floors. Ratcheted baseline: 72% total, 54% web_app.py.
+# Coverage floors. Ratcheted baseline: 72% total, 54% web_app.py, 95% changed-line (ADR 0040).
 # Raise the floors as phases land; never lower them silently.
 COVERAGE_FLOOR = 72.0
 WEB_APP_FLOOR = 54.0
-CHANGED_LINE_FLOOR = 80.0
+CHANGED_LINE_FLOOR = 95.0
 NEW_MODULE_FLOOR = 85.0
 
 
@@ -170,6 +170,16 @@ def main() -> int:
         print(i18n_check.stderr.strip())
     if i18n_check.returncode != 0:
         failures.append("i18n")
+
+    # Stage 2.8: POST handlers must take the parsed payload and never re-read
+    # the consumed body (M2-hang class: web_app._do_POST parses once).
+    payload_lint = run([sys.executable, "-B", str(ROOT / "scripts" / "check_handlers_payload.py")])
+    if payload_lint.stdout.strip():
+        print(payload_lint.stdout.strip())
+    if payload_lint.stderr.strip():
+        print(payload_lint.stderr.strip())
+    if payload_lint.returncode != 0:
+        failures.append("handlers_payload")
 
 
     modules = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip()]

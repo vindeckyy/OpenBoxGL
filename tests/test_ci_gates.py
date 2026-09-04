@@ -53,12 +53,16 @@ class CiGatesTests(unittest.TestCase):
         self.assertIn("python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5", ci)
 
 
+    def test_check_tests_wires_payload_lint(self):
+        content = (ROOT / "scripts" / "check_tests.py").read_text(encoding="utf-8")
+        self.assertIn("check_handlers_payload", content)
+
     def test_check_tests_floor_constants(self):
         from scripts import check_tests
 
         self.assertEqual(check_tests.COVERAGE_FLOOR, 72.0)
         self.assertEqual(check_tests.WEB_APP_FLOOR, 54.0)
-        self.assertEqual(check_tests.CHANGED_LINE_FLOOR, 80.0)
+        self.assertEqual(check_tests.CHANGED_LINE_FLOOR, 95.0)
         self.assertEqual(check_tests.NEW_MODULE_FLOOR, 85.0)
 
 
