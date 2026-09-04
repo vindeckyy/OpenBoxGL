@@ -146,6 +146,50 @@ import { openParty, partyOverlayOpen, partyGamepad } from './party.js';
       AppState.bigBoxLastInput = performance.now();
       renderBigBox();
     }
+
+    // --- Video snap player (1.9.0) ---
+    // ponytail: single reused <video> element, 600ms debounce, ducks BGM,
+    // respects prefers-reduced-motion, falls back to static cover.
+    let _videoSnapEl = null;
+    let _videoSnapTimer = 0;
+    let _videoSnapGameId = null;
+    const _reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
+    function clearVideoSnap() {
+      if (_videoSnapTimer) { clearTimeout(_videoSnapTimer); _videoSnapTimer = 0; }
+      if (_videoSnapEl) { _videoSnapEl.pause(); _videoSnapEl.removeAttribute('src'); _videoSnapEl.load(); _videoSnapEl = null; }
+      _videoSnapGameId = null;
+      if (AppState.libraryBgm && AppState.libraryBgm.volume < 0.4) {
+        AppState.libraryBgm.volume = AppState.appSettings.video_bgm_mix ? 0.35 : 0.6;
+      }
+    }
+
+    function scheduleVideoSnap(game) {
+      if (_reducedMotion()) return;
+      if (_videoSnapTimer) clearTimeout(_videoSnapTimer);
+      const videoUrl = media(game, 'video');
+      if (!videoUrl) { clearVideoSnap(); return; }
+      _videoSnapTimer = setTimeout(() => {
+        _videoSnapTimer = 0;
+        if (_videoSnapGameId === game.id && _videoSnapEl) return; // already playing
+        clearVideoSnap();
+        const el = document.createElement('video');
+        el.muted = true;
+        el.loop = true;
+        el.playsInline = true;
+        el.className = 'bigbox-video-snap';
+        el.src = videoUrl;
+        const coverEl = document.querySelector('.bigbox-cover');
+        if (!coverEl) return;
+        coverEl.appendChild(el);
+        el.play().catch(() => {});
+        _videoSnapEl = el;
+        _videoSnapGameId = game.id;
+        // Duck BGM while video plays
+        if (AppState.libraryBgm) AppState.libraryBgm.volume = 0.1;
+      }, 600);
+    }
+    // --- end video snap ---
     function renderBigBox() {
       const game = AppState.bigBoxGames[AppState.bigBoxIndex];
       applyMoodForGame(game).catch(() => {});
@@ -161,6 +205,7 @@ import { openParty, partyOverlayOpen, partyGamepad } from './party.js';
         ? '⬇ INSTALL'
         : (AppState.appSettings.dynamic_play_button === false ? '▶ PLAY' : game.versions.length ? '▶ PLAY DEFAULT' : game.applications.length ? '▶ PLAY GAME' : '▶ PLAY');
       if (mode === 'hybrid') {
+        clearVideoSnap();
         const platforms = [...new Set(AppState.bigBoxGames.map(item => item.platform || 'Unspecified'))].sort();
         if (AppState.bigBoxPlatform === 'all' && platforms.length) AppState.bigBoxPlatform = platforms[0];
         const platformGames = AppState.bigBoxGames.filter(item => (item.platform || 'Unspecified') === AppState.bigBoxPlatform);
@@ -180,6 +225,7 @@ import { openParty, partyOverlayOpen, partyGamepad } from './party.js';
           renderBigBox();
         });
       } else if (mode === 'coverflow') {
+        clearVideoSnap();
         $('bigBoxStage').className = 'bigbox-stage';
         const canAct = (game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed);
         const ownedLabel = game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : '';
@@ -196,6 +242,7 @@ import { openParty, partyOverlayOpen, partyGamepad } from './party.js';
       } else {
         $('bigBoxStage').className = 'bigbox-stage';
         $('bigBoxStage').innerHTML = `<div class="bigbox-cover${game.has_cover ? '' : ' no-image'}">${game.has_cover ? `<img src="${media(game,'cover')}" alt="">` : escapeHtml(game.name)}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : ''}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${(game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed) ? '' : 'disabled'}>${playLabel}</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:10px">Uninstall</button>' : ''}</div>`;
+        scheduleVideoSnap(game);
       }
       $('bigBoxPlay').onclick = () => activateCurrentGame(game);
       if ($('bigBoxUninstall')) $('bigBoxUninstall').onclick = () => uninstallGameyfin(game);

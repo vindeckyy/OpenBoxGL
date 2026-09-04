@@ -56,6 +56,21 @@ def test_app_vars_defined():
     missing = sorted(used - defs)
     assert not missing, f"app.css uses vars not defined in :root: {missing}\n defined: {sorted(defs)}"
 
+
+def test_bigbox_video_snap_css():
+    """Video snap class exists and is hidden under reduced-motion."""
+    css = APP.read_text()
+    assert ".bigbox-video-snap" in css, "bigbox-video-snap CSS class missing"
+    assert "prefers-reduced-motion" in css, "reduced-motion media query missing"
+
+
+def test_bigbox_video_snap_js():
+    """bigbox.js has scheduleVideoSnap and clearVideoSnap functions."""
+    js = (ROOT / "static" / "bigbox.js").read_text()
+    assert "function scheduleVideoSnap" in js, "scheduleVideoSnap missing"
+    assert "function clearVideoSnap" in js, "clearVideoSnap missing"
+    assert "prefers-reduced-motion" not in js or "_reducedMotion" in js, "reduced-motion check missing"
+
 def test_themes_surface_deep():
     missing_themes = []
     for p in THEMES:
@@ -198,6 +213,16 @@ if __name__ == "__main__":
     except AssertionError as e:
         print(f"FAIL test_f05_state_native_fallbacks_no_prompt: {e}")
     try:
+        test_bigbox_video_snap_css()
+        print("PASS test_bigbox_video_snap_css")
+    except AssertionError as e:
+        print(f"FAIL test_bigbox_video_snap_css: {e}")
+    try:
+        test_bigbox_video_snap_js()
+        print("PASS test_bigbox_video_snap_js")
+    except AssertionError as e:
+        print(f"FAIL test_bigbox_video_snap_js: {e}")
+    try:
         test_app_vars_defined()
         test_themes_surface_deep()
         test_themes_vars_defined()
@@ -206,6 +231,8 @@ if __name__ == "__main__":
         test_f05_dialogs_no_window_prompt()
         test_f05_app_js_context_menu_a11y()
         test_f05_state_native_fallbacks_no_prompt()
+        test_bigbox_video_snap_css()
+        test_bigbox_video_snap_js()
         print("ALL PASS")
     except AssertionError:
         print("SOME FAIL")
