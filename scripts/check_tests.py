@@ -13,6 +13,7 @@ Dev-only dependencies are expected in .venv-dev (see docs/CONTRIBUTING.md).
 """
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -99,6 +100,12 @@ def _check_changed_line_floor(coverage_bin: Path, failures: list[str]) -> None:
 
 
 def main() -> int:
+    if shutil.which("xvfb-run") and not os.environ.get("OPENBOX_HEADLESS_GATE"):
+        env = os.environ.copy()
+        env["OPENBOX_HEADLESS_GATE"] = "1"
+        res = subprocess.run(["xvfb-run", "-a", sys.executable, *sys.argv], env=env, check=False)
+        return res.returncode
+
     failures = []
 
     # Stage 1: lint.
