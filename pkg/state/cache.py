@@ -28,6 +28,11 @@ from plugins import run_plugins
 from retroachievements import load_credentials as load_ra_credentials
 from updates import VERSION
 
+from pkg.state.sqlite_readmodel import SqliteReadModel
+
+# Singleton read model; no-op when OPENBOX_ENABLE_SQLITE_READ is unset.
+SQLITE_READ_MODEL = SqliteReadModel(DATA.parent / "sqlite_readmodel.db")
+
 GZIP_THRESHOLD = 1024
 LOGGER = logging.getLogger("openbox")
 STATE_LOCK = threading.Lock()
@@ -898,4 +903,5 @@ def transact_state(mutator):
         result = upd_res(mutator)
     CACHE_EPOCH._invalidate_all()
     clear_discovery_cache()
+    SQLITE_READ_MODEL.invalidate()
     return result
