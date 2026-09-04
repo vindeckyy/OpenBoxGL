@@ -1,38 +1,13 @@
 """PickerHandlers — "What should I play?" suggestions."""
 from __future__ import annotations
 
-from openbox import load_state
+from openbox import load_state_readonly
 from pkg.parity.parity_picker import pick_games
 from routes.registry import route
 
 VALID_MOODS = {"any", "action", "chill", "story", "retro", "party"}
 VALID_FAMILIARITIES = {"any", "new", "favorite"}
 VALID_SCOPES = {"all", "platform", "playlist"}
-
-
-def _game_for_picker(game):
-    """Project only the fields the picker needs, with safe defaults."""
-    return {
-        "id": game.get("id"),
-        "game_id": game.get("game_id") or str(game.get("id", "")),
-        "name": game.get("name", ""),
-        "has_cover": game.get("has_cover", False),
-        "cover": game.get("cover", ""),
-        "platform": game.get("platform", ""),
-        "genre": game.get("genre", ""),
-        "year": game.get("year", ""),
-        "favorite": game.get("favorite", False),
-        "rating": game.get("rating", 0),
-        "progress": game.get("progress", ""),
-        "play_count": game.get("play_count", 0),
-        "playtime_seconds": game.get("playtime_seconds", 0),
-        "last_played": game.get("last_played", ""),
-        "path_exists": game.get("path_exists", True),
-        "hidden": game.get("hidden", False),
-        "hide_in_bigbox": game.get("hide_in_bigbox", False),
-        "store_installed": game.get("store_installed", False),
-        "max_players": game.get("max_players", 1),
-    }
 
 
 class PickerHandlers:
@@ -80,17 +55,22 @@ class PickerHandlers:
             raise BadRequest(f"scope must be one of {sorted(VALID_SCOPES)}")
         scope_name = str(body.get("scope_name", "")).strip()
 
-        state = load_state()
-        games = [_game_for_picker(g) for g in state.get("games", []) if isinstance(g, dict)]
+        state = load_state_readonly()
+        # Pass raw game dicts to pick_games (it does safe .get() with
+        # defaults); skip _game_for_picker projection to avoid 10k throwaway
+        # dicts. Filter hidden games early for the "all" scope.
+        raw_games = state.get("games", [])
         if scope == "platform":
-            games = [g for g in games if g.get("platform") == scope_name]
+            games = [g for g in raw_games if isinstance(g, dict) and g.get("platform") == scope_name]
         elif scope == "playlist":
             playlists = state.get("playlists", []) if isinstance(state.get("playlists"), list) else []
             playlist = next((p for p in playlists if p.get("name") == scope_name), None)
             if playlist is None:
                 raise BadRequest(f"playlist not found: {scope_name}")
             members = set(str(m) for m in playlist.get("members", []))
-            games = [g for g in games if str(g.get("id")) in members or str(g.get("game_id")) in members]
+            games = [g for g in raw_games if isinstance(g, dict) and (str(g.get("id")) in members or str(g.get("game_id")) in members)]
+        else:
+            games = [g for g in raw_games if isinstance(g, dict)]
 
         history = state.get("history", []) if isinstance(state.get("history"), list) else []
 
