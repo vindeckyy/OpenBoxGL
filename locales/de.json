@@ -659,5 +659,24 @@
     "mastered": "Gemeistert",
     "ra_progress": "RA-Fortschritt",
     "empty": "Noch keine Spiele zum Einordnen."
+  },
+  "party": {
+    "title": "Spieleabend",
+    "open": "Spieleabend",
+    "hint": "Wähle Spielerzahl und Sitzungslänge — OpenBox erstellt eine Mehrspieler-Warteschlange und dreht das Rad.",
+    "players": "Spieler",
+    "minutes": "Sitzungslänge",
+    "minutes_any": "Beliebig",
+    "build": "Warteschlange erstellen",
+    "close": "Schließen",
+    "empty": "Keine Couch-Mehrspieler-Spiele gefunden — prüfe die Spielerzahl oder trage Max-Spieler bei deinen Spielen ein.",
+    "up_next": "Als Nächstes",
+    "rebuild": "Neues Setup",
+    "next_round": "Nächste Runde",
+    "spin": "Drehen",
+    "spinning": "Dreht…",
+    "winner": "Gewinner spielt",
+    "launch": "Starten",
+    "only_one": "Nur ein Spiel in der Warteschlange."
   }
 }

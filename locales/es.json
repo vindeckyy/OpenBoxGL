@@ -659,5 +659,24 @@
     "mastered": "Dominado",
     "ra_progress": "Progreso RA",
     "empty": "Aún no hay juegos para clasificar."
+  },
+  "party": {
+    "title": "Noche de juegos",
+    "open": "Noche de juegos",
+    "hint": "Elige el número de jugadores y la duración — OpenBox crea una cola multijugador y gira la ruleta.",
+    "players": "Jugadores",
+    "minutes": "Duración de la sesión",
+    "minutes_any": "Cualquiera",
+    "build": "Crear cola",
+    "close": "Cerrar",
+    "empty": "No se encontraron juegos multijugador de sofá — revisa el número de jugadores o añade jugadores máximos a tus juegos.",
+    "up_next": "A continuación",
+    "rebuild": "Nueva configuración",
+    "next_round": "Siguiente ronda",
+    "spin": "Girar",
+    "spinning": "Girando…",
+    "winner": "El ganador juega",
+    "launch": "Jugar",
+    "only_one": "Solo hay un juego en la cola."
   }
 }

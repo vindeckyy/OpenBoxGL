@@ -639,6 +639,88 @@ const puppeteer = require('./node_modules/puppeteer');
   });
   console.log('mastery dialog:', masterySmoke);
 
+  // M6 Game Night: overlay opens from the Big Box menu, builds a wheel, Escape closes.
+  // Seed two couch-eligible games server-side (node owns /tmp fixture files;
+  // the page cannot create them). Cleaned up right after this block.
+  const partySeedDir = fs.mkdtempSync('/tmp/obx-party-seed-');
+  const partySeedIds = [];
+  try {
+    for (const [name, rom] of [['Party Kart', 'kart.bin'], ['Couch Brawler', 'brawl.bin']]) {
+      const romPath = `${partySeedDir}/${rom}`;
+      fs.writeFileSync(romPath, 'party-smoke-fixture');
+      const res = await fetch(`http://127.0.0.1:${process.env.PORT}/api/game`, {
+        method: 'POST',
+        headers: {'X-OpenBox-Token': process.env.TOKEN, 'Content-Type': 'application/json'},
+        body: JSON.stringify({game: {name, platform: 'SNES', path: romPath, max_players: 4}}),
+      });
+      if (!res.ok) throw new Error(`party seed failed for ${name}: ${res.status}`);
+    }
+    const libRes = await fetch(`http://127.0.0.1:${process.env.PORT}/api/library`, {
+      headers: {'X-OpenBox-Token': process.env.TOKEN},
+    });
+    const lib = await libRes.json();
+    for (const g of lib.games || []) {
+      if (String(g.name || '').startsWith('Party ') || g.name === 'Couch Brawler') partySeedIds.push(g.id);
+    }
+  } catch (error) {
+    console.log('party seed failed:', error.message);
+  }
+  const partySmoke = await page.evaluate(async () => {
+    const bigboxMod = await import('/static/bigbox.js');
+    const libraryMod = await import('/static/library.js');
+    // Earlier smoke stages replace AppState.games with sparse fixtures;
+    // reload the normalized server library (seeded Quake + Chrono Trigger).
+    await libraryMod.refresh();
+    // Reset any library filters left over by earlier smoke stages.
+    AppState.platform = 'all';
+    AppState.platformCategory = 'all';
+    AppState.activePlaylist = '';
+    AppState.activeFilterPreset = '';
+    AppState.importBatchId = '';
+    AppState.explorerRules = {};
+    AppState.bigBoxPlatform = 'all';
+    const sidebarSearch = document.getElementById('sidebarSearch');
+    if (sidebarSearch) sidebarSearch.value = '';
+    const viewSel = document.getElementById('view');
+    if (viewSel) viewSel.value = 'all';
+    const esrbSel = document.getElementById('esrbFilter');
+    if (esrbSel) esrbSel.value = '';
+    bigboxMod.openBigBox();
+    await new Promise(r => setTimeout(r, 300));
+    if (document.getElementById('bigBox').hidden) return {bigBox: false};
+    bigboxMod.openBigBoxMenu();
+    await new Promise(r => setTimeout(r, 200));
+    document.getElementById('partyMenuButton')?.click();
+    await new Promise(r => setTimeout(r, 300));
+    const overlayOpen = !document.getElementById('partyOverlay')?.hidden;
+    const setupOk = Boolean(document.getElementById('partyBuild'));
+    document.getElementById('partyMore')?.click();
+    await new Promise(r => setTimeout(r, 200));
+    const playersShown = document.getElementById('partyPlayers')?.textContent;
+    document.getElementById('partyBuild')?.click();
+    let wheel = false;
+    for (let i = 0; i < 25 && !wheel; i++) {
+      await new Promise(r => setTimeout(r, 200));
+      wheel = Boolean(document.getElementById('partyWheel')?.querySelector('.party-slice-label'));
+    }
+    const upNext = document.getElementById('partyUpNext')?.children.length || 0;
+    document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+    await new Promise(r => setTimeout(r, 200));
+    const closedByKeyboard = document.getElementById('partyOverlay')?.hidden === true;
+    const bigBoxStillOpen = !document.getElementById('bigBox')?.hidden;
+    bigboxMod.closeBigBox();
+    return {bigBox: true, overlayOpen, setupOk, playersShown, wheel, upNext, closedByKeyboard, bigBoxStillOpen};
+  });
+  console.log('party dialog:', partySmoke);
+  for (const id of partySeedIds) {
+    await fetch(`http://127.0.0.1:${process.env.PORT}/api/game/delete`, {
+      method: 'POST',
+      headers: {'X-OpenBox-Token': process.env.TOKEN, 'Content-Type': 'application/json'},
+      body: JSON.stringify({id}),
+    }).catch(() => {});
+  }
+  fs.rmSync(partySeedDir, {recursive: true, force: true});
+
   // F23 Big Box correctness: viewport matrix, activation, preflight launch
   const bigboxCorrectness = { viewportCases: [], activateExported: false, appUsesActivate: false, preflightLaunch: false, noConfirmSessions: false, noConfirmStorefront: false, shortcutWhileTyping: false };
   const staticChecks = await page.evaluate(async () => {
@@ -1254,6 +1336,14 @@ const puppeteer = require('./node_modules/puppeteer');
   if (!libraryWorkspace.detailsResizeNoLibraryPost) process.exit(1);
   if (!masterySmoke.open) process.exit(1);
   if (!masterySmoke.rendered) process.exit(1);
+  if (!partySmoke.bigBox) process.exit(1);
+  if (!partySmoke.overlayOpen) process.exit(1);
+  if (!partySmoke.setupOk) process.exit(1);
+  if (partySmoke.playersShown !== '3') process.exit(1);
+  if (!partySmoke.wheel) process.exit(1);
+  if (!(partySmoke.upNext >= 1)) process.exit(1);
+  if (!partySmoke.closedByKeyboard) process.exit(1);
+  if (!partySmoke.bigBoxStillOpen) process.exit(1);
   if (!dropHonesty.pickerOpened) process.exit(1);
   if (!dropHonesty.libraryUnchanged) process.exit(1);
   if (!dropHonesty.noRomBinFolder) process.exit(1);

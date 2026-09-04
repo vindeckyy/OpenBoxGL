@@ -1,8 +1,6 @@
 """PickerHandlers — "What should I play?" suggestions."""
 from __future__ import annotations
 
-import json
-
 from openbox import load_state
 from pkg.parity.parity_picker import pick_games
 from routes.registry import route
@@ -39,13 +37,13 @@ def _game_for_picker(game):
 
 class PickerHandlers:
     @route("POST", "/api/v2/library/pick")
-    def _api_post_api_v2_library_pick(self, parsed):
+    def _api_post_api_v2_library_pick(self, payload):
         from api_errors import BadRequest
 
-        try:
-            body = self.body()
-        except (json.JSONDecodeError, ValueError) as error:
-            raise BadRequest("invalid JSON body") from error
+        # Dispatch passes the already-parsed JSON body (web_app._do_POST reads
+        # rfile exactly once); never call self.body() here — re-reading the
+        # exhausted stream blocks until the socket times out.
+        body = payload
         if not isinstance(body, dict):
             raise BadRequest("body must be an object")
 

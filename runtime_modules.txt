@@ -122,4 +122,7 @@ parity_picker.py
 pkg/parity/parity_constellation.py
 parity_constellation.py
 handlers/constellation.py
+pkg/parity/parity_party.py
+parity_party.py
+handlers/party.py
 pkg/state/sqlite_readmodel.py

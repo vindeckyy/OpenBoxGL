@@ -63,6 +63,7 @@ from handlers.jobs import JobsHandlers
 from handlers.launch import LaunchHandlers
 from handlers.picker import PickerHandlers
 from handlers.constellation import ConstellationHandlers
+from handlers.party import PartyHandlers
 from handlers.setup import SetupHandlers
 from handlers.library import LibraryHandlers
 from handlers.media import MediaHandlers
@@ -126,7 +127,7 @@ CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsaf
 
 
 
-class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, ExportHandlers, LaunchHandlers, SetupHandlers, DataHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, ScreenScraperHandlers, PickerHandlers, ConstellationHandlers, BaseHTTPRequestHandler):
+class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, ExportHandlers, LaunchHandlers, SetupHandlers, DataHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, ScreenScraperHandlers, PickerHandlers, ConstellationHandlers, PartyHandlers, BaseHTTPRequestHandler):
     server_version = "OpenBox/1"
     protocol_version = "HTTP/1.1"
     MAX_BODY = 65536
@@ -413,6 +414,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         "/static/wrapped.js",
         "/static/timeline.js",
         "/static/mastery.js",
+        "/static/party.js",
         "/static/worker.search.js",
         "/static/i18n.js",
         "/static/app.css",

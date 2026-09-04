@@ -573,10 +573,12 @@
         <label class="field"><span>Quick preset</span><select id="bigBoxQuickPreset"><option value="">None</option></select></label>
         <label class="field"><span>Achievements</span><select id="bigBoxRaFilter"><option value="all">All games</option><option value="matched">RetroAchievements matched</option><option value="unmatched">Not matched</option></select></label>
         <div class="dialog-actions"><button class="icon-button" id="closeBigBoxMenu" type="button">Cancel</button><button class="primary" id="applyBigBoxMenu" type="button">Apply</button></div>
+        <div class="dialog-actions"><button class="icon-button" id="partyMenuButton" type="button" data-i18n="party.open">Game Night</button></div>
       </div>
     </div>
     <div class="screensaver" id="screenSaver" hidden><video id="screenSaverVideo" muted autoplay loop></video><div class="screensaver-copy"><div class="hero-kicker" id="screenSaverPlatform"></div><h2 id="screenSaverTitle"></h2><p>Press Play to launch, or any other control to return.</p></div></div>
     <div class="bigbox-pause" id="bigBoxPause" hidden><div class="bigbox-pause-panel"><h2 id="bigBoxPauseTitle">Running game</h2><p class="description" id="bigBoxPauseMeta"></p><div class="extras" id="bigBoxPauseActions"></div></div></div>
+    <div class="party-overlay" id="partyOverlay" hidden></div>
   </section>
 
   <dialog id="pickerDialog" aria-modal="true" aria-labelledby="pickerDialogTitle">

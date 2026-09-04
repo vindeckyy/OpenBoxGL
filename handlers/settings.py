@@ -68,6 +68,43 @@ def _clean_mood(merged):
     return enabled, enabled and bigbox
 
 
+def _clean_party(merged):
+    queue = merged.get("party_queue", [])
+    if queue is None:
+        queue = []
+    if not isinstance(queue, list):
+        raise ValueError("Party queue must be a list of game ids.")
+    clean_queue = []
+    for item in queue:
+        game_id = str(item or "").strip()
+        if game_id and game_id not in clean_queue:
+            clean_queue.append(game_id)
+    clean_queue = clean_queue[:50]
+    players = merged.get("party_players", 2)
+    if players is None:
+        players = 2
+    try:
+        players = int(players)
+    except (TypeError, ValueError) as error:
+        raise ValueError("Party players must be an integer.") from error
+    if not 2 <= players <= 8:
+        raise ValueError("Party players must be between 2 and 8.")
+    index = merged.get("party_index", 0)
+    if index is None:
+        index = 0
+    try:
+        index = int(index)
+    except (TypeError, ValueError) as error:
+        raise ValueError("Party index must be an integer.") from error
+    if index < 0:
+        raise ValueError("Party index must be >= 0.")
+    if clean_queue:
+        index = min(index, len(clean_queue) - 1)
+    else:
+        index = 0
+    return clean_queue, players, index
+
+
 def _clean_cloud_folder(merged):
     cloud_folder = str(merged.get("cloud_folder", "")).strip()
     if cloud_folder:
@@ -326,6 +363,7 @@ def clean_settings(merged):
     gameyfin_password = _clean_password(merged)
     controller_prompt_hint = _clean_controller_prompt_hint(merged)
     mood_match_enabled, mood_match_bigbox = _clean_mood(merged)
+    party_queue, party_players, party_index = _clean_party(merged)
     return {
             "watch_folders": clean_folders,
             "screensaver_seconds": seconds,
@@ -389,6 +427,9 @@ def clean_settings(merged):
             "mangohud_enabled": bool(merged.get("mangohud_enabled", False)),
             "mood_match_enabled": mood_match_enabled,
             "mood_match_bigbox": mood_match_bigbox,
+            "party_queue": party_queue,
+            "party_players": party_players,
+            "party_index": party_index,
     }
 
 

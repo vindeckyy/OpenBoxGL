@@ -7,6 +7,7 @@ import { loadAchievements } from './metadata.js';
 import { openAchievements } from './settings.js';
 import { installGameyfin, uninstallGameyfin } from './storefront.js';
 import { applyMoodForGame, clearMood } from './mood.js';
+import { openParty, partyOverlayOpen, partyGamepad } from './party.js';
 
 
 
@@ -292,7 +293,9 @@ import { applyMoodForGame, clearMood } from './mood.js';
           gamepadFrame = requestAnimationFrame(pollGamepads);
           return;
         }
-        if (!$('bigBoxMenu').hidden) {
+        if (partyOverlayOpen()) {
+          partyGamepad(edge);
+        } else if (!$('bigBoxMenu').hidden) {
           const selects = [$('bigBoxFilter'),$('bigBoxSort'),$('bigBoxQuickPreset'),$('bigBoxRaFilter')].filter(Boolean);
           let active = selects.indexOf(document.activeElement);
           if (active < 0) active = 0;
@@ -343,7 +346,7 @@ import { applyMoodForGame, clearMood } from './mood.js';
         else if ($('bigBox') && !$('bigBox').hidden) pollGamepads();
       });
       $('bigBoxHybridSearch')?.addEventListener('focus', () => { AppState.bigBoxSearchMode = true; });
-      $('bigBoxHybridSearch')?.addEventListener('blur', () => { AppState.bigBoxSearchMode = false; });
+      $('partyMenuButton')?.addEventListener('click', () => { closeBigBoxMenu(); openParty(); });      $('bigBoxHybridSearch')?.addEventListener('blur', () => { AppState.bigBoxSearchMode = false; });
       $('bigBoxHybridSearch')?.addEventListener('input', event => {
         AppState.bigBoxHybridQuery = event.target.value.trim();
         AppState.bigBoxGames = filteredBigBoxGames();

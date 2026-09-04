@@ -6,7 +6,6 @@ import json
 import sys
 import unittest
 from pathlib import Path
-from urllib.parse import urlparse
 
 from api_errors import BadRequest
 
@@ -51,7 +50,7 @@ class PickerHandlerTest(unittest.TestCase):
             picker_module.load_state = sample_state
             body = json.dumps({"mood": "action", "players": 1, "minutes": 60}).encode()
             h = self.handler(body)
-            h._api_post_api_v2_library_pick(urlparse("/api/v2/library/pick"))
+            h._api_post_api_v2_library_pick(json.loads(body))
             status, payload = h.responses[0]
             self.assertEqual(status, 200)
             self.assertIn("picks", payload)
@@ -67,7 +66,7 @@ class PickerHandlerTest(unittest.TestCase):
             body = json.dumps({"mood": "spooky"}).encode()
             h = self.handler(body)
             with self.assertRaises(BadRequest):
-                h._api_post_api_v2_library_pick(urlparse("/api/v2/library/pick"))
+                h._api_post_api_v2_library_pick(json.loads(body))
         finally:
             picker_module.load_state = original_load
 
@@ -78,7 +77,7 @@ class PickerHandlerTest(unittest.TestCase):
             body = json.dumps({"scope": "playlist", "scope_name": "missing"}).encode()
             h = self.handler(body)
             with self.assertRaises(BadRequest):
-                h._api_post_api_v2_library_pick(urlparse("/api/v2/library/pick"))
+                h._api_post_api_v2_library_pick(json.loads(body))
         finally:
             picker_module.load_state = original_load
 
@@ -88,7 +87,7 @@ class PickerHandlerTest(unittest.TestCase):
             picker_module.load_state = sample_state
             body = json.dumps({"scope": "platform", "scope_name": "SNES"}).encode()
             h = self.handler(body)
-            h._api_post_api_v2_library_pick(urlparse("/api/v2/library/pick"))
+            h._api_post_api_v2_library_pick(json.loads(body))
             status, payload = h.responses[0]
             self.assertEqual(status, 200)
             self.assertEqual(len(payload["picks"]), 1)
@@ -104,7 +103,7 @@ class PickerHandlerTest(unittest.TestCase):
             picker_module.load_state = lambda: state
             body = json.dumps({"scope": "playlist", "scope_name": "My List"}).encode()
             h = self.handler(body)
-            h._api_post_api_v2_library_pick(urlparse("/api/v2/library/pick"))
+            h._api_post_api_v2_library_pick(json.loads(body))
             status, payload = h.responses[0]
             self.assertEqual(status, 200)
             self.assertEqual(payload["picks"][0]["game_id"], "2")
@@ -118,7 +117,7 @@ class PickerHandlerTest(unittest.TestCase):
             body = json.dumps({"players": 99}).encode()
             h = self.handler(body)
             with self.assertRaises(BadRequest):
-                h._api_post_api_v2_library_pick(urlparse("/api/v2/library/pick"))
+                h._api_post_api_v2_library_pick(json.loads(body))
         finally:
             picker_module.load_state = original_load
 
@@ -129,7 +128,7 @@ class PickerHandlerTest(unittest.TestCase):
             body = json.dumps({"scope": "everywhere"}).encode()
             h = self.handler(body)
             with self.assertRaises(BadRequest):
-                h._api_post_api_v2_library_pick(urlparse("/api/v2/library/pick"))
+                h._api_post_api_v2_library_pick(json.loads(body))
         finally:
             picker_module.load_state = original_load
 
@@ -143,7 +142,7 @@ class PickerHandlerTest(unittest.TestCase):
             picker_module.load_state = lambda: state
             body = json.dumps({"minutes": 45, "mood": "party", "players": 2}).encode()
             h = self.handler(body)
-            h._api_post_api_v2_library_pick(urlparse("/api/v2/library/pick"))
+            h._api_post_api_v2_library_pick(json.loads(body))
             status, payload = h.responses[0]
             self.assertEqual(status, 200)
             self.assertEqual(len(payload["picks"]), 1)
