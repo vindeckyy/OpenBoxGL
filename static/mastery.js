@@ -52,7 +52,14 @@ function render(data) {
   const useDecades = filter !== '';
   const rows = useDecades ? Object.entries(data.decades || {}).sort() : Object.entries(data.platforms || {}).sort();
 
-  let html = '<div class="mastery-list">';
+  // D5: RA-cache-missing affordance uses only the already-fetched mastery
+  // payload (zero new network calls); local progress is always available.
+  const hasRa = Boolean(data.ra_available) || Object.values(data.platforms || {}).some(s => (s.ra_tracked || 0) > 0);
+  let html = '';
+  if (!hasRa) {
+    html += `<p class="description" data-i18n="mastery.local_only">${t('mastery.local_only')}</p>`;
+  }
+  html += '<div class="mastery-list">';
   for (const [name, stats] of rows) {
     if (useDecades && filter !== 'all' && name !== filter) continue;
     const total = stats.total || 0;

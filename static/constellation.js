@@ -47,6 +47,10 @@ import { AppState, api, media } from './state.js';
     let cssW = 0, cssH = 0;
     let data = { nodes: [], edges: [] };
     let camera = { x: 0, y: 0, zoom: 1 };
+    // D5: ego-graph focus (game_id) + depth; double-click a node to focus,
+    // double-click empty canvas to clear. Sent as ?focus=<id>&depth=1.
+    let currentFocus = null;
+    let currentDepth = 1;
     let dragging = null;
     let hovered = null;
     let lastMouse = { x: 0, y: 0 };
@@ -56,6 +60,8 @@ import { AppState, api, media } from './state.js';
     function openConstellation() {
       if (!dialog) initDom();
       renderKindLabels();
+      currentFocus = null;
+      currentDepth = 1;
       dialog.showModal();
       loadAndRender();
     }
@@ -122,6 +128,13 @@ import { AppState, api, media } from './state.js';
           document.dispatchEvent(new CustomEvent('app:show-game', { detail: { gameId: n.game_id } }));
         }
       };
+      canvas.ondblclick = e => {
+        const p = pointOnCanvas(e.clientX, e.clientY);
+        const n = nodeAt(p.x, p.y);
+        currentFocus = n && n.game_id ? n.game_id : null;
+        currentDepth = 1;
+        loadAndRender();
+      };
       window.addEventListener('resize', () => { resizeCanvas(); draw(); });
     }
 
@@ -148,8 +161,9 @@ import { AppState, api, media } from './state.js';
       $('constellationEmpty').hidden = true;
       const kinds = [...document.querySelectorAll('#constellationKinds input:checked')].map(i => i.value).join(',');
       const limit = $('constellationLimit').value;
+      const focus = currentFocus ? `&focus=${encodeURIComponent(currentFocus)}&depth=${currentDepth}` : '';
       try {
-        data = await api(`/api/v2/library/constellation?kinds=${kinds}&limit=${limit}`);
+        data = await api(`/api/v2/library/constellation?kinds=${kinds}&limit=${limit}${focus}`);
         if (!data.nodes || !data.nodes.length) {
           $('constellationLoading').hidden = true;
           $('constellationEmpty').hidden = false;

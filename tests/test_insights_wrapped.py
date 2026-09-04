@@ -76,6 +76,42 @@ class TimelineGroupsTest(unittest.TestCase):
         self.assertEqual(len(result["groups"]), 1)
         self.assertEqual(result["groups"][0]["entries"][0]["recording"], "recording.mkv")
 
+    # --- D5: basenames-only redaction (posix + windows) ---
+    def test_timeline_windows_basename(self):
+        today = date.today()
+        games = [{"id": 1, "game_id": "g-1", "name": "Quake"}]
+        history = [
+            {"game_id": "g-1", "started": today.isoformat() + "T12:00:00", "seconds": 60, "recording": "C:\\Videos\\OBS\\run.mkv"},
+        ]
+        result = timeline_groups(self._state(games, history), days=90)
+        rec = result["groups"][0]["entries"][0]["recording"]
+        self.assertEqual(rec, "run.mkv")
+
+    def test_timeline_no_separators_leak(self):
+        today = date.today()
+        games = [{"id": 1, "game_id": "g-1", "name": "Quake"}]
+        for raw in ("/a/b/c.mkv", "C:\\a\\b\\c.mkv", "plain.mkv", ""):
+            history = [{"game_id": "g-1", "started": today.isoformat() + "T12:00:00", "seconds": 60, "recording": raw}]
+            result = timeline_groups(self._state(games, history), days=90)
+            rec = result["groups"][0]["entries"][0]["recording"]
+            self.assertNotIn("/", rec)
+            self.assertNotIn("\\", rec)
+
+    def test_timeline_js_basename_defense(self):
+        text = (Path(__file__).resolve().parent.parent / "static" / "timeline.js").read_text(encoding="utf-8")
+        self.assertIn("recording", text)
+        # Frontend must not interpolate a full path; basename split is the guard.
+        self.assertRegex(text, r"split\(\s*/\[\\\\\/\]/\s*\)|split\(['\"]")
+
+    def test_wrapped_print_css_no_raw_hex_and_hides_chrome(self):
+        import re
+        css = (Path(__file__).resolve().parent.parent / "static" / "app.css").read_text(encoding="utf-8")
+        m = re.search(r"@media\s+print\s*\{(.*?)\n    \}", css, re.DOTALL)
+        self.assertIsNotNone(m, "print block missing")
+        block = m.group(1)
+        self.assertNotRegex(block, r"#[0-9a-fA-F]{3,6}")
+        self.assertIn(".wrapped-card", block)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

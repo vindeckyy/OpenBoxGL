@@ -666,7 +666,8 @@
     "completed": "Completado",
     "mastered": "Dominado",
     "ra_progress": "Progresso RA",
-    "empty": "Ainda não há jogos para classificar."
+    "empty": "Ainda não há jogos para classificar.",
+    "local_only": "Apenas progresso local — a cache do RetroAchievements está indisponível."
   },
   "party": {
     "title": "Noite de jogos",

@@ -38,7 +38,19 @@ class ConstellationHandlers:
             if not 50 <= limit <= 1000:
                 raise BadRequest("limit must be between 50 and 1000")
 
+        focus = params.get("focus", [""])[0].strip() if "focus" in params else ""
+        focus = focus or None
+        depth = 1
+        raw_depth = params.get("depth", [""])[0].strip() if "depth" in params else ""
+        if raw_depth:
+            try:
+                depth = int(raw_depth)
+            except (TypeError, ValueError) as error:
+                raise BadRequest("depth must be an integer") from error
+            if depth not in (1, 2):
+                raise BadRequest("depth must be 1 or 2")
+
         history = state.get("history", []) if isinstance(state.get("history"), list) else []
-        result = build_graph(games, history, kinds=kinds, limit=limit)
+        result = build_graph(games, history, kinds=kinds, limit=limit, focus=focus, depth=depth)
         self.send_json(200, result)
         return

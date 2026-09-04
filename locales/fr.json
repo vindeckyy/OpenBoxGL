@@ -666,7 +666,8 @@
     "completed": "Complété",
     "mastered": "Maîtrisé",
     "ra_progress": "Progression RA",
-    "empty": "Pas encore de jeux à classer."
+    "empty": "Pas encore de jeux à classer.",
+    "local_only": "Progression locale uniquement — le cache RetroAchievements est indisponible."
   },
   "party": {
     "title": "Soirée jeux",

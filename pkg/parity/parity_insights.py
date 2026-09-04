@@ -17,7 +17,10 @@ from typing import Any
 def _basename(value: Any) -> str:
     if not value:
         return ""
-    return Path(str(value)).name
+    # Basenames only (privacy): handle posix + windows separators explicitly
+    # since Path().name on linux keeps backslashes intact.
+    text = str(value).replace("\\", "/")
+    return text.split("/")[-1] if text else ""
 
 
 def _in_year(date_value: Any, year: int) -> bool:
@@ -365,6 +368,8 @@ def mastery_summary(games, ra_cache_dir=None):
 
     platforms = {p: bucket(items) for p, items in by_platform.items()}
     overall = bucket([g for g in games if isinstance(g, dict)])
+    ra_available = bool(ra_cache)
+    overall["ra_available"] = ra_available
 
     # Decades
     decade_buckets: dict[str, list[dict[str, Any]]] = {}
@@ -382,7 +387,7 @@ def mastery_summary(games, ra_cache_dir=None):
         decade_buckets.setdefault(key, []).append(g)
     decades = {d: bucket(items) for d, items in decade_buckets.items()}
 
-    return {"platforms": platforms, "overall": overall, "decades": decades}
+    return {"platforms": platforms, "overall": overall, "decades": decades, "ra_available": ra_available}
 
 
 def _wrapped_year_range(year: int) -> tuple[datetime.date, datetime.date]:

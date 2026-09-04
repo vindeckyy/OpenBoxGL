@@ -55,6 +55,24 @@ class PickerHandlers:
             raise BadRequest(f"scope must be one of {sorted(VALID_SCOPES)}")
         scope_name = str(body.get("scope_name", "")).strip()
 
+        raw_excluded = body.get("excluded_ids", [])
+        if raw_excluded is None:
+            raw_excluded = []
+        if not isinstance(raw_excluded, list):
+            raise BadRequest("excluded_ids must be an array")
+        if len(raw_excluded) > 10:
+            raise BadRequest("excluded_ids must contain at most 10 ids")
+        excluded_ids: list = []
+        for item in raw_excluded:
+            if isinstance(item, bool):
+                raise BadRequest("excluded_ids must be integers or strings")
+            if isinstance(item, int):
+                excluded_ids.append(item)
+            elif isinstance(item, str) and item.strip():
+                excluded_ids.append(item.strip())
+            else:
+                raise BadRequest("excluded_ids must be integers or strings")
+
         state = load_state_readonly()
         # Pass raw game dicts to pick_games (it does safe .get() with
         # defaults); skip _game_for_picker projection to avoid 10k throwaway
@@ -82,6 +100,7 @@ class PickerHandlers:
             "scope": scope,
             "scope_name": scope_name,
             "limit": 3,
+            "excluded_ids": excluded_ids,
         }
         picks = pick_games(games, history, criteria)
         self.send_json(200, {"picks": picks})

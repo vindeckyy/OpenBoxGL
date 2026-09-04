@@ -193,6 +193,112 @@ class ParityPickerTests(unittest.TestCase):
         s = _score(game, [], {"mood": "any", "players": 1, "minutes": 0}, now)
         self.assertGreater(s, 10)
 
+    # --- D5: excluded_ids[] server-enforced (Again never repeats last-5) ---
+    def test_excluded_ids_server_enforced_single(self):
+        games = [self._game(id=i, name=f"Game {i}") for i in range(1, 4)]
+        first = pick_games(games, [], {"limit": 3})
+        self.assertTrue(first)
+        first_id = first[0]["id"]
+        for _ in range(5):
+            again = pick_games(games, [], {"limit": 3, "excluded_ids": [first_id]})
+            ids = [p["id"] for p in again]
+            self.assertNotIn(first_id, ids)
+
+    def test_excluded_ids_last_five_never_repeat(self):
+        games = [self._game(id=i, name=f"Game {i}") for i in range(1, 9)]
+        excluded = [1, 2, 3, 4, 5]
+        for _ in range(5):
+            picks = pick_games(games, [], {"limit": 3, "excluded_ids": excluded})
+            for p in picks:
+                self.assertNotIn(p["id"], excluded)
+
+    def test_excluded_ids_game_id_strings(self):
+        games = [self._game(id=1, name="A"), self._game(id=2, name="B")]
+        games[0]["game_id"] = "g-a"
+        games[1]["game_id"] = "g-b"
+        picks = pick_games(games, [], {"excluded_ids": ["g-a"]})
+        self.assertEqual([p["id"] for p in picks], [2])
+
+    def test_excluded_ids_all_excluded_empty(self):
+        games = [self._game(id=1, name="A"), self._game(id=2, name="B")]
+        picks = pick_games(games, [], {"excluded_ids": [1, 2]})
+        self.assertEqual(picks, [])
+
+    def test_excluded_ids_invalid_type_ignored(self):
+        games = [self._game(id=1, name="A")]
+        picks = pick_games(games, [], {"excluded_ids": "not-a-list"})
+        self.assertEqual(len(picks), 1)
+
+    # --- D5: reasons localized (no hardcoded English) ---
+    def test_reason_fallback_played_never_claims_never_played(self):
+        # Played recently, no strong signal: must not claim "never played".
+        game = self._game(id=1, name="Played", play_count=3, rating=3,
+                          last_played="2026-08-25T00:00:00Z")
+        picks = pick_games([game], [], {"mood": "any", "minutes": 0})
+        self.assertEqual(len(picks), 1)
+        self.assertNotEqual(picks[0]["reason_key"], "picker.reason.never_played")
+
+    def test_reasons_all_keys_localized(self):
+        allowed = {
+            "picker.reason.never_played",
+            "picker.reason.long_time",
+            "picker.reason.mood",
+            "picker.reason.rated",
+            "picker.reason.fits_session",
+            "picker.reason.favorite",
+            "picker.reason.random",
+        }
+        games = [
+            self._game(id=1, name="New"),
+            self._game(id=2, name="Fav", favorite=True, play_count=2,
+                       last_played="2025-01-01T00:00:00Z"),
+            self._game(id=3, name="Rated", play_count=2, rating=5,
+                       last_played="2026-08-25T00:00:00Z"),
+        ]
+        picks = pick_games(games, [], {"mood": "any", "minutes": 0})
+        self.assertTrue(picks)
+        for p in picks:
+            self.assertIn(p["reason_key"], allowed)
+            self.assertNotIn("reason", {k for k in p if k == "reason"})
+            for key in p["reason_params"]:
+                self.assertIn(key, {"name", "days", "mood", "minutes", "rating"})
+        # No English sentence literals leak through the API shape.
+        for p in picks:
+            for value in p.values():
+                if isinstance(value, str) and " " in value.strip():
+                    self.assertNotIn("You ", value)
+
+    # --- D5: POST handlers take parsed payload (M2-hang lint) ---
+    def test_handlers_payload_lint(self):
+        from scripts.check_handlers_payload import check_source, check_tree
+        bad_missing_arg = (
+            "from routes.registry import route\n"
+            "class H:\n"
+            '    @route("POST", "/api/x")\n'
+            "    def _api_post_x(self):\n"
+            "        pass\n"
+        )
+        bad_reread = (
+            "from routes.registry import route\n"
+            "class H:\n"
+            '    @route("POST", "/api/x")\n'
+            "    def _api_post_x(self, payload):\n"
+            "        body = self.body()\n"
+        )
+        good = (
+            "from routes.registry import route\n"
+            "class H:\n"
+            '    @route("POST", "/api/x")\n'
+            "    def _api_post_x(self, payload):\n"
+            "        body = payload\n"
+        )
+        self.assertTrue(check_source("handlers/x.py", bad_missing_arg))
+        self.assertTrue(check_source("handlers/x.py", bad_reread))
+        self.assertEqual(check_source("handlers/x.py", good), [])
+        # Real tree must be clean.
+        errors = check_tree(ROOT / "handlers")
+        self.assertEqual(errors, [])
+
 
 if __name__ == "__main__":
     unittest.main()

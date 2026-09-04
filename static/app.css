@@ -773,6 +773,9 @@
     @media print {
       body { background:var(--white); color:var(--black); }
       .wrapped-head button { display:none; }
+      .topbar, .sidebar, .details, .library-head .search, .library-head .icon-button, .drop-zone { display:none; }
+      .wrapped-card { break-inside:avoid; border-color:var(--border-card); background:var(--white); color:var(--black); }
+      .wrapped-stat { color:var(--black); }
     }
 
     /* Timeline (1.9.0) */

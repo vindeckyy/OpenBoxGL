@@ -140,15 +140,24 @@ def _shared_value(a, b, field):
     return None
 
 
-def build_graph(games, history, kinds=None, limit=400):
+def build_graph(games, history, kinds=None, limit=400, focus=None, depth=1):
     """Build a deterministic relationship graph from a game list.
 
     Returns a dict with nodes, edges, kinds, and truncated flag.
+    focus/depth optionally restrict to an ego-graph neighborhood: only nodes
+    within `depth` hops of `focus` (matched by game_id or id) are returned,
+    with edges reindexed. Unknown focus yields an honest empty graph.
     """
     kinds = set(kinds) if kinds else set(KINDS)
     kinds = {k for k in kinds if k in KINDS}
     if not kinds:
         kinds = set(KINDS)
+    try:
+        depth = int(depth)
+    except (TypeError, ValueError):
+        depth = 1
+    depth = max(1, min(2, depth))
+    focus_key = str(focus).strip() if focus is not None and str(focus).strip() else None
 
     candidates = sorted(games, key=_rank_key)
     truncated = len(candidates) > limit
@@ -218,9 +227,67 @@ def build_graph(games, history, kinds=None, limit=400):
     # Deterministic sort.
     edges.sort(key=lambda e: (e["s"], e["t"], e["kind"]))
 
-    return {
+    base = {
         "nodes": nodes,
         "edges": edges,
         "kinds": sorted(kinds),
         "truncated": truncated,
+        "empty": not nodes,
+        "focus": focus_key,
+        "depth": depth,
+    }
+    if focus_key is None:
+        return base
+
+    # Ego-graph: BFS from the focus node over undirected edges.
+    focus_idx = None
+    for n in nodes:
+        if str(n.get("game_id") or "") == focus_key or str(n.get("id") or "") == focus_key:
+            focus_idx = n["i"]
+            break
+    if focus_idx is None:
+        return {
+            "nodes": [],
+            "edges": [],
+            "kinds": sorted(kinds),
+            "truncated": False,
+            "empty": True,
+            "focus": focus_key,
+            "depth": depth,
+        }
+    adjacency: dict[int, set[int]] = {n["i"]: set() for n in nodes}
+    for e in edges:
+        adjacency[e["s"]].add(e["t"])
+        adjacency[e["t"]].add(e["s"])
+    seen: set[int] = {focus_idx}
+    frontier: set[int] = {focus_idx}
+    for _ in range(depth):
+        nxt: set[int] = set()
+        for idx in frontier:
+            nxt |= adjacency.get(idx, set()) - seen
+        seen |= nxt
+        frontier = nxt
+        if not frontier:
+            break
+    keep = sorted(seen)
+    remap = {old: new for new, old in enumerate(keep)}
+    new_nodes = []
+    for new_i, old_i in enumerate(keep):
+        n = dict(nodes[old_i])
+        n["i"] = new_i
+        new_nodes.append(n)
+    new_edges = [
+        {"s": remap[e["s"]], "t": remap[e["t"]], "kind": e["kind"], "w": e["w"]}
+        for e in edges
+        if e["s"] in remap and e["t"] in remap
+    ]
+    new_edges.sort(key=lambda e: (e["s"], e["t"], e["kind"]))
+    return {
+        "nodes": new_nodes,
+        "edges": new_edges,
+        "kinds": sorted(kinds),
+        "truncated": truncated,
+        "empty": not new_nodes,
+        "focus": focus_key,
+        "depth": depth,
     }

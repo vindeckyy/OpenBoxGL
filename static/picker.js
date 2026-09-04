@@ -10,6 +10,13 @@ import { render, selectGame } from './library.js';
     const VALID_FAMILIARITIES = ['any', 'new', 'favorite'];
 
     let lastCriteria = { minutes: 0, mood: 'any', familiarity: 'any', players: 1 };
+    // D5: last-5 shown ids so "Again" never repeats (server-enforced via excluded_ids[]).
+    let recentIds = [];
+    function rememberPick(id) {
+      if (id === null || id === undefined || id === '') return;
+      recentIds.push(id);
+      if (recentIds.length > 5) recentIds = recentIds.slice(-5);
+    }
 
     function openPicker() {
       if (!AppState.games.length) return notify(t('picker.empty'));
@@ -45,6 +52,7 @@ import { render, selectGame } from './library.js';
         players: Math.max(1, Math.min(8, Number($('pickerPlayers')?.value || 1))),
         scope: 'all',
         scope_name: '',
+        excluded_ids: [...recentIds],
       };
     }
 
@@ -56,7 +64,11 @@ import { render, selectGame } from './library.js';
           $('pickerResultEmpty').hidden = false;
           return;
         }
-        const game = visible[Math.floor(Math.random() * visible.length)];
+        const excluded = new Set(recentIds.map(String));
+        const fresh = visible.filter(g => !excluded.has(String(g.id)));
+        const pool = fresh.length ? fresh : visible;
+        const game = pool[Math.floor(Math.random() * pool.length)];
+        rememberPick(game.id);
         showPick({
           id: game.id,
           game_id: game.game_id || String(game.id),
@@ -83,6 +95,7 @@ import { render, selectGame } from './library.js';
           $('pickerResultEmpty').hidden = false;
           return;
         }
+        rememberPick(result.picks[0].id);
         showPick(result.picks[0]);
       } catch(error) {
         $('pickerSpinning').hidden = true;

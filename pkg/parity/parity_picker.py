@@ -114,6 +114,26 @@ def _fits_minutes(game: dict, history: list[dict], minutes: int) -> bool:
     return estimate <= minutes * 1.5
 
 
+def _excluded_set(criteria: dict) -> set[str]:
+    """Return normalized excluded ids from criteria (server-enforced).
+
+    The picker dialog sends the last-5 shown ids as excluded_ids[] so "Again"
+    never repeats. Non-list values are ignored (defensive, no crash).
+    """
+    raw = criteria.get("excluded_ids") if isinstance(criteria, dict) else None
+    if not isinstance(raw, (list, tuple)):
+        return set()
+    out: set[str] = set()
+    for item in raw:
+        if isinstance(item, bool):
+            continue
+        if isinstance(item, (int, float)):
+            out.add(str(int(item)))
+        elif isinstance(item, str) and item.strip():
+            out.add(item.strip())
+    return out
+
+
 def _eligibility(game: dict, history: list[dict], criteria: dict, now: datetime) -> tuple[bool, str | None, dict]:
     """Return (eligible, reason_key, reason_params) for a single game.
 
@@ -247,8 +267,13 @@ def pick_games(
       - limit: int (default 3)
     """
     now = datetime.now(timezone.utc)
+    excluded = _excluded_set(criteria)
     eligible = []
     for game in games:
+        gid = str(game.get("id", ""))
+        stable = str(game.get("game_id") or "")
+        if gid in excluded or (stable and stable in excluded):
+            continue
         ok, reason_key, reason_params = _eligibility(game, history, criteria, now)
         if not ok:
             continue
@@ -321,7 +346,9 @@ def pick_games(
             reason_key = "picker.reason.rated"
             reason_params["rating"] = float(game.get("rating"))
         elif reason_key is None:
-            reason_key = "picker.reason.never_played"
+            # Played game with no strong signal: use the generic localized
+            # fallback (never claim "never played" for a played game).
+            reason_key = "picker.reason.random"
 
         result.append({
             "id": game.get("id"),

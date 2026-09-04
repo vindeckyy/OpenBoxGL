@@ -666,7 +666,8 @@
     "completed": "Abgeschlossen",
     "mastered": "Gemeistert",
     "ra_progress": "RA-Fortschritt",
-    "empty": "Noch keine Spiele zum Einordnen."
+    "empty": "Noch keine Spiele zum Einordnen.",
+    "local_only": "Nur lokaler Fortschritt — RetroAchievements-Zwischenspeicher ist nicht verfügbar."
   },
   "party": {
     "title": "Spieleabend",

@@ -666,7 +666,8 @@
     "completed": "Completed",
     "mastered": "Mastered",
     "ra_progress": "RA progress",
-    "empty": "No games to rank yet."
+    "empty": "No games to rank yet.",
+    "local_only": "Showing local progress only — RetroAchievements cache is unavailable."
   },
   "party": {
     "title": "Game Night",

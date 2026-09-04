@@ -17,7 +17,10 @@ function renderTimelineTab(container) {
       html += `<div class="timeline-group"><h3 class="timeline-date">${escapeHtml(date)}</h3>`;
       for (const entry of group.entries) {
         const dur = Math.floor((entry.seconds || 0) / 60);
-        const rec = entry.recording ? `<span class="timeline-recording" data-i18n="timeline.recording">${t('timeline.recording')}</span>` : '';
+        // D5: basenames only — backend already redacts, but re-strip here so
+        // a full path can never leak into the DOM even if the API regresses.
+        const recBase = String(entry.recording || '').split(/[\\/]/).pop() || '';
+        const rec = recBase ? `<span class="timeline-recording" data-i18n="timeline.recording" title="${escapeHtml(recBase)}">${t('timeline.recording')}</span>` : '';
         html += `
           <div class="timeline-entry" data-game-id="${escapeHtml(entry.game_id)}">
             <div class="timeline-cover" style="background-image:url('${media(entry.game_id, 'cover')}')" role="img"></div>
