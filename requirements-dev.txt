@@ -1,4 +1,4 @@
 # Pinned developer and release tooling. Runtime code remains dependency-free.
-coverage==7.15.4
+coverage==7.16.0
 cryptography==50.0.1
 ruff==0.16.4
