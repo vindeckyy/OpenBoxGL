@@ -117,7 +117,7 @@ jobs:
         run: echo "name=OpenBox ${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Create release and upload Flatpak
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # softprops/action-gh-release@v3.0.2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # softprops/action-gh-release@v3.0.3
         with:
           tag_name: ${{ github.ref_name }}
           target_commitish: ${{ github.sha }}
