@@ -120,6 +120,12 @@ def _ensure_handlers_loaded() -> None:
         "handlers.wine",
         "handlers.faugus",
         "handlers.native",
+        "handlers.insights",
+        "handlers.picker",
+        "handlers.constellation",
+        "handlers.party",
+        "handlers.export",
+        "handlers.screenscraper",
         "web_app",
     )
     for mod in modules:
