@@ -7,7 +7,7 @@ Amended: 2026-09-02 by ADR 0024 (ARM64 un-deferred for 1.8.0).
 This ADR records the v1.7/1.8 artifact decision and its historical support
 matrix. The current 1.10.0 release workflow and evidence are documented in
 `docs/CONTRIBUTING.md`, `docs/SUPPORT.md`, and the release closure in
-`docs/NEXT_UPDATE_EXECUTION.md`; those documents qualify physical hardware and
+`docs/archive/NEXT_UPDATE_EXECUTION.md`; those documents qualify physical hardware and
 Flathub claims instead of treating build output as hardware validation.
 
 ## Context
