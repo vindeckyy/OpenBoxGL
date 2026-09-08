@@ -28,6 +28,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import pkg.parity  # noqa: F401, E402  # register flat-import finder before parity_* imports
+
 FIXTURE_ROOT = Path("/tmp/openbox-readme-fixtures")
 DATA_DIR = FIXTURE_ROOT / "data"
 ROMS_DIR = FIXTURE_ROOT / "roms"
@@ -234,6 +236,7 @@ def build_library() -> None:
             "image_group": "cover",
             "bigbox_mode": "stage",
             "screensaver_seconds": 90,
+            "show_insights": False,
             "controller_map": {
                 "play": 0,
                 "back": 1,
@@ -305,7 +308,8 @@ def assert_dimensions(path: Path) -> None:
 def main() -> None:
     ensure_fixture_tree()
     build_library()
-    server, app_url, _token = start_server()
+    server, app_url, token = start_server()
+    app_url = f"{app_url}?token={token}"
     library_out = FIXTURE_ROOT / "openbox-screenshot.png"
     detail_out = FIXTURE_ROOT / "openbox-game-detail.png"
     bigbox_out = FIXTURE_ROOT / "openbox-bigbox.png"

@@ -6,12 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+- Serve large media files completely: `os.sendfile` on the timeout-managed
+  socket could stop mid-response and leave the transfer truncated, hanging
+  browsers waiting for the promised `Content-Length` bytes; the buffered
+  writer now resumes exactly where sendfile stopped.
+- Honor the **Show Play insights** setting in the web UI: the setting was
+  saved but never included in the public settings payload, so the insights
+  panel always rendered.
+
 ### Documentation & Gates
 - Move superseded 1.10.0 planning documents and 1.7.2/1.8.0 release notes to
   `docs/archive/`; rewrite `docs/README.md` as a complete docs index (ADR 0041).
 - Extend the runtime-modules gate to root `*.py` files, list all handler modules
   explicitly in the route registry loader, and add the documented
   `import pkg.parity` to `web_app.py` (ADR 0041).
+- Repair the README screenshot pipeline (parity finder import, auth token,
+  lazy-loaded covers, virtualized-grid click) and regenerate the four
+  screenshots against the current UI.
 
 ## [1.10.0] - 2026-09-08
 
