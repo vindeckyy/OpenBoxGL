@@ -48,6 +48,7 @@ def main() -> int:
 
     # 3. required globs must be present in manifest
     required_patterns = [
+        "*.py",
         "handlers/*.py",
         "pkg/state/*.py",
         "pkg/parity/*.py",
