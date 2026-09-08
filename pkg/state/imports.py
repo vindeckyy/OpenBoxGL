@@ -237,6 +237,12 @@ def merge_imported_games(imported, identity_fn):
         timestamp = datetime.now().isoformat(timespec="seconds")
         default_progress = state.get("settings", {}).get("progress_on_first_play", "Playing")
         for game in filtered:
+            # Keep caller-owned importer records detached from the committed
+            # state.  The warm state store retains the transaction object, so
+            # appending this dict directly would leak generated fields such as
+            # ``game_id`` back into the importer and affect later identity
+            # decisions.
+            game = copy.deepcopy(game)
             source_keys = source_identities(game)
             target = next((exact[key] for key in source_keys if key in exact), None)
             if target is not None or identity_fn(game) in legacy_existing:

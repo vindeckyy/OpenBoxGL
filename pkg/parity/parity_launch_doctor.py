@@ -388,6 +388,8 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None):
     path = Path(path_value) if path_value else None
 
     if not path_value:
+        if game.get("manual_entry"):
+            return [_check("SHELF_ENTRY", "info", "This shelf entry has no local launch path yet.", [], _fix_reveal(""))]
         checks.append(_check("PATH_MISSING", "error", "Game path is missing.", [REMEDIATION_SET_PATH], _fix_reveal("")))
         return checks
     if not path.exists():

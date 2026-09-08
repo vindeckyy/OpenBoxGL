@@ -187,6 +187,27 @@ class ParityPickerTests(unittest.TestCase):
         now = datetime(2026, 9, 3, tzinfo=timezone.utc)
         self.assertEqual(_days_since_last_play(game, history, now), 245)
 
+    def test_pick_indexes_history_for_session_and_recency(self):
+        games = [
+            self._game(id=1, name="Short", play_count=1, last_played="not-a-date"),
+            self._game(id=2, name="Long", play_count=1, last_played="not-a-date"),
+        ]
+        history = [
+            {"game_id": 1, "seconds": 1200, "started": "2026-01-01T00:00:00Z"},
+            {"game_id": 2, "seconds": 5400, "started": "2026-01-01T00:00:00Z"},
+        ]
+        picks = pick_games(games, history, {"minutes": 30})
+        self.assertEqual([pick["id"] for pick in picks], [1])
+        self.assertEqual(picks[0]["reason_key"], "picker.reason.long_time")
+
+    def test_pick_ignores_mixed_timezone_history_for_other_games(self):
+        history = [
+            {"game_id": 999, "started": "2026-01-01T00:00:00"},
+            {"game_id": 999, "started": "2026-01-02T00:00:00Z"},
+        ]
+        picks = pick_games([self._game(id=1)], history, {})
+        self.assertEqual([pick["id"] for pick in picks], [1])
+
     def test_score_with_no_history(self):
         game = self._game(id=1, favorite=True)
         now = datetime(2026, 9, 3, tzinfo=timezone.utc)

@@ -7,7 +7,7 @@ Stages:
   3. py_compile over all runtime modules, test files, and scripts
   4. full test suite under coverage, run serially (gamescope/X tests collide
      in parallel workers)
-  5. coverage floor checks (72.0 total + 54.0 web_app.py + 80 changed-line +
+  5. coverage floor checks (72.0 total + 54.0 web_app.py + 95 changed-line +
      85 new-module) and design-token hygiene
 
 Exits non-zero when any stage fails. Used by `make check` and CI.
@@ -30,7 +30,7 @@ COVERAGE = VENV / "bin" / "coverage"
 # Raise the floors as phases land; never lower them silently.
 COVERAGE_FLOOR = 72.0
 WEB_APP_FLOOR = 54.0
-CHANGED_LINE_FLOOR = 80.0
+CHANGED_LINE_FLOOR = 95.0
 NEW_MODULE_FLOOR = 85.0
 
 

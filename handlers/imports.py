@@ -128,20 +128,68 @@ class ImportsHandlers:
         if not Path(xml_path).is_file():
             raise BadRequest(f"LaunchBox XML not found: {xml_path}")
         state = load_state_view()
-        report = preview_import(xml_path, state["games"])
+        report = preview_import(xml_path, state, options=payload.get("options") or {})
         self.send_json(200, report)
 
     @route("POST", "/api/v2/import/launchbox/apply")
     def _api_post_api_v2_import_launchbox_apply(self, payload):
-        from pkg.parity.parity_launchbox_import import apply_import
+        from pkg.parity.parity_launchbox_import import (
+            StaleImportPlan,
+            apply_import_plan,
+            build_import_plan,
+            parse_launchbox_xml,
+        )
 
         xml_path = str(payload.get("xml_path", "")).strip()
         if not xml_path:
             raise BadRequest("xml_path is required.")
         if not Path(xml_path).is_file():
             raise BadRequest(f"LaunchBox XML not found: {xml_path}")
-        state = load_state_view()
-        result = apply_import(xml_path, state["games"], merge_imported_games)
+        supplied_plan = payload.get("plan")
+        options = payload.get("options") if "options" in payload else (
+            supplied_plan.get("options") if isinstance(supplied_plan, dict) else {}
+        )
+        options = options or {}
+        if supplied_plan:
+            parsed = parse_launchbox_xml(xml_path)
+            if str(parsed.get("source_digest")) != str(supplied_plan.get("source_digest")):
+                raise BadRequest("LaunchBox XML changed since the preview; review it again.")
+
+            def mutate(current):
+                result_state = apply_import_plan(
+                    supplied_plan,
+                    current,
+                    preview_token=payload.get("preview_token") or supplied_plan.get("preview_token"),
+                    source_digest=parsed.get("source_digest"),
+                    source=parsed,
+                    options=options,
+                )
+                current["games"] = result_state["games"]
+                current["import_counts"] = result_state.get("import_counts", {})
+                return result_state.get("import_counts", {})
+
+            try:
+                counts = transact_state(mutate)[1]
+            except StaleImportPlan as error:
+                raise BadRequest(str(error)) from None
+            result = counts
+        else:
+            parsed = parse_launchbox_xml(xml_path)
+
+            def mutate(current):
+                canonical = build_import_plan(parsed, current, options=options)
+                result_state = apply_import_plan(
+                    canonical, current, preview_token=canonical["preview_token"],
+                    source_digest=parsed.get("source_digest"), source=parsed, options=options,
+                )
+                current["games"] = result_state["games"]
+                current["import_counts"] = result_state.get("import_counts", {})
+                return result_state.get("import_counts", {})
+
+            try:
+                result = transact_state(mutate)[1]
+            except StaleImportPlan as error:
+                raise BadRequest(str(error)) from None
         clear_file_probe_cache()
         broadcast_event("library.imported", {"source": "launchbox", "added": result.get("added", 0)})
         self.send_json(200, result)

@@ -4,6 +4,7 @@ No runtime deps. Pure functions operating on library state and history.
 """
 from __future__ import annotations
 
+import heapq
 import math
 import random
 from datetime import datetime, timezone
@@ -89,6 +90,10 @@ def _estimated_minutes_for_unplayed(game: dict) -> float | None:
     # ponytail: naive genre-based estimate when no play history exists.
     # If a how-long-to-beat source is added later, prefer that.
     genre = _normalize_text(game.get("genre"))
+    return _estimated_minutes_for_genre(genre)
+
+
+def _estimated_minutes_for_genre(genre: str) -> float:
     if any(k in genre for k in ("rpg", "strategy", "simulation")):
         return 120.0
     if any(k in genre for k in ("adventure", "action", "shooter", "platform", "fighting")):
@@ -112,6 +117,96 @@ def _fits_minutes(game: dict, history: list[dict], minutes: int) -> bool:
     if estimate is None:
         return True
     return estimate <= minutes * 1.5
+
+
+def _picker_history_indexes(history: list[dict]) -> tuple[dict[Any, list[float]], dict[Any, datetime]]:
+    """Build the two history lookups used by a picker pass.
+
+    The picker evaluates every game, so scanning the complete history from
+    each game turns a small history into an avoidable O(games * history) hot
+    path.  Keep the public helper behavior unchanged while indexing once for
+    the optimized request path.
+    """
+    sessions: dict[Any, list[float]] = {}
+    recent: dict[Any, datetime] = {}
+    for entry in history:
+        if not isinstance(entry, dict):
+            continue
+        game_id = entry.get("game_id")
+        try:
+            hash(game_id)
+        except TypeError:
+            continue
+        seconds = entry.get("seconds")
+        if seconds:
+            try:
+                sessions.setdefault(game_id, []).append(float(seconds))
+            except (TypeError, ValueError):
+                pass
+        started = entry.get("started")
+        if started:
+            try:
+                dt = datetime.fromisoformat(str(started).replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                continue
+            # Treat legacy naive timestamps as UTC so a malformed entry cannot
+            # make an otherwise unrelated picker request fail when compared
+            # with an aware timestamp.
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            else:
+                dt = dt.astimezone(timezone.utc)
+            if recent.get(game_id) is None or dt > recent[game_id]:
+                recent[game_id] = dt
+    return sessions, recent
+
+
+def _indexed_days_since_last_play(game: dict, recent: dict[Any, datetime], now: datetime) -> int | None:
+    """Match ``_days_since_last_play`` without rescanning history."""
+    last = game.get("last_played")
+    if last:
+        try:
+            dt = datetime.fromisoformat(str(last).replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            else:
+                dt = dt.astimezone(timezone.utc)
+            return max(0, (now - dt).days)
+        except (TypeError, ValueError):
+            pass
+    dt = recent.get(game.get("id"))
+    if dt is None:
+        return None
+    return max(0, (now - dt).days)
+
+
+def _indexed_fits_minutes(
+    game: dict,
+    sessions: dict[Any, list[float]],
+    minutes: int,
+    genre: str,
+    estimate_cache: dict[str, float] | None = None,
+) -> bool:
+    if not minutes:
+        return True
+    target = minutes * 60
+    values = sessions.get(game.get("id"))
+    if values:
+        return _median(values) <= target * 1.5
+    if estimate_cache is not None:
+        estimate = estimate_cache.get(genre)
+        if estimate is None:
+            estimate = _estimated_minutes_for_genre(genre)
+            estimate_cache[genre] = estimate
+    else:
+        estimate = _estimated_minutes_for_genre(genre)
+    return estimate <= minutes * 1.5
+
+
+def _indexed_mood_match(genre: str, mood: str) -> bool:
+    if mood in ("any", "retro", "party"):
+        return mood == "any"
+    return any(keyword in genre for keyword in MOOD_GENRES.get(mood, set()))
 
 
 def _eligibility(game: dict, history: list[dict], criteria: dict, now: datetime) -> tuple[bool, str | None, dict]:
@@ -247,25 +342,135 @@ def pick_games(
       - limit: int (default 3)
     """
     now = datetime.now(timezone.utc)
+    players = criteria.get("players") or 1
+    mood = criteria.get("mood") or "any"
+    familiarity = criteria.get("familiarity") or "any"
+    minutes = criteria.get("minutes") or 0
+    history_sessions, history_recent = _picker_history_indexes(history)
+    # Synthetic and imported libraries repeat the same genre/date values many
+    # times. Cache their cheap normalization and date parsing for this pass so
+    # scoring cost stays proportional to the number of games rather than the
+    # number of duplicate metadata values.
+    genre_cache: dict[Any, str] = {}
+    estimate_cache: dict[str, float] = {}
+    date_cache: dict[str, datetime | None] = {}
     eligible = []
     for game in games:
-        ok, reason_key, reason_params = _eligibility(game, history, criteria, now)
-        if not ok:
+        if game.get("hidden") or game.get("hide_in_bigbox"):
             continue
-        s = _score(game, history, criteria, now)
+        if game.get("path_exists") is False and game.get("store_installed") is False:
+            continue
+        max_players = int(game.get("max_players") or 1)
+        if players > 1 and max_players < players:
+            continue
+        raw_genre = game.get("genre")
+        try:
+            genre = genre_cache[raw_genre]
+        except (KeyError, TypeError):
+            genre = raw_genre.lower() if isinstance(raw_genre, str) else _normalize_text(raw_genre)
+            try:
+                genre_cache[raw_genre] = genre
+            except TypeError:
+                pass
+        mood_match = _indexed_mood_match(genre, mood)
+        if mood == "party" and max_players <= 1:
+            continue
+        if mood == "retro":
+            try:
+                year = int(game.get("year") or 0)
+            except (TypeError, ValueError):
+                year = 0
+            if year >= 2001:
+                continue
+        elif mood not in ("any", "party") and not mood_match:
+            continue
+        play_count = int(game.get("play_count") or 0)
+        if familiarity == "new" and play_count > 0:
+            continue
+        rating = float(game.get("rating") or 0)
+        if familiarity == "favorite" and not (game.get("favorite") or rating >= 4):
+            continue
+        fits_minutes = _indexed_fits_minutes(game, history_sessions, minutes, genre, estimate_cache)
+        if not fits_minutes:
+            continue
+        last = game.get("last_played")
+        days = None
+        if last:
+            date_key = str(last).replace("Z", "+00:00")
+            if date_key not in date_cache:
+                try:
+                    dt = datetime.fromisoformat(date_key)
+                    date_cache[date_key] = (
+                        dt.replace(tzinfo=timezone.utc)
+                        if dt.tzinfo is None
+                        else dt.astimezone(timezone.utc)
+                    )
+                except (TypeError, ValueError):
+                    date_cache[date_key] = None
+            dt = date_cache[date_key]
+            if dt is not None:
+                try:
+                    days = max(0, (now - dt).days)
+                except TypeError:
+                    # Preserve the legacy fallback for naive timestamps.
+                    days = None
+        if days is None:
+            dt = history_recent.get(game.get("id"))
+            if dt is not None:
+                days = max(0, (now - dt).days)
+        reason_key = None
+        reason_params = {"name": str(game.get("name") or "game")}
+        if play_count == 0:
+            reason_key = "picker.reason.never_played"
+        elif game.get("favorite"):
+            reason_key = "picker.reason.favorite"
+            if days is not None:
+                reason_params["days"] = days
+        elif days is not None and days > 30:
+            reason_key = "picker.reason.long_time"
+            reason_params["days"] = days
+        elif mood_match and mood != "any":
+            reason_key = "picker.reason.mood"
+            reason_params["mood"] = mood
+        if reason_key is None and rating >= 4:
+            reason_key = "picker.reason.rated"
+            reason_params["rating"] = rating
+        if reason_key is None and minutes:
+            reason_key = "picker.reason.fits_session"
+            reason_params["minutes"] = minutes
+
+        # Inline _score while the normalized genre, history-derived values,
+        # and parsed numeric fields are already available.
+        score = 12.0 if play_count == 0 else math.log1p(play_count) * 2.5
+        if game.get("favorite"):
+            score += 10.0
+        if rating:
+            score += rating * 3.0
+        score += min(days, 365) / 365.0 * 8.0 if days is not None else 8.0
+        if mood != "any" and mood_match:
+            score += 6.0
+        if minutes:
+            score += 4.0
+        if players > 1 and max_players >= players:
+            score += 3.0
         eligible.append({
             "game": game,
-            "score": s,
+            "score": score,
             "reason_key": reason_key,
             "reason_params": reason_params,
+            "days": days,
+            "mood_match": mood_match,
+            "fits_minutes": fits_minutes,
+            "play_count": play_count,
+            "rating": rating,
         })
 
     if not eligible:
         return []
 
-    # Deterministic sort by score desc, then stable by game id.
-    eligible.sort(key=lambda x: (-x["score"], x["game"].get("id", 0)))
-    top = eligible[:12]
+    # Only the top twelve can be selected.  Keep the deterministic ordering
+    # while avoiding a full O(N log N) sort for very large libraries.
+    top = heapq.nsmallest(12, eligible, key=lambda x: (-x["score"], x["game"].get("id", 0)))
 
     # Weighted random selection: higher-scored games are more likely to be picked.
     picks = []
@@ -297,10 +502,8 @@ def pick_games(
         reason_params = {"name": g_name}
         reason_key = item["reason_key"]
 
-        days = _days_since_last_play(game, history, now)
-        play_count = int(game.get("play_count") or 0)
-        mood = criteria.get("mood") or "any"
-        minutes = criteria.get("minutes") or 0
+        days = item["days"]
+        play_count = item["play_count"]
 
         # Rewrite reason to the strongest signal, in priority order.
         if play_count == 0:
@@ -311,15 +514,15 @@ def pick_games(
         elif days is not None and days > 30:
             reason_key = "picker.reason.long_time"
             reason_params["days"] = days
-        elif mood != "any" and _genre_matches_mood(_normalize_text(game.get("genre")), mood):
+        elif mood != "any" and item["mood_match"]:
             reason_key = "picker.reason.mood"
             reason_params["mood"] = mood
-        elif minutes and _fits_minutes(game, history, minutes):
+        elif minutes and item["fits_minutes"]:
             reason_key = "picker.reason.fits_session"
             reason_params["minutes"] = minutes
-        elif float(game.get("rating") or 0) >= 4:
+        elif item["rating"] >= 4:
             reason_key = "picker.reason.rated"
-            reason_params["rating"] = float(game.get("rating"))
+            reason_params["rating"] = item["rating"]
         elif reason_key is None:
             reason_key = "picker.reason.never_played"
 

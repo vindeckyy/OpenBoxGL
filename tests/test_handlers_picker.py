@@ -5,6 +5,7 @@ import io
 import json
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from api_errors import BadRequest
@@ -147,6 +148,26 @@ class PickerHandlerTest(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertEqual(len(payload["picks"]), 1)
             self.assertEqual(payload["picks"][0]["game_id"], "2")
+        finally:
+            picker_module.load_state_readonly = original_load
+
+    def test_picker_recomputes_randomized_result(self):
+        original_load = picker_module.load_state_readonly
+        try:
+            picker_module.load_state_readonly = sample_state
+            body = {}
+            with mock.patch.object(
+                picker_module,
+                "pick_games",
+                side_effect=[[{"game_id": "first"}], [{"game_id": "second"}]],
+            ) as pick:
+                first = self.handler(json.dumps(body).encode())
+                first._api_post_api_v2_library_pick(body)
+                second = self.handler(json.dumps(body).encode())
+                second._api_post_api_v2_library_pick(body)
+            self.assertEqual(pick.call_count, 2)
+            self.assertEqual(first.responses[0][1]["picks"][0]["game_id"], "first")
+            self.assertEqual(second.responses[0][1]["picks"][0]["game_id"], "second")
         finally:
             picker_module.load_state_readonly = original_load
 

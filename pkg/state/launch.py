@@ -14,7 +14,8 @@ import threading
 import time
 
 from automation import build_event
-from pkg.state.registry import EVENT_SEQUENCE, PROCESS_LOCK, PROCESSES, RUNNING, SESSION_EVENTS  # noqa: F401
+from api_errors import Conflict
+from pkg.state.registry import EVENT_SEQUENCE, PENDING_LAUNCHES, PROCESS_LOCK, PROCESSES, RUNNING, SESSION_EVENTS  # noqa: F401
 from backend_io import contained_path
 from catalog import apply_progress_automation
 from openbox import DATA, build_launch, load_state, update_state
@@ -372,13 +373,15 @@ def _terminate_owned_process(process):
             pass
 
 
-def _rollback_failed_launch(launch_id, process=None):
+def _rollback_failed_launch(launch_id, process=None, stable_game_id=""):
     """Undo phases 5-7 after a post-spawn failure."""
     upd_st = _ns("update_state", update_state)
     _terminate_owned_process(process)
     with PROCESS_LOCK:
         RUNNING.pop(launch_id, None)
         PROCESSES.pop(launch_id, None)
+
+    _release_pending_launch(stable_game_id, launch_id)
 
     def mutate(state):
         state["active_sessions"] = [
@@ -390,6 +393,61 @@ def _rollback_failed_launch(launch_id, process=None):
         upd_st(mutate)
     except Exception:
         LOGGER.exception("Failed to clear persisted session %s during launch rollback", launch_id)
+
+
+def _release_pending_launch(stable_game_id="", launch_id=""):
+    """Release a launch reservation without touching state or process data."""
+    stable_game_id = str(stable_game_id or "").strip()
+    with PROCESS_LOCK:
+        if stable_game_id:
+            pending = PENDING_LAUNCHES.get(stable_game_id)
+            if pending is None or (launch_id and pending.get("launch_id") != launch_id):
+                return
+            PENDING_LAUNCHES.pop(stable_game_id, None)
+            return
+        if launch_id:
+            for key, pending in list(PENDING_LAUNCHES.items()):
+                if pending.get("launch_id") == launch_id:
+                    PENDING_LAUNCHES.pop(key, None)
+
+
+def _reserve_launch(stable_game_id, launch_id, *, game_name="", profile=""):
+    """Reserve one launch slot for a stable game ID atomically.
+
+    The lock only protects the process registry. No state-store operation is
+    performed while it is held, preserving the lock ordering in ADR-0007.
+    """
+    stable_game_id = str(stable_game_id or "").strip()
+    if not stable_game_id:
+        # State normalization assigns stable IDs. Keep compatibility with
+        # callers that provide an unnormalized in-memory fixture; such a game
+        # cannot participate in stable-ID deduplication.
+        return
+    with PROCESS_LOCK:
+        # The session watcher owns cleanup.  A launcher wrapper can exit while
+        # a configured child process/folder/process-name tracker is still
+        # active, so Popen.poll() is not sufficient evidence that a launch is
+        # complete.
+        for running in RUNNING.values():
+            if str(running.get("stable_game_id") or "").strip() == stable_game_id:
+                raise Conflict(
+                    "That game is already running.",
+                    code="LAUNCH_ALREADY_ACTIVE",
+                    detail={"stable_game_id": stable_game_id, "state": "running"},
+                )
+        pending = PENDING_LAUNCHES.get(stable_game_id)
+        if pending is not None:
+            raise Conflict(
+                "That game is already launching.",
+                code="LAUNCH_ALREADY_ACTIVE",
+                detail={"stable_game_id": stable_game_id, "state": "pending"},
+            )
+        PENDING_LAUNCHES[stable_game_id] = {
+            "launch_id": str(launch_id),
+            "stable_game_id": stable_game_id,
+            "game": str(game_name or "Untitled"),
+            "profile": str(profile or ""),
+        }
 
 
 def _start_launch_command(game, profiles):
@@ -461,13 +519,17 @@ def _make_start_mutator(stable_game_id, index, started, process, entry, missing,
         if current is None:
             missing["value"] = True
             return
+        current_index = next(
+            (position for position, candidate in enumerate(state.get("games", [])) if candidate is current),
+            index,
+        )
         current["last_played"] = started.isoformat(timespec="seconds")
         current["play_count"] = current.get("play_count", 0) + 1
         if not current.get("progress") and state.get("settings", {}).get("progress_on_first_play", "Playing"):
             current["progress"] = state.get("settings", {}).get("progress_on_first_play", "Playing")
         entry.update({
             "launch_id": launch_id,
-            "game_id": index,
+            "game_id": current_index,
             "stable_game_id": stable_game_id,
             "effective_profile": effective_profile,
             "game": current.get("name", "Untitled"),
@@ -536,7 +598,8 @@ def _publish_start_events(game, entry):
 
 
 def start_game(index=None, stable_game_id=""):
-    # Explicit 8-phase launch (Days 0-14, Task 2): each failure after phase 4 restores perf, no stale RUNNING.
+    # Explicit launch phases: reserve the stable game ID before validation or
+    # spawn, then release it on every failure path.
     load_fn = _ns("load_state", load_state)
     res_start = _ns("_resolve_start_game", _resolve_start_game)
     start_cmd = _ns("_start_launch_command", _start_launch_command)
@@ -549,26 +612,34 @@ def start_game(index=None, stable_game_id=""):
     ann_gs = _ns("_annotate_gamescope_start", _annotate_gamescope_start)
     pub_ev = _ns("_publish_start_events", _publish_start_events)
     fin_sess = _ns("finish_session", finish_session)
+    reserve = _ns("_reserve_launch", _reserve_launch)
+    release_pending = _ns("_release_pending_launch", _release_pending_launch)
 
     # Phase 1: Resolve the game by stable ID.
     state = load_fn()
     game, index = res_start(state, index, stable_game_id)
     stable_game_id = str(game.get("game_id") or stable_game_id)
-    # Phase 2: Resolve and validate the launch command and working directory.
-    profiles = dict(state["profiles"])
+    profiles = dict(state.get("profiles") or {})
     selected_profile = str(game.get("launch_profile", "")).strip()
     if selected_profile and selected_profile in profiles:
         profiles = {game.get("platform", ""): profiles[selected_profile]}
-    args, cwd = start_cmd(game, profiles)
-    # Phase 3: Create a launch record containing stable game ID, canonical game path, profile name, and expected process identity.
     launch_id = secrets.token_urlsafe(8)
-    # Phase 4: Apply the performance profile and retain whether it actually changed system state.
-    effective_profile = eff_prof_fn(game, state["profiles"])
-    lease = app_perf(effective_profile, state)
+    reserve(
+        stable_game_id,
+        launch_id,
+        game_name=game.get("name", "Untitled"),
+        profile=game.get("launch_profile", ""),
+    )
+    lease = None
     process = None
 
     try:
-        # Phase 5: Start the process (plugins + validation must succeed first).
+        # Resolve and validate only after the reservation is held. This makes
+        # rapid retries deterministic even when launch setup is slow.
+        args, cwd = start_cmd(game, profiles)
+        effective_profile = eff_prof_fn(game, state.get("profiles") or {})
+        lease = app_perf(effective_profile, state)
+        # Start the process (plugins + validation must succeed first).
         args, cwd = app_plug(game, args, cwd)
         # Apply gamescope preset if set and not already a gamescope guest (1.7.2).
         args = _apply_gamescope_preset_from_state(state, game, args)
@@ -579,14 +650,16 @@ def start_game(index=None, stable_game_id=""):
         started = datetime.now()
         entry = {}
         missing = {"value": False}
-        # Phase 6: Persist the active-session record.
+        # Persist the active-session record.
         upd_st(make_mut(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile))
         if missing["value"]:
             raise IndexError("Game was removed while it was launching")
-        # Phase 7: Register the in-memory session and start the watcher.
+        # Register the in-memory session and atomically hand the slot from
+        # pending to running. No state-store lock is held here.
         with PROCESS_LOCK:
             RUNNING[launch_id] = entry
             PROCESSES[launch_id] = process
+            PENDING_LAUNCHES.pop(stable_game_id, None)
         ann_gs(args, game, process)
         pub_ev(game, entry)
         threading.Thread(
@@ -596,11 +669,15 @@ def start_game(index=None, stable_game_id=""):
         ).start()
         return dict(entry)
     except Exception:
-        # Phase 8: Roll back post-spawn state and restore the performance lease.
+        # Roll back post-spawn state, release any pending reservation, and
+        # restore the performance lease.
         if process is not None:
             roll_back = _ns("_rollback_failed_launch", _rollback_failed_launch)
-            roll_back(launch_id, process)
-        lease.restore()
+            roll_back(launch_id, process, stable_game_id)
+        else:
+            release_pending(stable_game_id, launch_id)
+        if lease is not None:
+            lease.restore()
         raise
 
 

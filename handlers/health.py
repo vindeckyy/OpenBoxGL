@@ -1,18 +1,20 @@
 """HealthHandlers capability handlers. Log, diagnostic, backup, and update endpoints."""
 
 import json
+import copy
 import urllib.parse
 import zipfile
 
-from api_errors import BadRequest
+from api_errors import BadRequest, Conflict
 from crash_report import build_preview
+from cloud_sync import LibrarySyncUnavailable
 from openbox import DATA, load_state
 from routes.registry import route
 from openbox_logging import read_diagnostic_log
 from parity_backup import BACKUP_ITEMS, create_backup, restore_backup, diff_manifests
 from pkg.parity.parity_redact import detach_state_view, redact_state_for_export
 from updates import check_update, install_desktop_entry, install_update
-from webapp_state import JOB_MANAGER, RUNNING, approved_backup_file, bump_media_epoch, load_state_view, sync_cloud
+from webapp_state import JOB_MANAGER, RUNNING, approved_backup_file, bump_media_epoch, load_state_view, sync_cloud, transact_state
 
 
 class HealthHandlers:
@@ -171,44 +173,103 @@ class HealthHandlers:
 
     @route("POST", "/api/v2/library/sync/publish")
     def _api_post_api_v2_library_sync_publish(self, payload):
-        from cloud_sync import publish_library
-        import openbox
+        if isinstance(payload, dict) and payload.get("protocol") == "v3":
+            from pkg.parity.parity_library_sync import SyncFolderError, SyncStaleError, publish_outbox, state_token, sync_enabled
 
-        state = openbox.load_state()
-        folder = state.get("settings", {}).get("cloud_folder", "")
-        if not folder:
-            self.send_json(400, {"error": "Configure a mounted cloud sync folder first."})
+            state = load_state_view()
+            if not sync_enabled(state):
+                self.send_json(400, {"error": "Enable library synchronization before publishing.", "code": "SYNC_NOT_ENABLED"})
+                return
+            folder = str(state.get("settings", {}).get("cloud_folder", "") or "")
+            if not folder:
+                raise BadRequest("Configure a mounted cloud sync folder first.")
+            base_token = state_token(state)
+            pending = list((state.get("library_sync") or {}).get("outbox", []))
+            detached = copy.deepcopy(state)
+            try:
+                result = publish_outbox(detached, folder)
+            except (SyncFolderError, OSError, ValueError) as error:
+                raise BadRequest(str(error)) from None
+
+            def acknowledge(current):
+                if state_token(current) != base_token:
+                    raise SyncStaleError("Local library changed while sync was publishing; retry the operation.")
+                metadata = current.setdefault("library_sync", {})
+                ids = {item.get("event_id") for item in pending if isinstance(item, dict)}
+                metadata["outbox"] = [item for item in metadata.get("outbox", []) if item.get("event_id") not in ids]
+                return len(ids)
+
+            try:
+                acknowledged = transact_state(acknowledge)[1]
+            except SyncStaleError as error:
+                raise Conflict(str(error), code="SYNC_PUBLISH_STALE") from None
+            self.send_json(200, {**result, "acknowledged": acknowledged, "protocol": "v3"})
             return
-        device_id = str(payload.get("device_id") or "local")
-        result = publish_library(state, folder, device_id=device_id)
-        self.send_json(200, result)
+        error = LibrarySyncUnavailable()
+        self.send_json(503, {"error": error.message, "code": error.code})
 
     @route("POST", "/api/v2/library/sync/pull")
     def _api_post_api_v2_library_sync_pull(self, payload):
-        from cloud_sync import pull_library
-        import openbox
+        error = LibrarySyncUnavailable()
+        self.send_json(503, {"error": error.message, "code": error.code})
 
-        state = openbox.load_state()
-        folder = state.get("settings", {}).get("cloud_folder", "")
-        if not folder:
-            self.send_json(400, {"error": "Configure a mounted cloud sync folder first."})
+    @route("POST", "/api/v2/library/sync/preview")
+    def _api_post_api_v2_library_sync_preview(self, payload):
+        """Preview the opt-in causal catalog transport without mutating state."""
+        from pkg.parity.parity_library_sync import (
+            SyncValidationError,
+            preview_sync,
+            read_events,
+            sync_enabled,
+        )
+
+        state = load_state_view()
+        if not sync_enabled(state):
+            self.send_json(400, {"error": "Enable library synchronization before reviewing changes.", "code": "SYNC_NOT_ENABLED"})
             return
-        device_id = str(payload.get("device_id") or "local")
-        result = pull_library(state, folder, device_id=device_id)
+        folder = str(state.get("settings", {}).get("cloud_folder", "") or "")
+        try:
+            incoming = payload.get("events") if isinstance(payload, dict) and isinstance(payload.get("events"), list) else read_events(folder)
+            plan = preview_sync(state, incoming)
+        except (SyncValidationError, OSError, ValueError) as error:
+            self.send_json(400, {"error": str(error), "code": "SYNC_INVALID"})
+            return
+        self.send_json(200, plan)
 
-        from webapp_state import transact_state
+    @route("POST", "/api/v2/library/sync/apply")
+    def _api_post_api_v2_library_sync_apply(self, payload):
+        """Apply a reviewed causal sync plan at the state transaction boundary."""
+        from pkg.parity.parity_library_sync import SyncStaleError, SyncValidationError, apply_sync, sync_enabled
+
+        state = load_state_view()
+        if not sync_enabled(state):
+            self.send_json(400, {"error": "Enable library synchronization before applying changes.", "code": "SYNC_NOT_ENABLED"})
+            return
+        plan = payload.get("plan") if isinstance(payload, dict) else None
+        if not isinstance(plan, dict):
+            raise BadRequest("A reviewed sync plan is required.")
+        conflicts = payload.get("conflicts") if isinstance(payload, dict) else None
+        # Preserve a local recovery point before replacing catalog records.
+        # The archive is created outside the state transaction so filesystem
+        # work never extends the commit lock; a failed snapshot aborts apply.
+        try:
+            recovery = create_backup(DATA.parent, state, ["library"], keep=3, running_map=RUNNING)
+        except (OSError, ValueError) as error:
+            raise BadRequest(f"Unable to create sync recovery backup: {error}") from None
 
         def mutate(current):
-            current["games"] = result["games"]
-            current.setdefault("settings", {})["last_library_sync"] = result["synced_at"]
+            current.setdefault("library_sync", {})["_suppress_local_recording"] = True
+            return apply_sync(current, plan, conflicts=conflicts)
 
-        transact_state(mutate)
+        try:
+            result = transact_state(mutate)[1]
+        except SyncStaleError as error:
+            raise Conflict(str(error), code="SYNC_PREVIEW_STALE") from None
+        except SyncValidationError as error:
+            raise BadRequest(str(error)) from None
         self.send_json(200, {
-            "added": result["added"],
-            "updated": result["updated"],
-            "deleted": result["deleted"],
-            "skipped": result["skipped"],
-            "synced_at": result["synced_at"],
+            "applied": result.get("applied", 0),
+            "conflicts": result.get("conflicts", []),
+            "changed": result.get("changed", False),
+            "recovery_backup": recovery.name,
         })
-
-

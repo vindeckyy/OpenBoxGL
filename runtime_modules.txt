@@ -26,6 +26,7 @@ pkg/parity/__init__.py
 pkg/parity/parity_discovery.py
 pkg/parity/parity_import.py
 pkg/parity/parity_launchbox_import.py
+pkg/parity/parity_library_sync.py
 pkg/parity/parity_integrations.py
 pkg/parity/parity_media.py
 pkg/parity/parity_saves.py

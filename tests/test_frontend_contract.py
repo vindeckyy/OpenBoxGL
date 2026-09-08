@@ -129,6 +129,20 @@ def test_game_dialog_path_browse_hosts():
             missing.append(name)
     assert not missing, f"#gameDialog path fields missing .path-browse host: {missing}"
 
+
+def test_shelf_entry_editor_and_actions():
+    html = INDEX.read_text()
+    assert 'id="addShelfButton"' in html
+    assert 'name="entry_type"' in html
+    assert 'value="shelf"' in html
+    dialogs = (ROOT / "static" / "dialogs.js").read_text()
+    app = (ROOT / "static" / "app.js").read_text()
+    library = (ROOT / "static" / "library.js").read_text()
+    assert "manual-entry/update" in app
+    assert "manual-entry/convert" in dialogs
+    assert "Set up launch" in library
+    assert "game.manual_entry" in library
+
 def test_f05_dialogs_no_window_prompt():
     text = DIALOGS.read_text()
     assert "window.prompt" not in text

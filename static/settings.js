@@ -3,6 +3,7 @@ import { AppState, api, notify, token, selectedIds, playlistFor, applySidebarVis
 import { refresh, render, renderGrid } from './library.js';
 import { applyLibraryMusic } from './bigbox.js';
 import { confirmAction, promptInput } from './dialogs.js';
+import { t } from './i18n.js';
 
 
 
@@ -154,6 +155,7 @@ import { confirmAction, promptInput } from './dialogs.js';
       return {
         watch_folders:$('watchFolders').value.split('\n').map(value => value.trim()).filter(Boolean),
         cloud_folder:$('cloudFolder').value.trim(),
+        library_sync_enabled:$('librarySyncEnabled')?.checked || false,
         screensaver_seconds:Number($('screensaverSeconds').value),
         startup_commands:$('startupCommands').value.split('\n').map(value => value.trim()).filter(Boolean),
         shutdown_commands:$('shutdownCommands').value.split('\n').map(value => value.trim()).filter(Boolean),
@@ -223,6 +225,10 @@ import { confirmAction, promptInput } from './dialogs.js';
         AppState.appSettings = await api('/api/settings');
         $('watchFolders').value = AppState.appSettings.watch_folders.join('\n');
         $('cloudFolder').value = AppState.appSettings.cloud_folder || '';
+        if ($('librarySyncEnabled')) $('librarySyncEnabled').checked = AppState.appSettings.library_sync_enabled === true;
+        if ($('librarySyncStatus')) $('librarySyncStatus').textContent = '';
+        if ($('librarySyncPreviewResults')) { $('librarySyncPreviewResults').hidden = true; $('librarySyncPreviewResults').innerHTML = ''; }
+        if ($('librarySyncConflicts')) { $('librarySyncConflicts').hidden = true; $('librarySyncConflicts').innerHTML = ''; }
         const cloudBeta = AppState.appSettings.cloud_sync_beta ? ' (beta)' : ' (beta)';
         const cloudLast = AppState.appSettings.last_cloud_sync
           ? `Last synced ${AppState.appSettings.last_cloud_sync.replace('T', ' ')}`
@@ -720,6 +726,124 @@ import { confirmAction, promptInput } from './dialogs.js';
       if ($('exportScopeName')) $('exportScopeName').hidden = !needsName;
     };
     if ($('exportLibrary')) $('exportLibrary').onclick = exportLibrary;
+
+    let librarySyncPlan = null;
+    function syncValue(value) {
+      if (value === undefined) return '—';
+      try { return JSON.stringify(value); } catch { return String(value); }
+    }
+
+    function syncConflictRows(plan) {
+      return (plan?.changes || []).flatMap(change => (change.conflicts || []).map(row => ({...row, sync_key: change.sync_key})));
+    }
+
+    function renderLibrarySyncPlan(plan) {
+      const results = $('librarySyncPreviewResults');
+      const conflicts = $('librarySyncConflicts');
+      const applyButton = $('librarySyncApply');
+      if (!results || !conflicts) return;
+      const counts = plan?.counts || {};
+      const changes = Array.isArray(plan?.changes) ? plan.changes : [];
+      const conflictRows = syncConflictRows(plan);
+      results.innerHTML = `<h4>${escapeHtml(t('settings.library_sync_preview_ready'))}</h4><p class="description">${escapeHtml(t('settings.library_sync_counts', {additions:counts.additions || 0, updates:counts.updates || 0, deletions:counts.deletions || 0, conflicts:counts.conflicts || 0}))}</p>${changes.length ? `<div class="facts">${changes.slice(0, 50).map(change => `<div class="fact"><strong>${escapeHtml(change.action || 'change')}</strong><span>${escapeHtml(change.remote?.name || change.local?.name || change.sync_key || '')}</span></div>`).join('')}</div>` : `<p class="description">${escapeHtml(t('settings.library_sync_no_changes'))}</p>`}`;
+      results.hidden = false;
+      conflicts.innerHTML = conflictRows.length ? `<h4>${escapeHtml(t('settings.library_sync_conflicts'))}</h4><p class="description">${escapeHtml(t('settings.library_sync_conflicts_description'))}</p><div class="form-grid">${conflictRows.slice(0, 50).map((row, index) => {
+        const alternatives = Array.isArray(row.alternatives) && row.alternatives.length ? row.alternatives : [
+          {choice: 'local', value: row.local}, {choice: 'remote', value: row.remote},
+        ];
+        const options = alternatives.map((alternative, alternativeIndex) => {
+          const label = alternativeIndex === 0 ? t('settings.library_sync_keep_local') : (alternativeIndex === 1 ? t('settings.library_sync_keep_remote') : `${t('settings.library_sync_keep_remote')} ${alternativeIndex + 1}`);
+          return `<option value="${escapeHtml(alternative.choice || `alternative:${alternativeIndex}`)}">${escapeHtml(label)}: ${escapeHtml(syncValue(alternative.value))}</option>`;
+        }).join('');
+        return `<label class="field wide"><span>${escapeHtml(row.sync_key)} · ${escapeHtml(row.field)}</span><select data-library-sync-conflict="${index}"><option value="">${escapeHtml(t('settings.library_sync_conflicts'))}</option>${options}</select></label>`;
+      }).join('')}</div>` : '';
+      conflicts.hidden = !conflictRows.length;
+      if (applyButton) applyButton.disabled = !changes.length;
+    }
+
+    async function saveLibrarySyncSettings() {
+      const folder = $('cloudFolder')?.value.trim() || '';
+      if ($('librarySyncEnabled')?.checked && !folder) throw new Error(t('settings.library_sync_folder_required'));
+      AppState.appSettings = await api('/api/settings', {method:'POST', body:JSON.stringify({
+        cloud_folder: folder,
+        library_sync_enabled: Boolean($('librarySyncEnabled')?.checked),
+      })});
+    }
+
+    async function previewLibrarySync() {
+      const status = $('librarySyncStatus');
+      const button = $('librarySyncPreview');
+      if (button) button.disabled = true;
+      try {
+        await saveLibrarySyncSettings();
+        librarySyncPlan = await api('/api/v2/library/sync/preview', {method:'POST', body:'{}'});
+        renderLibrarySyncPlan(librarySyncPlan);
+        if (status) status.textContent = t('settings.library_sync_preview_complete');
+      } catch (error) {
+        librarySyncPlan = null;
+        if (status) status.textContent = error.message;
+        notify(error.message);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+
+    function selectedLibrarySyncConflicts() {
+      const rows = syncConflictRows(librarySyncPlan);
+      const choices = {};
+      document.querySelectorAll('[data-library-sync-conflict]').forEach(select => {
+        const row = rows[Number(select.dataset.librarySyncConflict)];
+        if (!row || !select.value) return;
+        const choiceKey = row.conflict_id || row.field;
+        choices[row.sync_key] = {...choices[row.sync_key], [choiceKey]: select.value};
+      });
+      return choices;
+    }
+
+    async function applyLibrarySync() {
+      if (!librarySyncPlan) return;
+      const status = $('librarySyncStatus');
+      const button = $('librarySyncApply');
+      if (button) button.disabled = true;
+      try {
+        await saveLibrarySyncSettings();
+        const result = await api('/api/v2/library/sync/apply', {method:'POST', body:JSON.stringify({plan:librarySyncPlan, conflicts:selectedLibrarySyncConflicts()})});
+        if (result.conflicts?.length) {
+          if (status) status.textContent = t('settings.library_sync_conflicts_remaining', {count:result.conflicts.length});
+        } else {
+          if (status) status.textContent = t('settings.library_sync_applied', {count:result.applied || 0});
+          librarySyncPlan = null;
+          if ($('librarySyncPreviewResults')) $('librarySyncPreviewResults').hidden = true;
+          if ($('librarySyncConflicts')) $('librarySyncConflicts').hidden = true;
+          await refresh();
+        }
+      } catch (error) {
+        if (status) status.textContent = error.message;
+        notify(error.message);
+      } finally {
+        if (button) button.disabled = !librarySyncPlan;
+      }
+    }
+
+    async function publishLibrarySync() {
+      const status = $('librarySyncStatus');
+      const button = $('librarySyncPublish');
+      if (button) button.disabled = true;
+      try {
+        await saveLibrarySyncSettings();
+        const result = await api('/api/v2/library/sync/publish', {method:'POST', body:JSON.stringify({protocol:'v3'})});
+        if (status) status.textContent = t('settings.library_sync_published', {count:result.published || 0});
+      } catch (error) {
+        if (status) status.textContent = error.message;
+        notify(error.message);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+
+    if ($('librarySyncPreview')) $('librarySyncPreview').onclick = previewLibrarySync;
+    if ($('librarySyncApply')) $('librarySyncApply').onclick = applyLibrarySync;
+    if ($('librarySyncPublish')) $('librarySyncPublish').onclick = publishLibrarySync;
 
     $('settingsForm').onsubmit = async event => {
       event.preventDefault();

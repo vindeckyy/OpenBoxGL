@@ -130,6 +130,13 @@ def test():
                 hook.assert_called_once()
                 launched = popen.call_args[0][0]
                 assert launched == ["bash", str(game_file)], launched
+                # The production session watcher owns cleanup.  This test
+                # mocks finish_session, so release its registries explicitly
+                # before exercising a second launch.
+                from pkg.state.registry import PENDING_LAUNCHES, PROCESSES, RUNNING
+                RUNNING.clear()
+                PROCESSES.clear()
+                PENDING_LAUNCHES.clear()
                 # Original cwd is the game directory; a valid plugin result is kept.
                 with mock.patch("webapp_state.subprocess.Popen", return_value=process) as popen:
                     with mock.patch("webapp_state.run_plugins", side_effect=lambda _directory, _hook, payload: {

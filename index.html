@@ -15,6 +15,7 @@
       <button class="menu-button primary-nav" id="libraryButton" data-i18n="nav.library">Library</button>
       <button class="menu-button primary-nav" id="setupLibraryButton" data-i18n="nav.setup_library">Set up library</button>
       <button class="menu-button primary-nav" id="addButton" data-i18n="nav.add_game">Add game</button>
+      <button class="menu-button primary-nav" id="addShelfButton" data-i18n="nav.add_shelf">Add shelf entry</button>
       <button class="menu-button primary-nav" id="importButton" data-i18n="nav.import_folder">Import folder</button>
     </nav>
     <nav class="topbar-zone" aria-label="Actions">
@@ -71,7 +72,7 @@
   <div class="workspace">
     <aside class="sidebar" aria-label="Library filters" data-i18n-aria-label="library.library_filters">
       <label class="field" data-sidebar-section="search"><span data-i18n="sidebar.search">Search</span><input id="sidebarSearch" type="search" aria-label="Search library" data-i18n-aria-label="sidebar.search"></label>
-      <label class="field" data-sidebar-section="view"><span data-i18n="sidebar.view">View</span><select id="view"><option value="all" data-i18n="sidebar.all_games">All games</option><option value="favorites" data-i18n="sidebar.favorites">Favorites</option><option value="recent" data-i18n="sidebar.recently_played">Recently played</option><option value="never" data-i18n="sidebar.never_played">Never played</option><option value="playing" data-i18n="sidebar.in_progress">In progress</option><option value="completed" data-i18n="sidebar.completed">Completed</option><option value="installed" data-i18n="sidebar.installed_only">Installed only</option><option value="owned" data-i18n="sidebar.owned_not_installed">Owned / not installed</option><option value="saves" data-i18n="sidebar.has_saves">Has saves</option><option value="hidden" data-i18n="sidebar.hidden">Hidden</option><option value="missing" data-i18n="sidebar.missing_files">Missing files</option></select></label>
+      <label class="field" data-sidebar-section="view"><span data-i18n="sidebar.view">View</span><select id="view"><option value="all" data-i18n="sidebar.all_games">All games</option><option value="favorites" data-i18n="sidebar.favorites">Favorites</option><option value="recent" data-i18n="sidebar.recently_played">Recently played</option><option value="never" data-i18n="sidebar.never_played">Never played</option><option value="playing" data-i18n="sidebar.in_progress">In progress</option><option value="completed" data-i18n="sidebar.completed">Completed</option><option value="installed" data-i18n="sidebar.installed_only">Installed only</option><option value="owned" data-i18n="sidebar.owned_not_installed">Owned / not installed</option><option value="saves" data-i18n="sidebar.has_saves">Has saves</option><option value="shelf" data-i18n="sidebar.shelf_entries">Shelf entries</option><option value="hidden" data-i18n="sidebar.hidden">Hidden</option><option value="missing" data-i18n="sidebar.missing_files">Missing files</option></select></label>
       <label class="field" data-sidebar-section="filters"><span data-i18n="sidebar.esrb">ESRB</span><select id="esrbFilter"><option value="" data-i18n="sidebar.any_rating">Any rating</option><option>E</option><option>E10+</option><option>T</option><option>M</option><option>AO</option><option>RP</option><option data-i18n="sidebar.unrated">Unrated</option></select></label>
       <div class="section-title" data-sidebar-section="filters" data-i18n="sidebar.categories">Categories</div>
       <nav class="platforms" id="platformCategories" data-sidebar-section="filters"></nav>
@@ -125,6 +126,8 @@
       <div class="form-grid game-editor-sections">
         <section class="wide game-editor-section" data-game-section="basics" aria-labelledby="gameSectionBasics">
           <h3 id="gameSectionBasics">Basics</h3>
+        <label class="field wide"><span data-i18n="game.entry_type">Entry type</span><select name="entry_type" id="gameEntryType"><option value="playable" data-i18n="game.entry_playable">Playable game</option><option value="shelf" data-i18n="game.entry_shelf">Shelf entry (no local file)</option></select></label>
+        <p class="wide description" id="gameShelfHint" data-i18n="game.shelf_hint" hidden>A shelf entry stays in your collection without a local file. Use Set up launch from its details when you have a file to play.</p>
         <label class="field"><span>Name</span><input name="name" required></label>
         <label class="field"><span>Platform</span><input name="platform"></label>
         <label class="field"><span>Genre</span><input name="genre"></label>
@@ -265,6 +268,20 @@
       <button class="icon-button" id="hashMatchScreenscraper" type="button">ScreenScraper hash-match</button>
       <button class="primary" type="submit">Search</button>
       <button class="icon-button" id="autoMatchMetadata" type="button">Auto-match library</button>
+      <div class="wide section-title" data-i18n="metadata.launchbox_heading">LaunchBox migration</div>
+      <div class="wide detail-card">
+        <p class="description" data-i18n="metadata.launchbox_description">Preview a LaunchBox XML export before adding or merging games. The preview is bound to this file and your current library.</p>
+        <label class="field wide"><span data-i18n="metadata.launchbox_xml">LaunchBox XML file</span><span class="path-input-row"><input id="launchboxXmlPath" type="text" data-i18n-placeholder="metadata.launchbox_xml_placeholder" placeholder="/path/to/Platforms.xml"><button type="button" class="path-browse" id="browseLaunchBoxXml" data-i18n="common.browse">Browse</button></span></label>
+        <div class="form-grid">
+          <label class="field"><span data-i18n="metadata.launchbox_source_root">Source path root (optional)</span><input id="launchboxSourceRoot" type="text" placeholder="C:\\Games"></label>
+          <label class="field"><span data-i18n="metadata.launchbox_destination_root">Local path root (optional)</span><input id="launchboxDestinationRoot" type="text" placeholder="/home/user/Games"></label>
+          <label class="field wide"><span data-i18n="metadata.launchbox_emulator_map">Emulator mappings (one LaunchBox ID=OpenBox adapter per line)</span><textarea id="launchboxEmulatorMap" rows="2" placeholder="launchbox-emulator-id=retroarch"></textarea></label>
+          <label class="check wide"><input type="checkbox" id="launchboxOverwrite"> <span data-i18n="metadata.launchbox_overwrite">Overwrite existing path and metadata fields</span></label>
+        </div>
+        <div class="extras"><button type="button" class="icon-button" id="previewLaunchBox" data-i18n="metadata.launchbox_preview">Preview migration</button><button type="button" class="primary" id="applyLaunchBox" data-i18n="metadata.launchbox_apply" hidden disabled>Apply preview</button></div>
+        <p class="wide description" id="launchboxStatus" aria-live="polite"></p>
+        <div class="wide metadata-results" id="launchboxReport" hidden></div>
+      </div>
       <div class="wide description" id="metadataStatus"></div>
       <div class="wide detail-card" id="metadataCoverage" style="display:none"><div class="facts" id="metadataCoverageFacts"></div></div>
       <div class="wide metadata-results" id="metadataResults"></div>
@@ -417,8 +434,20 @@
         <label class="field wide settings-field settings-panel" data-settings-panel="library imports" data-setting="watched folders import auto"><span>Automatically watched game folders, one absolute path per line</span><span class="path-input-row"><textarea id="watchFolders"></textarea><button type="button" class="path-browse" data-browse-for="watchFolders" data-browse-kind="folder">Browse</button></span></label>
         <div class="wide settings-field" data-setting="library cleanup remove steam imports"><button type="button" class="icon-button" id="removeSteamGames">Remove all imported Steam games</button><span class="description">Removes library entries only. Game files and media stay on disk.</span></div>
         <div class="wide settings-field" data-setting="diagnostic support troubleshooting logs"><button type="button" class="icon-button" id="copyDiagnosticLog">Copy diagnostic log</button><span class="description">Review it before sharing because it can include game names and local file paths.</span></div>
-        <label class="field wide settings-field settings-panel" data-settings-panel="integrations" data-setting="cloud sync syncthing dropbox nextcloud"><span>Mounted Nextcloud, Syncthing, Dropbox, or other cloud folder for game-stat syncing</span><span class="path-input-row"><input id="cloudFolder"><button type="button" class="path-browse" data-browse-for="cloudFolder" data-browse-kind="folder">Browse</button></span></label>
-        <div class="wide settings-field" data-setting="cloud sync"><button type="button" class="icon-button" id="syncCloud">Sync statistics now</button><span class="description" id="cloudStatus"></span></div>
+        <label class="field wide settings-field settings-panel" data-settings-panel="integrations" data-setting="cloud sync syncthing dropbox nextcloud"><span data-i18n="settings.cloud_folder">Mounted Nextcloud, Syncthing, Dropbox, or other cloud folder for game-stat syncing</span><span class="path-input-row"><input id="cloudFolder"><button type="button" class="path-browse" data-browse-for="cloudFolder" data-browse-kind="folder">Browse</button></span></label>
+        <div class="wide settings-field" data-setting="cloud sync"><button type="button" class="icon-button" id="syncCloud" data-i18n="settings.sync_now">Sync statistics now</button><span class="description" id="cloudStatus"></span></div>
+        <div class="wide settings-field settings-panel detail-card" data-settings-panel="integrations" data-setting="library catalog sync causal cloud">
+          <label class="check"><input type="checkbox" id="librarySyncEnabled"><span data-i18n="settings.library_sync_enabled">Enable opt-in library catalog sync</span></label>
+          <p class="description" data-i18n="settings.library_sync_description">Safely syncs catalog metadata through the mounted cloud folder. File paths, launch settings, credentials, and play statistics stay local.</p>
+          <div class="extras">
+            <button type="button" class="icon-button" id="librarySyncPreview" data-i18n="settings.library_sync_preview">Preview catalog changes</button>
+            <button type="button" class="icon-button" id="librarySyncApply" data-i18n="settings.library_sync_apply" disabled>Apply reviewed changes</button>
+            <button type="button" class="icon-button" id="librarySyncPublish" data-i18n="settings.library_sync_publish">Publish local changes</button>
+          </div>
+          <p class="description" id="librarySyncStatus" aria-live="polite"></p>
+          <div id="librarySyncPreviewResults" hidden></div>
+          <div id="librarySyncConflicts" hidden></div>
+        </div>
         <div class="wide settings-field settings-panel" data-settings-panel="integrations" data-setting="screenscraper scraper hash rom credentials"><span>ScreenScraper (credentials live in ~/.env: SCREENSCRAPER_USER, SCREENSCRAPER_PASSWORD)</span><div class="extras"><span class="description" id="screenscraperStatus">Not checked</span><button type="button" class="icon-button" id="testScreenscraper">Check ScreenScraper</button></div></div>
         <label class="field wide settings-field" data-setting="default image group viewing cover background screenshot clear logo fanart banner icon box back box spine 3d box title screen cart front cart back disc ads flyers manuals"><span>Default image group</span><select id="defaultImageGroup"><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option><option value="clear_logo">Clear logos</option><option value="fanart">Fanart</option><option value="banner">Banners</option><option value="icon">Icons</option><option value="box_back">Box backs</option><option value="box_spine">Box spines</option><option value="box_3d">3D boxes</option><option value="title_screen">Title screens</option><option value="cart_front">Cart fronts</option><option value="cart_back">Cart backs</option><option value="disc">Discs</option><option value="advertisement">Ads / flyers</option><option value="manual">Manuals</option></select></label>
         <div class="wide settings-field" data-setting="badges favorite installed missing media saves documents versions storefront achievements high scores progress rating broken portable controller"><span>Visible game badges</span><div class="badge-row">

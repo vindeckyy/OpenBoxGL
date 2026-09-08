@@ -1,7 +1,11 @@
 # ADR 0035: Library sync via mounted folder
 
 **Date:** 2026-09-04
-**Status:** Accepted
+**Status:** Superseded by ADR 0038 (legacy protocol disabled) and ADR 0039 (replacement design)
+
+The behavior below records the original design, not verified current guarantees.
+Deletion propagation and safe two-device merging were disproved during the
+next-update audit. See ADR 0038 for the corrective guard.
 
 ## Context
 

@@ -340,6 +340,101 @@ def normalize_state(raw: Any) -> tuple[dict[str, Any], bool]:
     return state, changed
 
 
+def _normalize_committed_state(state: dict[str, Any]) -> dict[str, Any]:
+    """Validate and repair a state already loaded from the current schema.
+
+    Transactions normally start from the store's validated in-memory state.
+    Calling ``normalize_state`` here would deep-copy every game before every
+    single-field write.  Keep the same validation and repair guarantees while
+    doing the common current-schema path in place; legacy or malformed roots
+    still use the full normalizer.
+    """
+    if not isinstance(state, dict):
+        raise StateCorruptError("OpenBox state must be an object.")
+    try:
+        version = int(state.get("schema_version", 1))
+    except (TypeError, ValueError):
+        version = 1
+    required = ("games", "profiles", "history", "settings", "playlists", "ui_state")
+    if version != STATE_SCHEMA_VERSION or any(key not in state for key in required):
+        return normalize_state(state)[0]
+    state.setdefault("schema_version", STATE_SCHEMA_VERSION)
+    if _normalize_feature_fields(state):
+        # The repair is already applied in place.
+        pass
+    if not isinstance(state.get("games"), list):
+        raise StateCorruptError("OpenBox library.json has an invalid games collection.")
+    _normalize_game_ids(state["games"])
+    _validate_state(state)
+    return state
+
+
+def _transaction_owned_containers(state: dict[str, Any]) -> tuple[dict[str, int], dict[int, set[int]]]:
+    """Index shallow container ownership without copying the catalog."""
+    roots: dict[str, int] = {}
+    children: dict[int, set[int]] = {}
+
+    def register(value: Any) -> None:
+        if not isinstance(value, (dict, list)) or id(value) in children:
+            return
+        values = value.values() if isinstance(value, dict) else value
+        children[id(value)] = {
+            id(child) for child in values if isinstance(child, (dict, list))
+        }
+        for child in values:
+            register(child)
+
+    for key, value in state.items():
+        if not isinstance(value, (dict, list)):
+            continue
+        roots[key] = id(value)
+        register(value)
+    return roots, children
+
+
+def _detach_new_mutables(
+    state: dict[str, Any],
+    owned: tuple[dict[str, int], dict[int, set[int]]],
+) -> None:
+    """Detach mutator-introduced records while retaining the warm write path."""
+    roots, children = owned
+
+    def detach(value: Any, seen: set[int] | None = None) -> None:
+        known = children.get(id(value))
+        if known is None:
+            return
+        if seen is None:
+            seen = set()
+        if id(value) in seen:
+            return
+        seen.add(id(value))
+        if isinstance(value, dict):
+            items = list(value.items())
+            for key, child in items:
+                if not isinstance(child, (dict, list)):
+                    continue
+                if id(child) not in known:
+                    value[key] = copy.deepcopy(child)
+                else:
+                    detach(child, seen)
+        else:
+            for index, child in enumerate(list(value)):
+                if not isinstance(child, (dict, list)):
+                    continue
+                if id(child) not in known:
+                    value[index] = copy.deepcopy(child)
+                else:
+                    detach(child, seen)
+
+    for key, value in list(state.items()):
+        if not isinstance(value, (dict, list)):
+            continue
+        if id(value) != roots.get(key):
+            state[key] = copy.deepcopy(value)
+            continue
+        detach(value)
+
+
 class JsonStateStore:
     """A high-performance JSON store with in-memory caching, indexing, and atomic commits."""
 
@@ -548,7 +643,13 @@ class JsonStateStore:
             self._write_unlocked(state, adopt=True)
             return state
 
-    def _write_unlocked(self, state: dict[str, Any], adopt: bool = False) -> None:
+    def _write_unlocked(
+        self,
+        state: dict[str, Any],
+        adopt: bool = False,
+        *,
+        reuse_cache: bool = False,
+    ) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, temporary_name = tempfile.mkstemp(
             prefix=f".{self.path.name}.", suffix=".tmp", dir=self.path.parent
@@ -580,7 +681,7 @@ class JsonStateStore:
                 os.fsync(output.fileno())
 
             os.chmod(temporary, 0o600)
-            # Backup first with a separate inode: a failure or corruption of primary must not affect backup
+            # Backup first with a separate inode: a failure or corruption of primary must not affect backup.
             backup_tmp = self.backup_path.with_name(f".{self.backup_path.name}.{secrets.token_hex(4)}.tmp")
             try:
                 shutil.copy2(temporary, backup_tmp)
@@ -595,7 +696,15 @@ class JsonStateStore:
             os.chmod(self.path, 0o600)
             fsync_directory(self.path.parent)
             self._rotate_snapshots()
-            self._remember(state, adopt=adopt)
+            if reuse_cache:
+                # New caller-owned containers were detached before the write;
+                # retaining this validated transaction object avoids copying
+                # every game dictionary on the warm path.
+                self._cached_state = state
+                self._cached_signature = self._signature()
+                self._reindex(state)
+            else:
+                self._remember(state, adopt=adopt)
         finally:
             if temporary.exists():
                 temporary.unlink()
@@ -665,9 +774,9 @@ class JsonStateStore:
                 self._clear_cache()
                 raise
 
-    def update(self, mutator: Callable[[dict[str, Any]], Any]) -> dict[str, Any]:
+    def update(self, mutator: Callable[[dict[str, Any]], Any], *, isolate: bool = True) -> dict[str, Any]:
         """Apply a mutation and return a detached snapshot of the committed state."""
-        state, _ = self.update_with_result(mutator)
+        state, _ = self.update_with_result(mutator, isolate=isolate)
         return copy.deepcopy(state)
 
     def _flush_coalesced(self) -> None:
@@ -726,18 +835,34 @@ class JsonStateStore:
                 self._coalesce_timer.start()
         return copy.deepcopy(normalized), result
 
-    def update_with_result(self, mutator: Callable[[dict[str, Any]], Any]) -> tuple[dict[str, Any], Any]:
-        """Apply a mutation under the process lock; the returned state is cache-owned, read-only for the caller."""
+    def update_with_result(
+        self,
+        mutator: Callable[[dict[str, Any]], Any],
+        *,
+        isolate: bool = True,
+    ) -> tuple[dict[str, Any], Any]:
+        """Apply a mutation under the process lock.
+
+        Direct callers get the historical transaction isolation by default.
+        The application-level wrapper uses ``isolate=False`` because its
+        mutators are internal and the HTTP boundary cannot retain Python
+        object aliases; this keeps large-library writes on the warm path.
+        """
         with self._thread_lock, self._file_lock(True):
             signature = self._signature()
             if self._cached_state is not None and signature == self._cached_signature:
                 state = self._cached_state
             else:
                 state, _ = self._load_unlocked()
+            owned_containers = _transaction_owned_containers(state) if isolate else None
             try:
                 result = mutator(state)
-                normalized, _ = normalize_state(state)
-                self._write_unlocked(normalized, adopt=True)
+                normalized = _normalize_committed_state(state)
+                if owned_containers is not None:
+                    _detach_new_mutables(normalized, owned_containers)
+                if isinstance(result, (dict, list, tuple, set)):
+                    result = copy.deepcopy(result)
+                self._write_unlocked(normalized, adopt=True, reuse_cache=True)
                 self._coalesce_last_flush = time.monotonic()
                 return normalized, result
             except Exception:

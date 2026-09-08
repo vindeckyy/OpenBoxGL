@@ -7,10 +7,12 @@ import json
 import os
 from pathlib import Path
 import re
+import time
 import subprocess
 import sys
 import tempfile
 import shutil
+from urllib.request import urlopen
 
 def _repo_root() -> Path:
     candidate = Path(__file__).resolve().parent
@@ -104,6 +106,69 @@ def test_makefile_install():
         assert script.exists(), f"missing {name}"
         assert os.access(script, os.X_OK), f"{name} not executable"
     print("  Makefile scripts: ok")
+
+
+def test_staged_install_locale_endpoints():
+    """A staged Makefile install must serve every public locale endpoint."""
+    locales = sorted((ROOT / "locales").glob("*.json"))
+    assert locales, "expected source locale files"
+    with tempfile.TemporaryDirectory() as directory:
+        stage = Path(directory) / "stage"
+        data_dir = Path(directory) / "data"
+        # Skip the native-host compile while exercising the install recipe. The
+        # web server is launched with --no-browser, so /bin/true is sufficient
+        # as an install-time stand-in for the native binary.
+        subprocess.run(
+            [
+                "make", "-o", "native-host", "install",
+                f"DESTDIR={stage}", "PREFIX=/usr", "NATIVE_HOST=/bin/true",
+            ],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        share = stage / "usr" / "share" / "openbox"
+        for locale in locales:
+            installed = share / "locales" / locale.name
+            assert installed.is_file(), f"missing staged locale {locale.name}"
+            assert installed.read_bytes() == locale.read_bytes()
+
+        env = os.environ.copy()
+        env["OPENBOX_DATA_DIR"] = str(data_dir)
+        server = subprocess.Popen(
+            [sys.executable, str(share / "web_app.py"), "--no-browser"],
+            cwd=share,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            port_file = data_dir / "server.port"
+            deadline = time.monotonic() + 15
+            while not port_file.is_file() and time.monotonic() < deadline:
+                if server.poll() is not None:
+                    break
+                time.sleep(0.05)
+            assert port_file.is_file(), "staged web server did not publish a port"
+            port = int(port_file.read_text(encoding="utf-8"))
+            for locale in locales:
+                with urlopen(f"http://127.0.0.1:{port}/locales/{locale.name}", timeout=5) as response:
+                    assert response.status == 200
+                    assert response.headers["Content-Type"].startswith("application/json")
+                    assert json.loads(response.read()) == json.loads(locale.read_text(encoding="utf-8"))
+        finally:
+            server.terminate()
+            try:
+                server.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                server.kill()
+                server.wait(timeout=10)
+            stdout, stderr = server.communicate()
+            if server.returncode and not (port_file.is_file() if "port_file" in locals() else False):
+                raise AssertionError(f"staged web server failed: {stderr or stdout}")
+    print("  Staged locale endpoints: ok")
 
 
 def test_runtime_manifest():
@@ -459,7 +524,7 @@ def test_appimage_library_scope():
             "LD_LIBRARY_PATH": "/host/incompatible/readline",
         })
         subprocess.run([str(app_run_path)], env=env, check=True, timeout=10)
-        assert marker.read_text() == str(root / "usr" / "lib")
+        assert marker.read_text() == f"{root / 'usr' / 'lib'}:{root / 'usr' / 'lib64'}"
 
         marker.unlink()
         native.unlink()
@@ -467,7 +532,7 @@ def test_appimage_library_scope():
         python.write_text("#!/bin/sh\nprintf '%s' \"$LD_LIBRARY_PATH\" > \"$OPENBOX_TEST_ENV\"\n")
         python.chmod(0o755)
         subprocess.run([str(app_run_path)], env=env, check=True, timeout=10)
-        assert marker.read_text() == str(root / "usr" / "lib")
+        assert marker.read_text() == f"{root / 'usr' / 'lib'}:{root / 'usr' / 'lib64'}"
     print("  AppImage library scope: ok")
 
 
@@ -524,6 +589,7 @@ def main():
     test_legal_policy()
     test_flatpak_manifest()
     test_makefile_install()
+    test_staged_install_locale_endpoints()
     test_runtime_manifest()
     test_runtime_import_closure()
     test_sbom_artifact_inventory()

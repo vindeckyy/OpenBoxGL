@@ -6,7 +6,7 @@ methods are no-ops and the JSON read path is used exclusively.
 
 The SQLite database is rebuilt from the canonical JSON state on demand.
 It provides:
-  - Full-text search via FTS5 (with LIKE fallback when FTS5 is unavailable).
+  - Canonical-name substring search with Unicode casefolding and library order.
   - Filtered queries with indexed lookups on platform, genre, favorite, etc.
   - Facet computation via GROUP BY.
 
@@ -33,6 +33,10 @@ _FTS5_AVAILABLE: bool | None = None
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS games (
     game_id TEXT PRIMARY KEY,
+    name TEXT,
+    -- ``title`` is retained as an internal compatibility column for older
+    -- read-model databases.  Search semantics use the canonical ``name``
+    -- projection below.
     title TEXT,
     platform TEXT,
     genre TEXT,
@@ -56,7 +60,8 @@ CREATE TABLE IF NOT EXISTS games (
     controller_support TEXT,
     sort_title TEXT,
     description TEXT,
-    raw_json TEXT
+    raw_json TEXT,
+    library_order INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_games_platform ON games(platform);
 CREATE INDEX IF NOT EXISTS idx_games_genre ON games(genre);
@@ -134,6 +139,14 @@ class SqliteReadModel:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
         conn.executescript(_SCHEMA)
+        # Read-model databases created before the canonical-name projection
+        # lack these columns.  Keep the optional projection readable and let
+        # the next rebuild populate them from JSON state.
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(games)")}
+        if "name" not in columns:
+            conn.execute("ALTER TABLE games ADD COLUMN name TEXT")
+        if "library_order" not in columns:
+            conn.execute("ALTER TABLE games ADD COLUMN library_order INTEGER DEFAULT 0")
         if _check_fts5():
             conn.executescript(_FTS_SCHEMA)
             conn.executescript(_FTS_TRIGGERS)
@@ -158,9 +171,14 @@ class SqliteReadModel:
                 gid = str(game.get("game_id") or "").strip()
                 if not gid:
                     continue
+                # ``name`` is the canonical library field.  Do not project
+                # the legacy ``title`` field into search semantics.
+                name = str(game.get("name") or "")
+                library_order = len(rows)
                 rows.append((
                     gid,
-                    str(game.get("title") or ""),
+                    name,
+                    name,
                     str(game.get("platform") or ""),
                     str(game.get("genre") or ""),
                     str(game.get("developer") or ""),
@@ -184,15 +202,16 @@ class SqliteReadModel:
                     str(game.get("sort_title") or ""),
                     str(game.get("description") or ""),
                     json.dumps(game, ensure_ascii=False),
+                    library_order,
                 ))
             conn.executemany(
                 """INSERT OR REPLACE INTO games (
-                    game_id, title, platform, genre, developer, publisher,
+                    game_id, name, title, platform, genre, developer, publisher,
                     series, region, year, favorite, hidden, installed, broken,
                     portable, play_count, playtime_seconds, last_played,
                     date_added, rating, progress, esrb, controller_support,
-                    sort_title, description, raw_json
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    sort_title, description, raw_json, library_order
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 rows,
             )
             conn.commit()
@@ -246,30 +265,40 @@ class SqliteReadModel:
             clauses.append("installed = ?")
             params.append(1 if installed else 0)
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
-        sql = f"SELECT raw_json FROM games{where} ORDER BY title LIMIT ? OFFSET ?"
+        sql = f"SELECT raw_json FROM games{where} ORDER BY library_order, rowid LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         rows = conn.execute(sql, params).fetchall()
         return [json.loads(r[0]) for r in rows]
 
     def search(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
-        """Full-text search for games. Uses FTS5 if available, LIKE otherwise."""
+        """Search canonical game names by casefolded substring in library order.
+
+        The v2 API promises substring matching over ``name`` only.  Keeping
+        matching here in Python avoids SQLite LIKE/FTS differences for Unicode
+        casefolding and treats punctuation and malformed FTS expressions as
+        ordinary text.
+        """
         if not self._enabled:
             return []
         conn = self._connect()
-        if _check_fts5():
-            sql = """SELECT g.raw_json FROM games_fts f
-                     JOIN games g ON g.rowid = f.rowid
-                     WHERE games_fts MATCH ? ORDER BY rank LIMIT ?"""
-            try:
-                rows = conn.execute(sql, [query + "*", limit]).fetchall()
-                return [json.loads(r[0]) for r in rows]
-            except sqlite3.OperationalError:
-                pass  # fall through to LIKE
-        # LIKE fallback
-        pattern = f"%{query}%"
-        sql = "SELECT raw_json FROM games WHERE title LIKE ? OR platform LIKE ? OR genre LIKE ? LIMIT ?"
-        rows = conn.execute(sql, [pattern, pattern, pattern, limit]).fetchall()
-        return [json.loads(r[0]) for r in rows]
+        try:
+            limit = max(1, min(int(limit), 200))
+        except (TypeError, ValueError):
+            limit = 50
+        needle = str(query or "").casefold()
+        if not needle:
+            return []
+        rows = conn.execute(
+            "SELECT raw_json FROM games ORDER BY library_order, rowid"
+        ).fetchall()
+        results = []
+        for raw_json, in rows:
+            game = json.loads(raw_json)
+            if needle in str(game.get("name") or "").casefold():
+                results.append(game)
+                if len(results) >= limit:
+                    break
+        return results
 
     def facets(self, field: str, limit: int = 40) -> list[tuple[str, int]]:
         """Compute facets (value, count) for a given field via GROUP BY."""

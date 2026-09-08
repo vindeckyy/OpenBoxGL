@@ -28,6 +28,7 @@ LOGGER = logging.getLogger("openbox")
 
 FIELDS = {
     "name", "platform", "genre", "year", "developer", "publisher", "series",
+    "manual_entry",
     "collection", "description", "path", "launch", "launch_profile", "cover", "background",
     "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen",
     "cart_front", "cart_back", "disc", "advertisement", "manual",

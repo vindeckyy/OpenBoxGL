@@ -40,6 +40,14 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.10.0" date="2026-09-08">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.10.0</url>
+      <description>
+        <p>Sync, Import, Launch release hardening library synchronization, making LaunchBox migration reviewable, and improving large-library search, shelf management, launch reliability, and packaging.</p>
+        <p>Adds fail-closed legacy sync handling, opt-in causal catalog transport with independently selectable conflict alternatives, recovery snapshots, and transactional recording. LaunchBox preview/apply flows now use bounded parsing, explicit source identity, stale-plan and tamper rejection, and transactional application.</p>
+        <p>Also: canonical search and facets with an optional SQLite read model, manual and shelf entry workflows, atomic launch reservations, warm state writes, picker timestamp safety, complete locale packaging, and x86_64/aarch64 release validation.</p>
+      </description>
+    </release>
     <release version="1.9.0" date="2026-09-04">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.9.0</url>
       <description>
