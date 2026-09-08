@@ -4,25 +4,26 @@
 
 | Version | Supported |
 | --- | --- |
-| 1.9.x | Yes |
-| 1.8.x | Yes |
-| 1.7.x | Yes |
-| 1.6.x | Yes |
-| 1.5.x | Yes |
-| 1.4.x | Yes |
-| 1.3.x | Yes |
-| 1.2.x | Yes |
-| 1.1.x | Yes |
-| 1.0.x | Yes |
-| 0.9.x | Yes |
-| 0.8.x | Yes |
+| 1.10.x | Yes (current) |
+| 1.9.x | No — upgrade required |
+| 1.8.x | No — upgrade required |
+| 1.7.x | No — upgrade required |
+| 1.6.x | No — upgrade required |
+| 1.5.x | No — upgrade required |
+| 1.4.x | No — upgrade required |
+| 1.3.x | No — upgrade required |
+| 1.2.x | No — upgrade required |
+| 1.1.x | No — upgrade required |
+| 1.0.x | No — upgrade required |
+| 0.9.x | No — upgrade required |
+| 0.8.x | No — upgrade required |
 | 0.7.x | Best effort |
 | 0.6.x | Best effort |
 | 0.5.x | Best effort |
 | 0.4.x | Best effort |
 | < 0.4.0 | No |
 
-Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them.
+Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. The 1.10.x line is the current maintained release; the older rows document the historical support policy and should not be read as promises of backported fixes.
 
 ## Reporting a vulnerability
 

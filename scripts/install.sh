@@ -3,12 +3,21 @@
 set -euo pipefail
 
 REPO="vindeckyy/OpenBoxGL"
-ASSET="OpenBox-x86_64.AppImage"
+arch="${OPENBOX_ARCH:-$(uname -m)}"
+case "$arch" in
+  x86_64|amd64|x64) arch="x86_64" ;;
+  aarch64|arm64) arch="aarch64" ;;
+  *)
+    printf '\033[1;31m%s\033[0m\n' "Unsupported architecture: $arch (expected x86_64 or aarch64)." >&2
+    exit 1
+    ;;
+esac
+ASSET="OpenBox-${arch}.AppImage"
 KEY_ASSET="openbox-release.pub"
 SIG_ASSET="${ASSET}.sig"
 DEST_DIR="${OPENBOX_INSTALL_DIR:-$HOME/.local/bin}"
 # Bootstrap trust anchor for the committed production release key.
-RELEASE_KEY_SHA256="95a107c1ee073a4b91b23299dc6ad3b65abbe06871a2b4b25abb903f64a69e4d"
+RELEASE_KEY_SHA256="39db9c52aa2e6e24b06ac845c29e0aeda60f3facf1ee30007913d7e93368d9ea"
 
 umask 077
 TMP_DIR="$(mktemp -d)"

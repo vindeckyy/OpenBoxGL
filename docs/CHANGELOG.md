@@ -109,6 +109,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Library Sync via Mounted Folder
 - New `POST /api/v2/library/sync/publish` and `POST /api/v2/library/sync/pull` extend cloud sync to the full library with tombstones for deletions and last-writer-wins conflict resolution. Stats sync remains separate (ADR 0035).
+- **Superseded in 1.10.0:** the legacy full-library routes now fail closed before mutation; use the opt-in causal catalog transport described by ADRs 0038–0039.
 
 ### Manual/Shelf Entries
 - New `POST /api/v2/library/manual-entry` adds games without a local file path (physical media, board games, console games). Marked with `manual_entry: true` (ADR 0036).

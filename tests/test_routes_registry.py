@@ -29,8 +29,8 @@ from scripts import check_v1_contract  # noqa: E402
 
 class RouteRegistryTests(unittest.TestCase):
     def test_route_table_sizes(self):
-        # 122 base GET + 25 v1 aliases = 147 total (1.9.0 adds mastery + party queue/static)
-        # 125 base POST + 42 v1 aliases = 167 total (causal sync and shelf
+        # 123 base GET + 25 v1 aliases = 148 total (1.10.0 adds mastery + party queue/static)
+        # 126 base POST + 42 v1 aliases = 168 total (causal sync and shelf
         # conversion are additive v2 routes).
         self.assertEqual(len(GET_TABLE), 148)
         self.assertEqual(len(POST_TABLE), 168)

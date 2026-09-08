@@ -8,7 +8,7 @@
   <description>
     <p>OpenBox Game Launcher is an open-source game library manager and launcher for Linux. It combines Steam, Heroic, Lutris, ROM collections, and emulator workflows in one local catalog with advanced search, ordered playlists, metadata, artwork galleries, session tracking, backups, and launch profiles.</p>
     <p>OpenBox Game Launcher is unrelated to the Openbox Linux window manager. The projects have different maintainers, codebases, and purposes.</p>
-    <p>Features include Big Box fullscreen browsing, Steam Game Mode guest support for handhelds, LaunchBox Games Database sync, advanced search, manual and filter playlists, context actions, configurable status badges, collection details, RetroAchievements integration, save and library backups, artwork galleries, plugin hooks, storefront import tools, custom fields, ESRB filters, list view, drag-and-drop import, bundled media packs, and a localized interface (English, Spanish, German, French, Portuguese). LaunchBox Premium-equivalent workflows are included without a subscription.</p>
+    <p>Features include Big Box fullscreen browsing, Steam Game Mode guest support for handhelds, LaunchBox Games Database sync and reviewable XML migration, causal local-first catalog sync, indexed large-library search and facets, manual shelf entries, advanced search, manual and filter playlists, context actions, configurable status badges, collection details, RetroAchievements integration, save and library backups, artwork galleries, plugin hooks, storefront import tools, custom fields, ESRB filters, list view, drag-and-drop import, bundled media packs, and a localized interface (English, Spanish, German, French, Portuguese). LaunchBox Premium-equivalent workflows are included without a subscription.</p>
   </description>
   <launchable type="desktop-id">io.openbox.GameLauncher.desktop</launchable>
   <url type="homepage">https://openboxgl.github.io/</url>
@@ -23,19 +23,19 @@
   </content_rating>
   <screenshots>
     <screenshot type="default">
-      <image type="source">https://openboxgl.github.io/openbox-screenshot.png</image>
+      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.10.0/assets/openbox-screenshot.png</image>
       <caption>The library grid with cover art, filters, and the top bar.</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://openboxgl.github.io/openbox-game-detail.png</image>
+      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.10.0/assets/openbox-game-detail.png</image>
       <caption>Game detail pane with metadata, artwork, and launch actions.</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://openboxgl.github.io/openbox-bigbox.png</image>
+      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.10.0/assets/openbox-bigbox.png</image>
       <caption>Big Box fullscreen mode for controller-driven couch use.</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://openboxgl.github.io/openbox-constellation.png</image>
+      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.10.0/assets/openbox-constellation.png</image>
       <caption>Library Constellation relationship graph with series, developer, and genre edges.</caption>
     </screenshot>
   </screenshots>
@@ -53,7 +53,7 @@
       <description>
         <p>Look, Discover, Play release introducing adaptive cover theming, a smart play picker, a library relationship graph, a printable year-in-review report, a completionist dashboard, and a Big Box party mode.</p>
         <p>Adds Mood Match adaptive theming that tints accents from the selected cover, a What should I play picker scored by time/mood/familiarity/players, a pan/zoomable Library Constellation graph, OpenBox Wrapped annual aggregates with a History Timeline tab, a Mastery Map of per-platform progress with RetroAchievements columns, and Game Night couch-multiplayer queues with a spinning wheel and persistent rounds.</p>
-        <p>Also: 28 root parity shims replaced by a single MetaPathFinder bridge, central _deps registry, SQLite read model graduated from dead code to wired query path, LaunchBox XML library migration import, Big Box video snaps with debounce and BGM ducking, full library sync via mounted folder with tombstones, and manual/shelf entries for games without local files.</p>
+        <p>Also: 28 root parity shims replaced by a single MetaPathFinder bridge, central _deps registry, SQLite read model graduated from dead code to wired query path, LaunchBox XML library migration import, Big Box video snaps with debounce and BGM ducking, full library sync via mounted folder with tombstones, and manual/shelf entries for games without local files. The legacy full-library sync design was superseded by the reviewable causal transport in 1.10.0.</p>
       </description>
     </release>
     <release version="1.8.0" date="2026-09-02">

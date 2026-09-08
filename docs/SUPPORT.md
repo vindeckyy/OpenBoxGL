@@ -2,22 +2,24 @@
 
 ## Scale and architecture
 
-- **Formal library scale:** 20,000 games (performance gates enforce 10k/20k scenarios). Optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) extends search and facet performance for 50k+ libraries.
-- **CPU architecture:** **x86_64 and aarch64** for 1.8.0 AppImage artifacts (the Flatpak bundle is x86_64 only). The self-updater installs only the artifact matching the running architecture.
+- **Formal library scale:** 20,000 games (blocking performance gates cover 10k and 20k scenarios). The optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) provides indexed search and facets for larger libraries while JSON remains canonical.
+- **CPU architecture:** OpenBox 1.10.0 publishes signed **x86_64 and aarch64 AppImages**. The Flatpak bundle is **x86_64 only**. The in-app updater and the release installer select the artifact that matches the running architecture and refuse a mismatched or unsigned artifact.
 - **Interface language:** English, Spanish, German, French, and Portuguese (v1.7.2+).
 
 ## Supported platforms
 
-OpenBox targets Linux on **x86_64 and aarch64**. The maintainers test these environments per release:
+OpenBox targets Linux on **x86_64 and aarch64**. Release CI validates the packaged paths and native host build; hardware and distro coverage below describes the strength of the evidence rather than a promise that every combination is physically tested:
 
 | Environment | Status |
 |---|---|
-| Ubuntu LTS (two most recent) | Tested |
-| Fedora (latest stable) | Tested |
-| Arch Linux | Tested |
-| SteamOS / Steam Deck | Tested (gamescope guest mode) |
-| aarch64 desktops / handhelds | Tested (AppImage built on ubuntu-24.04-arm) |
+| Ubuntu LTS (release runners) | Release-gated build and test coverage |
+| Fedora | Host and writable emulated-aarch64 build validation; runtime otherwise best effort |
+| Arch Linux | Best effort |
+| SteamOS / Steam Deck | Gamescope guest harness and controller-path coverage; physical maintainer pass unavailable |
+| aarch64 desktops / handhelds | Release-gated AppImage/native build and emulated smoke; physical hardware unverified |
 | Other glibc distributions | Best effort |
+
+The aarch64 runner and emulated tests prove the build and packaged paths, not battery, display, controller, or gamescope behavior on a particular handheld. Report hardware-specific results with the model, distro image, and desktop/session details.
 
 ## Supported runtimes
 

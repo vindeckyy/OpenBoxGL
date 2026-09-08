@@ -82,6 +82,7 @@ class V1AliasTests(unittest.TestCase):
             self.assertEqual(res.returncode, 0, res.stderr)
             content = out_file.read_text(encoding="utf-8")
             self.assertIn("Generated from `routes.py` and `contracts.py`; do not edit by hand.", content)
+            self.assertIn("additive feature work targets `/api/v2/*`", content)
             self.assertIn("| GET / POST | `/api/v1/settings` |", content)
             self.assertIn("`/api/v1/metadata/match`", content)
 

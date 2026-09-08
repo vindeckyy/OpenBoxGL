@@ -4,6 +4,12 @@ Date: 2026-08-25
 Status: Accepted
 Amended: 2026-09-02 by ADR 0024 (ARM64 un-deferred for 1.8.0).
 
+This ADR records the v1.7/1.8 artifact decision and its historical support
+matrix. The current 1.10.0 release workflow and evidence are documented in
+`docs/CONTRIBUTING.md`, `docs/SUPPORT.md`, and the release closure in
+`docs/NEXT_UPDATE_EXECUTION.md`; those documents qualify physical hardware and
+Flathub claims instead of treating build output as hardware validation.
+
 ## Context
 
 OpenBox v1.7 is a flagship release for new Linux users. Shipping requires reproducible installable artifacts, explicit platform support, and gate checks that block publication until binaries pass—not documentation claims alone. The project adds no telemetry and does not conflate building a Flatpak bundle with Flathub store submission.

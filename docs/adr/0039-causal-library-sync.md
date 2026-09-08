@@ -1,7 +1,13 @@
 # ADR 0039: Causal catalog synchronization
 
 Date: 2026-09-08
-Status: Accepted design; release enablement requires acceptance tests
+Status: Accepted and enabled in 1.10.0
+
+The release gate completed automated independent-folder exchange, conflict,
+deletion/tombstone, stale-preview, recovery, transaction, and HTTP
+preview/apply/publish coverage before the sync UI was enabled. Manual background
+sync scheduling and physical multi-device soak remain outside this design; the
+workflow is explicit and opt-in.
 
 ## Ownership and identity
 
@@ -55,6 +61,7 @@ the commit phase is explicitly non-cancellable.
 ## Compatibility and release gate
 
 Preserve format-2 files. Old clients cannot overwrite the new transport namespace.
-Do not promise downgrade compatibility. Enable the UI only after independent
-two-device exchange, conflict, deletion, recovery and stale-preview regressions
-pass. The legacy guard in ADR 0038 remains until that integration is proven.
+Do not promise downgrade compatibility. The independent exchange, conflict,
+deletion, recovery, stale-preview, and HTTP regressions passed for 1.10.0, so the
+explicit opt-in UI is enabled. The legacy guard in ADR 0038 remains as the
+fail-closed compatibility boundary for old routes.

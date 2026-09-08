@@ -95,6 +95,11 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # AppImage and Flatpak publish jobs share one GitHub Release. Keep the
+    # uploads serialized while allowing their build jobs to run in parallel.
+    concurrency:
+      group: release-publish-${{ github.ref_name }}
+      cancel-in-progress: false
     environment: release
     permissions:
       contents: write
@@ -122,6 +127,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           target_commitish: ${{ github.sha }}
           name: ${{ steps.relname.outputs.name }}
+          body_path: docs/RELEASE_NOTES.md
           generate_release_notes: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           fail_on_unmatched_files: true

@@ -43,9 +43,9 @@ def main():
     lines = [
         "# API v1 contract",
         "",
-        "The v1 surface is the stable contract. Legacy `/api/*` paths stay available for older clients; new work targets v1.",
+        "The v1 surface is the stable contract. Legacy `/api/*` paths stay available for older clients; additive feature work targets `/api/v2/*` so the frozen v1 contract does not drift.",
         "",
-        "Authentication: every request needs the `X-OpenBox-Token` header with the per-process token from `server.token`. Responses are JSON; errors carry `error`, `code`, and `request_id`.",
+        "Authentication: this generated page covers authenticated v1 JSON aliases. Most requests use the `X-OpenBox-Token` header with the per-process token from `server.token`; the local UI may also use a query token during startup. Public assets and byte/stream endpoints follow their route-specific behavior, and not every legacy error has the full `error`, `code`, and `request_id` envelope.",
         "",
         "| Method | Path | Handler | Response |",
         "|---|---|---|---|",

@@ -5,7 +5,7 @@
 
 ## Context
 
-The changed-line coverage floor (`CHANGED_LINE_FLOOR = 80` in `scripts/check_tests.py`, measured by `scripts/check_changed_coverage.py`) intersected the diff against the upstream base with coverage data. However, the coverage configuration omits `test_*` and `scripts/*` from measurement (`[tool.coverage.run] omit`), so those files never appear in the combined data. Every changed line in a test or script file was therefore counted as a miss, making the floor unpassable whenever a release edits an existing test file and the upstream base is behind (the normal state while developing a release). Releases 1.7.x never hit this because checks ran after the upstream push, when the diff base equals HEAD.
+The changed-line coverage floor (`CHANGED_LINE_FLOOR = 80` at the time of this decision, later raised to 95% by ADR 0037) intersected the diff against the upstream base with coverage data. However, the coverage configuration omits `test_*` and `scripts/*` from measurement (`[tool.coverage.run] omit`), so those files never appear in the combined data. Every changed line in a test or script file was therefore counted as a miss, making the floor unpassable whenever a release edits an existing test file and the upstream base is behind (the normal state while developing a release). Releases 1.7.x never hit this because checks ran after the upstream push, when the diff base equals HEAD.
 
 ## Decision
 
@@ -15,4 +15,4 @@ In `measure_changed_lines()`, skip any changed file that is not present in the c
 
 - The floor measures what it can actually influence: runtime code. Test edits no longer mechanically fail the gate.
 - Coverage of test files themselves is still enforced structurally: the gate py_compiles them and runs them to completion; failures fail the gate.
-- No change to the floors themselves (`COVERAGE_FLOOR`, `WEB_APP_FLOOR`, `CHANGED_LINE_FLOOR`, `NEW_MODULE_FLOOR`).
+- This ADR did not change the floors at the time; the later 95% changed-line requirement is recorded in ADR 0037 and enforced by `scripts/check_tests.py` and CI.

@@ -99,22 +99,33 @@ All tests must pass on CI before a PR can be merged.
 
 ## Release process
 
-OpenBox follows **artifact-first** gates (ADR 0013). Stable publication requires exact-artifact CI green, not source-only checks.
+OpenBox follows **artifact-first** gates (ADR 0013). Stable publication requires
+the exact tagged artifacts and their release workflow checks to be green, plus
+maintainer review of the corresponding master CI/CodeQL results. The tag
+workflows build and publish after the protected `release` environment approves;
+they do not automatically wait for an unrelated master run.
 
 ### Repository and release authority
 
 - Git tags and [GitHub Releases](https://github.com/vindeckyy/OpenBoxGL/releases) on this repository are the canonical publication channel for AppImage, Flatpak bundle, SBOM, and install scripts.
 - Version strings are declared once in `updates.py`; `make version-check` (`scripts/check_version_sync.py`) must pass before tagging.
-- Changelog, `openbox.metainfo.xml`, README badge, and issue templates must agree with `updates.py`.
+- Changelog, `openbox.metainfo.xml`, README release badge/latest/installer text,
+  PARITY lead, release-note compare link, SBOM fallback metadata, and issue
+  templates must agree with `updates.py`; the version check also covers SUPPORT,
+  SECURITY, and Flathub checklist markers. Review those documents for
+  release-specific validation claims as well.
 
 ### RC soak (48–72 hours)
 
 Before a **stable** tag:
 
-1. Publish a prerelease artifact from CI (AppImage + Flatpak on x86_64).
+1. Publish a prerelease artifact from CI (x86_64 and aarch64 AppImages plus the x86_64 Flatpak bundle).
 2. Soak **48–72 hours** on supported distros.
 3. Run Setup Center, Activity, Launch Doctor, and launch flows on the binary—not just from source.
 4. Confirm `make check`, `tests/test_packaging.py`, and `./scripts/ui_smoke.sh` on the release commit.
+5. Push an annotated `vX.Y.Z` tag only after the master CI and CodeQL runs for
+   that commit are green; the AppImage and Flatpak tag workflows then serialize
+   publication into the same GitHub Release.
 
 See [ADR 0013 (Artifact Gates & Release Criteria)](adr/0013-artifact-gates.md) for the full RC and release gate requirements.
 

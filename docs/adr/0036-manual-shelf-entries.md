@@ -1,11 +1,15 @@
 # ADR 0036: Manual/shelf entries
 
 **Date:** 2026-09-04
-**Status:** Accepted
+**Status:** Accepted; expanded in 1.10.0
 
 ## Context
 
-OpenBox requires a local file path for every game entry. Users with physical media (cartridges, discs), board games, or console games that don't have a local executable want to track these in their library without a fake path. This is a stretch feature for 1.9.0 — minimal scope, one route, no new abstraction.
+Before 1.9.0, OpenBox required a local file path for every game entry. Users with
+physical media (cartridges, discs), board games, or console games that do not
+have a local executable still needed a catalog record without a fake path. The
+initial 1.9.0 implementation was deliberately small; 1.10.0 completed the
+normal UI workflow without changing the record model.
 
 ## Decision
 
@@ -17,11 +21,11 @@ Add a single route for manual entries:
 
 3. **No path validation**: manual entries skip the path existence/symlink/file checks that `save_game` enforces, since there is no executable.
 
-4. **Downstream reuse**: manual entries flow through the same library as all other games — they appear in search, facets, Wrapped, Mastery, etc. The `manual_entry` flag is available for UI filtering but no UI changes are required for the stretch scope.
+4. **Downstream reuse**: manual entries flow through the same library as all other games — they appear in search, facets, Wrapped, Mastery, and exports. The `manual_entry` flag drives the Shelf filter and launchability projection. The 1.10.0 UI adds create/edit/convert actions; conversion attaches a verified local path without changing the stable game identity.
 
 ## Consequences
 
 - Users can track physical/board/console games in their OpenBox library.
 - No new abstraction or speculative catalog system.
-- The `manual_entry` flag enables future UI differentiation without requiring it now.
+- The `manual_entry` flag keeps catalog membership separate from launchability and supports the Shelf filter and editor.
 - v1 route surface untouched; additive `/api/v2/` route.

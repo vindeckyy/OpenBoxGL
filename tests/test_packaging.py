@@ -406,6 +406,10 @@ def test_release_flatpak_workflow():
     assert "ubuntu-24.04" in content
     assert "io.openbox.GameLauncher.yml" in content
     assert "flatpak build-bundle" in content
+    assert "group: release-publish-${{ github.ref_name }}" in content
+    assert "body_path: docs/RELEASE_NOTES.md" in content
+    appimage = (ROOT / ".github" / "workflows" / "release-appimage.yml").read_text(encoding="utf-8")
+    assert "group: release-publish-${{ github.ref_name }}" in appimage
     print("  Release Flatpak workflow: ok")
 
 
@@ -444,8 +448,9 @@ def test_legal_policy():
     assert "clean-room" not in disclaimer
     assert "15 U.S.C." not in disclaimer
     assert "Openbox window manager" in trademarks
-    assert "| 0.8.x | Yes |" in security
-    assert "| 1.0.x | Yes |" in security
+    assert "| 0.8.x | No — upgrade required |" in security
+    assert "| 1.0.x | No — upgrade required |" in security
+    assert "| 1.10.x | Yes (current) |" in security
     assert "| < 0.4.0 | No |" in security
     print("  Legal policy: ok")
 
@@ -474,6 +479,12 @@ def test_update_verification():
     assert "RELEASE_KEY_SHA256" in installer
     assert "openssl pkeyutl -verify" in installer
     assert "SIG_ASSET" in installer
+    assert 'OPENBOX_ARCH' in installer
+    assert 'OpenBox-${arch}.AppImage' in installer
+    assert 'aarch64|arm64' in installer
+    pinned = re.search(r'RELEASE_KEY_SHA256="([0-9a-f]{64})"', installer)
+    assert pinned, "installer must pin a SHA-256 trust anchor"
+    assert pinned.group(1) == hashlib.sha256((ROOT / "openbox-release.pub").read_bytes()).hexdigest()
     print("  Update version logic: ok")
 
 
