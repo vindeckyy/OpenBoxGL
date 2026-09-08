@@ -370,6 +370,7 @@ def clean_settings(merged):
             "controller_map": clean_mapping,
             "badge_visibility": [str(item) for item in badge_visibility],
             "cloud_folder": cloud_folder,
+            "library_sync_enabled": bool(merged.get("library_sync_enabled", False)),
             "startup_commands": startup_commands,
             "shutdown_commands": shutdown_commands,
             "track_session_history": track_session_history,
@@ -546,6 +547,10 @@ class SettingsHandlers:
                 continue
             merged[key] = value
         normalized_settings = clean_settings(merged)
+        enabling_library_sync = (
+            bool(normalized_settings.get("library_sync_enabled"))
+            and not bool(existing_settings.get("library_sync_enabled"))
+        )
         def mutate(state):
             settings = state.setdefault("settings", {})
             incoming_keys = {
@@ -560,6 +565,9 @@ class SettingsHandlers:
             for key, value in normalized_settings.items():
                 if key in incoming_keys or key not in settings:
                     settings[key] = value
+            if enabling_library_sync:
+                from pkg.parity.parity_library_sync import bootstrap_local_catalog
+                bootstrap_local_catalog(state)
         state = update_state_with_result(mutate)[0]
         self.send_json(200, public_settings(state))
 
@@ -600,5 +608,3 @@ class SettingsHandlers:
         if not credentials:
             raise ValueError("Configure RetroAchievements first.")
         self.send_json(200, inject_retroachievements(credentials))
-
-

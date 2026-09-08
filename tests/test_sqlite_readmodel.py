@@ -35,7 +35,7 @@ def _make_state(n=100):
     for i in range(n):
         games.append({
             "game_id": f"game-{i:04d}",
-            "title": f"Test Game {i}",
+            "name": f"Test Game {i}",
             "platform": ["PC", "Steam", "GOG", "NES", "SNES"][i % 5],
             "genre": ["Action", "RPG", "Puzzle", "Racing", "Sports"][i % 5],
             "developer": f"Dev {i % 10}",
@@ -51,6 +51,41 @@ def _make_state(n=100):
             "description": f"A test game number {i} for testing",
         })
     return {"games": games, "settings": {}, "profiles": {}}
+
+
+def _semantic_state():
+    """Corpus for server-search semantics rather than FTS token behavior."""
+    return {
+        "games": [
+            {
+                "game_id": "hidden-alpha",
+                "name": "Zeta Alpha",
+                "title": "Wrong Title",
+                "platform": "PC",
+                "hidden": True,
+            },
+            {
+                "game_id": "visible-alpha",
+                "name": "alpha: beta",
+                "platform": "Steam",
+                "developer": "Alpha Studios",
+            },
+            {
+                "game_id": "unicode",
+                "name": "Straße Quest",
+                "platform": "Console",
+            },
+            {
+                "game_id": "metadata-only",
+                "name": "Canonical Name",
+                "title": "Wrong Title",
+                "platform": "Alpha Platform",
+                "genre": "Puzzle",
+            },
+        ],
+        "settings": {},
+        "profiles": {},
+    }
 
 
 def test_rebuild_and_count():
@@ -99,7 +134,7 @@ def test_search_fts():
         rm.rebuild(state)
         results = rm.search("Test Game 5")
         assert len(results) > 0, "Search returned no results"
-        assert any("Test Game 5" in g["title"] for g in results), "Search didn't find expected title"
+        assert any("Test Game 5" in g["name"] for g in results), "Search didn't find expected name"
         rm.close()
 
 
@@ -119,6 +154,39 @@ def test_search_like_fallback():
             assert len(results) > 0, "LIKE search returned no results"
         finally:
             mod._FTS5_AVAILABLE = old_fts5
+        rm.close()
+
+
+def test_search_semantic_corpus_uses_name_casefold_and_library_order():
+    """Search matches canonical names, including hidden games, in input order."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rm = SqliteReadModel(Path(tmp) / "test.db")
+        rm._enabled = True
+        rm.rebuild(_semantic_state())
+        alpha = rm.search("ALPHA")
+        assert [game["game_id"] for game in alpha] == ["hidden-alpha", "visible-alpha"]
+        assert rm.search("wrong title") == []
+        assert [game["game_id"] for game in rm.search("STRASSE")] == ["unicode"]
+        # FTS operators and punctuation are ordinary substring text here.
+        assert rm.search('alpha AND [broken') == []
+        rm.close()
+
+
+def test_search_semantic_limit_is_clamped():
+    """The read model follows the v2 search result bounds."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rm = SqliteReadModel(Path(tmp) / "test.db")
+        rm._enabled = True
+        state = {
+            "games": [
+                {"game_id": f"g-{index}", "name": f"Alpha {index}"}
+                for index in range(205)
+            ],
+            "settings": {},
+        }
+        rm.rebuild(state)
+        assert len(rm.search("alpha", limit=0)) == 1
+        assert len(rm.search("alpha", limit=999)) == 200
         rm.close()
 
 
@@ -288,6 +356,8 @@ def run_all_tests():
         test_query_favorite,
         test_search_fts,
         test_search_like_fallback,
+        test_search_semantic_corpus_uses_name_casefold_and_library_order,
+        test_search_semantic_limit_is_clamped,
         test_facets,
         test_facets_invalid_field,
         test_invalidate,

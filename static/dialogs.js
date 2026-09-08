@@ -1,5 +1,5 @@
 import { $, escapeHtml } from './util.js';
-import { AppState, ensureProfiles, filteredGames } from './state.js';
+import { AppState, api, ensureProfiles, filteredGames, nativePickFile } from './state.js';
 import { closeBigBoxMenu } from './bigbox.js';
 
 let lastDialogTrigger = null;
@@ -261,6 +261,27 @@ function bindContextMenuA11y() {
 }
 
 let gameFormSnapshot = '';
+function syncGameEntryType() {
+  const form = $('gameForm');
+  const entryType = form?.elements?.entry_type;
+  if (!form || !entryType) return;
+  const shelf = entryType.value === 'shelf';
+  const path = form.elements.path;
+  if (path) {
+    path.required = !shelf;
+    path.disabled = shelf;
+  }
+  const hint = $('gameShelfHint');
+  if (hint) hint.hidden = !shelf;
+  const launchNav = document.querySelector('.game-editor-nav-item[data-game-section="launch"]');
+  if (launchNav) launchNav.hidden = shelf;
+  const launchSection = document.querySelector('.game-editor-section[data-game-section="launch"]');
+  if (shelf && launchSection && !launchSection.hidden) {
+    document.querySelectorAll('.game-editor-nav-item').forEach(item => item.classList.toggle('active', item.dataset.gameSection === 'basics'));
+    document.querySelectorAll('.game-editor-section').forEach(panel => { panel.hidden = panel.dataset.gameSection !== 'basics'; });
+  }
+}
+
 function snapshotGameForm() {
   const form = $('gameForm');
   if (!form) return '';
@@ -393,10 +414,11 @@ document.querySelectorAll('dialog').forEach(dialog => {
   });
 });
 
-async function openGameDialog(game = null) {
+async function openGameDialog(game = null, options = {}) {
   await ensureProfiles();
   AppState.editingId = game ? game.id : null;
-  $('dialogTitle').textContent = game ? 'Edit game' : 'Add game';
+  const shelf = options.shelf ?? Boolean(game?.manual_entry);
+  $('dialogTitle').textContent = game ? (shelf ? 'Edit shelf entry' : 'Edit game') : (shelf ? 'Add shelf entry' : 'Add game');
   [...$('gameForm').elements].forEach(element => {
     if (!element.name) return;
     if (element.type === 'checkbox') element.checked = Boolean(game?.[element.name]);
@@ -408,6 +430,15 @@ async function openGameDialog(game = null) {
     else if (element.name === 'alternate_names') element.value = Array.isArray(game?.alternate_names) ? game.alternate_names.join('; ') : (game?.alternate_names || '');
     else element.value = game?.[element.name] || '';
   });
+  const entryType = $('gameForm').elements.entry_type;
+  if (entryType) {
+    entryType.value = shelf ? 'shelf' : 'playable';
+    // Editing an existing record keeps its identity and entry kind. Use the
+    // explicit shelf conversion action for supported transitions so the save
+    // endpoint cannot be selected from a stale form value.
+    entryType.disabled = Boolean(game);
+    entryType.onchange = syncGameEntryType;
+  }
   const container = $('customFieldInputs');
   const defs = AppState.appSettings.custom_field_defs || [];
   container.innerHTML = defs.length ? defs.map(def => {
@@ -442,8 +473,20 @@ async function openGameDialog(game = null) {
     nextBtn.disabled = !game || currentIndex === -1 || currentIndex >= visible.length - 1;
     nextBtn.onclick = (game && currentIndex !== -1 && currentIndex < visible.length - 1) ? () => guardUnsavedGameEditor(() => openGameDialog(visible[currentIndex + 1])) : null;
   }
+  syncGameEntryType();
   gameFormSnapshot = snapshotGameForm();
   openDialog($('gameDialog'));
+}
+
+async function convertShelfEntry(game) {
+  if (!game?.manual_entry) return false;
+  const path = await nativePickFile('Choose a game or ROM file');
+  if (!path) return false;
+  await api('/api/v2/library/manual-entry/convert', {
+    method: 'POST',
+    body: JSON.stringify({game_id: game.game_id || game.id, path}),
+  });
+  return true;
 }
 
 bindGameEditorUnsavedGuard();
@@ -464,6 +507,7 @@ export {
   openDialog,
   closeDialog,
   openGameDialog,
+  convertShelfEntry,
   openContextMenu,
   closeContextMenu,
   bindContextMenuA11y,

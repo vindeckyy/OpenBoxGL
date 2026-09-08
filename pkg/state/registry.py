@@ -28,6 +28,11 @@ RUNNING: dict[str, dict] = {}
 # Maps launch_id → subprocess.Popen (or _ReattachedProcess).
 PROCESSES: dict[str, object] = {}
 
+# Maps stable game ID → the launch reservation held while a launch is
+# being validated, spawned, and registered. Reservations are process-local
+# and are guarded by PROCESS_LOCK alongside RUNNING/PROCESSES.
+PENDING_LAUNCHES: dict[str, dict] = {}
+
 # Bounded list of session events; kept to the last 100 entries.
 SESSION_EVENTS: list[dict] = []
 

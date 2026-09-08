@@ -40,7 +40,7 @@ Build the native host with `make native-host`, then run `./openbox-native.sh`.
 
 ## Testing
 
-Run the full verification gate before submitting a pull request. This covers ruff lint, runtime-module drift, the frozen v1 contract, version sync, frontend lint, i18n key coverage, compile checks, the full test suite under coverage, coverage floors (72.0% total, 54.0% `web_app.py`, 80% changed-line, 85% new-module), and design-token hygiene. Note CI additionally enforces a stricter 95% changed-line floor (`check_changed_coverage.py --fail-under=95` in `ci.yml`):
+Run the full verification gate before submitting a pull request. This covers ruff lint, runtime-module drift, the frozen v1 contract, version sync, frontend lint, i18n key coverage, compile checks, the full test suite under coverage, coverage floors (72.0% total, 54.0% `web_app.py`, 95% changed-line, 85% new-module), and design-token hygiene. CI also enforces the same 95% changed-line floor (`check_changed_coverage.py --fail-under=95` in `ci.yml`):
 
 ```bash
 make check

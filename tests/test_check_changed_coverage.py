@@ -100,12 +100,23 @@ class CheckChangedCoverageTests(unittest.TestCase):
 
 
 class CheckTestsFloorConstants(unittest.TestCase):
+    def test_local_gate_enforces_95_percent_boundary(self):
+        from scripts import check_tests
+
+        for hit, expected_failure in ((94, True), (95, False), (96, False)):
+            with self.subTest(hit=hit), mock.patch.object(
+                ccc, "measure_changed_lines", return_value=(hit, 100, ["sample.py"])
+            ):
+                failures = []
+                check_tests._check_changed_line_floor(Path("coverage"), failures)
+                self.assertEqual(bool(failures), expected_failure)
+
     def test_coverage_floors_ratcheted(self):
         import importlib
         check_tests = importlib.import_module("scripts.check_tests")
         self.assertEqual(check_tests.COVERAGE_FLOOR, 72.0)
         self.assertEqual(check_tests.WEB_APP_FLOOR, 54.0)
-        self.assertEqual(check_tests.CHANGED_LINE_FLOOR, 80.0)
+        self.assertEqual(check_tests.CHANGED_LINE_FLOOR, 95.0)
         self.assertEqual(check_tests.NEW_MODULE_FLOOR, 85.0)
 
 

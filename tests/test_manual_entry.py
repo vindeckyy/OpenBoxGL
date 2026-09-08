@@ -25,6 +25,7 @@ class ManualEntryTest(unittest.TestCase):
     def test_route_registered(self):
         from routes import POST_TABLE
         self.assertIn("/api/v2/library/manual-entry", POST_TABLE)
+        self.assertIn("/api/v2/library/manual-entry/convert", POST_TABLE)
 
     def test_manual_entry_adds_game_without_path(self):
         """The handler adds a game with manual_entry=True and empty path."""
@@ -94,6 +95,90 @@ class ManualEntryTest(unittest.TestCase):
         handler = MockHandler()
         with self.assertRaises(BadRequest):
             handler._api_post_api_v2_library_manual_entry({"game": {"platform": "PC"}})
+
+    def test_convert_preserves_identity_and_metadata(self):
+        import openbox
+        from handlers.library import LibraryHandlers
+        from webapp_state import load_state_view
+
+        openbox.STATE_STORE.save({
+            "games": [{"game_id": "shelf-1", "name": "Catan", "manual_entry": True,
+                       "path": "", "tags": ["party"], "notes": "owned"}],
+            "settings": {}, "profiles": {},
+        })
+        executable = Path(self._tmp.name) / "catan.sh"
+        executable.write_text("#!/bin/sh\n")
+
+        class MockHandler(LibraryHandlers):
+            def send_json(self, code, body):
+                self._sent = (code, body)
+
+        handler = MockHandler()
+        stable_id = load_state_view()["games"][0]["game_id"]
+        handler._api_post_api_v2_library_manual_entry_convert({"game_id": stable_id, "path": str(executable)})
+        self.assertEqual(handler._sent[0], 200)
+        game = load_state_view()["games"][0]
+        self.assertEqual(game["game_id"], stable_id)
+        self.assertFalse(game["manual_entry"])
+        self.assertEqual(game["path"], str(executable))
+        self.assertEqual(game["tags"], ["party"])
+        self.assertEqual(game["notes"], "owned")
+
+    def test_update_preserves_shelf_identity(self):
+        import openbox
+        from handlers.library import LibraryHandlers
+        from webapp_state import load_state_view
+
+        openbox.STATE_STORE.save({
+            "games": [{"id": 7, "game_id": "shelf-7", "name": "Old", "manual_entry": True, "path": ""}],
+            "settings": {}, "profiles": {},
+        })
+
+        class MockHandler(LibraryHandlers):
+            def send_json(self, code, body):
+                self._sent = (code, body)
+
+        handler = MockHandler()
+        stable_id = load_state_view()["games"][0]["game_id"]
+        handler._api_post_api_v2_library_manual_entry_update({
+            "game_id": stable_id,
+            "game": {"name": "New", "platform": "Tabletop"},
+        })
+        self.assertEqual(handler._sent[0], 200)
+        game = load_state_view()["games"][0]
+        self.assertEqual(game["game_id"], stable_id)
+        self.assertEqual(game["name"], "New")
+        self.assertTrue(game["manual_entry"])
+        self.assertEqual(game["path"], "")
+
+    def test_update_preserves_identity_and_keeps_shelf_type(self):
+        import openbox
+        from handlers.library import LibraryHandlers
+        from webapp_state import load_state_view
+
+        openbox.STATE_STORE.save({
+            "games": [{"game_id": "shelf-2", "name": "Old title", "manual_entry": True,
+                       "path": "", "tags": ["owned"], "notes": "keep this"}],
+            "settings": {}, "profiles": {},
+        })
+
+        class MockHandler(LibraryHandlers):
+            def send_json(self, code, body):
+                self._sent = (code, body)
+
+        handler = MockHandler()
+        stable_id = load_state_view()["games"][0]["game_id"]
+        handler._api_post_api_v2_library_manual_entry_update({
+            "game_id": stable_id,
+            "game": {"name": "New title", "platform": "Tabletop", "notes": "updated"},
+        })
+        self.assertEqual(handler._sent[0], 200)
+        game = load_state_view()["games"][0]
+        self.assertEqual(game["game_id"], stable_id)
+        self.assertEqual(game["name"], "New title")
+        self.assertTrue(game["manual_entry"])
+        self.assertEqual(game["path"], "")
+        self.assertEqual(game["tags"], ["owned"])
 
 
 if __name__ == "__main__":

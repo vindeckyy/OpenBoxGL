@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.9.0**, the Look, Discover, Play release described in the CHANGELOG.
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.10.0**, the Sync, Import, Launch release described in the CHANGELOG.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -70,7 +70,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | ScummVM / RPCS3 / Vita3K library import | done | Dedicated import endpoints scan common emulator libraries |
 | MAME community high scores | done | Local high-score discovery plus export/import bundles for sharing |
 | OBS recording attach | done | Latest OBS recording auto-attaches on session close; manual attach remains available |
-| Premium cloud sync | done | Mounted-folder statistics sync plus full library sync with tombstones via `POST /api/v2/library/sync/publish` and `/pull` (ADR 0035) |
+| Premium cloud sync | done | Mounted-folder statistics sync remains available; opt-in causal full-library sync adds validated events, conflict review, tombstones, and recovery while unsafe legacy routes fail closed before mutation (ADRs 0038–0039) |
 | Custom fields and bulk metadata wizard | done | Define custom fields in Settings, edit per game, and bulk update selected games |
 | ESRB ratings filter and metadata | done | ESRB from LaunchBox database imports, sidebar filter, list view column, and bulk edit |
 | List view and library columns | done | Grid/list toggle with sortable list columns including ESRB and progress |
@@ -121,7 +121,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Big Box party mode (Game Night) | done | Couch-multiplayer queue builder, spinning wheel, up-next strip, gamepad/keyboard control, persistent rounds (1.9.0, ADR 0031) |
 | LaunchBox XML library migration | done | `POST /api/v2/import/launchbox/preview` and `/apply` parse LaunchBox XML exports with dedup and emulator reporting (1.9.0, ADR 0033) |
 | Big Box video snaps | done | Stage mode shows looping gameplay videos with debounce, BGM duck, reduced-motion support (1.9.0, ADR 0034) |
-| Full library cloud sync | done | `POST /api/v2/library/sync/publish` and `/pull` with tombstones and last-writer-wins (1.9.0, ADR 0035) |
+| Full library cloud sync | done | Opt-in causal catalog transport records validated events, tombstones, outbox acknowledgements, recovery snapshots, and independently selectable conflicts; legacy routes fail closed before mutation (ADRs 0038–0039) |
 | Manual/shelf entries | done | `POST /api/v2/library/manual-entry` for games without local files (1.9.0, ADR 0036) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.

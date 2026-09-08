@@ -452,6 +452,7 @@ def _public_settings_uncached(state):
         "image_group_by_platform": settings.get("image_group_by_platform", {}),
         "image_group_by_playlist": settings.get("image_group_by_playlist", {}),
         "cloud_folder": settings.get("cloud_folder", ""),
+        "library_sync_enabled": settings.get("library_sync_enabled", False),
         "last_cloud_sync": settings.get("last_cloud_sync", ""),
         "startup_commands": settings.get("startup_commands", []),
         "shutdown_commands": settings.get("shutdown_commands", []),
@@ -553,6 +554,7 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         game.get("progress"), game.get("rating"), game.get("notes"),
         game.get("name"), game.get("path"), game.get("cover"), game.get("background"),
         game.get("platform"), index in save_indices,
+        game.get("manual_entry"),
     )
     with _GAME_PROJECTION_LOCK:
         cached = _GAME_PROJECTION_CACHE.get(ckey)
@@ -583,6 +585,7 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         vfield = ""
 
     raw_path = game.get("path", "")
+    shelf_entry = bool(game.get("manual_entry"))
     path_exists = prb_pth(str(raw_path), file_only=False) if raw_path else False
     store_installed = bool(game["store_installed"]) if "store_installed" in game else path_exists
 
@@ -635,6 +638,9 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "collection": game.get("collection", ""),
         "description": game.get("description", ""),
         "path": raw_path,
+        "manual_entry": shelf_entry,
+        "entry_type": "shelf" if shelf_entry else "playable",
+        "playable": bool(path_exists or store_installed) and not shelf_entry,
         "launch": game.get("launch", ""),
         "launch_profile": game.get("launch_profile", ""),
         "cover": cov,
@@ -899,6 +905,7 @@ def transact_state(mutator):
     """Run one read-modify-write transaction under the local and process lock."""
     state_lock = _ns("STATE_LOCK", STATE_LOCK)
     upd_res = _ns("update_state_with_result", update_state_with_result)
+
     with state_lock:
         result = upd_res(mutator)
     CACHE_EPOCH._invalidate_all()

@@ -71,14 +71,55 @@ def save_state(state):
     return STATE_STORE.save(state)
 
 
+def _sync_wrapped_mutator(mutator):
+    """Attach opt-in catalog recording to every canonical state transaction."""
+    def wrapped(state):
+        from pkg.parity.parity_library_sync import (
+            SyncValidationError,
+            bootstrap_local_catalog,
+            capture_sync_snapshot,
+            record_local_changes,
+            set_sync_error,
+            sync_enabled,
+        )
+
+        before_enabled = sync_enabled(state)
+        before = capture_sync_snapshot(state) if before_enabled else None
+        result = mutator(state)
+        metadata = state.get("library_sync")
+        suppress = isinstance(metadata, dict) and bool(metadata.pop("_suppress_local_recording", False))
+        if sync_enabled(state) and not before_enabled:
+            bootstrap_local_catalog(state)
+        elif before is not None and not suppress:
+            try:
+                record_local_changes(state, before, state)
+            except SyncValidationError as error:
+                # A bad/ambiguous sync identity must never reject the user's
+                # local mutation.  Preserve the committed data and expose a
+                # durable error requiring sync metadata repair.
+                code = "SYNC_IDENTITY_AMBIGUOUS" if "Duplicate local sync identity" in str(error) else "SYNC_METADATA_INVALID"
+                set_sync_error(state, error, code=code)
+        return result
+
+    return wrapped
+
+
 def update_state(mutator):
     """Apply one state mutation under the cross-process transaction lock."""
-    return STATE_STORE.update(mutator)
+    wrapped = _sync_wrapped_mutator(mutator)
+    if isinstance(STATE_STORE, JsonStateStore):
+        return STATE_STORE.update(wrapped, isolate=False)
+    # Keep lightweight test doubles and embedding adapters compatible with the
+    # original one-argument store protocol.
+    return STATE_STORE.update(wrapped)
 
 
 def update_state_with_result(mutator):
     """Apply a mutation and return both the committed state and callback result."""
-    return STATE_STORE.update_with_result(mutator)
+    wrapped = _sync_wrapped_mutator(mutator)
+    if isinstance(STATE_STORE, JsonStateStore):
+        return STATE_STORE.update_with_result(wrapped, isolate=False)
+    return STATE_STORE.update_with_result(wrapped)
 
 
 def recover_state():

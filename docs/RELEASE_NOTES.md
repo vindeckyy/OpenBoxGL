@@ -1,75 +1,66 @@
-# OpenBox v1.9.0: Look, Discover, Play
+# OpenBox 1.10.0 — Sync, Import, Launch
 
-**OpenBox v1.9.0** introduces adaptive cover theming, a smart "What should I play?" picker, a Library Constellation relationship graph, an OpenBox Wrapped year-in-review report with a session Timeline, a Mastery Map completionist dashboard, and a Game Night Big Box party mode.
-
----
-
-### Mood Match — Adaptive Cover Theming
-* **Live Palette**: Selecting a game extracts a 5-color palette (primary, ink, secondary, glow, tint) from its cover with a fast 4×4×4 RGB bin quantizer and applies it to the selected card, detail hero, play button hover, and Big Box background (ADR 0026).
-* **Off by Default**: Toggles in Settings → Appearance (`mood_match_enabled`/`mood_match_bigbox`); decorative accents only, text and focus tokens untouched.
+The OpenBox release focused on safer library changes, reviewable imports, and dependable play sessions. It gives shared libraries a causal sync path, makes LaunchBox migration auditable before anything is applied, and keeps large collections responsive from search through launch.
 
 ---
 
-### "What Should I Play?" Picker
-* **Scored Suggestions**: Pick by available time, mood (action/chill/story/retro/party), familiarity (new/favorite), and player count via `POST /api/v2/library/pick` (`pkg/parity/parity_picker.py`, ADR 0028).
-* **Reasons**: Every pick explains itself ("You added this 2 years ago and never launched it"); Launch / Details / Again actions plus a "Just surprise me" fallback.
+## What's New
+
+### Causal Library Sync — Shared Changes You Can Review
+Opt-in catalog sync now records content-addressed events with device identity, tombstones, bounded validation, outbox acknowledgement, stale previews, and recovery snapshots. Changes are recorded transactionally at the canonical state boundary, so a shared folder can carry an auditable history instead of an opaque last-writer-wins overwrite.
+
+Conflicts expose stable review IDs for every concurrent field and tombstone alternative. Select the title from one device, the rating from another, and the deletion decision separately; unresolved alternatives are never acknowledged silently.
+
+The old full-library routes now fail closed before mutation with a structured unavailable response. Statistics sync remains available while the safer catalog transport is enabled explicitly.
+
+### LaunchBox Migration — Preview Before Apply
+Import a LaunchBox XML export through the migration flow. Bounded parsing creates a deterministic plan with explicit source identity, path and emulator mappings, exclusions, and a review token. Nothing changes until the plan is applied.
+
+Plans are rejected when their inputs are stale or their payload has been tampered with. Accepted plans apply transactionally, and provider identity remains separate from numeric metadata IDs so unrelated records cannot merge by accident.
+
+### Search, Facets & Shelf — One Library Model
+Search and facets now share one canonical implementation across the HTTP surface, with bounded limits, hidden-item handling, and stable library ordering. Set `OPENBOX_ENABLE_SQLITE_READ=1` to use indexed search and GROUP BY facets for very large libraries while retaining parity checks against the JSON source of truth.
+
+Manual and shelf entries can be created, edited, filtered, exported, and converted explicitly. Physical media, board games, and console-only titles remain intentional records without fake local paths.
+
+### Launch Reservations — No Duplicate Starts
+Launch reservations are atomic by stable game ID and remain held until the configured tracker finishes, including wrapper-exit and child-process cases. A repeated click cannot start the same game twice while its previous launch is still active.
 
 ---
 
-### Library Constellation
-* **Star Map**: Tools → Constellation renders a pan/zoomable canvas graph of series, developer, publisher, genre, platform-family, and co-play edges via `GET /api/v2/library/constellation` (ADR 0027).
-* **Deterministic & Capped**: Nodes ranked by playtime (200/400/800/1000), one strongest edge per pair, chunked spring-electric layout; clicking a node selects it in the library.
+## Also New
+
+### Warm State Writes
+Large-library commits reuse the validated in-memory state after a successful write, preserving backup and recovery guarantees while reducing write latency. Direct state-store transactions detach mutable caller records and results recursively, including nested containers.
+
+### Picker Reliability
+Weighted picker requests recompute their suggestion on every request, so **Again** can produce a new result. Legacy naive and timezone-aware timestamps are normalized safely when history is scored.
+
+### Complete Linux Packaging
+AppImage and Flatpak builds include all locale files, desktop metadata, SBOM and update metadata, with relocatable Python and scoped loader paths. The release audit covers x86_64 and emulated aarch64 paths plus native WebKitGTK compilation.
 
 ---
 
-### Wrapped + Replay Timeline
-* **Your Year in Games**: Insights → Wrapped opens a printable report with playtime, sessions, streaks, progress, top game/platform/genre, oldest played, and busiest month via `GET /api/v2/insights/wrapped?year=YYYY` (ADR 0029).
-* **Timeline Tab**: History → Timeline groups sessions by day with covers and recording badges via `GET /api/v2/history/timeline?days=90`. Privacy-safe by construction: names, covers, and aggregates only.
+## Under the Hood
+
+- **Fail-closed sync boundary** — unsafe legacy full-library operations are rejected before mutation, with the causal transport and conflict choices tested at the canonical state boundary
+- **Source identity separation** — LaunchBox imports preserve provider IDs independently from numeric metadata IDs and reject stale or tampered migration plans
+- **Warm transaction path** — validated state is reused for internal HTTP writes while direct callers receive recursive mutable-object isolation
+- **Reviewable shelf records** — entry type, conversion, export, and health semantics are covered by the same state and route model
+- **Release gates** — 107 test files, frontend and i18n checks, UI smoke, coverage floors, AppImage/Flatpak validation, and strict seven-run performance budgets pass on the release candidate
 
 ---
 
-### Mastery Map
-* **Completionist Dashboard**: Tools → Mastery shows stacked per-platform and per-decade bars over local progress states with a RetroAchievements column fed exclusively from the on-disk cache — zero new network calls (ADR 0030).
-* **Route**: `GET /api/v2/insights/mastery`; clicking a segment filters the library to that platform.
+## Download
+
+| Asset | Architecture | Type |
+|-------|-------------|------|
+| `OpenBox-x86_64.AppImage` | x86_64 | AppImage |
+| `OpenBox-aarch64.AppImage` | ARM64 | AppImage |
+| `OpenBox-x86_64.flatpak` | x86_64 | Flatpak |
+
+All AppImages are signed and include SHA-256 checksums, zsync metadata for delta updates, and SBOMs. Verify with `openbox-release.pub` and `install.sh`.
 
 ---
 
-### Game Night Party Mode
-* **Couch Flow**: Big Box → Game Night builds a multiplayer queue from player count and session length, spins a wheel for the round winner, shows an "Up next" strip, and persists rounds across restarts (`POST`/`GET /api/v2/party/queue`, `POST /api/v2/party/next`, ADR 0031).
-* **Controls**: Gamepad via the existing `pollGamepads` edge detection plus keyboard fallback (arrows/Enter/N/Escape).
-
----
-
-### Fixes
-* `POST /api/v2/library/pick` no longer hangs on a live server: POST handlers take the parsed `payload` argument instead of re-reading the consumed request body (ADR 0031).
-
----
-
-### Architecture & Performance
-* **Parity shim cleanup**: All 28 root-level `parity_*.py` shims deleted; `MetaPathFinder` is the sole flat-import bridge (ADR 0003).
-* **Central dependency registry**: `pkg/state/_deps.py` replaces 4 private `_ns()` helpers (ADR 0009).
-* **SQLite read model graduated**: `OPENBOX_ENABLE_SQLITE_READ=1` now serves facets via GROUP BY and adds `GET /api/v2/library/search` with FTS5. Default off = no behavior change (ADR 0032).
-
----
-
-### LaunchBox Migration
-* Import your LaunchBox library via `POST /api/v2/import/launchbox/preview` and `/apply`. Emulator mappings are reported for manual resolution (ADR 0033).
-
----
-
-### Big Box Video Snaps
-* Stage mode shows looping gameplay videos with 600ms debounce, BGM ducking, and reduced-motion support (ADR 0034).
-
----
-
-### Library Sync
-* `POST /api/v2/library/sync/publish` and `/pull` sync the full library via a mounted folder with tombstones for deletions (ADR 0035).
-
----
-
-### Manual/Shelf Entries
-* `POST /api/v2/library/manual-entry` adds games without a local file path — physical media, board games, console games (ADR 0036).
-
----
-
-**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.8.0...v1.9.0
+**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.9.0...v1.10.0

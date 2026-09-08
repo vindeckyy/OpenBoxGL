@@ -17,11 +17,11 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.9.0"><img src="https://img.shields.io/badge/Release-v1.9.0-0052CC?style=for-the-badge" alt="Release v1.9.0"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.10.0"><img src="https://img.shields.io/badge/Release-v1.10.0-0052CC?style=for-the-badge" alt="Release v1.10.0"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-2EA44F?style=for-the-badge" alt="CI"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux-lightgrey?style=for-the-badge" alt="Linux"></a>
   <br>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.9.0</strong></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.10.0</strong></a>
 </p>
 
 <p align="center">
@@ -148,7 +148,7 @@ Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attra
 
 ### Scale & Backups
 
-Optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) with FTS5 full-text search and GROUP BY facets for 50k+ libraries, wired into the facets endpoint and `/api/v2/library/search`. Backup diff API (`GET /api/v2/backup/diff`) to compare current library against archives. Visual chip builder for smart collection filter presets. **Library export** to JSON or CSV with platform/playlist scopes, shareable-by-construction field projection, and automatic newest-10 rotation. **Full library sync** via mounted folder with tombstones (`POST /api/v2/library/sync/publish` and `/pull`). **LaunchBox XML migration** import (`POST /api/v2/import/launchbox/preview` and `/apply`). **Manual/shelf entries** for games without local files.
+Optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) with canonical name-substring search and JSON-equivalent facets for large libraries, wired into `/api/v2/library/search`. Backup diff API (`GET /api/v2/backup/diff`) to compare current library against archives. Visual chip builder for smart collection filter presets. **Library export** to JSON or CSV with platform/playlist scopes, shareable-by-construction field projection, and automatic newest-10 rotation. Statistics sync remains available through the mounted-folder workflow; the opt-in causal transport provides validated full-library sync with conflict review and tombstones, while legacy routes fail closed before mutation. **LaunchBox XML migration** import (`POST /api/v2/import/launchbox/preview` and `/apply`). **Manual/shelf entries** for games without local files.
 
 ### Extensibility
 
@@ -241,7 +241,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 Download the installer from a specific signed release, inspect it, then run it. The installer verifies the release public-key pin, SHA-256 checksum, and Ed25519 signature before installing to `~/.local/bin`:
 
 ```bash
-VERSION=1.9.0
+VERSION=1.10.0
 curl --proto '=https' --tlsv1.2 --fail --location \
   --output install.sh \
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install.sh"

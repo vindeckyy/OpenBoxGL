@@ -9,7 +9,7 @@ from api_errors import BadRequest, GameNotFound
 from catalog import PROGRESS, bulk_update, game_media_paths, related_game_ids, tag_counts
 from handlers._shared import clean_extras as _clean_extras_shared
 from notifications import clear as clear_notifications, mark_read as mark_notifications_read, unread_count
-from openbox import load_state
+from openbox import load_state, load_state_readonly
 from routes.registry import route
 from parity_deeplinks import launcher_menu_items
 from parity_discovery import discovery_lists, related_with_reasons
@@ -254,14 +254,9 @@ class LibraryHandlers:
     def _api_get_api_explorer_facets(self, parsed):
         field = parse_qs(parsed.query).get("field", ["genre"])[0]
         state = load_state_view()
-        from pkg.state.cache import SQLITE_READ_MODEL
-        if SQLITE_READ_MODEL.enabled:
-            import openbox
-            SQLITE_READ_MODEL.ensure_fresh(state, openbox.STATE_STORE.signature())
-            if SQLITE_READ_MODEL.query_parity_check(state["games"]):
-                facets = SQLITE_READ_MODEL.facets(field)
-                self.send_json(200, {"field": field, "facets": [{"value": v, "count": c} for v, c in facets]})
-                return
+        # Keep the established explorer contract (hidden filtering, split
+        # genres, blank-value labels, and tie ordering) independent of the
+        # optional SQLite acceleration path.
         self.send_json(200, {"field": field, "facets": explorer_facets(state["games"], field)})
         return
 
@@ -576,6 +571,8 @@ class LibraryHandlers:
             else:
                 seen[identity] = index
             path = Path(game.get("path", ""))
+            if game.get("manual_entry"):
+                continue
             if not game.get("path") or not path.exists():
                 issues.append({"id":index, "game":game.get("name", ""), "type":"Missing game", "detail":str(path)})
             if not Path(game.get("cover", "")).is_file():
@@ -594,7 +591,7 @@ class LibraryHandlers:
             "games": len(state["games"]),
             "missing": sum(issue["type"] == "Missing game" for issue in issues),
             "duplicates": len(duplicates),
-            "unconfigured": sum(not game.get("path") for game in state["games"]),
+            "unconfigured": sum(not game.get("path") and not game.get("manual_entry") for game in state["games"]),
             "missing_media": sum(issue["type"] == "Missing box front" for issue in issues),
             "issues":issues,
         })
@@ -632,13 +629,63 @@ class LibraryHandlers:
         clear_file_probe_cache()
         self.send_json(200, {"ok": True, "name": game.get("name")})
 
+    @route("POST", "/api/v2/library/manual-entry/convert")
+    def _api_post_api_v2_library_manual_entry_convert(self, payload):
+        """Attach a verified local file to a shelf entry without changing its identity."""
+        path_value = str(payload.get("path") or "").strip()
+        if not path_value:
+            raise BadRequest("path is required to convert a shelf entry.")
+        candidate = Path(path_value).expanduser()
+        if not candidate.is_absolute() or not candidate.is_file():
+            raise BadRequest("path must be an existing absolute file.")
+
+        def mutate(state):
+            game = game_from_payload(state, payload)
+            if not game.get("manual_entry"):
+                raise BadRequest("Game is not a shelf entry.")
+            game["path"] = str(candidate)
+            game["manual_entry"] = False
+            return game.get("game_id", "")
+
+        _, game_id = transact_state(mutate)
+        clear_file_probe_cache()
+        self.send_json(200, {"ok": True, "game_id": game_id, "playable": True})
+
+    @route("POST", "/api/v2/library/manual-entry/update")
+    def _api_post_api_v2_library_manual_entry_update(self, payload):
+        """Update a shelf entry while retaining its stable identity and pathless type."""
+        source = payload.get("game", {})
+        game = _clean_game_fields(source)
+        if not game.get("name"):
+            raise BadRequest("Name is required.")
+        _clean_game_lists(game, source)
+        _apply_game_misc(game, source)
+
+        def mutate(state):
+            existing = game_from_payload(state, payload)
+            if not existing.get("manual_entry"):
+                raise BadRequest("Game is not a shelf entry.")
+            game["game_id"] = existing.get("game_id", game.get("game_id", ""))
+            game["manual_entry"] = True
+            game["path"] = ""
+            existing.update(game)
+            return game.get("game_id", "")
+
+        _, game_id = transact_state(mutate)
+        clear_file_probe_cache()
+        self.send_json(200, {"ok": True, "game_id": game_id, "manual_entry": True})
+
     @route("GET", "/api/v2/library/search")
     def _api_get_api_v2_library_search(self, parsed):
-        params = parse_qs(parsed.query)
+        params = parse_qs(parsed.query, keep_blank_values=True)
         query = params.get("q", [""])[0]
-        limit = min(int(params.get("limit", ["50"])[0]), 200)
+        try:
+            limit = int(params.get("limit", ["50"])[0])
+        except (TypeError, ValueError):
+            raise BadRequest("Invalid limit.") from None
+        limit = max(1, min(limit, 200))
         if not query.strip():
-            self.send_json(200, {"results": [], "source": "json"})
+            self.send_json(200, {"results": [], "source": "json", "count": 0})
             return
         from pkg.state.cache import SQLITE_READ_MODEL
         if SQLITE_READ_MODEL.enabled:
@@ -648,9 +695,18 @@ class LibraryHandlers:
             results = SQLITE_READ_MODEL.search(query, limit=limit)
             self.send_json(200, {"results": results[:limit], "source": "sqlite", "count": len(results)})
             return
-        # JSON fallback: simple title substring match
-        state = load_state_view()
-        q_lower = query.lower()
-        results = [g for g in state["games"] if q_lower in str(g.get("name", "")).lower()][:limit]
+        # JSON fallback: canonical name substring match, preserving library
+        # order and the existing policy of returning hidden games as well.
+        state = load_state_readonly()
+        q_lower = query.casefold()
+        results = []
+        for game in state.get("games", []):
+            if q_lower in str(game.get("name", "")).casefold():
+                # The state store owns this cached object; detach only the
+                # bounded response rows rather than deep-copying the whole
+                # library on every search request.
+                results.append(dict(game))
+                if len(results) >= limit:
+                    break
         self.send_json(200, {"results": results, "source": "json", "count": len(results)})
         return

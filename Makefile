@@ -10,6 +10,7 @@ PYTHON_SOURCES = $(shell sed '/^[[:space:]]*#/d;/^[[:space:]]*$$/d' runtime_modu
 
 DATA_FILES = index.html openbox.svg openbox.metainfo.xml LICENSE assets/openbox-logo.png
 STATIC_FILES = $(wildcard static/*.js) $(wildcard static/*.css)
+LOCALE_FILES = $(wildcard locales/*.json)
 NATIVE_HOST = native_host
 
 .PHONY: install uninstall appimage check version-check dev-venv test-one native-host
@@ -58,6 +59,7 @@ install: native-host
 	install -Dm644 plugins/catalog.json $(DESTDIR)$(SHAREDIR)/plugins/catalog.json
 	for f in $(DATA_FILES); do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/$$f"; done
 	for f in $(STATIC_FILES); do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/$$f"; done
+	for f in $(LOCALE_FILES); do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/$$f"; done
 	for f in themes/*.css; do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/$$f"; done
 	install -Dm644 openbox.desktop $(DESTDIR)$(DESKTOPDIR)/io.openbox.GameLauncher.desktop
 	install -Dm644 openbox.svg $(DESTDIR)$(ICONDIR)/io.openbox.GameLauncher.svg

@@ -62,6 +62,7 @@ KNOWN_SETTINGS = {
     "backup_on_close",
     "save_backup_limit",
     "cloud_folder",
+    "library_sync_enabled",
     "last_cloud_sync",
     "last_update_check",
     # integrations

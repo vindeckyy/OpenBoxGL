@@ -26,6 +26,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
     function renderBadges(game) {
       const visible = badgeVisibility();
       return [
+        game.manual_entry && badge('Shelf entry', true, 'shelf'),
         visible.has('favorite') && badge('Favorite', game.favorite, 'favorite'),
         visible.has('installed') && badge(gameInstalled(game) ? 'Installed' : 'Owned', true),
         visible.has('missing_media') && badge('Missing media', game.has_missing_media, 'danger'),
@@ -368,7 +369,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
         const installed = gameInstalled(game);
         const ownedUninstalled = Boolean(game.owned || game.store_catalog || game.gameyfin_id) && !installed;
         const effectiveView = presetRules.view || view;
-        const viewMatch = (effectiveView === 'all' && !game.hidden) || (effectiveView === 'favorites' && game.favorite && !game.hidden) || (effectiveView === 'recent' && game.last_played && !game.hidden) || (effectiveView === 'never' && !game.play_count && !game.hidden) || (effectiveView === 'playing' && ['Playing','Paused'].includes(game.progress) && !game.hidden) || (effectiveView === 'completed' && completed && !game.hidden) || (effectiveView === 'installed' && installed && !game.hidden) || (effectiveView === 'owned' && ownedUninstalled && !game.hidden) || (effectiveView === 'saves' && game.has_saves && !game.hidden) || (effectiveView === 'hidden' && game.hidden) || (effectiveView === 'missing' && !game.path_exists && !game.hidden);
+        const viewMatch = (effectiveView === 'all' && !game.hidden) || (effectiveView === 'favorites' && game.favorite && !game.hidden) || (effectiveView === 'recent' && game.last_played && !game.hidden) || (effectiveView === 'never' && !game.play_count && !game.hidden) || (effectiveView === 'playing' && ['Playing','Paused'].includes(game.progress) && !game.hidden) || (effectiveView === 'completed' && completed && !game.hidden) || (effectiveView === 'installed' && installed && !game.hidden) || (effectiveView === 'owned' && ownedUninstalled && !game.hidden) || (effectiveView === 'saves' && game.has_saves && !game.hidden) || (effectiveView === 'shelf' && game.manual_entry && !game.hidden) || (effectiveView === 'hidden' && game.hidden) || (effectiveView === 'missing' && !game.path_exists && !game.manual_entry && !game.hidden);
         const effectivePlatform = presetRules.platform || AppState.platform;
         const platformMatch = effectivePlatform === 'all' || game.platform === effectivePlatform;
         const category = presetRules.platform_category || AppState.platformCategory;

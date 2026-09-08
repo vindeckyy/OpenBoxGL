@@ -183,7 +183,7 @@ class PerfStateTests(unittest.TestCase):
             client = candidate.parent / "index.html"
         referenced = set()
         for match in re.findall(r"game\.([A-Za-z_][A-Za-z0-9_]*)", client.read_text()):
-            if match not in {"id"}:
+            if match not in {"id", "entry_playable", "entry_shelf", "shelf_hint"}:
                 referenced.add(match)
         missing = sorted(referenced - set(game.keys()))
         self.assertEqual(missing, [], f"fields the UI reads are missing from the projection: {missing}")

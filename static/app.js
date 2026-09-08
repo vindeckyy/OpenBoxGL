@@ -2,7 +2,7 @@ import { $, escapeHtml } from './util.js';
 import { token, AppState, api, notify, nativeFullscreen, detectNative, filteredGames, nativePickFile, selectedIds, resetQuery, resolveDeeplinkGameId } from './state.js';
 import { refresh, render, renderGrid, favorite, updateGameStatus, removeGame } from './library.js';
 import { openSettings, openProfiles, openThemes, openAchievements, openPlugins, health, openBackups, openFeature, bulkAction, saveFilter, savePreset, openPlaylists, createManualPlaylist, createFilterPlaylist, createNamedBackup, filterSettings, gracefulShutdown, loadTheme, addGamesToPlaylist } from './settings.js';
-import { importFolder, importSteam, importHeroic, importLutris, importArcade, runStartupStorefrontImports } from './imports.js';
+import { importFolder, importSteam, importHeroic, importLutris, importArcade, runStartupStorefrontImports, bindLaunchBoxMigration } from './imports.js';
 import { watchMetadata } from './metadata.js';
 import { openMediaManager } from './media.js';
 import { setReaderPage } from './reader.js';
@@ -92,17 +92,31 @@ window.addEventListener('DOMContentLoaded', () => {
     $('gameForm').onsubmit = async event => {
       event.preventDefault();
       const game = Object.fromEntries(new FormData(event.currentTarget));
+      const shelf = event.currentTarget.elements.entry_type?.value === 'shelf';
+      delete game.entry_type;
       game.extract_archive = event.currentTarget.elements.extract_archive.checked;
       game.hidden = event.currentTarget.elements.hidden.checked;
       game.hide_in_bigbox = event.currentTarget.elements.hide_in_bigbox.checked;
-      game.alternate_names = game.alternate_names.split(';').map(value => value.trim()).filter(Boolean);
-      game.applications = game.applications.split('\n').filter(Boolean).map(line => { const [name,path,command=''] = line.split('|').map(value => value.trim()); return {name,path,command}; });
-      game.versions = game.versions.split('\n').filter(Boolean).map(line => { const [name,path,command=''] = line.split('|').map(value => value.trim()); return {name,path,command}; });
-      game.documents = game.documents.split('\n').filter(Boolean).map(line => { const [name,path] = line.split('|').map(value => value.trim()); return {name,path}; });
-      game.save_paths = game.save_paths.split('\n').map(value => value.trim()).filter(Boolean);
-      game.screenshots = game.screenshots.split('\n').map(value => value.trim()).filter(Boolean);
+      game.alternate_names = String(game.alternate_names || '').split(';').map(value => value.trim()).filter(Boolean);
+      game.applications = String(game.applications || '').split('\n').filter(Boolean).map(line => { const [name,path,command=''] = line.split('|').map(value => value.trim()); return {name,path,command}; });
+      game.versions = String(game.versions || '').split('\n').filter(Boolean).map(line => { const [name,path,command=''] = line.split('|').map(value => value.trim()); return {name,path,command}; });
+      game.documents = String(game.documents || '').split('\n').filter(Boolean).map(line => { const [name,path] = line.split('|').map(value => value.trim()); return {name,path}; });
+      game.save_paths = String(game.save_paths || '').split('\n').map(value => value.trim()).filter(Boolean);
+      game.screenshots = String(game.screenshots || '').split('\n').map(value => value.trim()).filter(Boolean);
       game.custom_fields = Object.fromEntries([...document.querySelectorAll('[data-custom-field]')].map(input => [input.dataset.customField, input.value.trim()]).filter(([, value]) => value));
-      try { await api('/api/game',{method:'POST',body:JSON.stringify({id:AppState.editingId,game})}); $('gameDialog').close(); await refresh(); notify('Library saved'); } catch(error) { notify(error.message); }
+      if (shelf) {
+        game.manual_entry = true;
+        game.path = '';
+      } else delete game.manual_entry;
+      try {
+        const endpoint = shelf && AppState.editingId !== null
+          ? '/api/v2/library/manual-entry/update'
+          : shelf ? '/api/v2/library/manual-entry' : '/api/game';
+        await api(endpoint,{method:'POST',body:JSON.stringify({id:AppState.editingId,game})});
+        $('gameDialog').close();
+        await refresh();
+        notify(shelf ? 'Shelf entry saved' : 'Library saved');
+      } catch(error) { notify(error.message); }
     };
     $('bulkForm').onsubmit = async event => {
       event.preventDefault();
@@ -210,7 +224,7 @@ window.addEventListener('DOMContentLoaded', () => {
     $('loadStorefrontCatalog').onclick = loadStorefrontCatalog;
     $('importStorefrontInstalled').onclick = () => importStorefrontCatalog(false);
     $('importStorefrontUninstalled').onclick = () => importStorefrontCatalog(true);
-    $('addButton').onclick = () => openGameDialog(); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => $('metadataDialog').showModal(); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('constellationButton').onclick = openConstellation; $('masteryButton').onclick = openMastery; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
+    $('addButton').onclick = () => openGameDialog(); $('addShelfButton').onclick = () => openGameDialog(null, {shelf:true}); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => $('metadataDialog').showModal(); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('constellationButton').onclick = openConstellation; $('masteryButton').onclick = openMastery; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
     // ── Accessible Tools menu ──────────────────────────────────────────
     const toolsWrap = $('toolsWrap');
     const toolsButton = $('toolsButton');
@@ -326,6 +340,7 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
     $('closeSettings').onclick = $('cancelSettings').onclick = () => $('settingsDialog').close();
+    bindLaunchBoxMigration();
     $('closeBigBoxMenu').onclick = closeBigBoxMenu;
     $('applyBigBoxMenu').onclick = applyBigBoxMenu;
     $('screenSaver').onclick = stopScreenSaver;

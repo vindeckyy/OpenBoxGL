@@ -96,6 +96,60 @@ class PerfWriteTests(unittest.TestCase):
             reloaded = store.load()
             self.assertEqual(reloaded["games"][0]["name"], "One", "returned state must not alias stored state")
 
+    def test_warm_commit_detaches_mutator_owned_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.make_store(directory, snapshot_limit=0)
+            record = {"game_id": "g1", "name": "One", "tags": ["a"]}
+            store.update(lambda current: current["games"].append(record))
+            record["name"] = "Changed outside transaction"
+            record["tags"].append("outside")
+            reloaded = store.load()
+            self.assertEqual(reloaded["games"][0]["name"], "One")
+            self.assertEqual(reloaded["games"][0]["tags"], ["a"])
+            # A later warm write must not persist the detached external edit.
+            store.update(lambda current: current["settings"].update({"warm": True}))
+            reloaded = store.load()
+            self.assertEqual(reloaded["games"][0]["name"], "One")
+            self.assertEqual(reloaded["games"][0]["tags"], ["a"])
+
+    def test_warm_commit_detaches_nested_records_and_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.make_store(directory, snapshot_limit=0)
+            store.save({"games": [{"game_id": "g1", "name": "One", "launchers": []}]})
+            launcher = {"path": "committed"}
+            state, result = store.update_with_result(
+                lambda current: (current["games"][0]["launchers"].append(launcher) or current["games"][0])
+            )
+            launcher["path"] = "outside transaction"
+            result["name"] = "outside result"
+            self.assertEqual(store.load()["games"][0]["launchers"][0]["path"], "committed")
+            self.assertEqual(store.load()["games"][0]["name"], "One")
+            self.assertEqual(state["games"][0]["name"], "One")
+
+    def test_warm_commit_detaches_deep_nested_assignment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.make_store(directory, snapshot_limit=0)
+            store.save({
+                "games": [{"game_id": "g1", "name": "One", "launchers": [{"path": "p"}]}],
+            })
+            args = ["committed"]
+            store.update_with_result(
+                lambda current: current["games"][0]["launchers"][0].__setitem__("args", args)
+            )
+            args.append("outside transaction")
+            self.assertEqual(store.load()["games"][0]["launchers"][0]["args"], ["committed"])
+
+    def test_current_schema_update_uses_in_place_validation(self):
+        """Single-field writes must not deep-copy the complete game catalog."""
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.make_store(directory, snapshot_limit=0)
+            store.save({"games": [{"game_id": "g1", "name": "One"}]})
+            with mock.patch("state_store.normalize_state", side_effect=AssertionError("slow normalizer called")):
+                state, _ = store.update_with_result(
+                    lambda current: current["games"][0].__setitem__("favorite", True)
+                )
+            self.assertTrue(state["games"][0]["favorite"])
+
     def test_write_failure_keeps_primary_and_backup_consistent(self):
         with tempfile.TemporaryDirectory() as directory:
             store = self.make_store(directory)
@@ -129,7 +183,10 @@ class PerfWriteTests(unittest.TestCase):
             with mock.patch.object(store, "_load_unlocked", wraps=store._load_unlocked) as load_spy:
                 start = time.perf_counter()
                 for i in range(5):
-                    store.update_with_result(lambda s, val=bool(i % 2): s["games"][0].__setitem__("favorite", val))
+                    store.update_with_result(
+                        lambda s, val=bool(i % 2): s["games"][0].__setitem__("favorite", val),
+                        isolate=False,
+                    )
                 elapsed_total = time.perf_counter() - start
                 load_spy.assert_not_called()
                 avg_ms = (elapsed_total / 5.0) * 1000.0
@@ -577,4 +634,3 @@ class WriteCoalesceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

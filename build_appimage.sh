@@ -21,9 +21,12 @@ mkdir -p "$appdir/usr/bin" "$appdir/usr/lib" "$appdir/usr/share/openbox" "$appdi
 python_binary="$(readlink -f "$(command -v python3)")"
 stdlib="$(python3 -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')"
 python_version="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+stdlib_platlib="$(python3 -c 'import sys; print(getattr(sys, "platlibdir", "lib"))')"
+python_stdlib_dir="$appdir/usr/$stdlib_platlib/python$python_version"
+mkdir -p "$(dirname "$python_stdlib_dir")"
 cp "$python_binary" "$appdir/usr/bin/python3"
-cp -a "$stdlib" "$appdir/usr/lib/python$python_version"
-find "$appdir/usr/lib/python$python_version" -type d -name __pycache__ -prune -exec rm -rf -- {} +
+cp -a "$stdlib" "$python_stdlib_dir"
+find "$python_stdlib_dir" -type d -name __pycache__ -prune -exec rm -rf -- {} +
 
 while IFS= read -r file; do
   file="$(echo "$file" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
@@ -55,7 +58,7 @@ gcc -O2 "$source_root/native_host.c" -o "$appdir/usr/share/openbox/native_host" 
 while IFS= read -r library; do
   cp -L "$library" "$appdir/usr/lib/$(basename "$library")"
 done < <(
-  find "$appdir/usr/bin/python3" "$appdir/usr/lib/python$python_version/lib-dynload" -type f -print0 |
+  find "$appdir/usr/bin/python3" "$python_stdlib_dir/lib-dynload" -type f -print0 |
     xargs -0 -n1 ldd 2>/dev/null |
     awk '/=> \// {print $3} /^\// {print $1}' |
     grep -vE '/(libc|libm|libpthread|libdl|librt|ld-linux)[^/]*\.so' |
@@ -77,7 +80,7 @@ export APPDIR="$app_root"
 export PATH="$app_root/usr/bin:${PATH:-/usr/bin:/bin}"
 export PYTHONHOME="$app_root/usr"
 export PYTHONPATH="$app_root/usr/share/openbox${PYTHONPATH:+:$PYTHONPATH}"
-lib_path="$app_root/usr/lib"
+lib_path="$app_root/usr/lib:$app_root/usr/lib64"
 python="$app_root/usr/bin/python3"
 data_dir="${OPENBOX_DATA_DIR:-$HOME/.local/share/openbox-game-launcher}"
 mkdir -p "$data_dir"

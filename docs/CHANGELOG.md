@@ -4,6 +4,54 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.10.0] - 2026-09-08
+
+### Safe Library Sync
+- Disable unsafe legacy full-library publish/pull with an explicit error before
+  mutation; preserve remote files and keep statistics sync available (ADR 0038).
+- Add opt-in causal catalog sync with content-addressed events, device identity,
+  tombstones, outbox acknowledgement, bounded validation, stale previews,
+  recovery snapshots, and transactional recording at the canonical state
+  boundary (ADR 0039).
+- Preserve every concurrent field and tombstone alternative with stable review
+  IDs, allowing independent conflict choices without silently acknowledging an
+  unresolved alternative.
+
+### LaunchBox Migration
+- Add bounded LaunchBox XML preview/apply flows with explicit source IDs, path
+  and emulator mappings, exclusions, deterministic preview tokens, stale-plan
+  rejection, tamper detection, and transactional application (ADR 0040).
+- Keep provider identity separate from numeric metadata IDs so distinct records
+  cannot merge implicitly.
+
+### Search, Facets & Shelf
+- Wire the canonical JSON search and facet implementation through the HTTP
+  surface, with bounded limits, hidden-item handling, library order, and an
+  optional SQLite read model for large libraries.
+- Add manual and shelf entry projection, editing, conversion, filtering, export,
+  and health/doctor semantics while preserving entry type until conversion is
+  explicit.
+- Install all locale JSON assets with the system Makefile and verify locale
+  endpoints from the staged installed tree.
+
+### Launch & Performance
+- Make launch reservations atomic by stable game ID and hold them until the
+  configured tracker finishes, including wrapper-exit and child-process cases.
+- Reuse the validated warm state cache for large-library writes while keeping
+  direct state-store transactions isolated from mutable caller records and
+  results, including nested containers.
+- Recompute weighted picker requests so “Again” can produce a new result and
+  handle mixed legacy timestamp formats safely.
+
+### Packaging & Gates
+- Keep AppImage and Flatpak packaging relocatable and complete across locales,
+  desktop metadata, SBOM, update metadata, and installed-tree checks.
+- Validate the x86_64 and emulated aarch64 paths, native WebKitGTK host build,
+  frontend checks, UI smoke, coverage floors, and strict seven-run performance
+  budgets for 10k/20k libraries.
+
 ## [1.9.0] - 2026-09-04
 
 ### Mood Match — Adaptive Cover Theming

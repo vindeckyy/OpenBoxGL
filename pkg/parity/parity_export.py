@@ -25,7 +25,7 @@ EXPORT_NAME_RE = re.compile(rf"^{EXPORT_PREFIX}[0-9]{{8}}-[0-9]{{6}}(?:-[0-9]+)?
 # Ordered, shareable game fields. Keys mirror the FIELDS schema; anything
 # secret-adjacent (credentials live in settings, not games) is absent.
 EXPORT_GAME_FIELDS = (
-    "game_id", "name", "sort_title", "alternate_names",
+    "game_id", "name", "sort_title", "alternate_names", "manual_entry",
     "platform", "genre", "year", "developer", "publisher", "series",
     "region", "esrb", "max_players", "description", "notes", "wikipedia_url",
     "progress", "rating", "play_count", "playtime_seconds", "last_played",

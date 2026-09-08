@@ -9,7 +9,6 @@ VALID_MOODS = {"any", "action", "chill", "story", "retro", "party"}
 VALID_FAMILIARITIES = {"any", "new", "favorite"}
 VALID_SCOPES = {"all", "platform", "playlist"}
 
-
 class PickerHandlers:
     @route("POST", "/api/v2/library/pick")
     def _api_post_api_v2_library_pick(self, payload):
@@ -83,6 +82,9 @@ class PickerHandlers:
             "scope_name": scope_name,
             "limit": 3,
         }
+        # ``pick_games`` deliberately randomizes among the weighted top
+        # candidates. Do not cache final picks: repeated requests must be able
+        # to produce a new suggestion without waiting for a library mutation.
         picks = pick_games(games, history, criteria)
         self.send_json(200, {"picks": picks})
         return
