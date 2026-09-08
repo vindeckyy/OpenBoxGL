@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Documentation & Gates
+- Move superseded 1.10.0 planning documents and 1.7.2/1.8.0 release notes to
+  `docs/archive/`; rewrite `docs/README.md` as a complete docs index (ADR 0041).
+- Extend the runtime-modules gate to root `*.py` files, list all handler modules
+  explicitly in the route registry loader, and add the documented
+  `import pkg.parity` to `web_app.py` (ADR 0041).
+
 ## [1.10.0] - 2026-09-08
 
 ### Safe Library Sync
@@ -305,7 +312,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Added `Ctrl+Alt+Q` (and `Ctrl+Alt+R`) global shortcut to shuffle and focus a random game in the desktop grid and list views.
 - Search and filter queries now support acronym matching for game titles (e.g., `oot` matches *The Legend of Zelda: Ocarina of Time*, `mgs` matches *Metal Gear Solid*, `sotn` matches *Castlevania: Symphony of the Night*).
 - Expanded dynamic launch variables for custom emulators and launch commands, supporting `{ImagePath}`, `{dir}`, `{Dir}`, `{file}`, `{File}`, `{stem}`, `{FileNameWithoutExtension}`, `{Platform}`, `{EmulatorDir}`, and `{DataDir}`.
-- Added Proton and Wine prefix manager (`/api/wine/*`), Faugus scan and import (`/api/faugus/*`), and Eden Switch emulator definition (`emulator_defs/eden.yaml`).
+- Added Proton and Wine prefix manager (`/api/wine/*`), Faugus scan and import (`/api/faugus/*`), and Eden Switch emulator definition (`emulator_defs/eden.yaml`, later renamed `eden-switch.yaml`).
 - Added canonical identity normalization across Steam, Heroic, Lutris, Faugus, and ROMs with duplicate game consolidation in library health checks.
 - Added `--fullscreen-width`, `--fullscreen-height`, and `--resolution <WxH>` CLI flags to control kiosk and native window viewport sizing.
 
