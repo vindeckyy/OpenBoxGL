@@ -245,41 +245,34 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
         self.end_headers()
         self.wfile.flush()
-        # Use os.sendfile for zero-copy transfer on full-file requests (Linux)
+        # Use os.sendfile for zero-copy transfer on full-file requests (Linux).
+        # Note: settimeout() puts the raw fd in non-blocking mode, so sendfile
+        # can hit EAGAIN (BlockingIOError) once the kernel send buffer fills.
+        # Its return value is the exact byte count per call, and a call that
+        # raises transfers nothing, so the buffered path can safely resume at
+        # start + sendfile_sent.
+        remaining = length
         if response_status == 200 and hasattr(os, "sendfile") and hasattr(self, "connection"):
-            sendfile_sent = 0
-            sendfile_failed = False
+            sent = 0
             try:
                 file_fd = os.open(str(path), os.O_RDONLY)
                 try:
                     offset = start
-                    while sendfile_sent < length:
-                        transferred = os.sendfile(self.connection.fileno(), file_fd, offset, min(1024 * 1024, length - sendfile_sent))
+                    while sent < length:
+                        transferred = os.sendfile(self.connection.fileno(), file_fd, offset, min(1024 * 1024, length - sent))
                         if transferred == 0:
                             break
                         offset += transferred
-                        sendfile_sent += transferred
+                        sent += transferred
                 finally:
                     os.close(file_fd)
             except (OSError, AttributeError):
-                sendfile_failed = True
-            # Fall back to read/write on sendfile failure, but only if nothing was sent yet.
-            # If sendfile partially succeeded, we cannot know exactly how many bytes were sent,
-            # so resuming would risk duplicating bytes and breaking Content-Length framing.
-            if (sendfile_failed or sendfile_sent < length) and sendfile_sent == 0:
-                with path.open("rb") as source:
-                    source.seek(start)
-                    remaining = length
-                    while remaining:
-                        chunk = source.read(min(1024 * 1024, remaining))
-                        if not chunk:
-                            break
-                        self.wfile.write(chunk)
-                        remaining -= len(chunk)
-        else:
+                pass
+            start += sent
+            remaining -= sent
+        if remaining:
             with path.open("rb") as source:
                 source.seek(start)
-                remaining = length
                 while remaining:
                     chunk = source.read(min(1024 * 1024, remaining))
                     if not chunk:

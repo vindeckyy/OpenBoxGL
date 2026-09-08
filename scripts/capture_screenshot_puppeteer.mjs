@@ -22,7 +22,7 @@ await page.waitForFunction(
 // the img elements. Wait until the DOM is stable AND every cover is decoded
 // before capturing, so no card is ever a placeholder in the screenshot.
 async function waitForStableGrid() {
-  for (let attempt = 0; attempt < 25; attempt++) {
+  for (let attempt = 0; attempt < 60; attempt++) {
     const previous = await page.evaluate(() =>
       [...document.querySelectorAll("#grid img")].map((img) => img.src).join("\n"),
     );
@@ -30,6 +30,15 @@ async function waitForStableGrid() {
     const settled = await page.evaluate(async (prev) => {
       const images = [...document.querySelectorAll("#grid img")];
       if (images.map((img) => img.src).join("\n") !== prev) return false;
+      // Covers are loading="lazy" and the grid is virtualized: images below
+      // the fold never start loading in a static headless capture. Flip them
+      // to eager and re-fire the src so they load regardless of scroll.
+      for (const img of images) {
+        if (!(img.complete && img.naturalWidth > 32)) {
+          img.loading = "eager";
+          img.src = img.src;
+        }
+      }
       if (!images.every((img) => img.complete && img.naturalWidth > 32)) return false;
       await Promise.all(images.map((img) => img.decode().catch(() => {})));
       return true;
@@ -60,6 +69,12 @@ async function forceSynchronousDecode() {
   );
 }
 
+// Covers render with loading="lazy" and the grid is virtualized: below-the-fold
+// images never start loading in a static headless capture. Switch them all to
+// eager up front so the stability wait can observe real progress.
+await page.evaluate(() => {
+  for (const img of document.querySelectorAll("#grid img")) img.loading = "eager";
+});
 await waitForStableGrid();
 await forceSynchronousDecode();
 
@@ -99,7 +114,10 @@ if (mode === "bigbox") {
   await new Promise((resolve) => setTimeout(resolve, 6000));
 } else if (mode === "detail" || detailGameId !== "") {
   const gameId = detailGameId || mode;
-  await page.click(`[data-game="${gameId}"]`);
+  // The grid is virtualized and re-renders on scroll, so puppeteer's
+  // coordinate-based click can miss a recreated element. Dispatch the click
+  // through the DOM instead.
+  await page.evaluate((id) => document.querySelector(`[data-game="${id}"]`)?.click(), gameId);
   await page.waitForSelector("#details .play", { timeout: 30000 });
   await page.waitForFunction(
     () => {
