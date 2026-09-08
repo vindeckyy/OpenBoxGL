@@ -17,6 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import pkg.parity  # noqa: F401  # register flat-import finder before parity_* imports
 from api_errors import ApiError, BadRequest, RouteNotFound
 from env_config import bootstrap_env
 from openbox_logging import configure_logging
