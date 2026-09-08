@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# OpenBox release pipeline: everything mechanical up to the human approval.
+# OpenBox release pipeline: local artifact preflight up to the maintainer tag.
 #
 #   ./scripts/release.sh
 #
 # Runs: version sync -> make check gate -> AppImage build -> SBOM -> signing
-# -> release notes draft. The final `gh release`
-# publish is intentionally left to the maintainer.
+# -> release notes preparation. Pushing an annotated v* tag starts the GitHub
+# AppImage and Flatpak workflows; those workflows publish the shared release.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -70,26 +70,42 @@ cmp -s "$generated_public_key" openbox-release.pub \
   || fail "signing key does not match the committed openbox-release.pub"
 python3 scripts/verify_release.py --key openbox-release.pub "$appimage" "$appimage.sig"
 
-echo "== 6/6 release notes draft =="
+echo "== 6/6 release notes preparation =="
 CHANGELOG_FILE="CHANGELOG.md"
 if [ -f "docs/CHANGELOG.md" ]; then
   CHANGELOG_FILE="docs/CHANGELOG.md"
 fi
-cat > "release-notes-$VERSION.md" <<NOTES
-# OpenBox v$VERSION
+notes_file="release-notes-$VERSION.md"
+if [ -f "docs/RELEASE_NOTES.md" ] && grep -q "^# OpenBox $VERSION" docs/RELEASE_NOTES.md; then
+  cp docs/RELEASE_NOTES.md "$notes_file"
+else
+  cat > "$notes_file" <<NOTES
+# OpenBox $VERSION
 
 $(sed -n '/^## Unreleased/,/^## \[/p' "$CHANGELOG_FILE" | sed '1d;$d')
+NOTES
+fi
+
+cat >> "$notes_file" <<NOTES
 
 ## Verification
 
-- \`make check\`: lint, compile, $({ ls test_*.py tests/test_*.py 2>/dev/null | wc -l; }) test files, coverage floors green.
+- \`make check\`: lint, compile, $(find . -type f -name 'test_*.py' -not -path './.git/*' -not -path './build/*' -not -path './.venv-dev/*' | wc -l | tr -d ' ') test files, and coverage floors green.
 - SBOM: \`$sbom_name\` (CycloneDX 1.4)
 - SHA-256: \`$(cut -d' ' -f1 "$appimage.sha256")\`
 - Ed25519 signature: \`$appimage.sig\` (verified against openbox-release.pub)
-
-**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v$(git tag --sort=-v:refname | head -1 | sed 's/^v//')...v$VERSION
 NOTES
 
+if ! grep -q '^\*\*Full Changelog\*\*' "$notes_file"; then
+  previous_tag="$(git tag --sort=-v:refname | awk -v current="v$VERSION" '$0 != current { print; exit }')"
+  if [ -n "$previous_tag" ]; then
+    echo "" >> "$notes_file"
+    echo "**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/$previous_tag...v$VERSION" >> "$notes_file"
+  fi
+fi
+
 echo
-echo "Pipeline complete. Review release-notes-$VERSION.md, then run:"
-echo "  gh release create v$VERSION $appimage $appimage.zsync $appimage.sha256 $appimage.sig openbox-release.pub scripts/install.sh $sbom_name --notes-file release-notes-$VERSION.md"
+echo "Pipeline complete. Review $notes_file, push the commit, then run:"
+echo "  git tag -a v$VERSION -m \"OpenBox $VERSION\""
+echo "  git push origin v$VERSION"
+echo "The tag-triggered AppImage and Flatpak workflows publish the shared GitHub Release."

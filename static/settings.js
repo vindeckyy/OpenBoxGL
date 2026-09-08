@@ -229,11 +229,11 @@ import { t } from './i18n.js';
         if ($('librarySyncStatus')) $('librarySyncStatus').textContent = '';
         if ($('librarySyncPreviewResults')) { $('librarySyncPreviewResults').hidden = true; $('librarySyncPreviewResults').innerHTML = ''; }
         if ($('librarySyncConflicts')) { $('librarySyncConflicts').hidden = true; $('librarySyncConflicts').innerHTML = ''; }
-        const cloudBeta = AppState.appSettings.cloud_sync_beta ? ' (beta)' : ' (beta)';
+        const cloudLabel = AppState.appSettings.cloud_sync_beta ? 'Statistics sync (beta)' : 'Statistics sync';
         const cloudLast = AppState.appSettings.last_cloud_sync
           ? `Last synced ${AppState.appSettings.last_cloud_sync.replace('T', ' ')}`
           : (AppState.appSettings.last_cloud_sync_error ? `Last sync failed: ${AppState.appSettings.last_cloud_sync_error}` : 'Not synced yet');
-        $('cloudStatus').textContent = `${cloudBeta} · ${cloudLast}`;
+        $('cloudStatus').textContent = `${cloudLabel} · ${cloudLast}`;
         $('screensaverSeconds').value = AppState.appSettings.screensaver_seconds;
         $('startupCommands').value = (AppState.appSettings.startup_commands || []).join('\n');
         $('shutdownCommands').value = (AppState.appSettings.shutdown_commands || []).join('\n');
@@ -504,9 +504,9 @@ import { t } from './i18n.js';
       try {
         const result = await api('/api/health',{method:'POST',body:'{}'});
         const cloudLine = AppState.appSettings.last_cloud_sync
-          ? `Last cloud sync: ${AppState.appSettings.last_cloud_sync.replace('T', ' ')}`
-          : (AppState.appSettings.last_cloud_sync_error ? `Last cloud sync failed: ${AppState.appSettings.last_cloud_sync_error}` : 'Cloud sync (beta): not synced yet');
-        $('healthSummary').innerHTML = `<h3>Audit summary</h3><div class="facts">${fact('Games',result.games)}${fact('Missing games',result.missing)}${fact('Duplicates',result.duplicates)}${fact('Missing box fronts',result.missing_media)}${fact('Cloud sync (beta)',cloudLine)}</div>`;
+          ? `Last statistics sync: ${AppState.appSettings.last_cloud_sync.replace('T', ' ')}`
+          : (AppState.appSettings.last_cloud_sync_error ? `Last statistics sync failed: ${AppState.appSettings.last_cloud_sync_error}` : 'Statistics sync: not synced yet');
+        $('healthSummary').innerHTML = `<h3>Audit summary</h3><div class="facts">${fact('Games',result.games)}${fact('Missing games',result.missing)}${fact('Duplicates',result.duplicates)}${fact('Missing box fronts',result.missing_media)}${fact('Statistics sync',cloudLine)}</div>`;
         $('healthIssues').innerHTML = result.issues.length ? result.issues.map(issue => `<button type="button" class="metadata-result icon-button" data-audit-game="${issue.id}"><div><strong>${escapeHtml(issue.game)}</strong><small>${escapeHtml(issue.type)} · ${escapeHtml(issue.detail)}</small></div></button>`).join('') : '<p class="description">No library issues found.</p>';
         document.querySelectorAll('[data-audit-game]').forEach(button => button.onclick = () => { AppState.selectedId = Number(button.dataset.auditGame); $('healthDialog').close(); render(); });
         $('dedupeButton').disabled = !result.duplicates;
@@ -904,10 +904,10 @@ import { t } from './i18n.js';
       try {
         AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
         const result = await api('/api/cloud/sync',{method:'POST',body:'{}'});
-        $('cloudStatus').textContent = ` (beta) · Synced ${result.games} games, merged ${result.merged} remote changes`;
+        $('cloudStatus').textContent = `${AppState.appSettings.cloud_sync_beta ? 'Statistics sync (beta)' : 'Statistics sync'} · Synced ${result.games} games, merged ${result.merged} remote changes`;
         await refresh();
       } catch(error) {
-        $('cloudStatus').textContent = ` (beta) · Sync failed: ${error.message}`;
+        $('cloudStatus').textContent = `${AppState.appSettings.cloud_sync_beta ? 'Statistics sync (beta)' : 'Statistics sync'} · Sync failed: ${error.message}`;
         notify(error.message);
       }
     };

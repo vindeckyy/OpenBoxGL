@@ -2,7 +2,24 @@
 
 Measured by `scripts/perf_bench.py` against a synthetic library served by the real server (loopback, gzip enabled). Reference machine: this workstation.
 
-## Baseline (2026-08-20, v1.5.1 - dirty-field writes + cached projections)
+## Release-candidate measurements (2026-09-08, v1.10.0)
+
+Seven-run strict local sampling on the release-candidate tree recorded the
+following p95 values. The sample is evidence for this workstation, not a claim
+about every user's hardware; the blocking CI job applies its documented runner
+multiplier.
+
+| Library size | Full library | Gzip | Favorite write | Write path | Picker | Constellation |
+|---|---:|---:|---:|---:|---:|---:|
+| 10,000 games | 36.6 ms | 2.9 ms | 164.0 ms | 143.4 ms | 112.8 ms | 579.7 ms |
+| 20,000 games | 68.9 ms | 5.3 ms | 344.7 ms | 291.9 ms | 76.1 ms | 936.4 ms |
+
+The full JSON evidence was captured in `/tmp/openbox-perf-final.json` during the
+release execution and is intentionally treated as a disposable measurement.
+The formal release gates remain the thresholds below; performance above 20,000
+games is exploratory even when the SQLite read model is enabled.
+
+## Historical baseline (2026-08-20, v1.5.1 - dirty-field writes + cached projections)
 
 | Library size | /api/library plain | /api/library gzip | /api/media | Favorite mutation (full save) |
 |---|---|---|---|---|
@@ -12,7 +29,7 @@ Measured by `scripts/perf_bench.py` against a synthetic library served by the re
 
 - Native host cold start (launch to server ready): 242 ms; server files published 182 ms after spawn. The WebKitGTK window then loads the token-bearing URL, so the full handshake stays under the 2s target.
 - Coverage gates enforced in `scripts/check_tests.py`: `COVERAGE_FLOOR=72.0` total, `WEB_APP_FLOOR=54.0`, changed-line `95%`, new runtime modules `85%`.
-- JSON store ceiling acknowledged; SQLite read model remains the escape hatch beyond 20k.
+- JSON remains canonical; the optional SQLite projection is an indexed read path for larger libraries, but only 10k/20k scenarios are release-gated.
 
 ## 20,000-game gates (blocking CI job `perf-20k`)
 
@@ -24,6 +41,8 @@ Measured by `scripts/perf_bench.py` against a synthetic library served by the re
 | `filtered_query_ms_p95` | 2000 |
 | `facet_ms_p95` | 2000 |
 | `20k_write_ms_p95` | 1000 |
+| `picker_score_ms_p95` | 200 |
+| `constellation_build_ms_p95` | 1500 |
 
 CI command:
 
@@ -43,8 +62,10 @@ Default local `--sizes` is `1000,5000,10000,20000`. Write-path benchmarks always
 | `filtered_query_ms_p95` | 1000 |
 | `facet_ms_p95` | 1000 |
 | `10k_write_ms_p95` | 500 |
+| `picker_score_ms_p95` | 200 |
+| `constellation_build_ms_p95` | 1500 |
 
-## Baseline (2026-08-13, v1.0.0)
+## Historical baseline (2026-08-13, v1.0.0)
 
 | Library size | /api/library plain | /api/library gzip | /api/media | Favorite mutation (full save) |
 |---|---|---|---|---|
@@ -53,7 +74,7 @@ Default local `--sizes` is `1000,5000,10000,20000`. Write-path benchmarks always
 
 Previous 242 ms native host cold start and 182 ms server-files figures retained for reference.
 
-## Baseline (2026-08-12)
+## Historical baseline (2026-08-12)
 
 | Library size | /api/library plain | /api/library gzip | /api/media | Favorite mutation (full save) |
 |---|---|---|---|---|
@@ -67,7 +88,7 @@ Notes:
 
 ## Targets
 
-- /api/library at 10k games: under 200ms plain, gzip under 50ms.
+- Product aspiration: `/api/library` at 10k games under 200ms plain and gzip under 50ms. The blocking CI thresholds are intentionally looser (`2000` ms and `1000` ms) to account for hosted-runner variance; passing CI is not the same as meeting this aspiration.
 - State write at 10k games: under 500ms (currently ~150ms at 5k, superlinear).
 - Cold start to UI ready: under 2s on the reference machine.
 

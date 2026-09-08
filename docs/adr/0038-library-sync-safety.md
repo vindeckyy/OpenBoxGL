@@ -1,7 +1,7 @@
 # ADR 0038: Reject unsafe legacy library synchronization
 
 Date: 2026-09-08
-Status: Accepted for the corrective update
+Status: Accepted and implemented in 1.10.0; replacement enabled by ADR 0039
 
 ## Context
 

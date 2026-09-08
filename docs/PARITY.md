@@ -19,7 +19,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Steam metadata and artwork | done | Selected game downloads real store data and media |
 | Steam launching | done | Imported App ID launches through Steam or its URI |
 | Epic, GOG, and Amazon imports through Heroic | done | Installed manifests import and launch through Heroic |
-| EA, Ubisoft, and Xbox imports | done | Lutris/Heroic catalog import with EA, Ubisoft, and Xbox/Game Pass tagging; Xbox native PC packages remain unavailable on Linux |
+| EA, Ubisoft, and Xbox imports | partial | Lutris/Heroic catalog import provides EA, Ubisoft, and Xbox/Game Pass tagging; native Xbox PC package scanning remains unavailable on Linux |
 | MAME and FinalBurn full-set imports | done | DAT/XML metadata classifies and imports merged, split, and non-merged sets |
 | LaunchBox Games Database matching | done | Official daily database sync, local matching, and selected metadata/media downloads work |
 | Full LaunchBox media catalog | done | Box backs, spines, 3D boxes, clear logos, fanart, banners, title screens, carts, discs, and advertisement flyers download from the database alongside covers, backgrounds, and screenshots; manuals are user-supplied paths because the LaunchBox metadata feed ships no manual images |
@@ -48,7 +48,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Durable background operations | done | Activity drawer with SSE progress, cancellation, retry/resume, and `operations.json` persistence |
 | Launch readiness preflight | done | Launch Doctor validates paths, adapters, Flatpak/native executables, BIOS/firmware, and tokenized arguments before launch. BIOS SHA1 drift detection reports `BIOS_SHA1_DRIFT` when a BIOS file exists but its hash doesn't match the expected value (1.7.2) |
 | Play Insights local analytics | done | Local 366-day playtime heatmap (levels 0–4), streaks, momentum, top platforms/genres with zero telemetry |
-| Optional SQLite read model | done | `OPENBOX_ENABLE_SQLITE_READ=1` enables FTS5 search, indexed queries, and GROUP BY facets for 50k+ libraries; JSON remains source of truth. Wired into facets and `/api/v2/library/search` in 1.9.0 (ADR 0032) |
+| Optional SQLite read model | done | `OPENBOX_ENABLE_SQLITE_READ=1` enables FTS5 search, indexed queries, and GROUP BY facets for libraries beyond the JSON path; JSON remains source of truth. The formal release gates cover 10k/20k libraries, so performance above 20k is exploratory rather than release-gated (ADR 0032) |
 | Visual chip builder for collections | done | Filter presets render as visual chips via `rules_to_chips`/`chips_to_rules` round-trip conversion (1.7.2) |
 | Searchable settings pages | done | Settings dialog filters fields by name and related terms |
 | Session history toggle and viewer | done | Play sessions can be disabled and are browsable from the History menu |
@@ -70,7 +70,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | ScummVM / RPCS3 / Vita3K library import | done | Dedicated import endpoints scan common emulator libraries |
 | MAME community high scores | done | Local high-score discovery plus export/import bundles for sharing |
 | OBS recording attach | done | Latest OBS recording auto-attaches on session close; manual attach remains available |
-| Premium cloud sync | done | Mounted-folder statistics sync remains available; opt-in causal full-library sync adds validated events, conflict review, tombstones, and recovery while unsafe legacy routes fail closed before mutation (ADRs 0038–0039) |
+| Local-first library synchronization | done | Mounted-folder statistics sync remains available; opt-in causal catalog sync adds validated events, conflict review, tombstones, and recovery while unsafe legacy routes fail closed before mutation. No vendor cloud account is involved (ADRs 0038–0039) |
 | Custom fields and bulk metadata wizard | done | Define custom fields in Settings, edit per game, and bulk update selected games |
 | ESRB ratings filter and metadata | done | ESRB from LaunchBox database imports, sidebar filter, list view column, and bulk edit |
 | List view and library columns | done | Grid/list toggle with sortable list columns including ESRB and progress |
@@ -82,7 +82,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Big Box hybrid scoped search | done | Hybrid mode exposes platform-scoped search while browsing |
 | Attract mode and startup video | done | Separate attract delay, optional Big Box startup video, and screensaver launch |
 | Bundled media packs (free) | done | Platform logos, controller prompts, and badge packs apply without a subscription |
-| Localization | done | Full i18n for English, Spanish, German, French, and Portuguese via data-i18n attributes and JSON locale files (1.7.2) |
+| Localization | done | Locale catalogs and translated `data-i18n`/`t()` surfaces cover English, Spanish, German, French, and Portuguese; some operational/browser fallback labels remain English |
 | Big Box shutdown apps on mode switch | done | Configurable commands run when entering Big Box (not when leaving) |
 | Xbox 360 and loose arcade import | done | default.xex folder scan and Hypseus/Singe loose file import |
 | Vita3K title resolution | done | Title IDs resolve to readable game names on import |
@@ -121,8 +121,8 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Big Box party mode (Game Night) | done | Couch-multiplayer queue builder, spinning wheel, up-next strip, gamepad/keyboard control, persistent rounds (1.9.0, ADR 0031) |
 | LaunchBox XML library migration | done | `POST /api/v2/import/launchbox/preview` and `/apply` parse LaunchBox XML exports with dedup and emulator reporting (1.9.0, ADR 0033) |
 | Big Box video snaps | done | Stage mode shows looping gameplay videos with debounce, BGM duck, reduced-motion support (1.9.0, ADR 0034) |
-| Full library cloud sync | done | Opt-in causal catalog transport records validated events, tombstones, outbox acknowledgements, recovery snapshots, and independently selectable conflicts; legacy routes fail closed before mutation (ADRs 0038–0039) |
-| Manual/shelf entries | done | `POST /api/v2/library/manual-entry` for games without local files (1.9.0, ADR 0036) |
+| Full library catalog sync | done | Opt-in causal catalog transport records validated events, tombstones, outbox acknowledgements, recovery snapshots, and independently selectable conflicts; legacy routes fail closed before mutation. Launch paths, commands, credentials, and media remain local (ADRs 0038–0039) |
+| Manual/shelf entries | done | Create, edit, filter, export, and explicit conversion for games without local files through the `/api/v2/library/manual-entry*` routes (1.10.0, ADR 0036) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 

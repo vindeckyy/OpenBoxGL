@@ -1,9 +1,14 @@
 # Next update execution checkpoint
 
-Started September 8, 2026 from `b4e2810` (version 1.9.0). This record covers
-the supplied next-update plan through a local release-candidate audit.
-Publishing, external submissions, maintainer messages, and hardware claims are
-outside this execution.
+> **Historical checkpoint — superseded by OpenBox 1.10.0.** Started September
+> 8, 2026 from `b4e2810` (version 1.9.0), this record covers the supplied
+> next-update plan through a local release-candidate audit. The release was
+> subsequently published at [v1.10.0](https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.10.0);
+> the physical handheld item remains unverified.
+
+At the time this checkpoint was written, publishing, external submissions,
+maintainer messages, and hardware claims were outside the local execution. The
+post-checkpoint closure below records what happened after that boundary.
 
 ## Preserved baseline and decisions
 
@@ -107,7 +112,11 @@ remain outside this workstation execution.
   build/tests; physical handheld testing remains unavailable.
 - [x] Final post-repair `make check`, explicit changed-line report, and
   independent Astra review of the repaired sync/migration/launch paths.
-- [ ] Physical handheld execution and external release publication.
+- [ ] Physical handheld execution remains unavailable.
 
-External release publication and maintainer review remain explicit external
-steps and are neither performed nor claimed here.
+## Post-checkpoint release closure
+
+- [x] The tagged commit `a876d30` was published as [OpenBox 1.10.0](https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.10.0) with x86_64 and aarch64 signed AppImages, checksums, signatures, zsync metadata, SBOMs, `install.sh`, the release key, and the x86_64 Flatpak bundle.
+- [x] The documentation refinement commit `2eca231` was pushed to `master`; its [CI run](https://github.com/vindeckyy/OpenBoxGL/actions/runs/34282109231) and [CodeQL run](https://github.com/vindeckyy/OpenBoxGL/actions/runs/34282109232) completed successfully.
+- [x] The [AppImage release workflow](https://github.com/vindeckyy/OpenBoxGL/actions/runs/34280801667) and [Flatpak release workflow](https://github.com/vindeckyy/OpenBoxGL/actions/runs/34280801655) completed successfully for the tag.
+- [ ] Physical handheld execution and a Flathub store submission remain outside the evidence recorded here.

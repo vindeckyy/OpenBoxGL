@@ -69,7 +69,24 @@ def _changed_line_numbers(base: str, rel_path: str) -> set[int]:
 
 
 def _load_coverage():
-    from coverage import Coverage
+    try:
+        from coverage import Coverage
+    except ModuleNotFoundError:
+        # `make check` invokes this script with the system interpreter while
+        # coverage is intentionally installed in the dev-only virtualenv.
+        # Load the pinned tool from that environment instead of making the
+        # gate depend on a globally installed package.
+        candidates = []
+        venv_lib = ROOT / ".venv-dev"
+        for lib_name in ("lib", "lib64"):
+            candidates.extend((venv_lib / lib_name).glob("python*/site-packages"))
+        for candidate in candidates:
+            if (candidate / "coverage").is_dir():
+                sys.path.insert(0, str(candidate))
+                from coverage import Coverage
+                break
+        else:
+            raise
 
     data_path = ROOT / ".coverage"
     if not data_path.is_file():

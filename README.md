@@ -62,7 +62,7 @@
 ## Quick Start
 
 1. **Install.** Grab the [latest AppImage](https://github.com/vindeckyy/OpenBoxGL/releases/latest), or run from source with `python3 web_app.py` (Python 3.10+).
-2. **Open the UI.** `openbox` opens a native WebKitGTK window by default, and falls back to a chrome-less app window (then your default browser) when WebKitGTK is missing. `openbox --web` skips the native window and opens the loopback web UI in a browser; from source, `python3 web_app.py` also opens the browser automatically with the token in the URL. To open the UI manually, append the token from the data directory, e.g. open `http://127.0.0.1:PORT/?token=$(cat ~/.local/share/openbox-game-launcher/server.token)`.
+2. **Open the UI.** `openbox` opens a native WebKitGTK window by default, and falls back to a chrome-less app window (then your default browser) when WebKitGTK is missing. `openbox --web` skips the native window and opens the loopback web UI in a browser; from source, `python3 web_app.py` also opens the browser automatically with the token in the URL. To open the UI manually, append the token from the data directory, e.g. open `http://127.0.0.1:PORT/?token=$(cat ~/.local/share/openbox-game-launcher/server.token)`. Treat token-bearing URLs as secrets; prefer the `X-OpenBox-Token` header for scripts and never paste or share the URL.
 3. **Import games.** Click **Import Folder** and point at a directory of `.sh` files, or **Import Steam** to scan your installed games.
 4. **Press PLAY.** Sessions, play time, and history are tracked automatically.
 
@@ -72,7 +72,7 @@ For ROMs, emulators, Big Box, RetroAchievements, and everything else, see [Getti
 
 ## Overview
 
-OpenBox Game Launcher is an open-source game library manager and launcher for Linux. It puts Steam, Heroic (Epic/GOG/Amazon), Lutris, Faugus, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and Eden Switch collections, and local executables in one searchable catalog with advanced search, ordered playlists, artwork galleries, session tracking, save and library backups, launch profiles, and controller-ready Big Box mode. No account, no cloud, no telemetry.
+OpenBox Game Launcher is an open-source game library manager and launcher for Linux. It puts Steam, Heroic (Epic/GOG/Amazon), Lutris, Faugus, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and Eden Switch collections, and local executables in one searchable catalog with advanced search, ordered playlists, artwork galleries, session tracking, save and library backups, launch profiles, and controller-ready Big Box mode. No account, no vendor cloud lock-in, and no telemetry; optional mounted-folder sync stays under your control.
 
 OpenBox Game Launcher is unrelated to [Openbox](https://openbox.org/), the open-source Linux window manager. The projects have different maintainers, codebases, and purposes.
 
@@ -149,6 +149,14 @@ Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attra
 ### Scale & Backups
 
 Optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) with canonical name-substring search and JSON-equivalent facets for large libraries, wired into `/api/v2/library/search`. Backup diff API (`GET /api/v2/backup/diff`) to compare current library against archives. Visual chip builder for smart collection filter presets. **Library export** to JSON or CSV with platform/playlist scopes, shareable-by-construction field projection, and automatic newest-10 rotation. Statistics sync remains available through the mounted-folder workflow; the opt-in causal transport provides validated full-library sync with conflict review and tombstones, while legacy routes fail closed before mutation. **LaunchBox XML migration** import (`POST /api/v2/import/launchbox/preview` and `/apply`). **Manual/shelf entries** for games without local files.
+
+For the review-first workflows, use the UI rather than copying paths or records by hand:
+
+- **LaunchBox XML:** open the LaunchBox migration panel, choose one bounded XML export, review the parsed entries, path mappings, exclusions, and emulator mappings, then apply the preview. A changed file or library invalidates the preview and requires a new review; XML never supplies executable commands.
+- **Catalog sync:** configure a mounted folder in Settings, enable **library catalog sync**, preview incoming changes, choose alternatives for conflicts, apply the reviewed plan, and publish local changes explicitly. Paths, launch commands, credentials, media, and play statistics remain local; the apply step creates a recovery backup first.
+- **Shelf entries:** use **Add shelf entry** for a title without a local file. Shelf records can be edited, filtered, and exported, then converted to a playable entry only after selecting an existing absolute file.
+
+The SQLite read model is opt-in and keeps JSON as the source of truth. The release gate covers 10,000 and 20,000-game libraries; behavior and performance beyond 20,000 games are exploratory.
 
 ### Extensibility
 
@@ -230,7 +238,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 
 | Method | Best for | Notes |
 | --- | --- | --- |
-| AppImage (installer) | Desktop, Steam Deck, handhelds, immutable systems | Built-in verified updater, installs to `~/.local/bin` |
+| AppImage (installer) | Desktop, Steam Deck, handhelds, immutable systems | Architecture-matched signed installer and built-in verified updater; installs to `~/.local/bin` |
 | AppImage (manual) | Offline or custom path | `chmod +x` and run, no install step |
 | Flatpak | Sandboxed installs | `flatpak-builder` from manifest |
 | Source | Development, patching | `git clone` and `python3 web_app.py` |
@@ -238,7 +246,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 
 ### Versioned release installer
 
-Download the installer from a specific signed release, inspect it, then run it. The installer verifies the release public-key pin, SHA-256 checksum, and Ed25519 signature before installing to `~/.local/bin`:
+Download the installer from a specific signed release, inspect it, then run it. The installer detects `uname -m` (override with `OPENBOX_ARCH=x86_64` or `OPENBOX_ARCH=aarch64`), selects the matching AppImage, and verifies the release public-key pin, SHA-256 checksum, and Ed25519 signature before installing to `~/.local/bin`:
 
 ```bash
 VERSION=1.10.0
@@ -402,7 +410,7 @@ OpenBox/
 ├── themes/                 Stock themes (5 CSS files)
 ├── emulator_defs/          YAML definition packs
 ├── scripts/                Build, test, screenshot capture
-├── tests/test_*.py         Test suite (100 files)
+├── tests/test_*.py         Test suite (107 files)
 ```
 
 ### Run tests

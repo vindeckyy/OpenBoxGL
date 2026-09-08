@@ -2,9 +2,9 @@
 """Verify the version string in updates.py matches every published spot.
 
 The version is declared once, in updates.py. README badge, metainfo latest
-release, PARITY.md lead paragraph, and the bug report template must all agree
-or the release would ship with stale version claims. CI runs this on every
-push and release.
+release, PARITY.md lead paragraph, support/security policy, Flathub checklist,
+and the bug report template must all agree or the release would ship with
+stale version claims. CI runs this on every push and release.
 
 Run directly: python3 scripts/check_version_sync.py
 """
@@ -76,6 +76,18 @@ def main() -> int:
     if f"v{version}" not in bug_template:
         print(f"bug_report.yml: does not mention v{version}")
         failures.append("bug report template")
+
+    version_surfaces = (
+        ("SUPPORT.md", f"OpenBox {version}"),
+        ("SECURITY.md", f"{'.'.join(version.split('.')[:2])}.x"),
+        ("flathub-checklist.md", f"OpenBox {version}"),
+    )
+    for name, marker in version_surfaces:
+        path = _doc_path(name)
+        content = path.read_text(encoding="utf-8") if path.is_file() else ""
+        if marker not in content:
+            print(f"{name}: does not mention {marker}")
+            failures.append(name)
 
     changelog = _doc_path("CHANGELOG.md").read_text(encoding="utf-8")
     if version not in changelog:

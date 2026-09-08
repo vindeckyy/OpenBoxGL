@@ -36,7 +36,7 @@ body:
     attributes:
       label: Environment
       description: Distro, desktop environment, and Python version if running from source
-      placeholder: Fedora 42, KDE Plasma, Python 3.12
+      placeholder: Fedora <version>, KDE Plasma, Python 3.12
     validations:
       required: true
 

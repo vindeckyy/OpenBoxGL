@@ -143,6 +143,12 @@ def test_shelf_entry_editor_and_actions():
     assert "Set up launch" in library
     assert "game.manual_entry" in library
 
+def test_statistics_sync_status_uses_current_label():
+    text = (ROOT / "static" / "settings.js").read_text()
+    assert "const cloudLabel = AppState.appSettings.cloud_sync_beta ? 'Statistics sync (beta)' : 'Statistics sync';" in text
+    assert "const cloudBeta = AppState.appSettings.cloud_sync_beta ? ' (beta)' : ' (beta)';" not in text
+    assert "Cloud sync (beta)" not in text
+
 def test_f05_dialogs_no_window_prompt():
     text = DIALOGS.read_text()
     assert "window.prompt" not in text
@@ -227,6 +233,11 @@ if __name__ == "__main__":
     except AssertionError as e:
         print(f"FAIL test_f05_state_native_fallbacks_no_prompt: {e}")
     try:
+        test_statistics_sync_status_uses_current_label()
+        print("PASS test_statistics_sync_status_uses_current_label")
+    except AssertionError as e:
+        print(f"FAIL test_statistics_sync_status_uses_current_label: {e}")
+    try:
         test_bigbox_video_snap_css()
         print("PASS test_bigbox_video_snap_css")
     except AssertionError as e:
@@ -245,6 +256,7 @@ if __name__ == "__main__":
         test_f05_dialogs_no_window_prompt()
         test_f05_app_js_context_menu_a11y()
         test_f05_state_native_fallbacks_no_prompt()
+        test_statistics_sync_status_uses_current_label()
         test_bigbox_video_snap_css()
         test_bigbox_video_snap_js()
         print("ALL PASS")

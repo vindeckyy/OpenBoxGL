@@ -1,4 +1,4 @@
-"""Optional ScreenScraper metadata/media provider (1.8.0, ADR 0022).
+"""Optional ScreenScraper metadata/media provider (ADR 0022).
 
 ScreenScraper (https://www.screenscraper.fr) is the emulation community's
 per-ROM-hash scraping service. This module mirrors parity_igdb.py: pure
@@ -24,6 +24,7 @@ from urllib.request import Request, urlopen
 
 from backend_io import read_limited
 from env_config import ensure_env_loaded
+from updates import VERSION
 
 SS_ENDPOINT = "https://www.screenscraper.fr/api2"
 SS_CACHE_TTL = 30 * 24 * 3600
@@ -138,7 +139,7 @@ def ss_request(endpoint, params, *, timeout=30):
     for attempt in range(_MAX_RETRIES):
         _throttle()
         try:
-            request = Request(url, headers={"User-Agent": "OpenBox/1.8.0"})
+            request = Request(url, headers={"User-Agent": f"OpenBox/{VERSION}"})
             with urlopen(request, timeout=timeout) as response:
                 return json.loads(read_limited(response, 8 * 1024 * 1024).decode())
         except Exception as error:  # urllib raises HTTPError/URLError subclasses

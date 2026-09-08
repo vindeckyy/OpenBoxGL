@@ -2,6 +2,13 @@
 
 Planning baseline: September 8, 2026; local commit `b4e2810`; application version `1.9.0` in `updates.py`; working tree clean before this planning document was added.
 
+> **Archived planning record.** This plan was executed and superseded by the
+> OpenBox 1.10.0 release. The baseline, proposals, and findings below describe
+> the state known when the plan was written; they are retained for traceability,
+> not as a current roadmap. See [the execution checkpoint](NEXT_UPDATE_EXECUTION.md)
+> and [the 1.10.0 release](https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.10.0)
+> for the shipped result.
+
 This is an execution plan for one continuous, long-running implementation effort once execution is requested. Creating or editing this plan does not itself start that effort. Findings below distinguish isolated reproductions, source inspection, and proposed work. Public release availability, open GitHub issues, user demand, current distribution requirements, and real handheld behavior were not checked. Version numbers below are proposals based on the local version, and should be reconciled with intervening releases before implementation.
 
 ## Continuous execution contract
@@ -63,7 +70,11 @@ Do not make a wholesale framework migration, a new database write architecture, 
 | Localization | Five locale files and a key-coverage checker | `scripts/check_i18n.py`; key coverage does not prove all visible strings are translated |
 | Distribution | x86_64/aarch64 release work, Flatpak manifest and bundle workflow | CI and release workflows; Flathub submission remains separate from bundle preparation |
 
-### Confirmed by isolated execution
+### Confirmed by isolated execution at the planning baseline (historical)
+
+The following findings were recorded before implementation. They were addressed
+or deliberately superseded during the 1.10.0 execution; none is an open defect
+by itself.
 
 **F1 — Deletion propagation is incomplete.** In a temporary directory, publish a library containing one game, publish the same library after removing it, then pull onto a device that still has it. The resulting remote tombstone map is empty, the pull deletes zero games, and the other device retains the game. `publish_library()` preserves existing tombstones but does not generate new ones from local deletion events. The published documentation promises more than this sequence delivers.
 
@@ -97,9 +108,20 @@ Do not make a wholesale framework migration, a new database write architecture, 
 
 Passing these 28 tests is evidence about those test cases, not proof that the workflows above are correct. The corrective release should add regressions for the missing scenarios.
 
+### Planning-finding resolution in 1.10.0
+
+| Finding | Shipped resolution |
+|---|---|
+| F1/F2/F7 — legacy sync could lose deletions or device-local edits | Legacy full-library publish/pull now fails closed before mutation; the causal transport uses event ancestry, tombstones, stale-base checks, and transaction-bound apply (ADRs 0038–0039). |
+| F3/F9 — SQLite facets and search could diverge from JSON | Canonical JSON search/facet semantics are shared by the HTTP path; SQLite is an opt-in read projection with parity checks and bounded limits. |
+| F4/F5 — migration preview/apply and source identity could diverge | LaunchBox preview and apply share one planner, source IDs are separate from metadata IDs, and stale/tampered plans are rejected (ADR 0040). |
+| F6 — shelf entries were not represented in the normal UI | Shelf projection, create/edit/filter/export, and explicit conversion are available in the 1.10.0 UI and v2 routes (ADR 0036). |
+| F8 — installed locales were not copied by `make install` | The Makefile installs all locale JSON files and the staged-tree packaging tests exercise the endpoint. |
+| F10 — rapid launches had no documented guard | Stable game-ID launch reservations return `LAUNCH_ALREADY_ACTIVE` for a competing request and release cleanly on validation failure. |
+
 ## 3. Release split and scope control
 
-### Proposed 1.9.1 corrective release
+### Original proposal: 1.9.1 corrective release
 
 Mandatory candidates:
 
@@ -111,7 +133,7 @@ Mandatory candidates:
 
 A patch must not quietly introduce a new distributed sync protocol, reinterpret all historical IDs, or broaden the UI. Prefer a safe, explicit limitation over maintaining an inaccurate success claim. Preserve route registration and existing v1 contracts.
 
-### Proposed 1.10.0 core
+### Original proposal: 1.10.0 core
 
 - Safe sync engine and a reviewable two-device workflow, if the engine passes all convergence and recovery checks.
 - Guided LaunchBox migration with path mapping, accurate preview, and import results.
@@ -424,7 +446,7 @@ Use disposable data directories and synthetic or sanitized fixtures; never use a
 6. Confirm recovery from pre-update backups. Do not promise backward downgrade compatibility unless it was tested against any changed formats.
 7. Update changelog, release notes, parity matrix, reliability matrix, performance report, version metadata, and screenshots where needed.
 8. Describe limitations honestly: supported migration shapes, whether sync is manual/opt-in, which data is local, and how optional SQLite differs or falls back.
-9. Complete maintainer release review and publish through the established process. No publishing or external submission is authorized by this planning document itself.
+9. Complete maintainer release review and publish through the established process. At planning time, this document did not itself authorize publishing or external submission; the release was later published through the maintainer-approved tag workflow.
 
 ## 13. Decisions to settle during M0
 
@@ -454,7 +476,7 @@ Success should be demonstrated through local test evidence and opt-in feedback, 
 - `docs/CHANGELOG.md`, `docs/RELEASE_NOTES.md`, `docs/PARITY.md`: current advertised capabilities.
 - `docs/adr/0032-sqlite-read-model-graduation.md`: limited read-model role and JSON source of truth.
 - `docs/adr/0033-launchbox-xml-migration.md`: current import scope.
-- `docs/adr/0035-library-sync-mounted-folder.md`: current sync promise and known conflict ceiling.
+- `docs/adr/0035-library-sync-mounted-folder.md`: historical statistics-sync design; its legacy full-library proposal is superseded by ADRs 0038–0039.
 - `docs/adr/0036-manual-shelf-entries.md`: intentionally minimal shelf scope.
 - `cloud_sync.py`, `handlers/health.py`: sync implementation and transaction boundary.
 - `pkg/parity/parity_launchbox_import.py`, `pkg/state/imports.py`: preview/apply decisions.

@@ -166,6 +166,7 @@ class RequestTest(unittest.TestCase):
         self.assertIn("user=user1", url)
         self.assertIn("devid=dev1", url)
         self.assertIn("output=json", url)
+        self.assertEqual(opener.call_args[0][0].get_header("User-agent"), "OpenBox/1.10.0")
 
     def test_ss_request_non_retryable_error_raises(self):
         from urllib.error import HTTPError
