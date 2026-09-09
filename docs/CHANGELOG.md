@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   panel always rendered.
 
 ### Documentation & Gates
+- Stabilize the perf-20k gate against single-run scheduler spikes: each
+  benchmarked endpoint now does one unmeasured warm-up request, and the p95
+  statistic drops the single worst run of a five-run sample. Sustained
+  regressions still fail; one-off runner noise no longer flakes the gate
+  (ADR 0042).
 - Move superseded 1.10.0 planning documents and 1.7.2/1.8.0 release notes to
   `docs/archive/`; rewrite `docs/README.md` as a complete docs index (ADR 0041).
 - Extend the runtime-modules gate to root `*.py` files, list all handler modules
