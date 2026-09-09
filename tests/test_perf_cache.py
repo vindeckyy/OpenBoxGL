@@ -173,6 +173,30 @@ class PerfCacheTests(unittest.TestCase):
         self.assertEqual(status, "416")
         self.assertEqual(headers.get("content-disposition"), 'inline; filename="manual.pdf"')
 
+    def test_send_file_extra_headers_on_if_modified_since_304(self):
+        _, headers, _ = self.send_file()
+        status, headers, body = self.send_file(
+            extra_headers={"If-Modified-Since": headers["last-modified"]},
+            response_extra_headers={"Content-Disposition": 'inline; filename="manual.pdf"'},
+        )
+        self.assertEqual(status, "304")
+        self.assertEqual(headers.get("content-disposition"), 'inline; filename="manual.pdf"')
+
+    def test_send_file_empty_chunk_breaks_read_loop(self):
+        handler = self.make_handler()
+        # Simulate a file that was truncated after stat: read returns b""
+        # even though remaining > 0, exercising the defensive break.
+        import unittest.mock as _mock
+        empty_read = _mock.Mock(return_value=b"")
+        fake_file = _mock.Mock()
+        fake_file.__enter__ = _mock.Mock(return_value=fake_file)
+        fake_file.__exit__ = _mock.Mock(return_value=False)
+        fake_file.seek = _mock.Mock()
+        fake_file.read = empty_read
+        with _mock.patch.object(Path, "open", return_value=fake_file):
+            handler.send_file(200, self.media_path)
+        empty_read.assert_called()
+
     def test_json_stays_no_store(self):
         from web_app import Handler
 

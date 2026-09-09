@@ -449,6 +449,34 @@ class ParityApiTests(unittest.TestCase):
             ["faugus-42", "itch-987", "1086940", "game-standard"],
         )
 
+    def test_manual_playlist_numeric_string_falls_back_to_db_index(self):
+        from openbox import load_state, save_state
+        from web_app import Handler
+
+        save_state({
+            "schema_version": 6,
+            "games": [
+                {"name": "Alpha Game", "game_id": "game-alpha", "path": "/bin/true"},
+                {"name": "Beta Game", "game_id": "game-beta", "path": "/bin/true"},
+            ],
+            "profiles": {}, "history": [], "settings": {}, "playlists": [],
+        })
+        handler = object.__new__(Handler)
+        handler.send_json = mock.Mock()
+        # "0" is numeric but no game has game_id "0", so the IndexError
+        # fallback resolves it as db index 0 -> "game-alpha".
+        Handler.save_playlist(handler, {
+            "name": "Index Fallback",
+            "type": "manual",
+            "members": ["0", "1"],
+            "parent": "",
+            "notes": "",
+            "rules": {},
+        })
+        state = load_state()
+        playlist = state["playlists"][0]
+        self.assertEqual(playlist["members"], ["game-alpha", "game-beta"])
+
     def test_settings_save_persists_badges_and_extended_image_group(self):
         from openbox import load_state, save_state
         from web_app import Handler

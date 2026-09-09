@@ -143,8 +143,6 @@ class HealthHandlers:
         self.send_json(202, {"state": "queued", "job_id": job["job_id"]})
 
     def restore_library_backup(self, payload):
-        if not isinstance(payload, dict):
-            raise BadRequest("Request body must be a JSON object.")
         raw_path = str(payload.get("path", "") or "").strip()
         if not raw_path:
             raise BadRequest("Backup path is required.")
@@ -152,8 +150,6 @@ class HealthHandlers:
             archive = approved_backup_file(raw_path)
         except (ValueError, FileNotFoundError) as error:
             raise BadRequest(str(error)) from error
-        if not archive:
-            raise BadRequest("Backup archive not found or outside backups folder.")
         items = payload.get("items")
         force = bool(payload.get("force"))
 
