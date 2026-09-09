@@ -1,6 +1,7 @@
 """Faugus Launcher import handlers."""
 
 from api_errors import BadRequest
+from openbox import load_state
 from routes.registry import route
 from webapp_state import clear_file_probe_cache, merge_imported_games
 try:
@@ -43,10 +44,18 @@ class FaugusHandlers:
                 "source_identity": cand.get("source_identity", ""),
             }
             games.append(game)
+        state_before = load_state()
+        before_count = len(state_before.get("games", [])) if isinstance(state_before, dict) else 0
         added, found = merge_imported_games(
             games,
             lambda g: ("faugus", str(g.get("faugus_id") or g.get("source_identity") or g.get("path", ""))),
         )
         clear_file_probe_cache()
-        added_names = [g["name"] for g in games[:added]]
+        state_after = load_state()
+        after_games = state_after.get("games", []) if isinstance(state_after, dict) else []
+        added_games = after_games[before_count:before_count + added]
+        if added_games or not added:
+            added_names = [g.get("name", "") for g in added_games if isinstance(g, dict)]
+        else:
+            added_names = [g.get("name", "") for g in games[:added] if isinstance(g, dict)]
         self.send_json(200, {"added": added, "found": found, "imported": added_names, "count": added})
