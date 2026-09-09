@@ -1214,6 +1214,27 @@ class JobsAdapterTests(unittest.TestCase):
             _wait_for(webapp_state.JOB_MANAGER, "library-restore", {"done"})
             bump.assert_called_once()
 
+    def test_restore_library_backup_validation_errors(self):
+        # Non-dict payload
+        status, payload = self.request("POST", "/api/backup/restore", "invalid-body")
+        self.assertEqual(status, 400)
+        self.assertEqual(payload.get("code"), "BAD_REQUEST")
+
+        # Empty path
+        status, payload = self.request("POST", "/api/backup/restore", {"path": ""})
+        self.assertEqual(status, 400)
+        self.assertEqual(payload.get("code"), "BAD_REQUEST")
+
+        # Non-existent zip
+        status, payload = self.request("POST", "/api/backup/restore", {"path": "/tmp/nonexistent_backup.zip"})
+        self.assertEqual(status, 400)
+        self.assertEqual(payload.get("code"), "BAD_REQUEST")
+
+        # Non-zip file
+        status, payload = self.request("POST", "/api/backup/restore", {"path": "/tmp/backup.tar.gz"})
+        self.assertEqual(status, 400)
+        self.assertEqual(payload.get("code"), "BAD_REQUEST")
+
     def test_update_install_wraps_operation(self):
         import webapp_state
 
