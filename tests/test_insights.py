@@ -335,6 +335,65 @@ class InsightsHandlerTest(unittest.TestCase):
             self.assertIn(key, payload)
         self.assertIn("total", payload["overall"])
 
+    def test_mastery_with_retroachievements_enabled_and_cache(self):
+        import json
+        from urllib.parse import urlparse
+        import handlers.insights
+        from openbox import STATE_STORE, load_state
+
+        prev_ra_data = handlers.insights.DATA
+        handlers.insights.DATA = self.web_app.DATA
+        try:
+            STATE_STORE.save({
+                "games": [{"name": "Chrono Trigger", "platform": "SNES"}],
+                "profiles": {},
+                "settings": {"retroachievements_enabled": True},
+                "history": [],
+                "playlists": [],
+            })
+            gid = load_state()["games"][0]["game_id"]
+            ra_cache_dir = self.web_app.DATA.parent / "cache" / "retroachievements"
+            ra_cache_dir.mkdir(parents=True, exist_ok=True)
+            (ra_cache_dir / f"{gid}.json").write_text(json.dumps({
+                "game_id": gid,
+                "mastered": True,
+                "progress_pct": 100.0,
+            }))
+            h = self.handler()
+            parsed = urlparse("/api/v2/insights/mastery")
+            h._api_get_api_v2_insights_mastery(parsed)
+            self.assertEqual(h.responses[0][0], 200)
+            payload = h.responses[0][1]
+            self.assertEqual(payload["overall"]["ra_tracked"], 1)
+            self.assertEqual(payload["overall"]["ra_mastered"], 1)
+            self.assertEqual(payload["overall"]["ra_avg_progress"], 100.0)
+        finally:
+            handlers.insights.DATA = prev_ra_data
+
+    def test_mastery_with_retroachievements_enabled_missing_cache_dir(self):
+        from urllib.parse import urlparse
+        import handlers.insights
+        from openbox import STATE_STORE
+
+        prev_ra_data = handlers.insights.DATA
+        handlers.insights.DATA = self.web_app.DATA
+        try:
+            STATE_STORE.save({
+                "games": [{"game_id": "101", "name": "Chrono Trigger", "platform": "SNES"}],
+                "profiles": {},
+                "settings": {"retroachievements_enabled": True},
+                "history": [],
+                "playlists": [],
+            })
+            h = self.handler()
+            parsed = urlparse("/api/v2/insights/mastery")
+            h._api_get_api_v2_insights_mastery(parsed)
+            self.assertEqual(h.responses[0][0], 200)
+            payload = h.responses[0][1]
+            self.assertEqual(payload["overall"]["ra_tracked"], 0)
+        finally:
+            handlers.insights.DATA = prev_ra_data
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
