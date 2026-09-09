@@ -30,7 +30,9 @@ def run_configured_commands(key):
     for command in load_state().get("settings", {}).get(key, []):
         try:
             args = shlex.split(command)
+            if not args:
+                continue
             args[0] = str(Path(args[0]).expanduser())
             subprocess.Popen(args, start_new_session=True)
-        except (OSError, subprocess.SubprocessError) as e:
+        except (OSError, subprocess.SubprocessError, ValueError, IndexError) as e:
             LOGGER.warning("run_configured_commands: %s", e)
