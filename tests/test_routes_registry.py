@@ -109,6 +109,11 @@ class RouteRegistryTests(unittest.TestCase):
         self.assertTrue(_is_static_asset("/static/activity.js"))
         self.assertIn("/static/setup.js", GET_TABLE)
         self.assertIn("/static/activity.js", GET_TABLE)
+        from routes import PUBLIC_GET_PATHS
+        self.assertIn("/static/worker.search.js", PUBLIC_GET_PATHS)
+        self.assertIn("/static/insights.js", PUBLIC_GET_PATHS)
+        self.assertTrue(_is_public_path("/static/worker.search.js"))
+        self.assertTrue(_is_public_path("/static/insights.js"))
         self.assertFalse(_is_static_asset("/api/library"))
         self.assertFalse(_is_public_path("/api/library"))
 

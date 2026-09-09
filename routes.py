@@ -32,6 +32,8 @@ PUBLIC_GET_PATHS = frozenset({
     "/static/timeline.js",
     "/static/mastery.js",
     "/static/party.js",
+    "/static/worker.search.js",
+    "/static/insights.js",
     "/static/app.css",
     "/static/logo.png",
     "/locales/en.json",
