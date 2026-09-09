@@ -63,6 +63,37 @@ class RunConfiguredCommandsTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     self._call()
 
+    def test_empty_command_skipped(self):
+        """Empty and whitespace-only commands should be skipped without calling Popen or raising."""
+        state = {"settings": {"startup_commands": ["", "   ", "\t\n"]}}
+        with patch("pkg.state.commands.load_state", return_value=state):
+            with patch("subprocess.Popen") as mock_popen:
+                self._call()
+                mock_popen.assert_not_called()
+
+    def test_malformed_command_value_error_logged(self):
+        """Unclosed quotes raising ValueError should be caught and logged as warning."""
+        state = {"settings": {"startup_commands": ['echo "unclosed quote']}}
+        with patch("pkg.state.commands.load_state", return_value=state):
+            with self.assertLogs("openbox", level="WARNING") as captured:
+                self._call()
+        self.assertTrue(
+            any("run_configured_commands" in msg for msg in captured.output),
+            f"Expected warning log for ValueError, got: {captured.output}",
+        )
+
+    def test_empty_args_index_error_logged(self):
+        """Empty args list from shlex or index error should be handled cleanly."""
+        state = {"settings": {"startup_commands": ["something"]}}
+        with patch("pkg.state.commands.load_state", return_value=state):
+            with patch("shlex.split", side_effect=IndexError("simulated index error")):
+                with self.assertLogs("openbox", level="WARNING") as captured:
+                    self._call()
+        self.assertTrue(
+            any("run_configured_commands" in msg and "simulated index error" in msg for msg in captured.output),
+            f"Expected warning log for IndexError, got: {captured.output}",
+        )
+
 
 class ImportLoopContinuesTests(unittest.TestCase):
     """The install_emulator loop in import_wizard should continue after individual failures."""
