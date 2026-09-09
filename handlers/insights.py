@@ -1,10 +1,9 @@
 """InsightsHandlers — Play Insights dashboard (1.7.1)."""
 
 import datetime
-from pathlib import Path
 from urllib.parse import parse_qs
 
-from openbox import load_state
+from openbox import DATA, load_state
 from pkg.parity.parity_insights import compute_heatmap, mastery_summary, summarize, wrapped_summary
 from routes.registry import route
 
@@ -98,8 +97,8 @@ class InsightsHandlers:
         ra_dir = None
         settings = state.get("settings", {}) if isinstance(state, dict) else {}
         if settings.get("retroachievements_enabled"):
-            cache = state.get("settings", {}).get("state_dir")
-            if cache:
-                ra_dir = str(Path(cache) / "retroachievements")
+            ra_cache = DATA.parent / "cache/retroachievements"
+            if ra_cache.is_dir():
+                ra_dir = str(ra_cache)
         self.send_json(200, mastery_summary(games, ra_cache_dir=ra_dir))
         return
