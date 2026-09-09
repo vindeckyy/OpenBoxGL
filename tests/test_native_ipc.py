@@ -77,6 +77,13 @@ class NativeIpcTests(unittest.TestCase):
             urllib.request.urlopen(req)
         self.assertEqual(ctx.exception.code, 403)
 
+    def test_post_endpoints_require_auth(self):
+        for path in ("/api/native/dialog", "/api/native/open-external", "/api/native/reveal", "/api/native/window"):
+            req = urllib.request.Request(self.origin + path, data=b"{}", headers={"Content-Type": "application/json"})
+            with self.assertRaises(urllib.error.HTTPError) as ctx:
+                urllib.request.urlopen(req)
+            self.assertEqual(ctx.exception.code, 403)
+
     def test_dialog_without_host_is_cancelled(self):
         status, payload = self.request("/api/native/dialog", method="POST", body={"kind": "folder"})
         self.assertEqual(status, 200)
