@@ -112,6 +112,59 @@ if (mode === "bigbox") {
     { timeout: 60000 },
   );
   await new Promise((resolve) => setTimeout(resolve, 6000));
+} else if (mode === "picker") {
+  await page.evaluate(async () => { (await import("/static/picker.js")).openPicker(); });
+  await page.waitForFunction(
+    () => document.querySelector("#pickerDialog")?.open === true,
+    { timeout: 30000 },
+  );
+  await new Promise((resolve) => setTimeout(resolve, 800));
+} else if (mode === "wrapped") {
+  await page.evaluate(async () => { (await import("/static/wrapped.js")).openWrapped(); });
+  await page.waitForFunction(
+    () => {
+      const dlg = document.querySelector("#wrappedDialog");
+      if (!dlg || !dlg.open) return false;
+      const text = dlg.textContent || "";
+      return text.includes("Total playtime") && !text.includes("common.loading");
+    },
+    { timeout: 30000 },
+  );
+  await new Promise((resolve) => setTimeout(resolve, 800));
+} else if (mode === "mastery") {
+  await page.evaluate(async () => { (await import("/static/mastery.js")).openMastery(); });
+  await page.waitForFunction(
+    () => document.querySelector("#masteryDialog")?.open === true,
+    { timeout: 30000 },
+  );
+  await new Promise((resolve) => setTimeout(resolve, 800));
+} else if (mode === "party") {
+  // Game Night lives inside Big Box: #partyOverlay is nested in #bigBox, so
+  // it only lays out once Big Box is open. Enter Big Box first, then open
+  // the party overlay on top of the stage.
+  await page.evaluate(async () => { (await import("/static/bigbox.js")).openBigBox?.(); });
+  await page.waitForFunction(() => {
+    const bigBox = document.querySelector("#bigBox");
+    return bigBox && !bigBox.hidden && getComputedStyle(bigBox).opacity === "1";
+  }, { timeout: 30000 });
+  await page.evaluate(async () => { (await import("/static/party.js")).openParty(); });
+  await page.waitForFunction(
+    () => {
+      const overlay = document.querySelector("#partyOverlay");
+      if (!overlay || overlay.hidden) return false;
+      if (getComputedStyle(overlay).opacity !== "1") return false;
+      const rect = overlay.getBoundingClientRect();
+      return rect.width > 100 && (overlay.textContent || "").trim().length > 0;
+    },
+    { timeout: 30000 },
+  );
+  // Build the queue so the capture shows the wheel, not just the setup panel.
+  await page.evaluate(() => document.querySelector("#partyBuild")?.click());
+  await page.waitForFunction(
+    () => Boolean(document.querySelector("#partyWheel")?.children.length),
+    { timeout: 30000 },
+  );
+  await new Promise((resolve) => setTimeout(resolve, 600));
 } else if (mode === "detail" || detailGameId !== "") {
   const gameId = detailGameId || mode;
   // The grid is virtualized and re-renders on scroll, so puppeteer's

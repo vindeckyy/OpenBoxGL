@@ -224,10 +224,33 @@ def build_library() -> None:
             raise SystemExit(f"No cover art available for {name}")
         games.append(entry)
 
+    # Stable ids are recomputed from identity on load; derive them with the
+    # same function so seeded history entries reference the surviving ids.
+    from state_store import _stable_game_id
+
+    history: list[dict] = []
+    for index, game in enumerate(games):
+        game["game_id"] = _stable_game_id(game)
+        if index % 3 == 0:
+            game["added_at"] = f"2026-0{1 + index % 7}-1{index % 9}T12:00:00"
+        session_count = 4 + (index % 5)
+        for session in range(session_count):
+            month = 2 + (index + session) % 7
+            day = 1 + ((index * 5 + session * 9) % 27)
+            hour = 17 + (index + session) % 5
+            started = datetime(2026, month, day, hour, 12, 0).isoformat()
+            history.append({
+                "game_id": game["game_id"],
+                "title": game["name"],
+                "started": started,
+                "seconds": 1800 + ((index * 977 + session * 613) % 12600),
+                "exit_code": 0,
+            })
+
     state = {
         "games": games,
         "profiles": {},
-        "history": [],
+        "history": history,
         "playlists": [],
         "settings": {
             "welcome_completed": True,
@@ -314,24 +337,38 @@ def main() -> None:
     detail_out = FIXTURE_ROOT / "openbox-game-detail.png"
     bigbox_out = FIXTURE_ROOT / "openbox-bigbox.png"
     constellation_out = FIXTURE_ROOT / "openbox-constellation.png"
+    picker_out = FIXTURE_ROOT / "openbox-picker.png"
+    wrapped_out = FIXTURE_ROOT / "openbox-wrapped.png"
+    mastery_out = FIXTURE_ROOT / "openbox-mastery.png"
+    party_out = FIXTURE_ROOT / "openbox-game-night.png"
     try:
         capture_with_puppeteer(app_url, library_out)
         capture_with_puppeteer(app_url, detail_out, mode="detail", detail_game_id=1)
         capture_with_puppeteer(app_url, bigbox_out, mode="bigbox")
         capture_with_puppeteer(app_url, constellation_out, mode="constellation")
-        assert_dimensions(library_out)
-        assert_dimensions(detail_out)
-        assert_dimensions(bigbox_out)
-        assert_dimensions(constellation_out)
+        capture_with_puppeteer(app_url, picker_out, mode="picker")
+        capture_with_puppeteer(app_url, wrapped_out, mode="wrapped")
+        capture_with_puppeteer(app_url, mastery_out, mode="mastery")
+        capture_with_puppeteer(app_url, party_out, mode="party")
+        for output in (library_out, detail_out, bigbox_out, constellation_out, picker_out, wrapped_out, mastery_out, party_out):
+            assert_dimensions(output)
         ASSETS_DIR.mkdir(exist_ok=True)
         shutil.copy2(library_out, ASSETS_DIR / "openbox-screenshot.png")
         shutil.copy2(detail_out, ASSETS_DIR / "openbox-game-detail.png")
         shutil.copy2(bigbox_out, ASSETS_DIR / "openbox-bigbox.png")
         shutil.copy2(constellation_out, ASSETS_DIR / "openbox-constellation.png")
+        shutil.copy2(picker_out, ASSETS_DIR / "openbox-picker.png")
+        shutil.copy2(wrapped_out, ASSETS_DIR / "openbox-wrapped.png")
+        shutil.copy2(mastery_out, ASSETS_DIR / "openbox-mastery.png")
+        shutil.copy2(party_out, ASSETS_DIR / "openbox-game-night.png")
         print(f"Wrote {ASSETS_DIR / 'openbox-screenshot.png'}")
         print(f"Wrote {ASSETS_DIR / 'openbox-game-detail.png'}")
         print(f"Wrote {ASSETS_DIR / 'openbox-bigbox.png'}")
         print(f"Wrote {ASSETS_DIR / 'openbox-constellation.png'}")
+        print(f"Wrote {ASSETS_DIR / 'openbox-picker.png'}")
+        print(f"Wrote {ASSETS_DIR / 'openbox-wrapped.png'}")
+        print(f"Wrote {ASSETS_DIR / 'openbox-mastery.png'}")
+        print(f"Wrote {ASSETS_DIR / 'openbox-game-night.png'}")
     finally:
         server.terminate()
         try:
