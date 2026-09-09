@@ -29,6 +29,10 @@ class DummyHandler:
         self.status = status
         self.payload = {"error": msg}
 
+    def handle_unauthorized(self):
+        self.status = 403
+        self.payload = {"error": "Unauthorized"}
+
 
 class TestNativeHandlers(unittest.TestCase):
     def test_capabilities_unauthorized(self):
@@ -101,5 +105,36 @@ class TestNativeHandlers(unittest.TestCase):
             window(h, {"action": "bad"})
         with self.assertRaises(BadRequest):
             window(h, {})
+
+    def test_post_handlers_unauthorized(self):
+        for fn, payload in [
+            (dialog, {"kind": "folder"}),
+            (open_external, {"url": "https://example.com"}),
+            (reveal, {"path": "/tmp/test"}),
+            (window, {"action": "minimize"}),
+        ]:
+            h = DummyHandler(authorized=False)
+            fn(h, payload)
+            self.assertEqual(h.status, 403)
+            self.assertEqual(h.payload.get("error"), "Unauthorized")
+
+    def test_unauthorized_fallback_without_handle_unauthorized_method(self):
+        class MinimalHandler:
+            def __init__(self):
+                self.status = None
+                self.payload = None
+
+            def authorized(self):
+                return False
+
+            def send_json(self, status, payload):
+                self.status = status
+                self.payload = payload
+
+        h = MinimalHandler()
+        dialog(h, {"kind": "folder"})
+        self.assertEqual(h.status, 403)
+        self.assertEqual(h.payload.get("error"), "Unauthorized")
+
 if __name__ == "__main__":
     unittest.main()
