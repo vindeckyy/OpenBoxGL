@@ -15,9 +15,7 @@ def _reset_openbox_modules():
         sys.modules.pop(name, None)
     try:
         from routes.registry import _REGISTRY
-        for key in list(_REGISTRY):
-            if "/faugus" in key[1]:
-                del _REGISTRY[key]
+        _REGISTRY.clear()
     except ImportError:
         pass
 
@@ -244,6 +242,56 @@ class TestFaugus(unittest.TestCase):
 
                 args = shlex.split(_filled_launch_command(state["games"][0]))
                 self.assertEqual(args, ["umu-run", "/tmp/my spaced game.exe"])
+            finally:
+                if prev is None:
+                    os.environ.pop("OPENBOX_DATA_DIR", None)
+                else:
+                    os.environ["OPENBOX_DATA_DIR"] = prev
+                _reset_openbox_modules()
+
+    def test_faugus_import_accurately_tracks_added_game_names(self):
+        import tempfile
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            prev = os.environ.get("OPENBOX_DATA_DIR")
+            os.environ["OPENBOX_DATA_DIR"] = tmp
+            try:
+                _reset_openbox_modules()
+                from openbox import save_state, load_state
+                from web_app import Handler
+
+                save_state({
+                    "games": [{
+                        "game_id": "faugus:game-1",
+                        "name": "Existing Game",
+                        "faugus_id": "game-1",
+                        "source": "Faugus",
+                    }],
+                    "profiles": {},
+                    "history": [],
+                    "settings": {},
+                    "playlists": [],
+                })
+                handler = object.__new__(Handler)
+                responses = []
+                handler.send_json = lambda status, payload: responses.append((status, payload))
+
+                candidates = [
+                    {"name": "Existing Game", "faugus_id": "game-1", "path": "/tmp/g1.exe"},
+                    {"name": "New Game A", "faugus_id": "game-2", "path": "/tmp/g2.exe"},
+                    {"name": "New Game B", "faugus_id": "game-3", "path": "/tmp/g3.exe"},
+                ]
+                with mock.patch("handlers.faugus.scan_faugus_games", return_value=candidates):
+                    handler._api_post_api_faugus_import({})
+                    self.assertEqual(responses[-1][0], 200)
+                    body = responses[-1][1]
+                    self.assertEqual(body["added"], 2)
+                    self.assertEqual(body["found"], 3)
+                    self.assertEqual(body["imported"], ["New Game A", "New Game B"])
+                    self.assertEqual(body["count"], 2)
+
+                state = load_state()
+                self.assertEqual(len(state["games"]), 3)
             finally:
                 if prev is None:
                     os.environ.pop("OPENBOX_DATA_DIR", None)
