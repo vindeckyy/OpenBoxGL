@@ -3,7 +3,6 @@
 import copy
 import mimetypes
 import re
-import shutil
 from pathlib import Path
 from urllib.parse import parse_qs
 
@@ -53,14 +52,13 @@ class DataHandlers:
             game = game_from_query(load_state_view(), query)
             document = game.get("documents", [])[int(query["index"][0])]
             path = safe_document_file(document["path"])
-            self.send_response(200)
-            self.headers_common(mimetypes.guess_type(path.name)[0] or "application/octet-stream")
             safe_name = re.sub(r'[\r\n"]', "_", path.name)
-            self.send_header("Content-Disposition", f'inline; filename="{safe_name}"')
-            self.send_header("Content-Length", str(path.stat().st_size))
-            self.end_headers()
-            with path.open("rb") as source:
-                shutil.copyfileobj(source, self.wfile)
+            self.send_file(
+                200,
+                path,
+                content_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+                extra_headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
+            )
         except (KeyError, IndexError, ValueError, FileNotFoundError):
             raise DocumentNotFound("Document not found") from None
         return
@@ -102,14 +100,13 @@ class DataHandlers:
             index = int(query["index"][0])
             document = load_state_view().get("settings", {}).get("platform_documents", {}).get(platform, [])[index]
             path = safe_document_file(document["path"])
-            self.send_response(200)
-            self.headers_common(mimetypes.guess_type(path.name)[0] or "application/octet-stream")
             safe_name = re.sub(r'[\r\n"]', "_", path.name)
-            self.send_header("Content-Disposition", f'inline; filename="{safe_name}"')
-            self.send_header("Content-Length", str(path.stat().st_size))
-            self.end_headers()
-            with path.open("rb") as source:
-                shutil.copyfileobj(source, self.wfile)
+            self.send_file(
+                200,
+                path,
+                content_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+                extra_headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
+            )
         except (KeyError, IndexError, ValueError, FileNotFoundError):
             raise PlatformDocumentNotFound("Platform document not found") from None
         return

@@ -183,22 +183,25 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         last_modified = email.utils.formatdate(stat_result.st_mtime, usegmt=True)
         return etag, last_modified
 
-    def send_file(self, status, path, content_type=None):
+    def send_file(self, status, path, content_type=None, extra_headers=None):
         path = Path(path)
         stat_result = path.stat()
         size = stat_result.st_size
         etag, last_modified = self._cache_headers(path, stat_result)
         request_cache_control = "private, max-age=31536000, immutable"
-        conditional = self.headers.get("If-None-Match", "")
+        headers = getattr(self, "headers", None) or {}
+        conditional = headers.get("If-None-Match", "")
         if etag in {item.strip() for item in conditional.split(",")}:
             self.send_response(304)
             self.headers_common(content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream", cache_control=request_cache_control)
             self.send_header("ETag", etag)
             self.send_header("Last-Modified", last_modified)
+            for name, value in (extra_headers or {}).items():
+                self.send_header(name, value)
             self.end_headers()
             return
         if not conditional:
-            if_modified_since = self.headers.get("If-Modified-Since", "")
+            if_modified_since = headers.get("If-Modified-Since", "")
             if if_modified_since:
                 try:
                     since = email.utils.parsedate_to_datetime(if_modified_since)
@@ -207,13 +210,15 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
                         self.headers_common(content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream", cache_control=request_cache_control)
                         self.send_header("ETag", etag)
                         self.send_header("Last-Modified", last_modified)
+                        for name, value in (extra_headers or {}).items():
+                            self.send_header(name, value)
                         self.end_headers()
                         return
                 except (TypeError, ValueError):
                     pass
         start, end = 0, size - 1
         response_status = status
-        range_header = self.headers.get("Range", "")
+        range_header = headers.get("Range", "")
         if range_header.startswith("bytes="):
             spec = range_header[6:].split(",", 1)[0].strip()
             if "-" not in spec:
@@ -230,6 +235,8 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
                 self.headers_common(content_type or "application/octet-stream", cache_control=request_cache_control)
                 self.send_header("Content-Range", f"bytes */{size}")
                 self.send_header("Content-Length", "0")
+                for name, value in (extra_headers or {}).items():
+                    self.send_header(name, value)
                 self.end_headers()
                 return
             end = min(end, size - 1)
@@ -243,8 +250,13 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         self.send_header("Content-Length", str(length))
         if response_status == 206:
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
-        self.end_headers()
-        self.wfile.flush()
+        for name, value in (extra_headers or {}).items():
+            self.send_header(name, value)
+        try:
+            self.end_headers()
+            self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
         # Use os.sendfile for zero-copy transfer on full-file requests (Linux).
         # Note: settimeout() puts the raw fd in non-blocking mode, so sendfile
         # can hit EAGAIN (BlockingIOError) once the kernel send buffer fills.
@@ -266,19 +278,25 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
                         sent += transferred
                 finally:
                     os.close(file_fd)
+            except (BrokenPipeError, ConnectionResetError):
+                return
             except (OSError, AttributeError):
                 pass
             start += sent
             remaining -= sent
         if remaining:
-            with path.open("rb") as source:
-                source.seek(start)
-                while remaining:
-                    chunk = source.read(min(1024 * 1024, remaining))
-                    if not chunk:
-                        break
-                    self.wfile.write(chunk)
-                    remaining -= len(chunk)
+            try:
+                with path.open("rb") as source:
+                    source.seek(start)
+                    while remaining:
+                        chunk = source.read(min(1024 * 1024, remaining))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        remaining -= len(chunk)
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
 
     def send_json(self, status, payload, extra_headers=None):
         data = json.dumps(payload).encode()

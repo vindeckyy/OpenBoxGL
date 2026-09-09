@@ -1383,6 +1383,32 @@ class DataHandlersStreamTests(unittest.TestCase):
             self.handler._api_get_api_platform_document(urlparse("/api/platform/document?platform=NES&index=0"))
             self.assertTrue(self.handler.wfile.getvalue())
 
+    def test_document_routes_byte_range_and_caching(self):
+        import io
+        from urllib.parse import urlparse
+
+        self.handler.wfile = io.BytesIO()
+        self.handler.headers = {"Range": "bytes=0-3"}
+        self.handler.send_response = mock.Mock()
+        self.handler.headers_common = mock.Mock()
+        self.handler.send_header = mock.Mock()
+        self.handler.end_headers = mock.Mock()
+        with mock.patch("handlers.data.safe_document_file", return_value=self.doc):
+            self.handler._api_get_api_document(urlparse("/api/document?id=0&index=0"))
+            self.handler.send_response.assert_called_with(206)
+            self.assertEqual(self.handler.wfile.getvalue(), b"%PDF")
+
+        self.handler.wfile = io.BytesIO()
+        self.handler.headers = {"Range": "bytes=1-4"}
+        self.handler.send_response = mock.Mock()
+        self.handler.headers_common = mock.Mock()
+        self.handler.send_header = mock.Mock()
+        self.handler.end_headers = mock.Mock()
+        with mock.patch("handlers.data.safe_document_file", return_value=self.doc):
+            self.handler._api_get_api_platform_document(urlparse("/api/platform/document?platform=NES&index=0"))
+            self.handler.send_response.assert_called_with(206)
+            self.assertEqual(self.handler.wfile.getvalue(), b"PDF-")
+
     def test_gameyfin_password_and_install_error_paths(self):
         from web_app import Handler
 

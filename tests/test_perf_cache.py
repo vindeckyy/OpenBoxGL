@@ -76,11 +76,11 @@ class PerfCacheTests(unittest.TestCase):
         handler.log_request = lambda *args, **kwargs: None
         return handler
 
-    def send_file(self, path=None, extra_headers=None):
+    def send_file(self, path=None, extra_headers=None, response_extra_headers=None):
         handler = self.make_handler()
         for key, value in (extra_headers or {}).items():
             handler.headers[key] = value
-        handler.send_file(200, path or self.media_path)
+        handler.send_file(200, path or self.media_path, extra_headers=response_extra_headers)
         return _parse_response(handler.wfile.getvalue())
 
     def test_media_has_cache_headers(self):
@@ -113,6 +113,65 @@ class PerfCacheTests(unittest.TestCase):
         self.assertEqual(headers.get("content-range"), "bytes 0-4/14")
         self.assertTrue(headers.get("etag"))
         self.assertIn("immutable", headers.get("cache-control", ""))
+
+    def test_send_file_flushes_after_write_loop(self):
+        handler = self.make_handler()
+        flush_called = []
+        original_flush = handler.wfile.flush
+        def tracking_flush():
+            flush_called.append(True)
+            original_flush()
+        handler.wfile.flush = tracking_flush
+        handler.send_file(200, self.media_path)
+        self.assertGreaterEqual(len(flush_called), 2)
+
+    def test_send_file_broken_pipe_on_write(self):
+        handler = self.make_handler()
+        original_write = handler.wfile.write
+        calls = 0
+        def write_with_pipe_error(b):
+            nonlocal calls
+            calls += 1
+            if calls > 1:
+                raise BrokenPipeError("broken pipe")
+            return original_write(b)
+        handler.wfile.write = write_with_pipe_error
+        handler.send_file(200, self.media_path)
+
+    def test_send_file_connection_reset_on_write(self):
+        handler = self.make_handler()
+        original_write = handler.wfile.write
+        calls = 0
+        def write_with_reset_error(b):
+            nonlocal calls
+            calls += 1
+            if calls > 1:
+                raise ConnectionResetError("conn reset")
+            return original_write(b)
+        handler.wfile.write = write_with_reset_error
+        handler.send_file(200, self.media_path)
+
+    def test_send_file_broken_pipe_on_header_flush(self):
+        handler = self.make_handler()
+        handler.wfile.flush = mock.Mock(side_effect=BrokenPipeError("broken pipe"))
+        handler.send_file(200, self.media_path)
+
+    def test_send_file_extra_headers(self):
+        status, headers, body = self.send_file(response_extra_headers={"Content-Disposition": 'inline; filename="manual.pdf"'})
+        self.assertEqual(status, "200")
+        self.assertEqual(headers.get("content-disposition"), 'inline; filename="manual.pdf"')
+
+    def test_send_file_extra_headers_on_304(self):
+        _, headers, _ = self.send_file()
+        etag = headers["etag"]
+        status, headers, body = self.send_file(extra_headers={"If-None-Match": etag}, response_extra_headers={"Content-Disposition": 'inline; filename="manual.pdf"'})
+        self.assertEqual(status, "304")
+        self.assertEqual(headers.get("content-disposition"), 'inline; filename="manual.pdf"')
+
+    def test_send_file_extra_headers_on_416(self):
+        status, headers, body = self.send_file(extra_headers={"Range": "bytes=9999-10000"}, response_extra_headers={"Content-Disposition": 'inline; filename="manual.pdf"'})
+        self.assertEqual(status, "416")
+        self.assertEqual(headers.get("content-disposition"), 'inline; filename="manual.pdf"')
 
     def test_json_stays_no_store(self):
         from web_app import Handler
