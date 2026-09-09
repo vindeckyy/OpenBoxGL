@@ -417,6 +417,38 @@ class ParityApiTests(unittest.TestCase):
         self.assertEqual(playlist["parent"], "Favorites")
         self.assertEqual(playlist["notes"], "Play in this order")
 
+    def test_manual_playlist_storefront_and_custom_ids(self):
+        from openbox import load_state, save_state
+        from web_app import Handler
+
+        save_state({
+            "schema_version": 6,
+            "games": [
+                {"name": "Faugus Game", "game_id": "faugus-42", "path": "/bin/true"},
+                {"name": "Itch Game", "game_id": "itch-987", "path": "/bin/true"},
+                {"name": "Numeric Game", "game_id": "1086940", "path": "/bin/true"},
+                {"name": "Standard Game", "game_id": "game-standard", "path": "/bin/true"},
+            ],
+            "profiles": {}, "history": [], "settings": {}, "playlists": [],
+        })
+        handler = object.__new__(Handler)
+        handler.send_json = mock.Mock()
+        Handler.save_playlist(handler, {
+            "name": "Storefront Collection",
+            "type": "manual",
+            "members": ["faugus-42", "itch-987", "1086940", "game-standard", 0, {"game_id": "itch-987"}],
+            "parent": "Storefronts",
+            "notes": "Storefront and custom IDs",
+            "rules": {},
+        })
+        state = load_state()
+        playlist = state["playlists"][0]
+        self.assertEqual(playlist["type"], "manual")
+        self.assertEqual(
+            playlist["members"],
+            ["faugus-42", "itch-987", "1086940", "game-standard"],
+        )
+
     def test_settings_save_persists_badges_and_extended_image_group(self):
         from openbox import load_state, save_state
         from web_app import Handler

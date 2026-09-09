@@ -228,7 +228,17 @@ class ExtensionsHandlers:
             raise ValueError("Playlist members must be a list.")
         member_ids = []
         for value in members:
-            game = game_from_payload(state, {"game_id": value}) if str(value).startswith("game-") else game_from_payload(state, {"id": value})
+            if isinstance(value, dict):
+                game = game_from_payload(state, value)
+            elif isinstance(value, int) and not isinstance(value, bool):
+                game = game_from_payload(state, {"id": value})
+            elif isinstance(value, str) and value.isdigit():
+                try:
+                    game = game_from_payload(state, {"game_id": value})
+                except IndexError:
+                    game = game_from_payload(state, {"id": int(value)})
+            else:
+                game = game_from_payload(state, {"game_id": str(value)})
             stable_id = str(game.get("game_id") or "")
             if stable_id and stable_id not in member_ids:
                 member_ids.append(stable_id)
