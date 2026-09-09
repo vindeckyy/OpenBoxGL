@@ -34,9 +34,14 @@ def main():
             save_state({"games":[{"name":"Session test", "path":hold_script}], "profiles":{}, "history":[]})
             session = start_game(0)
             control_game_session(session["launch_id"], "pause")
-            time.sleep(.03)
-            with open(f"/proc/{session['pid']}/status", encoding="utf-8") as status_file:
-                assert "\nState:\tT" in status_file.read()
+            for _ in range(200):
+                with open(f"/proc/{session['pid']}/status", encoding="utf-8") as status_file:
+                    if "\nState:\tT" in status_file.read():
+                        break
+                time.sleep(.01)
+            else:
+                with open(f"/proc/{session['pid']}/status", encoding="utf-8") as status_file:
+                    assert "\nState:\tT" in status_file.read()
             control_game_session(session["launch_id"], "resume")
             control_game_session(session["launch_id"], "resume")
             with mock.patch("os.killpg", side_effect=OSError("No such process")):
