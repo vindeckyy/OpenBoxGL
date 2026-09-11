@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+- Redraw the application logo as a true vector: `openbox.svg` now contains
+  real path geometry (isometric cube with the three face glyphs) instead of a
+  base64-embedded PNG, and `assets/openbox-logo.png` plus
+  `assets/OpenBoxGL.png` are re-rendered from it.
+
 ### Fixed
 - Serve large media files completely: `os.sendfile` on the timeout-managed
   socket could stop mid-response and leave the transfer truncated, hanging
