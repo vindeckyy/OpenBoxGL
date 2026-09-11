@@ -37,14 +37,15 @@ native_host
 
 # Maintainer-only signing material (never commit private keys)
 
-# Local-only planning and design docs (kept out of the repo)
-PLAN.md
-POLISH_PLAN.md
-ARCHITECTURE.md
-DESIGN.md
-PRODUCT.md
-COVERAGE.md
-PERF.md
+# Local-only planning and design docs (kept out of the repo root;
+# tracked files with these names under docs/ are unaffected)
+/PLAN.md
+/POLISH_PLAN.md
+/ARCHITECTURE.md
+/DESIGN.md
+/PRODUCT.md
+/COVERAGE.md
+/PERF.md
 .agents/
 .mimocode/
 local/
