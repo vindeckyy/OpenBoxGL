@@ -157,7 +157,7 @@ docs: update parity matrix for OBS attach workflow
 Plugins are optional Python packages installed in the user plugins directory. Each plugin requires:
 
 - `plugin.json` with `id`, `name`, `version`, `entry`, and `hooks`
-- An entry Python module that reads JSON from stdin and writes JSON to stdout
+- An entry Python module that exports one function per declared hook (`def library(payload)`, `def before_launch(payload)`, `def after_session(payload)`); the runner feeds each hook a decoded JSON payload and writes the returned dict back as JSON
 
 Supported hooks:
 
