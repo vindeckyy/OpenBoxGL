@@ -11,6 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (app icon and favicon) now carries the hexagonal OBGL monogram traced in
   `assets/OpenBoxLogo.svg`, and `assets/openbox-logo.png` plus
   `assets/OpenBoxGL.png` are re-rendered from it.
+- Complete the logo rebrand with consistent square, transparent application
+  and README artwork generated from the supplied SVG. Native window and tray
+  icons use the bundled mark when running directly from source as well as
+  installed builds. Regenerate the artwork with `bash scripts/render_branding.sh`
+  (ImageMagick is needed only for development).
 
 ### Fixed
 - Serve large media files completely: `os.sendfile` on the timeout-managed

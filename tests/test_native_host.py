@@ -79,6 +79,51 @@ int main(int argc, char **argv) {
         self.assertEqual(result.returncode, 0, f"Harness compilation failed:\n{result.stderr}")
         return binary
 
+    def _compile_icon_path_harness(self, directory):
+        """Compile the bundled icon lookup without opening a GTK display."""
+        root_dir = Path(__file__).resolve().parent.parent
+        harness = Path(directory) / "native_icon_path_harness.c"
+        harness.write_text(
+            r'''
+#define main native_host_program_main
+#include "@@NATIVE_SOURCE@@"
+#undef main
+
+int main(int argc, char **argv) {
+    if (argc != 2) {
+        return 2;
+    }
+    web_app_path = argv[1];
+    char *path = resolve_application_icon_path();
+    if (!path) {
+        return 1;
+    }
+    puts(path);
+    g_free(path);
+    return 0;
+}
+'''.replace("@@NATIVE_SOURCE@@", str(root_dir / "native_host.c")),
+            encoding="utf-8",
+        )
+        cflags = subprocess.check_output(
+            ['pkg-config', '--cflags', 'webkit2gtk-4.1', 'gtk+-3.0'],
+            text=True,
+        ).strip()
+        libs = subprocess.check_output(
+            ['pkg-config', '--libs', 'webkit2gtk-4.1', 'gtk+-3.0'],
+            text=True,
+        ).strip()
+        binary = Path(directory) / "native_icon_path_harness"
+        result = subprocess.run(
+            ['gcc', '-Wall', '-Wextra'] + cflags.split() +
+            ['-o', str(binary), str(harness)] + libs.split(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, f"Icon harness compilation failed:\n{result.stderr}")
+        return binary
+
     def test_compiles(self):
         """native_host.c compiles without errors."""
         result = subprocess.run(
@@ -119,6 +164,70 @@ int main(int argc, char **argv) {
         self.assertIn('poll(&pfd', parent_wait)
         self.assertIn('waitpid(server_pid', parent_wait)
         self.assertNotIn('100 * 1000', parent_wait)
+
+    def test_application_icon_uses_bundled_svg_for_source_and_installed_layouts(self):
+        """Window and tray branding resolve the SVG beside the web app."""
+        source = (Path(__file__).resolve().parent.parent / 'native_host.c').read_text(
+            encoding='utf-8'
+        )
+        self.assertIn('gtk_window_set_icon_from_file', source)
+        self.assertIn('gtk_status_icon_new_from_file', source)
+        result = subprocess.run(
+            ['pkg-config', '--exists', 'webkit2gtk-4.1'],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            self.skipTest('webkit2gtk-4.1 dev headers not available')
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            binary = self._compile_icon_path_harness(root)
+            layouts = [
+                root / 'source-checkout',
+                root / 'prefix' / 'share' / 'openbox',
+            ]
+            for share_dir in layouts:
+                share_dir.mkdir(parents=True)
+                (share_dir / 'web_app.py').write_text('# test\n', encoding='utf-8')
+                (share_dir / 'openbox.svg').write_text('<svg/>\n', encoding='utf-8')
+                resolved = subprocess.check_output(
+                    [str(binary), str(share_dir / 'web_app.py')],
+                    cwd=root,
+                    text=True,
+                ).strip()
+                self.assertEqual(resolved, str(share_dir / 'openbox.svg'))
+
+    def test_application_icon_falls_back_to_installed_icon_data(self):
+        """Installed layouts without a share copy use the desktop icon asset."""
+        result = subprocess.run(
+            ['pkg-config', '--exists', 'webkit2gtk-4.1'],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            self.skipTest('webkit2gtk-4.1 dev headers not available')
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            binary = self._compile_icon_path_harness(root)
+            share_dir = root / 'prefix' / 'share' / 'openbox'
+            share_dir.mkdir(parents=True)
+            (share_dir / 'web_app.py').write_text('# test\n', encoding='utf-8')
+            data_dir = root / 'xdg-data'
+            icon = data_dir / 'icons' / 'hicolor' / 'scalable' / 'apps' / 'io.openbox.GameLauncher.svg'
+            icon.parent.mkdir(parents=True)
+            icon.write_text('<svg/>\n', encoding='utf-8')
+            env = os.environ.copy()
+            env['XDG_DATA_HOME'] = str(root / 'xdg-user')
+            env['XDG_DATA_DIRS'] = str(data_dir)
+            resolved = subprocess.check_output(
+                [str(binary), str(share_dir / 'web_app.py')],
+                cwd=root,
+                env=env,
+                text=True,
+            ).strip()
+            self.assertEqual(resolved, str(icon))
 
     def test_single_instance_dispatches_forwarded_requests(self):
         """A running owner receives deeplinks, not only the legacy focus ping."""
