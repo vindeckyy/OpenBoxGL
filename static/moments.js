@@ -393,6 +393,9 @@ async function mountResumeAffordance(gameOrId, host) {
   const game = resolveGame(gameOrId);
   if (!game || !host) return;
   host.innerHTML = '';
+  // Games without a server-issued stable id (synthetic client-side entries)
+  // cannot resolve server-side; the status probe would always 400.
+  if (!game.game_id && !game.stable_game_id) return;
   try {
     const status = await api(`/api/v2/resume/status?game_id=${encodeURIComponent(stableGameId(game))}`);
     if (!status.enabled || !status.capable || !status.available || status.stale) return;

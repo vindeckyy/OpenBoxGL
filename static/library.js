@@ -151,6 +151,15 @@ async function verifyWorkerParity(query, games) {
 
 // IntersectionObserver for virtual spacer windowing
 let _virtualObserver = null;
+// The pane scrolls more than the grid: library-head, the drop zone, and the
+// insights panel all sit above it. Virtual-window math works in grid-relative
+// space, so convert pane.scrollTop by the grid's offset inside the pane.
+function gridTopInPane() {
+  const pane = document.querySelector('main.library');
+  const grid = $('grid');
+  if (!pane || !grid) return 0;
+  return grid.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop;
+}
 function ensureVirtualObserver() {
   if (!isVirtualEnabled()) return;
   if (typeof IntersectionObserver === 'undefined') return;
@@ -161,7 +170,7 @@ function ensureVirtualObserver() {
     for (const entry of entries) {
       if (entry.isIntersecting && entry.intersectionRatio > 0) {
         // Spacer became visible: expand window by rendering with updated scroll
-        const top = pane.scrollTop;
+        const top = Math.max(0, pane.scrollTop - gridTopInPane());
         if (gridRowHeight && Math.abs(top - gridScrollTop) < 1) return;
         gridScrollTop = top;
         renderGrid({ fromScroll: true });
@@ -525,7 +534,7 @@ function markFilterAria() {
         if (pane && gridRowHeight) {
           const row = Math.floor(target.index / Math.max(gridCols, 1));
           gridScrollTop = Math.max(0, row * gridRowHeight - pane.clientHeight / 2);
-          pane.scrollTop = gridScrollTop;
+          pane.scrollTop = gridTopInPane() + gridScrollTop;
           renderGrid();
         } else {
           const card = document.querySelector(`[data-game="${visible[target.index].id}"]`);
@@ -764,7 +773,7 @@ function markFilterAria() {
         for (const row of groupedGeo.rows) {
           if (row.kind === 'header') continue;
           if (count + row.games.length > clamped) {
-            pane.scrollTop = row.top;
+            pane.scrollTop = gridTopInPane() + row.top;
             break;
           }
           count += row.games.length;
@@ -773,7 +782,7 @@ function markFilterAria() {
         const cols = Math.max(gridCols, 1);
         const row = Math.floor(clamped / cols);
         const rows = Math.ceil(ids.length / cols);
-        pane.scrollTop = Math.min(row * gridRowHeight, Math.max(0, rows * gridRowHeight - pane.clientHeight));
+        pane.scrollTop = gridTopInPane() + Math.min(row * gridRowHeight, Math.max(0, rows * gridRowHeight - pane.clientHeight));
       }
       renderGrid({ fromScroll: true });
       document.querySelector(`[data-game="${id}"]`)?.focus();
@@ -822,7 +831,7 @@ function markFilterAria() {
     function renderGrid({fromScroll} = {}) {
       if (isTrashView()) { renderTrashView({fromScroll}); return; }
       const pane = gridPane();
-      if (pane) gridScrollTop = pane.scrollTop;
+      if (pane) gridScrollTop = Math.max(0, pane.scrollTop - gridTopInPane());
       const visible = visibleGames();
       const explicitImageGroup = AppState.activePlaylist ? AppState.appSettings.image_group_by_playlist?.[AppState.activePlaylist] : AppState.platform !== 'all' ? AppState.appSettings.image_group_by_platform?.[AppState.platform] : AppState.appSettings.image_group;
       const effectiveImageGroup = explicitImageGroup || (AppState.platform === 'all' && !AppState.activePlaylist ? 'cover' : 'default');
@@ -1472,7 +1481,7 @@ function markFilterAria() {
         scrollFramePending = true;
         requestAnimationFrame(() => {
           scrollFramePending = false;
-          const top = libraryPaneElement.scrollTop;
+          const top = Math.max(0, libraryPaneElement.scrollTop - gridTopInPane());
           if (gridRowHeight && Math.abs(top - gridScrollTop) < gridRowHeight) return;
           gridScrollTop = top;
           renderGrid({fromScroll:true});

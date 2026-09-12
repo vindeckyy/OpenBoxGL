@@ -33,6 +33,14 @@ import { AppState, token } from './state.js';
       }
       $('readerPageLabel').textContent = `Page ${AppState.readerPage}`;
     }
+    function resetReaderFrame() {
+      const frame = $('readerFrame');
+      if (!frame) return;
+      frame.removeAttribute('src');
+      try { frame.contentWindow?.location.replace('about:blank'); } catch { /* frame not navigable */ }
+      AppState.readerUrl = '';
+      AppState.readerPage = 1;
+    }
     document.querySelectorAll('[data-reader-layout]').forEach(button => button.onclick = () => {
       $('readerViewport').classList.toggle('spread', button.dataset.readerLayout === 'spread');
     });
@@ -42,4 +50,4 @@ import { AppState, token } from './state.js';
     $('readerPrev').onclick = () => setReaderPage(AppState.readerPage - 1);
     $('readerNext').onclick = () => setReaderPage(AppState.readerPage + 1);
 
-export { openReader, setReaderPage };
+export { openReader, setReaderPage, resetReaderFrame };

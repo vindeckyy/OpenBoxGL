@@ -5,7 +5,7 @@ import { openSettings, openProfiles, openThemes, openAchievements, openPlugins, 
 import { importFolder, importSteam, importHeroic, importLutris, importArcade, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport } from './imports.js';
 import { watchMetadata } from './metadata.js';
 import { openMediaManager } from './media.js';
-import { setReaderPage } from './reader.js';
+import { setReaderPage, resetReaderFrame } from './reader.js';
 import { openSessions, openHistory, launch, connectSessionEvents, pollSessions } from './sessions.js';
 import { openSessionRecap } from './recap.js';
 import { openDiscovery, openStorefronts, saveStorefrontSettings, importStorefrontCatalog, loadStorefrontCatalog } from './storefront.js';
@@ -381,7 +381,7 @@ window.addEventListener('DOMContentLoaded', () => {
     $('applyBigBoxMenu').onclick = applyBigBoxMenu;
     $('screenSaver').onclick = stopScreenSaver;
     $('closeMedia').onclick = () => { $('mediaDialog').close(); $('mediaDialog').querySelectorAll('img').forEach(el => el.remove()); };
-    $('closeReader').onclick = () => { $('readerDialog').close(); $('readerFrame').removeAttribute('src'); AppState.readerUrl = ''; AppState.readerPage = 1; };
+    $('closeReader').onclick = () => { $('readerDialog').close(); resetReaderFrame(); };
     $('bigBox').onkeydown = event => {
       if (bigBoxTypingActive()) {
         if (event.key === 'Escape') $('bigBoxHybridSearch').blur();
