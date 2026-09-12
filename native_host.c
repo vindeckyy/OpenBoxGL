@@ -82,6 +82,7 @@ static gboolean window_maximized = FALSE;
 static gboolean tray_enabled = FALSE;
 static gboolean minimize_to_tray = FALSE;
 static GtkStatusIcon *tray_icon = NULL;
+static char *application_icon_path = NULL;
 static NativeRequest pending_request = { NATIVE_REQUEST_NONE, NULL };
 static gboolean pending_focus = FALSE;
 /* ------------------------------------------------------------------ */
@@ -1147,13 +1148,20 @@ setup_tray(void)
     if (!tray_enabled) {
         return;
     }
-    tray_icon = gtk_status_icon_new_from_icon_name("io.openbox.GameLauncher");
+    G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+    if (application_icon_path) {
+        tray_icon = gtk_status_icon_new_from_file(application_icon_path);
+    }
+    if (!tray_icon) {
+        tray_icon = gtk_status_icon_new_from_icon_name("io.openbox.GameLauncher");
+    }
     if (!tray_icon) {
         tray_icon = gtk_status_icon_new();
     }
     gtk_status_icon_set_title(tray_icon, "OpenBox Game Launcher");
     gtk_status_icon_set_tooltip_text(tray_icon, "OpenBox Game Launcher");
     g_signal_connect(tray_icon, "activate", G_CALLBACK(on_tray_activate), NULL);
+    G_GNUC_END_IGNORE_DEPRECATIONS
 }
 
 static gboolean
@@ -1544,6 +1552,102 @@ inject_bridge(WebKitWebView *view)
 /* GTK setup                                                           */
 /* ------------------------------------------------------------------ */
 
+static char *
+icon_path_in_directory(const char *directory, const char *filename)
+{
+    if (!directory || !directory[0]) {
+        return NULL;
+    }
+    char *candidate = g_build_filename(directory, filename, NULL);
+    if (g_file_test(candidate, G_FILE_TEST_IS_REGULAR)) {
+        return candidate;
+    }
+    g_free(candidate);
+    return NULL;
+}
+
+static char *
+resolve_application_icon_path(void)
+{
+    /* The launcher passes an absolute web_app.py path in every bundled
+     * layout, so its directory is the most reliable source-run/install path.
+     * Keeping the lookup relative to the application files also avoids a
+     * dependency on the desktop environment's icon theme cache. */
+    if (web_app_path) {
+        char *share_dir = g_path_get_dirname(web_app_path);
+        char *candidate = icon_path_in_directory(share_dir, "openbox.svg");
+        g_free(share_dir);
+        if (candidate) {
+            return candidate;
+        }
+    }
+
+    /* Direct execution from a source checkout remains useful even when the
+     * caller did not launch through openbox-native.sh. */
+    char *cwd = g_get_current_dir();
+    char *candidate = icon_path_in_directory(cwd, "openbox.svg");
+    g_free(cwd);
+    if (candidate) {
+        return candidate;
+    }
+
+    /* Make the native host work from an installed tree where the executable
+     * and the bundled data are colocated, including custom prefixes. */
+    char *executable = g_file_read_link("/proc/self/exe", NULL);
+    if (executable) {
+        char *executable_dir = g_path_get_dirname(executable);
+        candidate = icon_path_in_directory(executable_dir, "openbox.svg");
+        g_free(executable_dir);
+        g_free(executable);
+        if (candidate) {
+            return candidate;
+        }
+    }
+
+    /* Flatpak keeps the desktop icon under the standard icon data directory,
+     * and update-installed desktop integration can do the same in the user's
+     * data directory. */
+    const char *user_data_dir = g_get_user_data_dir();
+    candidate = icon_path_in_directory(
+        user_data_dir,
+        "icons/hicolor/scalable/apps/io.openbox.GameLauncher.svg");
+    if (candidate) {
+        return candidate;
+    }
+
+    const gchar * const *system_data_dirs = g_get_system_data_dirs();
+    for (gsize index = 0; system_data_dirs && system_data_dirs[index]; index++) {
+        candidate = icon_path_in_directory(
+            system_data_dirs[index],
+            "icons/hicolor/scalable/apps/io.openbox.GameLauncher.svg");
+        if (candidate) {
+            return candidate;
+        }
+    }
+    return NULL;
+}
+
+static gboolean
+apply_application_icon(GtkWindow *window)
+{
+    if (!application_icon_path) {
+        gtk_window_set_icon_name(window, "io.openbox.GameLauncher");
+        return FALSE;
+    }
+
+    GError *error = NULL;
+    gboolean loaded = gtk_window_set_icon_from_file(
+        window, application_icon_path, &error);
+    if (!loaded) {
+        g_printerr("native_host: could not load application icon %s: %s\n",
+                   application_icon_path,
+                   error ? error->message : "unknown error");
+        g_clear_error(&error);
+        gtk_window_set_icon_name(window, "io.openbox.GameLauncher");
+    }
+    return loaded;
+}
+
 static char **
 gtk_argv_without_native_args(int argc, char **argv, int *filtered_argc)
 {
@@ -1673,8 +1777,10 @@ main(int argc, char **argv)
     g_free(gtk_argv);
     load_geometry();
     load_tray_flags();
+    application_icon_path = resolve_application_icon_path();
     main_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(main_window), "OpenBox Game Launcher");
+    apply_application_icon(GTK_WINDOW(main_window));
     gtk_window_set_default_size(GTK_WINDOW(main_window), default_width, default_height);
     if (window_maximized) {
         gtk_window_maximize(GTK_WINDOW(main_window));
@@ -1726,6 +1832,7 @@ main(int argc, char **argv)
     native_request_clear(&pending_request);
     g_free(origin);
     g_free(token);
+    g_free(application_icon_path);
     g_free(default_data_dir);
     return 0;
 }
