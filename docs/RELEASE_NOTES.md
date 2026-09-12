@@ -1,10 +1,68 @@
-# OpenBox 1.10.0 — Bring Your Library Across Safely
+# OpenBox 1.11 — Every Second Counts
 
-Your collection keeps growing, and your devices should keep up. OpenBox 1.10.0 makes the everyday path calmer: bring in a LaunchBox collection, review changes before they land, keep catalog data in sync without silent loss, and get into your next game without duplicate launches.
+Your collection keeps growing, and every session leaves a little more context
+behind. OpenBox 1.11 keeps that context close: resume where you stopped,
+capture the moment, find the right next game, and turn your library into
+something you can browse together.
 
 ---
 
 ## What's New
+
+### Never Lose Your Place
+
+Quick Resume records progress-aware session state where the adapter can expose
+it, while session recaps and the Moments timeline keep captures, play context,
+and recent activity attached to the game. Record That can ask OBS for a replay
+buffer, fall back to a safe local screenshot when necessary, and build bounded
+highlight reels without sending media to a server.
+
+### A Library You Can Ask
+
+Backlog Radio recommends games from local habits and explains each pick. The
+search bar understands a small deterministic grammar such as `short unplayed
+rpg` and shows the interpretation as removable chips. Ctrl/Cmd-K opens the
+command palette for games, actions, settings, and What's New discovery.
+
+### Time Machine
+
+The journal-backed Time Machine provides a bounded event timeline, as-of views,
+and reviewable revert previews. It is designed to make experimentation safe:
+the canonical state remains transactional, and malformed or stale requests
+stop before mutation.
+
+### Arcade Room and Household
+
+Arcade Room is a controller-friendly canvas showroom organized by platform.
+Museum mode turns it into a self-guided exhibit with real library facts, while
+reduced-motion users get a static presentation. An optional salted PIN is a
+local convenience boundary for kiosk browsing; it is not advertised as a
+security boundary.
+
+Household adds opt-in members, challenges, shares, results, and leaderboards
+over the existing sync folder. There are no accounts, hosted services, or
+surprise telemetry, and statistics remain off unless a device opts in.
+
+### Deck Migration and Polish
+
+Steam Bridge previews, applies, and removes OpenBox entries in Steam's
+`shortcuts.vdf` while preserving unrelated records. `openbox --play <id>` makes
+the same launch path available from Steam Game Mode. ES-DE `gamelist.xml`
+imports use the same review-first discipline as LaunchBox migration: bounded
+parsing, explicit identity, stale-source detection, and transactional apply.
+
+What's New tips, localized UI strings, per-game Moments and Clips tabs, quick
+query chips, and the 1.10.1 corrective hardening sweep round out the update.
+
+---
+
+## Previous release: OpenBox 1.10.0 — Bring Your Library Across Safely
+
+Your collection keeps growing, and your devices should keep up. OpenBox 1.10.0 made the everyday path calmer: bring in a LaunchBox collection, review changes before they land, keep catalog data in sync without silent loss, and get into your next game without duplicate launches.
+
+---
+
+### What's New in 1.10.0
 
 ### Sync You Can Trust
 
@@ -71,4 +129,4 @@ Already running OpenBox? Use the built-in updater or download the matching artif
 
 ---
 
-**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.9.0...v1.10.0
+**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.10.0...v1.11.0

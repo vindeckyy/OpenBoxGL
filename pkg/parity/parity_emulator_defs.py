@@ -51,12 +51,23 @@ def _parse_yaml(text):
             elif ":" in line:
                 key, value = line.split(":", 1)
                 data[key.strip()] = value.strip().strip('"').strip("'")
+                current = None
             continue
         if current is None:
             continue
         stripped = line.strip()
         if stripped.startswith("- "):
             item = stripped[2:].strip().strip('"').strip("'")
+        elif ":" in stripped:
+            # One-level nested mapping, e.g. the ``state:`` block's
+            # ``kind:``/``template:`` scalars. Nested lists under a mapping
+            # key are intentionally unsupported — keep values scalar.
+            key, value = stripped.split(":", 1)
+            if not isinstance(data.get(current), dict):
+                data[current] = {}
+            if isinstance(data[current], dict):
+                data[current][key.strip()] = value.strip().strip('"').strip("'")
+            continue
         else:
             item = stripped.strip('"').strip("'")
         if not item:
@@ -95,6 +106,61 @@ def _compile_startup_args(raw):
         return shlex.split(startup)
     except ValueError:
         return startup.split()
+
+
+# Quick Resume (T1) state-schema kinds, per the M0a capability matrix.
+STATE_KINDS = frozenset({"retroarch", "adapter-cli", "config-override", "none"})
+_EMPTY_STATE = {"kind": "none", "template": [], "capture": [], "glob": []}
+
+
+def _split_state_args(value):
+    """state: sub-values accept a scalar string (shlex-split) or a YAML list."""
+    if value in (None, ""):
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    text = str(value).strip()
+    if not text:
+        return []
+    try:
+        return shlex.split(text)
+    except ValueError:
+        return text.split()
+
+
+def _normalize_state(raw_state, adapter_id):
+    if raw_state in (None, ""):
+        return dict(_EMPTY_STATE)
+    if not isinstance(raw_state, dict):
+        raise ValueError(f"Adapter {adapter_id} state block must be a mapping.")
+    kind = str(raw_state.get("kind") or "none").strip()
+    if kind not in STATE_KINDS:
+        raise ValueError(
+            f"Adapter {adapter_id} state.kind must be one of {sorted(STATE_KINDS)}."
+        )
+    template = _split_state_args(raw_state.get("template"))
+    capture = _split_state_args(raw_state.get("capture"))
+    glob = raw_state.get("glob")
+    if isinstance(glob, str):
+        glob = [item for item in glob.replace(",", " ").split() if item]
+    glob = [str(item) for item in (glob or [])]
+    if kind == "none" and (template or capture):
+        raise ValueError(
+            f"Adapter {adapter_id} kind 'none' must not declare state args."
+        )
+    try:
+        from pkg.parity.launch_tokens import validate_startup_args
+
+        invalid = validate_startup_args(template + capture)
+        if invalid:
+            raise ValueError(
+                f"Adapter {adapter_id} state args contain unknown tokens: {', '.join(invalid)}"
+            )
+    except ValueError:
+        raise
+    except Exception:
+        pass
+    return {"kind": kind, "template": template, "capture": capture, "glob": glob}
 
 
 def _normalize_adapter(raw):
@@ -154,6 +220,7 @@ def _normalize_adapter(raw):
         "firmware_path": str(firmware_path).strip() if firmware_path else None,
         "firmware_sha1": str(firmware_sha1).strip().lower() if firmware_sha1 else None,
         "core_path": str(core_path).strip() if core_path else None,
+        "state": _normalize_state(raw.get("state"), adapter_id),
     }
 
 
@@ -311,6 +378,7 @@ def load_registry(defs_dir=None, health=False, which=None, home=None):
             "startup_args": list(item["startup_args"]),
             "recommended": item["recommended"],
             "priority": item["priority"],
+            "state": dict(item["state"]),
         }
         if health:
             h = adapter_health(item, which=which, home=home)
@@ -377,6 +445,7 @@ def load_definitions(defs_dir=None):
             "native": adapter["native_exe"] or "",
             "emulator_id": adapter["emulator_id"],
             "emulator_def": adapter["adapter_id"],
+            "state": dict(adapter["state"]),
         })
     return definitions
 

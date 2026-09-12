@@ -1,15 +1,17 @@
 """LibraryHandlers capability handlers. Library, game CRUD, favorites, tags, queue, notifications, and health."""
 
+import copy
 from datetime import datetime
 import os
 from pathlib import Path
+import secrets
 from urllib.parse import parse_qs
 
 from api_errors import BadRequest, GameNotFound
 from catalog import PROGRESS, bulk_update, game_media_paths, related_game_ids, tag_counts
 from handlers._shared import clean_extras as _clean_extras_shared
 from notifications import clear as clear_notifications, mark_read as mark_notifications_read, unread_count
-from openbox import load_state, load_state_readonly
+from openbox import load_state, load_state_readonly, local_only_mutation
 from routes.registry import route
 from parity_deeplinks import launcher_menu_items
 from parity_discovery import discovery_lists, related_with_reasons
@@ -17,6 +19,7 @@ from parity_filter_presets import bigbox_quick_presets, delete_preset, explorer_
 from parity_media import normalize_video_fields
 from parity_premium import bulk_wizard_changes, custom_field_defs, normalize_custom_fields
 from play_queue import advance as advance_queue, enqueue as enqueue_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
+from state_store import _stable_game_id, prune_trash
 from webapp_state import FIELDS, MEDIA_PATH_FIELDS, _public_state_cached, approved_media_path, bump_media_epoch, clear_file_probe_cache, consolidate_existing_games, game_from_payload, game_from_query, game_identity, load_state_view, public_state, public_state_bytes, public_state_etag, public_settings, transact_state
 
 
@@ -100,6 +103,81 @@ def _save_game_mutate(state, payload, game):
         existing = game_from_payload(state, payload)
         game["game_id"] = existing.get("game_id", game.get("game_id", ""))
         existing.update(game)
+
+
+# ── Trash bin (S3) ───────────────────────────────────────────────────────────
+# v2 delete is a soft delete: the full record plus its manual-playlist
+# memberships move into the bounded state["trash"] list so the toast's Undo and
+# the trash view's Restore can put it back. v1 /api/game/delete stays a hard
+# delete (frozen contract). Bounds (TRASH_CAP, TRASH_MAX_AGE_DAYS) are enforced
+# on every write via state_store.prune_trash and again at load time.
+def _trash_entry_for(state, game):
+    """Build the trash entry preserving the full record and memberships."""
+    game_id = str(game.get("game_id") or "")
+    member_keys = {game_id, str(game.get("id") or "")} - {""}
+    playlists = [
+        str(playlist.get("name") or "")
+        for playlist in state.get("playlists", [])
+        if playlist.get("type") == "manual"
+        and isinstance(playlist.get("members"), list)
+        and any(str(member) in member_keys for member in playlist["members"])
+    ]
+    # Identity scan: equal-content games must not alias the original position.
+    index = next((i for i, item in enumerate(state["games"]) if item is game), len(state["games"]))
+    return {
+        "trash_id": f"trash-{secrets.token_hex(6)}",
+        "trashed_at": datetime.now().isoformat(timespec="seconds"),
+        "index": index,
+        "game_id": game_id,
+        "name": str(game.get("name") or ""),
+        "platform": str(game.get("platform") or ""),
+        "game": copy.deepcopy(game),
+        "playlists": playlists,
+    }
+
+
+def _trash_entry_public(entry):
+    """Project a trash entry for the trash view payload."""
+    game = entry.get("game") if isinstance(entry.get("game"), dict) else {}
+    return {
+        "trash_id": str(entry.get("trash_id") or ""),
+        "game_id": str(entry.get("game_id") or game.get("game_id") or ""),
+        "name": str(entry.get("name") or game.get("name") or ""),
+        "platform": str(entry.get("platform") or game.get("platform") or ""),
+        "trashed_at": str(entry.get("trashed_at") or ""),
+        "playlists": [str(name) for name in entry.get("playlists") or []],
+    }
+
+
+def _free_game_id(used, base):
+    """Return base, or the first free ``base-N``, for a restored id collision."""
+    candidate = base
+    suffix = 2
+    while candidate in used:
+        candidate = f"{base}-{suffix}"
+        suffix += 1
+    return candidate
+
+
+def _remove_media_files(media_paths, referenced_media):
+    """Delete media files no remaining game references; mirrors v1 delete semantics."""
+    deleted_media = []
+    shared_media = []
+    for path in media_paths:
+        try:
+            target = approved_media_path(path, must_exist=True)
+            canon = os.path.realpath(str(target))
+            if canon in referenced_media:
+                if str(target) not in shared_media:
+                    shared_media.append(str(target))
+                continue
+            if target.is_file():
+                target.unlink()
+                if str(target) not in deleted_media:
+                    deleted_media.append(str(target))
+        except (OSError, ValueError):
+            pass
+    return deleted_media, shared_media
 
 
 class LibraryHandlers:
@@ -343,7 +421,7 @@ class LibraryHandlers:
             game = game_from_payload(state, payload)
             game["favorite"] = not game.get("favorite", False)
             return game["favorite"]
-        _, favorite = transact_state(mutate)
+        _, favorite = transact_state(local_only_mutation(mutate))
         self.send_json(200, {"favorite": favorite})
 
     def queue(self, payload):
@@ -455,28 +533,14 @@ class LibraryHandlers:
             return game.get("name", "")
             
         _, removed = transact_state(mutate)
-        
+
         deleted_media = []
         shared_media = []
-        
+
         if delete_media:
-            for path in media_paths:
-                try:
-                    target = approved_media_path(path, must_exist=True)
-                    canon = os.path.realpath(str(target))
-                    if canon in referenced_media:
-                        if str(target) not in shared_media:
-                            shared_media.append(str(target))
-                        continue
-                        
-                    if target.is_file():
-                        target.unlink()
-                        if str(target) not in deleted_media:
-                            deleted_media.append(str(target))
-                except (OSError, ValueError):
-                    pass
+            deleted_media, shared_media = _remove_media_files(media_paths, referenced_media)
             bump_media_epoch()
-            
+
         clear_file_probe_cache()
         self.send_json(200, {
             "removed": removed,
@@ -710,3 +774,157 @@ class LibraryHandlers:
                     break
         self.send_json(200, {"results": results, "source": "json", "count": len(results)})
         return
+
+    @route("POST", "/api/v2/library/query/parse")
+    def _api_post_api_v2_library_query_parse(self, payload):
+        """Parse a natural-language query without changing the library."""
+        if not isinstance(payload, dict):
+            raise BadRequest("Request body must be an object.")
+        query = payload.get("query")
+        if not isinstance(query, str):
+            raise BadRequest("query must be a string.")
+        if len(query) > 2000:
+            raise BadRequest("query is too long.")
+
+        from pkg.parity import parity_query
+
+        parsed = parity_query.parse_query(query)
+        state = load_state_view()
+        matches = parity_query.filter_games_by_query(state.get("games", []), parsed)
+        # Let the client apply the exact interpretation without shipping
+        # duplicate game records. Keep the identifier payload bounded while
+        # preserving the full count for honest result messaging.
+        matched_game_ids = [
+            str(game.get("game_id") or game.get("id") or "")
+            for game in matches[:20000]
+            if isinstance(game, dict) and (game.get("game_id") or game.get("id")) is not None
+        ]
+        self.send_json(200, {
+            **parsed,
+            "match_count": len(matches),
+            "matched_game_ids": matched_game_ids,
+        })
+
+    # ── Trash bin routes (S3) — see module-level helpers above ─────────────
+    @route("GET", "/api/v2/library/trash")
+    def _api_get_api_v2_library_trash(self, parsed):
+        """List trash entries, newest first."""
+        state = load_state_view()
+        items = [_trash_entry_public(entry) for entry in reversed(state.get("trash") or [])]
+        self.send_json(200, {"items": items, "count": len(items)})
+
+    @route("POST", "/api/v2/library/trash")
+    def _api_post_api_v2_library_trash(self, payload):
+        """Move a game into the trash bin (v2 soft delete; undoable)."""
+        delete_media = bool(payload.get("delete_media"))
+        media_paths = []
+        referenced_media = set()
+
+        def mutate(state):
+            game = game_from_payload(state, payload)
+            if delete_media:
+                media_paths.extend(game_media_paths(game))
+            entry = _trash_entry_for(state, game)
+            state["games"].remove(game)
+            member_keys = {entry["game_id"], str(game.get("id") or "")} - {""}
+            for playlist in state.get("playlists", []):
+                if playlist.get("type") != "manual" or not isinstance(playlist.get("members"), list):
+                    continue
+                playlist["members"] = [member for member in playlist["members"] if str(member) not in member_keys]
+            if delete_media:
+                for other_game in state["games"]:
+                    for path in game_media_paths(other_game):
+                        try:
+                            referenced_media.add(os.path.realpath(str(path)))
+                        except Exception:
+                            pass
+            trash = state.setdefault("trash", [])
+            trash.append(entry)
+            state["trash"] = prune_trash(trash)
+            return entry
+
+        _, entry = transact_state(mutate)
+
+        deleted_media = []
+        shared_media = []
+        if delete_media:
+            deleted_media, shared_media = _remove_media_files(media_paths, referenced_media)
+            bump_media_epoch()
+
+        clear_file_probe_cache()
+        self.send_json(200, {
+            "ok": True,
+            "trash_id": entry["trash_id"],
+            "game_id": entry["game_id"],
+            "name": entry["name"],
+            "deleted_media": deleted_media,
+            "shared_media": shared_media,
+        })
+
+    @route("POST", "/api/v2/library/trash/restore")
+    def _api_post_api_v2_library_trash_restore(self, payload):
+        """Restore a trash entry into the library with identity and playlists."""
+        trash_id = str(payload.get("trash_id") or "").strip()
+        if not trash_id:
+            raise BadRequest("trash_id is required.")
+
+        def mutate(state):
+            entry = next(
+                (item for item in state.get("trash") or []
+                 if isinstance(item, dict) and item.get("trash_id") == trash_id),
+                None,
+            )
+            if entry is None:
+                raise BadRequest("Trash entry not found.")
+            game = entry.get("game") if isinstance(entry.get("game"), dict) else {}
+            restored = copy.deepcopy(game)
+            used = {str(item.get("game_id") or "") for item in state.get("games", [])}
+            original = str(entry.get("game_id") or restored.get("game_id") or "")
+            wanted = original or _stable_game_id(restored)
+            restored["game_id"] = _free_game_id(used, wanted)
+            renamed = restored["game_id"] != original
+            index = entry.get("index")
+            if not isinstance(index, int) or isinstance(index, bool) or index < 0 or index > len(state["games"]):
+                index = len(state["games"])
+            state["games"].insert(index, restored)
+            for name in entry.get("playlists") or []:
+                for playlist in state.get("playlists", []):
+                    if playlist.get("type") != "manual" or playlist.get("name") != name:
+                        continue
+                    members = playlist.get("members")
+                    if not isinstance(members, list):
+                        members = []
+                        playlist["members"] = members
+                    if restored["game_id"] not in members:
+                        members.append(restored["game_id"])
+            state["trash"] = [item for item in state.get("trash") or [] if item is not entry]
+            return {"game_id": restored["game_id"], "name": str(restored.get("name") or ""), "renamed": renamed}
+
+        _, result = transact_state(mutate)
+        clear_file_probe_cache()
+        self.send_json(200, {"ok": True, "restored": True, **result})
+
+    @route("POST", "/api/v2/library/trash/purge")
+    def _api_post_api_v2_library_trash_purge(self, payload):
+        """Permanently drop trash entries: ``ids`` selects entries, absent purges all."""
+        ids = payload.get("ids")
+        wanted = None
+        if ids is not None:
+            if not isinstance(ids, list):
+                raise BadRequest("ids must be a list of trash entry ids.")
+            wanted = {str(item) for item in ids}
+
+        def mutate(state):
+            trash = state.get("trash") or []
+            if wanted is None:
+                state["trash"] = []
+                return len(trash)
+            kept = [
+                item for item in trash
+                if not (isinstance(item, dict) and item.get("trash_id") in wanted)
+            ]
+            state["trash"] = kept
+            return len(trash) - len(kept)
+
+        _, purged = transact_state(mutate)
+        self.send_json(200, {"ok": True, "purged": purged})

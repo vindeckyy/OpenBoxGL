@@ -126,6 +126,14 @@ def _ensure_handlers_loaded() -> None:
         "handlers.party",
         "handlers.export",
         "handlers.screenscraper",
+        "handlers.resume",
+        "handlers.moments",
+        "handlers.steamgrid",
+        "handlers.timemachine",
+        "handlers.household",
+        "handlers.clips",
+        "handlers.steambridge",
+        "handlers.arcade",
         "web_app",
     )
     for mod in modules:

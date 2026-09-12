@@ -71,34 +71,65 @@ def save_state(state):
     return STATE_STORE.save(state)
 
 
+def local_only_mutation(mutator):
+    """Mark an internal mutator that cannot change shared catalog fields.
+
+    The transaction hook journals the explicit shared catalog allowlist.  A
+    caller that only changes local state (for example a favorite toggle) can
+    opt out of taking detached before/after catalog snapshots.  The marker is
+    deliberately attached to the callback rather than made a store-wide
+    switch, so ordinary mutators retain the default journal behavior.
+    """
+    mutator._openbox_catalog_unchanged = True
+    return mutator
+
+
 def _sync_wrapped_mutator(mutator):
-    """Attach opt-in catalog recording to every canonical state transaction."""
+    """Attach catalog recording to every canonical state transaction.
+
+    Recording runs when either remote sync is opted in (``sync_enabled``) or
+    the local-only journal is on (``journal_enabled``, default).  Journal mode
+    records the same validated events without any transport folder; the
+    ``sync_enabled`` predicate itself stays sync-only so the remote sync
+    routes remain opt-in.
+    """
     def wrapped(state):
         from pkg.parity.parity_library_sync import (
             SyncValidationError,
             bootstrap_local_catalog,
             capture_sync_snapshot,
+            journal_enabled,
             record_local_changes,
             set_sync_error,
             sync_enabled,
         )
 
-        before_enabled = sync_enabled(state)
-        before = capture_sync_snapshot(state) if before_enabled else None
+        before_enabled = sync_enabled(state) or journal_enabled(state)
+        catalog_unchanged = bool(getattr(mutator, "_openbox_catalog_unchanged", False))
+        before = capture_sync_snapshot(state) if before_enabled and not catalog_unchanged else None
         result = mutator(state)
         metadata = state.get("library_sync")
         suppress = isinstance(metadata, dict) and bool(metadata.pop("_suppress_local_recording", False))
-        if sync_enabled(state) and not before_enabled:
+        recording = sync_enabled(state) or journal_enabled(state)
+        if recording and not before_enabled:
             bootstrap_local_catalog(state)
         elif before is not None and not suppress:
             try:
-                record_local_changes(state, before, state)
+                # Compare another catalog-only projection.  Passing the full
+                # state here would rebuild the allowlisted catalog for every
+                # nested field in every game, even for local-only writes.
+                after = capture_sync_snapshot(state)
+                record_local_changes(state, before, after)
             except SyncValidationError as error:
                 # A bad/ambiguous sync identity must never reject the user's
                 # local mutation.  Preserve the committed data and expose a
                 # durable error requiring sync metadata repair.
                 code = "SYNC_IDENTITY_AMBIGUOUS" if "Duplicate local sync identity" in str(error) else "SYNC_METADATA_INVALID"
                 set_sync_error(state, error, code=code)
+        if recording:
+            from pkg.parity.parity_time_machine import maybe_compact_journal
+
+            maybe_compact_journal(state)
         return result
 
     return wrapped

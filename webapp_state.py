@@ -15,7 +15,7 @@ import threading
 
 from backend_io import download_file
 from job_manager import JobManager
-from openbox import DATA, STATE_STORE, build_launch, load_state, load_state_readonly, update_state, update_state_with_result
+from openbox import DATA, STATE_STORE, build_launch, load_state, load_state_readonly, local_only_mutation, update_state, update_state_with_result
 from parity_emulator_defs import scan_folder as scan_emulator_folder
 from parity_perf import apply_perf_profile
 from parity_premium import category_for_platform

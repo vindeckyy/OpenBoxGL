@@ -24,6 +24,7 @@ from parity_media import REGION_PRIORITY_DEFAULT, active_video, media_types_from
 from parity_premium import LIST_COLUMNS_DEFAULT, category_for_platform, custom_field_defs, list_media_packs, platform_categories, strings_for
 from parity_saves import games_with_saves
 from parity_save_tools import save_tool_status
+from parity_steamgrid import is_configured as steamgrid_is_configured
 from plugins import run_plugins
 from retroachievements import load_credentials as load_ra_credentials
 from updates import VERSION
@@ -457,6 +458,10 @@ def _public_settings_uncached(state):
         "startup_commands": settings.get("startup_commands", []),
         "shutdown_commands": settings.get("shutdown_commands", []),
         "track_session_history": settings.get("track_session_history", True),
+        "session_recap_enabled": settings.get("session_recap_enabled", True),
+        "quick_resume_enabled": settings.get("quick_resume_enabled", True),
+        "moments_autocapture": settings.get("moments_autocapture", True),
+        "state_retention": settings.get("state_retention", 1),
         "backup_on_close": settings.get("backup_on_close", False),
         "save_backup_limit": settings.get("save_backup_limit", 10),
         "progress_automation_enabled": settings.get("progress_automation_enabled", False),
@@ -465,6 +470,10 @@ def _public_settings_uncached(state):
         "welcome_completed": settings.get("welcome_completed", False),
         "auto_import_media_types": sorted(media_types_from_settings(settings)),
         "media_download_limit": settings.get("media_download_limit", 0),
+        "memories_import_enabled": settings.get("memories_import_enabled", False),
+        "memories_import_roots": settings.get("memories_import_roots", []),
+        "steamgrid_enabled": settings.get("steamgrid_enabled", True),
+        "steamgrid_key_configured": steamgrid_is_configured(),
         "region_priority": settings.get("region_priority", list(REGION_PRIORITY_DEFAULT)),
         "video_priority": settings.get("video_priority", ["video_snap", "video_theme", "video_trailer", "video_recording"]),
         "library_music": settings.get("library_music", ""),
@@ -477,6 +486,11 @@ def _public_settings_uncached(state):
         "storefront_auto_import": settings.get("storefront_auto_import", {"steam": False, "heroic": False, "lutris": False, "gameyfin": False}),
         "obs_auto_attach": settings.get("obs_auto_attach", True),
         "obs_recording_path": settings.get("obs_recording_path", ""),
+        "obs_replay_enabled": bool(settings.get("obs_replay_enabled", False)),
+        "obs_websocket_url": settings.get("obs_websocket_url", ""),
+        "household_stats_sharing": bool(settings.get("household_stats_sharing", False)),
+        "museum_kiosk_enabled": bool(settings.get("museum_kiosk_enabled", False)),
+        "museum_kiosk_pin_set": bool(settings.get("museum_kiosk_pin_hash")),
         "dynamic_play_button": settings.get("dynamic_play_button", True),
         "gameyfin_url": settings.get("gameyfin_url", ""),
         "gameyfin_username": settings.get("gameyfin_username", ""),
@@ -540,6 +554,19 @@ def _public_state_signature():
     return (openbox.STATE_STORE.signature(), MEDIA_EPOCH["value"], PLUGIN_EPOCH["value"])
 
 
+def _ra_cache_record(game_id, data_parent):
+    """Read the small per-game RA projection used by auto-moment triggers."""
+    game_id = str(game_id or "").strip()
+    if not game_id:
+        return {}
+    path = Path(data_parent) / "cache" / "retroachievements" / f"{game_id}.json"
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def _project_game(game, index, media_set, save_indices, video_priority, settings, media_epoch):
     from pkg.state.media_probe import probe_path, sanitize_document_records, sanitize_media_path
 
@@ -547,6 +574,12 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
     prb_pth = _ns("probe_path", probe_path)
     san_doc = _ns("sanitize_document_records", sanitize_document_records)
     med_cnt = _ns("_media_set_contains", _media_set_contains)
+    game_id = game.get("game_id", "")
+    ra_game_id = game.get("ra_game_id", "")
+    ra_cache = _ra_cache_record(game_id, _ns("DATA", DATA).parent) if ra_game_id else {}
+    ra_cache_key = tuple(str(ra_cache.get(key, "")) for key in (
+        "earned", "earned_hardcore", "total", "progress_pct", "mastered",
+    ))
 
     ckey = (
         id(game), index, media_epoch,
@@ -556,6 +589,12 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         game.get("name"), game.get("path"), game.get("cover"), game.get("background"),
         game.get("platform"), index in save_indices,
         game.get("manual_entry"),
+        game_id, ra_game_id, ra_cache_key,
+        game.get("ra_achievements_earned"), game.get("ra_achievements_earned_hardcore"),
+        game.get("ra_achievements_total"), game.get("ra_progress_pct"), game.get("ra_mastered"),
+        len(game.get("memories") or []),
+        len(game.get("moments") or []),
+        len(game.get("clips") or []),
     )
     with _GAME_PROJECTION_LOCK:
         cached = _GAME_PROJECTION_CACHE.get(ckey)
@@ -590,7 +629,16 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
     path_exists = prb_pth(str(raw_path), file_only=False) if raw_path else False
     store_installed = bool(game["store_installed"]) if "store_installed" in game else path_exists
 
-    game_id = game.get("game_id", "")
+    def ra_int(key, fallback=0):
+        try:
+            return int(ra_cache.get(key, fallback) or 0)
+        except (TypeError, ValueError):
+            return int(fallback or 0)
+
+    try:
+        ra_progress_pct = float(ra_cache.get("progress_pct", game.get("ra_progress_pct", 0)) or 0)
+    except (TypeError, ValueError):
+        ra_progress_pct = 0.0
     steam_id = game.get("steam_app_id", "")
     heroic_id = game.get("heroic_app_id", "")
     lutris_id = game.get("lutris_id", "")
@@ -615,6 +663,50 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         raw_screenshots = []
     screenshots = [safe_path for p in raw_screenshots for safe_path in [san_med(p)] if safe_path]
     available_screenshots = [i for i, p in enumerate(screenshots) if med_cnt(media_set, p)]
+
+    raw_memories = game.get("memories", [])
+    if not isinstance(raw_memories, list):
+        raw_memories = []
+    memories = []
+    for memory in raw_memories:
+        if not isinstance(memory, dict):
+            continue
+        safe_memory_path = san_med(memory.get("path"))
+        if not safe_memory_path:
+            continue
+        memories.append({
+            "path": safe_memory_path,
+            "sha256": str(memory.get("sha256") or ""),
+            "bytes": int(memory.get("bytes") or 0),
+            "source": str(memory.get("source") or ""),
+            "taken_at": str(memory.get("taken_at") or ""),
+            "imported_at": str(memory.get("imported_at") or ""),
+        })
+
+    raw_moments = game.get("moments", [])
+    if not isinstance(raw_moments, list):
+        raw_moments = []
+    moments_count = sum(1 for moment in raw_moments if isinstance(moment, dict))
+
+    raw_clips = game.get("clips", [])
+    if not isinstance(raw_clips, list):
+        raw_clips = []
+    clips = []
+    for clip in raw_clips[-100:]:
+        if not isinstance(clip, dict):
+            continue
+        safe_clip_path = san_med(clip.get("path"))
+        if not safe_clip_path:
+            continue
+        clips.append({
+            "path": safe_clip_path,
+            "clip_id": str(clip.get("clip_id") or ""),
+            "created_at": str(clip.get("created_at") or ""),
+            "launch_id": str(clip.get("launch_id") or ""),
+            "title": str(clip.get("title") or "Replay clip"),
+            "source": str(clip.get("source") or ""),
+            "fallback": bool(clip.get("fallback")),
+        })
 
     platform = str(game.get("platform", ""))
     settings_id = id(settings)
@@ -668,6 +760,11 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "clone_of": game.get("clone_of", ""),
         "set_type": game.get("set_type", ""),
         "ra_game_id": game.get("ra_game_id", ""),
+        "ra_achievements_earned": ra_int("earned", game.get("ra_achievements_earned", 0)),
+        "ra_achievements_earned_hardcore": ra_int("earned_hardcore", game.get("ra_achievements_earned_hardcore", 0)),
+        "ra_achievements_total": ra_int("total", game.get("ra_achievements_total", 0)),
+        "ra_progress_pct": ra_progress_pct,
+        "ra_mastered": bool(ra_cache.get("mastered", game.get("ra_mastered", False))),
         "ra_hash": game.get("ra_hash", ""),
         "launchbox_db_id": game.get("launchbox_db_id", ""),
         "archive_member": game.get("archive_member", ""),
@@ -743,6 +840,12 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "save_paths": game.get("save_paths", []),
         "screenshots": screenshots,
         "available_screenshots": available_screenshots,
+        "memories": memories,
+        "has_memories": bool(memories),
+        "moments_count": moments_count,
+        "has_moments": moments_count > 0,
+        "clips": clips,
+        "has_clips": bool(clips),
         "custom_fields": custom,
         "platform_category": platform_cat,
         "tags": tags,

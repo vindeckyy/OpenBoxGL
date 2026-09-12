@@ -17,11 +17,11 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.10.0"><img src="https://img.shields.io/badge/Release-v1.10.0-0052CC?style=for-the-badge" alt="Release v1.10.0"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.11.0"><img src="https://img.shields.io/badge/Release-v1.11.0-0052CC?style=for-the-badge" alt="Release v1.11.0"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-2EA44F?style=for-the-badge" alt="CI"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux-lightgrey?style=for-the-badge" alt="Linux"></a>
   <br>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.10.0</strong></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.11.0</strong></a>
 </p>
 
 <p align="center">
@@ -115,6 +115,20 @@ The full capability matrix with acceptance checks lives in [PARITY.md](docs/PARI
 ---
 
 ## Features
+
+### Every Second Counts (1.11.0)
+
+Quick Resume and Moments keep save-state-aware progress, captures, and session
+recaps close to the game you were playing. Record That adds replay-buffer clips
+and deterministic highlight reels. The Time Machine provides journal-backed
+history and safe as-of inspection, while Backlog Radio, the explainable natural
+query bar, and the command palette make a large backlog easier to navigate.
+
+The Arcade Room and Museum mode turn the library into a controller-friendly
+showcase, with an optional local kiosk PIN convenience boundary. Household
+records provide opt-in, server-free challenges and leaderboards. Steam Bridge
+can preview and manage non-Steam shortcuts, and ES-DE `gamelist.xml` imports are
+reviewable before they change the library.
 
 ### Library & Discovery
 
@@ -249,7 +263,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 Download the installer from a specific signed release, inspect it, then run it. The installer detects `uname -m` (override with `OPENBOX_ARCH=x86_64` or `OPENBOX_ARCH=aarch64`), selects the matching AppImage, and verifies the release public-key pin, SHA-256 checksum, and Ed25519 signature before installing to `~/.local/bin`:
 
 ```bash
-VERSION=1.10.0
+VERSION=1.11.0
 curl --proto '=https' --tlsv1.2 --fail --location \
   --output install.sh \
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install.sh"

@@ -154,12 +154,19 @@ import { t } from './i18n.js';
     function collectSettings() {
       return {
         watch_folders:$('watchFolders').value.split('\n').map(value => value.trim()).filter(Boolean),
+        memories_import_enabled:$('memoriesImportEnabled').checked,
+        memories_import_roots:$('memoriesImportRoots').value.split('\n').map(value => value.trim()).filter(Boolean),
+        steamgrid_enabled:$('steamgridEnabled') ? $('steamgridEnabled').checked : true,
         cloud_folder:$('cloudFolder').value.trim(),
         library_sync_enabled:$('librarySyncEnabled')?.checked || false,
         screensaver_seconds:Number($('screensaverSeconds').value),
         startup_commands:$('startupCommands').value.split('\n').map(value => value.trim()).filter(Boolean),
         shutdown_commands:$('shutdownCommands').value.split('\n').map(value => value.trim()).filter(Boolean),
         track_session_history:$('trackSessionHistory').checked,
+        session_recap_enabled:$('sessionRecapEnabled').checked,
+        quick_resume_enabled:$('quickResumeEnabled')?.checked ?? true,
+        moments_autocapture:$('momentsAutocapture')?.checked ?? true,
+        state_retention:Number($('stateRetention')?.value)||1,
         backup_on_close:$('backupOnClose').checked,
         save_backup_limit:Number($('saveBackupLimit').value),
         media_download_limit:Number($('mediaDownloadLimit').value),
@@ -176,6 +183,11 @@ import { t } from './i18n.js';
         hidden_sidebar_sections:$('hiddenSidebarSections').value.split(',').map(value => value.trim()).filter(Boolean),
         obs_auto_attach:$('obsAutoAttach').checked,
         obs_recording_path:$('obsRecordingPath').value.trim(),
+        obs_replay_enabled:$('obsReplayEnabled')?.checked || false,
+        obs_websocket_url:$('obsWebsocketUrl')?.value.trim() || '',
+        obs_websocket_password:$('obsWebsocketPassword')?.value || '',
+        household_stats_sharing:$('householdStatsSharing')?.checked || false,
+        museum_kiosk_enabled:$('museumKioskEnabled')?.checked || false,
         progress_automation_enabled:$('progressAutomationEnabled').checked,
         progress_automation_play_minutes:Number($('progressAutomationMinutes').value),
         progress_automation_idle_days:Number($('progressAutomationIdleDays').value),
@@ -204,6 +216,14 @@ import { t } from './i18n.js';
         mangohud_enabled:$('mangohudEnabled')?.checked || false,
       };
     }
+    async function refreshMemoriesStatus() {
+      const statusEl = $('memoriesImportStatus');
+      if (!statusEl) return;
+      try {
+        const status = await api('/api/v2/memories/status');
+        statusEl.textContent = t('settings.memories_status', {imported: status.memories || 0, unassigned: status.unassigned || 0});
+      } catch (error) { statusEl.textContent = ''; }
+    }
     async function saveEmumoviesSettings() {
       const username = $('emumoviesUsername').value.trim();
       const password = $('emumoviesPassword').value;
@@ -224,6 +244,11 @@ import { t } from './i18n.js';
       try {
         AppState.appSettings = await api('/api/settings');
         $('watchFolders').value = AppState.appSettings.watch_folders.join('\n');
+        if ($('memoriesImportEnabled')) $('memoriesImportEnabled').checked = Boolean(AppState.appSettings.memories_import_enabled);
+        if ($('memoriesImportRoots')) $('memoriesImportRoots').value = (AppState.appSettings.memories_import_roots || []).join('\n');
+        refreshMemoriesStatus();
+        if ($('steamgridEnabled')) $('steamgridEnabled').checked = AppState.appSettings.steamgrid_enabled !== false;
+        if ($('steamgridStatus')) $('steamgridStatus').textContent = AppState.appSettings.steamgrid_key_configured ? t('settings.steamgrid_key_present') : t('settings.steamgrid_key_missing');
         $('cloudFolder').value = AppState.appSettings.cloud_folder || '';
         if ($('librarySyncEnabled')) $('librarySyncEnabled').checked = AppState.appSettings.library_sync_enabled === true;
         if ($('librarySyncStatus')) $('librarySyncStatus').textContent = '';
@@ -241,6 +266,10 @@ import { t } from './i18n.js';
         const visibleBadges = new Set(AppState.appSettings.badge_visibility || defaultBadges);
         document.querySelectorAll('[data-badge-setting]').forEach(input => input.checked = visibleBadges.has(input.dataset.badgeSetting));
         $('trackSessionHistory').checked = AppState.appSettings.track_session_history !== false;
+        $('sessionRecapEnabled').checked = AppState.appSettings.session_recap_enabled !== false;
+        if ($('quickResumeEnabled')) $('quickResumeEnabled').checked = AppState.appSettings.quick_resume_enabled !== false;
+        if ($('momentsAutocapture')) $('momentsAutocapture').checked = AppState.appSettings.moments_autocapture !== false;
+        if ($('stateRetention')) $('stateRetention').value = AppState.appSettings.state_retention ?? 1;
         $('backupOnClose').checked = Boolean(AppState.appSettings.backup_on_close);
         $('progressAutomationEnabled').checked = Boolean(AppState.appSettings.progress_automation_enabled);
         $('progressAutomationMinutes').value = AppState.appSettings.progress_automation_play_minutes ?? 30;
@@ -266,6 +295,11 @@ import { t } from './i18n.js';
         $('hiddenSidebarSections').value = (AppState.appSettings.hidden_sidebar_sections || []).join(', ');
         $('obsAutoAttach').checked = AppState.appSettings.obs_auto_attach !== false;
         $('obsRecordingPath').value = AppState.appSettings.obs_recording_path || '';
+        if ($('obsReplayEnabled')) $('obsReplayEnabled').checked = AppState.appSettings.obs_replay_enabled === true;
+        if ($('obsWebsocketUrl')) $('obsWebsocketUrl').value = AppState.appSettings.obs_websocket_url || '';
+        if ($('householdStatsSharing')) $('householdStatsSharing').checked = AppState.appSettings.household_stats_sharing === true;
+        if ($('museumKioskEnabled')) $('museumKioskEnabled').checked = AppState.appSettings.museum_kiosk_enabled === true;
+        if ($('museumKioskPin')) $('museumKioskPin').value = '';
         $('localeSetting').value = AppState.appSettings.locale || 'en';
         $('libraryViewSetting').value = AppState.appSettings.library_view || 'grid';
         if ($('groupingSetting')) $('groupingSetting').value = AppState.appSettings.cover_grouping || 'shape';
@@ -676,6 +710,17 @@ import { t } from './i18n.js';
         notify(error.message);
       }
     };
+    if ($('testSteamgrid')) $('testSteamgrid').onclick = async () => {
+      const status = $('steamgridStatus');
+      try {
+        await api('/api/v2/steamgrid/test',{method:'POST',body:'{}'});
+        if (status) status.textContent = t('settings.steamgrid_connected');
+        notify(t('settings.steamgrid_connected'));
+      } catch(error) {
+        if (status) status.textContent = error.message;
+        notify(error.message);
+      }
+    };
 
     async function waitForExportJob(jobId) {
       for (let attempt = 0; attempt < 40; attempt++) {
@@ -849,13 +894,29 @@ import { t } from './i18n.js';
       event.preventDefault();
       try {
         await saveEmumoviesSettings().catch(() => {});
-        AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
+        const settingsPayload = collectSettings();
+        AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(settingsPayload)});
+        const museumPin = $('museumKioskPin')?.value.trim() || '';
+        if (museumPin) {
+          const kiosk = await api('/api/v2/arcade/kiosk/pin', {method:'POST', body:JSON.stringify({pin:museumPin, enabled:Boolean(settingsPayload.museum_kiosk_enabled)})});
+          AppState.appSettings.museum_kiosk_enabled = kiosk.enabled;
+          AppState.appSettings.museum_kiosk_pin_set = kiosk.pin_set;
+          $('museumKioskPin').value = '';
+        }
         $('settingsDialog').close();
         stopControllerBench();
         notify('Settings saved');
         applyLibraryMusic();
         applySidebarVisibility();
         renderGrid();
+      } catch(error) { notify(error.message); }
+    };
+    if ($('clearMuseumKioskPin')) $('clearMuseumKioskPin').onclick = async () => {
+      try {
+        const kiosk = await api('/api/v2/arcade/kiosk/pin', {method:'POST', body:JSON.stringify({clear:true, enabled:Boolean($('museumKioskEnabled')?.checked)})});
+        AppState.appSettings.museum_kiosk_pin_set = kiosk.pin_set;
+        if ($('museumKioskPin')) $('museumKioskPin').value = '';
+        notify('Museum PIN cleared');
       } catch(error) { notify(error.message); }
     };
     $('settingsDialog').addEventListener('close', stopControllerBench);
@@ -865,6 +926,28 @@ import { t } from './i18n.js';
         const result = await api('/api/import/watch',{method:'POST',body:'{}'});
         await refresh();
         notify(`${result.added} games imported from watched folders${result.errors.length ? ` · ${result.errors.length} errors` : ''}`);
+      } catch(error) { notify(error.message); }
+    };
+    if ($('memoriesImportNow')) $('memoriesImportNow').onclick = async () => {
+      try {
+        AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
+        const started = await api('/api/v2/memories/import',{method:'POST',body:'{}'});
+        if (started.enabled === false) { notify(t('settings.memories_import_disabled')); return; }
+        const statusEl = $('memoriesImportStatus');
+        if (statusEl) statusEl.textContent = t('settings.memories_import_running');
+        for (let attempt = 0; attempt < 120; attempt += 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const status = await api('/api/v2/memories/status');
+          const jobState = status.job?.state || '';
+          if (jobState === 'done' || jobState === 'error' || jobState === 'cancelled') {
+            const added = status.job?.added ?? 0;
+            const text = t('settings.memories_import_done', {added});
+            if (statusEl) statusEl.textContent = text;
+            notify(text);
+            return;
+          }
+        }
+        notify(t('settings.memories_import_running'));
       } catch(error) { notify(error.message); }
     };
     $('removeSteamGames').onclick = async () => {

@@ -11,12 +11,14 @@ import shlex
 from pathlib import Path
 
 
-def _build_context(game, *, path=None, data_dir="", emulator_dir=""):
+def _build_context(game, *, path=None, data_dir="", emulator_dir="", state_path="", state_dir="", state_config="", state_name=""):
     """Return a flat dict of every token value needed by :data:`PLACEHOLDERS`.
 
     *game* is any mapping with at least ``name`` (or the caller pre-populates
     ``path`` via the keyword override).  Optional keyword arguments let callers
-    supply values that are not stored on the game dict itself.
+    supply values that are not stored on the game dict itself.  The
+    ``state_*`` values serve the ``{state_*}`` tokens used by emulator_def
+    ``state:`` blocks; they stay empty for ordinary launch commands.
     """
     resolved = path if path is not None else str(game.get("path", ""))
     rom_p = Path(resolved)
@@ -33,6 +35,10 @@ def _build_context(game, *, path=None, data_dir="", emulator_dir=""):
         "rom_name": str(game.get("rom_name", "")),
         "data_dir": data_dir,
         "emulator_dir": emulator_dir,
+        "state_path": state_path,
+        "state_dir": state_dir,
+        "state_config": state_config,
+        "state_name": state_name,
     }
 
 
@@ -40,6 +46,7 @@ def _build_context(game, *, path=None, data_dir="", emulator_dir=""):
 # from a context dict built by :func:`_build_context`.
 PLACEHOLDERS = {
     "{path}": lambda ctx: ctx["path"],
+    "{Path}": lambda ctx: ctx["path"],
     "{ImagePath}": lambda ctx: ctx["path"],
     "{name}": lambda ctx: ctx["name"],
     "{Name}": lambda ctx: ctx["name"],
@@ -57,10 +64,14 @@ PLACEHOLDERS = {
     "{rom_name}": lambda ctx: ctx["rom_name"],
     "{DataDir}": lambda ctx: ctx["data_dir"],
     "{EmulatorDir}": lambda ctx: ctx["emulator_dir"],
+    "{state_path}": lambda ctx: ctx["state_path"],
+    "{state_dir}": lambda ctx: ctx["state_dir"],
+    "{state_config}": lambda ctx: ctx["state_config"],
+    "{state_name}": lambda ctx: ctx["state_name"],
 }
 
 
-def apply_tokens(template, game, *, path=None, data_dir="", emulator_dir=""):
+def apply_tokens(template, game, *, path=None, data_dir="", emulator_dir="", state_path="", state_dir="", state_config="", state_name=""):
     """Replace all ``{token}`` placeholders in *template*.
 
     Parameters
@@ -77,20 +88,25 @@ def apply_tokens(template, game, *, path=None, data_dir="", emulator_dir=""):
     emulator_dir : str, optional
         Value for ``{EmulatorDir}`` — the directory containing the emulator
         binary.
+    state_path, state_dir, state_config, state_name : str, optional
+        Values for the ``{state_*}`` tokens used by emulator_def ``state:``
+        blocks (Quick Resume).  They stay empty for ordinary launch commands.
 
     Returns
     -------
     str
         *template* with every recognised ``{token}`` replaced.
     """
-    ctx = _build_context(game, path=path, data_dir=data_dir, emulator_dir=emulator_dir)
+    ctx = _build_context(game, path=path, data_dir=data_dir, emulator_dir=emulator_dir,
+                         state_path=state_path, state_dir=state_dir, state_config=state_config,
+                         state_name=state_name)
     result = template
     for token, extractor in PLACEHOLDERS.items():
         result = result.replace(token, extractor(ctx))
     return result
 
 
-def build_launch_args(template, game, *, path=None, data_dir="", emulator_dir=""):
+def build_launch_args(template, game, *, path=None, data_dir="", emulator_dir="", state_path="", state_dir="", state_config="", state_name=""):
     """Shlex-split *template* and replace ``{token}`` placeholders in each arg.
 
     Parameters match :func:`apply_tokens`.
@@ -104,7 +120,9 @@ def build_launch_args(template, game, *, path=None, data_dir="", emulator_dir=""
         parts = shlex.split(str(template))
     except ValueError:
         parts = str(template).split()
-    ctx = _build_context(game, path=path, data_dir=data_dir, emulator_dir=emulator_dir)
+    ctx = _build_context(game, path=path, data_dir=data_dir, emulator_dir=emulator_dir,
+                         state_path=state_path, state_dir=state_dir, state_config=state_config,
+                         state_name=state_name)
     result = []
     for part in parts:
         for token, extractor in PLACEHOLDERS.items():

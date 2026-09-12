@@ -60,6 +60,11 @@ function t(key, params) {
   return key;
 }
 
+// Dependency-sensitive surfaces such as the canvas Arcade Room keep their
+// static imports small. Expose the same translator for those surfaces without
+// introducing a circular import.
+if (typeof window !== 'undefined') window.OpenBoxI18n = { ...(window.OpenBoxI18n || {}), t };
+
 function applyTranslations() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');

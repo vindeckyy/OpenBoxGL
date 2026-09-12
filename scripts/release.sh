@@ -76,7 +76,8 @@ if [ -f "docs/CHANGELOG.md" ]; then
   CHANGELOG_FILE="docs/CHANGELOG.md"
 fi
 notes_file="release-notes-$VERSION.md"
-if [ -f "docs/RELEASE_NOTES.md" ] && grep -q "^# OpenBox $VERSION" docs/RELEASE_NOTES.md; then
+display_version="${VERSION%.*}"
+if [ -f "docs/RELEASE_NOTES.md" ] && grep -Eq "^# OpenBox ($VERSION|$display_version)( |$)" docs/RELEASE_NOTES.md; then
   cp docs/RELEASE_NOTES.md "$notes_file"
 else
   cat > "$notes_file" <<NOTES

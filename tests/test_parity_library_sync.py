@@ -81,6 +81,29 @@ class LibrarySyncTests(unittest.TestCase):
         state["games"][0]["name"] = "Changed"
         self.assertEqual(snapshot[0]["name"], "Quake")
 
+    def test_snapshot_preserves_verified_identity_lineage_without_sharing_identity_fields(self):
+        cases = [
+            ({"library_sync_id": "manual-1"}, "verified:manual-1"),
+            ({"sync_identity": "reviewed-2"}, "verified:reviewed-2"),
+            ({"verified_sync_key": "reviewed-3"}, "verified:reviewed-3"),
+            ({"verified_provider_identity": "provider-4"}, "verified:provider-4"),
+            ({"provider_identity_verified": True, "steam_app_id": 42}, "verified:provider:steam_app_id:42"),
+        ]
+        for identity, expected_key in cases:
+            original = {"game_id": "local", "name": "Before", **identity}
+            before = capture_sync_snapshot({"games": [original]})
+            after = copy.deepcopy(before)
+            after[0]["name"] = "After"
+            state = {"games": [], "library_sync": {}}
+            result = record_local_changes(state, before, after, now="2026-01-01T00:00:00+00:00", device="device")
+            self.assertEqual(result["changed"], 1)
+            event = result["events"][0]
+            self.assertEqual(event["sync_key"], expected_key)
+            self.assertNotIn("sync_identity", event["catalog"])
+            self.assertNotIn("verified_sync_key", event["catalog"])
+            self.assertNotIn("verified_provider_identity", event["catalog"])
+            self.assertNotIn("provider_identity_verified", event["catalog"])
+
     def test_bootstrap_is_idempotent_and_ambiguous_identity_is_metadata_error(self):
         state = {"games": [game()]}
         first = bootstrap_local_catalog(state, now="2026-01-01T00:00:00+00:00")

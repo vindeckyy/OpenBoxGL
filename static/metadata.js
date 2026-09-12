@@ -2,6 +2,7 @@ import { $, escapeHtml, fact } from './util.js';
 import { api, notify, AppState, token } from './state.js';
 import { refresh, renderDetails } from './library.js';
 import { confirmAction, promptChoice, openDialog, closeDialog } from './dialogs.js';
+import { t } from './i18n.js';
 
 const MATCH_FIELDS = ['title', 'platform', 'year', 'developer', 'publisher', 'genre', 'esrb', 'description', 'media_categories'];
 const REVIEW_CLASSES = ['exact_review', 'likely', 'possible', 'unmatched'];
@@ -367,11 +368,51 @@ async function openMetadata(game) {
   $('metadataResults').innerHTML = '';
   if (!$('metadataDialog').open) openDialog($('metadataDialog'));
   setMetadataTab('search');
+  refreshSteamgridProvider();
   try {
     const status = await api('/api/metadata/status');
     renderMetadataStatus(status);
     if (status.ready) searchMetadata();
   } catch(error) { notify(error.message); }
+}
+
+// SteamGridDB (S4): artwork-only provider — hidden when the key is missing,
+// the toggle is off, or a 401 disabled it for the session.
+const STEAMGRID_KINDS = ['cover', 'background', 'clear_logo', 'icon', 'banner'];
+
+async function refreshSteamgridProvider() {
+  const buttons = [$('searchSteamgrid'), $('bulkSteamgrid')].filter(Boolean);
+  if (!buttons.length) return;
+  let available = false;
+  try {
+    const status = await api('/api/v2/steamgrid/status');
+    available = Boolean(status.configured && status.enabled && !status.disabled);
+  } catch (error) { available = false; }
+  buttons.forEach(button => { button.hidden = !available; });
+}
+
+function mergeSteamgridResults(results) {
+  const box = $('metadataResults');
+  if (!box) return;
+  box.querySelectorAll('[data-provider="steamgrid"]').forEach(node => node.remove());
+  if (!results.length) {
+    box.insertAdjacentHTML('beforeend', `<p class="description" data-provider="steamgrid">${escapeHtml(t('metadata.steamgrid_no_results'))}</p>`);
+    return;
+  }
+  box.insertAdjacentHTML('beforeend', results.map(item => `<div class="metadata-result" data-provider="steamgrid"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(t('metadata.steamgrid_provider'))}${item.year ? ` · ${escapeHtml(item.year)}` : ''}</small></div><button type="button" class="primary" data-apply-sgdb="${Number(item.id) || ''}">${escapeHtml(t('common.apply'))}</button></div>`).join(''));
+  box.querySelectorAll('[data-apply-sgdb]').forEach(button => button.onclick = async () => {
+    const checked = STEAMGRID_KINDS.filter(kind => $(`matchReviewMedia_${kind}`)?.checked);
+    try {
+      await api('/api/v2/steamgrid/apply', {method:'POST', body:JSON.stringify({
+        id: AppState.games.find(item => item.id === AppState.metadataGameId)?.game_id,
+        steamgrid_id: Number(button.dataset.applySgdb),
+        media: checked.length ? checked : STEAMGRID_KINDS,
+      })});
+      closeDialog($('metadataDialog'));
+      await refresh();
+      notify(t('metadata.steamgrid_applied'));
+    } catch(error) { notify(error.message); }
+  });
 }
 function renderMetadataStatus(status = {}) {
   const state = status?.job?.state || '';
@@ -447,6 +488,18 @@ $('hashMatchScreenscraper').onclick = async () => {
     await api('/api/v2/screenscraper/apply',{method:'POST',body:JSON.stringify({id:game.game_id,rom_path:game.path,fields:['description','year','genre','developer','publisher'],media:['cover','screenshots','clear_logo']})});
     closeDialog($('metadataDialog'));
     notify('ScreenScraper hash-match queued — progress in the Activity Center');
+  } catch(error) { notify(error.message); }
+};
+if ($('searchSteamgrid')) $('searchSteamgrid').onclick = async () => {
+  try {
+    const result = await api(`/api/v2/steamgrid/search?q=${encodeURIComponent($('metadataQuery').value)}`);
+    mergeSteamgridResults(result.results || []);
+  } catch(error) { notify(error.message); }
+};
+if ($('bulkSteamgrid')) $('bulkSteamgrid').onclick = async () => {
+  try {
+    await api('/api/v2/steamgrid/match', {method:'POST', body:'{}'});
+    notify(t('metadata.steamgrid_queued'));
   } catch(error) { notify(error.message); }
 };
 $('searchIgdb').onclick = async () => {

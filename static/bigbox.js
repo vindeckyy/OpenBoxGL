@@ -8,6 +8,8 @@ import { openAchievements } from './settings.js';
 import { installGameyfin, uninstallGameyfin } from './storefront.js';
 import { applyMoodForGame, clearMood } from './mood.js';
 import { openParty, partyOverlayOpen, partyGamepad } from './party.js';
+import { captureMomentInteractive } from './moments.js';
+import { captureClip } from './clips.js';
 
 
 
@@ -167,8 +169,10 @@ import { openParty, partyOverlayOpen, partyGamepad } from './party.js';
     function scheduleVideoSnap(game) {
       if (_reducedMotion()) return;
       if (_videoSnapTimer) clearTimeout(_videoSnapTimer);
+      // media() always builds a URL; gate on the has_video flag so games
+      // without a snap never get a doomed <video> element.
+      if (!game.has_video) { clearVideoSnap(); return; }
       const videoUrl = media(game, 'video');
-      if (!videoUrl) { clearVideoSnap(); return; }
       _videoSnapTimer = setTimeout(() => {
         _videoSnapTimer = 0;
         if (_videoSnapGameId === game.id && _videoSnapEl) return; // already playing
@@ -262,7 +266,7 @@ import { openParty, partyOverlayOpen, partyGamepad } from './party.js';
       const game = AppState.games.find(item => item.id === session.game_id);
       $('bigBoxPauseTitle').textContent = session.game;
       $('bigBoxPauseMeta').textContent = `${session.paused ? 'Paused' : 'Running'} · started ${String(session.started || '').replace('T',' ')}`;
-      $('bigBoxPauseActions').innerHTML = `<button class="primary" data-pause-action="${session.launch_id}:${session.paused ? 'resume' : 'pause'}">${session.paused ? 'Resume' : 'Pause'}</button><button class="icon-button" data-pause-action="${session.launch_id}:stop">Exit game</button>${game?.documents.map((item,index) => `<button class="icon-button" data-pause-doc="${game.id}:${index}">Read ${escapeHtml(item.name)}</button>`).join('') || ''}${AppState.raConfigured ? `<button class="icon-button" id="pauseAchievements">Achievements</button>` : ''}`;
+      $('bigBoxPauseActions').innerHTML = `<button class="primary" data-pause-action="${session.launch_id}:${session.paused ? 'resume' : 'pause'}">${session.paused ? 'Resume' : 'Pause'}</button><button class="icon-button" data-pause-action="${session.launch_id}:stop">Exit game</button>${game ? '<button class="icon-button" id="pauseMoment">Capture moment</button><button class="icon-button" id="pauseClip">Clip it</button>' : ''}${game?.documents.map((item,index) => `<button class="icon-button" data-pause-doc="${game.id}:${index}">Read ${escapeHtml(item.name)}</button>`).join('') || ''}${AppState.raConfigured ? `<button class="icon-button" id="pauseAchievements">Achievements</button>` : ''}`;
       document.querySelectorAll('[data-pause-action]').forEach(button => button.onclick = async () => {
         const [launch_id,action] = button.dataset.pauseAction.split(':');
         await api('/api/session/control',{method:'POST',body:JSON.stringify({launch_id,action})});
@@ -274,6 +278,8 @@ import { openParty, partyOverlayOpen, partyGamepad } from './party.js';
         const targetGame = AppState.games.find(item => item.id === Number(gameId));
         if (targetGame) openReader(targetGame,Number(index));
       });
+      if ($('pauseMoment')) $('pauseMoment').onclick = () => captureMomentInteractive(game, { trigger: 'pause', launchId: session.launch_id });
+      if ($('pauseClip')) $('pauseClip').onclick = async () => { try { await captureClip({ game, launchId: session.launch_id }); } catch (error) { notify(error.message); } };
       if ($('pauseAchievements')) $('pauseAchievements').onclick = () => { $('bigBoxPause').hidden = true; openAchievements(); };
       $('bigBoxPause').hidden = false;
     }
@@ -282,9 +288,8 @@ import { openParty, partyOverlayOpen, partyGamepad } from './party.js';
       if (!visible.length) return;
       const game = visible[Math.floor(Math.random() * visible.length)];
       AppState.screenSaverGame = game;
-      const video = media(game, 'video');
-      if (video) {
-        $('screenSaverVideo').src = video;
+      if (game.has_video) {
+        $('screenSaverVideo').src = media(game, 'video');
       } else if (game.has_cover) {
         $('screenSaverVideo').src = media(game, 'cover');
       } else {

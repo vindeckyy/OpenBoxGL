@@ -15,27 +15,58 @@
 #include <gio/gio.h>
 #include <glib.h>
 #include <glib-unix.h>
+#include <arpa/inet.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <netinet/in.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/inotify.h>
 #include <sys/un.h>
+#include <sys/time.h>
 #include <time.h>
 #include <poll.h>
 #include <unistd.h>
 
 #define DEFAULT_DATA_DIR "/.local/share/openbox-game-launcher"
 #define BOOT_TIMEOUT_SECONDS 30
+#define API_TIMEOUT_SECONDS 30
+#define MAX_NATIVE_VALUE_BYTES 4096
+#define MAX_IPC_MESSAGE_BYTES 8192
+
+typedef enum {
+    NATIVE_REQUEST_NONE = 0,
+    NATIVE_REQUEST_START,
+    NATIVE_REQUEST_SHOWGAME,
+    NATIVE_REQUEST_SEARCH,
+    NATIVE_REQUEST_BIGBOX,
+    NATIVE_REQUEST_SETTINGS,
+    NATIVE_REQUEST_MOMENT,
+    NATIVE_REQUEST_CLIP,
+    NATIVE_REQUEST_LAUNCH,
+    NATIVE_REQUEST_RESUME,
+} NativeRequestKind;
+
+typedef struct {
+    NativeRequestKind kind;
+    char *value;
+} NativeRequest;
+
+typedef enum {
+    NATIVE_ARGS_NONE = 0,
+    NATIVE_ARGS_REQUEST,
+    NATIVE_ARGS_INVALID,
+} NativeArgsResult;
 
 static pid_t server_pid = 0;
 static GtkWidget *main_window = NULL;
+static WebKitWebView *main_view = NULL;
 static char *token = NULL;
 static char *origin = NULL;
 static guint16 server_port = 0;
@@ -51,6 +82,8 @@ static gboolean window_maximized = FALSE;
 static gboolean tray_enabled = FALSE;
 static gboolean minimize_to_tray = FALSE;
 static GtkStatusIcon *tray_icon = NULL;
+static NativeRequest pending_request = { NATIVE_REQUEST_NONE, NULL };
+static gboolean pending_focus = FALSE;
 /* ------------------------------------------------------------------ */
 /* Process ownership                                                   */
 /* ------------------------------------------------------------------ */
@@ -154,6 +187,554 @@ token_is_valid(const char *value)
         }
     }
     return TRUE;
+}
+
+static void
+native_request_clear(NativeRequest *request)
+{
+    if (!request) {
+        return;
+    }
+    g_clear_pointer(&request->value, g_free);
+    request->kind = NATIVE_REQUEST_NONE;
+}
+
+static gboolean
+native_request_copy(NativeRequest *destination, const NativeRequest *source)
+{
+    if (!destination || !source) {
+        return FALSE;
+    }
+    native_request_clear(destination);
+    destination->kind = source->kind;
+    destination->value = source->value ? g_strdup(source->value) : NULL;
+    return !source->value || destination->value != NULL;
+}
+
+static gboolean
+native_text_is_valid(const char *value, gsize length, gboolean allow_empty)
+{
+    if (!value || (!allow_empty && length == 0) || length > MAX_NATIVE_VALUE_BYTES ||
+        !g_utf8_validate(value, (gssize)length, NULL)) {
+        return FALSE;
+    }
+    for (gsize index = 0; index < length; index++) {
+        unsigned char character = (unsigned char)value[index];
+        if (character == '\0' || character < 0x20 || character == 0x7F) {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
+static gboolean
+native_text_string_is_valid(const char *value, gboolean allow_empty)
+{
+    return value && native_text_is_valid(value, strlen(value), allow_empty);
+}
+
+static int
+hex_value(unsigned char character)
+{
+    if (character >= '0' && character <= '9') {
+        return character - '0';
+    }
+    if (character >= 'a' && character <= 'f') {
+        return character - 'a' + 10;
+    }
+    if (character >= 'A' && character <= 'F') {
+        return character - 'A' + 10;
+    }
+    return -1;
+}
+
+static char *
+native_uri_unescape(const char *value)
+{
+    if (!native_text_string_is_valid(value, TRUE)) {
+        return NULL;
+    }
+    GString *decoded = g_string_sized_new(strlen(value));
+    for (gsize index = 0; value[index] != '\0'; index++) {
+        if (value[index] == '%') {
+            if (value[index + 1] == '\0' || value[index + 2] == '\0') {
+                g_string_free(decoded, TRUE);
+                return NULL;
+            }
+            int high = hex_value((unsigned char)value[index + 1]);
+            int low = hex_value((unsigned char)value[index + 2]);
+            if (high < 0 || low < 0) {
+                g_string_free(decoded, TRUE);
+                return NULL;
+            }
+            g_string_append_c(decoded, (char)((high << 4) | low));
+            index += 2;
+        } else {
+            g_string_append_c(decoded, value[index]);
+        }
+        if (decoded->len > MAX_NATIVE_VALUE_BYTES) {
+            g_string_free(decoded, TRUE);
+            return NULL;
+        }
+    }
+    if (!native_text_is_valid(decoded->str, decoded->len, TRUE)) {
+        g_string_free(decoded, TRUE);
+        return NULL;
+    }
+    return g_string_free(decoded, FALSE);
+}
+
+static gboolean
+native_request_set_value(NativeRequest *request, NativeRequestKind kind,
+                         char *value, gboolean allow_empty)
+{
+    if (!request || !value) {
+        g_free(value);
+        return FALSE;
+    }
+    if (!native_text_string_is_valid(value, allow_empty)) {
+        g_free(value);
+        return FALSE;
+    }
+    native_request_clear(request);
+    request->kind = kind;
+    request->value = value;
+    return TRUE;
+}
+
+static gboolean
+native_request_set_uri_value(NativeRequest *request, NativeRequestKind kind,
+                             const char *raw_value, gboolean trim,
+                             gboolean allow_empty)
+{
+    char *value = native_uri_unescape(raw_value ? raw_value : "");
+    if (!value) {
+        return FALSE;
+    }
+    if (trim) {
+        g_strstrip(value);
+    }
+    return native_request_set_value(request, kind, value, allow_empty);
+}
+
+static gboolean
+native_request_from_uri(const char *uri, NativeRequest *request)
+{
+    NativeRequest parsed = { NATIVE_REQUEST_NONE, NULL };
+    char *text = uri ? g_strdup(uri) : NULL;
+    if (!text) {
+        return FALSE;
+    }
+    g_strstrip(text);
+    if (!native_text_string_is_valid(text, FALSE)) {
+        g_free(text);
+        return FALSE;
+    }
+
+    const char *route = NULL;
+    if (g_str_has_prefix(text, "openbox://")) {
+        const char *rest = text + strlen("openbox://");
+        const char *slash = strchr(rest, '/');
+        if (slash) {
+            char *authority = g_strndup(rest, (gsize)(slash - rest));
+            gboolean local_authority = authority[0] == '\0' ||
+                                       g_ascii_strcasecmp(authority, "localhost") == 0 ||
+                                       g_ascii_strcasecmp(authority, "openbox") == 0;
+            gboolean foreign_authority = strchr(authority, '.') != NULL ||
+                                         strchr(authority, ':') != NULL;
+            if (!local_authority && foreign_authority) {
+                g_free(authority);
+                g_free(text);
+                return FALSE;
+            }
+            route = local_authority ? slash + 1 : rest;
+            g_free(authority);
+        } else {
+            gboolean local_authority = rest[0] == '\0' ||
+                                       g_ascii_strcasecmp(rest, "localhost") == 0 ||
+                                       g_ascii_strcasecmp(rest, "openbox") == 0;
+            if ((!local_authority && strchr(rest, '.') != NULL) ||
+                (!local_authority && strchr(rest, ':') != NULL)) {
+                g_free(text);
+                return FALSE;
+            }
+            route = local_authority ? "" : rest;
+        }
+    } else if (g_str_has_prefix(text, "openbox:")) {
+        route = text + strlen("openbox:");
+    } else {
+        g_free(text);
+        return FALSE;
+    }
+
+    while (route[0] == '/') {
+        route++;
+    }
+    char *route_copy = g_strdup(route);
+    char *separator = strchr(route_copy, '/');
+    char *remainder = "";
+    if (separator) {
+        *separator = '\0';
+        remainder = separator + 1;
+    }
+
+    if (g_ascii_strcasecmp(route_copy, "start") == 0 || route_copy[0] == '\0') {
+        parsed.kind = NATIVE_REQUEST_START;
+    } else if (g_ascii_strcasecmp(route_copy, "showgame") == 0 ||
+               g_ascii_strcasecmp(route_copy, "game") == 0) {
+        if (!native_request_set_uri_value(&parsed, NATIVE_REQUEST_SHOWGAME,
+                                          remainder, TRUE, FALSE)) {
+            goto invalid;
+        }
+    } else if (g_ascii_strcasecmp(route_copy, "search") == 0) {
+        if (!native_request_set_uri_value(&parsed, NATIVE_REQUEST_SEARCH,
+                                          remainder, FALSE, TRUE)) {
+            goto invalid;
+        }
+    } else if (g_ascii_strcasecmp(route_copy, "launch") == 0) {
+        if (!native_request_set_uri_value(&parsed, NATIVE_REQUEST_LAUNCH,
+                                          remainder, TRUE, FALSE)) {
+            goto invalid;
+        }
+    } else if (g_ascii_strcasecmp(route_copy, "resume") == 0) {
+        if (!native_request_set_uri_value(&parsed, NATIVE_REQUEST_RESUME,
+                                          remainder, TRUE, FALSE)) {
+            goto invalid;
+        }
+    } else if (g_ascii_strcasecmp(route_copy, "moment") == 0) {
+        if (!native_request_set_uri_value(&parsed, NATIVE_REQUEST_MOMENT,
+                                          remainder, TRUE, FALSE)) {
+            goto invalid;
+        }
+    } else if (g_ascii_strcasecmp(route_copy, "clip") == 0) {
+        if (!native_request_set_uri_value(&parsed, NATIVE_REQUEST_CLIP,
+                                          remainder, TRUE, FALSE)) {
+            goto invalid;
+        }
+    } else if (g_ascii_strcasecmp(route_copy, "bigbox") == 0 ||
+               g_ascii_strcasecmp(route_copy, "fullscreen") == 0) {
+        parsed.kind = NATIVE_REQUEST_BIGBOX;
+    } else if (g_ascii_strcasecmp(route_copy, "settings") == 0) {
+        parsed.kind = NATIVE_REQUEST_SETTINGS;
+    } else {
+        goto invalid;
+    }
+
+    native_request_clear(request);
+    *request = parsed;
+    g_free(route_copy);
+    g_free(text);
+    return TRUE;
+
+invalid:
+    native_request_clear(&parsed);
+    g_free(route_copy);
+    g_free(text);
+    return FALSE;
+}
+
+static gboolean
+native_request_set_play(NativeRequest *request, const char *value)
+{
+    char *game_id = value ? g_strdup(value) : NULL;
+    if (!game_id) {
+        return FALSE;
+    }
+    g_strstrip(game_id);
+    return native_request_set_value(request, NATIVE_REQUEST_LAUNCH, game_id, FALSE);
+}
+
+static NativeArgsResult
+native_request_from_argv(int argc, char **argv, NativeRequest *request)
+{
+    native_request_clear(request);
+    for (int index = 1; index < argc; index++) {
+        if (strcmp(argv[index], "--uri") == 0) {
+            if (index + 1 >= argc ||
+                !native_request_from_uri(argv[index + 1], request)) {
+                return NATIVE_ARGS_INVALID;
+            }
+            return NATIVE_ARGS_REQUEST;
+        }
+    }
+    for (int index = 1; index < argc; index++) {
+        if (strcmp(argv[index], "--play") == 0) {
+            if (index + 1 >= argc ||
+                !native_request_set_play(request, argv[index + 1])) {
+                return NATIVE_ARGS_INVALID;
+            }
+            return NATIVE_ARGS_REQUEST;
+        }
+    }
+    for (int index = 1; index < argc; index++) {
+        if (g_str_has_prefix(argv[index], "openbox:")) {
+            if (!native_request_from_uri(argv[index], request)) {
+                return NATIVE_ARGS_INVALID;
+            }
+            return NATIVE_ARGS_REQUEST;
+        }
+    }
+    return NATIVE_ARGS_NONE;
+}
+
+static const char *
+native_request_action(NativeRequestKind kind)
+{
+    switch (kind) {
+    case NATIVE_REQUEST_SHOWGAME:
+    case NATIVE_REQUEST_LAUNCH:
+        return "showgame";
+    case NATIVE_REQUEST_SEARCH:
+        return "search";
+    case NATIVE_REQUEST_BIGBOX:
+        return "bigbox";
+    case NATIVE_REQUEST_SETTINGS:
+        return "settings";
+    case NATIVE_REQUEST_MOMENT:
+        return "moment";
+    case NATIVE_REQUEST_CLIP:
+        return "clip";
+    case NATIVE_REQUEST_RESUME:
+        return "resume";
+    default:
+        return NULL;
+    }
+}
+
+static char *
+native_request_to_uri(const NativeRequest *request)
+{
+    if (!request || request->kind == NATIVE_REQUEST_NONE) {
+        return NULL;
+    }
+    if (request->kind == NATIVE_REQUEST_START) {
+        return g_strdup("openbox://start");
+    }
+    const char *action = native_request_action(request->kind);
+    if (request->kind == NATIVE_REQUEST_LAUNCH) {
+        action = "launch";
+    }
+    if (!action) {
+        return NULL;
+    }
+    char *escaped = request->value
+        ? g_uri_escape_string(request->value, "", FALSE)
+        : g_strdup("");
+    if (!escaped) {
+        return NULL;
+    }
+    char *result = g_strdup_printf("openbox://%s/%s", action, escaped);
+    g_free(escaped);
+    return result;
+}
+
+static char *
+native_authenticated_url(const NativeRequest *request)
+{
+    if (!origin || !token) {
+        return NULL;
+    }
+    char *base = g_strdup_printf("%s/?token=%s", origin, token);
+    if (!request || request->kind == NATIVE_REQUEST_NONE ||
+        request->kind == NATIVE_REQUEST_START) {
+        return base;
+    }
+
+    const char *action = native_request_action(request->kind);
+    char *escaped = request->value
+        ? g_uri_escape_string(request->value, "", FALSE)
+        : g_strdup("");
+    if (!action || !escaped) {
+        g_free(escaped);
+        g_free(base);
+        return NULL;
+    }
+    const char *parameter = strcmp(action, "search") == 0 ? "q" : "id";
+    char *result = NULL;
+    if (request->kind == NATIVE_REQUEST_BIGBOX ||
+        request->kind == NATIVE_REQUEST_SETTINGS) {
+        result = g_strdup_printf("%s&deeplink=%s", base, action);
+    } else {
+        result = g_strdup_printf("%s&deeplink=%s&%s=%s",
+                                 base, action, parameter, escaped);
+    }
+    g_free(escaped);
+    g_free(base);
+    return result;
+}
+
+static char *
+json_escape_string(const char *value)
+{
+    GString *escaped = g_string_new(NULL);
+    for (const unsigned char *cursor = (const unsigned char *)value;
+         cursor && *cursor != '\0'; cursor++) {
+        switch (*cursor) {
+        case '"':
+            g_string_append(escaped, "\\\"");
+            break;
+        case '\\':
+            g_string_append(escaped, "\\\\");
+            break;
+        case '\b':
+            g_string_append(escaped, "\\b");
+            break;
+        case '\f':
+            g_string_append(escaped, "\\f");
+            break;
+        case '\n':
+            g_string_append(escaped, "\\n");
+            break;
+        case '\r':
+            g_string_append(escaped, "\\r");
+            break;
+        case '\t':
+            g_string_append(escaped, "\\t");
+            break;
+        default:
+            if (*cursor < 0x20) {
+                g_string_append_printf(escaped, "\\u%04x", *cursor);
+            } else {
+                g_string_append_c(escaped, (char)*cursor);
+            }
+            break;
+        }
+    }
+    return g_string_free(escaped, FALSE);
+}
+
+static gboolean
+write_all_fd(int fd, const char *data, gsize length)
+{
+    gsize written = 0;
+    while (written < length) {
+        ssize_t count = send(fd, data + written, length - written, MSG_NOSIGNAL);
+        if (count < 0 && errno == EINTR) {
+            continue;
+        }
+        if (count <= 0) {
+            return FALSE;
+        }
+        written += (gsize)count;
+    }
+    return TRUE;
+}
+
+static gboolean
+api_post_json(const char *path, const char *body)
+{
+    if (!path || !body || !token || server_port == 0) {
+        return FALSE;
+    }
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        g_printerr("native_host: could not create loopback API socket: %s\n",
+                   strerror(errno));
+        return FALSE;
+    }
+    struct timeval timeout = { API_TIMEOUT_SECONDS, 0 };
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+    struct sockaddr_in address;
+    memset(&address, 0, sizeof(address));
+    address.sin_family = AF_INET;
+    address.sin_port = htons(server_port);
+    if (inet_pton(AF_INET, "127.0.0.1", &address.sin_addr) != 1 ||
+        connect(fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        g_printerr("native_host: could not connect to the loopback API: %s\n",
+                   strerror(errno));
+        close(fd);
+        return FALSE;
+    }
+
+    char *request = g_strdup_printf(
+        "POST %s HTTP/1.1\r\n"
+        "Host: 127.0.0.1:%u\r\n"
+        "X-OpenBox-Token: %s\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: %zu\r\n"
+        "Connection: close\r\n\r\n%s",
+        path, server_port, token, strlen(body), body);
+    gboolean sent = write_all_fd(fd, request, strlen(request));
+    g_free(request);
+    if (!sent) {
+        g_printerr("native_host: could not send loopback API request: %s\n",
+                   strerror(errno));
+        close(fd);
+        return FALSE;
+    }
+
+    char response[128];
+    gsize used = 0;
+    while (used + 1 < sizeof(response)) {
+        ssize_t count = read(fd, response + used, sizeof(response) - used - 1);
+        if (count < 0 && errno == EINTR) {
+            continue;
+        }
+        if (count <= 0) {
+            break;
+        }
+        used += (gsize)count;
+        if (memchr(response, '\n', used) != NULL) {
+            break;
+        }
+    }
+    response[used] = '\0';
+    int status = 0;
+    gboolean ok = sscanf(response, "HTTP/%*s %d", &status) == 1 &&
+                  status >= 200 && status < 300;
+    if (!ok) {
+        g_printerr("native_host: loopback API request failed (HTTP %d)\n", status);
+    }
+    close(fd);
+    return ok;
+}
+
+static gboolean
+native_request_is_decimal(const char *value)
+{
+    if (!value || !value[0]) {
+        return FALSE;
+    }
+    for (const unsigned char *cursor = (const unsigned char *)value;
+         *cursor != '\0'; cursor++) {
+        if (*cursor < '0' || *cursor > '9') {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
+static char *
+native_request_api_body(const char *value)
+{
+    if (native_request_is_decimal(value)) {
+        const char *first_nonzero = value;
+        while (first_nonzero[0] == '0' && first_nonzero[1] != '\0') {
+            first_nonzero++;
+        }
+        return g_strdup_printf("{\"id\":%s}", first_nonzero);
+    }
+    char *escaped = json_escape_string(value);
+    char *body = g_strdup_printf("{\"game_id\":\"%s\"}", escaped);
+    g_free(escaped);
+    return body;
+}
+
+static gboolean
+dispatch_native_api_request(const NativeRequest *request)
+{
+    if (!request || !request->value) {
+        return FALSE;
+    }
+    const char *path = request->kind == NATIVE_REQUEST_RESUME
+        ? "/api/v2/resume"
+        : "/api/launch";
+    char *body = native_request_api_body(request->value);
+    gboolean ok = api_post_json(path, body);
+    g_free(body);
+    return ok;
 }
 
 static void stop_server(void);
@@ -302,19 +883,102 @@ stop_server(void)
     }
 }
 
-static gboolean on_socket_connection(GIOChannel *source, GIOCondition cond, gpointer data) {
+static void
+present_main_window(void)
+{
+    if (main_window) {
+        gtk_widget_show(main_window);
+        gtk_window_present(GTK_WINDOW(main_window));
+    }
+}
+
+static void
+dispatch_native_request(const NativeRequest *request)
+{
+    if (!request || request->kind == NATIVE_REQUEST_NONE) {
+        return;
+    }
+    if (!main_view) {
+        native_request_copy(&pending_request, request);
+        return;
+    }
+
+    present_main_window();
+    if (request->kind == NATIVE_REQUEST_LAUNCH ||
+        request->kind == NATIVE_REQUEST_RESUME) {
+        /* Keep --play/launch semantics identical to parity_deeplinks: the
+         * game starts through the authenticated API, then the page lands on
+         * the corresponding UI deeplink in the native window. */
+        dispatch_native_api_request(request);
+    }
+    char *url = native_authenticated_url(request);
+    if (!url) {
+        g_printerr("native_host: could not build the authenticated deeplink\n");
+        return;
+    }
+    webkit_web_view_load_uri(main_view, url);
+    g_free(url);
+}
+
+static gboolean
+read_ipc_line(int fd, char *buffer, gsize capacity)
+{
+    if (!buffer || capacity < 2) {
+        return FALSE;
+    }
+    gsize used = 0;
+    while (used + 1 < capacity) {
+        ssize_t count = read(fd, buffer + used, capacity - used - 1);
+        if (count < 0 && errno == EINTR) {
+            continue;
+        }
+        if (count <= 0) {
+            return FALSE;
+        }
+        for (ssize_t index = 0; index < count; index++) {
+            unsigned char character = (unsigned char)buffer[used + (gsize)index];
+            if (character == '\n') {
+                if ((gsize)index != (gsize)count - 1) {
+                    return FALSE;
+                }
+                buffer[used + (gsize)index] = '\0';
+                return TRUE;
+            }
+            if (character == '\0' || character < 0x20 || character == 0x7F) {
+                return FALSE;
+            }
+        }
+        used += (gsize)count;
+    }
+    return FALSE;
+}
+
+static gboolean
+on_socket_connection(GIOChannel *source, GIOCondition cond, gpointer data)
+{
     (void)cond;
     (void)data;
     int client = accept(g_io_channel_unix_get_fd(source), NULL, NULL);
     if (client >= 0) {
-        char buf[16];
-        ssize_t n = read(client, buf, sizeof(buf) - 1);
-        if (n > 0) {
-            buf[n] = '\0';
-            if (strncmp(buf, "focus", 5) == 0) {
+        char message[MAX_IPC_MESSAGE_BYTES];
+        if (read_ipc_line(client, message, sizeof(message))) {
+            if (strcmp(message, "focus") == 0) {
                 if (main_window) {
-                    gtk_window_present(GTK_WINDOW(main_window));
+                    present_main_window();
+                } else {
+                    pending_focus = TRUE;
                 }
+            } else if (g_str_has_prefix(message, "deeplink ")) {
+                NativeRequest request = { NATIVE_REQUEST_NONE, NULL };
+                const char *uri = message + strlen("deeplink ");
+                if (native_request_from_uri(uri, &request)) {
+                    dispatch_native_request(&request);
+                } else {
+                    g_printerr("native_host: rejected invalid single-instance deeplink\n");
+                }
+                native_request_clear(&request);
+            } else {
+                g_printerr("native_host: rejected invalid single-instance message\n");
             }
         }
         close(client);
@@ -323,7 +987,24 @@ static gboolean on_socket_connection(GIOChannel *source, GIOCondition cond, gpoi
 }
 
 static gboolean
-acquire_single_instance(void)
+send_single_instance_request(int fd, const NativeRequest *request)
+{
+    if (!request || request->kind == NATIVE_REQUEST_NONE) {
+        return write_all_fd(fd, "focus\n", strlen("focus\n"));
+    }
+    char *uri = native_request_to_uri(request);
+    if (!uri) {
+        return FALSE;
+    }
+    char *message = g_strdup_printf("deeplink %s\n", uri);
+    gboolean sent = write_all_fd(fd, message, strlen(message));
+    g_free(message);
+    g_free(uri);
+    return sent;
+}
+
+static gboolean
+acquire_single_instance(const NativeRequest *request)
 {
     char *sock_path = g_build_filename(data_dir, "openbox.sock", NULL);
     int sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -338,8 +1019,7 @@ acquire_single_instance(void)
     snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", sock_path);
 
     if (connect(sock_fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
-        ssize_t ignored = write(sock_fd, "focus\n", 6);
-        (void)ignored;
+        send_single_instance_request(sock_fd, request);
         close(sock_fd);
         g_free(sock_path);
         return FALSE;
@@ -864,6 +1544,28 @@ inject_bridge(WebKitWebView *view)
 /* GTK setup                                                           */
 /* ------------------------------------------------------------------ */
 
+static char **
+gtk_argv_without_native_args(int argc, char **argv, int *filtered_argc)
+{
+    char **filtered = g_new0(char *, (gsize)argc + 1);
+    int count = 0;
+    for (int index = 0; index < argc; index++) {
+        if (index > 0 &&
+            (strcmp(argv[index], "--play") == 0 ||
+             strcmp(argv[index], "--uri") == 0)) {
+            index++; /* The validated application value is not a GTK option. */
+            continue;
+        }
+        if (index > 0 && g_str_has_prefix(argv[index], "openbox:")) {
+            continue;
+        }
+        filtered[count++] = argv[index];
+    }
+    filtered[count] = NULL;
+    *filtered_argc = count;
+    return filtered;
+}
+
 static void
 on_close_request(GtkWidget *widget, gpointer user_data)
 {
@@ -889,6 +1591,14 @@ on_signal(gpointer user_data)
 int
 main(int argc, char **argv)
 {
+    NativeRequest startup_request = { NATIVE_REQUEST_NONE, NULL };
+    NativeArgsResult args_result = native_request_from_argv(argc, argv, &startup_request);
+    if (args_result == NATIVE_ARGS_INVALID) {
+        g_printerr("native_host: unsupported or invalid --play/--uri argument\n");
+        native_request_clear(&startup_request);
+        return 2;
+    }
+
     /* Resolve configurable paths from argv or environment. */
     web_app_path = g_getenv("OPENBOX_WEB_APP");
     python_path = g_getenv("OPENBOX_PYTHON") ?: "python3";
@@ -928,9 +1638,10 @@ main(int argc, char **argv)
         }
     }
 
-    if (!acquire_single_instance()) {
-        /* Another instance is running; a second launch focuses it and exits. */
-        g_printerr("native_host: an OpenBox window is already open\n");
+    if (!acquire_single_instance(&startup_request)) {
+        /* Another instance is running; its owner handles focus and dispatch. */
+        g_printerr("native_host: an OpenBox window is already open; request forwarded\n");
+        native_request_clear(&startup_request);
         g_free(default_data_dir);
         return 0;
     }
@@ -942,6 +1653,7 @@ main(int argc, char **argv)
         g_printerr("native_host: could not start the OpenBox server. "
                    "Is python3 installed and OPENBOX_WEB_APP correct?\n");
         release_single_instance();
+        native_request_clear(&startup_request);
         g_free(default_data_dir);
         return 1;
     }
@@ -955,7 +1667,10 @@ main(int argc, char **argv)
         g_setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", TRUE);
     }
 
-    gtk_init(&argc, &argv);
+    int gtk_argc = 0;
+    char **gtk_argv = gtk_argv_without_native_args(argc, argv, &gtk_argc);
+    gtk_init(&gtk_argc, &gtk_argv);
+    g_free(gtk_argv);
     load_geometry();
     load_tray_flags();
     main_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -990,9 +1705,16 @@ main(int argc, char **argv)
     inject_bridge(view);
     gtk_container_add(GTK_CONTAINER(main_window), GTK_WIDGET(view));
 
-    char *url = g_strdup_printf("%s/?token=%s", origin, token);
-    webkit_web_view_load_uri(view, url);
-    g_free(url);
+    main_view = view;
+    NativeRequest initial_request = startup_request;
+    if (initial_request.kind == NATIVE_REQUEST_NONE) {
+        initial_request.kind = NATIVE_REQUEST_START;
+    }
+    dispatch_native_request(&initial_request);
+    if (pending_focus) {
+        pending_focus = FALSE;
+        present_main_window();
+    }
 
     g_signal_connect(main_window, "delete-event", G_CALLBACK(on_window_delete), NULL);
     g_signal_connect(main_window, "destroy", G_CALLBACK(on_close_request), NULL);
@@ -1000,6 +1722,8 @@ main(int argc, char **argv)
     g_unix_signal_add(SIGINT, on_signal, NULL);
     gtk_widget_show_all(main_window);
     gtk_main();
+    native_request_clear(&startup_request);
+    native_request_clear(&pending_request);
     g_free(origin);
     g_free(token);
     g_free(default_data_dir);

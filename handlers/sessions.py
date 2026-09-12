@@ -159,6 +159,21 @@ class SessionHandlers:
         self.send_json(200, timeline_groups(state, days=days))
         return
 
+    @route("GET", "/api/v2/sessions/recap")
+    def _api_get_api_v2_sessions_recap(self, parsed):
+        from api_errors import NotFound
+        from pkg.state.sse import last_session_recap, session_recap_from_history
+
+        state = load_state()
+        settings = state.get("settings", {}) if isinstance(state, dict) else {}
+        if not settings.get("track_session_history", True) or not settings.get("session_recap_enabled", True):
+            raise NotFound("Session recap is not available.")
+        recap = last_session_recap() or session_recap_from_history(state)
+        if recap is None:
+            raise NotFound("No session recap is available.")
+        self.send_json(200, recap)
+        return
+
     def launch_extra(self, payload):
         state = load_state()
         game = game_from_payload(state, payload)

@@ -78,6 +78,7 @@ OPERATION_POLICIES: dict[str, dict] = {
     "metadata.apply": {"resume": "checkpoint", "retry": True, "refuse_cancel_promote": True},
     "media.bulk_download": {"resume": "checkpoint", "retry": "failed_only", "refuse_cancel_promote": False},
     "media.cleanup": {"resume": "checkpoint", "retry": True, "refuse_cancel_promote": False},
+    "media.memories_import": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": False},
     "emulator.install": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},
     "emulator.update": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},
     "gameyfin.install": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},

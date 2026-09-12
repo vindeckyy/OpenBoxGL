@@ -17,3 +17,8 @@ recommended: true
 priority: 10
 executable_patterns:
   - pcsx2-qt
+state:
+  kind: adapter-cli
+  template: "-statefile {state_path}"
+  capture: ""
+  glob: "*.p2s*"

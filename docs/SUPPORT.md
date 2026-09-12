@@ -3,7 +3,7 @@
 ## Scale and architecture
 
 - **Formal library scale:** 20,000 games (blocking performance gates cover 10k and 20k scenarios). The optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) provides indexed search and facets for larger libraries while JSON remains canonical.
-- **CPU architecture:** OpenBox 1.10.0 publishes signed **x86_64 and aarch64 AppImages**. The Flatpak bundle is **x86_64 only**. The in-app updater and the release installer select the artifact that matches the running architecture and refuse a mismatched or unsigned artifact.
+- **CPU architecture:** OpenBox 1.11.0 publishes signed **x86_64 and aarch64 AppImages**. The Flatpak bundle is **x86_64 only**. The in-app updater and the release installer select the artifact that matches the running architecture and refuse a mismatched or unsigned artifact.
 - **Interface language:** English, Spanish, German, French, and Portuguese (v1.7.2+).
 
 ## Supported platforms
