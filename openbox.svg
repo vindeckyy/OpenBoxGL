@@ -1,31 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="517" height="517" viewBox="-11.5 0 517 517">
-  <defs>
-    <linearGradient id="obTop" x1="6" y1="142" x2="490" y2="108" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#f95f00"/>
-      <stop offset="1" stop-color="#ffa114"/>
-    </linearGradient>
-    <linearGradient id="obLeft" x1="4" y1="142" x2="243" y2="508" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#f64600"/>
-      <stop offset="1" stop-color="#ff7200"/>
-    </linearGradient>
-    <linearGradient id="obRight" x1="252" y1="480" x2="490" y2="134" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#fe6800"/>
-      <stop offset="1" stop-color="#ffb416"/>
-    </linearGradient>
-    <clipPath id="obClipTop"><polygon points="247,0 494,130 247,260 0,130"/></clipPath>
-    <clipPath id="obClipLeft"><polygon points="0,130 247,260 247,516 0,386"/></clipPath>
-    <clipPath id="obClipRight"><polygon points="247,260 494,130 494,386 247,516"/></clipPath>
-  </defs>
-  <polygon points="247,0 494,130 247,260 0,130" fill="url(#obTop)"/>
-  <polygon points="0,130 247,260 247,516 0,386" fill="url(#obLeft)"/>
-  <polygon points="247,260 494,130 494,386 247,516" fill="url(#obRight)"/>
-  <g clip-path="url(#obClipTop)">
-    <path fill="#000" transform="matrix(-247,130,247,130,247,0)" d="M0,0.341 L0,0.555 L0.657,0.567 L0.657,0.735 L0.203,0.733 L0.203,0.866 L0.869,0.869 L0.869,0.205 L0.186,0.197 L0.186,0.341 L0.657,0.343 L0.657,0.53 L0.19,0.525 C0.092,0.487 0.05,0.447 0,0.341 Z"/>
-  </g>
-  <g clip-path="url(#obClipLeft)">
-    <path fill="#000" transform="matrix(247,130,0,256,0,130)" d="M0.145,0.128 L1,0.128 L1,1 L0.96,1 L0.96,0.2 L0.79,0.2 L0.79,0.808 L0.664,0.808 L0.534,1 L0.445,1 L0.567,0.81 L0.145,0.81 Z"/>
-  </g>
-  <g clip-path="url(#obClipRight)">
-    <path fill="#000" transform="matrix(247,-130,0,256,247,260)" d="M0,0.02 L0.836,0.02 L0.836,0.76 L1,0.76 L1,0.82 L0.68,0.82 L0.68,0.393 L0.338,0.393 L0.338,0.53 L0.515,0.53 L0.515,0.975 L0.465,0.975 L0.465,0.731 L0.21,0.731 L0.21,0.31 L0.68,0.31 L0.68,0.133 L0.033,0.133 L0.033,0.97 L0,0.97 Z"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 1254 1254">
+  <path fill="#000000" d="M 185.20 357.42 L 616.77 115.31 L 616.80 624.92 L 1064.14 624.93 L 1065.29 834.81 L 611.73 1094.54 L 184.49 833.62 Z"/>
+  <path fill="#fd5301" d="M 637.07 117.62 L 1063.55 357.74 L 1063.98 604.02 L 636.84 604.10 Z"/>
+  <path fill="#fdfdfd" fill-rule="evenodd" d="M 251.10 393.97 L 560.92 222.38 L 560.94 572.29 L 251.10 572.32 Z M 326.61 432.52 L 483.36 346.38 L 483.29 509.16 L 326.52 509.14 Z"/>
+  <path fill="#000000" fill-rule="evenodd" d="M 692.23 245.98 L 963.80 397.16 L 963.97 443.32 L 930.94 460.69 L 963.85 478.56 L 963.90 550.66 L 692.20 550.68 Z M 757.36 350.06 L 875.44 414.42 L 851.74 426.27 L 757.27 392.57 Z M 757.33 450.85 L 877.52 493.33 L 757.22 493.34 Z"/>
+  <path fill="#fdfdfd" d="M 251.08 632.73 L 561.04 632.74 L 561.10 696.65 L 362.18 696.64 L 362.19 783.82 L 495.23 862.82 L 495.26 816.07 L 449.86 789.69 L 449.87 746.52 L 561.16 746.56 L 561.00 987.24 L 251.06 800.29 Z"/>
+  <path fill="#fdfdfd" d="M 640.02 678.14 L 717.82 678.07 L 717.59 860.50 L 982.27 716.19 L 982.25 804.35 L 639.88 994.28 Z"/>
 </svg>
