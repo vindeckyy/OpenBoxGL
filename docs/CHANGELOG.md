@@ -7,9 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Changed
-- Redraw the application logo as a true vector: `openbox.svg` now contains
-  real path geometry (isometric cube with the three face glyphs) instead of a
-  base64-embedded PNG, and `assets/openbox-logo.png` plus
+- Replace the application logo with the new OpenBox GL mark: `openbox.svg`
+  (app icon and favicon) now carries the hexagonal OBGL monogram traced in
+  `assets/OpenBoxLogo.svg`, and `assets/openbox-logo.png` plus
   `assets/OpenBoxGL.png` are re-rendered from it.
 
 ### Fixed
@@ -20,6 +20,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Honor the **Show Play insights** setting in the web UI: the setting was
   saved but never included in the public settings payload, so the insights
   panel always rendered.
+- Restore the in-app document reader: the 1.11 security headers marked every
+  response `frame-ancestors 'none'`, which blocked the reader iframe from
+  ever loading `/api/document` or `/api/platform/document`; those endpoints
+  now allow same-origin framing (`frame-ancestors 'self'`), and closing the
+  reader also unloads the frame instead of only dropping the `src`
+  attribute.
+- Keep the grid rendered when the library pane scrolls: the virtual window
+  treated the pane's scroll offset as grid-relative even though the library
+  header, drop zone, and insights panel sit above the grid, so scrolling
+  could blank the card grid; scroll offsets are now converted by the grid's
+  position inside the pane.
+- Restore focus to the card when Escape closes the context menu: the
+  navigation Escape handler blurred the restored focus because it ran after
+  the menu handler had already consumed the key.
+- Stop the resume affordance from probing the server for games that have no
+  server-issued stable id (e.g. client-only entries); the request could
+  never resolve and surfaced as a console error.
 
 ### Documentation & Gates
 - Stabilize the perf-20k gate against single-run scheduler spikes: each

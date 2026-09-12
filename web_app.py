@@ -126,6 +126,9 @@ _AUTH_WINDOW_SECONDS = 60.0
 # Security headers shared by every response (including the SSE stream) so the
 # policy can't drift between code paths.
 CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.bunny.net; font-src 'self' https://fonts.bunny.net; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+# Document responses are framed by the in-app reader iframe, so they relax
+# only the framing directives; every other policy stays identical.
+CSP_FRAMEABLE = CSP_DEFAULT.replace("frame-ancestors 'none'", "frame-ancestors 'self'")
 
 
 
@@ -150,13 +153,13 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
     def send_response(self, code, message=None):
         LOGGER.debug("HTTP %s %s -> %s", getattr(self, "command", "?"), urlparse(getattr(self, "path", "")).path, code)
         super().send_response(code, message)
-    def headers_common(self, content_type, cache_control="no-store"):
+    def headers_common(self, content_type, cache_control="no-store", frameable=False):
         self.send_header("Content-Type", content_type)
         self.send_header("Cache-Control", cache_control)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Content-Security-Policy", CSP_DEFAULT)
-        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Content-Security-Policy", CSP_FRAMEABLE if frameable else CSP_DEFAULT)
+        self.send_header("X-Frame-Options", "SAMEORIGIN" if frameable else "DENY")
 
 
     def send_bytes(self, status, data, content_type, cache_control="no-store", etag=None, last_modified=None, extra_headers=None):
@@ -184,7 +187,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         last_modified = email.utils.formatdate(stat_result.st_mtime, usegmt=True)
         return etag, last_modified
 
-    def send_file(self, status, path, content_type=None, extra_headers=None):
+    def send_file(self, status, path, content_type=None, extra_headers=None, frameable=False):
         path = Path(path)
         stat_result = path.stat()
         size = stat_result.st_size
@@ -194,7 +197,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         conditional = headers.get("If-None-Match", "")
         if etag in {item.strip() for item in conditional.split(",")}:
             self.send_response(304)
-            self.headers_common(content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream", cache_control=request_cache_control)
+            self.headers_common(content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream", cache_control=request_cache_control, frameable=frameable)
             self.send_header("ETag", etag)
             self.send_header("Last-Modified", last_modified)
             for name, value in (extra_headers or {}).items():
@@ -208,7 +211,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
                     since = email.utils.parsedate_to_datetime(if_modified_since)
                     if stat_result.st_mtime < since.timestamp() + 1:
                         self.send_response(304)
-                        self.headers_common(content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream", cache_control=request_cache_control)
+                        self.headers_common(content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream", cache_control=request_cache_control, frameable=frameable)
                         self.send_header("ETag", etag)
                         self.send_header("Last-Modified", last_modified)
                         for name, value in (extra_headers or {}).items():
@@ -233,7 +236,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
                 start = max(0, size - length)
             if start < 0 or start >= size or end < start:
                 self.send_response(416)
-                self.headers_common(content_type or "application/octet-stream", cache_control=request_cache_control)
+                self.headers_common(content_type or "application/octet-stream", cache_control=request_cache_control, frameable=frameable)
                 self.send_header("Content-Range", f"bytes */{size}")
                 self.send_header("Content-Length", "0")
                 for name, value in (extra_headers or {}).items():
@@ -244,7 +247,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
             response_status = 206
         length = max(0, end - start + 1)
         self.send_response(response_status)
-        self.headers_common(content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream", cache_control=request_cache_control)
+        self.headers_common(content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream", cache_control=request_cache_control, frameable=frameable)
         self.send_header("Accept-Ranges", "bytes")
         self.send_header("ETag", etag)
         self.send_header("Last-Modified", last_modified)

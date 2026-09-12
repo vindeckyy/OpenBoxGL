@@ -98,7 +98,7 @@ function handleKey(event) {
     }
     return;
   }
-  if (event.key === 'Escape') {
+  if (event.key === 'Escape' && !event.defaultPrevented) {
     event.preventDefault();
     selectGame(null);
     document.activeElement?.blur?.();

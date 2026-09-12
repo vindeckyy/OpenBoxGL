@@ -2,6 +2,7 @@ import { $, escapeHtml } from './util.js';
 import { AppState, api, ensureProfiles, filteredGames, nativePickFile } from './state.js';
 import { t } from './i18n.js';
 import { closeBigBoxMenu } from './bigbox.js';
+import { resetReaderFrame } from './reader.js';
 
 let lastDialogTrigger = null;
 const dialogTriggers = new WeakMap();
@@ -404,9 +405,7 @@ document.querySelectorAll('dialog').forEach(dialog => {
   }
   dialog.addEventListener('close', () => {
     if (dialog.id === 'readerDialog') {
-      $('readerFrame').removeAttribute('src');
-      AppState.readerUrl = '';
-      AppState.readerPage = 1;
+      resetReaderFrame();
     }
     if (dialog.id === 'mediaDialog') $('fullScreenshot')?.remove();
     const trigger = dialogTriggers.get(dialog);
