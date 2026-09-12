@@ -1,7 +1,7 @@
 """ConstellationHandlers — library relationship graph."""
 from __future__ import annotations
 
-from openbox import load_state
+from openbox import load_state_readonly
 from pkg.parity.parity_constellation import KINDS, build_graph
 from routes.registry import route
 
@@ -11,7 +11,10 @@ class ConstellationHandlers:
     def _api_get_api_v2_library_constellation(self, parsed):
         from api_errors import BadRequest
 
-        state = load_state()
+        # The graph builder only reads games/history.  Avoid deep-copying every
+        # game on each request for large libraries; the read-only store view is
+        # safe for this projection and keeps the endpoint on the warm cache.
+        state = load_state_readonly()
         games = [g for g in state.get("games", []) if isinstance(g, dict)]
 
         qs = (getattr(parsed, "query", "") or "")

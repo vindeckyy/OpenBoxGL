@@ -89,6 +89,8 @@ COMPACT_JSON_THRESHOLD = 1024 * 1024
 LEGACY_INDEXED_ID = re.compile(r"^game-[0-9a-f]{24}-\d+$")
 QUEUE_CAP = 500
 NOTIFICATIONS_CAP = 200
+TRASH_CAP = 200
+TRASH_MAX_AGE_DAYS = 30
 SNAPSHOT_DEBOUNCE_DEFAULT = float(os.environ.get("OPENBOX_SNAPSHOT_DEBOUNCE", "0.0"))
 WRITE_COALESCE_WINDOW = 0.05
 WRITE_COALESCE_MS = 50
@@ -110,6 +112,7 @@ def default_state() -> dict[str, Any]:
         "notifications": [],
         "ui_state": {},
         "active_sessions": [],
+        "trash": [],
     }
 
 
@@ -213,6 +216,26 @@ MIGRATIONS: dict[int, Callable[[dict[str, Any]], None]] = {
 }
 
 
+def _trash_entry_expired(entry: dict[str, Any], cutoff: float) -> bool:
+    """Return True when a trash entry's ``trashed_at`` is older than the retention window."""
+    raw = entry.get("trashed_at")
+    if not isinstance(raw, str):
+        return False
+    try:
+        return datetime.fromisoformat(raw).timestamp() < cutoff
+    except (ValueError, OverflowError, OSError):
+        return False
+
+
+def prune_trash(trash: list[Any], *, now: float | None = None) -> list[Any]:
+    """Return the bounded trash list: dict entries only, within retention, newest TRASH_CAP kept."""
+    cutoff = (now if now is not None else time.time()) - TRASH_MAX_AGE_DAYS * 86400
+    return [
+        entry for entry in trash
+        if isinstance(entry, dict) and not _trash_entry_expired(entry, cutoff)
+    ][-TRASH_CAP:]
+
+
 def _normalize_feature_fields(state: dict[str, Any]) -> bool:
     """Repair feature collections, sessions, and per-game tags; returns True if changed."""
     changed = False
@@ -223,6 +246,15 @@ def _normalize_feature_fields(state: dict[str, Any]) -> bool:
             changed = True
         elif len(value) > cap:
             state[key] = value[:cap]
+            changed = True
+    trash = state.get("trash")
+    if not isinstance(trash, list):
+        state["trash"] = []
+        changed = True
+    else:
+        kept = prune_trash(trash)
+        if len(kept) != len(trash):
+            state["trash"] = kept
             changed = True
     sessions = state.get("active_sessions")
     if not isinstance(sessions, list):

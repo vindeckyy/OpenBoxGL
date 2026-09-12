@@ -29,28 +29,30 @@ from scripts import check_v1_contract  # noqa: E402
 
 class RouteRegistryTests(unittest.TestCase):
     def test_route_table_sizes(self):
-        # 123 base GET + 25 v1 aliases = 148 total (1.10.0 adds mastery + party queue/static)
-        # 126 base POST + 42 v1 aliases = 168 total (causal sync and shelf
-        # conversion are additive v2 routes).
-        self.assertEqual(len(GET_TABLE), 148)
-        self.assertEqual(len(POST_TABLE), 168)
+        # 151 base GET + 25 v1 aliases = 176 total (v2 additions remain
+        # additive, including their public static module rows).
+        # 163 base POST + 42 v1 aliases = 205 total (v2 feature CRUD rows are
+        # additive to the existing query/trash/memories/resume surface).
+        self.assertEqual(len(GET_TABLE), 176)
+        self.assertEqual(len(POST_TABLE), 205)
         self.assertEqual(len(V1_ALIASED_PREFIXES), 60)
 
     def test_base_routes_count(self):
         base_get = [p for p in GET_TABLE if not p.startswith("/api/v1")]
         base_post = [p for p in POST_TABLE if not p.startswith("/api/v1")]
-        self.assertEqual(len(base_get), 123)
-        self.assertEqual(len(base_post), 126)
-        self.assertEqual(len(base_get) + len(base_post), 249)
+        self.assertEqual(len(base_get), 151)
+        self.assertEqual(len(base_post), 163)
+        self.assertEqual(len(base_get) + len(base_post), 314)
 
     def test_all_routes_registered(self):
         routes = all_routes()
-        self.assertEqual(len(routes), 250)
+        # 315 = 314 table paths + the /api/v1/jobs dual-registration.
+        self.assertEqual(len(routes), 315)
 
         get_routes = [r for r in routes if r.method == "GET"]
         post_routes = [r for r in routes if r.method == "POST"]
-        self.assertEqual(len(get_routes), 124)
-        self.assertEqual(len(post_routes), 126)
+        self.assertEqual(len(get_routes), 152)
+        self.assertEqual(len(post_routes), 163)
 
     def test_every_registered_route_matches_live_table(self):
         routes = all_routes()
@@ -112,8 +114,10 @@ class RouteRegistryTests(unittest.TestCase):
         from routes import PUBLIC_GET_PATHS
         self.assertIn("/static/worker.search.js", PUBLIC_GET_PATHS)
         self.assertIn("/static/insights.js", PUBLIC_GET_PATHS)
+        self.assertIn("/static/timemachine.js", PUBLIC_GET_PATHS)
         self.assertTrue(_is_public_path("/static/worker.search.js"))
         self.assertTrue(_is_public_path("/static/insights.js"))
+        self.assertTrue(_is_public_path("/static/timemachine.js"))
         self.assertFalse(_is_static_asset("/api/library"))
         self.assertFalse(_is_public_path("/api/library"))
 

@@ -175,6 +175,34 @@ def _clean_media_types(merged):
     return auto_import_media_types
 
 
+def _clean_state_retention(merged):
+    """T1: resume states kept per game — bounded to the on-disk archive cap."""
+    retention = int(merged.get("state_retention", 1) or 1)
+    if not 1 <= retention <= 20:
+        raise ValueError("Resume state retention must be between 1 and 20.")
+    return retention
+
+
+def _clean_memory_roots(merged):
+    """S5: user-configured memory roots — absolute existing dirs only."""
+    roots = merged.get("memories_import_roots", [])
+    if roots in (None, ""):
+        return []
+    if not isinstance(roots, list) or len(roots) > 32:
+        raise ValueError("Memory roots must be a list of at most 32 paths.")
+    clean = []
+    for value in roots:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        path = Path(text).expanduser()
+        if not path.is_absolute() or not path.is_dir():
+            raise ValueError(f"Memory root does not exist: {path}")
+        if str(path) not in clean:
+            clean.append(str(path))
+    return clean
+
+
 def _clean_priority_lists(merged):
     region_priority = merged.get("region_priority", list(REGION_PRIORITY_DEFAULT))
     if not isinstance(region_priority, list) or not region_priority:
@@ -349,6 +377,8 @@ def clean_settings(merged):
     badge_visibility = _clean_badge_visibility(merged)
     save_backup_limit, media_download_limit = _clean_limits(merged)
     auto_import_media_types = _clean_media_types(merged)
+    memories_import_roots = _clean_memory_roots(merged)
+    state_retention = _clean_state_retention(merged)
     region_priority, video_priority = _clean_priority_lists(merged)
     library_music = _clean_library_music(merged)
     bigbox_mode = _clean_bigbox(merged)
@@ -374,6 +404,10 @@ def clean_settings(merged):
             "startup_commands": startup_commands,
             "shutdown_commands": shutdown_commands,
             "track_session_history": track_session_history,
+            "session_recap_enabled": bool(merged.get("session_recap_enabled", True)),
+            "quick_resume_enabled": bool(merged.get("quick_resume_enabled", True)),
+            "moments_autocapture": bool(merged.get("moments_autocapture", True)),
+            "state_retention": state_retention,
             "backup_on_close": backup_on_close,
             "save_backup_limit": save_backup_limit,
             "progress_automation_enabled": progress_automation_enabled,
@@ -383,6 +417,9 @@ def clean_settings(merged):
             "image_group": image_group,
             "auto_import_media_types": sorted(set(auto_import_media_types) or {"cover", "background", "screenshots"}),
             "media_download_limit": media_download_limit,
+            "memories_import_enabled": bool(merged.get("memories_import_enabled", False)),
+            "memories_import_roots": memories_import_roots,
+            "steamgrid_enabled": bool(merged.get("steamgrid_enabled", True)),
             "region_priority": [str(item) for item in region_priority],
             "video_priority": [str(item) for item in video_priority],
             "library_music": library_music,
@@ -393,6 +430,10 @@ def clean_settings(merged):
             "storefront_auto_import": clean_storefront,
             "obs_auto_attach": obs_auto_attach,
             "obs_recording_path": obs_recording_path,
+            "obs_replay_enabled": bool(merged.get("obs_replay_enabled", False)),
+            "obs_websocket_url": str(merged.get("obs_websocket_url", "")).strip()[:256],
+            "obs_websocket_password": str(merged.get("obs_websocket_password", ""))[:256],
+            "obs_websocket_timeout": max(0.1, min(30.0, float(merged.get("obs_websocket_timeout", 5.0)))),
             "dynamic_play_button": bool(merged.get("dynamic_play_button", True)),
             "custom_field_defs": custom_field_defs({"custom_field_defs": merged.get("custom_field_defs", [])}),
             "platform_categories": platform_categories({"platform_categories": merged.get("platform_categories", {})}),
@@ -431,6 +472,9 @@ def clean_settings(merged):
             "party_queue": party_queue,
             "party_players": party_players,
             "party_index": party_index,
+            "household_stats_sharing": bool(merged.get("household_stats_sharing", False)),
+            "museum_kiosk_enabled": bool(merged.get("museum_kiosk_enabled", False)),
+            "museum_kiosk_pin_hash": str(merged.get("museum_kiosk_pin_hash", ""))[:512],
     }
 
 
@@ -543,7 +587,7 @@ class SettingsHandlers:
         existing_settings = dict(load_state().get("settings", {}))
         merged = dict(existing_settings)
         for key, value in payload.items():
-            if key == "gameyfin_password" and not str(value).strip():
+            if key in {"gameyfin_password", "obs_websocket_password"} and not str(value).strip():
                 continue
             merged[key] = value
         normalized_settings = clean_settings(merged)
@@ -555,7 +599,7 @@ class SettingsHandlers:
             settings = state.setdefault("settings", {})
             incoming_keys = {
                 key for key, value in payload.items()
-                if key != "gameyfin_password" or str(value).strip()
+                if key not in {"gameyfin_password", "obs_websocket_password"} or str(value).strip()
             }
             # Drop keys nobody knows about before they reach the store.
             clean_payload, dropped = sanitize_settings(payload)

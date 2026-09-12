@@ -450,7 +450,7 @@ def test_legal_policy():
     assert "Openbox window manager" in trademarks
     assert "| 0.8.x | No — upgrade required |" in security
     assert "| 1.0.x | No — upgrade required |" in security
-    assert "| 1.10.x | Yes (current) |" in security
+    assert "| 1.11.x | Yes (current) |" in security
     assert "| < 0.4.0 | No |" in security
     print("  Legal policy: ok")
 

@@ -16,3 +16,8 @@ recommended: true
 priority: 20
 executable_patterns:
   - retroarch
+state:
+  kind: retroarch
+  template: "-s {state_path} --appendconfig {state_config}"
+  capture: "--appendconfig {state_config}"
+  glob: "*.state*"

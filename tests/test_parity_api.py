@@ -389,6 +389,32 @@ class ParityApiTests(unittest.TestCase):
         self.assertEqual(settings["gameyfin_password"], "secret")
         self.assertEqual(settings["gameyfin_install_dir"], "/tmp/gameyfin")
 
+    def test_settings_save_preserves_obs_password_when_ui_omits_it(self):
+        from openbox import load_state, save_state
+        from web_app import Handler
+
+        save_state({
+            "games": [],
+            "profiles": {},
+            "history": [],
+            "settings": {
+                "obs_replay_enabled": True,
+                "obs_websocket_url": "ws://127.0.0.1:4455",
+                "obs_websocket_password": "obs-secret",
+            },
+            "playlists": [],
+        })
+        handler = object.__new__(Handler)
+        handler.send_json = mock.Mock()
+        Handler.save_settings(handler, {
+            "watch_folders": [],
+            "obs_replay_enabled": True,
+            "obs_websocket_url": "ws://127.0.0.1:4455",
+            "obs_websocket_password": "",
+        })
+        settings = load_state()["settings"]
+        self.assertEqual(settings["obs_websocket_password"], "obs-secret")
+
     def test_manual_playlist_preserves_order_and_metadata(self):
         from openbox import load_state, save_state
         from web_app import Handler

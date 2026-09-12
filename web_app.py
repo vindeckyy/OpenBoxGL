@@ -72,6 +72,7 @@ from handlers.metadata import MetadataHandlers
 from handlers.sessions import SessionHandlers
 from handlers.screenscraper import ScreenScraperHandlers
 from handlers.settings import SettingsHandlers
+from handlers.timemachine import TimeMachineHandlers
 from handlers.wine import WineHandlers
 
 import re as _re
@@ -128,7 +129,7 @@ CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsaf
 
 
 
-class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, ExportHandlers, LaunchHandlers, SetupHandlers, DataHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, ScreenScraperHandlers, PickerHandlers, ConstellationHandlers, PartyHandlers, BaseHTTPRequestHandler):
+class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, TimeMachineHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, ExportHandlers, LaunchHandlers, SetupHandlers, DataHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, ScreenScraperHandlers, PickerHandlers, ConstellationHandlers, PartyHandlers, BaseHTTPRequestHandler):
     server_version = "OpenBox/1"
     protocol_version = "HTTP/1.1"
     MAX_BODY = 65536
@@ -414,6 +415,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         "/static/media.js",
         "/static/reader.js",
         "/static/sessions.js",
+        "/static/recap.js",
         "/static/bigbox.js",
         "/static/storefront.js",
         "/static/dialogs.js",
@@ -427,6 +429,13 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         "/static/timeline.js",
         "/static/mastery.js",
         "/static/party.js",
+        "/static/timemachine.js",
+        "/static/moments.js",
+        "/static/palette.js",
+        "/static/arcaderoom.js",
+        "/static/household.js",
+        "/static/clips.js",
+        "/static/whatsnew.js",
         "/static/worker.search.js",
         "/static/i18n.js",
         "/static/app.css",

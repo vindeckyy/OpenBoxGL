@@ -41,9 +41,9 @@ class ConstellationHandlerTest(unittest.TestCase):
         return h
 
     def test_happy(self):
-        original_load = constellation_module.load_state
+        original_load = constellation_module.load_state_readonly
         try:
-            constellation_module.load_state = sample_state
+            constellation_module.load_state_readonly = sample_state
             h = self.handler()
             h._api_get_api_v2_library_constellation(urlparse("/api/v2/library/constellation?kinds=genre&limit=200"))
             status, payload = h.responses[0]
@@ -51,27 +51,27 @@ class ConstellationHandlerTest(unittest.TestCase):
             self.assertEqual(len(payload["nodes"]), 3)
             self.assertTrue(payload["edges"])
         finally:
-            constellation_module.load_state = original_load
+            constellation_module.load_state_readonly = original_load
 
     def test_bad_kind(self):
-        original_load = constellation_module.load_state
+        original_load = constellation_module.load_state_readonly
         try:
-            constellation_module.load_state = sample_state
+            constellation_module.load_state_readonly = sample_state
             h = self.handler()
             with self.assertRaises(BadRequest):
                 h._api_get_api_v2_library_constellation(urlparse("/api/v2/library/constellation?kinds=invalid"))
         finally:
-            constellation_module.load_state = original_load
+            constellation_module.load_state_readonly = original_load
 
     def test_bad_limit(self):
-        original_load = constellation_module.load_state
+        original_load = constellation_module.load_state_readonly
         try:
-            constellation_module.load_state = sample_state
+            constellation_module.load_state_readonly = sample_state
             h = self.handler()
             with self.assertRaises(BadRequest):
                 h._api_get_api_v2_library_constellation(urlparse("/api/v2/library/constellation?limit=10"))
         finally:
-            constellation_module.load_state = original_load
+            constellation_module.load_state_readonly = original_load
 
 
 if __name__ == "__main__":

@@ -36,6 +36,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   lazy-loaded covers, virtualized-grid click) and regenerate the four
   screenshots against the current UI.
 
+## [1.11.0] - 2026-09-12
+
+### Every Second Counts
+- Add Quick Resume, progress-aware session recaps, Moments capture/timeline,
+  and replay-buffer or screenshot-backed Record That clips with deterministic
+  highlight reels.
+- Add the Library Time Machine with journal-backed timeline, bounded as-of
+  inspection, and safe revert previews that preserve the canonical state
+  boundary (ADR 0044).
+- Add Backlog Radio, the deterministic natural-language query bar with
+  editable interpretation chips, and the Ctrl/Cmd-K command palette (ADRs
+  0043 and 0045).
+
+### Showroom and Household
+- Add the controller-friendly Arcade Room and Museum mode with bounded media
+  caching, reduced-motion rendering, real metadata fact cards, and an optional
+  salted kiosk PIN convenience boundary.
+- Add opt-in, local-first Household members, challenges, results, shares, and
+  leaderboard projections over the existing sync folder; no account or hosted
+  service is required.
+
+### Handheld Migration and Polish
+- Add Steam Bridge preview/apply/remove support for lossless `shortcuts.vdf`
+  files and `openbox --play <id>` launch dispatch.
+- Add reviewable ES-DE `gamelist.xml` preview/apply with bounded parsing,
+  explicit source identity, source-digest checks, stale-plan rejection, and
+  transactional application.
+- Add What's New/tips discovery, detail-pane Moments and Clips surfaces,
+  query chips, kiosk settings, and localized UI coverage across all five stock
+  locales.
+
+### Corrective hardening
+- Complete the 1.10.1 sweep of state, save, import, media, launch, sync, and
+  frontend edge cases, with the full gate keeping changed-line coverage and
+  release contracts green.
+
 ## [1.10.0] - 2026-09-08
 
 ### Safe Library Sync

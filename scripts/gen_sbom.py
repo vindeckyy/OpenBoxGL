@@ -8,7 +8,7 @@ release can answer "what is inside this artifact" with zero new runtime
 dependencies.
 
 Usage:
-  python3 scripts/gen_sbom.py --version 1.10.0 --appdir build/OpenBox.AppDir --out sbom.json
+  python3 scripts/gen_sbom.py --version 1.11.0 --appdir build/OpenBox.AppDir --out sbom.json
 """
 
 import argparse
@@ -172,7 +172,7 @@ def main():
     try:
         from updates import VERSION as DEFAULT_VERSION
     except ImportError:
-        DEFAULT_VERSION = "1.10.0"
+        DEFAULT_VERSION = "1.11.0"
 
     parser = argparse.ArgumentParser(description="Generate a CycloneDX SBOM for OpenBox")
     parser.add_argument("pos_out", nargs="?", default=None, help="output JSON path")

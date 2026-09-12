@@ -14,3 +14,8 @@ recommended: true
 priority: 5
 executable_patterns:
   - mame
+state:
+  kind: adapter-cli
+  template: "-autosave -state_directory {state_dir} -state {state_name}"
+  capture: "-autosave -state_directory {state_dir} -state {state_name}"
+  glob: "**/*.sta"

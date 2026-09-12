@@ -22,12 +22,17 @@ from openbox import DATA, build_launch, load_state, update_state
 from parity_gamescope import is_gamescope_guest, is_steam_launch, mark_process_windows, steam_game_id_for, apply_mangohud_env, merge_gamescope_preset, should_nest_gamescope
 from parity_integrations import auto_attach_obs_recording
 from parity_perf import apply_perf_profile, effective_profile_name, restore_perf_profile
+from parity_resume import collect_resume_state, inject_resume_args
 from parity_saves import enforce_backup_limit
 from parity_tracking import close_store_client, wait_for_exit
 from plugins import run_plugins
 from saves import backup_saves
 
 LOGGER = logging.getLogger("openbox")
+
+_OBS_REPLAY_LOCK = threading.RLock()
+_OBS_REPLAY_SESSIONS = 0
+_OBS_REPLAY_OWNED = False
 
 
 def _apply_mangohud_from_state(state):
@@ -67,6 +72,65 @@ def _ns(name, default):
         return getattr(mod, name)
     from pkg.state._deps import get
     return get(name, default)
+
+
+def _toggle_obs_replay(settings):
+    """Acquire one session's use of the OBS replay buffer.
+
+    A buffer may already be running before OpenBox starts.  Keep a small
+    process-local ownership count so overlapping sessions do not toggle it
+    off underneath each other, and never stop a buffer OpenBox did not start.
+    """
+    global _OBS_REPLAY_SESSIONS, _OBS_REPLAY_OWNED
+    result = {"armed": False, "owned": False}
+    if not isinstance(settings, dict) or not settings.get("obs_replay_enabled"):
+        return result
+    try:
+        from pkg.parity.parity_obs_bridge import arm_replay_buffer
+
+        with _OBS_REPLAY_LOCK:
+            if _OBS_REPLAY_SESSIONS:
+                _OBS_REPLAY_SESSIONS += 1
+                return {"armed": True, "owned": False, "shared": True}
+            armed = arm_replay_buffer(settings)
+            if not isinstance(armed, dict) or not armed.get("armed"):
+                return result
+            _OBS_REPLAY_SESSIONS = 1
+            _OBS_REPLAY_OWNED = bool(armed.get("owned"))
+            return {
+                "armed": True,
+                "owned": bool(armed.get("owned")),
+                "shared": False,
+            }
+    except Exception:
+        LOGGER.info("OBS replay buffer is unavailable", exc_info=True)
+        return result
+
+
+def _release_obs_replay(settings, *, owned=False):
+    """Release a session and stop OBS only after the final owned session."""
+    global _OBS_REPLAY_SESSIONS, _OBS_REPLAY_OWNED
+    with _OBS_REPLAY_LOCK:
+        if _OBS_REPLAY_SESSIONS:
+            _OBS_REPLAY_SESSIONS -= 1
+        should_stop = _OBS_REPLAY_SESSIONS == 0 and (_OBS_REPLAY_OWNED or owned)
+        if _OBS_REPLAY_SESSIONS > 0:
+            return False
+        was_owned = _OBS_REPLAY_OWNED or owned
+        _OBS_REPLAY_OWNED = False
+        if not should_stop:
+            return False
+        # Keep acquisition serialized through the actual OBS stop.  Releasing
+        # this lock before the websocket call lets a new session acquire the
+        # still-running buffer and then have this teardown stop it underneath
+        # the newcomer.
+        try:
+            from pkg.parity.parity_obs_bridge import disarm_replay_buffer
+
+            disarm_replay_buffer(settings)
+        except Exception:
+            LOGGER.info("Could not stop the OpenBox-owned OBS replay buffer", exc_info=True)
+        return was_owned
 
 
 def _read_proc_start_time(pid):
@@ -508,7 +572,7 @@ def _validate_start_command(args, cwd):
         raise ValueError("A plugin returned an invalid working directory.")
 
 
-def _make_start_mutator(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile):
+def _make_start_mutator(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile, resumed=False, replay_armed=False, replay_owned=False):
     """Build the state transaction that records a launched session."""
     res_game = _ns("resolve_library_game", resolve_library_game)
     read_start = _ns("_read_proc_start_time", _read_proc_start_time)
@@ -541,6 +605,9 @@ def _make_start_mutator(stable_game_id, index, started, process, entry, missing,
             "started": started.isoformat(timespec="seconds"),
             "pid": process.pid,
             "paused": False,
+            "resumed_from_state": bool(resumed),
+            "replay_buffer_armed": bool(replay_armed),
+            "replay_buffer_owned": bool(replay_owned),
         })
 
         try:
@@ -597,10 +664,11 @@ def _publish_start_events(game, entry):
     }))
 
 
-def start_game(index=None, stable_game_id=""):
+def start_game(index=None, stable_game_id="", resume=False, allow_stale=False):
     # Explicit launch phases: reserve the stable game ID before validation or
     # spawn, then release it on every failure path.
     load_fn = _ns("load_state", load_state)
+    inj_resume = _ns("inject_resume_args", inject_resume_args)
     res_start = _ns("_resolve_start_game", _resolve_start_game)
     start_cmd = _ns("_start_launch_command", _start_launch_command)
     eff_prof_fn = _ns("effective_profile_name", effective_profile_name)
@@ -632,11 +700,19 @@ def start_game(index=None, stable_game_id=""):
     )
     lease = None
     process = None
+    replay_info = {"armed": False, "owned": False}
 
     try:
         # Resolve and validate only after the reservation is held. This makes
         # rapid retries deterministic even when launch setup is slow.
         args, cwd = start_cmd(game, profiles)
+        # Quick Resume (T1): arm state capture on clean starts and inject the
+        # stored state file on resume, through the same atomic reservation.
+        args = inj_resume(
+            game, args, profiles=profiles, settings=state.get("settings"),
+            resume=resume, allow_stale=allow_stale,
+            data_parent=_ns("DATA", DATA).parent,
+        )
         effective_profile = eff_prof_fn(game, state.get("profiles") or {})
         lease = app_perf(effective_profile, state)
         # Start the process (plugins + validation must succeed first).
@@ -648,10 +724,15 @@ def start_game(index=None, stable_game_id=""):
         launch_env = _apply_mangohud_from_state(state)
         process = subprocess.Popen(args, cwd=cwd, start_new_session=True, env=launch_env)
         started = datetime.now()
+        replay_info = _toggle_obs_replay(state.get("settings", {}))
+        if isinstance(replay_info, bool):
+            replay_info = {"armed": replay_info, "owned": False}
+        replay_armed = bool(replay_info.get("armed"))
+        replay_owned = bool(replay_info.get("owned"))
         entry = {}
         missing = {"value": False}
         # Persist the active-session record.
-        upd_st(make_mut(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile))
+        upd_st(make_mut(stable_game_id, index, started, process, entry, missing, launch_id, effective_profile, resumed=bool(resume), replay_armed=replay_armed, replay_owned=replay_owned))
         if missing["value"]:
             raise IndexError("Game was removed while it was launching")
         # Register the in-memory session and atomically hand the slot from
@@ -676,6 +757,8 @@ def start_game(index=None, stable_game_id=""):
             roll_back(launch_id, process, stable_game_id)
         else:
             release_pending(stable_game_id, launch_id)
+        if replay_info.get("armed"):
+            _release_obs_replay(state.get("settings", {}), owned=bool(replay_info.get("owned")))
         if lease is not None:
             lease.restore()
         raise
@@ -711,6 +794,46 @@ def control_game_session(launch_id, action):
     if action in {"pause", "resume"}:
         sess_ev("paused" if action == "pause" else "resumed", launch_id, game)
     return {"ok": True, "action": action}
+
+
+def _history_exit_code(value):
+    """Coerce a stored exit code to ``int``.
+
+    ``wait_for_exit`` returns a ``WaitResult`` namedtuple and rows shipped in
+    1.10.0 persisted it raw — JSON-serialized as ``[code, timed_out]`` — so
+    both the namedtuple and the legacy two-element list decode to element 0.
+    """
+    if isinstance(value, (list, tuple)) and value:
+        value = value[0]
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _normalize_history_entries(history, games):
+    """Normalize shipped history rows in place (additive migration).
+
+    Legacy rows may carry ``exit_code`` as ``[code, timed_out]`` and lack
+    ``game_id``; backfill the id only when the recorded name maps to exactly
+    one library game so ambiguous names are never guessed.
+    """
+    names = {}
+    for game in games or []:
+        if not isinstance(game, dict):
+            continue
+        name = str(game.get("name") or "")
+        game_id = str(game.get("game_id") or "")
+        if name and game_id:
+            names.setdefault(name, set()).add(game_id)
+    for entry in history or []:
+        if not isinstance(entry, dict):
+            continue
+        entry["exit_code"] = _history_exit_code(entry.get("exit_code"))
+        if "game_id" not in entry:
+            candidates = names.get(str(entry.get("game") or ""), set())
+            if len(candidates) == 1:
+                entry["game_id"] = next(iter(candidates))
 
 
 def finish_session(launch_id, game_index, started, process, lease):
@@ -759,6 +882,8 @@ def finish_session(launch_id, game_index, started, process, lease):
             original_game_name = str(game_snapshot.get("name", "") or identity.get("game_name") or "Untitled")
         exit_code = wait_exit(process, game_snapshot, settings)
         seconds = max(1, int((datetime.now() - started).total_seconds()))
+        if running_snapshot.get("replay_buffer_armed"):
+            _release_obs_replay(settings, owned=bool(running_snapshot.get("replay_buffer_owned")))
         if game_snapshot:
             if settings.get("backup_on_close") and game_snapshot.get("save_paths"):
                 try:
@@ -774,6 +899,17 @@ def finish_session(launch_id, game_index, started, process, lease):
                 cls_store(game_snapshot, settings)
             except (OSError, ValueError):
                 pass
+            # Quick Resume (T1): adopt the suspend state the armed adapter
+            # captured at exit. Capture must never fail session bookkeeping.
+            try:
+                cap_resume = _ns("collect_resume_state", collect_resume_state)
+                cap_resume(
+                    game_snapshot, settings, profiles=state.get("profiles"),
+                    data_parent=data_parent, launch_id=launch_id,
+                    started_at=started,
+                )
+            except Exception:
+                LOGGER.exception("Resume-state capture failed for session %s", launch_id)
 
         session_result = {"game_name": original_game_name, "session": {}}
 
@@ -793,11 +929,14 @@ def finish_session(launch_id, game_index, started, process, lease):
                 "game": game_name_local,
                 "started": started.isoformat(timespec="seconds"),
                 "seconds": seconds,
-                "exit_code": exit_code,
+                "exit_code": _history_exit_code(exit_code),
+                "game_id": str((game or {}).get("game_id") or identity.get("stable_game_id") or ""),
             }
             if settings.get("track_session_history", True):
-                state["history"].append(session_local)
-                state["history"][:] = state["history"][-500:]
+                history = state.setdefault("history", [])
+                _normalize_history_entries(history, state.get("games", []))
+                history.append(session_local)
+                history[:] = history[-500:]
 
             # Remove from active_sessions
             state["active_sessions"] = [s for s in state.get("active_sessions", []) if s.get("launch_id") != launch_id]
@@ -835,6 +974,26 @@ def finish_session(launch_id, game_index, started, process, lease):
         "started_at": session.get("started", ""),
         "stopped_at": datetime.now().isoformat(timespec="seconds"),
     }))
+    # S2 session recap: publish once the session row is committed, only when
+    # history tracking and the recap card are both enabled.
+    if session_committed and settings.get("track_session_history", True) and settings.get("session_recap_enabled", True):
+        try:
+            from pkg.state.sse import publish_session_recap
+            pub_recap = _ns("publish_session_recap", publish_session_recap)
+            pub_recap(
+                launch_id=launch_id,
+                session=session,
+                game_name=game_name,
+                exit_code=_history_exit_code(exit_code),
+                seconds=seconds,
+                state=load_fn(),
+                game_before=game_snapshot,
+                identity=identity,
+                data_parent=data_parent,
+                fallback_index=game_index,
+            )
+        except Exception:
+            LOGGER.exception("Failed to publish session recap")
     if not os.environ.get("OPENBOX_SAFE_MODE"):
         run_pl(data_parent / "plugins", "after_session", session)
     try:

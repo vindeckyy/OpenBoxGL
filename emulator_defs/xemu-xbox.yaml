@@ -15,3 +15,5 @@ recommended: true
 priority: 10
 executable_patterns:
   - xemu
+state:
+  kind: none

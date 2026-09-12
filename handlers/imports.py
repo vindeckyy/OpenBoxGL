@@ -194,6 +194,79 @@ class ImportsHandlers:
         broadcast_event("library.imported", {"source": "launchbox", "added": result.get("added", 0)})
         self.send_json(200, result)
 
+    @route("POST", "/api/v2/import/esde/preview")
+    def _api_post_api_v2_import_esde_preview(self, payload):
+        from pkg.parity.parity_esde_import import ESDEImportError, build_import_plan, parse_gamelist
+
+        xml_path = str(payload.get("xml_path", payload.get("gamelist", ""))).strip()
+        if not xml_path:
+            raise BadRequest("xml_path is required.")
+        if not Path(xml_path).is_file():
+            raise BadRequest(f"ES-DE gamelist not found: {xml_path}")
+        try:
+            parsed = parse_gamelist(xml_path)
+            plan = build_import_plan(parsed, load_state_view(), options=payload.get("options") or {})
+        except ESDEImportError as error:
+            raise BadRequest(str(error), code="ESDE_INVALID_SOURCE") from error
+        self.send_json(200, plan)
+
+    @route("POST", "/api/v2/import/esde/apply")
+    def _api_post_api_v2_import_esde_apply(self, payload):
+        from pkg.parity.parity_esde_import import (
+            ESDEImportError,
+            StaleESDEPlan,
+            apply_import_plan,
+            build_import_plan,
+            parse_gamelist,
+        )
+
+        xml_path = str(payload.get("xml_path", payload.get("gamelist", ""))).strip()
+        if not xml_path:
+            raise BadRequest("xml_path is required.")
+        if not Path(xml_path).is_file():
+            raise BadRequest(f"ES-DE gamelist not found: {xml_path}")
+        options = payload.get("options") if "options" in payload else (
+            payload.get("plan", {}).get("options") if isinstance(payload.get("plan"), dict) else {}
+        )
+        options = options or {}
+        try:
+            parsed = parse_gamelist(xml_path)
+        except ESDEImportError as error:
+            raise BadRequest(str(error), code="ESDE_INVALID_SOURCE") from error
+        submitted = payload.get("plan")
+        try:
+            if submitted:
+                if str(submitted.get("source_digest")) != str(parsed.get("source_digest")):
+                    raise StaleESDEPlan("ES-DE gamelist changed since the preview; review it again.")
+
+                def mutate(current):
+                    result = apply_import_plan(
+                        submitted, current,
+                        preview_token=payload.get("preview_token") or submitted.get("preview_token"),
+                        source_digest=parsed.get("source_digest"), source=parsed, options=options,
+                    )
+                    current["games"] = result["games"]
+                    counts = result.get("counts", result.get("import_counts", {}))
+                    current["import_counts"] = counts
+                    return counts
+            else:
+                def mutate(current):
+                    plan = build_import_plan(parsed, current, options=options)
+                    result = apply_import_plan(
+                        plan, current, preview_token=plan["preview_token"],
+                        source_digest=parsed.get("source_digest"), source=parsed, options=options,
+                    )
+                    current["games"] = result["games"]
+                    counts = result.get("counts", result.get("import_counts", {}))
+                    current["import_counts"] = counts
+                    return counts
+            result = transact_state(mutate)[1]
+        except (ESDEImportError, StaleESDEPlan, ValueError) as error:
+            raise BadRequest(str(error), code="ESDE_STALE_PLAN" if isinstance(error, StaleESDEPlan) else "ESDE_INVALID_PLAN") from error
+        clear_file_probe_cache()
+        broadcast_event("library.imported", {"source": "esde", "added": result.get("added", 0)})
+        self.send_json(200, result)
+
     def import_folder(self, payload):
         folder = _required_folder_path(payload)
         broadcast_event("job.progress", {"job": "import", "folder": folder, "state": "running"})

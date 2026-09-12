@@ -503,9 +503,9 @@ def plan_import(*args, **kwargs):
 
 
 def _find_target(games: list[dict[str, Any]], operation: dict[str, Any]) -> dict[str, Any] | None:
-    target_index = operation.get("target_index")
-    if isinstance(target_index, int) and 0 <= target_index < len(games):
-        return games[target_index]
+    # ``target_game_id`` is the stable identity and wins over the positional
+    # ``target_index`` hint: a shifted library must never silently merge into
+    # whatever game happens to sit at the old index.
     target_id = str(operation.get("target_game_id") or "")
     source_id = str(operation.get("source_id") or "")
     for game in games:
@@ -513,6 +513,13 @@ def _find_target(games: list[dict[str, Any]], operation: dict[str, Any]) -> dict
             return game
         if source_id and _launchbox_id(game) == source_id:
             return game
+    # The positional hint applies only when the operation carries no stronger
+    # identity — never merge into an index that contradicts them.
+    if target_id or source_id:
+        return None
+    target_index = operation.get("target_index")
+    if isinstance(target_index, int) and 0 <= target_index < len(games):
+        return games[target_index]
     return None
 
 

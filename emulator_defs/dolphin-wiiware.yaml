@@ -15,3 +15,8 @@ recommended: true
 priority: 20
 executable_patterns:
   - dolphin-emu
+state:
+  kind: adapter-cli
+  template: "--save_state={state_path}"
+  capture: ""
+  glob: "*.s?? *.savestate"

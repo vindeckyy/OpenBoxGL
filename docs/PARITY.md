@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.10.0**, the Sync, Import, Launch release described in the CHANGELOG.
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.11.0**, the Every Second Counts release described in the CHANGELOG.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -123,6 +123,14 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Big Box video snaps | done | Stage mode shows looping gameplay videos with debounce, BGM duck, reduced-motion support (1.9.0, ADR 0034) |
 | Full library catalog sync | done | Opt-in causal catalog transport records validated events, tombstones, outbox acknowledgements, recovery snapshots, and independently selectable conflicts; legacy routes fail closed before mutation. Launch paths, commands, credentials, and media remain local (ADRs 0038–0039) |
 | Manual/shelf entries | done | Create, edit, filter, export, and explicit conversion for games without local files through the `/api/v2/library/manual-entry*` routes (1.10.0, ADR 0036) |
+| Quick Resume and Moments | done | Resume-aware progress, session recaps, captures, and a per-game Moments timeline keep a player's place visible (1.11.0) |
+| Library Time Machine | done | Journal-backed event history supports bounded timeline, as-of inspection, and safe revert previews (1.11.0, ADR 0044) |
+| Backlog Radio and natural query | done | Habit-aware backlog recommendations, explainable query chips, and the Ctrl/Cmd-K command palette are local and deterministic (1.11.0, ADR 0043, ADR 0045) |
+| Arcade Room and Museum mode | done | Controller-friendly platform room, museum facts, reduced-motion rendering, and optional local kiosk convenience boundary (1.11.0) |
+| Household challenges and leaderboard | partial | Opt-in local records converge through the sync folder; no accounts or hosted multiplayer service (1.11.0) |
+| Record That clips and reels | done | Replay-buffer or fail-safe screenshot capture plus bounded, deterministic highlight reels (1.11.0) |
+| Steam Bridge shortcuts | done | Preview/apply/remove `shortcuts.vdf` entries and launch an OpenBox game with `openbox --play <id>` (1.11.0) |
+| ES-DE gamelist import | done | Reviewable `gamelist.xml` preview/apply with stale-plan and source-digest protection (1.11.0) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 

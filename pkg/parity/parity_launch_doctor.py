@@ -6,7 +6,7 @@ import json
 import shutil
 import subprocess
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from api_errors import BadRequest, GameNotFound
@@ -138,8 +138,10 @@ def validate_preview(preview_id, data_dir):
     expires_at = str(payload.get("expires_at") or "").strip()
     if expires_at:
         try:
-            expired = datetime.fromisoformat(expires_at) < datetime.now()
-        except ValueError:
+            parsed = datetime.fromisoformat(expires_at)
+            now = datetime.now() if parsed.tzinfo is None else datetime.now(timezone.utc)
+            expired = parsed < now
+        except (TypeError, ValueError):
             expired = False
         if expired:
             raise BadRequest("Preview has expired.", code="PREVIEW_EXPIRED")

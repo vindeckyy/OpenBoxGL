@@ -11,14 +11,14 @@ THEMES = sorted((ROOT / "themes").glob("*.css"))
 TOOL_GROUPS = {
     "library": [
         "metadataButton", "mediaButton", "healthButton", "constellationButton", "masteryButton", "bulkButton", "tagsButton",
-        "playlistsButton", "backupButton", "historyButton", "achievementsButton",
+        "playlistsButton", "backupButton", "historyButton", "timeMachineButton", "achievementsButton",
         "saveFilterButton", "savePresetButton",
     ],
     "sources": [
         "storefrontButton", "emulatorsButton", "steamButton", "heroicButton",
-        "lutrisButton", "arcadeButton", "discoveryButton",
+        "lutrisButton", "arcadeButton", "arcadeRoomButton", "householdButton", "discoveryButton",
     ],
-    "personalize": ["themesButton", "pluginsButton", "settingsButton", "fullscreenButton"],
+    "personalize": ["themesButton", "pluginsButton", "settingsButton", "whatsNewButton", "fullscreenButton"],
     "automation": ["webhooksButton", "notificationsButton"],
 }
 
@@ -109,6 +109,27 @@ def test_tool_menu_group_membership():
     for key, expected in TOOL_GROUPS.items():
         assert key in groups, f"missing data-tool-group={key!r}"
         assert groups[key] == expected, f"{key} group ids {groups[key]!r} != {expected!r}"
+
+def test_time_machine_ui_surface():
+    html = INDEX.read_text()
+    js = (ROOT / "static" / "timemachine.js").read_text()
+    app = APP_JS.read_text()
+    assert 'id="timeMachineDialog"' in html
+    assert 'id="timeMachineButton"' in html
+    assert "openTimeMachine" in app
+    assert "/api/v2/library/time-machine/events" in js
+    assert "/api/v2/library/time-machine/as-of" in js
+    assert "/api/v2/library/time-machine/revert" in js
+    assert "confirmAction" in js
+
+def test_clip_deeplink_ui_surface():
+    app = APP_JS.read_text()
+    clips = (ROOT / "static" / "clips.js").read_text()
+    assert "import { openClip } from './clips.js';" in app
+    assert "clip: params => openClip(params.get('id'))" in app
+    assert "function openClip(clipId)" in clips
+    assert "app:show-game" in clips
+    assert "momentsTab" in clips
 
 def test_game_dialog_path_browse_hosts():
     html = INDEX.read_text()
@@ -209,6 +230,7 @@ if __name__ == "__main__":
         print(f"FAIL test_themes_vars_defined: {e}")
     try:
         test_tool_menu_group_membership()
+        test_time_machine_ui_surface()
         print("PASS test_tool_menu_group_membership")
     except AssertionError as e:
         print(f"FAIL test_tool_menu_group_membership: {e}")
@@ -252,6 +274,7 @@ if __name__ == "__main__":
         test_themes_surface_deep()
         test_themes_vars_defined()
         test_tool_menu_group_membership()
+        test_time_machine_ui_surface()
         test_game_dialog_path_browse_hosts()
         test_f05_dialogs_no_window_prompt()
         test_f05_app_js_context_menu_a11y()

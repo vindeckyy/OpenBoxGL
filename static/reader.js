@@ -17,7 +17,20 @@ import { AppState, token } from './state.js';
     function setReaderPage(page) {
       AppState.readerPage = Math.max(1, page);
       const suffix = AppState.readerUrl.toLowerCase().includes('.pdf') || AppState.readerUrl.includes('/api/document') ? `#page=${AppState.readerPage}` : '';
-      $('readerFrame').src = `${AppState.readerUrl}${suffix}`;
+      const url = `${AppState.readerUrl}${suffix}`;
+      const frame = $('readerFrame');
+      // Assigning iframe.src pushes a session-history entry per page turn;
+      // location.replace keeps Back/Exit honest instead.
+      const frameWindow = frame.contentWindow;
+      try {
+        if (frameWindow) {
+          frameWindow.location.replace(url);
+        } else {
+          frame.src = url;
+        }
+      } catch {
+        frame.src = url;
+      }
       $('readerPageLabel').textContent = `Page ${AppState.readerPage}`;
     }
     document.querySelectorAll('[data-reader-layout]').forEach(button => button.onclick = () => {

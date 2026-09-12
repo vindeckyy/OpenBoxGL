@@ -95,6 +95,57 @@ class LaunchBoxHttpTests(unittest.TestCase):
         self.assertEqual(result["added"], 1)
         self.assertEqual(self.openbox.load_state()["games"][0]["name"], "Quake")
 
+    def test_esde_preview_apply_and_source_stale(self):
+        esde = Path(self.tmp.name) / "gamelist.xml"
+        esde.write_text(
+            "<gameList><game><path>./quake.zip</path><name>Quake</name>"
+            "<system>pc</system><id>esde-q1</id></game></gameList>",
+            encoding="utf-8",
+        )
+        status, preview = self.post("/api/v2/import/esde/preview", {"xml_path": str(esde)})
+        self.assertEqual(status, 200)
+        self.assertEqual(preview["counts"]["added"], 1)
+        status, result = self.post("/api/v2/import/esde/apply", {
+            "xml_path": str(esde), "plan": preview, "preview_token": preview["preview_token"],
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(result["added"], 1)
+        self.assertEqual(self.openbox.load_state()["games"][0]["source_identity"], "esde:esde-q1")
+
+        esde.write_text(
+            "<gameList><game><path>./quake.zip</path><name>Quake changed</name>"
+            "<system>pc</system><id>esde-q1</id></game></gameList>",
+            encoding="utf-8",
+        )
+        status, body = self.post("/api/v2/import/esde/apply", {
+            "xml_path": str(esde), "plan": preview, "preview_token": preview["preview_token"],
+        })
+        self.assertEqual(status, 400)
+        self.assertEqual(body["code"], "ESDE_STALE_PLAN")
+
+    def test_esde_apply_without_plan_and_invalid_source(self):
+        esde = Path(self.tmp.name) / "gamelist.xml"
+        esde.write_text(
+            "<gameList><game><path>./doom.zip</path><name>Doom</name></game></gameList>",
+            encoding="utf-8",
+        )
+        status, result = self.post("/api/v2/import/esde/apply", {"xml_path": str(esde)})
+        self.assertEqual(status, 200)
+        self.assertEqual(result["added"], 1)
+
+        esde.write_text("<not-a-gamelist/>", encoding="utf-8")
+        status, body = self.post("/api/v2/import/esde/preview", {"xml_path": str(esde)})
+        self.assertEqual(status, 400)
+        self.assertEqual(body["code"], "ESDE_INVALID_SOURCE")
+        status, body = self.post("/api/v2/import/esde/apply", {"xml_path": str(esde)})
+        self.assertEqual(status, 400)
+        self.assertEqual(body["code"], "ESDE_INVALID_SOURCE")
+
+        status, body = self.post("/api/v2/import/esde/preview", {
+            "xml_path": str(Path(self.tmp.name) / "missing-gamelist.xml"),
+        })
+        self.assertEqual(status, 400)
+
 
 if __name__ == "__main__":
     unittest.main()

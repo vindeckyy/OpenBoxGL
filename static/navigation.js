@@ -10,8 +10,18 @@ import { $, defaultControllerMap } from './util.js';
 import { AppState } from './state.js';
 import { visibleGameIds, focusGameIndex, gridMetrics, favorite, selectGame } from './library.js';
 import { openContextMenu } from './dialogs.js';
+import { captureMomentInteractive } from './moments.js';
 
 const HINT_DISMISS_AFTER_MS = 6000;
+
+// One source of truth for keyboard help.  The palette consumes this table for
+// its ``?`` view, so shortcuts shown to users cannot drift from navigation.
+export const SHORTCUTS = Object.freeze([
+  { key: 'Ctrl/Cmd+K', labelKey: 'shortcuts.command_palette' },
+  { key: 'M', labelKey: 'shortcuts.capture_moment' },
+  { key: 'F', labelKey: 'shortcuts.favorite_focused' },
+  { key: 'Esc', labelKey: 'shortcuts.close_selection' },
+]);
 
 function navigationBlocked() {
   if ($('bigBox') && !$('bigBox').hidden) return true;
@@ -51,6 +61,17 @@ function move(delta, { absolute = false } = {}) {
 
 function handleKey(event) {
   if (event.ctrlKey || event.metaKey || event.altKey) return;
+  if (event.key === 'm' || event.key === 'M') {
+    if ($('bigBox') && !$('bigBox').hidden) return;
+    const active = document.activeElement;
+    if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA' || active?.tagName === 'SELECT' || active?.isContentEditable || document.querySelector('dialog[open]')) return;
+    const session = AppState.runningGames[0];
+    const game = AppState.games.find(item => item.id === session?.game_id || String(item.game_id) === String(session?.game_id)) || AppState.games.find(item => item.id === AppState.selectedId);
+    if (!game) return;
+    event.preventDefault();
+    captureMomentInteractive(game, { trigger: 'hotkey', launchId: session?.launch_id }).catch(() => {});
+    return;
+  }
   if (navigationBlocked()) return;
   const { cols, page } = gridMetrics();
   const actions = {
