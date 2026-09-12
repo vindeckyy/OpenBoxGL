@@ -71,6 +71,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Complete the 1.10.1 sweep of state, save, import, media, launch, sync, and
   frontend edge cases, with the full gate keeping changed-line coverage and
   release contracts green.
+- Keep memory-root imports stable across supported Python pathlib
+  implementations and ship a square vector icon accepted by Flatpak.
 
 ## [1.10.0] - 2026-09-08
 

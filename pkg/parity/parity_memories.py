@@ -181,10 +181,18 @@ def discover_memory_roots(home=None, extra_roots=None):
 def _iter_image_files(root):
     """Yield image files under root without following symlinks."""
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if not (Path(dirpath) / d).is_symlink()]
+        # Keep symlink probing on the os.path API.  pathlib's predicate
+        # implementation changed between supported Python versions and may
+        # delegate to the overridable Path.stat method, which turns a file
+        # disappearing between directory enumeration and hashing into a
+        # root-level scan failure instead of a per-file import failure.
+        dirnames[:] = [
+            d for d in dirnames
+            if not os.path.islink(os.fspath(Path(dirpath) / d))
+        ]
         for name in filenames:
             candidate = Path(dirpath) / name
-            if candidate.is_symlink():
+            if os.path.islink(os.fspath(candidate)):
                 continue
             if candidate.suffix.casefold() in MEMORY_EXTENSIONS:
                 yield candidate
@@ -390,7 +398,7 @@ def _copy_into_media(src, dest_dir, digest):
     """Copy src to content-addressed dest; returns Path or raises OSError."""
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / f"{digest}{src.suffix.casefold()}"
-    if dest.is_file():
+    if os.path.isfile(os.fspath(dest)):
         try:
             if dest.stat().st_size == src.stat().st_size:
                 return dest
