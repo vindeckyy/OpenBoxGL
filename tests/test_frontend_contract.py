@@ -126,10 +126,26 @@ def test_clip_deeplink_ui_surface():
     app = APP_JS.read_text()
     clips = (ROOT / "static" / "clips.js").read_text()
     assert "import { openClip } from './clips.js';" in app
-    assert "clip: params => openClip(params.get('id'))" in app
+    assert "['clip', params => openClip(params.get('id'))]" in app
     assert "function openClip(clipId)" in clips
     assert "app:show-game" in clips
     assert "momentsTab" in clips
+
+def test_deeplink_dispatch_uses_explicit_allowlist():
+    app = APP_JS.read_text()
+    actions = re.search(
+        r"const DEEPLINK_ACTIONS = new Map\(\[(.*?)\n    \]\);",
+        app,
+        re.DOTALL,
+    )
+    assert actions, "deeplink actions must use an explicit Map"
+    action_names = set(re.findall(r"^\s*\['([^']+)',", actions.group(1), re.MULTILINE))
+    assert action_names == {"bigbox", "settings", "showgame", "recap", "moment", "clip"}
+
+    dispatch = _function_body(app, "dispatchDeeplink")
+    assert "DEEPLINK_ACTIONS.get(params.get('deeplink'))" in dispatch
+    assert "DEEPLINK_ACTIONS[" not in dispatch
+    assert "if (action) action(params);" in dispatch
 
 def test_game_dialog_path_browse_hosts():
     html = INDEX.read_text()
@@ -231,6 +247,7 @@ if __name__ == "__main__":
     try:
         test_tool_menu_group_membership()
         test_time_machine_ui_surface()
+        test_deeplink_dispatch_uses_explicit_allowlist()
         print("PASS test_tool_menu_group_membership")
     except AssertionError as e:
         print(f"FAIL test_tool_menu_group_membership: {e}")
@@ -275,6 +292,7 @@ if __name__ == "__main__":
         test_themes_vars_defined()
         test_tool_menu_group_membership()
         test_time_machine_ui_surface()
+        test_deeplink_dispatch_uses_explicit_allowlist()
         test_game_dialog_path_browse_hosts()
         test_f05_dialogs_no_window_prompt()
         test_f05_app_js_context_menu_a11y()

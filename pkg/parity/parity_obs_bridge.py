@@ -141,6 +141,7 @@ def build_authentication(password, salt, challenge) -> str:
     password_bytes = str(password).encode("utf-8")
     salt_bytes = str(salt).encode("utf-8")
     challenge_bytes = str(challenge).encode("utf-8")
+    # codeql[py/weak-sensitive-data-hashing]: OBS WebSocket v5 requires SHA-256 here; this is not password storage.
     secret = base64.b64encode(hashlib.sha256(password_bytes + salt_bytes).digest())
     return base64.b64encode(hashlib.sha256(secret + challenge_bytes).digest()).decode("ascii")
 
