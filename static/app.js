@@ -416,22 +416,22 @@ window.addEventListener('DOMContentLoaded', () => {
     // ?deeplink= dispatch map (S2 owns the shape). 'search' stays above — it
     // seeds the input before the
     // first render, so it must run before refresh().
-    const DEEPLINK_ACTIONS = {
-      bigbox: () => openBigBox(),
-      settings: () => openSettings(),
-      showgame: params => {
+    const DEEPLINK_ACTIONS = new Map([
+      ['bigbox', () => openBigBox()],
+      ['settings', () => openSettings()],
+      ['showgame', params => {
         const resolved = resolveDeeplinkGameId(params.get('id'));
         if (resolved !== null) {
           AppState.selectedId = resolved;
           render();
         }
-      },
-      recap: () => openSessionRecap(),
-      moment: params => openMoment(params.get('id')),
-      clip: params => openClip(params.get('id')),
-    };
+      }],
+      ['recap', () => openSessionRecap()],
+      ['moment', params => openMoment(params.get('id'))],
+      ['clip', params => openClip(params.get('id'))],
+    ]);
     function dispatchDeeplink(params) {
-      const action = DEEPLINK_ACTIONS[params.get('deeplink')];
+      const action = DEEPLINK_ACTIONS.get(params.get('deeplink'));
       if (action) action(params);
     }
 
