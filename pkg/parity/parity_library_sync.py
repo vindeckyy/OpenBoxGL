@@ -40,6 +40,11 @@ CATALOG_FIELDS = (
     "set_type", "manual_entry", "tags", "library_sync_id",
 )
 CATALOG_FIELD_SET = frozenset(CATALOG_FIELDS)
+
+
+class CatalogSnapshot(list):
+    """Detached catalog projection used to make transaction comparisons cheap."""
+
 PROVIDER_ID_FIELDS = (
     "steam_app_id", "heroic_app_id", "lutris_id", "gameyfin_id", "igdb_id",
     "ra_game_id", "launchbox_db_id",
@@ -48,6 +53,11 @@ PROVIDER_ID_FIELDS = (
 # cross-device identity after an explicit reconciliation step; imported
 # provider fields by themselves are evidence, not permission to link records.
 EXPLICIT_IDENTITY_FIELDS = ("library_sync_id", "sync_identity", "verified_sync_key", "verified_provider_identity")
+# These fields are routing evidence rather than shared catalog data.  They
+# travel through detached transaction snapshots so a verified lineage cannot
+# silently fall back to ``game_id``; ``_catalog_for_sync_key`` filters them
+# back out of the event payload.
+SNAPSHOT_IDENTITY_FIELDS = (*EXPLICIT_IDENTITY_FIELDS, "provider_identity_verified")
 LOCAL_ONLY_FIELDS = frozenset({
     "path", "launch", "command", "executable", "args", "arguments", "install_dir",
     "working_dir", "favorite", "hidden", "broken", "portable", "installed",
@@ -485,9 +495,44 @@ def sync_enabled(state: dict[str, Any]) -> bool:
     return isinstance(settings, dict) and settings.get("library_sync_enabled") is True
 
 
+JOURNAL_SETTING = "library_journal_enabled"
+
+
+def journal_enabled(state: dict[str, Any]) -> bool:
+    """Return whether the local catalog journal records without sync.
+
+    The journal is on by default (spec decision: local-only events are the
+    Time Machine substrate); only an explicit ``library_journal_enabled``
+    opt-out disables it.  This gate is intentionally separate from
+    ``sync_enabled`` — sync routes keep requiring the real opt-in while the
+    journal records the same validated events locally.
+    """
+    if not isinstance(state, dict):
+        return False
+    settings = state.get("settings")
+    if not isinstance(settings, dict):
+        return True
+    return bool(settings.get(JOURNAL_SETTING, True))
+
+
 def capture_sync_snapshot(state: dict[str, Any]) -> list[dict[str, Any]]:
-    """Capture a detached pre-mutation snapshot for the transactional hook."""
-    return copy.deepcopy(_games(state))
+    """Capture a detached catalog-only snapshot for the transactional hook.
+
+    The transaction wrapper calls this for every local write.  Copying whole
+    game records made a favorite toggle pay for screenshots, clips, memories,
+    and provider metadata that can never enter a sync event.  Keep the public
+    snapshot detached, but project it through the same allowlist as events,
+    retaining only the separate identity evidence needed to keep verified
+    revisions on their existing lineage.
+    """
+    snapshot = CatalogSnapshot()
+    for game in _games(state):
+        projected = {}
+        for field in (*CATALOG_FIELDS, *SNAPSHOT_IDENTITY_FIELDS):
+            if field in game and game[field] is not None:
+                projected[field] = _json_safe(game[field])
+        snapshot.append(projected)
+    return snapshot
 
 
 sync_snapshot = capture_sync_snapshot
@@ -590,14 +635,24 @@ def _next_sequence(metadata: dict[str, Any]) -> int:
     return value
 
 
-def _catalog_for_sync_key(game: dict[str, Any], key: str) -> dict[str, Any]:
-    catalog = build_catalog(game)
+def _catalog_for_sync_key(game: dict[str, Any], key: str, *, projected: bool = False) -> dict[str, Any]:
+    # ``capture_sync_snapshot`` has already applied the allowlist and detached
+    # every value.  Avoid serializing those same fields a second time during a
+    # normal transaction; direct callers still take the fully validated path.
+    if projected:
+        catalog = {
+            field: game[field]
+            for field in CATALOG_FIELDS
+            if field in game and game[field] is not None
+        }
+    else:
+        catalog = build_catalog(game)
     if key.startswith("verified:") and not catalog.get("library_sync_id"):
         catalog["library_sync_id"] = key.split(":", 1)[1]
     return catalog
 
 
-def _game_map(games: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def _game_map(games: list[dict[str, Any]], *, projected: bool = False) -> dict[str, dict[str, Any]]:
     result = {}
     for game in games:
         key = stable_sync_key(game)
@@ -629,8 +684,10 @@ def record_local_changes(state: dict[str, Any] | Any, before: Any = None, after:
         raise SyncValidationError("Record-local-changes requires before and after snapshots.")
     metadata = _metadata(state)
     device = device or ensure_device_id(state)
-    before_map = _game_map(_games(before))
-    after_map = _game_map(_games(after))
+    before_projected = isinstance(before, CatalogSnapshot)
+    after_projected = isinstance(after, CatalogSnapshot)
+    before_map = _game_map(_games(before), projected=before_projected)
+    after_map = _game_map(_games(after), projected=after_projected)
     all_keys = sorted(set(before_map) | set(after_map))
     heads = metadata.setdefault("heads", {})
     if not isinstance(heads, dict):
@@ -640,8 +697,8 @@ def record_local_changes(state: dict[str, Any] | Any, before: Any = None, after:
     for key in all_keys:
         old = before_map.get(key)
         new = after_map.get(key)
-        old_catalog = _catalog_for_sync_key(old, key) if old else None
-        new_catalog = _catalog_for_sync_key(new, key) if new else None
+        old_catalog = _catalog_for_sync_key(old, key, projected=before_projected) if old else None
+        new_catalog = _catalog_for_sync_key(new, key, projected=after_projected) if new else None
         if old is not None and new is not None and old_catalog == new_catalog:
             continue
         prior = heads.get(key, [])

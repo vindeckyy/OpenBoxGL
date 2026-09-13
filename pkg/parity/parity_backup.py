@@ -432,7 +432,7 @@ def diff_manifests(current_state, archive_path):
         cur = current_games.get(gid, {})
         bak = backup_games.get(gid, {})
         # Compare key fields
-        for field in ("title", "platform", "genre", "rating", "progress", "favorite", "hidden", "play_count", "playtime_seconds"):
+        for field in ("name", "title", "platform", "genre", "rating", "progress", "favorite", "hidden", "play_count", "playtime_seconds"):
             if cur.get(field) != bak.get(field):
                 changed.append(gid)
                 break

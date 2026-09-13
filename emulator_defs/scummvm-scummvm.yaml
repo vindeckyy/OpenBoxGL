@@ -13,3 +13,8 @@ recommended: true
 priority: 10
 executable_patterns:
   - scummvm
+state:
+  kind: adapter-cli
+  template: "--savepath={state_dir} --save-slot=0"
+  capture: "--savepath={state_dir}"
+  glob: "*.s??"

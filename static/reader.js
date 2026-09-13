@@ -17,8 +17,29 @@ import { AppState, token } from './state.js';
     function setReaderPage(page) {
       AppState.readerPage = Math.max(1, page);
       const suffix = AppState.readerUrl.toLowerCase().includes('.pdf') || AppState.readerUrl.includes('/api/document') ? `#page=${AppState.readerPage}` : '';
-      $('readerFrame').src = `${AppState.readerUrl}${suffix}`;
+      const url = `${AppState.readerUrl}${suffix}`;
+      const frame = $('readerFrame');
+      // Assigning iframe.src pushes a session-history entry per page turn;
+      // location.replace keeps Back/Exit honest instead.
+      const frameWindow = frame.contentWindow;
+      try {
+        if (frameWindow) {
+          frameWindow.location.replace(url);
+        } else {
+          frame.src = url;
+        }
+      } catch {
+        frame.src = url;
+      }
       $('readerPageLabel').textContent = `Page ${AppState.readerPage}`;
+    }
+    function resetReaderFrame() {
+      const frame = $('readerFrame');
+      if (!frame) return;
+      frame.removeAttribute('src');
+      try { frame.contentWindow?.location.replace('about:blank'); } catch { /* frame not navigable */ }
+      AppState.readerUrl = '';
+      AppState.readerPage = 1;
     }
     document.querySelectorAll('[data-reader-layout]').forEach(button => button.onclick = () => {
       $('readerViewport').classList.toggle('spread', button.dataset.readerLayout === 'spread');
@@ -29,4 +50,4 @@ import { AppState, token } from './state.js';
     $('readerPrev').onclick = () => setReaderPage(AppState.readerPage - 1);
     $('readerNext').onclick = () => setReaderPage(AppState.readerPage + 1);
 
-export { openReader, setReaderPage };
+export { openReader, setReaderPage, resetReaderFrame };

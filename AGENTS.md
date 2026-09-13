@@ -3,10 +3,10 @@
 Read this before writing code. A convention that lives only in a human's head is one prompt away from being ignored.
 
 ## Where things go
-- `openbox.py` is the launcher entry point, stays at root.
+- `openbox.py` is the shared core library for data paths, state, and launch helpers, and stays at root. Launch paths are `openbox.sh`, `openbox-native.sh`, and `web_app.py`.
 - `handlers/` - HTTP handlers, one module per domain or feature surface (library, imports, media, party, picker, etc.). Shared helpers live in `_shared.py`.
 - `pkg/parity/` - parity_* modules (clear names, cohesive cluster) plus the shared `launch_tokens.py` helper. New parity code goes there. Flat `import parity_x` still resolves via the MetaPathFinder in `pkg/parity/__init__.py`; entry points (`openbox.py`, `web_app.py`) must `import pkg.parity` before any flat `parity_*` import.
-- `static/` - 27 JS modules (25 domain modules plus app.js and worker.search.js) and app.css.
+- `static/` - Frontend JavaScript modules, the search worker, and app.css.
 - `themes/` - theme CSS files, each overrides `:root` tokens only.
 - `emulator_defs/` - YAML definitions.
 - `tests/` - standalone `test_*.py` scripts run via `./run_all_tests.sh` (`python3 -B file.py` style). Tests are feature/module-scoped, not a strict 1:1 mirror; every new runtime module still needs a covering test file.

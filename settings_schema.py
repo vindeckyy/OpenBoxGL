@@ -9,8 +9,16 @@ KNOWN_SETTINGS = {
     "storefront_auto_import",
     "emulator_scan_configs",
     "import_exclusions",
+    "memories_import_enabled",
+    "memories_import_roots",
+    "steamgrid_enabled",
+    "steamgrid_key_configured",
     # launch and sessions
     "track_session_history",
+    "session_recap_enabled",
+    "quick_resume_enabled",
+    "moments_autocapture",
+    "state_retention",
     "tracking_mode",
     "tracking_delay",
     "tracking_frequency",
@@ -68,6 +76,10 @@ KNOWN_SETTINGS = {
     # integrations
     "obs_auto_attach",
     "obs_recording_path",
+    "obs_replay_enabled",
+    "obs_websocket_url",
+    "obs_websocket_password",
+    "obs_websocket_timeout",
     "gameyfin_url",
     "gameyfin_username",
     "gameyfin_password",
@@ -101,6 +113,9 @@ KNOWN_SETTINGS = {
     "party_queue",
     "party_players",
     "party_index",
+    "household_stats_sharing",
+    "museum_kiosk_enabled",
+    "museum_kiosk_pin_hash",
 }
 
 

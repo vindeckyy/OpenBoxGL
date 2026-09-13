@@ -14,12 +14,13 @@ class TestPlaceholders(unittest.TestCase):
 
     def test_known_tokens_present(self):
         expected = {
-            "{path}", "{ImagePath}", "{name}", "{Name}",
+            "{path}", "{Path}", "{ImagePath}", "{name}", "{Name}",
             "{dir}", "{Dir}", "{file}", "{File}",
             "{stem}", "{FileNameWithoutExtension}",
             "{platform}", "{Platform}",
             "{app_id}", "{heroic_app_id}", "{lutris_id}",
             "{rom_name}", "{DataDir}", "{EmulatorDir}",
+            "{state_path}", "{state_dir}", "{state_config}", "{state_name}",
         }
         self.assertEqual(set(PLACEHOLDERS.keys()), expected)
 

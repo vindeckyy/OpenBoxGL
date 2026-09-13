@@ -94,6 +94,26 @@ def generate_m3u(disc_paths, output_path):
     return output
 
 
+def _write_m3u_playlist(group, base, m3u_dir):
+    """Write a multi-disc playlist, degrading gracefully on unwritable targets.
+
+    Order: the requested directory (or the ROM dir beside the discs) first,
+    then the generated playlist dir.  Returns the written ``Path`` or ``None``
+    when every target rejects the write — callers then keep the first disc.
+    """
+    targets = [Path(m3u_dir)] if m3u_dir is not None else [group[0].parent]
+    generated = generated_m3u_dir()
+    if generated not in targets:
+        targets.append(generated)
+    for directory in targets:
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            return generate_m3u(group, directory / f"{base}.m3u")
+        except OSError:
+            continue
+    return None
+
+
 def parse_m3u(m3u_path: Path | str) -> list[Path]:
     """Safely parse an M3U file, returning referenced paths resolved relative to the M3U."""
     path = Path(m3u_path)
@@ -329,14 +349,8 @@ def import_multi_platform(
         if len(group) > 1:
             base = _disc_base(group[0])
             if write_m3u:
-                if m3u_dir is not None:
-                    target_dir = Path(m3u_dir)
-                    target_dir.mkdir(parents=True, exist_ok=True)
-                    m3u = target_dir / f"{base}.m3u"
-                else:
-                    m3u = group[0].with_name(f"{base}.m3u")
-                generate_m3u(group, m3u)
-                path = m3u
+                m3u = _write_m3u_playlist(group, base, m3u_dir)
+                path = m3u if m3u is not None else group[0]
             else:
                 path = group[0]
             name = base
@@ -528,7 +542,10 @@ def detect_dependencies(emulator_name, home=None):
     required, missing = [], []
     for label, path in hints:
         path = Path(str(path).replace(str(Path.home()), str(home)))
-        found = path.exists() and (path.is_file() or any(path.iterdir()) if path.is_dir() else False)
+        try:
+            found = path.is_file() or (path.is_dir() and any(path.iterdir()))
+        except OSError:
+            found = False
         entry = {"name": label, "path": str(path), "found": bool(found)}
         required.append(entry)
         if not found:

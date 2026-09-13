@@ -17,11 +17,11 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.10.0"><img src="https://img.shields.io/badge/Release-v1.10.0-0052CC?style=for-the-badge" alt="Release v1.10.0"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.11.0"><img src="https://img.shields.io/badge/Release-v1.11.0-0052CC?style=for-the-badge" alt="Release v1.11.0"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-2EA44F?style=for-the-badge" alt="CI"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux-lightgrey?style=for-the-badge" alt="Linux"></a>
   <br>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.10.0</strong></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.11.0</strong></a>
 </p>
 
 <p align="center">
@@ -116,13 +116,27 @@ The full capability matrix with acceptance checks lives in [PARITY.md](docs/PARI
 
 ## Features
 
+### Every Second Counts (1.11.0)
+
+Quick Resume and Moments keep save-state-aware progress, captures, and session
+recaps close to the game you were playing. Record That adds replay-buffer clips
+and deterministic highlight reels. The Time Machine provides journal-backed
+history and safe as-of inspection, while Backlog Radio, the explainable natural
+query bar, and the command palette make a large backlog easier to navigate.
+
+The Arcade Room and Museum mode turn the library into a controller-friendly
+showcase, with an optional local kiosk PIN convenience boundary. Household
+records provide opt-in, server-free challenges and leaderboards. Steam Bridge
+can preview and manage non-Steam shortcuts, and ES-DE `gamelist.xml` imports are
+reviewable before they change the library.
+
 ### Library & Discovery
 
 One catalog for Steam, Heroic, Lutris, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and local executables. Advanced search, collections, playlists, tags, bulk edits, custom fields, ESRB filtering, list view, **"What should I play?" smart picker** (time, mood, familiarity, players) plus Surprise Me random selection, and a pan/zoomable **Library Constellation** relationship graph. **Keyboard and gamepad navigation** across the grid and list (arrows/Home/End/Page, `f` favorite, Escape clear, configurable controller map), **hash routing** so refresh and shared links restore platform/playlist/preset/query/selection/sort, sortable list-view columns with persisted direction, screenshot lightbox with prev/next/zoom, cover skeleton loading, and **Mood Match adaptive cover theming** that tints accents from the selected game.
 
 ### Metadata & Media
 
-LaunchBox Games Database sync (covers, backgrounds, screenshots, box backs, spines, 3D boxes, clear logos, fanart, banners, title screens, carts, discs, and advertisement flyers), IGDB search, Steam/GOG media, EmuMovies, Bezel Project, **ScreenScraper** per-ROM-hash scraping (credentials in `~/.env`, 1 req/s throttle, 30-day cache), bundled media packs (platform logos, controller prompts, badges), duplicate cleanup, region priority, download limits.
+LaunchBox Games Database sync (covers, backgrounds, screenshots, box backs, spines, 3D boxes, clear logos, fanart, banners, title screens, carts, discs, and advertisement flyers), IGDB search, Steam/GOG media, EmuMovies, Bezel Project, **ScreenScraper** per-ROM-hash scraping (credentials in `~/.env`, 1 req/s throttle, 30-day cache), optional **SteamGridDB** artwork search/apply and bulk matching for covers, backgrounds, clear logos, icons, and banners (credentials in `~/.env`, local cache), bundled media packs (platform logos, controller prompts, badges), duplicate cleanup, region priority, download limits.
 
 ### Emulators & Launching
 
@@ -136,11 +150,11 @@ Tokens: `{path}`, `{name}`, `{rom_name}`, `{app_id}`, `{heroic_app_id}`, `{lutri
 
 ### Sessions & Saves
 
-Play time tracking, session history, save discovery (Steam Cloud, RetroArch, PCSX2, PPSSPP, RPCS3, Dolphin, Cemu), versioned backups with retention limits, Ludusavi/Hoard CLI hooks, RetroAchievements (hardcore, beaten, mastered, badge injection).
+Play time tracking, session history, save discovery (Steam Cloud, RetroArch, PCSX2, PPSSPP, RPCS3, Dolphin, Cemu), versioned backups with retention limits, Ludusavi/Hoard CLI hooks, RetroAchievements (hardcore, beaten, mastered, badge injection). OpenBox launcher trophies are a separate local, deterministic trophy case evaluated from library and history.
 
 ### Play Insights
 
-Local-first playtime analytics with a 366-day activity heatmap (levels 0–4), current and longest play streaks, 30-day play momentum, and top platforms/genres. **OpenBox Wrapped** prints your year in games (playtime, streaks, progress, busiest month), the **History Timeline** tab groups sessions by day, and the **Mastery Map** dashboard breaks the library into per-platform and per-decade progress bars with RetroAchievements columns. Computed entirely locally from library history with zero telemetry.
+Local-first playtime analytics with a 366-day activity heatmap (levels 0–4), current and longest play streaks, 30-day play momentum, and top platforms/genres. **OpenBox Wrapped** prints your year in games (playtime, streaks, progress, busiest month), the **History Timeline** tab groups sessions by day, and the **Mastery Map** dashboard breaks the library into per-platform and per-decade progress bars with RetroAchievements columns. The **launcher trophy case** evaluates deterministic OpenBox milestones from local library/history data; these awards are separate from RetroAchievements. Computed entirely locally with zero telemetry.
 
 ### Big Box & Handhelds
 
@@ -249,7 +263,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 Download the installer from a specific signed release, inspect it, then run it. The installer detects `uname -m` (override with `OPENBOX_ARCH=x86_64` or `OPENBOX_ARCH=aarch64`), selects the matching AppImage, and verifies the release public-key pin, SHA-256 checksum, and Ed25519 signature before installing to `~/.local/bin`:
 
 ```bash
-VERSION=1.10.0
+VERSION=1.11.0
 curl --proto '=https' --tlsv1.2 --fail --location \
   --output install.sh \
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install.sh"
@@ -390,6 +404,7 @@ OpenBox/
 ├── routes.py               GET/POST route tables (frozen v1 surface + additive v2 routes)
 ├── contracts.py            Frozen v1 API contract + legacy aliases
 ├── openbox.py              Shared core helpers (data paths, launch, profiles)
+├── static/                 Frontend JavaScript modules, search worker, and app.css
 ├── state_store.py          Schema-versioned state, atomic writes, snapshots
 ├── settings_schema.py      Settings key whitelist
 ├── api_errors.py           Structured API error codes
@@ -410,7 +425,7 @@ OpenBox/
 ├── themes/                 Stock themes (5 CSS files)
 ├── emulator_defs/          YAML definition packs
 ├── scripts/                Build, test, screenshot capture
-├── tests/test_*.py         Test suite (107 files)
+├── tests/test_*.py         Standalone test files run by ./run_all_tests.sh
 ```
 
 ### Run tests

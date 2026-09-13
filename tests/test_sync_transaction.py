@@ -58,6 +58,34 @@ class SyncTransactionTests(unittest.TestCase):
             self.assertEqual(state["library_sync"]["error"]["code"], "SYNC_METADATA_INVALID")
             os.environ.pop("OPENBOX_DATA_DIR", None)
 
+    def test_local_only_mutation_skips_catalog_snapshot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            os.environ["OPENBOX_DATA_DIR"] = directory
+            import openbox
+            import parity_library_sync
+
+            openbox.STATE_STORE.save({
+                "games": [{"game_id": "g1", "name": "Quake", "favorite": False}],
+                "settings": {}, "profiles": {},
+            })
+            original = parity_library_sync.capture_sync_snapshot
+            calls = []
+
+            def capture(state):
+                calls.append(state)
+                return original(state)
+
+            parity_library_sync.capture_sync_snapshot = capture
+            try:
+                openbox.update_state(openbox.local_only_mutation(
+                    lambda state: state["games"][0].__setitem__("favorite", True)
+                ))
+            finally:
+                parity_library_sync.capture_sync_snapshot = original
+                os.environ.pop("OPENBOX_DATA_DIR", None)
+            self.assertEqual(calls, [])
+            self.assertTrue(openbox.load_state()["games"][0]["favorite"])
+
 
 if __name__ == "__main__":
     unittest.main()

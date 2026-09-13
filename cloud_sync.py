@@ -8,6 +8,7 @@ from pathlib import Path
 
 from backend_io import atomic_write_text
 from notifications import record_cloud_sync_outcome
+from saves import SAVE_SYNC_LOCK
 
 STAT_FIELDS = ("play_count", "playtime_seconds", "last_played", "progress", "rating", "favorite")
 PROGRESS = {"", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned"}
@@ -201,27 +202,30 @@ def sync_statistics(state, folder, now=None):
     target = folder / "openbox-statistics.json"
     timestamp = now or datetime.now().astimezone().isoformat(timespec="seconds")
     try:
-        with _sync_lock(target):
-            remote, remote_games = _load_remote_state(target)
-            remote_generated = _timestamp(remote.get("generated_at", ""))
-            last_sync = _timestamp(state.get("settings", {}).get("last_cloud_sync", ""))
-            merged = {}
-            changed = 0
-            for game in state["games"]:
-                key = game_key(game)
-                saved, remote_key = _resolve_saved_record(remote_games, game, key)
-                merged_record, record_changed = _merge_game_stats(game, saved)
-                changed += record_changed
-                merged[key] = merged_record
-                if remote_key != key:
-                    merged.pop(remote_key, None)
-            generated_at = _resolve_generated_at(remote, remote_generated, last_sync, timestamp)
-            payload = {
-                "format": 1,
-                "generated_at": generated_at,
-                "games": merged,
-            }
-            atomic_write_text(target, json.dumps(payload, indent=2), mode=0o600)
+        # Serialize the remote read->merge->upload cycle against save-archive
+        # extraction/backups so a sync never observes a half-restored tree.
+        with SAVE_SYNC_LOCK:
+            with _sync_lock(target):
+                remote, remote_games = _load_remote_state(target)
+                remote_generated = _timestamp(remote.get("generated_at", ""))
+                last_sync = _timestamp(state.get("settings", {}).get("last_cloud_sync", ""))
+                merged = {}
+                changed = 0
+                for game in state["games"]:
+                    key = game_key(game)
+                    saved, remote_key = _resolve_saved_record(remote_games, game, key)
+                    merged_record, record_changed = _merge_game_stats(game, saved)
+                    changed += record_changed
+                    merged[key] = merged_record
+                    if remote_key != key:
+                        merged.pop(remote_key, None)
+                generated_at = _resolve_generated_at(remote, remote_generated, last_sync, timestamp)
+                payload = {
+                    "format": 1,
+                    "generated_at": generated_at,
+                    "games": merged,
+                }
+                atomic_write_text(target, json.dumps(payload, indent=2), mode=0o600)
     except CloudSyncError as error:
         record_cloud_sync_outcome(state, success=False, body=error.message, now=timestamp)
         raise

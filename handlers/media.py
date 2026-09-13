@@ -13,8 +13,46 @@ from openbox import load_state
 from routes.registry import route
 from parity_integrations import attach_recording, capture_screenshot, download_bezel, download_emumovies_media, load_emumovies_credentials, obs_recording_status, save_emumovies_credentials
 from parity_media import active_video, cleanup_duplicates, find_duplicate_media, load_media_queue
+from parity_memories import IMPORT_JOB_NAME, MEMORIES_FIELD, UNASSIGNED_FIELD, apply_import_plan, collect_imports, configured_roots, memories_import_enabled
 from parity_premium import apply_media_pack, download_gog_media, download_steam_trailer, list_media_packs, platform_categories, strings_for
 from webapp_state import DATA, JOB_MANAGER, MEDIA_JOB, MEDIA_TYPES_ALL, METADATA_DATABASE, PROCESS_LOCK, approved_media_path, bump_media_epoch, download_image, game_from_payload, game_from_query, load_state_view, media_probe_path, public_settings, transact_state
+
+
+# EmuMovies media type -> library game field.  Unknown types are rejected so a
+# download can never silently overwrite ``cover`` with the wrong asset.
+EMUMOVIES_TYPE_FIELDS = {
+    "box": "cover",
+    "box_front": "cover",
+    "cover": "cover",
+    "boxback": "box_back",
+    "box_back": "box_back",
+    "boxspine": "box_spine",
+    "box_spine": "box_spine",
+    "box3d": "box_3d",
+    "box_3d": "box_3d",
+    "snap": "screenshots",
+    "screenshot": "screenshots",
+    "screenshots": "screenshots",
+    "title": "title_screen",
+    "titlescreen": "title_screen",
+    "title_screen": "title_screen",
+    "marquee": "banner",
+    "banner": "banner",
+    "cart": "cart_front",
+    "cartfront": "cart_front",
+    "cart_front": "cart_front",
+    "cartback": "cart_back",
+    "cart_back": "cart_back",
+    "disc": "disc",
+    "logo": "clear_logo",
+    "clearlogo": "clear_logo",
+    "clear_logo": "clear_logo",
+    "fanart": "fanart",
+    "background": "background",
+    "icon": "icon",
+    "manual": "manual",
+    "advertisement": "advertisement",
+}
 
 
 class MediaHandlers:
@@ -83,6 +121,12 @@ class MediaHandlers:
             if kind == "screenshot":
                 index = int(query["index"][0])
                 media = Path(game.get("screenshots", [])[index])
+            elif kind == "clip":
+                index = int(query["index"][0])
+                clips = game.get("clips", [])
+                if not isinstance(clips, list):
+                    raise ValueError
+                media = Path(clips[index].get("path", ""))
             elif kind in {"cover", "background", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "cart_front", "cart_back", "disc", "advertisement", "manual", "video", "music", "video_snap", "video_theme", "video_trailer", "video_recording"}:
                 if kind == "video":
                     _, video_path = active_video(game)
@@ -92,10 +136,29 @@ class MediaHandlers:
             else:
                 raise ValueError
             media = approved_media_path(media, must_exist=True)
-            self.send_file(200, media)
+            try:
+                self.send_file(200, media)
+            except ValueError:
+                self._send_range_unsatisfiable(media)
         except (KeyError, IndexError, ValueError, FileNotFoundError):
             raise MediaNotFound("Media not found") from None
         return
+
+    def _send_range_unsatisfiable(self, media):
+        """Answer a malformed ``Range`` header with 416 + ``Content-Range``.
+
+        ``send_file`` raises ``ValueError`` for an unparseable range spec;
+        the route's ``except ValueError`` would otherwise mask it as 404.
+        """
+        try:
+            size = Path(media).stat().st_size
+        except OSError:
+            size = 0
+        self.send_response(416)
+        self.headers_common("application/octet-stream", cache_control="private, max-age=31536000, immutable")
+        self.send_header("Content-Range", f"bytes */{size}")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     @route("GET", "/api/media/duplicates")
     def _api_get_api_media_duplicates(self, parsed):
@@ -313,14 +376,27 @@ class MediaHandlers:
         credentials = load_emumovies_credentials(DATA.parent)
         state = load_state()
         target = copy.deepcopy(game_from_payload(state, payload))
+        media_type = str(payload.get("type", "box")).strip() or "box"
+        field = EMUMOVIES_TYPE_FIELDS.get(media_type.casefold())
+        if field is None:
+            raise ValueError(f"Unsupported EmuMovies media type: {media_type}")
         path = download_emumovies_media(
-            target, credentials, DATA.parent / "media", str(payload.get("type", "box")),
+            target, credentials, DATA.parent / "media", media_type,
         )
         def mutate(state):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)
-            game["cover"] = path
+            if field == "screenshots":
+                screenshots = game.get("screenshots")
+                if not isinstance(screenshots, list):
+                    screenshots = []
+                    game["screenshots"] = screenshots
+                if path not in screenshots:
+                    screenshots.append(path)
+            else:
+                game[field] = path
         transact_state(mutate)
+        bump_media_epoch()
         self.send_json(200, {"path": path})
 
     def cleanup_media(self, payload):
@@ -361,3 +437,115 @@ class MediaHandlers:
         transact_state(mutate)
         bump_media_epoch()
         self.send_json(200, {"path": path, "obs": obs_recording_status()})
+
+    # --- S5: memory roots auto-import -------------------------------------
+    # Additive v2 surface. All filesystem work happens in the background job;
+    # the status/list routes read state only and never scan roots themselves.
+
+    @route("GET", "/api/v2/memories/status")
+    def _api_get_api_v2_memories_status(self, parsed):
+        state = load_state_view()
+        settings = state.get("settings") or {}
+        memories_count = 0
+        games_with = 0
+        for game in state.get("games") or []:
+            entries = game.get(MEMORIES_FIELD)
+            if isinstance(entries, list) and entries:
+                games_with += 1
+                memories_count += len(entries)
+        unassigned = state.get(UNASSIGNED_FIELD)
+        self.send_json(200, {
+            "enabled": memories_import_enabled(settings),
+            "roots": len(configured_roots(settings)),
+            "memories": memories_count,
+            "games_with_memories": games_with,
+            "unassigned": len(unassigned) if isinstance(unassigned, list) else 0,
+            "job": JOB_MANAGER.snapshot(IMPORT_JOB_NAME),
+        })
+
+    @route("GET", "/api/v2/memories")
+    def _api_get_api_v2_memories(self, parsed):
+        query = parse_qs(parsed.query)
+        state = load_state_view()
+        if query.get("unassigned", [""])[0] in {"1", "true", "yes"}:
+            entries = state.get(UNASSIGNED_FIELD)
+            source = entries if isinstance(entries, list) else []
+        else:
+            game = game_from_query(state, query)
+            entries = game.get(MEMORIES_FIELD)
+            source = entries if isinstance(entries, list) else []
+        self.send_json(200, {"memories": self._memories_public(source)})
+
+    @route("GET", "/api/v2/memories/media")
+    def _api_get_api_v2_memories_media(self, parsed):
+        query = parse_qs(parsed.query)
+        state = load_state_view()
+        try:
+            if query.get("bucket", [""])[0] == "unassigned":
+                entries = state.get(UNASSIGNED_FIELD)
+                source = entries if isinstance(entries, list) else []
+            else:
+                source = game_from_query(state, query).get(MEMORIES_FIELD) or []
+            index = int(query["index"][0])
+            entry = source[index]
+            media = approved_media_path(entry.get("path"), must_exist=True)
+            try:
+                self.send_file(200, media)
+            except ValueError:
+                self._send_range_unsatisfiable(media)
+        except (KeyError, IndexError, ValueError, TypeError, AttributeError, FileNotFoundError):
+            raise MediaNotFound("Media not found") from None
+        return
+
+    @route("POST", "/api/v2/memories/import")
+    def _api_post_api_v2_memories_import(self, payload):
+        settings = (load_state().get("settings") or {})
+        if not memories_import_enabled(settings):
+            self.send_json(200, {"enabled": False, "state": "disabled", "added": 0})
+            return
+
+        def worker(cancel_event=None):
+            state = load_state()
+            current_settings = state.get("settings") or {}
+            if not memories_import_enabled(current_settings):
+                return {"enabled": False, "added": 0}
+            plan = collect_imports(
+                state, DATA.parent,
+                extra_roots=configured_roots(current_settings),
+                progress=cancel_event.progress if cancel_event is not None else None,
+                cancel=cancel_event,
+            )
+            _, applied = transact_state(lambda s: apply_import_plan(s, plan))
+            counts = dict(plan["counts"])
+            counts["added"] = applied["attached"]
+            counts["unassigned"] = applied["unassigned"]
+            counts["failed"] += applied["failed"]
+            if applied["attached"] or applied["unassigned"]:
+                bump_media_epoch()
+            return counts
+
+        job = JOB_MANAGER.submit(IMPORT_JOB_NAME, worker)
+        self.send_json(202, {"state": job.get("state", "queued"), "job_id": job.get("job_id", "")})
+
+    @staticmethod
+    def _memories_public(entries):
+        """Project stored memory entries to the public shape, dropping
+        anything whose path no longer resolves under the media root."""
+        public = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            try:
+                resolved = approved_media_path(entry.get("path"), must_exist=True)
+            except (OSError, ValueError):
+                continue
+            public.append({
+                "path": str(resolved),
+                "sha256": str(entry.get("sha256") or ""),
+                "bytes": int(entry.get("bytes") or 0),
+                "source": str(entry.get("source") or ""),
+                "taken_at": str(entry.get("taken_at") or ""),
+                "imported_at": str(entry.get("imported_at") or ""),
+                "hint": str(entry.get("hint") or ""),
+            })
+        return public

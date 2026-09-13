@@ -13,3 +13,5 @@ recommended: true
 priority: 5
 executable_patterns:
   - melonDS
+state:
+  kind: none

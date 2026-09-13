@@ -21,3 +21,8 @@ recommended: true
 priority: 10
 executable_patterns:
   - duckstation-qt
+state:
+  kind: adapter-cli
+  template: "-statefile {state_path}"
+  capture: ""
+  glob: "*"

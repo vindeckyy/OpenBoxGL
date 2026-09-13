@@ -605,11 +605,13 @@ const puppeteer = require('./node_modules/puppeteer');
     const fakeGame = {id: 1, documents: [{name: 'Manual', path: '/tmp/test.pdf'}]};
     readerMod.openReader(fakeGame, 0);
     const frame = document.getElementById('readerFrame');
-    const hasSrcBefore = Boolean(frame.getAttribute('src'));
+    // openReader navigates the frame via location.replace (no src attribute);
+    // readerUrl being populated is the observable "document loaded" signal.
+    const loadedBefore = AppState.readerUrl !== '';
     document.getElementById('closeReader').click();
     const hasSrcAfter = Boolean(frame.getAttribute('src'));
     const urlCleared = AppState.readerUrl === '';
-    return hasSrcBefore && !hasSrcAfter && urlCleared;
+    return loadedBefore && !hasSrcAfter && urlCleared;
   });
   console.log('reader cleanup:', {readerCleanedOk});
   const gamepadLoopStopped = await page.evaluate(async () => {
@@ -1388,9 +1390,9 @@ const puppeteer = require('./node_modules/puppeteer');
   if (!dropEmptyHonesty.libraryUnchanged) process.exit(1);
   if (!dropEmptyHonesty.noImport) process.exit(1);
   const expectedGroups = {
-    library: ['metadataButton','mediaButton','healthButton','constellationButton','masteryButton','bulkButton','tagsButton','playlistsButton','backupButton','historyButton','achievementsButton','saveFilterButton','savePresetButton'],
-    sources: ['storefrontButton','emulatorsButton','steamButton','heroicButton','lutrisButton','arcadeButton','discoveryButton'],
-    personalize: ['themesButton','pluginsButton','settingsButton','fullscreenButton'],
+    library: ['metadataButton','mediaButton','healthButton','constellationButton','masteryButton','bulkButton','tagsButton','playlistsButton','backupButton','historyButton','timeMachineButton','achievementsButton','saveFilterButton','savePresetButton'],
+    sources: ['storefrontButton','emulatorsButton','steamButton','heroicButton','lutrisButton','arcadeButton','arcadeRoomButton','householdButton','discoveryButton'],
+    personalize: ['themesButton','pluginsButton','settingsButton','whatsNewButton','fullscreenButton'],
     automation: ['webhooksButton','notificationsButton'],
   };
   for (const [key, ids] of Object.entries(expectedGroups)) {

@@ -3,6 +3,7 @@ import signal
 import sys
 import os
 import tempfile
+import threading
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -467,6 +468,53 @@ class TestLaunchModuleCoverage(unittest.TestCase):
         webapp_state.PROCESSES["bad-action"] = mock_process
         with self.assertRaises(ValueError):
             webapp_state.control_game_session("bad-action", "fly")
+
+    def test_obs_replay_release_serializes_new_acquisition(self):
+        import pkg.state.launch as launch
+
+        with launch._OBS_REPLAY_LOCK:
+            launch._OBS_REPLAY_SESSIONS = 1
+            launch._OBS_REPLAY_OWNED = True
+        disarm_entered = threading.Event()
+        allow_disarm = threading.Event()
+        arm_entered = threading.Event()
+        results = {}
+
+        def disarm(_settings):
+            disarm_entered.set()
+            self.assertTrue(allow_disarm.wait(2), "test disarm did not unblock")
+
+        def arm(_settings):
+            arm_entered.set()
+            return {"armed": True, "owned": True}
+
+        def release():
+            results["release"] = launch._release_obs_replay({"obs_replay_enabled": True}, owned=True)
+
+        def acquire():
+            results["acquire"] = launch._toggle_obs_replay({"obs_replay_enabled": True})
+
+        try:
+            with patch("pkg.parity.parity_obs_bridge.disarm_replay_buffer", side_effect=disarm), patch(
+                "pkg.parity.parity_obs_bridge.arm_replay_buffer", side_effect=arm
+            ):
+                release_thread = threading.Thread(target=release)
+                release_thread.start()
+                self.assertTrue(disarm_entered.wait(2), "release did not reach OBS teardown")
+                acquire_thread = threading.Thread(target=acquire)
+                acquire_thread.start()
+                self.assertFalse(arm_entered.wait(0.05), "new acquisition crossed the teardown lock")
+                allow_disarm.set()
+                release_thread.join(2)
+                acquire_thread.join(2)
+                self.assertFalse(release_thread.is_alive())
+                self.assertFalse(acquire_thread.is_alive())
+                self.assertTrue(results["release"])
+                self.assertTrue(results["acquire"]["armed"])
+        finally:
+            with launch._OBS_REPLAY_LOCK:
+                launch._OBS_REPLAY_SESSIONS = 0
+                launch._OBS_REPLAY_OWNED = False
 
     def test_start_game_success_path(self):
         with patch("webapp_state.apply_perf_profile") as mock_perf, patch(

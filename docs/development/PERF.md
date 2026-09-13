@@ -2,6 +2,22 @@
 
 Measured by `scripts/perf_bench.py` against a synthetic library served by the real server (loopback, gzip enabled). Reference machine: this workstation.
 
+## Final 1.11.0 measurements (2026-09-12)
+
+Five-run strict local sampling on the final 1.11.0 worktree passed the 10k and
+20k performance gates. Values below are p95 milliseconds from
+`python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5`; the generated
+evidence is in `build/perf.json`.
+
+| Library size | Full library | Gzip | Favorite write | Write path | Picker | Constellation |
+|---|---:|---:|---:|---:|---:|---:|
+| 10,000 games | 63.4 ms | 4.4 ms | 311.0 ms | 262.3 ms | 67.5 ms | 778.8 ms |
+| 20,000 games | 120.8 ms | 5.4 ms | 553.2 ms | 537.6 ms | 135.2 ms | 611.1 ms |
+
+The constellation endpoint uses the cached read-only state view so graph
+requests do not deep-copy the complete catalog. This reduced the 20k
+constellation p95 from 2,138.5 ms in the pre-fix sample to 611.1 ms here.
+
 ## Release-candidate measurements (2026-09-08, v1.10.0)
 
 Seven-run strict local sampling on the release-candidate tree recorded the

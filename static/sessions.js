@@ -2,6 +2,7 @@ import { $, escapeHtml, duration } from './util.js';
 import { api, notify, AppState, token, setButtonBusy } from './state.js';
 import { refresh, launchExtra } from './library.js';
 import { renderTimelineTab } from './timeline.js';
+import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
 
 
 
@@ -57,6 +58,20 @@ import { renderTimelineTab } from './timeline.js';
       try {
         const source = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
         let _sseRefreshTimer = null;
+        // Events arrive as named SSE frames (event: <kind>), so each kind needs
+        // its own listener — onmessage only covers unnamed messages.
+        const handleSessionEvent = () => pollSessions();
+        const handleStateChanged = () => {
+          if (_sseRefreshTimer) clearTimeout(_sseRefreshTimer);
+          _sseRefreshTimer = setTimeout(() => { _sseRefreshTimer = null; refresh().catch(() => {}); }, 500);
+        };
+        ['session.started', 'session.stopped', 'session.state', 'job.finished'].forEach(kind => source.addEventListener(kind, handleSessionEvent));
+        source.addEventListener('state.changed', handleStateChanged);
+        source.addEventListener('session.recap', event => {
+          let payload;
+          try { payload = JSON.parse(event.data); } catch { return; }
+          showSessionRecap(payload).catch(() => {});
+        });
         source.onmessage = event => {
           let data;
           try { data = JSON.parse(event.data); } catch { return; }
@@ -64,8 +79,7 @@ import { renderTimelineTab } from './timeline.js';
           if (kind === 'session.started' || kind === 'session.stopped' || kind === 'session.state' || kind === 'job.finished') {
             pollSessions();
           } else if (kind === 'state.changed') {
-            if (_sseRefreshTimer) clearTimeout(_sseRefreshTimer);
-            _sseRefreshTimer = setTimeout(() => { _sseRefreshTimer = null; refresh().catch(() => {}); }, 500);
+            handleStateChanged();
           }
         };
         source.onerror = () => { source.close(); /* fall back to polling */ };
@@ -94,6 +108,7 @@ import { renderTimelineTab } from './timeline.js';
           } else {
             showLifecycle('Session ended', stopped.game, 'Play time and history were saved', 1600);
           }
+          showSessionRecapForStopped().catch(() => {});
           await refresh();
         }
         $('sessionsButton').textContent = result.running.length ? `Running (${result.running.length})` : 'Running';

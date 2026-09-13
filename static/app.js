@@ -2,11 +2,12 @@ import { $, escapeHtml } from './util.js';
 import { token, AppState, api, notify, nativeFullscreen, detectNative, filteredGames, nativePickFile, selectedIds, resetQuery, resolveDeeplinkGameId } from './state.js';
 import { refresh, render, renderGrid, favorite, updateGameStatus, removeGame } from './library.js';
 import { openSettings, openProfiles, openThemes, openAchievements, openPlugins, health, openBackups, openFeature, bulkAction, saveFilter, savePreset, openPlaylists, createManualPlaylist, createFilterPlaylist, createNamedBackup, filterSettings, gracefulShutdown, loadTheme, addGamesToPlaylist } from './settings.js';
-import { importFolder, importSteam, importHeroic, importLutris, importArcade, runStartupStorefrontImports, bindLaunchBoxMigration } from './imports.js';
+import { importFolder, importSteam, importHeroic, importLutris, importArcade, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport } from './imports.js';
 import { watchMetadata } from './metadata.js';
 import { openMediaManager } from './media.js';
-import { setReaderPage } from './reader.js';
+import { setReaderPage, resetReaderFrame } from './reader.js';
 import { openSessions, openHistory, launch, connectSessionEvents, pollSessions } from './sessions.js';
+import { openSessionRecap } from './recap.js';
 import { openDiscovery, openStorefronts, saveStorefrontSettings, importStorefrontCatalog, loadStorefrontCatalog } from './storefront.js';
 import { openBigBox, closeBigBox, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, stopScreenSaver, favoriteBigBox, openBigBoxPause, filteredBigBoxGames, applyLibraryMusic, activateCurrentGame, bigBoxTypingActive } from './bigbox.js';
 import { openPicker } from './picker.js';
@@ -14,7 +15,14 @@ import { openConstellation } from './constellation.js';
 import { openMastery } from './mastery.js';
 import { closeDialog, openGameDialog, closeContextMenu, bindContextMenuA11y, promptChoice, promptInput, confirmAction } from './dialogs.js';
 import { loadInsights, bindInsights } from './insights.js';
+import { openTimeMachine } from './timemachine.js';
+import { openMoment } from './moments.js';
+import { openClip } from './clips.js';
+import { openArcadeRoom } from './arcaderoom.js';
+import { initHousehold, openHousehold } from './household.js';
 import { initNavigation } from './navigation.js';
+import { initPalette } from './palette.js';
+import { initWhatsNew } from './whatsnew.js';
 import { applyHash } from './router.js';
 import { initMood } from './mood.js';
 import { init as i18nInit, setLocale, getSupportedLocales, t } from './i18n.js';
@@ -43,7 +51,26 @@ function initI18n() {
     }
   } catch { /* settings not ready yet — non-fatal */ }
 }
+
+async function verifyMuseumPin() {
+  const pin = await promptInput({ title: 'Museum PIN', label: 'PIN', defaultValue: '' });
+  if (pin === null) return false;
+  try {
+    const result = await api('/api/v2/arcade/kiosk/verify', {
+      method: 'POST',
+      body: JSON.stringify({pin}),
+    });
+    if (!result.ok) notify('That Museum PIN was not accepted.');
+    return Boolean(result.ok);
+  } catch (error) {
+    notify(error.message);
+    return false;
+  }
+}
 window.addEventListener('DOMContentLoaded', () => setTimeout(initI18n, 0));
+window.addEventListener('DOMContentLoaded', () => initPalette());
+window.addEventListener('DOMContentLoaded', () => initHousehold());
+window.addEventListener('DOMContentLoaded', () => initWhatsNew());
 window.addEventListener('DOMContentLoaded', () => {
   bindInsights();
   document.addEventListener('app:show-game', event => {
@@ -56,6 +83,13 @@ window.addEventListener('DOMContentLoaded', () => {
     render();
     document.querySelector(`[data-game="${game.id}"]`)?.scrollIntoView({ block: 'nearest' });
   });
+  document.addEventListener('app:palette-open-settings', () => $('settingsButton')?.click());
+  document.addEventListener('app:palette-open-time-machine', () => $('timeMachineButton')?.click());
+  document.addEventListener('app:palette-open-bigbox', () => $('bigBoxButton')?.click());
+  document.addEventListener('app:palette-open-arcade-room', () => $('arcadeRoomButton')?.click());
+  document.addEventListener('app:palette-open-household', () => $('householdButton')?.click());
+  document.addEventListener('app:palette-surprise', () => $('surpriseButton')?.click());
+  document.addEventListener('app:palette-focus-search', () => $('sidebarSearch')?.focus());
 });
 // Scrub the token from browser history immediately after reading it: keep any
 // deeplink params, drop only 'token'.
@@ -224,7 +258,8 @@ window.addEventListener('DOMContentLoaded', () => {
     $('loadStorefrontCatalog').onclick = loadStorefrontCatalog;
     $('importStorefrontInstalled').onclick = () => importStorefrontCatalog(false);
     $('importStorefrontUninstalled').onclick = () => importStorefrontCatalog(true);
-    $('addButton').onclick = () => openGameDialog(); $('addShelfButton').onclick = () => openGameDialog(null, {shelf:true}); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => $('metadataDialog').showModal(); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('constellationButton').onclick = openConstellation; $('masteryButton').onclick = openMastery; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
+    $('addButton').onclick = () => openGameDialog(); $('addShelfButton').onclick = () => openGameDialog(null, {shelf:true}); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => $('metadataDialog').showModal(); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('arcadeRoomButton').onclick = () => openArcadeRoom({state:AppState, games:() => AppState.games, museumKioskEnabled:Boolean(AppState.appSettings.museum_kiosk_enabled && AppState.appSettings.museum_kiosk_pin_set), verifyMuseumPin, onShowGame:game => { AppState.selectedId = game.id; render(); }, onLaunch:game => launch(game)}); $('householdButton').onclick = openHousehold; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('timeMachineButton').onclick = openTimeMachine; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('constellationButton').onclick = openConstellation; $('masteryButton').onclick = openMastery; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
+    $('doneTimeMachine').onclick = () => $('timeMachineDialog').close();
     // ── Accessible Tools menu ──────────────────────────────────────────
     const toolsWrap = $('toolsWrap');
     const toolsButton = $('toolsButton');
@@ -341,11 +376,12 @@ window.addEventListener('DOMContentLoaded', () => {
     });
     $('closeSettings').onclick = $('cancelSettings').onclick = () => $('settingsDialog').close();
     bindLaunchBoxMigration();
+    bindEsdeImport();
     $('closeBigBoxMenu').onclick = closeBigBoxMenu;
     $('applyBigBoxMenu').onclick = applyBigBoxMenu;
     $('screenSaver').onclick = stopScreenSaver;
     $('closeMedia').onclick = () => { $('mediaDialog').close(); $('mediaDialog').querySelectorAll('img').forEach(el => el.remove()); };
-    $('closeReader').onclick = () => { $('readerDialog').close(); $('readerFrame').removeAttribute('src'); AppState.readerUrl = ''; AppState.readerPage = 1; };
+    $('closeReader').onclick = () => { $('readerDialog').close(); resetReaderFrame(); };
     $('bigBox').onkeydown = event => {
       if (bigBoxTypingActive()) {
         if (event.key === 'Escape') $('bigBoxHybridSearch').blur();
@@ -377,6 +413,28 @@ window.addEventListener('DOMContentLoaded', () => {
       if (event.key === 'Escape' || event.key === 'Backspace') closeBigBox();
     };
 
+    // ?deeplink= dispatch map (S2 owns the shape). 'search' stays above — it
+    // seeds the input before the
+    // first render, so it must run before refresh().
+    const DEEPLINK_ACTIONS = new Map([
+      ['bigbox', () => openBigBox()],
+      ['settings', () => openSettings()],
+      ['showgame', params => {
+        const resolved = resolveDeeplinkGameId(params.get('id'));
+        if (resolved !== null) {
+          AppState.selectedId = resolved;
+          render();
+        }
+      }],
+      ['recap', () => openSessionRecap()],
+      ['moment', params => openMoment(params.get('id'))],
+      ['clip', params => openClip(params.get('id'))],
+    ]);
+    function dispatchDeeplink(params) {
+      const action = DEEPLINK_ACTIONS.get(params.get('deeplink'));
+      if (typeof action === 'function') action(params);
+    }
+
     const deeplink = new URLSearchParams(location.search);
     if (deeplink.get('deeplink') === 'search') $('sidebarSearch').value = deeplink.get('q') || '';
     // Restore the view context from the URL hash before the first render.
@@ -394,14 +452,6 @@ window.addEventListener('DOMContentLoaded', () => {
       connectSessionEvents();
       pollSessions();
       await runStartupStorefrontImports().catch(() => {});
-      if (deeplink.get('deeplink') === 'bigbox') openBigBox();
-      else if (AppState.appSettings.gamescope_guest) openBigBox();
-      if (deeplink.get('deeplink') === 'settings') openSettings();
-      if (deeplink.get('deeplink') === 'showgame') {
-        const resolved = resolveDeeplinkGameId(deeplink.get('id'));
-        if (resolved !== null) {
-          AppState.selectedId = resolved;
-          render();
-        }
-      }
+      if (deeplink.get('deeplink') !== 'bigbox' && AppState.appSettings.gamescope_guest) openBigBox();
+      dispatchDeeplink(deeplink);
     }).catch(error => notify(error.message));
