@@ -66,7 +66,6 @@ What's New tips, localized UI strings, per-game Moments and Clips tabs, quick
 query chips, kiosk settings, and the final polish sweep round out the update.
 
 ---
----
 
 ## Download
 
