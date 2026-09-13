@@ -13,6 +13,7 @@ import sys
 import tempfile
 import shutil
 from urllib.request import urlopen
+from xml.etree import ElementTree
 
 def _repo_root() -> Path:
     candidate = Path(__file__).resolve().parent
@@ -399,6 +400,15 @@ def test_flatpak_manifest():
     print("  Flatpak manifest: ok")
 
 
+def test_flatpak_icon_is_square():
+    root = ElementTree.parse(ROOT / "openbox.svg").getroot()
+    view_box = [float(value) for value in (root.get("viewBox") or "").split()]
+    assert len(view_box) == 4, "openbox.svg must declare a four-value viewBox"
+    assert view_box[2] == view_box[3], "Flatpak app icons must use a square viewBox"
+    assert float(root.get("width", "0")) == float(root.get("height", "-1"))
+    print("  Flatpak icon geometry: square")
+
+
 def test_release_flatpak_workflow():
     workflow = ROOT / ".github" / "workflows" / "release-flatpak.yml"
     assert workflow.is_file(), "missing release Flatpak workflow"
@@ -450,7 +460,7 @@ def test_legal_policy():
     assert "Openbox window manager" in trademarks
     assert "| 0.8.x | No — upgrade required |" in security
     assert "| 1.0.x | No — upgrade required |" in security
-    assert "| 1.10.x | Yes (current) |" in security
+    assert "| 1.11.x | Yes (current) |" in security
     assert "| < 0.4.0 | No |" in security
     print("  Legal policy: ok")
 
@@ -599,6 +609,7 @@ def main():
     test_release_flatpak_workflow()
     test_legal_policy()
     test_flatpak_manifest()
+    test_flatpak_icon_is_square()
     test_makefile_install()
     test_staged_install_locale_endpoints()
     test_runtime_manifest()

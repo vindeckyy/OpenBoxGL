@@ -17,3 +17,5 @@ recommended: true
 priority: 10
 executable_patterns:
   - cemu
+state:
+  kind: none

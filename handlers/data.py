@@ -58,6 +58,7 @@ class DataHandlers:
                 path,
                 content_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
                 extra_headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
+                frameable=True,
             )
         except (KeyError, IndexError, ValueError, FileNotFoundError):
             raise DocumentNotFound("Document not found") from None
@@ -106,6 +107,7 @@ class DataHandlers:
                 path,
                 content_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
                 extra_headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
+                frameable=True,
             )
         except (KeyError, IndexError, ValueError, FileNotFoundError):
             raise PlatformDocumentNotFound("Platform document not found") from None

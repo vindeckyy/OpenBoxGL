@@ -40,6 +40,7 @@
             <button class="menu-button" id="playlistsButton" role="menuitem" tabindex="-1" data-i18n="tools.playlists">Playlists</button>
             <button class="menu-button" id="backupButton" role="menuitem" tabindex="-1" data-i18n="tools.backup">Backup</button>
             <button class="menu-button" id="historyButton" role="menuitem" tabindex="-1" data-i18n="tools.history">History</button>
+            <button class="menu-button" id="timeMachineButton" role="menuitem" tabindex="-1" data-i18n="tools.time_machine">Time Machine</button>
             <button class="menu-button" id="achievementsButton" role="menuitem" tabindex="-1" data-i18n="tools.achievements">Achievements</button>
             <button class="menu-button" id="saveFilterButton" role="menuitem" tabindex="-1" data-i18n="tools.save_filter">Save filter</button>
             <button class="menu-button" id="savePresetButton" role="menuitem" tabindex="-1" data-i18n="tools.save_preset">Save preset</button>
@@ -51,12 +52,15 @@
             <button class="menu-button" id="heroicButton" role="menuitem" tabindex="-1" data-i18n="tools.import_heroic">Import Heroic</button>
             <button class="menu-button" id="lutrisButton" role="menuitem" tabindex="-1" data-i18n="tools.import_lutris">Import Lutris</button>
             <button class="menu-button" id="arcadeButton" role="menuitem" tabindex="-1" data-i18n="tools.import_arcade">Import Arcade</button>
+            <button class="menu-button" id="arcadeRoomButton" role="menuitem" tabindex="-1" data-i18n="tools.arcade_room">Arcade Room</button>
+            <button class="menu-button" id="householdButton" role="menuitem" tabindex="-1" data-i18n="tools.household">Household</button>
             <button class="menu-button" id="discoveryButton" role="menuitem" tabindex="-1" data-i18n="tools.discovery">Discovery</button>
           </div>
           <div role="group" aria-label="Personalize" data-tool-group="personalize">
             <button class="menu-button" id="themesButton" role="menuitem" tabindex="-1" data-i18n="tools.themes">Themes</button>
             <button class="menu-button" id="pluginsButton" role="menuitem" tabindex="-1" data-i18n="tools.plugins">Plugins</button>
             <button class="menu-button" id="settingsButton" role="menuitem" tabindex="-1" data-i18n="tools.settings">Settings</button>
+            <button class="menu-button" id="whatsNewButton" role="menuitem" tabindex="-1" data-i18n="common.whats_new">What's New</button>
             <button class="menu-button" id="fullscreenButton" role="menuitem" tabindex="-1" data-i18n="nav.fullscreen">Fullscreen</button>
           </div>
           <div role="group" aria-label="Automation" data-tool-group="automation">
@@ -105,7 +109,7 @@
       </div>
     </main>
 
-    <aside class="details" id="details" aria-label="Game details" data-i18n-aria-label="library.game_details"><div class="details-resize-handle" id="detailsResizeHandle" role="separator" aria-orientation="vertical" aria-label="Resize details pane" tabindex="0" data-i18n-aria-label="library.resize_details"></div><div class="detail-empty" data-i18n="library.select_game_prompt">Select a game to inspect its real metadata and artwork.</div></aside>
+    <aside class="details" id="details" aria-label="Game details" data-i18n-aria-label="library.game_details" data-moments-host="detail"><div class="details-resize-handle" id="detailsResizeHandle" role="separator" aria-orientation="vertical" aria-label="Resize details pane" tabindex="0" data-i18n-aria-label="library.resize_details"></div><div class="detail-empty" data-i18n="library.select_game_prompt">Select a game to inspect its real metadata and artwork.</div></aside>
   </div>
 
   <dialog id="filterDrawer" aria-modal="true" aria-labelledby="filterDrawerTitle">
@@ -266,6 +270,8 @@
       <button class="icon-button" id="searchIgdb" type="button">Search IGDB</button>
       <button class="icon-button" id="searchScreenscraper" type="button">Search ScreenScraper</button>
       <button class="icon-button" id="hashMatchScreenscraper" type="button">ScreenScraper hash-match</button>
+      <button class="icon-button" id="searchSteamgrid" type="button" data-i18n="metadata.steamgrid_search" hidden>Search SteamGridDB</button>
+      <button class="icon-button" id="bulkSteamgrid" type="button" data-i18n="metadata.steamgrid_bulk" hidden>Fill missing art via SteamGridDB</button>
       <button class="primary" type="submit">Search</button>
       <button class="icon-button" id="autoMatchMetadata" type="button">Auto-match library</button>
       <div class="wide section-title" data-i18n="metadata.launchbox_heading">LaunchBox migration</div>
@@ -281,6 +287,14 @@
         <div class="extras"><button type="button" class="icon-button" id="previewLaunchBox" data-i18n="metadata.launchbox_preview">Preview migration</button><button type="button" class="primary" id="applyLaunchBox" data-i18n="metadata.launchbox_apply" hidden disabled>Apply preview</button></div>
         <p class="wide description" id="launchboxStatus" aria-live="polite"></p>
         <div class="wide metadata-results" id="launchboxReport" hidden></div>
+      </div>
+      <div class="wide section-title" data-i18n="metadata.esde_heading">ES-DE import</div>
+      <div class="wide detail-card">
+        <p class="description" data-i18n="metadata.esde_description">Preview an ES-DE gamelist.xml before adding or merging games. Paths remain local references.</p>
+        <label class="field wide"><span data-i18n="metadata.esde_xml">ES-DE gamelist.xml</span><span class="path-input-row"><input id="esdeXmlPath" type="text" data-i18n-placeholder="metadata.esde_xml_placeholder" placeholder="/path/to/gamelist.xml"><button type="button" class="path-browse" id="browseEsdeXml" data-i18n="common.browse">Browse</button></span></label>
+        <div class="extras"><button type="button" class="icon-button" id="previewEsde" data-i18n="metadata.esde_preview">Preview ES-DE import</button><button type="button" class="primary" id="applyEsde" data-i18n="metadata.esde_apply" hidden disabled>Apply preview</button></div>
+        <p class="wide description" id="esdeStatus" aria-live="polite"></p>
+        <div class="wide metadata-results" id="esdeReport" hidden></div>
       </div>
       <div class="wide description" id="metadataStatus"></div>
       <div class="wide detail-card" id="metadataCoverage" style="display:none"><div class="facts" id="metadataCoverageFacts"></div></div>
@@ -394,6 +408,32 @@
     <div class="form-grid" id="historyTimelinePane" hidden><div class="wide timeline" id="timelineContainer"></div></div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneHistory">Done</button></div>
   </dialog>
+  <dialog id="timeMachineDialog" aria-modal="true" aria-labelledby="timeMachineDialogTitle">
+    <div class="dialog-head"><h2 id="timeMachineDialogTitle" data-i18n="time_machine.title">Library Time Machine</h2><button type="button" id="closeTimeMachine" aria-label="Close Time Machine">×</button></div>
+    <div class="dialog-tabs" role="tablist" aria-label="Time Machine views">
+      <button type="button" class="dialog-tab active" role="tab" id="tmEventsTab" aria-selected="true" data-i18n="time_machine.timeline">Timeline</button>
+      <button type="button" class="dialog-tab" role="tab" id="tmAsOfTab" aria-selected="false" data-i18n="time_machine.as_of">Browse as of</button>
+    </div>
+    <div class="form-grid" id="timeMachineEventsPane">
+      <label class="field"><span data-i18n="time_machine.kind">Kind</span><select id="tmKind"><option value="" data-i18n="time_machine.all_kinds">All events</option><option value="add" data-i18n="time_machine.kind_add">Add</option><option value="edit" data-i18n="time_machine.kind_edit">Edit</option><option value="delete" data-i18n="time_machine.kind_delete">Delete</option><option value="restore" data-i18n="time_machine.kind_restore">Restore</option><option value="revert" data-i18n="time_machine.kind_revert">Revert</option></select></label>
+      <label class="field"><span data-i18n="time_machine.days">Days</span><input id="tmDays" type="number" min="1" placeholder="400"></label>
+      <label class="field"><span data-i18n="time_machine.game">Game ID</span><input id="tmGame" type="search" autocomplete="off"></label>
+      <div class="field"><span>&nbsp;</span><button type="button" class="icon-button" id="tmRefresh" data-i18n="time_machine.refresh">Refresh</button></div>
+      <div class="wide timeline" id="timeMachineEventsBody"><p class="muted" data-i18n="time_machine.loading">Loading Time Machine…</p></div>
+    </div>
+    <div class="form-grid" id="timeMachineAsOfPane" hidden>
+      <label class="field"><span data-i18n="time_machine.date">Date</span><input id="tmAsOfDate" type="date"></label>
+      <div class="field"><span>&nbsp;</span><button type="button" class="icon-button" id="tmAsOfButton" data-i18n="time_machine.reconstruct">Reconstruct</button></div>
+      <p class="wide description" id="timeMachineAsOfMeta"></p>
+      <div class="wide" id="timeMachineAsOfBody"><p class="muted" data-i18n="time_machine.no_date">Choose a date.</p></div>
+    </div>
+    <div class="dialog-actions"><button type="button" class="primary" id="doneTimeMachine" data-i18n="common.done">Done</button></div>
+  </dialog>
+  <dialog id="recapDialog" aria-modal="true" aria-labelledby="recapDialogTitle">
+    <div class="dialog-head"><h2 id="recapDialogTitle" data-i18n="recap.title">Session Recap</h2><button type="button" id="closeRecap" aria-label="Close Session Recap dialog">×</button></div>
+    <div class="recap-card" id="recapCard"></div>
+    <div class="dialog-actions"><button type="button" class="primary" id="recapDone" data-i18n="recap.done">Done</button></div>
+  </dialog>
   <dialog id="welcomeDialog" hidden aria-hidden="true"></dialog>
   <dialog id="setupCenter" aria-modal="true" aria-labelledby="setupCenterTitle" class="setup-center-dialog">
     <div class="dialog-head setup-center-head"><h2 id="setupCenterTitle">Library Setup Center</h2><button type="button" id="closeSetupCenter" aria-label="Close Library Setup Center">×</button></div>
@@ -432,6 +472,11 @@
       <div class="form-grid settings-panels">
         <label class="field wide settings-field" data-setting="search watched folders cloud screensaver startup shutdown session history backup progress automation image group controller gamepad"><span>Search settings</span><input id="settingsSearch" class="settings-search" type="search" placeholder="Type to filter settings"></label>
         <label class="field wide settings-field settings-panel" data-settings-panel="library imports" data-setting="watched folders import auto"><span>Automatically watched game folders, one absolute path per line</span><span class="path-input-row"><textarea id="watchFolders"></textarea><button type="button" class="path-browse" data-browse-for="watchFolders" data-browse-kind="folder">Browse</button></span></label>
+        <div class="wide settings-field settings-panel detail-card" data-settings-panel="library imports" data-setting="memories screenshots import steam retroarch dolphin folders auto">
+          <label class="check"><input type="checkbox" id="memoriesImportEnabled"><span data-i18n="settings.memories_import_enabled">Import screenshots from Steam, RetroArch, and Dolphin folders</span></label>
+          <label class="field wide"><span data-i18n="settings.memories_import_roots">Additional screenshot folders, one absolute path per line</span><textarea id="memoriesImportRoots"></textarea></label>
+          <div class="extras"><button type="button" class="icon-button" id="memoriesImportNow" data-i18n="settings.memories_import_now">Scan for screenshots now</button><span class="description" id="memoriesImportStatus"></span></div>
+        </div>
         <div class="wide settings-field" data-setting="library cleanup remove steam imports"><button type="button" class="icon-button" id="removeSteamGames">Remove all imported Steam games</button><span class="description">Removes library entries only. Game files and media stay on disk.</span></div>
         <div class="wide settings-field" data-setting="diagnostic support troubleshooting logs"><button type="button" class="icon-button" id="copyDiagnosticLog">Copy diagnostic log</button><span class="description">Review it before sharing because it can include game names and local file paths.</span></div>
         <label class="field wide settings-field settings-panel" data-settings-panel="integrations" data-setting="cloud sync syncthing dropbox nextcloud"><span data-i18n="settings.cloud_folder">Mounted Nextcloud, Syncthing, Dropbox, or other cloud folder for game-stat syncing</span><span class="path-input-row"><input id="cloudFolder"><button type="button" class="path-browse" data-browse-for="cloudFolder" data-browse-kind="folder">Browse</button></span></label>
@@ -449,6 +494,11 @@
           <div id="librarySyncConflicts" hidden></div>
         </div>
         <div class="wide settings-field settings-panel" data-settings-panel="integrations" data-setting="screenscraper scraper hash rom credentials"><span>ScreenScraper (credentials live in ~/.env: SCREENSCRAPER_USER, SCREENSCRAPER_PASSWORD)</span><div class="extras"><span class="description" id="screenscraperStatus">Not checked</span><button type="button" class="icon-button" id="testScreenscraper">Check ScreenScraper</button></div></div>
+        <div class="wide settings-field settings-panel detail-card" data-settings-panel="integrations" data-setting="steamgriddb artwork grid cover provider api key credentials">
+          <label class="check"><input type="checkbox" id="steamgridEnabled" checked> <span data-i18n="settings.steamgrid_enabled">Enable SteamGridDB artwork provider</span></label>
+          <span class="description" data-i18n="settings.steamgrid_credentials">API key lives in ~/.env: STEAMGRIDDB_API_KEY</span>
+          <div class="extras"><span class="description" id="steamgridStatus" data-i18n="settings.steamgrid_unchecked">Not checked</span><button type="button" class="icon-button" id="testSteamgrid" data-i18n="settings.steamgrid_check">Check SteamGridDB</button></div>
+        </div>
         <label class="field wide settings-field" data-setting="default image group viewing cover background screenshot clear logo fanart banner icon box back box spine 3d box title screen cart front cart back disc ads flyers manuals"><span>Default image group</span><select id="defaultImageGroup"><option value="cover">Box fronts</option><option value="background">Backgrounds</option><option value="screenshot">Screenshots</option><option value="clear_logo">Clear logos</option><option value="fanart">Fanart</option><option value="banner">Banners</option><option value="icon">Icons</option><option value="box_back">Box backs</option><option value="box_spine">Box spines</option><option value="box_3d">3D boxes</option><option value="title_screen">Title screens</option><option value="cart_front">Cart fronts</option><option value="cart_back">Cart backs</option><option value="disc">Discs</option><option value="advertisement">Ads / flyers</option><option value="manual">Manuals</option></select></label>
         <div class="wide settings-field" data-setting="badges favorite installed missing media saves documents versions storefront achievements high scores progress rating broken portable controller"><span>Visible game badges</span><div class="badge-row">
           <label class="check"><input type="checkbox" data-badge-setting="favorite"> Favorite</label>
@@ -470,8 +520,18 @@
         <label class="field wide settings-field" data-setting="startup applications commands"><span>Applications to start with OpenBox, one shell-free command per line</span><textarea id="startupCommands"></textarea></label>
         <label class="field wide settings-field" data-setting="shutdown applications commands exit"><span>Applications to start when OpenBox exits, one shell-free command per line</span><textarea id="shutdownCommands"></textarea></label>
         <label class="check settings-field" data-setting="session history tracking data play time"><input type="checkbox" id="trackSessionHistory" checked> Track play session history</label>
+        <label class="check settings-field" data-setting="session recap card summary end"><input type="checkbox" id="sessionRecapEnabled" checked> Show session recap when a session ends</label>
+        <label class="check settings-field" data-setting="quick resume save state suspend sessions saves"><input type="checkbox" id="quickResumeEnabled" checked> <span data-i18n="settings.quick_resume_enabled">Quick Resume — capture a resume state when a session ends</span></label>
+        <label class="check settings-field" data-setting="moments auto capture first boot achievement milestone"><input type="checkbox" id="momentsAutocapture" checked> <span data-i18n="settings.moments_autocapture">Auto-capture moments (first boot, achievements, milestones)</span></label>
+        <label class="field settings-field" data-setting="state retention resume states keep"><span data-i18n="settings.state_retention">Resume states kept per game</span><input id="stateRetention" type="number" min="1" max="20"></label>
         <label class="check settings-field" data-setting="backup on close saves"><input type="checkbox" id="backupOnClose"> Back up saves when a game session ends</label>
         <label class="check settings-field" data-setting="obs recording attach auto"><input type="checkbox" id="obsAutoAttach" checked> Auto-attach latest OBS recording when a session ends</label>
+        <label class="check settings-field settings-panel" data-settings-panel="integrations sessions" data-setting="obs replay buffer clips"><input type="checkbox" id="obsReplayEnabled"> Enable OBS replay-buffer clips</label>
+        <label class="field wide settings-field settings-panel" data-settings-panel="integrations sessions" data-setting="obs websocket endpoint"><span>OBS WebSocket endpoint (optional)</span><input id="obsWebsocketUrl" placeholder="ws://127.0.0.1:4455"></label>
+        <label class="field wide settings-field settings-panel" data-settings-panel="integrations sessions" data-setting="obs websocket password"><span>OBS WebSocket password (optional)</span><input id="obsWebsocketPassword" type="password" autocomplete="off"></label>
+        <label class="check settings-field settings-panel" data-settings-panel="integrations" data-setting="household family stats sharing local"><input type="checkbox" id="householdStatsSharing"> Share household play statistics with explicitly linked local devices</label>
+        <label class="check settings-field settings-panel" data-settings-panel="bigbox sessions" data-setting="museum arcade kiosk pin lock"><input type="checkbox" id="museumKioskEnabled"> Require a PIN before entering Museum mode (convenience boundary)</label>
+        <label class="field settings-field settings-panel" data-settings-panel="bigbox sessions" data-setting="museum arcade kiosk pin"><span>Museum PIN, 4–12 digits</span><span class="path-input-row"><input id="museumKioskPin" type="password" inputmode="numeric" autocomplete="new-password" placeholder="Leave blank to keep the current PIN"><button type="button" class="path-browse" id="clearMuseumKioskPin">Clear PIN</button></span></label>
         <label class="field wide settings-field settings-panel" data-settings-panel="sessions bigbox" data-setting="obs recording folder path"><span>OBS recording folder, optional override</span><span class="path-input-row"><input id="obsRecordingPath" placeholder="~/Videos"><button type="button" class="path-browse" data-browse-for="obsRecordingPath" data-browse-kind="folder">Browse</button></span></label>
         <label class="field settings-field" data-setting="save backup limit retention"><span>Save backup retention limit, 0 keeps all</span><input id="saveBackupLimit" type="number" min="0" max="500"></label>
         <label class="field settings-field" data-setting="media download limit queue welcome wizard"><span>Media download limit during imports, 0 unlimited</span><input id="mediaDownloadLimit" type="number" min="0" max="10000"></label>

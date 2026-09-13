@@ -16,3 +16,5 @@ recommended: true
 priority: 10
 executable_patterns:
   - eden
+state:
+  kind: none

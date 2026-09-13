@@ -26,6 +26,7 @@ OPERATION_TYPE_BY_NAME = {
     "emulator-install-all": "emulator.install",
     "emulator-update-all": "emulator.update",
     "media-bulk": "media.bulk_download",
+    "memories-import": "media.memories_import",
     "metadata": "metadata.db_sync",
     "metadata-match": "metadata.apply",
     "library-backup": "library.backup",
@@ -77,6 +78,8 @@ def operation_title_for_name(name: str) -> str:
         return f"Install Gameyfin game {name.split(':', 1)[1]}"
     if name == "media-bulk":
         return "Bulk media download"
+    if name == "memories-import":
+        return "Memory roots import"
     if name == "metadata":
         return "Metadata database sync"
     if name == "metadata-match":

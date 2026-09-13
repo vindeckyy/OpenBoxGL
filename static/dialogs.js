@@ -1,6 +1,8 @@
 import { $, escapeHtml } from './util.js';
 import { AppState, api, ensureProfiles, filteredGames, nativePickFile } from './state.js';
+import { t } from './i18n.js';
 import { closeBigBoxMenu } from './bigbox.js';
+import { resetReaderFrame } from './reader.js';
 
 let lastDialogTrigger = null;
 const dialogTriggers = new WeakMap();
@@ -403,9 +405,7 @@ document.querySelectorAll('dialog').forEach(dialog => {
   }
   dialog.addEventListener('close', () => {
     if (dialog.id === 'readerDialog') {
-      $('readerFrame').removeAttribute('src');
-      AppState.readerUrl = '';
-      AppState.readerPage = 1;
+      resetReaderFrame();
     }
     if (dialog.id === 'mediaDialog') $('fullScreenshot')?.remove();
     const trigger = dialogTriggers.get(dialog);
@@ -503,6 +503,109 @@ $('closeBulk').onclick = $('cancelBulk').onclick = () => closeDialog($('bulkDial
 $('closeSessions').onclick = $('doneSessions').onclick = () => closeDialog($('sessionsDialog'));
 $('closeHistory').onclick = $('doneHistory').onclick = () => closeDialog($('historyDialog'));
 
+// ── Trophy case (S6): launcher-level achievements ────────────────────────────
+// The dialog DOM is built lazily here so index.html stays untouched. The case
+// opens from the award toast, the exported openTrophyCase(), or the
+// app:open-trophy-case document event for other surfaces (tools menu, tabs).
+let trophyCaseReady = false;
+function ensureTrophyCaseHost() {
+  if (trophyCaseReady) return;
+  trophyCaseReady = true;
+  const wrap = document.createElement('div');
+  wrap.hidden = true;
+  wrap.innerHTML = `
+    <dialog id="trophyCaseDialog" aria-modal="true" aria-labelledby="trophyCaseTitle">
+      <div class="dialog-head"><h2 id="trophyCaseTitle"></h2><button type="button" id="trophyCaseClose" aria-label="Close">×</button></div>
+      <p class="trophy-case-count" id="trophyCaseCount"></p>
+      <div class="trophy-case-body" id="trophyCaseBody"></div>
+    </dialog>`;
+  document.body.appendChild(wrap);
+  const dialog = $('trophyCaseDialog');
+  dialog.setAttribute('closedby', 'closerequest');
+  $('trophyCaseClose').onclick = () => closeDialog(dialog);
+}
+
+function trophyCardHtml(item) {
+  const current = item.progress?.current ?? 0;
+  const target = item.progress?.target ?? 0;
+  const pct = target > 0 ? Math.min(100, Math.round(100 * current / target)) : 0;
+  const meta = item.awarded
+    ? (item.awarded_at ? t('trophy.earned_on', {date: String(item.awarded_at).slice(0, 10)}) : t('trophy.earned'))
+    : t('trophy.progress', {current, target});
+  return `<div class="trophy-card ${item.awarded ? 'is-earned' : 'is-locked'}">
+    <span class="trophy-card-icon" aria-hidden="true"></span>
+    <div class="trophy-card-text">
+      <strong>${escapeHtml(t(`trophy.rules.${item.id}.name`))}</strong>
+      <small>${escapeHtml(t(`trophy.rules.${item.id}.desc`))}</small>
+      <div class="trophy-progress"><div class="trophy-progress-fill" style="width:${pct}%"></div></div>
+      <small class="trophy-card-meta">${escapeHtml(meta)}</small>
+    </div>
+  </div>`;
+}
+
+function renderTrophyCase(payload) {
+  const body = $('trophyCaseBody');
+  if (!body) return;
+  const trophies = payload?.trophies || [];
+  $('trophyCaseTitle').textContent = t('trophy.case_title');
+  $('trophyCaseClose').setAttribute('aria-label', t('trophy.close'));
+  $('trophyCaseCount').textContent = t('trophy.count', {earned: payload?.earned ?? 0, total: payload?.total ?? trophies.length});
+  const earned = trophies.filter(item => item.awarded);
+  const locked = trophies.filter(item => !item.awarded);
+  if (!earned.length && !locked.length) {
+    body.innerHTML = `<p class="trophy-empty">${escapeHtml(t('trophy.empty'))}</p>`;
+    return;
+  }
+  body.innerHTML =
+    (earned.length ? `<h3 class="trophy-case-head">${escapeHtml(t('trophy.earned'))}</h3><div class="trophy-grid">${earned.map(trophyCardHtml).join('')}</div>` : '') +
+    (locked.length ? `<h3 class="trophy-case-head">${escapeHtml(t('trophy.locked'))}</h3><div class="trophy-grid">${locked.map(trophyCardHtml).join('')}</div>` : '');
+}
+
+async function openTrophyCase() {
+  ensureTrophyCaseHost();
+  const dialog = $('trophyCaseDialog');
+  if (!dialog.open) openDialog(dialog);
+  try {
+    renderTrophyCase(await api('/api/v2/insights/trophies'));
+  } catch (error) {
+    $('trophyCaseBody').innerHTML = `<p class="trophy-empty">${escapeHtml(error?.message || String(error))}</p>`;
+  }
+}
+
+function showTrophyToast(awards) {
+  const toast = $('toast');
+  if (!toast || !awards?.length) return;
+  const name = t(`trophy.rules.${awards[0].id}.name`);
+  const text = awards.length > 1 ? t('trophy.unlocked_more', {name, count: awards.length - 1}) : t('trophy.unlocked', {name});
+  toast.innerHTML = `<span class="trophy-toast-text">${escapeHtml(text)}</span><button type="button" class="trophy-view" id="trophyViewCase">${escapeHtml(t('trophy.view_case'))}</button>`;
+  toast.dataset.notifyLevel = 'success';
+  toast.classList.add('show');
+  $('trophyViewCase').onclick = () => { toast.classList.remove('show'); openTrophyCase(); };
+  clearTimeout(showTrophyToast.timer);
+  showTrophyToast.timer = setTimeout(() => toast.classList.remove('show'), 4000);
+}
+
+let trophyCheckTimer = 0;
+let trophyCheckBusy = false;
+async function checkTrophies() {
+  if (trophyCheckBusy) return;
+  trophyCheckBusy = true;
+  try {
+    const result = await api('/api/v2/insights/trophies/evaluate', {method: 'POST', body: '{}'});
+    showTrophyToast(result.newly_awarded);
+  } catch { /* trophies are best-effort; never block the refresh bus */ }
+  finally { trophyCheckBusy = false; }
+}
+function scheduleTrophyCheck() {
+  if (trophyCheckTimer) clearTimeout(trophyCheckTimer);
+  trophyCheckTimer = setTimeout(() => { trophyCheckTimer = 0; checkTrophies(); }, 600);
+}
+document.addEventListener('app:state-refreshed', scheduleTrophyCheck);
+document.addEventListener('app:open-trophy-case', () => { openTrophyCase(); });
+document.addEventListener('localechange', () => {
+  if ($('trophyCaseDialog')?.open) api('/api/v2/insights/trophies').then(renderTrophyCase).catch(() => {});
+});
+
 export {
   openDialog,
   closeDialog,
@@ -514,4 +617,5 @@ export {
   promptInput,
   promptChoice,
   confirmAction,
+  openTrophyCase,
 };

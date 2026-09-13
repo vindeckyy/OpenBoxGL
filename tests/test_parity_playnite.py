@@ -300,6 +300,17 @@ class DeeplinkTests(unittest.TestCase):
             code = handle_cli(["--uri"], "/tmp")
         self.assertEqual(code, 2)
 
+    def test_handle_cli_play_dispatches_launch_deeplink(self):
+        with mock.patch("parity_deeplinks.dispatch_uri", return_value=0) as dispatch:
+            code = handle_cli(["--play", "game/id"], "/tmp")
+        self.assertEqual(code, 0)
+        dispatch.assert_called_once_with("openbox://launch/game%2Fid", "/tmp")
+
+    def test_handle_cli_play_missing_argument(self):
+        with mock.patch("builtins.print"):
+            code = handle_cli(["--play"], "/tmp")
+        self.assertEqual(code, 2)
+
     def test_dispatch_showgame_prints_url(self):
         from parity_deeplinks import dispatch_uri
 

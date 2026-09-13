@@ -52,7 +52,7 @@ even when bridge injection is unavailable, and it is what the tests exercise.
 
 ## HTTP native surface
 
-All native routes are authenticated like every other route: unauthenticated calls get `403` (`GET /api/native/capabilities`) or `401` (all other native routes). Authorized calls when no native host is attached return capability-absent fallbacks (never an error that blocks the browser fallback).
+All native routes are authenticated like every other route: unauthenticated calls get `403` with the shared `{"error":"Unauthorized"}` response. Authorized calls when no native host is attached return capability-absent fallbacks (never an error that blocks the browser fallback).
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -89,7 +89,7 @@ through the capability resolver with a browser fallback.
 | Browser API | Native mapping |
 |---|---|
 | `window.open(url)` (manuals, Wikipedia) | `openExternal(url)` |
-| `prompt(...)` (removed; was 16 call sites across the 27-module frontend, now styled in-page dialogs) | `dialog("file"/"folder")` or styled in-page prompt |
+| `prompt(...)` (removed across the frontend; now styled in-page dialogs) | `dialog("file"/"folder")` or styled in-page prompt |
 | `confirm(...)` (removed; was 13 sites, now styled in-page confirms) | styled in-page confirm or native dialog |
 | `localStorage` (UI prefs) | server-persisted `ui_state` when native; `localStorage` in browser |
 | `navigator.clipboard` | host clipboard; browser fallback |
@@ -97,14 +97,18 @@ through the capability resolver with a browser fallback.
 | `navigator.getBattery` | optional; hide status when absent |
 | `navigator.getGamepads` | Web Gamepad API always (host `onGamepad` is a no-op stub; capabilities report `"webkit"`) |
 | `location.search` (token, deeplink) | unchanged; the host loads the same URL |
-| `beforeunload` (shutdown) | host calls `/api/shutdown` on window close |
+| `beforeunload` (shutdown) | page requests `/api/shutdown` when tracked games remain; native host sends `SIGTERM` on window close |
 
 ## Server lifecycle
 
 - The host is the parent; it owns the Python child.
-- On window close, the host calls `POST /api/shutdown` (the existing graceful
-  path that stops sessions and drains webhooks), then SIGTERMs the child as a
-  backstop.
+- On window close, the page requests `POST /api/shutdown` when tracked games
+  remain, while the native host sends `SIGTERM` to the Python child process
+  group as the lifecycle owner.
+- `web_app.py` performs graceful teardown by stopping tracked sessions, waiting
+  up to two seconds, force-killing known game process groups (or their PIDs),
+  persisting final cleanup, and draining webhooks. The native host also waits
+  for the child and sends `SIGKILL` to its process group if it remains alive.
 - The host holds no credentials. The token stays in the URL and the
   owner-readable `server.token` file, unchanged from the current threat model.
 

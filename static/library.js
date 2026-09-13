@@ -10,6 +10,8 @@ import { launch, backupSaves, discoverSaves, loadBackups } from './sessions.js';
 import { installGameyfin, uninstallGameyfin, ludusaviAction, hoardAction } from './storefront.js';
 import { openReader } from './reader.js';
 import { applyMoodForGame, clearMood } from './mood.js';
+import { t } from './i18n.js';
+import { mountMomentsPanel, mountResumeAffordance } from './moments.js';
 
 const DETAILS_WIDTH_KEY = 'openbox-details-width';
 const DETAILS_COLLAPSED_KEY = 'openbox-details-collapsed';
@@ -17,6 +19,39 @@ const VIRTUAL_GRID_KEY = 'openbox-virtual-grid';
 let lastFacetsFingerprint = null;
 let detailsDragActive = false;
 let detailSheetScrollTop = 0;
+let smartQueryRequest = 0;
+
+async function refreshSmartQuery(query) {
+  const text = String(query || '').trim();
+  const request = ++smartQueryRequest;
+  if (!text) {
+    AppState.queryParse = null;
+    AppState.queryParseText = '';
+    AppState.queryMatchIds = null;
+    invalidateFilterCache();
+    return;
+  }
+  try {
+    const result = await api('/api/v2/library/query/parse', {
+      method: 'POST',
+      body: JSON.stringify({query: text}),
+    });
+    if (request !== smartQueryRequest) return;
+    AppState.queryParse = result;
+    AppState.queryParseText = text;
+    AppState.queryMatchIds = new Set((result.matched_game_ids || []).map(String));
+  } catch {
+    if (request !== smartQueryRequest) return;
+    // The local matcher still keeps search usable if the interpretation
+    // preview is temporarily unavailable.
+    AppState.queryParse = null;
+    AppState.queryParseText = '';
+    AppState.queryMatchIds = null;
+  }
+  invalidateFilterCache();
+  renderQueryChips();
+  renderGrid();
+}
 
 // Virtual grid feature flag: localStorage['openbox-virtual-grid'] !== '0' enables windowing.
 // When disabled, grid renders all items without spacers or IntersectionObserver.
@@ -116,6 +151,15 @@ async function verifyWorkerParity(query, games) {
 
 // IntersectionObserver for virtual spacer windowing
 let _virtualObserver = null;
+// The pane scrolls more than the grid: library-head, the drop zone, and the
+// insights panel all sit above it. Virtual-window math works in grid-relative
+// space, so convert pane.scrollTop by the grid's offset inside the pane.
+function gridTopInPane() {
+  const pane = document.querySelector('main.library');
+  const grid = $('grid');
+  if (!pane || !grid) return 0;
+  return grid.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop;
+}
 function ensureVirtualObserver() {
   if (!isVirtualEnabled()) return;
   if (typeof IntersectionObserver === 'undefined') return;
@@ -126,7 +170,7 @@ function ensureVirtualObserver() {
     for (const entry of entries) {
       if (entry.isIntersecting && entry.intersectionRatio > 0) {
         // Spacer became visible: expand window by rendering with updated scroll
-        const top = pane.scrollTop;
+        const top = Math.max(0, pane.scrollTop - gridTopInPane());
         if (gridRowHeight && Math.abs(top - gridScrollTop) < 1) return;
         gridScrollTop = top;
         renderGrid({ fromScroll: true });
@@ -347,7 +391,16 @@ function renderQueryChips() {
   if (state.platformCategory !== 'all') addChip('category', `Category: ${state.platformCategory}`, () => { AppState.platformCategory = 'all'; });
   if (state.view !== 'all') addChip('view', `View: ${$('view').selectedOptions[0]?.text || state.view}`, () => { $('view').value = 'all'; });
   if (state.esrb) addChip('esrb', `ESRB: ${state.esrb}`, () => { if ($('esrbFilter')) $('esrbFilter').value = ''; });
-  if (state.query) addChip('search', `Search: ${state.query}`, () => { $('sidebarSearch').value = ''; invalidateFilterCache(); });
+  const parsedQuery = AppState.queryParse && String(AppState.queryParseText || '').toLowerCase().trim() === state.query.toLowerCase();
+  if (state.query && parsedQuery && Array.isArray(AppState.queryParse.chips) && AppState.queryParse.chips.length) {
+    AppState.queryParse.chips.forEach((chip, index) => {
+      const label = [chip.label, chip.display].filter(value => value !== undefined && value !== '').join(': ');
+      addChip(`query:${index}`, label || 'Query filter', () => { $('sidebarSearch').value = ''; refreshSmartQuery(''); });
+    });
+    if (AppState.queryParse.hint) chips.push(`<span class="description query-hint">${escapeHtml(AppState.queryParse.hint)}</span>`);
+  } else if (state.query) {
+    addChip('search', `Search: ${state.query}`, () => { $('sidebarSearch').value = ''; refreshSmartQuery(''); });
+  }
   if (state.explorer.progress) addChip('explorer', `Progress: ${state.explorer.progress === '__unset' ? 'Unset' : state.explorer.progress}`, () => { AppState.explorerRules = {}; });
   if (state.importBatchId) addChip('import_batch', `Import batch: ${state.importBatchId}`, () => { AppState.importBatchId = ''; invalidateFilterCache(); });
   if (state.smart.has_achievements) addChip('smart_achievements', 'Achievements', () => { delete AppState.smartFilterRules.has_achievements; });
@@ -374,7 +427,7 @@ function renderQueryChips() {
       else if (key === 'category') AppState.platformCategory = 'all';
       else if (key === 'view') $('view').value = 'all';
       else if (key === 'esrb' && $('esrbFilter')) $('esrbFilter').value = '';
-      else if (key === 'search') { $('sidebarSearch').value = ''; invalidateFilterCache(); }
+      else if (key === 'search' || key.startsWith('query:')) { $('sidebarSearch').value = ''; refreshSmartQuery(''); }
       else if (key === 'explorer') AppState.explorerRules = {};
       else if (key === 'import_batch') { AppState.importBatchId = ''; invalidateFilterCache(); }
       else if (key === 'smart_achievements') delete AppState.smartFilterRules.has_achievements;
@@ -417,6 +470,7 @@ function markFilterAria() {
       AppState.appSettings = state.settings || AppState.appSettings;
       AppState.mediaEpoch = state.media_epoch || 0;
       AppState._refreshCounter = (AppState._refreshCounter || 0) + 1;
+      _trashItems = null;
       if (AppState.activePlaylist && !AppState.playlists.some(item => item.name === AppState.activePlaylist)) AppState.activePlaylist = '';
       if (AppState.selectedId !== null && !AppState.games.some(game => game.id === AppState.selectedId)) AppState.selectedId = null;
       for (const id of selectedIds) if (!AppState.games.some(game => game.id === id)) selectedIds.delete(id);
@@ -480,7 +534,7 @@ function markFilterAria() {
         if (pane && gridRowHeight) {
           const row = Math.floor(target.index / Math.max(gridCols, 1));
           gridScrollTop = Math.max(0, row * gridRowHeight - pane.clientHeight / 2);
-          pane.scrollTop = gridScrollTop;
+          pane.scrollTop = gridTopInPane() + gridScrollTop;
           renderGrid();
         } else {
           const card = document.querySelector(`[data-game="${visible[target.index].id}"]`);
@@ -681,8 +735,9 @@ function markFilterAria() {
       return `<article class="card${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${bucketKey ? ` data-ratio="${bucketKey}"` : ''}${fromScroll ? '' : ` style="--motion-index:${Math.min(index,10)}"`}>
         ${AppState.bulkMode ? `<input class="card-picker" type="checkbox" data-game-picker="${game.id}" ${selectedIds.has(game.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(game.name)}">` : ''}
         <button type="button" class="card-main" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><div class="cover ${AppState.appSettings.bigbox_mode === 'coverflow' ? 'jewel-3d' : ''}">${imageMarkup(game,imageGroup)}</div>
-        <h3>${escapeHtml(game.name)}</h3><p>${escapeHtml(game.developer || game.platform || '')}</p>
+        <h3>${escapeHtml(game.name)}${game.moments_count ? `<span class="card-moments-count" aria-label="${escapeHtml(t('moments.count', {count: game.moments_count}))}">${escapeHtml(String(game.moments_count))}</span>` : ''}</h3><p>${escapeHtml(game.developer || game.platform || '')}</p>
         <div class="badge-row">${renderBadges(game)}</div></button>
+        ${game.moments_count ? `<button type="button" class="card-moments" data-moments-card="${game.id}" aria-label="${escapeHtml(t('moments.open_card', {count: game.moments_count}))}">${escapeHtml(t('moments.tab'))}</button>` : ''}
       </article>`;
     }
     let gridScrollTop = 0, gridRowHeight = 0, gridCols = 1;
@@ -718,7 +773,7 @@ function markFilterAria() {
         for (const row of groupedGeo.rows) {
           if (row.kind === 'header') continue;
           if (count + row.games.length > clamped) {
-            pane.scrollTop = row.top;
+            pane.scrollTop = gridTopInPane() + row.top;
             break;
           }
           count += row.games.length;
@@ -727,7 +782,7 @@ function markFilterAria() {
         const cols = Math.max(gridCols, 1);
         const row = Math.floor(clamped / cols);
         const rows = Math.ceil(ids.length / cols);
-        pane.scrollTop = Math.min(row * gridRowHeight, Math.max(0, rows * gridRowHeight - pane.clientHeight));
+        pane.scrollTop = gridTopInPane() + Math.min(row * gridRowHeight, Math.max(0, rows * gridRowHeight - pane.clientHeight));
       }
       renderGrid({ fromScroll: true });
       document.querySelector(`[data-game="${id}"]`)?.focus();
@@ -774,8 +829,9 @@ function markFilterAria() {
       return [Math.min(total, firstRow * gridCols), Math.min(total, (lastRow + 1) * gridCols)];
     }
     function renderGrid({fromScroll} = {}) {
+      if (isTrashView()) { renderTrashView({fromScroll}); return; }
       const pane = gridPane();
-      if (pane) gridScrollTop = pane.scrollTop;
+      if (pane) gridScrollTop = Math.max(0, pane.scrollTop - gridTopInPane());
       const visible = visibleGames();
       const explicitImageGroup = AppState.activePlaylist ? AppState.appSettings.image_group_by_playlist?.[AppState.activePlaylist] : AppState.platform !== 'all' ? AppState.appSettings.image_group_by_platform?.[AppState.platform] : AppState.appSettings.image_group;
       const effectiveImageGroup = explicitImageGroup || (AppState.platform === 'all' && !AppState.activePlaylist ? 'cover' : 'default');
@@ -876,6 +932,12 @@ function markFilterAria() {
         input.checked ? selectedIds.add(id) : selectedIds.delete(id);
         input.closest('.card')?.classList.toggle('selected', input.checked || AppState.selectedId === id);
       });
+      document.querySelectorAll('[data-moments-card]').forEach(button => button.onclick = event => {
+        event.preventDefault();
+        event.stopPropagation();
+        selectGame(Number(button.dataset.momentsCard));
+        setTimeout(() => document.getElementById('momentsTab')?.click(), 0);
+      });
       document.querySelectorAll('[data-list-sort]').forEach(button => button.onclick = () => toggleListSort(button.dataset.listSort));
       document.querySelectorAll('[data-manual-tile]').forEach(tile => {
         const game = AppState.games.find(item => item.id === Number(tile.dataset.manualTile));
@@ -921,9 +983,11 @@ function markFilterAria() {
       const shelfEntry = Boolean(game.manual_entry);
       $('details').innerHTML = `<div class="hero motion-enter" ${heroStyle}><div class="hero-copy"><div class="hero-kicker">${escapeHtml(game.platform || 'Unspecified platform')}</div><h2>${escapeHtml(game.name)}</h2></div></div>
         <div class="detail-body">
+          <div class="detail-tabs" role="tablist" aria-label="${escapeHtml(t('moments.detail_tabs'))}"><button type="button" class="detail-tab active" id="detailsOverviewTab" role="tab" aria-selected="true" aria-controls="detailsOverview">${escapeHtml(t('moments.overview'))}</button><button type="button" class="detail-tab" id="momentsTab" role="tab" aria-selected="false" aria-controls="detailsMoments">${escapeHtml(t('moments.tab'))}${game.moments_count ? ` <span class="tab-count">${escapeHtml(String(game.moments_count))}</span>` : ''}</button></div>
+          <section class="detail-tab-panel" id="detailsOverview" role="tabpanel" aria-labelledby="detailsOverviewTab">
           <div class="rating"><strong>${game.favorite ? '★ Favorite' : game.rating ? `${game.rating} ★` : 'Library'}</strong><span>${escapeHtml(game.progress || game.genre || '')}</span><span class="badge-row">${renderBadges(game)}</span></div>
           <button class="play" id="playButton" ${shelfEntry ? '' : game.path_exists && game.store_installed !== false ? '' : game.gameyfin_id && !game.store_installed ? '' : 'disabled'}>${shelfEntry ? 'SET UP LAUNCH' : game.gameyfin_id && !game.store_installed ? '⬇ INSTALL' : '▶ PLAY'}</button>
-          <div class="detail-actions"><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">${shelfEntry ? 'Edit shelf entry' : 'Edit metadata'}</button>${shelfEntry ? '<button class="icon-button" id="convertShelfButton">Set up launch</button>' : ''}<button class="icon-button" id="databaseMetadataButton">Find metadata</button>${game.steam_app_id ? '<button class="icon-button" id="steamMetadataButton">Use Steam data</button>' : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="uninstallGameyfin">Uninstall Gameyfin copy</button>' : ''}${game.path ? '<button class="icon-button" id="showInFolderButton">Show in folder</button>' : ''}<button class="icon-button" id="removeGameButton">Remove game</button></div>
+          <div class="detail-actions"><span id="resumeActionSlot" class="resume-action-slot"></span><button class="icon-button" id="momentsButton">${escapeHtml(t('moments.tab'))}</button><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">${shelfEntry ? 'Edit shelf entry' : 'Edit metadata'}</button>${shelfEntry ? '<button class="icon-button" id="convertShelfButton">Set up launch</button>' : ''}<button class="icon-button" id="databaseMetadataButton">Find metadata</button>${game.steam_app_id ? '<button class="icon-button" id="steamMetadataButton">Use Steam data</button>' : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="uninstallGameyfin">Uninstall Gameyfin copy</button>' : ''}${game.path ? '<button class="icon-button" id="showInFolderButton">Show in folder</button>' : ''}<button class="icon-button" id="removeGameButton">Remove game</button></div>
           <div class="detail-card"><h3>Information</h3><div class="facts">
             ${fact('Release date',game.year)}${fact('Developer',game.developer)}${fact('Publisher',game.publisher)}${fact('ESRB',game.esrb)}${fact('Source',game.source)}${fact('Category',platformCategoryFor(game))}${Object.entries(game.custom_fields || {}).map(([key,value]) => fact(key,value)).join('')}${fact('Max players',game.max_players)}${fact('Controller support',game.controller_support)}${fact('Disc count',game.disc_count)}${fact('Play time',duration(game.playtime_seconds))}
             ${fact('Launches',game.play_count)}${fact('Last played',game.last_played ? game.last_played.replace('T',' ') : '')}${fact('Progress',game.progress)}${fact('Rating',game.rating ? `${game.rating} / 5` : '')}${fact('Region',game.region)}${fact('Play mode',game.play_mode)}${fact('Wikipedia',game.wikipedia_url)}${fact('Video URL',game.video_url)}
@@ -937,7 +1001,26 @@ function markFilterAria() {
           ${AppState.raConfigured ? `<div class="detail-card"><h3>RetroAchievements</h3><div id="achievementContent"><p class="description">${game.ra_game_id ? `Matched to game ${escapeHtml(game.ra_game_id)}.` : 'Match this ROM to load achievements.'}</p><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}<button class="icon-button" id="openBrowser">Open Wikipedia</button></div><button class="icon-button" id="loadAchievements">Load achievements</button><div id="achievementStats"></div></div></div>` : ''}
           <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${savePaths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${AppState.appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}${game.platform === 'Arcade' || game.rom_name ? '<button class="icon-button" id="exportHighscores">Export high scores</button>' : ''}</div><div class="description" id="saveDiscovery">${savePaths.length ? `${savePaths.length} configured location${savePaths.length === 1 ? '' : 's'}` : 'No save location configured.'}${AppState.appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
           <div class="detail-card doctor-card" id="doctorCard" style="border:1px solid var(--border-card)"><h3>Launch Doctor</h3><div id="doctorChecks" class="description">Checking launch readiness…</div></div>
+          </section><section class="detail-tab-panel" id="detailsMoments" role="tabpanel" aria-labelledby="momentsTab" hidden><div id="momentsPanel"></div></section>
         </div>`;
+      const overviewTab = $('detailsOverviewTab');
+      const momentsTab = $('momentsTab');
+      const overviewPanel = $('detailsOverview');
+      const momentsPanel = $('detailsMoments');
+      const selectDetailTab = tab => {
+        const moments = tab === 'moments';
+        overviewTab?.classList.toggle('active', !moments);
+        momentsTab?.classList.toggle('active', moments);
+        overviewTab?.setAttribute('aria-selected', String(!moments));
+        momentsTab?.setAttribute('aria-selected', String(moments));
+        overviewPanel?.toggleAttribute('hidden', moments);
+        momentsPanel?.toggleAttribute('hidden', !moments);
+        if (moments) mountMomentsPanel(game, $('momentsPanel'));
+      };
+      overviewTab?.addEventListener('click', () => selectDetailTab('overview'));
+      momentsTab?.addEventListener('click', () => selectDetailTab('moments'));
+      $('momentsButton')?.addEventListener('click', () => selectDetailTab('moments'));
+      mountResumeAffordance(game, $('resumeActionSlot'));
       $('playButton').onclick = async () => {
         if (shelfEntry) {
           try {
@@ -1154,10 +1237,149 @@ function markFilterAria() {
         destructive: true,
         confirmLabel: 'Delete media',
       });
-      try { await api('/api/game/delete',{method:'POST',body:JSON.stringify({id,delete_media:alsoDeleteMedia})}); AppState.selectedId = null; await refresh(); notify('Game removed from library'); } catch(error) { notify(error.message); }
+      try {
+        // v2 delete is a soft delete into the trash bin; the toast offers Undo.
+        const result = await api('/api/v2/library/trash',{method:'POST',body:JSON.stringify({id,delete_media:alsoDeleteMedia})});
+        AppState.selectedId = null;
+        await refresh();
+        showTrashUndoToast(result.name || name, result.trash_id);
+      } catch(error) { notify(error.message); }
     }
     async function launchExtra(id,kind,index) { try { await api('/api/extra/launch',{method:'POST',body:JSON.stringify({id,kind,index})}); notify('Opened'); } catch(error) { notify(error.message); } }
-    $('sidebarSearch').oninput = () => { leaveActivePreset(); AppState.activePlaylist = ''; scheduleSearch(() => { renderPlaylists(); renderGrid(); }); };
+    // ── Trash bin (S3): toast undo + trash view ──────────────────────────────
+    // The View select gains a Trash option at runtime (index.html is owned by
+    // other lanes); selecting it renders the bounded bin served by
+    // GET /api/v2/library/trash. v2 delete soft-deletes; Undo restores.
+    const TRASH_VIEW = 'trash';
+    const TRASH_TOAST_MS = 8000;
+    let _trashItems = null;
+    let _trashToastTimer = 0;
+    function isTrashView() { return $('view')?.value === TRASH_VIEW; }
+    function ensureTrashViewOption() {
+      const select = $('view');
+      if (!select) return;
+      let option = [...select.options].find(item => item.value === TRASH_VIEW);
+      if (!option) {
+        option = document.createElement('option');
+        option.value = TRASH_VIEW;
+        select.appendChild(option);
+      }
+      option.textContent = t('trash.view');
+    }
+    function hideTrashToast() {
+      clearTimeout(_trashToastTimer);
+      const toast = $('toast');
+      if (toast) toast.classList.remove('show');
+    }
+    function showTrashUndoToast(name, trashId) {
+      const toast = $('toast');
+      if (!toast || !trashId) { notify(t('trash.moved', {name})); return; }
+      clearTimeout(_trashToastTimer);
+      if (notify.timer) clearTimeout(notify.timer);
+      toast.dataset.notifyLevel = 'info';
+      toast.innerHTML = `<span class="trash-toast-text">${escapeHtml(t('trash.moved', {name}))}</span><button type="button" class="trash-undo" id="trashUndoButton">${escapeHtml(t('trash.undo'))}</button>`;
+      toast.classList.add('show');
+      const undo = $('trashUndoButton');
+      if (undo) undo.onclick = () => { hideTrashToast(); restoreTrashEntry(trashId); };
+      _trashToastTimer = setTimeout(hideTrashToast, TRASH_TOAST_MS);
+    }
+    async function loadTrashItems() {
+      try {
+        const result = await api('/api/v2/library/trash');
+        _trashItems = Array.isArray(result.items) ? result.items : [];
+      } catch (error) {
+        _trashItems = [];
+        notify(error.message);
+      }
+      return _trashItems;
+    }
+    async function restoreTrashEntry(trashId) {
+      try {
+        const result = await api('/api/v2/library/trash/restore',{method:'POST',body:JSON.stringify({trash_id:trashId})});
+        _trashItems = null;
+        await refresh();
+        notify(t('trash.restored', {name: result.name || ''}));
+      } catch(error) { notify(error.message); }
+    }
+    async function purgeTrashEntry(trashId, name) {
+      const ok = await confirmAction({
+        title: t('trash.delete_forever'),
+        target: name,
+        consequence: t('trash.purge_consequence'),
+        retained: t('trash.purge_retained'),
+        recovery: t('trash.purge_recovery'),
+        destructive: true,
+        confirmLabel: t('trash.delete_forever'),
+      });
+      if (!ok) return;
+      try {
+        await api('/api/v2/library/trash/purge',{method:'POST',body:JSON.stringify({ids:[trashId]})});
+        _trashItems = null;
+        renderTrashView();
+      } catch(error) { notify(error.message); }
+    }
+    async function emptyTrash() {
+      const ok = await confirmAction({
+        title: t('trash.empty'),
+        consequence: t('trash.empty_consequence'),
+        recovery: t('trash.purge_recovery'),
+        destructive: true,
+        confirmLabel: t('trash.empty'),
+      });
+      if (!ok) return;
+      try {
+        const result = await api('/api/v2/library/trash/purge',{method:'POST',body:JSON.stringify({})});
+        _trashItems = null;
+        renderTrashView();
+        notify(t('trash.emptied', {count: result.purged ?? 0}));
+      } catch(error) { notify(error.message); }
+    }
+    function trashRowHTML(item) {
+      const when = String(item.trashed_at || '').replace('T', ' ');
+      const meta = [item.platform, when, (item.playlists || []).length ? t('trash.in_playlists', {names: item.playlists.join(', ')}) : ''].filter(Boolean).join(' · ');
+      return `<div class="trash-row" data-trash-id="${escapeHtml(item.trash_id)}">
+        <div class="trash-row-main"><strong>${escapeHtml(item.name || '')}</strong><span class="trash-meta">${escapeHtml(meta)}</span></div>
+        <button type="button" class="icon-button" data-trash-restore="${escapeHtml(item.trash_id)}">${escapeHtml(t('trash.restore'))}</button>
+        <button type="button" class="icon-button trash-danger" data-trash-purge="${escapeHtml(item.trash_id)}">${escapeHtml(t('trash.delete_forever'))}</button>
+      </div>`;
+    }
+    function renderTrashView({fromScroll} = {}) {
+      if (fromScroll) return; // the trash list is not virtualized; scroll repaints are no-ops here
+      AppState.selectedId = null;
+      selectedIds.clear();
+      AppState.bulkMode = false;
+      $('libraryTitle').textContent = t('trash.view');
+      $('surpriseButton').disabled = true;
+      $('grid').className = 'trash-wrap';
+      $('grid').innerHTML = `<div class="trash-empty">${escapeHtml(t('common.loading'))}</div>`;
+      loadTrashItems().then(items => {
+        if (!isTrashView()) return; // user navigated away mid-fetch
+        $('libraryMeta').textContent = t('trash.count', {count: items.length});
+        const head = `<div class="trash-head"><span class="trash-meta">${escapeHtml(t('trash.retention'))}</span>${items.length ? `<button type="button" class="icon-button trash-danger" id="trashEmpty">${escapeHtml(t('trash.empty'))}</button>` : ''}</div>`;
+        $('grid').innerHTML = items.length
+          ? `${head}<div class="trash-list">${items.map(trashRowHTML).join('')}</div>`
+          : `<div class="trash-empty"><h2>${escapeHtml(t('trash.view'))}</h2><p>${escapeHtml(t('trash.empty_state'))}</p></div>`;
+        const emptyButton = $('trashEmpty');
+        if (emptyButton) emptyButton.onclick = () => emptyTrash();
+        $('grid').querySelectorAll('[data-trash-restore]').forEach(button => button.onclick = () => restoreTrashEntry(button.dataset.trashRestore));
+        $('grid').querySelectorAll('[data-trash-purge]').forEach(button => {
+          const item = items.find(entry => entry.trash_id === button.dataset.trashPurge);
+          button.onclick = () => purgeTrashEntry(button.dataset.trashPurge, item?.name || '');
+        });
+      });
+    }
+    ensureTrashViewOption();
+    document.addEventListener('localechange', ensureTrashViewOption);
+    $('sidebarSearch').oninput = () => {
+      leaveActivePreset();
+      AppState.activePlaylist = '';
+      const query = $('sidebarSearch').value;
+      scheduleSearch(() => {
+        refreshSmartQuery(query);
+        renderPlaylists();
+        renderGrid();
+      });
+    };
     $('view').onchange = () => { leaveActivePreset(); AppState.activePlaylist = ''; renderPlaylists(); renderGrid(); };
     $('sort').onchange = () => {
       AppState.appSettings.list_sort = $('sort').value;
@@ -1259,7 +1481,7 @@ function markFilterAria() {
         scrollFramePending = true;
         requestAnimationFrame(() => {
           scrollFramePending = false;
-          const top = libraryPaneElement.scrollTop;
+          const top = Math.max(0, libraryPaneElement.scrollTop - gridTopInPane());
           if (gridRowHeight && Math.abs(top - gridScrollTop) < gridRowHeight) return;
           gridScrollTop = top;
           renderGrid({fromScroll:true});
@@ -1289,4 +1511,4 @@ function markFilterAria() {
     bindFilterDrawer();
     applyDetailsLayout();
 
-export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated, isVirtualEnabled, getSearchWorker, workerSearch, searchWithFallback, verifyWorkerParity, ensureVirtualObserver, visibleGameIds, focusGameIndex, gridMetrics };
+export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated, isVirtualEnabled, getSearchWorker, workerSearch, searchWithFallback, verifyWorkerParity, ensureVirtualObserver, visibleGameIds, focusGameIndex, gridMetrics, isTrashView, renderTrashView, showTrashUndoToast, restoreTrashEntry };

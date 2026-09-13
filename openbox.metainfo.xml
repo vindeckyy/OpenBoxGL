@@ -23,23 +23,30 @@
   </content_rating>
   <screenshots>
     <screenshot type="default">
-      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.10.0/assets/openbox-screenshot.png</image>
+      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.11.0/assets/openbox-screenshot.png</image>
       <caption>The library grid with cover art, filters, and the top bar.</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.10.0/assets/openbox-game-detail.png</image>
+      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.11.0/assets/openbox-game-detail.png</image>
       <caption>Game detail pane with metadata, artwork, and launch actions.</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.10.0/assets/openbox-bigbox.png</image>
+      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.11.0/assets/openbox-bigbox.png</image>
       <caption>Big Box fullscreen mode for controller-driven couch use.</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.10.0/assets/openbox-constellation.png</image>
+      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.11.0/assets/openbox-constellation.png</image>
       <caption>Library Constellation relationship graph with series, developer, and genre edges.</caption>
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.11.0" date="2026-09-12">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.11.0</url>
+      <description>
+        <p>Every Second Counts: Quick Resume, Moments, replay-buffer clips, highlight reels, the Library Time Machine, Backlog Radio, explainable natural queries, and a command palette.</p>
+        <p>Adds the controller-friendly Arcade Room and Museum mode, an optional local kiosk PIN boundary, opt-in server-free Household challenges and leaderboards, Steam Bridge shortcuts, and reviewable ES-DE gamelist.xml import.</p>
+      </description>
+    </release>
     <release version="1.10.0" date="2026-09-08">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.10.0</url>
       <description>

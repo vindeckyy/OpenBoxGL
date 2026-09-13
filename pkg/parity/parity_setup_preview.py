@@ -101,9 +101,11 @@ def _is_expired(expires_at: str) -> bool:
     if not expires_at:
         return False
     try:
-        return datetime.fromisoformat(expires_at) < datetime.now(timezone.utc)
-    except ValueError:
+        parsed = datetime.fromisoformat(expires_at)
+    except (TypeError, ValueError):
         return False
+    now = datetime.now() if parsed.tzinfo is None else datetime.now(timezone.utc)
+    return parsed < now
 
 
 def _candidate_id(source_type: str, source_id: str, identity: str, path: str | None = None) -> str:
@@ -200,6 +202,25 @@ def classify_emulator_readiness(game: dict, *, which=None) -> str:
     return "unknown"
 
 
+def _game_has_media(game: dict) -> bool:
+    """True when the game has at least one on-disk media asset.
+
+    The library schema stores art under ``cover`` (single path) and
+    ``screenshots`` (list of paths) — not LaunchBox-style ``box_front``.
+    """
+    if not isinstance(game, dict):
+        return False
+    cover = str(game.get("cover") or "").strip()
+    if cover and Path(cover).is_file():
+        return True
+    shots = game.get("screenshots")
+    if isinstance(shots, str):
+        shots = [shots]
+    if isinstance(shots, list):
+        return any(Path(str(path)).is_file() for path in shots if str(path or "").strip())
+    return False
+
+
 def compute_summary(*, state: dict | None = None, which=None) -> dict:
     state = state or load_state()
     games = state.get("games", [])
@@ -219,11 +240,7 @@ def compute_summary(*, state: dict | None = None, which=None) -> dict:
                 duplicate_count += 1
             seen_paths.add(norm)
     matched = sum(bool(game.get("launchbox_db_id")) for game in games)
-    media_gaps = sum(
-        1
-        for game in games
-        if not any(Path(str(game.get(field) or "")).is_file() for field in ("box_front", "screenshot"))
-    )
+    media_gaps = sum(1 for game in games if not _game_has_media(game))
     active_operations = sum(
         1
         for doc in get_operation_service().list_jobs(limit=MAX_PREVIEWS * 10).get("jobs", [])
@@ -927,8 +944,14 @@ def commit_preview(
                 m3u = staging_dir / f"{base}.m3u"
                 from pkg.parity.parity_import import generate_m3u
 
-                generate_m3u([Path(d) for d in discs], m3u)
-                game["path"] = str(m3u)
+                try:
+                    generate_m3u([Path(d) for d in discs], m3u)
+                except OSError:
+                    # Unwritable staging dir must not abort the commit; the
+                    # game keeps its first disc as the launch path.
+                    game["path"] = str(game.get("path") or discs[0])
+                else:
+                    game["path"] = str(m3u)
             game["import_batch_id"] = import_batch_id
             game["added_at"] = timestamp
             target = None

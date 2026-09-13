@@ -13,3 +13,5 @@ recommended: true
 priority: 10
 executable_patterns:
   - Vita3K
+state:
+  kind: none

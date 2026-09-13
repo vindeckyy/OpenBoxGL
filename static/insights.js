@@ -5,7 +5,7 @@
    Table fallback for a11y.
 */
 import { $, escapeHtml } from './util.js';
-import { api, AppState } from './state.js';
+import { api, AppState, notify } from './state.js';
 import { t } from './i18n.js';
 import { openWrapped } from './wrapped.js';
 
@@ -83,6 +83,81 @@ function renderTopGames(items) {
   return `<div class="insight-section"><h3 class="insight-title">${escapeHtml(t('insights.top_games'))}</h3><ol class="insight-rank">${rows}</ol></div>`;
 }
 
+function renderReasonChips(reasons) {
+  return (reasons || []).map(r => `<span class="radio-chip">${escapeHtml(t(r.key, r.params || {}))}</span>`).join('');
+}
+
+function renderRadio(playlist) {
+  if (!playlist) return '';
+  const picks = playlist.picks || [];
+  const notice = playlist.notice_key && playlist.notice_key !== 'radio.notice.ok'
+    ? `<p class="muted radio-notice">${escapeHtml(t(playlist.notice_key))}</p>` : '';
+  const badge = playlist.fallback ? `<span class="radio-badge">${escapeHtml(t('radio.fallback_badge'))}</span>` : '';
+  const rows = picks.map(pick => `
+    <li class="insight-rank-row radio-pick">
+      <button type="button" class="insight-game-link" data-insight-game="${escapeHtml(pick.game_id)}"><span class="insight-rank-label">${escapeHtml(pick.name)}</span><span class="insight-rank-count">${escapeHtml(pick.platform)} • ${pick.estimated_minutes}m</span></button>
+      <div class="radio-reasons">${renderReasonChips(pick.reasons)}</div>
+    </li>`).join('');
+  return `
+    <div class="insight-section radio-card">
+      <div class="radio-head"><h3 class="insight-title">${escapeHtml(t('radio.title'))}${badge}</h3><button type="button" class="icon-button" id="radioRefresh" aria-label="${escapeHtml(t('radio.refresh'))}" title="${escapeHtml(t('radio.refresh'))}">↻</button></div>
+      <p class="muted radio-saved">${escapeHtml(t('radio.saved', { name: playlist.name || 'Backlog Radio' }))}</p>
+      ${notice}
+      <ol class="insight-rank">${rows || `<li class="muted">${escapeHtml(t('radio.empty'))}</li>`}</ol>
+    </div>`;
+}
+
+function renderRadarRow(item, canPark) {
+  const meta = `${item.days_stalled}d • ${escapeHtml(formatHours(item.observed_seconds))}`;
+  const parkBtn = canPark ? `<button type="button" class="icon-button radio-park-btn" data-radio-park="${escapeHtml(item.game_id)}">${escapeHtml(t('radio.radar.park_button'))}</button>` : '';
+  return `<li class="insight-rank-row radar-row">
+    <button type="button" class="insight-game-link" data-insight-game="${escapeHtml(item.game_id)}"><span class="insight-rank-label">${escapeHtml(item.name)}</span><span class="insight-rank-count">${meta}</span></button>
+    <div class="radio-reasons">${renderReasonChips(item.reasons)}</div>${parkBtn}
+  </li>`;
+}
+
+function renderRadar(radar) {
+  if (!radar) return '';
+  if (!radar.enough_history) {
+    return `<div class="insight-section radio-card"><h3 class="insight-title">${escapeHtml(t('radio.radar.title'))}</h3><p class="muted">${escapeHtml(t('radio.radar.thin'))}</p></div>`;
+  }
+  const win = radar.winnable || [];
+  const park = radar.park || [];
+  const empty = !win.length && !park.length ? `<p class="muted">${escapeHtml(t('radio.radar.empty'))}</p>` : '';
+  return `
+    <div class="insight-section radio-card">
+      <h3 class="insight-title">${escapeHtml(t('radio.radar.title'))}</h3>
+      ${empty}
+      ${win.length ? `<h4 class="radio-sub">${escapeHtml(t('radio.radar.winnable'))}</h4><ol class="insight-rank">${win.map(i => renderRadarRow(i, false)).join('')}</ol>` : ''}
+      ${park.length ? `<h4 class="radio-sub">${escapeHtml(t('radio.radar.park'))}</h4><ol class="insight-rank">${park.map(i => renderRadarRow(i, true)).join('')}</ol>` : ''}
+    </div>`;
+}
+
+function bindRadioControls(body) {
+  const refresh = $('radioRefresh');
+  if (refresh) {
+    refresh.onclick = async () => {
+      try {
+        await api('/api/v2/insights/radio/refresh', { method: 'POST', body: '{}' });
+        loadInsights();
+      } catch (error) {
+        notify(error.message);
+      }
+    };
+  }
+  body.querySelectorAll('[data-radio-park]').forEach(btn => {
+    btn.onclick = async () => {
+      try {
+        const res = await api('/api/v2/insights/radar/park', { method: 'POST', body: JSON.stringify({ game_id: btn.dataset.radioPark }) });
+        if (res && res.parked) notify(t('radio.radar.parked', { name: res.name || '' }));
+        loadInsights();
+      } catch (error) {
+        notify(error.message);
+      }
+    };
+  });
+}
+
 function renderStreak(streak, momentum) {
   const delta = momentum.delta_seconds;
   const deltaLabel = delta === 0 ? t('insights.momentum_same') : (delta > 0 ? `+${formatHours(delta)} ${t('insights.momentum_vs_prev')}` : `${formatHours(delta)} ${t('insights.momentum_vs_prev')}`);
@@ -114,11 +189,16 @@ async function loadInsights() {
   if (!body) return;
   body.innerHTML = `<div class="muted">${escapeHtml(t('insights.loading'))}</div>`;
   try {
-    const data = await api(`/api/v2/insights/summary?days=${rangeDays}`);
+    const [data, radioRes, radarRes] = await Promise.all([
+      api(`/api/v2/insights/summary?days=${rangeDays}`),
+      api('/api/v2/insights/radio').catch(() => null),
+      api('/api/v2/insights/radar').catch(() => null),
+    ]);
     const { heatmap, totals, top_platforms, top_genres, top_games, streak, momentum } = data;
     body.innerHTML = `
       <div class="insights">
         ${renderTotals(totals)}
+        ${renderRadio(radioRes && radioRes.playlist)}
         ${renderStreak(streak, momentum)}
         <div class="insight-section">
           <h3 class="insight-title">${escapeHtml(t('insights.last_year'))}</h3>
@@ -130,8 +210,10 @@ async function loadInsights() {
           ${renderTopList(t('insights.top_genres'), top_genres || [], 'genre')}
         </div>
         ${renderTopGames(top_games || [])}
+        ${renderRadar(radarRes && radarRes.radar)}
       </div>
     `;
+    bindRadioControls(body);
     loaded = true;
   } catch (error) {
     body.innerHTML = `<div class="muted">${escapeHtml(t('insights.unavailable'))}: ${escapeHtml(error.message || String(error))}</div>`;

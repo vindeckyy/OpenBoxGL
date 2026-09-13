@@ -2,6 +2,7 @@
 
 import json
 import sys
+import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -27,11 +28,12 @@ def parse_uri(uri):
             else:
                 text = authority
         else:
-            known = {"start", "search", "showgame", "game", "launch", "bigbox", "fullscreen", "settings"}
-            if authority.casefold() not in {"", "localhost", "openbox"} and authority.casefold() not in known:
+            bare = authority.casefold()
+            if bare not in {"", "localhost", "openbox"} and ("." in authority or ":" in authority):
                 return {"action": "unknown"}
-            # A known action as authority is the bare form; keep the remainder as the action path.
-            text = rest if authority.casefold() in known else (path if sep else authority)
+            # A word authority is the action itself (openbox://resume/<id>); only
+            # dotted/port-bearing authorities are rejected as foreign hosts.
+            text = rest if bare not in {"", "localhost", "openbox"} else (path if sep else authority)
     elif text.startswith(f"{SCHEME}:"):
         text = text[len(f"{SCHEME}:") :]
     text = text.lstrip("/")
@@ -46,6 +48,8 @@ def parse_uri(uri):
     elif action == "search":
         payload["query"] = urllib.parse.unquote(remainder)
     elif action == "launch":
+        payload["id"] = urllib.parse.unquote(remainder).strip()
+    elif action in {"resume", "moment", "clip"}:
         payload["id"] = remainder.strip()
     elif action in {"bigbox", "fullscreen"}:
         payload["mode"] = "bigbox"
@@ -68,6 +72,9 @@ def build_launch_url(base_url, action, **params):
         return f"{base}/?deeplink=bigbox"
     if action == "settings":
         return f"{base}/?deeplink=settings"
+    if action in {"resume", "moment", "clip"}:
+        game_id = urllib.parse.quote(str(params.get("id", "")))
+        return f"{base}/?deeplink={action}&id={game_id}"
     return base
 
 
@@ -103,6 +110,7 @@ def handle_cli(argv, data_dir):
         print("  --fullscreen-width <W>     Custom viewport width in kiosk/app mode")
         print("  --fullscreen-height <H>    Custom viewport height in kiosk/app mode")
         print("  --resolution <WxH>         Custom viewport resolution (e.g. 1920x1080)")
+        print("  --play <id>                Launch a game by stable id or numeric id")
         print("  --uri <uri>                Dispatch an openbox:// deep link URI")
         print("  --launcher                 Run the keyboard quick launcher (rofi/wofi)")
         print("  --backup [--items <list>]  Create a backup archive")
@@ -114,6 +122,19 @@ def handle_cli(argv, data_dir):
             print("Usage: openbox --uri openbox://search/quake", file=sys.stderr)
             return 2
         return dispatch_uri(args[index + 1], data_dir)
+    if "--play" in args:
+        index = args.index("--play")
+        if index + 1 >= len(args):
+            print("Usage: openbox --play <game-id>", file=sys.stderr)
+            return 2
+        game_id = str(args[index + 1]).strip()
+        if not game_id:
+            print("Usage: openbox --play <game-id>", file=sys.stderr)
+            return 2
+        return dispatch_uri(
+            f"openbox://launch/{urllib.parse.quote(game_id, safe='')}",
+            data_dir,
+        )
     for arg in args:
         if str(arg).startswith(f"{SCHEME}:"):
             return dispatch_uri(arg, data_dir, open_browser=True)
@@ -142,9 +163,12 @@ def dispatch_uri(uri, data_dir, host="127.0.0.1", port=None, token=None, open_br
             except Exception:
                 pass
         return 0
-    if not port:
-        print("OpenBox is not running (no server port found). Start OpenBox first.", file=sys.stderr)
-        return 1
+    needs_token = action in {"launch", "resume"}
+    if not port or (needs_token and not token):
+        port, token = _start_server_and_wait(data_dir, host=host, token=token)
+        if not port:
+            print("OpenBox could not start its local server.", file=sys.stderr)
+            return 1
     try:
         if action in {"showgame", "game", "launch"}:
             game_id = str(parsed.get("id", "")).strip()
@@ -160,6 +184,25 @@ def dispatch_uri(uri, data_dir, host="127.0.0.1", port=None, token=None, open_br
                     webbrowser.open(url)
                 else:
                     print(url)
+            return 0
+        if action == "resume":
+            game_id = str(parsed.get("id", "")).strip()
+            if not game_id:
+                raise ValueError("Game id is required.")
+            body = {"id": int(game_id)} if game_id.isdigit() else {"game_id": game_id}
+            api_request(host, port, token, "/api/v2/resume", "POST", body)
+            return 0
+        if action in {"moment", "clip"}:
+            # Dispatch shells: the in-app consumers land with T1-ui (moment) and
+            # T3-obs (clip); open the deeplink URL so the SPA handles it.
+            url = build_launch_url(
+                f"http://{host}:{port}", action, id=str(parsed.get("id", "")).strip()
+            )
+            if open_browser:
+                import webbrowser
+                webbrowser.open(url)
+            else:
+                print(url)
             return 0
         if action == "search":
             query = parsed.get("query", "")
@@ -191,6 +234,68 @@ def dispatch_uri(uri, data_dir, host="127.0.0.1", port=None, token=None, open_br
         return 1
     print(f"Unknown deeplink action: {action}", file=sys.stderr)
     return 1
+
+
+def _server_token(data_dir):
+    try:
+        return (Path(data_dir) / "server.token").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _server_responds(host, port, token):
+    if not port or not token:
+        return False
+    try:
+        api_request(host, port, token, "/api/health")
+    except (OSError, ValueError, urllib.error.URLError):
+        return False
+    return True
+
+
+def _start_server_and_wait(data_dir, *, host="127.0.0.1", token=""):
+    """Boot a detached loopback server for deep links issued before startup."""
+    data_dir = Path(data_dir)
+    current_port = read_port_file(data_dir)
+    current_token = token or _server_token(data_dir)
+    if _server_responds(host, current_port, current_token):
+        return current_port, current_token
+
+    # These are ephemeral readiness markers, not user data.  Remove only
+    # regular files so a stale launch cannot be mistaken for a fresh server.
+    for name in ("server.port", "server.token"):
+        marker = data_dir / name
+        try:
+            if marker.is_file() and not marker.is_symlink():
+                marker.unlink()
+        except OSError:
+            pass
+    root = Path(__file__).resolve().parents[2]
+    web_app = root / "web_app.py"
+    if not web_app.is_file():
+        return 0, ""
+    try:
+        import subprocess
+
+        subprocess.Popen(
+            [sys.executable, str(web_app), "--no-browser"],
+            cwd=str(root),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            close_fds=True,
+        )
+    except OSError:
+        return 0, ""
+    deadline = time.monotonic() + 15.0
+    while time.monotonic() < deadline:
+        current_port = read_port_file(data_dir)
+        current_token = _server_token(data_dir)
+        if _server_responds(host, current_port, current_token):
+            return current_port, current_token
+        time.sleep(0.05)
+    return 0, ""
 
 
 def run_keyboard_launcher(data_dir):

@@ -7,10 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Changed
-- Redraw the application logo as a true vector: `openbox.svg` now contains
-  real path geometry (isometric cube with the three face glyphs) instead of a
-  base64-embedded PNG, and `assets/openbox-logo.png` plus
+- Replace the application logo with the new OpenBox GL mark: `openbox.svg`
+  (app icon and favicon) now carries the hexagonal OBGL monogram traced in
+  `assets/OpenBoxLogo.svg`, and `assets/openbox-logo.png` plus
   `assets/OpenBoxGL.png` are re-rendered from it.
+- Complete the logo rebrand with consistent square, transparent application
+  and README artwork generated from the supplied SVG. Native window and tray
+  icons use the bundled mark when running directly from source as well as
+  installed builds. Regenerate the artwork with `bash scripts/render_branding.sh`
+  (ImageMagick is needed only for development).
 
 ### Fixed
 - Serve large media files completely: `os.sendfile` on the timeout-managed
@@ -20,6 +25,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Honor the **Show Play insights** setting in the web UI: the setting was
   saved but never included in the public settings payload, so the insights
   panel always rendered.
+- Restore the in-app document reader: the 1.11 security headers marked every
+  response `frame-ancestors 'none'`, which blocked the reader iframe from
+  ever loading `/api/document` or `/api/platform/document`; those endpoints
+  now allow same-origin framing (`frame-ancestors 'self'`), and closing the
+  reader also unloads the frame instead of only dropping the `src`
+  attribute.
+- Keep the grid rendered when the library pane scrolls: the virtual window
+  treated the pane's scroll offset as grid-relative even though the library
+  header, drop zone, and insights panel sit above the grid, so scrolling
+  could blank the card grid; scroll offsets are now converted by the grid's
+  position inside the pane.
+- Restore focus to the card when Escape closes the context menu: the
+  navigation Escape handler blurred the restored focus because it ran after
+  the menu handler had already consumed the key.
+- Stop the resume affordance from probing the server for games that have no
+  server-issued stable id (e.g. client-only entries); the request could
+  never resolve and surfaced as a console error.
 
 ### Documentation & Gates
 - Stabilize the perf-20k gate against single-run scheduler spikes: each
@@ -35,6 +57,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Repair the README screenshot pipeline (parity finder import, auth token,
   lazy-loaded covers, virtualized-grid click) and regenerate the four
   screenshots against the current UI.
+
+## [1.11.0] - 2026-09-12
+
+### Every Second Counts
+- Add Quick Resume, progress-aware session recaps, Moments capture/timeline,
+  and replay-buffer or screenshot-backed Record That clips with deterministic
+  highlight reels.
+- Add the Library Time Machine with journal-backed timeline, bounded as-of
+  inspection, and safe revert previews that preserve the canonical state
+  boundary (ADR 0044).
+- Add Backlog Radio, the deterministic natural-language query bar with
+  editable interpretation chips, and the Ctrl/Cmd-K command palette (ADRs
+  0043 and 0045).
+
+### Showroom and Household
+- Add the controller-friendly Arcade Room and Museum mode with bounded media
+  caching, reduced-motion rendering, real metadata fact cards, and an optional
+  salted kiosk PIN convenience boundary.
+- Add opt-in, local-first Household members, challenges, results, shares, and
+  leaderboard projections over the existing sync folder; no account or hosted
+  service is required.
+
+### Handheld Migration and Polish
+- Add Steam Bridge preview/apply/remove support for lossless `shortcuts.vdf`
+  files and `openbox --play <id>` launch dispatch.
+- Add reviewable ES-DE `gamelist.xml` preview/apply with bounded parsing,
+  explicit source identity, source-digest checks, stale-plan rejection, and
+  transactional application.
+- Add What's New/tips discovery, detail-pane Moments and Clips surfaces,
+  query chips, kiosk settings, and localized UI coverage across all five stock
+  locales.
+
+### Artwork and achievements
+- Add an optional SteamGridDB artwork provider for searching, previewing,
+  applying, and bulk-matching covers, backgrounds, clear logos, icons, and
+  banners with a local cache and `STEAMGRIDDB_API_KEY` configuration.
+- Add deterministic local OpenBox launcher trophies with a persisted trophy
+  case, separate from the optional RetroAchievements account integration.
+
+### Corrective hardening
+- Complete the 1.10.1 sweep of state, save, import, media, launch, sync, and
+  frontend edge cases, with the full gate keeping changed-line coverage and
+  release contracts green.
+- Keep memory-root imports stable across supported Python pathlib
+  implementations and ship a square vector icon accepted by Flatpak.
 
 ## [1.10.0] - 2026-09-08
 

@@ -10,7 +10,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
      */
     const AppState = {
       games: [], playlists: [], filterPresets: [], explorerField: 'genre', explorerRules: {}, activeFilterPreset: '', bigBoxGames: [], runningGames: [], raConfigured: false, selectedId: null, platform: 'all', activePlaylist: '', editingId: null, metadataGameId: null, bigBoxIndex: 0, gamepadState: {}, lastSessionEvent: 0, bulkMode: false, bigBoxLastInput: performance.now(), screenSaverGame: null, contextGameId: null, availableProfiles: {},
-      appSettings: {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',cover_grouping:'shape',locale:'en'}, bigBoxFilter: 'all', bigBoxSort: 'title', bigBoxRaFilter: 'all', bigBoxPlatform: 'all', platformCategory: 'all', pendingUpdate: null, duplicateMediaGroups: 0, libraryBgm: null, readerPage: 1, readerUrl: '', bigBoxHybridQuery: '', mediaEpoch: 0, coverRatios: {}, importBatchId: '',
+      appSettings: {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',cover_grouping:'shape',locale:'en'}, bigBoxFilter: 'all', bigBoxSort: 'title', bigBoxRaFilter: 'all', bigBoxPlatform: 'all', platformCategory: 'all', pendingUpdate: null, duplicateMediaGroups: 0, libraryBgm: null, readerPage: 1, readerUrl: '', bigBoxHybridQuery: '', mediaEpoch: 0, coverRatios: {}, importBatchId: '', queryParse: null, queryParseText: '', queryMatchIds: null,
     };
 
     const selectedIds = new Set();
@@ -336,6 +336,9 @@ const token = new URLSearchParams(location.search).get('token') || '';
       AppState.activeFilterPreset = '';
       AppState.explorerRules = {};
       AppState.importBatchId = '';
+      AppState.queryParse = null;
+      AppState.queryParseText = '';
+      AppState.queryMatchIds = null;
       invalidateFilterCache();
     }
     function resolveDeeplinkGameId(id) {
@@ -362,8 +365,10 @@ const token = new URLSearchParams(location.search).get('token') || '';
       const preset = AppState.filterPresets.find(item => item.name === AppState.activeFilterPreset);
       const presetRules = preset?.rules || {};
       const activePlaylistData = playlistFor(AppState.activePlaylist);
-      const indexQuery = (presetRules.query || query).trim();
-      const sourceGames = indexedTitleCandidates(indexQuery) || AppState.games;
+      const parsedQueryText = String(AppState.queryParseText || '').toLowerCase().trim();
+      const smartQueryActive = !presetRules.query && parsedQueryText === query && AppState.queryMatchIds instanceof Set;
+      const indexQuery = smartQueryActive ? '' : (presetRules.query || query).trim();
+      const sourceGames = smartQueryActive ? AppState.games : (indexedTitleCandidates(indexQuery) || AppState.games);
       const visible = sourceGames.filter(game => {
         const completed = ['Beaten','Completed','Mastered'].includes(game.progress);
         const installed = gameInstalled(game);
@@ -377,7 +382,11 @@ const token = new URLSearchParams(location.search).get('token') || '';
         const esrb = presetRules.esrb || $('esrbFilter')?.value || '';
         const esrbMatch = !esrb || (game.esrb || 'Unrated') === esrb;
         const effectiveQuery = (presetRules.query || query).trim();
-        const queryMatch = !effectiveQuery || advancedQueryMatches(game, effectiveQuery);
+        const queryMatch = !effectiveQuery
+          ? true
+          : smartQueryActive
+            ? AppState.queryMatchIds.has(String(game.game_id || game.id || ''))
+            : advancedQueryMatches(game, effectiveQuery);
         const batchMatch = !AppState.importBatchId || String(game.import_batch_id) === AppState.importBatchId;
         const progressMatch = !presetRules.progress || game.progress === presetRules.progress;
         const favoriteMatch = presetRules.favorite === undefined || Boolean(game.favorite) === Boolean(presetRules.favorite);

@@ -6,6 +6,7 @@ import os
 import re
 import stat
 import tempfile
+import threading
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,11 @@ from backend_io import atomic_copy_stream, fsync_directory
 MAX_SAVE_ARCHIVE_MEMBER_BYTES = 4 * 1024 * 1024 * 1024
 MAX_SAVE_ARCHIVE_TOTAL_BYTES = 32 * 1024 * 1024 * 1024
 MAX_SAVE_ARCHIVE_MEMBERS = 50_000
+
+# Serializes save-archive creation/extraction against cloud-sync uploads so a
+# sync never observes a half-restored save tree and concurrent restores cannot
+# interleave.  Reentrant because ``restore_saves`` nests ``backup_saves``.
+SAVE_SYNC_LOCK = threading.RLock()
 
 
 def _reject_symlink_components(path):
@@ -174,45 +180,48 @@ def discover_save_paths(game, home=None):
     return list(unique.values())
 
 
-def backup_saves(game, root, label="manual"):
-    raw_root = Path(root).expanduser()
-    _reject_symlink_components(raw_root)
-    root = raw_root.resolve()
-    roots = [path for path in save_roots(game) if path.exists()]
-    if not roots:
-        raise FileNotFoundError("No configured save paths currently exist.")
-    if any(path.is_symlink() for path in roots):
-        raise ValueError("Save backup paths may not be symlinks.")
-    directory = game_backup_dir(game, root)
-    _reject_symlink_components(directory)
-    directory.parent.mkdir(parents=True, exist_ok=True)
-    _reject_symlink_components(directory)
-    directory.mkdir(parents=True, exist_ok=True)
-    os.chmod(directory.parent, 0o700)
-    os.chmod(directory, 0o700)
-    _restrict_archive_permissions(directory)
-    label = str(label or "manual").strip()
-    if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", label):
-        raise ValueError("Save backup label is invalid.")
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    archive = directory / f"{stamp}-{label}.zip"
-    manifest = {"game": game.get("name", ""), "roots": [{"path":str(path), "file":path.is_file()} for path in roots]}
+def backup_saves(game, root, label="manual", *, allow_empty=False):
+    with SAVE_SYNC_LOCK:
+        raw_root = Path(root).expanduser()
+        _reject_symlink_components(raw_root)
+        root = raw_root.resolve()
+        roots = [path for path in save_roots(game) if path.exists()]
+        if not roots:
+            if allow_empty:
+                return None
+            raise FileNotFoundError("No configured save paths currently exist.")
+        if any(path.is_symlink() for path in roots):
+            raise ValueError("Save backup paths may not be symlinks.")
+        directory = game_backup_dir(game, root)
+        _reject_symlink_components(directory)
+        directory.parent.mkdir(parents=True, exist_ok=True)
+        _reject_symlink_components(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        os.chmod(directory.parent, 0o700)
+        os.chmod(directory, 0o700)
+        _restrict_archive_permissions(directory)
+        label = str(label or "manual").strip()
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", label):
+            raise ValueError("Save backup label is invalid.")
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        archive = directory / f"{stamp}-{label}.zip"
+        manifest = {"game": game.get("name", ""), "roots": [{"path":str(path), "file":path.is_file()} for path in roots]}
 
-    def populate(package):
-        package.writestr("manifest.json", json.dumps(manifest))
-        for index, source in enumerate(roots):
-            if source.is_file():
-                _write_archive_file(package, source, f"roots/{index}/{source.name}")
-            else:
-                _reject_symlink_components(source)
-                for file in source.rglob("*"):
-                    if file.is_symlink():
-                        raise ValueError(f"Save backup source contains a symlink: {file}")
-                    if file.is_file():
-                        _write_archive_file(package, file, f"roots/{index}/{file.relative_to(source)}")
+        def populate(package):
+            package.writestr("manifest.json", json.dumps(manifest))
+            for index, source in enumerate(roots):
+                if source.is_file():
+                    _write_archive_file(package, source, f"roots/{index}/{source.name}")
+                else:
+                    _reject_symlink_components(source)
+                    for file in source.rglob("*"):
+                        if file.is_symlink():
+                            raise ValueError(f"Save backup source contains a symlink: {file}")
+                        if file.is_file():
+                            _write_archive_file(package, file, f"roots/{index}/{file.relative_to(source)}")
 
-    _write_private_archive(archive, populate)
-    return archive
+        _write_private_archive(archive, populate)
+        return archive
 
 
 def list_backups(game, root):
@@ -270,11 +279,14 @@ def _match_save_roots(manifest, configured):
         saved_path = str(item.get("path", ""))
         if Path(saved_path).expanduser() != configured[index]:
             raise ValueError("Save backup roots do not match this game.")
-        expected_file = configured[index].is_file()
-        if bool(item.get("file")) != expected_file:
+        # The manifest records the root's type at backup time.  A missing root
+        # is restored as that recorded type; a live type swap is still unsafe.
+        expected_file = bool(item.get("file"))
+        current = configured[index]
+        if current.exists() and current.is_file() != expected_file:
             raise ValueError("Save backup root type does not match this game.")
-        _reject_symlink_components(configured[index])
-        roots.append({"path": configured[index], "file": expected_file})
+        _reject_symlink_components(current)
+        roots.append({"path": current, "file": expected_file})
     return roots
 
 
@@ -321,21 +333,24 @@ def _write_save_restores(package, destinations):
 
 
 def restore_saves(game, root, backup_name):
-    raw_root = Path(root).expanduser()
-    _reject_symlink_components(raw_root)
-    root = raw_root.resolve()
-    directory = game_backup_dir(game, root)
-    _reject_symlink_components(directory)
-    archive = directory / Path(backup_name).name
-    _reject_symlink_components(archive)
-    if directory not in archive.parents or not archive.is_file():
-        raise FileNotFoundError("Save backup not found.")
-    with zipfile.ZipFile(archive) as package:
-        infos = _validate_save_archive_entries(package)
-        manifest = _load_save_manifest(package)
-        configured = save_roots(game)
-        roots = _match_save_roots(manifest, configured)
-        destinations = _compute_save_destinations(infos, roots)
-        backup_saves(game, root, "before-restore")
-        _write_save_restores(package, destinations)
-    return archive
+    with SAVE_SYNC_LOCK:
+        raw_root = Path(root).expanduser()
+        _reject_symlink_components(raw_root)
+        root = raw_root.resolve()
+        directory = game_backup_dir(game, root)
+        _reject_symlink_components(directory)
+        archive = directory / Path(backup_name).name
+        _reject_symlink_components(archive)
+        if directory not in archive.parents or not archive.is_file():
+            raise FileNotFoundError("Save backup not found.")
+        with zipfile.ZipFile(archive) as package:
+            infos = _validate_save_archive_entries(package)
+            manifest = _load_save_manifest(package)
+            configured = save_roots(game)
+            roots = _match_save_roots(manifest, configured)
+            destinations = _compute_save_destinations(infos, roots)
+            # A missing save tree is exactly when a restore is needed; the
+            # safety backup is skipped instead of aborting the restore.
+            backup_saves(game, root, "before-restore", allow_empty=True)
+            _write_save_restores(package, destinations)
+        return archive

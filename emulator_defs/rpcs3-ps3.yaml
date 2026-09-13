@@ -15,3 +15,8 @@ recommended: true
 priority: 10
 executable_patterns:
   - rpcs3
+state:
+  kind: adapter-cli
+  template: "--savestate={state_path}"
+  capture: ""
+  glob: "*.SAVESTAT *.savestat"

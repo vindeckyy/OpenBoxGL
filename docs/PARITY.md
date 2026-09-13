@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.10.0**, the Sync, Import, Launch release described in the CHANGELOG.
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.11.0**, the Every Second Counts release described in the CHANGELOG.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -17,6 +17,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Local executable and ROM import | done | Multi-disc M3U generation, multi-platform folder import, and emulator recommendations on import work |
 | Steam installed-game import | done | Manifests are discovered across Steam libraries |
 | Steam metadata and artwork | done | Selected game downloads real store data and media |
+| SteamGridDB artwork provider | done | Optional `STEAMGRIDDB_API_KEY` provider searches, previews, applies, and bulk-matches cover, background, clear-logo, icon, and banner artwork with a local cache (1.11.0) |
 | Steam launching | done | Imported App ID launches through Steam or its URI |
 | Epic, GOG, and Amazon imports through Heroic | done | Installed manifests import and launch through Heroic |
 | EA, Ubisoft, and Xbox imports | partial | Lutris/Heroic catalog import provides EA, Ubisoft, and Xbox/Game Pass tagging; native Xbox PC package scanning remains unavailable on Linux |
@@ -32,7 +33,8 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Additional apps, versions, and documents | done | Extras launch from each game's detail pane |
 | Manuals and reader | done | Reader toolbar with page navigation, spread layout, and light/dark themes for PDFs and documents |
 | Save management | done | Discover, scan, retention limits, versioned backups, backup-on-close, and restore work |
-| RetroAchievements | done | Account, matching, progress, badges, Big Box filters, pause access, and emulator injection work |
+| RetroAchievements | done | Optional account integration provides matching, progress, badges, Big Box filters, pause access, and emulator injection; it is separate from OpenBox launcher trophies |
+| OpenBox launcher trophies | done | Deterministic local trophy rules evaluate library and history, persist award dates, and render the trophy case (1.11.0) |
 | Video, music, and screenshot playback | done | Multi-category videos, library BGM, video/BGM mix, capture, and gallery work |
 | Playlists, auto-filters, and saved filters | done | Platform, view, search rules, ordered manual members, parent playlists, and notes save, apply, update, and delete |
 | Big Box controller-first navigation | done | Stage, hybrid, and CoverFlow layouts; filter/sort/RA filters; pause overlay; screensaver launch |
@@ -123,6 +125,14 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Big Box video snaps | done | Stage mode shows looping gameplay videos with debounce, BGM duck, reduced-motion support (1.9.0, ADR 0034) |
 | Full library catalog sync | done | Opt-in causal catalog transport records validated events, tombstones, outbox acknowledgements, recovery snapshots, and independently selectable conflicts; legacy routes fail closed before mutation. Launch paths, commands, credentials, and media remain local (ADRs 0038–0039) |
 | Manual/shelf entries | done | Create, edit, filter, export, and explicit conversion for games without local files through the `/api/v2/library/manual-entry*` routes (1.10.0, ADR 0036) |
+| Quick Resume and Moments | done | Resume-aware progress, session recaps, captures, and a per-game Moments timeline keep a player's place visible (1.11.0) |
+| Library Time Machine | done | Journal-backed event history supports bounded timeline, as-of inspection, and safe revert previews (1.11.0, ADR 0044) |
+| Backlog Radio and natural query | done | Habit-aware backlog recommendations, explainable query chips, and the Ctrl/Cmd-K command palette are local and deterministic (1.11.0, ADR 0043, ADR 0045) |
+| Arcade Room and Museum mode | done | Controller-friendly platform room, museum facts, reduced-motion rendering, and optional local kiosk convenience boundary (1.11.0) |
+| Household challenges and leaderboard | partial | Opt-in local records converge through the sync folder; no accounts or hosted multiplayer service (1.11.0) |
+| Record That clips and reels | done | Replay-buffer or fail-safe screenshot capture plus bounded, deterministic highlight reels (1.11.0) |
+| Steam Bridge shortcuts | done | Preview/apply/remove `shortcuts.vdf` entries and launch an OpenBox game with `openbox --play <id>` (1.11.0) |
+| ES-DE gamelist import | done | Reviewable `gamelist.xml` preview/apply with stale-plan and source-digest protection (1.11.0) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 

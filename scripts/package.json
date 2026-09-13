@@ -5,10 +5,10 @@
   "private": true,
   "license": "AGPL-3.0-or-later",
   "dependencies": {
-    "puppeteer": "25.9.0"
+    "puppeteer": "25.10.0"
   },
   "devDependencies": {
-    "eslint": "^10.9.1",
+    "eslint": "^10.10.0",
     "globals": "17.12.0",
     "typescript": "^7.0.2"
   },

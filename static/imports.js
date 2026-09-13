@@ -108,6 +108,7 @@ async function pickEmulatorForPlatform(platform, items) {
     }
 
 let launchBoxPreview = null;
+let esdePreview = null;
 
 function invalidateLaunchBoxPreview() {
   launchBoxPreview = null;
@@ -248,4 +249,86 @@ function bindLaunchBoxMigration() {
   }
 }
 
-export { importFolder, importSteam, importHeroic, importLutris, importArcade, importDroppedFolder, runStartupStorefrontImports, bindLaunchBoxMigration };
+function invalidateEsdePreview() {
+  esdePreview = null;
+  const apply = $('applyEsde');
+  if (apply) { apply.hidden = true; apply.disabled = true; }
+  const report = $('esdeReport');
+  if (report) { report.hidden = true; report.textContent = ''; }
+  const status = $('esdeStatus');
+  if (status) status.textContent = '';
+}
+
+function renderEsdeReport(report) {
+  const reportElement = $('esdeReport');
+  const status = $('esdeStatus');
+  if (!reportElement || !status) return;
+  const counts = report?.counts || {};
+  const operations = Array.isArray(report?.operations) ? report.operations : [];
+  const summary = [
+    t('metadata.esde_found', {count: counts.found ?? counts.total_in_xml ?? 0}),
+    t('metadata.esde_add_count', {count: counts.added ?? 0}),
+    t('metadata.esde_merge_count', {count: counts.merged ?? 0}),
+    t('metadata.esde_skip_count', {count: counts.skipped_malformed ?? 0}),
+  ].join(' · ');
+  const rows = operations.slice(0, 50).map(operation => {
+    const game = operation.game || {};
+    const action = operation.action === 'merge' ? t('metadata.esde_merge') : t('metadata.esde_add');
+    const review = operation.review_fields?.length ? ` · ${t('metadata.esde_review')}: ${operation.review_fields.join(', ')}` : '';
+    return `<div class="detail-card"><strong>${escapeHtml(action)}</strong> ${escapeHtml(game.name || t('metadata.esde_unnamed'))}${escapeHtml(review)}</div>`;
+  }).join('');
+  const errors = (report?.errors || []).slice(0, 10);
+  reportElement.innerHTML = `<div class="detail-card"><strong>${escapeHtml(summary)}</strong>${errors.length ? `<p class="description">${escapeHtml(`${t('metadata.esde_errors')}: ${errors.join(' · ')}`)}</p>` : ''}</div>${rows || `<p class="description">${escapeHtml(t('metadata.esde_no_operations'))}</p>`}`;
+  reportElement.hidden = false;
+  status.textContent = t('metadata.esde_preview_ready');
+  const apply = $('applyEsde');
+  if (apply) { apply.hidden = false; apply.disabled = !report?.preview_token; }
+}
+
+async function previewEsde() {
+  const xmlPath = $('esdeXmlPath')?.value.trim() || '';
+  if (!xmlPath) return notify(t('metadata.esde_source_required'));
+  const button = $('previewEsde');
+  try {
+    if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); }
+    const report = await api('/api/v2/import/esde/preview', {method: 'POST', body: JSON.stringify({xml_path: xmlPath})});
+    esdePreview = report;
+    renderEsdeReport(report);
+  } catch (error) {
+    invalidateEsdePreview();
+    notify(error.message);
+  } finally {
+    if (button) { button.disabled = false; button.removeAttribute('aria-busy'); }
+  }
+}
+
+async function applyEsde() {
+  const xmlPath = $('esdeXmlPath')?.value.trim() || '';
+  if (!xmlPath || !esdePreview?.preview_token) return notify(t('metadata.esde_preview_required'));
+  const button = $('applyEsde');
+  try {
+    if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); }
+    const result = await api('/api/v2/import/esde/apply', {method: 'POST', body: JSON.stringify({xml_path: xmlPath, plan: esdePreview, preview_token: esdePreview.preview_token})});
+    esdePreview = null;
+    if (button) button.hidden = true;
+    $('esdeStatus').textContent = t('metadata.esde_applied', {added: result.added ?? result.counts?.added ?? 0, merged: result.merged ?? result.counts?.merged ?? 0});
+    await refresh();
+  } catch (error) {
+    notify(error.message);
+  } finally {
+    if (button) { button.disabled = false; button.removeAttribute('aria-busy'); }
+  }
+}
+
+function bindEsdeImport() {
+  const browse = $('browseEsdeXml');
+  if (browse) browse.onclick = async () => {
+    const path = await nativePickFile(t('metadata.esde_select_file'));
+    if (path) { $('esdeXmlPath').value = path; invalidateEsdePreview(); }
+  };
+  if ($('previewEsde')) $('previewEsde').onclick = previewEsde;
+  if ($('applyEsde')) $('applyEsde').onclick = applyEsde;
+  $('esdeXmlPath')?.addEventListener('input', invalidateEsdePreview);
+}
+
+export { importFolder, importSteam, importHeroic, importLutris, importArcade, importDroppedFolder, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport };

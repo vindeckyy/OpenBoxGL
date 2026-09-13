@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from pkg.parity import parity_screenscraper as ss  # noqa: E402
+from updates import VERSION  # noqa: E402
 
 
 class PlatformMappingTest(unittest.TestCase):
@@ -166,7 +167,7 @@ class RequestTest(unittest.TestCase):
         self.assertIn("user=user1", url)
         self.assertIn("devid=dev1", url)
         self.assertIn("output=json", url)
-        self.assertEqual(opener.call_args[0][0].get_header("User-agent"), "OpenBox/1.10.0")
+        self.assertEqual(opener.call_args[0][0].get_header("User-agent"), f"OpenBox/{VERSION}")
 
     def test_ss_request_non_retryable_error_raises(self):
         from urllib.error import HTTPError
