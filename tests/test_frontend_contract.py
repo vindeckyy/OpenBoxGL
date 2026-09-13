@@ -145,7 +145,7 @@ def test_deeplink_dispatch_uses_explicit_allowlist():
     dispatch = _function_body(app, "dispatchDeeplink")
     assert "DEEPLINK_ACTIONS.get(params.get('deeplink'))" in dispatch
     assert "DEEPLINK_ACTIONS[" not in dispatch
-    assert "if (action) action(params);" in dispatch
+    assert "if (typeof action === 'function') action(params);" in dispatch
 
 def test_game_dialog_path_browse_hosts():
     html = INDEX.read_text()

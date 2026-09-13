@@ -432,7 +432,7 @@ window.addEventListener('DOMContentLoaded', () => {
     ]);
     function dispatchDeeplink(params) {
       const action = DEEPLINK_ACTIONS.get(params.get('deeplink'));
-      if (action) action(params);
+      if (typeof action === 'function') action(params);
     }
 
     const deeplink = new URLSearchParams(location.search);
