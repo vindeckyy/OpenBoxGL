@@ -36,14 +36,14 @@ colors:
   lifecycle-bg: "#45351d"
   bigbox-bg: "#30261a"
   bigbox-copy: "#d0c0a5"
-  overlay-insight-cell-0: "#1c1915"
-  overlay-insight-cell-1: "#4a2c0a"
-  overlay-insight-cell-2: "#8a4f10"
-  overlay-insight-cell-3: "#c97316"
+  overlay-insight-cell-0: "#1b1916"
+  overlay-insight-cell-1: "#3d2b1f"
+  overlay-insight-cell-2: "#7a4a1f"
+  overlay-insight-cell-3: "#c46a1f"
   overlay-insight-cell-4: "#f06000"
-  border-insight: "#3d3932"
-  shadow-insight: "#00000066"
-  surface-insight-card: "#1b1916"
+  border-insight: "#4b4338"
+  shadow-insight: "#0007"
+  surface-insight-card: "#211e1a"
   focus-ring: "#f06000"
 typography:
   display:
@@ -168,6 +168,10 @@ components:
     rounded: "{rounded.cover}"
     padding: "12px"
 ---
+
+> This is a design specification. `static/app.css` is the runtime token source
+> of truth; values that differ elsewhere in this reference are historical or
+> intentional design-spec values, not claims about the shipped CSS.
 
 # Design System: OpenBox
 

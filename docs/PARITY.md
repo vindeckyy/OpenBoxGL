@@ -17,6 +17,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Local executable and ROM import | done | Multi-disc M3U generation, multi-platform folder import, and emulator recommendations on import work |
 | Steam installed-game import | done | Manifests are discovered across Steam libraries |
 | Steam metadata and artwork | done | Selected game downloads real store data and media |
+| SteamGridDB artwork provider | done | Optional `STEAMGRIDDB_API_KEY` provider searches, previews, applies, and bulk-matches cover, background, clear-logo, icon, and banner artwork with a local cache (1.11.0) |
 | Steam launching | done | Imported App ID launches through Steam or its URI |
 | Epic, GOG, and Amazon imports through Heroic | done | Installed manifests import and launch through Heroic |
 | EA, Ubisoft, and Xbox imports | partial | Lutris/Heroic catalog import provides EA, Ubisoft, and Xbox/Game Pass tagging; native Xbox PC package scanning remains unavailable on Linux |
@@ -32,7 +33,8 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Additional apps, versions, and documents | done | Extras launch from each game's detail pane |
 | Manuals and reader | done | Reader toolbar with page navigation, spread layout, and light/dark themes for PDFs and documents |
 | Save management | done | Discover, scan, retention limits, versioned backups, backup-on-close, and restore work |
-| RetroAchievements | done | Account, matching, progress, badges, Big Box filters, pause access, and emulator injection work |
+| RetroAchievements | done | Optional account integration provides matching, progress, badges, Big Box filters, pause access, and emulator injection; it is separate from OpenBox launcher trophies |
+| OpenBox launcher trophies | done | Deterministic local trophy rules evaluate library and history, persist award dates, and render the trophy case (1.11.0) |
 | Video, music, and screenshot playback | done | Multi-category videos, library BGM, video/BGM mix, capture, and gallery work |
 | Playlists, auto-filters, and saved filters | done | Platform, view, search rules, ordered manual members, parent playlists, and notes save, apply, update, and delete |
 | Big Box controller-first navigation | done | Stage, hybrid, and CoverFlow layouts; filter/sort/RA filters; pause overlay; screensaver launch |

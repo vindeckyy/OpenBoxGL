@@ -51,6 +51,17 @@ the same launch path available from Steam Game Mode. ES-DE `gamelist.xml`
 imports add bounded parsing, explicit identity, stale-source detection, and
 transactional apply for another popular handheld workflow.
 
+### Artwork and achievements
+
+The optional SteamGridDB artwork provider searches, previews, applies, and
+bulk-matches community covers, backgrounds, clear logos, icons, and banners.
+Set `STEAMGRIDDB_API_KEY` in `~/.env`; results use a local cache and the
+provider can be disabled from Settings.
+
+OpenBox now includes a local launcher trophy case with deterministic awards
+evaluated from library and play-history data. These launcher trophies are
+separate from the optional RetroAchievements account integration.
+
 What's New tips, localized UI strings, per-game Moments and Clips tabs, quick
 query chips, kiosk settings, and the final polish sweep round out the update.
 

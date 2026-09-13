@@ -18,6 +18,9 @@ The files under this `docs/` folder are engineering, process, and release docume
 - `RELEASE_NOTES.md` — release notes for the current version
 - `flathub-checklist.md` — remaining steps toward Flathub store submission
 
+The current shipped release is **v1.11.0**. The planning and execution records
+below are historical archives, not an unfinished active roadmap.
+
 ## Process and policies
 
 - `CONTRIBUTING.md` — development setup, test/gate workflow, coding conventions
@@ -30,6 +33,6 @@ The files under this `docs/` folder are engineering, process, and release docume
 
 ## Archive
 
-- `archive/` — superseded planning documents and historical release notes kept for traceability: `NEXT_UPDATE_PLAN.md` and `NEXT_UPDATE_EXECUTION.md` (the executed 1.9.0→1.10.0 plan), `NEXT_UPDATE_EXECUTION-1.11.md` (the executed 1.11.0 ledger), `release-notes-1.7.2.md`, `release-notes-1.8.0.md`
+- `archive/` — superseded planning documents and historical release notes kept for traceability: `NEXT_UPDATE_PLAN.md` (the executed 1.9.0→1.10.0 plan), `NEXT_UPDATE_PLAN-1.11.md` (the 1.11.0 planning record), `NEXT_UPDATE_EXECUTION.md` (the executed 1.9.0→1.10.0 ledger), `NEXT_UPDATE_EXECUTION-1.11.md` (the executed 1.11.0 ledger), `release-notes-1.7.2.md`, `release-notes-1.8.0.md`
 
 Do not add user-facing markdown here. Edit the docs site repo instead.
