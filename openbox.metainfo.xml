@@ -23,19 +23,19 @@
   </content_rating>
   <screenshots>
     <screenshot type="default">
-      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.10.0/assets/openbox-screenshot.png</image>
+      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.11.0/assets/openbox-screenshot.png</image>
       <caption>The library grid with cover art, filters, and the top bar.</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.10.0/assets/openbox-game-detail.png</image>
+      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.11.0/assets/openbox-game-detail.png</image>
       <caption>Game detail pane with metadata, artwork, and launch actions.</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.10.0/assets/openbox-bigbox.png</image>
+      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.11.0/assets/openbox-bigbox.png</image>
       <caption>Big Box fullscreen mode for controller-driven couch use.</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.10.0/assets/openbox-constellation.png</image>
+      <image type="source">https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/v1.11.0/assets/openbox-constellation.png</image>
       <caption>Library Constellation relationship graph with series, developer, and genre edges.</caption>
     </screenshot>
   </screenshots>

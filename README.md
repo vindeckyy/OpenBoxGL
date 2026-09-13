@@ -136,7 +136,7 @@ One catalog for Steam, Heroic, Lutris, Gameyfin, ROM folders, ScummVM, RPCS3, Vi
 
 ### Metadata & Media
 
-LaunchBox Games Database sync (covers, backgrounds, screenshots, box backs, spines, 3D boxes, clear logos, fanart, banners, title screens, carts, discs, and advertisement flyers), IGDB search, Steam/GOG media, EmuMovies, Bezel Project, **ScreenScraper** per-ROM-hash scraping (credentials in `~/.env`, 1 req/s throttle, 30-day cache), bundled media packs (platform logos, controller prompts, badges), duplicate cleanup, region priority, download limits.
+LaunchBox Games Database sync (covers, backgrounds, screenshots, box backs, spines, 3D boxes, clear logos, fanart, banners, title screens, carts, discs, and advertisement flyers), IGDB search, Steam/GOG media, EmuMovies, Bezel Project, **ScreenScraper** per-ROM-hash scraping (credentials in `~/.env`, 1 req/s throttle, 30-day cache), optional **SteamGridDB** artwork search/apply and bulk matching for covers, backgrounds, clear logos, icons, and banners (credentials in `~/.env`, local cache), bundled media packs (platform logos, controller prompts, badges), duplicate cleanup, region priority, download limits.
 
 ### Emulators & Launching
 
@@ -150,11 +150,11 @@ Tokens: `{path}`, `{name}`, `{rom_name}`, `{app_id}`, `{heroic_app_id}`, `{lutri
 
 ### Sessions & Saves
 
-Play time tracking, session history, save discovery (Steam Cloud, RetroArch, PCSX2, PPSSPP, RPCS3, Dolphin, Cemu), versioned backups with retention limits, Ludusavi/Hoard CLI hooks, RetroAchievements (hardcore, beaten, mastered, badge injection).
+Play time tracking, session history, save discovery (Steam Cloud, RetroArch, PCSX2, PPSSPP, RPCS3, Dolphin, Cemu), versioned backups with retention limits, Ludusavi/Hoard CLI hooks, RetroAchievements (hardcore, beaten, mastered, badge injection). OpenBox launcher trophies are a separate local, deterministic trophy case evaluated from library and history.
 
 ### Play Insights
 
-Local-first playtime analytics with a 366-day activity heatmap (levels 0–4), current and longest play streaks, 30-day play momentum, and top platforms/genres. **OpenBox Wrapped** prints your year in games (playtime, streaks, progress, busiest month), the **History Timeline** tab groups sessions by day, and the **Mastery Map** dashboard breaks the library into per-platform and per-decade progress bars with RetroAchievements columns. Computed entirely locally from library history with zero telemetry.
+Local-first playtime analytics with a 366-day activity heatmap (levels 0–4), current and longest play streaks, 30-day play momentum, and top platforms/genres. **OpenBox Wrapped** prints your year in games (playtime, streaks, progress, busiest month), the **History Timeline** tab groups sessions by day, and the **Mastery Map** dashboard breaks the library into per-platform and per-decade progress bars with RetroAchievements columns. The **launcher trophy case** evaluates deterministic OpenBox milestones from local library/history data; these awards are separate from RetroAchievements. Computed entirely locally with zero telemetry.
 
 ### Big Box & Handhelds
 
@@ -404,6 +404,7 @@ OpenBox/
 ├── routes.py               GET/POST route tables (frozen v1 surface + additive v2 routes)
 ├── contracts.py            Frozen v1 API contract + legacy aliases
 ├── openbox.py              Shared core helpers (data paths, launch, profiles)
+├── static/                 Frontend JavaScript modules, search worker, and app.css
 ├── state_store.py          Schema-versioned state, atomic writes, snapshots
 ├── settings_schema.py      Settings key whitelist
 ├── api_errors.py           Structured API error codes
@@ -424,7 +425,7 @@ OpenBox/
 ├── themes/                 Stock themes (5 CSS files)
 ├── emulator_defs/          YAML definition packs
 ├── scripts/                Build, test, screenshot capture
-├── tests/test_*.py         Test suite (107 files)
+├── tests/test_*.py         Standalone test files run by ./run_all_tests.sh
 ```
 
 ### Run tests

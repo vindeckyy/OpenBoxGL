@@ -36,6 +36,6 @@ Bug reports should include: OpenBox version, distro and desktop, Python version 
 
 See `docs/reliability.md` for the full edge case catalog. Highlights:
 
-- Games you launch keep running after OpenBox exits unless you close them from the Running panel.
+- Graceful shutdown stops tracked sessions, persists cleanup, and drains shutdown work. If a tracked game remains alive after the two-second grace window, OpenBox force-kills its process group (falling back to the PID); the native host also force-kills its server process group if the server does not exit in time.
 - OpenBox data lives in `~/.local/share/openbox-game-launcher/`; deleting `library.json` resets the library while media files stay.
 - The web UI is local-only. Sharing the token in the URL with another machine is equivalent to handing over control of the instance.

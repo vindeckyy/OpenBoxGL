@@ -89,6 +89,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   query chips, kiosk settings, and localized UI coverage across all five stock
   locales.
 
+### Artwork and achievements
+- Add an optional SteamGridDB artwork provider for searching, previewing,
+  applying, and bulk-matching covers, backgrounds, clear logos, icons, and
+  banners with a local cache and `STEAMGRIDDB_API_KEY` configuration.
+- Add deterministic local OpenBox launcher trophies with a persisted trophy
+  case, separate from the optional RetroAchievements account integration.
+
 ### Corrective hardening
 - Complete the 1.10.1 sweep of state, save, import, media, launch, sync, and
   frontend edge cases, with the full gate keeping changed-line coverage and
