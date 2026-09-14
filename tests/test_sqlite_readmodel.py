@@ -343,6 +343,30 @@ def test_singleton_exists():
     assert hasattr(SQLITE_READ_MODEL, "search")
 
 
+def test_auto_enable_threshold():
+    """should_auto_enable() latches on at SQLITE_AUTO_THRESHOLD (1.12.0)."""
+    from pkg.state.sqlite_readmodel import SQLITE_AUTO_THRESHOLD
+    with tempfile.TemporaryDirectory() as tmp:
+        rm = SqliteReadModel(Path(tmp) / "test.db")
+        rm._enabled = False
+        assert rm.should_auto_enable(SQLITE_AUTO_THRESHOLD - 1) is False
+        assert rm.enabled is False
+        assert rm.should_auto_enable(SQLITE_AUTO_THRESHOLD) is True
+        assert rm.enabled is True  # latched: stays on afterwards
+        assert rm.should_auto_enable(0) is True
+        rm.close()
+
+
+def test_auto_enable_rejects_garbage():
+    """should_auto_enable() treats unparsable counts as small."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rm = SqliteReadModel(Path(tmp) / "test.db")
+        rm._enabled = False
+        assert rm.should_auto_enable(None) is False
+        assert rm.should_auto_enable("many") is False
+        rm.close()
+
+
 def test_search_route_registered():
     """GET /api/v2/library/search is in the route table."""
     from routes import GET_TABLE
@@ -371,6 +395,8 @@ def run_all_tests():
         test_runtime_modules_has_sqlite,
         test_singleton_exists,
         test_search_route_registered,
+        test_auto_enable_threshold,
+        test_auto_enable_rejects_garbage,
     ]
     failures = 0
     for test in tests:

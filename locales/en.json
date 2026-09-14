@@ -143,7 +143,8 @@
     "missing_files": "Missing files",
     "shelf_entries": "Shelf entries",
     "any_rating": "Any rating",
-    "unrated": "Unrated"
+    "unrated": "Unrated",
+    "smart_collections": "Collections"
   },
   "library": {
     "all_games": "All Games",

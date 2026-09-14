@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **Smart collections (1.12.0):** save the active Backlog Radio search as a
+  named, living shelf. Collections store the query — not a snapshot — so
+  membership stays correct as the library changes. New routes
+  `GET/POST /api/v2/collections` and `POST /api/v2/collections/delete`, a
+  Collections sidebar section, and a "Save as collection" chip in the query
+  bar (backed by `pkg/parity/parity_collections.py`).
+- **Game Story (1.12.0):** a per-game narrative tab in the detail pane,
+  served by `GET /api/v2/story?game_id=` — a deterministic projection
+  (`pkg/parity/parity_story.py`) over the game record, session journal, and
+  Moments: added date, first played, longest session, playtime milestones,
+  progress, and captured moments.
+- **Per-game environment overrides (1.12.0):** Edit game → Launch gains a
+  `launch_env` field (`KEY=value` lines), validated at save and merged over
+  the launch environment in `pkg/state/launch.py`, plus an “Always confirm
+  before launch” per-game flag that asks before preflight.
+- **Weekly automatic backups (1.12.0):** Settings gains an opt-in weekly
+  library backup with retention and a “last automatic backup” line; the
+  scheduler reuses the existing backup engine (`auto_backup_due()`).
+- **SQLite self-enables for large libraries (1.12.0):** at 5,000+ games the
+  FTS read model turns itself on; an explicit env opt-out is honored and
+  small libraries see identical behavior.
+- **Command palette learns (1.12.0):** recently chosen games and actions
+  rank first, from local usage counts — no telemetry.
+
 ### Changed
 - Replace the application logo with the new OpenBox GL mark: `openbox.svg`
   (app icon and favicon) now carries the hexagonal OBGL monogram traced in
@@ -18,6 +43,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (ImageMagick is needed only for development).
 
 ### Fixed
+- Route export downloads through the shared `send_bytes` writer so they
+  inherit the same partial-write discipline as every other response.
+- Restore focus to the opening element on every dialog close: `closeDialog()`
+  in `static/dialogs.js` now owns a focus stack, so no caller needs its own
+  focus dance and competing Escape handlers can't blur the restored target.
+- Project the per-game **Gamescope preset override** to the client: the field
+  saved correctly but `_project_game` never included it, so the Edit game
+  select always rendered blank.
 - Serve large media files completely: `os.sendfile` on the timeout-managed
   socket could stop mid-response and leave the transfer truncated, hanging
   browsers waiting for the promised `Content-Length` bytes; the buffered
@@ -44,6 +77,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   never resolve and surfaced as a console error.
 
 ### Documentation & Gates
+- Enforce the CSP framing contract in the gate (Stage 2.8,
+  `scripts/check_csp.py`): only the document endpoints may relax
+  `frame-ancestors` to `'self'`, so the 1.11 reader regression can't
+  return (ADR 0047).
 - Stabilize the perf-20k gate against single-run scheduler spikes: each
   benchmarked endpoint now does one unmeasured warm-up request, and the p95
   statistic drops the single worst run of a five-run sample. Sustained

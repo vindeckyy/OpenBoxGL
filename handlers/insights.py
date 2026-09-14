@@ -93,6 +93,21 @@ class InsightsHandlers:
         self.send_json(200, wrapped_summary(state, year))
         return
 
+    @route("GET", "/api/v2/story")
+    def _api_get_api_v2_story(self, parsed):
+        from api_errors import BadRequest
+        from pkg.parity.parity_story import game_story
+        from pkg.state.launch import game_from_query
+
+        state = load_state()
+        qs = parse_qs(parsed.query or "")
+        try:
+            game = game_from_query(state, qs)
+        except (IndexError, ValueError, TypeError) as error:
+            raise BadRequest("Game not found.", code="GAME_NOT_FOUND") from error
+        self.send_json(200, game_story(state, game))
+        return
+
     @route("GET", "/api/v2/insights/mastery")
     def _api_get_api_v2_insights_mastery(self, parsed):
         state = load_state()

@@ -19,6 +19,20 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
       if (!game_id) return;
       setButtonBusy(trigger, true);
       try {
+        // launch() accepts either a game object or an id; object callers
+        // (palette, bigbox, party, picker) already carry launch_confirm.
+        const game = gameOrId && typeof gameOrId === 'object' ? gameOrId
+          : AppState.games.find(item => item.id === gameOrId || item.game_id === gameOrId);
+        if (game?.launch_confirm) {
+          const { confirmAction } = await import('./dialogs.js');
+          const ok = await confirmAction({
+            title: 'Launch game',
+            target: game.name || 'Untitled',
+            consequence: 'Launch now?',
+            confirmLabel: 'Launch',
+          });
+          if (!ok) return;
+        }
         const preflight = await api('/api/v2/launch/preflight', {
           method: 'POST',
           body: JSON.stringify({ game_id, candidate: null }),

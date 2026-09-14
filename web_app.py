@@ -2,6 +2,7 @@
 """Local browser UI for OpenBox. Independent open-source software not affiliated with LaunchBox or Unbroken Software, LLC."""
 
 import email.utils
+from datetime import datetime, timezone
 import json
 import mimetypes
 import os
@@ -22,7 +23,7 @@ from api_errors import ApiError, BadRequest, RouteNotFound
 from env_config import bootstrap_env
 from openbox_logging import configure_logging
 from openbox import DATA, load_state, purge_demo_games, update_state
-from parity_backup import create_backup, restore_backup
+from parity_backup import AUTO_BACKUP_ITEMS, AUTO_BACKUP_KEEP, auto_backup_due, create_backup, restore_backup
 from parity_deeplinks import handle_cli
 from parity_emulator_defs import merge_profiles_from_definitions
 from parity_gameyfin import GameyfinError
@@ -598,6 +599,34 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         self._handle_request("do_POST")
 
 
+def _auto_backup_tick():
+    """Create the weekly automatic backup when due (1.12.0). Best-effort."""
+    try:
+        settings = load_state().get("settings", {})
+        if not auto_backup_due(settings):
+            return
+        try:
+            keep = max(0, int(settings.get("backup_auto_keep", AUTO_BACKUP_KEEP)))
+        except (TypeError, ValueError):
+            keep = AUTO_BACKUP_KEEP
+        archive = create_backup(DATA.parent, load_state(), AUTO_BACKUP_ITEMS, keep=keep, running_map=RUNNING)
+        stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+        def _record(current):
+            current.setdefault("settings", {})["last_auto_backup"] = stamp
+
+        update_state(_record)
+        LOGGER.info("Automatic backup saved to %s", archive.name)
+    except Exception:
+        LOGGER.exception("Automatic backup failed")
+
+
+def _auto_backup_worker():
+    """Hourly tick; WATCH_STOP wakes it for shutdown."""
+    while not WATCH_STOP.wait(3600):
+        _auto_backup_tick()
+
+
 def main():
     bootstrap_env(DATA.parent)
     configure_logging(DATA.parent)
@@ -653,6 +682,7 @@ def main():
         LOGGER.exception("Session reconciliation failed; continuing with empty active_sessions")
     WATCH_STOP.clear()
     JOB_MANAGER.submit("auto-import", auto_import_worker)
+    threading.Thread(target=_auto_backup_worker, name="auto-backup", daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     run_configured_commands("startup_commands")
     port = server.server_address[1]

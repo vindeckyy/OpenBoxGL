@@ -35,10 +35,6 @@ TYPE_RECORD = 0x00
 TYPE_STRING = 0x01
 TYPE_INT32 = 0x02
 TYPE_END = 0x08
-TAG_RECORD = TYPE_RECORD
-TAG_INT32 = TYPE_INT32
-TAG_STRING = TYPE_STRING
-TAG_END = TYPE_END
 
 ROOT_KEY = "shortcuts"
 OPENBOX_APPID_MASK = 0x80000000
@@ -47,8 +43,6 @@ OPENBOX_APPID_MASK = 0x80000000
 # a corrupted path from becoming an unbounded allocation while allowing a
 # large collection and arbitrary Steam metadata to survive a round trip.
 MAX_SHORTCUTS_BYTES = 16 * 1024 * 1024
-MAX_VDF_BYTES = MAX_SHORTCUTS_BYTES
-MAX_FILE_BYTES = MAX_SHORTCUTS_BYTES
 MAX_STRING_BYTES = 1024 * 1024
 MAX_RECORDS = 100_000
 MAX_DEPTH = 32
@@ -68,14 +62,6 @@ class ShortcutsTooLargeError(SteamBridgeError):
 
 class ShortcutsStaleError(SteamBridgeError):
     """Raised when an apply plan no longer describes the current file."""
-
-
-# A few descriptive aliases make the exceptions convenient for integrations
-# that use ``VDF`` terminology.
-VDFError = SteamBridgeError
-VDFCorruptError = ShortcutsCorruptError
-VDFTooLargeError = ShortcutsTooLargeError
-PreviewStaleError = ShortcutsStaleError
 
 
 def _decode_text(value: bytes) -> str:
@@ -262,9 +248,6 @@ class ShortcutsVDF(Mapping[str, Any]):
 
 
 # Readable aliases used by different callers.
-VDFDocument = ShortcutsVDF
-ShortcutDocument = ShortcutsVDF
-Record = VDFRecord
 
 
 class _Parser:
@@ -384,26 +367,7 @@ def parse_shortcuts(
     return ShortcutsVDF(records=records, root_key=root_key, raw_root_key=raw_root_key)
 
 
-def parse_shortcuts_vdf(source, *, max_bytes: int = MAX_SHORTCUTS_BYTES, as_dict: bool = False):
-    """Compatibility spelling for :func:`parse_shortcuts`."""
 
-    document = parse_shortcuts(source, max_bytes=max_bytes)
-    return document.to_dict() if as_dict else document
-
-
-def decode_shortcuts(source, *, max_bytes: int = MAX_SHORTCUTS_BYTES, as_dict: bool = False):
-    return parse_shortcuts_vdf(source, max_bytes=max_bytes, as_dict=as_dict)
-
-
-def parse_vdf(source, *, max_bytes: int = MAX_SHORTCUTS_BYTES, as_dict: bool = False):
-    return parse_shortcuts_vdf(source, max_bytes=max_bytes, as_dict=as_dict)
-
-
-def decode_vdf(source, *, max_bytes: int = MAX_SHORTCUTS_BYTES, as_dict: bool = False):
-    return parse_shortcuts_vdf(source, max_bytes=max_bytes, as_dict=as_dict)
-
-
-parse_binary_vdf = parse_shortcuts
 
 
 def _record_value_to_python(record: VDFRecord) -> Any:
@@ -419,12 +383,6 @@ def _records_to_mapping(records: Iterable[VDFRecord]) -> dict[str, Any]:
     for record in records:
         result[record.key] = _record_value_to_python(record)
     return result
-
-
-def record_to_dict(record: VDFRecord) -> dict[str, Any]:
-    """Return one record in the familiar mapping form."""
-
-    return {record.key: _record_value_to_python(record)}
 
 
 def _mapping_record_descriptor(value: Mapping[str, Any], *, key: str = "") -> VDFRecord | None:
@@ -608,19 +566,7 @@ def encode_shortcuts(
     return bytes(output)
 
 
-def encode_shortcuts_vdf(document, *, max_bytes: int = MAX_SHORTCUTS_BYTES, preserve_empty: bool = True) -> bytes:
-    return encode_shortcuts(document, max_bytes=max_bytes, preserve_empty=preserve_empty)
 
-
-def encode_vdf(document, *, max_bytes: int = MAX_SHORTCUTS_BYTES, preserve_empty: bool = True) -> bytes:
-    return encode_shortcuts(document, max_bytes=max_bytes, preserve_empty=preserve_empty)
-
-
-def encode_binary_vdf(document, *, max_bytes: int = MAX_SHORTCUTS_BYTES, preserve_empty: bool = True) -> bytes:
-    return encode_shortcuts(document, max_bytes=max_bytes, preserve_empty=preserve_empty)
-
-
-encode_binary_shortcuts = encode_shortcuts
 
 
 def write_shortcuts_bytes(path: str | os.PathLike[str], data: bytes, *, mode: int | None = None) -> Path:
@@ -679,15 +625,7 @@ def write_shortcuts_bytes(path: str | os.PathLike[str], data: bytes, *, mode: in
     return target
 
 
-def read_shortcuts(path: str | os.PathLike[str], *, max_bytes: int = MAX_SHORTCUTS_BYTES, missing_ok: bool = False) -> ShortcutsVDF:
-    target = Path(path)
-    if missing_ok and not target.exists() and not target.is_symlink():
-        return ShortcutsVDF(source_empty=True)
-    return parse_shortcuts(target, max_bytes=max_bytes)
 
-
-load_shortcuts = read_shortcuts
-read_shortcuts_vdf = read_shortcuts
 
 
 def appid_for(exe: str | os.PathLike[str], name: str) -> int:
@@ -698,23 +636,7 @@ def appid_for(exe: str | os.PathLike[str], name: str) -> int:
     return (zlib.crc32(exe_bytes + name_bytes) & 0xFFFFFFFF) | OPENBOX_APPID_MASK
 
 
-def deterministic_appid(exe, name) -> int:
-    return appid_for(exe, name)
 
-
-def shortcut_appid(exe, name) -> int:
-    return appid_for(exe, name)
-
-
-def appid(exe, name) -> int:
-    return appid_for(exe, name)
-
-
-compute_appid = appid_for
-synthetic_appid = appid_for
-steam_appid_for = appid_for
-appid_for_shortcut = appid_for
-crc32_appid = appid_for
 
 
 def _field(mapping: Mapping[str, Any], *names: str, default: Any = None) -> Any:
@@ -786,10 +708,6 @@ def make_shortcut(
     return fields
 
 
-build_shortcut = make_shortcut
-make_bridge_shortcut = make_shortcut
-
-
 def shortcut_from_game(
     game: Mapping[str, Any],
     *,
@@ -832,10 +750,6 @@ def shortcut_from_game(
         tags=_field(game, "tags", "Tags", default=None),
         openbox_game_id=str(_field(game, "game_id", "id", default="") or ""),
     )
-
-
-game_to_shortcut = shortcut_from_game
-entry_for_game = shortcut_from_game
 
 
 def _looks_like_shortcut(value: Mapping[str, Any]) -> bool:
@@ -1035,13 +949,6 @@ def _collision_appid(record: VDFRecord, occupied: set[int]) -> int:
         if candidate not in occupied:
             return candidate
         salt += 1
-
-
-def is_openbox_appid(value: Any) -> bool:
-    try:
-        return bool(_coerce_int32(value) & OPENBOX_APPID_MASK)
-    except SteamBridgeError:
-        return False
 
 
 def is_bridge_shortcut(record: VDFRecord | Mapping[str, Any]) -> bool:
@@ -1306,10 +1213,6 @@ def preview_shortcuts(
     return _apply_plan_for_records(document, data, exists, target, proposed)
 
 
-preview = preview_shortcuts
-preview_bridge = preview_shortcuts
-
-
 def _target_descriptors(targets: Any) -> list[Any]:
     if isinstance(targets, Sequence) and not isinstance(targets, (str, bytes, bytearray)):
         return list(targets)
@@ -1407,23 +1310,6 @@ def preview_remove(
     return _remove_plan(document, data, exists, target, targets)
 
 
-remove_preview = preview_remove
-
-
-def build_bridge_plan(
-    path: str | os.PathLike[str],
-    shortcuts: Any = (),
-    *,
-    operation: str = "apply",
-    max_bytes: int = MAX_SHORTCUTS_BYTES,
-) -> dict[str, Any]:
-    """Build an apply or remove preview using the plan-oriented API spelling."""
-
-    if operation == "remove":
-        return preview_remove(path, shortcuts, max_bytes=max_bytes)
-    if operation != "apply":
-        raise SteamBridgeError("Steam Bridge plan operation must be apply or remove.")
-    return preview_shortcuts(path, shortcuts, max_bytes=max_bytes)
 
 
 def _commit_plan(
@@ -1498,30 +1384,6 @@ def apply_shortcuts(
     return _commit_plan(path, plan, max_bytes=max_bytes, dry_run=dry_run)
 
 
-apply = apply_shortcuts
-apply_bridge = apply_shortcuts
-commit = apply_shortcuts
-
-
-def apply_bridge_plan(
-    plan: Mapping[str, Any],
-    path: str | os.PathLike[str] | None = None,
-    *,
-    max_bytes: int = MAX_SHORTCUTS_BYTES,
-    dry_run: bool = False,
-) -> dict[str, Any]:
-    """Apply a serialized bridge plan, defaulting to the previewed path."""
-
-    target = path if path is not None else plan.get("path") if isinstance(plan, Mapping) else None
-    if not target:
-        raise SteamBridgeError("A shortcuts.vdf path is required for plan apply.")
-    return _commit_plan(target, plan, max_bytes=max_bytes, dry_run=dry_run)
-
-
-apply_plan = apply_bridge_plan
-plan_bridge = build_bridge_plan
-
-
 def remove_shortcuts(
     path: str | os.PathLike[str],
     targets: Any,
@@ -1538,31 +1400,14 @@ def remove_shortcuts(
     return _commit_plan(path, plan, max_bytes=max_bytes, dry_run=dry_run)
 
 
-remove = remove_shortcuts
-remove_bridge = remove_shortcuts
-remove_plan = preview_remove
-
-
-def build_document(records: Sequence[VDFRecord] | Iterable[VDFRecord] = ()) -> ShortcutsVDF:
-    """Small convenience constructor for fixture and integration code."""
-
-    return ShortcutsVDF(records=[record.clone() for record in records])
-
-
 __all__ = [
     "TYPE_RECORD",
     "TYPE_INT32",
     "TYPE_STRING",
     "TYPE_END",
-    "TAG_RECORD",
-    "TAG_INT32",
-    "TAG_STRING",
-    "TAG_END",
     "ROOT_KEY",
     "OPENBOX_APPID_MASK",
     "MAX_SHORTCUTS_BYTES",
-    "MAX_VDF_BYTES",
-    "MAX_FILE_BYTES",
     "MAX_STRING_BYTES",
     "MAX_RECORDS",
     "MAX_DEPTH",
@@ -1570,64 +1415,17 @@ __all__ = [
     "ShortcutsCorruptError",
     "ShortcutsTooLargeError",
     "ShortcutsStaleError",
-    "VDFError",
-    "VDFCorruptError",
-    "VDFTooLargeError",
-    "PreviewStaleError",
     "VDFRecord",
-    "Record",
     "ShortcutsVDF",
-    "ShortcutDocument",
-    "VDFDocument",
     "parse_shortcuts",
-    "parse_shortcuts_vdf",
-    "decode_shortcuts",
-    "parse_vdf",
-    "decode_vdf",
-    "parse_binary_vdf",
     "encode_shortcuts",
-    "encode_shortcuts_vdf",
-    "encode_vdf",
-    "encode_binary_vdf",
-    "encode_binary_shortcuts",
-    "read_shortcuts",
-    "read_shortcuts_vdf",
-    "load_shortcuts",
     "write_shortcuts_bytes",
-    "record_to_dict",
     "appid_for",
-    "deterministic_appid",
-    "shortcut_appid",
-    "appid",
-    "compute_appid",
-    "synthetic_appid",
-    "steam_appid_for",
-    "appid_for_shortcut",
-    "crc32_appid",
     "make_shortcut",
-    "build_shortcut",
-    "make_bridge_shortcut",
     "shortcut_from_game",
-    "game_to_shortcut",
-    "entry_for_game",
-    "is_openbox_appid",
     "is_bridge_shortcut",
     "preview_shortcuts",
     "preview_remove",
-    "preview",
-    "preview_bridge",
-    "remove_preview",
-    "build_bridge_plan",
     "apply_shortcuts",
-    "apply",
-    "apply_bridge",
-    "commit",
-    "apply_bridge_plan",
-    "apply_plan",
-    "plan_bridge",
     "remove_shortcuts",
-    "remove",
-    "remove_bridge",
-    "remove_plan",
-    "build_document",
 ]

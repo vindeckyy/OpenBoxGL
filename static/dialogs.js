@@ -26,8 +26,16 @@ function openDialog(dialog, trigger = lastDialogTrigger || document.activeElemen
   if (first) first.focus();
 }
 function closeDialog(dialog) {
+  // Every dialog close restores focus to the element that opened it, so no
+  // caller needs its own focus dance (and competing Escape handlers can't
+  // blur the restored target afterwards — this runs inside the consuming
+  // handler, before later listeners fire).
+  const trigger = dialogTriggers.get(dialog);
   if (dialog.open && typeof dialog.close === 'function') dialog.close();
   else dialog.removeAttribute('open');
+  try {
+    if (trigger?.isConnected && typeof trigger.focus === 'function') trigger.focus({ preventScroll: true });
+  } catch {}
 }
 
 document.addEventListener('keydown', event => {
@@ -410,7 +418,7 @@ document.querySelectorAll('dialog').forEach(dialog => {
     if (dialog.id === 'mediaDialog') $('fullScreenshot')?.remove();
     const trigger = dialogTriggers.get(dialog);
     dialogTriggers.delete(dialog);
-    if (trigger?.isConnected) trigger.focus();
+    if (trigger?.isConnected) trigger.focus({ preventScroll: true });
   });
 });
 
@@ -428,6 +436,7 @@ async function openGameDialog(game = null, options = {}) {
     else if (element.name === 'save_paths') element.value = (game?.save_paths || []).join('\n');
     else if (element.name === 'screenshots') element.value = (game?.screenshots || []).join('\n');
     else if (element.name === 'alternate_names') element.value = Array.isArray(game?.alternate_names) ? game.alternate_names.join('; ') : (game?.alternate_names || '');
+    else if (element.name === 'launch_env') element.value = Object.entries(game?.launch_env || {}).map(([key, value]) => `${key}=${value}`).join('\n');
     else element.value = game?.[element.name] || '';
   });
   const entryType = $('gameForm').elements.entry_type;

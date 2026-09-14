@@ -38,7 +38,6 @@ from pkg.parity.parity_library_sync import (
 
 
 HOUSEHOLD_FORMAT = 1
-HOUSEHOLD_FORMAT_VERSION = HOUSEHOLD_FORMAT
 HOUSEHOLD_SYNC_FORMAT = HOUSEHOLD_FORMAT
 HOUSEHOLD_STATE_KEY = "household"
 HOUSEHOLD_SYNC_DIRECTORY = "openbox-household-v1"
@@ -55,8 +54,6 @@ MAX_RECORDS = 10_000
 # Familiar names for callers that share the library-sync transport helpers.
 MAX_EVENT_BYTES = MAX_RECORD_BYTES
 MAX_EVENTS = MAX_RECORDS
-MAX_HOUSEHOLD_RECORD_BYTES = MAX_RECORD_BYTES
-MAX_HOUSEHOLD_RECORDS = MAX_RECORDS
 MAX_PARENTS = 256
 MAX_MEMBER_NAME = 80
 MAX_AVATAR_COLOR = 48
@@ -132,10 +129,6 @@ SHARE_FIELDS = frozenset({
     "window_start",
     "window_end",
 })
-
-
-class HouseholdError(Exception):
-    """Base class for household protocol errors."""
 
 
 # Keep the library-sync exception as the public validation type.  Callers
@@ -605,7 +598,7 @@ def _read_household_records_at_root(target: Path) -> list[dict[str, Any]]:
     if events_dir.is_symlink() or not events_dir.is_dir():
         raise SyncFolderError("Household sync event directory is not a directory.")
     paths = sorted(events_dir.glob("*.json"))
-    if len(paths) > MAX_HOUSEHOLD_RECORDS:
+    if len(paths) > MAX_RECORDS:
         raise SyncValidationError("Too many household sync records.")
     records = [_read_household_record_file(path) for path in paths]
     validate_record_set(records)
@@ -656,7 +649,6 @@ sync_folder = household_sync_folder
 event_path = household_event_path
 read_events = read_household_records
 read_event_files = read_household_records
-read_shared_records = read_household_records
 write_event = write_household_record
 write_events = write_household_records
 
@@ -958,10 +950,6 @@ def latest_valid(records: Iterable[dict[str, Any]], sync_key: str | None = None,
     return copy.deepcopy(max(candidates, key=_record_order_key)) if candidates else None
 
 
-latest_valid_record = latest_valid
-select_latest = latest_valid
-
-
 def current_records(records: Iterable[dict[str, Any]], known_records: Iterable[dict[str, Any]] = ()) -> list[dict[str, Any]]:
     return converge_records(records, known_records)
 
@@ -1084,17 +1072,6 @@ def make_share_record(member_id: str, period: str = "all_time", stats: dict[str,
     )
 
 
-build_record = make_record
-build_member_record = make_member_record
-build_challenge_record = make_challenge_record
-build_challenge_result_record = make_challenge_result_record
-build_share_record = make_share_record
-member_record = make_member_record
-challenge_record = make_challenge_record
-challenge_result_record = make_challenge_result_record
-share_record = make_share_record
-
-
 def make_tombstone_record(kind: str, sync_key: str, *, device_id: str = "local", sequence: int = 1,
                           parents: Iterable[str] = (), created_at: str | None = None) -> dict[str, Any]:
     return make_record(
@@ -1112,9 +1089,6 @@ def tombstone_record(record: dict[str, Any], *, device_id: str = "local", sequen
         checked["kind"], checked["sync_key"], device_id=device_id, sequence=sequence,
         parents=parent_ids, created_at=created_at,
     )
-
-
-delete_record = tombstone_record
 
 
 def stats_sharing_enabled(value: Any) -> bool:
@@ -1142,10 +1116,6 @@ def stats_sharing_enabled(value: Any) -> bool:
             if candidate.get(key) is True:
                 return True
     return False
-
-
-share_stats_enabled = stats_sharing_enabled
-stats_opted_in = stats_sharing_enabled
 
 
 def collect_stats(games: Any, history: Any = None, period: str = "all_time", *,
@@ -1222,9 +1192,6 @@ def collect_stats(games: Any, history: Any = None, period: str = "all_time", *,
     }
 
 
-compute_stats = collect_stats
-
-
 def shareable_stats(value: Any, *, state: Any = None) -> dict[str, int] | None:
     """Return only share-safe stats when the caller explicitly opted in."""
     if state is not None and not stats_sharing_enabled(state):
@@ -1292,9 +1259,6 @@ def acknowledge_outbox(state: dict[str, Any], record_ids: Iterable[str]) -> int:
     return before - len(bucket["outbox"])
 
 
-acknowledge_household_outbox = acknowledge_outbox
-
-
 def _household_record_can_publish(state: dict[str, Any], record: dict[str, Any]) -> bool:
     """Apply the existing per-device stats opt-in at the transport boundary."""
     return record.get("kind") != "share" or stats_sharing_enabled(state)
@@ -1353,11 +1317,7 @@ def pull_household_records(state: dict[str, Any], folder: str | os.PathLike[str]
     return result
 
 
-pull_household = pull_household_records
-pull_shared_records = pull_household_records
-publish_household = publish_household_outbox
 publish_outbox = publish_household_outbox
-pull_records = pull_household_records
 
 
 def _device_for(state: dict[str, Any], bucket: dict[str, Any], device_id: str | None) -> str:
@@ -1627,19 +1587,12 @@ def record_stats_share(state: dict[str, Any], member_id: str, period: str, *,
     return record_share(state, member_id, period, values, **kwargs)
 
 
-emit_share_record = record_share
-append_local_record = append_record
-
-
 def household_records(state: dict[str, Any], *, include_tombstones: bool = True) -> list[dict[str, Any]]:
     bucket, records = _state_bucket(state)
     result = converge_records(records.values())
     if include_tombstones:
         return result
     return [item for item in result if "payload" in item]
-
-
-current_household_records = household_records
 
 
 def merge_records(state: dict[str, Any], incoming: Iterable[dict[str, Any]]) -> dict[str, Any]:
@@ -1660,10 +1613,6 @@ def merge_records(state: dict[str, Any], incoming: Iterable[dict[str, Any]]) -> 
         "changed": bool(checked),
         "heads": copy.deepcopy(next_bucket["heads"]),
     }
-
-
-merge_household_records = merge_records
-ingest_records = validate_record_set
 
 
 def _payload(value: Any, kind: str | None = None) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
@@ -1825,10 +1774,6 @@ def challenge_progress(challenge: Any, results: Any = None, *, member_id: str | 
     }
 
 
-compute_challenge_progress = challenge_progress
-progress_for_challenge = challenge_progress
-
-
 def challenge_winner(challenge: Any, results: Any = None, *, now: str | None = None) -> dict[str, Any] | None:
     challenge_payload, _ = _payload(challenge, "challenge")
     challenge_id = challenge_payload["challenge_id"] if challenge_payload else ""
@@ -1847,10 +1792,6 @@ def challenge_winner(challenge: Any, results: Any = None, *, now: str | None = N
         return None
     _, _, member, payload = min(candidates, key=lambda item: (item[0], item[1], item[2]))
     return {"member_id": member, "result": copy.deepcopy(payload)}
-
-
-winner_for_challenge = challenge_winner
-result_for_challenge = challenge_progress
 
 
 def compute_leaderboard(records: Any, *, stats_sharing: bool = True, period: str | None = None,
@@ -1911,19 +1852,9 @@ def compute_leaderboard(records: Any, *, stats_sharing: bool = True, period: str
 
 
 leaderboard = compute_leaderboard
-build_leaderboard = compute_leaderboard
 
 # Short aliases keep the pure core convenient for callers that use the
 # record-oriented vocabulary already present in parity_library_sync.
-make_member = make_member_record
-make_challenge = make_challenge_record
-make_challenge_result = make_challenge_result_record
-make_share = make_share_record
-validate_records = validate_record_set
-converge = converge_records
-latest_record = latest_valid
-stats_enabled = stats_sharing_enabled
-build_stats_share = make_share_record
 
 
 def state_token(state: dict[str, Any]) -> str:

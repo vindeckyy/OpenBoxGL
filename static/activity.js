@@ -65,7 +65,7 @@ function isRecentCandidate(job) {
   return false;
 }
 
-export function partitionJobs(jobs) {
+function partitionJobs(jobs) {
   const active = [];
   const attention = [];
   const recent = [];
@@ -88,7 +88,7 @@ export function partitionJobs(jobs) {
   return {active, attention, recent};
 }
 
-export function groupJobsByRoot(jobs) {
+function groupJobsByRoot(jobs) {
   const grouped = new Map();
   for (const job of jobs) {
     const root = job.root_job_id || job.job_id;
@@ -101,14 +101,14 @@ export function groupJobsByRoot(jobs) {
   return grouped;
 }
 
-export function filterJobs(jobs, {typeFilter = null, stateFilter = null} = {}) {
+function filterJobs(jobs, {typeFilter = null, stateFilter = null} = {}) {
   let result = jobs;
   if (typeFilter) result = result.filter(job => job.type === typeFilter);
   if (stateFilter) result = result.filter(job => job.state === stateFilter);
   return result;
 }
 
-export function jobSummaryLine(job) {
+function jobSummaryLine(job) {
   const state = job.state;
   const result = job.result || {};
   const error = job.error || {};

@@ -25,6 +25,21 @@ let selectedIndex = 0;
 let resultRows = [];
 let resultsRequest = 0;
 
+// Recently chosen rows rank first (local usage counts, no telemetry).
+const RECENT_KEY = 'openbox-palette-recent';
+function recentCounts() {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '{}'); } catch { return {}; }
+}
+function rowKey(row) {
+  return row.type === 'game' ? `game:${row.value.game_id || row.value.id}` : `${row.type}:${row.value.id || row.value.event || ''}`;
+}
+function rankRecent(rows) {
+  const counts = recentCounts();
+  return rows.map((row, index) => ({ row, index }))
+    .sort((a, b) => (counts[rowKey(b.row)] || 0) - (counts[rowKey(a.row)] || 0) || a.index - b.index)
+    .map(item => item.row);
+}
+
 function ensurePalette() {
   if (paletteDialog) return paletteDialog;
   paletteDialog = document.createElement('dialog');
@@ -72,7 +87,7 @@ async function renderResults() {
   if (!paletteResults) return;
   const request = ++resultsRequest;
   const rows = filteredResults(paletteInput.value);
-  resultRows = rows && typeof rows.then === 'function' ? await rows : rows;
+  resultRows = rankRecent(rows && typeof rows.then === 'function' ? await rows : rows);
   if (request !== resultsRequest || !paletteResults) return;
   selectedIndex = Math.max(0, Math.min(selectedIndex, resultRows.length - 1));
   paletteResults.innerHTML = resultRows.length ? resultRows.map((row, index) => `<button type="button" class="detail-card palette-row${index === selectedIndex ? ' active' : ''}" role="option" aria-selected="${index === selectedIndex}" data-palette-index="${index}">${escapeHtml(row.type === 'action' ? `> ${row.label}` : row.label)}</button>`).join('') : `<p class="description">${escapeHtml(t('common.no_results'))}</p>`;
@@ -100,6 +115,12 @@ function handleKeydown(event) {
 function choose(index) {
   const row = resultRows[index];
   if (!row) return;
+  try {
+    const counts = recentCounts();
+    const key = rowKey(row);
+    counts[key] = (counts[key] || 0) + 1;
+    localStorage.setItem(RECENT_KEY, JSON.stringify(counts));
+  } catch {}
   closePalette();
   if (row.type === 'game') {
     AppState.selectedId = row.value.id;
@@ -111,7 +132,7 @@ function choose(index) {
   document.dispatchEvent(new CustomEvent(`app:palette-${row.value.event}`));
 }
 
-export function openPalette() {
+function openPalette() {
   ensurePalette();
   previousFocus = document.activeElement;
   paletteInput.value = '';
@@ -121,7 +142,7 @@ export function openPalette() {
   paletteInput.focus();
 }
 
-export function closePalette() {
+function closePalette() {
   if (paletteDialog?.open) paletteDialog.close();
   previousFocus?.focus?.();
   previousFocus = null;

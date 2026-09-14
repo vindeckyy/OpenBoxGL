@@ -86,6 +86,8 @@
       <nav class="platforms" id="playlists" data-sidebar-section="playlists"></nav>
       <div class="section-title" data-sidebar-section="filters" data-i18n="sidebar.filter_presets">Filter presets</div>
       <nav class="platforms" id="filterPresets" data-sidebar-section="filters"></nav>
+      <div class="section-title" data-sidebar-section="filters" data-i18n="sidebar.smart_collections">Collections</div>
+      <nav class="platforms" id="smartCollections" data-sidebar-section="filters"></nav>
       <div class="section-title" data-sidebar-section="filters" data-i18n="sidebar.explorer">Explorer</div>
       <nav class="platforms" id="explorerFacets" data-sidebar-section="filters"></nav>
     </aside>
@@ -160,7 +162,9 @@
         <label class="field wide"><span>Launch command, optional override</span><input name="launch"></label>
         <label class="field wide"><span>Launch profile override</span><select name="launch_profile"><option value="">Default platform profile</option></select></label>
         <label class="field wide"><span>Gamescope preset override</span><select name="gamescope_preset"><option value="">Global setting</option></select></label>
+        <label class="field wide"><span>Environment overrides, one per line: KEY=value</span><textarea name="launch_env" rows="3" placeholder="PROTON_NO_ESYNC=1"></textarea></label>
         <label class="check"><input type="checkbox" name="extract_archive">Extract archive before launch</label>
+        <label class="check"><input type="checkbox" name="launch_confirm">Always confirm before launch</label>
         <label class="check"><input type="checkbox" name="hide_in_bigbox"> Hide in Big Box</label>
         <label class="check"><input type="checkbox" name="hidden">Hide from normal views</label>
         <label class="check"><input type="checkbox" name="broken"> Mark as broken</label>
@@ -525,6 +529,9 @@
         <label class="check settings-field" data-setting="moments auto capture first boot achievement milestone"><input type="checkbox" id="momentsAutocapture" checked> <span data-i18n="settings.moments_autocapture">Auto-capture moments (first boot, achievements, milestones)</span></label>
         <label class="field settings-field" data-setting="state retention resume states keep"><span data-i18n="settings.state_retention">Resume states kept per game</span><input id="stateRetention" type="number" min="1" max="20"></label>
         <label class="check settings-field" data-setting="backup on close saves"><input type="checkbox" id="backupOnClose"> Back up saves when a game session ends</label>
+        <label class="check settings-field" data-setting="automatic backup weekly library"><input type="checkbox" id="backupAutoEnabled"> Back up the library automatically each week</label>
+        <label class="field settings-field" data-setting="automatic backup retention keep"><span>Automatic backups kept</span><input id="backupAutoKeep" type="number" min="1" max="52"></label>
+        <p class="wide description settings-field" data-setting="automatic backup last" id="lastAutoBackupLine" hidden></p>
         <label class="check settings-field" data-setting="obs recording attach auto"><input type="checkbox" id="obsAutoAttach" checked> Auto-attach latest OBS recording when a session ends</label>
         <label class="check settings-field settings-panel" data-settings-panel="integrations sessions" data-setting="obs replay buffer clips"><input type="checkbox" id="obsReplayEnabled"> Enable OBS replay-buffer clips</label>
         <label class="field wide settings-field settings-panel" data-settings-panel="integrations sessions" data-setting="obs websocket endpoint"><span>OBS WebSocket endpoint (optional)</span><input id="obsWebsocketUrl" placeholder="ws://127.0.0.1:4455"></label>

@@ -1,69 +1,45 @@
-# OpenBox 1.11 — Every Second Counts
+# OpenBox 1.12 — Living Library
 
-Your collection keeps growing, and every session leaves a little more context
-behind. OpenBox 1.11 keeps that context close: resume where you stopped,
-capture the moment, find the right next game, and turn your library into
-something you can browse together.
+OpenBox 1.12 makes the 1.11 feature wave feel finished: searches you pinned
+become shelves that stay correct on their own, every game gets a story worth
+scrolling, and the launch-options sheet is complete down to environment
+variables.
 
 ---
 
 ## What's New
 
-### Never Lose Your Place
+### Smart Collections
 
-Quick Resume records progress-aware session state where the adapter can expose
-it, while session recaps and the Moments timeline keep captures, play context,
-and recent activity attached to the game. Record That can ask OBS for a replay
-buffer, fall back to a safe local screenshot when necessary, and build bounded
-highlight reels without sending media to a server.
+The search bar's deterministic grammar (`short unplayed rpg`, `beaten co-op
+before 2000`) can now be pinned. "Save as collection" turns the active query
+into a named sidebar shelf that re-evaluates live — a collection stores the
+question, not the answer, so "under 5 hours, never played" stays honest as
+your library and habits change.
 
-### A Library You Can Ask
+### Game Story
 
-Backlog Radio recommends games from local habits and explains each pick. The
-search bar understands a small deterministic grammar such as `short unplayed
-rpg` and shows the interpretation as removable chips. Ctrl/Cmd-K opens the
-command palette for games, actions, settings, and What's New discovery.
+A new Story tab in the detail pane narrates each game's journey: added to the
+library, first played, longest session, playtime milestones, progress states,
+and the Moments you captured — one deterministic timeline built from the
+session journal, no separate tracking required.
 
-### Time Machine
+### Per-game Environment Overrides
 
-The journal-backed Time Machine provides a bounded event timeline, as-of views,
-and reviewable revert previews. It is designed to make experimentation safe:
-the canonical state remains transactional, and malformed or stale requests
-stop before mutation.
+Edit game → Launch gains `KEY=value` environment overrides per title, merged
+over the launch environment at spawn. Combined with the existing per-game
+launch command, profile, and Gamescope preset, every launch knob is now
+per-game.
 
-### Arcade Room and Household
+### Fixed
 
-Arcade Room is a controller-friendly canvas showroom organized by platform.
-Museum mode turns it into a self-guided exhibit with real library facts, while
-reduced-motion users get a static presentation. An optional salted PIN is a
-local convenience boundary for kiosk browsing; it is not advertised as a
-security boundary.
+- The per-game **Gamescope preset override** saved correctly but was never
+  projected to the client, so the Edit game select always rendered blank.
+  It now round-trips.
 
-Household adds opt-in members, challenges, shares, results, and leaderboards
-over the existing sync folder. There are no accounts, hosted services, or
-surprise telemetry, and statistics remain off unless a device opts in.
-
-### Deck Migration and Polish
-
-Steam Bridge previews, applies, and removes OpenBox entries in Steam's
-`shortcuts.vdf` while preserving unrelated records. `openbox --play <id>` makes
-the same launch path available from Steam Game Mode. ES-DE `gamelist.xml`
-imports add bounded parsing, explicit identity, stale-source detection, and
-transactional apply for another popular handheld workflow.
-
-### Artwork and achievements
-
-The optional SteamGridDB artwork provider searches, previews, applies, and
-bulk-matches community covers, backgrounds, clear logos, icons, and banners.
-Set `STEAMGRIDDB_API_KEY` in `~/.env`; results use a local cache and the
-provider can be disabled from Settings.
-
-OpenBox now includes a local launcher trophy case with deterministic awards
-evaluated from library and play-history data. These launcher trophies are
-separate from the optional RetroAchievements account integration.
-
-What's New tips, localized UI strings, per-game Moments and Clips tabs, quick
-query chips, kiosk settings, and the final polish sweep round out the update.
+Plus the full 1.11.1 hardening sweep already on master: complete large-media
+responses, document-reader framing, scroll-stable grid virtualization, and
+focus restoration fixes.
 
 ---
 
@@ -81,4 +57,4 @@ Already running OpenBox? Use the built-in updater or download the matching artif
 
 ---
 
-**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.10.0...v1.11.0
+**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.11.0...v1.12.0

@@ -69,6 +69,9 @@ KNOWN_SETTINGS = {
     # backup and cloud
     "backup_on_close",
     "save_backup_limit",
+    "backup_auto_enabled",
+    "backup_auto_keep",
+    "last_auto_backup",
     "cloud_folder",
     "library_sync_enabled",
     "last_cloud_sync",

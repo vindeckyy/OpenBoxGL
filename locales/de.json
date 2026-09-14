@@ -143,7 +143,8 @@
     "missing_files": "Fehlende Dateien",
     "shelf_entries": "Sammeleinträge",
     "any_rating": "Beliebige Altersfreigabe",
-    "unrated": "Ohne Altersfreigabe"
+    "unrated": "Ohne Altersfreigabe",
+    "smart_collections": "Sammlungen"
   },
   "library": {
     "all_games": "Alle Spiele",

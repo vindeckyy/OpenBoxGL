@@ -174,7 +174,7 @@ export function openHousehold() {
   refreshHousehold();
 }
 
-export function closeHousehold() {
+function closeHousehold() {
   if (dialog?.open) dialog.close();
 }
 

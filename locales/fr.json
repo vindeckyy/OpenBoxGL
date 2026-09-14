@@ -143,7 +143,8 @@
     "missing_files": "Fichiers manquants",
     "shelf_entries": "Entrées de collection",
     "any_rating": "Toute classification",
-    "unrated": "Non classés"
+    "unrated": "Non classés",
+    "smart_collections": "Collections"
   },
   "library": {
     "all_games": "Tous les jeux",

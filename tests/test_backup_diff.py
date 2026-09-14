@@ -16,7 +16,8 @@ def _repo_root() -> Path:
 ROOT = _repo_root()
 sys.path.insert(0, str(ROOT))
 
-from pkg.parity.parity_backup import diff_manifests, create_backup  # noqa: E402
+from pkg.parity.parity_backup import AUTO_BACKUP_DAYS, auto_backup_due, diff_manifests, create_backup  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
 
 
 def _make_state(n=10):
@@ -177,6 +178,57 @@ def test_diff_settings_unchanged():
         assert result["settings_changed"] is False
 
 
+def test_auto_backup_due_disabled():
+    """auto_backup_due() should be False unless the weekly backup is enabled."""
+    assert auto_backup_due({}) is False
+    assert auto_backup_due({"backup_auto_enabled": False}) is False
+
+
+def test_auto_backup_due_first_run():
+    """auto_backup_due() should fire on a fresh install with no last run."""
+    assert auto_backup_due({"backup_auto_enabled": True}) is True
+    assert auto_backup_due({"backup_auto_enabled": True, "last_auto_backup": "nonsense"}) is True
+
+
+def test_auto_backup_due_weekly():
+    """auto_backup_due() should fire only after AUTO_BACKUP_DAYS."""
+    now = datetime.now(timezone.utc)
+    recent = (now - timedelta(days=AUTO_BACKUP_DAYS - 1)).isoformat()
+    stale = (now - timedelta(days=AUTO_BACKUP_DAYS + 1)).isoformat()
+    assert auto_backup_due({"backup_auto_enabled": True, "last_auto_backup": recent}, now=now) is False
+    assert auto_backup_due({"backup_auto_enabled": True, "last_auto_backup": stale}, now=now) is True
+
+
+def test_auto_backup_tick_skips_when_disabled():
+    """_auto_backup_tick() should not back up unless the schedule is on."""
+    import web_app
+    from unittest import mock
+    with mock.patch.object(web_app, "load_state", return_value={"settings": {}}), mock.patch.object(
+        web_app, "create_backup"
+    ) as created:
+        web_app._auto_backup_tick()
+    created.assert_not_called()
+
+
+def test_auto_backup_tick_records_stamp():
+    """_auto_backup_tick() should back up when due and record last_auto_backup."""
+    import web_app
+    from types import SimpleNamespace
+    from unittest import mock
+    committed = {}
+    with mock.patch.object(
+        web_app, "load_state", return_value={"settings": {"backup_auto_enabled": True, "backup_auto_keep": "bad"}}
+    ), mock.patch.object(
+        web_app, "create_backup", return_value=SimpleNamespace(name="auto.zip")
+    ) as created, mock.patch.object(
+        web_app, "update_state", side_effect=lambda mut: mut(committed) or committed
+    ):
+        web_app._auto_backup_tick()
+    assert created.call_count == 1
+    assert created.call_args.kwargs["keep"] == 4  # unparsable keep falls back
+    assert committed["settings"]["last_auto_backup"].startswith("20")
+
+
 def run_all_tests():
     tests = [
         test_diff_no_changes,
@@ -192,6 +244,11 @@ def run_all_tests():
         test_diff_handler_exists,
         test_diff_settings_changed,
         test_diff_settings_unchanged,
+        test_auto_backup_due_disabled,
+        test_auto_backup_due_first_run,
+        test_auto_backup_due_weekly,
+        test_auto_backup_tick_skips_when_disabled,
+        test_auto_backup_tick_records_stamp,
     ]
     failures = 0
     for test in tests:

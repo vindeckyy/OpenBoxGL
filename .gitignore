@@ -35,6 +35,9 @@ native_host
 # Harness working directory
 .omo/
 
+# Generated image/scratch output
+output/
+
 # Maintainer-only signing material (never commit private keys)
 
 # Local-only planning and design docs (kept out of the repo root;

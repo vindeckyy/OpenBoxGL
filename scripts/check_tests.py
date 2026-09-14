@@ -171,6 +171,15 @@ def main() -> int:
     if i18n_check.returncode != 0:
         failures.append("i18n")
 
+    # Stage 2.8: CSP framing contract (1.12.0). Only the document endpoints
+    # may relax frame-ancestors; the 1.11 reader regression must not return.
+    csp_check = run([sys.executable, "-B", str(ROOT / "scripts" / "check_csp.py")])
+    if csp_check.stdout.strip():
+        print(csp_check.stdout.strip())
+    if csp_check.stderr.strip():
+        print(csp_check.stderr.strip())
+    if csp_check.returncode != 0:
+        failures.append("csp")
 
     modules = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip()]
     compile_failed = 0
