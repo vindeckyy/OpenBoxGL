@@ -65,7 +65,7 @@ function isRecentCandidate(job) {
   return false;
 }
 
-function partitionJobs(jobs) {
+export function partitionJobs(jobs) {
   const active = [];
   const attention = [];
   const recent = [];
