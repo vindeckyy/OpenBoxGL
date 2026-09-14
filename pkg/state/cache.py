@@ -14,6 +14,8 @@ import time
 
 import openbox
 from openbox import DATA, load_state, load_state_readonly, update_state_with_result
+from parity_backup import AUTO_BACKUP_KEEP
+from parity_collections import list_collections
 from parity_discovery import clear_discovery_cache, discovery_lists
 from parity_emulator_defs import list_scan_configs
 from parity_filter_presets import list_presets
@@ -464,6 +466,9 @@ def _public_settings_uncached(state):
         "state_retention": settings.get("state_retention", 1),
         "backup_on_close": settings.get("backup_on_close", False),
         "save_backup_limit": settings.get("save_backup_limit", 10),
+        "backup_auto_enabled": settings.get("backup_auto_enabled", False),
+        "backup_auto_keep": settings.get("backup_auto_keep", AUTO_BACKUP_KEEP),
+        "last_auto_backup": settings.get("last_auto_backup", ""),
         "progress_automation_enabled": settings.get("progress_automation_enabled", False),
         "progress_automation_play_minutes": settings.get("progress_automation_play_minutes", 30),
         "progress_automation_idle_days": settings.get("progress_automation_idle_days", 30),
@@ -589,6 +594,9 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         game.get("name"), game.get("path"), game.get("cover"), game.get("background"),
         game.get("platform"), index in save_indices,
         game.get("manual_entry"),
+        game.get("launch_confirm"),
+        game.get("gamescope_preset"),
+        tuple(sorted((game.get("launch_env") or {}).items())) if isinstance(game.get("launch_env"), dict) else (),
         game_id, ra_game_id, ra_cache_key,
         game.get("ra_achievements_earned"), game.get("ra_achievements_earned_hardcore"),
         game.get("ra_achievements_total"), game.get("ra_progress_pct"), game.get("ra_mastered"),
@@ -736,6 +744,8 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "playable": bool(path_exists or store_installed) and not shelf_entry,
         "launch": game.get("launch", ""),
         "launch_profile": game.get("launch_profile", ""),
+        "gamescope_preset": game.get("gamescope_preset", ""),
+        "launch_env": {str(k): str(v) for k, v in game.get("launch_env").items()} if isinstance(game.get("launch_env"), dict) else {},
         "cover": cov,
         "background": bg,
         "clear_logo": logo,
@@ -834,6 +844,7 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "has_highscores": bool(game.get("rom_name")) and platform.casefold() in {"arcade", "mame", "finalburn neo"},
         "has_missing_media": not has_cov,
         "extract_archive": bool(game.get("extract_archive")),
+        "launch_confirm": bool(game.get("launch_confirm")),
         "applications": game.get("applications", []),
         "versions": game.get("versions", []),
         "documents": documents,
@@ -932,6 +943,7 @@ def _build_public_state():
         "games": games,
         "playlists": state.get("playlists", []),
         "filter_presets": list_presets(state),
+        "smart_collections": list_collections(state),
         "ra_configured": bool(load_ra_credentials(data_parent)),
         "settings": pub_settings(state),
         "discovery": discovery_lists(state["games"]),

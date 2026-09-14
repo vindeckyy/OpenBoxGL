@@ -96,14 +96,6 @@ class UnresolvedCandidates(Conflict):
     code = "UNRESOLVED_CANDIDATES"
 
 
-class AmbiguousPlatform(BadRequest):
-    code = "AMBIGUOUS_PLATFORM"
-
-
-class EmulatorRequired(Conflict):
-    code = "EMULATOR_REQUIRED"
-
-
 class PreviewLimitExceeded(BadRequest):
     code = "PREVIEW_LIMIT_EXCEEDED"
 

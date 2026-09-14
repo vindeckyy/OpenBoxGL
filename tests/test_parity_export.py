@@ -147,7 +147,7 @@ class ExportHandlerTest(unittest.TestCase):
         h.sent_headers = []
         h.send_json = lambda status, payload: h.responses.append((status, payload))
         h.send_response = lambda status: h.sent_headers.append(("status", status))
-        h.headers_common = lambda content_type: h.sent_headers.append(("content-type", content_type))
+        h.headers_common = lambda content_type, **kwargs: h.sent_headers.append(("content-type", content_type))
         h.send_header = lambda name, value: h.sent_headers.append((name, value))
         h.end_headers = lambda: None
         h.wfile = h.body

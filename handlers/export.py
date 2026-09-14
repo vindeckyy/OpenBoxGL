@@ -36,12 +36,11 @@ class ExportHandlers:
             return
         data = approved.read_bytes()
         content_type = "application/json" if approved.suffix == ".json" else "text/csv; charset=utf-8"
-        self.send_response(200)
-        self.headers_common(content_type)
-        self.send_header("Content-Disposition", f'attachment; filename="{approved.name}"')
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+        # send_bytes owns Content-Length and the single-write path, so this
+        # inherits the same partial-write discipline as every other response.
+        self.send_bytes(200, data, content_type, extra_headers={
+            "Content-Disposition": f'attachment; filename="{approved.name}"',
+        })
         return
 
     def create_library_export(self, payload):

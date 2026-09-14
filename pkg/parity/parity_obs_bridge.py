@@ -58,8 +58,6 @@ class OBSRequestError(OBSBridgeError):
 
 # Short aliases are useful to embedders that used the names from the
 # obs-websocket documentation while keeping the more explicit names public.
-OBSWebSocketError = OBSBridgeError
-OBSAuthError = OBSAuthenticationError
 
 
 def _bounded_timeout(value) -> float:
@@ -841,16 +839,6 @@ def obs_available(settings, *, bridge=None, **kwargs) -> bool:
 
 
 # Names used by small integrations and older spikes.
-OBSWebSocket = OBSBridge
-OBSClient = OBSBridge
-ObsBridge = OBSBridge
-ObsWebSocket = OBSBridge
-ObsWebsocket = OBSBridge
-OBSWebsocket = OBSBridge
-build_auth = build_authentication
-make_authentication = build_authentication
-encode_websocket_frame = encode_frame
-decode_websocket_frame = decode_frame
 
 
 __all__ = [
@@ -858,23 +846,14 @@ __all__ = [
     "DEFAULT_PORT",
     "DEFAULT_TIMEOUT",
     "OBSBridge",
-    "OBSClient",
-    "OBSWebSocket",
-    "ObsBridge",
-    "ObsWebSocket",
-    "ObsWebsocket",
-    "OBSWebsocket",
     "OBSBridgeError",
-    "OBSWebSocketError",
     "OBSUnavailableError",
     "OBSTimeoutError",
     "OBSProtocolError",
     "OBSAuthenticationError",
-    "OBSAuthError",
     "OBSRequestError",
     "parse_endpoint",
     "build_authentication",
-    "make_authentication",
     "encode_frame",
     "decode_frame",
     "replay_enabled",

@@ -527,41 +527,17 @@ def create_reel(
     )
 
 
-def generate_reel(*args, **kwargs):
-    """Alias for :func:`create_reel`."""
-
-    return create_reel(*args, **kwargs)
-
-
-def reel_manifest(*args, **kwargs):
-    """Alias for :func:`build_reel_manifest`."""
-
-    return build_reel_manifest(*args, **kwargs)
-
-
-reel_output_path = reel_path
-write_reel_manifest = write_manifest
-render_html = render_html_reel
-html_fallback = render_html_reel
-
-
 __all__ = [
     "REEL_FORMAT",
     "DEFAULT_IMAGE_SECONDS",
     "DEFAULT_FFMPEG_TIMEOUT",
     "build_reel_manifest",
     "build_manifest",
-    "reel_manifest",
     "manifest_json",
     "write_manifest",
     "reel_path",
-    "reel_output_path",
     "ffmpeg_available",
     "render_html_reel",
-    "render_html",
-    "html_fallback",
     "render_reel",
     "create_reel",
-    "generate_reel",
-    "write_reel_manifest",
 ]

@@ -28,6 +28,10 @@ from typing import Any
 LOGGER = logging.getLogger("openbox.sqlite_readmodel")
 
 _ENABLED = os.environ.get("OPENBOX_ENABLE_SQLITE_READ", "").strip() in ("1", "true", "yes")
+_DISABLED = os.environ.get("OPENBOX_ENABLE_SQLITE_READ", "").strip().casefold() in ("0", "false", "no", "off")
+# Libraries at or above this size self-enable the read model (1.12.0); the
+# env var still forces the feature on (any truthy value) or off.
+SQLITE_AUTO_THRESHOLD = 5000
 _FTS5_AVAILABLE: bool | None = None
 
 _SCHEMA = """
@@ -129,6 +133,25 @@ class SqliteReadModel:
 
     @property
     def enabled(self) -> bool:
+        return self._enabled
+
+    def should_auto_enable(self, game_count) -> bool:
+        """Latch the read model on for large libraries; returns effective state.
+
+        An explicit opt-out (``OPENBOX_ENABLE_SQLITE_READ=0``) is honored and
+        never overridden. Latching is one-way per process: once the model
+        has rebuilt for a large library it stays on, which is exactly the
+        steady state for a 5k+ collection.
+        """
+        if self._enabled or _DISABLED:
+            return self._enabled
+        try:
+            count = int(game_count or 0)
+        except (TypeError, ValueError):
+            return False
+        if count >= SQLITE_AUTO_THRESHOLD:
+            self._enabled = True
+            LOGGER.info("SQLite read model auto-enabled for %d games", count)
         return self._enabled
 
     def _connect(self) -> sqlite3.Connection:

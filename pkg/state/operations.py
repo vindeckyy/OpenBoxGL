@@ -730,42 +730,6 @@ def group_jobs_by_root(jobs: list[dict]) -> dict[str, list[dict]]:
     return grouped
 
 
-def filter_jobs_by_type_state(
-    jobs: list[dict],
-    *,
-    type_filter: str | None = None,
-    state_filter: str | None = None,
-) -> list[dict]:
-    """Module-level filter helper for type/state."""
-    result = jobs
-    if type_filter:
-        result = [j for j in result if j.get("type") == type_filter]
-    if state_filter:
-        result = [j for j in result if j.get("state") == state_filter]
-    return [dict(j) for j in result]
-
-
-def job_summary_line(job: dict) -> str:
-    """Module-level human summary for finished jobs."""
-    state = job.get("state")
-    result = job.get("result") or {}
-    error = job.get("error") or {}
-    if state == "done" and result:
-        parts = []
-        for key in ("added", "merged", "skipped", "excluded", "completed", "downloaded"):
-            if key in result:
-                parts.append(f"{result[key]} {key}")
-        if parts:
-            return "Finished — " + ", ".join(parts)
-        return "Finished successfully"
-    if state in {"error", "partial", "interrupted"} and error:
-        msg = error.get("message") or error.get("code") or ""
-        return f"Finished with {state}: {msg}".strip() if msg else f"Finished with {state}"
-    if state == "cancelled":
-        return "Cancelled"
-    return f"Finished — {state}" if state else "Finished"
-
-
 def get_operation_service(data_path: Path | None = None) -> OperationService:
     global _SERVICE
     if data_path is not None:

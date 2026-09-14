@@ -285,14 +285,6 @@ def summarize(
     }
 
 
-def heatmap_for_range(
-    history: list[dict[str, Any]],
-    days: int = 366,
-    end_date: datetime.date | None = None,
-) -> list[dict[str, Any]]:
-    return compute_heatmap(history, days=days, end_date=end_date)
-
-
 def _load_ra_cache(ra_cache_dir: str) -> dict[str, dict[str, Any]]:
     """Load RA game caches keyed by game_id. Returns empty on missing dir."""
     by_game: dict[str, dict[str, Any]] = {}

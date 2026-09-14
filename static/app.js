@@ -129,6 +129,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const shelf = event.currentTarget.elements.entry_type?.value === 'shelf';
       delete game.entry_type;
       game.extract_archive = event.currentTarget.elements.extract_archive.checked;
+      game.launch_confirm = event.currentTarget.elements.launch_confirm.checked;
       game.hidden = event.currentTarget.elements.hidden.checked;
       game.hide_in_bigbox = event.currentTarget.elements.hide_in_bigbox.checked;
       game.alternate_names = String(game.alternate_names || '').split(';').map(value => value.trim()).filter(Boolean);
@@ -138,6 +139,7 @@ window.addEventListener('DOMContentLoaded', () => {
       game.save_paths = String(game.save_paths || '').split('\n').map(value => value.trim()).filter(Boolean);
       game.screenshots = String(game.screenshots || '').split('\n').map(value => value.trim()).filter(Boolean);
       game.custom_fields = Object.fromEntries([...document.querySelectorAll('[data-custom-field]')].map(input => [input.dataset.customField, input.value.trim()]).filter(([, value]) => value));
+      game.launch_env = Object.fromEntries(String(game.launch_env || '').split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#')).map(line => { const i = line.indexOf('='); return [i < 0 ? line : line.slice(0, i).trim(), i < 0 ? '' : line.slice(i + 1).trim()]; }));
       if (shelf) {
         game.manual_entry = true;
         game.path = '';

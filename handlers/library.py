@@ -3,6 +3,7 @@
 import copy
 from datetime import datetime
 import os
+import re
 from pathlib import Path
 import secrets
 from urllib.parse import parse_qs
@@ -27,7 +28,7 @@ def _clean_game_fields(source):
     game = {key: str(source[key]).strip() for key in FIELDS if key in source}
     game["extract_archive"] = bool(source.get("extract_archive"))
     game["hidden"] = bool(source.get("hidden"))
-    for field in ("broken", "portable"):
+    for field in ("broken", "portable", "launch_confirm"):
         game[field] = bool(source.get(field))
     if "disc_count" in source:
         try:
@@ -78,8 +79,43 @@ def _clean_game_lists(game, source):
     return game
 
 
+def _clean_launch_env(value):
+    """Validate per-game environment overrides into a bounded {KEY: value} dict.
+
+    Accepts a mapping or newline-separated ``KEY=value`` text (the Edit game
+    form serializes the textarea as text). Keys must be valid environment
+    names; values are plain strings.
+    """
+    if value is None:
+        return {}
+    if isinstance(value, str):
+        pairs = {}
+        for line in value.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            key, sep, val = line.partition("=")
+            if not sep:
+                raise ValueError(f"Environment override must be KEY=value: {line!r}")
+            pairs[key.strip()] = val.strip()
+        value = pairs
+    if not isinstance(value, dict):
+        raise ValueError("Environment overrides must be an object or KEY=value lines.")
+    if len(value) > 50:
+        raise ValueError("At most 50 environment overrides per game.")
+    clean = {}
+    for key, val in value.items():
+        key = str(key).strip()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            raise ValueError(f"Invalid environment variable name: {key!r}")
+        clean[key] = str(val)[:500]
+    return clean
+
+
 def _apply_game_misc(game, source):
     normalize_video_fields(game)
+    if "launch_env" in source:
+        game["launch_env"] = _clean_launch_env(source.get("launch_env"))
     game["hide_in_bigbox"] = bool(source.get("hide_in_bigbox"))
     esrb = str(source.get("esrb", game.get("esrb", ""))).strip()
     if esrb:
@@ -752,7 +788,10 @@ class LibraryHandlers:
             self.send_json(200, {"results": [], "source": "json", "count": 0})
             return
         from pkg.state.cache import SQLITE_READ_MODEL
-        if SQLITE_READ_MODEL.enabled:
+        # Above SQLITE_AUTO_THRESHOLD games the read model self-enables
+        # (1.12.0); the explicit env opt-out is still honored.
+        readonly = load_state_readonly()
+        if SQLITE_READ_MODEL.enabled or SQLITE_READ_MODEL.should_auto_enable(len(readonly.get("games", []) or [])):
             state = load_state_view()
             import openbox
             SQLITE_READ_MODEL.ensure_fresh(state, openbox.STATE_STORE.signature())
@@ -761,7 +800,7 @@ class LibraryHandlers:
             return
         # JSON fallback: canonical name substring match, preserving library
         # order and the existing policy of returning hidden games as well.
-        state = load_state_readonly()
+        state = readonly
         q_lower = query.casefold()
         results = []
         for game in state.get("games", []):

@@ -14,6 +14,29 @@ import { t } from './i18n.js';
 import { mountMomentsPanel, mountResumeAffordance } from './moments.js';
 
 const DETAILS_WIDTH_KEY = 'openbox-details-width';
+
+// Story reuses the History → Timeline markup (timeline-group/entry/meta) so
+// the per-game narrative needs no new styles or design tokens.
+const STORY_KIND_LABELS = {added: 'Added', first_played: 'First played', session: 'Session', milestone: 'Milestone', progress: 'Progress', moment: 'Moment'};
+async function mountStoryPanel(game, container) {
+  if (!container || !game) return;
+  container.innerHTML = '<p class="description">Loading story…</p>';
+  try {
+    const story = await api(`/api/v2/story?game_id=${encodeURIComponent(game.game_id || '')}&id=${encodeURIComponent(game.id)}`);
+    const events = story.events || [];
+    const totals = story.totals || {};
+    const groups = {};
+    events.forEach(event => {
+      const day = String(event.at || '').slice(0, 10) || 'Unknown date';
+      if (!groups[day]) groups[day] = [];
+      groups[day].push(event);
+    });
+    const days = Object.keys(groups).sort();
+    container.innerHTML = `<div class="detail-card"><h3>${escapeHtml(story.name || game.name || 'Story')}</h3><p class="description">${totals.sessions || 0} sessions · ${escapeHtml(duration(totals.playtime_seconds || 0))}${totals.progress ? ` · ${escapeHtml(totals.progress)}` : ''}</p>${days.length ? days.map(day => `<div class="timeline-group"><h3 class="timeline-date">${escapeHtml(day)}</h3>${groups[day].map(event => `<div class="timeline-entry"><div class="timeline-meta"><div class="timeline-name">${escapeHtml(event.title || '')}</div><div class="timeline-duration">${escapeHtml(STORY_KIND_LABELS[event.kind] || event.kind || '')}${event.detail ? ` · ${escapeHtml(event.detail)}` : ''}</div></div></div>`).join('')}</div>`).join('') : '<p class="description">No recorded history for this game yet.</p>'}</div>`;
+  } catch (error) {
+    container.innerHTML = `<p class="description">${escapeHtml(error.message || 'Story unavailable.')}</p>`;
+  }
+}
 const DETAILS_COLLAPSED_KEY = 'openbox-details-collapsed';
 const VIRTUAL_GRID_KEY = 'openbox-virtual-grid';
 let lastFacetsFingerprint = null;
@@ -409,6 +432,7 @@ function renderQueryChips() {
   const hasFilters = chips.length > 0;
   const actions = [];
   if (state.preset) actions.push('<button type="button" class="platform query-chip" id="updateActivePreset">Update preset</button>');
+  if (state.query) actions.push('<button type="button" class="platform query-chip" id="saveAsCollection">Save as collection</button>');
   if (hasFilters) actions.push('<button type="button" class="platform query-chip" data-chip="clear-all">Clear all</button>');
   container.innerHTML = actions.join('') + chips.join('');
   container.querySelector('[data-chip="clear-all"]')?.addEventListener('click', () => {
@@ -417,6 +441,15 @@ function renderQueryChips() {
     render();
   });
   if ($('updateActivePreset')) $('updateActivePreset').onclick = () => updateActivePreset();
+  if ($('saveAsCollection')) $('saveAsCollection').onclick = async () => {
+    const name = await promptInput({ title: 'Save as collection', label: 'Collection name', defaultValue: '' });
+    if (!name) return;
+    try {
+      await api('/api/v2/collections', {method: 'POST', body: JSON.stringify({name, query: $('sidebarSearch').value.trim()})});
+      await refresh();
+      notify(`Collection "${name}" saved`);
+    } catch (error) { notify(error.message); }
+  };
   container.querySelectorAll('[data-chip-remove]').forEach(button => {
     button.onclick = () => {
       leaveActivePreset();
@@ -466,6 +499,7 @@ function markFilterAria() {
       AppState.games = state.games;
       AppState.playlists = state.playlists || [];
       AppState.filterPresets = state.filter_presets || state.settings?.filter_presets || AppState.appSettings.filter_presets || [];
+      AppState.smartCollections = state.smart_collections || [];
       AppState.raConfigured = state.ra_configured;
       AppState.appSettings = state.settings || AppState.appSettings;
       AppState.mediaEpoch = state.media_epoch || 0;
@@ -983,7 +1017,7 @@ function markFilterAria() {
       const shelfEntry = Boolean(game.manual_entry);
       $('details').innerHTML = `<div class="hero motion-enter" ${heroStyle}><div class="hero-copy"><div class="hero-kicker">${escapeHtml(game.platform || 'Unspecified platform')}</div><h2>${escapeHtml(game.name)}</h2></div></div>
         <div class="detail-body">
-          <div class="detail-tabs" role="tablist" aria-label="${escapeHtml(t('moments.detail_tabs'))}"><button type="button" class="detail-tab active" id="detailsOverviewTab" role="tab" aria-selected="true" aria-controls="detailsOverview">${escapeHtml(t('moments.overview'))}</button><button type="button" class="detail-tab" id="momentsTab" role="tab" aria-selected="false" aria-controls="detailsMoments">${escapeHtml(t('moments.tab'))}${game.moments_count ? ` <span class="tab-count">${escapeHtml(String(game.moments_count))}</span>` : ''}</button></div>
+          <div class="detail-tabs" role="tablist" aria-label="${escapeHtml(t('moments.detail_tabs'))}"><button type="button" class="detail-tab active" id="detailsOverviewTab" role="tab" aria-selected="true" aria-controls="detailsOverview">${escapeHtml(t('moments.overview'))}</button><button type="button" class="detail-tab" id="momentsTab" role="tab" aria-selected="false" aria-controls="detailsMoments">${escapeHtml(t('moments.tab'))}${game.moments_count ? ` <span class="tab-count">${escapeHtml(String(game.moments_count))}</span>` : ''}</button><button type="button" class="detail-tab" id="storyTab" role="tab" aria-selected="false" aria-controls="detailsStory">Story</button></div>
           <section class="detail-tab-panel" id="detailsOverview" role="tabpanel" aria-labelledby="detailsOverviewTab">
           <div class="rating"><strong>${game.favorite ? '★ Favorite' : game.rating ? `${game.rating} ★` : 'Library'}</strong><span>${escapeHtml(game.progress || game.genre || '')}</span><span class="badge-row">${renderBadges(game)}</span></div>
           <button class="play" id="playButton" ${shelfEntry ? '' : game.path_exists && game.store_installed !== false ? '' : game.gameyfin_id && !game.store_installed ? '' : 'disabled'}>${shelfEntry ? 'SET UP LAUNCH' : game.gameyfin_id && !game.store_installed ? '⬇ INSTALL' : '▶ PLAY'}</button>
@@ -1001,24 +1035,25 @@ function markFilterAria() {
           ${AppState.raConfigured ? `<div class="detail-card"><h3>RetroAchievements</h3><div id="achievementContent"><p class="description">${game.ra_game_id ? `Matched to game ${escapeHtml(game.ra_game_id)}.` : 'Match this ROM to load achievements.'}</p><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}<button class="icon-button" id="openBrowser">Open Wikipedia</button></div><button class="icon-button" id="loadAchievements">Load achievements</button><div id="achievementStats"></div></div></div>` : ''}
           <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${savePaths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${AppState.appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}${game.platform === 'Arcade' || game.rom_name ? '<button class="icon-button" id="exportHighscores">Export high scores</button>' : ''}</div><div class="description" id="saveDiscovery">${savePaths.length ? `${savePaths.length} configured location${savePaths.length === 1 ? '' : 's'}` : 'No save location configured.'}${AppState.appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
           <div class="detail-card doctor-card" id="doctorCard" style="border:1px solid var(--border-card)"><h3>Launch Doctor</h3><div id="doctorChecks" class="description">Checking launch readiness…</div></div>
-          </section><section class="detail-tab-panel" id="detailsMoments" role="tabpanel" aria-labelledby="momentsTab" hidden><div id="momentsPanel"></div></section>
+          </section><section class="detail-tab-panel" id="detailsMoments" role="tabpanel" aria-labelledby="momentsTab" hidden><div id="momentsPanel"></div></section><section class="detail-tab-panel" id="detailsStory" role="tabpanel" aria-labelledby="storyTab" hidden><div id="storyPanel"></div></section>
         </div>`;
       const overviewTab = $('detailsOverviewTab');
       const momentsTab = $('momentsTab');
-      const overviewPanel = $('detailsOverview');
-      const momentsPanel = $('detailsMoments');
+      const storyTab = $('storyTab');
+      const detailTabs = {overview: [overviewTab, $('detailsOverview')], moments: [momentsTab, $('detailsMoments')], story: [storyTab, $('detailsStory')]};
       const selectDetailTab = tab => {
-        const moments = tab === 'moments';
-        overviewTab?.classList.toggle('active', !moments);
-        momentsTab?.classList.toggle('active', moments);
-        overviewTab?.setAttribute('aria-selected', String(!moments));
-        momentsTab?.setAttribute('aria-selected', String(moments));
-        overviewPanel?.toggleAttribute('hidden', moments);
-        momentsPanel?.toggleAttribute('hidden', !moments);
-        if (moments) mountMomentsPanel(game, $('momentsPanel'));
+        Object.entries(detailTabs).forEach(([name, [tabEl, panel]]) => {
+          const active = name === tab;
+          tabEl?.classList.toggle('active', active);
+          tabEl?.setAttribute('aria-selected', String(active));
+          panel?.toggleAttribute('hidden', !active);
+        });
+        if (tab === 'moments') mountMomentsPanel(game, $('momentsPanel'));
+        if (tab === 'story') mountStoryPanel(game, $('storyPanel'));
       };
       overviewTab?.addEventListener('click', () => selectDetailTab('overview'));
       momentsTab?.addEventListener('click', () => selectDetailTab('moments'));
+      storyTab?.addEventListener('click', () => selectDetailTab('story'));
       $('momentsButton')?.addEventListener('click', () => selectDetailTab('moments'));
       mountResumeAffordance(game, $('resumeActionSlot'));
       $('playButton').onclick = async () => {
@@ -1157,7 +1192,40 @@ function markFilterAria() {
         document.querySelectorAll('[data-related]').forEach(button => button.onclick = () => selectGame(Number(button.dataset.related)));
       } catch(error) { if ($('relatedGames')) $('relatedGames').textContent = error.message; }
     }
-    function render() { renderQueryChips(); renderPlatformCategories(); renderPlatforms(); renderPlaylists(); renderFilterPresets(); renderGrid(); renderDetails(); markFilterAria(); applyDetailsLayout(); applySidebarVisibility(); syncHash(); $('status').textContent = `${AppState.games.length} games · local library`; }
+    function renderSmartCollections() {
+      const container = $('smartCollections');
+      if (!container) return;
+      const items = AppState.smartCollections || [];
+      const activeQuery = ($('sidebarSearch')?.value || '').trim();
+      container.innerHTML = items.length ? items.map(item => `<div class="playlist-row"><button class="platform ${activeQuery && item.query === activeQuery ? 'active' : ''}" data-smart-collection="${escapeHtml(item.name)}" title="${escapeHtml(item.query)}">${escapeHtml(item.name)}</button><button class="playlist-delete" data-delete-collection="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '<span class="description">Save a search as a living collection.</span>';
+      document.querySelectorAll('[data-smart-collection]').forEach(button => button.onclick = () => {
+        const item = items.find(entry => entry.name === button.dataset.smartCollection);
+        if (!item) return;
+        leaveActivePreset();
+        AppState.activePlaylist = '';
+        $('sidebarSearch').value = item.query;
+        refreshSmartQuery(item.query);
+        render();
+      });
+      document.querySelectorAll('[data-delete-collection]').forEach(button => button.onclick = async () => {
+        const ok = await confirmAction({
+          title: 'Delete collection',
+          target: button.dataset.deleteCollection,
+          consequence: 'This saved query will be removed.',
+          retained: 'Games and other collections remain.',
+          recovery: 'Re-run the search and save it again.',
+          destructive: true,
+          confirmLabel: 'Delete',
+        });
+        if (!ok) return;
+        try {
+          await api('/api/v2/collections/delete', {method: 'POST', body: JSON.stringify({name: button.dataset.deleteCollection})});
+          await refresh();
+          notify('Collection deleted');
+        } catch (error) { notify(error.message); }
+      });
+    }
+    function render() { renderQueryChips(); renderPlatformCategories(); renderPlatforms(); renderPlaylists(); renderFilterPresets(); renderSmartCollections(); renderGrid(); renderDetails(); markFilterAria(); applyDetailsLayout(); applySidebarVisibility(); syncHash(); $('status').textContent = `${AppState.games.length} games · local library`; }
     function collectionStats(items) {
       const completed = items.filter(game => ['Beaten','Completed','Mastered'].includes(game.progress)).length;
       const playtime = items.reduce((total, game) => total + Number(game.playtime_seconds || 0), 0);

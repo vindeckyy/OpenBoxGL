@@ -157,12 +157,6 @@ def recover_state():
     return STATE_STORE.recover()
 
 
-def format_duration(seconds):
-    minutes = int(seconds or 0) // 60
-    hours, minutes = divmod(minutes, 60)
-    return f"{hours}h {minutes}m" if hours else f"{minutes}m"
-
-
 def discover_profiles(which=shutil.which):
     from parity_emulator_defs import _registry, build_adapter_argv, detect_adapter_prefix
 
@@ -216,7 +210,6 @@ if __name__ == "__main__":
         assert {"games", "profiles", "history"} <= load_state().keys()
         assert "{path}" in "retroarch -L core.so {path}"
         assert shlex.split("retroarch -L core.so {path}")[-1] == "{path}"
-        assert format_duration(3720) == "1h 2m"
         assert discover_profiles(lambda binary: f"/usr/bin/{binary}" if binary == "wine" else None) == {"Windows": "wine {path}"}
         try:
             build_launch({"name": "Missing", "path": ""}, {})

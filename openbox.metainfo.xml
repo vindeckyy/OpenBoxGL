@@ -40,6 +40,13 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.12.0" date="2026-09-14">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.12.0</url>
+      <description>
+        <p>Your library, alive and connected: smart collections pin Backlog Radio queries as living shelves, a per-game Story tab narrates each title's journey from added to mastered, and per-game environment overrides finish the launch-options sheet.</p>
+        <p>Fixes the gamescope preset override not round-tripping to the game editor.</p>
+      </description>
+    </release>
     <release version="1.11.0" date="2026-09-12">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.11.0</url>
       <description>

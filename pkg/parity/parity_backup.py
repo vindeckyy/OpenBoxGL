@@ -5,7 +5,7 @@ import os
 import stat
 import tempfile
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from backend_io import atomic_copy_stream, fsync_directory
@@ -24,10 +24,37 @@ BACKUP_ITEMS = {
 MAX_BACKUP_MEMBERS = 50_000
 MAX_BACKUP_MEMBER_BYTES = 4 * 1024 * 1024 * 1024
 MAX_BACKUP_TOTAL_BYTES = 32 * 1024 * 1024 * 1024
+AUTO_BACKUP_DAYS = 7
+AUTO_BACKUP_KEEP = 4
+AUTO_BACKUP_ITEMS = ["library", "settings", "media", "plugins", "themes"]
 
 
 def games_running(running_map):
     return bool(running_map)
+
+
+def auto_backup_due(settings, now=None):
+    """True when the weekly automatic backup is enabled and overdue (1.12.0).
+
+    A missing or unparsable ``last_auto_backup`` counts as due — a fresh
+    install backs up on its first scheduled tick rather than waiting a week.
+    """
+    settings = settings if isinstance(settings, dict) else {}
+    if not settings.get("backup_auto_enabled"):
+        return False
+    raw = str(settings.get("last_auto_backup") or "").strip()
+    if not raw:
+        return True
+    try:
+        last = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return True
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    moment = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return (moment - last).total_seconds() >= AUTO_BACKUP_DAYS * 86400
 
 
 def settings_snapshot(state):

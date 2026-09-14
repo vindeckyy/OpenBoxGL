@@ -535,7 +535,7 @@ def capture_sync_snapshot(state: dict[str, Any]) -> list[dict[str, Any]]:
     return snapshot
 
 
-sync_snapshot = capture_sync_snapshot
+
 
 
 def set_sync_error(state: dict[str, Any], error: Exception, *, code: str = "SYNC_METADATA_INVALID") -> dict[str, Any]:
@@ -719,7 +719,7 @@ def record_local_changes(state: dict[str, Any] | Any, before: Any = None, after:
     return {"events": generated, "outbox": copy.deepcopy(metadata["outbox"]), "changed": len(generated)}
 
 
-record_changes = record_local_changes
+
 
 
 def publish_outbox(state: dict[str, Any], folder: str | os.PathLike[str]) -> dict[str, Any]:
@@ -1179,7 +1179,6 @@ def preview_sync(state: dict[str, Any], incoming: Iterable[dict[str, Any]], *, c
 
 
 preview = preview_sync
-preview_incoming = preview_sync
 
 
 def _replace_catalog(local: dict[str, Any] | None, catalog: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -1311,4 +1310,4 @@ def ingest_event_set(incoming: Iterable[dict[str, Any]], *, known_events: Iterab
     return validate_event_set(incoming, known_events)
 
 
-ingest_events = ingest_event_set
+

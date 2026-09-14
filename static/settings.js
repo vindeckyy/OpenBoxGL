@@ -168,6 +168,8 @@ import { t } from './i18n.js';
         moments_autocapture:$('momentsAutocapture')?.checked ?? true,
         state_retention:Number($('stateRetention')?.value)||1,
         backup_on_close:$('backupOnClose').checked,
+        backup_auto_enabled:$('backupAutoEnabled').checked,
+        backup_auto_keep:Math.max(1, Number($('backupAutoKeep').value) || 4),
         save_backup_limit:Number($('saveBackupLimit').value),
         media_download_limit:Number($('mediaDownloadLimit').value),
         auto_import_media_types:$('autoImportMediaTypes').value.split(',').map(value => value.trim()).filter(Boolean),
@@ -271,6 +273,13 @@ import { t } from './i18n.js';
         if ($('momentsAutocapture')) $('momentsAutocapture').checked = AppState.appSettings.moments_autocapture !== false;
         if ($('stateRetention')) $('stateRetention').value = AppState.appSettings.state_retention ?? 1;
         $('backupOnClose').checked = Boolean(AppState.appSettings.backup_on_close);
+        $('backupAutoEnabled').checked = Boolean(AppState.appSettings.backup_auto_enabled);
+        $('backupAutoKeep').value = AppState.appSettings.backup_auto_keep ?? 4;
+        const lastAuto = AppState.appSettings.last_auto_backup || '';
+        if ($('lastAutoBackupLine')) {
+          $('lastAutoBackupLine').hidden = !lastAuto;
+          if (lastAuto) $('lastAutoBackupLine').textContent = `Last automatic backup: ${lastAuto.replace('T', ' ')}`;
+        }
         $('progressAutomationEnabled').checked = Boolean(AppState.appSettings.progress_automation_enabled);
         $('progressAutomationMinutes').value = AppState.appSettings.progress_automation_play_minutes ?? 30;
         $('progressAutomationIdleDays').value = AppState.appSettings.progress_automation_idle_days ?? 30;

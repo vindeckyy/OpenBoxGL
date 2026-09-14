@@ -29,30 +29,32 @@ from scripts import check_v1_contract  # noqa: E402
 
 class RouteRegistryTests(unittest.TestCase):
     def test_route_table_sizes(self):
-        # 151 base GET + 25 v1 aliases = 176 total (v2 additions remain
-        # additive, including their public static module rows).
-        # 163 base POST + 42 v1 aliases = 205 total (v2 feature CRUD rows are
-        # additive to the existing query/trash/memories/resume surface).
-        self.assertEqual(len(GET_TABLE), 176)
-        self.assertEqual(len(POST_TABLE), 205)
+        # 153 base GET + 25 v1 aliases = 178 total (v2 additions remain
+        # additive, including their public static module rows; 1.12 adds
+        # /api/v2/collections and /api/v2/story).
+        # 165 base POST + 42 v1 aliases = 207 total (v2 feature CRUD rows are
+        # additive to the existing query/trash/memories/resume surface;
+        # 1.12 adds collections save + delete).
+        self.assertEqual(len(GET_TABLE), 178)
+        self.assertEqual(len(POST_TABLE), 207)
         self.assertEqual(len(V1_ALIASED_PREFIXES), 60)
 
     def test_base_routes_count(self):
         base_get = [p for p in GET_TABLE if not p.startswith("/api/v1")]
         base_post = [p for p in POST_TABLE if not p.startswith("/api/v1")]
-        self.assertEqual(len(base_get), 151)
-        self.assertEqual(len(base_post), 163)
-        self.assertEqual(len(base_get) + len(base_post), 314)
+        self.assertEqual(len(base_get), 153)
+        self.assertEqual(len(base_post), 165)
+        self.assertEqual(len(base_get) + len(base_post), 318)
 
     def test_all_routes_registered(self):
         routes = all_routes()
-        # 315 = 314 table paths + the /api/v1/jobs dual-registration.
-        self.assertEqual(len(routes), 315)
+        # 319 = 318 table paths + the /api/v1/jobs dual-registration.
+        self.assertEqual(len(routes), 319)
 
         get_routes = [r for r in routes if r.method == "GET"]
         post_routes = [r for r in routes if r.method == "POST"]
-        self.assertEqual(len(get_routes), 152)
-        self.assertEqual(len(post_routes), 163)
+        self.assertEqual(len(get_routes), 154)
+        self.assertEqual(len(post_routes), 165)
 
     def test_every_registered_route_matches_live_table(self):
         routes = all_routes()

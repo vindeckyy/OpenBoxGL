@@ -41,6 +41,24 @@ def _apply_mangohud_from_state(state):
     return apply_mangohud_env(enabled=bool(settings.get("mangohud_enabled", False)))
 
 
+def _apply_launch_env(base_env, game):
+    """Overlay per-game ``launch_env`` overrides onto the launch environment (1.12.0).
+
+    Values come from ``_clean_launch_env`` at save time; anything malformed in
+    older state is skipped rather than breaking the launch.
+    """
+    overrides = game.get("launch_env") if isinstance(game, dict) else None
+    if not isinstance(overrides, dict) or not overrides:
+        return base_env
+    env = dict(base_env)
+    for key, value in overrides.items():
+        key = str(key)
+        if not key or "=" in key:
+            continue
+        env[key] = "" if value is None else str(value)
+    return env
+
+
 def _apply_gamescope_preset_from_state(state, game, args):
     """Wrap *args* with gamescope when a preset is set and nesting is safe (1.7.2).
 
@@ -722,6 +740,7 @@ def start_game(index=None, stable_game_id="", resume=False, allow_stale=False):
         val_cmd(args, cwd)
         # Apply MangoHud env if enabled in settings (1.7.2).
         launch_env = _apply_mangohud_from_state(state)
+        launch_env = _apply_launch_env(launch_env, game)
         process = subprocess.Popen(args, cwd=cwd, start_new_session=True, env=launch_env)
         started = datetime.now()
         replay_info = _toggle_obs_replay(state.get("settings", {}))
