@@ -10,7 +10,7 @@ The files under this `docs/` folder are engineering, process, and release docume
 - `native-host-contract.md` — contract between the page and the WebKitGTK native host
 - `PARITY.md` — feature parity tracker against LaunchBox and Playnite
 - `development/` — development conventions: `DESIGN.md` (architecture overview), `HANDLER_CONVENTIONS.md`, `PERF.md` (performance budgets and measurements)
-- `adr/` — Architectural Decision Records (ADR 0001 through 0046) covering native host, repository layout, parity shims, theme tokens, cache hierarchy, gate completion, lock ordering, state decomposition, namespace migration, setup preview, durable operations, emulator registry, artifact gates, SQLite read model, i18n system, gamescope presets, controller settings UI, BIOS SHA1 drift detection, backup diff API, smart collection chips, hash routing, ScreenScraper, library export, aarch64 artifacts, changed-line coverage, mood-match theming, library constellation, picker, wrapped timeline, mastery map, game night, SQLite read-model graduation, LaunchBox XML migration, Big Box video snaps, mounted-folder library sync, manual shelf entries, causal sync safety, reviewable LaunchBox source identity, the docs archive layout, perf-gate warm-up with trimmed p95, the Library Time Machine journal contract, the deterministic query grammar contract, and the Every Second Counts local-first surfaces
+- `adr/` — Architectural Decision Records (ADR 0001 through 0047) covering native host, repository layout, parity shims, theme tokens, cache hierarchy, gate completion, lock ordering, state decomposition, namespace migration, setup preview, durable operations, emulator registry, artifact gates, SQLite read model, i18n system, gamescope presets, controller settings UI, BIOS SHA1 drift detection, backup diff API, smart collection chips, hash routing, ScreenScraper, library export, aarch64 artifacts, changed-line coverage, mood-match theming, library constellation, picker, wrapped timeline, mastery map, game night, SQLite read-model graduation, LaunchBox XML migration, Big Box video snaps, mounted-folder library sync, manual shelf entries, causal sync safety, reviewable LaunchBox source identity, the docs archive layout, perf-gate warm-up with trimmed p95, the Library Time Machine journal contract, the deterministic query grammar contract, the Every Second Counts local-first surfaces, and the Living Library additions (smart collections, Game Story, per-game launch options, scheduled backups, SQLite auto-enable, CSP framing gate)
 
 ## Release
 
@@ -18,7 +18,7 @@ The files under this `docs/` folder are engineering, process, and release docume
 - `RELEASE_NOTES.md` — release notes for the current version
 - `flathub-checklist.md` — remaining steps toward Flathub store submission
 
-The current shipped release is **v1.11.0**. The planning and execution records
+The current shipped release is **v1.12.0**. The planning and execution records
 below are historical archives, not an unfinished active roadmap.
 
 ## Process and policies
@@ -33,6 +33,6 @@ below are historical archives, not an unfinished active roadmap.
 
 ## Archive
 
-- `archive/` — superseded planning documents and historical release notes kept for traceability: `NEXT_UPDATE_PLAN.md` (the executed 1.9.0→1.10.0 plan), `NEXT_UPDATE_PLAN-1.11.md` (the 1.11.0 planning record), `NEXT_UPDATE_EXECUTION.md` (the executed 1.9.0→1.10.0 ledger), `NEXT_UPDATE_EXECUTION-1.11.md` (the executed 1.11.0 ledger), `release-notes-1.7.2.md`, `release-notes-1.8.0.md`
+- `archive/` — superseded planning documents and historical release notes kept for traceability: `NEXT_UPDATE_PLAN.md` (the executed 1.9.0→1.10.0 plan), `NEXT_UPDATE_PLAN-1.11.md` (the 1.11.0 planning record), `NEXT_UPDATE_PLAN-1.12.md` (the executed 1.12.0 plan), `NEXT_UPDATE_EXECUTION.md` (the executed 1.9.0→1.10.0 ledger), `NEXT_UPDATE_EXECUTION-1.11.md` (the executed 1.11.0 ledger), `release-notes-1.7.2.md`, `release-notes-1.8.0.md`, `release-notes-1.11.0.md`
 
 Do not add user-facing markdown here. Edit the docs site repo instead.

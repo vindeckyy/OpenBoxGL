@@ -1,7 +1,7 @@
 # OpenBox 1.12 — Megaplan
 
-Status: partially implemented (see execution log below). When 1.12 ships,
-move this to `docs/archive/` per convention.
+Status: shipped as 1.12.0 (2026-09-14). Archived per the docs-archive
+convention (ADR 0041); the execution log below is the historical record.
 
 ## Execution log
 

@@ -93,6 +93,16 @@ def main() -> int:
     if version not in changelog:
         print(f"CHANGELOG.md: no entry mentions {version}")
         failures.append("CHANGELOG")
+    elif not re.search(rf"^## \[{re.escape(version)}\]", changelog, re.MULTILINE):
+        print(f"CHANGELOG.md: no dated ## [{version}] section (entries may be stranded in [Unreleased])")
+        failures.append("CHANGELOG section")
+
+    docs_index = ROOT / "docs" / "README.md"
+    if docs_index.is_file():
+        docs_index_text = docs_index.read_text(encoding="utf-8")
+        if f"**v{version}**" not in docs_index_text:
+            print(f"docs/README.md: shipped-release line does not mention v{version}")
+            failures.append("docs README")
 
 
     release_notes_path = _doc_path("RELEASE_NOTES.md")
