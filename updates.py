@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from backend_io import atomic_write_bytes, atomic_write_text, download_file, read_limited
+from backend_io import atomic_write_bytes, atomic_write_text, download_file, fsync_directory, read_limited
 
 logger = logging.getLogger("openbox")
 
@@ -122,6 +122,22 @@ def resolve_update_checksum(update, opener=urlopen):
     raise ValueError("The release checksum is unavailable.")
 
 
+# Every y-coordinate that encodes a small-order Ed25519 point (orders 1, 2,
+# 4 and 8), matching the libsodium/ZIP-215 blacklist. Both sign-bit variants
+# share a y value, and a small-order verification key makes signatures
+# forgeable, so all of them must be rejected.
+_SMALL_ORDER_Y = frozenset(
+    int.from_bytes(bytes.fromhex(encoding), "little") & ((1 << 255) - 1)
+    for encoding in (
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0100000000000000000000000000000000000000000000000000000000000000",
+        "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+        "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+    )
+)
+
+
 def _point_decompress(public_bytes):
     """Decompress an Ed25519 public key to affine coordinates (RFC 8032).
 
@@ -137,9 +153,9 @@ def _point_decompress(public_bytes):
     # sign bit must be masked before the range check (RFC 8032).
     if y >= p:
         raise ValueError("Invalid Ed25519 point: coordinate out of range.")
-    # Reject small-order points (identity, order 2, order 4): they are
-    # never valid verification keys for this application.
-    if y in (0, 1, p - 1):
+    # Reject small-order points (orders 1, 2, 4 and 8): they are never
+    # valid verification keys for this application.
+    if y in _SMALL_ORDER_Y:
         raise ValueError("Invalid Ed25519 point: small-order point.")
     denominator = (d * y * y + 1) % p
     x2 = ((y * y - 1) * pow(denominator, p - 2, p)) % p
@@ -207,7 +223,8 @@ def load_release_signature(url, opener=urlopen):
         raise ValueError(f"The release signature uses an unsupported algorithm: {payload.get('algorithm')!r}")
     if payload.get("digest_algorithm") != "sha256":
         raise ValueError("The release signature is missing a SHA-256 digest.")
-    if not re.fullmatch(r"[0-9a-f]{64}", str(payload.get("digest", "")).lower()):
+    digest = str(payload.get("digest", "")).lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", digest):
         raise ValueError("The release signature is missing a valid digest.")
     try:
         signature = base64.b64decode(str(payload.get("signature", "")), validate=True)
@@ -215,7 +232,7 @@ def load_release_signature(url, opener=urlopen):
         raise ValueError("The release signature is missing a valid signature.") from error
     if len(signature) != 64:
         raise ValueError("The release signature has an invalid length.")
-    return {"digest": payload["digest"].lower(), "signature": signature}
+    return {"digest": digest, "signature": signature}
 
 
 def verify_update_signature(update, artifact_digest, signature, public_key_bytes):
@@ -272,6 +289,8 @@ def check_update(opener=urlopen):
     except URLError as error:
         raise ValueError(f"Could not reach GitHub releases: {error.reason}") from error
 
+    if not isinstance(release, dict):
+        raise ValueError("The GitHub releases payload is invalid.")
     version = str(release.get("tag_name", ""))
     urls, digests = parse_release_assets(release)
     appimage = urls.get(ASSET, "")
@@ -308,7 +327,8 @@ def check_update(opener=urlopen):
 
 
 def install_update(update, destination=None, opener=urlopen):
-    destination = Path(destination or os.environ.get("APPIMAGE", "")).expanduser()
+    # Resolve symlinks so the real AppImage is replaced, not the link.
+    destination = Path(destination or os.environ.get("APPIMAGE", "")).expanduser().resolve()
     if not destination.is_file():
         raise ValueError("Automatic updates require the OpenBox AppImage.")
     if not update.get("available"):
@@ -336,6 +356,7 @@ def install_update(update, destination=None, opener=urlopen):
         except OSError:
             backup.replace(destination)
             raise
+        fsync_directory(destination.parent)
     finally:
         temporary.unlink(missing_ok=True)
     return {"installed": update["latest"], "backup": str(backup)}
@@ -349,6 +370,8 @@ def install_desktop_entry(appimage=None):
     if "\n" in executable:
         raise ValueError("The AppImage path is not valid for a desktop entry.")
     executable = executable.replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`").replace("$", "\\$")
+    # '%' starts a desktop-entry field code, so literal percent must double.
+    executable = executable.replace("%", "%%")
     applications = Path.home() / ".local/share/applications"
     icons = Path.home() / ".local/share/icons/hicolor/scalable/apps"
     applications.mkdir(parents=True, exist_ok=True)
