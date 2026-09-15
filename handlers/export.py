@@ -51,6 +51,8 @@ class ExportHandlers:
         if scope not in EXPORT_SCOPES:
             raise ValueError("Export scope must be all, platform, or playlist.")
         scope_name = str(payload.get("scope_name", "")).strip()
+        if scope != "all" and not scope_name:
+            raise ValueError(f"Export scope {scope} requires a name.")
         include_media_paths = bool(payload.get("include_media_paths"))
 
         def worker(_cancel_event):

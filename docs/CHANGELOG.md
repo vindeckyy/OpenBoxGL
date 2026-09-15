@@ -43,6 +43,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (ImageMagick is needed only for development).
 
 ### Fixed
+- Return 404 when deleting a playlist that doesn't exist instead of a false
+  success, and reject scoped library exports without a name synchronously
+  (400) instead of failing later inside the export job.
+- Explain empty Game Night queues: `POST /api/v2/party/queue` now returns an
+  `empty_reason` plus an exclusion breakdown (e.g. no games support N
+  players), rendered in the party setup status instead of a bare empty state.
+- Type background jobs correctly in Activity: export, SteamGridDB,
+  ScreenScraper, auto-import, and reel jobs no longer masquerade as
+  `setup.scan` (with the wrong retry policy); new `library.export`,
+  `screenscraper.*`, `steamgrid.*`, `storefront.auto_import`, and
+  `clips.reel` operation types and policies.
+- Fix "undefinedm" estimates in Backlog Radio rows served from the stored
+  playlist: hydrated picks now carry `estimated_minutes`, with a frontend
+  fallback for older entries.
+- Stop the test suite from clobbering the developer's real library: an
+  import-order hazard in `tests/test_sse.py` wrote 100 synthetic games into
+  `~/.local/share/openbox-game-launcher/library.json` on every full run.
+  `run_all_tests.sh` and `scripts/check_tests.py` now export an isolated
+  `OPENBOX_DATA_DIR`, and the test module guards itself at import time.
 - Route export downloads through the shared `send_bytes` writer so they
   inherit the same partial-write discipline as every other response.
 - Restore focus to the opening element on every dialog close: `closeDialog()`

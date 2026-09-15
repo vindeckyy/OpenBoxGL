@@ -20,7 +20,7 @@ import { t } from './i18n.js';
         <label class="check preset-flag"><input type="checkbox" class="preset-integer" ${preset.integer ? 'checked' : ''}> Int</label>
         <label class="check preset-flag"><input type="checkbox" class="preset-stretch" ${preset.stretch ? 'checked' : ''}> Stretch</label>
         <label class="check preset-flag"><input type="checkbox" class="preset-borderless" ${preset.borderless ? 'checked' : ''}> Borderless</label>
-        <input class="preset-extra" placeholder="Extra gamescope args" value="${escapeHtml((preset.extra_args || []).join(' '))}" aria-label="Extra gamescope arguments">
+        <input class="preset-extra" placeholder="Extra gamescope args" value="${escapeHtml((Array.isArray(preset.extra_args) ? preset.extra_args : String(preset.extra_args || '').split(/\s+/).filter(Boolean)).join(' '))}" aria-label="Extra gamescope arguments">
         <button type="button" class="icon-button preset-delete" aria-label="Remove preset">×</button>
       </div>`;
     }
@@ -44,7 +44,7 @@ import { t } from './i18n.js';
         integer: row.querySelector('.preset-integer').checked,
         stretch: row.querySelector('.preset-stretch').checked,
         borderless: row.querySelector('.preset-borderless').checked,
-        extra_args: row.querySelector('.preset-extra').value.trim(),
+        extra_args: row.querySelector('.preset-extra').value.trim().split(/\s+/).filter(Boolean),
       }));
     }
 
@@ -101,8 +101,13 @@ import { t } from './i18n.js';
     function applySettingsVisibility() {
       const query = $('settingsSearch').value.toLowerCase().trim();
       document.querySelectorAll('.settings-field').forEach(field => {
+        if (field.hasAttribute('data-settings-exempt') || field.contains($('settingsSearch'))) {
+          field.hidden = false;
+          return;
+        }
         const panels = (field.dataset.settingsPanel || '').split(/\s+/).filter(Boolean);
-        const inCategory = !panels.length || panels.includes(settingsCategory);
+        if (!panels.length) console.warn('settings: field without data-settings-panel', field.id || field.dataset.setting || field.className);
+        const inCategory = panels.includes(settingsCategory);
         const haystack = `${field.dataset.setting || ''} ${field.textContent || ''}`.toLowerCase();
         const matchesSearch = !query || haystack.includes(query);
         field.hidden = !inCategory || !matchesSearch;
@@ -400,7 +405,7 @@ import { t } from './i18n.js';
         } else if (!a.firmware_ok) {
           fixBtn = `<button type="button" class="icon-button" style="border:1px solid var(--focus);color:var(--focus)">Firmware help</button>`;
         }
-        return `<div class="emulator-health-row" style="border:1px solid var(--border-card);padding:0.5rem;margin:0.3rem 0;display:flex;justify-content:space-between;align-items:center"><div><strong>${escapeHtml(a.label)}</strong> <small>${escapeHtml(a.platform)}</small><div class="health-badges" style="display:flex;gap:0.5rem;font-size:0.85rem">${bios} ${firm} ${core}</div></div><div>${fixBtn}</div></div>`;
+        return `<div class="emulator-health-row" style="border:1px solid var(--border-card);padding:var(--space-sm);margin:var(--space-xs) 0;display:flex;justify-content:space-between;align-items:center"><div><strong>${escapeHtml(a.label)}</strong> <small>${escapeHtml(a.platform)}</small><div class="health-badges" style="display:flex;gap:var(--gap-tight);font-size:0.85rem">${bios} ${firm} ${core}</div></div><div>${fixBtn}</div></div>`;
       }).join('');
       container.innerHTML = `<div class="section-title">Emulator Health <small style="color:var(--muted)">BIOS SHA1 / firmware / core drift</small></div>${rows}`;
       container.querySelectorAll('[data-bios-path]').forEach(btn => btn.onclick = () => { const p = btn.dataset.biosPath; if (p) { try { notify('BIOS expected at ' + p); } catch (e) {} } });

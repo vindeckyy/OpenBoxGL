@@ -643,7 +643,7 @@ class ArcadeRoom {
     close.className = 'icon-button';
     close.textContent = '×';
     close.setAttribute('aria-label', arcadeText('arcade.close', 'Close Arcade Room'));
-    close.style.cssText = 'margin-left:auto;border:1px solid var(--border-card);border-radius:var(--radius-cover);padding:4px 9px;background:var(--surface-card);color:var(--text);font-size:var(--font-subtitle);';
+    close.style.cssText = 'margin-left:auto;border:1px solid var(--border-card);border-radius:var(--radius-cover);padding:var(--space-2xs) var(--space-sm);background:var(--surface-card);color:var(--text);font-size:var(--font-subtitle);';
     close.addEventListener('click', () => this.close());
     bar.append(this.titleElement, this.statusElement, close);
 

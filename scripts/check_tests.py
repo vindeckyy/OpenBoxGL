@@ -229,6 +229,14 @@ def main() -> int:
         env = os.environ.copy()
         env["PYTHONPATH"] = str(ROOT) + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["COVERAGE_RUN"] = "1"
+        # Isolate state: openbox.py binds DATA at import time per test
+        # process. Without a suite-wide temp dir, any test importing state
+        # modules before setting its own writes fixtures into the real
+        # developer library. Explicitly-set dirs are honored.
+        if not env.get("OPENBOX_DATA_DIR"):
+            import tempfile as _tempfile
+
+            env["OPENBOX_DATA_DIR"] = _tempfile.mkdtemp(prefix="openbox-gate-data.")
         for test_file in test_files:
             command = [str(COVERAGE), "run", "-p", str(test_file)]
             last_output = ""
@@ -255,6 +263,9 @@ def main() -> int:
         print(f"{passed_tests} test files passed, {len(failed_tests)} failed")
         if failed_tests:
             failures.append("tests")
+        gate_data_dir = env.get("OPENBOX_DATA_DIR", "")
+        if gate_data_dir and "openbox-gate-data." in gate_data_dir:
+            shutil.rmtree(gate_data_dir, ignore_errors=True)
 
 
         combined = run([str(COVERAGE), "combine", "--quiet"])

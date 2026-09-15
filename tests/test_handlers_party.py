@@ -73,10 +73,23 @@ class PartyHandlerTest(unittest.TestCase):
         # g-3 is single-player only; rating 5 sorts first.
         self.assertEqual(payload["queue"], ["g-1", "g-2"])
         self.assertEqual(payload["count"], 2)
+        self.assertIsNone(payload["empty_reason"])
         # Persisted through settings.
         self.assertEqual(self.store["state"]["settings"]["party_queue"], ["g-1", "g-2"])
         self.assertEqual(self.store["state"]["settings"]["party_players"], 2)
         self.assertEqual(self.store["state"]["settings"]["party_index"], 0)
+
+    def test_build_queue_empty_explains_why(self):
+        self.store["state"]["games"] = [
+            {"id": 9, "game_id": "g-9", "name": "Solo", "platform": "SNES",
+             "path_exists": True, "max_players": 1, "rating": 5},
+        ]
+        status, payload = self.build({"players": 2, "minutes": 0})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["queue"], [])
+        self.assertEqual(payload["count"], 0)
+        self.assertIn("2 players", payload["empty_reason"])
+        self.assertEqual(payload["excluded"]["too_few_players"], 1)
 
     def test_build_bad_players(self):
         for bad in (1, 9, 0, "four", None):

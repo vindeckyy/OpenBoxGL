@@ -648,6 +648,7 @@
     "bigbox": "Big Box",
     "integrations": "Integrations",
     "appearance": "Appearance",
+    "controller": "Controller",
     "advanced": "Advanced",
     "search_settings": "Search settings",
     "search_placeholder": "Type to filter settings",

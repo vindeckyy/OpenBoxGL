@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from openbox import load_state
-from pkg.parity.parity_party import build_party_queue
+from pkg.parity.parity_party import build_party_queue, empty_queue_reason, queue_exclusion_breakdown
 from routes.registry import route
 from webapp_state import transact_state
 
@@ -59,7 +59,13 @@ class PartyHandlers:
             settings["party_index"] = 0
 
         transact_state(mutate)
-        self.send_json(200, {"queue": queue, "count": len(queue)})
+        breakdown = queue_exclusion_breakdown(games, players=players, minutes=minutes)
+        self.send_json(200, {
+            "queue": queue,
+            "count": len(queue),
+            "empty_reason": empty_queue_reason(breakdown, players) if not queue else None,
+            "excluded": breakdown,
+        })
         return
 
     @route("GET", "/api/v2/party/queue")

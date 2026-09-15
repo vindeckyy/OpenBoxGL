@@ -80,6 +80,74 @@ def eligible_party_games(games: list[dict[str, Any]], *, players: int = 2) -> li
     return eligible
 
 
+def queue_exclusion_breakdown(
+    games: list[dict[str, Any]],
+    *,
+    players: int = 2,
+    minutes: int = 0,
+) -> dict[str, int]:
+    """Count why games were excluded from a party queue (same rules as build).
+
+    Keys: total, hidden, unusable_path, too_few_players,
+    no_controller_or_platform, over_budget. Used to explain empty queues.
+    """
+    try:
+        players = max(2, min(8, int(players)))
+    except (TypeError, ValueError):
+        players = 2
+    try:
+        minutes = int(minutes or 0)
+    except (TypeError, ValueError):
+        minutes = 0
+    counts = {
+        "total": 0, "hidden": 0, "unusable_path": 0, "too_few_players": 0,
+        "no_controller_or_platform": 0, "over_budget": 0,
+    }
+    budget = minutes * 60 * 3 if minutes > 0 else None
+    for game in games or []:
+        if not isinstance(game, dict):
+            continue
+        counts["total"] += 1
+        if game.get("hidden") or game.get("hide_in_bigbox"):
+            counts["hidden"] += 1
+            continue
+        if not _path_usable(game):
+            counts["unusable_path"] += 1
+            continue
+        if _max_players(game) < players:
+            counts["too_few_players"] += 1
+            continue
+        platform = str(game.get("platform") or "").strip()
+        if not str(game.get("controller_support") or "").strip() and platform not in COUCH_PLATFORMS:
+            counts["no_controller_or_platform"] += 1
+            continue
+        if budget is not None:
+            avg = _avg_session_seconds(game)
+            if avg is not None and avg > budget:
+                counts["over_budget"] += 1
+    return counts
+
+
+def empty_queue_reason(breakdown: dict[str, int], players: int = 2) -> str:
+    """Human-readable explanation for an empty party queue."""
+    total = breakdown.get("total", 0)
+    if not total:
+        return "Your library is empty — import games to build a party queue."
+    ranked = sorted(
+        (("too_few_players", f"No games support {players} players — lower the player count or add Max players metadata."),
+         ("no_controller_or_platform", "No couch-ready games found — add controller support or console platforms."),
+         ("unusable_path", "Every candidate has missing game files — fix paths or reinstall."),
+         ("over_budget", "Every candidate runs longer than the session budget — raise the minutes."),
+         ("hidden", "Every game in the library is hidden.")),
+        key=lambda item: breakdown.get(item[0], 0),
+        reverse=True,
+    )
+    for key, message in ranked:
+        if breakdown.get(key, 0):
+            return message
+    return "No eligible games for this setup."
+
+
 def build_party_queue(
     games: list[dict[str, Any]],
     *,

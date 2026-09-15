@@ -1137,7 +1137,7 @@ function markFilterAria() {
           const platforms = payload.platforms || payload.candidates || [];
           if (check.code === 'AMBIGUOUS_PLATFORM' && platforms.length) {
             const chips = platforms.map(pl => `<button type="button" class="platform" data-pick-platform="${escapeHtml(pl)}" data-game-id="${escapeHtml(game.game_id)}" style="border-color:var(--focus);color:var(--focus);background:var(--surface-card)">${escapeHtml(pl)}</button>`).join('');
-            fixBtn = `<div class="extras" style="gap:0.4rem;flex-wrap:wrap">${chips}</div>`;
+            fixBtn = `<div class="extras" style="gap:var(--gap-tight);flex-wrap:wrap">${chips}</div>`;
           } else if (payload.core) {
             fixBtn = `<button type="button" class="icon-button" data-fix="pick-core" data-core="${escapeHtml(payload.core)}" style="border:1px solid var(--brand);color:var(--brand)">Choose core</button>`;
           } else {
@@ -1150,7 +1150,7 @@ function markFilterAria() {
           fixBtn = `<span class="description">${escapeHtml(fix.label || '')}</span>`;
         }
         const severityColor = check.severity === 'error' ? 'var(--danger)' : 'var(--gold)';
-        return `<div class="doctor-row" style="border-left:3px solid ${severityColor};padding:0.5rem;margin:0.5rem 0;background:var(--surface-card)"><div><strong>${escapeHtml(check.code)}</strong>: ${escapeHtml(check.message)}</div><div style="margin-top:0.4rem">${fixBtn}</div></div>`;
+        return `<div class="doctor-row" style="border-left:3px solid ${severityColor};padding:var(--space-sm);margin:var(--space-sm) 0;background:var(--surface-card)"><div><strong>${escapeHtml(check.code)}</strong>: ${escapeHtml(check.message)}</div><div style="margin-top:var(--space-xs)">${fixBtn}</div></div>`;
       }).join('');
       // Bind fix actions
       container.querySelectorAll('[data-fix="flatpak"]').forEach(btn => btn.onclick = async () => {

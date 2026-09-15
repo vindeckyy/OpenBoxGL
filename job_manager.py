@@ -31,6 +31,12 @@ OPERATION_TYPE_BY_NAME = {
     "metadata-match": "metadata.apply",
     "library-backup": "library.backup",
     "library-restore": "library.restore",
+    "library-export": "library.export",
+    "screenscraper-match": "screenscraper.match",
+    "screenscraper-apply": "screenscraper.apply",
+    "steamgrid-match": "steamgrid.match",
+    "steamgrid-apply": "steamgrid.apply",
+    "auto-import": "storefront.auto_import",
     "cloud-sync": "cloud.sync",
     "updater-install": "updater.install",
     "saves-scan": "saves.scan",
@@ -58,6 +64,8 @@ def operation_type_for_name(name: str) -> str:
         return "setup.revalidate"
     if name.startswith("setup-commit:"):
         return "setup.commit"
+    if name.startswith("reel:"):
+        return "clips.reel"
     if name.startswith("metadata-match-preview:"):
         return "metadata.match_preview"
     if name.startswith("metadata-match-apply:"):

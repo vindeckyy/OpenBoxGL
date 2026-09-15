@@ -259,10 +259,23 @@ class ExtensionsHandlers:
         self.send_json(200, {"saved": name})
 
     def delete_playlist(self, payload):
+        from api_errors import NotFound
+
         name = str(payload.get("name", "")).strip()
+        removed = []
+
         def mutate(state):
-            state["playlists"] = [item for item in state.get("playlists", []) if item.get("name") != name]
+            nonlocal removed
+            kept = []
+            for item in state.get("playlists", []):
+                if isinstance(item, dict) and item.get("name") == name:
+                    removed.append(item)
+                else:
+                    kept.append(item)
+            state["playlists"] = kept
         transact_state(mutate)
+        if not removed:
+            raise NotFound(f"Playlist not found: {name or '(blank)'}")
         self.send_json(200, {"deleted": name})
 
     def install_catalog_plugin(self, payload):

@@ -93,11 +93,14 @@ function renderRadio(playlist) {
   const notice = playlist.notice_key && playlist.notice_key !== 'radio.notice.ok'
     ? `<p class="muted radio-notice">${escapeHtml(t(playlist.notice_key))}</p>` : '';
   const badge = playlist.fallback ? `<span class="radio-badge">${escapeHtml(t('radio.fallback_badge'))}</span>` : '';
-  const rows = picks.map(pick => `
+  const rows = picks.map(pick => {
+    const mins = pick.estimated_minutes;
+    const minsLabel = mins === undefined || mins === null ? '–' : `${mins}m`;
+    return `
     <li class="insight-rank-row radio-pick">
-      <button type="button" class="insight-game-link" data-insight-game="${escapeHtml(pick.game_id)}"><span class="insight-rank-label">${escapeHtml(pick.name)}</span><span class="insight-rank-count">${escapeHtml(pick.platform)} • ${pick.estimated_minutes}m</span></button>
+      <button type="button" class="insight-game-link" data-insight-game="${escapeHtml(pick.game_id)}"><span class="insight-rank-label">${escapeHtml(pick.name)}</span><span class="insight-rank-count">${escapeHtml(pick.platform)} • ${minsLabel}</span></button>
       <div class="radio-reasons">${renderReasonChips(pick.reasons)}</div>
-    </li>`).join('');
+    </li>`; }).join('');
   return `
     <div class="insight-section radio-card">
       <div class="radio-head"><h3 class="insight-title">${escapeHtml(t('radio.title'))}${badge}</h3><button type="button" class="icon-button" id="radioRefresh" aria-label="${escapeHtml(t('radio.refresh'))}" title="${escapeHtml(t('radio.refresh'))}">↻</button></div>
