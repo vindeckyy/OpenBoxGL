@@ -2,6 +2,15 @@
 
 Measured by `scripts/perf_bench.py` against a synthetic library served by the real server (loopback, gzip enabled). Reference machine: this workstation.
 
+## 1.12.0 measurements
+
+No dedicated measurement run was recorded for the 1.12.0 release. The
+blocking 10k/20k gates below remain the release evidence. Note that the
+SQLite read model now self-enables at 5,000+ games unless opted out
+(ADR 0047), so large-library search defaults to the FTS path rather than
+the JSON path measured below. Re-run `python3 -B scripts/perf_bench.py
+--sizes 10000,20000 --runs 5` on the release tree to refresh this table.
+
 ## Final 1.11.0 measurements (2026-09-12)
 
 Five-run strict local sampling on the final 1.11.0 worktree passed the 10k and

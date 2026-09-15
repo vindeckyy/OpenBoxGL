@@ -50,7 +50,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Durable background operations | done | Activity drawer with SSE progress, cancellation, retry/resume, and `operations.json` persistence |
 | Launch readiness preflight | done | Launch Doctor validates paths, adapters, Flatpak/native executables, BIOS/firmware, and tokenized arguments before launch. BIOS SHA1 drift detection reports `BIOS_SHA1_DRIFT` when a BIOS file exists but its hash doesn't match the expected value (1.7.2) |
 | Play Insights local analytics | done | Local 366-day playtime heatmap (levels 0–4), streaks, momentum, top platforms/genres with zero telemetry |
-| Optional SQLite read model | done | `OPENBOX_ENABLE_SQLITE_READ=1` enables FTS5 search, indexed queries, and GROUP BY facets for libraries beyond the JSON path; JSON remains source of truth. The formal release gates cover 10k/20k libraries, so performance above 20k is exploratory rather than release-gated (ADR 0032) |
+| Optional SQLite read model | done | `OPENBOX_ENABLE_SQLITE_READ=1` enables FTS5 search, indexed queries, and GROUP BY facets for libraries beyond the JSON path; the read model also self-enables at 5,000+ games unless explicitly opted out (1.12.0, ADR 0047). JSON remains source of truth. The formal release gates cover 10k/20k libraries, so performance above 20k is exploratory rather than release-gated (ADR 0032) |
 | Visual chip builder for collections | done | Filter presets render as visual chips via `rules_to_chips`/`chips_to_rules` round-trip conversion (1.7.2) |
 | Searchable settings pages | done | Settings dialog filters fields by name and related terms |
 | Session history toggle and viewer | done | Play sessions can be disabled and are browsable from the History menu |
@@ -133,6 +133,10 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Record That clips and reels | done | Replay-buffer or fail-safe screenshot capture plus bounded, deterministic highlight reels (1.11.0) |
 | Steam Bridge shortcuts | done | Preview/apply/remove `shortcuts.vdf` entries and launch an OpenBox game with `openbox --play <id>` (1.11.0) |
 | ES-DE gamelist import | done | Reviewable `gamelist.xml` preview/apply with stale-plan and source-digest protection (1.11.0) |
+| Smart collections | done | Named Backlog Radio queries persist as live sidebar shelves evaluated at read time via `GET/POST /api/v2/collections` and `POST /api/v2/collections/delete` (1.12.0, ADR 0047) |
+| Per-game Game Story | done | Detail-pane Story tab narrates added/first-played/milestone/moment history via `GET /api/v2/story` (1.12.0, ADR 0047) |
+| Per-game launch environment and confirm | done | `launch_env` KEY=value overrides merge over the launch environment and `launch_confirm` asks before preflight, per game (1.12.0, ADR 0047) |
+| Scheduled library backups | done | Opt-in weekly automatic backups with retention and a last-run line via `auto_backup_due()` (1.12.0, ADR 0047) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 

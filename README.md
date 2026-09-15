@@ -116,6 +116,18 @@ The full capability matrix with acceptance checks lives in [PARITY.md](docs/PARI
 
 ## Features
 
+### Living Library (1.12.0)
+
+Saved Backlog Radio searches pin as named **smart collections** that
+re-evaluate live — the shelf stores the question, not the answer. Every game
+gains a **Story** tab narrating its journey: added, first played, longest
+session, milestones, progress, and captured Moments. The launch sheet gains
+per-game `KEY=value` environment overrides and an optional confirm-before-
+launch step, and an opt-in **weekly automatic backup** keeps a bounded archive
+history with a last-run line in Settings. The SQLite read model self-enables
+at 5,000+ games (env opt-out honored), and the command palette ranks recently
+used games and actions first.
+
 ### Every Second Counts (1.11.0)
 
 Quick Resume and Moments keep save-state-aware progress, captures, and session
@@ -401,8 +413,10 @@ OpenBox/
 ├── native_host.c           Native WebKitGTK host (spawns web_app.py)
 ├── handlers/               Route handler mixins (library, media, imports, settings, ...)
 ├── web_app.py              Loopback server + REST API (shared core)
+├── webapp_state.py         SSE/event bus facade over the canonical state owner
 ├── routes.py               GET/POST route tables (frozen v1 surface + additive v2 routes)
-├── contracts.py            Frozen v1 API contract + legacy aliases
+├── routes/                 Route registry package (@route decorator, handler loading)
+├── contracts.py            Frozen v1 API contract + legacy aliases (v1_contracts.json)
 ├── openbox.py              Shared core helpers (data paths, launch, profiles)
 ├── static/                 Frontend JavaScript modules, search worker, and app.css
 ├── state_store.py          Schema-versioned state, atomic writes, snapshots
@@ -410,6 +424,15 @@ OpenBox/
 ├── api_errors.py           Structured API error codes
 ├── job_manager.py          Background job lifecycle adapter
 ├── importers.py            Steam, Heroic, Lutris, ROM imports
+├── automation.py           HMAC-signed webhook delivery + event allowlists
+├── backend_io.py           Bounded network and filesystem helpers
+├── cloud_sync.py           Mounted-folder statistics sync
+├── crash_report.py         Redacted diagnostic report generator
+├── notifications.py        Persistent notification feed helpers
+├── openbox_logging.py      Diagnostic logging with secret redaction
+├── play_queue.py           Persistent play queue helpers
+├── archives.py             Safe, cached archive extraction
+├── arcade.py               MAME and FinalBurn full-set import
 ├── pkg/state/              Modularized state, caches, launch, and operations
 ├── pkg/parity/              Parity modules (flat `import parity_*` via MetaPathFinder bridge)
 ├── emulators.py            Emulator profiles + Flathub management
@@ -419,6 +442,7 @@ OpenBox/
 ├── updates.py              Verified GitHub updater
 ├── env_config.py           .env loading + credential aliases
 ├── plugins.py              Plugin lifecycle + hooks
+├── plugin_runner.py        Sandboxed plugin subprocess runner
 ├── plugin_catalog.py       Bundled community catalog
 ├── catalog.py              Search, filters, bulk edits
 ├── stock_themes.py         Bundled CSS theme installer

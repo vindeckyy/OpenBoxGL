@@ -6,42 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Added
-- **Smart collections (1.12.0):** save the active Backlog Radio search as a
-  named, living shelf. Collections store the query — not a snapshot — so
-  membership stays correct as the library changes. New routes
-  `GET/POST /api/v2/collections` and `POST /api/v2/collections/delete`, a
-  Collections sidebar section, and a "Save as collection" chip in the query
-  bar (backed by `pkg/parity/parity_collections.py`).
-- **Game Story (1.12.0):** a per-game narrative tab in the detail pane,
-  served by `GET /api/v2/story?game_id=` — a deterministic projection
-  (`pkg/parity/parity_story.py`) over the game record, session journal, and
-  Moments: added date, first played, longest session, playtime milestones,
-  progress, and captured moments.
-- **Per-game environment overrides (1.12.0):** Edit game → Launch gains a
-  `launch_env` field (`KEY=value` lines), validated at save and merged over
-  the launch environment in `pkg/state/launch.py`, plus an “Always confirm
-  before launch” per-game flag that asks before preflight.
-- **Weekly automatic backups (1.12.0):** Settings gains an opt-in weekly
-  library backup with retention and a “last automatic backup” line; the
-  scheduler reuses the existing backup engine (`auto_backup_due()`).
-- **SQLite self-enables for large libraries (1.12.0):** at 5,000+ games the
-  FTS read model turns itself on; an explicit env opt-out is honored and
-  small libraries see identical behavior.
-- **Command palette learns (1.12.0):** recently chosen games and actions
-  rank first, from local usage counts — no telemetry.
-
-### Changed
-- Replace the application logo with the new OpenBox GL mark: `openbox.svg`
-  (app icon and favicon) now carries the hexagonal OBGL monogram traced in
-  `assets/OpenBoxLogo.svg`, and `assets/openbox-logo.png` plus
-  `assets/OpenBoxGL.png` are re-rendered from it.
-- Complete the logo rebrand with consistent square, transparent application
-  and README artwork generated from the supplied SVG. Native window and tray
-  icons use the bundled mark when running directly from source as well as
-  installed builds. Regenerate the artwork with `bash scripts/render_branding.sh`
-  (ImageMagick is needed only for development).
-
 ### Fixed
 - Return 404 when deleting a playlist that doesn't exist instead of a false
   success, and reject scoped library exports without a name synchronously
@@ -62,6 +26,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `~/.local/share/openbox-game-launcher/library.json` on every full run.
   `run_all_tests.sh` and `scripts/check_tests.py` now export an isolated
   `OPENBOX_DATA_DIR`, and the test module guards itself at import time.
+
+## [1.12.0] - 2026-09-14
+
+### Living Library
+
+### Added
+- **Smart collections:** save the active Backlog Radio search as a
+  named, living shelf. Collections store the query — not a snapshot — so
+  membership stays correct as the library changes. New routes
+  `GET/POST /api/v2/collections` and `POST /api/v2/collections/delete`, a
+  Collections sidebar section, and a "Save as collection" chip in the query
+  bar (backed by `pkg/parity/parity_collections.py`).
+- **Game Story:** a per-game narrative tab in the detail pane,
+  served by `GET /api/v2/story?game_id=` — a deterministic projection
+  (`pkg/parity/parity_story.py`) over the game record, session journal, and
+  Moments: added date, first played, longest session, playtime milestones,
+  progress, and captured moments.
+- **Per-game environment overrides:** Edit game → Launch gains a
+  `launch_env` field (`KEY=value` lines), validated at save and merged over
+  the launch environment in `pkg/state/launch.py`, plus an “Always confirm
+  before launch” per-game flag that asks before preflight.
+- **Weekly automatic backups:** Settings gains an opt-in weekly
+  library backup with retention and a “last automatic backup” line; the
+  scheduler reuses the existing backup engine (`auto_backup_due()`).
+- **SQLite self-enables for large libraries:** at 5,000+ games the
+  FTS read model turns itself on; an explicit env opt-out is honored and
+  small libraries see identical behavior.
+- **Command palette learns:** recently chosen games and actions
+  rank first, from local usage counts — no telemetry.
+
+### Changed
+- Replace the application logo with the new OpenBox GL mark: `openbox.svg`
+  (app icon and favicon) now carries the hexagonal OBGL monogram traced in
+  `assets/OpenBoxLogo.svg`, and `assets/openbox-logo.png` plus
+  `assets/OpenBoxGL.png` are re-rendered from it.
+- Complete the logo rebrand with consistent square, transparent application
+  and README artwork generated from the supplied SVG. Native window and tray
+  icons use the bundled mark when running directly from source as well as
+  installed builds. Regenerate the artwork with `bash scripts/render_branding.sh`
+  (ImageMagick is needed only for development).
+
+### Fixed
 - Route export downloads through the shared `send_bytes` writer so they
   inherit the same partial-write discipline as every other response.
 - Restore focus to the opening element on every dialog close: `closeDialog()`
@@ -994,6 +1000,14 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.12.0...HEAD
+[1.12.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.11.0...v1.12.0
+[1.11.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.10.0...v1.11.0
+[1.10.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.9.0...v1.10.0
+[1.9.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.8.0...v1.9.0
+[1.8.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.7.2...v1.8.0
+[1.7.2]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.7.1...v1.7.2
+[1.7.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.5.0...v1.5.1
