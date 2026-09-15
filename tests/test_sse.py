@@ -14,6 +14,13 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# Isolate state at import time: openbox.py binds DATA once per process, and
+# unittest runs SseModuleTests (which imports pkg.state) before SseTests.
+# A setUpClass-only guard arrives too late — without this, fixture writes
+# land in the developer's REAL library. Explicitly-set dirs are honored.
+_MODULE_DATA_DIR = tempfile.TemporaryDirectory(prefix="openbox-test-sse.")
+os.environ.setdefault("OPENBOX_DATA_DIR", _MODULE_DATA_DIR.name)
+
 
 class SseTests(unittest.TestCase):
     @classmethod
@@ -182,6 +189,17 @@ class SseTests(unittest.TestCase):
 
 
 class SseModuleTests(unittest.TestCase):
+    def test_state_binding_is_isolated_from_real_library(self):
+        # Regression: import-time DATA binding once pointed at the real
+        # developer library, and fixture writes clobbered it with 100
+        # synthetic games. The module-level guard must hold regardless of
+        # which TestCase runs first.
+        from openbox import DATA
+
+        real_default = Path.home() / ".local/share/openbox-game-launcher/library.json"
+        self.assertTrue(os.environ.get("OPENBOX_DATA_DIR"))
+        self.assertNotEqual(Path(DATA).resolve(), real_default.resolve())
+
     def test_emit_operation_event_and_webhook_helpers(self):
         from pkg.state import sse
 

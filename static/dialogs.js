@@ -56,7 +56,8 @@ function ensureA11yDialogHosts() {
     <dialog id="a11yInputDialog" aria-modal="true" aria-labelledby="a11yInputTitle">
       <form id="a11yInputForm">
         <div class="dialog-head"><h2 id="a11yInputTitle"></h2><button type="button" id="a11yInputClose" aria-label="Close dialog">×</button></div>
-        <div class="form-grid" style="padding:16px">
+        <div class="form-grid" style="padding:var(--space-md)">
+
           <p class="wide description" id="a11yInputMessage" hidden></p>
           <label class="field wide"><span id="a11yInputLabel">Value</span><input id="a11yInputField" autocomplete="off"></label>
         </div>
@@ -66,7 +67,7 @@ function ensureA11yDialogHosts() {
     <dialog id="a11yChoiceDialog" aria-modal="true" aria-labelledby="a11yChoiceTitle">
       <form id="a11yChoiceForm">
         <div class="dialog-head"><h2 id="a11yChoiceTitle"></h2><button type="button" id="a11yChoiceClose" aria-label="Close dialog">×</button></div>
-        <div class="form-grid" style="padding:16px">
+        <div class="form-grid" style="padding:var(--space-md)">
           <p class="wide description" id="a11yChoiceMessage" hidden></p>
           <label class="field wide"><span id="a11yChoiceLabel">Choice</span><select id="a11yChoiceSelect"></select></label>
         </div>
@@ -74,9 +75,9 @@ function ensureA11yDialogHosts() {
       </form>
     </dialog>
     <dialog id="a11yConfirmDialog" aria-modal="true" aria-labelledby="a11yConfirmTitle">
-      <div class="dialog-head"><h2 id="a11yConfirmTitle"></h2><button type="button" id="a11yConfirmClose" aria-label="Close dialog">×</button></div>
-      <div class="form-grid" style="padding:16px">
-        <p class="wide description" id="a11yConfirmMessage" hidden></p>
+        <div class="dialog-head"><h2 id="a11yConfirmTitle"></h2><button type="button" id="a11yConfirmClose" aria-label="Close dialog">×</button></div>
+        <div class="form-grid" style="padding:var(--space-md)">
+          <p class="wide description" id="a11yConfirmMessage" hidden></p>
         <p class="wide description" id="a11yConfirmTarget" hidden></p>
         <p class="wide description" id="a11yConfirmConsequence" hidden></p>
         <p class="wide description" id="a11yConfirmRetained" hidden></p>

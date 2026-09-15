@@ -648,6 +648,7 @@
     "bigbox": "Big Box",
     "integrations": "Intégrations",
     "appearance": "Apparence",
+    "controller": "Manette",
     "advanced": "Avancé",
     "search_settings": "Rechercher dans les paramètres",
     "search_placeholder": "Saisissez pour filtrer les paramètres",

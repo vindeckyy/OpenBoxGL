@@ -707,6 +707,7 @@ def entry_payload(entry: dict, state: dict) -> dict[str, Any]:
                 "has_cover": bool(game.get("has_cover")),
                 "cover": game.get("cover", ""),
                 "score": stored.get("score", 0.0),
+                "estimated_minutes": int(round(_effective_minutes(game))),
                 "reasons": stored.get("reasons") or [],
             }
         )

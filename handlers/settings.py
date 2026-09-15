@@ -6,6 +6,7 @@ from pathlib import Path
 
 from catalog import PROGRESS
 from openbox import discover_profiles, load_state, update_state_with_result
+from parity_backup import AUTO_BACKUP_KEEP
 from parity_integrations import inject_retroachievements
 from parity_media import REGION_PRIORITY_DEFAULT
 from parity_premium import LIST_COLUMNS_DEFAULT, custom_field_defs, enhanced_ra_profile, platform_categories
@@ -14,6 +15,26 @@ from retroachievements import api_get as ra_api_get, game_progress as ra_game_pr
 from routes.registry import route
 from settings_schema import KNOWN_SETTINGS, sanitize_settings
 from webapp_state import DATA, LOGGER, MEDIA_TYPES_ALL, STATE_LOCK, clean_commands, game_from_payload, load_state_view, public_settings, transact_state
+
+
+def _safe_int(value, default, message):
+    """Coerce to int. Stored nulls/containers fall back to default; unparseable
+    strings raise a 400-style ValueError instead of leaking a TypeError (500)."""
+    if value is None or isinstance(value, (list, dict)):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(message) from error
+
+
+def _safe_float(value, default, message):
+    if value is None or isinstance(value, (list, dict)):
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(message) from error
 
 
 def _clean_watch_folders(merged):
@@ -31,7 +52,8 @@ def _clean_watch_folders(merged):
 
 
 def _clean_screensaver_seconds(merged):
-    seconds = int(merged.get("screensaver_seconds", 90))
+    seconds = _safe_int(merged.get("screensaver_seconds", 90), 90,
+                        "Screensaver delay must be 0 or between 30 and 3600 seconds.")
     if seconds and not 30 <= seconds <= 3600:
         raise ValueError("Screensaver delay must be 0 or between 30 and 3600 seconds.")
     return seconds
@@ -126,8 +148,10 @@ def _clean_progress_automation(merged):
     track_session_history = bool(merged.get("track_session_history", True))
     backup_on_close = bool(merged.get("backup_on_close", False))
     progress_automation_enabled = bool(merged.get("progress_automation_enabled", False))
-    play_minutes = int(merged.get("progress_automation_play_minutes", 30))
-    idle_days = int(merged.get("progress_automation_idle_days", 30))
+    play_minutes = _safe_int(merged.get("progress_automation_play_minutes", 30), 30,
+                             "Progress automation play minutes must be between 0 and 100000.")
+    idle_days = _safe_int(merged.get("progress_automation_idle_days", 30), 30,
+                          "Progress automation idle days must be between 0 and 3650.")
     if not 0 <= play_minutes <= 100000:
         raise ValueError("Progress automation play minutes must be between 0 and 100000.")
     if not 0 <= idle_days <= 3650:
@@ -159,13 +183,25 @@ def _clean_badge_visibility(merged):
 
 
 def _clean_limits(merged):
-    save_backup_limit = int(merged.get("save_backup_limit", 10))
+    save_backup_limit = _safe_int(merged.get("save_backup_limit", 10), 10,
+                                  "Save backup limit must be between 0 and 500.")
     if not 0 <= save_backup_limit <= 500:
         raise ValueError("Save backup limit must be between 0 and 500.")
-    media_download_limit = int(merged.get("media_download_limit", 0))
+    media_download_limit = _safe_int(merged.get("media_download_limit", 0), 0,
+                                     "Media download limit must be between 0 and 10000.")
     if media_download_limit < 0 or media_download_limit > 10000:
         raise ValueError("Media download limit must be between 0 and 10000.")
     return save_backup_limit, media_download_limit
+
+
+def _clean_backup_auto(merged):
+    """Weekly library auto-backup toggle + retention (1–52)."""
+    enabled = bool(merged.get("backup_auto_enabled", False))
+    keep = _safe_int(merged.get("backup_auto_keep", AUTO_BACKUP_KEEP), AUTO_BACKUP_KEEP,
+                     "Automatic backups kept must be between 1 and 52.")
+    if not 1 <= keep <= 52:
+        raise ValueError("Automatic backups kept must be between 1 and 52.")
+    return enabled, keep
 
 
 def _clean_media_types(merged):
@@ -177,7 +213,8 @@ def _clean_media_types(merged):
 
 def _clean_state_retention(merged):
     """T1: resume states kept per game — bounded to the on-disk archive cap."""
-    retention = int(merged.get("state_retention", 1) or 1)
+    retention = _safe_int(merged.get("state_retention", 1) or 1, 1,
+                          "Resume state retention must be between 1 and 20.")
     if not 1 <= retention <= 20:
         raise ValueError("Resume state retention must be between 1 and 20.")
     return retention
@@ -282,8 +319,10 @@ def _clean_tracking(merged):
     tracking_mode = str(merged.get("tracking_mode", "default")).strip().casefold()
     if tracking_mode not in TRACKING_MODES:
         raise ValueError("Unknown tracking mode.")
-    tracking_delay = int(merged.get("tracking_delay", 0))
-    tracking_frequency = float(merged.get("tracking_frequency", 2))
+    tracking_delay = _safe_int(merged.get("tracking_delay", 0), 0,
+                               "Tracking delay must be between 0 and 600 seconds.")
+    tracking_frequency = _safe_float(merged.get("tracking_frequency", 2), 2,
+                                     "Tracking frequency must be between 0.5 and 60 seconds.")
     if tracking_delay < 0 or tracking_delay > 600:
         raise ValueError("Tracking delay must be between 0 and 600 seconds.")
     if not 0.5 <= tracking_frequency <= 60:
@@ -376,6 +415,7 @@ def clean_settings(merged):
     image_group = _clean_image_group(merged)
     badge_visibility = _clean_badge_visibility(merged)
     save_backup_limit, media_download_limit = _clean_limits(merged)
+    backup_auto_enabled, backup_auto_keep = _clean_backup_auto(merged)
     auto_import_media_types = _clean_media_types(merged)
     memories_import_roots = _clean_memory_roots(merged)
     state_retention = _clean_state_retention(merged)
@@ -409,6 +449,8 @@ def clean_settings(merged):
             "moments_autocapture": bool(merged.get("moments_autocapture", True)),
             "state_retention": state_retention,
             "backup_on_close": backup_on_close,
+            "backup_auto_enabled": backup_auto_enabled,
+            "backup_auto_keep": backup_auto_keep,
             "save_backup_limit": save_backup_limit,
             "progress_automation_enabled": progress_automation_enabled,
             "progress_automation_play_minutes": play_minutes,
@@ -426,6 +468,7 @@ def clean_settings(merged):
             "video_bgm_mix": bool(merged.get("video_bgm_mix", False)),
             "bigbox_mode": bigbox_mode,
             "show_playlist_actions": bool(merged.get("show_playlist_actions", True)),
+            "show_insights": bool(merged.get("show_insights", True)),
             "hidden_sidebar_sections": [str(item) for item in hidden_sidebar_sections][:20],
             "storefront_auto_import": clean_storefront,
             "obs_auto_attach": obs_auto_attach,
@@ -433,7 +476,8 @@ def clean_settings(merged):
             "obs_replay_enabled": bool(merged.get("obs_replay_enabled", False)),
             "obs_websocket_url": str(merged.get("obs_websocket_url", "")).strip()[:256],
             "obs_websocket_password": str(merged.get("obs_websocket_password", ""))[:256],
-            "obs_websocket_timeout": max(0.1, min(30.0, float(merged.get("obs_websocket_timeout", 5.0)))),
+            "obs_websocket_timeout": max(0.1, min(30.0, _safe_float(merged.get("obs_websocket_timeout", 5.0), 5.0,
+                                                                             "OBS WebSocket timeout must be between 0.1 and 30 seconds."))),
             "dynamic_play_button": bool(merged.get("dynamic_play_button", True)),
             "custom_field_defs": custom_field_defs({"custom_field_defs": merged.get("custom_field_defs", [])}),
             "platform_categories": platform_categories({"platform_categories": merged.get("platform_categories", {})}),
@@ -443,7 +487,8 @@ def clean_settings(merged):
             "library_view": str(merged.get("library_view", "grid")),
             "cover_grouping": str(merged.get("cover_grouping", "shape")),
             "locale": str(merged.get("locale", "en"))[:5],
-            "attract_mode_seconds": int(merged.get("attract_mode_seconds", seconds or 90)),
+            "attract_mode_seconds": _safe_int(merged.get("attract_mode_seconds", seconds or 90), seconds or 90,
+                                               "Attract mode delay must be between 0 and 3600 seconds."),
             "bigbox_startup_video": str(merged.get("bigbox_startup_video", "")).strip(),
             "bigbox_shutdown_commands": clean_commands(merged.get("bigbox_shutdown_commands", [])),
             "tray_enabled": bool(merged.get("tray_enabled", False)),

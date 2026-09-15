@@ -503,6 +503,41 @@ class ParityApiTests(unittest.TestCase):
         playlist = state["playlists"][0]
         self.assertEqual(playlist["members"], ["game-alpha", "game-beta"])
 
+    def test_delete_missing_playlist_404s(self):
+        from api_errors import NotFound
+        from openbox import load_state, save_state
+        from web_app import Handler
+
+        save_state({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
+        handler = object.__new__(Handler)
+        handler.send_json = mock.Mock()
+        with self.assertRaises(NotFound):
+            Handler.delete_playlist(handler, {"name": "Nope Missing"})
+        self.assertEqual(load_state()["playlists"], [])
+
+    def test_delete_existing_playlist_reports_removal(self):
+        from openbox import load_state, save_state
+        from web_app import Handler
+
+        save_state({"games": [], "profiles": {}, "history": [], "settings": {},
+                    "playlists": [{"name": "Gone", "type": "manual", "members": []}]})
+        handler = object.__new__(Handler)
+        handler.send_json = mock.Mock()
+        Handler.delete_playlist(handler, {"name": "Gone"})
+        status, payload = handler.send_json.call_args[0]
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, {"deleted": "Gone"})
+        self.assertEqual(load_state()["playlists"], [])
+
+    def test_scoped_export_without_name_rejected_synchronously(self):
+        from web_app import Handler
+
+        handler = object.__new__(Handler)
+        handler.send_json = mock.Mock()
+        with self.assertRaises(ValueError) as ctx:
+            Handler.create_library_export(handler, {"format": "json", "scope": "platform"})
+        self.assertIn("requires a name", str(ctx.exception))
+
     def test_settings_save_persists_badges_and_extended_image_group(self):
         from openbox import load_state, save_state
         from web_app import Handler

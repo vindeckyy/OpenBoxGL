@@ -8,6 +8,14 @@ export PYTHONPATH="$ROOT:${PYTHONPATH:-}"
 TEMP_LOG_DIR="$(mktemp -d /tmp/openbox-test-logs.XXXXXX)"
 trap 'rm -rf "$TEMP_LOG_DIR"' EXIT
 
+# Isolate state: import-time DATA binding in openbox.py resolves
+# OPENBOX_DATA_DIR once per test process. Without this, any test file that
+# imports state modules before setting its own temp dir writes fixtures
+# into the developer's REAL library (seen: 100 synthetic games).
+SUITE_DATA_DIR="$(mktemp -d /tmp/openbox-test-data.XXXXXX)"
+export OPENBOX_DATA_DIR="$SUITE_DATA_DIR"
+trap 'rm -rf "$TEMP_LOG_DIR" "$SUITE_DATA_DIR"' EXIT
+
 # Layout: run tests/ when it contains test files, otherwise fall back to root test_*.py.
 # When tests/ yields files the root walk is skipped (early break below).
 TEST_DIRS=("tests" ".")

@@ -128,3 +128,19 @@ def sanitize_settings(settings):
         return {}, []
     dropped = [key for key in settings if key not in KNOWN_SETTINGS]
     return {key: value for key, value in settings.items() if key in KNOWN_SETTINGS}, dropped
+
+
+def prune_unknown_settings(state):
+    """One-time jumble cleanup: drop unknown keys from stored state["settings"].
+
+    Returns the sorted list of removed key names. Never touches known keys.
+    """
+    if not isinstance(state, dict):
+        return []
+    settings = state.get("settings")
+    if not isinstance(settings, dict):
+        return []
+    removed = sorted(key for key in settings if key not in KNOWN_SETTINGS)
+    for key in removed:
+        del settings[key]
+    return removed

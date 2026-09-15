@@ -11,6 +11,8 @@ from pkg.parity.parity_party import (  # noqa: E402
     PARTY_QUEUE_LIMIT,
     build_party_queue,
     eligible_party_games,
+    empty_queue_reason,
+    queue_exclusion_breakdown,
 )
 
 
@@ -111,6 +113,42 @@ class BuildPartyQueueTest(unittest.TestCase):
             self.assertIn(platform, COUCH_PLATFORMS)
         for platform in ("PC", "Windows", "Linux", "macOS"):
             self.assertNotIn(platform, COUCH_PLATFORMS)
+
+
+class QueueExclusionBreakdownTest(unittest.TestCase):
+    def test_empty_library(self):
+        breakdown = queue_exclusion_breakdown([])
+        self.assertEqual(breakdown["total"], 0)
+        self.assertIn("import games", empty_queue_reason(breakdown))
+
+    def test_missing_max_players_is_top_blocker(self):
+        games = [game(1, max_players=None), game(2, max_players=None)]
+        breakdown = queue_exclusion_breakdown(games, players=2)
+        self.assertEqual(breakdown, {
+            "total": 2, "hidden": 0, "unusable_path": 0, "too_few_players": 2,
+            "no_controller_or_platform": 0, "over_budget": 0,
+        })
+        self.assertIn("2 players", empty_queue_reason(breakdown, 2))
+
+    def test_mirrors_eligibility_rules(self):
+        games = [
+            game(1, hidden=True),
+            game(2, path_exists=False),
+            game(3, platform="PC", controller_support="", max_players=4),
+            game(4, play_count=4, playtime_seconds=4 * 3 * 3600),
+        ]
+        breakdown = queue_exclusion_breakdown(games, players=2, minutes=30)
+        self.assertEqual(breakdown["hidden"], 1)
+        self.assertEqual(breakdown["unusable_path"], 1)
+        self.assertEqual(breakdown["no_controller_or_platform"], 1)
+        self.assertEqual(breakdown["over_budget"], 1)
+        # budget is a build-time filter only: g-4 stays eligible, the rest drop
+        self.assertEqual([g["game_id"] for g in eligible_party_games(games, players=2)], ["g-4"])
+
+    def test_reason_names_largest_blocker(self):
+        breakdown = {"total": 5, "hidden": 0, "unusable_path": 4,
+                     "too_few_players": 1, "no_controller_or_platform": 0, "over_budget": 0}
+        self.assertIn("missing game files", empty_queue_reason(breakdown))
 
 
 if __name__ == "__main__":

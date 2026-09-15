@@ -219,7 +219,7 @@ async function buildQueue() {
     queueIndex = 0;
     spun = false;
     if (!queue.length) {
-      if (status) status.textContent = t('party.empty');
+      if (status) status.textContent = result.empty_reason || t('party.empty');
       return;
     }
     resolveQueueGames();

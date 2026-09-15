@@ -100,6 +100,21 @@ def _blocked_worker_hold_until_release(started, release):
 
 
 class SubmitValidationTests(unittest.TestCase):
+    def test_operation_types_cover_every_known_job_name(self):
+        # Regression: unmapped names used to fall through to setup.scan,
+        # mislabeling exports/steamgrid/screenscraper/reels in Activity.
+        self.assertEqual(operation_type_for_name("library-export"), "library.export")
+        self.assertEqual(operation_type_for_name("screenscraper-match"), "screenscraper.match")
+        self.assertEqual(operation_type_for_name("screenscraper-apply"), "screenscraper.apply")
+        self.assertEqual(operation_type_for_name("steamgrid-match"), "steamgrid.match")
+        self.assertEqual(operation_type_for_name("steamgrid-apply"), "steamgrid.apply")
+        self.assertEqual(operation_type_for_name("auto-import"), "storefront.auto_import")
+        self.assertEqual(operation_type_for_name("reel:abc123"), "clips.reel")
+        from pkg.state.operations import OPERATION_POLICIES
+        for known in ("library.export", "screenscraper.match", "screenscraper.apply",
+                      "steamgrid.match", "steamgrid.apply", "storefront.auto_import", "clips.reel"):
+            self.assertIn(known, OPERATION_POLICIES)
+
     def setUp(self):
         _reset_operations()
         self.manager = JobManager(max_workers=1)

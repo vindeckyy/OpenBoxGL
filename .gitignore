@@ -49,6 +49,7 @@ output/
 /PRODUCT.md
 /COVERAGE.md
 /PERF.md
+docs/*.local.md
 .agents/
 .mimocode/
 local/

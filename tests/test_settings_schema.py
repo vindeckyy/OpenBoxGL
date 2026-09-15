@@ -1,6 +1,7 @@
 """Settings whitelist boundary tests."""
 from __future__ import annotations
 
+import re
 import sys
 import tempfile
 import unittest
@@ -14,10 +15,22 @@ from handlers.settings import (  # noqa: E402
     _clean_gamescope_presets,
     _clean_party,
     _clean_screensaver_seconds,
+    _clean_tracking,
     _clean_watch_folders,
     clean_settings,
 )
-from settings_schema import KNOWN_SETTINGS, sanitize_settings  # noqa: E402
+from settings_schema import KNOWN_SETTINGS, prune_unknown_settings, sanitize_settings  # noqa: E402
+
+
+def _form_collected_keys():
+    """Parse the keys returned by collectSettings() in static/settings.js."""
+    root = Path(__file__).resolve().parent.parent
+    src = (root / "static" / "settings.js").read_text()
+    match = re.search(r"function collectSettings\(\)\s*\{.*?return\s*\{(.*?)\n\s*\};", src, re.S)
+    assert match, "collectSettings return block not found"
+    keys = set(re.findall(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:", match.group(1), re.M))
+    keys |= {"badge_visibility", "controller_map", "gamescope_custom_presets"}
+    return keys
 
 
 class SettingsSchemaTests(unittest.TestCase):
@@ -85,6 +98,51 @@ class SettingsSchemaTests(unittest.TestCase):
             "party_queue", "party_players", "party_index",
         ):
             self.assertIn(key, KNOWN_SETTINGS, f"save-path key missing from whitelist: {key}")
+
+    def test_clean_settings_emits_every_form_collected_key(self):
+        # Anti-jumble regression: any key the settings form collects but
+        # clean_settings drops would silently never persist (show_insights,
+        # backup_auto_enabled/keep class of bug).
+        emitted = set(clean_settings({}))
+        for key in sorted(_form_collected_keys()):
+            self.assertIn(key, emitted, f"form-collected key never written: {key}")
+
+    def test_clean_settings_round_trips_backup_auto_and_insights(self):
+        clean = clean_settings({
+            "show_insights": False,
+            "backup_auto_enabled": True,
+            "backup_auto_keep": 8,
+        })
+        self.assertIs(clean["show_insights"], False)
+        self.assertIs(clean["backup_auto_enabled"], True)
+        self.assertEqual(clean["backup_auto_keep"], 8)
+        self.assertEqual(clean_settings({})["backup_auto_keep"], 4)
+        for bad in (0, 53, "many"):
+            with self.assertRaises(ValueError, msg=str(bad)):
+                clean_settings({"backup_auto_keep": bad})
+
+    def test_safe_coercion_maps_null_to_default_and_garbage_to_400(self):
+        self.assertEqual(_clean_screensaver_seconds({"screensaver_seconds": None}), 90)
+        self.assertEqual(_clean_tracking({"tracking_frequency": None})[2], 2)
+        self.assertEqual(clean_settings({"state_retention": None})["state_retention"], 1)
+        self.assertEqual(clean_settings({"attract_mode_seconds": None})["attract_mode_seconds"], 90)
+        for payload in (
+            {"screensaver_seconds": "soon"},
+            {"tracking_delay": "later"},
+            {"tracking_frequency": "often"},
+            {"save_backup_limit": "lots"},
+            {"progress_automation_play_minutes": "x"},
+        ):
+            with self.assertRaises(ValueError, msg=str(payload)):
+                clean_settings(payload)
+
+    def test_prune_unknown_settings_removes_only_unknowns(self):
+        state = {"settings": {"library_view": "grid", "ghost_key": 1, "other_ghost": 2}}
+        removed = prune_unknown_settings(state)
+        self.assertEqual(removed, ["ghost_key", "other_ghost"])
+        self.assertEqual(state["settings"], {"library_view": "grid"})
+        self.assertEqual(prune_unknown_settings({}), [])
+        self.assertEqual(prune_unknown_settings({"settings": None}), [])
 
     def test_clean_gamescope_presets_valid(self):
         clean = _clean_gamescope_presets({"gamescope_custom_presets": [

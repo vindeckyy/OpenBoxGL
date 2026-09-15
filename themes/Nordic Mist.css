@@ -258,6 +258,14 @@
   --moments-tab-gap: 6px;
   --moments-radius: var(--radius-cover);
   --moments-border-width: 1px;
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px;
+  --space-md: 16px; --space-lg: 24px; --space-xl: 32px; --space-2xl: 48px;
+  --gap-micro: var(--space-2xs); --gap-tight: var(--space-xs); --gap-default: var(--space-sm);
+  --gap-loose: var(--space-md); --gap-spacious: var(--space-lg);
+  --inset-tight: var(--space-xs); --inset-default: var(--space-md); --inset-loose: var(--space-lg);
+  --stack-xs: var(--space-xs); --stack-sm: var(--space-sm); --stack-md: var(--space-md);
+  --leading-tight: 1.25; --leading-normal: 1.45; --leading-relaxed: 1.6;
+  --measure-narrow: 50ch; --measure-default: 60ch; --measure-wide: 70ch;
 }
 
 @media (prefers-reduced-motion: reduce) {

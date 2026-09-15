@@ -86,6 +86,13 @@ OPERATION_POLICIES: dict[str, dict] = {
     "saves.backup": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},
     "library.backup": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},
     "library.restore": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},
+    "library.export": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},
+    "screenscraper.match": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},
+    "screenscraper.apply": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},
+    "steamgrid.match": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},
+    "steamgrid.apply": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},
+    "storefront.auto_import": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},
+    "clips.reel": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},
     "cloud.sync": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},
     "updater.install": {"resume": "retry_only", "retry": True, "refuse_cancel_promote": True},
 }

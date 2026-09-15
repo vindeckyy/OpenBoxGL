@@ -444,6 +444,17 @@ class ManagedPlaylistTest(unittest.TestCase):
         hydrated = parity_radio.entry_payload(parity_radio.managed_playlist(state), state)
         self.assertNotIn(removed, {p["game_id"] for p in hydrated["picks"]})
 
+    def test_entry_payload_carries_estimated_minutes(self):
+        # Regression: stored-playlist reads rendered "undefinedm" because the
+        # hydrated picks lacked estimated_minutes (only force payloads had it).
+        games, history = _platformer_habit()
+        state = self._state(games, history)
+        parity_radio.radio_payload(state, now=NOW, force=True)
+        hydrated = parity_radio.entry_payload(parity_radio.managed_playlist(state), state)
+        self.assertTrue(hydrated["picks"])
+        for pick in hydrated["picks"]:
+            self.assertIsInstance(pick["estimated_minutes"], int)
+
     def test_park_game(self):
         games, history = _platformer_habit()
         state = self._state(games, history)
