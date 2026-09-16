@@ -1239,6 +1239,76 @@ const puppeteer = require('./node_modules/puppeteer');
   });
   console.log('drop empty honesty:', JSON.stringify(dropEmptyHonesty, null, 2));
 
+  // 14. Hardening rows: long names truncate, selected-game delete rebinds,
+  // rapid filter switching stays consistent.
+  const hardening = {};
+  hardening.longName = await page.evaluate(async (token) => {
+    const state = await (await fetch('/api/library', {headers: {'X-OpenBox-Token': token}})).json();
+    AppState.games = state.games;
+    if (!AppState.games.length) return {rendered: false};
+    const name = 'A'.repeat(400);
+    AppState.games[0].name = name;
+    const search = document.getElementById('sidebarSearch');
+    if (search) search.value = '';
+    AppState.platform = 'all';
+    AppState._refreshCounter = (AppState._refreshCounter || 0) + 1;
+    document.getElementById('libraryButton').click();
+    await new Promise(r => setTimeout(r, 600));
+    const heading = [...document.querySelectorAll('.card h3')].find(h => h.textContent.startsWith(name));
+    if (!heading) return {rendered: false};
+    const style = getComputedStyle(heading);
+    return {
+      rendered: true,
+      ellipsis: style.textOverflow === 'ellipsis',
+      truncated: heading.scrollWidth > heading.clientWidth,
+      pageOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+    };
+  }, process.env.TOKEN);
+  console.log('long name:', JSON.stringify(hardening.longName));
+
+  // Delete the selected game with its details open: confirms resolve, the
+  // selection clears, and the grid/details re-render without a stale rebind.
+  hardening.deleteSelected = await page.evaluate(async () => {
+    const card = document.querySelector('.card-main');
+    if (!card) return {ok: false, reason: 'no card'};
+    card.click();
+    await new Promise(r => setTimeout(r, 600));
+    const remove = document.getElementById('removeGameButton');
+    if (!remove) return {ok: false, reason: 'details not open'};
+    const before = AppState.games.length;
+    remove.click();
+    await new Promise(r => setTimeout(r, 400));
+    document.getElementById('a11yConfirmOk').click();
+    await new Promise(r => setTimeout(r, 500));
+    document.getElementById('a11yConfirmOk').click();
+    await new Promise(r => setTimeout(r, 1000));
+    return {
+      ok: true,
+      selectedCleared: AppState.selectedId === null,
+      countDropped: AppState.games.length === before - 1,
+      staleDetails: document.getElementById('details').innerText.includes('Launch Doctor'),
+    };
+  });
+  console.log('delete selected:', JSON.stringify(hardening.deleteSelected));
+
+  hardening.filter = await page.evaluate(() => {
+    const buttons = [...document.querySelectorAll('#platforms [data-platform]')];
+    if (!buttons.length) return {consistent: false, reason: 'no platform buttons'};
+    for (let i = 0; i < 10; i++) buttons[i % buttons.length].click();
+    return {clicked: true};
+  });
+  await new Promise(r => setTimeout(r, 800));
+  const filterResult = await page.evaluate(() => {
+    const first = filteredGames().map(g => g.id);
+    const second = filteredGames().map(g => g.id);
+    return {
+      consistent: JSON.stringify(first) === JSON.stringify(second),
+      cardsRendered: document.querySelectorAll('.card').length > 0,
+    };
+  });
+  hardening.filter = {...hardening.filter, ...filterResult};
+  console.log('rapid filter:', JSON.stringify(hardening.filter));
+
   if (perfChecks.coverflowNodes > 11) process.exit(1);
   if (!perfChecks.gridNodeCount) process.exit(1);
   if (perfChecks.gridNodeCount >= perfChecks.visibleCount) process.exit(1);
@@ -1399,5 +1469,10 @@ const puppeteer = require('./node_modules/puppeteer');
     const got = appShell.toolGroups[key] || [];
     if (JSON.stringify(got) !== JSON.stringify(ids)) process.exit(1);
   }
+  if (!hardening.longName.rendered || !hardening.longName.ellipsis || !hardening.longName.truncated) process.exit(1);
+  if (hardening.longName.pageOverflow) process.exit(1);
+  if (!hardening.deleteSelected.ok || !hardening.deleteSelected.selectedCleared) process.exit(1);
+  if (!hardening.deleteSelected.countDropped || hardening.deleteSelected.staleDetails) process.exit(1);
+  if (!hardening.filter.consistent || !hardening.filter.cardsRendered) process.exit(1);
   console.log('UI SMOKE PASSED');
 })().catch(e => { console.error('SMOKE FAIL', e.message); process.exit(1); });
