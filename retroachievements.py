@@ -5,6 +5,7 @@ import json
 import re
 from pathlib import Path
 from time import time
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -44,8 +45,13 @@ def api_get(endpoint, params, credentials, opener=urlopen):
         f"https://retroachievements.org/API/{endpoint}?{query}",
         headers={"User-Agent": "OpenBox/1"},
     )
-    with opener(request, timeout=20) as response:
-        return json.loads(read_limited(response, 8 * 1024 * 1024))
+    try:
+        with opener(request, timeout=20) as response:
+            return json.loads(read_limited(response, 8 * 1024 * 1024))
+    except HTTPError as error:
+        if error.code in (401, 403):
+            raise ValueError("RetroAchievements rejected those credentials.") from None
+        raise
 
 
 def load_credentials(directory):

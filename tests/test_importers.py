@@ -2,6 +2,7 @@
 """Comprehensive unit and integration tests for OpenBox importers and parallel scanner."""
 
 import io
+import os
 import sys
 import tempfile
 import unittest
@@ -187,6 +188,20 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
             # Should safely skip broken symlinks
             self.assertTrue(any(p.name == "valid.nes" for p in scanned))
 
+    def test_parallel_scanner_non_utf8_names(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "normal.chd").write_bytes(b"CHD")
+            # A filename that is not valid UTF-8 arrives via surrogateescape.
+            fd = os.open(os.fsencode(root) + b"/bad\xff\xfe name.chd", os.O_WRONLY | os.O_CREAT, 0o644)
+            os.write(fd, b"CHD")
+            os.close(fd)
+            scanned = _parallel_scandir(root, {".chd"})
+            self.assertEqual(len(scanned), 2)
+            # Import must survive the surrogate name without crashing.
+            imported = import_multi_platform(root, {".chd"}, {".chd": "Disc image"})
+            self.assertEqual(len(imported), 2)
+
     def test_group_multi_disc_formats(self):
         formats = [
             ("Final Fantasy VII (Disc 1).chd", "Final Fantasy VII (Disc 2).chd", "Final Fantasy VII"),
@@ -364,6 +379,22 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
             (steamapps / "appmanifest_bad.acf").write_bytes(b"\x00\xff")
             games = import_steam(root)
             self.assertEqual(len(games), 0)
+
+        # A steamapps dir the process cannot read reports the path, not silence.
+        if os.geteuid() != 0:
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                steamapps = root / ".local/share/Steam/steamapps"
+                steamapps.mkdir(parents=True)
+                steamapps.chmod(0o000)
+                errors = []
+                try:
+                    games = import_steam(root, errors=errors)
+                    self.assertEqual(games, [])
+                    self.assertTrue(errors)
+                    self.assertIn(str(steamapps), errors[0])
+                finally:
+                    steamapps.chmod(0o755)
 
         # json_records nonexistent and corrupt
         self.assertEqual(json_records("/nonexistent/file.json"), [])

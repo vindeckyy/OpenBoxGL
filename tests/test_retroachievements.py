@@ -7,7 +7,9 @@ from tempfile import TemporaryDirectory
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
-from retroachievements import game_hash, game_progress, match_game, save_credentials
+from urllib.error import HTTPError
+
+from retroachievements import api_get, game_hash, game_progress, match_game, save_credentials
 
 
 def test():
@@ -43,6 +45,15 @@ def test():
         # Use a fresh cache dir so the updated game list is fetched.
         game_id, matched_hash = match_game({"path":str(other),"platform":"NES"}, {"username":"player","api_key":"key"}, root / "cache2", fetch)
         assert (game_id, matched_hash) == (42, null_hash)
+
+        # A 401 surfaces as a credentials hint, not a generic HTTP error.
+        def rejected(request, timeout=0):
+            raise HTTPError(request.full_url, 401, "Unauthorized", {}, None)
+        try:
+            api_get("API_GetUserProfile.php", {"u":"player"}, {"username":"player","api_key":"bad"}, opener=rejected)
+            raise AssertionError("401 should fail")
+        except ValueError as error:
+            assert "credentials" in str(error).casefold()
     print("RetroAchievements self-test: ok")
 
 

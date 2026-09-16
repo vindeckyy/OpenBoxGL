@@ -56,7 +56,7 @@ def steam_libraries(root):
     return sorted(libraries)
 
 
-def import_steam(home=None):
+def import_steam(home=None, errors=None):
     home = home or Path.home()
     executable, command = steam_command()
     games = []
@@ -89,7 +89,9 @@ def import_steam(home=None):
                                 "steam_app_id": app_id,
                                 "install_dir": str(library / "steamapps/common" / values.get("installdir", "")),
                             })
-            except OSError:
+            except OSError as error:
+                if errors is not None:
+                    errors.append(f"{steamapps}: {error.strerror or error}")
                 continue
     return games
 

@@ -2,6 +2,7 @@
 import email.message
 import io
 import sys
+from urllib.error import URLError
 import time
 import zipfile
 from pathlib import Path
@@ -35,6 +36,16 @@ def test():
             raise AssertionError("expected download failure")
         except OSError:
             pass
+        leftovers = [p for p in root.iterdir() if p.suffix == ".zip"]
+        assert leftovers == [], f"temp zip leaked: {leftovers}"
+        # An unreachable host surfaces a clean offline error for the job panel.
+        def offline_opener(request, timeout=0):
+            raise URLError("Name or service not known")
+        try:
+            sync_database(root / "metadata.db", opener=offline_opener)
+            raise AssertionError("expected offline failure")
+        except ValueError as error:
+            assert "connection" in str(error).casefold()
         leftovers = [p for p in root.iterdir() if p.suffix == ".zip"]
         assert leftovers == [], f"temp zip leaked: {leftovers}"
         package = root / "Metadata.zip"
