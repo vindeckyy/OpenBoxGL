@@ -1,5 +1,12 @@
 # OpenBox next-update plan — the "Time" release
 
+> **Archived planning record.** This plan was executed and superseded by the
+> OpenBox 1.11.0 release. The baseline, proposals, and findings below describe
+> the state known when the plan was written; they are retained for traceability,
+> not as a current roadmap. See [the execution checkpoint](NEXT_UPDATE_EXECUTION-1.11.md)
+> and [the 1.11.0 release](https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.11.0)
+> for the shipped result.
+
 Planning baseline: September 11, 2026; application version `1.10.0` in `updates.py`; 1.10.0 shipped
 2026-09-08. A repository-wide bug-fix sweep (27 inventoried defects) is in flight under `.agents/`;
 Milestone 1 fixes are implemented and under review at planning time.
