@@ -115,6 +115,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The test gate reports every retry and fails on flaky tests, applies a
   per-file timeout with named attribution, and counts environment skips
   (gamescope/7z/webkit/AppImage) instead of passing silently (P9-4–P9-6).
+  A flaky test now also prints its first failed attempt, so the defect is
+  identifiable instead of only being marked FLAKY.
 - Coverage floors ratcheted from 83/58 to the measured totals (P9-8).
 - The touched-module floor from `scripts/check_changed_coverage.py` now runs
   inside `make check`, matching CI (P9-11).

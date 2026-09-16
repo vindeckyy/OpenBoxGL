@@ -329,6 +329,7 @@ def main() -> int:
             code = 1
             attempts_used = 0
             timed_out = False
+            first_failure_output = ""
             for attempt in range(1, TEST_ATTEMPTS + 1):
                 attempts_used = attempt
                 try:
@@ -348,6 +349,8 @@ def main() -> int:
                     break
                 code = result.returncode
                 last_output = (result.stdout or "") + (result.stderr or "")
+                if code != 0 and not first_failure_output:
+                    first_failure_output = last_output
                 if code == 0:
                     break
             notes = _skip_notes(last_output)
@@ -370,6 +373,9 @@ def main() -> int:
             elif attempts_used > 1:
                 flaky_tests.append(test_file.name)
                 print(f"FLAKY {test_file.name} (passed on attempt {attempts_used}/{TEST_ATTEMPTS}; retries hide a defect)")
+                if first_failure_output.strip():
+                    print("first-attempt failure output:")
+                    print("\n".join(first_failure_output.strip().splitlines()[-40:]))
             else:
                 print(f"PASS {test_file.name}")
         passed_tests = len(test_files) - len(failed_tests) - len(timeout_tests)
