@@ -7,7 +7,7 @@ Stages:
   3. py_compile over all runtime modules, test files, and scripts
   4. full test suite under coverage, run serially (gamescope/X tests collide
      in parallel workers)
-  5. coverage floor checks (72.0 total + 54.0 web_app.py + 95 changed-line +
+  5. coverage floor checks (83.0 total + 58.0 web_app.py + 95 changed-line +
      85 new-module) and design-token hygiene
 
 Exits non-zero when any stage fails. Used by `make check` and CI.
@@ -26,10 +26,10 @@ VENV = ROOT / ".venv-dev"
 RUFF = VENV / "bin" / "ruff"
 COVERAGE = VENV / "bin" / "coverage"
 
-# Coverage floors. Ratcheted baseline: 72% total, 54% web_app.py.
+# Coverage floors. Ratcheted baseline: 83% total, 58% web_app.py.
 # Raise the floors as phases land; never lower them silently.
-COVERAGE_FLOOR = 72.0
-WEB_APP_FLOOR = 54.0
+COVERAGE_FLOOR = 83.0
+WEB_APP_FLOOR = 58.0
 CHANGED_LINE_FLOOR = 95.0
 NEW_MODULE_FLOOR = 85.0
 

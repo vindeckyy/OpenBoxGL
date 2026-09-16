@@ -4,9 +4,30 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.12.1] - 2026-09-15
 
 ### Fixed
+- Harden the AppImage update path: reject order-8 Ed25519 small-order
+  verification keys (ZIP-215/libsodium set), fail closed on non-object
+  GitHub releases payloads, normalize the signature digest before
+  validation, resolve a symlinked install destination so the real AppImage
+  is replaced, fsync the install directory, and escape `%` so AppImage
+  paths cannot inject desktop-entry field codes.
+- Surface unreadable Steam libraries instead of skipping them silently:
+  `POST /api/import/steam` now carries an `errors` array naming the path and
+  the OS error (reliability row 12).
+- Translate RetroAchievements 401/403 responses into "RetroAchievements
+  rejected those credentials" instead of a generic HTTP failure (row 13).
+- Report an unreachable metadata database as a clean connection error in the
+  job panel — `URLError`/`TimeoutError` during LBDB sync no longer leak raw
+  socket messages (row 11).
+- Automate the last manual reliability rows: non-UTF8 scan names,
+  read-only mounts, wrong credentials, offline sync, 400-character names,
+  deleting the selected game with details open, and rapid filter switching
+  are all gated tests now (`docs/reliability.md` has zero Manual rows).
+- Ratchet coverage floors to 83% total / 58% web_app.py to match measured.
+- Stop `test_launch_doctor.py` from writing a probe ROM into the real
+  `$HOME` during test runs.
 - Return 404 when deleting a playlist that doesn't exist instead of a false
   success, and reject scoped library exports without a name synchronously
   (400) instead of failing later inside the export job.
