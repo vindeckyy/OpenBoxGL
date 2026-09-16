@@ -1,6 +1,6 @@
 # Flathub submission checklist
 
-OpenBox 1.12.0 keeps the release-gated x86_64 Flatpak path and maintains the
+OpenBox 1.12.1 keeps the release-gated x86_64 Flatpak path and maintains the
 manifest/AppStream metadata ready for a future Flathub submission. **Submission
 itself remains a maintainer decision** (ADR 0013); this list tracks the manual
 steps that remain when that decision is made.

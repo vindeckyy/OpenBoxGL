@@ -1,3 +1,46 @@
+# OpenBox 1.12.1 — Hardening
+
+A reliability pass over 1.12: no new features, just a sturdier launcher.
+
+---
+
+## Fixed
+
+- **Update verification:** the Ed25519 check now rejects the full
+  small-order point blacklist (orders 1, 2, 4 and 8, matching the
+  libsodium/ZIP-215 set), a malformed GitHub releases payload fails closed
+  instead of crashing, and a symlinked AppImage path updates the real file.
+- **Import honesty:** a Steam library on a read-only mount is reported in
+  the import result's `errors` list with the actual path instead of being
+  skipped silently.
+- **Clearer failure surfaces:** RetroAchievements 401/403 responses read
+  "RetroAchievements rejected those credentials", and an unreachable
+  metadata database reports a connection error in the job panel instead of
+  a raw socket message.
+- **Every reliability scenario is now gated:** the last manual rows in
+  `docs/reliability.md` (non-UTF8 paths, offline sync, read-only mounts,
+  bad credentials, long names, delete-while-open, rapid filtering) are
+  covered by automated tests, and coverage floors were ratcheted to
+  83% / 58% (web_app).
+
+---
+
+## Download
+
+| Asset | Architecture | Type |
+|-------|-------------|------|
+| `OpenBox-x86_64.AppImage` | x86_64 | AppImage |
+| `OpenBox-aarch64.AppImage` | ARM64 | AppImage |
+| `OpenBox-x86_64.flatpak` | x86_64 | Flatpak |
+
+Already running OpenBox? The built-in updater handles the delta.
+
+---
+
+**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.12.0...v1.12.1
+
+---
+
 # OpenBox 1.12 — Living Library
 
 OpenBox 1.12 makes the 1.11 feature wave feel finished: searches you pinned

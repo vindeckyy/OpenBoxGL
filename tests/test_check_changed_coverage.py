@@ -114,8 +114,8 @@ class CheckTestsFloorConstants(unittest.TestCase):
     def test_coverage_floors_ratcheted(self):
         import importlib
         check_tests = importlib.import_module("scripts.check_tests")
-        self.assertEqual(check_tests.COVERAGE_FLOOR, 72.0)
-        self.assertEqual(check_tests.WEB_APP_FLOOR, 54.0)
+        self.assertEqual(check_tests.COVERAGE_FLOOR, 83.0)
+        self.assertEqual(check_tests.WEB_APP_FLOOR, 58.0)
         self.assertEqual(check_tests.CHANGED_LINE_FLOOR, 95.0)
         self.assertEqual(check_tests.NEW_MODULE_FLOOR, 85.0)
 
