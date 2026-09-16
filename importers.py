@@ -62,7 +62,13 @@ def import_steam(home=None, errors=None):
     games = []
     seen = set()
     for root in steam_roots(home):
-        for library in steam_libraries(root):
+        try:
+            libraries = steam_libraries(root)
+        except OSError as error:
+            if errors is not None:
+                errors.append(f"{root}: {error}")
+            continue
+        for library in libraries:
             steamapps = library / "steamapps"
             if not steamapps.is_dir():
                 continue
@@ -91,7 +97,7 @@ def import_steam(home=None, errors=None):
                             })
             except OSError as error:
                 if errors is not None:
-                    errors.append(f"{steamapps}: {error.strerror or error}")
+                    errors.append(f"{steamapps}: {error}")
                 continue
     return games
 

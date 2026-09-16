@@ -381,20 +381,36 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
             self.assertEqual(len(games), 0)
 
         # A steamapps dir the process cannot read reports the path, not silence.
-        if os.geteuid() != 0:
-            with tempfile.TemporaryDirectory() as directory:
-                root = Path(directory)
-                steamapps = root / ".local/share/Steam/steamapps"
-                steamapps.mkdir(parents=True)
-                steamapps.chmod(0o000)
-                errors = []
-                try:
-                    games = import_steam(root, errors=errors)
-                    self.assertEqual(games, [])
-                    self.assertTrue(errors)
-                    self.assertIn(str(steamapps), errors[0])
-                finally:
-                    steamapps.chmod(0o755)
+        # (Mocked: chmod semantics for stat-vs-read differ across filesystems.)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            steamapps = root / ".local/share/Steam/steamapps"
+            steamapps.mkdir(parents=True)
+            real_scandir = os.scandir
+
+            def denied(path, *args, **kwargs):
+                if Path(path) == steamapps:
+                    raise PermissionError(13, "Permission denied", str(path))
+                return real_scandir(path, *args, **kwargs)
+
+            errors = []
+            with mock.patch.object(os, "scandir", side_effect=denied):
+                games = import_steam(root, errors=errors)
+            self.assertEqual(games, [])
+            self.assertTrue(errors)
+            self.assertIn(str(steamapps), errors[0])
+
+        # A stat-able but unreadable libraryfolders.vdf reports the root too.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            steamapps = root / ".local/share/Steam/steamapps"
+            steamapps.mkdir(parents=True)
+            (steamapps / "libraryfolders.vdf").write_text('"path" "x"')
+            errors = []
+            with mock.patch.object(Path, "read_text", side_effect=PermissionError(13, "denied")):
+                games = import_steam(root, errors=errors)
+            self.assertEqual(games, [])
+            self.assertTrue(errors)
 
         # json_records nonexistent and corrupt
         self.assertEqual(json_records("/nonexistent/file.json"), [])

@@ -1,6 +1,6 @@
 # OpenBox 1.12.1 — Hardening
 
-A reliability pass over 1.12: no new features, just a sturdier launcher.
+A reliability pass: no new features, just a sturdier launcher.
 
 ---
 
