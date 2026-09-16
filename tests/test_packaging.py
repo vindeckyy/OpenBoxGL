@@ -460,7 +460,9 @@ def test_legal_policy():
     assert "Openbox window manager" in trademarks
     assert "| 0.8.x | No — upgrade required |" in security
     assert "| 1.0.x | No — upgrade required |" in security
-    assert "| 1.12.x | Yes (current) |" in security
+    from updates import VERSION
+    current_line = f"| {'.'.join(VERSION.split('.')[:2])}.x | Yes (current) |"
+    assert current_line in security, f"SECURITY.md missing current line: {current_line}"
     assert "| 1.11.x | No — upgrade required |" in security
     assert "| < 0.4.0 | No |" in security
     print("  Legal policy: ok")

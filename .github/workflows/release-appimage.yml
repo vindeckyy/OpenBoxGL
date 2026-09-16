@@ -18,7 +18,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # x86_64 stays on Ubuntu 22.04 to match the v1.7-built artifact line.
+          # x86_64 builds stay pinned to Ubuntu 22.04: each AppImage bundles
+          # its host interpreter and glibc baseline, so moving the builder to
+          # 24.04 would raise the minimum supported distro (ADR 0024). The
+          # attest/publish jobs, which do not build, run on ubuntu-24.04.
           # aarch64 uses ubuntu-24.04-arm: ubuntu-22.04-arm deprecates 2026-09-17
           # (ADR 0024). Each AppImage bundles its host interpreter, so the
           # artifact arch follows the runner arch.
@@ -141,7 +144,7 @@ jobs:
         include:
           - arch: x86_64
           - arch: aarch64
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       actions: read
@@ -163,7 +166,7 @@ jobs:
 
   publish:
     needs: [build, attest]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     # AppImage and Flatpak publish jobs share one GitHub Release. Keep the
     # uploads serialized while allowing their build matrices to run in parallel.

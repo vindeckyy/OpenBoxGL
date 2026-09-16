@@ -158,24 +158,6 @@ async function searchWithFallback(query, games) {
     return false;
   });
 }
-// Expose for testing that worker and main produce identical results (F1 acceptance)
-async function verifyWorkerParity(query, games) {
-  const main = await searchWithFallback(query, games);
-  try {
-    const w = getSearchWorker();
-    if (!w) return { parity: true, reason: 'no-worker-fallback' };
-    const id = String(++_workerSeq);
-    const workerRes = await new Promise((resolve, reject) => {
-      _workerPending.set(id, { resolve, reject });
-      w.postMessage({ id, type: 'search', query, games });
-      setTimeout(() => { if (_workerPending.has(id)) { _workerPending.delete(id); reject(new Error('timeout')); } }, 500);
-    });
-    const wResults = workerRes.results || [];
-    const same = main.length === wResults.length && main.every((g, i) => g.id === wResults[i].id);
-    return { parity: same, main: main.length, worker: wResults.length };
-  } catch (e) { return { parity: false, error: String(e.message || e) }; }
-}
-
 // IntersectionObserver for virtual spacer windowing
 let _virtualObserver = null;
 // The pane scrolls more than the grid: library-head, the drop zone, and the
@@ -2052,4 +2034,4 @@ export function openDuplicatesDialog() {
 document.addEventListener('app:open-repair-wizard', () => openRepairWizard());
 document.addEventListener('app:open-duplicates', () => openDuplicatesDialog());
 
-export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated, isVirtualEnabled, getSearchWorker, workerSearch, searchWithFallback, verifyWorkerParity, ensureVirtualObserver, visibleGameIds, focusGameIndex, gridMetrics, isTrashView, renderTrashView, showTrashUndoToast, restoreTrashEntry };
+export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated, isVirtualEnabled, getSearchWorker, workerSearch, searchWithFallback, ensureVirtualObserver, visibleGameIds, focusGameIndex, gridMetrics, isTrashView, renderTrashView, showTrashUndoToast, restoreTrashEntry };

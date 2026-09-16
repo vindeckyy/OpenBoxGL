@@ -28,5 +28,5 @@ Ship a two-architecture AppImage release matrix: **x86_64** and **aarch64**.
 - ARM64 users get a release-gated, signed AppImage and self-update path instead of a best-effort source run.
 - A release now carries two AppImages, two zsyncs, two checksums, two signatures, and two SBOMs; the GitHub Release body lists all of them.
 - The updater refuses an update when the running architecture's artifact is absent (e.g., an aarch64 host against an x86_64-only release) rather than installing the wrong arch.
-- The x86_64 build runner (`ubuntu-22.04`) is itself on the 2026-09-17 deprecation path; migrating it to `ubuntu-24.04` is a separate follow-up (it would change the bundled glibc baseline and is out of 1.8.0 scope).
+- The x86_64 build runner (`ubuntu-22.04`) is itself on the 2026-09-17 deprecation path; migrating it to `ubuntu-24.04` is a separate follow-up (it would change the bundled glibc baseline and is out of 1.8.0 scope). As of 1.13.0 the non-building attest and publish jobs run on `ubuntu-24.04`, while the x86_64 build deliberately stays on `ubuntu-22.04` so the bundled glibc baseline does not move; any future migration must either accept a higher baseline or build inside a pinned container.
 - Flathub submission remains a separate maintainer decision (ADR 0013); this ADR only governs the AppImage matrix.

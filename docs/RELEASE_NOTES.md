@@ -1,3 +1,102 @@
+# OpenBox 1.13.0 — Solid Ground
+
+The finishing pass for the 1.12 wave: the surfaces added in 1.11/1.12 become
+faster, safer, and more reliable, and the biggest deferred features land —
+household presence, party decks, save history, and artwork tooling.
+
+---
+
+## Added
+
+- **Now Playing presence:** opt-in signed heartbeats with a 10-minute TTL, a
+  live "who's playing what" strip in Household, elapsed time, and a
+  rate-limited per-member toast. Presence projects unexpired events only and
+  keeps no history (ADR 0050).
+- **Game Night deck builder:** named queues, theme presets, deterministic
+  seeded shuffle, and content-addressed deck sharing over the household
+  folder (ADR 0051).
+- **Time Machine compare:** added/removed/re-edited diffs between two dates
+  with journal honesty flags, plus revert apply constrained to a metadata
+  whitelist (paths and launch config are rejected, ADR 0052).
+- **Save history:** per-game save versions with source, age, size, read-back
+  verification, restore, and retention pruning (ADR 0053).
+- **Artwork Doctor:** bulk hygiene report (missing, low-res, odd aspect,
+  duplicate art) with a cancelable "fix all with SteamGridDB" job, per-item
+  progress, undo, and provider attribution (ADR 0055).
+- **Plugin API v1:** frozen SemVer surface — bounded library read, palette
+  commands, and notifications — plus malformed/unsandboxed plugin surfacing
+  in the manager and `docs/plugin-api.md` (ADR 0056).
+- **High-contrast stock theme** (sixth theme) with WCAG AA contrast checks
+  for text tokens in the theme test suite (ADR 0057).
+- **Per-platform setup checklists**, first-run "try these" cards, auto-Moment
+  suggestions, kiosk PIN lockout, constellation viewpoints/path/PNG export,
+  signed emulator-definition update channel (ADR 0058), background update
+  download with apply on restart (ADR 0059), household weekly challenges,
+  the missing-file repair wizard, duplicate detection and merge, the save
+  "test restore" drill, session journal export, collection export/import,
+  the `?` shortcut cheat sheet, and undo action toasts.
+
+## Changed
+
+- **Performance at scale:** structurally shared library snapshots (ADR 0054),
+  touched-id sync journaling, idle-fingerprinted auto-import, one-pass save
+  indexing, single-transaction bulk media, SQL-level SQLite FTS/facets,
+  media probe batch caching, emulator status TTL with background installs,
+  worker-side facets, and a connection cap with a per-request deadline. At
+  20k games: `/api/library` p95 85→75 ms, facets 774→46 ms, `/api/media`
+  709→2 ms, picker 887→222 ms.
+- Error taxonomy (`400` only for validation, `500` with request id for
+  faults), a stacked toast queue, virtual-grid ARIA semantics, universal
+  `openDialog()` focus handling, conditional dev-venv setup, per-file test
+  timeouts with retry reporting, the token gate extended to `index.html`
+  and `static/*.js`, and release workflows gated on version sync plus the
+  full test gate with Flatpak build attestation.
+
+## Fixed
+
+- Reloading or closing the window no longer stops running games, and Escape
+  in the game editor runs the unsaved-changes guard instead of discarding
+  edits.
+- A corrupt `library.json` no longer blocks startup: OpenBox boots into
+  recovery mode and offers last-known-good or snapshot restore.
+- LaunchBox/ES-DE apply no longer uploads the full preview plan (which
+  exceeded the 64 KB body cap and always failed), and bulk edits chunk large
+  selections instead of exceeding the cap.
+- Error toasts render as errors again, the locale selector populates after
+  settings load, reads never rewrite `library.json`, and concurrent writes
+  can no longer expose half-applied state (ADR 0049).
+- The full correctness sweep from the 1.13 plan: shared read locks,
+  content-keyed projection caches, archive/operations safety, save-path
+  containment, lazy BIOS hints, hot-reloadable emulator definitions,
+  streaming export downloads, and the media/health/registry fixes.
+
+## Documentation & gates
+
+- `docs/api-v2.md` is generated from the live route tables with a freshness
+  gate, `scripts/check_docs_links.py` verifies relative links,
+  `scripts/bump_version.py` automates version bumps, `make check-ci` covers
+  the CI-only checks, the changed-line/new-module coverage gates resolve
+  their diff base correctly on PRs (ADR 0048), and gate scripts gained
+  table-driven self-tests.
+
+---
+
+## Download
+
+| Asset | Architecture | Type |
+|-------|-------------|------|
+| `OpenBox-x86_64.AppImage` | x86_64 | AppImage |
+| `OpenBox-aarch64.AppImage` | ARM64 | AppImage |
+| `OpenBox-x86_64.flatpak` | x86_64 | Flatpak |
+
+Already running OpenBox? The built-in updater handles the delta.
+
+---
+
+**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.12.1...v1.13.0
+
+---
+
 # OpenBox 1.12.1 — Hardening
 
 A reliability pass: no new features, just a sturdier launcher.

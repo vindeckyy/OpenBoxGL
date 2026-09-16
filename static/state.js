@@ -363,8 +363,6 @@ const token = new URLSearchParams(location.search).get('token') || '';
     let _searchTimer = null;
     function scheduleSearch(callback, delay = 150) { clearTimeout(_searchTimer); _searchTimer = setTimeout(callback, delay); }
     let _searchIndex = { games: null, refresh: null, title: new Map(), all: [] };
-    let _searchIndexDirty = true;
-    function markSearchIndexDirty() { _searchIndexDirty = true; }
     let _filterVersion = 0;
     function invalidateFilterCache() { _filterVersion++; }
     function indexValues(game) {
@@ -403,7 +401,6 @@ const token = new URLSearchParams(location.search).get('token') || '';
       });
       _searchIndex = { games: AppState.games, refresh, title, all: AppState.games };
       AppState.searchIndexStats = { terms: title.size, games: AppState.games.length };
-      _searchIndexDirty = false;
       return _searchIndex;
     }
     const INDEX_PREFIX_MAX = 9;
@@ -540,4 +537,4 @@ const token = new URLSearchParams(location.search).get('token') || '';
       }
     }
 
-export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, notifyAction, notifyError, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId };
+export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, notifyAction, notifyError, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, scheduleSearch, resetQuery, resolveDeeplinkGameId };

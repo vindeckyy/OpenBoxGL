@@ -56,11 +56,6 @@ class EmulatorsHandlers:
         health = qs.get("health", ["0"])[0]
         want_health = str(health).lower() in {"1", "true", "yes", "on"}
         if want_health:
-            # Validate startup_args tokens as part of health pass; adapters with invalid tokens are still returned but health flags reflect.
-            try:
-                from pkg.parity.launch_tokens import validate_startup_args  # noqa: F401
-            except Exception:
-                pass
             payload = load_registry(ROOT / "emulator_defs", health=True)
         else:
             payload = load_registry(ROOT / "emulator_defs")
