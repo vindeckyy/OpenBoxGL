@@ -179,6 +179,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"check_changed_coverage: {exc}", file=sys.stderr)
         return 1
 
+    # ADR 0025: files excluded from measurement (tests/*, scripts/*, build/*)
+    # are neutral to the floor. main() applies the same rule as
+    # measure_changed_lines() so a release that edits a test file does not
+    # count its lines as misses (analysis2 reports them all as missing).
+    try:
+        measured = {str(Path(path).resolve()) for path in cov.get_data().measured_files()}
+    except Exception:
+        measured = set()
+
     failures: list[str] = []
     total_changed = 0
     total_hit = 0
@@ -191,6 +200,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"check_changed_coverage: {exc}", file=sys.stderr)
             return 1
         if not changed_lines:
+            continue
+        if measured and abs_path not in measured:
             continue
         try:
             _filename, statements, _excluded, missing, _missing_formatted = cov.analysis2(abs_path)
@@ -221,21 +232,35 @@ def main(argv: list[str] | None = None) -> int:
                 f"changed-line coverage {pct:.1f}% below floor {args.fail_under:.1f}%"
             )
 
-    touched_include = ",".join(changed_files)
-    report = _run(
-        [
-            "coverage",
-            "report",
-            f"--include={touched_include}",
-            f"--fail-under={int(args.fail_under)}",
-        ]
-    )
-    if report.stdout.strip():
-        print(report.stdout.strip())
-    if report.stderr.strip():
-        print(report.stderr.strip(), file=sys.stderr)
-    if report.returncode != 0:
-        failures.append("touched-module coverage below fail-under")
+    report_files = [
+        path for path in changed_files
+        if not measured or str((ROOT / path).resolve()) in measured
+    ]
+
+    # Informational per-module table for the touched files.
+    if report_files:
+        report = _run(
+            [
+                "coverage",
+                "report",
+                f"--include={','.join(report_files)}",
+            ]
+        )
+        if report.stdout.strip():
+            print(report.stdout.strip())
+        if report.stderr.strip():
+            print(report.stderr.strip(), file=sys.stderr)
+
+    # Touched modules must not sit at 0% coverage (this is the touched-module
+    # floor; whole-module floors are enforced separately). The changed-line
+    # loop above already measures files with executable changed lines, so this
+    # covers files whose changed lines are comments/blank.
+    for rel_path in report_files:
+        module_pct = _module_percent(cov, rel_path)
+        if module_pct is not None and module_pct <= 0.0:
+            failure = f"{rel_path}: touched module at 0%"
+            if failure not in failures:
+                failures.append(failure)
 
     if failures:
         print("CHANGED COVERAGE FAILED:", file=sys.stderr)

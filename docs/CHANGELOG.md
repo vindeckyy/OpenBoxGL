@@ -194,6 +194,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   PR base SHA, the branch upstream, or `origin`, and an unresolvable base
   fails the gate instead of comparing `HEAD` to itself (ADR 0048).
   `tests/test_git_diff_base.py` covers the resolver and its failure modes.
+- The standalone changed-line checker now applies ADR 0025 itself: changed
+  files excluded from coverage measurement (tests, scripts) no longer count
+  as misses, and a touched module fails only at 0% instead of an
+  unenforceable whole-file 95%. The old behavior made any release commit
+  that edited a test file or `updates.py` (77% covered) fail locally.
 
 ## [1.12.1] - 2026-09-15
 

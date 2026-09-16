@@ -69,6 +69,9 @@ household presence, party decks, save history, and artwork tooling.
   content-keyed projection caches, archive/operations safety, save-path
   containment, lazy BIOS hints, hot-reloadable emulator definitions,
   streaming export downloads, and the media/health/registry fixes.
+- The standalone changed-line/touched-module checker now honors ADR 0025:
+  test and script edits no longer count as coverage misses, and a touched
+  module fails only at 0% instead of an unenforceable whole-file 95%.
 
 ## Documentation & gates
 
