@@ -99,6 +99,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   alias or a junction used to produce one `argv` carrying the resolved state
   file next to an unresolved `--appendconfig` path; the state directory and
   everything under it now share one spelling.
+- The standalone changed-line checker now applies ADR 0025 itself: changed
+  files excluded from coverage measurement (tests, scripts) no longer count
+  as misses, and a touched module fails only at 0% instead of an
+  unenforceable whole-file 95%. The old behavior made any release commit
+  that edited a test file or `updates.py` (77% covered) fail locally.
 
 ## [1.12.1] - 2026-09-15
 
