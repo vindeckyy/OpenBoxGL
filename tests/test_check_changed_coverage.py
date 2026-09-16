@@ -99,6 +99,42 @@ class CheckChangedCoverageTests(unittest.TestCase):
         self.assertEqual(code, 1)
 
 
+    def test_main_skips_unmeasured_files_like_adr_0025(self):
+        # A release commit that edits a test file must not count its lines as
+        # misses; main() applies the same ADR 0025 skip as measure_changed_lines.
+        with mock.patch.object(ccc, "_diff_base", return_value="base"), \
+             mock.patch.object(ccc, "_changed_python_files", return_value=["sample.py", "tests/test_sample.py"]), \
+             mock.patch.object(
+                 ccc, "_changed_line_numbers",
+                 side_effect=lambda base, rel: {5, 6, 7} if rel == "tests/test_sample.py" else {11},
+             ), \
+             mock.patch.object(ccc, "_load_coverage", return_value=FakeCoverage({"sample.py": set(range(1, 30))})), \
+             mock.patch.object(
+                 ccc, "_run",
+                 return_value=mock.Mock(returncode=0, stdout="", stderr=""),
+             ) as run_mock:
+            code = ccc.main(["--fail-under=95"])
+        self.assertEqual(code, 0)
+        include_arg = run_mock.call_args[0][0][2]
+        self.assertIn("sample.py", include_arg)
+        self.assertNotIn("test_sample.py", include_arg)
+
+
+    def test_main_allows_touched_module_below_95_but_above_zero(self):
+        # Touched modules are not required to hit the changed-line floor as a
+        # whole (updates.py sits near 77%); only 0% is a failure.
+        run_mock = mock.Mock(returncode=0, stdout="", stderr="")
+        with mock.patch.object(ccc, "_diff_base", return_value="base"), \
+             mock.patch.object(ccc, "_changed_python_files", return_value=["sample.py"]), \
+             mock.patch.object(ccc, "_changed_line_numbers", return_value=set(range(11, 20))), \
+             mock.patch.object(ccc, "_load_coverage", return_value=FakeCoverage({"sample.py": set(range(1, 101))})), \
+             mock.patch.object(ccc, "_run", return_value=run_mock):
+            # FakeCoverage marks every tenth line missing: 90% module coverage,
+            # but all nine changed lines are hit.
+            code = ccc.main(["--fail-under=95"])
+        self.assertEqual(code, 0)
+
+
 class CheckTestsFloorConstants(unittest.TestCase):
     def test_local_gate_enforces_95_percent_boundary(self):
         from scripts import check_tests

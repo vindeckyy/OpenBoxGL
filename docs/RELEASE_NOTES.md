@@ -79,6 +79,9 @@ Flatpak, and system-install paths are untouched.
 - **SQLite handles before an atomic swap.** The metadata database closes its
   cached thread-local connections before replacing the file, so a live resync
   cannot fail with a locked `metadata.db` on Windows.
+- The standalone changed-line/touched-module checker now honors ADR 0025:
+  test and script edits no longer count as coverage misses, and a touched
+  module fails only at 0% instead of an unenforceable whole-file 95%.
 
 ## Windows boundaries
 
