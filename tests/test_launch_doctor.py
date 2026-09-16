@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -677,7 +678,8 @@ class LaunchDoctorEdgeCaseTests(unittest.TestCase):
         )
         doctor.validate_preview("weird", str(self.data_dir))
 
-        home_rom = Path.home() / "openbox-f13-test.nes"
+        outside_dir = Path(tempfile.mkdtemp(prefix="openbox-f13-"))
+        home_rom = outside_dir / "outside.nes"
         home_rom.write_bytes(b"NES")
         try:
             def run_shared(*_args, **_kwargs):
@@ -697,7 +699,7 @@ class LaunchDoctorEdgeCaseTests(unittest.TestCase):
 
             self.assertFalse(doctor._flatpak_fs_allowed("app", str(rom), lambda _: "flatpak", run_broken))
         finally:
-            home_rom.unlink(missing_ok=True)
+            shutil.rmtree(outside_dir, ignore_errors=True)
 
         rom = self.data_dir / "argv.nes"
         rom.write_bytes(b"NES")
