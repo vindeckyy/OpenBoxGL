@@ -84,6 +84,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Windows binary names for every emulator definition (`native_exe_windows`), so
   adapter detection, resume, and launch doctor work with Windows builds of
   Dolphin, RetroArch, PCSX2, RPCS3, and the rest.
+- A test file that fails and then passes on retry now prints the first
+  failed attempt's output, so the defect is identifiable instead of
+  passing silently on the retry.
 
 ### Fixed
 - Process-group signalling can no longer reach group `0` or `1`. A stored

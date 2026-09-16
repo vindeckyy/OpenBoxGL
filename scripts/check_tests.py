@@ -252,7 +252,10 @@ def main() -> int:
             command = [str(COVERAGE), "run", "-p", str(test_file)]
             last_output = ""
             code = 1
+            first_failure_output = ""
+            attempts_used = 0
             for _attempt in range(3):
+                attempts_used = _attempt + 1
                 result = subprocess.run(
                     command,
                     cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -260,6 +263,8 @@ def main() -> int:
                 )
                 code = result.returncode
                 last_output = (result.stdout or "") + (result.stderr or "")
+                if code != 0 and not first_failure_output:
+                    first_failure_output = last_output
                 if code == 0:
                     break
             if code:
@@ -268,6 +273,11 @@ def main() -> int:
                 if last_output.strip():
                     tail = last_output.strip().splitlines()[-40:]
                     print("\n".join(tail))
+            elif attempts_used > 1:
+                print(f"RETRIED {test_file.name} (passed on attempt {attempts_used}/3; first failure below)")
+                if first_failure_output.strip():
+                    print("first-attempt failure output:")
+                    print("\n".join(first_failure_output.strip().splitlines()[-40:]))
             else:
                 print(f"PASS {test_file.name}")
         passed_tests = len(test_files) - len(failed_tests)
