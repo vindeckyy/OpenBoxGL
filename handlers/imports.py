@@ -319,9 +319,10 @@ class ImportsHandlers:
         self.send_json(200, {"added": added, "found": found, "errors": errors})
 
     def import_steam_games(self):
-        imported = import_steam()
+        errors = []
+        imported = import_steam(errors=errors)
         added, found = merge_imported_games(imported, lambda game: ("steam", str(game.get("steam_app_id", ""))))
-        _send_import_result(self, added, found)
+        _send_import_result(self, added, found, errors=errors)
 
     def import_heroic_games(self):
         imported = import_heroic()

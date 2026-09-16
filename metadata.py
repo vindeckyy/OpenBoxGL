@@ -13,6 +13,7 @@ import zipfile
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
+from urllib.error import URLError
 from urllib.request import urlopen
 from xml.etree import ElementTree
 
@@ -188,13 +189,17 @@ def sync_database(destination, opener=urlopen):
     with tempfile.NamedTemporaryFile(dir=destination.parent, suffix=".zip", delete=False) as temporary:
         archive = Path(temporary.name)
     try:
-        download_file(
-            DATABASE_URL,
-            archive,
-            max_bytes=2 * 1024 * 1024 * 1024,
-            timeout=120,
-            opener=opener,
-        )
+        try:
+            download_file(
+                DATABASE_URL,
+                archive,
+                max_bytes=2 * 1024 * 1024 * 1024,
+                timeout=120,
+                opener=opener,
+            )
+        except (URLError, TimeoutError) as error:
+            reason = getattr(error, "reason", error)
+            raise ValueError(f"Could not reach the metadata database ({reason}). Check the connection and try again.") from error
         build_database(archive, destination)
     finally:
         archive.unlink(missing_ok=True)
