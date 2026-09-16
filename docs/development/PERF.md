@@ -53,7 +53,7 @@ games is exploratory even when the SQLite read model is enabled.
 | 10,000 games | ~28ms (29MB est) | ~3.8ms (1.3MB) | ~2.8ms | ~310ms |
 
 - Native host cold start (launch to server ready): 242 ms; server files published 182 ms after spawn. The WebKitGTK window then loads the token-bearing URL, so the full handshake stays under the 2s target.
-- Coverage gates enforced in `scripts/check_tests.py`: `COVERAGE_FLOOR=72.0` total, `WEB_APP_FLOOR=54.0`, changed-line `95%`, new runtime modules `85%`.
+- Coverage gates enforced in `scripts/check_tests.py`: `COVERAGE_FLOOR=83.0` total, `WEB_APP_FLOOR=58.0`, changed-line `95%`, new runtime modules `85%`.
 - JSON remains canonical; the optional SQLite projection is an indexed read path for larger libraries, but only 10k/20k scenarios are release-gated.
 
 ## 20,000-game gates (blocking CI job `perf-20k`)

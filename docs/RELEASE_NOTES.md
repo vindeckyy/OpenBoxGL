@@ -22,6 +22,23 @@ A reliability pass: no new features, just a sturdier launcher.
   bad credentials, long names, delete-while-open, rapid filtering) are
   covered by automated tests, and coverage floors were ratcheted to
   83% / 58% (web_app).
+- **Honest empty states and errors:** deleting a playlist that doesn't exist
+  returns 404 instead of a false success; scoped library exports without a
+  name are rejected synchronously with 400; and an empty Game Night queue
+  explains itself with an `empty_reason` plus an exclusion breakdown
+  (e.g. no games support N players) instead of a bare empty state.
+- **Typed background jobs:** export, SteamGridDB, ScreenScraper,
+  auto-import, and reel jobs now run as `library.export`,
+  `screenscraper.*`, `steamgrid.*`, `storefront.auto_import`, and
+  `clips.reel` with the correct retry policy instead of masquerading as
+  `setup.scan`.
+- **Backlog Radio estimates that survive reloads:** picks hydrated from the
+  stored playlist now carry `estimated_minutes` (with a frontend fallback
+  for older entries), fixing "undefinedm" rows.
+- **Test isolation:** the suite no longer risks the real library — test runs
+  export an isolated `OPENBOX_DATA_DIR` (and `test_sse.py` guards itself at
+  import time), so synthetic games can't land in
+  `~/.local/share/openbox-game-launcher/library.json`.
 
 ---
 

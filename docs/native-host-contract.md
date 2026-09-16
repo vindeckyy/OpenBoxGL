@@ -114,17 +114,11 @@ through the capability resolver with a browser fallback.
 
 ## Persistence
 
-Window geometry and the last session live in `ui_state`, not `settings`:
-
-```json
-{
-  "ui_state": {
-    "window": { "x": 0, "y": 0, "w": 1280, "h": 780, "maximized": false },
-    "last_session": { "view": "grid", "selected_id": "", "platform": "all", "playlist": "" },
-    "single_instance": true
-  }
-}
-```
-
-On Wayland, absolute window position is WM-controlled and not persisted; the
-host persists size and maximized state only.
+Window geometry lives in a flat `window-geometry` file in the data directory
+(`native_host.c` `load_geometry`/`save_geometry`), not in `ui_state` and not in
+`settings`. The file holds size plus maximized state only (`"<w> <h> <maximized>"`);
+there is no x/y — on Wayland absolute window position is WM-controlled and never
+persisted. `state_store.py` owns the `ui_state` schema default (`{}`), which carries
+UI prefs such as the last session (`view`, `selected_id`, `platform`, `playlist`),
+never the native window frame. `single_instance` is a capability reported by
+`GET /api/native/capabilities` (`handlers/native.py`), not stored state.

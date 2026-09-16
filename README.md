@@ -17,7 +17,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.12.0"><img src="https://img.shields.io/badge/Release-v1.12.1-0052CC?style=for-the-badge" alt="Release v1.12.0"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.12.1"><img src="https://img.shields.io/badge/Release-v1.12.1-0052CC?style=for-the-badge" alt="Release v1.12.1"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-2EA44F?style=for-the-badge" alt="CI"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux-lightgrey?style=for-the-badge" alt="Linux"></a>
   <br>
@@ -62,7 +62,7 @@
 ## Quick Start
 
 1. **Install.** Grab the [latest AppImage](https://github.com/vindeckyy/OpenBoxGL/releases/latest), or run from source with `python3 web_app.py` (Python 3.10+).
-2. **Open the UI.** `openbox` opens a native WebKitGTK window by default, and falls back to a chrome-less app window (then your default browser) when WebKitGTK is missing. `openbox --web` skips the native window and opens the loopback web UI in a browser; from source, `python3 web_app.py` also opens the browser automatically with the token in the URL. To open the UI manually, append the token from the data directory, e.g. open `http://127.0.0.1:PORT/?token=$(cat ~/.local/share/openbox-game-launcher/server.token)`. Treat token-bearing URLs as secrets; prefer the `X-OpenBox-Token` header for scripts and never paste or share the URL.
+2. **Open the UI.** `openbox` opens a native WebKitGTK window by default, and falls back to a chrome-less app window (then your default browser) when WebKitGTK is missing. `openbox --web` skips the WebKitGTK host and opens the loopback UI in a browser app window (plain tab fallback); from source, `python3 web_app.py` also opens the browser automatically with the token in the URL. Steam Deck / gamescope kiosk: `python3 web_app.py --game-mode` or `openbox --web --game-mode`. To open the UI manually, append the token from the data directory, e.g. open `http://127.0.0.1:PORT/?token=$(cat ~/.local/share/openbox-game-launcher/server.token)`. Treat token-bearing URLs as secrets; prefer the `X-OpenBox-Token` header for scripts and never paste or share the URL.
 3. **Import games.** Click **Import Folder** and point at a directory of `.sh` files, or **Import Steam** to scan your installed games.
 4. **Press PLAY.** Sessions, play time, and history are tracked automatically.
 
@@ -76,12 +76,12 @@ OpenBox Game Launcher is an open-source game library manager and launcher for Li
 
 OpenBox Game Launcher is unrelated to [Openbox](https://openbox.org/), the open-source Linux window manager. The projects have different maintainers, codebases, and purposes.
 
-OpenBox provides one UI over two hosts:
+OpenBox provides one UI over two use-case entry points (the native host renders the same `web_app.py` loopback UI):
 
-| Host | Entry point | Best for |
-| --- | --- | --- |
-| Native window | `openbox` or `openbox-native` | Default desktop use; one WebKitGTK window renders the full UI |
-| Web UI | `openbox --web` or `python3 web_app.py` | Development and debugging; full feature set, REST API, Big Box mode |
+| Entry point | Use when |
+| --- | --- |
+| `openbox` or `openbox-native` | Default desktop use; one WebKitGTK window renders the full UI |
+| `openbox --web` or `python3 web_app.py` | Development and debugging; full feature set, REST API, Big Box mode |
 
 Library data is stored locally at `~/.local/share/openbox-game-launcher/library.json`. Set the `OPENBOX_DATA_DIR` environment variable to use a different data directory.
 
@@ -124,8 +124,9 @@ gains a **Story** tab narrating its journey: added, first played, longest
 session, milestones, progress, and captured Moments. The launch sheet gains
 per-game `KEY=value` environment overrides and an optional confirm-before-
 launch step, and an opt-in **weekly automatic backup** keeps a bounded archive
-history with a last-run line in Settings. The SQLite read model self-enables
-at 5,000+ games (env opt-out honored), and the command palette ranks recently
+history with a last-run line in Settings. The SQLite read model is
+opt-in via `OPENBOX_ENABLE_SQLITE_READ=1`, auto-enabled at 5,000+ games
+unless opted out (`=0`); JSON stays the source of truth, and the command palette ranks recently
 used games and actions first.
 
 ### Every Second Counts (1.11.0)
@@ -144,7 +145,7 @@ reviewable before they change the library.
 
 ### Library & Discovery
 
-One catalog for Steam, Heroic, Lutris, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and local executables. Advanced search, collections, playlists, tags, bulk edits, custom fields, ESRB filtering, list view, **"What should I play?" smart picker** (time, mood, familiarity, players) plus Surprise Me random selection, and a pan/zoomable **Library Constellation** relationship graph. **Keyboard and gamepad navigation** across the grid and list (arrows/Home/End/Page, `f` favorite, Escape clear, configurable controller map), **hash routing** so refresh and shared links restore platform/playlist/preset/query/selection/sort, sortable list-view columns with persisted direction, screenshot lightbox with prev/next/zoom, cover skeleton loading, and **Mood Match adaptive cover theming** that tints accents from the selected game.
+One catalog for Steam, Heroic, Lutris, Faugus, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, Eden, arcade (MAME), and local executables. Advanced search, collections, playlists, tags, bulk edits, custom fields, ESRB filtering, list view, **"What should I play?" smart picker** (time, mood, familiarity, players) plus Surprise Me random selection, and a pan/zoomable **Library Constellation** relationship graph. **Keyboard and gamepad navigation** across the grid and list (arrows/Home/End/Page, `f` favorite, Escape clear, configurable controller map), **hash routing** so refresh and shared links restore platform/playlist/preset/query/selection/sort, sortable list-view columns with persisted direction, screenshot lightbox with prev/next/zoom, cover skeleton loading, and **Mood Match adaptive cover theming** that tints accents from the selected game.
 
 ### Metadata & Media
 
@@ -158,7 +159,7 @@ Auto-detect emulators on `$PATH`, Flathub install/update, YAML definition packs,
 SNES = retroarch -L /usr/lib/libretro/snes9x_libretro.so "{path}"
 ```
 
-Tokens: `{path}`, `{name}`, `{rom_name}`, `{app_id}`, `{heroic_app_id}`, `{lutris_id}`.
+Tokens: `{path}`, `{name}`, `{rom_name}`, `{app_id}`, `{heroic_app_id}`, `{lutris_id}` — see the [command-tokens reference](https://openboxgl.github.io/reference/command-tokens/) for the full placeholder list.
 
 ### Sessions & Saves
 
@@ -174,19 +175,19 @@ Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attra
 
 ### Scale & Backups
 
-Optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) with canonical name-substring search and JSON-equivalent facets for large libraries, wired into `/api/v2/library/search`. Backup diff API (`GET /api/v2/backup/diff`) to compare current library against archives. Visual chip builder for smart collection filter presets. **Library export** to JSON or CSV with platform/playlist scopes, shareable-by-construction field projection, and automatic newest-10 rotation. Statistics sync remains available through the mounted-folder workflow; the opt-in causal transport provides validated full-library sync with conflict review and tombstones, while legacy routes fail closed before mutation. **LaunchBox XML migration** import (`POST /api/v2/import/launchbox/preview` and `/apply`). **Manual/shelf entries** for games without local files.
+Optional SQLite read model (opt-in via `OPENBOX_ENABLE_SQLITE_READ=1`, auto-enabled at 5,000+ games unless opted out (`=0`); JSON stays the source of truth) with canonical name-substring search and JSON-equivalent facets for large libraries, wired into `/api/v2/library/search`. Backup diff API (`GET /api/v2/backup/diff`) to compare current library against archives. Visual chip builder for smart collection filter presets. **Library export** to JSON or CSV with platform/playlist scopes, shareable-by-construction field projection, and automatic newest-10 rotation. Statistics sync remains available through the mounted-folder workflow; the opt-in causal transport provides validated catalog sync with conflict review and tombstones, while the legacy whole-library publish/pull routes return `LIBRARY_SYNC_UNAVAILABLE` before mutation. **LaunchBox XML migration** import (`POST /api/v2/import/launchbox/preview` and `/apply`). **Manual/shelf entries** for games without local files.
 
 For the review-first workflows, use the UI rather than copying paths or records by hand:
 
 - **LaunchBox XML:** open the LaunchBox migration panel, choose one bounded XML export, review the parsed entries, path mappings, exclusions, and emulator mappings, then apply the preview. A changed file or library invalidates the preview and requires a new review; XML never supplies executable commands.
-- **Catalog sync:** configure a mounted folder in Settings, enable **library catalog sync**, preview incoming changes, choose alternatives for conflicts, apply the reviewed plan, and publish local changes explicitly. Paths, launch commands, credentials, media, and play statistics remain local; the apply step creates a recovery backup first.
+- **Catalog sync:** configure a mounted folder in Settings, enable **library catalog sync**, preview incoming changes, choose alternatives for conflicts, apply the reviewed plan, and publish local changes explicitly. Paths, launch commands, credentials, media, and play statistics remain local; apply requires the reviewed plan and publish is an explicit separate step.
 - **Shelf entries:** use **Add shelf entry** for a title without a local file. Shelf records can be edited, filtered, and exported, then converted to a playable entry only after selecting an existing absolute file.
 
-The SQLite read model is opt-in and keeps JSON as the source of truth. The release gate covers 10,000 and 20,000-game libraries; behavior and performance beyond 20,000 games are exploratory.
+The SQLite read model is opt-in via `OPENBOX_ENABLE_SQLITE_READ=1`, auto-enabled at 5,000+ games unless opted out (`=0`); JSON stays the source of truth. The release gate covers 10,000 and 20,000-game libraries; behavior and performance beyond 20,000 games are exploratory.
 
 ### Extensibility
 
-REST API with token auth, Python plugins (`library`, `before_launch`, `after_session` hooks), local CSS themes with live reload, HMAC-signed webhooks, mounted-folder statistics sync, `openbox://` deep links.
+REST API with token auth, Python plugins (`library`, `before_launch`, `after_session` hooks), local CSS themes with instant apply, HMAC-signed webhooks, mounted-folder statistics sync, `openbox://` deep links.
 
 [Full feature list in the documentation](https://openboxgl.github.io/)
 
@@ -300,7 +301,7 @@ chmod +x OpenBox-$(uname -m).AppImage
 ./OpenBox-$(uname -m).AppImage
 ```
 
-The AppImage opens the native window by default. To use the loopback web UI instead, pass `--web`:
+The AppImage opens the native window by default. To skip the WebKitGTK host and open the loopback UI in a browser app window (plain tab fallback), pass `--web`:
 
 ```bash
 ./OpenBox-x86_64.AppImage --web
@@ -310,10 +311,12 @@ Desktop integrators such as Gear Lever work with the AppImage. If an older build
 
 ### System install
 
+`make install` builds `native_host` first (needs `gcc` + `libwebkit2gtk-4.1-dev`):
+
 ```bash
 sudo make install
 openbox          # Native window (default)
-openbox --web    # Web UI (development)
+openbox --web    # Skips WebKitGTK host, loopback UI in browser app window (plain tab fallback)
 ```
 
 ### Flatpak
@@ -415,8 +418,8 @@ OpenBox/
 ├── web_app.py              Loopback server + REST API (shared core)
 ├── webapp_state.py         SSE/event bus facade over the canonical state owner
 ├── routes.py               GET/POST route tables (frozen v1 surface + additive v2 routes)
-├── routes/                 Route registry package (@route decorator, handler loading)
-├── contracts.py            Frozen v1 API contract + legacy aliases (v1_contracts.json)
+├── routes/                 `@route` decorator registry only (handlers are imported by web_app.py)
+├── contracts.py            Frozen v1 API contract (v1_contracts.json); legacy `/api/library` + `/api/launch` aliases live in handlers/library.py, handlers/sessions.py via routes.py
 ├── openbox.py              Shared core helpers (data paths, launch, profiles)
 ├── static/                 Frontend JavaScript modules, search worker, and app.css
 ├── state_store.py          Schema-versioned state, atomic writes, snapshots
