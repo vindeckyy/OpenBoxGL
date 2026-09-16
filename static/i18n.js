@@ -3,12 +3,16 @@
    and provides t(key) for JS string lookups. No deps.
    Lazy-loads locale files via fetch. Falls back to en for missing keys.
 */
-import { AppState } from './state.js';
+import { AppState, notify } from './state.js';
 
 const SUPPORTED_LOCALES = ['en', 'es', 'de', 'fr', 'pt'];
 let _locale = 'en';
 let _strings = {};
 let _enStrings = null;
+let _fallbackWarned = false;
+// P8: JS-rendered surfaces subscribe here instead of listening for the raw
+// DOM event, so re-render registrations are explicit, removable, and testable.
+const localeChangeListeners = new Set();
 
 function deepGet(obj, path) {
   const parts = path.split('.');
@@ -35,6 +39,24 @@ async function loadLocaleFile(locale) {
   }
 }
 
+// P8: a failed locale fetch used to fall back to English silently. Surface it
+// exactly once (toast when the shell is ready, console otherwise) so a broken
+// deploy is diagnosable without spamming every navigation.
+function warnLocaleFallback(locale) {
+  if (_fallbackWarned || locale === 'en') return;
+  _fallbackWarned = true;
+  const message = t('common.locale_fallback', { locale });
+  if (message !== 'common.locale_fallback') {
+    try {
+      notify('warning', message);
+      return;
+    } catch { /* shell not ready yet */ }
+  }
+  if (typeof console !== 'undefined' && console.warn) {
+    console.warn(`OpenBox: could not load the "${locale}" language pack; falling back to English.`);
+  }
+}
+
 async function loadLocale(locale) {
   if (!SUPPORTED_LOCALES.includes(locale)) locale = 'en';
   if (!_enStrings) {
@@ -45,11 +67,28 @@ async function loadLocale(locale) {
     _strings = _enStrings;
   } else {
     const data = await loadLocaleFile(locale);
+    if (!data) warnLocaleFallback(locale);
     _strings = data || _enStrings;
   }
   _locale = locale;
   applyTranslations();
+  for (const listener of localeChangeListeners) {
+    try { listener(locale); } catch (error) { console.error('localechange listener failed', error); }
+  }
   document.dispatchEvent(new CustomEvent('localechange', { detail: { locale } }));
+}
+
+/**
+ * Register a callback that runs after a locale finishes loading, including the
+ * initial load. Returns an unsubscribe function. Prefer this over listening for
+ * the raw `localechange` DOM event so registrations are discoverable.
+ * @param {(locale: string) => void} fn
+ * @returns {() => void}
+ */
+function onLocaleChange(fn) {
+  if (typeof fn !== 'function') return () => {};
+  localeChangeListeners.add(fn);
+  return () => localeChangeListeners.delete(fn);
 }
 
 function t(key, params) {
@@ -111,6 +150,42 @@ function storedLocale() {
   return '';
 }
 
+function populateLocaleSelector(settings) {
+  // Called once before settings load (defaults) and again from refresh() with
+  // the real available_locales. Before 1.13.0 the selector was built from the
+  // empty AppState at DOMContentLoaded, so non-English locales were not
+  // selectable until localStorage already held a choice.
+  const sel = typeof document !== 'undefined' ? document.getElementById('localeSetting') : null;
+  if (!sel) return;
+  const locales = (settings && Array.isArray(settings.available_locales) && settings.available_locales.length)
+    ? settings.available_locales
+    : [{ code: 'en', name: 'English', native: 'English' }];
+  const signature = locales.map(item => `${item.code}:${item.native || item.name || ''}`).join('|');
+  if (sel.dataset.localeSignature === signature) {
+    sel.value = getLocale();
+    return;
+  }
+  sel.dataset.localeSignature = signature;
+  sel.innerHTML = '';
+  for (const loc of locales) {
+    const opt = document.createElement('option');
+    opt.value = loc.code;
+    opt.textContent = loc.native || loc.name || loc.code;
+    sel.appendChild(opt);
+  }
+  sel.value = getLocale();
+  sel.onchange = () => { setLocale(sel.value).catch(() => {}); };
+}
+
+async function syncLocaleFromSettings(settings) {
+  // Explicit choice (localStorage) still wins; the server setting is honored
+  // when no explicit choice exists and settings arrive after startup.
+  const target = storedLocale() || (settings && settings.locale) || '';
+  if (target && SUPPORTED_LOCALES.includes(target) && target !== getLocale()) {
+    await setLocale(target);
+  }
+}
+
 async function init() {
   // Priority: explicit choice (localStorage) > server setting > browser language > en.
   const fallback = (AppState.appSettings && AppState.appSettings.locale) ||
@@ -119,4 +194,4 @@ async function init() {
   await loadLocale(locale);
 }
 
-export { t, init, setLocale, getLocale, getSupportedLocales, applyTranslations, loadLocale };
+export { t, init, setLocale, getLocale, getSupportedLocales, applyTranslations, loadLocale, populateLocaleSelector, syncLocaleFromSettings, onLocaleChange };

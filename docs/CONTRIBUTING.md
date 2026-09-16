@@ -40,13 +40,24 @@ Build the native host with `make native-host`, then run `./openbox-native.sh`.
 
 ## Testing
 
-Run the full verification gate before submitting a pull request. This covers ruff lint, runtime-module drift, the frozen v1 contract, version sync, frontend lint, i18n key coverage (including the extra-keys rule), the CSP framing contract (`scripts/check_csp.py`), compile checks, the full test suite under coverage, coverage floors (83.0% total, 58.0% `web_app.py`, 95% changed-line, 85% new-module), and design-token hygiene. CI also enforces the same 95% changed-line floor (`check_changed_coverage.py --fail-under=95` in `ci.yml`):
+Run the full verification gate before submitting a pull request. This covers ruff lint, runtime-module drift, the frozen v1 contract, version sync, frontend lint, i18n key coverage (including the extra-keys rule), the CSP framing contract (`scripts/check_csp.py`), compile checks, the full test suite under coverage, coverage floors (83.0% total, 73.0% `web_app.py`, 95% changed-line, 85% new-module), and design-token hygiene. CI also enforces the same 95% changed-line floor (`check_changed_coverage.py --fail-under=95` in `ci.yml`):
 
 ```bash
 make check
 ```
 
-The gate needs dev-only tooling (ruff and coverage) in `.venv-dev`, which `make check` creates on first run. The runtime app itself stays dependency-free.
+`make check` is the portable gate. CI additionally runs shellcheck, desktop/AppStream
+validation, the Flatpak dry-run, the UI smoke suite, and the 10k/20k perf gates;
+run all of it locally with:
+
+```bash
+make check-ci
+```
+
+`check-ci` reports locally missing CI-only tools as `SKIP`; export
+`OPENBOX_CI_STRICT=1` to make those skips fail instead (this is what CI does).
+The gate needs dev-only tooling (ruff and coverage) in `.venv-dev`, which
+`make check` creates on first run. The runtime app itself stays dependency-free.
 
 Run the plain test suite without coverage when iterating:
 
@@ -96,6 +107,38 @@ All tests must pass on CI before a PR can be merged.
 
 - Preserve existing UI patterns and accessibility conventions.
 - Test dialog flows, Big Box navigation, and settings persistence manually when touching frontend logic.
+
+## Community locales
+
+OpenBox ships English (`en`), Spanish (`es`), German (`de`), French (`fr`),
+and Portuguese (`pt`). New locales are welcome.
+
+- **Layout.** One JSON file per locale in `locales/`, named with the ISO 639-1
+  code (`locales/en.json`, `locales/es.json`, ...). The object is nested by
+  namespace (`common`, `library`, `settings`, ...); leaf values are strings and
+  may contain `{placeholder}` tokens. `meta` carries `name`, `native`, and
+  `rtl` (not translatable keys). Copy `locales/en.json` as the starting point
+  and keep its structure.
+- **Key parity gate.** Every locale must have exactly the same keys as
+  `locales/en.json` — no missing and no extra keys. `scripts/check_i18n.py`
+  also verifies that every `data-i18n*` attribute in `index.html` and every
+  static `t()` call in `static/*.js` (single, double, or backtick quoting)
+  resolves against `en.json`. Placeholders must be preserved in every translation.
+  Run it directly:
+
+  ```bash
+  python3 -B scripts/check_i18n.py
+  ```
+
+  `tests/test_i18n.py` runs the same checks and `make check` includes them.
+- **How to submit.** Add `locales/<code>.json` (plus an entry in
+  `tests/test_i18n.py::test_meta_native_names` and the
+  `SUPPORTED_LOCALES`/`AVAILABLE_LOCALES` lists in `static/i18n.js` and
+  `pkg/state/cache.py` for a brand-new language), run `make check`, and open a
+  pull request describing the language, the translator, and whether the
+  translation was reviewed by a native speaker. Partial translations are not
+  merged: the key-parity rule is all-or-nothing so a locale can never render
+  raw keys.
 
 ## Release process
 

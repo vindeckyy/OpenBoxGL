@@ -119,6 +119,15 @@ KNOWN_SETTINGS = {
     "household_stats_sharing",
     "museum_kiosk_enabled",
     "museum_kiosk_pin_hash",
+    # signed emulator definitions channel (F13)
+    "emulator_defs_update_enabled",
+    "emulator_defs_channel_url",
+    "emulator_defs_channel_sig_url",
+    "emulator_defs_last_check",
+    "emulator_defs_version",
+    # background update download (F14)
+    "update_auto_download",
+    "update_downloaded_version",
 }
 
 

@@ -5,10 +5,11 @@
    openSessionRecap/showSessionRecapForStopped). Moment/clip capture buttons
    stay hidden until their owning lanes ship a surface: T1-ui's moments.js
    exporting captureMoment(), or T3-obs registering window.OpenBoxClip. */
-import { $, escapeHtml, duration } from './util.js';
+import { $, escapeHtml, duration, formatDate } from './util.js';
 import { api, notify, AppState } from './state.js';
 import { t } from './i18n.js';
 import { updateGameStatus } from './library.js';
+import { openDialog } from './dialogs.js';
 
 const PROGRESS_ACTIONS = [
   { value: 'Playing', label: 'dialog.progress_playing' },
@@ -52,7 +53,7 @@ function _stat(label, value) {
 function _renderStats(payload) {
   const stats = [
     _stat(t('recap.duration'), duration(payload.seconds)),
-    _stat(t('recap.started'), String(payload.started_at || '').replace('T', ' ') || '—'),
+    _stat(t('recap.started'), formatDate(payload.started_at) || '—'),
     _stat(t('recap.exit_code'), payload.exit_code === 0 ? t('recap.exit_clean') : String(payload.exit_code)),
     _stat(t('recap.screenshots'), String(payload.screenshots_taken ?? 0)),
   ];
@@ -133,7 +134,7 @@ async function showSessionRecap(payload) {
   if (close) close.onclick = () => dialog.close();
   const done = $('recapDone');
   if (done) done.onclick = () => dialog.close();
-  if (!dialog.open) dialog.showModal();
+  if (!dialog.open) openDialog(dialog);
 }
 
 async function showSessionRecapForStopped() {

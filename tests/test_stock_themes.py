@@ -68,13 +68,14 @@ class StockThemesTests(unittest.TestCase):
     def test_bundled_sources_exist(self):
         sources = stock_theme_sources(ROOT)
         names = {path.stem for path in sources}
-        self.assertGreaterEqual(len(sources), 5)
+        self.assertGreaterEqual(len(sources), 6)
         for expected in (
             "Midnight Circuit",
             "Phosphor Terminal",
             "Harbor Light",
             "Cinema Marquee",
             "Nordic Mist",
+            "High Contrast",
         ):
             self.assertIn(expected, names)
             self.assertTrue(is_stock_theme(ROOT / "themes" / f"{expected}.css"))
@@ -83,7 +84,7 @@ class StockThemesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "themes"
             installed = ensure_stock_themes(destination, ROOT)
-            self.assertEqual(len(installed), 5)
+            self.assertEqual(len(installed), 6)
             custom = destination / "My Custom.css"
             custom.write_text("body { background: pink; }\n", encoding="utf-8")
             stock = destination / "Midnight Circuit.css"
@@ -159,16 +160,34 @@ class StockThemesTests(unittest.TestCase):
             self.assertFalse(missing, f"{path.name} missing :root tokens: {missing[:8]}")
 
     def test_stock_themes_meet_wcag_aa_contrast(self):
+        # Every stock theme must clear WCAG AA (4.5:1) for the text tokens
+        # that carry paragraphs, metadata, and secondary labels on each
+        # surface. The High Contrast theme (F8) exists to prove the contract
+        # covers a maximum-legibility palette too.
+        pairs = (
+            ("text", "bg"),
+            ("muted", "bg"),
+            ("text-soft", "bg"),
+            ("nav-muted", "topbar"),
+            ("top-status", "topbar"),
+            ("text", "panel"),
+            ("text", "surface-card"),
+            ("card-muted", "surface-card"),
+            ("detail-head", "surface-card"),
+            ("section-muted", "surface-card"),
+            ("fact-label", "surface-card"),
+        )
         for path in stock_theme_sources(ROOT):
             tokens = _parse_root_vars(path.read_text(encoding="utf-8"))
-            text = _resolve_color(tokens, "text")
-            bg = _resolve_color(tokens, "bg")
-            muted = _resolve_color(tokens, "muted")
-            self.assertIsNotNone(text, f"{path.name} needs resolvable --text")
-            self.assertIsNotNone(bg, f"{path.name} needs resolvable --bg")
-            self.assertGreaterEqual(_contrast_ratio(text, bg), 4.5, f"{path.name} text/bg contrast")
-            if muted:
-                self.assertGreaterEqual(_contrast_ratio(muted, bg), 4.5, f"{path.name} muted/bg contrast")
+            for fg_name, bg_name in pairs:
+                fg = _resolve_color(tokens, fg_name)
+                bg = _resolve_color(tokens, bg_name)
+                self.assertIsNotNone(fg, f"{path.name} needs resolvable --{fg_name}")
+                self.assertIsNotNone(bg, f"{path.name} needs resolvable --{bg_name}")
+                self.assertGreaterEqual(
+                    _contrast_ratio(fg, bg), 4.5,
+                    f"{path.name} {fg_name}/{bg_name} contrast",
+                )
 
 
 def _css_blocks(css):

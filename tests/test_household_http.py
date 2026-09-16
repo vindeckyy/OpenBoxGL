@@ -131,6 +131,56 @@ class HouseholdRouteTests(unittest.TestCase):
             household.household_merge(Handler(), {"records": "not-a-list"})
         self.assertEqual(raised.exception.code, "HOUSEHOLD_INVALID_REQUEST")
 
+    def test_weekly_challenge_is_week_seeded_and_adoptable(self):
+        first = household.weekly_challenge_definition()
+        second = household.weekly_challenge_definition()
+        self.assertEqual(first["challenge_id"], second["challenge_id"])
+        self.assertEqual(first["target"], second["target"])
+        self.assertRegex(first["challenge_id"], r"^weekly-\d{4}w\d{2}$")
+        self.assertIn(first["metric"], {"completions", "finished", "playtime_seconds", "ra_count", "achievements", "wins"})
+        self.assertGreaterEqual(first["target"], 1)
+        self.assertIn("deadline", first)
+
+        with mock.patch.object(household, "load_state_view", return_value=self.state), mock.patch.object(
+            household, "transact_state", side_effect=self._transact
+        ), mock.patch.object(household, "broadcast_event"):
+            before = Handler()
+            household.household_weekly_challenge(before, SimpleNamespace(query=""))
+            self.assertFalse(before.responses[-1][1]["adopted"])
+            adopt = Handler()
+            household.household_weekly_adopt(adopt, {})
+            self.assertEqual(adopt.responses[-1][0], 200)
+            after = Handler()
+            household.household_weekly_challenge(after, SimpleNamespace(query=""))
+            self.assertTrue(after.responses[-1][1]["adopted"])
+            self.assertEqual(after.responses[-1][1]["challenge"]["challenge_id"], first["challenge_id"])
+
+    def test_shelf_share_projects_wishlist_entries(self):
+        self.state["games"] = [
+            {"game_id": "shelf-1", "name": "Shelf One", "platform": "NES", "manual_entry": True},
+            {"game_id": "owned-1", "name": "Owned One", "platform": "SNES"},
+        ]
+        with mock.patch.object(household, "load_state_view", return_value=self.state), mock.patch.object(
+            household, "transact_state", side_effect=self._transact
+        ), mock.patch.object(household, "broadcast_event"):
+            share = Handler()
+            household.household_wishlist_share(share, {"member_id": "m1"})
+            payload = share.responses[-1][1]
+            self.assertEqual(payload["total"], 1)
+            self.assertEqual(payload["members"]["m1"]["items"][0]["name"], "Shelf One")
+            listed = Handler()
+            household.household_wishlist(listed, SimpleNamespace(query=""))
+            self.assertEqual(listed.responses[-1][1]["members"]["m1"]["items"][0]["game_id"], "shelf-1")
+
+        with mock.patch.object(household, "load_state_view", return_value=self.state), mock.patch.object(
+            household, "transact_state", side_effect=self._transact
+        ), mock.patch.object(household, "broadcast_event"):
+            handler = Handler()
+            household.household_wishlist_share(handler, {"member_id": "m1", "game_ids": [{"name": "Wanted", "platform": "PC"}]})
+            item = handler.responses[-1][1]["members"]["m1"]["items"][0]
+            self.assertEqual(item["name"], "Wanted")
+            self.assertEqual(item["note"], "")
+
     def test_routes_and_runtime_manifest_include_household(self):
         from routes import GET_TABLE, POST_TABLE, PUBLIC_GET_PATHS
         from routes.registry import all_routes
@@ -141,6 +191,8 @@ class HouseholdRouteTests(unittest.TestCase):
         self.assertTrue(any(route.path == "/api/v2/household/merge" for route in all_routes()))
         self.assertTrue(any(route.path == "/api/v2/household/sync/publish" for route in all_routes()))
         self.assertTrue(any(route.path == "/api/v2/household/sync/pull" for route in all_routes()))
+        self.assertTrue(any(route.path == "/api/v2/household/challenge/weekly" for route in all_routes()))
+        self.assertTrue(any(route.path == "/api/v2/household/wishlist" for route in all_routes()))
         self.assertIn("handlers/household.py", (ROOT / "runtime_modules.txt").read_text())
 
 

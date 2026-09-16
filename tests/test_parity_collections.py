@@ -8,10 +8,14 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from pkg.parity.parity_collections import (  # noqa: E402
+    EXPORT_FORMAT,
     MAX_COLLECTIONS,
+    MAX_IMPORT_ITEMS,
     collections_with_counts,
     delete_collection,
     evaluate_collection,
+    export_collections,
+    import_collections,
     list_collections,
     save_collection,
 )
@@ -82,6 +86,50 @@ def test_evaluate_and_counts():
     save_collection(state, "Done", "beaten")
     counts = {item["name"]: item["count"] for item in collections_with_counts(state)}
     assert counts == {"PC": 2, "Done": 1}
+
+
+def test_export_import_round_trip():
+    state = _state()
+    save_collection(state, "Faves", "favorite")
+    save_collection(state, "PC", "platform:pc")
+    exported = export_collections(state)
+    assert exported["format"] == EXPORT_FORMAT
+    assert exported["collections"] == list_collections(state)
+
+    target = _state()
+    result = import_collections(target, exported["collections"])
+    assert result == {"imported": 2, "skipped": 0, "total": 2}
+    assert list_collections(target) == exported["collections"]
+
+
+def test_import_upserts_replaces_and_skips_invalid_rows():
+    state = _state()
+    save_collection(state, "Faves", "favorite")
+    save_collection(state, "Old", "retro")
+    result = import_collections(state, [
+        {"name": "Faves", "query": "platform:pc"},
+        {"name": "", "query": "x"},
+        "not-a-dict",
+    ])
+    assert result["imported"] == 1
+    assert result["skipped"] == 2
+    assert list_collections(state) == [
+        {"name": "Faves", "query": "platform:pc"},
+        {"name": "Old", "query": "retro"},
+    ]
+
+    replace = _state()
+    save_collection(replace, "Old", "retro")
+    result = import_collections(replace, [{"name": "New", "query": "beaten"}], replace=True)
+    assert result["imported"] == 1
+    assert list_collections(replace) == [{"name": "New", "query": "beaten"}]
+
+    try:
+        import_collections(state, [{"name": f"c{i}", "query": "x"} for i in range(MAX_IMPORT_ITEMS + 1)])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("import cap not enforced")
 
 
 if __name__ == "__main__":

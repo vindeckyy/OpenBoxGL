@@ -75,6 +75,20 @@ GATES_20K = {
     "constellation_build_ms_p95": 1500.0,
 }
 
+# 50,000-game tier (opt-in via --sizes 50000): exploratory scale headroom.
+# Budgets mirror the 20k gates with doubled limits where the 2026-09-16 run
+# showed real growth (picker/constellation), so a true regression still trips.
+GATES_50K = {
+    "library_ms_p95": 4000.0,
+    "library_gzip_ms_p95": 2000.0,
+    "favorite_mutation_ms_p95": 4000.0,
+    "filtered_query_ms_p95": 2000.0,
+    "facet_ms_p95": 2000.0,
+    "50k_write_ms_p95": 2500.0,
+    "picker_score_ms_p95": 2500.0,
+    "constellation_build_ms_p95": 2000.0,
+}
+
 
 def _effective_gates(gates: dict[str, float]) -> dict[str, float]:
     """Relax gates on GitHub-hosted runners where IO is slower than dev hardware."""
@@ -406,6 +420,8 @@ def _check_size_gates(results, size_key: str, gates: dict, label: str) -> list[s
             write_gate_key = "10k_write_ms_p95"
         elif size_key == "20000":
             write_gate_key = "20k_write_ms_p95"
+        elif size_key == "50000":
+            write_gate_key = "50k_write_ms_p95"
         if wp.get("runs", 0) >= 1 and "p95_ms" in wp:
             gate = gates.get(write_gate_key)
             if gate is not None and wp["p95_ms"] > gate:
@@ -415,19 +431,23 @@ def _check_size_gates(results, size_key: str, gates: dict, label: str) -> list[s
         else:
             detail = wp.get("error", "no successful runs")
             failures.append(f"{write_key} missing p95_ms at {label}: {detail}")
-    else:
+    elif int(size_key) < 50000:
+        # The 50k write tier is opt-in (disk-heavy); the read tier never
+        # requires it.
         failures.append(f"missing {label} write-path benchmark: {write_key}")
 
     return failures
 
 
 def _check_gates(results):
-    """Enforce non-regression gates for 10k and 20k library sizes when present."""
+    """Enforce non-regression gates for 10k, 20k, and 50k library sizes when present."""
     failures: list[str] = []
     if "10000" in results:
         failures.extend(_check_size_gates(results, "10000", _effective_gates(GATES_10K), "10,000 games"))
     if "20000" in results:
         failures.extend(_check_size_gates(results, "20000", _effective_gates(GATES_20K), "20,000 games"))
+    if "50000" in results:
+        failures.extend(_check_size_gates(results, "50000", _effective_gates(GATES_50K), "50,000 games"))
     return failures
 
 
@@ -451,8 +471,13 @@ def main():
         print(f"benchmarking {size} games ({args.runs} runs per op) ...", flush=True)
         results[str(size)] = benchmark(data_dir, runs=args.runs)
 
-    # Write-path benchmark: measure favorite mutation at 10k and 20k.
-    for wsize in (10000, 20000):
+    # Write-path benchmark: measure favorite mutation at 10k and 20k (plus
+    # 50k when both requested and explicitly enabled, since it needs a second
+    # full 50k tree on disk).
+    write_sizes = [10000, 20000]
+    if "50000" in results and os.environ.get("OPENBOX_PERF_50K_WRITE") == "1":
+        write_sizes.append(50000)
+    for wsize in write_sizes:
         wdir = base / f"write-{wsize}"
         print(f"generating {wsize} games for write-path benchmark in {wdir} ...", flush=True)
         generate(wsize, wdir)

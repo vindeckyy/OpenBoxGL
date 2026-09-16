@@ -38,9 +38,7 @@ from pkg.parity.parity_emulator_defs import PLATFORM_EMULATORS as _PLATFORM_EMUL
 PLATFORM_EMULATORS = _PLATFORM_EMULATORS
 
 
-def _get_bios_hints():
-    """Return BIOS hints with runtime Path.home() calls (not frozen at import)."""
-    home = Path.home()
+def _build_bios_hints(home):
     return {
         "DuckStation": [
             ("PSX BIOS (scph1001.bin)", home / ".local/share/duckstation/bios"),
@@ -61,7 +59,36 @@ def _get_bios_hints():
     }
 
 
-BIOS_HINTS = _get_bios_hints()
+_BIOS_HINTS_LOCK = threading.Lock()
+_BIOS_HINTS_CACHE_KEY: tuple[str, str] | None = None
+BIOS_HINTS: dict = {}
+
+
+def _bios_hints_key() -> tuple[str, str]:
+    return (str(Path.home()), str(os.environ.get("OPENBOX_DATA_DIR") or ""))
+
+
+def bios_hints() -> dict:
+    """Return BIOS hints resolved against the current HOME and data dir.
+
+    The module-level :data:`BIOS_HINTS` map is refreshed in place whenever the
+    environment signature changes, so callers that cached a reference (and
+    tests that patch the map) keep seeing live entries.
+    """
+    global _BIOS_HINTS_CACHE_KEY
+    key = _bios_hints_key()
+    with _BIOS_HINTS_LOCK:
+        if key != _BIOS_HINTS_CACHE_KEY:
+            BIOS_HINTS.update(_build_bios_hints(Path.home()))
+            _BIOS_HINTS_CACHE_KEY = key
+    return BIOS_HINTS
+
+
+def reset_bios_hints() -> None:
+    """Force the next :func:`bios_hints` call to rebuild from the environment."""
+    global _BIOS_HINTS_CACHE_KEY
+    with _BIOS_HINTS_LOCK:
+        _BIOS_HINTS_CACHE_KEY = None
 
 
 DISC_RE = re.compile(
@@ -538,7 +565,7 @@ def import_vita3k(home=None):
 
 def detect_dependencies(emulator_name, home=None):
     home = Path(home or Path.home())
-    hints = BIOS_HINTS.get(emulator_name, [])
+    hints = bios_hints().get(emulator_name, [])
     required, missing = [], []
     for label, path in hints:
         path = Path(str(path).replace(str(Path.home()), str(home)))

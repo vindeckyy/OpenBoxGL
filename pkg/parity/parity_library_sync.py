@@ -535,6 +535,140 @@ def capture_sync_snapshot(state: dict[str, Any]) -> list[dict[str, Any]]:
     return snapshot
 
 
+# Markers used by the in-place edit tracker.  ``state_store.TrackedGame``
+# records the previous value of every assignment while a transaction is
+# active, so the journal can compare only the touched records instead of
+# projecting the whole catalog twice (P2-3).
+try:
+    from state_store import MISSING as _TRACK_MISSING
+except ImportError:  # pragma: no cover - state_store is always a sibling module
+    _TRACK_MISSING = object()
+
+
+def begin_catalog_tracking(state: dict[str, Any]) -> dict[int, dict[str, Any]]:
+    """Start recording in-place game edits for one transaction.
+
+    Returns an opaque token mapping object identity to the pre-transaction
+    record, holding a strong reference so id reuse cannot hide a replacement.
+    """
+    before: dict[int, dict[str, Any]] = {}
+    for game in _games(state):
+        before[id(game)] = game
+        if hasattr(game, "_openbox_sync_changes"):
+            game._openbox_sync_changes = {}
+    return before
+
+
+def _before_catalog(game: dict[str, Any], key: str) -> dict[str, Any]:
+    """Rebuild the pre-transaction catalog for one touched record."""
+    changes = getattr(game, "_openbox_sync_changes", None) or {}
+    catalog = {}
+    for field in CATALOG_FIELDS:
+        if field in changes:
+            value = changes[field]
+            if value is _TRACK_MISSING:
+                continue
+        elif field in game:
+            value = game[field]
+        else:
+            continue
+        if value is not None:
+            catalog[field] = value
+    if key.startswith("verified:") and not catalog.get("library_sync_id"):
+        catalog["library_sync_id"] = key.split(":", 1)[1]
+    return build_catalog(catalog)
+
+
+def record_tracked_changes(state: dict[str, Any], tracking: dict[int, dict[str, Any]], *,
+                           now: str | None = None, device: str | None = None) -> dict[str, Any]:
+    """Journal only the records touched during a tracked transaction.
+
+    ``tracking`` is the token returned by :func:`begin_catalog_tracking`.
+    Unchanged records are never projected, so a settings-only write performs
+    no catalog work at all.
+    """
+    after_games = _games(state)
+    changed: dict[str, tuple[dict[str, Any] | None, dict[str, Any] | None]] = {}
+    seen: set[int] = set()
+    for game in after_games:
+        seen.add(id(game))
+        old = tracking.get(id(game))
+        touched = getattr(game, "_openbox_sync_changes", None)
+        if old is not None and old is game and not touched:
+            continue
+        key = stable_sync_key(game)
+        if key in changed:
+            raise SyncValidationError(f"Duplicate local sync identity: {key}")
+        changed[key] = (old, game)
+    for identity, old in tracking.items():
+        if identity in seen:
+            continue
+        key = stable_sync_key(old)
+        if key in changed:
+            raise SyncValidationError(f"Duplicate local sync identity: {key}")
+        changed[key] = (old, None)
+    if not changed:
+        # No touched record means no catalog projection and no metadata
+        # mutation at all; the journal only exists once something changes.
+        for game in after_games:
+            if getattr(game, "_openbox_sync_changes", None) is not None:
+                game._openbox_sync_changes = None
+        for old in tracking.values():
+            if getattr(old, "_openbox_sync_changes", None) is not None:
+                old._openbox_sync_changes = None
+        metadata = state.get(SYNC_METADATA_KEY)
+        outbox = metadata.get("outbox", []) if isinstance(metadata, dict) else []
+        return {"events": [], "outbox": copy.deepcopy(outbox), "changed": 0}
+    # Build catalogs before releasing per-record tracking state; the before
+    # projection needs the stashed previous values.
+    before_map = {}
+    after_map = {}
+    for key, (old, new) in changed.items():
+        before_map[key] = _before_catalog(old, key) if old is not None else None
+        after_map[key] = _catalog_for_sync_key(new, key) if new is not None else None
+    for game in after_games:
+        if getattr(game, "_openbox_sync_changes", None) is not None:
+            game._openbox_sync_changes = None
+    for old in tracking.values():
+        if getattr(old, "_openbox_sync_changes", None) is not None:
+            old._openbox_sync_changes = None
+    return _record_catalog_maps(state, before_map, after_map, now=now, device=device)
+
+
+def _record_catalog_maps(state: dict[str, Any], before_map: dict[str, Any], after_map: dict[str, Any], *,
+                         now: str | None = None, device: str | None = None) -> dict[str, Any]:
+    """Create events for pre-built before/after catalogs (None means deleted)."""
+    metadata = _metadata(state)
+    device = device or ensure_device_id(state)
+    heads = metadata.setdefault("heads", {})
+    if not isinstance(heads, dict):
+        raise SyncValidationError("Library sync heads are invalid.")
+    created = now or _utc_now()
+    generated = []
+    for key in sorted(set(before_map) | set(after_map)):
+        old_catalog = before_map.get(key)
+        new_catalog = after_map.get(key)
+        if old_catalog is not None and new_catalog is not None and old_catalog == new_catalog:
+            continue
+        prior = heads.get(key, [])
+        if not isinstance(prior, list):
+            raise SyncValidationError("Library sync head history is invalid.")
+        event = make_event(
+            device_id=device,
+            sequence=_next_sequence(metadata),
+            sync_key=key,
+            parents=prior,
+            catalog=new_catalog,
+            tombstone=new_catalog is None,
+            created_at=created,
+        )
+        _append_event(metadata, event)
+        heads[key] = [event["event_id"]]
+        generated.append(copy.deepcopy(event))
+    return {"events": generated, "outbox": copy.deepcopy(metadata["outbox"]), "changed": len(generated)}
+
+
+
 
 
 
@@ -682,41 +816,19 @@ def record_local_changes(state: dict[str, Any] | Any, before: Any = None, after:
             raise SyncValidationError("Record-local-changes arguments are invalid.")
     if not isinstance(state, dict) or before is None or after is None:
         raise SyncValidationError("Record-local-changes requires before and after snapshots.")
-    metadata = _metadata(state)
     device = device or ensure_device_id(state)
     before_projected = isinstance(before, CatalogSnapshot)
     after_projected = isinstance(after, CatalogSnapshot)
     before_map = _game_map(_games(before), projected=before_projected)
     after_map = _game_map(_games(after), projected=after_projected)
-    all_keys = sorted(set(before_map) | set(after_map))
-    heads = metadata.setdefault("heads", {})
-    if not isinstance(heads, dict):
-        raise SyncValidationError("Library sync heads are invalid.")
-    created = now or _utc_now()
-    generated = []
-    for key in all_keys:
+    before_catalogs = {}
+    after_catalogs = {}
+    for key in set(before_map) | set(after_map):
         old = before_map.get(key)
         new = after_map.get(key)
-        old_catalog = _catalog_for_sync_key(old, key, projected=before_projected) if old else None
-        new_catalog = _catalog_for_sync_key(new, key, projected=after_projected) if new else None
-        if old is not None and new is not None and old_catalog == new_catalog:
-            continue
-        prior = heads.get(key, [])
-        if not isinstance(prior, list):
-            raise SyncValidationError("Library sync head history is invalid.")
-        event = make_event(
-            device_id=device,
-            sequence=_next_sequence(metadata),
-            sync_key=key,
-            parents=prior,
-            catalog=new_catalog,
-            tombstone=new is None,
-            created_at=created,
-        )
-        _append_event(metadata, event)
-        heads[key] = [event["event_id"]]
-        generated.append(copy.deepcopy(event))
-    return {"events": generated, "outbox": copy.deepcopy(metadata["outbox"]), "changed": len(generated)}
+        before_catalogs[key] = _catalog_for_sync_key(old, key, projected=before_projected) if old else None
+        after_catalogs[key] = _catalog_for_sync_key(new, key, projected=after_projected) if new else None
+    return _record_catalog_maps(state, before_catalogs, after_catalogs, now=now, device=device)
 
 
 

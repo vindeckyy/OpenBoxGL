@@ -6,11 +6,14 @@ import threading
 import time
 from pathlib import Path
 
-from saves import discover_save_paths, list_backups
+from saves import discover_save_paths, list_backups, retroarch_indices
 
 
 _SAVE_CACHE_LOCK = threading.RLock()
 _SAVE_CACHE = {"at": 0.0, "signature": None, "indices": []}
+# Save trees change rarely; keep the scan result for longer than the old 2 s
+# and rebuild only when the per-game identity signature changes (P2-5).
+SAVE_SCAN_TTL = 300.0
 
 
 def extra_save_candidates(game, home=None):
@@ -53,9 +56,10 @@ def enforce_backup_limit(game, root, max_backups):
 def scan_all_saves(games, home=None):
     home = Path(home or Path.home())
     found = {}
+    retro_indices = retroarch_indices(home)
     for index, game in enumerate(games):
         paths = []
-        for item in discover_save_paths(game, home=home):
+        for item in discover_save_paths(game, home=home, retro_indices=retro_indices):
             paths.append(item["path"])
         for item in extra_save_candidates(game, home=home):
             if item["path"] not in paths:
@@ -77,7 +81,7 @@ def games_with_saves(games, home=None):
         for index, game in enumerate(games)
     ) + (home_key,)
     with _SAVE_CACHE_LOCK:
-        if _SAVE_CACHE["signature"] == signature and time.monotonic() - _SAVE_CACHE["at"] < 2:
+        if _SAVE_CACHE["signature"] == signature and time.monotonic() - _SAVE_CACHE["at"] < SAVE_SCAN_TTL:
             return list(_SAVE_CACHE["indices"])
     scanned = scan_all_saves(games, home=home)
     indices = set(scanned)

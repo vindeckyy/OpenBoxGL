@@ -85,6 +85,25 @@ class SetupHandlerTests(unittest.TestCase):
         self.tempdir.cleanup()
         os.environ.pop("OPENBOX_DATA_DIR", None)
 
+    def test_checklists_route_returns_per_platform_cards(self):
+        state = {
+            "games": [
+                {"game_id": "g1", "name": "One", "platform": "NES", "path": str(self.data_dir / "ready.nes"), "launch": "retroarch {path}", "cover": "cover.png"},
+            ]
+        }
+        handler = DummySetupHandler()
+        with mock.patch("handlers.setup.load_state", return_value=state):
+            handler._api_get_api_v2_setup_checklists(mock.Mock(query=""))
+        status, payload, _kwargs = handler.responses[-1]
+        self.assertEqual(status, 200)
+        self.assertEqual(len(payload["platforms"]), 1)
+        card = payload["platforms"][0]
+        self.assertEqual(card["platform"], "NES")
+        self.assertEqual(card["checks"]["emulator"]["state"], "ok")
+        self.assertEqual(card["checks"]["launch"]["state"], "ok")
+        self.assertEqual(card["checks"]["artwork"]["state"], "ok")
+        self.assertIn("summary", payload)
+
     def test_summary_contains_required_keys_and_readiness_buckets(self):
         handler = DummySetupHandler()
         with mock.patch("handlers.setup.load_state"), mock.patch(

@@ -673,7 +673,9 @@ class TestMediaRangeStatus(unittest.TestCase):
 
         class Handler(_FakeMediaHandler, MediaHandlers):
             def send_file(self, status, path, content_type=None, extra_headers=None):
-                raise ValueError("Invalid byte range.")
+                from api_errors import RangeParseError
+
+                raise RangeParseError("Invalid byte range.")
 
         handler = Handler()
         parsed = urllib.parse.urlparse("/api/media?id=0&kind=cover")

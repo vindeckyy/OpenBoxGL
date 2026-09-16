@@ -15,12 +15,17 @@ import { captureMomentInteractive } from './moments.js';
 const HINT_DISMISS_AFTER_MS = 6000;
 
 // One source of truth for keyboard help.  The palette consumes this table for
-// its ``?`` view, so shortcuts shown to users cannot drift from navigation.
+// its ``?`` view and the shortcuts cheat sheet groups it for the dialog, so
+// shortcuts shown to users cannot drift from navigation.
 export const SHORTCUTS = Object.freeze([
-  { key: 'Ctrl/Cmd+K', labelKey: 'shortcuts.command_palette' },
-  { key: 'M', labelKey: 'shortcuts.capture_moment' },
-  { key: 'F', labelKey: 'shortcuts.favorite_focused' },
-  { key: 'Esc', labelKey: 'shortcuts.close_selection' },
+  { key: 'Ctrl/Cmd+K', labelKey: 'shortcuts.command_palette', group: 'shortcuts.group_global' },
+  { key: '?', labelKey: 'shortcuts.show_shortcuts', group: 'shortcuts.group_global' },
+  { key: 'M', labelKey: 'shortcuts.capture_moment', group: 'shortcuts.group_library' },
+  { key: 'F', labelKey: 'shortcuts.favorite_focused', group: 'shortcuts.group_library' },
+  { key: 'Arrow keys', labelKey: 'shortcuts.navigate_grid', group: 'shortcuts.group_library' },
+  { key: 'Page Up / Page Down', labelKey: 'shortcuts.page_games', group: 'shortcuts.group_library' },
+  { key: 'Home / End', labelKey: 'shortcuts.first_last', group: 'shortcuts.group_library' },
+  { key: 'Esc', labelKey: 'shortcuts.close_selection', group: 'shortcuts.group_library' },
 ]);
 
 function navigationBlocked() {

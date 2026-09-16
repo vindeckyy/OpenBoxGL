@@ -1,5 +1,5 @@
-import { $, escapeHtml, defaultControllerMap, recentActivityValue } from './util.js';
-import { AppState, media, filteredGames, api, notify, nativeFullscreen, nativeFullscreenOn } from './state.js';
+import { $, escapeHtml, defaultControllerMap, recentActivityValue, formatDate } from './util.js';
+import { AppState, media, filteredGames, api, notify, nativeFullscreen, nativeFullscreenOn, notifyError } from './state.js';
 import { refresh } from './library.js';
 import { launch, openSessions } from './sessions.js';
 import { openReader } from './reader.js';
@@ -68,6 +68,9 @@ import { captureClip } from './clips.js';
     function closeBigBox() {
       stopScreenSaver();
       stopGamepadPoll();
+      // The overlay is hidden, not removed: a snap left playing here kept its
+      // audio alive (and the BGM ducked) after Big Box closed.
+      clearVideoSnap();
       $('bigBoxMenu').hidden = true;
       $('bigBox').hidden = true;
       if ($('bigBoxStartupVideo')) { $('bigBoxStartupVideo').pause(); $('bigBoxStartupVideo').hidden = true; }
@@ -265,7 +268,7 @@ import { captureClip } from './clips.js';
       if (!session) return openSessions();
       const game = AppState.games.find(item => item.id === session.game_id);
       $('bigBoxPauseTitle').textContent = session.game;
-      $('bigBoxPauseMeta').textContent = `${session.paused ? 'Paused' : 'Running'} · started ${String(session.started || '').replace('T',' ')}`;
+      $('bigBoxPauseMeta').textContent = `${session.paused ? 'Paused' : 'Running'} · started ${formatDate(session.started)}`;
       $('bigBoxPauseActions').innerHTML = `<button class="primary" data-pause-action="${session.launch_id}:${session.paused ? 'resume' : 'pause'}">${session.paused ? 'Resume' : 'Pause'}</button><button class="icon-button" data-pause-action="${session.launch_id}:stop">Exit game</button>${game ? '<button class="icon-button" id="pauseMoment">Capture moment</button><button class="icon-button" id="pauseClip">Clip it</button>' : ''}${game?.documents.map((item,index) => `<button class="icon-button" data-pause-doc="${game.id}:${index}">Read ${escapeHtml(item.name)}</button>`).join('') || ''}${AppState.raConfigured ? `<button class="icon-button" id="pauseAchievements">Achievements</button>` : ''}`;
       document.querySelectorAll('[data-pause-action]').forEach(button => button.onclick = async () => {
         const [launch_id,action] = button.dataset.pauseAction.split(':');
@@ -279,7 +282,7 @@ import { captureClip } from './clips.js';
         if (targetGame) openReader(targetGame,Number(index));
       });
       if ($('pauseMoment')) $('pauseMoment').onclick = () => captureMomentInteractive(game, { trigger: 'pause', launchId: session.launch_id });
-      if ($('pauseClip')) $('pauseClip').onclick = async () => { try { await captureClip({ game, launchId: session.launch_id }); } catch (error) { notify(error.message); } };
+      if ($('pauseClip')) $('pauseClip').onclick = async () => { try { await captureClip({ game, launchId: session.launch_id }); } catch (error) { notifyError(error); } };
       if ($('pauseAchievements')) $('pauseAchievements').onclick = () => { $('bigBoxPause').hidden = true; openAchievements(); };
       $('bigBoxPause').hidden = false;
     }
@@ -317,7 +320,7 @@ import { captureClip } from './clips.js';
           if (!AppState.bigBoxGames.length) { closeBigBox(); notify('The current view is now empty'); return; }
           AppState.bigBoxIndex = Math.max(0,AppState.bigBoxGames.findIndex(g => g.id === game.id));
           renderBigBox();
-        } catch(error) { notify(error.message); }
+        } catch(error) { notifyError(error); }
       }
     }
     function pollGamepads() {
@@ -385,7 +388,9 @@ import { captureClip } from './clips.js';
         if (Object.keys(current).some(edge)) AppState.bigBoxLastInput = performance.now();
         AppState.gamepadState = current;
       }
-      if ($('screenSaver').hidden && $('bigBoxMenu').hidden && (() => {
+      // Attract mode must not cover an open overlay: the pause panel and the
+      // Party game-night overlay both own the screen while visible.
+      if ($('screenSaver').hidden && $('bigBoxMenu').hidden && $('bigBoxPause').hidden && !partyOverlayOpen() && (() => {
         const delay = Number(AppState.appSettings.attract_mode_seconds ?? AppState.appSettings.screensaver_seconds ?? 0);
         return delay && performance.now() - AppState.bigBoxLastInput >= delay * 1000;
       })()) startScreenSaver();

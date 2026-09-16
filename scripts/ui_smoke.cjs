@@ -929,13 +929,17 @@ const puppeteer = require('./node_modules/puppeteer');
     AppState.importBatchId = 'batch-a';
     state.resetQuery();
     results.resetClearsImportBatch = AppState.importBatchId === '';
-    const toast = document.getElementById('toast');
+    // notify() renders into the #toastQueue stack (one .toast per message)
+    // instead of the legacy single #toast element. Clear any leftover toasts
+    // first so the three assertions read the toasts they just created.
+    document.querySelectorAll('#toastQueue .toast').forEach(item => item.remove());
+    const latestToast = () => [...document.querySelectorAll('#toastQueue .toast')].at(-1);
     state.notify('success', 'ok-success');
-    results.notifySuccessLevel = toast.dataset.notifyLevel === 'success';
+    results.notifySuccessLevel = latestToast()?.dataset.notifyLevel === 'success';
     state.notify('Preset deleted');
-    results.notifyCompatInfo = toast.dataset.notifyLevel === 'info' && toast.textContent === 'Preset deleted';
+    results.notifyCompatInfo = latestToast()?.dataset.notifyLevel === 'info' && latestToast()?.textContent === 'Preset deleted';
     state.notify('error');
-    results.notifySingleErrorLevel = toast.dataset.notifyLevel === 'error';
+    results.notifySingleErrorLevel = latestToast()?.dataset.notifyLevel === 'error';
     document.getElementById('errorBanner').hidden = true;
     state.notify('error', 'sticky failure', {actionable: true});
     results.stickyErrorVisible = !document.getElementById('errorBanner').hidden;
@@ -1206,8 +1210,8 @@ const puppeteer = require('./node_modules/puppeteer');
     document.getElementById('a11yInputCancel')?.click();
     await new Promise(r => setTimeout(r, 200));
     results.libraryUnchanged = AppState.games.length === beforeCount;
-    const toast = document.getElementById('toast');
-    results.noImportToast = !/imported/i.test(toast?.textContent || '');
+    const toastText = [...document.querySelectorAll('#toastQueue .toast, #toast')].map(item => item.textContent).join(' ');
+    results.noImportToast = !/imported/i.test(toastText);
     results.noRomBinFolder = !importBody || importBody.folder !== 'rom.bin';
     window.fetch = origFetch;
     return results;
@@ -1308,6 +1312,45 @@ const puppeteer = require('./node_modules/puppeteer');
   });
   hardening.filter = {...hardening.filter, ...filterResult};
   console.log('rapid filter:', JSON.stringify(hardening.filter));
+
+  // M7: action toasts, the generated shortcuts cheat sheet, and the repair UI.
+  const m7 = await page.evaluate(async () => {
+    const state = await import('/static/state.js');
+    const results = {};
+    document.querySelectorAll('#toastQueue .toast').forEach(item => item.remove());
+    let acted = false;
+    state.notifyAction('Undo me', {label: 'Undo', duration: 60000, onAction: () => { acted = true; }});
+    const toast = [...document.querySelectorAll('#toastQueue .toast')].at(-1);
+    results.actionToast = Boolean(toast?.querySelector('.trash-undo'));
+    toast?.querySelector('.trash-undo')?.click();
+    results.actionRan = acted;
+    return results;
+  });
+  const m7Ui = await page.evaluate(async () => {
+    const results = {};
+    const { openShortcutCheatSheet } = await import('/static/palette.js');
+    openShortcutCheatSheet();
+    await new Promise(r => setTimeout(r, 200));
+    const dialog = document.getElementById('shortcutsDialog');
+    results.shortcutsOpen = dialog?.open === true;
+    results.shortcutGroups = dialog?.querySelectorAll('.shortcut-group').length || 0;
+    results.shortcutRows = dialog?.querySelectorAll('.shortcut-row').length || 0;
+    dialog?.close();
+    document.dispatchEvent(new CustomEvent('app:open-repair-wizard'));
+    await new Promise(r => setTimeout(r, 500));
+    const repair = document.getElementById('repairDialog');
+    results.repairOpen = repair?.open === true;
+    results.repairRendered = Boolean(document.getElementById('repairBody')?.textContent.trim());
+    repair?.close();
+    document.dispatchEvent(new CustomEvent('app:open-duplicates'));
+    await new Promise(r => setTimeout(r, 500));
+    const duplicates = document.getElementById('duplicatesDialog');
+    results.duplicatesOpen = duplicates?.open === true;
+    results.duplicatesRendered = Boolean(document.getElementById('duplicatesBody')?.textContent.trim());
+    duplicates?.close();
+    return results;
+  });
+  console.log('m7 ui:', JSON.stringify({...m7, ...m7Ui}));
 
   if (perfChecks.coverflowNodes > 11) process.exit(1);
   if (!perfChecks.gridNodeCount) process.exit(1);
@@ -1474,5 +1517,9 @@ const puppeteer = require('./node_modules/puppeteer');
   if (!hardening.deleteSelected.ok || !hardening.deleteSelected.selectedCleared) process.exit(1);
   if (!hardening.deleteSelected.countDropped || hardening.deleteSelected.staleDetails) process.exit(1);
   if (!hardening.filter.consistent || !hardening.filter.cardsRendered) process.exit(1);
+  if (!m7.actionToast || !m7.actionRan) process.exit(1);
+  if (!m7Ui.shortcutsOpen || !m7Ui.shortcutGroups || !m7Ui.shortcutRows) process.exit(1);
+  if (!m7Ui.repairOpen || !m7Ui.repairRendered) process.exit(1);
+  if (!m7Ui.duplicatesOpen || !m7Ui.duplicatesRendered) process.exit(1);
   console.log('UI SMOKE PASSED');
 })().catch(e => { console.error('SMOKE FAIL', e.message); process.exit(1); });

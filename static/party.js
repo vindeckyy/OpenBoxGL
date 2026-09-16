@@ -1,7 +1,7 @@
 /* party.js — Game Night Big Box party mode: setup, wheel, up-next, launch. */
 import { $, escapeHtml } from './util.js';
 import { t } from './i18n.js';
-import { AppState, api, media, notify } from './state.js';
+import { AppState, api, media, notify, notifyError } from './state.js';
 import { launch } from './sessions.js';
 
 const WHEEL_COLORS = ['var(--brand)', 'var(--accent)', 'var(--active)', 'var(--focus)'];
@@ -17,6 +17,10 @@ let spun = false;
 let spinning = false;
 let currentRotation = 0;
 let keyHandler = null;
+let preset = '';
+let presets = [];
+let decks = [];
+let decksLoaded = false;
 
 function partyOverlayOpen() {
   return Boolean($('partyOverlay') && !$('partyOverlay').hidden && !$('bigBox').hidden);
@@ -41,6 +45,7 @@ function openParty() {
   if ($('bigBoxMenu')) $('bigBoxMenu').hidden = true;
   players = clampPlayers(AppState.appSettings.party_players || 2);
   minutes = 0;
+  preset = '';
   queue = [];
   queueIndex = 0;
   queueGames = [];
@@ -48,6 +53,7 @@ function openParty() {
   spinning = false;
   $('partyOverlay').hidden = false;
   renderSetup();
+  if (!decksLoaded) refreshDecks();
   if (!keyHandler) {
     keyHandler = event => partyKeydown(event);
     // Capture phase: the overlay swallows keys so Big Box navigation
@@ -152,6 +158,37 @@ function primaryAction() {
   launchWinner();
 }
 
+function presetOptions() {
+  const options = [`<option value="">${escapeHtml(t('party.preset_none'))}</option>`];
+  for (const item of presets) {
+    options.push(`<option value="${escapeHtml(item.id)}"${item.id === preset ? ' selected' : ''}>${escapeHtml(t(item.label_key))}</option>`);
+  }
+  return options.join('');
+}
+
+function deckListHtml() {
+  if (!decks.length) return `<p class="description">${escapeHtml(t('party.deck_none'))}</p>`;
+  return decks.map(deck => {
+    const meta = `${escapeHtml(String(deck.players))} ${escapeHtml(t('party.players'))} · ${escapeHtml(String(deck.game_ids.length))} ${escapeHtml(t('party.games_short'))}${deck.preset ? ` · ${escapeHtml(t(`party.preset_${deck.preset}`))}` : ''}`;
+    return `<article class="party-deck" data-deck-id="${escapeHtml(deck.deck_id)}"><div><strong>${escapeHtml(deck.name)}</strong>${deck.shared ? ` <span class="badge">${escapeHtml(t('party.imported_badge'))}</span>` : ''}<span class="description">${meta}<br>${escapeHtml(t('party.deck_seed'))}: ${escapeHtml(deck.seed.slice(0, 12))}</span></div><div class="dialog-actions"><button type="button" class="icon-button" data-deck-load="${escapeHtml(deck.deck_id)}">${escapeHtml(t('party.load_deck'))}</button><button type="button" class="icon-button" data-deck-share="${escapeHtml(deck.deck_id)}">${escapeHtml(t('party.share_deck'))}</button><button type="button" class="icon-button" data-deck-delete="${escapeHtml(deck.deck_id)}">${escapeHtml(t('party.delete_deck'))}</button></div></article>`;
+  }).join('');
+}
+
+function renderDeckList() {
+  const list = $('partyDeckList');
+  if (!list) return;
+  list.innerHTML = deckListHtml();
+  list.querySelectorAll('[data-deck-load]').forEach(button => {
+    button.onclick = () => loadDeck(button.dataset.deckLoad);
+  });
+  list.querySelectorAll('[data-deck-share]').forEach(button => {
+    button.onclick = () => shareDeck(button.dataset.deckShare);
+  });
+  list.querySelectorAll('[data-deck-delete]').forEach(button => {
+    button.onclick = () => removeDeck(button.dataset.deckDelete);
+  });
+}
+
 function setupHtml() {
   const lengthOptions = SESSION_LENGTHS.map(m =>
     `<option value="${m}"${m === minutes ? ' selected' : ''}>${m === 0 ? escapeHtml(t('party.minutes_any')) : `${m} min`}</option>`).join('');
@@ -163,11 +200,16 @@ function setupHtml() {
         <span class="party-stepper"><button type="button" id="partyFewer" aria-label="−">−</button><strong id="partyPlayers">${players}</strong><button type="button" id="partyMore" aria-label="+">+</button></span>
       </label>
       <label class="field"><span>${escapeHtml(t('party.minutes'))}</span><select id="partyMinutes">${lengthOptions}</select></label>
+      <label class="field"><span>${escapeHtml(t('party.preset'))}</span><select id="partyPreset">${presetOptions()}</select></label>
+      <label class="field"><span>${escapeHtml(t('party.deck_name'))}</span><input id="partyDeckName" maxlength="80" placeholder="${escapeHtml(t('party.deck_name_placeholder'))}"></label>
     </div>
     <div class="dialog-actions">
       <button type="button" class="icon-button" id="closeParty2">${escapeHtml(t('party.close'))}</button>
+      <button type="button" class="icon-button" id="partySaveDeck">${escapeHtml(t('party.save_deck'))}</button>
+      <button type="button" class="icon-button" id="partyImportDecks">${escapeHtml(t('party.import_decks'))}</button>
       <button type="button" class="primary" id="partyBuild">${escapeHtml(t('party.build'))}</button>
     </div>
+    <div class="party-decks"><h3>${escapeHtml(t('party.decks'))}</h3><div id="partyDeckList" class="party-deck-list">${deckListHtml()}</div></div>
     <div id="partyStatus" class="description" role="status"></div>
   </div>`;
 }
@@ -202,7 +244,95 @@ function renderSetup() {
   $('partyFewer').onclick = () => { players = clampPlayers(players - 1); renderSetup(); $('partyBuild')?.focus(); };
   $('partyMore').onclick = () => { players = clampPlayers(players + 1); renderSetup(); $('partyBuild')?.focus(); };
   $('partyMinutes').onchange = event => { minutes = Number(event.target.value) || 0; };
+  $('partyPreset').onchange = event => { preset = event.target.value || ''; };
+  $('partySaveDeck').onclick = () => saveDeck();
+  $('partyImportDecks').onclick = () => importDecks();
   $('partyBuild').onclick = () => buildQueue();
+  renderDeckList();
+}
+
+async function refreshDecks() {
+  try {
+    const result = await api('/api/v2/party/decks');
+    decks = Array.isArray(result.decks) ? result.decks : [];
+    presets = Array.isArray(result.presets) ? result.presets : [];
+    decksLoaded = true;
+    if (isSetupView()) renderSetup();
+  } catch (error) {
+    decksLoaded = false;
+    if (isSetupView()) renderDeckList();
+    notifyError(error);
+  }
+}
+
+function partyStatus(message) {
+  const status = $('partyStatus');
+  if (status) status.textContent = message;
+}
+
+async function saveDeck() {
+  const name = ($('partyDeckName')?.value || '').trim();
+  if (!name) {
+    partyStatus(t('party.deck_name_required'));
+    return;
+  }
+  try {
+    const result = await api('/api/v2/party/decks', {
+      method: 'POST',
+      body: JSON.stringify({ name, players, minutes, preset }),
+    });
+    decks = [result.deck, ...decks.filter(deck => deck.deck_id !== result.deck.deck_id)];
+    partyStatus(t('party.deck_saved', { name: result.deck.name }));
+    renderSetup();
+  } catch (error) { notifyError(error); }
+}
+
+async function loadDeck(deckId) {
+  try {
+    const result = await api('/api/v2/party/decks/load', { method: 'POST', body: JSON.stringify({ deck_id: deckId }) });
+    queue = Array.isArray(result.queue) ? result.queue.map(String) : [];
+    queueIndex = 0;
+    players = clampPlayers(result.deck?.players);
+    minutes = Number(result.deck?.minutes) || 0;
+    preset = result.deck?.preset || '';
+    spun = false;
+    if (!queue.length) {
+      partyStatus(t('party.empty'));
+      return;
+    }
+    resolveQueueGames();
+    if (!queueGames.length) {
+      partyStatus(t('party.empty'));
+      queue = [];
+      return;
+    }
+    renderWheel();
+  } catch (error) { notifyError(error); }
+}
+
+async function removeDeck(deckId) {
+  try {
+    await api('/api/v2/party/decks/delete', { method: 'POST', body: JSON.stringify({ deck_id: deckId }) });
+    decks = decks.filter(deck => deck.deck_id !== deckId);
+    partyStatus(t('party.deck_deleted'));
+    renderSetup();
+  } catch (error) { notifyError(error); }
+}
+
+async function shareDeck(deckId) {
+  try {
+    await api('/api/v2/party/decks/share', { method: 'POST', body: JSON.stringify({ deck_id: deckId }) });
+    partyStatus(t('party.deck_shared'));
+    await refreshDecks();
+  } catch (error) { notifyError(error); }
+}
+
+async function importDecks() {
+  try {
+    const result = await api('/api/v2/party/decks/import', { method: 'POST', body: '{}' });
+    partyStatus(t('party.decks_imported', { count: result.imported || 0 }));
+    await refreshDecks();
+  } catch (error) { notifyError(error); }
 }
 
 async function buildQueue() {
@@ -213,13 +343,13 @@ async function buildQueue() {
   try {
     const result = await api('/api/v2/party/queue', {
       method: 'POST',
-      body: JSON.stringify({ players, minutes }),
+      body: JSON.stringify({ players, minutes, preset }),
     });
     queue = Array.isArray(result.queue) ? result.queue.map(String) : [];
     queueIndex = 0;
     spun = false;
     if (!queue.length) {
-      if (status) status.textContent = result.empty_reason || t('party.empty');
+      if (status) status.textContent = result.empty_reason ? t(result.empty_reason) : t('party.empty');
       return;
     }
     resolveQueueGames();
@@ -231,7 +361,7 @@ async function buildQueue() {
     renderWheel();
   } catch (error) {
     if (status) status.textContent = error.message;
-    else notify(error.message);
+    else notifyError(error);
   } finally {
     spinning = false;
   }
@@ -348,7 +478,7 @@ async function nextRound() {
     spun = false;
     renderWheel();
   } catch (error) {
-    notify(error.message);
+    notifyError(error);
   } finally {
     spinning = false;
   }

@@ -18,6 +18,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+if str(Path(__file__).resolve().parent.parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from scripts.git_diff_base import DiffBaseUnresolved, resolve_diff_base
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -26,21 +30,21 @@ def _run(command: list[str], cwd: Path = ROOT) -> subprocess.CompletedProcess[st
 
 
 def _diff_base(ref: str | None) -> str:
-    if ref:
-        return ref.strip()
-    upstream = _run(["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
-    if upstream.returncode == 0 and upstream.stdout.strip():
-        merge = _run(["git", "merge-base", "HEAD", upstream.stdout.strip()])
-        if merge.returncode == 0 and merge.stdout.strip():
-            return merge.stdout.strip()
-    head = _run(["git", "rev-parse", "HEAD"])
-    return head.stdout.strip() if head.returncode == 0 else "HEAD"
+    base = resolve_diff_base(ref, run=_run)
+    if base is None:
+        raise DiffBaseUnresolved(
+            "no diff base: pass --diff-base, set OPENBOX_DIFF_BASE, add an "
+            "upstream, or fetch origin. Use OPENBOX_DIFF_BASE=HEAD to skip."
+        )
+    return base
 
 
 def _changed_python_files(base: str) -> list[str]:
     diff = _run(["git", "diff", "--name-only", f"{base}...HEAD", "--", "*.py"])
     if diff.returncode != 0:
         diff = _run(["git", "diff", "--name-only", base, "HEAD", "--", "*.py"])
+    if diff.returncode != 0:
+        raise RuntimeError(f"git diff against base {base} failed: {diff.stderr.strip()}")
     files = [line.strip() for line in diff.stdout.splitlines() if line.strip()]
     return sorted(files)
 
@@ -49,6 +53,8 @@ def _changed_line_numbers(base: str, rel_path: str) -> set[int]:
     diff = _run(["git", "diff", "-U0", f"{base}...HEAD", "--", rel_path])
     if diff.returncode != 0:
         diff = _run(["git", "diff", "-U0", base, "HEAD", "--", rel_path])
+    if diff.returncode != 0:
+        raise RuntimeError(f"git diff against base {base} failed for {rel_path}: {diff.stderr.strip()}")
     lines: set[int] = set()
     current_file = None
     for raw in diff.stdout.splitlines():
@@ -155,8 +161,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     include = {item.strip() for item in args.include.split(",") if item.strip()}
-    base = _diff_base(args.diff_base)
-    changed_files = _changed_python_files(base)
+    try:
+        base = _diff_base(args.diff_base)
+        changed_files = _changed_python_files(base)
+    except (DiffBaseUnresolved, RuntimeError) as exc:
+        print(f"check_changed_coverage: {exc}", file=sys.stderr)
+        return 1
     if include:
         changed_files = [path for path in changed_files if path in include]
     if not changed_files:
@@ -175,7 +185,11 @@ def main(argv: list[str] | None = None) -> int:
 
     for rel_path in changed_files:
         abs_path = str((ROOT / rel_path).resolve())
-        changed_lines = _changed_line_numbers(base, rel_path)
+        try:
+            changed_lines = _changed_line_numbers(base, rel_path)
+        except RuntimeError as exc:
+            print(f"check_changed_coverage: {exc}", file=sys.stderr)
+            return 1
         if not changed_lines:
             continue
         try:

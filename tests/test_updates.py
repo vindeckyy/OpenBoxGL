@@ -215,6 +215,58 @@ def main():
             assert link.is_symlink()
             assert real.read_bytes() == payload
 
+    # F14: background download stages the verified AppImage for the next start,
+    # reports honest byte progress, and cancels without touching the current file.
+    from updates import background_download_update
+
+    class HeaderedResponse(Response):
+        headers = {"Content-Length": str(len(payload))}
+
+    def progress_opener(request, timeout=0):
+        response = opener(request, timeout)
+        if request.full_url.endswith(ASSET):
+            response.headers = HeaderedResponse.headers
+        return response
+
+    with mock.patch("updates._release_public_key", return_value=public_key):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / ASSET
+            destination.write_bytes(b"old appimage")
+            seen = []
+            staged = background_download_update(
+                update, destination, progress_opener,
+                progress=lambda downloaded, total: seen.append((downloaded, total)),
+            )
+            assert destination.read_bytes() == payload
+            assert staged["bytes"] == len(payload)
+            assert seen and seen[-1] == (len(payload), len(payload))
+            assert Path(staged["backup"]).read_bytes() == b"old appimage"
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / ASSET
+            destination.write_bytes(b"old appimage")
+            calls = {"count": 0}
+
+            def cancelled():
+                calls["count"] += 1
+                return calls["count"] > 1
+
+            try:
+                background_download_update(update, destination, opener, cancelled=cancelled)
+                raise AssertionError("cancelled download should fail")
+            except ValueError as error:
+                assert "cancel" in str(error).casefold()
+            assert destination.read_bytes() == b"old appimage"
+            assert not list(Path(directory).glob(".*.download"))
+    with mock.patch("updates._release_public_key", return_value=public_key):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / ASSET
+            destination.write_bytes(b"old appimage")
+            try:
+                background_download_update(dict(update, available=False), destination, opener)
+                raise AssertionError("unavailable update should fail")
+            except ValueError as error:
+                assert "up to date" in str(error).casefold()
+
     # '%' in the AppImage path must survive desktop-entry field codes.
     from updates import install_desktop_entry
     with tempfile.TemporaryDirectory() as directory:

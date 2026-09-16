@@ -1,9 +1,9 @@
 """Cache structures and cached projection builders for OpenBox library state."""
 
 from collections import OrderedDict
-import copy
 from dataclasses import dataclass, field
 import gzip
+import hashlib
 import json
 import logging
 import os
@@ -14,6 +14,7 @@ import time
 
 import openbox
 from openbox import DATA, load_state, load_state_readonly, update_state_with_result
+from state_store import snapshot_value
 from parity_backup import AUTO_BACKUP_KEEP
 from parity_collections import list_collections
 from parity_discovery import clear_discovery_cache, discovery_lists
@@ -42,7 +43,9 @@ STATE_LOCK = threading.Lock()
 
 FILE_PROBE_LOCK = threading.Lock()
 FILE_PROBE_TTL = 120.0
-FILE_PROBE_MAX = 20000
+# Media audits stat every field path of every game; the cache must hold at
+# least one full pass of a 20k+ library or it thrashes (P2-7).
+FILE_PROBE_MAX = 200000
 _KNOWN_MEDIA_MAX = 100000
 
 PLUGIN_LIBRARY_TTL = 30.0
@@ -572,6 +575,47 @@ def _ra_cache_record(game_id, data_parent):
     return value if isinstance(value, dict) else {}
 
 
+# Projected game fields that are not already part of the explicit cache key
+# below. The projection cache must key on content, never on object identity:
+# CPython recycles a dict's address after garbage collection, and transactions
+# mutate game dicts in place, so ``id(game)`` can serve a stale projection for
+# a different record. Collection fields are included wholesale because their
+# serialized output (documents, clips, screenshots, ...) is projected too.
+_PROJECTION_FINGERPRINT_FIELDS = (
+    "genre", "year", "developer", "publisher", "series", "collection",
+    "description", "launch", "launch_profile", "clear_logo", "fanart",
+    "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen",
+    "cart_front", "cart_back", "disc", "advertisement", "manual", "source",
+    "steam_app_id", "lutris_id", "install_dir", "heroic_app_id", "rom_name",
+    "clone_of", "set_type", "ra_hash", "launchbox_db_id", "archive_member",
+    "video", "music", "video_snap", "video_theme", "video_trailer",
+    "video_recording", "region", "play_mode", "sort_title", "added_at",
+    "max_players", "wikipedia_url", "video_url", "esrb", "broken",
+    "portable", "controller_support", "disc_count", "gameyfin_id",
+    "gameyfin_provider", "store_catalog", "store_installed", "owned",
+    "tracking_mode", "tracking_delay", "tracking_frequency",
+    "tracking_process_name", "igdb_id", "extract_archive",
+)
+_PROJECTION_FINGERPRINT_COLLECTIONS = (
+    "alternate_names", "applications", "clips", "custom_fields", "documents",
+    "legacy_game_ids", "memories", "moments", "save_paths", "screenshots",
+    "tags", "versions",
+)
+
+
+def _projection_fingerprint(game):
+    """Return a stable content hash for projected inputs not in the cache key."""
+    payload = [game.get(field) for field in _PROJECTION_FINGERPRINT_FIELDS]
+    payload.extend(game.get(field) for field in _PROJECTION_FINGERPRINT_COLLECTIONS)
+    try:
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=repr)
+    except (TypeError, ValueError):
+        # Plugin-decorated games can carry values JSON cannot encode (or
+        # circular references); a repr fingerprint still distinguishes them.
+        raw = repr(payload)
+    return hashlib.blake2b(raw.encode("utf-8", "replace"), digest_size=16).hexdigest()
+
+
 def _project_game(game, index, media_set, save_indices, video_priority, settings, media_epoch):
     from pkg.state.media_probe import probe_path, sanitize_document_records, sanitize_media_path
 
@@ -586,8 +630,9 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "earned", "earned_hardcore", "total", "progress_pct", "mastered",
     ))
 
+    priority_key = tuple(video_priority) if isinstance(video_priority, (list, tuple)) else video_priority
     ckey = (
-        id(game), index, media_epoch,
+        index, media_epoch,
         game.get("favorite"), game.get("hidden"), game.get("hide_in_bigbox"),
         game.get("last_played"), game.get("play_count"), game.get("playtime_seconds"),
         game.get("progress"), game.get("rating"), game.get("notes"),
@@ -603,6 +648,8 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         len(game.get("memories") or []),
         len(game.get("moments") or []),
         len(game.get("clips") or []),
+        priority_key,
+        _projection_fingerprint(game),
     )
     with _GAME_PROJECTION_LOCK:
         cached = _GAME_PROJECTION_CACHE.get(ckey)
@@ -1001,20 +1048,39 @@ def public_state_etag():
     return f'"{stat[0]:x}-{stat[1]:x}-{signature[1]}-{signature[2]}"'
 
 
+def state_view_snapshot():
+    """Documented helper: return the internal detached snapshot behind views.
+
+    Repeated ``load_state_view()`` calls share this object's nested structure
+    (copy-on-write) until the library state changes. Tests use its identity to
+    prove structural sharing; callers must treat it as read-only.
+    """
+    with STATE_VIEW_LOCK:
+        return STATE_VIEW_CACHE["state"]
+
+
 def load_state_view():
-    """Read-only library snapshot reused across requests until the file changes."""
-    load_ro = _ns("load_state_readonly", load_state_readonly)
+    """Read-only library view reused across requests until the file changes.
+
+    Returns a copy-on-write view, not a deep copy: repeated calls share the
+    snapshot's containers and only mutate detached nodes when the caller
+    writes through the view. Use ``state_view_snapshot()`` to identity-check
+    the shared structure.
+    """
+    store = openbox.STATE_STORE
     with STATE_VIEW_LOCK:
-        signature = openbox.STATE_STORE.signature()
+        signature = store.signature()
         if STATE_VIEW_CACHE["state"] is not None and STATE_VIEW_CACHE["signature"] == signature:
-            return copy.deepcopy(STATE_VIEW_CACHE["state"])
-    raw = load_ro()
-    detached = copy.deepcopy(dict(raw))
+            return snapshot_value(STATE_VIEW_CACHE["state"])
+    # Take the copy under the store lock: transactions mutate the live cached
+    # state in place, and copying it outside the lock could observe a
+    # half-applied edit (1.13.0 concurrency fix).
+    state, snapshot_signature = store.read_snapshot()
     with STATE_VIEW_LOCK:
-        if STATE_VIEW_CACHE["state"] is not None and STATE_VIEW_CACHE["signature"] == signature:
-            return copy.deepcopy(STATE_VIEW_CACHE["state"])
-        STATE_VIEW_CACHE.update({"signature": signature, "state": detached})
-        return copy.deepcopy(detached)
+        if STATE_VIEW_CACHE["state"] is not None and STATE_VIEW_CACHE["signature"] == snapshot_signature:
+            return snapshot_value(STATE_VIEW_CACHE["state"])
+        STATE_VIEW_CACHE.update({"signature": snapshot_signature, "state": state})
+        return snapshot_value(state)
 
 
 def transact_state(mutator):

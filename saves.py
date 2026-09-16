@@ -7,16 +7,73 @@ import re
 import stat
 import tempfile
 import threading
+import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from backend_io import atomic_copy_stream, fsync_directory
+from backend_io import atomic_copy_stream, dir_signature, fsync_directory
 
 
 MAX_SAVE_ARCHIVE_MEMBER_BYTES = 4 * 1024 * 1024 * 1024
 MAX_SAVE_ARCHIVE_TOTAL_BYTES = 32 * 1024 * 1024 * 1024
 MAX_SAVE_ARCHIVE_MEMBERS = 50_000
+
+# RetroArch trees are walked once and indexed by normalized stem; the index is
+# reused for every game and only rebuilt when a directory signature changes
+# (P2-5).  The old per-game ``rglob("*")`` re-walked the same trees 20k times.
+RETRO_INDEX_LOCK = threading.Lock()
+RETRO_INDEX_CACHE: dict[str, dict] = {}
+RETRO_INDEX_MAX_ROOTS = 16
+# Serve the cached index without even a directory walk inside this window;
+# after it expires the directory signature decides whether to rebuild.
+RETRO_INDEX_TTL = 300.0
+
+
+def _retro_roots(home):
+    home = Path(home or Path.home())
+    return (
+        home / ".config/retroarch/saves",
+        home / ".config/retroarch/states",
+        home / ".var/app/org.libretro.RetroArch/config/retroarch/saves",
+        home / ".var/app/org.libretro.RetroArch/config/retroarch/states",
+    )
+
+
+def _retroarch_index(root):
+    """Return {normalized_stem: [paths]} for one root, rebuilt on change."""
+    key = str(root)
+    now = time.monotonic()
+    with RETRO_INDEX_LOCK:
+        cached = RETRO_INDEX_CACHE.get(key)
+        if cached is not None and now - cached["at"] < RETRO_INDEX_TTL:
+            return cached["by_stem"]
+    signature = dir_signature(root)
+    if signature is None:
+        return {}
+    with RETRO_INDEX_LOCK:
+        cached = RETRO_INDEX_CACHE.get(key)
+        if cached is not None and cached["signature"] == signature:
+            cached["at"] = now
+            return cached["by_stem"]
+    by_stem: dict[str, list[str]] = {}
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for filename in filenames:
+            stem = re.sub(r"[^a-z0-9]+", "", Path(filename).stem.casefold())
+            if stem:
+                by_stem.setdefault(stem, []).append(str(Path(dirpath) / filename))
+    for paths in by_stem.values():
+        paths.sort()
+    with RETRO_INDEX_LOCK:
+        if len(RETRO_INDEX_CACHE) >= RETRO_INDEX_MAX_ROOTS:
+            RETRO_INDEX_CACHE.clear()
+        RETRO_INDEX_CACHE[key] = {"signature": signature, "by_stem": by_stem, "at": now}
+    return by_stem
+
+
+def retroarch_indices(home=None):
+    """Build (or reuse) the per-root RetroArch save/state indices for one scan."""
+    return {root: _retroarch_index(root) for root in _retro_roots(home)}
 
 # Serializes save-archive creation/extraction against cloud-sync uploads so a
 # sync never observes a half-restored save tree and concurrent restores cannot
@@ -108,7 +165,7 @@ def save_roots(game):
     return roots
 
 
-def discover_save_paths(game, home=None):
+def discover_save_paths(game, home=None, retro_indices=None):
     home = Path(home or Path.home())
     candidates = []
     app_id = str(game.get("steam_app_id", ""))
@@ -162,18 +219,14 @@ def discover_save_paths(game, home=None):
         if path.exists()
     )
     title = re.sub(r"[^a-z0-9]+", "", str(game.get("name") or Path(game.get("path", "")).stem).casefold())
-    retro_roots = (
-        home / ".config/retroarch/saves",
-        home / ".config/retroarch/states",
-        home / ".var/app/org.libretro.RetroArch/config/retroarch/saves",
-        home / ".var/app/org.libretro.RetroArch/config/retroarch/states",
-    )
-    for root in retro_roots:
-        if not root.is_dir() or not title:
-            continue
-        for path in root.rglob("*"):
-            if path.is_file() and re.sub(r"[^a-z0-9]+", "", path.stem.casefold()) == title:
-                candidates.append({"path":str(path), "label":"RetroArch save", "shared":False})
+    if title:
+        indices = retro_indices if retro_indices is not None else retroarch_indices(home)
+        for root in _retro_roots(home):
+            index = indices.get(root)
+            if not index:
+                continue
+            for path in index.get(title, ()):
+                candidates.append({"path": path, "label": "RetroArch save", "shared": False})
     unique = {}
     for candidate in candidates:
         unique[candidate["path"]] = candidate

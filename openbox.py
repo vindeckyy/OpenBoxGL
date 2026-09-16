@@ -14,7 +14,7 @@ import pkg.parity  # noqa: F401  # register flat-import finder before parity_* i
 from archives import extract_game
 from parity_import import EXTENSIONS_EXTRA, PLATFORM_BY_EXTENSION_EXTRA
 from parity_emulator_defs import build_platform_by_extension, resolve_launch
-from state_store import JsonStateStore
+from state_store import NO_CHANGE, JsonStateStore, track_games
 
 CUSTOM_DATA_DIR = os.environ.get("OPENBOX_DATA_DIR")
 APP_DIR = Path(CUSTOM_DATA_DIR or Path.home() / ".local/share/openbox-game-launcher").expanduser()
@@ -96,30 +96,35 @@ def _sync_wrapped_mutator(mutator):
     def wrapped(state):
         from pkg.parity.parity_library_sync import (
             SyncValidationError,
+            begin_catalog_tracking,
             bootstrap_local_catalog,
-            capture_sync_snapshot,
             journal_enabled,
-            record_local_changes,
+            record_tracked_changes,
             set_sync_error,
             sync_enabled,
         )
 
         before_enabled = sync_enabled(state) or journal_enabled(state)
         catalog_unchanged = bool(getattr(mutator, "_openbox_catalog_unchanged", False))
-        before = capture_sync_snapshot(state) if before_enabled and not catalog_unchanged else None
+        # A previous mutator may have installed plain game records (imports,
+        # sync apply). Wrap them before tracking so in-place edits are seen.
+        if before_enabled and not catalog_unchanged:
+            track_games(state)
+        # The per-record tracker journals only records the mutator actually
+        # touched.  A settings-only write therefore performs no catalog
+        # projection at all, and a favorite toggle skips tracking entirely.
+        tracking = begin_catalog_tracking(state) if before_enabled and not catalog_unchanged else None
         result = mutator(state)
+        if result is NO_CHANGE:
+            return result
         metadata = state.get("library_sync")
         suppress = isinstance(metadata, dict) and bool(metadata.pop("_suppress_local_recording", False))
         recording = sync_enabled(state) or journal_enabled(state)
         if recording and not before_enabled:
             bootstrap_local_catalog(state)
-        elif before is not None and not suppress:
+        elif tracking is not None and not suppress:
             try:
-                # Compare another catalog-only projection.  Passing the full
-                # state here would rebuild the allowlisted catalog for every
-                # nested field in every game, even for local-only writes.
-                after = capture_sync_snapshot(state)
-                record_local_changes(state, before, after)
+                record_tracked_changes(state, tracking)
             except SyncValidationError as error:
                 # A bad/ambiguous sync identity must never reject the user's
                 # local mutation.  Preserve the committed data and expose a

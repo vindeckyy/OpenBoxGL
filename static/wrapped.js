@@ -1,13 +1,14 @@
 /* wrapped.js — annual gaming report (printable). */
-import { $ } from './util.js';
+import { $, escapeHtml } from './util.js';
 import { t } from './i18n.js';
 import { AppState, api } from './state.js';
+import { openDialog } from './dialogs.js';
 
 let dialog;
 
 function openWrapped(year = new Date().getFullYear()) {
   if (!dialog) initDom();
-  dialog.showModal();
+  if (!dialog.open) openDialog(dialog);
   loadWrapped(year);
 }
 
@@ -25,7 +26,7 @@ async function loadWrapped(year) {
     const data = await api(`/api/v2/insights/wrapped?year=${year}`);
     render(data);
   } catch (e) {
-    body.innerHTML = `<p class="description">${e.message}</p>`;
+    body.innerHTML = `<p class="description">${escapeHtml(e?.message || 'Could not load Wrapped')}</p>`;
   }
 }
 

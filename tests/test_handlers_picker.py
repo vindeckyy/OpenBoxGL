@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT))
 
 import web_app  # noqa: E402
 import handlers.picker as picker_module  # noqa: E402
+import webapp_state  # noqa: E402
 
 
 def sample_state():
@@ -46,9 +47,9 @@ class PickerHandlerTest(unittest.TestCase):
         return h
 
     def test_picker_happy(self):
-        original_load = picker_module.load_state_readonly
+        original_load = webapp_state.load_state_view
         try:
-            picker_module.load_state_readonly = sample_state
+            webapp_state.load_state_view = sample_state
             body = json.dumps({"mood": "action", "players": 1, "minutes": 60}).encode()
             h = self.handler(body)
             h._api_post_api_v2_library_pick(json.loads(body))
@@ -58,34 +59,34 @@ class PickerHandlerTest(unittest.TestCase):
             self.assertEqual(len(payload["picks"]), 1)
             self.assertEqual(payload["picks"][0]["game_id"], "1")
         finally:
-            picker_module.load_state_readonly = original_load
+            webapp_state.load_state_view = original_load
 
     def test_picker_bad_mood(self):
-        original_load = picker_module.load_state_readonly
+        original_load = webapp_state.load_state_view
         try:
-            picker_module.load_state_readonly = sample_state
+            webapp_state.load_state_view = sample_state
             body = json.dumps({"mood": "spooky"}).encode()
             h = self.handler(body)
             with self.assertRaises(BadRequest):
                 h._api_post_api_v2_library_pick(json.loads(body))
         finally:
-            picker_module.load_state_readonly = original_load
+            webapp_state.load_state_view = original_load
 
     def test_picker_playlist_not_found(self):
-        original_load = picker_module.load_state_readonly
+        original_load = webapp_state.load_state_view
         try:
-            picker_module.load_state_readonly = sample_state
+            webapp_state.load_state_view = sample_state
             body = json.dumps({"scope": "playlist", "scope_name": "missing"}).encode()
             h = self.handler(body)
             with self.assertRaises(BadRequest):
                 h._api_post_api_v2_library_pick(json.loads(body))
         finally:
-            picker_module.load_state_readonly = original_load
+            webapp_state.load_state_view = original_load
 
     def test_picker_platform_scope(self):
-        original_load = picker_module.load_state_readonly
+        original_load = webapp_state.load_state_view
         try:
-            picker_module.load_state_readonly = sample_state
+            webapp_state.load_state_view = sample_state
             body = json.dumps({"scope": "platform", "scope_name": "SNES"}).encode()
             h = self.handler(body)
             h._api_post_api_v2_library_pick(json.loads(body))
@@ -94,14 +95,14 @@ class PickerHandlerTest(unittest.TestCase):
             self.assertEqual(len(payload["picks"]), 1)
             self.assertEqual(payload["picks"][0]["game_id"], "2")
         finally:
-            picker_module.load_state_readonly = original_load
+            webapp_state.load_state_view = original_load
 
     def test_picker_playlist_scope(self):
         state = sample_state()
         state["playlists"] = [{"name": "My List", "members": ["2"]}]
-        original_load = picker_module.load_state_readonly
+        original_load = webapp_state.load_state_view
         try:
-            picker_module.load_state_readonly = lambda: state
+            webapp_state.load_state_view = lambda: state
             body = json.dumps({"scope": "playlist", "scope_name": "My List"}).encode()
             h = self.handler(body)
             h._api_post_api_v2_library_pick(json.loads(body))
@@ -109,38 +110,38 @@ class PickerHandlerTest(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertEqual(payload["picks"][0]["game_id"], "2")
         finally:
-            picker_module.load_state_readonly = original_load
+            webapp_state.load_state_view = original_load
 
     def test_picker_invalid_players(self):
-        original_load = picker_module.load_state_readonly
+        original_load = webapp_state.load_state_view
         try:
-            picker_module.load_state_readonly = sample_state
+            webapp_state.load_state_view = sample_state
             body = json.dumps({"players": 99}).encode()
             h = self.handler(body)
             with self.assertRaises(BadRequest):
                 h._api_post_api_v2_library_pick(json.loads(body))
         finally:
-            picker_module.load_state_readonly = original_load
+            webapp_state.load_state_view = original_load
 
     def test_picker_invalid_scope(self):
-        original_load = picker_module.load_state_readonly
+        original_load = webapp_state.load_state_view
         try:
-            picker_module.load_state_readonly = sample_state
+            webapp_state.load_state_view = sample_state
             body = json.dumps({"scope": "everywhere"}).encode()
             h = self.handler(body)
             with self.assertRaises(BadRequest):
                 h._api_post_api_v2_library_pick(json.loads(body))
         finally:
-            picker_module.load_state_readonly = original_load
+            webapp_state.load_state_view = original_load
 
     def test_picker_minutes_session(self):
         state = sample_state()
         state["history"] = [
             {"game_id": 2, "seconds": 1200, "started": "2026-01-01T00:00:00Z"},
         ]
-        original_load = picker_module.load_state_readonly
+        original_load = webapp_state.load_state_view
         try:
-            picker_module.load_state_readonly = lambda: state
+            webapp_state.load_state_view = lambda: state
             body = json.dumps({"minutes": 45, "mood": "party", "players": 2}).encode()
             h = self.handler(body)
             h._api_post_api_v2_library_pick(json.loads(body))
@@ -149,12 +150,12 @@ class PickerHandlerTest(unittest.TestCase):
             self.assertEqual(len(payload["picks"]), 1)
             self.assertEqual(payload["picks"][0]["game_id"], "2")
         finally:
-            picker_module.load_state_readonly = original_load
+            webapp_state.load_state_view = original_load
 
     def test_picker_recomputes_randomized_result(self):
-        original_load = picker_module.load_state_readonly
+        original_load = webapp_state.load_state_view
         try:
-            picker_module.load_state_readonly = sample_state
+            webapp_state.load_state_view = sample_state
             body = {}
             with mock.patch.object(
                 picker_module,
@@ -169,7 +170,7 @@ class PickerHandlerTest(unittest.TestCase):
             self.assertEqual(first.responses[0][1]["picks"][0]["game_id"], "first")
             self.assertEqual(second.responses[0][1]["picks"][0]["game_id"], "second")
         finally:
-            picker_module.load_state_readonly = original_load
+            webapp_state.load_state_view = original_load
 
 
 if __name__ == "__main__":

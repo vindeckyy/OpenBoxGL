@@ -236,8 +236,11 @@ class ApiSweep(unittest.TestCase):
             side_effect=subprocess.CalledProcessError(1, ["lutris"]),
         ):
             status, payload = self.request("/api/import/lutris", {})
-        self.assertEqual(status, 400)
-        self.assertIn("error", payload)
+        # P1-19: a failed external importer is a server failure, not a client
+        # mistake, so it must answer 500 INTERNAL_ERROR with a request id.
+        self.assertEqual(status, 500)
+        self.assertEqual(payload["code"], "INTERNAL_ERROR")
+        self.assertTrue(payload["request_id"])
         self.assert_alive()
 
     def test_settings(self):

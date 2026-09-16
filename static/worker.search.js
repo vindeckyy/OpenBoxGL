@@ -126,32 +126,81 @@ function searchGames(games, query) {
   });
 }
 
-// Worker message protocol
-self.onmessage = function(e) {
-  const data = e.data || {};
-  const id = data.id;
-  try {
-    if (data.type === 'expand') {
-      const out = expandTrigrams(data.query || '');
-      self.postMessage({ id, type: 'expand', trigrams: out });
-    } else if (data.type === 'search') {
-      const games = Array.isArray(data.games) ? data.games : [];
-      const query = String(data.query || '');
-      const results = searchGames(games, query);
-      self.postMessage({ id, type: 'search', results, count: results.length });
-    } else if (data.type === 'warm') {
-      const games = Array.isArray(data.games) ? data.games : [];
-      buildWorkerIndex(games);
-      self.postMessage({ id, type: 'warm', ok: true });
-    } else {
-      self.postMessage({ id, error: 'unknown type' });
+// Facet counting moved off the UI thread (P2-16). Mirrors the server's
+// explorer_facets contract: hidden games excluded, comma-split genres,
+// blank-value labels, count-desc then casefold-asc tie ordering.
+const FACET_FIELDS = new Set(['genre', 'developer', 'publisher', 'platform', 'progress', 'esrb']);
+
+function facetCounts(games, field, limit) {
+  const list = Array.isArray(games) ? games : [];
+  const parsed = Number(limit);
+  const cap = Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 40;
+  if (!FACET_FIELDS.has(field)) return null;
+  const counts = new Map();
+  const add = label => {
+    if (!label) return;
+    counts.set(label, (counts.get(label) || 0) + 1);
+  };
+  for (const game of list) {
+    if (!game || game.hidden) continue;
+    if (field === 'genre') {
+      for (const part of String(game.genre || '').split(',')) add(part.trim());
+    } else if (field === 'developer') {
+      add(String(game.developer || '').trim());
+    } else if (field === 'publisher') {
+      add(String(game.publisher || '').trim());
+    } else if (field === 'platform') {
+      add(String(game.platform || 'Unspecified').trim() || 'Unspecified');
+    } else if (field === 'progress') {
+      add(String(game.progress || '').trim() || 'Unset');
+    } else if (field === 'esrb') {
+      add(String(game.esrb || '').trim() || 'Unrated');
     }
-  } catch (err) {
-    self.postMessage({ id, error: String(err && err.message || err) });
   }
-};
+  return [...counts.entries()]
+    .sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1];
+      const left = a[0].toLowerCase();
+      const right = b[0].toLowerCase();
+      if (left === right) return 0;
+      return left < right ? -1 : 1;
+    })
+    .slice(0, cap)
+    .map(([value, count]) => ({ value, count }));
+}
+
+// Worker message protocol
+if (typeof self !== 'undefined') {
+  self.onmessage = function(e) {
+    const data = e.data || {};
+    const id = data.id;
+    try {
+      if (data.type === 'expand') {
+        const out = expandTrigrams(data.query || '');
+        self.postMessage({ id, type: 'expand', trigrams: out });
+      } else if (data.type === 'search') {
+        const games = Array.isArray(data.games) ? data.games : [];
+        const query = String(data.query || '');
+        const results = searchGames(games, query);
+        self.postMessage({ id, type: 'search', results, count: results.length });
+      } else if (data.type === 'facets') {
+        const games = Array.isArray(data.games) ? data.games : [];
+        const facets = facetCounts(games, String(data.field || ''), data.limit);
+        self.postMessage({ id, type: 'facets', facets });
+      } else if (data.type === 'warm') {
+        const games = Array.isArray(data.games) ? data.games : [];
+        buildWorkerIndex(games);
+        self.postMessage({ id, type: 'warm', ok: true });
+      } else {
+        self.postMessage({ id, error: 'unknown type' });
+      }
+    } catch (err) {
+      self.postMessage({ id, error: String(err && err.message || err) });
+    }
+  };
+}
 
 // Export for main-thread fallback testing (when imported as module)
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { trigramsOf, expandTrigrams, searchGames, buildWorkerIndex, workerIndexedCandidates, indexTerms, indexValues };
+  module.exports = { trigramsOf, expandTrigrams, searchGames, buildWorkerIndex, workerIndexedCandidates, indexTerms, indexValues, facetCounts };
 }

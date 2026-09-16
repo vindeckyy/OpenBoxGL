@@ -15,6 +15,8 @@ import openbox  # noqa: E402
 from parity_collections import (  # noqa: E402
     collections_with_counts,
     delete_collection,
+    export_collections,
+    import_collections,
     save_collection,
 )
 from routes.registry import route  # noqa: E402
@@ -65,3 +67,32 @@ def collections_delete(handler, payload):
     if not deleted:
         raise NotFound("Collection not found.", code="COLLECTION_NOT_FOUND")
     handler.send_json(200, {"ok": True, "deleted": str(name or "").strip()})
+
+
+@route("GET", "/api/v2/collections/export", spec="handlers.collections.collections_export")
+def collections_export(handler, parsed):
+    """Download saved collections as a portable JSON file (no library data)."""
+    if not handler.authorized():
+        handler.handle_unauthorized()
+        return
+    handler.send_json(200, export_collections(openbox.load_state()), extra_headers={
+        "Content-Disposition": 'attachment; filename="openbox-collections.json"',
+    })
+
+
+@route("POST", "/api/v2/collections/import", spec="handlers.collections.collections_import")
+def collections_import(handler, payload):
+    """Import a collections export; ``replace`` clears before restoring."""
+    if not handler.authorized():
+        handler.handle_unauthorized()
+        return
+    body = payload if isinstance(payload, dict) else {}
+
+    def mutate(state):
+        return import_collections(state, body.get("collections"), replace=bool(body.get("replace")))
+
+    try:
+        _committed, result = transact_state(mutate)
+    except ValueError as exc:
+        raise BadRequest(str(exc), code="COLLECTION_INVALID") from exc
+    handler.send_json(200, {"ok": True, **result})

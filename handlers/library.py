@@ -6,22 +6,55 @@ import os
 import re
 from pathlib import Path
 import secrets
+import threading
+import time
 from urllib.parse import parse_qs
 
 from api_errors import BadRequest, GameNotFound
 from catalog import PROGRESS, bulk_update, game_media_paths, related_game_ids, tag_counts
 from handlers._shared import clean_extras as _clean_extras_shared
 from notifications import clear as clear_notifications, mark_read as mark_notifications_read, unread_count
-from openbox import load_state, load_state_readonly, local_only_mutation
+from openbox import load_state, local_only_mutation
 from routes.registry import route
 from parity_deeplinks import launcher_menu_items
 from parity_discovery import discovery_lists, related_with_reasons
 from parity_filter_presets import bigbox_quick_presets, delete_preset, explorer_facets, list_presets, save_preset
 from parity_media import normalize_video_fields
 from parity_premium import bulk_wizard_changes, custom_field_defs, normalize_custom_fields
+from pkg.parity.parity_duplicates import apply_merge, find_duplicates, merge_plan
+from pkg.parity.parity_repair import apply_repair, plan_repair, scan_candidates as scan_repair_candidates, scan_missing_paths
+from pkg.parity.parity_repair import resolve_folder as resolve_repair_folder
 from play_queue import advance as advance_queue, enqueue as enqueue_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
 from state_store import _stable_game_id, prune_trash
 from webapp_state import FIELDS, MEDIA_PATH_FIELDS, _public_state_cached, approved_media_path, bump_media_epoch, clear_file_probe_cache, consolidate_existing_games, game_from_payload, game_from_query, game_identity, load_state_view, public_state, public_state_bytes, public_state_etag, public_settings, transact_state
+
+
+# Health reports stat the same paths on every poll. A short TTL keeps repeated
+# calls cheap without hiding a file appearing or disappearing for long.
+_HEALTH_STAT_TTL = 5.0
+_HEALTH_STAT_CACHE_MAX = 50000
+_HEALTH_STAT_CACHE: dict[tuple[str, bool], tuple[float, bool]] = {}
+_HEALTH_STAT_LOCK = threading.Lock()
+
+
+def _health_path_exists(path_value, *, is_file: bool = False) -> bool:
+    """Stat *path_value* with a short TTL cache; unreadable paths are absent."""
+    text = str(path_value or "").strip()
+    if not text:
+        return False
+    key = (text, is_file)
+    now = time.monotonic()
+    with _HEALTH_STAT_LOCK:
+        cached = _HEALTH_STAT_CACHE.get(key)
+        if cached is not None and now - cached[0] < _HEALTH_STAT_TTL:
+            return cached[1]
+    target = Path(text)
+    exists = target.is_file() if is_file else target.exists()
+    with _HEALTH_STAT_LOCK:
+        if len(_HEALTH_STAT_CACHE) >= _HEALTH_STAT_CACHE_MAX:
+            _HEALTH_STAT_CACHE.clear()
+        _HEALTH_STAT_CACHE[key] = (now, exists)
+    return exists
 
 
 def _clean_game_fields(source):
@@ -368,10 +401,20 @@ class LibraryHandlers:
     def _api_get_api_explorer_facets(self, parsed):
         field = parse_qs(parsed.query).get("field", ["genre"])[0]
         state = load_state_view()
+        games = state["games"]
         # Keep the established explorer contract (hidden filtering, split
         # genres, blank-value labels, and tie ordering) independent of the
-        # optional SQLite acceleration path.
-        self.send_json(200, {"field": field, "facets": explorer_facets(state["games"], field)})
+        # optional SQLite acceleration path. Fields the read model can
+        # reproduce exactly are served from SQL; everything else falls back.
+        from pkg.state.cache import SQLITE_READ_MODEL
+        if SQLITE_READ_MODEL.enabled or SQLITE_READ_MODEL.should_auto_enable(len(games) or []):
+            import openbox
+            SQLITE_READ_MODEL.ensure_fresh(state, openbox.STATE_STORE.signature())
+            facets = SQLITE_READ_MODEL.explorer_facets(field)
+            if facets is not None:
+                self.send_json(200, {"field": field, "facets": facets})
+                return
+        self.send_json(200, {"field": field, "facets": explorer_facets(games, field)})
         return
 
     @route("GET", "/api/launcher/menu")
@@ -462,6 +505,10 @@ class LibraryHandlers:
 
     def queue(self, payload):
         action = str(payload.get("action") or "list")
+        if action in {"list", "resolve"}:
+            # Read-only actions must not open a transaction (P2-9).
+            self.send_json(200, {"queue": resolve_queue(load_state()), "next": None})
+            return
         def mutate(state):
             if action == "enqueue":
                 enqueue_queue(state, payload.get("game_ids", []), payload.get("position"), payload.get("note", ""))
@@ -471,24 +518,30 @@ class LibraryHandlers:
                 reorder_queue(state, payload.get("ordered_game_ids", []))
             elif action == "advance":
                 return advance_queue(state, payload.get("current_game_id"))
-            elif action not in {"list", "resolve"}:
+            else:
                 raise ValueError("Unknown queue action.")
             return None
-        _, result = transact_state(mutate)
-        self.send_json(200, {"queue": resolve_queue(load_state()), "next": result if action == "advance" else None})
+        committed, result = transact_state(mutate)
+        self.send_json(200, {"queue": resolve_queue(committed), "next": result if action == "advance" else None})
 
     def notifications(self, payload):
         action = str(payload.get("action") or "list")
+        if action == "list":
+            # Listing notifications is a pure read; the old mutator rewrote
+            # the complete library for every poll (P2-9).
+            state = load_state()
+            self.send_json(200, {"notifications": state.get("notifications", []), "unread": unread_count(state)})
+            return
         def mutate(state):
             if action == "read":
                 mark_notifications_read(state, payload.get("ids"))
             elif action == "clear":
                 clear_notifications(state, payload.get("ids"))
-            elif action != "list":
+            else:
                 raise ValueError("Unknown notification action.")
             return unread_count(state)
         committed, unread = transact_state(mutate)
-        self.send_json(200, {"notifications": committed.get("notifications", []), "unread": unread})
+        self.send_json(200, {"notifications": copy.deepcopy(committed.get("notifications", [])), "unread": unread})
 
     def tags(self, payload):
         ids = payload.get("ids")
@@ -497,8 +550,8 @@ class LibraryHandlers:
             raise ValueError("No tag changes were supplied.")
         def mutate(state):
             return bulk_update(state["games"], ids, changes)
-        _, updated = transact_state(mutate)
-        self.send_json(200, {"updated": updated, "tags": tag_counts(load_state()["games"])})
+        committed, updated = transact_state(mutate)
+        self.send_json(200, {"updated": updated, "tags": tag_counts(committed["games"])})
 
     def save_game(self, payload):
         source = payload.get("game", {})
@@ -659,6 +712,9 @@ class LibraryHandlers:
         else:
             dup_index_by_id = {}
         for index, game in enumerate(state["games"]):
+            if game.get("path") is None:
+                # JSON null would make Path(...) raise inside identity helpers.
+                game = {**game, "path": ""}
             if has_canonical:
                 identity = dup_index_by_id.get(game.get("game_id") or game.get("id"))
                 if not identity:
@@ -670,21 +726,30 @@ class LibraryHandlers:
                 issues.append({"id":index, "game":game.get("name", ""), "type":"Duplicate", "detail":f"Matches {state['games'][seen[identity]].get('name', '')}; identity {identity}"})
             else:
                 seen[identity] = index
-            path = Path(game.get("path", ""))
+            path = Path(str(game.get("path") or ""))
             if game.get("manual_entry"):
                 continue
-            if not game.get("path") or not path.exists():
+            if not game.get("path") or not _health_path_exists(game.get("path")):
                 issues.append({"id":index, "game":game.get("name", ""), "type":"Missing game", "detail":str(path)})
-            if not Path(game.get("cover", "")).is_file():
+            if not _health_path_exists(game.get("cover"), is_file=True):
                 issues.append({"id":index, "game":game.get("name", ""), "type":"Missing box front", "detail":"No local cover image"})
             for kind in ("applications", "versions", "documents"):
-                for extra in game.get(kind, []):
-                    if not Path(extra.get("path", "")).exists():
-                        issues.append({"id":index, "game":game.get("name", ""), "type":"Missing extra", "detail":extra.get("path", "")})
-            for path in game.get("save_paths", []):
-                if not Path(path).exists():
-                    issues.append({"id":index, "game":game.get("name", ""), "type":"Missing save path", "detail":path})
-            suffix = Path(game.get("path", "")).suffix.casefold()
+                extras = game.get(kind, [])
+                if not isinstance(extras, list):
+                    continue
+                for extra in extras:
+                    if not isinstance(extra, dict):
+                        continue
+                    extra_path = str(extra.get("path") or "")
+                    if not _health_path_exists(extra_path):
+                        issues.append({"id":index, "game":game.get("name", ""), "type":"Missing extra", "detail":extra_path})
+            save_paths = game.get("save_paths", [])
+            if not isinstance(save_paths, list):
+                save_paths = []
+            for save_path in save_paths:
+                if not _health_path_exists(save_path):
+                    issues.append({"id":index, "game":game.get("name", ""), "type":"Missing save path", "detail":str(save_path or "")})
+            suffix = path.suffix.casefold()
             if suffix in {".rom", ".nes", ".sfc", ".smc", ".gba", ".gb", ".gbc", ".iso"} and not game.get("launch") and not state["profiles"].get(game.get("platform", "")):
                 issues.append({"id":index, "game":game.get("name", ""), "type":"No emulator", "detail":game.get("platform", "Unspecified")})
         self.send_json(200, {
@@ -701,6 +766,86 @@ class LibraryHandlers:
             return consolidate_existing_games(state["games"])
         _, removed = transact_state(mutate)
         self.send_json(200, {"removed": removed})
+
+    # ── Missing-file repair wizard (P5) ──────────────────────────────────────
+    @route("GET", "/api/v2/library/repair")
+    def _api_get_api_v2_library_repair(self, parsed):
+        """List missing game/media paths without mutating anything."""
+        qs = parse_qs(parsed.query or "")
+        include_media = (qs.get("media", ["1"])[0] or "1").strip().lower() not in {"0", "false", "no"}
+        self.send_json(200, scan_missing_paths(load_state_view(), include_media=include_media))
+
+    @route("POST", "/api/v2/library/repair/preview")
+    def _api_post_api_v2_library_repair_preview(self, payload):
+        """Dry-run: match missing basenames against a user-picked folder."""
+        include_media, fields, folder = self._repair_request(payload)
+        candidates = scan_repair_candidates(folder)
+        scan = scan_missing_paths(load_state_view(), include_media=include_media)
+        plan = plan_repair(scan["items"], candidates, fields=fields)
+        plan["folder"] = str(folder)
+        plan["scanned"] = scan["count"]
+        plan["candidates"] = len(candidates)
+        self.send_json(200, plan)
+
+    @route("POST", "/api/v2/library/repair/apply")
+    def _api_post_api_v2_library_repair_apply(self, payload):
+        """Re-plan inside the transaction and relink only still-missing rows."""
+        include_media, fields, folder = self._repair_request(payload)
+        selection = payload.get("selection")
+        if selection is not None and not isinstance(selection, list):
+            raise BadRequest("selection must be a list of [id, field] pairs or ids.")
+        candidates = scan_repair_candidates(folder)
+
+        def mutate(state):
+            scan = scan_missing_paths(state, include_media=include_media)
+            plan = plan_repair(scan["items"], candidates, fields=fields)
+            return apply_repair(state, plan["matches"], selection=selection)
+
+        _, result = transact_state(mutate)
+        clear_file_probe_cache()
+        self.send_json(200, result)
+
+    def _repair_request(self, payload):
+        payload = payload or {}
+        try:
+            folder = resolve_repair_folder(payload.get("folder"))
+        except ValueError as error:
+            raise BadRequest(str(error)) from error
+        fields = payload.get("fields")
+        if fields is not None and not isinstance(fields, list):
+            raise BadRequest("fields must be a list of field names.")
+        return bool(payload.get("include_media", True)), fields, folder
+
+    # ── Duplicate detection & merge (P5) ─────────────────────────────────────
+    @route("GET", "/api/v2/library/duplicates")
+    def _api_get_api_v2_library_duplicates(self, parsed):
+        qs = parse_qs(parsed.query or "")
+        include_title = (qs.get("title", ["1"])[0] or "1").strip().lower() not in {"0", "false", "no"}
+        self.send_json(200, find_duplicates(load_state_view(), include_title=include_title))
+
+    @route("POST", "/api/v2/library/duplicates/preview")
+    def _api_post_api_v2_library_duplicates_preview(self, payload):
+        indexes = (payload or {}).get("ids")
+        if not isinstance(indexes, list):
+            raise BadRequest("ids must be a list of game indexes.")
+        try:
+            plan = merge_plan(load_state_view(), indexes)
+        except ValueError as error:
+            raise BadRequest(str(error)) from error
+        self.send_json(200, plan)
+
+    @route("POST", "/api/v2/library/duplicates/merge")
+    def _api_post_api_v2_library_duplicates_merge(self, payload):
+        indexes = (payload or {}).get("ids")
+        if not isinstance(indexes, list) or len(indexes) < 2:
+            raise BadRequest("A merge needs at least two game indexes.")
+
+        def mutate(state):
+            return apply_merge(state, indexes, trash_game=_trash_entry_for)
+
+        _, result = transact_state(mutate)
+        clear_file_probe_cache()
+        self.send_json(200, result)
 
     @route("POST", "/api/v2/library/manual-entry")
     def _api_post_api_v2_library_manual_entry(self, payload):
@@ -789,10 +934,11 @@ class LibraryHandlers:
             return
         from pkg.state.cache import SQLITE_READ_MODEL
         # Above SQLITE_AUTO_THRESHOLD games the read model self-enables
-        # (1.12.0); the explicit env opt-out is still honored.
-        readonly = load_state_readonly()
-        if SQLITE_READ_MODEL.enabled or SQLITE_READ_MODEL.should_auto_enable(len(readonly.get("games", []) or [])):
-            state = load_state_view()
+        # (1.12.0); the explicit env opt-out is still honored. The consistent
+        # snapshot replaces the zero-copy view so an in-flight transaction
+        # can never be observed half-applied (1.13.0 concurrency fix).
+        state = load_state_view()
+        if SQLITE_READ_MODEL.enabled or SQLITE_READ_MODEL.should_auto_enable(len(state.get("games", []) or [])):
             import openbox
             SQLITE_READ_MODEL.ensure_fresh(state, openbox.STATE_STORE.signature())
             results = SQLITE_READ_MODEL.search(query, limit=limit)
@@ -800,7 +946,6 @@ class LibraryHandlers:
             return
         # JSON fallback: canonical name substring match, preserving library
         # order and the existing policy of returning hidden games as well.
-        state = readonly
         q_lower = query.casefold()
         results = []
         for game in state.get("games", []):

@@ -128,6 +128,52 @@ class PolishRouteTests(unittest.TestCase):
             payload = json.loads(response.read())
         self.assertTrue(payload["dry_run"])
         self.assertIn("snapshots", payload)
+        self.assertFalse(payload["needs_recovery"])
+
+    def post(self, path, payload):
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}{path}",
+            data=json.dumps(payload).encode(),
+            headers={"X-OpenBox-Token": "polish-token", "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                return response.status, json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read())
+
+    def test_corrupt_state_serves_503_then_recovers_from_backup(self):
+        # A second save creates the last-known-good .bak from the first save.
+        self.save_state({
+            "games": [{"name": "Latest", "path": "/bin/true"}],
+            "profiles": {},
+            "history": [],
+            "settings": {},
+            "playlists": [],
+        })
+        from openbox import STATE_STORE
+
+        state_path = STATE_STORE.path
+        state_path.write_text("{ not valid json", encoding="utf-8")
+
+        status, _, body = self.request("/api/library")
+        self.assertEqual(status, 503)
+        self.assertEqual(json.loads(body)["code"], "STATE_UNAVAILABLE")
+
+        status, payload = self.post("/api/state/recover", {"dry_run": True})
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["needs_recovery"])
+        self.assertTrue(payload["backup_available"])
+
+        status, payload = self.post("/api/state/recover", {})
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+
+        status, _, body = self.request("/api/library")
+        self.assertEqual(status, 200)
+        # .bak mirrors the last committed write, so recovery returns it.
+        self.assertEqual(json.loads(body)["games"][0]["name"], "Latest")
 
 
 if __name__ == "__main__":

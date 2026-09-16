@@ -100,6 +100,346 @@ class StateCorruptError(RuntimeError):
     """Raised when the primary state file cannot be decoded safely."""
 
 
+class _NoChange:
+    """Sentinel returned by a mutator that made no persistent change.
+
+    ``update_with_result`` skips the disk write entirely for such mutations,
+    which keeps idle auto-import passes from rewriting a 20k-game library.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return "NO_CHANGE"
+
+
+NO_CHANGE = _NoChange()
+
+
+# -- structural-sharing snapshot views (1.13 performance) --------------------
+#
+# ``load()``, ``update()`` and ``load_state_view()`` used to deep-copy the
+# complete catalog for every read and after every write.  At 20k games that is
+# hundreds of milliseconds per call.  Instead they now return a copy-on-write
+# view over a detached snapshot: reads share the snapshot's containers, and the
+# first mutation of any node detaches that node and its ancestors, so writes
+# can never reach the snapshot or the live store cache.  The classes are dict
+# and list subclasses so ``json.dumps``, equality, ``len``, slicing and
+# ``isinstance(x, dict)`` keep working unchanged.
+
+_MISSING = object()
+MISSING = _MISSING
+
+
+def snapshot_value(value: Any) -> Any:
+    """Wrap one value in a copy-on-write view (dict/list only)."""
+    if isinstance(value, (SnapshotDict, SnapshotList)):
+        return value
+    if isinstance(value, dict):
+        return SnapshotDict(value)
+    if isinstance(value, list):
+        return SnapshotList(value)
+    return value
+
+
+def _wrap_child(value: Any, owner, key) -> Any:
+    """Wrap a nested container and register its detach path with the parent."""
+    if isinstance(value, (SnapshotDict, SnapshotList)):
+        return value
+    if isinstance(value, dict):
+        return SnapshotDict(value, owner, key)
+    if isinstance(value, list):
+        return SnapshotList(value, owner, key)
+    return value
+
+
+class SnapshotDict(dict):
+    """Copy-on-write mapping view over a shared snapshot node."""
+
+    __slots__ = ("_snapshot_detached", "_snapshot_owner", "_snapshot_key")
+
+    def __init__(self, source=(), owner=None, owner_key=None):
+        dict.__init__(self, source)
+        self._snapshot_detached = False
+        self._snapshot_owner = owner
+        self._snapshot_key = owner_key
+
+    # -- detach plumbing -----------------------------------------------------
+    def _detach(self) -> None:
+        if self._snapshot_detached:
+            return
+        inner = dict(self)
+        dict.clear(self)
+        dict.update(self, inner)
+        self._snapshot_detached = True
+        owner = self._snapshot_owner
+        if owner is not None:
+            owner._adopt_child(self._snapshot_key, self)
+
+    def _adopt_child(self, key, child) -> None:
+        self._detach()
+        dict.__setitem__(self, key, child)
+
+    # -- reads ---------------------------------------------------------------
+    def __getitem__(self, key):
+        return _wrap_child(dict.__getitem__(self, key), self, key)
+
+    def get(self, key, default=None):
+        value = dict.get(self, key, _MISSING)
+        if value is _MISSING:
+            return default
+        return _wrap_child(value, self, key)
+
+    def items(self):
+        for key, value in dict.items(self):
+            yield key, _wrap_child(value, self, key)
+
+    def values(self):
+        for key, value in dict.items(self):
+            yield _wrap_child(value, self, key)
+
+    def setdefault(self, key, default=None):
+        value = dict.get(self, key, _MISSING)
+        if value is not _MISSING:
+            return _wrap_child(value, self, key)
+        self._detach()
+        dict.__setitem__(self, key, default)
+        return default
+
+    # -- writes --------------------------------------------------------------
+    def __setitem__(self, key, value):
+        self._detach()
+        dict.__setitem__(self, key, value)
+
+    def __delitem__(self, key):
+        self._detach()
+        dict.__delitem__(self, key)
+
+    def update(self, *args, **kwargs):
+        if not args and not kwargs:
+            return
+        self._detach()
+        dict.update(self, *args, **kwargs)
+
+    def pop(self, key, *default):
+        value = dict.get(self, key, _MISSING)
+        if value is _MISSING:
+            if default:
+                return default[0]
+            raise KeyError(key)
+        self._detach()
+        return copy.deepcopy(dict.pop(self, key))
+
+    def popitem(self):
+        self._detach()
+        key, value = dict.popitem(self)
+        return key, copy.deepcopy(value)
+
+    def clear(self):
+        self._detach()
+        dict.clear(self)
+
+    # -- copy/pickle protocols ----------------------------------------------
+    def copy(self):
+        return SnapshotDict(self)
+
+    def __copy__(self):
+        return SnapshotDict(self)
+
+    def __deepcopy__(self, memo):
+        return copy.deepcopy(dict(self), memo)
+
+    def __reduce__(self):
+        return (dict, (dict(self),))
+
+
+class SnapshotList(list):
+    """Copy-on-write sequence view over a shared snapshot node."""
+
+    __slots__ = ("_snapshot_detached", "_snapshot_owner", "_snapshot_key")
+
+    def __init__(self, source=(), owner=None, owner_key=None):
+        list.__init__(self, source)
+        self._snapshot_detached = False
+        self._snapshot_owner = owner
+        self._snapshot_key = owner_key
+
+    # -- detach plumbing -----------------------------------------------------
+    def _detach(self) -> None:
+        if self._snapshot_detached:
+            return
+        inner = list(self)
+        list.clear(self)
+        list.extend(self, inner)
+        self._snapshot_detached = True
+        owner = self._snapshot_owner
+        if owner is not None:
+            owner._adopt_child(self._snapshot_key, self)
+
+    def _adopt_child(self, index, child) -> None:
+        self._detach()
+        list.__setitem__(self, index, child)
+
+    # -- reads ---------------------------------------------------------------
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            return SnapshotList([snapshot_value(value) for value in list.__getitem__(self, index)])
+        return _wrap_child(list.__getitem__(self, index), self, index)
+
+    def __iter__(self):
+        for index, value in enumerate(list.__iter__(self)):
+            yield _wrap_child(value, self, index)
+
+    # -- writes --------------------------------------------------------------
+    def __setitem__(self, index, value):
+        self._detach()
+        list.__setitem__(self, index, value)
+
+    def __delitem__(self, index):
+        self._detach()
+        list.__delitem__(self, index)
+
+    def append(self, value):
+        self._detach()
+        list.append(self, value)
+
+    def extend(self, values):
+        self._detach()
+        list.extend(self, values)
+
+    def insert(self, index, value):
+        self._detach()
+        list.insert(self, index, value)
+
+    def pop(self, index=-1):
+        self._detach()
+        return copy.deepcopy(list.pop(self, index))
+
+    def remove(self, value):
+        self._detach()
+        list.remove(self, value)
+
+    def clear(self):
+        self._detach()
+        list.clear(self)
+
+    def sort(self, *args, **kwargs):
+        self._detach()
+        list.sort(self, *args, **kwargs)
+
+    def reverse(self):
+        self._detach()
+        list.reverse(self)
+
+    def __iadd__(self, values):
+        self._detach()
+        list.__iadd__(self, values)
+        return self
+
+    def __imul__(self, count):
+        self._detach()
+        list.__imul__(self, count)
+        return self
+
+    # -- copy/pickle protocols ----------------------------------------------
+    def copy(self):
+        return SnapshotList(self)
+
+    def __copy__(self):
+        return SnapshotList(self)
+
+    def __deepcopy__(self, memo):
+        return copy.deepcopy(list(self), memo)
+
+    def __reduce__(self):
+        return (list, (list(self),))
+
+
+class TrackedGame(dict):
+    """Dict subclass recording in-place field changes for the sync journal.
+
+    Transactions mutate cached game records in place, so before/after snapshots
+    were the only way to learn what changed.  A tracked record remembers the
+    previous value of every field assignment while a transaction is active;
+    the journal then rebuilds catalogs only for the touched records instead of
+    projecting the whole catalog twice per write (P2-3).
+    """
+
+    __slots__ = ("_openbox_sync_changes",)
+
+    def __init__(self, source=()):
+        dict.__init__(self, source)
+        self._openbox_sync_changes = None
+
+    def _track(self, key):
+        changes = self._openbox_sync_changes
+        if changes is not None and key not in changes:
+            changes[key] = dict.get(self, key, _MISSING)
+
+    def __setitem__(self, key, value):
+        self._track(key)
+        dict.__setitem__(self, key, value)
+
+    def __delitem__(self, key):
+        self._track(key)
+        dict.__delitem__(self, key)
+
+    def update(self, *args, **kwargs):
+        for mapping in args:
+            items = mapping.items() if hasattr(mapping, "items") else mapping
+            for key, value in items:
+                self[key] = value
+        for key, value in kwargs.items():
+            self[key] = value
+
+    def setdefault(self, key, default=None):
+        if key in self:
+            return dict.__getitem__(self, key)
+        self._track(key)
+        dict.__setitem__(self, key, default)
+        return default
+
+    def pop(self, key, *default):
+        if key not in self:
+            if default:
+                return default[0]
+            raise KeyError(key)
+        self._track(key)
+        return dict.pop(self, key)
+
+    def popitem(self):
+        # dict.popitem removes the last-inserted key; track that one.
+        key = next(reversed(self))
+        self._track(key)
+        return dict.popitem(self)
+
+    def clear(self):
+        for key in list(self):
+            self._track(key)
+        dict.clear(self)
+
+    def __copy__(self):
+        return dict(self)
+
+    def __deepcopy__(self, memo):
+        return copy.deepcopy(dict(self), memo)
+
+    def __reduce__(self):
+        return (dict, (dict(self),))
+
+
+def track_games(state: dict[str, Any] | None) -> None:
+    """Wrap top-level game records so in-place edits can be journaled cheaply."""
+    if not isinstance(state, dict):
+        return
+    games = state.get("games")
+    if not isinstance(games, list):
+        return
+    for index, game in enumerate(games):
+        if isinstance(game, dict) and not isinstance(game, TrackedGame):
+            games[index] = TrackedGame(game)
+
+
 def default_state() -> dict[str, Any]:
     return {
         "schema_version": STATE_SCHEMA_VERSION,
@@ -481,6 +821,8 @@ class JsonStateStore:
         self._thread_lock = threading.RLock()
         self._cached_state: dict[str, Any] | None = None
         self._cached_signature: tuple[int, int, int] | None = None
+        self._snapshot_state: dict[str, Any] | None = None
+        self._snapshot_signature: tuple[int, int, int] | None = None
         self._games_by_id: dict[str, dict[str, Any]] = {}
         self._games_by_platform: dict[str, list[dict[str, Any]]] = {}
         # Write coalesce: 50ms micro-batch, single fsync per batch
@@ -522,12 +864,15 @@ class JsonStateStore:
         self._games_by_platform = games_by_platform
 
     def _remember(self, state: dict[str, Any], adopt: bool = False) -> None:
+        # A new in-memory state supersedes any cached read snapshot.
+        self._snapshot_state = None
+        self._snapshot_signature = None
         if adopt:
             games = state.get("games")
             if isinstance(games, list):
                 self._cached_state = {
                     **state,
-                    "games": [dict(g) if isinstance(g, dict) else g for g in games],
+                    "games": [TrackedGame(g) if isinstance(g, dict) else g for g in games],
                     "profiles": dict(state.get("profiles", {})),
                     "settings": dict(state.get("settings", {})),
                     "history": list(state.get("history", [])),
@@ -541,12 +886,15 @@ class JsonStateStore:
                 self._cached_state = copy.deepcopy(state)
         else:
             self._cached_state = copy.deepcopy(state)
+        track_games(self._cached_state)
         self._cached_signature = self._signature()
         self._reindex(self._cached_state)
 
     def _clear_cache(self) -> None:
         self._cached_state = None
         self._cached_signature = None
+        self._snapshot_state = None
+        self._snapshot_signature = None
         self._reindex(None)
 
     @property
@@ -578,10 +926,14 @@ class JsonStateStore:
     def _ensure_loaded(self) -> None:
         signature = self._signature()
         if self._cached_state is None or signature != self._cached_signature:
-            with self._file_lock(True):
-                state, changed = self._load_unlocked()
-                if changed:
-                    self._write_unlocked(state)
+            # Reads take LOCK_SH so any number of readers can proceed together;
+            # writers still hold LOCK_EX (update_with_result, save, recover).
+            with self._file_lock(False):
+                # Read paths never persist normalization. A GET that rewrites
+                # library.json can fail on a full/read-only disk and turn a
+                # read into a 400; the next real mutation persists the
+                # normalized form (update_with_result always writes).
+                state, _changed = self._load_unlocked()
                 self._remember(state)
 
     def _ensure_data_parent(self) -> None:
@@ -640,16 +992,23 @@ class JsonStateStore:
         return normalize_state(raw)
 
     def load(self) -> dict[str, Any]:
+        """Return a copy-on-write view of a consistent detached snapshot.
+
+        The snapshot is deep-copied under the store lock once per file
+        signature (so readers never observe a half-applied transaction, per
+        ADR 0049) and shared by every caller until the state changes. Reads
+        are therefore zero-copy; the first mutation through the returned view
+        detaches only the touched nodes.
+        """
         with self._thread_lock:
             signature = self._signature()
-            if self._cached_state is not None and signature == self._cached_signature:
-                return copy.deepcopy(self._cached_state)
-            with self._file_lock(True):
-                state, changed = self._load_unlocked()
-                if changed:
-                    self._write_unlocked(state)
-                self._remember(state)
-                return copy.deepcopy(state)
+            if self._snapshot_state is not None and self._snapshot_signature == signature:
+                return snapshot_value(self._snapshot_state)
+            self._ensure_loaded()
+            snapshot = copy.deepcopy(self._cached_state)
+            self._snapshot_state = snapshot
+            self._snapshot_signature = self._cached_signature
+            return snapshot_value(snapshot)
 
     def load_readonly(self) -> dict[str, Any]:
         """Return a shallow-frozen view of cached state. Callers cannot mutate top-level keys."""
@@ -657,12 +1016,22 @@ class JsonStateStore:
             signature = self._signature()
             if self._cached_state is not None and signature == self._cached_signature:
                 return types.MappingProxyType(self._cached_state)
-            with self._file_lock(True):
-                state, changed = self._load_unlocked()
-                if changed:
-                    self._write_unlocked(state)
+            with self._file_lock(False):
+                state, _changed = self._load_unlocked()
                 self._remember(state)
                 return types.MappingProxyType(self._cached_state)
+
+    def read_snapshot(self) -> tuple[dict[str, Any], tuple[int, int, int] | None]:
+        """Return a detached copy plus the signature it was taken at.
+
+        The copy runs under the store thread lock, which transactions hold for
+        their entire read-modify-write. Readers that copied the live cached
+        state outside this lock could see a half-applied transaction, or raise
+        ``dictionary changed size during iteration``.
+        """
+        with self._thread_lock:
+            self._ensure_loaded()
+            return copy.deepcopy(self._cached_state), self._cached_signature
 
     def recover(self) -> dict[str, Any]:
         with self._thread_lock, self._file_lock(True):
@@ -683,6 +1052,10 @@ class JsonStateStore:
         reuse_cache: bool = False,
     ) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # The committed state is about to change; cached read snapshots are
+        # stale even when the write reuses the warm cache object.
+        self._snapshot_state = None
+        self._snapshot_signature = None
         fd, temporary_name = tempfile.mkstemp(
             prefix=f".{self.path.name}.", suffix=".tmp", dir=self.path.parent
         )
@@ -718,6 +1091,10 @@ class JsonStateStore:
             try:
                 shutil.copy2(temporary, backup_tmp)
                 os.chmod(backup_tmp, 0o600)
+                # Note: the backup is intentionally not fsynced separately. It
+                # mirrors the already-fsynced primary, and the write path keeps
+                # exactly one fsync per commit (WriteCoalesceTests). A power
+                # loss can leave a stale .bak while the primary stays durable.
                 os.replace(backup_tmp, self.backup_path)
                 os.chmod(self.backup_path, 0o600)
             finally:
@@ -807,9 +1184,9 @@ class JsonStateStore:
                 raise
 
     def update(self, mutator: Callable[[dict[str, Any]], Any], *, isolate: bool = True) -> dict[str, Any]:
-        """Apply a mutation and return a detached snapshot of the committed state."""
+        """Apply a mutation and return a copy-on-write view of the committed state."""
         state, _ = self.update_with_result(mutator, isolate=isolate)
-        return copy.deepcopy(state)
+        return snapshot_value(state)
 
     def _flush_coalesced(self) -> None:
         """Flush the pending coalesced state with a single fsync."""
@@ -886,14 +1263,22 @@ class JsonStateStore:
                 state = self._cached_state
             else:
                 state, _ = self._load_unlocked()
+                track_games(state)
             owned_containers = _transaction_owned_containers(state) if isolate else None
             try:
                 result = mutator(state)
                 normalized = _normalize_committed_state(state)
+                if result is NO_CHANGE:
+                    # Nothing changed: keep the validated in-memory state and
+                    # skip serialization, fsync, and backup rotation.
+                    if self._cached_state is None:
+                        self._remember(state)
+                    return normalized, None
                 if owned_containers is not None:
                     _detach_new_mutables(normalized, owned_containers)
                 if isinstance(result, (dict, list, tuple, set)):
                     result = copy.deepcopy(result)
+                track_games(normalized)
                 self._write_unlocked(normalized, adopt=True, reuse_cache=True)
                 self._coalesce_last_flush = time.monotonic()
                 return normalized, result

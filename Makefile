@@ -13,25 +13,79 @@ STATIC_FILES = $(wildcard static/*.js) $(wildcard static/*.css)
 LOCALE_FILES = $(wildcard locales/*.json)
 NATIVE_HOST = native_host
 
-.PHONY: install uninstall appimage check version-check dev-venv test-one native-host
+.PHONY: install uninstall appimage check check-ci version-check dev-venv test-one native-host shellcheck desktop-appstream flatpak-validate ui-smoke perf
+
+VENV_STAMP = .venv-dev/.requirements.stamp
+CI_STRICT ?= 0
+STRICT_CASE = if [ "$${OPENBOX_CI_STRICT:-$(CI_STRICT)}" = "1" ]; then echo "check-ci: missing tool in strict mode: $(1)" >&2; exit 1; else echo "check-ci: SKIP $(1) (not installed; OPENBOX_CI_STRICT=1 to fail)"; fi
 
 native-host:
 	gcc -O2 native_host.c -o $(NATIVE_HOST) $$(pkg-config --cflags --libs webkit2gtk-4.1)
 
-dev-venv:
-	python3 -m venv .venv-dev
+# Dev-only tooling. The stamp makes this a no-op unless the venv is missing
+# or requirements-dev.txt changed, so `make check` no longer reinstalls pip
+# dependencies on every run.
+dev-venv: $(VENV_STAMP)
+
+$(VENV_STAMP): requirements-dev.txt
+	@test -x .venv-dev/bin/python || python3 -m venv .venv-dev
 	.venv-dev/bin/pip install --disable-pip-version-check -r requirements-dev.txt
+	@touch $(VENV_STAMP)
 
 # Full verification gate: ruff, runtime_modules, v1_contract, version_sync,
-# frontend, i18n, py_compile, tests under coverage, coverage floors
-# (total + web_app + changed-line + new-module), tokens.
+# frontend, i18n, csp, docs links, py_compile, api-v2 freshness, tests under
+# coverage, coverage floors (total + web_app + changed-line + new-module),
+# tokens.
 # Dev-only dependencies live in .venv-dev; the runtime app stays dep-free.
 check: dev-venv
 	python3 scripts/check_tests.py
 
+# Everything CI runs. `check` already covers the gate and the test suite; the
+# CI-only jobs are shellcheck, desktop/AppStream validation, the Flatpak
+# dry-run, the 10k/20k perf gates, and the puppeteer UI smoke. Locally missing
+# tools are reported as SKIP; set OPENBOX_CI_STRICT=1 to fail instead.
+check-ci: check shellcheck desktop-appstream flatpak-validate ui-smoke perf
+
 # A single test file, e.g. `make test-one TEST=tests/test_saves.py`.
+# Runs against a throwaway OPENBOX_DATA_DIR so a test that skips its own
+# isolation cannot touch the developer's real library.
 test-one:
-	python3 -B $(TEST)
+	@test -n "$(TEST)" || { echo "usage: make test-one TEST=tests/test_x.py" >&2; exit 2; }
+	@d="$$(mktemp -d /tmp/openbox-test-one.XXXXXX)"; \
+	trap 'rm -rf "$$d"' EXIT; \
+	OPENBOX_DATA_DIR="$$d" python3 -B $(TEST)
+
+shellcheck:
+	@if command -v shellcheck >/dev/null 2>&1; then \
+		shellcheck -S error -x run_all_tests.sh build_appimage.sh openbox.sh openbox-native.sh scripts/*.sh; \
+	else \
+		$(call STRICT_CASE,shellcheck); \
+	fi
+
+desktop-appstream:
+	@if command -v desktop-file-validate >/dev/null 2>&1 && command -v appstreamcli >/dev/null 2>&1; then \
+		desktop-file-validate openbox.desktop; \
+		appstreamcli validate --no-net openbox.metainfo.xml; \
+	else \
+		$(call STRICT_CASE,desktop-file-validate/appstreamcli); \
+	fi
+
+flatpak-validate:
+	@if command -v flatpak-builder >/dev/null 2>&1; then \
+		flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry io.openbox.GameLauncher.yml; \
+	else \
+		python3 -B scripts/validate_flatpak_manifest.py; \
+	fi
+
+ui-smoke:
+	@if [ -x scripts/node_modules/.bin/puppeteer ] || [ -d scripts/node_modules/puppeteer ]; then \
+		./scripts/ui_smoke.sh; \
+	else \
+		$(call STRICT_CASE,puppeteer); \
+	fi
+
+perf:
+	python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5
 
 # Fails when the version in updates.py disagrees with any published spot.
 version-check:

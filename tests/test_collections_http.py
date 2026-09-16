@@ -21,8 +21,11 @@ class Handler:
     def __init__(self):
         self.responses = []
 
-    def send_json(self, status, payload):
-        self.responses.append((status, payload))
+    def send_json(self, status, payload, extra_headers=None):
+        if extra_headers is None:
+            self.responses.append((status, payload))
+        else:
+            self.responses.append((status, payload, extra_headers))
 
     def authorized(self):
         return True
@@ -81,6 +84,28 @@ class CollectionsRouteTests(unittest.TestCase):
             with self.assertRaises(NotFound) as raised:
                 collections_handler.collections_delete(Handler(), {"name": "Nope"})
             self.assertEqual(raised.exception.code, "COLLECTION_NOT_FOUND")
+
+    def test_export_and_import_routes(self):
+        with mock.patch.object(collections_handler.openbox, "load_state", return_value=self.state):
+            export_handler = Handler()
+            collections_handler.collections_export(export_handler, SimpleNamespace(query=""))
+            status, payload, headers = export_handler.responses[0]
+            self.assertEqual(status, 200)
+            self.assertEqual(payload["format"], 1)
+            self.assertIn("attachment", headers["Content-Disposition"])
+
+        with mock.patch.object(collections_handler, "transact_state", side_effect=self._transact):
+            import_handler = Handler()
+            collections_handler.collections_import(import_handler, {
+                "collections": [{"name": "Faves", "query": "favorite"}],
+                "replace": True,
+            })
+            self.assertEqual(import_handler.responses[0][1], {"ok": True, "imported": 1, "skipped": 0, "total": 1})
+            self.assertEqual(self.state["smart_collections"], [{"name": "Faves", "query": "favorite"}])
+
+        with mock.patch.object(collections_handler, "transact_state", side_effect=self._transact):
+            with self.assertRaises(BadRequest):
+                collections_handler.collections_import(Handler(), {"collections": "nope"})
 
 
 class StoryRouteTests(unittest.TestCase):

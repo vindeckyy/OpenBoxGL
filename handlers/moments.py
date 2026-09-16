@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import logging
 import secrets
 import shutil
@@ -357,6 +358,42 @@ def _find_moment(state, payload):
             if isinstance(item, dict) and str(item.get("moment_id") or "") == moment_id:
                 return candidate, item
     raise NotFound("Moment not found.", code="MOMENT_NOT_FOUND")
+
+
+@route("GET", "/api/v2/moments/auto-suggest", spec="handlers.moments.moments_auto_suggest")
+def moments_auto_suggest(handler, parsed):
+    """Offer a capture when a session-end trophy or progress advance happened.
+
+    The client persists the pre-session snapshot it tracked (the same shape
+    ``moments.js`` keeps across state refreshes); the server runs the single
+    ``auto_moment_trigger`` implementation so both sides cannot drift.
+    """
+    if not handler.authorized():
+        handler.handle_unauthorized()
+        return
+    query = parse_qs(parsed.query or "", keep_blank_values=True)
+    game_id = str(query.get("game_id", [""])[0] or "").strip()
+    if not game_id:
+        raise BadRequest("game_id is required.", code="MOMENT_ID_REQUIRED")
+    state = openbox.load_state()
+    game = next(
+        (item for item in state.get("games", []) if str(item.get("game_id") or "") == game_id),
+        None,
+    )
+    if game is None:
+        raise NotFound("Game not found.", code="GAME_NOT_FOUND")
+    raw_previous = str(query.get("previous", ["{}"])[0] or "{}")
+    try:
+        previous = json.loads(raw_previous)
+    except json.JSONDecodeError:
+        raise BadRequest("previous must be a JSON object.", code="MOMENT_INVALID_PREVIOUS") from None
+    trigger = auto_moment_trigger(previous if isinstance(previous, dict) else {}, game)
+    handler.send_json(200, {
+        "game_id": game_id,
+        "trigger": trigger,
+        "title": TRIGGER_TITLES.get(trigger, ""),
+        "suggested": bool(trigger),
+    })
 
 
 @route("GET", "/api/v2/moments", spec="handlers.moments.moments_list")

@@ -326,6 +326,67 @@ def check_update(opener=urlopen):
     }
 
 
+def background_download_update(update, destination=None, opener=urlopen, progress=None, cancelled=None):
+    """Download, verify, and stage an update for the next OpenBox start.
+
+    The AppImage file is replaced atomically after the checksum and Ed25519
+    signature both verify, so the running process keeps its inode and the next
+    start runs the new build. ``progress(downloaded, total)`` reports bytes;
+    ``cancelled()`` is polled between chunks and raises when true.
+    """
+    destination = Path(destination or os.environ.get("APPIMAGE", "")).expanduser().resolve()
+    if not destination.is_file():
+        raise ValueError("Background updates require the OpenBox AppImage.")
+    if not update.get("available"):
+        raise ValueError("OpenBox is already up to date.")
+    appimage = str(update.get("appimage", "")).strip()
+    if not appimage.startswith(TRUSTED_RELEASE_PREFIX):
+        raise ValueError("The update URLs are not trusted OpenBox release assets.")
+    expected = resolve_update_checksum(update, opener=opener)
+    verify_release_signature(update, expected, opener=opener)
+    temporary = destination.with_name(f".{destination.name}.download")
+    digest = hashlib.sha256()
+    downloaded = 0
+    total = 0
+    try:
+        request = Request(appimage, headers={"User-Agent": f"OpenBox/{VERSION}"})
+        with opener(request, timeout=60) as response:
+            try:
+                total = int(response.headers.get("Content-Length", "0") or 0)
+            except (AttributeError, TypeError, ValueError):
+                total = 0
+            with temporary.open("wb") as output:
+                while True:
+                    if cancelled is not None and cancelled():
+                        raise ValueError("Update download cancelled.")
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                    digest.update(chunk)
+                    downloaded += len(chunk)
+                    if progress is not None:
+                        progress(downloaded, total)
+                output.flush()
+                os.fsync(output.fileno())
+        if digest.hexdigest() != expected:
+            raise ValueError("The downloaded update failed its SHA-256 checksum.")
+        temporary.chmod(destination.stat().st_mode)
+        backup = destination.with_name(f"{destination.stem}.previous{destination.suffix}")
+        if backup.exists():
+            backup.unlink()
+        destination.replace(backup)
+        try:
+            temporary.replace(destination)
+        except OSError:
+            backup.replace(destination)
+            raise
+        fsync_directory(destination.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return {"installed": update["latest"], "backup": str(backup), "bytes": downloaded, "total": total}
+
+
 def install_update(update, destination=None, opener=urlopen):
     # Resolve symlinks so the real AppImage is replaced, not the link.
     destination = Path(destination or os.environ.get("APPIMAGE", "")).expanduser().resolve()

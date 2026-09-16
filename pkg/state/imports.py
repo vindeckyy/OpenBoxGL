@@ -10,9 +10,10 @@ import shlex
 import threading
 from pathlib import Path
 
+from backend_io import dir_signature
 from cloud_sync import sync_statistics
 from importers import import_heroic, import_lutris, import_steam
-from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, load_state, update_state
+from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, NO_CHANGE, load_state, update_state
 from parity_emulator_defs import list_scan_configs, scan_folder as scan_emulator_folder
 from pkg.parity.launch_tokens import build_launch_args
 from parity_gameyfin import GameyfinError, catalog_gameyfin
@@ -185,6 +186,14 @@ def import_folder_path(folder, recommend=True, chosen_emulators=None):
             platform = item.get("platform", "")
             recommendations.setdefault(platform, recommend_emulators(platform))
     result = {"additions": [], "settings": {}, "recommendations": recommendations}
+    if not candidates:
+        return 0, 0, recommendations
+    # Cheap pre-check on a copy-on-write view: an unchanged folder must not
+    # open a transaction (P2-4).
+    view = load_state()
+    existing_paths = {game.get("path") for game in view.get("games", [])}
+    if all(item.get("path") in existing_paths for item in candidates):
+        return 0, len(candidates), recommendations
 
     def mutate(state):
         existing = {game.get("path") for game in state["games"]}
@@ -226,6 +235,20 @@ def import_folder_path(folder, recommend=True, chosen_emulators=None):
     return len(result["additions"]), len(candidates), result["recommendations"]
 
 
+_MERGE_TRACKED_FIELDS = (
+    "applications", "source_identities", "heroic_source", "steam_app_id",
+    "heroic_app_id", "lutris_id", "gameyfin_id", "gameyfin_provider",
+    "faugus_id", "install_dir", "owned", "store_catalog", "store_installed",
+    "alternate_names", "cover", "background", "clear_logo", "fanart",
+    "banner", "icon", "path", "launch", "platform",
+)
+
+
+def _merge_snapshot(game):
+    """Cheap shallow snapshot of the fields ``_merge_imported_game`` touches."""
+    return {field: game.get(field) for field in _MERGE_TRACKED_FIELDS}
+
+
 def merge_imported_games(imported, identity_fn):
     result = {"added": 0, "found": 0}
 
@@ -234,20 +257,17 @@ def merge_imported_games(imported, identity_fn):
         exact, cross = _index_existing_games(state["games"])
         legacy_existing = {identity_fn(game) for game in state["games"]}
         new_games = []
+        changed_existing = False
         timestamp = datetime.now().isoformat(timespec="seconds")
         default_progress = state.get("settings", {}).get("progress_on_first_play", "Playing")
         for game in filtered:
-            # Keep caller-owned importer records detached from the committed
-            # state.  The warm state store retains the transaction object, so
-            # appending this dict directly would leak generated fields such as
-            # ``game_id`` back into the importer and affect later identity
-            # decisions.
-            game = copy.deepcopy(game)
             source_keys = source_identities(game)
             target = next((exact[key] for key in source_keys if key in exact), None)
             if target is not None or identity_fn(game) in legacy_existing:
                 if target is not None:
+                    before = _merge_snapshot(target)
                     _merge_imported_game(target, game, add_launcher=False)
+                    changed_existing = changed_existing or _merge_snapshot(target) != before
                     for key in source_identities(target):
                         exact.setdefault(key, target)
                 continue
@@ -258,10 +278,18 @@ def merge_imported_games(imported, identity_fn):
                 and source_family(cross[title_identity]) != source_family(game)
             ):
                 target = cross[title_identity]
+                before = _merge_snapshot(target)
                 _merge_imported_game(target, game, add_launcher=True)
+                changed_existing = changed_existing or _merge_snapshot(target) != before
                 for key in source_identities(target):
                     exact.setdefault(key, target)
                 continue
+            # Keep caller-owned importer records detached from the committed
+            # state.  The warm state store retains the transaction object, so
+            # appending this dict directly would leak generated fields such as
+            # ``game_id`` back into the importer and affect later identity
+            # decisions.
+            game = copy.deepcopy(game)
             game["added_at"] = timestamp
             if default_progress and not game.get("progress"):
                 game["progress"] = default_progress
@@ -272,15 +300,100 @@ def merge_imported_games(imported, identity_fn):
                 exact.setdefault(key, game)
             if title_identity:
                 cross.setdefault(title_identity, game)
-        state["games"].extend(new_games)
+        if new_games:
+            state["games"].extend(new_games)
         result.update({"added": len(new_games), "found": len(filtered)})
+        if not new_games and not changed_existing:
+            return NO_CHANGE
+        return None
 
     update_state(mutate)
     return result["added"], result["found"]
 
 
+BASE_IDLE_DELAY = 10
+MAX_IDLE_DELAY = 60
+WATCH_FINGERPRINT_MAX_DIRS = 20000
+
+
+def watch_folder_fingerprint(folder, *, max_dirs=WATCH_FINGERPRINT_MAX_DIRS):
+    """Cheap mtime/count fingerprint for one watched tree (see backend_io.dir_signature)."""
+    return dir_signature(Path(folder).expanduser(), max_entries=max_dirs)
+
+
+def _auto_import_storefronts(state, settings):
+    """Run the opt-in storefront and emulator scan passes for one idle tick."""
+    storefront = settings.get("storefront_auto_import", {})
+    if storefront.get("steam"):
+        try:
+            merge_imported_games(import_steam(), lambda game: ("steam", str(game.get("steam_app_id", ""))))
+        except (OSError, ValueError) as error:
+            LOGGER.warning("Steam auto-import failed: %s", error)
+    if storefront.get("heroic"):
+        try:
+            merge_imported_games(
+                import_heroic(),
+                lambda game: ("heroic", str(game.get("source", "")), str(game.get("heroic_app_id", ""))),
+            )
+        except (OSError, ValueError) as error:
+            LOGGER.warning("Heroic auto-import failed: %s", error)
+    if storefront.get("lutris"):
+        try:
+            merge_imported_games(import_lutris(), lambda game: ("lutris", str(game.get("lutris_id", ""))))
+        except (OSError, ValueError) as error:
+            LOGGER.warning("Lutris auto-import failed: %s", error)
+    if storefront.get("gameyfin"):
+        try:
+            catalog, _providers = catalog_gameyfin(settings)
+            imported = catalog_entries_to_games(catalog)
+            merge_imported_games(imported, lambda game: ("gameyfin", str(game.get("gameyfin_id", ""))))
+        except (OSError, ValueError, GameyfinError) as error:
+            LOGGER.warning("Gameyfin auto-import failed: %s", error)
+    for config in list_scan_configs(state):
+        if not config.get("auto_update"):
+            continue
+        folder = str(config.get("folder", "")).strip()
+        if not folder:
+            continue
+        try:
+            imported = scan_emulator_folder(
+                folder,
+                emulator_id=str(config.get("emulator_id", "")).strip() or None,
+            )
+            merge_imported_games(imported, lambda game: ("path", str(game.get("path", ""))))
+        except (OSError, ValueError) as error:
+            LOGGER.warning("Emulator scan auto-update failed for %s: %s", folder, error)
+
+
+def auto_import_pass(state, fingerprints):
+    """Run one idle pass; returns True when a watched folder changed.
+
+    ``fingerprints`` is a caller-owned ``{folder: fingerprint}`` map that
+    persists across passes so unchanged trees are never rescanned.
+    """
+    changed = False
+    settings = state.get("settings", {})
+    folders = settings.get("watch_folders", [])
+    if isinstance(folders, list):
+        for folder in folders:
+            if not isinstance(folder, str) or not folder.strip():
+                continue
+            fingerprint = watch_folder_fingerprint(folder)
+            if fingerprint is not None and fingerprints.get(folder) == fingerprint:
+                continue
+            fingerprints[folder] = fingerprint
+            changed = True
+            try:
+                import_folder_path(folder)
+            except (OSError, ValueError) as error:
+                LOGGER.warning("Watched-folder import failed for %s: %s", folder, error)
+    _auto_import_storefronts(state, settings)
+    return changed
+
+
 def auto_import_worker(cancel_event=None):
-    delay = 10
+    delay = BASE_IDLE_DELAY
+    fingerprints = {}
     while not WATCH_STOP.wait(delay):
         if cancel_event and cancel_event.is_set():
             return
@@ -290,54 +403,9 @@ def auto_import_worker(cancel_event=None):
             LOGGER.exception("Automatic import paused because library state could not be read: %s", error)
             delay = min(delay * 2, 300)
             continue
-        delay = 10
-        settings = state.get("settings", {})
-        folders = settings.get("watch_folders", [])
-        for folder in folders:
-            try:
-                import_folder_path(folder)
-            except (OSError, ValueError) as error:
-                LOGGER.warning("Watched-folder import failed for %s: %s", folder, error)
-        storefront = settings.get("storefront_auto_import", {})
-        if storefront.get("steam"):
-            try:
-                merge_imported_games(import_steam(), lambda game: ("steam", str(game.get("steam_app_id", ""))))
-            except (OSError, ValueError) as error:
-                LOGGER.warning("Steam auto-import failed: %s", error)
-        if storefront.get("heroic"):
-            try:
-                merge_imported_games(
-                    import_heroic(),
-                    lambda game: ("heroic", str(game.get("source", "")), str(game.get("heroic_app_id", ""))),
-                )
-            except (OSError, ValueError) as error:
-                LOGGER.warning("Heroic auto-import failed: %s", error)
-        if storefront.get("lutris"):
-            try:
-                merge_imported_games(import_lutris(), lambda game: ("lutris", str(game.get("lutris_id", ""))))
-            except (OSError, ValueError) as error:
-                LOGGER.warning("Lutris auto-import failed: %s", error)
-        if storefront.get("gameyfin"):
-            try:
-                catalog, _providers = catalog_gameyfin(settings)
-                imported = catalog_entries_to_games(catalog)
-                merge_imported_games(imported, lambda game: ("gameyfin", str(game.get("gameyfin_id", ""))))
-            except (OSError, ValueError, GameyfinError) as error:
-                LOGGER.warning("Gameyfin auto-import failed: %s", error)
-        for config in list_scan_configs(state):
-            if not config.get("auto_update"):
-                continue
-            folder = str(config.get("folder", "")).strip()
-            if not folder:
-                continue
-            try:
-                imported = scan_emulator_folder(
-                    folder,
-                    emulator_id=str(config.get("emulator_id", "")).strip() or None,
-                )
-                merge_imported_games(imported, lambda game: ("path", str(game.get("path", ""))))
-            except (OSError, ValueError) as error:
-                LOGGER.warning("Emulator scan auto-update failed for %s: %s", folder, error)
+        changed = auto_import_pass(state, fingerprints)
+        # Idle trees back off up to a minute; any change resets the cadence.
+        delay = BASE_IDLE_DELAY if changed else min(max(delay, BASE_IDLE_DELAY) * 2, MAX_IDLE_DELAY)
 
 
 def sync_cloud():

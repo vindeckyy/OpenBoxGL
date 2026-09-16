@@ -123,3 +123,9 @@ handlers/arcade.py
 pkg/parity/parity_collections.py
 pkg/parity/parity_story.py
 handlers/collections.py
+pkg/parity/parity_presence.py
+pkg/parity/parity_save_history.py
+pkg/parity/parity_artwork_hygiene.py
+pkg/parity/parity_setup_checklist.py
+pkg/parity/parity_repair.py
+pkg/parity/parity_duplicates.py

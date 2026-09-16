@@ -2,7 +2,9 @@
 
 The kiosk PIN is a convenience boundary for Museum mode, not an account or
 security system. Only a salted PBKDF2 digest is stored in local settings; the
-digest is never included in public settings responses.
+digest is never included in public settings responses. Failed verifications
+are rate-limited with an in-process exponential backoff so a shoulder-surfer
+cannot brute-force a short PIN interactively.
 """
 
 from __future__ import annotations
@@ -11,6 +13,8 @@ import base64
 import hashlib
 import hmac
 import secrets
+import threading
+import time
 
 from api_errors import BadRequest
 from routes.registry import route
@@ -20,6 +24,40 @@ PIN_ITERATIONS = 120_000
 PIN_SALT_BYTES = 16
 PIN_MIN_LENGTH = 4
 PIN_MAX_LENGTH = 12
+LOCKOUT_THRESHOLD = 3
+LOCKOUT_BASE_SECONDS = 5
+LOCKOUT_MAX_SECONDS = 300
+
+_LOCKOUT_LOCK = threading.Lock()
+_LOCKOUT = {"failures": 0, "locked_until": 0.0}
+
+
+def _monotonic():
+    return time.monotonic()
+
+
+def reset_kiosk_lockout():
+    """Clear the in-memory failure counter (process lifetime only)."""
+    with _LOCKOUT_LOCK:
+        _LOCKOUT["failures"] = 0
+        _LOCKOUT["locked_until"] = 0.0
+
+
+def kiosk_lockout_state():
+    """Return the remaining lockout seconds for diagnostics and the UI."""
+    with _LOCKOUT_LOCK:
+        return max(0.0, _LOCKOUT["locked_until"] - _monotonic())
+
+
+def _register_failure():
+    with _LOCKOUT_LOCK:
+        _LOCKOUT["failures"] += 1
+        grace = LOCKOUT_THRESHOLD - 1
+        if _LOCKOUT["failures"] > grace:
+            delay = min(LOCKOUT_BASE_SECONDS * (2 ** (_LOCKOUT["failures"] - grace - 1)), LOCKOUT_MAX_SECONDS)
+            _LOCKOUT["locked_until"] = _monotonic() + delay
+            return delay
+    return 0.0
 
 
 def _pin(value):
@@ -68,9 +106,12 @@ def verify_kiosk_pin(stored, pin):
 
 def _status(state):
     settings = state.get("settings", {}) if isinstance(state, dict) else {}
+    remaining = kiosk_lockout_state()
     return {
         "enabled": bool(settings.get("museum_kiosk_enabled", False)),
         "pin_set": bool(settings.get("museum_kiosk_pin_hash")),
+        "locked": remaining > 0,
+        "retry_after": int(remaining + 0.999) if remaining > 0 else 0,
     }
 
 
@@ -108,11 +149,35 @@ def kiosk_pin(handler, payload):
 def kiosk_verify(handler, payload):
     if not isinstance(payload, dict):
         raise BadRequest("Museum kiosk request must be an object.", code="ARCADE_INVALID_REQUEST")
+    remaining = kiosk_lockout_state()
+    if remaining > 0:
+        raise BadRequest(
+            f"Too many Museum PIN attempts. Try again in {int(remaining + 0.999)} seconds.",
+            code="ARCADE_LOCKED_OUT",
+        )
     pin = payload.get("pin")
     if not isinstance(pin, str) or len(pin) > PIN_MAX_LENGTH:
         raise BadRequest("Museum PIN must be text.", code="ARCADE_INVALID_PIN")
     settings = load_state_view().get("settings", {})
-    handler.send_json(200, {"ok": verify_kiosk_pin(settings.get("museum_kiosk_pin_hash", ""), pin)})
+    ok = verify_kiosk_pin(settings.get("museum_kiosk_pin_hash", ""), pin)
+    if ok:
+        reset_kiosk_lockout()
+    else:
+        delay = _register_failure()
+        if delay:
+            raise BadRequest(
+                f"Too many Museum PIN attempts. Try again in {int(delay)} seconds.",
+                code="ARCADE_LOCKED_OUT",
+            )
+    handler.send_json(200, {"ok": ok})
 
 
-__all__ = ["hash_kiosk_pin", "verify_kiosk_pin", "kiosk_status", "kiosk_pin", "kiosk_verify"]
+__all__ = [
+    "hash_kiosk_pin",
+    "verify_kiosk_pin",
+    "reset_kiosk_lockout",
+    "kiosk_lockout_state",
+    "kiosk_status",
+    "kiosk_pin",
+    "kiosk_verify",
+]

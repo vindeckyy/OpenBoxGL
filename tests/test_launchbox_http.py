@@ -95,6 +95,34 @@ class LaunchBoxHttpTests(unittest.TestCase):
         self.assertEqual(result["added"], 1)
         self.assertEqual(self.openbox.load_state()["games"][0]["name"], "Quake")
 
+    def test_apply_with_preview_token_only(self):
+        # 1.13.0: the browser sends only the token, never the multi-megabyte
+        # plan (MAX_BODY is 64 KB, so real libraries failed at apply).
+        status, preview = self.post("/api/v2/import/launchbox/preview", {
+            "xml_path": str(self.xml), "options": {},
+        })
+        self.assertEqual(status, 200)
+        status, result = self.post("/api/v2/import/launchbox/apply", {
+            "xml_path": str(self.xml), "preview_token": preview["preview_token"], "options": {},
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(result["added"], 1)
+        self.assertEqual(self.openbox.load_state()["games"][0]["name"], "Quake")
+
+    def test_apply_token_only_rejects_stale_library(self):
+        status, preview = self.post("/api/v2/import/launchbox/preview", {
+            "xml_path": str(self.xml), "options": {},
+        })
+        self.assertEqual(status, 200)
+        self.openbox.update_state(
+            lambda state: state["games"].append({"game_id": "game-late", "name": "Later", "path": "/tmp/later"})
+        )
+        status, body = self.post("/api/v2/import/launchbox/apply", {
+            "xml_path": str(self.xml), "preview_token": preview["preview_token"], "options": {},
+        })
+        self.assertEqual(status, 400)
+        self.assertEqual(len(self.openbox.load_state()["games"]), 1)
+
     def test_esde_preview_apply_and_source_stale(self):
         esde = Path(self.tmp.name) / "gamelist.xml"
         esde.write_text(
@@ -119,6 +147,39 @@ class LaunchBoxHttpTests(unittest.TestCase):
         )
         status, body = self.post("/api/v2/import/esde/apply", {
             "xml_path": str(esde), "plan": preview, "preview_token": preview["preview_token"],
+        })
+        self.assertEqual(status, 400)
+        self.assertEqual(body["code"], "ESDE_STALE_PLAN")
+
+    def test_esde_apply_with_preview_token_only(self):
+        esde = Path(self.tmp.name) / "gamelist.xml"
+        esde.write_text(
+            "<gameList><game><path>./quake.zip</path><name>Quake</name>"
+            "<system>pc</system><id>esde-q1</id></game></gameList>",
+            encoding="utf-8",
+        )
+        status, preview = self.post("/api/v2/import/esde/preview", {"xml_path": str(esde)})
+        self.assertEqual(status, 200)
+        status, result = self.post("/api/v2/import/esde/apply", {
+            "xml_path": str(esde), "preview_token": preview["preview_token"],
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(result["added"], 1)
+
+    def test_esde_token_only_rejects_stale_library(self):
+        esde = Path(self.tmp.name) / "gamelist.xml"
+        esde.write_text(
+            "<gameList><game><path>./quake.zip</path><name>Quake</name>"
+            "<system>pc</system><id>esde-q1</id></game></gameList>",
+            encoding="utf-8",
+        )
+        status, preview = self.post("/api/v2/import/esde/preview", {"xml_path": str(esde)})
+        self.assertEqual(status, 200)
+        self.openbox.update_state(
+            lambda state: state["games"].append({"game_id": "game-late", "name": "Later", "path": "/tmp/later"})
+        )
+        status, body = self.post("/api/v2/import/esde/apply", {
+            "xml_path": str(esde), "preview_token": preview["preview_token"],
         })
         self.assertEqual(status, 400)
         self.assertEqual(body["code"], "ESDE_STALE_PLAN")

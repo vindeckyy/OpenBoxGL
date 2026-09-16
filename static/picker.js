@@ -1,9 +1,10 @@
 /* picker.js — "What should I play?" smart picker dialog. */
 import { $, escapeHtml } from './util.js';
 import { t } from './i18n.js';
-import { AppState, api, filteredGames, media, notify } from './state.js';
+import { AppState, api, filteredGames, media, notify, notifyError, setButtonBusy } from './state.js';
 import { launch } from './sessions.js';
 import { render, selectGame } from './library.js';
+import { openDialog } from './dialogs.js';
 
     const VALID_TIMES = [0, 30, 45, 60, 90, 120];
     const VALID_MOODS = ['any', 'action', 'chill', 'story', 'retro', 'party'];
@@ -13,7 +14,7 @@ import { render, selectGame } from './library.js';
 
     function openPicker() {
       if (!AppState.games.length) return notify(t('picker.empty'));
-      $('pickerDialog').showModal();
+      if (!$('pickerDialog').open) openDialog($('pickerDialog'));
       renderPickerControls();
       $('pickerResult').hidden = true;
       $('pickerResultEmpty').hidden = true;
@@ -49,6 +50,8 @@ import { render, selectGame } from './library.js';
     }
 
     async function doPick(surprise = false) {
+      const spinButton = $('pickerSpin');
+      if (!surprise && spinButton?.disabled) return;
       if (surprise) {
         const visible = filteredGames();
         if (!visible.length) {
@@ -73,6 +76,7 @@ import { render, selectGame } from './library.js';
       $('pickerResult').hidden = true;
       $('pickerResultEmpty').hidden = true;
       $('pickerSpinning').hidden = false;
+      setButtonBusy(spinButton, true, t('common.loading'));
       try {
         const result = await api('/api/v2/library/pick', {
           method: 'POST',
@@ -86,7 +90,9 @@ import { render, selectGame } from './library.js';
         showPick(result.picks[0]);
       } catch(error) {
         $('pickerSpinning').hidden = true;
-        notify(error.message);
+        notifyError(error);
+      } finally {
+        setButtonBusy(spinButton, false);
       }
     }
 

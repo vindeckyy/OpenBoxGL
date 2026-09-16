@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
 import shlex
 import shutil
 import sys
 from pathlib import Path
+from urllib.request import urlopen
 
 _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from backend_io import atomic_write_text, read_limited  # noqa: E402
 from pkg.parity.launch_tokens import apply_tokens, build_launch_args  # noqa: E402
 
 try:
@@ -19,7 +24,14 @@ except ImportError:
     yaml = None
 
 SCHEMA_VERSION = 1
+DEFS_CHANNEL_FORMAT = 1
+MAX_DEFS_MANIFEST_BYTES = 2 * 1024 * 1024
+MAX_DEFS_FILE_BYTES = 256 * 1024
+MAX_DEFS_FILES = 200
+DEFS_VERSION_RE = re.compile(r"^\d{4}\.\d{2}\.\d+$")
+_REMOTE_DEF_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.yaml$")
 _REGISTRY_CACHE: dict | None = None
+_PARSE_ERRORS: tuple = (OSError, UnicodeDecodeError) + ((yaml.YAMLError,) if yaml is not None else ())
 
 
 def _repo_root() -> Path:
@@ -224,7 +236,12 @@ def _normalize_adapter(raw):
     }
 
 
-def _load_raw_adapters(defs_dir=None):
+def _record_def_error(errors, path, message):
+    if errors is not None:
+        errors.append({"file": path.name, "error": message or "invalid definition"})
+
+
+def _load_raw_adapters(defs_dir=None, errors=None):
     folder = Path(defs_dir or DEFS_DIR)
     adapters = []
     if not folder.is_dir():
@@ -232,19 +249,22 @@ def _load_raw_adapters(defs_dir=None):
     for path in sorted(folder.glob("*.yaml")):
         try:
             payload = _parse_yaml(path.read_text(encoding="utf-8"))
-        except OSError:
+        except _PARSE_ERRORS as error:
+            _record_def_error(errors, path, str(error))
             continue
         if not isinstance(payload, dict):
+            _record_def_error(errors, path, "definition must be a mapping")
             continue
         try:
             adapters.append(_normalize_adapter(payload))
-        except ValueError:
+        except ValueError as error:
+            _record_def_error(errors, path, str(error))
             continue
     return adapters
 
 
-def load_adapters(defs_dir=None):
-    return list(_load_raw_adapters(defs_dir))
+def load_adapters(defs_dir=None, errors=None):
+    return list(_load_raw_adapters(defs_dir, errors=errors))
 
 
 def _file_sha1(path):
@@ -363,7 +383,13 @@ def adapter_health(adapter, which=None, home=None):
 
 
 def load_registry(defs_dir=None, health=False, which=None, home=None):
-    adapters = load_adapters(defs_dir)
+    errors: list[dict] = []
+    if defs_dir is not None:
+        adapters = load_adapters(defs_dir, errors=errors)
+    else:
+        registry = _registry()
+        adapters = registry["adapters"]
+        errors = [dict(item) for item in registry.get("errors", [])]
     schema_version = adapters[0]["schema_version"] if adapters else SCHEMA_VERSION
     out_adapters = []
     for item in adapters:
@@ -396,14 +422,33 @@ def load_registry(defs_dir=None, health=False, which=None, home=None):
     return {
         "schema_version": schema_version,
         "adapters": out_adapters,
+        "errors": errors,
     }
+
+
+def _defs_fingerprint(folder=None):
+    folder = Path(folder if folder is not None else DEFS_DIR)
+    if not folder.is_dir():
+        return ()
+    fingerprint = []
+    for path in sorted(folder.glob("*.yaml")):
+        try:
+            info = path.stat()
+        except OSError:
+            continue
+        fingerprint.append((path.name, info.st_mtime_ns, info.st_size))
+    return tuple(fingerprint)
 
 
 def _registry():
     global _REGISTRY_CACHE
-    if _REGISTRY_CACHE is None:
+    fingerprint = _defs_fingerprint()
+    if _REGISTRY_CACHE is None or _REGISTRY_CACHE.get("fingerprint") != fingerprint:
+        errors: list[dict] = []
         _REGISTRY_CACHE = {
-            "adapters": load_adapters(),
+            "adapters": _load_raw_adapters(errors=errors),
+            "errors": errors,
+            "fingerprint": fingerprint,
             "by_adapter_id": {},
             "by_emulator_id": {},
             "by_platform": {},
@@ -424,6 +469,22 @@ def _registry():
 def _reset_registry_cache():
     global _REGISTRY_CACHE
     _REGISTRY_CACHE = None
+
+
+def reload_defs():
+    """Invalidate the registry cache and refresh the module-level EMULATORS maps."""
+    _reset_registry_cache()
+    registry = _registry()
+    EMULATORS.clear()
+    EMULATORS.update(build_emulators_dict(registry["adapters"]))
+    PLATFORM_EMULATORS.clear()
+    PLATFORM_EMULATORS.update(build_platform_emulators(registry["adapters"]))
+    return registry
+
+
+def definition_errors():
+    """Malformed or invalid definition files from the last registry load."""
+    return [dict(item) for item in _registry().get("errors", [])]
 
 
 def load_definitions(defs_dir=None):
@@ -760,6 +821,122 @@ priority: 1
     assert data["extensions"] == ["iso", "cso"]
     assert data["platform"] == "Single"
     print("emulator-defs fallback parser self-test: ok")
+
+
+# --- F13: signed, versioned definition update channel -----------------------
+
+
+def _defs_public_key(path=None):
+    candidate = Path(path or (ROOT / "openbox-release.pub"))
+    try:
+        data = candidate.read_bytes()
+    except OSError:
+        return None
+    return data if len(data) == 32 else None
+
+
+def validate_defs_manifest(payload):
+    """Validate the unsigned manifest shape; returns {version, files}."""
+    if not isinstance(payload, dict):
+        raise ValueError("The emulator definitions manifest must be an object.")
+    if int(payload.get("format") or 0) != DEFS_CHANNEL_FORMAT:
+        raise ValueError("The emulator definitions manifest format is unsupported.")
+    version = str(payload.get("version") or "").strip()
+    if not DEFS_VERSION_RE.fullmatch(version):
+        raise ValueError("The emulator definitions manifest version is invalid.")
+    files = payload.get("files")
+    yaml_files = payload.get("yaml")
+    if not isinstance(files, dict) or not isinstance(yaml_files, dict):
+        raise ValueError("The emulator definitions manifest is missing files.")
+    if not files or len(files) > MAX_DEFS_FILES:
+        raise ValueError("The emulator definitions manifest has an unsupported file count.")
+    clean = {}
+    for name, digest in files.items():
+        name = str(name)
+        digest = str(digest or "").strip().lower()
+        if not _REMOTE_DEF_NAME_RE.fullmatch(name):
+            raise ValueError(f"Unsafe emulator definition name: {name!r}.")
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError(f"Emulator definition {name} is missing a valid sha256.")
+        body = yaml_files.get(name)
+        if not isinstance(body, str) or not body.strip():
+            raise ValueError(f"Emulator definition {name} has no content.")
+        if len(body.encode("utf-8")) > MAX_DEFS_FILE_BYTES:
+            raise ValueError(f"Emulator definition {name} is too large.")
+        if hashlib.sha256(body.encode("utf-8")).hexdigest() != digest:
+            raise ValueError(f"Emulator definition {name} failed its sha256 checksum.")
+        clean[name] = body
+    return {"version": version, "files": clean, "digest": str(payload.get("digest") or "")}
+
+
+def apply_defs_manifest(manifest, defs_dir=None):
+    """Atomically replace definition files, keeping ``.bak`` copies.
+
+    Returns {"applied": [names], "backed_up": [names], "version": str}.
+    """
+    target = Path(defs_dir if defs_dir is not None else DEFS_DIR)
+    target.mkdir(parents=True, exist_ok=True)
+    applied = []
+    backed_up = []
+    for name, body in manifest["files"].items():
+        path = target / name
+        if path.exists():
+            backup = path.with_suffix(".yaml.bak")
+            try:
+                shutil.copy2(path, backup)
+                backed_up.append(str(backup))
+            except OSError:
+                pass
+        atomic_write_text(path, body, mode=0o644)
+        applied.append(name)
+    return {"applied": applied, "backed_up": backed_up, "version": manifest["version"]}
+
+
+def fetch_defs_channel(manifest_url, signature_url, *, defs_dir=None, opener=urlopen, public_key=None):
+    """Fetch, verify, and apply a signed emulator definition manifest.
+
+    Trust model (ADR 0058): the manifest is fetched over HTTPS *and* verified
+    against the committed ``openbox-release.pub`` Ed25519 key before any file
+    touches the definitions directory. A missing key, bad signature, bad
+    checksum, or unsafe file name aborts the whole update.
+    """
+    from updates import load_release_signature, verify_update_signature
+
+    manifest_url = str(manifest_url or "").strip()
+    signature_url = str(signature_url or "").strip()
+    if not manifest_url.startswith("https://") or not signature_url.startswith("https://"):
+        raise ValueError("The emulator definitions channel must use HTTPS.")
+    with opener(manifest_url, timeout=20) as response:
+        raw = read_limited(response, MAX_DEFS_MANIFEST_BYTES)
+    key = public_key if public_key is not None else _defs_public_key()
+    if not key:
+        raise ValueError("The committed OpenBox release public key is unavailable.")
+    digest = hashlib.sha256(raw).hexdigest()
+    signature = load_release_signature(signature_url, opener=opener)
+    verify_update_signature({}, digest, signature, key)
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("The emulator definitions manifest is not valid JSON.") from error
+    manifest = validate_defs_manifest(payload)
+    if manifest["digest"] and manifest["digest"] != digest:
+        raise ValueError("The emulator definitions manifest digest does not match its signature.")
+    result = apply_defs_manifest(manifest, defs_dir=defs_dir)
+    reload_defs()
+    result["errors"] = definition_errors()
+    return result
+
+
+def defs_channel_status(defs_dir=None, *, last_check="", installed_version=""):
+    registry = _registry()
+    return {
+        "defs_dir": str(Path(defs_dir if defs_dir is not None else DEFS_DIR)),
+        "adapters": len(registry["adapters"]),
+        "errors": len(registry.get("errors", [])),
+        "last_check": str(last_check or ""),
+        "installed_version": str(installed_version or ""),
+        "backups": sorted(path.name for path in Path(defs_dir if defs_dir is not None else DEFS_DIR).glob("*.yaml.bak")) if Path(defs_dir if defs_dir is not None else DEFS_DIR).is_dir() else [],
+    }
 
 
 if __name__ == "__main__":

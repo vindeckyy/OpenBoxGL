@@ -1,8 +1,11 @@
 """Route tables mapping HTTP paths to Handler method names."""
 
+import logging
 from pathlib import Path
 
 from api_errors import RouteNotFound
+
+LOGGER = logging.getLogger("openbox.routes")
 
 __path__ = [str(Path(__file__).resolve().parent / "routes")]
 
@@ -67,6 +70,8 @@ GET_TABLE = {
     "/api/emulators/recommend": "_api_get_api_emulators_recommend",
     "/api/emulators/scan-configs": "_api_get_api_emulators_scan_configs",
     "/api/v2/emulators/registry": "_api_get_api_v2_emulators_registry",
+    "/api/v2/emulators/defs/channel": "_api_get_api_v2_emulators_defs_channel",
+    "/api/v2/update/download/status": "_api_get_api_v2_update_download_status",
     "/api/explorer/facets": "_api_get_api_explorer_facets",
     "/api/filter-presets": "_api_get_api_filter_presets",
     "/api/gameyfin/install/status": "_api_get_api_gameyfin_install_status",
@@ -77,6 +82,7 @@ GET_TABLE = {
     "/api/v2/jobs": "_api_get_api_v2_jobs",
     "/api/v2/jobs/items": "_api_get_api_v2_jobs_items",
     "/api/v2/setup/summary": "_api_get_api_v2_setup_summary",
+    "/api/v2/setup/checklists": "_api_get_api_v2_setup_checklists",
     "/api/v2/setup/preview": "_api_get_api_v2_setup_preview",
     "/api/v2/setup/preview/items": "_api_get_api_v2_setup_preview_items",
     "/api/v2/metadata/matches/preview": "_api_get_api_v2_metadata_matches_preview",
@@ -92,14 +98,23 @@ GET_TABLE = {
     "/api/v2/library/constellation": "_api_get_api_v2_library_constellation",
     "/api/v2/library/search": "_api_get_api_v2_library_search",
     "/api/v2/library/trash": "_api_get_api_v2_library_trash",
+    "/api/v2/library/repair": "_api_get_api_v2_library_repair",
+    "/api/v2/library/duplicates": "_api_get_api_v2_library_duplicates",
     "/api/v2/library/time-machine/events": "_api_get_api_v2_library_time_machine_events",
     "/api/v2/library/time-machine/as-of": "_api_get_api_v2_library_time_machine_as_of",
     "/api/v2/party/queue": "_api_get_api_v2_party_queue",
+    "/api/v2/party/decks": "_api_get_api_v2_party_decks",
+    "/api/v2/saves/history": "_api_get_api_v2_saves_history",
+    "/api/v2/sessions/export": "_api_get_api_v2_sessions_export",
+    "/api/v2/timemachine/compare": "_api_get_api_v2_timemachine_compare",
     "/api/v2/backup/diff": "_api_get_api_v2_backup_diff",
     "/api/v2/screenscraper/search": "_api_get_api_v2_screenscraper_search",
     "/api/v2/screenscraper/status": "_api_get_api_v2_screenscraper_status",
+    "/api/v2/plugins/commands": "_api_get_api_v2_plugins_commands",
+    "/api/v2/collections/export": "handlers.collections.collections_export",
     "/api/v2/steamgrid/search": "handlers.steamgrid.steamgrid_search",
     "/api/v2/steamgrid/status": "handlers.steamgrid.steamgrid_status",
+    "/api/v2/steamgrid/hygiene/report": "handlers.steamgrid.steamgrid_hygiene_report",
     "/api/v2/steambridge/status": "handlers.steambridge.steambridge_status",
     "/api/v2/library/export/exports": "_api_get_api_v2_library_export_exports",
     "/api/v2/library/export/download": "_api_get_api_v2_library_export_download",
@@ -109,10 +124,14 @@ GET_TABLE = {
     "/api/v2/sessions/recap": "_api_get_api_v2_sessions_recap",
     "/api/v2/resume/status": "handlers.resume.resume_status",
     "/api/v2/moments": "handlers.moments.moments_list",
+    "/api/v2/moments/auto-suggest": "handlers.moments.moments_auto_suggest",
     "/api/v2/collections": "handlers.collections.collections_list",
     "/api/v2/story": "_api_get_api_v2_story",
     "/api/v2/household": "handlers.household.household_status",
     "/api/v2/household/leaderboard": "handlers.household.household_leaderboard",
+    "/api/v2/household/activity": "handlers.household.household_activity",
+    "/api/v2/household/challenge/weekly": "handlers.household.household_weekly_challenge",
+    "/api/v2/household/wishlist": "handlers.household.household_wishlist",
     "/api/v2/clips": "handlers.clips.clips_list",
     "/api/v2/reels": "handlers.clips.reel_manifest",
     "/api/v2/arcade/kiosk/status": "handlers.arcade.kiosk_status",
@@ -223,6 +242,8 @@ POST_TABLE = {
     "/api/emulators/scan-configs": "_api_post_api_emulators_scan_configs",
     "/api/emulators/update": "_api_post_api_emulators_update",
     "/api/emulators/update-all": "_api_post_api_emulators_update_all",
+    "/api/v2/emulators/defs/channel/update": "_api_post_api_v2_emulators_defs_channel_update",
+    "/api/v2/update/download": "_api_post_api_v2_update_download",
     "/api/emumovies/download": "_api_post_api_emumovies_download",
     "/api/emumovies/settings": "_api_post_api_emumovies_settings",
     "/api/extra/launch": "_api_post_api_extra_launch",
@@ -276,6 +297,10 @@ POST_TABLE = {
     "/api/v2/library/manual-entry/update": "_api_post_api_v2_library_manual_entry_update",
     "/api/v2/library/manual-entry/convert": "_api_post_api_v2_library_manual_entry_convert",
     "/api/v2/library/trash": "_api_post_api_v2_library_trash",
+    "/api/v2/library/repair/preview": "_api_post_api_v2_library_repair_preview",
+    "/api/v2/library/repair/apply": "_api_post_api_v2_library_repair_apply",
+    "/api/v2/library/duplicates/preview": "_api_post_api_v2_library_duplicates_preview",
+    "/api/v2/library/duplicates/merge": "_api_post_api_v2_library_duplicates_merge",
     "/api/v2/library/query/parse": "_api_post_api_v2_library_query_parse",
     "/api/v2/library/time-machine/revert": "_api_post_api_v2_library_time_machine_revert",
     "/api/v2/library/trash/restore": "_api_post_api_v2_library_trash_restore",
@@ -284,6 +309,15 @@ POST_TABLE = {
     "/api/v2/library/sync/apply": "_api_post_api_v2_library_sync_apply",
     "/api/v2/party/queue": "_api_post_api_v2_party_queue",
     "/api/v2/party/next": "_api_post_api_v2_party_next",
+    "/api/v2/party/decks": "_api_post_api_v2_party_decks",
+    "/api/v2/party/decks/load": "_api_post_api_v2_party_decks_load",
+    "/api/v2/party/decks/delete": "_api_post_api_v2_party_decks_delete",
+    "/api/v2/party/decks/share": "_api_post_api_v2_party_decks_share",
+    "/api/v2/party/decks/import": "_api_post_api_v2_party_decks_import",
+    "/api/v2/saves/history/verify": "_api_post_api_v2_saves_history_verify",
+    "/api/v2/saves/history/restore": "_api_post_api_v2_saves_history_restore",
+    "/api/v2/saves/history/prune": "_api_post_api_v2_saves_history_prune",
+    "/api/v2/saves/history/test-restore": "_api_post_api_v2_saves_history_test_restore",
     "/api/v2/screenscraper/apply": "_api_post_api_v2_screenscraper_apply",
     "/api/v2/screenscraper/info": "_api_post_api_v2_screenscraper_info",
     "/api/v2/screenscraper/match": "_api_post_api_v2_screenscraper_match",
@@ -292,6 +326,8 @@ POST_TABLE = {
     "/api/v2/steamgrid/info": "handlers.steamgrid.steamgrid_info",
     "/api/v2/steamgrid/match": "handlers.steamgrid.steamgrid_match",
     "/api/v2/steamgrid/test": "handlers.steamgrid.steamgrid_test",
+    "/api/v2/steamgrid/hygiene/fix": "handlers.steamgrid.steamgrid_hygiene_fix",
+    "/api/v2/steamgrid/hygiene/undo": "handlers.steamgrid.steamgrid_hygiene_undo",
     "/api/v2/steambridge/preview": "handlers.steambridge.steambridge_preview",
     "/api/v2/steambridge/apply": "handlers.steambridge.steambridge_apply",
     "/api/v2/steambridge/remove/preview": "handlers.steambridge.steambridge_remove_preview",
@@ -309,15 +345,20 @@ POST_TABLE = {
     "/api/v2/moments": "handlers.moments.moments_create",
     "/api/v2/collections": "handlers.collections.collections_save",
     "/api/v2/collections/delete": "handlers.collections.collections_delete",
+    "/api/v2/collections/import": "handlers.collections.collections_import",
     "/api/v2/moments/resume": "handlers.moments.moments_resume",
     "/api/v2/moments/update": "handlers.moments.moments_update",
     "/api/v2/moments/delete": "handlers.moments.moments_delete",
     "/api/v2/household/member": "handlers.household.household_member",
     "/api/v2/household/challenge": "handlers.household.household_challenge",
+    "/api/v2/household/challenge/weekly": "handlers.household.household_weekly_adopt",
+    "/api/v2/household/wishlist": "handlers.household.household_wishlist_share",
     "/api/v2/household/challenge/result": "handlers.household.household_result",
     "/api/v2/household/share": "handlers.household.household_share",
     "/api/v2/household/merge": "handlers.household.household_merge",
     "/api/v2/household/record": "handlers.household.household_record",
+    "/api/v2/household/presence": "handlers.household.household_presence",
+    "/api/v2/household/presence/heartbeat": "handlers.household.household_heartbeat",
     "/api/v2/household/sync/publish": "handlers.household.household_sync_publish",
     "/api/v2/household/sync/pull": "handlers.household.household_sync_pull",
     "/api/v2/clips/capture": "handlers.clips.capture_clip",
@@ -344,6 +385,7 @@ POST_TABLE = {
     "/api/plugins/install": "_api_post_api_plugins_install",
     "/api/plugins/remove": "_api_post_api_plugins_remove",
     "/api/plugins/toggle": "_api_post_api_plugins_toggle",
+    "/api/v2/plugins/command": "_api_post_api_v2_plugins_command",
     "/api/premium/media-packs/apply": "_api_post_api_premium_media_packs_apply",
     "/api/profiles": "_api_post_api_profiles",
     "/api/queue": "_api_post_api_queue",
@@ -489,7 +531,12 @@ def _is_public_path(path):
 
 
 def _lookup_registry(method, path):
-    """Check the decorator registry for a path not in the static tables."""
+    """Check the decorator registry for a path not in the static tables.
+
+    A broken registry must fail loudly: swallowing the error here turned every
+    decorator-only route into a silent 404. Log and re-raise so the request
+    answers 500 with the real cause instead.
+    """
     try:
         from routes.registry import _REGISTRY
 
@@ -503,7 +550,8 @@ def _lookup_registry(method, path):
             if entry is not None and base in V1_ALIASED_PREFIXES:
                 return entry.spec
     except Exception:
-        pass
+        LOGGER.exception("Route registry lookup failed for %s %s", method, path)
+        raise
     return None
 
 

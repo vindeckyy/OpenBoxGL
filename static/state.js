@@ -1,5 +1,6 @@
 import { escapeHtml, API_V1, badge, defaultBadges, sortGames, advancedQueryMatches, parseQueryTokens, gameInstalled, $ } from './util.js';
 import { render } from './library.js';
+import { t } from './i18n.js';
 
 
 
@@ -148,6 +149,76 @@ const token = new URLSearchParams(location.search).get('token') || '';
       return document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
     }
     const NOTIFY_LEVELS = new Set(['success', 'info', 'warning', 'error']);
+    const NOTIFY_DURATION_MS = 2800;
+    const NOTIFY_EXIT_MS = 200;
+    const NOTIFY_MAX_VISIBLE = 3;
+    // Concurrent notifications stack instead of clobbering the single #toast
+    // element. The host is created lazily so index.html stays untouched, and
+    // legacy writers that still target #toast keep working.
+    const notifyQueue = [];
+    function toastHost() {
+      let host = $('toastQueue');
+      if (!host) {
+        host = document.createElement('div');
+        host.id = 'toastQueue';
+        // Each toast carries role=status so screen readers announce it without
+        // a second live region on the host.
+        host.style.cssText = 'position:fixed;right:var(--space-md);bottom:var(--space-md);z-index:20;display:flex;flex-direction:column-reverse;gap:var(--space-xs);max-width:360px;pointer-events:none;';
+        document.body.appendChild(host);
+      }
+      return host;
+    }
+    function activeToasts() {
+      const host = $('toastQueue');
+      return host ? [...host.querySelectorAll('.toast')] : [];
+    }
+    function removeToast(toast) {
+      clearTimeout(toast._notifyTimer);
+      toast.classList.remove('show');
+      clearTimeout(toast._notifyExitTimer);
+      toast._notifyExitTimer = setTimeout(() => {
+        toast.remove();
+        drainNotifyQueue();
+      }, NOTIFY_EXIT_MS);
+    }
+    function presentToast(level, text, action = null) {
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.dataset.notifyLevel = level;
+      toast.setAttribute('role', 'status');
+      toast.setAttribute('aria-atomic', 'true');
+      toast.textContent = text;
+      if (action && action.label) {
+        // Action toasts (Undo) are interactive: the host is pointer-events:none,
+        // so the button opts back in through the existing .trash-undo rule.
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'trash-undo';
+        button.textContent = action.label;
+        button.onclick = () => {
+          try { action.onAction?.(); }
+          finally { removeToast(toast); }
+        };
+        toast.appendChild(button);
+      }
+      // .toast is fixed-position with right/bottom offsets; static keeps it in
+      // the host's column-reverse flow so those offsets cannot shift the stack.
+      toast.style.position = 'static';
+      toastHost().appendChild(toast);
+      // Flush the initial hidden state before show so the entrance transition
+      // still runs for fast consecutive notifications.
+      toast.getBoundingClientRect();
+      toast.classList.add('show');
+      const duration = action && Number.isFinite(action.duration) ? action.duration : NOTIFY_DURATION_MS;
+      toast._notifyTimer = setTimeout(() => removeToast(toast), duration);
+      return toast;
+    }
+    function drainNotifyQueue() {
+      while (notifyQueue.length && activeToasts().length < NOTIFY_MAX_VISIBLE) {
+        const item = notifyQueue.shift();
+        presentToast(item.level, item.text, item.action || null);
+      }
+    }
     function notify(levelOrMessage, message, options) {
       let level, text, opts;
       if (arguments.length === 1 && NOTIFY_LEVELS.has(levelOrMessage)) {
@@ -163,23 +234,47 @@ const token = new URLSearchParams(location.search).get('token') || '';
         text = String(message ?? '');
         opts = options || {};
       }
-      const toast = $('toast');
-      if (toast) {
-        toast.textContent = text;
-        toast.dataset.notifyLevel = level;
-        toast.classList.add('show');
-        clearTimeout(notify.timer);
-        notify.timer = setTimeout(() => toast.classList.remove('show'), 2800);
+      if (activeToasts().length < NOTIFY_MAX_VISIBLE) presentToast(level, text);
+      else notifyQueue.push({ level, text });
+      if (level === 'error' && (opts.actionable || opts.code || opts.requestId)) {
+        showErrorBanner({
+          message: text,
+          code: opts.code,
+          requestId: opts.requestId,
+          detail: opts.detail,
+          actionable: Boolean(opts.actionable),
+        });
       }
-      if (level === 'error' && opts.actionable) {
-        const banner = $('errorBanner');
-        if (banner) {
-          $('errorBannerText').textContent = text;
-          lastBannerDetails = [text, opts.code ? `code: ${opts.code}` : '', opts.requestId ? `request id: ${opts.requestId}` : '', opts.detail ? String(opts.detail) : ''].filter(Boolean).join('\n');
-          banner.hidden = false;
-          clearTimeout(showErrorBanner.timer);
-        }
+    }
+    function notifyAction(message, { label, onAction, duration = 8000, level = 'info' } = {}) {
+      // Timed toast with one action button (Undo). Returns a dismiss handle so
+      // deferred work can close the toast once it is no longer applicable.
+      const item = {
+        level,
+        text: String(message ?? ''),
+        action: { label: String(label ?? ''), onAction, duration },
+      };
+      if (activeToasts().length < NOTIFY_MAX_VISIBLE) {
+        const toast = presentToast(item.level, item.text, item.action);
+        return { dismiss: () => removeToast(toast), item };
       }
+      notifyQueue.push(item);
+      // Still queued: no toast element exists yet, so dismiss drops the
+      // queue entry before it can be presented.
+      return { dismiss: () => { const at = notifyQueue.indexOf(item); if (at >= 0) notifyQueue.splice(at, 1); }, item };
+    }
+    function notifyError(error, fallbackMessage) {
+      // Most call sites used notify(error.message), which defaulted to the
+      // info style and hid real failures. Everything routed through here is a
+      // failure: red toast, plus the diagnostic banner when the server gave a
+      // code or request id to copy.
+      const message = (error && error.message) || fallbackMessage || 'Something went wrong.';
+      return notify('error', message, {
+        actionable: Boolean(error && error.actionable),
+        code: error && error.code,
+        requestId: error && error.requestId,
+        detail: error && error.detail,
+      });
     }
     let lastBannerDetails = '';
     function showErrorBanner(error) {
@@ -199,9 +294,9 @@ const token = new URLSearchParams(location.search).get('token') || '';
         clearTimeout(showErrorBanner.timer);
       }
     }
-    function copyDiagnostics() {
+    async function copyDiagnostics() {
       try {
-        navigator.clipboard.writeText(lastBannerDetails || 'No error details captured.');
+        await navigator.clipboard.writeText(lastBannerDetails || 'No error details captured.');
         notify('Error details copied');
       } catch (error) {
         notify('Could not copy: clipboard unavailable');
@@ -214,18 +309,24 @@ const token = new URLSearchParams(location.search).get('token') || '';
         showErrorBanner(event.reason);
       }
     });
-    function setButtonBusy(button, busy) {
+    function setButtonBusy(button, busy, busyLabel = 'Starting game') {
       if (!button) return;
       button.disabled = busy;
       button.toggleAttribute('aria-busy', busy);
-      if (busy) button.setAttribute('aria-label', 'Starting game');
+      if (busy) button.setAttribute('aria-label', busyLabel);
       else button.removeAttribute('aria-label');
     }
     let profilesFetched = false;
     async function ensureProfiles() {
       if (profilesFetched) return;
       profilesFetched = true;
-      try { AppState.availableProfiles = (await api('/api/profiles')).profiles || {}; } catch(error) { profilesFetched = false; }
+      try { AppState.availableProfiles = (await api('/api/profiles')).profiles || {}; }
+      catch(error) {
+        // Retry on the next caller and surface the failure instead of
+        // silently showing "Default platform profile" everywhere.
+        profilesFetched = false;
+        notifyError(error);
+      }
     }
     function applyLocaleStrings() {
       const strings = AppState.appSettings.strings || {};
@@ -412,9 +513,11 @@ const token = new URLSearchParams(location.search).get('token') || '';
       if (!container) return;
       try {
         const result = await api(`/api/explorer/facets?field=${encodeURIComponent(field)}`);
-        const tabs = ['genre','developer','platform','progress','esrb'].map(name => `<button type="button" class="platform ${AppState.explorerField === name ? 'active' : ''}" data-explorer-field="${name}">${name}</button>`).join('');
+        // data-explorer-field stays the API's English field key; only the
+        // visible label is localized.
+        const tabs = ['genre','developer','platform','progress','esrb'].map(name => `<button type="button" class="platform ${AppState.explorerField === name ? 'active' : ''}" data-explorer-field="${name}">${escapeHtml(t(`dialog.${name}`))}</button>`).join('');
         const facets = (result.facets || []).map(item => `<button type="button" class="platform" data-explorer-value="${escapeHtml(item.value)}" data-explorer-field="${AppState.explorerField}">${escapeHtml(item.value)} (${item.count})</button>`).join('');
-        container.innerHTML = `<div class="platforms">${tabs}</div><div class="platforms">${facets || '<span class="description">No values yet.</span>'}</div>`;
+        container.innerHTML = `<div class="platforms">${tabs}</div><div class="platforms">${facets || `<span class="description">${escapeHtml(t('explorer.no_values'))}</span>`}</div>`;
         document.querySelectorAll('[data-explorer-field]').forEach(button => {
           if (button.dataset.explorerValue) {
             button.onclick = () => {
@@ -437,4 +540,4 @@ const token = new URLSearchParams(location.search).get('token') || '';
       }
     }
 
-export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId };
+export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, notifyAction, notifyError, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId };

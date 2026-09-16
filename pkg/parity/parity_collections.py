@@ -16,6 +16,8 @@ from pkg.parity.parity_query import filter_games_by_query, parse_query
 MAX_COLLECTIONS = 50
 MAX_NAME_LENGTH = 80
 MAX_QUERY_LENGTH = 500
+EXPORT_FORMAT = 1
+MAX_IMPORT_ITEMS = MAX_COLLECTIONS * 2
 
 
 def list_collections(state):
@@ -103,3 +105,37 @@ def collections_with_counts(state, now=None):
         {**item, "count": evaluate_collection(state, item["query"], now=now)}
         for item in list_collections(state)
     ]
+
+
+def export_collections(state):
+    """Portable collection export: names and queries only, no library data."""
+    return {
+        "format": EXPORT_FORMAT,
+        "collections": list_collections(state),
+    }
+
+
+def import_collections(state, collections, *, replace=False):
+    """Upsert imported collections; invalid rows are skipped, never fatal.
+
+    ``replace`` clears the existing list first, so a restore round-trips.
+    Both modes stay inside the existing name/query/count bounds.
+    """
+    if not isinstance(collections, (list, tuple)):
+        raise ValueError("collections must be a list.")
+    if len(collections) > MAX_IMPORT_ITEMS:
+        raise ValueError(f"At most {MAX_IMPORT_ITEMS} collections can be imported at once.")
+    if replace:
+        state["smart_collections"] = []
+    imported = 0
+    skipped = 0
+    for item in collections:
+        if not isinstance(item, dict):
+            skipped += 1
+            continue
+        try:
+            save_collection(state, item.get("name"), item.get("query"))
+            imported += 1
+        except ValueError:
+            skipped += 1
+    return {"imported": imported, "skipped": skipped, "total": len(list_collections(state))}

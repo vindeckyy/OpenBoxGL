@@ -20,7 +20,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | SteamGridDB artwork provider | done | Optional `STEAMGRIDDB_API_KEY` provider searches, previews, applies, and bulk-matches cover, background, clear-logo, icon, and banner artwork with a local cache (1.11.0) |
 | Steam launching | done | Imported App ID launches through Steam or its URI |
 | Epic, GOG, and Amazon imports through Heroic | done | Installed manifests import and launch through Heroic |
-| EA, Ubisoft, and Xbox imports | partial | Lutris/Heroic catalog import provides EA, Ubisoft, and Xbox/Game Pass tagging; native Xbox PC package scanning remains unavailable on Linux |
+| EA, Ubisoft, and Xbox imports | partial | Lutris/Heroic catalog import provides EA, Ubisoft, and Xbox/Game Pass tagging; native Xbox PC package scanning remains unavailable on Linux. Unchanged in 1.13.0: new launcher integrations (Heroic/Lutris/itch.io/GOG/Epic) are discovery-list work, not shipped |
 | MAME and FinalBurn full-set imports | done | DAT/XML metadata classifies and imports merged, split, and non-merged sets |
 | LaunchBox Games Database matching | done | Official daily database sync, local matching, and selected metadata/media downloads work |
 | Full LaunchBox media catalog | done | Box backs, spines, 3D boxes, clear logos, fanart, banners, title screens, carts, discs, and advertisement flyers download from the database alongside covers, backgrounds, and screenshots; manuals are user-supplied paths because the LaunchBox metadata feed ships no manual images |
@@ -50,7 +50,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Durable background operations | done | Activity drawer with SSE progress, cancellation, retry/resume, and `operations.json` persistence |
 | Launch readiness preflight | done | Launch Doctor validates paths, adapters, Flatpak/native executables, BIOS/firmware, and tokenized arguments before launch. BIOS SHA1 drift detection reports `BIOS_SHA1_DRIFT` when a BIOS file exists but its hash doesn't match the expected value (1.7.2) |
 | Play Insights local analytics | done | Local 366-day playtime heatmap (levels 0–4), streaks, momentum, top platforms/genres with zero telemetry |
-| Optional SQLite read model | done | `OPENBOX_ENABLE_SQLITE_READ=1` enables FTS5 search, indexed queries, and GROUP BY facets for libraries beyond the JSON path; the read model also self-enables at 5,000+ games unless explicitly opted out (1.12.0, ADR 0047). JSON remains source of truth. The formal release gates cover 10k/20k libraries, so performance above 20k is exploratory rather than release-gated (ADR 0032) |
+| Optional SQLite read model | done | `OPENBOX_ENABLE_SQLITE_READ=1` enables FTS5 search, indexed queries, and GROUP BY facets for libraries beyond the JSON path; the read model also self-enables at 5,000+ games unless explicitly opted out (1.12.0, ADR 0047). JSON remains source of truth. The formal release gates cover 10k/20k libraries, so performance above 20k is exploratory rather than release-gated (ADR 0032). 1.13.0 records an exploratory 50k tier in `docs/development/PERF.md`; 10k/20k remain the blocking gates |
 | Visual chip builder for collections | done | Filter presets render as visual chips via `rules_to_chips`/`chips_to_rules` round-trip conversion (1.7.2) |
 | Searchable settings pages | done | Settings dialog filters fields by name and related terms |
 | Session history toggle and viewer | done | Play sessions can be disabled and are browsable from the History menu |
@@ -129,7 +129,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Library Time Machine | done | Journal-backed event history supports bounded timeline, as-of inspection, and safe revert previews (1.11.0, ADR 0044) |
 | Backlog Radio and natural query | done | Habit-aware backlog recommendations, explainable query chips, and the Ctrl/Cmd-K command palette are local and deterministic (1.11.0, ADR 0043, ADR 0045) |
 | Arcade Room and Museum mode | done | Controller-friendly platform room, museum facts, reduced-motion rendering, and optional local kiosk convenience boundary (1.11.0) |
-| Household challenges and leaderboard | partial | Opt-in local records converge through the sync folder; no accounts or hosted multiplayer service (1.11.0) |
+| Household challenges and leaderboard | partial | Opt-in local records converge through the sync folder; no accounts or hosted multiplayer service (1.11.0). 1.13.0 adds Now Playing presence and shared game-night decks (F1/F2), still folder-synced and local-only — presence is off by default and retains no history |
 | Record That clips and reels | done | Replay-buffer or fail-safe screenshot capture plus bounded, deterministic highlight reels (1.11.0) |
 | Steam Bridge shortcuts | done | Preview/apply/remove `shortcuts.vdf` entries and launch an OpenBox game with `openbox --play <id>` (1.11.0) |
 | ES-DE gamelist import | done | Reviewable `gamelist.xml` preview/apply with stale-plan and source-digest protection (1.11.0) |

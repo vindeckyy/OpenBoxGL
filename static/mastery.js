@@ -2,6 +2,7 @@
 import { $, escapeHtml } from './util.js';
 import { t } from './i18n.js';
 import { AppState, api } from './state.js';
+import { openDialog } from './dialogs.js';
 
 const STATES = ['never', 'played', 'beaten', 'completed', 'mastered'];
 function stateLabels() {
@@ -25,7 +26,7 @@ let dialog;
 
 function openMastery() {
   if (!dialog) initDom();
-  dialog.showModal();
+  if (!dialog.open) openDialog(dialog);
   loadMastery();
 }
 

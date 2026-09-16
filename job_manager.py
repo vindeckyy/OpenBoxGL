@@ -389,6 +389,10 @@ class JobManager:
             if job.get("state") in finished:
                 self._jobs.pop(name, None)
                 self._cancel_events.pop(job.get("job_id"), None)
+                # Without this the id -> name map grew for the lifetime of the
+                # process; cancel_by_id depends on it and it is also used for
+                # Activity labels.
+                self._names_by_id.pop(job.get("job_id"), None)
 
     def submit(
         self,

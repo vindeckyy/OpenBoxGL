@@ -10,7 +10,8 @@ from openbox import STATE_STORE, load_state, recover_state as recover_library_st
 from pkg.parity.launch_tokens import build_launch_args
 from pkg.parity.parity_insights import timeline_groups
 from routes.registry import route
-from webapp_state import EVENT_SEQUENCE, PROCESS_LOCK, RUNNING, SESSION_EVENTS, STATE_LOCK, bump_media_epoch, control_game_session, game_from_payload, load_state_view, start_game
+from state_store import StateCorruptError
+from webapp_state import EVENT_SEQUENCE, PROCESS_LOCK, RUNNING, SESSION_EVENTS, bump_media_epoch, control_game_session, game_from_payload, load_state_view, start_game
 
 
 class SessionHandlers:
@@ -99,14 +100,22 @@ class SessionHandlers:
     def recover_state(self, payload=None):
         payload = payload or {}
         if payload.get("dry_run"):
-            with STATE_LOCK:
+            # Must work while the primary state is corrupt: this is the
+            # preview the recovery UI shows before restoring.
+            try:
                 games_list = load_state().get("games", [])
-                return self.send_json(200, {
-                    "dry_run": True,
-                    "backup_available": STATE_STORE.backup_path.is_file(),
-                    "snapshots": STATE_STORE.snapshots(),
-                    "games": len(games_list) if isinstance(games_list, list) else 0,
-                })
+                games_count = len(games_list) if isinstance(games_list, list) else 0
+                needs_recovery = False
+            except StateCorruptError:
+                games_count = 0
+                needs_recovery = True
+            return self.send_json(200, {
+                "dry_run": True,
+                "needs_recovery": needs_recovery,
+                "backup_available": STATE_STORE.backup_path.is_file(),
+                "snapshots": STATE_STORE.snapshots(),
+                "games": games_count,
+            })
         if payload.get("snapshot"):
             state = STATE_STORE.restore_snapshot(str(payload["snapshot"]))
             bump_media_epoch()

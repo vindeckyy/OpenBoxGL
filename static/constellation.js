@@ -1,7 +1,8 @@
 /* constellation.js — library relationship graph (force-directed canvas). */
-import { $, escapeHtml } from './util.js';
+import { $, escapeHtml, safeStorage } from './util.js';
 import { t } from './i18n.js';
-import { AppState, api, media } from './state.js';
+import { AppState, api, media, notify, notifyError } from './state.js';
+import { openDialog } from './dialogs.js';
 
     // ponytail: labels resolve at render time (not module load) because the
     // locale dictionary is fetched asynchronously after boot; a frozen map
@@ -38,10 +39,15 @@ import { AppState, api, media } from './state.js';
         nodeFill: cssToken('--surface-card', 'black'),
         nodeStroke: cssToken('--border-card', 'white'),
         nodeText: cssToken('--text', 'white'),
+        path: cssToken('--focus', 'yellow'),
       };
     }
     let palette = null;
     const DEFAULT_KINDS = ['series','developer','publisher','genre','platform_family','co_played'];
+    const VIEWPOINT_KEY = 'openbox-constellation-viewpoints';
+    let viewpoints = [];
+    let pathNodes = new Set();
+    let pathEdges = new Set();
 
     let canvas, ctx, dialog, container;
     let cssW = 0, cssH = 0;
@@ -56,7 +62,7 @@ import { AppState, api, media } from './state.js';
     function openConstellation() {
       if (!dialog) initDom();
       renderKindLabels();
-      dialog.showModal();
+      if (!dialog.open) openDialog(dialog);
       loadAndRender();
     }
 
@@ -76,6 +82,7 @@ import { AppState, api, media } from './state.js';
       renderKindLabels();
       $('constellationLimit').onchange = () => loadAndRender();
       $('constellationKinds').onchange = () => loadAndRender();
+      ensureConstellationTools();
 
       canvas.onmousedown = e => {
         const p = pointOnCanvas(e.clientX, e.clientY);
@@ -142,10 +149,35 @@ import { AppState, api, media } from './state.js';
       return null;
     }
 
+    function ensureConstellationErrorHost() {
+      let host = $('constellationError');
+      if (host) return host;
+      const wrap = document.querySelector('.constellation-wrap');
+      if (!wrap) return null;
+      host = document.createElement('p');
+      host.id = 'constellationError';
+      host.className = 'description';
+      host.hidden = true;
+      wrap.appendChild(host);
+      return host;
+    }
+
+    function showConstellationError(error) {
+      const host = ensureConstellationErrorHost();
+      if (!host) return;
+      const message = error?.message || String(error || '');
+      host.innerHTML = `<span>${escapeHtml(t('constellation.load_failed'))}${message ? ` ${escapeHtml(message)}` : ''}</span> <button type="button" class="icon-button" id="constellationRetry">${escapeHtml(t('constellation.retry'))}</button>`;
+      host.hidden = false;
+      const retry = $('constellationRetry');
+      if (retry) retry.onclick = () => { host.hidden = true; loadAndRender(); };
+    }
+
     async function loadAndRender() {
       if (!canvas) return;
       $('constellationLoading').hidden = false;
       $('constellationEmpty').hidden = true;
+      const errorHost = ensureConstellationErrorHost();
+      if (errorHost) errorHost.hidden = true;
       const kinds = [...document.querySelectorAll('#constellationKinds input:checked')].map(i => i.value).join(',');
       const limit = $('constellationLimit').value;
       try {
@@ -161,10 +193,17 @@ import { AppState, api, media } from './state.js';
           return { x: Math.cos(angle) * r, y: Math.sin(angle) * r };
         });
         palette = resolveColors();
+        clearPath();
         resizeCanvas();
+        refreshConstellationTools();
         $('constellationLoading').hidden = true;
         startSim();
-      } catch(error) { console.error(error); }
+      } catch(error) {
+        // A failed fetch used to leave the spinner up forever; show the error
+        // and a retry affordance instead of only logging it.
+        $('constellationLoading').hidden = true;
+        showConstellationError(error);
+      }
     }
 
     function resizeCanvas() {
@@ -268,12 +307,13 @@ import { AppState, api, media } from './state.js';
       const colors = palette || resolveColors();
       for (const edge of data.edges) {
         const a = nodePos[edge.s], b = nodePos[edge.t];
+        const onPath = pathEdges.has(edgeKey(edge.s, edge.t));
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
-        ctx.strokeStyle = colors[edge.kind] || colors.genre;
-        ctx.globalAlpha = 0.2 + 0.5 * (edge.w || 0.3);
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = onPath ? colors.path : (colors[edge.kind] || colors.genre);
+        ctx.globalAlpha = onPath ? 1 : 0.2 + 0.5 * (edge.w || 0.3);
+        ctx.lineWidth = onPath ? 3 : 1;
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
@@ -285,8 +325,9 @@ import { AppState, api, media } from './state.js';
         ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
         ctx.fillStyle = colors.nodeFill;
         ctx.fill();
-        ctx.strokeStyle = colors.nodeStroke;
-        ctx.lineWidth = 2;
+        const onPath = pathNodes.has(String(node.game_id || ''));
+        ctx.strokeStyle = onPath ? colors.path : colors.nodeStroke;
+        ctx.lineWidth = onPath ? 3 : 2;
         ctx.stroke();
         if (node.has_cover) {
           // draw cover as small image; if not loaded, fallback to initial
@@ -312,4 +353,223 @@ import { AppState, api, media } from './state.js';
       }
     }
 
-    export { openConstellation };
+    // --- F12: viewpoints, path finding, PNG export -------------------------
+    function selectedKinds() {
+      return [...document.querySelectorAll('#constellationKinds input:checked')].map(input => input.value);
+    }
+
+    function loadViewpoints() {
+      try {
+        const parsed = JSON.parse(safeStorage.get(VIEWPOINT_KEY) || '[]');
+        viewpoints = Array.isArray(parsed) ? parsed.filter(item => item && item.name && item.camera) : [];
+      } catch {
+        viewpoints = [];
+      }
+      return viewpoints;
+    }
+
+    function persistViewpoints() {
+      safeStorage.set(VIEWPOINT_KEY, JSON.stringify(viewpoints.slice(0, 24)));
+    }
+
+    function currentViewpoint(name) {
+      return {
+        name: String(name || '').trim().slice(0, 60),
+        saved_at: new Date().toISOString(),
+        camera: { x: camera.x, y: camera.y, zoom: camera.zoom },
+        kinds: selectedKinds(),
+        limit: String($('constellationLimit')?.value || '400'),
+      };
+    }
+
+    function applyViewpoint(viewpoint) {
+      if (!viewpoint || !viewpoint.camera) return false;
+      camera = {
+        x: Number(viewpoint.camera.x) || 0,
+        y: Number(viewpoint.camera.y) || 0,
+        zoom: Math.max(0.25, Math.min(4, Number(viewpoint.camera.zoom) || 1)),
+      };
+      const kinds = new Set(Array.isArray(viewpoint.kinds) ? viewpoint.kinds : DEFAULT_KINDS);
+      document.querySelectorAll('#constellationKinds input').forEach(input => { input.checked = kinds.has(input.value); });
+      if (viewpoint.limit && $('constellationLimit')) $('constellationLimit').value = String(viewpoint.limit);
+      draw();
+      return true;
+    }
+
+    function bfsPath(nodes, edges, fromId, toId) {
+      const from = String(fromId || '');
+      const to = String(toId || '');
+      if (!from || !to) return null;
+      if (from === to) return [from];
+      const adjacency = new Map();
+      for (const edge of edges || []) {
+        const a = String(nodes[edge.s]?.game_id || '');
+        const b = String(nodes[edge.t]?.game_id || '');
+        if (!a || !b) continue;
+        if (!adjacency.has(a)) adjacency.set(a, []);
+        if (!adjacency.has(b)) adjacency.set(b, []);
+        adjacency.get(a).push(b);
+        adjacency.get(b).push(a);
+      }
+      if (!adjacency.has(from) || !adjacency.has(to)) return null;
+      const previous = new Map([[from, null]]);
+      const queue = [from];
+      let head = 0;
+      while (head < queue.length) {
+        const current = queue[head++];
+        if (current === to) break;
+        for (const next of adjacency.get(current) || []) {
+          if (previous.has(next)) continue;
+          previous.set(next, current);
+          queue.push(next);
+        }
+      }
+      if (!previous.has(to)) return null;
+      const path = [];
+      let cursor = to;
+      while (cursor !== null) {
+        path.push(cursor);
+        cursor = previous.get(cursor);
+      }
+      return path.reverse();
+    }
+
+    function edgeKey(a, b) {
+      return `${a}-${b}`;
+    }
+
+    function clearPath() {
+      pathNodes = new Set();
+      pathEdges = new Set();
+    }
+
+    function highlightPath(path) {
+      clearPath();
+      if (!path || path.length < 2) return path || null;
+      const indexByGame = new Map(data.nodes.map((node, index) => [String(node.game_id || ''), index]));
+      pathNodes = new Set(path);
+      for (let i = 0; i < path.length - 1; i += 1) {
+        const s = indexByGame.get(path[i]);
+        const tIndex = indexByGame.get(path[i + 1]);
+        if (s === undefined || tIndex === undefined) continue;
+        pathEdges.add(edgeKey(s, tIndex));
+        pathEdges.add(edgeKey(tIndex, s));
+      }
+      draw();
+      return path;
+    }
+
+    function findPathBetweenGames() {
+      const from = $('constellationPathFrom')?.value || '';
+      const to = $('constellationPathTo')?.value || '';
+      const path = bfsPath(data.nodes, data.edges, from, to);
+      if (!path) {
+        clearPath();
+        draw();
+        notify('warning', t('constellation.path_none'));
+        return null;
+      }
+      highlightPath(path);
+      const names = path.map(gameId => data.nodes.find(node => String(node.game_id || '') === gameId)?.name || gameId);
+      notify('success', t('constellation.path_found', { count: path.length - 1, path: names.join(' → ') }));
+      return path;
+    }
+
+    function refreshConstellationTools() {
+      const select = $('constellationViewpoint');
+      if (select) {
+        loadViewpoints();
+        const previous = select.value;
+        select.innerHTML = viewpoints.length
+          ? viewpoints.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join('')
+          : `<option value="">${escapeHtml(t('constellation.viewpoint_none'))}</option>`;
+        if (previous && viewpoints.some(item => item.name === previous)) select.value = previous;
+      }
+      const options = data.nodes
+        .filter(node => node.game_id)
+        .map(node => `<option value="${escapeHtml(node.game_id)}">${escapeHtml(node.name)}</option>`)
+        .join('');
+      for (const id of ['constellationPathFrom', 'constellationPathTo']) {
+        const host = $(id);
+        if (host) host.innerHTML = options;
+      }
+    }
+
+    async function saveCurrentViewpoint() {
+      const { promptInput } = await import('./dialogs.js');
+      const name = await promptInput({ title: t('constellation.viewpoint_save'), label: t('constellation.viewpoint_name'), defaultValue: '' });
+      if (name === null || !String(name).trim()) return;
+      loadViewpoints();
+      const index = viewpoints.findIndex(item => item.name === String(name).trim());
+      const viewpoint = currentViewpoint(name);
+      if (index >= 0) viewpoints[index] = viewpoint;
+      else viewpoints.unshift(viewpoint);
+      persistViewpoints();
+      refreshConstellationTools();
+      notify('success', t('constellation.viewpoint_saved', { name: viewpoint.name }));
+    }
+
+    function deleteCurrentViewpoint() {
+      const select = $('constellationViewpoint');
+      const name = select?.value || '';
+      if (!name) return;
+      loadViewpoints();
+      viewpoints = viewpoints.filter(item => item.name !== name);
+      persistViewpoints();
+      refreshConstellationTools();
+      notify('success', t('constellation.viewpoint_deleted', { name }));
+    }
+
+    function exportConstellationPng() {
+      if (!canvas) return;
+      try {
+        const link = document.createElement('a');
+        link.download = `openbox-constellation-${Date.now()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        notify('success', t('constellation.export_done'));
+      } catch (error) {
+        notifyError(error, t('constellation.export_failed'));
+      }
+    }
+
+    function ensureConstellationTools() {
+      if ($('constellationTools')) return $('constellationTools');
+      const wrap = document.querySelector('.constellation-wrap');
+      if (!wrap) return null;
+      const host = document.createElement('div');
+      host.className = 'constellation-tools';
+      host.id = 'constellationTools';
+      host.innerHTML = `
+        <div class="constellation-tool-row">
+          <label class="field"><span>${escapeHtml(t('constellation.viewpoint'))}</span><select id="constellationViewpoint"></select></label>
+          <button type="button" class="icon-button" id="constellationSaveViewpoint">${escapeHtml(t('constellation.viewpoint_save'))}</button>
+          <button type="button" class="icon-button" id="constellationLoadViewpoint">${escapeHtml(t('constellation.viewpoint_load'))}</button>
+          <button type="button" class="icon-button" id="constellationDeleteViewpoint">${escapeHtml(t('constellation.viewpoint_delete'))}</button>
+          <button type="button" class="icon-button" id="constellationExportPng">${escapeHtml(t('constellation.export_png'))}</button>
+        </div>
+        <div class="constellation-tool-row">
+          <label class="field"><span>${escapeHtml(t('constellation.path_from'))}</span><select id="constellationPathFrom"></select></label>
+          <label class="field"><span>${escapeHtml(t('constellation.path_to'))}</span><select id="constellationPathTo"></select></label>
+          <button type="button" class="primary" id="constellationFindPath">${escapeHtml(t('constellation.path_find'))}</button>
+          <button type="button" class="icon-button" id="constellationClearPath">${escapeHtml(t('constellation.path_clear'))}</button>
+        </div>`;
+      wrap.appendChild(host);
+      $('constellationSaveViewpoint').onclick = () => saveCurrentViewpoint();
+      $('constellationLoadViewpoint').onclick = () => {
+        loadViewpoints();
+        const name = $('constellationViewpoint')?.value || '';
+        const viewpoint = viewpoints.find(item => item.name === name);
+        if (applyViewpoint(viewpoint)) {
+          notify('success', t('constellation.viewpoint_loaded', { name }));
+          loadAndRender();
+        }
+      };
+      $('constellationDeleteViewpoint').onclick = () => deleteCurrentViewpoint();
+      $('constellationExportPng').onclick = () => exportConstellationPng();
+      $('constellationFindPath').onclick = () => findPathBetweenGames();
+      $('constellationClearPath').onclick = () => { clearPath(); draw(); };
+      return host;
+    }
+
+    export { openConstellation, bfsPath };

@@ -1,38 +1,40 @@
 import { $, escapeHtml } from './util.js';
 import { api, notify, AppState, nativePickFolder, nativePickFile, resetQuery } from './state.js';
-import { promptChoice, promptInput } from './dialogs.js';
+import { promptChoice, promptInput, openDialog, closeDialog } from './dialogs.js';
 import { openMatchReview } from './metadata.js';
 import { openActivity } from './activity.js';
 import { refresh } from './library.js';
+import { t, onLocaleChange } from './i18n.js';
+import { waitForJob as waitForJobSse } from './events.js';
 
 const SUMMARY_KEYS = [
   'library_count', 'source_coverage', 'metadata_match_percent', 'media_gaps',
   'duplicate_count', 'missing_paths', 'emulator_readiness', 'active_operations', 'next_action',
 ];
 const STEPS = [
-  {id: 1, label: 'Overview', help: 'Review library health and the recommended next step.'},
-  {id: 2, label: 'Sources', help: 'Add folders, storefronts, and specialized sources to scan.'},
-  {id: 3, label: 'Scan', help: 'Run a side-effect-free preview scan via the v2 setup API.'},
-  {id: 4, label: 'Decisions', help: 'Resolve ambiguities, merges, and skips before import.'},
-  {id: 5, label: 'Readiness', help: 'Launch Doctor preflight for emulator and path readiness.'},
-  {id: 6, label: 'Options', help: 'Metadata, media, region, and import behavior.'},
-  {id: 7, label: 'Confirm', help: 'Revalidate the preview and commit to your library.'},
-  {id: 8, label: 'Finish', help: 'Enrich imported games and review completion counts.'},
+  {id: 1, labelKey: 'setup.step_overview', helpKey: 'setup.step_overview_help'},
+  {id: 2, labelKey: 'setup.step_sources', helpKey: 'setup.step_sources_help'},
+  {id: 3, labelKey: 'setup.step_scan', helpKey: 'setup.step_scan_help'},
+  {id: 4, labelKey: 'setup.step_decisions', helpKey: 'setup.step_decisions_help'},
+  {id: 5, labelKey: 'setup.step_readiness', helpKey: 'setup.step_readiness_help'},
+  {id: 6, labelKey: 'setup.step_options', helpKey: 'setup.step_options_help'},
+  {id: 7, labelKey: 'setup.step_confirm', helpKey: 'setup.step_confirm_help'},
+  {id: 8, labelKey: 'setup.step_finish', helpKey: 'setup.step_finish_help'},
 ];
 const PRIMARY_SOURCES = [
-  {type: 'folder', label: 'Folder', icon: '📁'},
-  {type: 'steam', label: 'Steam', icon: '🎮'},
-  {type: 'heroic', label: 'Heroic', icon: '🦸'},
-  {type: 'lutris', label: 'Lutris', icon: '🎯'},
-  {type: 'gameyfin', label: 'Gameyfin', icon: '📚'},
+  {type: 'folder', labelKey: 'setup.source_folder', icon: '📁'},
+  {type: 'steam', labelKey: 'setup.source_steam', icon: '🎮'},
+  {type: 'heroic', labelKey: 'setup.source_heroic', icon: '🦸'},
+  {type: 'lutris', labelKey: 'setup.source_lutris', icon: '🎯'},
+  {type: 'gameyfin', labelKey: 'setup.source_gameyfin', icon: '📚'},
 ];
 const MORE_SOURCES = [
-  {type: 'faugus', label: 'Faugus', icon: '🕹️'},
-  {type: 'xbox360', label: 'Xbox 360', icon: '🟢'},
-  {type: 'arcade', label: 'Arcade', icon: '👾'},
-  {type: 'scummvm', label: 'ScummVM', icon: '🧭'},
-  {type: 'rpcs3', label: 'RPCS3', icon: '🎲'},
-  {type: 'vita3k', label: 'Vita3K', icon: '📱'},
+  {type: 'faugus', labelKey: 'setup.source_faugus', icon: '🕹️'},
+  {type: 'xbox360', labelKey: 'setup.source_xbox360', icon: '🟢'},
+  {type: 'arcade', labelKey: 'setup.source_arcade', icon: '👾'},
+  {type: 'scummvm', labelKey: 'setup.source_scummvm', icon: '🧭'},
+  {type: 'rpcs3', labelKey: 'setup.source_rpcs3', icon: '🎲'},
+  {type: 'vita3k', labelKey: 'setup.source_vita3k', icon: '📱'},
 ];
 const MEDIA_TYPES = [
   'cover', 'background', 'screenshots', 'box_back', 'box_spine', 'box_3d',
@@ -47,6 +49,7 @@ function blankState() {
   return {
     step: 1,
     summary: null,
+    checklists: null,
     sources: [],
     options: {
       include_owned_uninstalled: false,
@@ -80,15 +83,15 @@ function ensureSetupShell() {
   if (!body) return;
   if (!body.querySelector('.setup-stepper')) {
     body.innerHTML = `
-      <nav class="setup-stepper" aria-label="Setup steps">
+      <nav class="setup-stepper" aria-label="${escapeHtml(t('setup.steps_aria'))}">
         <ol class="setup-step-list" id="setupStepList"></ol>
       </nav>
       <p class="setup-help description" id="setupHelp"></p>
       <div class="setup-panel" id="setupPanel" role="region" aria-live="polite"></div>
       <div class="setup-actions dialog-actions" id="setupActions">
-        <button type="button" id="setupBack">Back</button>
-        <button type="button" id="setupSaveClose">Save and close</button>
-        <button type="button" class="primary" id="setupContinue">Continue</button>
+        <button type="button" id="setupBack">${escapeHtml(t('setup.back'))}</button>
+        <button type="button" id="setupSaveClose">${escapeHtml(t('setup.save_close'))}</button>
+        <button type="button" class="primary" id="setupContinue">${escapeHtml(t('setup.continue'))}</button>
       </div>
     `;
   }
@@ -103,9 +106,9 @@ function renderStepList() {
   const list = $('setupStepList');
   if (!list) return;
   const progressByStep = {
-    3: state.previewDoc?.message || (state.previewDoc?.scanned_entries ? `Found ${state.previewDoc.scanned_entries} games` : ''),
-    4: state.previewItems.length ? `${state.previewItems.filter(i => (state.decisions.get(i.candidate_id)?.action || i.intended_action) === 'review').length} need review` : '',
-    5: state.preflight?.totals ? `Ready ${state.preflight.totals.ready ?? 0} · Blocked ${state.preflight.totals.blocked ?? 0}` : '',
+    3: state.previewDoc?.message || (state.previewDoc?.scanned_entries ? t('setup.progress_found_games', {count: state.previewDoc.scanned_entries}) : ''),
+    4: state.previewItems.length ? t('setup.progress_need_review', {count: state.previewItems.filter(i => (state.decisions.get(i.candidate_id)?.action || i.intended_action) === 'review').length}) : '',
+    5: state.preflight?.totals ? t('setup.progress_ready_blocked', {ready: state.preflight.totals.ready ?? 0, blocked: state.preflight.totals.blocked ?? 0}) : '',
     7: state.previewDoc?.message || '',
   };
   list.innerHTML = STEPS.map(step => {
@@ -113,25 +116,30 @@ function renderStepList() {
     return `
     <li class="setup-step-item${step.id === state.step ? ' active' : ''}${step.id < state.step ? ' done' : ''}" data-setup-step="${step.id}">
       <span class="setup-step-num">${step.id}</span>
-      <span class="setup-step-label">${escapeHtml(step.label)}</span>
+      <span class="setup-step-label">${escapeHtml(t(step.labelKey))}</span>
       ${progress ? `<span class="setup-step-progress">${escapeHtml(progress)}</span>` : ''}
     </li>
   `;
   }).join('');
   const help = $('setupHelp');
-  if (help) help.textContent = STEPS.find(s => s.id === state.step)?.help || '';
+  if (help) {
+    const current = STEPS.find(s => s.id === state.step);
+    help.textContent = current ? t(current.helpKey) : '';
+  }
 }
 
-async function waitForJob(jobId, {timeoutMs = 120000} = {}) {
-  if (!jobId) return null;
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const page = await api('/api/v2/jobs?limit=100');
-    const job = (page.jobs || []).find(entry => entry.job_id === jobId);
-    if (job && !['queued', 'running', 'cancelling'].includes(job.state)) return job;
-    await new Promise(r => setTimeout(r, 250));
-  }
-  throw new Error(`Timed out waiting for job ${jobId}`);
+function waitForJob(jobId, {timeoutMs = 120000} = {}) {
+  // SSE-driven wait (events.js) with the same deadline semantics callers had.
+  if (!jobId) return Promise.resolve(null);
+  return Promise.race([
+    waitForJobSse(jobId, {
+      fetch: async () => {
+        const page = await api('/api/v2/jobs?limit=100');
+        return (page.jobs || []).find(entry => entry.job_id === jobId) || null;
+      },
+    }),
+    new Promise((resolve, reject) => setTimeout(() => reject(new Error(t('setup.job_timeout', {job: jobId}))), timeoutMs)),
+  ]);
 }
 
 function emulatorChoicePayload() {
@@ -167,6 +175,48 @@ function decisionPayload(batch = state.previewItems) {
 async function loadSummary() {
   state.summary = await api('/api/v2/setup/summary');
   return state.summary;
+}
+
+async function loadChecklists() {
+  try {
+    state.checklists = await api('/api/v2/setup/checklists');
+  } catch {
+    state.checklists = null;
+  }
+  return state.checklists;
+}
+
+function checklistCheckLabel(check) {
+  const detail = String(check?.detail || '');
+  return detail || t('setup.check_unknown');
+}
+
+const CHECK_LABEL_KEYS = {
+  bios: 'setup.check_bios',
+  emulator: 'setup.check_emulator',
+  launch: 'setup.check_launch',
+  artwork: 'setup.check_artwork',
+};
+
+function renderChecklists() {
+  const payload = state.checklists;
+  if (!payload) return '';
+  const cards = (payload.platforms || []).map(card => {
+    const checks = card.checks || {};
+    const rows = ['bios', 'emulator', 'launch', 'artwork'].map(id => {
+      const check = checks[id];
+      if (!check) return '';
+      const stateName = String(check.state || 'skip');
+      return `<li class="setup-check-row" data-check-id="${escapeHtml(id)}" data-check-state="${escapeHtml(stateName)}"><span class="setup-check-dot setup-check-${escapeHtml(stateName)}" aria-hidden="true"></span><span class="setup-check-name">${escapeHtml(t(CHECK_LABEL_KEYS[id]))}</span><span class="setup-check-detail">${escapeHtml(checklistCheckLabel(check))}</span></li>`;
+    }).join('');
+    return `<article class="setup-check-card" data-platform="${escapeHtml(card.platform)}" data-status="${escapeHtml(card.status)}">
+      <header class="setup-check-head"><strong>${escapeHtml(card.platform)}</strong><span class="setup-check-badge setup-check-badge-${escapeHtml(card.status)}">${escapeHtml(t(`setup.status_${card.status}`))}</span><span class="description">${escapeHtml(t('setup.check_games', {count: card.games ?? 0}))}</span></header>
+      <ul class="setup-check-list">${rows}</ul>
+    </article>`;
+  }).join('');
+  if (!cards) return `<section class="setup-checklists" data-setup-panel="checklists"><h3 class="setup-section-title">${escapeHtml(t('setup.checklists_title'))}</h3><p class="description setup-empty">${escapeHtml(t('setup.checklists_empty'))}</p></section>`;
+  const summary = payload.summary || {};
+  return `<section class="setup-checklists" data-setup-panel="checklists"><h3 class="setup-section-title">${escapeHtml(t('setup.checklists_title'))}</h3><p class="description">${escapeHtml(t('setup.checklists_summary', {green: summary.green ?? 0, yellow: summary.yellow ?? 0, red: summary.red ?? 0}))}</p><div class="setup-check-grid">${cards}</div></section>`;
 }
 
 async function loadPreviewDocument() {
@@ -230,30 +280,35 @@ function renderOverview() {
   const summary = state.summary || {};
   const next = summary.next_action || {};
   const readiness = summary.emulator_readiness || {};
-  const coverage = (summary.source_coverage || []).map(row => `${escapeHtml(row.label || row.source_id)}: ${row.game_count ?? 0}`).join(' · ') || 'None';
+  const coverage = (summary.source_coverage || []).map(row => `${escapeHtml(row.label || row.source_id)}: ${row.game_count ?? 0}`).join(' · ') || t('common.none');
   return `
     <div class="setup-overview" data-setup-panel="overview">
       <div class="setup-summary-grid">
-        <div class="setup-stat" data-summary-key="library_count"><span class="setup-stat-label">Library games</span><strong>${summary.library_count ?? 0}</strong></div>
-        <div class="setup-stat" data-summary-key="metadata_match_percent"><span class="setup-stat-label">Metadata matched</span><strong>${summary.metadata_match_percent ?? 0}%</strong></div>
-        <div class="setup-stat" data-summary-key="media_gaps"><span class="setup-stat-label">Media gaps</span><strong>${summary.media_gaps ?? 0}</strong></div>
-        <div class="setup-stat" data-summary-key="duplicate_count"><span class="setup-stat-label">Duplicates</span><strong>${summary.duplicate_count ?? 0}</strong></div>
-        <div class="setup-stat" data-summary-key="missing_paths"><span class="setup-stat-label">Missing paths</span><strong>${summary.missing_paths ?? 0}</strong></div>
-        <div class="setup-stat" data-summary-key="active_operations"><span class="setup-stat-label">Active operations</span><strong>${summary.active_operations ?? 0}</strong></div>
+        <div class="setup-stat" data-summary-key="library_count"><span class="setup-stat-label">${escapeHtml(t('setup.stat_library_games'))}</span><strong>${summary.library_count ?? 0}</strong></div>
+        <div class="setup-stat" data-summary-key="metadata_match_percent"><span class="setup-stat-label">${escapeHtml(t('setup.stat_metadata_matched'))}</span><strong>${summary.metadata_match_percent ?? 0}%</strong></div>
+        <div class="setup-stat" data-summary-key="media_gaps"><span class="setup-stat-label">${escapeHtml(t('setup.stat_media_gaps'))}</span><strong>${summary.media_gaps ?? 0}</strong></div>
+        <div class="setup-stat" data-summary-key="duplicate_count"><span class="setup-stat-label">${escapeHtml(t('setup.stat_duplicates'))}</span><strong>${summary.duplicate_count ?? 0}</strong></div>
+        <div class="setup-stat" data-summary-key="missing_paths"><span class="setup-stat-label">${escapeHtml(t('setup.stat_missing_paths'))}</span><strong>${summary.missing_paths ?? 0}</strong></div>
+        <div class="setup-stat" data-summary-key="active_operations"><span class="setup-stat-label">${escapeHtml(t('setup.stat_active_operations'))}</span><strong>${summary.active_operations ?? 0}</strong></div>
       </div>
       <div class="setup-stat wide" data-summary-key="source_coverage">
-        <span class="setup-stat-label">Source coverage</span><strong>${coverage}</strong>
+        <span class="setup-stat-label">${escapeHtml(t('setup.stat_source_coverage'))}</span><strong>${coverage}</strong>
       </div>
       <div class="setup-stat wide" data-summary-key="emulator_readiness">
-        <span class="setup-stat-label">Emulator readiness</span>
-        <strong>Ready ${readiness.ready ?? 0} · Warning ${readiness.warning ?? 0} · Blocked ${readiness.blocked ?? 0}</strong>
+        <span class="setup-stat-label">${escapeHtml(t('setup.stat_emulator_readiness'))}</span>
+        <strong>${escapeHtml(t('setup.readiness_counts', {ready: readiness.ready ?? 0, warning: readiness.warning ?? 0, blocked: readiness.blocked ?? 0}))}</strong>
       </div>
       <div class="setup-next-action" data-summary-key="next_action">
-        <p class="description">Recommended next step</p>
-        <button type="button" class="primary setup-next-action-btn" data-next-step="${next.step || 2}">${escapeHtml(next.label || 'Continue setup')}</button>
+        <p class="description">${escapeHtml(t('setup.recommended_next'))}</p>
+        <button type="button" class="primary setup-next-action-btn" data-next-step="${next.step || 2}">${escapeHtml(next.label || t('setup.continue_setup'))}</button>
       </div>
     </div>
+    ${renderChecklists()}
   `;
+}
+
+function sourceLabel(source) {
+  return source.label || (source.labelKey ? t(source.labelKey) : source.type);
 }
 
 function renderSources() {
@@ -261,26 +316,26 @@ function renderSources() {
   const renderCard = source => `
     <button type="button" class="setup-source-card${selected.has(source._key) ? ' selected' : ''}" data-source-key="${escapeHtml(source._key)}">
       <span class="setup-source-icon">${source.icon || '📦'}</span>
-      <span class="setup-source-label">${escapeHtml(source.label)}</span>
+      <span class="setup-source-label">${escapeHtml(sourceLabel(source))}</span>
     </button>
   `;
   const primary = PRIMARY_SOURCES.map(s => ({...s, _key: s.type}));
   const more = MORE_SOURCES.map(s => ({...s, _key: s.type}));
   const selectedList = state.sources.length
-    ? `<ul class="setup-source-selected">${state.sources.map(s => `<li>${escapeHtml(s.label || s.type)}${s.path ? `: ${escapeHtml(s.path)}` : ''}</li>`).join('')}</ul>`
-    : '<p class="description setup-empty">No sources selected yet.</p>';
+    ? `<ul class="setup-source-selected">${state.sources.map(s => `<li>${escapeHtml(sourceLabel(s))}${s.path ? `: ${escapeHtml(s.path)}` : ''}</li>`).join('')}</ul>`
+    : `<p class="description setup-empty">${escapeHtml(t('setup.no_sources'))}</p>`;
   return `
     <div class="setup-sources" data-setup-panel="sources">
-      <h3 class="setup-section-title">Detected &amp; common sources</h3>
+      <h3 class="setup-section-title">${escapeHtml(t('setup.detected_sources'))}</h3>
       <div class="setup-source-grid">${primary.map(renderCard).join('')}</div>
       <details class="setup-more-sources">
-        <summary>More sources</summary>
+        <summary>${escapeHtml(t('setup.more_sources'))}</summary>
         <div class="setup-source-grid">${more.map(renderCard).join('')}</div>
       </details>
-      <h3 class="setup-section-title">Selected sources</h3>
+      <h3 class="setup-section-title">${escapeHtml(t('setup.selected_sources'))}</h3>
       ${selectedList}
-      <label class="field setup-checkbox"><input type="checkbox" id="setupIncludeUninstalled" ${state.options.include_owned_uninstalled ? 'checked' : ''}> Include owned but uninstalled storefront games</label>
-      <label class="field setup-checkbox"><input type="checkbox" id="setupWatchFolders" ${state.options.watch_folders ? 'checked' : ''}> Add folder to watched folders after import</label>
+      <label class="field setup-checkbox"><input type="checkbox" id="setupIncludeUninstalled" ${state.options.include_owned_uninstalled ? 'checked' : ''}> ${escapeHtml(t('setup.include_uninstalled'))}</label>
+      <label class="field setup-checkbox"><input type="checkbox" id="setupWatchFolders" ${state.options.watch_folders ? 'checked' : ''}> ${escapeHtml(t('setup.watch_folders'))}</label>
     </div>
   `;
 }
@@ -302,8 +357,8 @@ function renderPreviewRow(item) {
   return `
     <article class="setup-preview-row" data-candidate-id="${escapeHtml(item.candidate_id)}" data-intended-action="${escapeHtml(item.intended_action || '')}">
       <div class="setup-preview-head">
-        <strong>${escapeHtml(item.detected_title || 'Untitled')}</strong>
-        <span class="setup-preview-platform">${escapeHtml(item.detected_platform || 'Unknown')}</span>
+        <strong>${escapeHtml(item.detected_title || t('setup.untitled'))}</strong>
+        <span class="setup-preview-platform">${escapeHtml(item.detected_platform || t('common.unknown'))}</span>
         <span class="setup-preview-action">${escapeHtml(item.intended_action || '')}</span>
       </div>
       <div class="setup-preview-meta">
@@ -320,26 +375,26 @@ function renderPreviewRow(item) {
 function renderPreview() {
   const doc = state.previewDoc || {};
   const counts = doc.counts || {};
-  const countText = Object.entries(counts).map(([k, v]) => `${escapeHtml(k)}: ${v}`).join(' · ') || 'No counts yet';
+  const countText = Object.entries(counts).map(([k, v]) => `${escapeHtml(k)}: ${v}`).join(' · ') || t('setup.no_counts');
   const humanMessage = doc.message ? `<p class="setup-preview-message" data-preview-message>${escapeHtml(doc.message)}</p>` : '';
   const progressCopy = doc.scanned_entries
-    ? `<p class="setup-progress-copy">Found ${doc.scanned_entries} games${counts.ambiguities ? ` — ${counts.ambiguities} need your pick` : ''}${counts.unsupported ? ` · ${counts.unsupported} unsupported` : ''}</p>`
+    ? `<p class="setup-progress-copy">${escapeHtml(t('setup.progress_found_games', {count: doc.scanned_entries}))}${counts.ambiguities ? ` — ${escapeHtml(t('setup.progress_need_pick', {count: counts.ambiguities}))}` : ''}${counts.unsupported ? ` · ${escapeHtml(t('setup.progress_unsupported', {count: counts.unsupported}))}` : ''}</p>`
     : '';
   const rows = state.previewItems.map(item => {
     const chips = (item.emulator_choices || []).filter(c => c.flatpak_app_id).map(choice => `
-      <button type="button" class="setup-install-chip" data-install-chip="${escapeHtml(choice.flatpak_app_id)}" data-candidate-id="${escapeHtml(item.candidate_id)}" data-adapter-id="${escapeHtml(choice.adapter_id)}" data-emulator-id="${escapeHtml(choice.emulator_id)}">Install ${escapeHtml(choice.label || choice.adapter_id)} →</button>
+      <button type="button" class="setup-install-chip" data-install-chip="${escapeHtml(choice.flatpak_app_id)}" data-candidate-id="${escapeHtml(item.candidate_id)}" data-adapter-id="${escapeHtml(choice.adapter_id)}" data-emulator-id="${escapeHtml(choice.emulator_id)}">${escapeHtml(t('setup.install_emulator', {name: choice.label || choice.adapter_id}))} →</button>
     `).join('');
     return renderPreviewRow(item) + (chips ? `<div class="setup-preview-chips">${chips}</div>` : '');
   }).join('');
-  const status = state.busy ? '<p class="setup-status">Scan in progress…</p>' : '';
+  const status = state.busy ? `<p class="setup-status">${escapeHtml(t('setup.scan_in_progress'))}</p>` : '';
   return `
     <div class="setup-preview" data-setup-panel="preview">
       ${status}
       ${humanMessage}
       ${progressCopy}
       <p class="setup-preview-counts">${countText}</p>
-      <div class="setup-preview-list">${rows || '<p class="description setup-empty">No preview items yet. Continue to start a scan.</p>'}</div>
-      ${state.previewCursor ? '<button type="button" class="setup-load-more" id="setupLoadMorePreview">Load more</button>' : ''}
+      <div class="setup-preview-list">${rows || `<p class="description setup-empty">${escapeHtml(t('setup.no_preview_items'))}</p>`}</div>
+      ${state.previewCursor ? `<button type="button" class="setup-load-more" id="setupLoadMorePreview">${escapeHtml(t('setup.load_more'))}</button>` : ''}
     </div>
   `;
 }
@@ -354,9 +409,9 @@ function renderDecisions() {
           <strong>${escapeHtml(item.detected_title || '')}</strong>
           <span>${escapeHtml(item.detected_platform || '')}</span>
         </div>
-        <label class="field">Action
+        <label class="field">${escapeHtml(t('setup.action'))}
           <select class="setup-decision-action" data-candidate-id="${escapeHtml(item.candidate_id)}">
-            ${options.map(opt => `<option value="${opt}"${opt === current ? ' selected' : ''}>${opt}</option>`).join('')}
+            ${options.map(opt => `<option value="${opt}"${opt === current ? ' selected' : ''}>${escapeHtml(t(`setup.action_${opt}`))}</option>`).join('')}
           </select>
         </label>
         ${(item.merge_diff || []).length ? `<div class="setup-merge-diff compact">${(item.merge_diff || []).map(row => `<div class="setup-merge-field"><span>${escapeHtml(row.field)}</span><span>${escapeHtml(String(row.current ?? ''))}</span><span>→</span><span>${escapeHtml(String(row.proposed ?? ''))}</span></div>`).join('')}</div>` : ''}
@@ -365,8 +420,8 @@ function renderDecisions() {
   }).join('');
   return `
     <div class="setup-decisions" data-setup-panel="decisions">
-      <p class="description">Default safe additions import automatically. Resolve ambiguities explicitly.</p>
-      <div class="setup-decision-list">${rows || '<p class="description setup-empty">No decisions needed.</p>'}</div>
+      <p class="description">${escapeHtml(t('setup.decisions_hint'))}</p>
+      <div class="setup-decision-list">${rows || `<p class="description setup-empty">${escapeHtml(t('setup.no_decisions'))}</p>`}</div>
     </div>
   `;
 }
@@ -374,7 +429,7 @@ function renderDecisions() {
 function renderReadiness() {
   const preflight = state.preflight || {};
   const totals = preflight.totals || {};
-  const byPlatform = (preflight.by_platform || []).map(row => `${escapeHtml(row.platform || 'Unknown')}: ${row.ready ?? 0}/${row.total ?? 0}`).join(' · ');
+  const byPlatform = (preflight.by_platform || []).map(row => `${escapeHtml(row.platform || t('common.unknown'))}: ${row.ready ?? 0}/${row.total ?? 0}`).join(' · ');
   const progressCopy = state.previewDoc?.message ? `<p class="setup-readiness-progress">${escapeHtml(state.previewDoc.message)}</p>` : '';
   const results = (preflight.results || []).map(result => {
     const checks = (result.checks || []).map(check => `
@@ -387,28 +442,28 @@ function renderReadiness() {
     const choiceOptions = (item?.emulator_choices || []).map((choice, index) => {
       const selected = state.emulatorChoices.get(result.candidate_id);
       const isSelected = selected?.adapter_id === choice.adapter_id && selected?.launch_setup === 'adapter';
-      return `<option value="adapter:${index}"${isSelected ? ' selected' : ''}>Use ${escapeHtml(choice.label || choice.adapter_id || 'adapter')}</option>`;
+      return `<option value="adapter:${index}"${isSelected ? ' selected' : ''}>${escapeHtml(t('setup.use_adapter', {name: choice.label || choice.adapter_id || 'adapter'}))}</option>`;
     }).join('');
     const flatpakChoice = (item?.emulator_choices || []).find(c => c.flatpak_app_id);
     const installSelected = state.emulatorChoices.get(result.candidate_id)?.launch_setup === 'install_flatpak';
     const recommendChips = (item?.emulator_choices || []).map((choice, index) => `
-      <button type="button" class="setup-emulator-chip" data-emulator-chip="${escapeHtml(choice.adapter_id)}" data-candidate-id="${escapeHtml(result.candidate_id || '')}" data-choice-index="${index}">Install ${escapeHtml(choice.label || choice.adapter_id)}</button>
+      <button type="button" class="setup-emulator-chip" data-emulator-chip="${escapeHtml(choice.adapter_id)}" data-candidate-id="${escapeHtml(result.candidate_id || '')}" data-choice-index="${index}">${escapeHtml(t('setup.install_emulator', {name: choice.label || choice.adapter_id}))}</button>
     `).join('');
     return `
       <article class="setup-readiness-row" data-candidate-id="${escapeHtml(result.candidate_id || '')}" data-preflight-status="${escapeHtml(result.status || '')}">
         <div class="setup-readiness-head">
-          <strong>${escapeHtml(result.candidate_id || result.game_id || 'Candidate')}</strong>
+          <strong>${escapeHtml(result.candidate_id || result.game_id || t('setup.candidate'))}</strong>
           <span class="setup-readiness-status">${escapeHtml(result.status || '')}</span>
         </div>
-        <ul class="setup-check-list">${checks || '<li>No checks</li>'}</ul>
+        <ul class="setup-check-list">${checks || `<li>${escapeHtml(t('setup.no_checks'))}</li>`}</ul>
         ${recommendChips ? `<div class="setup-recommend-chips">${recommendChips}</div>` : ''}
-        <label class="field">Emulator choice
+        <label class="field">${escapeHtml(t('setup.emulator_choice'))}
           <select class="setup-emulator-choice" data-candidate-id="${escapeHtml(result.candidate_id || '')}">
             <option value="">—</option>
             ${choiceOptions}
-            ${flatpakChoice ? `<option value="install_flatpak"${installSelected ? ' selected' : ''}>Install Flatpak (${escapeHtml(flatpakChoice.flatpak_app_id || '')})</option>` : ''}
-            <option value="keep_custom">Keep custom launch</option>
-            <option value="incomplete">Import incomplete (not launch-ready)</option>
+            ${flatpakChoice ? `<option value="install_flatpak"${installSelected ? ' selected' : ''}>${escapeHtml(t('setup.install_flatpak', {id: flatpakChoice.flatpak_app_id || ''}))}</option>` : ''}
+            <option value="keep_custom">${escapeHtml(t('setup.keep_custom'))}</option>
+            <option value="incomplete">${escapeHtml(t('setup.incomplete'))}</option>
           </select>
         </label>
       </article>
@@ -418,40 +473,47 @@ function renderReadiness() {
     <div class="setup-readiness" data-setup-panel="readiness">
       ${progressCopy}
       <div class="setup-preflight-totals">
-        <span>Ready ${totals.ready ?? 0}</span>
-        <span>Warning ${totals.warning ?? 0}</span>
-        <span>Blocked ${totals.blocked ?? 0}</span>
+        <span>${escapeHtml(t('setup.ready_count', {count: totals.ready ?? 0}))}</span>
+        <span>${escapeHtml(t('setup.warning_count', {count: totals.warning ?? 0}))}</span>
+        <span>${escapeHtml(t('setup.blocked_count', {count: totals.blocked ?? 0}))}</span>
       </div>
-      <p class="setup-by-platform">${byPlatform || 'No platform breakdown yet.'}</p>
-      <div class="setup-readiness-list">${results || '<p class="description setup-empty">Run preflight after selecting import candidates.</p>'}</div>
-      <button type="button" class="setup-run-preflight" id="setupRunPreflight">Run preflight</button>
+      <p class="setup-by-platform">${byPlatform || escapeHtml(t('setup.no_platform_breakdown'))}</p>
+      <div class="setup-readiness-list">${results || `<p class="description setup-empty">${escapeHtml(t('setup.run_preflight_hint'))}</p>`}</div>
+      <button type="button" class="setup-run-preflight" id="setupRunPreflight">${escapeHtml(t('setup.run_preflight'))}</button>
     </div>
   `;
 }
 
+const MEDIA_LABEL_KEYS = {
+  cover: 'metadata.box_front', background: 'metadata.background', screenshots: 'metadata.screenshots',
+  box_back: 'metadata.box_back', box_spine: 'metadata.box_spine', box_3d: 'metadata.box_3d',
+  clear_logo: 'metadata.clear_logo', fanart: 'metadata.fanart', banner: 'metadata.banner',
+  icon: 'metadata.icon', title_screen: 'metadata.title_screen', manual: 'metadata.manual',
+};
+
 function renderOptions() {
   const mediaChecks = MEDIA_TYPES.map(type => `
-    <label class="setup-media-type"><input type="checkbox" data-media-type="${type}" ${state.options.media_types.includes(type) ? 'checked' : ''}> ${escapeHtml(type.replace(/_/g, ' '))}</label>
+    <label class="setup-media-type"><input type="checkbox" data-media-type="${type}" ${state.options.media_types.includes(type) ? 'checked' : ''}> ${escapeHtml(t(MEDIA_LABEL_KEYS[type] || type))}</label>
   `).join('');
   return `
     <div class="setup-options" data-setup-panel="options">
-      <label class="field setup-checkbox"><input type="checkbox" id="setupMetadataSync" ${state.options.metadata_sync ? 'checked' : ''}> Download / update LaunchBox metadata database after import</label>
+      <label class="field setup-checkbox"><input type="checkbox" id="setupMetadataSync" ${state.options.metadata_sync ? 'checked' : ''}> ${escapeHtml(t('setup.metadata_sync'))}</label>
       <fieldset class="setup-fieldset">
-        <legend>Media types to download (fill missing only by default)</legend>
+        <legend>${escapeHtml(t('setup.media_types_legend'))}</legend>
         <div class="setup-media-grid">${mediaChecks}</div>
       </fieldset>
-      <label class="field">Region preference
+      <label class="field">${escapeHtml(t('setup.region_preference'))}
         <select id="setupRegionPreference">
-          <option value="world"${state.options.region_preference === 'world' ? ' selected' : ''}>World</option>
-          <option value="us"${state.options.region_preference === 'us' ? ' selected' : ''}>United States</option>
-          <option value="eu"${state.options.region_preference === 'eu' ? ' selected' : ''}>Europe</option>
-          <option value="jp"${state.options.region_preference === 'jp' ? ' selected' : ''}>Japan</option>
+          <option value="world"${state.options.region_preference === 'world' ? ' selected' : ''}>${escapeHtml(t('setup.region_world'))}</option>
+          <option value="us"${state.options.region_preference === 'us' ? ' selected' : ''}>${escapeHtml(t('setup.region_us'))}</option>
+          <option value="eu"${state.options.region_preference === 'eu' ? ' selected' : ''}>${escapeHtml(t('setup.region_eu'))}</option>
+          <option value="jp"${state.options.region_preference === 'jp' ? ' selected' : ''}>${escapeHtml(t('setup.region_jp'))}</option>
         </select>
       </label>
-      <label class="field">Download limit (0 = no limit)
+      <label class="field">${escapeHtml(t('setup.download_limit'))}
         <input type="number" id="setupDownloadLimit" min="0" value="${state.options.download_limit || 0}">
       </label>
-      <label class="field setup-checkbox"><input type="checkbox" id="setupReplaceExisting" ${state.options.replace_existing ? 'checked' : ''}> Replace existing metadata/media (explicit opt-in)</label>
+      <label class="field setup-checkbox"><input type="checkbox" id="setupReplaceExisting" ${state.options.replace_existing ? 'checked' : ''}> ${escapeHtml(t('setup.replace_existing'))}</label>
     </div>
   `;
 }
@@ -460,20 +522,20 @@ function renderConfirm() {
   const doc = state.previewDoc || {};
   const humanMessage = doc.message ? `<p class="setup-confirm-message">${escapeHtml(doc.message)}</p>` : '';
   const staleNudge = state.stale
-    ? '<p class="setup-stale" role="alert">Preview is stale — sources or library changed since scan. Revalidate to sync before committing.</p><p class="description setup-revalidate-nudge">Revalidating re-scans your sources and checks the library fingerprint. It takes a moment but prevents surprises.</p>'
-    : '<p class="description setup-revalidate-hint">Tip: revalidate if you added files or changed your library since scanning.</p>';
+    ? `<p class="setup-stale" role="alert">${escapeHtml(t('setup.stale_alert'))}</p><p class="description setup-revalidate-nudge">${escapeHtml(t('setup.stale_nudge'))}</p>`
+    : `<p class="description setup-revalidate-hint">${escapeHtml(t('setup.revalidate_hint'))}</p>`;
   return `
     <div class="setup-confirm" data-setup-panel="confirm">
       ${humanMessage}
       ${staleNudge}
-      <p class="description">Revalidate scans sources again, then commit writes imported games to your library.</p>
+      <p class="description">${escapeHtml(t('setup.revalidate_description'))}</p>
       <div class="setup-confirm-summary">
-        <p>Preview <strong>${escapeHtml(state.previewId || '—')}</strong> revision <strong>${doc.revision ?? state.revision}</strong></p>
-        <p>Candidates: <strong>${state.previewItems.length}</strong></p>
-        <p>Import actions: <strong>${selectedImportCandidates().length}</strong></p>
+        <p>${escapeHtml(t('setup.preview_label'))} <strong>${escapeHtml(state.previewId || '—')}</strong> ${escapeHtml(t('setup.revision_label'))} <strong>${doc.revision ?? state.revision}</strong></p>
+        <p>${escapeHtml(t('setup.candidates_label'))} <strong>${state.previewItems.length}</strong></p>
+        <p>${escapeHtml(t('setup.import_actions_label'))} <strong>${selectedImportCandidates().length}</strong></p>
       </div>
-      ${state.stale ? '<button type="button" class="primary setup-revalidate" id="setupRevalidate">Revalidate preview</button>' : '<button type="button" class="icon-button setup-revalidate" id="setupRevalidate">Revalidate preview</button>'}
-      ${state.busy ? '<p class="setup-status">Operation in progress…</p>' : ''}
+      ${state.stale ? `<button type="button" class="primary setup-revalidate" id="setupRevalidate">${escapeHtml(t('setup.revalidate'))}</button>` : `<button type="button" class="icon-button setup-revalidate" id="setupRevalidate">${escapeHtml(t('setup.revalidate'))}</button>`}
+      ${state.busy ? `<p class="setup-status">${escapeHtml(t('setup.operation_in_progress'))}</p>` : ''}
     </div>
   `;
 }
@@ -483,22 +545,64 @@ function renderFinish() {
   const keys = ['added', 'merged', 'skipped', 'unmatched', 'media_complete', 'launch_ready', 'warning', 'failed'];
   const countCards = keys.map(key => `
     <div class="setup-finish-stat" data-finish-key="${key}">
-      <span class="setup-stat-label">${escapeHtml(key.replace(/_/g, ' '))}</span>
+      <span class="setup-stat-label">${escapeHtml(t(`setup.finish_${key}`))}</span>
       <strong>${counts[key] ?? 0}</strong>
     </div>
+  `).join('');
+  const tryThese = [
+    {id: 'pick-game', labelKey: 'setup.try_pick_game', hintKey: 'setup.try_pick_game_hint'},
+    {id: 'radio', labelKey: 'setup.try_radio', hintKey: 'setup.try_radio_hint'},
+    {id: 'arcade', labelKey: 'setup.try_arcade', hintKey: 'setup.try_arcade_hint'},
+    {id: 'save-folder', labelKey: 'setup.try_save_folder', hintKey: 'setup.try_save_folder_hint'},
+  ].map(item => `
+    <button type="button" class="setup-try-card" data-setup-try="${item.id}">
+      <strong>${escapeHtml(t(item.labelKey))}</strong>
+      <span class="description">${escapeHtml(t(item.hintKey))}</span>
+    </button>
   `).join('');
   return `
     <div class="setup-finish" data-setup-panel="finish">
       <div class="setup-finish-counts">${countCards}</div>
+      <section class="setup-try-these" data-setup-panel="try-these">
+        <h3 class="setup-section-title">${escapeHtml(t('setup.try_these_title'))}</h3>
+        <div class="setup-try-grid">${tryThese}</div>
+      </section>
       <div class="setup-finish-actions">
-        <button type="button" class="primary" id="setupViewImported">View imported games</button>
-        <button type="button" id="setupReviewMetadata">Review unmatched metadata</button>
-        <button type="button" id="setupFixLaunch">Fix launch blockers</button>
-        <button type="button" id="setupRetryWork">Retry failed work</button>
-        <button type="button" id="setupOpenActivity">Open Activity Center</button>
+        <button type="button" class="primary" id="setupViewImported">${escapeHtml(t('setup.view_imported'))}</button>
+        <button type="button" id="setupReviewMetadata">${escapeHtml(t('setup.review_unmatched'))}</button>
+        <button type="button" id="setupFixLaunch">${escapeHtml(t('setup.fix_launch_blockers'))}</button>
+        <button type="button" id="setupRetryWork">${escapeHtml(t('setup.retry_failed'))}</button>
+        <button type="button" id="setupOpenActivity">${escapeHtml(t('setup.open_activity'))}</button>
       </div>
     </div>
   `;
+}
+
+async function runTryThese(id) {
+  if (id === 'pick-game') {
+    saveAndClose();
+    document.dispatchEvent(new CustomEvent('app:palette-surprise'));
+    return;
+  }
+  if (id === 'radio') {
+    try {
+      await api('/api/v2/insights/radio/refresh', {method: 'POST', body: '{}'});
+      notify('success', t('setup.try_radio_done'));
+    } catch (error) {
+      notify('error', error.message);
+    }
+    return;
+  }
+  if (id === 'arcade') {
+    saveAndClose();
+    document.dispatchEvent(new CustomEvent('app:palette-open-arcade-room'));
+    return;
+  }
+  if (id === 'save-folder') {
+    saveAndClose();
+    document.dispatchEvent(new CustomEvent('app:palette-open-settings'));
+    return;
+  }
 }
 
 function renderPanel() {
@@ -519,14 +623,22 @@ function renderPanel() {
   bindPanelEvents();
   const back = $('setupBack');
   const cont = $('setupContinue');
-  if (back) back.disabled = state.step <= 1 || state.busy;
+  if (back) {
+    back.disabled = state.step <= 1 || state.busy;
+    back.textContent = t('setup.back');
+  }
+  const saveClose = $('setupSaveClose');
+  if (saveClose) saveClose.textContent = t('setup.save_close');
   if (cont) {
     cont.disabled = state.busy;
-    cont.textContent = state.step >= 8 ? 'Done' : 'Continue';
+    cont.textContent = state.step >= 8 ? t('common.done') : t('setup.continue');
   }
 }
 
 function bindPanelEvents() {
+  document.querySelectorAll('[data-setup-try]').forEach(btn => {
+    btn.onclick = () => runTryThese(btn.dataset.setupTry);
+  });
   document.querySelectorAll('.setup-next-action-btn').forEach(btn => {
     btn.onclick = () => {
       const step = Number(btn.dataset.nextStep || 2);
@@ -595,43 +707,43 @@ async function addSource(type) {
   const def = [...PRIMARY_SOURCES, ...MORE_SOURCES].find(s => s.type === type);
   if (!def) return;
   if (type === 'folder') {
-    const path = await nativePickFolder('Absolute path of the folder to import.');
+    const path = await nativePickFolder(t('setup.pick_folder_path'));
     if (!path) return;
     const recursive = await promptChoice({
-      title: 'Folder recursion',
-      message: 'Scan subfolders recursively?',
-      choices: [{value: 'yes', label: 'Yes, recurse'}, {value: 'no', label: 'Top level only'}],
+      title: t('setup.folder_recursion'),
+      message: t('setup.folder_recursion_message'),
+      choices: [{value: 'yes', label: t('setup.yes_recurse')}, {value: 'no', label: t('setup.top_level_only')}],
       defaultValue: 'yes',
     });
-    state.sources.push({type: 'folder', id: path, path, label: def.label, recursive: recursive !== 'no'});
+    state.sources.push({type: 'folder', id: path, path, labelKey: def.labelKey, recursive: recursive !== 'no'});
     renderPanel();
     return;
   }
   if (type === 'xbox360') {
-    const path = await nativePickFolder('Absolute path of the Xbox 360 content folder.');
+    const path = await nativePickFolder(t('setup.pick_xbox_path'));
     if (!path) return;
-    state.sources.push({type: 'xbox360', id: path, path, label: def.label});
+    state.sources.push({type: 'xbox360', id: path, path, labelKey: def.labelKey});
     renderPanel();
     return;
   }
   if (type === 'arcade') {
-    const path = await nativePickFolder('Absolute path of the arcade ROM folder.');
+    const path = await nativePickFolder(t('setup.pick_arcade_path'));
     if (!path) return;
     const setType = await promptChoice({
-      title: 'Arcade set type',
-      message: 'Choose the arcade set type.',
+      title: t('setup.arcade_set_type'),
+      message: t('setup.arcade_set_type_message'),
       choices: [{value: 'MAME', label: 'MAME'}, {value: 'FinalBurn Neo', label: 'FinalBurn Neo'}],
       defaultValue: 'MAME',
     });
     if (!setType) return;
-    const dat = (await nativePickFile('Absolute DAT/XML path. Leave blank to use installed MAME metadata.')) ?? '';
+    const dat = (await nativePickFile(t('setup.pick_dat_path'))) ?? '';
     const command = (await promptInput({
-      title: 'Launch command',
-      message: 'Optional launch command. Use {rom_name} and {path}.',
+      title: t('setup.launch_command'),
+      message: t('setup.launch_command_message'),
       defaultValue: '',
     })) ?? '';
     state.sources.push({
-      type: 'arcade', id: path, path, label: def.label,
+      type: 'arcade', id: path, path, labelKey: def.labelKey,
       set_type: setType, dat_path: dat, command,
       adapter_id: setType === 'FinalBurn Neo' ? 'fbneo' : 'mame',
     });
@@ -639,18 +751,18 @@ async function addSource(type) {
     return;
   }
   if (['scummvm', 'rpcs3', 'vita3k'].includes(type)) {
-    const path = await nativePickFolder(`Absolute path for ${def.label} import.`);
+    const path = await nativePickFolder(t('setup.pick_source_path', {source: sourceLabel(def)}));
     if (!path) return;
-    state.sources.push({type, id: path, path, label: def.label});
+    state.sources.push({type, id: path, path, labelKey: def.labelKey});
     renderPanel();
     return;
   }
   if (type === 'faugus') {
-    state.sources.push({type: 'faugus', id: 'faugus', label: def.label});
+    state.sources.push({type: 'faugus', id: 'faugus', labelKey: def.labelKey});
     renderPanel();
     return;
   }
-  state.sources.push({type, id: type, label: def.label});
+  state.sources.push({type, id: type, labelKey: def.labelKey});
   renderPanel();
 }
 
@@ -706,12 +818,12 @@ async function installFlatpakIfNeeded(candidateId) {
     });
     if (result.job_id) await waitForJob(result.job_id);
   } catch (error) {
-    notify('warning', `Flatpak install failed: ${error.message}`);
+    notify('warning', t('setup.flatpak_failed', {message: error.message}));
   }
 }
 
 async function startPreviewScan() {
-  if (!state.sources.length) throw new Error('Add at least one source before scanning.');
+  if (!state.sources.length) throw new Error(t('setup.add_source_first'));
   state.busy = true;
   state.runningJobId = '';
   renderPanel();
@@ -719,6 +831,7 @@ async function startPreviewScan() {
     sources: state.sources.map(source => {
       const copy = {...source};
       delete copy.label;
+      delete copy.labelKey;
       delete copy._key;
       if (copy.type === 'folder') {
         copy.recursive = copy.recursive !== false;
@@ -773,7 +886,7 @@ async function revalidatePreview() {
     });
     if (accepted.job_id) await waitForJob(accepted.job_id);
     await loadPreviewDocument();
-    if (!state.previewDoc?.revalidated) throw new Error('Preview was not revalidated.');
+    if (!state.previewDoc?.revalidated) throw new Error(t('setup.not_revalidated'));
   } catch (error) {
     if (String(error.message || '').includes('PREVIEW_STALE') || String(error.message || '').includes('PREVIEW_LIBRARY_CHANGED')) {
       state.stale = true;
@@ -833,7 +946,7 @@ async function runFinishPipeline() {
       const sync = await api('/api/metadata/sync', {method: 'POST', body: '{}'});
       if (sync.job_id) await waitForJob(sync.job_id);
     } catch (error) {
-      notify('warning', `Metadata sync failed: ${error.message}`);
+      notify('warning', t('setup.metadata_sync_failed', {message: error.message}));
     }
   }
   if (state.importBatchId) {
@@ -850,7 +963,7 @@ async function runFinishPipeline() {
         state._openMatchReview = true;
       }
     } catch (error) {
-      notify('warning', `Metadata match preview failed: ${error.message}`);
+      notify('warning', t('setup.metadata_preview_failed', {message: error.message}));
     }
   }
   if (state.options.media_types.length) {
@@ -874,7 +987,7 @@ async function runFinishPipeline() {
         finishCounts.media_complete = gameIds.length;
       }
     } catch (error) {
-      notify('warning', `Media download failed: ${error.message}`);
+      notify('warning', t('setup.media_failed', {message: error.message}));
     }
   }
   try {
@@ -896,7 +1009,7 @@ async function runFinishPipeline() {
       finishCounts.failed = batch.totals?.blocked ?? 0;
     }
   } catch (error) {
-    notify('warning', `Final summary failed: ${error.message}`);
+    notify('warning', t('setup.summary_failed', {message: error.message}));
   }
   state.finishCounts = finishCounts;
   try {
@@ -905,7 +1018,7 @@ async function runFinishPipeline() {
       body: JSON.stringify({...AppState.appSettings, welcome_completed: true}),
     });
   } catch (error) {
-    notify('warning', `Could not save welcome_completed: ${error.message}`);
+    notify('warning', t('setup.welcome_save_failed', {message: error.message}));
   }
   state.step = 8;
 }
@@ -924,7 +1037,7 @@ async function continueStep() {
       await loadSummary();
       state.step = Number(state.summary?.next_action?.step || 2);
     } else if (state.step === 2) {
-      if (!state.sources.length) throw new Error('Select at least one source.');
+      if (!state.sources.length) throw new Error(t('setup.select_source'));
       state.step = 3;
       await startPreviewScan();
     } else if (state.step === 3) {
@@ -969,7 +1082,7 @@ function goBack() {
 
 function saveAndClose() {
   const dialog = $('setupCenter');
-  if (dialog?.open) dialog.close();
+  if (dialog?.open) closeDialog(dialog);
 }
 
 export async function openSetupCenter({step = 1} = {}) {
@@ -977,10 +1090,11 @@ export async function openSetupCenter({step = 1} = {}) {
   if (!state.summary) {
     try { await loadSummary(); } catch { /* offline overview */ }
   }
+  if (!state.checklists) await loadChecklists();
   state.step = step;
   renderPanel();
   const dialog = $('setupCenter');
-  if (dialog && !dialog.open) dialog.showModal();
+  if (dialog && !dialog.open) openDialog(dialog, document.getElementById('setupLibraryButton') || document.activeElement);
 }
 
 function initSetupCenter() {
@@ -993,6 +1107,12 @@ function initSetupCenter() {
   }
   renderPanel();
 }
+
+// P8: the setup center is entirely JS-rendered, so a locale change only
+// becomes visible after a re-render. It is cheap and keeps step state.
+onLocaleChange(() => {
+  if ($('setupCenter')?.open) renderPanel();
+});
 
 queueMicrotask(() => { initSetupCenter(); });
 

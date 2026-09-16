@@ -530,6 +530,22 @@ def household_sync_folder(folder: str | os.PathLike[str], *, create: bool = Fals
     return target
 
 
+def transport_subdir(root: Path, name: str, *, create: bool) -> Path:
+    """Return the secured ``root/name`` shared-transport subdirectory."""
+    target = Path(root) / name
+    if target.is_symlink():
+        raise SyncFolderError(f"{name} directory may not be a symlink.")
+    if target.exists() and not target.is_dir():
+        raise SyncFolderError(f"{name} directory is not a directory.")
+    if create and not target.exists():
+        target.mkdir(parents=True, exist_ok=True)
+        try:
+            target.chmod(0o700)
+        except OSError as error:
+            raise SyncFolderError(f"Unable to secure the {name} directory.") from error
+    return target
+
+
 def household_event_path(folder: str | os.PathLike[str], ident: str) -> Path:
     """Return the private path for one content-addressed Household record."""
     ident = _clean_id(ident, "record_id")

@@ -4,9 +4,9 @@
    the panel first scrolls into view; reloads on app:state-refreshed while visible.
    Table fallback for a11y.
 */
-import { $, escapeHtml } from './util.js';
-import { api, AppState, notify } from './state.js';
-import { t } from './i18n.js';
+import { $, escapeHtml, safeStorage } from './util.js';
+import { api, AppState, notify, notifyError } from './state.js';
+import { t, onLocaleChange } from './i18n.js';
 import { openWrapped } from './wrapped.js';
 
 const LEVEL_CLASS = ['level-0', 'level-1', 'level-2', 'level-3', 'level-4'];
@@ -27,17 +27,14 @@ function formatHours(seconds) {
 }
 
 function storedRange() {
-  try {
-    const value = Number(localStorage.getItem(RANGE_KEY));
-    if ([30, 90, 365].includes(value)) return value;
-  } catch { /* storage unavailable */ }
-  return 365;
+  const value = Number(safeStorage.get(RANGE_KEY));
+  return [30, 90, 365].includes(value) ? value : 365;
 }
 
 function renderHeatmap(heatmap) {
   const cells = heatmap.map(cell => {
     const cls = LEVEL_CLASS[Math.max(0, Math.min(4, cell.level || 0))] || 'level-0';
-    const title = `${cell.date}: ${cell.count} session${cell.count === 1 ? '' : 's'} • ${formatHours(cell.seconds)}`;
+    const title = t('insights.heatmap_cell', { date: cell.date, count: cell.count, hours: formatHours(cell.seconds) });
     return `<div class="insight-cell ${cls}" data-date="${escapeHtml(cell.date)}" role="gridcell" aria-label="${escapeHtml(title)}" title="${escapeHtml(title)}"></div>`;
   }).join('');
   const tableRows = heatmap.map(cell => `<tr><td>${escapeHtml(cell.date)}</td><td>${cell.count}</td><td>${escapeHtml(formatHours(cell.seconds))}</td><td>${cell.level}</td></tr>`).join('');
@@ -65,7 +62,7 @@ function renderTotals(totals) {
 function renderTopList(title, items, keyName) {
   if (!items.length) return `<div class="insight-section"><h3 class="insight-title">${escapeHtml(title)}</h3><p class="muted">${escapeHtml(t('insights.no_data'))}</p></div>`;
   const rows = items.map(item => {
-    const label = escapeHtml(item[keyName] || 'Unknown');
+    const label = escapeHtml(item[keyName] || t('common.unknown'));
     const count = item.count ?? 0;
     const hours = item.playtime_seconds !== undefined ? ` • ${escapeHtml(formatHours(item.playtime_seconds))}` : '';
     return `<li class="insight-rank-row"><span class="insight-rank-label">${label}</span><span class="insight-rank-count">${count}${hours}</span></li>`;
@@ -76,7 +73,7 @@ function renderTopList(title, items, keyName) {
 function renderTopGames(items) {
   if (!items.length) return `<div class="insight-section"><h3 class="insight-title">${escapeHtml(t('insights.top_games'))}</h3><p class="muted">${escapeHtml(t('insights.no_data'))}</p></div>`;
   const rows = items.map(item => {
-    const label = escapeHtml(item.name || 'Unknown');
+    const label = escapeHtml(item.name || t('common.unknown'));
     const hours = ` • ${escapeHtml(formatHours(item.playtime_seconds))}`;
     return `<li class="insight-rank-row"><button type="button" class="insight-game-link" data-insight-game="${escapeHtml(item.game_id)}"><span class="insight-rank-label">${label}</span><span class="insight-rank-count">${item.play_count ?? 0}${hours}</span></button></li>`;
   }).join('');
@@ -144,7 +141,7 @@ function bindRadioControls(body) {
         await api('/api/v2/insights/radio/refresh', { method: 'POST', body: '{}' });
         loadInsights();
       } catch (error) {
-        notify(error.message);
+        notifyError(error);
       }
     };
   }
@@ -155,7 +152,7 @@ function bindRadioControls(body) {
         if (res && res.parked) notify(t('radio.radar.parked', { name: res.name || '' }));
         loadInsights();
       } catch (error) {
-        notify(error.message);
+        notifyError(error);
       }
     };
   });
@@ -219,6 +216,10 @@ async function loadInsights() {
     bindRadioControls(body);
     loaded = true;
   } catch (error) {
+    // A failed load must stay eligible for retry; the old code marked the
+    // panel loaded before the fetch resolved, so one transient failure meant
+    // insights never loaded again for the session.
+    loaded = false;
     body.innerHTML = `<div class="muted">${escapeHtml(t('insights.unavailable'))}: ${escapeHtml(error.message || String(error))}</div>`;
   }
 }
@@ -244,7 +245,7 @@ function ensurePanelHeader(force) {
   $('insightsRange').value = String(rangeDays);
   $('insightsRange').onchange = () => {
     rangeDays = Number($('insightsRange').value) || 365;
-    try { localStorage.setItem(RANGE_KEY, String(rangeDays)); } catch { /* storage unavailable */ }
+    safeStorage.set(RANGE_KEY, rangeDays);
     loadInsights();
   };
   $('insightsRefresh').onclick = () => loadInsights();
@@ -261,10 +262,9 @@ function bindInsights() {
   const panel = $('insightsPanel');
   if (panel && typeof IntersectionObserver === 'function' && !observer) {
     observer = new IntersectionObserver(entries => {
-      if (entries.some(entry => entry.isIntersecting) && !loaded) {
-        loaded = true;
-        loadInsights();
-      }
+      // loaded flips only after loadInsights succeeds, so a failure here can
+      // be retried on the next intersection instead of being permanent.
+      if (entries.some(entry => entry.isIntersecting) && !loaded) loadInsights();
     }, { rootMargin: '160px' });
     observer.observe(panel);
   }
@@ -278,7 +278,7 @@ function bindInsights() {
   });
   // The locale dictionary arrives after boot; re-render strings that were
   // built with raw keys before it landed.
-  document.addEventListener('localechange', () => {
+  onLocaleChange(() => {
     if ($('insightsBody')) {
       ensurePanelHeader(true);
       if (loaded) loadInsights();

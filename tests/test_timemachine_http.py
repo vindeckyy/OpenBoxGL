@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+from datetime import datetime, timezone
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -13,7 +14,12 @@ sys.path.insert(0, str(ROOT))
 
 from api_errors import BadRequest, Conflict  # noqa: E402
 from handlers import timemachine as handler_module  # noqa: E402
-from handlers.timemachine import TimeMachineHandlers  # noqa: E402
+from handlers.timemachine import (  # noqa: E402
+    COMPARE_FORMAT,
+    REVERT_METADATA_WHITELIST,
+    TimeMachineHandlers,
+    compare_snapshots,
+)
 from pkg.parity.parity_library_sync import (  # noqa: E402
     SyncStaleError,
     SyncValidationError,
@@ -184,5 +190,123 @@ class RevertRouteTests(unittest.TestCase):
                 self.assertEqual(raised.exception.code, expected)
 
 
+class CompareTests(unittest.TestCase):
+    def _snapshot(self, games, *, as_of="2026-01-01T00:00:00+00:00", corrupt=()):
+        return {"as_of": as_of, "games": games, "corrupt": list(corrupt), "truncated": False}
+
+    def test_compare_snapshots_reports_added_removed_and_re_edited(self):
+        before = self._snapshot([
+            {"sync_key": "game:a", "game_id": "a", "name": "Alpha", "platform": "SNES"},
+            {"sync_key": "game:b", "game_id": "b", "name": "Beta", "platform": "PC"},
+        ])
+        after = self._snapshot([
+            {"sync_key": "game:b", "game_id": "b", "name": "Beta Remastered", "platform": "PC", "year": 1999},
+            {"sync_key": "game:c", "game_id": "c", "name": "Gamma", "platform": "Arcade"},
+        ], corrupt=[{"event_id": "bad"}])
+        result = compare_snapshots(before, after, from_date="2026-01-01", to_date="2026-02-01")
+        self.assertEqual(result["format"], COMPARE_FORMAT)
+        self.assertEqual(result["added"], [{"sync_key": "game:c", "game_id": "c", "name": "Gamma", "platform": "Arcade"}])
+        self.assertEqual([item["game_id"] for item in result["removed"]], ["a"])
+        self.assertEqual(len(result["edited"]), 1)
+        edited = result["edited"][0]
+        self.assertEqual(edited["game_id"], "b")
+        fields = {item["field"] for item in edited["fields"]}
+        self.assertEqual(fields, {"name", "year"})
+        self.assertEqual(result["summary"], {"added": 1, "removed": 1, "edited": 1, "re_edited": 1})
+        self.assertEqual(len(result["corrupt"]), 1)
+
+    def test_compare_route_uses_two_materializations(self):
+        handler = MockHandler()
+        before = self._snapshot([{"sync_key": "game:a", "game_id": "a", "name": "Alpha"}])
+        after = self._snapshot([{"sync_key": "game:b", "game_id": "b", "name": "Beta"}])
+        with mock.patch.object(handler_module, "load_state", return_value={}), mock.patch.object(
+            handler_module.time_machine, "parse_as_of_date",
+            side_effect=[datetime(2026, 1, 1, tzinfo=timezone.utc), datetime(2026, 2, 1, tzinfo=timezone.utc)],
+        ), mock.patch.object(
+            handler_module.time_machine, "materialize_as_of", side_effect=[before, after]
+        ) as materialize:
+            handler._api_get_api_v2_timemachine_compare(_parsed("a=2026-01-01&b=2026-02-01"))
+        self.assertEqual(materialize.call_count, 2)
+        status, payload = handler.responses[0]
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["from"], "2026-01-01")
+        self.assertEqual(payload["to"], "2026-02-01")
+        self.assertEqual(payload["summary"]["added"], 1)
+
+    def test_compare_route_requires_dates_and_ordered_range(self):
+        with self.assertRaises(BadRequest) as raised:
+            MockHandler()._api_get_api_v2_timemachine_compare(_parsed("a=2026-01-01"))
+        self.assertEqual(raised.exception.code, "TM_INVALID_DATE")
+
+        with mock.patch.object(handler_module, "load_state", return_value={}), mock.patch.object(
+            handler_module.time_machine, "parse_as_of_date",
+            side_effect=[datetime(2026, 2, 1, tzinfo=timezone.utc), datetime(2026, 1, 1, tzinfo=timezone.utc)],
+        ):
+            with self.assertRaises(BadRequest) as raised:
+                MockHandler()._api_get_api_v2_timemachine_compare(_parsed("a=2026-02-01&b=2026-01-01"))
+        self.assertEqual(raised.exception.code, "TM_INVALID_REQUEST")
+
+        with mock.patch.object(handler_module, "load_state", return_value={}), mock.patch.object(
+            handler_module.time_machine, "parse_as_of_date", side_effect=SyncValidationError("bad date")
+        ):
+            with self.assertRaises(BadRequest) as raised:
+                MockHandler()._api_get_api_v2_timemachine_compare(_parsed("a=nope&b=2026-01-01"))
+        self.assertEqual(raised.exception.code, "TM_INVALID_DATE")
+
+
+class RevertWhitelistTests(unittest.TestCase):
+    def test_path_and_launch_fields_are_never_revertible(self):
+        for field in ("path", "launch", "command", "install_dir", "steam_app_id", "game_id", "library_sync_id"):
+            with self.subTest(field=field):
+                handler = MockHandler()
+                with mock.patch.object(handler_module, "load_state", return_value={}), mock.patch.object(
+                    handler_module.time_machine, "plan_revert"
+                ) as plan_revert:
+                    with self.assertRaises(BadRequest) as raised:
+                        handler._api_post_api_v2_library_time_machine_revert(
+                            {"event_id": "event-1", "fields": [field]}
+                        )
+                self.assertEqual(raised.exception.code, "TM_FIELD_NOT_ALLOWED")
+                plan_revert.assert_not_called()
+
+    def test_metadata_fields_pass_through_validated(self):
+        plan = {"format": "time-machine-revert-v1", "base_token": "old"}
+        handler = MockHandler()
+        with mock.patch.object(handler_module, "load_state", return_value={}), mock.patch.object(
+            handler_module.time_machine, "plan_revert", return_value=plan
+        ) as plan_revert:
+            handler._api_post_api_v2_library_time_machine_revert(
+                {"event_id": "event-1", "fields": ["name", "year"]}
+            )
+        plan_revert.assert_called_once()
+        self.assertEqual(plan_revert.call_args.kwargs["fields"], ["name", "year"])
+
+    def test_missing_fields_default_to_the_metadata_whitelist(self):
+        plan = {"format": "time-machine-revert-v1", "base_token": "old"}
+        handler = MockHandler()
+        with mock.patch.object(handler_module, "load_state", return_value={}), mock.patch.object(
+            handler_module.time_machine, "plan_revert", return_value=plan
+        ) as plan_revert:
+            handler._api_post_api_v2_library_time_machine_revert({"event_id": "event-1"})
+        self.assertEqual(plan_revert.call_args.kwargs["fields"], sorted(REVERT_METADATA_WHITELIST))
+        self.assertIn("name", REVERT_METADATA_WHITELIST)
+        self.assertNotIn("path", REVERT_METADATA_WHITELIST)
+        self.assertNotIn("launch", REVERT_METADATA_WHITELIST)
+
+    def test_fields_must_be_a_list_of_names(self):
+        with mock.patch.object(handler_module, "load_state", return_value={}):
+            with self.assertRaises(BadRequest) as raised:
+                MockHandler()._api_post_api_v2_library_time_machine_revert(
+                    {"event_id": "event-1", "fields": "name"}
+                )
+        self.assertEqual(raised.exception.code, "TM_INVALID_REQUEST")
+
+    def test_compare_route_is_registered(self):
+        from routes import GET_TABLE
+
+        self.assertEqual(GET_TABLE["/api/v2/timemachine/compare"], "_api_get_api_v2_timemachine_compare")
+
+
 if __name__ == "__main__":
     unittest.main()
+

@@ -1,8 +1,8 @@
-import { $, escapeHtml, duration, fact, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds, trigramsOf, expandTrigrams } from './util.js';
-import { token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
+import { $, escapeHtml, duration, fact, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds, trigramsOf, expandTrigrams, safeStorage, formatDate, applyGridA11y, gridCellAttrs } from './util.js';
+import { token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, notifyAction, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache, notifyError } from './state.js';
 import { loadTheme, deletePlaylist } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importDroppedFolder } from './imports.js';
-import { openGameDialog, convertShelfEntry, confirmAction, promptInput } from './dialogs.js';
+import { openGameDialog, convertShelfEntry, confirmAction, promptInput, openDialog, closeDialog } from './dialogs.js';
 import { syncHash } from './router.js';
 import { openMetadata, steamMetadata, loadAchievements } from './metadata.js';
 import { captureScreenshot, downloadBezel } from './media.js';
@@ -10,8 +10,9 @@ import { launch, backupSaves, discoverSaves, loadBackups } from './sessions.js';
 import { installGameyfin, uninstallGameyfin, ludusaviAction, hoardAction } from './storefront.js';
 import { openReader } from './reader.js';
 import { applyMoodForGame, clearMood } from './mood.js';
-import { t } from './i18n.js';
+import { t, populateLocaleSelector, syncLocaleFromSettings } from './i18n.js';
 import { mountMomentsPanel, mountResumeAffordance } from './moments.js';
+import { waitForJob } from './events.js';
 
 const DETAILS_WIDTH_KEY = 'openbox-details-width';
 
@@ -43,6 +44,7 @@ let lastFacetsFingerprint = null;
 let detailsDragActive = false;
 let detailSheetScrollTop = 0;
 let smartQueryRequest = 0;
+let platformDetailsRequest = 0;
 
 async function refreshSmartQuery(query) {
   const text = String(query || '').trim();
@@ -79,7 +81,7 @@ async function refreshSmartQuery(query) {
 // Virtual grid feature flag: localStorage['openbox-virtual-grid'] !== '0' enables windowing.
 // When disabled, grid renders all items without spacers or IntersectionObserver.
 function isVirtualEnabled() {
-  try { return localStorage.getItem(VIRTUAL_GRID_KEY) !== '0'; } catch { return true; }
+  return safeStorage.get(VIRTUAL_GRID_KEY) !== '0';
 }
 
 // Trigram Worker: offload trigram expansion/search when Worker is available, fallback to main thread otherwise.
@@ -102,9 +104,11 @@ function getSearchWorker() {
       }
     };
     w.onerror = e => {
-      // Worker failed: clear pending with fallback
+      // Worker failed: reject pending work and drop the handle so the next
+      // search creates a fresh worker instead of posting into a dead one.
       for (const [, pending] of _workerPending) pending.reject(new Error(e.message || 'Worker error'));
       _workerPending.clear();
+      _searchWorker = null;
     };
     _searchWorker = w;
     return w;
@@ -250,8 +254,12 @@ function applyDetailsLayout() {
   const details = $('details');
   if (!workspace || !details) return;
   const narrow = window.matchMedia('(max-width:760px)').matches;
-  const collapsed = localStorage.getItem(DETAILS_COLLAPSED_KEY) === '1';
-  const width = Math.min(640, Math.max(280, Number(localStorage.getItem(DETAILS_WIDTH_KEY)) || 410));
+  // Branch on the same breakpoint as the app.css media query. The old code
+  // always wrote the desktop 190/520/w columns inline, which outranks the
+  // <=1100px rule and pinned the wide layout on smaller desktops.
+  const compact = window.matchMedia('(max-width:1100px)').matches;
+  const collapsed = safeStorage.get(DETAILS_COLLAPSED_KEY) === '1';
+  const width = Math.min(640, Math.max(280, Number(safeStorage.get(DETAILS_WIDTH_KEY)) || 410));
   details.classList.toggle('details-collapsed', collapsed && !narrow);
   if (narrow) {
     workspace.style.gridTemplateColumns = '';
@@ -285,9 +293,14 @@ function applyDetailsLayout() {
   details.style.zIndex = '';
   details.style.borderTop = '';
   if (collapsed) {
-    workspace.style.gridTemplateColumns = '190px minmax(520px,1fr) 0';
+    workspace.style.gridTemplateColumns = compact ? '150px 1fr 0' : '190px minmax(520px,1fr) 0';
     details.style.width = '0';
     details.style.overflow = 'hidden';
+  } else if (compact) {
+    // Let the <=1100px media query own the compact columns.
+    workspace.style.gridTemplateColumns = '';
+    details.style.width = '';
+    details.style.overflow = '';
   } else {
     workspace.style.gridTemplateColumns = `190px minmax(520px,1fr) ${width}px`;
     details.style.width = `${width}px`;
@@ -303,7 +316,7 @@ function bindDetailsResize() {
     const workspace = document.querySelector('.workspace');
     if (!workspace) return;
     const width = Math.min(640, Math.max(280, workspace.getBoundingClientRect().right - event.clientX));
-    localStorage.setItem(DETAILS_WIDTH_KEY, String(width));
+    safeStorage.set(DETAILS_WIDTH_KEY, width);
     applyDetailsLayout();
   };
   const stopDrag = () => {
@@ -321,15 +334,15 @@ function bindDetailsResize() {
     if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
     event.preventDefault();
     const delta = event.key === 'ArrowLeft' ? 24 : -24;
-    const width = Math.min(640, Math.max(280, Number(localStorage.getItem(DETAILS_WIDTH_KEY) || 410) + delta));
-    localStorage.setItem(DETAILS_WIDTH_KEY, String(width));
+    const width = Math.min(640, Math.max(280, Number(safeStorage.get(DETAILS_WIDTH_KEY) || 410) + delta));
+    safeStorage.set(DETAILS_WIDTH_KEY, width);
     applyDetailsLayout();
   });
   document.addEventListener('mousemove', onMove);
   document.addEventListener('mouseup', stopDrag);
   handle.addEventListener('dblclick', () => {
-    const collapsed = localStorage.getItem(DETAILS_COLLAPSED_KEY) === '1';
-    localStorage.setItem(DETAILS_COLLAPSED_KEY, collapsed ? '0' : '1');
+    const collapsed = safeStorage.get(DETAILS_COLLAPSED_KEY) === '1';
+    safeStorage.set(DETAILS_COLLAPSED_KEY, collapsed ? '0' : '1');
     applyDetailsLayout();
   });
 }
@@ -381,7 +394,7 @@ function bindFilterDrawer() {
     drawer.close();
     render();
   };
-  if (openBtn) openBtn.onclick = () => drawer.showModal();
+  if (openBtn) openBtn.onclick = () => openDialog(drawer, openBtn);
   if ($('closeFilterDrawer')) $('closeFilterDrawer').onclick = () => drawer.close();
 }
 async function updateActivePreset() {
@@ -400,7 +413,7 @@ async function updateActivePreset() {
     await api('/api/filter-presets', {method: 'POST', body: JSON.stringify({name, rules, bigbox_quick: preset?.bigbox_quick || false})});
     await refresh();
     notify('Filter preset updated');
-  } catch (error) { notify(error.message); }
+  } catch (error) { notifyError(error); }
 }
 function renderQueryChips() {
   const container = $('queryChips');
@@ -448,7 +461,7 @@ function renderQueryChips() {
       await api('/api/v2/collections', {method: 'POST', body: JSON.stringify({name, query: $('sidebarSearch').value.trim()})});
       await refresh();
       notify(`Collection "${name}" saved`);
-    } catch (error) { notify(error.message); }
+    } catch (error) { notifyError(error); }
   };
   container.querySelectorAll('[data-chip-remove]').forEach(button => {
     button.onclick = () => {
@@ -490,7 +503,11 @@ function markFilterAria() {
   document.querySelectorAll('[data-game]').forEach(card => {
     const id = Number(card.dataset.game);
     const selected = AppState.selectedId === id || selectedIds.has(id);
-    card.setAttribute('aria-selected', selected ? 'true' : 'false');
+    // aria-selected is only valid on widgets with an option/gridcell role;
+    // the grid render assigns role=gridcell, but a stale or third-party
+    // [data-game] element must not advertise selection without one.
+    if (card.getAttribute('role')) card.setAttribute('aria-selected', selected ? 'true' : 'false');
+    else card.removeAttribute('aria-selected');
   });
 }
 
@@ -502,6 +519,10 @@ function markFilterAria() {
       AppState.smartCollections = state.smart_collections || [];
       AppState.raConfigured = state.ra_configured;
       AppState.appSettings = state.settings || AppState.appSettings;
+      // Settings carry available_locales and the persisted locale; the selector
+      // is built here (not only at startup) so non-English locales are usable.
+      populateLocaleSelector(AppState.appSettings);
+      syncLocaleFromSettings(AppState.appSettings).catch(() => {});
       AppState.mediaEpoch = state.media_epoch || 0;
       AppState._refreshCounter = (AppState._refreshCounter || 0) + 1;
       _trashItems = null;
@@ -513,7 +534,8 @@ function markFilterAria() {
       applyLocaleStrings();
       applyStoredSort();
       dispatchStateRefreshed();
-      if (!AppState.appSettings.welcome_completed && !AppState.games.length) $('setupCenter').showModal();
+      const setupCenter = $('setupCenter');
+      if (!AppState.appSettings.welcome_completed && !AppState.games.length && setupCenter && !setupCenter.open) openDialog(setupCenter);
       setTimeout(() => { try { warmSearchIndex(); } catch(error) { AppState.searchIndexError = error.message; } }, 0);
       const fingerprint = `${AppState.games.length}:${AppState.games[0]?.id || ''}:${AppState.games.at(-1)?.id || ''}`;
       if (lastFacetsFingerprint !== fingerprint) {
@@ -648,7 +670,7 @@ function markFilterAria() {
           if (AppState.activeFilterPreset === button.dataset.deletePreset) AppState.activeFilterPreset = '';
           await refresh();
           notify('Preset deleted');
-        } catch(error) { notify(error.message); }
+        } catch(error) { notifyError(error); }
       });
       const quick = $('bigBoxQuickPreset');
       if (quick) {
@@ -727,6 +749,9 @@ function markFilterAria() {
       const rowGap = parseFloat(getComputedStyle($('grid')).rowGap) || 0;
       const rows = [];
       let top = 0;
+      // Absolute index within the filtered order, so aria-rowindex stays
+      // correct even when the virtual window starts mid-section (P7).
+      let gameIndex = 0;
       for (const section of sections) {
         rows.push({kind:'header', label:section.label, count:section.games.length, top, height:ratioHeadH});
         top += ratioHeadH + rowGap;
@@ -734,7 +759,8 @@ function markFilterAria() {
         for (let r = 0; r < cardRows; r++) {
           const games = section.games.slice(r * cols, (r + 1) * cols);
           const minRatio = Math.min(...games.map(game => AppState.coverRatios[game.id] || RATIO_REP[section.key]));
-          rows.push({kind:'cards', section, games, top, height:cellW / minRatio + textBlockH});
+          rows.push({kind:'cards', section, games, top, height:cellW / minRatio + textBlockH, start:gameIndex});
+          gameIndex += games.length;
           top += cellW / minRatio + textBlockH + rowGap;
         }
       }
@@ -746,10 +772,9 @@ function markFilterAria() {
       const sections = groupedSections(visible);
       const {rows, cols, totalHeight} = gridRowsGeometry(sections);
       if (!isVirtualEnabled()) {
-        let cardIndex = 0;
         const rendered = rows.map(row => row.kind === 'header'
           ? `<div class="ratio-head">${row.label}<span class="ratio-count">${row.count}</span></div>`
-          : row.games.map(game => gridCardHTML(game, cardIndex++, imageGroup, fromScroll, motionClass, row.section.key)).join('')).join('');
+          : row.games.map((game, i) => gridCardHTML(game, row.start + i, imageGroup, fromScroll, motionClass, row.section.key, cols)).join('')).join('');
         return {topSpacer:'', bottomSpacer:'', rendered, geometry:{rows, cols, totalHeight}};
       }
       const pane = gridPane();
@@ -759,16 +784,17 @@ function markFilterAria() {
       const windowRows = rows.filter(row => row.top + row.height > topLimit && row.top < bottomLimit);
       const firstTop = windowRows.length ? windowRows[0].top : 0;
       const lastBottom = windowRows.length ? windowRows[windowRows.length - 1].top + windowRows[windowRows.length - 1].height : 0;
-      let cardIndex = 0;
       const rendered = windowRows.map(row => row.kind === 'header'
         ? `<div class="ratio-head">${row.label}<span class="ratio-count">${row.count}</span></div>`
-        : row.games.map(game => gridCardHTML(game, cardIndex++, imageGroup, fromScroll, motionClass, row.section.key)).join('')).join('');
+        : row.games.map((game, i) => gridCardHTML(game, row.start + i, imageGroup, fromScroll, motionClass, row.section.key, cols)).join('')).join('');
       return {topSpacer:`<div class="grid-spacer" style="height:${firstTop}px;contain-intrinsic-size:auto ${firstTop}px"></div>`, bottomSpacer:`<div class="grid-spacer" style="height:${Math.max(0, totalHeight - lastBottom)}px;contain-intrinsic-size:auto ${Math.max(0, totalHeight - lastBottom)}px"></div>`, rendered, geometry:{rows, cols, totalHeight}};
     }
-    function gridCardHTML(game, index, imageGroup, fromScroll, motionClass, bucketKey = '') {
-      return `<article class="card${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${bucketKey ? ` data-ratio="${bucketKey}"` : ''}${fromScroll ? '' : ` style="--motion-index:${Math.min(index,10)}"`}>
+    function gridCardHTML(game, index, imageGroup, fromScroll, motionClass, bucketKey = '', columns = gridCols) {
+      const selected = AppState.selectedId === game.id || selectedIds.has(game.id);
+      const cellAttrs = gridCellAttrs({ index, columns, selected });
+      return `<article class="card${motionClass} ${selected ? 'selected' : ''}" role="row"${bucketKey ? ` data-ratio="${bucketKey}"` : ''}${fromScroll ? '' : ` style="--motion-index:${Math.min(index,10)}"`}>
         ${AppState.bulkMode ? `<input class="card-picker" type="checkbox" data-game-picker="${game.id}" ${selectedIds.has(game.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(game.name)}">` : ''}
-        <button type="button" class="card-main" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><div class="cover ${AppState.appSettings.bigbox_mode === 'coverflow' ? 'jewel-3d' : ''}">${imageMarkup(game,imageGroup)}</div>
+        <button type="button" class="card-main" data-game="${game.id}" ${cellAttrs} aria-label="Open ${escapeHtml(game.name)}"><div class="cover ${AppState.appSettings.bigbox_mode === 'coverflow' ? 'jewel-3d' : ''}">${imageMarkup(game,imageGroup)}</div>
         <h3>${escapeHtml(game.name)}${game.moments_count ? `<span class="card-moments-count" aria-label="${escapeHtml(t('moments.count', {count: game.moments_count}))}">${escapeHtml(String(game.moments_count))}</span>` : ''}</h3><p>${escapeHtml(game.developer || game.platform || '')}</p>
         <div class="badge-row">${renderBadges(game)}</div></button>
         ${game.moments_count ? `<button type="button" class="card-moments" data-moments-card="${game.id}" aria-label="${escapeHtml(t('moments.open_card', {count: game.moments_count}))}">${escapeHtml(t('moments.tab'))}</button>` : ''}
@@ -877,8 +903,13 @@ function markFilterAria() {
         $('imageGroup').value = effectiveImageGroup;
         $('grouping').value = AppState.appSettings.cover_grouping || 'shape';
         $('bulkButton').textContent = AppState.bulkMode ? selectedIds.size ? `Edit ${selectedIds.size} Selected` : 'Cancel Bulk Edit' : 'Bulk Edit';
-        $('libraryTitle').textContent = AppState.activeFilterPreset || AppState.activePlaylist || (AppState.platform === 'all' ? $('view').selectedOptions[0].text : AppState.platform);
-        $('libraryMeta').textContent = AppState.bulkMode ? `${selectedIds.size} selected · ${visible.length} shown` : `${visible.length} game${visible.length === 1 ? '' : 's'}`;
+        // Compose translated chrome at render time: a localechange pass sets
+        // #libraryTitle from data-i18n, and the old raw English here would
+        // clobber it on the next render.
+        $('libraryTitle').textContent = AppState.activeFilterPreset || AppState.activePlaylist || (AppState.platform === 'all' ? ($('view').value === 'all' ? t('library.all_games') : $('view').selectedOptions[0].text) : AppState.platform);
+        $('libraryMeta').textContent = AppState.bulkMode
+          ? t('library.bulk_selected', {selected: selectedIds.size, shown: visible.length})
+          : (visible.length === 1 ? t('library.one_game') : t('library.games_count', {count: visible.length}));
         $('surpriseButton').disabled = !visible.length;
         $('status').textContent = `${AppState.games.length} games · local library`;
       }
@@ -887,7 +918,7 @@ function markFilterAria() {
         $('grid').innerHTML = AppState.games.length
           ? `<div class="empty"><div><h2>No games match this view</h2><p>Change the active filters or search the library again.</p></div></div>`
           : `<div class="empty"><div><h2>Start your library</h2><p>Bring your games into OpenBox, then search, filter, and launch them from one collection.</p><div class="empty-actions"><button id="emptySetupLibrary">Set up library</button><button id="emptyAdd">Add game</button><button class="empty-secondary" id="emptyImport">Import folder</button><button class="empty-secondary" id="emptySteam">Import Steam</button><button class="empty-secondary" id="emptyHeroic">Import Heroic</button><button class="empty-secondary" id="emptyLutris">Import Lutris</button></div></div></div>`;
-        if ($('emptySetupLibrary')) $('emptySetupLibrary').onclick = () => $('setupCenter').showModal();
+        if ($('emptySetupLibrary')) $('emptySetupLibrary').onclick = () => { const setupCenter = $('setupCenter'); if (setupCenter && !setupCenter.open) openDialog(setupCenter); };
         if ($('emptyAdd')) $('emptyAdd').onclick = () => openGameDialog();
         if ($('emptyImport')) $('emptyImport').onclick = () => importFolder();
         if ($('emptySteam')) $('emptySteam').onclick = () => importSteam();
@@ -926,10 +957,21 @@ function markFilterAria() {
           bottomSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${bottomHeight}px;contain-intrinsic-size:auto ${bottomHeight}px"></div>` : '';
         }
         const chunk = isVirtualEnabled() ? visible.slice(start, end) : visible;
-        rendered = chunk.map((game,index) => listView
-           ? `<button type="button" class="list-row${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${fromScroll ? '' : ` style="--motion-index:${Math.min(index,10)}"`} data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
-           : gridCardHTML(game, index, imageGroup, fromScroll, motionClass)).join('');
+        const baseIndex = isVirtualEnabled() ? start : 0;
+        rendered = chunk.map((game,index) => {
+          const absoluteIndex = baseIndex + index;
+          return listView
+           ? `<button type="button" class="list-row${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${fromScroll ? '' : ` style="--motion-index:${Math.min(index,10)}"`} data-game="${game.id}" ${gridCellAttrs({index: absoluteIndex, columns: 1, size: total, position: absoluteIndex + 1, selected: AppState.selectedId === game.id || selectedIds.has(game.id)})} aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
+           : gridCardHTML(game, absoluteIndex, imageGroup, fromScroll, motionClass);
+        }).join('');
       }
+      // Keep the virtual container's geometry honest after every render so
+      // aria-rowindex/colindex mean filtered positions, not window positions.
+      const a11yCols = grouped ? Math.max(groupedGeo?.cols || 1, 1) : Math.max(gridCols, 1);
+      const a11yRows = grouped
+        ? (groupedGeo?.rows || []).filter(row => row.kind === 'cards').length
+        : Math.ceil(total / a11yCols);
+      applyGridA11y($('grid'), { rowCount: a11yRows, colCount: a11yCols });
       const focusedGameId = $('grid')?.contains(document.activeElement) ? document.activeElement?.closest?.('[data-game]')?.dataset.game : null;
       const focusedPickerId = $('grid')?.contains(document.activeElement) ? document.activeElement?.closest?.('[data-game-picker]')?.dataset.gamePicker : null;
       const listHeadCell = (key, label) => key
@@ -1024,7 +1066,7 @@ function markFilterAria() {
           <div class="detail-actions"><span id="resumeActionSlot" class="resume-action-slot"></span><button class="icon-button" id="momentsButton">${escapeHtml(t('moments.tab'))}</button><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">${shelfEntry ? 'Edit shelf entry' : 'Edit metadata'}</button>${shelfEntry ? '<button class="icon-button" id="convertShelfButton">Set up launch</button>' : ''}<button class="icon-button" id="databaseMetadataButton">Find metadata</button>${game.steam_app_id ? '<button class="icon-button" id="steamMetadataButton">Use Steam data</button>' : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="uninstallGameyfin">Uninstall Gameyfin copy</button>' : ''}${game.path ? '<button class="icon-button" id="showInFolderButton">Show in folder</button>' : ''}<button class="icon-button" id="removeGameButton">Remove game</button></div>
           <div class="detail-card"><h3>Information</h3><div class="facts">
             ${fact('Release date',game.year)}${fact('Developer',game.developer)}${fact('Publisher',game.publisher)}${fact('ESRB',game.esrb)}${fact('Source',game.source)}${fact('Category',platformCategoryFor(game))}${Object.entries(game.custom_fields || {}).map(([key,value]) => fact(key,value)).join('')}${fact('Max players',game.max_players)}${fact('Controller support',game.controller_support)}${fact('Disc count',game.disc_count)}${fact('Play time',duration(game.playtime_seconds))}
-            ${fact('Launches',game.play_count)}${fact('Last played',game.last_played ? game.last_played.replace('T',' ') : '')}${fact('Progress',game.progress)}${fact('Rating',game.rating ? `${game.rating} / 5` : '')}${fact('Region',game.region)}${fact('Play mode',game.play_mode)}${fact('Wikipedia',game.wikipedia_url)}${fact('Video URL',game.video_url)}
+            ${fact('Launches',game.play_count)}${fact('Last played',formatDate(game.last_played))}${fact('Progress',game.progress)}${fact('Rating',game.rating ? `${game.rating} / 5` : '')}${fact('Region',game.region)}${fact('Play mode',game.play_mode)}${fact('Wikipedia',game.wikipedia_url)}${fact('Video URL',game.video_url)}
           </div>${game.description ? `<p class="description">${escapeHtml(game.description)}</p>` : ''}${game.notes ? `<p class="description"><strong>Notes</strong><br>${escapeHtml(game.notes)}</p>` : ''}
           ${applications.length || versions.length || documents.length ? `<div class="extras">${applications.map((item,index) => `<button class="icon-button" data-extra="applications:${index}">App · ${escapeHtml(item.name)}</button>`).join('')}${versions.map((item,index) => `<button class="icon-button" data-extra="versions:${index}">Version · ${escapeHtml(item.name)}</button>`).join('')}${documents.map((item,index) => `<button class="icon-button" data-document="${index}">Read ${escapeHtml(item.name)}</button><button class="icon-button" data-extra="documents:${index}" aria-label="Open ${escapeHtml(item.name)} externally">↗</button>`).join('')}</div>` : ''}</div>
           ${game.has_video ? `<div class="detail-card"><h3>Video</h3><video class="media-player" controls preload="metadata" src="${media(game,'video')}"></video></div>` : ''}
@@ -1065,7 +1107,7 @@ function markFilterAria() {
               renderDetails();
               notify('Shelf entry is ready to launch');
             }
-          } catch(error) { notify(error.message); }
+          } catch(error) { notifyError(error); }
           return;
         }
         if (game.gameyfin_id && !game.store_installed) installGameyfin(game);
@@ -1079,7 +1121,7 @@ function markFilterAria() {
       if ($('captureScreenshot')) $('captureScreenshot').onclick = () => captureScreenshot(game.id);
       if ($('downloadBezel')) $('downloadBezel').onclick = () => downloadBezel(game.platform);
       if ($('uninstallGameyfin')) $('uninstallGameyfin').onclick = () => uninstallGameyfin(game);
-      if ($('exportHighscores')) $('exportHighscores').onclick = async () => { try { const result = await api('/api/highscores/export',{method:'POST',body:JSON.stringify({id:game.id})}); notify(`Exported ${result.files.length} high score file${result.files.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
+      if ($('exportHighscores')) $('exportHighscores').onclick = async () => { try { const result = await api('/api/highscores/export',{method:'POST',body:JSON.stringify({id:game.id})}); notify(`Exported ${result.files.length} high score file${result.files.length === 1 ? '' : 's'}`); } catch(error) { notifyError(error); } };
       if ($('showInFolderButton')) $('showInFolderButton').onclick = () => nativeReveal(game.path);
       $('removeGameButton').onclick = () => removeGame(game.id,game.name);
       document.querySelectorAll('[data-extra]').forEach(button => button.onclick = () => {
@@ -1092,8 +1134,8 @@ function markFilterAria() {
       document.querySelectorAll('[data-manual-tile]').forEach(button => button.onclick = () => openManualReader(game));
       document.querySelectorAll('[data-document]').forEach(button => button.onclick = () => openReader(game, Number(button.dataset.document)));
       if ($('loadAchievements')) $('loadAchievements').onclick = () => loadAchievements(game.id);
-      if ($('downloadTrailer')) $('downloadTrailer').onclick = async () => { try { await api('/api/metadata/trailer',{method:'POST',body:JSON.stringify({id:game.id})}); await refresh(); renderDetails(); notify('Steam trailer downloaded'); } catch(error) { notify(error.message); } };
-      if ($('downloadGogMedia')) $('downloadGogMedia').onclick = async () => { try { await api('/api/metadata/gog',{method:'POST',body:JSON.stringify({id:game.id})}); await refresh(); renderDetails(); notify('GOG media downloaded'); } catch(error) { notify(error.message); } };
+      if ($('downloadTrailer')) $('downloadTrailer').onclick = async () => { try { await api('/api/metadata/trailer',{method:'POST',body:JSON.stringify({id:game.id})}); await refresh(); renderDetails(); notify('Steam trailer downloaded'); } catch(error) { notifyError(error); } };
+      if ($('downloadGogMedia')) $('downloadGogMedia').onclick = async () => { try { await api('/api/metadata/gog',{method:'POST',body:JSON.stringify({id:game.id})}); await refresh(); renderDetails(); notify('GOG media downloaded'); } catch(error) { notifyError(error); } };
       if ($('openBrowser')) $('openBrowser').onclick = () => { const url = game.wikipedia_url || `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(game.name)}`; nativeOpenExternal(url); };
       if ($('backupSaves')) {
         $('backupSaves').onclick = () => backupSaves(game.id);
@@ -1156,7 +1198,7 @@ function markFilterAria() {
       container.querySelectorAll('[data-fix="flatpak"]').forEach(btn => btn.onclick = async () => {
         const app = btn.dataset.app;
         if (!app) return;
-        try { await api('/api/emulators/install', {method:'POST', body: JSON.stringify({app_id: app})}); notify('Installing ' + app); } catch (e) { notify(e.message); }
+        try { await api('/api/emulators/install', {method:'POST', body: JSON.stringify({app_id: app})}); notify('Installing ' + app); } catch (e) { notifyError(e); }
       });
       container.querySelectorAll('[data-fix="reveal"]').forEach(btn => btn.onclick = () => {
         const p = btn.dataset.path;
@@ -1172,11 +1214,14 @@ function markFilterAria() {
           await api('/api/game', {method:'POST', body: JSON.stringify({id: g.id, game: {...g, platform}})} );
           await refresh();
           notify('Platform set to ' + platform);
-        } catch (e) { notify(e.message); }
+        } catch (e) { notifyError(e); }
       });
       container.querySelectorAll('[data-fix="pick-core"], [data-fix="pick"]').forEach(btn => btn.onclick = () => {
         // Open profiles/emulator catalog for picking
-        try { document.getElementById('profilesDialog')?.showModal(); } catch (e) { notify('Open Emulator profiles to choose'); }
+        try {
+          const profilesDialog = document.getElementById('profilesDialog');
+          if (profilesDialog && !profilesDialog.open) openDialog(profilesDialog, btn);
+        } catch (e) { notify('Open Emulator profiles to choose'); }
       });
       container.querySelectorAll('[data-fix="explain"]').forEach(btn => btn.onclick = () => {
         const toks = btn.dataset.tokens || '';
@@ -1222,7 +1267,7 @@ function markFilterAria() {
           await api('/api/v2/collections/delete', {method: 'POST', body: JSON.stringify({name: button.dataset.deleteCollection})});
           await refresh();
           notify('Collection deleted');
-        } catch (error) { notify(error.message); }
+        } catch (error) { notifyError(error); }
       });
     }
     function render() { renderQueryChips(); renderPlatformCategories(); renderPlatforms(); renderPlaylists(); renderFilterPresets(); renderSmartCollections(); renderGrid(); renderDetails(); markFilterAria(); applyDetailsLayout(); applySidebarVisibility(); syncHash(); $('status').textContent = `${AppState.games.length} games · local library`; }
@@ -1241,6 +1286,10 @@ function markFilterAria() {
       document.querySelectorAll('[data-collection-game]').forEach(button => button.onclick = () => selectGame(Number(button.dataset.collectionGame)));
     }
     async function renderPlatformDetails(platformName) {
+      // Same stale-response guard as loadRelated: the platform documents fetch
+      // can resolve after the user selected a game (or another platform) and
+      // must not overwrite that newer detail pane.
+      const request = ++platformDetailsRequest;
       const count = AppState.games.filter(game => (game.platform || 'Unspecified') === platformName).length;
       const items = AppState.games.filter(game => (game.platform || 'Unspecified') === platformName);
       let documents = [];
@@ -1250,6 +1299,7 @@ function markFilterAria() {
       } catch(error) {
         documents = AppState.appSettings.platform_documents?.[platformName] || [];
       }
+      if (request !== platformDetailsRequest || AppState.selectedId !== null || AppState.platform !== platformName) return;
       $('details').innerHTML = `<div class="platform-panel"><div class="hero-kicker">Platform</div><h2>${escapeHtml(platformName)}</h2><p class="description">${count} game${count === 1 ? '' : 's'} in this platform view.</p>${collectionStats(items)}<div class="detail-card"><h3>Platform documents</h3>${documents.length ? `<div class="extras">${documents.map((item,index) => `<button class="icon-button" data-platform-doc="${index}">${escapeHtml(item.name)}</button>`).join('')}</div>` : '<p class="description">No platform documents configured yet.</p>'}<div class="extras"><button class="icon-button" id="editPlatformDocuments">Edit platform documents</button></div></div><div class="detail-card"><h3>Platform shortcuts</h3><div class="extras"><button class="primary" id="platformRandom">Play random</button>${items.filter(game => game.last_played).sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)))[0] ? `<button class="icon-button" id="platformLast">Last played</button>` : ''}${items.sort((a,b) => Number(b.play_count || 0) - Number(a.play_count || 0))[0] ? `<button class="icon-button" id="platformMost">Most played</button>` : ''}</div></div></div>`;
       if (items.length) $('platformRandom').onclick = () => launch(items[Math.floor(Math.random() * items.length)].id);
       const last = items.filter(game => game.last_played).sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)))[0];
@@ -1271,7 +1321,7 @@ function markFilterAria() {
           AppState.appSettings.platform_documents = {...(AppState.appSettings.platform_documents || {}), [platformName]: rows};
           renderPlatformDetails(platformName);
           notify('Platform documents saved');
-        } catch(error) { notify(error.message); }
+        } catch(error) { notifyError(error); }
       };
       document.querySelectorAll('[data-platform-doc]').forEach(button => button.onclick = () => {
         const doc = documents[Number(button.dataset.platformDoc)];
@@ -1279,14 +1329,17 @@ function markFilterAria() {
         openReader({id:'platform', documents:[doc], name:platformName}, 0, `/api/platform/document?platform=${encodeURIComponent(platformName)}&index=${button.dataset.platformDoc}&token=${encodeURIComponent(token)}`);
       });
     }
-    async function favorite(id) { try { const result = await api('/api/favorite',{method:'POST',body:JSON.stringify({id})}); const game = AppState.games.find(item => item.id === id); if (game) { game.favorite = result.favorite; AppState._refreshCounter = (AppState._refreshCounter || 0) + 1; } renderGrid(); renderDetails(); } catch(error) { notify(error.message); } }
+    async function favorite(id) { try { const result = await api('/api/favorite',{method:'POST',body:JSON.stringify({id})}); const game = AppState.games.find(item => item.id === id); if (game) { game.favorite = result.favorite; AppState._refreshCounter = (AppState._refreshCounter || 0) + 1; } renderGrid(); renderDetails(); } catch(error) { notifyError(error); } }
     async function updateGameStatus(id, progress) {
       const game = AppState.games.find(item => item.id === id);
       if (!game) return;
-      try { await api('/api/game',{method:'POST',body:JSON.stringify({id,game:{...game,progress}})}); await refresh(); notify(`Progress set to ${progress || 'Not set'}`); } catch(error) { notify(error.message); }
+      try { await api('/api/game',{method:'POST',body:JSON.stringify({id,game:{...game,progress}})}); await refresh(); notify(`Progress set to ${progress || 'Not set'}`); } catch(error) { notifyError(error); }
     }
     async function removeGame(id,name) {
-      const ok = await confirmAction({
+      // One confirmation with an explicit opt-in for media deletion. The old
+      // flow chained a second destructive dialog every time, so removing a
+      // game always asked twice.
+      const answer = await confirmAction({
         title: 'Remove game',
         target: name,
         consequence: 'This game will be removed from OpenBox.',
@@ -1294,26 +1347,19 @@ function markFilterAria() {
         recovery: 'Re-import the folder or add the game again.',
         destructive: true,
         confirmLabel: 'Remove',
+        checkboxLabel: t('library.remove_media_too'),
+        checkboxChecked: false,
       });
-      if (!ok) return;
-      const alsoDeleteMedia = await confirmAction({
-        title: 'Delete media files',
-        target: name,
-        consequence: 'Associated media files listed in this game entry will be deleted.',
-        retained: 'ROM and save files outside the media list remain.',
-        recovery: 'Re-download metadata media later.',
-        destructive: true,
-        confirmLabel: 'Delete media',
-      });
+      if (!answer || !answer.ok) return;
       try {
         // v2 delete is a soft delete into the trash bin; the toast offers Undo.
-        const result = await api('/api/v2/library/trash',{method:'POST',body:JSON.stringify({id,delete_media:alsoDeleteMedia})});
+        const result = await api('/api/v2/library/trash',{method:'POST',body:JSON.stringify({id,delete_media:Boolean(answer.checked)})});
         AppState.selectedId = null;
         await refresh();
         showTrashUndoToast(result.name || name, result.trash_id);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
-    async function launchExtra(id,kind,index) { try { await api('/api/extra/launch',{method:'POST',body:JSON.stringify({id,kind,index})}); notify('Opened'); } catch(error) { notify(error.message); } }
+    async function launchExtra(id,kind,index) { try { await api('/api/extra/launch',{method:'POST',body:JSON.stringify({id,kind,index})}); notify('Opened'); } catch(error) { notifyError(error); } }
     // ── Trash bin (S3): toast undo + trash view ──────────────────────────────
     // The View select gains a Trash option at runtime (index.html is owned by
     // other lanes); selecting it renders the bounded bin served by
@@ -1321,7 +1367,7 @@ function markFilterAria() {
     const TRASH_VIEW = 'trash';
     const TRASH_TOAST_MS = 8000;
     let _trashItems = null;
-    let _trashToastTimer = 0;
+    const _pendingPurgeTimers = new Map();
     function isTrashView() { return $('view')?.value === TRASH_VIEW; }
     function ensureTrashViewOption() {
       const select = $('view');
@@ -1334,22 +1380,42 @@ function markFilterAria() {
       }
       option.textContent = t('trash.view');
     }
-    function hideTrashToast() {
-      clearTimeout(_trashToastTimer);
-      const toast = $('toast');
-      if (toast) toast.classList.remove('show');
-    }
     function showTrashUndoToast(name, trashId) {
-      const toast = $('toast');
-      if (!toast || !trashId) { notify(t('trash.moved', {name})); return; }
-      clearTimeout(_trashToastTimer);
-      if (notify.timer) clearTimeout(notify.timer);
-      toast.dataset.notifyLevel = 'info';
-      toast.innerHTML = `<span class="trash-toast-text">${escapeHtml(t('trash.moved', {name}))}</span><button type="button" class="trash-undo" id="trashUndoButton">${escapeHtml(t('trash.undo'))}</button>`;
-      toast.classList.add('show');
-      const undo = $('trashUndoButton');
-      if (undo) undo.onclick = () => { hideTrashToast(); restoreTrashEntry(trashId); };
-      _trashToastTimer = setTimeout(hideTrashToast, TRASH_TOAST_MS);
+      if (!trashId) { notify(t('trash.moved', {name})); return; }
+      // Queue-hosted toast: concurrent notifications no longer clobber the
+      // undo button, and the action reuses the existing restore path.
+      notifyAction(t('trash.moved', {name}), {
+        label: t('trash.undo'),
+        level: 'info',
+        duration: TRASH_TOAST_MS,
+        onAction: () => restoreTrashEntry(trashId),
+      });
+    }
+    function cancelPendingPurge(trashId) {
+      const timer = _pendingPurgeTimers.get(trashId);
+      if (timer) clearTimeout(timer);
+      _pendingPurgeTimers.delete(trashId);
+    }
+    function scheduleTrashPurge(trashId, name) {
+      // Purge runs only after the undo window, so the toast is a real undo:
+      // clicking Undo cancels the timer and the entries never leave the bin.
+      cancelPendingPurge(trashId);
+      const timer = setTimeout(() => {
+        _pendingPurgeTimers.delete(trashId);
+        api('/api/v2/library/trash/purge',{method:'POST',body:JSON.stringify({ids:[trashId]})})
+          .then(() => { _trashItems = null; if (isTrashView()) renderTrashView(); })
+          .catch(notifyError);
+      }, TRASH_TOAST_MS);
+      _pendingPurgeTimers.set(trashId, timer);
+      notifyAction(t('trash.purge_pending', {name}), {
+        label: t('trash.undo'),
+        level: 'warning',
+        duration: TRASH_TOAST_MS,
+        onAction: () => {
+          cancelPendingPurge(trashId);
+          notify('info', t('trash.purge_undone', {name}));
+        },
+      });
     }
     async function loadTrashItems() {
       try {
@@ -1357,7 +1423,7 @@ function markFilterAria() {
         _trashItems = Array.isArray(result.items) ? result.items : [];
       } catch (error) {
         _trashItems = [];
-        notify(error.message);
+        notifyError(error);
       }
       return _trashItems;
     }
@@ -1367,7 +1433,7 @@ function markFilterAria() {
         _trashItems = null;
         await refresh();
         notify(t('trash.restored', {name: result.name || ''}));
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function purgeTrashEntry(trashId, name) {
       const ok = await confirmAction({
@@ -1380,11 +1446,8 @@ function markFilterAria() {
         confirmLabel: t('trash.delete_forever'),
       });
       if (!ok) return;
-      try {
-        await api('/api/v2/library/trash/purge',{method:'POST',body:JSON.stringify({ids:[trashId]})});
-        _trashItems = null;
-        renderTrashView();
-      } catch(error) { notify(error.message); }
+      scheduleTrashPurge(trashId, name);
+      renderTrashView();
     }
     async function emptyTrash() {
       const ok = await confirmAction({
@@ -1395,15 +1458,32 @@ function markFilterAria() {
         confirmLabel: t('trash.empty'),
       });
       if (!ok) return;
-      try {
-        const result = await api('/api/v2/library/trash/purge',{method:'POST',body:JSON.stringify({})});
-        _trashItems = null;
-        renderTrashView();
-        notify(t('trash.emptied', {count: result.purged ?? 0}));
-      } catch(error) { notify(error.message); }
+      const count = Array.isArray(_trashItems) ? _trashItems.length : 0;
+      // Defer the destructive call so the toast Undo can cancel it; entries
+      // stay in the bin until the window closes.
+      const timer = setTimeout(() => {
+        cancelPendingPurge('__all__');
+        api('/api/v2/library/trash/purge',{method:'POST',body:JSON.stringify({})})
+          .then(result => {
+            _trashItems = null;
+            if (isTrashView()) renderTrashView();
+            notify(t('trash.emptied', {count: result.purged ?? 0}));
+          })
+          .catch(notifyError);
+      }, TRASH_TOAST_MS);
+      _pendingPurgeTimers.set('__all__', timer);
+      notifyAction(t('trash.empty_pending', {count}), {
+        label: t('trash.undo'),
+        level: 'warning',
+        duration: TRASH_TOAST_MS,
+        onAction: () => {
+          cancelPendingPurge('__all__');
+          notify('info', t('trash.purge_cancelled'));
+        },
+      });
     }
     function trashRowHTML(item) {
-      const when = String(item.trashed_at || '').replace('T', ' ');
+      const when = formatDate(item.trashed_at);
       const meta = [item.platform, when, (item.playlists || []).length ? t('trash.in_playlists', {names: item.playlists.join(', ')}) : ''].filter(Boolean).join(' · ');
       return `<div class="trash-row" data-trash-id="${escapeHtml(item.trash_id)}">
         <div class="trash-row-main"><strong>${escapeHtml(item.name || '')}</strong><span class="trash-meta">${escapeHtml(meta)}</span></div>
@@ -1437,7 +1517,13 @@ function markFilterAria() {
       });
     }
     ensureTrashViewOption();
-    document.addEventListener('localechange', ensureTrashViewOption);
+    document.addEventListener('localechange', () => {
+      ensureTrashViewOption();
+      // The locale pass rewrites data-i18n labels; re-render so title/meta
+      // show the active view's localized text instead of a stale default.
+      applyLocaleStrings();
+      renderGrid();
+    });
     $('sidebarSearch').oninput = () => {
       leaveActivePreset();
       AppState.activePlaylist = '';
@@ -1470,7 +1556,9 @@ function markFilterAria() {
       persistListSort();
     }
     function persistListSort() {
-      api('/api/settings',{method:'POST',body:JSON.stringify({list_sort:AppState.appSettings.list_sort || 'title',list_sort_dir:AppState.appSettings.list_sort_dir || ''})}).catch(() => {});
+      // Sort/grouping/view are preferences: when the write fails the UI must
+      // say so instead of silently reverting on the next load.
+      api('/api/settings',{method:'POST',body:JSON.stringify({list_sort:AppState.appSettings.list_sort || 'title',list_sort_dir:AppState.appSettings.list_sort_dir || ''})}).catch(error => notifyError(error));
     }
     function applyStoredSort() {
       if (listSortApplied) return;
@@ -1491,7 +1579,8 @@ function markFilterAria() {
       if (!sources.length) return;
       lightbox = { kind, sources, index: Math.max(0, Math.min(index, sources.length - 1)) };
       renderLightbox();
-      $('mediaDialog').showModal();
+      const mediaDialog = $('mediaDialog');
+      if (mediaDialog && !mediaDialog.open) openDialog(mediaDialog);
     }
     function renderLightbox() {
       const dialog = $('mediaDialog');
@@ -1534,7 +1623,9 @@ function markFilterAria() {
       AppState.appSettings.cover_grouping = $('grouping').value;
       if ($('groupingSetting')) $('groupingSetting').value = $('grouping').value;
       renderGrid();
-      await api('/api/settings',{method:'POST',body:JSON.stringify({cover_grouping:AppState.appSettings.cover_grouping})}).catch(() => {});
+      try {
+        await api('/api/settings',{method:'POST',body:JSON.stringify({cover_grouping:AppState.appSettings.cover_grouping})});
+      } catch(error) { notifyError(error); }
     };
     if ($('esrbFilter')) $('esrbFilter').onchange = () => { leaveActivePreset(); renderGrid(); };
     const libraryPaneElement = document.querySelector('main.library');
@@ -1555,14 +1646,34 @@ function markFilterAria() {
           renderGrid({fromScroll:true});
         });
       }, { passive: true });
-      window.addEventListener('resize', () => { gridRowHeight = 0; applyDetailsLayout(); renderGrid(); });
+      let resizeFramePending = false;
+      window.addEventListener('resize', () => {
+        // Resize events fire per frame while dragging a window edge; coalesce
+        // them into one re-render per animation frame.
+        if (resizeFramePending) return;
+        resizeFramePending = true;
+        requestAnimationFrame(() => {
+          resizeFramePending = false;
+          gridRowHeight = 0;
+          applyDetailsLayout();
+          renderGrid();
+        });
+      });
     }
     $('viewToggleButton').onclick = async () => {
-      AppState.appSettings.library_view = (AppState.appSettings.library_view || 'grid') === 'list' ? 'grid' : 'list';
-      if ($('libraryViewSetting')) $('libraryViewSetting').value = AppState.appSettings.library_view;
-      applyLocaleStrings();
-      renderGrid();
-      await api('/api/settings',{method:'POST',body:JSON.stringify({library_view:AppState.appSettings.library_view})}).catch(() => {});
+      if ($('viewToggleButton').disabled) return;
+      setButtonBusy($('viewToggleButton'), true, t('common.loading'));
+      try {
+        AppState.appSettings.library_view = (AppState.appSettings.library_view || 'grid') === 'list' ? 'grid' : 'list';
+        if ($('libraryViewSetting')) $('libraryViewSetting').value = AppState.appSettings.library_view;
+        applyLocaleStrings();
+        renderGrid();
+        await api('/api/settings',{method:'POST',body:JSON.stringify({library_view:AppState.appSettings.library_view})});
+      } catch(error) {
+        notifyError(error);
+      } finally {
+        setButtonBusy($('viewToggleButton'), false);
+      }
     };
     if ($('dropZone')) {
       ['dragenter','dragover'].forEach(name => $('dropZone').addEventListener(name, event => { event.preventDefault(); $('dropZone').classList.add('active'); }));
@@ -1578,5 +1689,367 @@ function markFilterAria() {
     bindDetailsResize();
     bindFilterDrawer();
     applyDetailsLayout();
+
+// --- Artwork Doctor (F5) ---------------------------------------------------
+// Bulk hygiene report plus a cancelable, undoable SteamGridDB fill job. The
+// dialog is built in JS so the shared index.html stays untouched.
+const ARTWORK_ISSUE_KEYS = {
+  missing_cover: 'artwork_doctor.issue_missing_cover',
+  missing_file: 'artwork_doctor.issue_missing_file',
+  low_res: 'artwork_doctor.issue_low_res',
+  wrong_aspect: 'artwork_doctor.issue_wrong_aspect',
+  duplicate: 'artwork_doctor.issue_duplicate',
+};
+let artworkDoctorDialog = null;
+let artworkDoctorReport = null;
+let artworkDoctorJobId = '';
+
+function artworkIssueLabel(issue) {
+  return t(ARTWORK_ISSUE_KEYS[issue] || 'artwork_doctor.issue_unknown');
+}
+
+function artworkIssueDetail(issue) {
+  if (issue.issue === 'low_res') return `${issue.width}×${issue.height}`;
+  if (issue.issue === 'wrong_aspect') return `${issue.aspect} → ${issue.expected_aspect}`;
+  return issue.path || '';
+}
+
+function ensureArtworkDoctorDialog() {
+  if (artworkDoctorDialog) return artworkDoctorDialog;
+  artworkDoctorDialog = document.createElement('dialog');
+  artworkDoctorDialog.id = 'artworkDoctorDialog';
+  artworkDoctorDialog.className = 'detail-dialog artwork-doctor-dialog';
+  artworkDoctorDialog.setAttribute('aria-modal', 'true');
+  artworkDoctorDialog.innerHTML = `<div class="dialog-head"><h2>${escapeHtml(t('artwork_doctor.title'))}</h2><button type="button" class="icon-button" data-artwork-close aria-label="${escapeHtml(t('common.cancel'))}">×</button></div><div class="artwork-doctor-body" id="artworkDoctorBody"><p class="description">${escapeHtml(t('artwork_doctor.scanning'))}</p></div><div class="extras artwork-doctor-actions"><button type="button" class="icon-button" id="artworkDoctorRefresh">${escapeHtml(t('artwork_doctor.rescan'))}</button><button type="button" class="primary" id="artworkDoctorFix">${escapeHtml(t('artwork_doctor.fix_all'))}</button><button type="button" class="icon-button" id="artworkDoctorUndo">${escapeHtml(t('artwork_doctor.undo'))}</button></div>`;
+  document.body.appendChild(artworkDoctorDialog);
+  artworkDoctorDialog.querySelector('[data-artwork-close]').onclick = () => artworkDoctorDialog.close();
+  artworkDoctorDialog.addEventListener('cancel', event => { event.preventDefault(); artworkDoctorDialog.close(); });
+  $('artworkDoctorRefresh').onclick = () => renderArtworkDoctor();
+  $('artworkDoctorFix').onclick = () => startArtworkFix();
+  $('artworkDoctorUndo').onclick = () => undoArtworkBatch();
+  return artworkDoctorDialog;
+}
+
+function renderArtworkReport(report) {
+  const counts = report.counts || {};
+  const chips = Object.entries(ARTWORK_ISSUE_KEYS).map(([issue, key]) => `
+    <span class="artwork-count-chip" data-artwork-count="${escapeHtml(issue)}"><strong>${counts[issue] || 0}</strong> ${escapeHtml(t(key))}</span>
+  `).join('');
+  const issues = (report.issues || []).slice(0, 200).map(issue => `
+    <li class="artwork-issue-row" data-artwork-issue="${escapeHtml(issue.issue)}" data-artwork-field="${escapeHtml(issue.field || '')}">
+      <span class="artwork-issue-game">${escapeHtml(issue.name || issue.game_id || '')}</span>
+      <span class="artwork-issue-label">${escapeHtml(artworkIssueLabel(issue))}</span>
+      <span class="artwork-issue-detail">${escapeHtml(artworkIssueDetail(issue))}</span>
+    </li>
+  `).join('');
+  const batches = report.batches || [];
+  const attribution = report.provider_attribution ? `<p class="description">${escapeHtml(t('artwork_doctor.attribution', {provider: report.provider_attribution}))}</p>` : '';
+  return `<p class="description">${escapeHtml(t('artwork_doctor.summary', {count: report.scanned ?? 0}))}</p>${attribution}<div class="artwork-doctor-counts">${chips}</div><div class="artwork-doctor-status" id="artworkDoctorStatus"></div><ul class="artwork-doctor-list">${issues || `<li class="description">${escapeHtml(t('artwork_doctor.empty'))}</li>`}</ul><p class="description" id="artworkDoctorLastBatch">${batches.length ? escapeHtml(t('artwork_doctor.last_batch', {batch: batches[0].batch_id, count: batches[0].count})) : ''}</p>`;
+}
+
+async function renderArtworkDoctor() {
+  ensureArtworkDoctorDialog();
+  if (!artworkDoctorDialog.open) openDialog(artworkDoctorDialog);
+  const body = $('artworkDoctorBody');
+  body.innerHTML = `<p class="description">${escapeHtml(t('artwork_doctor.scanning'))}</p>`;
+  try {
+    artworkDoctorReport = await api('/api/v2/steamgrid/hygiene/report');
+  } catch (error) {
+    body.innerHTML = `<p class="description">${escapeHtml(t('artwork_doctor.report_failed'))}</p>`;
+    notifyError(error);
+    return;
+  }
+  body.innerHTML = renderArtworkReport(artworkDoctorReport);
+}
+
+function pollArtworkJob(jobId) {
+  // Driven by the shared SSE stream: progress frames update the counter,
+  // the terminal frame resolves with {state, result, error}. After a
+  // reconnect the job list is re-fetched once in case the frame was missed.
+  return waitForJob(jobId, {
+    onProgress: job => {
+      const status = $('artworkDoctorProgress') || $('artworkDoctorStatus');
+      if (status) status.textContent = t('artwork_doctor.fixing', {done: job.current ?? 0, total: job.total ?? 0});
+    },
+    fetch: async () => {
+      const page = await api('/api/v2/jobs?limit=100');
+      return (page.jobs || []).find(entry => entry.job_id === jobId) || null;
+    },
+  });
+}
+
+async function startArtworkFix() {
+  const button = $('artworkDoctorFix');
+  const status = $('artworkDoctorStatus');
+  if (status) status.textContent = t('artwork_doctor.scanning');
+  setButtonBusy(button, true, t('artwork_doctor.fixing', {done: 0, total: 0}));
+  try {
+    const queued = await api('/api/v2/steamgrid/hygiene/fix', {method: 'POST', body: JSON.stringify({fields: ['cover']})});
+    artworkDoctorJobId = queued.job_id;
+    if (status) status.innerHTML = `<span id="artworkDoctorProgress">${escapeHtml(t('artwork_doctor.fixing', {done: 0, total: 0}))}</span> <button type="button" class="icon-button" id="artworkDoctorCancel">${escapeHtml(t('common.cancel'))}</button>`;
+    $('artworkDoctorCancel')?.addEventListener('click', async () => {
+      try { await api('/api/v2/jobs/cancel', {method: 'POST', body: JSON.stringify({job_id: artworkDoctorJobId})}); } catch { /* job may have finished */ }
+    });
+    const job = await pollArtworkJob(queued.job_id);
+    if (job?.state === 'cancelled') notify('warning', t('artwork_doctor.cancelled'));
+    else if (job?.state === 'error') notify('error', t('artwork_doctor.fix_failed'));
+    else notify('success', t('artwork_doctor.fixed', {count: job?.result?.applied ?? 0}));
+    await refresh();
+    await renderArtworkDoctor();
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    setButtonBusy(button, false);
+  }
+}
+
+async function undoArtworkBatch() {
+  const batch = artworkDoctorReport?.batches?.[0];
+  if (!batch) {
+    notify('warning', t('artwork_doctor.no_batch'));
+    return;
+  }
+  try {
+    const result = await api('/api/v2/steamgrid/hygiene/undo', {method: 'POST', body: JSON.stringify({batch_id: batch.batch_id})});
+    notify('success', t('artwork_doctor.undone', {count: (result.restored || []).length}));
+    await refresh();
+    await renderArtworkDoctor();
+  } catch (error) {
+    notifyError(error);
+  }
+}
+
+function openArtworkDoctor() {
+  renderArtworkDoctor();
+}
+
+document.addEventListener('app:palette-artwork-doctor', () => openArtworkDoctor());
+
+// ── Missing-file repair wizard (P5) ─────────────────────────────────────────
+// Health already reports missing paths; this dialog fixes records. Preview and
+// apply both send the picked folder (never raw paths), so the server re-plans
+// and the transaction only writes targets that matched inside the folder.
+let repairDialog = null;
+let repairScanItems = [];
+let repairMatches = [];
+let repairAmbiguous = [];
+let repairUnmatched = [];
+let repairFolder = '';
+const repairSelected = new Set();
+
+function repairPairKey(item) { return `${item.id}:${item.field}`; }
+
+function repairKindLabel(kind) {
+  return kind === 'media' ? t('repair.kind_media') : t('repair.kind_game');
+}
+
+function ensureRepairDialog() {
+  if (repairDialog) return repairDialog;
+  repairDialog = document.createElement('dialog');
+  repairDialog.id = 'repairDialog';
+  repairDialog.className = 'detail-dialog repair-dialog';
+  repairDialog.setAttribute('aria-modal', 'true');
+  repairDialog.innerHTML = `<div class="dialog-head"><h2>${escapeHtml(t('repair.title'))}</h2><button type="button" class="icon-button" data-repair-close aria-label="${escapeHtml(t('common.close'))}">×</button></div><div class="repair-body" id="repairBody"></div><div class="extras repair-actions"><button type="button" class="icon-button" id="repairFind">${escapeHtml(t('repair.find_folder'))}</button><button type="button" class="primary" id="repairApply" disabled>${escapeHtml(t('repair.apply', {count: 0}))}</button></div>`;
+  document.body.appendChild(repairDialog);
+  repairDialog.querySelector('[data-repair-close]').onclick = () => closeDialog(repairDialog);
+  repairDialog.addEventListener('cancel', event => { event.preventDefault(); closeDialog(repairDialog); });
+  $('repairFind').onclick = () => pickRepairFolder();
+  $('repairApply').onclick = () => applyRepairPlan();
+  return repairDialog;
+}
+
+function updateRepairApplyState() {
+  const button = $('repairApply');
+  if (!button) return;
+  const count = repairMatches.filter(item => repairSelected.has(repairPairKey(item))).length;
+  button.disabled = !count;
+  button.textContent = t('repair.apply', {count});
+}
+
+function renderRepairBody() {
+  const body = $('repairBody');
+  if (!body) return;
+  const parts = [];
+  if (!repairScanItems.length) {
+    parts.push(`<p class="description">${escapeHtml(t('repair.empty'))}</p>`);
+  } else {
+    parts.push(`<p class="description">${escapeHtml(t('repair.summary', {count: repairScanItems.length}))}${repairFolder ? ` · ${escapeHtml(repairFolder)}` : ''}</p>`);
+  }
+  if (repairFolder) {
+    parts.push(`<p class="description">${escapeHtml(t('repair.matches', {count: repairMatches.length}))} · ${escapeHtml(t('repair.unmatched', {count: repairUnmatched.length}))} · ${escapeHtml(t('repair.ambiguous', {count: repairAmbiguous.length}))}</p>`);
+  }
+  const rows = (repairFolder ? repairMatches : repairScanItems).map(item => {
+    const key = repairPairKey(item);
+    const checked = repairSelected.has(key) ? ' checked' : '';
+    const target = repairFolder && item.path ? `<span class="repair-target">${escapeHtml(item.relative || item.path)}</span>` : '';
+    return `<label class="repair-row"><input type="checkbox" data-repair-pick="${escapeHtml(key)}"${checked}><span class="repair-row-main"><strong>${escapeHtml(item.name || item.game_id || '')}</strong><small>${escapeHtml(repairKindLabel(item.kind))} · ${escapeHtml(item.field)}</small><small class="repair-from">${escapeHtml(item.from || item.path || '')}${target ? ` → ${target}` : ''}</small></span></label>`;
+  });
+  if (repairAmbiguous.length) {
+    rows.push(`<p class="description">${escapeHtml(t('repair.ambiguous_hint'))}</p>`);
+  }
+  parts.push(`<div class="repair-list">${rows.join('') || `<p class="description">${escapeHtml(t('repair.empty'))}</p>`}</div>`);
+  body.innerHTML = parts.join('');
+  body.querySelectorAll('[data-repair-pick]').forEach(input => input.onchange = () => {
+    input.checked ? repairSelected.add(input.dataset.repairPick) : repairSelected.delete(input.dataset.repairPick);
+    updateRepairApplyState();
+  });
+  updateRepairApplyState();
+}
+
+async function scanRepair() {
+  try {
+    const result = await api('/api/v2/library/repair');
+    repairScanItems = result.items || [];
+  } catch (error) {
+    repairScanItems = [];
+    notifyError(error);
+  }
+  repairMatches = [];
+  repairAmbiguous = [];
+  repairUnmatched = [];
+  repairFolder = '';
+  repairSelected.clear();
+  repairScanItems.forEach(item => repairSelected.add(repairPairKey(item)));
+  renderRepairBody();
+}
+
+async function pickRepairFolder() {
+  const folder = await nativePickFolder(t('repair.find_folder'));
+  if (!folder) return;
+  const button = $('repairFind');
+  setButtonBusy(button, true);
+  try {
+    const plan = await api('/api/v2/library/repair/preview', {method: 'POST', body: JSON.stringify({folder, include_media: true})});
+    repairFolder = plan.folder || folder;
+    repairMatches = plan.matches || [];
+    repairAmbiguous = plan.ambiguous || [];
+    repairUnmatched = plan.unmatched || [];
+    repairSelected.clear();
+    repairMatches.forEach(item => repairSelected.add(repairPairKey(item)));
+    renderRepairBody();
+    if (!repairMatches.length) notify('warning', t('repair.no_matches'));
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    setButtonBusy(button, false);
+  }
+}
+
+async function applyRepairPlan() {
+  if (!repairFolder || !repairMatches.length) return;
+  const button = $('repairApply');
+  const selection = repairMatches
+    .filter(item => repairSelected.has(repairPairKey(item)))
+    .map(item => [item.id, item.field]);
+  setButtonBusy(button, true);
+  try {
+    // Dry-run first: the transaction re-validates, and skipped rows are reported
+    // instead of silently overwriting edits made since the preview.
+    const result = await api('/api/v2/library/repair/apply', {method: 'POST', body: JSON.stringify({folder: repairFolder, include_media: true, selection})});
+    if (result.updated) notify('success', t('repair.applied', {count: result.updated}));
+    else notify('info', t('repair.nothing_applied'));
+    if (result.skipped?.length) notify('warning', t('repair.skipped', {count: result.skipped.length}));
+    await refresh();
+    await scanRepair();
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    setButtonBusy(button, false);
+  }
+}
+
+export function openRepairWizard() {
+  ensureRepairDialog();
+  if (!repairDialog.open) openDialog(repairDialog);
+  $('repairBody').innerHTML = `<p class="description">${escapeHtml(t('repair.scanning'))}</p>`;
+  scanRepair();
+}
+
+// ── Duplicate detection & merge (P5) ────────────────────────────────────────
+let duplicatesDialog = null;
+let duplicateGroups = [];
+
+function ensureDuplicatesDialog() {
+  if (duplicatesDialog) return duplicatesDialog;
+  duplicatesDialog = document.createElement('dialog');
+  duplicatesDialog.id = 'duplicatesDialog';
+  duplicatesDialog.className = 'detail-dialog duplicates-dialog';
+  duplicatesDialog.setAttribute('aria-modal', 'true');
+  duplicatesDialog.innerHTML = `<div class="dialog-head"><h2>${escapeHtml(t('duplicates.title'))}</h2><button type="button" class="icon-button" data-duplicates-close aria-label="${escapeHtml(t('common.close'))}">×</button></div><div class="duplicates-body" id="duplicatesBody"></div>`;
+  document.body.appendChild(duplicatesDialog);
+  duplicatesDialog.querySelector('[data-duplicates-close]').onclick = () => closeDialog(duplicatesDialog);
+  duplicatesDialog.addEventListener('cancel', event => { event.preventDefault(); closeDialog(duplicatesDialog); });
+  return duplicatesDialog;
+}
+
+const DUPLICATE_KIND_KEYS = {identity: 'duplicates.kind_identity', path: 'duplicates.kind_path', title: 'duplicates.kind_title'};
+
+function renderDuplicateGroups() {
+  const body = $('duplicatesBody');
+  if (!body) return;
+  if (!duplicateGroups.length) {
+    body.innerHTML = `<p class="description">${escapeHtml(t('duplicates.empty'))}</p>`;
+    return;
+  }
+  body.innerHTML = `<p class="description">${escapeHtml(t('duplicates.summary', {count: duplicateGroups.length}))}</p>` +
+    duplicateGroups.map((group, index) => `
+      <section class="duplicate-group" data-duplicate-group="${index}">
+        <h3>${escapeHtml(t(DUPLICATE_KIND_KEYS[group.kind] || 'duplicates.title'))}</h3>
+        <div class="duplicate-rows">${group.games.map(game => `<div class="duplicate-row"><strong>${escapeHtml(game.name || '')}</strong><small>${escapeHtml(game.platform || '')} · ${escapeHtml(game.path || '')}</small><small>${escapeHtml(t('duplicates.row_stats', {sessions: game.sessions || 0, hours: (Number(game.playtime_seconds || 0) / 3600).toFixed(1)}))}</small></div>`).join('')}</div>
+        <button type="button" class="icon-button" data-duplicate-merge="${index}">${escapeHtml(t('duplicates.merge'))}</button>
+      </section>`).join('');
+  body.querySelectorAll('[data-duplicate-merge]').forEach(button => {
+    button.onclick = () => mergeDuplicateGroup(duplicateGroups[Number(button.dataset.duplicateMerge)], button);
+  });
+}
+
+async function loadDuplicates() {
+  try {
+    const result = await api('/api/v2/library/duplicates');
+    duplicateGroups = result.groups || [];
+  } catch (error) {
+    duplicateGroups = [];
+    notifyError(error);
+  }
+  renderDuplicateGroups();
+}
+
+async function mergeDuplicateGroup(group, trigger) {
+  if (!group) return;
+  setButtonBusy(trigger, true);
+  try {
+    const plan = await api('/api/v2/library/duplicates/preview', {method: 'POST', body: JSON.stringify({ids: group.games.map(game => game.id)})});
+    const primary = plan.primary || {};
+    const ok = await confirmAction({
+      title: t('duplicates.preview'),
+      target: primary.name || '',
+      message: t('duplicates.primary', {name: primary.name || ''}),
+      consequence: t('duplicates.absorbed', {count: (plan.absorbed || []).length}),
+      retained: t('duplicates.changes', {count: (plan.changed_fields || []).length}),
+      recovery: t('duplicates.restore_hint'),
+      destructive: true,
+      confirmLabel: t('duplicates.merge'),
+    });
+    if (!ok) return;
+    const result = await api('/api/v2/library/duplicates/merge', {method: 'POST', body: JSON.stringify({ids: group.games.map(game => game.id)})});
+    notify('success', t('duplicates.merged', {count: result.merged || 0}));
+    await refresh();
+    await loadDuplicates();
+  } catch (error) {
+    notifyError(error, t('duplicates.failed'));
+  } finally {
+    setButtonBusy(trigger, false);
+  }
+}
+
+export function openDuplicatesDialog() {
+  ensureDuplicatesDialog();
+  if (!duplicatesDialog.open) openDialog(duplicatesDialog);
+  $('duplicatesBody').innerHTML = `<p class="description">${escapeHtml(t('duplicates.scanning'))}</p>`;
+  loadDuplicates();
+}
+
+document.addEventListener('app:open-repair-wizard', () => openRepairWizard());
+document.addEventListener('app:open-duplicates', () => openDuplicatesDialog());
 
 export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated, isVirtualEnabled, getSearchWorker, workerSearch, searchWithFallback, verifyWorkerParity, ensureVirtualObserver, visibleGameIds, focusGameIndex, gridMetrics, isTrashView, renderTrashView, showTrashUndoToast, restoreTrashEntry };

@@ -2,6 +2,63 @@
 
 Measured by `scripts/perf_bench.py` against a synthetic library served by the real server (loopback, gzip enabled). Reference machine: this workstation.
 
+## 1.13.0 M3 measurements (2026-09-16)
+
+Snapshot views (ADR 0054), targeted sync journaling, SQLite-backed search and
+facets, the batched media audit, and the shortened save scan. Method:
+`python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5 --no-gate`
+(the "before" column was captured on the same tree while the M3 changes were
+landing and still contains the per-request deep-copy paths; every endpoint
+below that used `load_state_view()` shows the expected drop).
+
+| p95 ms | 10k before | 10k after | 20k before | 20k after |
+|---|---:|---:|---:|---:|
+| `/api/library` (warm) | 57.6 | 35.9 | 85.5 | 74.9 |
+| `/api/library` gzip | 3.0 | 2.8 | 3.9 | 4.5 |
+| favorite write (in-bench) | 130.2 | 147.6 | 331.8 | 305.6 |
+| `/api/favorite` write path | 128.2 | 156.6 | 277.8 | 277.3 |
+| filtered query | 13.5 | 13.4 | 18.3 | 13.5 |
+| `/api/explorer/facets` | 226.1 | 24.6 | 773.7 | 46.1 |
+| `/api/media` | 331.0 | 2.5 | 708.7 | 2.3 |
+| picker score | 349.2 | 113.5 | 887.0 | 222.3 |
+| constellation build | 604.7 | 672.4 | 1251.7 | 737.1 |
+
+20k budget check: `/api/library` warm p95 **74.9 ms** (≤ 250 ms target) and
+the favorite write path **277.3 ms** against a 277.8 ms before run (within the
+±50 ms single-write budget). The 10k write figures differ by ~13% between
+runs; the write path is fsync/serialize bound at this size and the before/after
+samples are only five runs each.
+
+In-process micro-benchmarks at 20k games (same state file):
+
+| Operation | Before | After |
+|---|---:|---:|
+| `copy.deepcopy(state)` | 532 ms | n/a (removed from read paths) |
+| `load_state_view()` miss / hit | 607 / 584 ms | 0.1 / 0.0 ms (one copy per file signature) |
+| `capture_sync_snapshot()` × 2 per write | ~370 ms | 0 ms (no-op/settings writes) |
+| tracked write diff (settings-only / one edited game) | — | 31 / 35 ms |
+
+## 50,000-game tier (exploratory, opt-in)
+
+`python3 -B scripts/perf_bench.py --sizes 50000 --runs 3 --no-gate` on the
+M3 tree. Gates in `scripts/perf_bench.py` (`GATES_50K`) are enforced when the
+size is requested; the write-path tier additionally needs
+`OPENBOX_PERF_50K_WRITE=1` because it materializes a second 50k tree.
+
+| key (50k) | measured p95 ms | gate p95 ms |
+|---|---:|---:|
+| `library_ms_p95` | 226.3 | 4000 |
+| `library_gzip_ms_p95` | 8.9 | 2000 |
+| `favorite_mutation_ms_p95` | 832.1 | 4000 |
+| `filtered_query_ms_p95` | 13.7 | 2000 |
+| `facet_ms_p95` | 115.5 | 2000 |
+| `picker_score_ms_p95` | 1132.2 | 2500 |
+| `constellation_build_ms_p95` | 927.2 | 2000 |
+
+The 50k write tier recorded no run in this measurement (disk-bound; see
+`OPENBOX_PERF_50K_WRITE` above) and the gate is skipped when the entry is
+absent.
+
 ## 1.12.0 measurements
 
 No dedicated measurement run was recorded for the 1.12.0 release. The
@@ -53,7 +110,7 @@ games is exploratory even when the SQLite read model is enabled.
 | 10,000 games | ~28ms (29MB est) | ~3.8ms (1.3MB) | ~2.8ms | ~310ms |
 
 - Native host cold start (launch to server ready): 242 ms; server files published 182 ms after spawn. The WebKitGTK window then loads the token-bearing URL, so the full handshake stays under the 2s target.
-- Coverage gates enforced in `scripts/check_tests.py`: `COVERAGE_FLOOR=83.0` total, `WEB_APP_FLOOR=58.0`, changed-line `95%`, new runtime modules `85%`.
+- Coverage gates enforced in `scripts/check_tests.py`: `COVERAGE_FLOOR=83.0` total, `WEB_APP_FLOOR=73.0`, changed-line `95%`, new runtime modules `85%`.
 - JSON remains canonical; the optional SQLite projection is an indexed read path for larger libraries, but only 10k/20k scenarios are release-gated.
 
 ## 20,000-game gates (blocking CI job `perf-20k`)

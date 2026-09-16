@@ -1273,7 +1273,9 @@ class MemoriesRouteTests(unittest.TestCase):
         handler = self._handler()
 
         def bad_send_file(*args, **kwargs):
-            raise ValueError("bad range")
+            from api_errors import RangeParseError
+
+            raise RangeParseError("bad range")
 
         handler.send_file = bad_send_file
         with mock.patch.object(media_mod, "load_state_view", return_value=state):

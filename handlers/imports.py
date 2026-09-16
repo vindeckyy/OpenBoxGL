@@ -17,6 +17,7 @@ from parity_import_policy import add_exclusion, list_exclusions, remove_exclusio
 from parity_premium import import_loose_arcade, import_xbox360_folder
 from parity_storefront import catalog_entries_to_games, storefront_catalog
 from webapp_state import (
+    JOB_MANAGER,
     broadcast_event,
     clear_file_probe_cache,
     import_folder_path,
@@ -42,6 +43,52 @@ def _send_import_result(handler, added, found, **extra):
     payload = {"added": added, "found": found}
     payload.update(extra)
     handler.send_json(200, payload)
+
+
+def _submit_emulator_install_job(app_ids):
+    """Install emulators in the background with progress and cancellation."""
+    total = len(app_ids)
+
+    def worker(cancel_event=None):
+        installed, errors = [], []
+        for index, app_id in enumerate(app_ids):
+            if cancel_event is not None and cancel_event.is_set():
+                break
+            if cancel_event is not None:
+                try:
+                    cancel_event.progress(
+                        phase="emulator.install",
+                        current=index,
+                        total=total,
+                        message=f"Installing {app_id}",
+                    )
+                except Exception:
+                    LOGGER.debug("Emulator install progress update failed", exc_info=True)
+            try:
+                install_emulator(app_id)
+                installed.append(app_id)
+            except (OSError, ValueError, RuntimeError) as error:
+                LOGGER.warning("install_emulator %s: %s", app_id, error)
+                errors.append(f"{app_id}: {error}")
+        if cancel_event is not None:
+            try:
+                cancel_event.progress(
+                    phase="emulator.install",
+                    current=len(installed),
+                    total=total,
+                    message="",
+                )
+            except Exception:
+                pass
+        return {"installed": installed, "errors": errors}
+
+    job = JOB_MANAGER.submit("emulator-install", worker)
+    return {
+        "job_id": job.get("job_id", ""),
+        "state": job.get("state", "queued"),
+        "pending": list(app_ids),
+        "total": total,
+    }
 
 
 class ImportsHandlers:
@@ -146,6 +193,11 @@ class ImportsHandlers:
         if not Path(xml_path).is_file():
             raise BadRequest(f"LaunchBox XML not found: {xml_path}")
         supplied_plan = payload.get("plan")
+        supplied_token = str(
+            payload.get("preview_token")
+            or (supplied_plan.get("preview_token") if isinstance(supplied_plan, dict) else "")
+            or ""
+        )
         options = payload.get("options") if "options" in payload else (
             supplied_plan.get("options") if isinstance(supplied_plan, dict) else {}
         )
@@ -178,6 +230,11 @@ class ImportsHandlers:
 
             def mutate(current):
                 canonical = build_import_plan(parsed, current, options=options)
+                # The browser stopped shipping the (potentially multi-megabyte)
+                # plan in 1.13.0; the preview token is the review evidence and
+                # must still match the canonical rebuild.
+                if supplied_token and str(canonical.get("preview_token") or "") != supplied_token:
+                    raise StaleImportPlan("Library changed since the preview; review it again.")
                 result_state = apply_import_plan(
                     canonical, current, preview_token=canonical["preview_token"],
                     source_digest=parsed.get("source_digest"), source=parsed, options=options,
@@ -234,6 +291,11 @@ class ImportsHandlers:
         except ESDEImportError as error:
             raise BadRequest(str(error), code="ESDE_INVALID_SOURCE") from error
         submitted = payload.get("plan")
+        submitted_token = str(
+            payload.get("preview_token")
+            or (submitted.get("preview_token") if isinstance(submitted, dict) else "")
+            or ""
+        )
         try:
             if submitted:
                 if str(submitted.get("source_digest")) != str(parsed.get("source_digest")):
@@ -252,6 +314,8 @@ class ImportsHandlers:
             else:
                 def mutate(current):
                     plan = build_import_plan(parsed, current, options=options)
+                    if submitted_token and str(plan.get("preview_token") or "") != submitted_token:
+                        raise StaleESDEPlan("Library changed since the preview; review it again.")
                     result = apply_import_plan(
                         plan, current, preview_token=plan["preview_token"],
                         source_digest=parsed.get("source_digest"), source=parsed, options=options,
@@ -283,16 +347,25 @@ class ImportsHandlers:
         if not isinstance(chosen, dict):
             raise BadRequest("chosen_emulators must be an object.")
         added, found, recommendations = import_folder_path(folder, chosen_emulators=chosen)
-        installs = []
+        pending = []
         for app_id in chosen.values():
             if not app_id:
                 continue
-            try:
-                install_emulator(str(app_id))
-                installs.append(str(app_id))
-            except (OSError, ValueError, RuntimeError) as e:
-                LOGGER.warning("install_emulator %s: %s", app_id, e)
-        _send_import_result(self, added, found, recommendations=recommendations, installed=installs)
+            app_id = str(app_id)
+            if app_id not in pending:
+                pending.append(app_id)
+        install_job = _submit_emulator_install_job(pending) if pending else None
+        # Installs used to block this request for up to 1800 s per emulator.
+        # They now run as a cancellable background job; the response keeps the
+        # historical keys and adds ``install_job`` /
+        # ``install_pending`` (P2-11).
+        _send_import_result(
+            self, added, found,
+            recommendations=recommendations,
+            installed=[],
+            install_pending=pending,
+            install_job=install_job,
+        )
 
     def import_xbox360(self, payload):
         folder = _required_folder_path(payload)

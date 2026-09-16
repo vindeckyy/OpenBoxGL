@@ -180,3 +180,27 @@ def download_file(
             Path(temporary_name).unlink(missing_ok=True)
     return destination
 
+
+def dir_signature(root, *, max_entries=None):
+    """Directory-only mtime/count fingerprint for one tree.
+
+    Directory mtimes change whenever a direct child is added, removed, or
+    renamed, so a walk of directories alone detects content churn without
+    opening or decoding a single file.  Returns ``None`` when the fingerprint
+    cannot be trusted (unreadable, or more than ``max_entries`` directories),
+    in which case callers must not skip the scan.
+    """
+    entries = []
+    try:
+        for dirpath, dirnames, filenames in os.walk(root):
+            if max_entries is not None and len(entries) >= max_entries:
+                return None
+            try:
+                stat_result = os.stat(dirpath)
+            except OSError:
+                return None
+            entries.append((dirpath, stat_result.st_mtime_ns, len(filenames), len(dirnames)))
+    except OSError:
+        return None
+    return tuple(entries)
+

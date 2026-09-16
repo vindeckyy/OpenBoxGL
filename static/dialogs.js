@@ -43,6 +43,11 @@ document.addEventListener('keydown', event => {
   const open = [...document.querySelectorAll('dialog[open]')].at(-1);
   if (!open) return;
   event.preventDefault();
+  // Dispatch a synthetic cancel so a dialog's own guard can veto the close
+  // (the game editor's unsaved-changes prompt relies on preventDefault here).
+  // When nothing vetoes, closeDialog owns the actual close plus focus restore.
+  const cancel = new Event('cancel', { cancelable: true });
+  if (!open.dispatchEvent(cancel)) return;
   closeDialog(open);
 });
 
@@ -82,6 +87,7 @@ function ensureA11yDialogHosts() {
         <p class="wide description" id="a11yConfirmConsequence" hidden></p>
         <p class="wide description" id="a11yConfirmRetained" hidden></p>
         <p class="wide description" id="a11yConfirmRecovery" hidden></p>
+        <label class="check wide" id="a11yConfirmCheckboxRow" hidden><input type="checkbox" id="a11yConfirmCheckbox"> <span id="a11yConfirmCheckboxLabel"></span></label>
       </div>
       <div class="dialog-actions"><button type="button" id="a11yConfirmCancel">Cancel</button><button type="button" class="primary" id="a11yConfirmOk">Confirm</button></div>
     </dialog>`;
@@ -160,6 +166,8 @@ function confirmAction({
   recovery = '',
   confirmLabel = 'Confirm',
   destructive = false,
+  checkboxLabel = '',
+  checkboxChecked = false,
 } = {}) {
   ensureA11yDialogHosts();
   const dialog = $('a11yConfirmDialog');
@@ -176,17 +184,33 @@ function confirmAction({
   setLine('a11yConfirmConsequence', 'Consequence', consequence);
   setLine('a11yConfirmRetained', 'Retained', retained);
   setLine('a11yConfirmRecovery', 'Recovery', recovery);
+  // Optional secondary choice (e.g. "also delete media") folds a follow-up
+  // destructive dialog into one confirmation. Callers that pass a
+  // checkboxLabel get {ok, checked} back; everyone else keeps the boolean.
+  const checkboxRow = $('a11yConfirmCheckboxRow');
+  const checkbox = $('a11yConfirmCheckbox');
+  if (checkboxLabel) {
+    $('a11yConfirmCheckboxLabel').textContent = checkboxLabel;
+    checkbox.checked = Boolean(checkboxChecked);
+    checkboxRow.hidden = false;
+  } else {
+    checkboxRow.hidden = true;
+  }
   const okBtn = $('a11yConfirmOk');
   okBtn.textContent = confirmLabel;
-  okBtn.className = 'primary';
+  // Destructive confirmations look different and focus Cancel, so Enter does
+  // not immediately delete/remove (the flag was accepted but never used).
+  okBtn.className = destructive ? 'primary confirm-destructive' : 'primary';
+  const cancelBtn = $('a11yConfirmCancel');
   return new Promise(resolve => {
     const finish = value => settleDialog(dialog, resolve, value);
-    okBtn.onclick = () => finish(true);
-    $('a11yConfirmCancel').onclick = () => finish(false);
+    okBtn.onclick = () => finish(checkboxLabel ? {ok: true, checked: checkbox.checked} : true);
+    cancelBtn.onclick = () => finish(false);
     $('a11yConfirmClose').onclick = () => finish(false);
     dialog.addEventListener('close', () => finish(false), {once:true});
     openDialog(dialog);
-    okBtn.focus();
+    if (destructive) cancelBtn.focus();
+    else okBtn.focus();
   });
 }
 

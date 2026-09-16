@@ -199,6 +199,57 @@ class MomentsTests(unittest.TestCase):
         self.assertEqual(moments.auto_moment_trigger({"progress": "Playing"}, {"progress": "Beaten"}), "progress")
         self.assertEqual(moments.auto_moment_trigger({"playtime_seconds": 3599}, {"playtime_seconds": 3600}), "milestone")
 
+    def test_auto_suggest_returns_the_server_trigger_for_a_session_end_offer(self):
+        from urllib.parse import urlencode
+
+        state = openbox.load_state()
+        state["games"][0]["progress"] = "Beaten"
+        with patch.object(moments.openbox, "load_state", return_value=state):
+            handler = _Handler()
+            previous = urlencode({"previous": '{"progress": "Playing"}'})
+            moments.moments_auto_suggest(
+                handler,
+                SimpleNamespace(query=f"game_id={self.game_id}&{previous}"),
+            )
+        status, payload = handler.responses[-1]
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["trigger"], "progress")
+        self.assertTrue(payload["suggested"])
+        self.assertTrue(payload["title"])
+
+        with patch.object(moments.openbox, "load_state", return_value=state):
+            handler = _Handler()
+            unchanged = urlencode({"previous": '{"progress": "Beaten"}'})
+            moments.moments_auto_suggest(
+                handler,
+                SimpleNamespace(query=f"game_id={self.game_id}&{unchanged}"),
+            )
+        self.assertFalse(handler.responses[-1][1]["suggested"])
+
+    def test_auto_suggest_rejects_missing_game_and_bad_previous(self):
+        from api_errors import BadRequest, NotFound
+
+        state = openbox.load_state()
+        with patch.object(moments.openbox, "load_state", return_value=state):
+            with self.assertRaises(BadRequest):
+                moments.moments_auto_suggest(_Handler(), SimpleNamespace(query=""))
+            with self.assertRaises(NotFound):
+                moments.moments_auto_suggest(_Handler(), SimpleNamespace(query="game_id=missing"))
+            with self.assertRaises(BadRequest):
+                moments.moments_auto_suggest(
+                    _Handler(),
+                    SimpleNamespace(query=f"game_id={self.game_id}&previous=not-json"),
+                )
+
+    def test_auto_suggest_denies_unauthorized_handlers(self):
+        class Denied(_Handler):
+            def authorized(self):
+                return False
+
+        handler = Denied()
+        moments.moments_auto_suggest(handler, SimpleNamespace(query="game_id=x"))
+        self.assertEqual(handler.responses[-1][0], 403)
+
     def test_routes_manifest_and_frontend_contract_are_registered(self):
         from routes import GET_TABLE, POST_TABLE, PUBLIC_GET_PATHS
         from routes.registry import all_routes
@@ -215,6 +266,8 @@ class MomentsTests(unittest.TestCase):
             "moments.js", "app.js", "navigation.js", "bigbox.js", "library.js",
         )}
         self.assertIn("/api/v2/moments", source["moments.js"])
+        self.assertIn("/api/v2/moments/auto-suggest", source["moments.js"])
+        self.assertIn("offerMomentCapture", source["moments.js"])
         self.assertIn("shareCardPayload", source["moments.js"])
         self.assertIn("capture_id", source["moments.js"])
         self.assertIn("resume_state: item.resume_state", source["moments.js"])

@@ -507,7 +507,7 @@ class PerfWriteTests(unittest.TestCase):
             self.assertEqual(store.games_by_id, {})
             self.assertEqual(store.games_by_platform, {})
 
-    def test_ensure_loaded_auto_migrates_on_disk(self):
+    def test_ensure_loaded_migrates_in_memory_without_writing(self):
         with tempfile.TemporaryDirectory() as directory:
             store = self.make_store(directory)
             legacy = {"schema_version": 1, "games": [{"name": "Legacy", "path": "/bin/true"}]}
@@ -516,7 +516,11 @@ class PerfWriteTests(unittest.TestCase):
             game = store.get_game_by_id(list(store.games_by_id.keys())[0])
             self.assertIsNotNone(game)
             self.assertEqual(game["name"], "Legacy")
-            # Verify file was migrated on disk
+            # Reads must not rewrite the file; the next mutation persists the
+            # migration (a GET on a full disk must still succeed).
+            raw = json.loads(store.path.read_text(encoding="utf-8"))
+            self.assertEqual(raw["schema_version"], 1)
+            store.update(lambda state: None)
             raw = json.loads(store.path.read_text(encoding="utf-8"))
             self.assertEqual(raw["schema_version"], 6)
 

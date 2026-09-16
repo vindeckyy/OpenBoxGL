@@ -197,6 +197,55 @@ def test_placeholders_preserved():
         assert not missing, f"{locale}.json missing placeholders: {missing}"
 
 
+def _check_i18n_module():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("check_i18n", ROOT / "scripts" / "check_i18n.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_on_locale_change_registry_exported():
+    """P8: i18n.js exposes onLocaleChange and fans out to registered listeners."""
+    content = (ROOT / "static" / "i18n.js").read_text(encoding="utf-8")
+    assert "function onLocaleChange(" in content, "onLocaleChange registry missing"
+    assert "localeChangeListeners" in content, "listener set missing"
+    assert "onLocaleChange," in content or "onLocaleChange }" in content, "onLocaleChange must be exported"
+
+
+def test_locale_fallback_warns():
+    """P8: a failed locale fetch surfaces a one-time warning."""
+    content = (ROOT / "static" / "i18n.js").read_text(encoding="utf-8")
+    assert "warnLocaleFallback" in content, "fallback warning helper missing"
+    assert "common.locale_fallback" in content, "fallback warning string key missing"
+    assert "console.warn" in content, "fallback must at least warn on the console"
+    assert "notify(" in content, "fallback warning must surface to the UI"
+
+
+def test_check_i18n_backtick_and_dynamic_keys():
+    """P8: the gate extracts backtick t() keys and reports dynamic prefixes."""
+    module = _check_i18n_module()
+    text = "const a = t('dialog.one'); const b = t(\"dialog.two\"); const c = t(`dialog.three`);"
+    assert module.extract_js_keys_from_text(text) == {"dialog.one", "dialog.two", "dialog.three"}
+    dynamic = "const d = t(`trophy.rules.${item.id}.name`);"
+    assert module.extract_dynamic_prefixes_from_text(dynamic) == {"trophy.rules"}
+    assert module.extract_dynamic_prefixes_from_text("t(`static.key`)") == set()
+    assert module.T_CALL_RE.search("t(`activity.state_${state}`)") is None
+
+
+def test_check_i18n_unused_keys_are_informational():
+    """P8: unused keys are reported but never fail the gate."""
+    result = subprocess.run(
+        [sys.executable, "-B", str(ROOT / "scripts" / "check_i18n.py")],
+        capture_output=True, text=True, timeout=30, check=False,
+    )
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, f"unused keys must not fail:\n{output}"
+    assert "informational" in output.lower(), "unused/dynamic report must be visible"
+    assert "Dynamic t() template keys" in output, "dynamic key report missing"
+
+
 def run_all_tests():
     tests = [
         test_locale_files_exist,
@@ -213,6 +262,10 @@ def run_all_tests():
         test_locales_in_flatpak,
         test_meta_native_names,
         test_placeholders_preserved,
+        test_on_locale_change_registry_exported,
+        test_locale_fallback_warns,
+        test_check_i18n_backtick_and_dynamic_keys,
+        test_check_i18n_unused_keys_are_informational,
     ]
     failures = 0
     for test in tests:

@@ -3,56 +3,75 @@
 
 Stages:
   1. ruff lint (gate rule set from pyproject.toml)
-  2. runtime_modules drift, v1 contract, version sync, frontend lint, i18n keys
+  2. runtime_modules drift, v1 contract, version sync, frontend lint, i18n keys,
+     CSP framing, docs links, generated api-v2 freshness
   3. py_compile over all runtime modules, test files, and scripts
   4. full test suite under coverage, run serially (gamescope/X tests collide
-     in parallel workers)
-  5. coverage floor checks (83.0 total + 58.0 web_app.py + 95 changed-line +
-     85 new-module) and design-token hygiene
+     in parallel workers), with a per-file timeout and skip accounting
+  5. coverage floor checks (83 total + 73 web_app.py + 95 changed-line + 85
+     new-module + touched-module) and design-token hygiene
 
 Exits non-zero when any stage fails. Used by `make check` and CI.
+
+Test retries are reported and a retry that rescues a pass marks the file FLAKY,
+which fails the gate: flaky tests must be fixed, not papered over. Environment
+skips (gamescope/7z/webkit) are counted and printed; set
+OPENBOX_STRICT_SKIPS=1 to fail on any skip. Per-file timeout defaults to 300s
+(OPENBOX_TEST_TIMEOUT overrides).
 
 Dev-only dependencies are expected in .venv-dev (see docs/CONTRIBUTING.md).
 """
 
 import os
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from scripts.git_diff_base import DiffBaseUnresolved, resolve_diff_base  # noqa: E402
 VENV = ROOT / ".venv-dev"
 RUFF = VENV / "bin" / "ruff"
 COVERAGE = VENV / "bin" / "coverage"
 
-# Coverage floors. Ratcheted baseline: 83% total, 58% web_app.py.
+# Coverage floors. Ratcheted baseline: 83% total, 73% web_app.py (measured
+# 83.804 / 73.429 on 2026-09-16; rounded down for margin).
 # Raise the floors as phases land; never lower them silently.
 COVERAGE_FLOOR = 83.0
-WEB_APP_FLOOR = 58.0
+WEB_APP_FLOOR = 73.0
 CHANGED_LINE_FLOOR = 95.0
 NEW_MODULE_FLOOR = 85.0
+# A single test file that runs longer than this is a hang, not a slow test.
+TEST_TIMEOUT = float(os.environ.get("OPENBOX_TEST_TIMEOUT", "300"))
+TEST_ATTEMPTS = 3
+SKIP_NOTE_RE = re.compile(r"\bskipp(?:ed|ing)\b", re.IGNORECASE)
 
 
-def run(command):
+def run(command, env=None):
     print(f"$ {' '.join(str(part) for part in command)}")
-    return subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
+    return subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False, env=env)
 
 
-def _git_diff_base() -> str:
-    upstream = run(["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
-    if upstream.returncode == 0 and upstream.stdout.strip():
-        merge = run(["git", "merge-base", "HEAD", upstream.stdout.strip()])
-        if merge.returncode == 0 and merge.stdout.strip():
-            return merge.stdout.strip()
-    head = run(["git", "rev-parse", "HEAD"])
-    return head.stdout.strip() if head.returncode == 0 else "HEAD"
+def _skip_notes(output: str) -> list[str]:
+    notes = []
+    for line in output.splitlines():
+        candidate = line.strip()
+        if candidate and SKIP_NOTE_RE.search(candidate):
+            notes.append(candidate[:200])
+    return notes
+
+
+def _git_diff_base() -> str | None:
+    return resolve_diff_base(run=run)
 
 
 def _runtime_modules_at(ref: str) -> set[str]:
     show = run(["git", "show", f"{ref}:runtime_modules.txt"])
     if show.returncode != 0:
-        return set()
+        raise RuntimeError(f"git show {ref}:runtime_modules.txt failed: {show.stderr.strip()}")
     return {
         line.strip()
         for line in show.stdout.splitlines()
@@ -60,14 +79,25 @@ def _runtime_modules_at(ref: str) -> set[str]:
     }
 
 
-def _check_new_module_coverage(coverage_bin: Path, failures: list[str]) -> None:
-    base = _git_diff_base()
+def _unresolved_base_message() -> str:
+    return (
+        "diff base unresolved: pass OPENBOX_DIFF_BASE, add an upstream, or fetch "
+        "origin (use OPENBOX_DIFF_BASE=HEAD to intentionally skip the comparison)"
+    )
+
+
+def _check_new_module_coverage(coverage_bin: Path, base: str, failures: list[str]) -> None:
     current = {
         line.strip()
         for line in (ROOT / "runtime_modules.txt").read_text().splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     }
-    previous = _runtime_modules_at(base)
+    try:
+        previous = _runtime_modules_at(base)
+    except RuntimeError as exc:
+        print(exc)
+        failures.append("runtime_modules base unreadable")
+        return
     new_modules = sorted(module for module in current - previous if module.endswith(".py"))
     if not new_modules:
         print("new runtime modules: none since diff base")
@@ -84,12 +114,15 @@ def _check_new_module_coverage(coverage_bin: Path, failures: list[str]) -> None:
         print(f"new runtime modules ({len(new_modules)}): >= {NEW_MODULE_FLOOR:.0f}% coverage")
 
 
-def _check_changed_line_floor(coverage_bin: Path, failures: list[str]) -> None:
-    if str(ROOT) not in sys.path:
-        sys.path.insert(0, str(ROOT))
+def _check_changed_line_floor(coverage_bin: Path, base: str, failures: list[str]) -> None:
     from scripts.check_changed_coverage import measure_changed_lines
 
-    hit, total, changed_files = measure_changed_lines()
+    try:
+        hit, total, changed_files = measure_changed_lines(base)
+    except (DiffBaseUnresolved, RuntimeError) as exc:
+        print(f"changed-line coverage: {exc}")
+        failures.append("changed-line diff base unreadable")
+        return
     if not changed_files:
         print(f"changed-line coverage: no Python changes since diff base; pass (floor {CHANGED_LINE_FLOOR:.0f}%)")
         return
@@ -100,6 +133,37 @@ def _check_changed_line_floor(coverage_bin: Path, failures: list[str]) -> None:
     print(f"changed-line coverage: {hit}/{total} = {pct:.1f}% (floor {CHANGED_LINE_FLOOR:.0f}%)")
     if pct < CHANGED_LINE_FLOOR:
         failures.append(f"changed-line coverage floor {CHANGED_LINE_FLOOR:.0f}%")
+
+
+def _check_touched_module_floor(failures: list[str]) -> None:
+    """Run the standalone touched-module floor used by CI inside `make check`.
+
+    The script also fails any touched module sitting at 0% coverage; keeping
+    one implementation avoids drift between the local gate and CI.
+    """
+    env = os.environ.copy()
+    env["PATH"] = f"{VENV / 'bin'}{os.pathsep}{env.get('PATH', '')}"
+    venv_python = VENV / "bin" / "python"
+    interpreter = str(venv_python) if venv_python.is_file() else sys.executable
+    result = subprocess.run(
+        [
+            interpreter,
+            "-B",
+            str(ROOT / "scripts" / "check_changed_coverage.py"),
+            f"--fail-under={CHANGED_LINE_FLOOR:.0f}",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    if result.stderr.strip():
+        print(result.stderr.strip())
+    if result.returncode != 0:
+        failures.append("touched-module coverage")
 
 
 def main() -> int:
@@ -181,6 +245,24 @@ def main() -> int:
     if csp_check.returncode != 0:
         failures.append("csp")
 
+    # Stage 2.9: relative markdown links in README.md and docs/ must resolve.
+    links_check = run([sys.executable, "-B", str(ROOT / "scripts" / "check_docs_links.py")])
+    if links_check.stdout.strip():
+        print(links_check.stdout.strip())
+    if links_check.stderr.strip():
+        print(links_check.stderr.strip())
+    if links_check.returncode != 0:
+        failures.append("docs links")
+
+    # Stage 2.10: docs/api-v2.md must match the live route registry.
+    api_docs_check = run([sys.executable, "-B", str(ROOT / "scripts" / "gen_api_docs.py"), "--check"])
+    if api_docs_check.stdout.strip():
+        print(api_docs_check.stdout.strip())
+    if api_docs_check.stderr.strip():
+        print(api_docs_check.stderr.strip())
+    if api_docs_check.returncode != 0:
+        failures.append("api docs freshness")
+
     modules = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip()]
     compile_failed = 0
     for module in modules:
@@ -225,6 +307,10 @@ def main() -> int:
         # Serial on purpose: the gamescope/deck tests spawn real nested X
         # sessions and collide when run in parallel workers.
         failed_tests = []
+        flaky_tests = []
+        timeout_tests = []
+        skip_total = 0
+        skip_files = 0
         # Ensure root is on PYTHONPATH so tests in tests/ can import flat modules
         env = os.environ.copy()
         env["PYTHONPATH"] = str(ROOT) + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
@@ -241,28 +327,63 @@ def main() -> int:
             command = [str(COVERAGE), "run", "-p", str(test_file)]
             last_output = ""
             code = 1
-            for _attempt in range(3):
-                result = subprocess.run(
-                    command,
-                    cwd=ROOT, capture_output=True, text=True,
-                    check=False, env=env,
-                )
+            attempts_used = 0
+            timed_out = False
+            for attempt in range(1, TEST_ATTEMPTS + 1):
+                attempts_used = attempt
+                try:
+                    result = subprocess.run(
+                        command,
+                        cwd=ROOT, capture_output=True, text=True,
+                        check=False, env=env, timeout=TEST_TIMEOUT,
+                    )
+                except subprocess.TimeoutExpired as exc:
+                    timed_out = True
+                    code = 124
+                    chunks = []
+                    for stream in (exc.stdout, exc.stderr):
+                        if stream:
+                            chunks.append(stream if isinstance(stream, str) else stream.decode("utf-8", "replace"))
+                    last_output = "\n".join(chunks)
+                    break
                 code = result.returncode
                 last_output = (result.stdout or "") + (result.stderr or "")
                 if code == 0:
                     break
-            if code:
+            notes = _skip_notes(last_output)
+            if notes:
+                skip_total += len(notes)
+                skip_files += 1
+                for note in notes[:3]:
+                    print(f"SKIP {test_file.name}: {note}")
+            if timed_out:
+                timeout_tests.append(test_file.name)
+                print(f"TIMEOUT {test_file.name} after {TEST_TIMEOUT:.0f}s")
+                if last_output.strip():
+                    print("\n".join(last_output.strip().splitlines()[-20:]))
+            elif code:
                 failed_tests.append(test_file.name)
                 print(f"FAIL {test_file.name}")
                 if last_output.strip():
                     tail = last_output.strip().splitlines()[-40:]
                     print("\n".join(tail))
+            elif attempts_used > 1:
+                flaky_tests.append(test_file.name)
+                print(f"FLAKY {test_file.name} (passed on attempt {attempts_used}/{TEST_ATTEMPTS}; retries hide a defect)")
             else:
                 print(f"PASS {test_file.name}")
-        passed_tests = len(test_files) - len(failed_tests)
-        print(f"{passed_tests} test files passed, {len(failed_tests)} failed")
+        passed_tests = len(test_files) - len(failed_tests) - len(timeout_tests)
+        print(f"{passed_tests} test files passed, {len(failed_tests)} failed, {len(timeout_tests)} timed out")
+        if skip_total:
+            print(f"environment skips: {skip_total} note(s) across {skip_files} file(s)")
+            if os.environ.get("OPENBOX_STRICT_SKIPS") == "1":
+                failures.append(f"environment skips ({skip_total})")
         if failed_tests:
             failures.append("tests")
+        if timeout_tests:
+            failures.append(f"test timeouts ({', '.join(timeout_tests)})")
+        if flaky_tests:
+            failures.append(f"flaky tests ({', '.join(flaky_tests)})")
         gate_data_dir = env.get("OPENBOX_DATA_DIR", "")
         if gate_data_dir and "openbox-gate-data." in gate_data_dir:
             shutil.rmtree(gate_data_dir, ignore_errors=True)
@@ -293,8 +414,14 @@ def main() -> int:
             if web_total < WEB_APP_FLOOR:
                 failures.append("web_app coverage floor")
 
-            _check_changed_line_floor(COVERAGE, failures)
-            _check_new_module_coverage(COVERAGE, failures)
+            base = _git_diff_base()
+            if base is None:
+                print(_unresolved_base_message())
+                failures.append("diff base unresolved")
+            else:
+                _check_changed_line_floor(COVERAGE, base, failures)
+                _check_new_module_coverage(COVERAGE, base, failures)
+                _check_touched_module_floor(failures)
 
             # Token hygiene: raw hex outside :root must not rise
             token = run([sys.executable, "scripts/check_tokens.py"])

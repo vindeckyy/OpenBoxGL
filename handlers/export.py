@@ -34,11 +34,12 @@ class ExportHandlers:
         if not approved:
             self.send_json(404, {"error": "export not found"})
             return
-        data = approved.read_bytes()
         content_type = "application/json" if approved.suffix == ".json" else "text/csv; charset=utf-8"
-        # send_bytes owns Content-Length and the single-write path, so this
-        # inherits the same partial-write discipline as every other response.
-        self.send_bytes(200, data, content_type, extra_headers={
+        # send_file streams from disk (sendfile/chunks) and owns ETag,
+        # Content-Length, and range handling, so a multi-MB export is never
+        # read into memory (P1-21). The approved path is validated above and
+        # Content-Disposition stays an attachment.
+        self.send_file(200, approved, content_type, extra_headers={
             "Content-Disposition": f'attachment; filename="{approved.name}"',
         })
         return

@@ -71,21 +71,32 @@ class HealthHandlers:
     @route("GET", "/api/backups")
     def _api_get_api_backups(self, parsed):
         folder = DATA.parent / "backups"
-        backups = []
-        for path in sorted(folder.glob("OpenBoxBackup-*.zip"), key=lambda item: item.stat().st_mtime, reverse=True):
+        collected = []
+        try:
+            candidates = list(folder.glob("OpenBoxBackup-*.zip"))
+        except OSError:
+            candidates = []
+        for path in candidates:
+            try:
+                stat_result = path.stat()
+            except OSError:
+                # A concurrently rotated/removed backup must not 500 the list.
+                continue
             try:
                 with zipfile.ZipFile(path) as package:
                     manifest = json.loads(package.read("manifest.json")) if "manifest.json" in package.namelist() else {}
             except (OSError, zipfile.BadZipFile, KeyError, json.JSONDecodeError):
                 manifest = {"items": [], "invalid": True}
-            backups.append({
+            collected.append((stat_result.st_mtime, {
                 "name": path.name,
                 "path": str(path),
-                "size": path.stat().st_size,
+                "size": stat_result.st_size,
                 "created": manifest.get("created", ""),
                 "items": manifest.get("items", []),
                 "invalid": bool(manifest.get("invalid")),
-            })
+            }))
+        collected.sort(key=lambda entry: entry[0], reverse=True)
+        backups = [entry for _mtime, entry in collected]
         self.send_json(200, {"backups": backups})
         return
 

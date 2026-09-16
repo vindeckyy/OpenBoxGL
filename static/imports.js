@@ -1,6 +1,6 @@
 import './setup.js';
 import { $, escapeHtml } from './util.js';
-import { api, notify, nativePickFolder, nativePickFile, AppState } from './state.js';
+import { api, notify, nativePickFolder, nativePickFile, AppState, notifyError } from './state.js';
 import { refresh } from './library.js';
 import { promptChoice, promptInput } from './dialogs.js';
 import { t } from './i18n.js';
@@ -38,28 +38,28 @@ async function pickEmulatorForPlatform(platform, items) {
           : preview;
         await refresh();
         notify(`${result.added} games imported${result.installed?.length ? ` · installed ${result.installed.length} emulator(s)` : ''}`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function importSteam() {
       try {
         const result = await api('/api/import/steam',{method:'POST',body:'{}'});
         await refresh();
         notify(`${result.added} Steam games imported · ${result.found} installed`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function importHeroic() {
       try {
         const result = await api('/api/import/heroic',{method:'POST',body:'{}'});
         await refresh();
         notify(`${result.added} Heroic games imported · ${result.found} installed`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function importLutris() {
       try {
         const result = await api('/api/import/lutris',{method:'POST',body:'{}'});
         await refresh();
         notify(`${result.added} Lutris games imported · ${result.found} installed`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function importArcade() {
       const folder = await nativePickFolder('Absolute path of the arcade ROM folder');
@@ -81,7 +81,7 @@ async function pickEmulatorForPlatform(platform, items) {
         const result = await api('/api/import/arcade',{method:'POST',body:JSON.stringify({folder,source,dat,command})});
         await refresh();
         notify(`${result.added} arcade games imported · ${result.found} matched`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function importDroppedFolder(folder) {
       try {
@@ -97,7 +97,7 @@ async function pickEmulatorForPlatform(platform, items) {
           : preview;
         await refresh();
         notify(`${result.added} games imported${result.installed?.length ? ` · installed ${result.installed.length} emulator(s)` : ''}`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function runStartupStorefrontImports() {
       const settings = AppState.appSettings.storefront_auto_import || {};
@@ -180,7 +180,7 @@ function renderLaunchBoxReport(report) {
   const apply = $('applyLaunchBox');
   if (apply) {
     apply.hidden = false;
-    apply.disabled = !report?.plan || !report?.preview_token;
+    apply.disabled = !report?.preview_token;
   }
 }
 
@@ -200,7 +200,7 @@ async function previewLaunchBox() {
     launchBoxPreview = null;
     const apply = $('applyLaunchBox');
     if (apply) { apply.hidden = true; apply.disabled = true; }
-    notify(error.message);
+    notifyError(error);
   } finally {
     if (button) { button.disabled = false; button.removeAttribute('aria-busy'); }
   }
@@ -208,7 +208,7 @@ async function previewLaunchBox() {
 
 async function applyLaunchBox() {
   const xmlPath = $('launchboxXmlPath')?.value.trim() || '';
-  if (!xmlPath || !launchBoxPreview?.plan) return notify(t('metadata.launchbox_preview_required'));
+  if (!xmlPath || !launchBoxPreview?.preview_token) return notify(t('metadata.launchbox_preview_required'));
   const button = $('applyLaunchBox');
   try {
     const options = collectLaunchBoxOptions();
@@ -217,7 +217,6 @@ async function applyLaunchBox() {
       method: 'POST',
       body: JSON.stringify({
         xml_path: xmlPath,
-        plan: launchBoxPreview.plan,
         preview_token: launchBoxPreview.preview_token,
         options,
       }),
@@ -227,7 +226,7 @@ async function applyLaunchBox() {
     $('launchboxStatus').textContent = t('metadata.launchbox_applied', {added: result.added ?? 0, merged: result.merged ?? 0});
     await refresh();
   } catch (error) {
-    notify(error.message);
+    notifyError(error);
   } finally {
     if (button) { button.disabled = false; button.removeAttribute('aria-busy'); }
   }
@@ -296,7 +295,7 @@ async function previewEsde() {
     renderEsdeReport(report);
   } catch (error) {
     invalidateEsdePreview();
-    notify(error.message);
+    notifyError(error);
   } finally {
     if (button) { button.disabled = false; button.removeAttribute('aria-busy'); }
   }
@@ -308,13 +307,13 @@ async function applyEsde() {
   const button = $('applyEsde');
   try {
     if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); }
-    const result = await api('/api/v2/import/esde/apply', {method: 'POST', body: JSON.stringify({xml_path: xmlPath, plan: esdePreview, preview_token: esdePreview.preview_token})});
+    const result = await api('/api/v2/import/esde/apply', {method: 'POST', body: JSON.stringify({xml_path: xmlPath, preview_token: esdePreview.preview_token})});
     esdePreview = null;
     if (button) button.hidden = true;
     $('esdeStatus').textContent = t('metadata.esde_applied', {added: result.added ?? result.counts?.added ?? 0, merged: result.merged ?? result.counts?.merged ?? 0});
     await refresh();
   } catch (error) {
-    notify(error.message);
+    notifyError(error);
   } finally {
     if (button) { button.disabled = false; button.removeAttribute('aria-busy'); }
   }

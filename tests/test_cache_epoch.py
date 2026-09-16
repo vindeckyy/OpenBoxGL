@@ -547,19 +547,19 @@ class CacheEpochTests(unittest.TestCase):
 
     def test_load_state_view_populated_during_load(self):
         import openbox
-        from webapp_state import STATE_VIEW_CACHE, load_state_view, load_state_readonly
+        from webapp_state import STATE_VIEW_CACHE, load_state_view
 
+        STATE_VIEW_CACHE.update({"signature": None, "state": None})
         signature = openbox.STATE_STORE.signature()
-        original = load_state_readonly
+        seeded_state = {"games": [{"game_id": "seed"}], "settings": {}}
 
-        def seeded_load():
-            STATE_VIEW_CACHE.update({
-                "signature": signature,
-                "state": {"games": [{"game_id": "seed"}], "settings": {}},
-            })
-            return original()
+        def seeded_snapshot():
+            # Simulate another request populating the view cache between our
+            # signature check and the snapshot copy.
+            STATE_VIEW_CACHE.update({"signature": signature, "state": seeded_state})
+            return seeded_state, signature
 
-        with mock.patch("webapp_state.load_state_readonly", side_effect=seeded_load):
+        with mock.patch.object(openbox.STATE_STORE, "read_snapshot", side_effect=seeded_snapshot):
             view = load_state_view()
         self.assertEqual(view["games"][0]["game_id"], "seed")
 

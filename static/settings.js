@@ -1,9 +1,10 @@
-import { $, escapeHtml, formatBytes, defaultBadges, defaultControllerMap, fact } from './util.js';
-import { AppState, api, notify, token, selectedIds, playlistFor, applySidebarVisibility, nativePickFile, nativePickFolder } from './state.js';
-import { refresh, render, renderGrid } from './library.js';
+import { $, escapeHtml, formatBytes, formatDate, defaultBadges, defaultControllerMap, fact } from './util.js';
+import { AppState, api, notify, token, selectedIds, playlistFor, applySidebarVisibility, nativePickFile, nativePickFolder, notifyError, setButtonBusy } from './state.js';
+import { refresh, render, renderGrid, openRepairWizard, openDuplicatesDialog } from './library.js';
 import { applyLibraryMusic } from './bigbox.js';
-import { confirmAction, promptInput } from './dialogs.js';
+import { confirmAction, promptInput, openDialog, closeDialog } from './dialogs.js';
 import { t } from './i18n.js';
+import { waitForJob } from './events.js';
 
 
 
@@ -151,10 +152,11 @@ import { t } from './i18n.js';
       try {
         AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify({...collectSettings(),welcome_completed:true})});
         $('setupCenter').close();
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     function maybeShowWelcome() {
-      if (!AppState.appSettings.welcome_completed && !AppState.games.length) $('setupCenter').showModal();
+      const setupCenter = $('setupCenter');
+      if (!AppState.appSettings.welcome_completed && !AppState.games.length && setupCenter && !setupCenter.open) openDialog(setupCenter);
     }
     function collectSettings() {
       return {
@@ -195,6 +197,8 @@ import { t } from './i18n.js';
         obs_websocket_password:$('obsWebsocketPassword')?.value || '',
         household_stats_sharing:$('householdStatsSharing')?.checked || false,
         museum_kiosk_enabled:$('museumKioskEnabled')?.checked || false,
+        emulator_defs_update_enabled:$('emulatorDefsUpdateEnabled')?.checked || false,
+        update_auto_download:$('updateAutoDownload')?.checked || false,
         progress_automation_enabled:$('progressAutomationEnabled').checked,
         progress_automation_play_minutes:Number($('progressAutomationMinutes').value),
         progress_automation_idle_days:Number($('progressAutomationIdleDays').value),
@@ -263,7 +267,7 @@ import { t } from './i18n.js';
         if ($('librarySyncConflicts')) { $('librarySyncConflicts').hidden = true; $('librarySyncConflicts').innerHTML = ''; }
         const cloudLabel = AppState.appSettings.cloud_sync_beta ? 'Statistics sync (beta)' : 'Statistics sync';
         const cloudLast = AppState.appSettings.last_cloud_sync
-          ? `Last synced ${AppState.appSettings.last_cloud_sync.replace('T', ' ')}`
+          ? `Last synced ${formatDate(AppState.appSettings.last_cloud_sync)}`
           : (AppState.appSettings.last_cloud_sync_error ? `Last sync failed: ${AppState.appSettings.last_cloud_sync_error}` : 'Not synced yet');
         $('cloudStatus').textContent = `${cloudLabel} · ${cloudLast}`;
         $('screensaverSeconds').value = AppState.appSettings.screensaver_seconds;
@@ -283,7 +287,7 @@ import { t } from './i18n.js';
         const lastAuto = AppState.appSettings.last_auto_backup || '';
         if ($('lastAutoBackupLine')) {
           $('lastAutoBackupLine').hidden = !lastAuto;
-          if (lastAuto) $('lastAutoBackupLine').textContent = `Last automatic backup: ${lastAuto.replace('T', ' ')}`;
+          if (lastAuto) $('lastAutoBackupLine').textContent = `Last automatic backup: ${formatDate(lastAuto)}`;
         }
         $('progressAutomationEnabled').checked = Boolean(AppState.appSettings.progress_automation_enabled);
         $('progressAutomationMinutes').value = AppState.appSettings.progress_automation_play_minutes ?? 30;
@@ -348,8 +352,9 @@ import { t } from './i18n.js';
         $('updateStatus').textContent = `OpenBox ${AppState.appSettings.version}${AppState.appSettings.appimage ? ' · AppImage' : ' · source checkout'}`;
         $('installUpdate').hidden = true;
         $('installDesktop').disabled = !AppState.appSettings.appimage;
-        if (!$('settingsDialog').open) $('settingsDialog').showModal();
-      } catch(error) { notify(error.message); }
+        refreshSignedChannelStatus();
+        if (!$('settingsDialog').open) openDialog($('settingsDialog'));
+      } catch(error) { notifyError(error); }
     }
     async function openProfiles() {
       try {
@@ -378,8 +383,9 @@ import { t } from './i18n.js';
           const health = await api('/api/v2/emulators/registry?health=1');
           renderRegistryHealth(health.adapters || []);
         } catch (e) { /* health best-effort */ }
-        $('profilesDialog').showModal();
-      } catch(error) { notify(error.message); }
+        const profilesDialog = $('profilesDialog');
+        if (profilesDialog && !profilesDialog.open) openDialog(profilesDialog);
+      } catch(error) { notifyError(error); }
     }
     function renderRegistryHealth(adapters) {
       const catalog = $('emulatorCatalog');
@@ -424,20 +430,20 @@ import { t } from './i18n.js';
           await api('/api/emulators/install-all',{method:'POST',body:'{}'});
           notify('Installing all available emulators');
           watchInstallAll();
-        } catch(error) { notify(error.message); }
+        } catch(error) { notifyError(error); }
       };
       $('updateAllEmulators').onclick = async () => {
         try {
           await api('/api/emulators/update-all',{method:'POST',body:'{}'});
           notify('Updating installed emulators');
           watchInstallAll();
-        } catch(error) { notify(error.message); }
+        } catch(error) { notifyError(error); }
       };
       document.querySelectorAll('[data-update-emulator]').forEach(button => button.onclick = async () => {
-        try { await api('/api/emulators/update',{method:'POST',body:JSON.stringify({app_id:button.dataset.updateEmulator})}); notify('Updating emulator'); watchEmulator(button.dataset.updateEmulator); } catch(error) { notify(error.message); }
+        try { await api('/api/emulators/update',{method:'POST',body:JSON.stringify({app_id:button.dataset.updateEmulator})}); notify('Updating emulator'); watchEmulator(button.dataset.updateEmulator); } catch(error) { notifyError(error); }
       });
       document.querySelectorAll('[data-open-emulator]').forEach(button => button.onclick = async () => {
-        try { await api('/api/emulators/open',{method:'POST',body:JSON.stringify({app_id:button.dataset.openEmulator})}); notify('Emulator launched'); } catch(error) { notify(error.message); }
+        try { await api('/api/emulators/open',{method:'POST',body:JSON.stringify({app_id:button.dataset.openEmulator})}); notify('Emulator launched'); } catch(error) { notifyError(error); }
       });
       document.querySelectorAll('[data-emulator]').forEach(button => button.onclick = async () => {
         const emulator = emulators.find(item => item.app_id === button.dataset.emulator);
@@ -452,7 +458,7 @@ import { t } from './i18n.js';
           await api('/api/emulators/install',{method:'POST',body:JSON.stringify({app_id:emulator.app_id})});
           notify(`Installing ${emulator.name}`);
           watchEmulator(emulator.app_id);
-        } catch(error) { notify(error.message); }
+        } catch(error) { notifyError(error); }
       });
     }
     async function watchEmulator(appId) {
@@ -466,7 +472,7 @@ import { t } from './i18n.js';
           $('profilesText').value = Object.entries(profiles.profiles).sort().map(([platform,command]) => `${platform} = ${command}`).join('\n');
           notify(`${emulator.name} installed and configured`);
         } else if (emulator?.job.state === 'error') notify(emulator.job.error);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function watchInstallAll() {
       try {
@@ -478,7 +484,7 @@ import { t } from './i18n.js';
           $('profilesText').value = Object.entries(profiles.profiles).sort().map(([platform,command]) => `${platform} = ${command}`).join('\n');
           notify(`Installed ${result.install_all.installed?.length || 0} emulator${result.install_all.installed?.length === 1 ? '' : 's'}`);
         } else if (result.install_all?.state === 'error') notify(result.install_all.error || 'Install all failed');
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     let perfDraft = {};
     async function loadTheme() {
@@ -498,8 +504,8 @@ import { t } from './i18n.js';
           const scoped = await api(`/api/themes?platform=${encodeURIComponent($('themeScope').value)}`);
           $('themeSelect').value = scoped.selected;
         };
-        if (!$('themesDialog').open) $('themesDialog').showModal();
-      } catch(error) { notify(error.message); }
+        if (!$('themesDialog').open) openDialog($('themesDialog'));
+      } catch(error) { notifyError(error); }
     }
     async function openAchievements() {
       try {
@@ -508,18 +514,32 @@ import { t } from './i18n.js';
         $('raApiKey').value = '';
         $('raApiKey').required = !result.configured;
         $('raProfile').textContent = result.configured ? `${result.username} · ${result.points} points${result.motto ? ` · ${result.motto}` : ''}` : 'Get your web API key from your RetroAchievements settings.';
-        $('achievementsDialog').showModal();
-      } catch(error) { notify(error.message); }
+        if (!$('achievementsDialog').open) openDialog($('achievementsDialog'));
+      } catch(error) { notifyError(error); }
     }
     async function openPlugins() {
       try {
         const result = await api('/api/plugins');
-        $('pluginList').innerHTML = result.plugins.length ? result.plugins.map(plugin => `<div class="emulator-item"><div><strong>${escapeHtml(plugin.name)} · ${escapeHtml(plugin.version)}</strong><small>${escapeHtml(plugin.id)} · ${escapeHtml(plugin.hooks.join(', ') || 'no hooks')}</small></div><button type="button" class="icon-button" data-toggle-plugin="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled}">${plugin.enabled ? 'Disable' : 'Enable'}</button><button type="button" class="playlist-delete" data-remove-plugin="${escapeHtml(plugin.id)}" aria-label="Remove ${escapeHtml(plugin.name)}">×</button></div>`).join('') : '<p class="description">No plugins installed.</p>';
+        const sandbox = result.sandbox || 'unavailable';
+        const invalid = result.plugins.filter(plugin => plugin.valid === false);
+        const rows = result.plugins.map(plugin => {
+          const invalidBadge = plugin.valid === false
+            ? `<span class="badge danger" title="${escapeHtml(plugin.error || '')}">${escapeHtml(t('plugins.invalid'))}</span>`
+            : `<span class="badge ${plugin.sandbox === 'ready' ? 'active' : 'danger'}">${escapeHtml(t(`plugins.sandbox_${plugin.sandbox || sandbox}`))}</span>`;
+          const actions = plugin.valid === false
+            ? ''
+            : `<button type="button" class="icon-button" data-toggle-plugin="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled}">${plugin.enabled ? escapeHtml(t('plugins.disable')) : escapeHtml(t('plugins.enable'))}</button>`;
+          return `<div class="emulator-item" data-plugin-valid="${plugin.valid !== false}"><div><strong>${escapeHtml(plugin.name)} · ${escapeHtml(plugin.version)}</strong><small>${escapeHtml(plugin.id)} · ${escapeHtml((plugin.hooks || []).join(', ') || t('plugins.no_hooks'))}</small>${plugin.valid === false ? `<small class="plugin-error">${escapeHtml(plugin.error || '')}</small>` : ''}</div>${invalidBadge}${actions}<button type="button" class="playlist-delete" data-remove-plugin="${escapeHtml(plugin.id)}" aria-label="Remove ${escapeHtml(plugin.name)}">×</button></div>`;
+        }).join('');
+        const sandboxNote = sandbox === 'ready'
+          ? ''
+          : `<p class="description">${escapeHtml(t('plugins.sandbox_unavailable_note'))}</p>`;
+        $('pluginList').innerHTML = (rows || `<p class="description">${escapeHtml(t('plugins.empty'))}</p>`) + sandboxNote + (invalid.length ? `<p class="description">${escapeHtml(t('plugins.invalid_note', {count: invalid.length}))}</p>` : '');
         document.querySelectorAll('[data-toggle-plugin]').forEach(button => button.onclick = async () => {
           try {
             await api('/api/plugins/toggle',{method:'POST',body:JSON.stringify({id:button.dataset.togglePlugin,enabled:button.dataset.enabled !== 'true'})});
             await openPlugins();
-          } catch(error) { notify(error.message); }
+          } catch(error) { notifyError(error); }
         });
         document.querySelectorAll('[data-remove-plugin]').forEach(button => button.onclick = async () => {
           const ok = await confirmAction({
@@ -528,10 +548,10 @@ import { t } from './i18n.js';
             consequence: 'A recoverable copy will be retained.',
           });
           if (!ok) return;
-          try { await api('/api/plugins/remove',{method:'POST',body:JSON.stringify({id:button.dataset.removePlugin})}); await openPlugins(); notify('Plugin removed'); } catch(error) { notify(error.message); }
+          try { await api('/api/plugins/remove',{method:'POST',body:JSON.stringify({id:button.dataset.removePlugin})}); await openPlugins(); notify('Plugin removed'); } catch(error) { notifyError(error); }
         });
-        if (!$('pluginsDialog').open) $('pluginsDialog').showModal();
-      } catch(error) { notify(error.message); }
+        if (!$('pluginsDialog').open) openDialog($('pluginsDialog'));
+      } catch(error) { notifyError(error); }
     }
     async function renderJobsPanel() {
       try {
@@ -548,22 +568,42 @@ import { t } from './i18n.js';
         $('jobsPanel').hidden = false;
       } catch (error) { /* jobs view is best-effort; never block the audit */ }
     }
+    function ensureHealthTools() {
+      const dialog = $('healthDialog');
+      const actions = dialog?.querySelector('.dialog-actions');
+      if (!actions || actions.querySelector('#repairButton')) return;
+      const repair = document.createElement('button');
+      repair.type = 'button';
+      repair.id = 'repairButton';
+      repair.className = 'icon-button';
+      repair.textContent = t('repair.open');
+      repair.onclick = () => { dialog.close(); openRepairWizard(); };
+      const duplicates = document.createElement('button');
+      duplicates.type = 'button';
+      duplicates.id = 'duplicatesButton';
+      duplicates.className = 'icon-button';
+      duplicates.textContent = t('duplicates.open');
+      duplicates.onclick = () => { dialog.close(); openDuplicatesDialog(); };
+      actions.insertBefore(duplicates, actions.firstChild);
+      actions.insertBefore(repair, duplicates);
+    }
     async function health() {
       try {
         const result = await api('/api/health',{method:'POST',body:'{}'});
         const cloudLine = AppState.appSettings.last_cloud_sync
-          ? `Last statistics sync: ${AppState.appSettings.last_cloud_sync.replace('T', ' ')}`
+          ? `Last statistics sync: ${formatDate(AppState.appSettings.last_cloud_sync)}`
           : (AppState.appSettings.last_cloud_sync_error ? `Last statistics sync failed: ${AppState.appSettings.last_cloud_sync_error}` : 'Statistics sync: not synced yet');
         $('healthSummary').innerHTML = `<h3>Audit summary</h3><div class="facts">${fact('Games',result.games)}${fact('Missing games',result.missing)}${fact('Duplicates',result.duplicates)}${fact('Missing box fronts',result.missing_media)}${fact('Statistics sync',cloudLine)}</div>`;
         $('healthIssues').innerHTML = result.issues.length ? result.issues.map(issue => `<button type="button" class="metadata-result icon-button" data-audit-game="${issue.id}"><div><strong>${escapeHtml(issue.game)}</strong><small>${escapeHtml(issue.type)} · ${escapeHtml(issue.detail)}</small></div></button>`).join('') : '<p class="description">No library issues found.</p>';
         document.querySelectorAll('[data-audit-game]').forEach(button => button.onclick = () => { AppState.selectedId = Number(button.dataset.auditGame); $('healthDialog').close(); render(); });
         $('dedupeButton').disabled = !result.duplicates;
+        ensureHealthTools();
         renderJobsPanel();
-        if (!$('healthDialog').open) $('healthDialog').showModal();
-      } catch(error) { notify(error.message); }
+        if (!$('healthDialog').open) openDialog($('healthDialog'));
+      } catch(error) { notifyError(error); }
     }
     async function savePreset() {
-      const name = await promptInput('Filter preset name', AppState.activeFilterPreset || AppState.activePlaylist);
+      const name = await promptInput({ title: 'Filter preset name', label: 'Name', defaultValue: AppState.activeFilterPreset || AppState.activePlaylist });
       if (!name?.trim()) return;
       const bigbox_quick = await confirmAction({
         title: 'Pin to Big Box',
@@ -583,10 +623,10 @@ import { t } from './i18n.js';
         AppState.activePlaylist = '';
         await refresh();
         notify('Filter preset saved');
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function saveFilter() {
-      const name = await promptInput('Playlist name', AppState.activePlaylist);
+      const name = await promptInput({ title: 'Playlist name', label: 'Name', defaultValue: AppState.activePlaylist });
       if (!name?.trim()) return;
       const rules = {platform: AppState.platform,platform_category:AppState.platformCategory,view:$('view').value,query:$('sidebarSearch').value.trim(),esrb:$('esrbFilter')?.value || '',progress:AppState.explorerRules.progress || ''};
       try {
@@ -594,7 +634,7 @@ import { t } from './i18n.js';
         AppState.activePlaylist = name.trim();
         await refresh();
         notify('Playlist saved');
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function saveManualPlaylist(name, members, parent = '', notes = '') {
       const cleanName = String(name || '').trim();
@@ -604,12 +644,12 @@ import { t } from './i18n.js';
         await refresh();
         notify('Manual playlist saved');
         return true;
-      } catch(error) { notify(error.message); return false; }
+      } catch(error) { notifyError(error); return false; }
     }
     async function createManualPlaylist(seedId = null) {
-      const name = await promptInput('Manual playlist name');
+      const name = await promptInput({ title: 'Manual playlist name', label: 'Name' });
       if (!name?.trim()) return;
-      const parent = await promptInput('Parent playlist, optional', '') || '';
+      const parent = await promptInput({ title: 'Parent playlist, optional', label: 'Parent', defaultValue: '' }) || '';
       await saveManualPlaylist(name, seedId === null ? [] : [seedId], parent);
     }
     async function addGamesToPlaylist(name, ids) {
@@ -633,10 +673,10 @@ import { t } from './i18n.js';
       document.querySelectorAll('[data-edit-playlist]').forEach(button => button.onclick = async () => {
         const item = playlistFor(button.dataset.editPlaylist);
         if (!item) return;
-        const notes = await promptInput('Playlist notes', item.notes || '');
+        const notes = await promptInput({ title: 'Playlist notes', label: 'Notes', defaultValue: item.notes || '' });
         if (notes === null) return;
         if (item.type === 'manual') updateManualPlaylist(item, item.members || []);
-        else api('/api/playlists',{method:'POST',body:JSON.stringify({...item,notes})}).then(refresh).then(openPlaylists).catch(error => notify(error.message));
+        else api('/api/playlists',{method:'POST',body:JSON.stringify({...item,notes})}).then(refresh).then(openPlaylists).catch(error => notifyError(error));
       });
       document.querySelectorAll('[data-playlist-index]').forEach(button => button.onclick = () => {
         const item = playlistFor(button.dataset.playlistName);
@@ -648,7 +688,7 @@ import { t } from './i18n.js';
         [members[index],members[target]] = [members[target],members[index]];
         updateManualPlaylist(item, members);
       });
-      if (!$('playlistsDialog').open) $('playlistsDialog').showModal();
+      if (!$('playlistsDialog').open) openDialog($('playlistsDialog'));
     }
     async function createFilterPlaylist() { await saveFilter(); openPlaylists(); }
     async function openBackups() {
@@ -662,13 +702,17 @@ import { t } from './i18n.js';
             consequence: 'A safety copy of the current library will be created first.',
           });
           if (!ok) return;
-          try { const result = await api('/api/backup/restore',{method:'POST',body:JSON.stringify({path:button.dataset.restoreBackup})}); await refresh(); notify(`Restored ${result.restored.join(', ')}`); } catch(error) { notify(error.message); }
+          try { const result = await api('/api/backup/restore',{method:'POST',body:JSON.stringify({path:button.dataset.restoreBackup})}); await refresh(); notify(`Restored ${result.restored.join(', ')}`); } catch(error) { notifyError(error); }
         });
-        if (!$('backupDialog').open) $('backupDialog').showModal();
-      } catch(error) { notify(error.message); }
+        if (!$('backupDialog').open) openDialog($('backupDialog'));
+      } catch(error) { notifyError(error); }
     }
     async function createNamedBackup() {
-      try { const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7})}); notify(`Backup saved to ${result.name}`); openBackups(); } catch(error) { notify(error.message); }
+      const button = $('createNamedBackup');
+      if (button?.disabled) return;
+      setButtonBusy(button, true, t('common.loading'));
+      try { const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7})}); notify(`Backup saved to ${result.name}`); openBackups(); } catch(error) { notifyError(error); }
+      finally { setButtonBusy(button, false); }
     }
     async function deletePlaylist(name) {
       const ok = await confirmAction({
@@ -681,13 +725,13 @@ import { t } from './i18n.js';
         if (AppState.activePlaylist === name) AppState.activePlaylist = '';
         await refresh();
         notify('Playlist deleted');
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function backup() {
       try {
         const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7})});
         notify(`Backup saved to ${result.name}`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     function bulkAction() {
       if (!AppState.bulkMode) {
@@ -698,7 +742,7 @@ import { t } from './i18n.js';
       } else if (selectedIds.size) {
         $('bulkForm').reset();
         $('bulkCount').textContent = `${selectedIds.size} game${selectedIds.size === 1 ? '' : 's'} selected. Only supplied values will change.`;
-        $('bulkDialog').showModal();
+        if (!$('bulkDialog').open) openDialog($('bulkDialog'));
       } else {
         AppState.bulkMode = false;
         renderGrid();
@@ -721,7 +765,7 @@ import { t } from './i18n.js';
         notify('ScreenScraper credentials work');
       } catch(error) {
         if (status) status.textContent = error.message;
-        notify(error.message);
+        notifyError(error);
       }
     };
     if ($('testSteamgrid')) $('testSteamgrid').onclick = async () => {
@@ -732,7 +776,7 @@ import { t } from './i18n.js';
         notify(t('settings.steamgrid_connected'));
       } catch(error) {
         if (status) status.textContent = error.message;
-        notify(error.message);
+        notifyError(error);
       }
     };
 
@@ -774,7 +818,7 @@ import { t } from './i18n.js';
         link.remove();
       } catch(error) {
         if (status) status.textContent = '';
-        notify(error.message);
+        notifyError(error);
       } finally {
         $('exportLibrary').disabled = false;
       }
@@ -784,7 +828,54 @@ import { t } from './i18n.js';
       const needsName = ['platform', 'playlist'].includes($('exportScope').value);
       if ($('exportScopeName')) $('exportScopeName').hidden = !needsName;
     };
+    // Collections export/import sits with the library export card: the file
+    // carries names and queries only, bounded server-side on import.
+    function ensureCollectionTransfer() {
+      const extras = $('exportLibrary')?.closest('.extras');
+      if (!extras || extras.querySelector('#exportCollections')) return;
+      const exportButton = document.createElement('button');
+      exportButton.type = 'button';
+      exportButton.className = 'icon-button';
+      exportButton.id = 'exportCollections';
+      exportButton.textContent = t('collections.export');
+      exportButton.onclick = () => {
+        const link = document.createElement('a');
+        link.href = `/api/v2/collections/export?token=${encodeURIComponent(token)}`;
+        link.download = 'openbox-collections.json';
+        document.body.append(link);
+        link.click();
+        link.remove();
+      };
+      const file = document.createElement('input');
+      file.type = 'file';
+      file.accept = 'application/json,.json';
+      file.hidden = true;
+      file.id = 'importCollectionsFile';
+      const importButton = document.createElement('button');
+      importButton.type = 'button';
+      importButton.className = 'icon-button';
+      importButton.id = 'importCollections';
+      importButton.textContent = t('collections.import');
+      importButton.onclick = () => file.click();
+      file.onchange = async () => {
+        const selected = file.files?.[0];
+        if (!selected) return;
+        try {
+          const parsed = JSON.parse(await selected.text());
+          const collections = Array.isArray(parsed) ? parsed : parsed.collections;
+          const result = await api('/api/v2/collections/import', {method: 'POST', body: JSON.stringify({collections, replace: false})});
+          notify('success', t('collections.imported', {count: result.imported || 0, skipped: result.skipped || 0}));
+          await refresh();
+        } catch (error) {
+          notifyError(error, t('collections.import_failed'));
+        } finally {
+          file.value = '';
+        }
+      };
+      extras.append(file, exportButton, importButton);
+    }
     if ($('exportLibrary')) $('exportLibrary').onclick = exportLibrary;
+    ensureCollectionTransfer();
 
     let librarySyncPlan = null;
     function syncValue(value) {
@@ -841,7 +932,7 @@ import { t } from './i18n.js';
       } catch (error) {
         librarySyncPlan = null;
         if (status) status.textContent = error.message;
-        notify(error.message);
+        notifyError(error);
       } finally {
         if (button) button.disabled = false;
       }
@@ -878,7 +969,7 @@ import { t } from './i18n.js';
         }
       } catch (error) {
         if (status) status.textContent = error.message;
-        notify(error.message);
+        notifyError(error);
       } finally {
         if (button) button.disabled = !librarySyncPlan;
       }
@@ -894,7 +985,7 @@ import { t } from './i18n.js';
         if (status) status.textContent = t('settings.library_sync_published', {count:result.published || 0});
       } catch (error) {
         if (status) status.textContent = error.message;
-        notify(error.message);
+        notifyError(error);
       } finally {
         if (button) button.disabled = false;
       }
@@ -907,7 +998,15 @@ import { t } from './i18n.js';
     $('settingsForm').onsubmit = async event => {
       event.preventDefault();
       try {
-        await saveEmumoviesSettings().catch(() => {});
+        let emumoviesFailed = false;
+        try {
+          await saveEmumoviesSettings();
+        } catch (error) {
+          // EmuMovies credentials save as part of the same submit; surface the
+          // failure and do not claim a clean save below.
+          emumoviesFailed = true;
+          notifyError(error, t('settings.emumovies_save_failed'));
+        }
         const settingsPayload = collectSettings();
         AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(settingsPayload)});
         const museumPin = $('museumKioskPin')?.value.trim() || '';
@@ -919,11 +1018,12 @@ import { t } from './i18n.js';
         }
         $('settingsDialog').close();
         stopControllerBench();
-        notify('Settings saved');
+        if (emumoviesFailed) notify('warning', t('settings.saved_emumovies_failed'));
+        else notify('Settings saved');
         applyLibraryMusic();
         applySidebarVisibility();
         renderGrid();
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     };
     if ($('clearMuseumKioskPin')) $('clearMuseumKioskPin').onclick = async () => {
       try {
@@ -931,7 +1031,7 @@ import { t } from './i18n.js';
         AppState.appSettings.museum_kiosk_pin_set = kiosk.pin_set;
         if ($('museumKioskPin')) $('museumKioskPin').value = '';
         notify('Museum PIN cleared');
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     };
     $('settingsDialog').addEventListener('close', stopControllerBench);
     $('scanWatched').onclick = async () => {
@@ -940,7 +1040,7 @@ import { t } from './i18n.js';
         const result = await api('/api/import/watch',{method:'POST',body:'{}'});
         await refresh();
         notify(`${result.added} games imported from watched folders${result.errors.length ? ` · ${result.errors.length} errors` : ''}`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     };
     if ($('memoriesImportNow')) $('memoriesImportNow').onclick = async () => {
       try {
@@ -962,21 +1062,25 @@ import { t } from './i18n.js';
           }
         }
         notify(t('settings.memories_import_running'));
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     };
     $('removeSteamGames').onclick = async () => {
-      const ok = await confirmAction({
-        title: 'Remove Steam games',
-        message: 'Remove every imported Steam game from OpenBox?',
-        consequence: 'Game files and media will stay on disk.',
-      });
-      if (!ok) return;
+      const button = $('removeSteamGames');
+      if (button.disabled) return;
+      setButtonBusy(button, true, t('common.loading'));
       try {
+        const ok = await confirmAction({
+          title: 'Remove Steam games',
+          message: 'Remove every imported Steam game from OpenBox?',
+          consequence: 'Game files and media will stay on disk.',
+        });
+        if (!ok) return;
         const result = await api('/api/games/delete-steam',{method:'POST',body:'{}'});
         AppState.selectedId = null;
         await refresh();
         notify(`${result.removed} imported Steam game${result.removed === 1 ? '' : 's'} removed from library`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
+      finally { setButtonBusy(button, false); }
     };
     $('copyDiagnosticLog').onclick = async () => {
       try {
@@ -995,9 +1099,12 @@ import { t } from './i18n.js';
         document.execCommand('copy');
         copy.remove();
         notify('Diagnostic summary copied. Review it before sharing.');
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     };
     $('syncCloud').onclick = async () => {
+      const button = $('syncCloud');
+      if (button.disabled) return;
+      setButtonBusy(button, true, t('common.loading'));
       try {
         AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
         const result = await api('/api/cloud/sync',{method:'POST',body:'{}'});
@@ -1005,38 +1112,49 @@ import { t } from './i18n.js';
         await refresh();
       } catch(error) {
         $('cloudStatus').textContent = `${AppState.appSettings.cloud_sync_beta ? 'Statistics sync (beta)' : 'Statistics sync'} · Sync failed: ${error.message}`;
-        notify(error.message);
+        notifyError(error);
       }
+      finally { setButtonBusy(button, false); }
     };
     $('checkUpdate').onclick = async () => {
+      const button = $('checkUpdate');
+      if (button.disabled) return;
+      setButtonBusy(button, true, t('common.loading'));
       try {
         $('updateStatus').textContent = 'Checking the verified GitHub release channel...';
         AppState.pendingUpdate = await api('/api/update');
         $('updateStatus').textContent = AppState.pendingUpdate.available ? `OpenBox ${AppState.pendingUpdate.latest} is available. ${AppState.pendingUpdate.notes || ''}` : `OpenBox ${AppState.pendingUpdate.current} is current.`;
         $('installUpdate').hidden = !AppState.pendingUpdate.available;
       } catch(error) { $('updateStatus').textContent = error.message; }
+      finally { setButtonBusy(button, false); }
     };
     $('installUpdate').onclick = async () => {
+      const button = $('installUpdate');
+      if (button.disabled) return;
       if (!AppState.pendingUpdate?.available) return;
-      const ok = await confirmAction({
-        title: 'Install update',
-        message: `Install OpenBox ${AppState.pendingUpdate.latest}?`,
-        consequence: 'The current AppImage will be retained as a backup.',
-      });
-      if (!ok) return;
+      setButtonBusy(button, true, t('common.loading'));
       try {
-        $('installUpdate').disabled = true;
+        const ok = await confirmAction({
+          title: 'Install update',
+          message: `Install OpenBox ${AppState.pendingUpdate.latest}?`,
+          consequence: 'The current AppImage will be retained as a backup.',
+        });
+        if (!ok) return;
         const result = await api('/api/update/install',{method:'POST',body:'{}'});
         $('updateStatus').textContent = `OpenBox ${result.installed} installed. Restart OpenBox to use it. Backup: ${result.backup}`;
         $('installUpdate').hidden = true;
       } catch(error) { $('updateStatus').textContent = error.message; }
-      finally { $('installUpdate').disabled = false; }
+      finally { setButtonBusy(button, false); }
     };
     $('installDesktop').onclick = async () => {
+      const button = $('installDesktop');
+      if (button.disabled) return;
+      setButtonBusy(button, true, t('common.loading'));
       try {
         const result = await api('/api/desktop/install',{method:'POST',body:'{}'});
         notify(`Desktop shortcut installed at ${result.desktop}`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
+      finally { setButtonBusy(button, false); }
     };
     $('profilesForm').onsubmit = async event => {
       event.preventDefault();
@@ -1047,14 +1165,14 @@ import { t } from './i18n.js';
       });
       try {
         const result = await api('/api/profiles',{method:'POST',body:JSON.stringify({profiles})});
-        try { await api('/api/perf_profiles',{method:'POST',body:JSON.stringify({perf_profiles:perfDraft})}); } catch(error) { notify(error.message); }
+        try { await api('/api/perf_profiles',{method:'POST',body:JSON.stringify({perf_profiles:perfDraft})}); } catch(error) { notifyError(error); }
         $('profilesDialog').close();
         notify(`${result.saved} emulator profiles saved`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     };
     $('themesForm').onsubmit = async event => {
       event.preventDefault();
-      try { await api('/api/themes/select',{method:'POST',body:JSON.stringify({name:$('themeSelect').value,platform:$('themeScope').value})}); $('themesDialog').close(); await loadTheme(); notify('Theme applied'); } catch(error) { notify(error.message); }
+      try { await api('/api/themes/select',{method:'POST',body:JSON.stringify({name:$('themeSelect').value,platform:$('themeScope').value})}); $('themesDialog').close(); await loadTheme(); notify('Theme applied'); } catch(error) { notifyError(error); }
     };
     $('achievementsForm').onsubmit = async event => {
       event.preventDefault();
@@ -1063,9 +1181,12 @@ import { t } from './i18n.js';
         $('achievementsDialog').close();
         await refresh();
         notify(`Connected ${result.username}`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     };
     $('browsePluginCatalog').onclick = async () => {
+      const button = $('browsePluginCatalog');
+      if (button.disabled) return;
+      setButtonBusy(button, true, t('common.loading'));
       try {
         const result = await api('/api/plugins/catalog');
         const entry = result.catalog?.[0];
@@ -1074,30 +1195,40 @@ import { t } from './i18n.js';
         await api('/api/plugins/catalog/install',{method:'POST',body:JSON.stringify({id:entry.id})});
         await openPlugins();
         notify(`${entry.name} installed from catalog`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
+      finally { setButtonBusy(button, false); }
     };
     $('installPlugin').onclick = async () => {
-      const path = await nativePickFile('Absolute path of the plugin directory or ZIP package');
-      if (!path) return;
+      const button = $('installPlugin');
+      if (button.disabled) return;
+      setButtonBusy(button, true, t('common.loading'));
       try {
+        const path = await nativePickFile('Absolute path of the plugin directory or ZIP package');
+        if (!path) return;
         const result = await api('/api/plugins/install',{method:'POST',body:JSON.stringify({path})});
         await openPlugins();
         notify(`${result.plugin.name} ${result.plugin.updated ? 'updated' : 'installed'}`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
+      finally { setButtonBusy(button, false); }
     };
     $('importTheme').onclick = async () => {
-      const path = await nativePickFile('Enter the absolute path of a CSS theme file.');
-      if (!path) return;
-      try { await api('/api/themes/import',{method:'POST',body:JSON.stringify({path})}); await openThemes(); notify('Theme imported'); } catch(error) { notify(error.message); }
+      const button = $('importTheme');
+      if (button.disabled) return;
+      setButtonBusy(button, true, t('common.loading'));
+      try {
+        const path = await nativePickFile('Enter the absolute path of a CSS theme file.');
+        if (!path) return;
+        await api('/api/themes/import',{method:'POST',body:JSON.stringify({path})});
+        await openThemes();
+        notify('Theme imported');
+      } catch(error) { notifyError(error); }
+      finally { setButtonBusy(button, false); }
     };
     $('dedupeButton').onclick = async () => {
-      const ok = await confirmAction({
-        title: 'Remove duplicates',
-        message: 'Remove duplicate library entries?',
-        consequence: 'Game files will not be deleted.',
-      });
-      if (!ok) return;
-      try { const result = await api('/api/health/dedupe',{method:'POST',body:'{}'}); await refresh(); await health(); notify(`${result.removed.length} duplicate entries removed`); } catch(error) { notify(error.message); }
+      // The merge dialog supersedes the old blind dedupe: it previews the
+      // primary record and every field union, and moves duplicates to Trash.
+      closeDialog($('healthDialog'));
+      openDuplicatesDialog();
     };
     let featureMode = '';
     async function openFeature(mode) {
@@ -1108,14 +1239,14 @@ import { t } from './i18n.js';
         if (mode === 'queue') {
           const result = await api('/api/queue');
           content.innerHTML = `<div class="extras"><button class="primary" type="button" id="queueAdvance">Play next</button><button class="icon-button" type="button" id="queueAdd">Add selected game</button></div><div class="emulator-list">${(result.queue || []).map(item => `<div class="detail-card"><strong>${escapeHtml(item.name)}</strong><p class="description">${escapeHtml(item.platform || '')}${item.note ? ` · ${escapeHtml(item.note)}` : ''}</p><button type="button" class="icon-button" data-queue-remove="${escapeHtml(item.game_id)}">Remove</button></div>`).join('') || '<p class="description">Queue is empty.</p>'}</div>`;
-          $('queueAdvance').onclick = async () => { try { await api('/api/queue',{method:'POST',body:JSON.stringify({action:'advance'})}); notify('Queue advanced'); openFeature('queue'); } catch (error) { notify(error.message); } };
-          $('queueAdd').onclick = async () => { if (AppState.selectedId === null) return notify('Select a game first.'); const game = AppState.games.find(item => item.id === AppState.selectedId); if (!game) return notify('Selected game not found.'); try { await api('/api/queue',{method:'POST',body:JSON.stringify({action:'enqueue',game_ids:[game.game_id]})}); notify('Game added to queue'); openFeature('queue'); } catch (error) { notify(error.message); } };
+          $('queueAdvance').onclick = async () => { try { await api('/api/queue',{method:'POST',body:JSON.stringify({action:'advance'})}); notify('Queue advanced'); openFeature('queue'); } catch (error) { notifyError(error); } };
+          $('queueAdd').onclick = async () => { if (AppState.selectedId === null) return notify('Select a game first.'); const game = AppState.games.find(item => item.id === AppState.selectedId); if (!game) return notify('Selected game not found.'); try { await api('/api/queue',{method:'POST',body:JSON.stringify({action:'enqueue',game_ids:[game.game_id]})}); notify('Game added to queue'); openFeature('queue'); } catch (error) { notifyError(error); } };
           document.querySelectorAll('[data-queue-remove]').forEach(button => button.onclick = async () => { await api('/api/queue',{method:'POST',body:JSON.stringify({action:'remove',game_ids:[button.dataset.queueRemove]})}); openFeature('queue'); });
         } else if (mode === 'tags') {
           const result = await api('/api/tags');
           content.innerHTML = `<p class="description">Select a game, then add or replace its tags.</p><div class="platforms">${(result.tags || []).map(item => `<button type="button" class="platform" data-tag-filter="${escapeHtml(item.tag)}">${escapeHtml(item.tag)} (${item.count})</button>`).join('') || '<span class="description">No tags yet.</span>'}</div><div class="extras"><input id="featureTagInput" placeholder="comma-separated tags"><button type="button" class="primary" id="saveFeatureTags">Save tags on selected game</button></div>`;
           document.querySelectorAll('[data-tag-filter]').forEach(button => button.onclick = () => { $('sidebarSearch').value = `tag:${button.dataset.tagFilter}`; $('featureDialog').close(); render(); });
-          $('saveFeatureTags').onclick = async () => { if (AppState.selectedId === null) return notify('Select a game first.'); const game = AppState.games.find(item => item.id === AppState.selectedId); if (!game) return notify('Selected game not found.'); const tags = $('featureTagInput').value.split(',').map(value => value.trim()).filter(Boolean); try { await api('/api/tags',{method:'POST',body:JSON.stringify({ids:[game.game_id],tags})}); await refresh(); openFeature('tags'); notify('Tags saved'); } catch (error) { notify(error.message); } };
+          $('saveFeatureTags').onclick = async () => { if (AppState.selectedId === null) return notify('Select a game first.'); const game = AppState.games.find(item => item.id === AppState.selectedId); if (!game) return notify('Selected game not found.'); const tags = $('featureTagInput').value.split(',').map(value => value.trim()).filter(Boolean); try { await api('/api/tags',{method:'POST',body:JSON.stringify({ids:[game.game_id],tags})}); await refresh(); openFeature('tags'); notify('Tags saved'); } catch (error) { notifyError(error); } };
         } else if (mode === 'notifications') {
           const result = await api('/api/notifications');
           content.innerHTML = `<div class="extras"><button type="button" class="primary" id="readNotifications">Mark all read</button><button type="button" class="icon-button" id="clearNotifications">Clear</button></div>${(result.notifications || []).map(item => `<div class="detail-card"><strong>${escapeHtml(item.title)}</strong><p class="description">${escapeHtml(item.body)}<br>${escapeHtml(item.created_at)}</p></div>`).join('') || '<p class="description">No notifications.</p>'}`;
@@ -1125,11 +1256,98 @@ import { t } from './i18n.js';
           const result = await api('/api/webhooks');
           const current = (result.webhooks || [])[0] || {};
           content.innerHTML = `<label class="field wide"><span>Webhook URL</span><input id="webhookUrl" value="${escapeHtml(current.url || '')}" placeholder="https://example.com/webhook"></label><label class="field"><span>Secret</span><input id="webhookSecret" type="password" value="${escapeHtml(current.secret || '')}" placeholder="Optional signature secret"></label><label class="field wide"><span>Events (comma separated)</span><input id="webhookEvents" value="${escapeHtml((current.events || ['session.started','session.stopped']).join(', '))}" placeholder="session.started, session.stopped"></label><div class="extras"><button type="button" class="primary" id="saveWebhook">Save webhook</button><button type="button" class="icon-button" id="testWebhook">Test webhook</button></div>`;
-          $('saveWebhook').onclick = async () => { try { await api('/api/webhooks',{method:'POST',body:JSON.stringify({webhooks:[{...current,url:$('webhookUrl').value.trim(),secret:$('webhookSecret').value,events:$('webhookEvents').value.split(',').map(value => value.trim()).filter(Boolean),enabled:true}]})}); notify('Webhook saved'); openFeature('webhooks'); } catch (error) { notify(error.message); } };
-          $('testWebhook').onclick = async () => { try { const testResult = await api('/api/webhooks/test',{method:'POST',body:JSON.stringify({url:$('webhookUrl').value.trim(),secret:$('webhookSecret').value,events:['session.started']})}); notify(testResult.ok ? 'Webhook test succeeded' : testResult.error); } catch (error) { notify(error.message); } };
+          $('saveWebhook').onclick = async () => { try { await api('/api/webhooks',{method:'POST',body:JSON.stringify({webhooks:[{...current,url:$('webhookUrl').value.trim(),secret:$('webhookSecret').value,events:$('webhookEvents').value.split(',').map(value => value.trim()).filter(Boolean),enabled:true}]})}); notify('Webhook saved'); openFeature('webhooks'); } catch (error) { notifyError(error); } };
+          $('testWebhook').onclick = async () => { try { const testResult = await api('/api/webhooks/test',{method:'POST',body:JSON.stringify({url:$('webhookUrl').value.trim(),secret:$('webhookSecret').value,events:['session.started']})}); notify(testResult.ok ? 'Webhook test succeeded' : testResult.error); } catch (error) { notifyError(error); } };
         }
-        if (!$('featureDialog').open) $('featureDialog').showModal();
-      } catch (error) { notify(error.message); }
+        if (!$('featureDialog').open) openDialog($('featureDialog'));
+      } catch (error) { notifyError(error); }
     }
 
-export { filterSettings, completeWelcome, maybeShowWelcome, collectSettings, saveEmumoviesSettings, shuttingDown, gracefulShutdown, openSettings, openProfiles, renderEmulators, watchEmulator, watchInstallAll, perfDraft, loadTheme, openThemes, openAchievements, openPlugins, renderJobsPanel, health, savePreset, saveFilter, saveManualPlaylist, createManualPlaylist, addGamesToPlaylist, updateManualPlaylist, openPlaylists, createFilterPlaylist, openBackups, createNamedBackup, deletePlaylist, backup, bulkAction, featureMode, openFeature, startControllerBench, stopControllerBench };
+    // ── F13/F14: signed definitions channel + background update download ────
+    function ensureSignedChannelSettings() {
+      if ($('signedChannelSettings')) return;
+      const anchor = document.querySelector('[data-setting*="application updates"]');
+      if (!anchor) return;
+      const host = document.createElement('div');
+      host.id = 'signedChannelSettings';
+      host.className = 'settings-field settings-panel wide';
+      host.dataset.settingsPanel = 'advanced';
+      host.dataset.setting = 'signed emulator definitions channel background update download';
+      host.innerHTML = `
+        <h4>${escapeHtml(t('settings.defs_channel_title'))}</h4>
+        <label class="check"><input type="checkbox" id="emulatorDefsUpdateEnabled"> ${escapeHtml(t('settings.defs_channel_enabled'))}</label>
+        <p class="description" id="emulatorDefsStatus"></p>
+        <div class="extras"><button type="button" class="icon-button" id="checkEmulatorDefs">${escapeHtml(t('settings.defs_channel_check'))}</button></div>
+        <h4>${escapeHtml(t('settings.bg_update_title'))}</h4>
+        <label class="check"><input type="checkbox" id="updateAutoDownload"> ${escapeHtml(t('settings.bg_update_enabled'))}</label>
+        <p class="description" id="updateDownloadStatus"></p>
+        <div class="extras"><button type="button" class="icon-button" id="downloadUpdate">${escapeHtml(t('settings.bg_update_now'))}</button></div>`;
+      anchor.insertAdjacentElement('afterend', host);
+      $('checkEmulatorDefs').onclick = async () => {
+        const button = $('checkEmulatorDefs');
+        setButtonBusy(button, true, t('common.loading'));
+        try {
+          const result = await api('/api/v2/emulators/defs/channel/update', {method: 'POST', body: JSON.stringify({})});
+          notify('success', t('settings.defs_channel_updated', {version: result.version || ''}));
+        } catch (error) {
+          notifyError(error);
+        } finally {
+          setButtonBusy(button, false);
+          refreshSignedChannelStatus();
+        }
+      };
+      $('downloadUpdate').onclick = async () => {
+        const button = $('downloadUpdate');
+        setButtonBusy(button, true, t('common.loading'));
+        try {
+          const job = await api('/api/v2/update/download', {method: 'POST', body: JSON.stringify({force: true})});
+          $('updateDownloadStatus').textContent = t('settings.bg_update_progress', {percent: 0});
+          // SSE job.progress frames carry {current, total}; a reconnect
+          // re-fetches the job list once in case the terminal frame was missed.
+          const done = await waitForJob(job.job_id, {
+            onProgress: progress => {
+              const percent = progress.total ? Math.round((progress.current || 0) / progress.total * 100) : null;
+              $('updateDownloadStatus').textContent = percent === null
+                ? t('settings.bg_update_progress_unknown', {bytes: formatBytes(progress.current || 0)})
+                : t('settings.bg_update_progress', {percent});
+            },
+            fetch: async () => {
+              const page = await api('/api/v2/jobs?limit=100');
+              return (page.jobs || []).find(item => item.job_id === job.job_id) || null;
+            },
+          });
+          if (done?.state === 'error') throw new Error(done.error?.message || t('settings.bg_update_progress_unknown', {bytes: 0}));
+          if (done?.state !== 'cancelled') notify('success', t('settings.bg_update_done'));
+        } catch (error) {
+          notifyError(error);
+        } finally {
+          setButtonBusy(button, false);
+          refreshSignedChannelStatus();
+        }
+      };
+    }
+
+    async function refreshSignedChannelStatus() {
+      ensureSignedChannelSettings();
+      if (!$('emulatorDefsStatus')) return;
+      try {
+        const status = await api('/api/v2/emulators/defs/channel');
+        $('emulatorDefsUpdateEnabled').checked = Boolean(status.enabled);
+        $('emulatorDefsStatus').textContent = status.configured
+          ? t('settings.defs_channel_status', {adapters: status.adapters ?? 0, errors: status.errors ?? 0, version: status.installed_version || t('common.none')})
+          : t('settings.defs_channel_unconfigured');
+      } catch (error) {
+        $('emulatorDefsStatus').textContent = error.message;
+      }
+      try {
+        const status = await api('/api/v2/update/download/status');
+        $('updateAutoDownload').checked = Boolean(status.auto_download);
+        $('updateDownloadStatus').textContent = status.appimage
+          ? t('settings.bg_update_status', {current: status.current})
+          : t('settings.bg_update_appimage_only');
+      } catch (error) {
+        $('updateDownloadStatus').textContent = error.message;
+      }
+    }
+
+export { filterSettings, completeWelcome, maybeShowWelcome, collectSettings, saveEmumoviesSettings, shuttingDown, gracefulShutdown, openSettings, openProfiles, renderEmulators, watchEmulator, watchInstallAll, perfDraft, loadTheme, openThemes, openAchievements, openPlugins, renderJobsPanel, health, savePreset, saveFilter, saveManualPlaylist, createManualPlaylist, addGamesToPlaylist, updateManualPlaylist, openPlaylists, createFilterPlaylist, openBackups, createNamedBackup, deletePlaylist, backup, bulkAction, featureMode, openFeature, startControllerBench, stopControllerBench, refreshSignedChannelStatus };

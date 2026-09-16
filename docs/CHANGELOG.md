@@ -4,6 +4,195 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Household presence (Now Playing):** opt-in signed heartbeats with a
+  10-minute TTL, a live "who's playing what" strip in Household, elapsed
+  time, and a rate-limited per-member toast; presence is a projection of
+  unexpired events only (ADR 0050).
+- **Game Night deck builder:** named queues, theme presets, deterministic
+  seeded shuffle, and content-addressed deck sharing over the household
+  folder (ADR 0051).
+- **Time Machine compare:** added/removed/re-edited diffs between two dates
+  with journal honesty flags, plus revert apply constrained to a metadata
+  whitelist (paths and launch config are rejected, ADR 0052).
+- **Save history:** per-game save versions with source/age/size, read-back
+  verification, restore, and retention pruning (ADR 0053).
+- **Artwork Doctor:** bulk hygiene report (missing, low-res, odd aspect,
+  duplicate art) with a cancelable "fix all with SteamGridDB" job,
+  per-item progress, undo, and provider attribution (ADR 0055).
+- **Per-platform setup checklists:** BIOS present + SHA1 drift, emulator
+  resolved, launchable game, and artwork, rendered as green/red cards.
+- **Plugin API v1:** frozen SemVer surface (bounded library read, palette
+  commands, notification post), manifest-declared commands consumed by the
+  command palette, malformed/unsandboxed plugins surfaced in the manager,
+  and `docs/plugin-api.md` (ADR 0056).
+- **High-contrast stock theme** (sixth theme) with WCAG AA contrast checks
+  for text tokens in the theme test suite (ADR 0057).
+- **First-run "try these" cards** after setup: pick a game, run a Radio
+  query, open Arcade Room, connect a save folder.
+- **Auto-Moment suggestions:** session end offers "Capture this moment?"
+  when a trophy or progress advance was recorded.
+- **Emulator definition update channel:** signed, versioned YAML defs
+  verified with `openbox-release.pub`, atomic apply with backup
+  (ADR 0058).
+- **Background update download with apply on restart** for AppImages, with
+  streamed progress and a Settings toggle (ADR 0059).
+- **Household weekly challenge** (week-seeded, deterministic) and shelf
+  share projected as wishlist entries.
+- **Kiosk PIN lockout:** exponential in-memory backoff after repeated
+  failures, with honest "convenience boundary" wording.
+- **Constellation extras:** saved viewpoints, BFS path between two games,
+  and canvas PNG export.
+- **Missing-file repair wizard:** a dry-run scan lists missing game/media paths,
+  "find in folder…" matches them against a picked folder, and applying the
+  plan relinks only rows the transaction re-validates (`parity_repair`, P5).
+- Duplicate detection and merge reports same-id/same-path/same-title groups,
+  previews which record keeps its history, unions media/list fields, and moves
+  the absorbed records to Trash so every merge is undoable
+  (`parity_duplicates`, P5).
+- Save-history "test restore" drill extracts a chosen backup into a temp
+  directory, verifies the file count and hashes, and never touches live saves
+  (`parity_save_history.test_restore`, P5).
+- Session/journal export per game or per household member as bounded,
+  streamed markdown or CSV (`/api/v2/sessions/export`, P5).
+- Collection export/import next to the library export controls; the file
+  carries names and queries only and import is bounded and transactional.
+- Keyboard shortcut cheat sheet opened with `?`, generated from the same
+  `SHORTCUTS` table navigation.js uses and reusing the shared dialog host.
+- `notifyAction()` action toasts: Trash undelete and deferred (undoable)
+  purge/empty use the stacked toast queue instead of the legacy `#toast`.
+- `scripts/check_docs_links.py` verifies every relative markdown link in
+  `README.md` and `docs/` resolves, and runs as a gate stage so a moved doc
+  cannot leave dangling links behind (P9-13).
+- `docs/api-v2.md` is generated from the live route tables and decorator
+  registry; the gate re-generates it with `scripts/gen_api_docs.py --check`
+  so the reference cannot drift (D1).
+- `scripts/bump_version.py` updates `updates.py`, the README install/badge
+  spots, and `openbox.metainfo.xml`, refuses to run without changelog
+  entries, and is dry-run by default (P9-15).
+- `make check-ci` runs the CI-only checks (shellcheck, desktop/AppStream,
+  Flatpak dry-run, UI smoke, 10k/20k perf) on top of `make check`; missing
+  tools are skipped unless `OPENBOX_CI_STRICT=1` (P9-2).
+- Table-driven tests for the gate scripts themselves
+  (`tests/test_gate_scripts.py`, `tests/test_docs_api_gates.py`,
+  `tests/test_bump_version.py`) cover counting, failure, and CI-detection
+  behavior instead of string matching (P9-10).
+
+### Changed
+- **Performance at scale:** library snapshots are structurally shared
+  (ADR 0054), sync journaling records only touched games, the auto-import
+  loop fingerprints watch folders and backs off when idle, save discovery
+  indexes RetroArch trees once, bulk media uses one transaction per batch,
+  SQLite search uses a real SQL-level filter with facets, and the media
+  probe cache no longer thrashes. Measured at 20k games: `/api/library`
+  p95 85→75 ms, facets 774→46 ms, `/api/media` 709→2 ms, picker 887→222 ms
+  (budget 250/800 ms). A 50k tier was added to the perf gate.
+- Emulator installs run as cancellable background jobs with progress
+  instead of blocking the request thread; `flatpak` status is cached.
+- `search facets` are counted in the search worker with a UI-thread
+  fallback.
+- Connection handling is capped at 64 threads with a per-request deadline
+  (SSE exempt).
+- Error taxonomy: only intentional validation errors answer `400`; real
+  server faults answer `500 INTERNAL_ERROR` with a request id and a log
+  traceback instead of a misleading client error.
+- Export downloads stream from disk instead of loading the whole archive
+  into memory; the export route keeps ETag/304 semantics.
+- Notifications use a stacked toast queue (max 3) so concurrent toasts no
+  longer clobber each other.
+- The virtualized library grid now exposes real `grid`/`row`/`gridcell`
+  semantics with filtered-order `aria-rowindex`/`aria-colindex`, and every
+  dialog opens through `openDialog()` so focus and trigger restoration are
+  consistent (P7).
+- `make check` only recreates `.venv-dev` and reinstalls dependencies when
+  the venv is missing or `requirements-dev.txt` changed (P9-3).
+- `make test-one` runs with a throwaway `OPENBOX_DATA_DIR`, so a test that
+  skips its own isolation can no longer write to the real library (P9-7).
+- The test gate reports every retry and fails on flaky tests, applies a
+  per-file timeout with named attribution, and counts environment skips
+  (gamescope/7z/webkit/AppImage) instead of passing silently (P9-4–P9-6).
+- Coverage floors ratcheted from 83/58 to the measured totals (P9-8).
+- The touched-module floor from `scripts/check_changed_coverage.py` now runs
+  inside `make check`, matching CI (P9-11).
+- The token gate also scans `index.html` and `static/*.js` for raw hex, with
+  a 0 baseline (P9-12).
+- Release workflows run `check_version_sync.py` and the full gate before
+  building, the AppImage signer now pins `cryptography==50.0.1` (matching
+  `requirements-dev.txt`), and the Flatpak bundle gets a build-provenance
+  attestation before publish (P9-14).
+- README CI badge links to the live workflow status instead of a static
+  "passing" shield (P9-17).
+- `docs/reliability.md`, `docs/PARITY.md`, and `docs/flathub-checklist.md`
+  got an honesty pass: rows name their tests, unimplemented ENOSPC messaging
+  is called out, and stale 1.11.0 screenshot/version references are dated
+  (D4–D6).
+
+### Fixed
+- Concurrent extraction of the same archive can no longer delete a
+  promoted tree, and the extraction cache is bounded
+  (`OPENBOX_ARCHIVE_CACHE_MAX_TREES`).
+- Operation item files are pruned with their records and appends are
+  locked, so parallel workers cannot drop each other's failures.
+- Save paths are contained to the home directory (or `OPENBOX_SAVE_ROOTS`)
+  instead of accepting any existing path such as `/etc`.
+- BIOS hint lookup is lazy and honors `HOME`/`OPENBOX_DATA_DIR` changes
+  instead of freezing at import.
+- Emulator definitions hot-reload on file change and malformed adapter
+  YAML is reported instead of silently dropped.
+- Read paths take shared file locks (`LOCK_SH`), the projection cache is
+  keyed by content instead of object identity, and media range failures
+  map to `416` only for malformed ranges (missing files are `404`).
+- `/api/health` tolerates null media fields and caches path stats for 5 s;
+  the backup list skips concurrently rotated files; registry lookup
+  failures surface instead of turning routes into 404s.
+- Theme `@import` validation rejects protocol-relative and absolute URLs,
+  and launch token validation is no longer swallowed.
+- Requests with `Transfer-Encoding: chunked` are rejected cleanly instead
+  of desyncing the next keep-alive request, and the SSE subscriber cap
+  answers `503 SSE_BUSY` before opening a stream that would only heartbeat.
+- Destructive confirmations are styled distinctly and focus Cancel first;
+  silent persistence failures surface; double-submit guards cover settings,
+  imports, picker, and view toggles; stale detail-pane responses, dead
+  search workers, forever-spinning constellation loading, and media polling
+  after dialog close are all fixed. Dates render through
+  `Intl.DateTimeFormat`.
+- Reloading the app window (F5) or closing the tab no longer stops running
+  games: the `beforeunload` handler called `gracefulShutdown()` and killed
+  every session. Games are server-side processes; only the explicit Quit
+  action stops them.
+- Escape in the game editor now runs the unsaved-changes guard instead of
+  closing the dialog and silently discarding edits.
+- A corrupt `library.json` no longer prevents the server from starting.
+  OpenBox boots in recovery mode, most routes answer `503
+  STATE_UNAVAILABLE`, and the UI offers last-known-good or snapshot restore
+  (`POST /api/state/recover`). `_do_GET`/`_do_POST` no longer flatten
+  `StateCorruptError` into a misleading `400`.
+- LaunchBox and ES-DE import apply no longer uploads the full preview plan
+  (which exceeded the 64 KB body cap on real libraries and always failed).
+  The server rebuilds the canonical plan from the source and validates the
+  submitted preview token; stale libraries are rejected.
+- Bulk edits chunk large selections instead of sending one request that
+  exceeded the 64 KB body cap for shift-range selections.
+- Error toasts are styled as errors again: `notify(error.message)` defaulted
+  to the info style, and the diagnostic banner now carries `code` and
+  `request_id` for copyable reports.
+- The locale selector is populated from `available_locales` after settings
+  load, and a persisted server locale is honored when no explicit choice
+  exists, so non-English locales are reachable.
+- Reads no longer rewrite `library.json`: a GET that normalized stale state
+  could fail on a full/read-only disk and turn a read into an error. The
+  next mutation persists the normalized form.
+- Read paths take a consistent snapshot of state under the store lock
+  (ADR 0049); concurrent writes can no longer be observed half-applied or
+  raise `dictionary changed size during iteration`.
+- The changed-line (95%) and new-module (85%) coverage gates no longer
+  silently pass on pull requests: the diff base is resolved from the GitHub
+  PR base SHA, the branch upstream, or `origin`, and an unresolvable base
+  fails the gate instead of comparing `HEAD` to itself (ADR 0048).
+  `tests/test_git_diff_base.py` covers the resolver and its failure modes.
+
 ## [1.12.1] - 2026-09-15
 
 ### Fixed

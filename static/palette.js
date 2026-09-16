@@ -1,9 +1,11 @@
 /* Command palette (T4): deterministic game search plus real application actions. */
-import { $, escapeHtml } from './util.js';
-import { AppState } from './state.js';
+import { $, escapeHtml, prefersReducedMotion } from './util.js';
+import { AppState, api, notify, notifyError } from './state.js';
 import { launch } from './sessions.js';
-import { t } from './i18n.js';
-import { searchWithFallback } from './library.js';
+import { t, onLocaleChange } from './i18n.js';
+import { searchWithFallback, favorite } from './library.js';
+import { captureMomentInteractive } from './moments.js';
+import { openDialog, closeDialog } from './dialogs.js';
 import { SHORTCUTS } from './navigation.js';
 
 const ACTIONS = [
@@ -13,6 +15,8 @@ const ACTIONS = [
   { id: 'arcade-room', label: () => t('tools.arcade_room'), event: 'open-arcade-room' },
   { id: 'household', label: () => t('tools.household'), event: 'open-household' },
   { id: 'whats-new', label: () => t('common.whats_new'), event: 'open-whats-new' },
+  { id: 'artwork-doctor', label: () => t('tools.artwork_doctor'), event: 'artwork-doctor' },
+  { id: 'launch-doctor', label: () => t('tools.launch_doctor'), event: 'launch-doctor' },
   { id: 'surprise', label: () => t('library.surprise_me'), event: 'surprise' },
   { id: 'search', label: () => t('common.search'), event: 'focus-search' },
 ];
@@ -24,6 +28,8 @@ let previousFocus = null;
 let selectedIndex = 0;
 let resultRows = [];
 let resultsRequest = 0;
+let pluginCommands = [];
+let shortcutsDialog = null;
 
 // Recently chosen rows rank first (local usage counts, no telemetry).
 const RECENT_KEY = 'openbox-palette-recent';
@@ -70,13 +76,88 @@ function shortcutRows() {
   }));
 }
 
+// P6: `?` searches a generated help index instead of exact-matching only `?`.
+// The index is built from the same SHORTCUTS table navigation.js consumes, so
+// the palette can never show a shortcut the app does not implement, plus the
+// runnable actions from `>`. Selecting a shortcut runs its action when one
+// exists (fixes the old dead end where choosing a help row did nothing).
+function helpRows(query) {
+  const text = String(query || '').trim().toLowerCase();
+  const rows = [
+    { type: 'shortcuts', value: {}, label: t('shortcuts.show_shortcuts') },
+    ...shortcutRows(),
+    ...ACTIONS.map(action => ({ type: 'action', value: action, label: `> ${action.label()}` })),
+  ];
+  return text ? rows.filter(row => row.label.toLowerCase().includes(text)) : rows;
+}
+
+// Grouped cheat sheet generated from navigation.js SHORTCUTS, opened with `?`
+// outside a text field or from the palette help index. It reuses the shared
+// dialog host/focus restore in dialogs.js instead of hand-rolling showModal.
+function ensureShortcutsDialog() {
+  if (shortcutsDialog) return shortcutsDialog;
+  shortcutsDialog = document.createElement('dialog');
+  shortcutsDialog.id = 'shortcutsDialog';
+  shortcutsDialog.className = 'shortcuts-dialog';
+  shortcutsDialog.setAttribute('aria-modal', 'true');
+  shortcutsDialog.innerHTML = `<div class="dialog-head"><h2>${escapeHtml(t('shortcuts.title'))}</h2><button type="button" class="icon-button" data-shortcuts-close aria-label="${escapeHtml(t('common.close'))}">×</button></div><div class="form-grid shortcuts-groups" id="shortcutsBody"></div>`;
+  document.body.appendChild(shortcutsDialog);
+  shortcutsDialog.querySelector('[data-shortcuts-close]').onclick = () => closeDialog(shortcutsDialog);
+  shortcutsDialog.addEventListener('cancel', event => { event.preventDefault(); closeDialog(shortcutsDialog); });
+  return shortcutsDialog;
+}
+
+function renderShortcutsDialog() {
+  const body = shortcutsDialog?.querySelector('#shortcutsBody');
+  if (!body) return;
+  const groups = new Map();
+  for (const shortcut of SHORTCUTS) {
+    const group = shortcut.group || 'shortcuts.group_global';
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(shortcut);
+  }
+  body.innerHTML = [...groups.entries()].map(([group, rows]) => `
+    <section class="shortcut-group wide">
+      <h3>${escapeHtml(t(group))}</h3>
+      <dl class="shortcut-list">${rows.map(row => `<div class="shortcut-row"><dt><kbd>${escapeHtml(row.key)}</kbd></dt><dd>${escapeHtml(t(row.labelKey))}</dd></div>`).join('')}</dl>
+    </section>`).join('');
+}
+
+export function openShortcutCheatSheet() {
+  ensureShortcutsDialog();
+  renderShortcutsDialog();
+  if (!shortcutsDialog.open) openDialog(shortcutsDialog);
+}
+
+const SHORTCUT_RUNNERS = {
+  'shortcuts.command_palette': () => { openPalette(); },
+  'shortcuts.capture_moment': () => {
+    const session = AppState.runningGames[0];
+    const game = AppState.games.find(item => item.id === session?.game_id || String(item.game_id) === String(session?.game_id)) ||
+      AppState.games.find(item => item.id === AppState.selectedId);
+    if (game) captureMomentInteractive(game, { trigger: 'palette' }).catch(() => {});
+    else notify('info', t('palette.select_game_hint'));
+  },
+  'shortcuts.favorite_focused': () => {
+    const id = AppState.selectedId;
+    if (id !== null && id !== undefined) favorite(id);
+  },
+  'shortcuts.close_selection': () => {},
+};
+
 function filteredResults(query) {
   const text = String(query || '').trim().toLowerCase();
   if (text.startsWith('>')) {
     const actionQuery = text.slice(1).trim();
-    return ACTIONS.filter(action => !actionQuery || action.label().toLowerCase().includes(actionQuery)).map(action => ({ type: 'action', value: action, label: action.label() }));
+    const actions = ACTIONS.map(action => ({ type: 'action', value: action, label: action.label() }));
+    const plugins = pluginCommands.map(command => ({
+      type: 'plugin',
+      value: command,
+      label: `${command.label} · ${command.plugin_id}`,
+    }));
+    return [...actions, ...plugins].filter(row => !actionQuery || row.label.toLowerCase().includes(actionQuery));
   }
-  if (text === '?') return shortcutRows();
+  if (text.startsWith('?')) return helpRows(text.slice(1));
   if (!text) return AppState.games.slice(0, 12).map(game => ({ type: 'game', value: game, label: gameLabel(game) }));
   return searchWithFallback(text, AppState.games).then(matches =>
     matches.slice(0, 20).map(game => ({ type: 'game', value: game, label: gameLabel(game) }))
@@ -102,13 +183,25 @@ function handleKeydown(event) {
     const delta = event.key === 'ArrowDown' ? 1 : -1;
     selectedIndex = resultRows.length ? (selectedIndex + delta + resultRows.length) % resultRows.length : 0;
     renderResults();
-    paletteResults?.querySelector(`[data-palette-index="${selectedIndex}"]`)?.scrollIntoView({ block: 'nearest' });
+    paletteResults?.querySelector(`[data-palette-index="${selectedIndex}"]`)?.scrollIntoView({
+      block: 'nearest',
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+    });
   } else if (event.key === 'Enter') {
     event.preventDefault();
     choose(selectedIndex);
   } else if (event.key === 'Escape') {
     event.preventDefault();
     closePalette();
+  }
+}
+
+async function loadPluginCommands() {
+  try {
+    const payload = await api('/api/v2/plugins/commands');
+    pluginCommands = Array.isArray(payload?.commands) ? payload.commands : [];
+  } catch {
+    pluginCommands = [];
   }
 }
 
@@ -128,23 +221,42 @@ function choose(index) {
     launch(row.value).catch(() => {});
     return;
   }
-  if (row.type === 'help') return;
+  if (row.type === 'help') {
+    SHORTCUT_RUNNERS[row.value.labelKey]?.();
+    return;
+  }
+  if (row.type === 'shortcuts') {
+    openShortcutCheatSheet();
+    return;
+  }
+  if (row.type === 'plugin') {
+    api('/api/v2/plugins/command', {
+      method: 'POST',
+      body: JSON.stringify({ plugin_id: row.value.plugin_id, command: row.value.id }),
+    }).then(result => {
+      const note = result?.notification;
+      if (note?.message) notify(note.level || 'info', note.message);
+      else notify('success', t('palette.plugin_command_done', { label: row.value.label }));
+    }).catch(error => notifyError(error));
+    return;
+  }
   document.dispatchEvent(new CustomEvent(`app:palette-${row.value.event}`));
 }
 
-function openPalette() {
+async function openPalette() {
   ensurePalette();
   previousFocus = document.activeElement;
   paletteInput.value = '';
   selectedIndex = 0;
+  await loadPluginCommands();
   renderResults();
-  if (!paletteDialog.open) paletteDialog.showModal();
+  if (!paletteDialog.open) openDialog(paletteDialog, previousFocus || undefined);
   paletteInput.focus();
 }
 
 function closePalette() {
-  if (paletteDialog?.open) paletteDialog.close();
-  previousFocus?.focus?.();
+  if (paletteDialog?.open) closeDialog(paletteDialog);
+  if (previousFocus?.isConnected) previousFocus.focus?.();
   previousFocus = null;
 }
 
@@ -153,14 +265,31 @@ export function initPalette() {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault();
       openPalette();
+      return;
     }
+    // `?` outside a text field and with no dialog open opens the cheat sheet;
+    // inside the palette it stays part of the searchable help index.
+    if (event.key !== '?' || event.ctrlKey || event.metaKey || event.altKey) return;
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT' || active.isContentEditable)) return;
+    if (document.querySelector('dialog[open]')) return;
+    event.preventDefault();
+    openShortcutCheatSheet();
   });
-  document.addEventListener('localechange', () => {
-    if (paletteDialog) {
-      paletteDialog.remove();
-      paletteDialog = null;
-      if (document.activeElement?.id === 'commandPaletteInput') openPalette();
+  // P8: rebuild the dialog markup after a language change; the old listener
+  // only recovered focus, leaving the header in the previous language.
+  onLocaleChange(() => {
+    if (shortcutsDialog) {
+      const wasOpen = shortcutsDialog.open;
+      shortcutsDialog.remove();
+      shortcutsDialog = null;
+      if (wasOpen) openShortcutCheatSheet();
     }
+    if (!paletteDialog) return;
+    const wasOpen = paletteDialog.open;
+    paletteDialog.remove();
+    paletteDialog = null;
+    if (wasOpen) openPalette();
   });
 }
 

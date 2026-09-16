@@ -1,8 +1,8 @@
 /* timemachine.js — journal timeline and read-only as-of browser (T2). */
 import { $, escapeHtml } from './util.js';
-import { api, notify } from './state.js';
+import { api, notify, notifyError } from './state.js';
 import { t } from './i18n.js';
-import { confirmAction } from './dialogs.js';
+import { confirmAction, openDialog } from './dialogs.js';
 
 let bound = false;
 let eventOffset = 0;
@@ -20,6 +20,38 @@ function valueText(value) {
     try { return JSON.stringify(value); } catch { return String(value); }
   }
   return String(value);
+}
+
+function fieldChanges(fields) {
+  if (!Array.isArray(fields) || !fields.length) return '';
+  return fields.map(entry => `<span class="tm-change"><strong>${escapeHtml(entry.field)}</strong>: ${escapeHtml(valueText(entry.from))} → ${escapeHtml(valueText(entry.to))}</span>`).join('');
+}
+
+function identityLine(row) {
+  const name = row.name || row.game_id || row.sync_key || t('common.none');
+  return `<strong>${escapeHtml(name)}</strong><span class="description">${escapeHtml(row.platform || '')} · ${escapeHtml(row.game_id || row.sync_key || '')}</span>`;
+}
+
+function renderCompare(result) {
+  const body = $('timeMachineCompareBody');
+  const meta = $('timeMachineCompareMeta');
+  if (!body || !meta) return;
+  const summary = result.summary || {};
+  // textContent is already XSS-safe; escapeHtml would show literal entities.
+  meta.textContent = `${t('time_machine.compare_added')}: ${summary.added || 0} · ${t('time_machine.compare_removed')}: ${summary.removed || 0} · ${t('time_machine.compare_edited')}: ${summary.edited || 0}`;
+  const warnings = [];
+  if (result.truncated) warnings.push(escapeHtml(t('time_machine.truncated', { date: result.from || result.to || '—' })));
+  if (result.corrupt?.length) warnings.push(escapeHtml(t('time_machine.corrupt')));
+  const section = (title, rows, render) => rows.length
+    ? `<section class="detail-card tm-compare-section"><h3>${escapeHtml(title)}</h3>${rows.map(render).join('')}</section>`
+    : '';
+  const html = [
+    warnings.length ? `<div class="description tm-warnings" role="status">${warnings.join(' ')}</div>` : '',
+    section(t('time_machine.compare_added'), result.added || [], row => `<div class="tm-compare-row">${identityLine(row)}</div>`),
+    section(t('time_machine.compare_removed'), result.removed || [], row => `<div class="tm-compare-row">${identityLine(row)}</div>`),
+    section(t('time_machine.compare_edited'), result.edited || [], row => `<div class="tm-compare-row">${identityLine(row)}<div class="tm-changes">${fieldChanges(row.fields)}</div></div>`),
+  ].join('');
+  body.innerHTML = html || `<p class="muted">${escapeHtml(t('time_machine.compare_empty'))}</p>`;
 }
 
 function kindText(kind) {
@@ -166,18 +198,37 @@ async function loadAsOf() {
   }
 }
 
-async function previewRevert(button) {
-  let fields = [];
-  try { fields = JSON.parse(button.dataset.tmFields || '[]'); } catch { fields = []; }
+async function loadCompare() {
+  const body = $('timeMachineCompareBody');
+  const rawFrom = $('tmCompareFrom')?.value?.trim();
+  const rawTo = $('tmCompareTo')?.value?.trim();
+  if (!body) return;
+  if (!rawFrom || !rawTo) {
+    body.innerHTML = `<p class="muted">${escapeHtml(t('time_machine.compare_need_dates'))}</p>`;
+    return;
+  }
+  body.innerHTML = `<p class="muted">${escapeHtml(t('time_machine.loading'))}</p>`;
   try {
+    const params = new URLSearchParams({ a: rawFrom, b: rawTo });
+    const result = await api(`/api/v2/timemachine/compare?${params}`);
+    renderCompare(result);
+  } catch (error) {
+    body.innerHTML = `<p class="muted">${escapeHtml(error.message || String(error))}</p>`;
+  }
+}
+
+async function previewRevert(button) {
+  try {
+    // No fields: the server applies its metadata whitelist, so paths and
+    // launch configuration can never be part of a revert plan.
     const preview = await api('/api/v2/library/time-machine/revert', {
       method: 'POST',
-      body: JSON.stringify({ event_id: button.dataset.tmRevert, fields }),
+      body: JSON.stringify({ event_id: button.dataset.tmRevert }),
     });
     const plan = preview.plan || {};
     if (!await confirmAction({
       title: t('time_machine.revert_title'),
-      message: t('time_machine.revert_message'),
+      message: `${t('time_machine.revert_message')} ${t('time_machine.revert_whitelist')}`,
       target: t('time_machine.revert_target', { event: button.dataset.tmRevert }),
       consequence: t('time_machine.revert_consequence'),
       retained: t('time_machine.revert_retained'),
@@ -209,18 +260,31 @@ function notifyRevert(result) {
 }
 
 function notifyRevertError(error) {
-  notify(error.message || String(error));
+  notifyError(error, String(error));
 }
 
 function showTab(tab) {
   const events = tab === 'events';
+  const asof = tab === 'asof';
+  const compare = tab === 'compare';
   $('timeMachineEventsPane').hidden = !events;
-  $('timeMachineAsOfPane').hidden = events;
-  $('tmEventsTab').setAttribute('aria-selected', String(events));
-  $('tmAsOfTab').setAttribute('aria-selected', String(!events));
-  $('tmEventsTab').classList.toggle('active', events);
-  $('tmAsOfTab').classList.toggle('active', !events);
-  if (!events && !$('timeMachineAsOfBody').dataset.loaded) loadAsOf();
+  $('timeMachineAsOfPane').hidden = !asof;
+  $('timeMachineComparePane').hidden = !compare;
+  const tabs = {
+    events: $('tmEventsTab'),
+    asof: $('tmAsOfTab'),
+    compare: $('tmCompareTab'),
+  };
+  Object.entries(tabs).forEach(([name, element]) => {
+    element.setAttribute('aria-selected', String(name === tab));
+    element.classList.toggle('active', name === tab);
+  });
+  if (asof && !$('timeMachineAsOfBody').dataset.loaded) loadAsOf();
+}
+
+function activeTab() {
+  if (!$('timeMachineComparePane')?.hidden) return 'compare';
+  return $('timeMachineAsOfPane')?.hidden ? 'events' : 'asof';
 }
 
 function bindTimeMachine() {
@@ -231,6 +295,7 @@ function bindTimeMachine() {
   $('closeTimeMachine').onclick = () => target.close();
   $('tmEventsTab').onclick = () => showTab('events');
   $('tmAsOfTab').onclick = () => showTab('asof');
+  $('tmCompareTab').onclick = () => showTab('compare');
   $('tmRefresh').onclick = () => loadEvents(true);
   $('tmKind').onchange = () => loadEvents(true);
   $('tmDays').onchange = () => loadEvents(true);
@@ -240,10 +305,11 @@ function bindTimeMachine() {
     $('timeMachineAsOfBody').dataset.loaded = '1';
     await loadAsOf();
   };
+  $('tmCompareButton').onclick = () => loadCompare();
   target.addEventListener('close', () => { $('timeMachineAsOfBody').dataset.loaded = ''; });
   document.addEventListener('localechange', () => {
     if (target.open) {
-      showTab($('timeMachineEventsPane').hidden ? 'asof' : 'events');
+      showTab(activeTab());
       if (!$('timeMachineEventsPane').hidden) loadEvents(true);
     }
   });
@@ -254,7 +320,7 @@ function openTimeMachine() {
   const target = dialog();
   if (!target) return;
   showTab('events');
-  if (!target.open) target.showModal();
+  if (!target.open) openDialog(target);
   loadEvents(true);
 }
 

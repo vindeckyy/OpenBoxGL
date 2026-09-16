@@ -1,5 +1,5 @@
 import { $, escapeHtml } from './util.js';
-import { token, AppState, api, notify, nativeFullscreen, detectNative, filteredGames, nativePickFile, selectedIds, resetQuery, resolveDeeplinkGameId } from './state.js';
+import { token, AppState, api, notify, nativeFullscreen, detectNative, filteredGames, nativePickFile, selectedIds, resetQuery, resolveDeeplinkGameId, notifyError, setButtonBusy } from './state.js';
 import { refresh, render, renderGrid, favorite, updateGameStatus, removeGame } from './library.js';
 import { openSettings, openProfiles, openThemes, openAchievements, openPlugins, health, openBackups, openFeature, bulkAction, saveFilter, savePreset, openPlaylists, createManualPlaylist, createFilterPlaylist, createNamedBackup, filterSettings, gracefulShutdown, loadTheme, addGamesToPlaylist } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importArcade, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport } from './imports.js';
@@ -13,7 +13,7 @@ import { openBigBox, closeBigBox, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMe
 import { openPicker } from './picker.js';
 import { openConstellation } from './constellation.js';
 import { openMastery } from './mastery.js';
-import { closeDialog, openGameDialog, closeContextMenu, bindContextMenuA11y, promptChoice, promptInput, confirmAction } from './dialogs.js';
+import { openDialog, closeDialog, openGameDialog, closeContextMenu, bindContextMenuA11y, promptChoice, promptInput, confirmAction } from './dialogs.js';
 import { loadInsights, bindInsights } from './insights.js';
 import { openTimeMachine } from './timemachine.js';
 import { openMoment } from './moments.js';
@@ -22,34 +22,76 @@ import { openArcadeRoom } from './arcaderoom.js';
 import { initHousehold, openHousehold } from './household.js';
 import { initNavigation } from './navigation.js';
 import { initPalette } from './palette.js';
+import { openSetupCenter as openSetupCenterDialog } from './setup.js';
 import { initWhatsNew } from './whatsnew.js';
 import { applyHash } from './router.js';
 import { initMood } from './mood.js';
-import { init as i18nInit, setLocale, getSupportedLocales, t } from './i18n.js';
+import { init as i18nInit, populateLocaleSelector, t } from './i18n.js';
 import './activity.js';
 
 // Initialize i18n after the page has settled so it doesn't hold network
 // connections during initial load (which would block networkidle2 in tests).
-// Populate the locale selector from public_settings once settings are loaded.
+// The locale selector is populated here with defaults and again from refresh()
+// once public_settings (available_locales, locale) have actually loaded.
 function initI18n() {
   i18nInit().catch(() => {});
-  // Populate the locale selector with available locales from AppState.
+  populateLocaleSelector(AppState.appSettings);
+}
+
+let recoveryDialogOpen = false;
+async function offerStateRecovery(error) {
+  // The server starts in recovery mode when library.json is unreadable; this
+  // dialog is the missing frontend half of POST /api/state/recover.
+  if (!error || error.code !== 'STATE_UNAVAILABLE' || recoveryDialogOpen) return false;
+  recoveryDialogOpen = true;
   try {
-    const locales = (AppState.appSettings && AppState.appSettings.available_locales) ||
-                    [{ code: 'en', name: 'English', native: 'English' }];
-    const sel = $('localeSetting');
-    if (sel) {
-      sel.innerHTML = '';
-      for (const loc of locales) {
-        const opt = document.createElement('option');
-        opt.value = loc.code;
-        opt.textContent = loc.native || loc.name || loc.code;
-        sel.appendChild(opt);
-      }
-      sel.value = (AppState.appSettings && AppState.appSettings.locale) || 'en';
-      sel.onchange = () => { setLocale(sel.value).catch(() => {}); };
+    let report = {};
+    try {
+      report = await api('/api/state/recover', { method: 'POST', body: JSON.stringify({ dry_run: true }) });
+    } catch { /* fall through to the no-options message */ }
+    const choices = [];
+    if (report.backup_available) choices.push({ value: 'backup', label: t('recovery.backup_option') });
+    for (const snapshot of report.snapshots || []) {
+      choices.push({ value: `snapshot:${snapshot.name}`, label: t('recovery.snapshot_option', { name: snapshot.name }) });
     }
-  } catch { /* settings not ready yet — non-fatal */ }
+    if (!choices.length) {
+      notifyError(error, t('recovery.none_available'));
+      return false;
+    }
+    const pick = await promptChoice({
+      title: t('recovery.title'),
+      message: t('recovery.message'),
+      label: t('recovery.choice_label'),
+      choices,
+    });
+    if (!pick) return false;
+    const payload = pick.startsWith('snapshot:') ? { snapshot: pick.slice('snapshot:'.length) } : {};
+    await api('/api/state/recover', { method: 'POST', body: JSON.stringify(payload) });
+    notify('success', t('recovery.restored'));
+    await refresh();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    recoveryDialogOpen = false;
+  }
+}
+
+const BULK_EDIT_CHUNK = 2000;
+async function bulkUpdateSelected(changes) {
+  // A shift-range selection can span the whole library. One request would
+  // exceed MAX_BODY (64 KB) around 10k ids and fail with a 400, so edits are
+  // chunked server-side-of-the-wire and totals are aggregated here.
+  const ids = [...selectedIds];
+  let updated = 0;
+  for (let start = 0; start < ids.length; start += BULK_EDIT_CHUNK) {
+    const result = await api('/api/games/bulk-wizard', {
+      method: 'POST',
+      body: JSON.stringify({ ids: ids.slice(start, start + BULK_EDIT_CHUNK), changes }),
+    });
+    updated += Number(result?.updated) || 0;
+  }
+  return { updated };
 }
 
 async function verifyMuseumPin() {
@@ -63,7 +105,7 @@ async function verifyMuseumPin() {
     if (!result.ok) notify('That Museum PIN was not accepted.');
     return Boolean(result.ok);
   } catch (error) {
-    notify(error.message);
+    notifyError(error);
     return false;
   }
 }
@@ -84,6 +126,7 @@ window.addEventListener('DOMContentLoaded', () => {
     document.querySelector(`[data-game="${game.id}"]`)?.scrollIntoView({ block: 'nearest' });
   });
   document.addEventListener('app:palette-open-settings', () => $('settingsButton')?.click());
+  document.addEventListener('app:palette-launch-doctor', () => openSetupCenter({ step: 5 }));
   document.addEventListener('app:palette-open-time-machine', () => $('timeMachineButton')?.click());
   document.addEventListener('app:palette-open-bigbox', () => $('bigBoxButton')?.click());
   document.addEventListener('app:palette-open-arcade-room', () => $('arcadeRoomButton')?.click());
@@ -104,14 +147,14 @@ window.addEventListener('DOMContentLoaded', () => {
 /** @type {any} */ (window).filteredGames = filteredGames;
 
     const welcomeShim = $('welcomeDialog');
+    const openSetupCenter = ({ step = 1 } = {}) => { openSetupCenterDialog({ step }).catch(() => {}); };
     if (welcomeShim) {
-      welcomeShim.showModal = () => $('setupCenter').showModal();
-      welcomeShim.close = () => $('setupCenter').close();
+      welcomeShim.showModal = () => openSetupCenter();
+      welcomeShim.close = () => closeDialog($('setupCenter'));
     }
-    const openSetupCenter = () => $('setupCenter').showModal();
-    if ($('setupLibraryButton')) $('setupLibraryButton').onclick = openSetupCenter;
-    if ($('reopenWelcome')) $('reopenWelcome').onclick = openSetupCenter;
-    if ($('closeSetupCenter')) $('closeSetupCenter').onclick = () => $('setupCenter').close();
+    if ($('setupLibraryButton')) $('setupLibraryButton').onclick = () => openSetupCenter();
+    if ($('reopenWelcome')) $('reopenWelcome').onclick = () => openSetupCenter();
+    if ($('closeSetupCenter')) $('closeSetupCenter').onclick = () => closeDialog($('setupCenter'));
 
     document.querySelectorAll('.game-editor-nav-item').forEach(button => {
       button.onclick = () => {
@@ -152,7 +195,7 @@ window.addEventListener('DOMContentLoaded', () => {
         $('gameDialog').close();
         await refresh();
         notify(shelf ? 'Shelf entry saved' : 'Library saved');
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     };
     $('bulkForm').onsubmit = async event => {
       event.preventDefault();
@@ -165,13 +208,13 @@ window.addEventListener('DOMContentLoaded', () => {
       if (values.esrb) changes.esrb = values.esrb;
       if (values.reset_stats) changes.reset_stats = true;
       try {
-        const result = await api('/api/games/bulk-wizard',{method:'POST',body:JSON.stringify({ids:[...selectedIds],changes})});
+        const result = await bulkUpdateSelected(changes);
         $('bulkDialog').close();
         selectedIds.clear();
         AppState.bulkMode = false;
         await refresh();
-        notify(`${result.updated} games updated`);
-      } catch(error) { notify(error.message); }
+        notify(`${result.updated} game${result.updated === 1 ? '' : 's'} updated`);
+      } catch(error) { notifyError(error); }
     };
     if ($('bigBoxHybridSearch')) {
       $('bigBoxHybridSearch').oninput = () => {
@@ -203,7 +246,7 @@ window.addEventListener('DOMContentLoaded', () => {
         AppState.appSettings = result.settings || AppState.appSettings;
         $('mediaPackStatus').textContent = (AppState.appSettings.media_packs || []).filter(item => item.active).map(item => item.name).join(', ');
         notify(`Applied ${pack.name}`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     };
     $('libraryButton').onclick = () => { resetQuery(); AppState.selectedId = null; render(); loadTheme(); };
     $('discoveryButton').onclick = openDiscovery;
@@ -211,17 +254,33 @@ window.addEventListener('DOMContentLoaded', () => {
     $('closeDiscovery').onclick = $('doneDiscovery').onclick = () => $('discoveryDialog').close();
     $('closeStorefront').onclick = () => $('storefrontDialog').close();
     $('saveStorefront').onclick = saveStorefrontSettings;
-    $('importSteamStore').onclick = () => { $('storefrontDialog').close(); importSteam(); };
-    $('importHeroicStore').onclick = () => { $('storefrontDialog').close(); importHeroic(); };
-    $('importLutrisStore').onclick = () => { $('storefrontDialog').close(); importLutris(); };
-    if ($('importGameyfinStore')) $('importGameyfinStore').onclick = async () => {
-      try {
-        await saveStorefrontSettings();
-        const result = await api('/api/storefront/import',{method:'POST',body:JSON.stringify({source:'gameyfin'})});
-        await refresh();
-        notify(`${result.added} Gameyfin games imported · ${result.found} owned`);
-      } catch(error) { notify(error.message); }
+    // Import buttons guard against double-submits: the storefront views stay
+    // interactive while an import runs, so a second click used to queue a
+    // duplicate import.
+    const bindImportButton = (id, run) => {
+      const button = $(id);
+      if (!button) return;
+      button.onclick = async () => {
+        if (button.disabled) return;
+        setButtonBusy(button, true, t('common.loading'));
+        try {
+          await run();
+        } catch(error) {
+          notifyError(error);
+        } finally {
+          setButtonBusy(button, false);
+        }
+      };
     };
+    bindImportButton('importSteamStore', () => { $('storefrontDialog').close(); return importSteam(); });
+    bindImportButton('importHeroicStore', () => { $('storefrontDialog').close(); return importHeroic(); });
+    bindImportButton('importLutrisStore', () => { $('storefrontDialog').close(); return importLutris(); });
+    bindImportButton('importGameyfinStore', async () => {
+      await saveStorefrontSettings();
+      const result = await api('/api/storefront/import',{method:'POST',body:JSON.stringify({source:'gameyfin'})});
+      await refresh();
+      notify(`${result.added} Gameyfin games imported · ${result.found} owned`);
+    });
     if ($('testGameyfin')) $('testGameyfin').onclick = async () => {
       try {
         const result = await api('/api/gameyfin/test',{method:'POST',body:JSON.stringify({
@@ -231,14 +290,14 @@ window.addEventListener('DOMContentLoaded', () => {
         })});
         $('storefrontGameyfinStatus').textContent = `Connected · ${result.games} games · ${result.providers.length} download provider${result.providers.length === 1 ? '' : 's'}`;
         notify('Gameyfin connection ok');
-      } catch(error) { $('storefrontGameyfinStatus').textContent = error.message; notify(error.message); }
+      } catch(error) { $('storefrontGameyfinStatus').textContent = error.message; notifyError(error); }
     };
-    $('importScummvmStore').onclick = async () => { try { const result = await api('/api/import/scummvm',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} ScummVM games imported`); } catch(error) { notify(error.message); } };
-    $('importRpcs3Store').onclick = async () => { try { const result = await api('/api/import/rpcs3',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} RPCS3 games imported`); } catch(error) { notify(error.message); } };
-    $('importVita3kStore').onclick = async () => { try { const result = await api('/api/import/vita3k',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} Vita3K games imported`); } catch(error) { notify(error.message); } };
-    $('openThemeFolder').onclick = async () => { try { const result = await api('/api/themes/open-folder',{method:'POST',body:'{}'}); notify(`Opened ${result.path}`); } catch(error) { notify(error.message); } };
-    $('injectRa').onclick = async () => { try { const result = await api('/api/ra/inject',{method:'POST',body:'{}'}); notify(`Updated ${result.updated.length} emulator config file${result.updated.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
-    $('cleanupMedia').onclick = async () => { try { const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({platform:AppState.platform,apply:false})}); AppState.duplicateMediaGroups = result.groups; $('applyCleanupMedia').hidden = !AppState.duplicateMediaGroups; notify(`${AppState.duplicateMediaGroups} duplicate media group${AppState.duplicateMediaGroups === 1 ? '' : 's'} found`); } catch(error) { notify(error.message); } };
+    bindImportButton('importScummvmStore', async () => { const result = await api('/api/import/scummvm',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} ScummVM games imported`); });
+    bindImportButton('importRpcs3Store', async () => { const result = await api('/api/import/rpcs3',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} RPCS3 games imported`); });
+    bindImportButton('importVita3kStore', async () => { const result = await api('/api/import/vita3k',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} Vita3K games imported`); });
+    $('openThemeFolder').onclick = async () => { try { const result = await api('/api/themes/open-folder',{method:'POST',body:'{}'}); notify(`Opened ${result.path}`); } catch(error) { notifyError(error); } };
+    $('injectRa').onclick = async () => { try { const result = await api('/api/ra/inject',{method:'POST',body:'{}'}); notify(`Updated ${result.updated.length} emulator config file${result.updated.length === 1 ? '' : 's'}`); } catch(error) { notifyError(error); } };
+    $('cleanupMedia').onclick = async () => { try { const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({platform:AppState.platform,apply:false})}); AppState.duplicateMediaGroups = result.groups; $('applyCleanupMedia').hidden = !AppState.duplicateMediaGroups; notify(`${AppState.duplicateMediaGroups} duplicate media group${AppState.duplicateMediaGroups === 1 ? '' : 's'} found`); } catch(error) { notifyError(error); } };
     $('applyCleanupMedia').onclick = async () => {
       if (!await confirmAction({
         title: 'Delete duplicate media',
@@ -253,14 +312,14 @@ window.addEventListener('DOMContentLoaded', () => {
         const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({platform:AppState.platform,apply:true})});
         $('applyCleanupMedia').hidden = true;
         notify(`Removed ${result.paths.length} duplicate file${result.paths.length === 1 ? '' : 's'}`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     };
-    $('scanAllSaves').onclick = async () => { try { const result = await api('/api/saves/scan/apply',{method:'POST',body:'{}'}); await refresh(); notify(`Added save paths on ${result.updated} location${result.updated === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
+    $('scanAllSaves').onclick = async () => { try { const result = await api('/api/saves/scan/apply',{method:'POST',body:'{}'}); await refresh(); notify(`Added save paths on ${result.updated} location${result.updated === 1 ? '' : 's'}`); } catch(error) { notifyError(error); } };
     $('bigBoxPause').onclick = event => { if (event.target === $('bigBoxPause')) $('bigBoxPause').hidden = true; };
     $('loadStorefrontCatalog').onclick = loadStorefrontCatalog;
     $('importStorefrontInstalled').onclick = () => importStorefrontCatalog(false);
     $('importStorefrontUninstalled').onclick = () => importStorefrontCatalog(true);
-    $('addButton').onclick = () => openGameDialog(); $('addShelfButton').onclick = () => openGameDialog(null, {shelf:true}); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => $('metadataDialog').showModal(); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('arcadeRoomButton').onclick = () => openArcadeRoom({state:AppState, games:() => AppState.games, museumKioskEnabled:Boolean(AppState.appSettings.museum_kiosk_enabled && AppState.appSettings.museum_kiosk_pin_set), verifyMuseumPin, onShowGame:game => { AppState.selectedId = game.id; render(); }, onLaunch:game => launch(game)}); $('householdButton').onclick = openHousehold; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('timeMachineButton').onclick = openTimeMachine; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('constellationButton').onclick = openConstellation; $('masteryButton').onclick = openMastery; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
+    $('addButton').onclick = () => openGameDialog(); $('addShelfButton').onclick = () => openGameDialog(null, {shelf:true}); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => openDialog($('metadataDialog')); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('arcadeRoomButton').onclick = () => openArcadeRoom({state:AppState, games:() => AppState.games, museumKioskEnabled:Boolean(AppState.appSettings.museum_kiosk_enabled && AppState.appSettings.museum_kiosk_pin_set), verifyMuseumPin, onShowGame:game => { AppState.selectedId = game.id; render(); }, onLaunch:game => launch(game)}); $('householdButton').onclick = openHousehold; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('timeMachineButton').onclick = openTimeMachine; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('constellationButton').onclick = openConstellation; $('masteryButton').onclick = openMastery; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
     $('doneTimeMachine').onclick = () => $('timeMachineDialog').close();
     // ── Accessible Tools menu ──────────────────────────────────────────
     const toolsWrap = $('toolsWrap');
@@ -329,7 +388,7 @@ window.addEventListener('DOMContentLoaded', () => {
         await api('/api/games/bulk-wizard', {method:'POST',body:JSON.stringify({ids:[id],changes:{reset_stats:true}})});
         await refresh();
         notify(`Reset play statistics for ${game.name}`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     };
     $('contextRemove').onclick = () => { const game = AppState.games.find(item => item.id === AppState.contextGameId); closeContextMenu(); if (game) removeGame(game.id, game.name); };
     bindContextMenuA11y();
@@ -343,7 +402,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const result = await api('/api/emulators/scan',{method:'POST',body:JSON.stringify({folder})});
         await refresh();
         notify(`Added ${result.added} of ${result.found} scanned games`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     };
     $('fullscreenButton').onclick = () => nativeFullscreen().catch(() => {});
     $('surpriseButton').onclick = openPicker;
@@ -353,12 +412,15 @@ window.addEventListener('DOMContentLoaded', () => {
       try {
         AppState.appSettings = await api('/api/image-group',{method:'POST',body:JSON.stringify({group:$('imageGroup').value,scope,name})});
         renderGrid();
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     };
 
     $('settingsSearch').oninput = filterSettings;
     $('forceShutdown').onclick = () => gracefulShutdown(true);
-    window.addEventListener('beforeunload', event => { if (AppState.runningGames.length) { event.preventDefault(); gracefulShutdown(); } });
+    // Games are server-side child processes. Reloading (F5) or closing this
+    // window must not stop them: an earlier beforeunload handler called
+    // gracefulShutdown() and killed every running game on reload. Explicit
+    // shutdown is the Quit action, which force-stops sessions by design.
     document.addEventListener('keydown', event => {
       if ((event.ctrlKey || event.metaKey) && event.key === ',') { event.preventDefault(); openSettings(); }
       if ((event.ctrlKey || event.metaKey) && event.altKey && (event.key.toLowerCase() === 'q' || event.key.toLowerCase() === 'r')) {
@@ -456,4 +518,6 @@ window.addEventListener('DOMContentLoaded', () => {
       await runStartupStorefrontImports().catch(() => {});
       if (deeplink.get('deeplink') !== 'bigbox' && AppState.appSettings.gamescope_guest) openBigBox();
       dispatchDeeplink(deeplink);
-    }).catch(error => notify(error.message));
+    }).catch(async error => {
+      if (!(await offerStateRecovery(error))) notifyError(error);
+    });

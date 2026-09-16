@@ -42,6 +42,9 @@ CREATE TABLE IF NOT EXISTS games (
     -- read-model databases.  Search semantics use the canonical ``name``
     -- projection below.
     title TEXT,
+    -- Python-casefolded name: SQL ``LIKE`` over this column gives the same
+    -- substring semantics as the JSON path without a per-row Python scan.
+    name_folded TEXT,
     platform TEXT,
     genre TEXT,
     developer TEXT,
@@ -72,35 +75,35 @@ CREATE INDEX IF NOT EXISTS idx_games_genre ON games(genre);
 CREATE INDEX IF NOT EXISTS idx_games_favorite ON games(favorite);
 CREATE INDEX IF NOT EXISTS idx_games_hidden ON games(hidden);
 CREATE INDEX IF NOT EXISTS idx_games_title ON games(title);
+CREATE INDEX IF NOT EXISTS idx_games_name_folded ON games(name_folded);
 """
 
+# Trigram FTS5 turns MATCH into substring search over the folded name; the
+# fallback is a SQL LIKE scan over the same column.
 _FTS_SCHEMA = """
 CREATE VIRTUAL TABLE IF NOT EXISTS games_fts USING fts5(
     game_id UNINDEXED,
-    title,
-    platform,
-    genre,
-    developer,
-    description,
+    name_folded,
     content='games',
-    content_rowid='rowid'
+    content_rowid='rowid',
+    tokenize='trigram'
 );
 """
 
 _FTS_TRIGGERS = """
 CREATE TRIGGER IF NOT EXISTS games_ai AFTER INSERT ON games BEGIN
-    INSERT INTO games_fts(rowid, game_id, title, platform, genre, developer, description)
-    VALUES (new.rowid, new.game_id, new.title, new.platform, new.genre, new.developer, new.description);
+    INSERT INTO games_fts(rowid, game_id, name_folded)
+    VALUES (new.rowid, new.game_id, new.name_folded);
 END;
 CREATE TRIGGER IF NOT EXISTS games_ad AFTER DELETE ON games BEGIN
-    INSERT INTO games_fts(games_fts, rowid, game_id, title, platform, genre, developer, description)
-    VALUES ('delete', old.rowid, old.game_id, old.title, old.platform, old.genre, old.developer, old.description);
+    INSERT INTO games_fts(games_fts, rowid, game_id, name_folded)
+    VALUES ('delete', old.rowid, old.game_id, old.name_folded);
 END;
 CREATE TRIGGER IF NOT EXISTS games_au AFTER UPDATE ON games BEGIN
-    INSERT INTO games_fts(games_fts, rowid, game_id, title, platform, genre, developer, description)
-    VALUES ('delete', old.rowid, old.game_id, old.title, old.platform, old.genre, old.developer, old.description);
-    INSERT INTO games_fts(rowid, game_id, title, platform, genre, developer, description)
-    VALUES (new.rowid, new.game_id, new.title, new.platform, new.genre, new.developer, new.description);
+    INSERT INTO games_fts(games_fts, rowid, game_id, name_folded)
+    VALUES ('delete', old.rowid, old.game_id, old.name_folded);
+    INSERT INTO games_fts(rowid, game_id, name_folded)
+    VALUES (new.rowid, new.game_id, new.name_folded);
 END;
 """
 
@@ -121,6 +124,25 @@ def _check_fts5() -> bool:
     return _FTS5_AVAILABLE
 
 
+_FTS5_TRIGRAM_AVAILABLE: bool | None = None
+
+
+def _check_fts5_trigram() -> bool:
+    """Check whether FTS5 supports the trigram tokenizer (substring search)."""
+    global _FTS5_TRIGRAM_AVAILABLE
+    if _FTS5_TRIGRAM_AVAILABLE is not None:
+        return _FTS5_TRIGRAM_AVAILABLE
+    try:
+        conn = sqlite3.connect(":memory:")
+        conn.execute("CREATE VIRTUAL TABLE fts5_trigram_test USING fts5(x, tokenize='trigram')")
+        conn.close()
+        _FTS5_TRIGRAM_AVAILABLE = True
+    except sqlite3.OperationalError:
+        _FTS5_TRIGRAM_AVAILABLE = False
+        LOGGER.info("SQLite FTS5 trigram tokenizer not available; using LIKE search")
+    return _FTS5_TRIGRAM_AVAILABLE
+
+
 class SqliteReadModel:
     """Optional SQLite-backed read model for the game library."""
 
@@ -130,6 +152,7 @@ class SqliteReadModel:
         self._conn: sqlite3.Connection | None = None
         self._signature: tuple[int, int, int] | None = None
         self._enabled = _ENABLED
+        self._rebuilt = False
 
     @property
     def enabled(self) -> bool:
@@ -170,7 +193,20 @@ class SqliteReadModel:
             conn.execute("ALTER TABLE games ADD COLUMN name TEXT")
         if "library_order" not in columns:
             conn.execute("ALTER TABLE games ADD COLUMN library_order INTEGER DEFAULT 0")
-        if _check_fts5():
+        if "name_folded" not in columns:
+            conn.execute("ALTER TABLE games ADD COLUMN name_folded TEXT")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_games_name_folded ON games(name_folded)")
+        if _check_fts5_trigram():
+            existing = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='games_fts'"
+            ).fetchone()
+            if existing is not None and "trigram" not in (existing[0] or ""):
+                # Older unicode61 FTS is unusable for substring search; drop
+                # it (and its triggers) and rebuild it with the trigram
+                # tokenizer. The next rebuild repopulates it.
+                conn.execute("DROP TABLE IF EXISTS games_fts")
+                for trigger in ("games_ai", "games_ad", "games_au"):
+                    conn.execute(f"DROP TRIGGER IF EXISTS {trigger}")
             conn.executescript(_FTS_SCHEMA)
             conn.executescript(_FTS_TRIGGERS)
         conn.commit()
@@ -202,6 +238,7 @@ class SqliteReadModel:
                     gid,
                     name,
                     name,
+                    name.casefold(),
                     str(game.get("platform") or ""),
                     str(game.get("genre") or ""),
                     str(game.get("developer") or ""),
@@ -229,15 +266,16 @@ class SqliteReadModel:
                 ))
             conn.executemany(
                 """INSERT OR REPLACE INTO games (
-                    game_id, name, title, platform, genre, developer, publisher,
+                    game_id, name, title, name_folded, platform, genre, developer, publisher,
                     series, region, year, favorite, hidden, installed, broken,
                     portable, play_count, playtime_seconds, last_played,
                     date_added, rating, progress, esrb, controller_support,
                     sort_title, description, raw_json, library_order
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 rows,
             )
             conn.commit()
+            self._rebuilt = True
 
     def invalidate(self) -> None:
         """Mark the read model as stale; next query triggers a rebuild."""
@@ -296,10 +334,12 @@ class SqliteReadModel:
     def search(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
         """Search canonical game names by casefolded substring in library order.
 
-        The v2 API promises substring matching over ``name`` only.  Keeping
-        matching here in Python avoids SQLite LIKE/FTS differences for Unicode
-        casefolding and treats punctuation and malformed FTS expressions as
-        ordinary text.
+        Matching happens at the SQL layer: FTS5 trigram ``MATCH`` when the
+        tokenizer is available, otherwise ``LIKE`` over the pre-folded
+        ``name_folded`` column. Every candidate is still verified in Python so
+        the result set is identical to the JSON path (Unicode casefold and
+        punctuation are treated as ordinary text); the Python scan only runs
+        as a fallback for databases that have not been rebuilt yet.
         """
         if not self._enabled:
             return []
@@ -311,6 +351,34 @@ class SqliteReadModel:
         needle = str(query or "").casefold()
         if not needle:
             return []
+        if not self._rebuilt:
+            return self._search_python(conn, needle, limit)
+        fetch_limit = max(limit * 4, limit + 32)
+        if _check_fts5_trigram() and len(needle) >= 3:
+            match = '"' + needle.replace('"', '""') + '"'
+            rows = conn.execute(
+                "SELECT g.raw_json FROM games_fts f JOIN games g ON g.rowid = f.rowid "
+                "WHERE games_fts MATCH ? ORDER BY f.rowid LIMIT ?",
+                (match, fetch_limit),
+            ).fetchall()
+        else:
+            escaped = needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            rows = conn.execute(
+                "SELECT raw_json FROM games WHERE name_folded LIKE ? ESCAPE '\\' "
+                "ORDER BY library_order, rowid LIMIT ?",
+                (f"%{escaped}%", fetch_limit),
+            ).fetchall()
+        results = []
+        for raw_json, in rows:
+            game = json.loads(raw_json)
+            if needle in str(game.get("name") or "").casefold():
+                results.append(game)
+                if len(results) >= limit:
+                    break
+        return results
+
+    def _search_python(self, conn: sqlite3.Connection, needle: str, limit: int) -> list[dict[str, Any]]:
+        """Fallback scan for a database that predates the folded-name column."""
         rows = conn.execute(
             "SELECT raw_json FROM games ORDER BY library_order, rowid"
         ).fetchall()
@@ -322,6 +390,42 @@ class SqliteReadModel:
                 if len(results) >= limit:
                     break
         return results
+
+    # Fields whose facet contract can be reproduced exactly in SQL. ``genre``
+    # splits on commas and stays on the JSON path.
+    _SQL_FACET_FIELDS = frozenset({"platform", "developer", "publisher", "progress", "esrb"})
+
+    def explorer_facets(self, field: str, limit: int = 40) -> list[dict[str, Any]] | None:
+        """SQL ``GROUP BY`` facets matching ``explorer_facets`` semantics.
+
+        Returns ``None`` when the field cannot be reproduced in SQL or the
+        model has not been rebuilt, so callers fall back to the JSON path.
+        """
+        if not self._enabled or not self._rebuilt or field not in self._SQL_FACET_FIELDS:
+            return None
+        try:
+            limit = max(0, int(limit))
+        except (TypeError, ValueError):
+            limit = 40
+        conn = self._connect()
+        if field == "platform":
+            expression = "CASE WHEN TRIM(COALESCE(platform, '')) = '' THEN 'Unspecified' ELSE TRIM(platform) END"
+            where = "hidden = 0"
+        elif field == "progress":
+            expression = "CASE WHEN TRIM(COALESCE(progress, '')) = '' THEN 'Unset' ELSE TRIM(progress) END"
+            where = "hidden = 0"
+        elif field == "esrb":
+            expression = "CASE WHEN TRIM(COALESCE(esrb, '')) = '' THEN 'Unrated' ELSE TRIM(esrb) END"
+            where = "hidden = 0"
+        else:
+            expression = f"TRIM({field})"
+            where = f"hidden = 0 AND TRIM(COALESCE({field}, '')) != ''"
+        rows = conn.execute(
+            f"SELECT {expression} AS label, COUNT(*) FROM games WHERE {where} GROUP BY label",
+        ).fetchall()
+        items = sorted(((str(label), int(count)) for label, count in rows),
+                       key=lambda pair: (-pair[1], pair[0].casefold()))
+        return [{"value": value, "count": count} for value, count in items[:limit]]
 
     def facets(self, field: str, limit: int = 40) -> list[tuple[str, int]]:
         """Compute facets (value, count) for a given field via GROUP BY."""

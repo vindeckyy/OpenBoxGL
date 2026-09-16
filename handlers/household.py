@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import uuid
+from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs
 
 from api_errors import BadRequest, Conflict
@@ -17,6 +19,7 @@ from pkg.parity.parity_household import (
     challenge_progress,
     compute_leaderboard,
     household_records,
+    materialize_records,
     merge_records,
     publish_household_outbox,
     read_household_records,
@@ -28,6 +31,17 @@ from pkg.parity.parity_household import (
     state_token,
     stats_sharing_enabled,
 )
+from pkg.parity.parity_presence import (
+    make_heartbeat,
+    new_device_id,
+    presence_opted_in,
+    presence_settings,
+    project_activity,
+    read_heartbeats,
+    set_presence_opt_in,
+    write_heartbeat,
+)
+from pkg.parity.parity_library_sync import SyncValidationError
 from routes.registry import route
 from webapp_state import broadcast_event, load_state_view, transact_state
 
@@ -117,6 +131,7 @@ def _snapshot(state, *, period=None):
         "stats_sharing": stats_sharing_enabled(state),
         "outbox_count": len((state.get("household") or {}).get("outbox", [])) if isinstance(state, dict) else 0,
         "device_id": (state.get("household") or {}).get("device_id") if isinstance(state, dict) else None,
+        "presence": presence_settings(state),
         "settings": {"household_stats_sharing": bool(settings.get("household_stats_sharing", False))},
         "household_sync": {"configured": sync_folder_configured, "format": HOUSEHOLD_SYNC_FORMAT},
         "state_token": state_token(state),
@@ -360,6 +375,134 @@ def household_record(handler, payload):
     _commit_record(handler, mutate, event="record")
 
 
+def _presence_folder(state):
+    settings = state.get("settings", {}) if isinstance(state, dict) else {}
+    folder = settings.get("cloud_folder") if isinstance(settings, dict) else None
+    if not isinstance(folder, str) or not folder.strip():
+        return None
+    return folder.strip()
+
+
+def _known_member_ids(state) -> set[str]:
+    try:
+        current = materialize_records(household_records(state))
+    except (HouseholdValidationError, SyncValidationError):
+        return set()
+    members = set()
+    for sync_key, payload in current.items():
+        if not str(sync_key).startswith("member:") or not isinstance(payload, dict):
+            continue
+        member_id = payload.get("member_id")
+        if isinstance(member_id, str) and member_id:
+            members.add(member_id)
+    return members
+
+
+def _local_device_id(state) -> str:
+    household = state.get("household") if isinstance(state, dict) else None
+    device = household.get("device_id") if isinstance(household, dict) else None
+    if not isinstance(device, str) or not device.strip():
+        library = state.get("library_sync") if isinstance(state, dict) else None
+        device = library.get("device_id") if isinstance(library, dict) else None
+    if isinstance(device, str) and device.strip():
+        return device.strip()
+    return new_device_id()
+
+
+@route("GET", "/api/v2/household/activity", spec="handlers.household.household_activity")
+def household_activity(handler, parsed):
+    """Project unexpired Now Playing heartbeats from the shared Household folder."""
+    state = load_state_view()
+    presence = presence_settings(state)
+    folder = _presence_folder(state)
+    base = {
+        "format": 1,
+        "available": False,
+        "reason": None,
+        "members": [],
+        "count": 0,
+        "presence": presence,
+    }
+    if folder is None:
+        base["reason"] = "sync_folder"
+        handler.send_json(200, base)
+        return
+    try:
+        events = read_heartbeats(folder)
+    except (SyncFolderError, OSError, SyncValidationError, ValueError):
+        base["reason"] = "unavailable"
+        handler.send_json(200, base)
+        return
+    base.update(project_activity(events))
+    base["available"] = True
+    base["presence"] = presence
+    handler.send_json(200, base)
+
+
+@route("POST", "/api/v2/household/presence", spec="handlers.household.household_presence")
+def household_presence(handler, payload):
+    """Toggle one member's local presence opt-in; off unless explicitly enabled."""
+    body = _body(payload)
+    member_id = _required_text(body, "member_id")
+    if "enabled" not in body:
+        raise BadRequest("enabled is required.", code="HOUSEHOLD_INVALID_FIELD")
+    enabled = bool(body.get("enabled"))
+    toast = body.get("toast")
+    state = load_state_view()
+    if enabled and member_id not in _known_member_ids(state):
+        raise BadRequest("Add the member before opting into presence.", code="HOUSEHOLD_MEMBER_UNKNOWN")
+
+    def mutate(live):
+        return set_presence_opt_in(live, member_id, enabled, toast=toast)
+
+    try:
+        settings = transact_state(mutate)[1]
+    except SyncValidationError as error:
+        raise BadRequest(str(error), code="HOUSEHOLD_INVALID_FIELD") from error
+    handler.send_json(200, {"presence": settings, "member_id": member_id})
+
+
+@route("POST", "/api/v2/household/presence/heartbeat", spec="handlers.household.household_heartbeat")
+def household_heartbeat(handler, payload):
+    """Write one signed, expiring heartbeat for an opted-in member."""
+    body = _body(payload)
+    member_id = _required_text(body, "member_id")
+    state = load_state_view()
+    if not presence_opted_in(state, member_id):
+        raise BadRequest("Enable presence for this member first.", code="HOUSEHOLD_PRESENCE_DISABLED")
+    folder = _presence_folder(state)
+    if folder is None:
+        raise BadRequest("Configure a mounted cloud sync folder first.", code="HOUSEHOLD_SYNC_FOLDER_REQUIRED")
+    display_name = str(body.get("display_name") or "")
+    avatar_color = str(body.get("avatar_color") or "")
+    game_night = body.get("game_night") if isinstance(body.get("game_night"), dict) else None
+
+    try:
+        event = make_heartbeat(
+            member_id=member_id,
+            device_id=_local_device_id(state),
+            display_name=display_name,
+            avatar_color=avatar_color,
+            game_id=str(body.get("game_id") or ""),
+            game_name=str(body.get("game_name") or ""),
+            platform=str(body.get("platform") or ""),
+            started_at=body.get("started_at"),
+            game_night=game_night,
+        )
+        path = write_heartbeat(folder, event)
+    except SyncValidationError as error:
+        raise BadRequest(str(error), code="HOUSEHOLD_INVALID_FIELD") from error
+    except (SyncFolderError, OSError, ValueError) as error:
+        raise BadRequest("Presence folder is invalid or unavailable.", code="HOUSEHOLD_SYNC_INVALID") from error
+    handler.send_json(200, {
+        "ok": True,
+        "member_id": event["member_id"],
+        "expires_at": event["expires_at"],
+        "slot": path.stem,
+        "presence": presence_settings(state),
+    })
+
+
 __all__ = [
     "household_status",
     "household_leaderboard",
@@ -371,4 +514,209 @@ __all__ = [
     "household_sync_pull",
     "household_merge",
     "household_record",
+    "household_activity",
+    "household_presence",
+    "household_heartbeat",
+    "household_weekly_challenge",
+    "household_weekly_adopt",
+    "household_wishlist",
+    "household_wishlist_share",
 ]
+
+
+# --- F15: weekly auto-challenge + shelf share as wishlist entries -----------
+
+MAX_WISHLIST_MEMBERS = 32
+MAX_WISHLIST_ITEMS = 200
+MAX_WISHLIST_NAME = 160
+MAX_WISHLIST_PLATFORM = 80
+MAX_WISHLIST_NOTE = 280
+
+# Deterministic week-seeded challenge pool. Every install derives the same
+# challenge from the ISO week number alone, so members agree without a vote
+# or a server.
+WEEKLY_CHALLENGE_LIBRARY = (
+    {"title": "Finish one game", "metric": "completions", "base": 1, "span": 1,
+     "description": "Beat or complete any game in the library this week."},
+    {"title": "Unlock three achievements", "metric": "achievements", "base": 3, "span": 3,
+     "description": "Earn achievements across any supported games this week."},
+    {"title": "Play for two hours", "metric": "playtime_seconds", "base": 7200, "span": 3600,
+     "description": "Put in some proper couch time this week."},
+    {"title": "Earn a RetroAchievements trophy", "metric": "ra_count", "base": 1, "span": 2,
+     "description": "Unlock RetroAchievements trophies this week."},
+    {"title": "Complete two games", "metric": "finished", "base": 2, "span": 2,
+     "description": "Finish two games this week."},
+)
+
+
+def _week_bounds(now=None):
+    current = now or datetime.now(timezone.utc)
+    iso = current.isocalendar()
+    start = datetime.fromisoformat(f"{iso.year}-W{iso.week:02d}-1").replace(tzinfo=timezone.utc)
+    end = start + timedelta(days=7) - timedelta(seconds=1)
+    return iso.year, iso.week, start, end
+
+
+def weekly_challenge_definition(now=None):
+    """Return the deterministic challenge for the current ISO week."""
+    year, week, start, end = _week_bounds(now)
+    week_key = f"{year}-W{week:02d}"
+    seed = hashlib.sha256(f"openbox-weekly-challenge:{week_key}".encode("utf-8")).digest()
+    template = WEEKLY_CHALLENGE_LIBRARY[seed[0] % len(WEEKLY_CHALLENGE_LIBRARY)]
+    span = max(1, int(template["span"]))
+    target = int(template["base"]) + ((seed[1] << 8) | seed[2]) % span
+    return {
+        "challenge_id": f"weekly-{year}w{week:02d}",
+        "week": week_key,
+        "title": template["title"],
+        "metric": template["metric"],
+        "target": target,
+        "description": template["description"],
+        "deadline": end.isoformat(timespec="seconds"),
+        "starts_at": start.isoformat(timespec="seconds"),
+    }
+
+
+def _weekly_challenge_progress(state, definition):
+    results = [item for item in household_records(state) if item.get("kind") == "challenge_result"]
+    for item in household_records(state):
+        if item.get("kind") != "challenge" or "payload" not in item:
+            continue
+        if str(item["payload"].get("challenge_id") or "") != definition["challenge_id"]:
+            continue
+        progress = challenge_progress(item, results)
+        progress["record_id"] = item.get("event_id")
+        return progress
+    return None
+
+
+@route("GET", "/api/v2/household/challenge/weekly", spec="handlers.household.household_weekly_challenge")
+def household_weekly_challenge(handler, parsed):
+    """Return this week's deterministic challenge and local progress."""
+    definition = weekly_challenge_definition()
+    state = load_state_view()
+    challenge = _weekly_challenge_progress(state, definition)
+    handler.send_json(200, {
+        "definition": definition,
+        "challenge": challenge,
+        "adopted": bool(challenge),
+        "week": definition["week"],
+    })
+
+
+@route("POST", "/api/v2/household/challenge/weekly", spec="handlers.household.household_weekly_adopt")
+def household_weekly_adopt(handler, payload):
+    """Adopt (record) this week's challenge so progress can be reported."""
+    definition = weekly_challenge_definition()
+    existing = _weekly_challenge_progress(load_state_view(), definition)
+    if existing:
+        _send_snapshot(handler, load_state_view(), weekly_definition=definition, challenge=existing, adopted=True)
+        return
+
+    def mutate(state):
+        return record_challenge(
+            state,
+            definition["challenge_id"],
+            definition["title"],
+            created_by="openbox",
+            metric=definition["metric"],
+            target=definition["target"],
+            description=definition["description"],
+            deadline=definition["deadline"],
+        )
+
+    _commit_record(handler, mutate, event="challenge")
+
+
+def _clean_wishlist_items(raw, games):
+    if not isinstance(raw, list) or len(raw) > MAX_WISHLIST_ITEMS:
+        raise BadRequest("Wishlist entries must be a bounded list.", code="HOUSEHOLD_INVALID_FIELD")
+    by_id = {str(game.get("game_id") or ""): game for game in games if isinstance(game, dict)}
+    items = []
+    seen = set()
+    for entry in raw:
+        if isinstance(entry, str):
+            game = by_id.get(entry)
+            if game is None:
+                continue
+            item = {"game_id": entry, "name": str(game.get("name") or "")[:MAX_WISHLIST_NAME],
+                    "platform": str(game.get("platform") or "")[:MAX_WISHLIST_PLATFORM], "note": ""}
+        elif isinstance(entry, dict):
+            name = str(entry.get("name") or "").strip()
+            if not name:
+                continue
+            item = {
+                "game_id": str(entry.get("game_id") or "")[:80],
+                "name": name[:MAX_WISHLIST_NAME],
+                "platform": str(entry.get("platform") or "")[:MAX_WISHLIST_PLATFORM],
+                "note": str(entry.get("note") or "")[:MAX_WISHLIST_NOTE],
+            }
+        else:
+            continue
+        key = item["game_id"] or item["name"].casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(item)
+    return items
+
+
+def _wishlist_view(state):
+    wishlists = (state.get("household") or {}).get("wishlists") if isinstance(state, dict) else {}
+    if not isinstance(wishlists, dict):
+        wishlists = {}
+    return {
+        "members": {
+            member_id: {
+                "updated_at": str(entry.get("updated_at") or ""),
+                "items": list(entry.get("items") or []),
+            }
+            for member_id, entry in wishlists.items()
+            if isinstance(entry, dict)
+        },
+        "total": sum(len(entry.get("items") or []) for entry in wishlists.values() if isinstance(entry, dict)),
+    }
+
+
+@route("GET", "/api/v2/household/wishlist", spec="handlers.household.household_wishlist")
+def household_wishlist(handler, parsed):
+    """Project the local shelf shares as wishlist entries per member."""
+    handler.send_json(200, _wishlist_view(load_state_view()))
+
+
+@route("POST", "/api/v2/household/wishlist", spec="handlers.household.household_wishlist_share")
+def household_wishlist_share(handler, payload):
+    """Share a filtered shelf list as wishlist entries (names, not files)."""
+    body = _body(payload)
+    member_id = _required_text(body, "member_id")
+    state = load_state_view()
+    games = state.get("games") or []
+    requested = body.get("game_ids")
+    if requested is None:
+        requested = [
+            str(game.get("game_id") or "")
+            for game in games
+            if game.get("manual_entry") or game.get("shelf")
+        ][:MAX_WISHLIST_ITEMS]
+    if not isinstance(requested, list):
+        raise BadRequest("game_ids must be a list.", code="HOUSEHOLD_INVALID_FIELD")
+    items = _clean_wishlist_items(requested, games)
+
+    def mutate(current):
+        household = current.setdefault("household", {})
+        wishlists = household.setdefault("wishlists", {})
+        if not isinstance(wishlists, dict) or len(wishlists) > MAX_WISHLIST_MEMBERS:
+            wishlists = {}
+            household["wishlists"] = wishlists
+        wishlists[member_id] = {
+            "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "items": items,
+        }
+        return _wishlist_view(current)
+
+    try:
+        view = transact_state(mutate)[1]
+    except SyncValidationError as error:
+        raise BadRequest(str(error), code="HOUSEHOLD_INVALID_FIELD") from error
+    broadcast_event("household.changed", {"event": "wishlist", "member_id": member_id})
+    handler.send_json(200, view)

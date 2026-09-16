@@ -108,14 +108,14 @@ class CheckTestsFloorConstants(unittest.TestCase):
                 ccc, "measure_changed_lines", return_value=(hit, 100, ["sample.py"])
             ):
                 failures = []
-                check_tests._check_changed_line_floor(Path("coverage"), failures)
+                check_tests._check_changed_line_floor(Path("coverage"), "base", failures)
                 self.assertEqual(bool(failures), expected_failure)
 
     def test_coverage_floors_ratcheted(self):
         import importlib
         check_tests = importlib.import_module("scripts.check_tests")
         self.assertEqual(check_tests.COVERAGE_FLOOR, 83.0)
-        self.assertEqual(check_tests.WEB_APP_FLOOR, 58.0)
+        self.assertEqual(check_tests.WEB_APP_FLOOR, 73.0)
         self.assertEqual(check_tests.CHANGED_LINE_FLOOR, 95.0)
         self.assertEqual(check_tests.NEW_MODULE_FLOOR, 85.0)
 

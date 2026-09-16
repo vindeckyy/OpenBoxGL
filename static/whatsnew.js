@@ -1,6 +1,7 @@
 /* What's New + rotating tips (S8). Keep the release surface local and dismissible. */
 import { $, escapeHtml } from './util.js';
 import { t } from './i18n.js';
+import { openDialog } from './dialogs.js';
 
 const TIPS = [
   'whats_new.tip_search',
@@ -50,7 +51,7 @@ function render() {
 function openWhatsNew() {
   tipIndex = loadTipIndex();
   render();
-  if (!dialog.open) dialog.showModal();
+  if (!dialog.open) openDialog(dialog);
 }
 
 function initWhatsNew() {

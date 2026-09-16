@@ -66,8 +66,32 @@ jobs:
       - name: Compile native host
         run: gcc -O2 native_host.c -o /tmp/native_host_check $(pkg-config --cflags --libs webkit2gtk-4.1)
 
-      - name: Run test suite
-        run: ./run_all_tests.sh
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # actions/setup-node@v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+
+      - name: Install gate tooling
+        run: |
+          python3 -m venv .venv-dev
+          .venv-dev/bin/pip install --disable-pip-version-check -r requirements-dev.txt
+          npm ci --ignore-scripts --prefix scripts
+
+      - name: Version sync
+        run: python3 scripts/check_version_sync.py
+
+      # `make check` equivalent: lint, contract/version/docs gates, the full
+      # suite under coverage, and the coverage floors. A tag may only publish
+      # artifacts that survive the same gate as a pull request.
+      - name: Full verification gate
+        run: python3 scripts/check_tests.py
 
       - name: Build AppImage
         env:
@@ -176,7 +200,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install signing dependency
-        run: python3 -m pip install --disable-pip-version-check cryptography==50.0.0
+        # Keep this pin identical to requirements-dev.txt; two signer builds
+        # with different cryptography versions is a release risk (P3-2).
+        run: python3 -m pip install --disable-pip-version-check cryptography==50.0.1
 
       - name: Sign and verify release artifacts
         env:

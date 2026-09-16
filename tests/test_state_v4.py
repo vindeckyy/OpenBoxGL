@@ -145,6 +145,10 @@ class FastPathTests(unittest.TestCase):
             loaded = store.load()
             self.assertEqual(loaded["queue"], [])
             self.assertEqual(loaded["notifications"], [])
+            # Reads repair in memory only; the next mutation persists the repair.
+            persisted = json.loads(path.read_text())
+            self.assertEqual(persisted["queue"], "oops")
+            store.update(lambda state: None)
             persisted = json.loads(path.read_text())
             self.assertEqual(persisted["queue"], [])
             self.assertEqual(persisted["notifications"], [])
@@ -162,8 +166,9 @@ class FastPathTests(unittest.TestCase):
             loaded = store.load()
             self.assertEqual(loaded["games"][0]["tags"], [])
             self.assertNotIn("tags", loaded["games"][1])
-            persisted = json.loads(path.read_text())
-            self.assertEqual(persisted["games"][0]["tags"], [])
+            self.assertEqual(json.loads(path.read_text())["games"][0]["tags"], "RPG")
+            store.update(lambda state: None)
+            self.assertEqual(json.loads(path.read_text())["games"][0]["tags"], [])
 
     def test_fast_path_repairs_oversized_collections(self):
         state = default_state()
@@ -643,7 +648,7 @@ class StoreInternalsTests(unittest.TestCase):
                 store.update(lambda state: state["settings"].update({"n": 2}))
             self.assertTrue(store.path.is_file())
 
-    def test_ensure_loaded_normalizes_stale_on_disk_state(self):
+    def test_ensure_loaded_normalizes_stale_state_in_memory_only(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "library.json"
             legacy = {
@@ -658,8 +663,11 @@ class StoreInternalsTests(unittest.TestCase):
             store = JsonStateStore(path)
             game = store.get_game_by_id("game-aaa")
             self.assertEqual(game["name"], "Alpha")
-            persisted = json.loads(path.read_text())
-            self.assertEqual(persisted["schema_version"], STATE_SCHEMA_VERSION)
+            # Reads must not rewrite the file (a full disk must not break GETs);
+            # the next mutation persists the migration.
+            self.assertEqual(json.loads(path.read_text())["schema_version"], 3)
+            store.update(lambda state: None)
+            self.assertEqual(json.loads(path.read_text())["schema_version"], STATE_SCHEMA_VERSION)
 
     def test_snapshot_limit_zero_skips_rotation(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -770,6 +778,47 @@ class StoreInternalsTests(unittest.TestCase):
             fake_dir.glob = mock.Mock(return_value=[bad])
             with mock.patch.object(store, "snapshots_dir", fake_dir):
                 self.assertEqual(store.snapshots(), [])
+
+
+class ReadPathNoWriteTests(unittest.TestCase):
+    """Reads must not persist normalization (1.13.0 data-safety fix).
+
+    A GET that rewrote library.json could fail on a full or read-only disk and
+    turn a pure read into an error; the next real mutation persists instead.
+    """
+
+    def _legacy_store(self, directory):
+        path = Path(directory) / "library.json"
+        path.write_text(json.dumps(v3_state()))
+        return JsonStateStore(path), path
+
+    def test_load_does_not_write_when_normalizing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store, path = self._legacy_store(directory)
+            before = path.read_text()
+            with mock.patch.object(store, "_write_unlocked", side_effect=AssertionError("read wrote state")):
+                loaded = store.load()
+            self.assertEqual(loaded["schema_version"], STATE_SCHEMA_VERSION)
+            self.assertEqual(path.read_text(), before)
+
+    def test_load_readonly_does_not_write_when_normalizing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store, path = self._legacy_store(directory)
+            before = path.read_text()
+            with mock.patch.object(store, "_write_unlocked", side_effect=AssertionError("read wrote state")):
+                view = store.load_readonly()
+            self.assertEqual(view["schema_version"], STATE_SCHEMA_VERSION)
+            self.assertEqual(path.read_text(), before)
+
+    def test_mutation_persists_normalization(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store, path = self._legacy_store(directory)
+            with mock.patch.object(store, "_write_unlocked", wraps=store._write_unlocked) as spy:
+                store.update(lambda state: state.setdefault("settings", {}).update({"locale": "de"}))
+            self.assertGreaterEqual(spy.call_count, 1)
+            persisted = json.loads(path.read_text())
+            self.assertEqual(persisted["schema_version"], STATE_SCHEMA_VERSION)
+            self.assertEqual(persisted["settings"]["locale"], "de")
 
 
 if __name__ == "__main__":

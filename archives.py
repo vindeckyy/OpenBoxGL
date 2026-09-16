@@ -7,6 +7,7 @@ import stat
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import zipfile
 from pathlib import Path
@@ -16,6 +17,11 @@ MAX_ARCHIVE_MEMBERS = 25_000
 MAX_ARCHIVE_MEMBER_BYTES = 2 * 1024 * 1024 * 1024
 MAX_ARCHIVE_TOTAL_BYTES = 8 * 1024 * 1024 * 1024
 MAX_ARCHIVE_LISTING_BYTES = 16 * 1024 * 1024
+ARCHIVE_CACHE_TREES_ENV = "OPENBOX_ARCHIVE_CACHE_MAX_TREES"
+MAX_ARCHIVE_CACHE_TREES = 32
+
+_EXTRACTION_LOCKS: dict[str, threading.Lock] = {}
+_EXTRACTION_LOCKS_GUARD = threading.Lock()
 
 
 def _snapshot_archive(archive, directory):
@@ -92,6 +98,57 @@ def extraction_dir(archive, cache_root):
     stat = archive.stat()
     digest = hashlib.sha256(f"{archive.resolve()}:{stat.st_size}:{stat.st_mtime_ns}".encode()).hexdigest()[:20]
     return cache_root / digest
+
+
+def _extraction_lock(destination):
+    key = str(destination)
+    with _EXTRACTION_LOCKS_GUARD:
+        lock = _EXTRACTION_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _EXTRACTION_LOCKS[key] = lock
+        return lock
+
+
+def _archive_cache_limit():
+    raw = os.environ.get(ARCHIVE_CACHE_TREES_ENV, "").strip()
+    if not raw:
+        return MAX_ARCHIVE_CACHE_TREES
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return MAX_ARCHIVE_CACHE_TREES
+
+
+def prune_extraction_cache(cache_root, keep=None, keep_current=None):
+    """Drop the oldest promoted extraction trees, keeping ``keep`` newest.
+
+    ``OPENBOX_ARCHIVE_CACHE_MAX_TREES`` overrides the default bound.  Staging
+    trees (leading dot) and trees without a ``.complete`` marker are ignored;
+    ``keep_current`` is never removed even when it falls outside the bound.
+    """
+    root = Path(cache_root)
+    if not root.is_dir():
+        return 0
+    limit = max(1, int(keep if keep is not None else _archive_cache_limit()))
+    candidates = []
+    for entry in root.iterdir():
+        if entry.name.startswith(".") or entry.is_symlink() or not entry.is_dir():
+            continue
+        if not (entry / ".complete").is_file():
+            continue
+        try:
+            candidates.append((entry.stat().st_mtime_ns, entry))
+        except OSError:
+            continue
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    removed = 0
+    for _, entry in candidates[limit:]:
+        if keep_current is not None and entry == keep_current:
+            continue
+        shutil.rmtree(entry, ignore_errors=True)
+        removed += 1
+    return removed
 
 
 def safe_zip_extract(
@@ -268,48 +325,69 @@ def extract_game(archive_path, cache_root, member=""):
     if archive.is_symlink():
         raise ValueError("Archive source is a symlink.")
     destination = extraction_dir(archive, Path(cache_root))
-    complete = destination / ".complete"
     if destination.is_symlink():
         raise ValueError("Archive cache destination is a symlink.")
-    if not complete.is_file():
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        staging = Path(tempfile.mkdtemp(prefix=f".{destination.name}.extracting-", dir=destination.parent))
-        snapshot = None
+    extracted = False
+    with _extraction_lock(destination):
+        complete = destination / ".complete"
+        if not complete.is_file():
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            staging = Path(tempfile.mkdtemp(prefix=f".{destination.name}.extracting-", dir=destination.parent))
+            snapshot = None
+            try:
+                if archive.suffix.lower() == ".zip":
+                    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+                    source_fd = os.open(archive, flags)
+                    try:
+                        source_info = os.fstat(source_fd)
+                        if not stat.S_ISREG(source_info.st_mode):
+                            raise ValueError("Archive source must be a regular file.")
+                        if source_info.st_size > MAX_ARCHIVE_TOTAL_BYTES:
+                            raise ValueError("Archive source is too large.")
+                        with os.fdopen(source_fd, "rb") as source_file:
+                            source_fd = -1
+                            safe_zip_extract(source_file, staging)
+                    finally:
+                        if source_fd >= 0:
+                            os.close(source_fd)
+                else:
+                    snapshot = _snapshot_archive(archive, destination.parent)
+                    extractor = shutil.which("7z") or shutil.which("7zz")
+                    if not extractor:
+                        raise FileNotFoundError("7z or 7zz is required to extract this archive.")
+                    validate_7z_paths(extractor, snapshot)
+                    subprocess.run(
+                        [extractor, "x", "-y", "-snl-", "-snh-", f"-o{staging}", str(snapshot)],
+                        check=True, capture_output=True, timeout=300,
+                    )
+                _validate_extracted_tree(staging)
+                (staging / ".complete").touch()
+                if (destination / ".complete").is_file():
+                    # Another process promoted a complete tree while this one
+                    # extracted; keep the winner and discard the staging copy.
+                    shutil.rmtree(staging, ignore_errors=True)
+                else:
+                    # An existing tree without ``.complete`` is a partial tree
+                    # from an interrupted run; replace it rather than reusing it.
+                    try:
+                        shutil.rmtree(destination, ignore_errors=True)
+                        staging.replace(destination)
+                    except OSError:
+                        if not (destination / ".complete").is_file():
+                            raise
+                        shutil.rmtree(staging, ignore_errors=True)
+                    else:
+                        extracted = True
+            except Exception:
+                shutil.rmtree(staging, ignore_errors=True)
+                raise
+            finally:
+                if snapshot is not None:
+                    snapshot.unlink(missing_ok=True)
+        selected = choose_game_file(destination, member)
+    if extracted:
         try:
-            if archive.suffix.lower() == ".zip":
-                flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
-                source_fd = os.open(archive, flags)
-                try:
-                    source_info = os.fstat(source_fd)
-                    if not stat.S_ISREG(source_info.st_mode):
-                        raise ValueError("Archive source must be a regular file.")
-                    if source_info.st_size > MAX_ARCHIVE_TOTAL_BYTES:
-                        raise ValueError("Archive source is too large.")
-                    with os.fdopen(source_fd, "rb") as source_file:
-                        source_fd = -1
-                        safe_zip_extract(source_file, staging)
-                finally:
-                    if source_fd >= 0:
-                        os.close(source_fd)
-            else:
-                snapshot = _snapshot_archive(archive, destination.parent)
-                extractor = shutil.which("7z") or shutil.which("7zz")
-                if not extractor:
-                    raise FileNotFoundError("7z or 7zz is required to extract this archive.")
-                validate_7z_paths(extractor, snapshot)
-                subprocess.run(
-                    [extractor, "x", "-y", "-snl-", "-snh-", f"-o{staging}", str(snapshot)],
-                    check=True, capture_output=True, timeout=300,
-                )
-            _validate_extracted_tree(staging)
-            (staging / ".complete").touch()
-            if destination.exists():
-                shutil.rmtree(destination)
-            staging.replace(destination)
-        except Exception:
-            shutil.rmtree(staging, ignore_errors=True)
-            raise
-        finally:
-            if snapshot is not None:
-                snapshot.unlink(missing_ok=True)
-    return choose_game_file(destination, member)
+            prune_extraction_cache(destination.parent, keep_current=destination)
+        except OSError:
+            pass
+    return selected

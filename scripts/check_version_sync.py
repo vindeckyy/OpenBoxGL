@@ -38,11 +38,8 @@ def runtime_version():
     return match.group(1)
 
 
-def main() -> int:
-    version = runtime_version()
-    if not version:
-        return 1
-    print(f"declared version: {version}")
+def check(version: str) -> list[str]:
+    """Return the list of published spots that disagree with ``version``."""
     failures = []
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -119,6 +116,15 @@ def main() -> int:
         if not sbom_default or sbom_default.group(1) != version:
             print(f"gen_sbom.py: fallback DEFAULT_VERSION is {sbom_default.group(1) if sbom_default else 'missing'}, expected {version}")
             failures.append("gen_sbom DEFAULT_VERSION")
+    return failures
+
+
+def main() -> int:
+    version = runtime_version()
+    if not version:
+        return 1
+    print(f"declared version: {version}")
+    failures = check(version)
     if failures:
         print(f"version sync failed: {', '.join(failures)}")
         return 1

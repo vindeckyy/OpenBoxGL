@@ -6,6 +6,7 @@ from urllib.parse import parse_qs
 
 from api_errors import BadRequest, PreviewExpired, PreviewNotFound
 from openbox import load_state
+from pkg.parity.parity_setup_checklist import build_checklists
 from pkg.parity.parity_setup_preview import (
     DEFAULT_ITEMS_LIMIT,
     MAX_ITEMS_LIMIT,
@@ -55,6 +56,10 @@ class SetupHandlers:
     @route("GET", "/api/v2/setup/summary")
     def _api_get_api_v2_setup_summary(self, parsed):
         self.send_json(200, compute_summary(state=load_state()))
+
+    @route("GET", "/api/v2/setup/checklists")
+    def _api_get_api_v2_setup_checklists(self, parsed):
+        self.send_json(200, build_checklists(load_state()))
 
     @route("POST", "/api/v2/setup/preview")
     def _api_post_api_v2_setup_preview(self, payload):

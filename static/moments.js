@@ -4,12 +4,13 @@
    dialogs and library rendering as dynamic/event-driven dependencies so the
    existing navigation modules remain the first writers for their hotkeys.
 */
-import { $, escapeHtml } from './util.js';
-import { AppState, api, media, notify, token } from './state.js';
+import { $, escapeHtml, formatDate as formatTimestamp } from './util.js';
+import { AppState, api, media, notify, token, notifyError } from './state.js';
 import { t } from './i18n.js';
 
 const MILESTONE_SECONDS = [3600, 5 * 3600, 10 * 3600, 25 * 3600, 50 * 3600, 100 * 3600];
 const autoCaptureInFlight = new Set();
+const momentOfferShown = new Set();
 let previousSnapshots = null;
 
 function stableGameId(game) {
@@ -45,12 +46,10 @@ function autoMomentTrigger(previous, current) {
 }
 
 function formatDate(value) {
+  // Shared util formatter keeps moments cards in step with the rest of the
+  // app (locale + localechange); only the empty state is moments-specific.
   if (!value) return t('moments.date_unknown');
-  try {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
-  } catch {
-    return String(value).replace('T', ' ');
-  }
+  return formatTimestamp(value);
 }
 
 function triggerLabel(trigger) {
@@ -195,7 +194,7 @@ async function shareMoment(moment, game) {
       notify(t('moments.share_downloaded'));
       return true;
     } catch (error) {
-      notify(error.message || t('moments.share_unavailable'));
+      notifyError(error, t('moments.share_unavailable'));
       return false;
     }
   }
@@ -247,7 +246,7 @@ async function captureMoment(gameOrOptions, options = {}) {
     if (!settings.silent) notify(item.screenshot ? t('moments.captured') : t('moments.saved_note'));
     return item;
   } catch (error) {
-    if (!settings.silent) notify(error.message || t('moments.capture_failed'));
+    if (!settings.silent) notifyError(error, t('moments.capture_failed'));
     return null;
   }
 }
@@ -384,7 +383,7 @@ async function mountMomentsPanel(gameOrId, host) {
       }
       await mountMomentsPanel(game, host);
     } catch (error) {
-      notify(error.message || t('moments.capture_failed'));
+      notifyError(error, t('moments.capture_failed'));
     }
   }));
 }
@@ -408,7 +407,7 @@ async function mountResumeAffordance(gameOrId, host) {
       try {
         await api('/api/v2/resume', { method: 'POST', body: JSON.stringify({ game_id: stableGameId(game) }) });
         notify(t('moments.resume_started'));
-      } catch (error) { notify(error.message || t('moments.resume_unavailable')); }
+      } catch (error) { notifyError(error, t('moments.resume_unavailable')); }
     };
     host.appendChild(button);
   } catch { /* unsupported adapters have no affordance */ }
@@ -426,7 +425,30 @@ async function openMoment(momentId) {
     if (!gameId) throw new Error(t('moments.game_missing'));
     document.dispatchEvent(new CustomEvent('app:show-game', { detail: { gameId } }));
     setTimeout(() => document.getElementById('momentsTab')?.click(), 0);
-  } catch (error) { notify(error.message || t('moments.capture_failed')); }
+  } catch (error) { notifyError(error, t('moments.capture_failed')); }
+}
+
+async function offerMomentCapture(game, trigger) {
+  // One "Capture this moment?" offer per game/trigger. The server runs the
+  // same auto_moment_trigger rules; a request failure falls back to the
+  // client-computed trigger so the offer still appears offline.
+  let suggested = true;
+  try {
+    const previous = previousSnapshots?.get(stableGameId(game)) || {};
+    const result = await api(`/api/v2/moments/auto-suggest?game_id=${encodeURIComponent(stableGameId(game))}&previous=${encodeURIComponent(JSON.stringify(previous))}`);
+    suggested = Boolean(result?.suggested);
+    if (result?.trigger) trigger = result.trigger;
+  } catch { /* offline: keep the local trigger */ }
+  if (!suggested || !trigger) return null;
+  const { confirmAction } = await import('./dialogs.js');
+  const ok = await confirmAction({
+    title: t('moments.offer_title'),
+    message: t('moments.offer_message', { name: game?.name || t('moments.tab') }),
+    confirmLabel: t('moments.capture'),
+  });
+  if (!ok) return null;
+  return captureMoment(game, { trigger, note: t(`moments.auto_${trigger}`), silent: true })
+    .then(item => item && notify(item.screenshot ? t('moments.captured') : t('moments.saved_note')));
 }
 
 document.addEventListener('app:state-refreshed', () => {
@@ -439,10 +461,17 @@ document.addEventListener('app:state-refreshed', () => {
   for (const game of AppState.games) {
     const gameId = stableGameId(game);
     const trigger = autoMomentTrigger(previousSnapshots.get(gameId), game);
-    if (!enabled || !trigger || autoCaptureInFlight.has(gameId)) continue;
-    autoCaptureInFlight.add(gameId);
-    captureMoment(game, { trigger, note: t(`moments.auto_${trigger}`), silent: true })
-      .finally(() => autoCaptureInFlight.delete(gameId));
+    if (!trigger || autoCaptureInFlight.has(gameId)) continue;
+    if (enabled) {
+      autoCaptureInFlight.add(gameId);
+      captureMoment(game, { trigger, note: t(`moments.auto_${trigger}`), silent: true })
+        .finally(() => autoCaptureInFlight.delete(gameId));
+      continue;
+    }
+    const offerKey = `${gameId}:${trigger}`;
+    if (momentOfferShown.has(offerKey)) continue;
+    momentOfferShown.add(offerKey);
+    offerMomentCapture(game, trigger).catch(() => {});
   }
   previousSnapshots = current;
 });

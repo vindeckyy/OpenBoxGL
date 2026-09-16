@@ -1,7 +1,6 @@
 """PickerHandlers — "What should I play?" suggestions."""
 from __future__ import annotations
 
-from openbox import load_state_readonly
 from pkg.parity.parity_picker import pick_games
 from routes.registry import route
 
@@ -54,7 +53,9 @@ class PickerHandlers:
             raise BadRequest(f"scope must be one of {sorted(VALID_SCOPES)}")
         scope_name = str(body.get("scope_name", "")).strip()
 
-        state = load_state_readonly()
+        from webapp_state import load_state_view
+
+        state = load_state_view()
         # Pass raw game dicts to pick_games (it does safe .get() with
         # defaults); skip _game_for_picker projection to avoid 10k throwaway
         # dicts. Filter hidden games early for the "all" scope.

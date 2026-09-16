@@ -3,9 +3,26 @@
     "id": "openbox.library-stats",
     "name": "Library Stats Hook",
     "version": "1.0.0",
-    "description": "Example after_session hook that keeps library statistics compatible with plugin workflows.",
+    "api_version": 1,
+    "description": "Example after_session hook that keeps library statistics compatible with plugin workflows. Local-only: install the directory or a ZIP with POST /api/plugins/install, or via the Plugins manager.",
     "url": "",
+    "sha256": "",
     "hooks": ["after_session"],
+    "commands": [],
+    "local_only": true
+  },
+  {
+    "id": "openbox.hello-palette",
+    "name": "Hello Palette",
+    "version": "1.0.0",
+    "api_version": 1,
+    "description": "Example command plugin: declares one palette command and returns a notification. Local-only until the community catalog hosts a signed package; install from a local directory or ZIP.",
+    "url": "",
+    "sha256": "",
+    "hooks": ["command"],
+    "commands": [
+      {"id": "hello", "label": "Hello from a plugin", "description": "Posts a notification from the sandboxed runner."}
+    ],
     "local_only": true
   }
 ]

@@ -10,7 +10,6 @@ import queue as queue_module
 import secrets
 import signal
 import socket
-import subprocess
 import sys
 import threading
 import time
@@ -19,14 +18,13 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pkg.parity  # noqa: F401  # register flat-import finder before parity_* imports
-from api_errors import ApiError, BadRequest, RouteNotFound
+from api_errors import ApiError, BadRequest, RangeParseError, RouteNotFound
 from env_config import bootstrap_env
 from openbox_logging import configure_logging
 from openbox import DATA, load_state, purge_demo_games, update_state
 from parity_backup import AUTO_BACKUP_ITEMS, AUTO_BACKUP_KEEP, auto_backup_due, create_backup, restore_backup
 from parity_deeplinks import handle_cli
 from parity_emulator_defs import merge_profiles_from_definitions
-from parity_gameyfin import GameyfinError
 from parity_gamescope import OPENBOX_STEAM_GAME_ID, is_gamescope_guest, mark_process_windows, open_ui
 from routes import dispatch_get, dispatch_post
 from routes.registry import route
@@ -138,6 +136,10 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
     protocol_version = "HTTP/1.1"
     MAX_BODY = 65536
     REQUEST_TIMEOUT = 30
+    # Total wall-clock budget for one request. A handler that exceeds it has
+    # its connection shut down so a runaway request cannot pin a connection
+    # thread forever; SSE streams opt out because they are long-lived (P2-15).
+    REQUEST_DEADLINE = float(os.environ.get("OPENBOX_REQUEST_DEADLINE", "120"))
 
     def setup(self):
         super().setup()
@@ -147,6 +149,39 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
             self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1024 * 1024)
         except (OSError, AttributeError):
             pass
+
+    def _cancel_request_deadline(self):
+        timer = getattr(self, "_request_deadline_timer", None)
+        if timer is not None:
+            timer.cancel()
+            self._request_deadline_timer = None
+
+    def _arm_request_deadline(self):
+        self._cancel_request_deadline()
+        if self.REQUEST_DEADLINE <= 0 or getattr(self, "_request_deadline_disabled", False):
+            return
+        timer = threading.Timer(self.REQUEST_DEADLINE, self._request_deadline_expired)
+        timer.daemon = True
+        self._request_deadline_timer = timer
+        timer.start()
+
+    def _request_deadline_expired(self):
+        try:
+            self.close_connection = True
+            self.connection.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+
+    def handle_one_request(self):
+        self._arm_request_deadline()
+        try:
+            return super().handle_one_request()
+        finally:
+            self._cancel_request_deadline()
+
+    def finish(self):
+        self._cancel_request_deadline()
+        return super().finish()
 
     def log_message(self, *_):
         pass
@@ -226,15 +261,18 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         range_header = headers.get("Range", "")
         if range_header.startswith("bytes="):
             spec = range_header[6:].split(",", 1)[0].strip()
-            if "-" not in spec:
-                raise ValueError("Invalid byte range.")
-            left, right = spec.split("-", 1)
-            if left:
-                start = int(left)
-                end = int(right) if right else end
-            elif right:
-                length = int(right)
-                start = max(0, size - length)
+            try:
+                if "-" not in spec:
+                    raise RangeParseError("Invalid byte range.")
+                left, right = spec.split("-", 1)
+                if left:
+                    start = int(left)
+                    end = int(right) if right else end
+                elif right:
+                    length = int(right)
+                    start = max(0, size - length)
+            except ValueError as error:
+                raise RangeParseError("Invalid byte range.") from error
             if start < 0 or start >= size or end < start:
                 self.send_response(416)
                 self.headers_common(content_type or "application/octet-stream", cache_control=request_cache_control, frameable=frameable)
@@ -375,6 +413,11 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
                 self.send_json(403, {"error": "Unauthorized"})
 
     def body(self):
+        if self.headers.get("Transfer-Encoding", "").strip():
+            # The body reader only understands Content-Length. Left unhandled,
+            # chunked bytes stay in the socket and desync the next keep-alive
+            # request instead of failing cleanly.
+            raise ValueError("Transfer-Encoding is not supported.")
         raw_length = self.headers.get("Content-Length", "0")
         try:
             length = int(raw_length)
@@ -393,10 +436,18 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         parsed = urlparse(self.path)
         try:
             dispatch_get(self, parsed)
-        except ApiError:
+        except (ApiError, StateCorruptError):
+            # Structured errors keep their own status/code, and
+            # StateCorruptError (a RuntimeError) must reach _handle_request's
+            # 503 STATE_UNAVAILABLE for the recovery UI.
             raise
-        except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError, json.JSONDecodeError, GameyfinError, FileNotFoundError, RuntimeError, subprocess.SubprocessError) as error:
-            LOGGER.warning("Request %s failed: %s", parsed.path, error)
+        except ValueError as error:
+            # ValueError is the validation signal; it is the only unstructured
+            # failure that belongs to the caller. Server bugs
+            # (KeyError/AttributeError/RuntimeError/OSError/...) fall through to
+            # _handle_request, which logs a traceback and answers 500 with a
+            # request id (P1-19).
+            LOGGER.warning("Request %s rejected: %s", parsed.path, error)
             raise BadRequest(_sanitize_error_message(error)) from None
 
     @route("GET", ["/", "/index.html"], public=True)
@@ -485,7 +536,17 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
                 self.send_bytes(200, icon.read_bytes(), "image/svg+xml")
     @route("GET", "/api/events")
     def _api_get_api_events(self, parsed):
+        self._request_deadline_disabled = True
         subscriber_queue = queue_module.Queue(maxsize=SSE_QUEUE_SIZE)
+        if not register_event_subscriber(subscriber_queue):
+            # The subscriber cap was reached; answer before the SSE headers so
+            # the client reconnects with backoff instead of believing it is
+            # connected to a stream that will only send heartbeats.
+            self.send_json(503, {
+                "error": "Too many live event streams; retry shortly.",
+                "code": "SSE_BUSY",
+            })
+            return
         try:
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -497,7 +558,6 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
             self.send_header("Content-Security-Policy", CSP_DEFAULT)
             self.send_header("X-Frame-Options", "DENY")
             self.end_headers()
-            register_event_subscriber(subscriber_queue)
             self.connection.settimeout(SSE_WRITE_TIMEOUT)
             while True:
                 try:
@@ -528,10 +588,14 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
                 raise ValueError("Request body must be a JSON object.")
             route = urlparse(self.path).path
             dispatch_post(self, route, payload)
-        except ApiError:
+        except (ApiError, StateCorruptError):
+            # See _do_GET: structured errors and the 503 recovery contract pass
+            # through untouched.
             raise
-        except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError, json.JSONDecodeError, GameyfinError, FileNotFoundError, RuntimeError, subprocess.SubprocessError) as error:
-            LOGGER.warning("Request %s failed: %s", urlparse(self.path).path, error)
+        except ValueError as error:
+            # See _do_GET: only validation errors are client mistakes; real
+            # server failures must surface as 500 INTERNAL_ERROR (P1-19).
+            LOGGER.warning("Request %s rejected: %s", urlparse(self.path).path, error)
             raise BadRequest(_sanitize_error_message(error)) from None
 
     def _loopback_host(self):
@@ -627,6 +691,44 @@ def _auto_backup_worker():
         _auto_backup_tick()
 
 
+MAX_CONNECTION_THREADS = max(1, int(os.environ.get("OPENBOX_MAX_CONNECTION_THREADS", "64")))
+
+
+class BoundedThreadingHTTPServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer with a fixed connection-thread budget (P2-15).
+
+    ``ThreadingMixIn`` spawns one unbounded thread per accepted socket. The
+    semaphore applies backpressure through the listen backlog once the budget
+    is exhausted, and each handler additionally arms a total-request deadline.
+    """
+
+    daemon_threads = True
+    request_queue_size = 128
+
+    def __init__(self, *args, max_connection_threads=MAX_CONNECTION_THREADS, **kwargs):
+        self._connection_slots = threading.BoundedSemaphore(int(max_connection_threads))
+        super().__init__(*args, **kwargs)
+
+    def process_request(self, request, client_address):
+        self._connection_slots.acquire()
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._connection_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._connection_slots.release()
+
+
+# Keep the historical module-level name so embedding code and tests that patch
+# ``web_app.ThreadingHTTPServer`` still intercept server construction.
+ThreadingHTTPServer = BoundedThreadingHTTPServer
+
+
 def main():
     bootstrap_env(DATA.parent)
     configure_logging(DATA.parent)
@@ -656,7 +758,21 @@ def main():
         purge_demo_games(state)
         profiles = state.setdefault("profiles", {})
         profiles.update(merge_profiles_from_definitions(profiles))
-    update_state(bootstrap_state)
+    # A corrupt library.json must not prevent the server from starting: the
+    # recovery UI needs a live server to offer .bak/snapshot restore. Most
+    # routes answer 503 STATE_UNAVAILABLE until recovery succeeds.
+    try:
+        update_state(bootstrap_state)
+    except StateCorruptError as error:
+        state_healthy = False
+        LOGGER.error("Library data needs recovery; starting in recovery mode: %s", error)
+        print(
+            "OpenBox: library data needs recovery; starting in recovery mode "
+            f"({DATA}). Open Settings or the error banner to restore a backup.",
+            flush=True,
+        )
+    else:
+        state_healthy = True
     # Reconcile persisted active_sessions from previous run (Days 0-14, Task 3).
     # Must run once before watchers/jobs start, inside a transaction so .bak/snapshots stay consistent.
     try:
@@ -680,15 +796,22 @@ def main():
                     LOGGER.exception("Failed to reattach persisted session %s", _sess.get("launch_id", ""))
     except Exception:
         LOGGER.exception("Session reconciliation failed; continuing with empty active_sessions")
-    WATCH_STOP.clear()
-    JOB_MANAGER.submit("auto-import", auto_import_worker)
-    threading.Thread(target=_auto_backup_worker, name="auto-backup", daemon=True).start()
+    if state_healthy:
+        WATCH_STOP.clear()
+        JOB_MANAGER.submit("auto-import", auto_import_worker)
+        threading.Thread(target=_auto_backup_worker, name="auto-backup", daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    run_configured_commands("startup_commands")
+    try:
+        run_configured_commands("startup_commands")
+    except StateCorruptError:
+        LOGGER.error("Startup commands skipped while library data needs recovery")
     port = server.server_address[1]
     secure_text_write(DATA.parent / "server.port", str(port))
     secure_text_write(DATA.parent / "server.token", TOKEN)
-    _settings = load_state().get("settings", {})
+    try:
+        _settings = load_state().get("settings", {})
+    except StateCorruptError:
+        _settings = {}
     secure_text_write(
         DATA.parent / "native-host-flags",
         f"{int(bool(_settings.get('tray_enabled')))} {int(bool(_settings.get('minimize_to_tray')))}\n",

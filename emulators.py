@@ -1,11 +1,26 @@
 """Install and configure supported Linux emulators."""
 
+import copy
 import shlex
 import shutil
 import subprocess
+import threading
+import time
 
 from pkg.parity.parity_emulator_defs import EMULATORS, PLATFORM_EMULATORS
 from parity_import import recommend_emulators
+
+# ``flatpak info`` costs a subprocess per app; a short TTL keeps the status
+# endpoint and the install/update loops from re-spawning it repeatedly
+# (P2-10).
+STATUS_TTL = 30.0
+_STATUS_CACHE: dict = {"at": 0.0, "result": None}
+_STATUS_LOCK = threading.Lock()
+
+
+def invalidate_status_cache() -> None:
+    with _STATUS_LOCK:
+        _STATUS_CACHE.update({"at": 0.0, "result": None})
 
 
 def commands_for(app_id, prefix):
@@ -15,7 +30,15 @@ def commands_for(app_id, prefix):
     }
 
 
-def emulator_status(run=subprocess.run, which=shutil.which):
+def emulator_status(run=subprocess.run, which=shutil.which, *, refresh=False):
+    # Only cache the default probes; injected runners are test/dev doubles.
+    cacheable = run is subprocess.run and which is shutil.which
+    now = time.monotonic()
+    if cacheable and not refresh:
+        with _STATUS_LOCK:
+            cached = _STATUS_CACHE["result"]
+            if cached is not None and now - _STATUS_CACHE["at"] < STATUS_TTL:
+                return copy.deepcopy(cached)
     flatpak = which("flatpak")
     result = []
     for app_id, emulator in EMULATORS.items():
@@ -36,6 +59,9 @@ def emulator_status(run=subprocess.run, which=shutil.which):
             "can_install": bool(flatpak),
             "recommendations": PLATFORM_EMULATORS,
         })
+    if cacheable:
+        with _STATUS_LOCK:
+            _STATUS_CACHE.update({"at": now, "result": copy.deepcopy(result)})
     return result
 
 
@@ -63,17 +89,21 @@ def launch_emulator(app_id, which=shutil.which):
 
 
 def install_all_emulators(run=subprocess.run, which=shutil.which):
+    # One status listing for the whole loop instead of one per app (P2-10).
+    statuses = {item["app_id"]: item for item in emulator_status(run=run, which=which)}
     installed = []
     errors = []
     for app_id in EMULATORS:
-        status = next(item for item in emulator_status(run=run, which=which) if item["app_id"] == app_id)
-        if status["installed"]:
+        status = statuses.get(app_id)
+        if status is None or status["installed"]:
             continue
         try:
             install_emulator(app_id, run=run, which=which)
             installed.append(status["name"])
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             errors.append(f"{status['name']}: {error}")
+    if installed:
+        invalidate_status_cache()
     return {"installed": installed, "errors": errors}
 
 
@@ -87,20 +117,24 @@ def update_emulator(app_id, run=subprocess.run, which=shutil.which):
         [flatpak, "update", "--user", "--noninteractive", "-y", app_id],
         check=True, capture_output=True, text=True, timeout=1800,
     )
+    invalidate_status_cache()
     return {"updated": EMULATORS[app_id]["name"]}
 
 
 def update_all_emulators(run=subprocess.run, which=shutil.which):
+    statuses = {item["app_id"]: item for item in emulator_status(run=run, which=which)}
     updated, errors = [], []
     for app_id in EMULATORS:
-        status = next(item for item in emulator_status(run=run, which=which) if item["app_id"] == app_id)
-        if not status["installed"] or status["mode"] != "flatpak":
+        status = statuses.get(app_id)
+        if status is None or not status["installed"] or status["mode"] != "flatpak":
             continue
         try:
             update_emulator(app_id, run=run, which=which)
             updated.append(status["name"])
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             errors.append(f"{status['name']}: {error}")
+    if updated:
+        invalidate_status_cache()
     return {"updated": updated, "errors": errors}
 
 
@@ -135,4 +169,5 @@ def install_emulator(app_id, run=subprocess.run, which=shutil.which):
             f"Flatpak could not install {EMULATORS[app_id]['name']}. "
             + (f"flatpak says: {detail}" if detail else "Check network access to flathub.org.")
         )
+    invalidate_status_cache()
     return commands_for(app_id, [flatpak, "run", app_id])

@@ -124,6 +124,20 @@ def operation_items_path(job_id: str, data_path: Path | None = None) -> Path:
     return base / f"{job_id}.json"
 
 
+_ITEMS_LOCKS: dict[str, threading.Lock] = {}
+_ITEMS_LOCKS_GUARD = threading.Lock()
+
+
+def _items_lock(path: Path) -> threading.Lock:
+    key = str(path)
+    with _ITEMS_LOCKS_GUARD:
+        lock = _ITEMS_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _ITEMS_LOCKS[key] = lock
+        return lock
+
+
 def sanitize_operation_input(value) -> dict:
     """Remove secrets and tokenize absolute home paths from operation input."""
     if not isinstance(value, dict):
@@ -192,7 +206,11 @@ class OperationService:
             except Exception:
                 LOGGER.exception("Operation SSE observer failed for %s", event_name)
 
-    def _snapshot(self, record: dict) -> dict:
+    def _snapshot(self, record: dict, *, checkpoint_source=None, checkpoint_doc=None) -> dict:
+        if checkpoint_source is not None and checkpoint_source is record.get("checkpoint"):
+            copied_checkpoint = checkpoint_doc
+        else:
+            copied_checkpoint = copy.deepcopy(record.get("checkpoint"))
         doc = {
             "job_id": str(record.get("job_id") or ""),
             "root_job_id": str(record.get("root_job_id") or record.get("job_id") or ""),
@@ -213,10 +231,14 @@ class OperationService:
             "can_retry": bool(record.get("can_retry")),
             "can_resume": bool(record.get("can_resume")),
             "input": sanitize_operation_input(record.get("input") or {}),
-            "checkpoint": copy.deepcopy(record.get("checkpoint")),
+            "checkpoint": copied_checkpoint,
             "result": _normalize_result(record.get("result")),
             "error": _normalize_error(record.get("error")),
         }
+        if record.get("checkpoint") is not None:
+            # Internal marker: lets the next progress tick reuse this already
+            # detached checkpoint instead of deep-copying it again (P2-14).
+            doc["_checkpoint_source"] = record.get("checkpoint")
         if doc["total"] is not None:
             doc["total"] = int(doc["total"])
         self._refresh_capabilities(doc)
@@ -276,10 +298,19 @@ class OperationService:
                 self._order.append(job_id)
             self._order.sort(key=lambda item: self._operations[item]["updated_at"], reverse=True)
 
+    def _remove_items_file(self, job_id: str) -> None:
+        path = operation_items_path(job_id, self._data_path)
+        with _items_lock(path):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                LOGGER.warning("Failed to prune operation items for %s", job_id)
+
     def _prune_locked(self) -> None:
         cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
         finished_states = TERMINAL_STATES
         kept: list[str] = []
+        pruned: list[str] = []
         for job_id in self._order:
             doc = self._operations.get(job_id)
             if not doc:
@@ -292,16 +323,33 @@ class OperationService:
                     finished = None
                 if finished is not None and finished < cutoff:
                     self._operations.pop(job_id, None)
+                    pruned.append(job_id)
                     continue
             kept.append(job_id)
+        overflow = kept[MAX_OPERATIONS:]
         self._order = kept[:MAX_OPERATIONS]
+        for job_id in overflow:
+            self._operations.pop(job_id, None)
+            pruned.append(job_id)
+        for job_id in pruned:
+            self._remove_items_file(job_id)
+
+    def _persist_doc(self, doc: dict) -> dict:
+        """Public document shape; drops internal checkpoint reuse markers."""
+        return self._public(doc)
+
+    def _public(self, doc: dict) -> dict:
+        return {key: value for key, value in doc.items() if not key.startswith("_")}
 
     def persist(self) -> bool:
         with self._lock:
             self._prune_locked()
             payload = {
                 "version": OPERATIONS_VERSION,
-                "operations": [self._operations[job_id] for job_id in self._order if job_id in self._operations],
+                "operations": [
+                    self._persist_doc(self._operations[job_id])
+                    for job_id in self._order if job_id in self._operations
+                ],
             }
             data = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
         try:
@@ -360,7 +408,7 @@ class OperationService:
             "started_at": None,
             "finished_at": None,
             "input": sanitize_operation_input(input_data or {}),
-            "checkpoint": copy.deepcopy(checkpoint),
+            "checkpoint": checkpoint,
             "result": None,
             "error": None,
         }
@@ -379,12 +427,12 @@ class OperationService:
                 "state": snapshot["state"],
             },
         )
-        return dict(snapshot)
+        return self._public(snapshot)
 
     def get(self, job_id: str) -> dict | None:
         with self._lock:
             record = self._operations.get(job_id)
-            return dict(record) if record else None
+            return self._public(record) if record else None
 
     def list_jobs(
         self,
@@ -416,7 +464,7 @@ class OperationService:
         return {
             "cursor": cursor,
             "next_cursor": next_cursor,
-            "jobs": [dict(doc) for doc in page],
+            "jobs": [self._public(doc) for doc in page],
         }
 
     def group_jobs_by_root(self, jobs: list[dict] | None = None) -> dict[str, list[dict]]:
@@ -484,7 +532,7 @@ class OperationService:
             snapshot = self._snapshot(record)
             self._operations[job_id] = snapshot
         self.persist()
-        return dict(snapshot)
+        return self._public(snapshot)
 
     def update_progress(
         self,
@@ -495,6 +543,7 @@ class OperationService:
         total: int | None = None,
         message: str | None = None,
         checkpoint: dict | None = None,
+        checkpoint_append: dict | None = None,
         persist: bool = True,
     ) -> dict:
         phase_changed = phase is not None
@@ -511,10 +560,31 @@ class OperationService:
                 record["total"] = int(total)
             if message is not None:
                 record["message"] = message
+            if checkpoint_append is not None:
+                # Append-only checkpoint deltas: long jobs add ids instead of
+                # resending (and re-copying) the entire checkpoint each tick.
+                merged = dict(record.get("checkpoint") or {})
+                for key, values in checkpoint_append.items():
+                    existing = list(merged.get(key) or [])
+                    existing.extend(values or [])
+                    merged[key] = existing
+                checkpoint = merged
             if checkpoint is not None:
-                record["checkpoint"] = copy.deepcopy(checkpoint)
+                # ``_snapshot`` detaches the checkpoint for storage; copying
+                # here too doubled the cost of every progress tick (P2-14).
+                record["checkpoint"] = checkpoint
             record["updated_at"] = _now()
-            snapshot = self._snapshot(record)
+            previous = self._operations.get(job_id)
+            reuse_doc = None
+            reuse_source = None
+            if (
+                previous is not None
+                and record.get("checkpoint") is not None
+                and previous.get("_checkpoint_source") is record.get("checkpoint")
+            ):
+                reuse_source = record.get("checkpoint")
+                reuse_doc = previous.get("checkpoint")
+            snapshot = self._snapshot(record, checkpoint_source=reuse_source, checkpoint_doc=reuse_doc)
             self._operations[job_id] = snapshot
             should_persist = persist and self._should_persist_progress(job_id, phase_changed=phase_changed)
             should_emit = self._should_emit_progress(job_id)
@@ -532,7 +602,7 @@ class OperationService:
                     "message": snapshot["message"],
                 },
             )
-        return dict(snapshot)
+        return self._public(snapshot)
 
     def set_promote_phase(self, job_id: str, *, active: bool) -> None:
         with self._lock:
@@ -565,7 +635,7 @@ class OperationService:
             SSE_EVENT_CANCELLING,
             {"job_id": snapshot["job_id"], "state": snapshot["state"], "message": snapshot["message"]},
         )
-        return dict(snapshot)
+        return self._public(snapshot)
 
     def finish(
         self,
@@ -594,9 +664,19 @@ class OperationService:
             if message is not None:
                 record["message"] = message
             if checkpoint is not None:
-                record["checkpoint"] = copy.deepcopy(checkpoint)
+                record["checkpoint"] = checkpoint
             self._promoting.discard(job_id)
-            snapshot = self._snapshot(record)
+            previous = self._operations.get(job_id)
+            reuse_doc = None
+            reuse_source = None
+            if (
+                previous is not None
+                and record.get("checkpoint") is not None
+                and previous.get("_checkpoint_source") is record.get("checkpoint")
+            ):
+                reuse_source = record.get("checkpoint")
+                reuse_doc = previous.get("checkpoint")
+            snapshot = self._snapshot(record, checkpoint_source=reuse_source, checkpoint_doc=reuse_doc)
             self._operations[job_id] = snapshot
         self.persist()
         event = SSE_EVENT_INTERRUPTED if state == "interrupted" else SSE_EVENT_FINISHED
@@ -615,7 +695,7 @@ class OperationService:
                     "error": snapshot["error"],
                 },
             )
-        return dict(snapshot)
+        return self._public(snapshot)
 
     def retry(self, job_id: str) -> dict:
         with self._lock:
@@ -673,26 +753,27 @@ class OperationService:
     ) -> dict:
         path = operation_items_path(job_id, self._data_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"job_id": job_id, "items": []}
-        if path.is_file():
-            try:
-                loaded = json.loads(path.read_text(encoding="utf-8"))
-                if isinstance(loaded, dict) and isinstance(loaded.get("items"), list):
-                    payload = loaded
-            except (OSError, json.JSONDecodeError, TypeError, ValueError):
-                payload = {"job_id": job_id, "items": []}
         entry = {
             "item_id": str(item_id),
             "label": str(label),
             "state": str(state),
             "error": _normalize_error(error),
         }
-        payload["items"] = [item for item in payload["items"] if item.get("item_id") != entry["item_id"]]
-        payload["items"].append(entry)
-        try:
-            atomic_write_text(path, json.dumps(payload, indent=2, ensure_ascii=False) + "\n", mode=0o600)
-        except OSError:
-            LOGGER.exception("Failed to persist operation items for %s", job_id)
+        with _items_lock(path):
+            payload = {"job_id": job_id, "items": []}
+            if path.is_file():
+                try:
+                    loaded = json.loads(path.read_text(encoding="utf-8"))
+                    if isinstance(loaded, dict) and isinstance(loaded.get("items"), list):
+                        payload = loaded
+                except (OSError, json.JSONDecodeError, TypeError, ValueError):
+                    payload = {"job_id": job_id, "items": []}
+            payload["items"] = [item for item in payload["items"] if item.get("item_id") != entry["item_id"]]
+            payload["items"].append(entry)
+            try:
+                atomic_write_text(path, json.dumps(payload, indent=2, ensure_ascii=False) + "\n", mode=0o600)
+            except OSError:
+                LOGGER.exception("Failed to persist operation items for %s", job_id)
         return entry
 
     def list_items(self, job_id: str, *, cursor: str | None = None, limit: int = DEFAULT_LIST_LIMIT) -> dict:

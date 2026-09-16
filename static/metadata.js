@@ -1,5 +1,5 @@
 import { $, escapeHtml, fact } from './util.js';
-import { api, notify, AppState, token } from './state.js';
+import { api, notify, AppState, token, notifyError } from './state.js';
 import { refresh, renderDetails } from './library.js';
 import { confirmAction, promptChoice, openDialog, closeDialog } from './dialogs.js';
 import { t } from './i18n.js';
@@ -205,7 +205,7 @@ function bindMatchRowActions() {
         await loadMatchItems();
         notify('Decision saved');
       } catch (error) {
-        notify(error.message);
+        notifyError(error);
       }
     };
   });
@@ -356,11 +356,11 @@ async function openMatchReview({preview_id: previewId = '', import_batch_id: imp
     await loadMatchItems();
     $('metadataStatus').textContent = 'Review proposed matches before applying. Only exact title+platform matches auto-apply.';
   } catch (error) {
-    notify(error.message);
+    notifyError(error);
   }
 }
 
-async function steamMetadata(id) { try { notify('Downloading Steam metadata and artwork'); await api('/api/metadata/steam',{method:'POST',body:JSON.stringify({id})}); await refresh(); notify('Steam metadata updated'); } catch(error) { notify(error.message); } }
+async function steamMetadata(id) { try { notify('Downloading Steam metadata and artwork'); await api('/api/metadata/steam',{method:'POST',body:JSON.stringify({id})}); await refresh(); notify('Steam metadata updated'); } catch(error) { notifyError(error); } }
 async function openMetadata(game) {
   ensureMatchReviewHosts();
   AppState.metadataGameId = game.id;
@@ -373,7 +373,7 @@ async function openMetadata(game) {
     const status = await api('/api/metadata/status');
     renderMetadataStatus(status);
     if (status.ready) searchMetadata();
-  } catch(error) { notify(error.message); }
+  } catch(error) { notifyError(error); }
 }
 
 // SteamGridDB (S4): artwork-only provider — hidden when the key is missing,
@@ -411,7 +411,7 @@ function mergeSteamgridResults(results) {
       closeDialog($('metadataDialog'));
       await refresh();
       notify(t('metadata.steamgrid_applied'));
-    } catch(error) { notify(error.message); }
+    } catch(error) { notifyError(error); }
   });
 }
 function renderMetadataStatus(status = {}) {
@@ -447,7 +447,7 @@ async function searchMetadata() {
     const result = await api(`/api/metadata/search?id=${AppState.metadataGameId}&q=${encodeURIComponent($('metadataQuery').value)}`);
     $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platform)}${item.release_date ? ` · ${escapeHtml(item.release_date)}` : ''}${item.developer ? ` · ${escapeHtml(item.developer)}` : ''}</small></div><button type="button" class="primary" data-apply-metadata="${Number(item.database_id) || ''}">Use</button></div>`).join('') : '<p class="description">No matching games found.</p>';
     document.querySelectorAll('[data-apply-metadata]').forEach(button => button.onclick = () => applyMetadata(button.dataset.applyMetadata));
-  } catch(error) { notify(error.message); }
+  } catch(error) { notifyError(error); }
 }
 if ($('metadataSearchForm')) $('metadataSearchForm').onsubmit = event => { event.preventDefault(); searchMetadata(); };
 $('syncMetadata').onclick = async () => {
@@ -455,13 +455,13 @@ $('syncMetadata').onclick = async () => {
     await api('/api/metadata/sync',{method:'POST',body:'{}'});
     renderMetadataStatus({ready:false,job:{state:'downloading'}});
     watchMetadata();
-  } catch(error) { notify(error.message); }
+  } catch(error) { notifyError(error); }
 };
 $('autoMatchMetadata').onclick = async () => {
   try {
     $('autoMatchMetadata').disabled = true;
     await openMatchReview({game_ids: AppState.games.map(game => game.game_id || String(game.id)).filter(Boolean)});
-  } catch(error) { notify(error.message); }
+  } catch(error) { notifyError(error); }
   finally { $('autoMatchMetadata').disabled = false; }
 };
 $('searchScreenscraper').onclick = async () => {
@@ -475,9 +475,9 @@ $('searchScreenscraper').onclick = async () => {
         closeDialog($('metadataDialog'));
         await refresh();
         notify('ScreenScraper metadata applied');
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     });
-  } catch(error) { notify(error.message); }
+  } catch(error) { notifyError(error); }
 };
 $('hashMatchScreenscraper').onclick = async () => {
   const game = AppState.games.find(item => item.id === AppState.metadataGameId);
@@ -488,19 +488,19 @@ $('hashMatchScreenscraper').onclick = async () => {
     await api('/api/v2/screenscraper/apply',{method:'POST',body:JSON.stringify({id:game.game_id,rom_path:game.path,fields:['description','year','genre','developer','publisher'],media:['cover','screenshots','clear_logo']})});
     closeDialog($('metadataDialog'));
     notify('ScreenScraper hash-match queued — progress in the Activity Center');
-  } catch(error) { notify(error.message); }
+  } catch(error) { notifyError(error); }
 };
 if ($('searchSteamgrid')) $('searchSteamgrid').onclick = async () => {
   try {
     const result = await api(`/api/v2/steamgrid/search?q=${encodeURIComponent($('metadataQuery').value)}`);
     mergeSteamgridResults(result.results || []);
-  } catch(error) { notify(error.message); }
+  } catch(error) { notifyError(error); }
 };
 if ($('bulkSteamgrid')) $('bulkSteamgrid').onclick = async () => {
   try {
     await api('/api/v2/steamgrid/match', {method:'POST', body:'{}'});
     notify(t('metadata.steamgrid_queued'));
-  } catch(error) { notify(error.message); }
+  } catch(error) { notifyError(error); }
 };
 $('searchIgdb').onclick = async () => {
   const game = AppState.games.find(item => item.id === AppState.metadataGameId);
@@ -513,9 +513,9 @@ $('searchIgdb').onclick = async () => {
         closeDialog($('metadataDialog'));
         await refresh();
         notify('IGDB metadata applied');
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     });
-  } catch(error) { notify(error.message); }
+  } catch(error) { notifyError(error); }
 };
 async function applyMetadata(databaseId) {
   const media = MEDIA_ALLOW_OPTIONS.filter(([,id]) => $(id)?.checked).map(([name]) => name);
@@ -525,7 +525,7 @@ async function applyMetadata(databaseId) {
     closeDialog($('metadataDialog'));
     await refresh();
     notify((result.notes || []).length ? result.notes.join(' · ') : 'Metadata applied');
-  } catch(error) { notify(error.message); }
+  } catch(error) { notifyError(error); }
 }
 async function watchMatchMetadata() {
   try {
@@ -546,7 +546,7 @@ async function watchMatchMetadata() {
     await refresh();
     renderMetadataStatus(status);
     notify(`Auto-match finished: ${job.matched || 0} games matched`);
-  } catch(error) { notify(error.message); $('autoMatchMetadata').disabled = false; }
+  } catch(error) { notifyError(error); $('autoMatchMetadata').disabled = false; }
 }
 async function watchMetadata() {
   try {
@@ -554,7 +554,7 @@ async function watchMetadata() {
     renderMetadataStatus(status);
     if (status?.job?.state === 'downloading') return setTimeout(watchMetadata, 1500);
     if (status.ready) { notify('Metadata database ready'); searchMetadata(); }
-  } catch(error) { notify(error.message); }
+  } catch(error) { notifyError(error); }
 }
 async function loadAchievements(id) {
   try {
@@ -564,7 +564,7 @@ async function loadAchievements(id) {
     if ($('achievementContent')) {
       $('achievementContent').innerHTML = `<p class="description">${result.earned} of ${result.total} earned · ${escapeHtml(result.completion)}${result.earned_hardcore ? ` · ${result.earned_hardcore} hardcore` : ''}${result.beaten ? ` · beaten ${result.beaten}` : ''}${result.mastered ? ` · mastered ${result.mastered}` : ''}${result.motivation ? ` · ${escapeHtml(result.motivation)}` : ''}</p>${(result.achievements || []).map(item => `<div class="achievement"><img src="/api/ra/badge?name=${encodeURIComponent(item.badge)}&locked=${item.earned ? 0 : 1}&token=${encodeURIComponent(token)}" alt="" loading="lazy" decoding="async"><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.description)}</small></div><span>${item.points} pts${item.hardcore ? ' ★' : ''}</span></div>`).join('')}`;
     }
-  } catch(error) { notify(error.message); renderDetails(); }
+  } catch(error) { notifyError(error); renderDetails(); }
 }
 
 ensureMatchReviewHosts();

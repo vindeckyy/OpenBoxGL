@@ -1,7 +1,8 @@
 import { $, escapeHtml } from './util.js';
-import { api, notify, AppState } from './state.js';
+import { api, notify, AppState, notifyError } from './state.js';
 import { refresh, render, renderDetails } from './library.js';
 import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
+import { openDialog } from './dialogs.js';
 
 
 
@@ -15,15 +16,15 @@ import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
           return `<div class="discovery-section"><h3>${label}</h3><div class="discovery-row">${items.length ? items.map(game => `<button class="related-game" data-discovery="${game.id}">${escapeHtml(game.name)}</button>`).join('') : '<span class="description">No matches yet.</span>'}</div></div>`;
         }).join('');
         document.querySelectorAll('[data-discovery]').forEach(button => button.onclick = () => { AppState.selectedId = Number(button.dataset.discovery); $('discoveryDialog').close(); render(); });
-        $('discoveryDialog').showModal();
-      } catch(error) { notify(error.message); }
+        if (!$('discoveryDialog').open) openDialog($('discoveryDialog'));
+      } catch(error) { notifyError(error); }
     }
     async function loadStorefrontCatalog() {
       const source = $('storefrontSource').value;
       try {
         const result = await api(`/api/storefront/catalog?source=${encodeURIComponent(source)}`);
         $('storefrontCatalog').innerHTML = result.catalog.length ? result.catalog.slice(0, 200).map(item => `<div class="storefront-row"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.source)} · ${item.installed ? 'Installed' : 'Not installed'}</small></div><span>${escapeHtml(item.id)}</span></div>`).join('') : '<p class="description">No storefront entries were found.</p>';
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function importStorefrontCatalog(uninstalledOnly) {
       const source = $('storefrontSource').value;
@@ -31,7 +32,7 @@ import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
         const result = await api('/api/storefront/import',{method:'POST',body:JSON.stringify({source,uninstalled_only:uninstalledOnly,installed_only:!uninstalledOnly})});
         await refresh();
         notify(`${result.added} ${uninstalledOnly ? 'uninstalled catalog' : 'installed'} entr${result.added === 1 ? 'y' : 'ies'} added`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     function openStorefronts() {
       const settings = AppState.appSettings.storefront_auto_import || {};
@@ -45,7 +46,7 @@ import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
       if ($('storefrontGameyfinInstallDir')) $('storefrontGameyfinInstallDir').value = AppState.appSettings.gameyfin_install_dir || '';
       if ($('storefrontGameyfinStatus')) $('storefrontGameyfinStatus').textContent = AppState.appSettings.gameyfin_url ? `Configured · ${AppState.appSettings.gameyfin_url}` : '';
       $('storefrontCatalog').innerHTML = '';
-      $('storefrontDialog').showModal();
+      if (!$('storefrontDialog').open) openDialog($('storefrontDialog'));
     }
     async function saveStorefrontSettings() {
       AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectStorefrontSettings())});
@@ -85,7 +86,7 @@ import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
         if (!$('bigBox').hidden) renderBigBox();
         else renderDetails();
         notify(`${game.name} installed`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function uninstallGameyfin(game) {
       const { confirmAction } = await import('./dialogs.js');
@@ -102,19 +103,19 @@ import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
         if (!$('bigBox').hidden) renderBigBox();
         else renderDetails();
         notify(`${game.name} uninstalled locally`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function ludusaviAction(id, action) {
       try {
         const result = await api('/api/save-tools/ludusavi',{method:'POST',body:JSON.stringify({id,action})});
         notify(`Ludusavi ${action} ${result.ok ? 'finished' : 'reported issues'}`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
     async function hoardAction(id, action) {
       try {
         await api('/api/save-tools/hoard',{method:'POST',body:JSON.stringify({id,action})});
         notify(`Hoard ${action} finished`);
-      } catch(error) { notify(error.message); }
+      } catch(error) { notifyError(error); }
     }
 
 export { openDiscovery, loadStorefrontCatalog, importStorefrontCatalog, openStorefronts, saveStorefrontSettings, collectStorefrontSettings, watchGameyfinInstall, installGameyfin, uninstallGameyfin, ludusaviAction, hoardAction };

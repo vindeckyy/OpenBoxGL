@@ -106,7 +106,9 @@
       <button type="button" class="drop-zone" id="dropZone" data-i18n="library.drop_zone">Drop ROM folders or game files here to import</button>
       <section id="insightsPanel" class="insights-panel" aria-label="Play insights" data-i18n-aria-label="library.play_insights"></section>
       <div class="arrange-wrap">
-        <section class="grid" id="grid"></section>
+        <!-- P7: library.js renders role="row"/role="gridcell" children later;
+             the row/col count hooks are updated via util.js applyGridA11y(). -->
+        <section class="grid" id="grid" role="grid" aria-label="Game library grid" data-i18n-aria-label="library.grid_label" aria-rowcount="-1" aria-colcount="-1"></section>
         <div class="arrange-bar" id="arrangeBar" hidden role="button" tabindex="0" aria-label="Jump through the current view" data-i18n-aria-label="library.jump_view"></div>
       </div>
     </main>
@@ -246,14 +248,14 @@
   </dialog>
   <dialog id="achievementsDialog" aria-modal="true" aria-labelledby="achievementsDialogTitle">
     <form id="achievementsForm">
-      <div class="dialog-head"><h2 id="achievementsDialogTitle">RetroAchievements</h2><button type="button" id="closeAchievements" aria-label="Close RetroAchievements dialog">×</button></div>
+      <div class="dialog-head"><h2 id="achievementsDialogTitle" data-i18n="achievements.title">RetroAchievements</h2><button type="button" id="closeAchievements" aria-label="Close RetroAchievements dialog" data-i18n-aria-label="achievements.close">×</button></div>
       <div class="form-grid">
-        <label class="field"><span>Username</span><input id="raUsername" required></label>
-        <label class="field"><span>Web API key</span><input id="raApiKey" type="password" autocomplete="off"></label>
-        <div class="wide description" id="raProfile">Get your web API key from your RetroAchievements settings.</div>
-        <button type="button" class="icon-button" id="injectRa">Inject credentials into emulators</button>
+        <label class="field"><span data-i18n="achievements.username">Username</span><input id="raUsername" required></label>
+        <label class="field"><span data-i18n="achievements.web_api_key">Web API key</span><input id="raApiKey" type="password" autocomplete="off"></label>
+        <div class="wide description" id="raProfile" data-i18n="achievements.get_key">Get your web API key from your RetroAchievements settings.</div>
+        <button type="button" class="icon-button" id="injectRa" data-i18n="achievements.inject">Inject credentials into emulators</button>
       </div>
-      <div class="dialog-actions"><button type="button" class="icon-button" id="cancelAchievements">Cancel</button><button class="primary">Connect account</button></div>
+      <div class="dialog-actions"><button type="button" class="icon-button" id="cancelAchievements" data-i18n="common.cancel">Cancel</button><button class="primary" data-i18n="achievements.connect_account">Connect account</button></div>
     </form>
   </dialog>
   <dialog id="pluginsDialog" aria-modal="true" aria-labelledby="pluginsDialogTitle">
@@ -380,27 +382,27 @@
     </form>
   </dialog>
   <dialog id="playlistsDialog" aria-modal="true" aria-labelledby="playlistsDialogTitle">
-    <div class="dialog-head"><h2 id="playlistsDialogTitle">Playlists</h2><button type="button" id="closePlaylists" aria-label="Close Playlists dialog">×</button></div>
+    <div class="dialog-head"><h2 id="playlistsDialogTitle" data-i18n="playlists.title">Playlists</h2><button type="button" id="closePlaylists" aria-label="Close Playlists dialog" data-i18n-aria-label="playlists.close">×</button></div>
     <div class="form-grid">
-      <div class="wide extras"><button type="button" class="primary" id="newManualPlaylist">New manual playlist</button><button type="button" class="icon-button" id="newFilterPlaylist">New filter playlist</button></div>
-      <div class="wide description">Manual playlists keep an ordered set of games. Filter playlists update from their rules.</div>
+      <div class="wide extras"><button type="button" class="primary" id="newManualPlaylist" data-i18n="playlists.new_manual">New manual playlist</button><button type="button" class="icon-button" id="newFilterPlaylist" data-i18n="playlists.new_filter">New filter playlist</button></div>
+      <div class="wide description" data-i18n="playlists.description">Manual playlists keep an ordered set of games. Filter playlists update from their rules.</div>
       <div class="wide playlist-manager-list" id="playlistManagerList"></div>
     </div>
-    <div class="dialog-actions"><button type="button" class="primary" id="donePlaylists">Done</button></div>
+    <div class="dialog-actions"><button type="button" class="primary" id="donePlaylists" data-i18n="common.done">Done</button></div>
   </dialog>
   <dialog id="backupDialog" aria-modal="true" aria-labelledby="backupDialogTitle">
-    <div class="dialog-head"><h2 id="backupDialogTitle">Backups</h2><button type="button" id="closeBackups" aria-label="Close Backups dialog">×</button></div>
+    <div class="dialog-head"><h2 id="backupDialogTitle" data-i18n="backup.title">Backups</h2><button type="button" id="closeBackups" aria-label="Close Backups dialog" data-i18n-aria-label="backup.close">×</button></div>
     <div class="form-grid">
-      <div class="wide extras"><button type="button" class="primary" id="createNamedBackup">Create backup</button><button type="button" class="icon-button" id="refreshBackups">Refresh</button></div>
-      <div class="wide description">Backups include selected library data, settings, media, plugins, and themes. Restore creates a safety copy first.</div>
+      <div class="wide extras"><button type="button" class="primary" id="createNamedBackup" data-i18n="backup.create">Create backup</button><button type="button" class="icon-button" id="refreshBackups" data-i18n="common.refresh">Refresh</button></div>
+      <div class="wide description" data-i18n="backup.description">Backups include selected library data, settings, media, plugins, and themes. Restore creates a safety copy first.</div>
       <div class="wide backup-list" id="backupList"></div>
     </div>
-    <div class="dialog-actions"><button type="button" class="primary" id="doneBackups">Done</button></div>
+    <div class="dialog-actions"><button type="button" class="primary" id="doneBackups" data-i18n="common.done">Done</button></div>
   </dialog>
   <dialog id="sessionsDialog" aria-modal="true" aria-labelledby="sessionsDialogTitle">
-    <div class="dialog-head"><h2 id="sessionsDialogTitle">Running Games</h2><button type="button" id="closeSessions" aria-label="Close Running Games dialog">×</button></div>
+    <div class="dialog-head"><h2 id="sessionsDialogTitle" data-i18n="sessions.title">Running Games</h2><button type="button" id="closeSessions" aria-label="Close Running Games dialog" data-i18n-aria-label="sessions.close">×</button></div>
     <div class="form-grid"><div class="wide emulator-list" id="sessionList"></div></div>
-    <div class="dialog-actions"><button type="button" class="primary" id="doneSessions">Done</button></div>
+    <div class="dialog-actions"><button type="button" class="primary" id="doneSessions" data-i18n="common.done">Done</button></div>
   </dialog>
   <dialog id="historyDialog" aria-modal="true" aria-labelledby="historyDialogTitle">
     <div class="dialog-head"><h2 id="historyDialogTitle">Play Session History</h2><button type="button" id="closeHistory" aria-label="Close Play Session History dialog">×</button></div>
@@ -417,6 +419,7 @@
     <div class="dialog-tabs" role="tablist" aria-label="Time Machine views">
       <button type="button" class="dialog-tab active" role="tab" id="tmEventsTab" aria-selected="true" data-i18n="time_machine.timeline">Timeline</button>
       <button type="button" class="dialog-tab" role="tab" id="tmAsOfTab" aria-selected="false" data-i18n="time_machine.as_of">Browse as of</button>
+      <button type="button" class="dialog-tab" role="tab" id="tmCompareTab" aria-selected="false" data-i18n="time_machine.compare">Compare</button>
     </div>
     <div class="form-grid" id="timeMachineEventsPane">
       <label class="field"><span data-i18n="time_machine.kind">Kind</span><select id="tmKind"><option value="" data-i18n="time_machine.all_kinds">All events</option><option value="add" data-i18n="time_machine.kind_add">Add</option><option value="edit" data-i18n="time_machine.kind_edit">Edit</option><option value="delete" data-i18n="time_machine.kind_delete">Delete</option><option value="restore" data-i18n="time_machine.kind_restore">Restore</option><option value="revert" data-i18n="time_machine.kind_revert">Revert</option></select></label>
@@ -431,6 +434,14 @@
       <p class="wide description" id="timeMachineAsOfMeta"></p>
       <div class="wide" id="timeMachineAsOfBody"><p class="muted" data-i18n="time_machine.no_date">Choose a date.</p></div>
     </div>
+    <div class="form-grid" id="timeMachineComparePane" hidden>
+      <label class="field"><span data-i18n="time_machine.compare_from">From</span><input id="tmCompareFrom" type="date"></label>
+      <label class="field"><span data-i18n="time_machine.compare_to">To</span><input id="tmCompareTo" type="date"></label>
+      <div class="field"><span>&nbsp;</span><button type="button" class="icon-button" id="tmCompareButton" data-i18n="time_machine.compare_run">Compare dates</button></div>
+      <p class="wide description" data-i18n="time_machine.compare_hint">Pick two dates to see what was added, removed, or re-edited.</p>
+      <p class="wide description" id="timeMachineCompareMeta"></p>
+      <div class="wide" id="timeMachineCompareBody"><p class="muted" data-i18n="time_machine.compare_hint">Pick two dates to see what was added, removed, or re-edited.</p></div>
+    </div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneTimeMachine" data-i18n="common.done">Done</button></div>
   </dialog>
   <dialog id="recapDialog" aria-modal="true" aria-labelledby="recapDialogTitle">
@@ -440,9 +451,9 @@
   </dialog>
   <dialog id="welcomeDialog" hidden aria-hidden="true"></dialog>
   <dialog id="setupCenter" aria-modal="true" aria-labelledby="setupCenterTitle" class="setup-center-dialog">
-    <div class="dialog-head setup-center-head"><h2 id="setupCenterTitle">Library Setup Center</h2><button type="button" id="closeSetupCenter" aria-label="Close Library Setup Center">×</button></div>
-    <div class="setup-center-body" id="setupCenterBody" role="region" aria-label="Setup workflow">
-      <p class="description">Guided library setup loads here.</p>
+    <div class="dialog-head setup-center-head"><h2 id="setupCenterTitle" data-i18n="setup.title">Library Setup Center</h2><button type="button" id="closeSetupCenter" aria-label="Close Library Setup Center" data-i18n-aria-label="setup.close">×</button></div>
+    <div class="setup-center-body" id="setupCenterBody" role="region" aria-label="Setup workflow" data-i18n-aria-label="setup.workflow">
+      <p class="description" data-i18n="setup.description">Guided library setup loads here.</p>
     </div>
   </dialog>
   <dialog id="featureDialog" aria-modal="true" aria-labelledby="featureDialogTitle">
@@ -537,7 +548,7 @@
         <label class="field wide settings-field settings-panel" data-settings-panel="integrations sessions" data-setting="obs websocket endpoint"><span>OBS WebSocket endpoint (optional)</span><input id="obsWebsocketUrl" placeholder="ws://127.0.0.1:4455"></label>
         <label class="field wide settings-field settings-panel" data-settings-panel="integrations sessions" data-setting="obs websocket password"><span>OBS WebSocket password (optional)</span><input id="obsWebsocketPassword" type="password" autocomplete="off"></label>
         <label class="check settings-field settings-panel" data-settings-panel="integrations" data-setting="household family stats sharing local"><input type="checkbox" id="householdStatsSharing"> Share household play statistics with explicitly linked local devices</label>
-        <label class="check settings-field settings-panel" data-settings-panel="bigbox sessions" data-setting="museum arcade kiosk pin lock"><input type="checkbox" id="museumKioskEnabled"> Require a PIN before entering Museum mode (convenience boundary)</label>
+        <label class="check settings-field settings-panel" data-settings-panel="bigbox sessions" data-setting="museum arcade kiosk pin lock"><input type="checkbox" id="museumKioskEnabled"> Require a PIN before entering Museum mode (a convenience boundary, not a security boundary; failed attempts are rate-limited)</label>
         <label class="field settings-field settings-panel" data-settings-panel="bigbox sessions" data-setting="museum arcade kiosk pin"><span>Museum PIN, 4–12 digits</span><span class="path-input-row"><input id="museumKioskPin" type="password" inputmode="numeric" autocomplete="new-password" placeholder="Leave blank to keep the current PIN"><button type="button" class="path-browse" id="clearMuseumKioskPin">Clear PIN</button></span></label>
         <label class="field wide settings-field settings-panel" data-settings-panel="sessions bigbox" data-setting="obs recording folder path"><span>OBS recording folder, optional override</span><span class="path-input-row"><input id="obsRecordingPath" placeholder="~/Videos"><button type="button" class="path-browse" data-browse-for="obsRecordingPath" data-browse-kind="folder">Browse</button></span></label>
         <label class="field settings-field settings-panel" data-settings-panel="sessions" data-setting="save backup limit retention"><span data-i18n="settings.save_backup_limit">Save backup retention limit, 0 keeps all</span><input id="saveBackupLimit" type="number" min="0" max="500"></label>
@@ -638,6 +649,9 @@
     <div class="reader-viewport" id="readerViewport"><iframe id="readerFrame" title="Document reader"></iframe></div>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  <!-- P7: job/activity state transitions are announced here (debounced) so the
+       count in #activityCount stays the only always-on live region. -->
+  <div class="sr-only" id="activityAnnouncer" role="status" aria-live="polite" aria-atomic="true"></div>
   <div class="gamepad-hint" id="gamepadHint" role="status" hidden></div>
   <div class="error-banner" id="errorBanner" role="alert" hidden>
     <span id="errorBannerText"></span>
@@ -658,22 +672,22 @@
   <section class="lifecycle" id="lifecycle" role="status" aria-live="polite" hidden><div><small id="lifecycleKind"></small><h2 id="lifecycleGame"></h2><p id="lifecycleMessage"></p></div></section>
   <section class="bigbox" id="bigBox" hidden tabindex="0">
     <video class="bigbox-startup-video" id="bigBoxStartupVideo" muted loop playsinline hidden></video>
-    <div class="bigbox-head"><strong>OpenBox</strong><input class="hybrid-search" id="bigBoxHybridSearch" type="search" placeholder="Search this platform" hidden><span class="bigbox-status" id="bigBoxStatus"></span><span id="bigBoxCounter"></span></div>
+    <div class="bigbox-head"><strong>OpenBox</strong><input class="hybrid-search" id="bigBoxHybridSearch" type="search" placeholder="Search this platform" data-i18n-placeholder="bigbox.search_platform" hidden><span class="bigbox-status" id="bigBoxStatus"></span><span id="bigBoxCounter"></span></div>
     <div class="bigbox-stage" id="bigBoxStage"></div>
-    <div class="bigbox-foot"><span>← → Browse</span><span>Enter / A Play</span><span>P Pause</span><span>M Filters</span><span>F / X Favorite</span><span>Esc / B Back</span></div>
+    <div class="bigbox-foot"><span>← → <span data-i18n="bigbox.browse">Browse</span></span><span>Enter / A <span data-i18n="bigbox.play_button">Play</span></span><span>P <span data-i18n="bigbox.pause">Pause</span></span><span>M <span data-i18n="bigbox.filters">Filters</span></span><span>F / X <span data-i18n="bigbox.favorite">Favorite</span></span><span>Esc / B <span data-i18n="bigbox.back">Back</span></span></div>
     <div class="bigbox-menu" id="bigBoxMenu" hidden>
       <div class="bigbox-menu-panel">
-        <h2>Filter and Sort</h2>
-        <label class="field"><span>Show</span><select id="bigBoxFilter"><option value="all">Current library view</option><option value="installed">Installed games</option><option value="owned">All owned games</option><option value="favorites">Favorites</option><option value="playing">In progress</option><option value="completed">Completed</option></select></label>
-        <label class="field"><span>Sort</span><select id="bigBoxSort"><option value="title">Title</option><option value="rating">Rating</option><option value="recent">Recently played</option><option value="recent_activity">Recent activity</option><option value="playtime">Play time</option><option value="random">Shuffle</option></select></label>
-        <label class="field"><span>Quick preset</span><select id="bigBoxQuickPreset"><option value="">None</option></select></label>
-        <label class="field"><span>Achievements</span><select id="bigBoxRaFilter"><option value="all">All games</option><option value="matched">RetroAchievements matched</option><option value="unmatched">Not matched</option></select></label>
-        <div class="dialog-actions"><button class="icon-button" id="closeBigBoxMenu" type="button">Cancel</button><button class="primary" id="applyBigBoxMenu" type="button">Apply</button></div>
+        <h2 data-i18n="bigbox.filter_sort">Filter and Sort</h2>
+        <label class="field"><span data-i18n="bigbox.show">Show</span><select id="bigBoxFilter"><option value="all" data-i18n="bigbox.current_view">Current library view</option><option value="installed" data-i18n="bigbox.installed_games">Installed games</option><option value="owned" data-i18n="bigbox.all_owned">All owned games</option><option value="favorites" data-i18n="sidebar.favorites">Favorites</option><option value="playing" data-i18n="sidebar.in_progress">In progress</option><option value="completed" data-i18n="sidebar.completed">Completed</option></select></label>
+        <label class="field"><span data-i18n="bigbox.sort">Sort</span><select id="bigBoxSort"><option value="title" data-i18n="library.sort_title">Title</option><option value="rating" data-i18n="library.sort_rating">Rating</option><option value="recent" data-i18n="library.sort_recent">Recently played</option><option value="recent_activity" data-i18n="library.sort_recent_activity">Recent activity</option><option value="playtime" data-i18n="library.sort_playtime">Play time</option><option value="random" data-i18n="bigbox.shuffle">Shuffle</option></select></label>
+        <label class="field"><span data-i18n="bigbox.quick_preset">Quick preset</span><select id="bigBoxQuickPreset"><option value="" data-i18n="common.none">None</option></select></label>
+        <label class="field"><span data-i18n="bigbox.achievements">Achievements</span><select id="bigBoxRaFilter"><option value="all" data-i18n="bigbox.all_games">All games</option><option value="matched" data-i18n="bigbox.ra_matched">RetroAchievements matched</option><option value="unmatched" data-i18n="bigbox.ra_not_matched">Not matched</option></select></label>
+        <div class="dialog-actions"><button class="icon-button" id="closeBigBoxMenu" type="button" data-i18n="common.cancel">Cancel</button><button class="primary" id="applyBigBoxMenu" type="button" data-i18n="common.apply">Apply</button></div>
         <div class="dialog-actions"><button class="icon-button" id="partyMenuButton" type="button" data-i18n="party.open">Game Night</button></div>
       </div>
     </div>
-    <div class="screensaver" id="screenSaver" hidden><video id="screenSaverVideo" muted autoplay loop></video><div class="screensaver-copy"><div class="hero-kicker" id="screenSaverPlatform"></div><h2 id="screenSaverTitle"></h2><p>Press Play to launch, or any other control to return.</p></div></div>
-    <div class="bigbox-pause" id="bigBoxPause" hidden><div class="bigbox-pause-panel"><h2 id="bigBoxPauseTitle">Running game</h2><p class="description" id="bigBoxPauseMeta"></p><div class="extras" id="bigBoxPauseActions"></div></div></div>
+    <div class="screensaver" id="screenSaver" hidden><video id="screenSaverVideo" muted autoplay loop></video><div class="screensaver-copy"><div class="hero-kicker" id="screenSaverPlatform"></div><h2 id="screenSaverTitle"></h2><p data-i18n="bigbox.screensaver_prompt">Press Play to launch, or any other control to return.</p></div></div>
+    <div class="bigbox-pause" id="bigBoxPause" hidden><div class="bigbox-pause-panel"><h2 id="bigBoxPauseTitle" data-i18n="bigbox.running_game">Running game</h2><p class="description" id="bigBoxPauseMeta"></p><div class="extras" id="bigBoxPauseActions"></div></div></div>
     <div class="party-overlay" id="partyOverlay" hidden></div>
   </section>
 

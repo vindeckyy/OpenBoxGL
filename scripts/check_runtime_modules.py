@@ -50,6 +50,7 @@ def main() -> int:
     required_patterns = [
         "*.py",
         "handlers/*.py",
+        "pkg/*.py",
         "pkg/state/*.py",
         "pkg/parity/*.py",
         "routes/*.py",

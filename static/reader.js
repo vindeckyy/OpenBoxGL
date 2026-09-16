@@ -1,5 +1,6 @@
 import { $ } from './util.js';
 import { AppState, token } from './state.js';
+import { openDialog } from './dialogs.js';
 
 
 
@@ -12,7 +13,7 @@ import { AppState, token } from './state.js';
       $('readerViewport').classList.remove('spread');
       $('readerFrame').style.filter = '';
       setReaderPage(1);
-      $('readerDialog').showModal();
+      if (!$('readerDialog').open) openDialog($('readerDialog'));
     }
     function setReaderPage(page) {
       AppState.readerPage = Math.max(1, page);

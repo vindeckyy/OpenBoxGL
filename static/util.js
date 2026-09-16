@@ -39,7 +39,122 @@
      * @param {number | string} value
      * @returns {string}
      */
-    const formatBytes = value => { const bytes = Number(value || 0); return bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`; };
+    const formatBytes = value => {
+      const bytes = Number(value || 0);
+      if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+      if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+      if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${Math.round(bytes)} B`;
+    };
+
+    /**
+     * localStorage access that cannot throw in privacy mode or sandboxed
+     * webviews. Render paths call this on every paint, so unguarded access
+     * (SecurityError / quota) used to break rendering entirely.
+     */
+    const safeStorage = {
+      get(key) { try { return localStorage.getItem(key); } catch { return null; } },
+      set(key, value) { try { localStorage.setItem(key, String(value)); return true; } catch { return false; } },
+      remove(key) { try { localStorage.removeItem(key); return true; } catch { return false; } },
+    };
+
+    /**
+     * True when the user asked the OS to minimize motion. Gate any programmatic
+     * scrolling, transition, or animation on this — CSS rules live in app.css.
+     * @returns {boolean}
+     */
+    const prefersReducedMotion = () =>
+      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        : false;
+
+    /**
+     * ARIA guidance for the virtualized game grid (P7).
+     *
+     * index.html already declares `#grid` as `role="grid"` with
+     * `aria-rowcount`/`aria-colcount` placeholders. The rows and cells are
+     * rendered by `static/library.js`, which has not adopted these helpers yet.
+     * When it does:
+     *   1. call `applyGridA11y($('grid'), {rowCount, colCount})` after geometry
+     *      is computed, and
+     *   2. render each card as `role="row"` and its `[data-game]` button as
+     *      `role="gridcell"` with the attributes from `gridCellAttrs()`.
+     * Rows are presentational wrappers; the keyboard target stays the button.
+     * @param {HTMLElement | null | undefined} container
+     * @param {{rowCount?: number, colCount?: number}} [geometry]
+     */
+    function applyGridA11y(container, { rowCount = -1, colCount = -1 } = {}) {
+      if (!container) return;
+      container.setAttribute('role', 'grid');
+      if (rowCount >= 0) container.setAttribute('aria-rowcount', String(rowCount));
+      if (colCount >= 0) container.setAttribute('aria-colcount', String(colCount));
+    }
+
+    /**
+     * Build the role/position attributes for one virtualized grid cell.
+     * `aria-rowindex`/`aria-colindex` stay 1-based and derive from the flat
+     * cell index so virtual windows keep correct positions. `aria-setsize` /
+     * `aria-posinset` are only emitted for list-style surfaces.
+     * @param {{index?: number, columns?: number, rowCount?: number, colCount?: number, size?: number, position?: number, selected?: boolean}} [options]
+     * @returns {string}
+     */
+    function gridCellAttrs({ index = 0, columns = 1, rowCount, colCount, size, position, selected = false } = {}) {
+      const attrs = ['role="gridcell"'];
+      if (columns > 0) {
+        attrs.push(`aria-rowindex="${Math.floor(index / columns) + 1}"`);
+        attrs.push(`aria-colindex="${(index % columns) + 1}"`);
+      }
+      if (rowCount != null) attrs.push(`aria-rowcount="${rowCount}"`);
+      if (colCount != null) attrs.push(`aria-colcount="${colCount}"`);
+      if (size != null) attrs.push(`aria-setsize="${size}"`);
+      if (position != null) attrs.push(`aria-posinset="${position}"`);
+      if (selected) attrs.push('aria-selected="true"');
+      return attrs.join(' ');
+    }
+
+    const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+    let _dateFormatters = {};
+    let _dateFormatterLang = null;
+    function dateFormatter(hasTime) {
+      const lang = (typeof document !== 'undefined' && document.documentElement.lang) || 'en';
+      if (_dateFormatterLang !== lang) {
+        _dateFormatterLang = lang;
+        _dateFormatters = {};
+      }
+      const slot = hasTime ? 'datetime' : 'date';
+      if (!_dateFormatters[slot]) {
+        const options = hasTime ? { dateStyle: 'medium', timeStyle: 'short' } : { dateStyle: 'medium' };
+        try { _dateFormatters[slot] = new Intl.DateTimeFormat(lang, options); }
+        catch { _dateFormatters[slot] = null; }
+      }
+      return _dateFormatters[slot];
+    }
+    /**
+     * Shared date rendering with Intl.DateTimeFormat. Handles ISO datetimes,
+     * date-only strings (parsed as local dates, not UTC midnight), Date
+     * objects, and garbage values (passed through with the T separator).
+     * @param {string | number | Date | null | undefined} value
+     * @returns {string}
+     */
+    function formatDate(value) {
+      if (value === null || value === undefined || value === '') return '';
+      const text = value instanceof Date ? null : String(value);
+      const hasTime = text === null || !DATE_ONLY_RE.test(text);
+      let date;
+      if (value instanceof Date) date = value;
+      else if (DATE_ONLY_RE.test(text)) {
+        const [year, month, day] = text.split('-').map(Number);
+        date = new Date(year, month - 1, day);
+      } else date = new Date(text);
+      if (Number.isNaN(date.getTime())) return text.replace('T', ' ');
+      const formatter = dateFormatter(hasTime);
+      return formatter ? formatter.format(date) : date.toLocaleString();
+    }
+    if (typeof document !== 'undefined') {
+      // The active locale arrives asynchronously; drop the cached formatter so
+      // the next render uses the new locale.
+      document.addEventListener('localechange', () => { _dateFormatterLang = null; });
+    }
 
     const queryTokenCache = new Map();
 
@@ -232,4 +347,4 @@
       return common / q.size;
     }
 
-export { $, escapeHtml, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches, trigramsOf, expandTrigrams, trigramScore };
+export { $, escapeHtml, duration, formatBytes, safeStorage, prefersReducedMotion, applyGridA11y, gridCellAttrs, formatDate, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches, trigramsOf, expandTrigrams, trigramScore };

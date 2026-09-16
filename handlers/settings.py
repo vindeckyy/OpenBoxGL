@@ -2,8 +2,11 @@
 
 import copy
 import json
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 
+import updates
 from catalog import PROGRESS
 from openbox import discover_profiles, load_state, update_state_with_result
 from parity_backup import AUTO_BACKUP_KEEP
@@ -11,10 +14,11 @@ from parity_integrations import inject_retroachievements
 from parity_media import REGION_PRIORITY_DEFAULT
 from parity_premium import LIST_COLUMNS_DEFAULT, custom_field_defs, enhanced_ra_profile, platform_categories
 from parity_tracking import TRACKING_MODES
+from pkg.parity.parity_emulator_defs import defs_channel_status, fetch_defs_channel
 from retroachievements import api_get as ra_api_get, game_progress as ra_game_progress, load_credentials as load_ra_credentials, match_game as match_ra_game, save_credentials as save_ra_credentials
 from routes.registry import route
 from settings_schema import KNOWN_SETTINGS, sanitize_settings
-from webapp_state import DATA, LOGGER, MEDIA_TYPES_ALL, STATE_LOCK, clean_commands, game_from_payload, load_state_view, public_settings, transact_state
+from webapp_state import DATA, JOB_MANAGER, LOGGER, MEDIA_TYPES_ALL, STATE_LOCK, clean_commands, game_from_payload, load_state_view, public_settings, transact_state
 
 
 def _safe_int(value, default, message):
@@ -292,8 +296,12 @@ def _clean_gameyfin(merged):
     gameyfin_install_dir = str(merged.get("gameyfin_install_dir", "")).strip()
     if gameyfin_install_dir:
         install_path = Path(gameyfin_install_dir).expanduser()
+        # Validate before mkdir: a relative path used to create junk under the
+        # server working directory and only then raise.
+        if not install_path.is_absolute():
+            raise ValueError(f"Gameyfin install folder must be an absolute path: {install_path}")
         install_path.mkdir(parents=True, exist_ok=True)
-        if not install_path.is_absolute() or not install_path.is_dir():
+        if not install_path.is_dir():
             raise ValueError(f"Gameyfin install folder is invalid: {install_path}")
         gameyfin_install_dir = str(install_path)
     return gameyfin_url, gameyfin_install_dir
@@ -303,6 +311,8 @@ def _clean_ludusavi(merged):
     ludusavi_backup_path = str(merged.get("ludusavi_backup_path", "")).strip()
     if ludusavi_backup_path:
         backup_path = Path(ludusavi_backup_path).expanduser()
+        if not backup_path.is_absolute():
+            raise ValueError(f"Ludusavi backup folder must be an absolute path: {backup_path}")
         backup_path.mkdir(parents=True, exist_ok=True)
         ludusavi_backup_path = str(backup_path)
     return ludusavi_backup_path
@@ -520,6 +530,13 @@ def clean_settings(merged):
             "household_stats_sharing": bool(merged.get("household_stats_sharing", False)),
             "museum_kiosk_enabled": bool(merged.get("museum_kiosk_enabled", False)),
             "museum_kiosk_pin_hash": str(merged.get("museum_kiosk_pin_hash", ""))[:512],
+            "emulator_defs_update_enabled": bool(merged.get("emulator_defs_update_enabled", False)),
+            "emulator_defs_channel_url": str(merged.get("emulator_defs_channel_url", "")).strip()[:512],
+            "emulator_defs_channel_sig_url": str(merged.get("emulator_defs_channel_sig_url", "")).strip()[:512],
+            "emulator_defs_last_check": str(merged.get("emulator_defs_last_check", ""))[:64],
+            "emulator_defs_version": str(merged.get("emulator_defs_version", ""))[:32],
+            "update_auto_download": bool(merged.get("update_auto_download", False)),
+            "update_downloaded_version": str(merged.get("update_downloaded_version", ""))[:32],
     }
 
 
@@ -697,3 +714,83 @@ class SettingsHandlers:
         if not credentials:
             raise ValueError("Configure RetroAchievements first.")
         self.send_json(200, inject_retroachievements(credentials))
+
+    # --- F13: signed emulator definition update channel ---------------------
+
+    @route("GET", "/api/v2/emulators/defs/channel")
+    def _api_get_api_v2_emulators_defs_channel(self, parsed):
+        settings = load_state_view().get("settings", {})
+        status = defs_channel_status()
+        status.update({
+            "enabled": bool(settings.get("emulator_defs_update_enabled", False)),
+            "configured": bool(
+                str(settings.get("emulator_defs_channel_url") or "").strip()
+                and str(settings.get("emulator_defs_channel_sig_url") or "").strip()
+            ),
+            "last_check": str(settings.get("emulator_defs_last_check") or ""),
+            "installed_version": str(settings.get("emulator_defs_version") or ""),
+        })
+        self.send_json(200, status)
+
+    @route("POST", "/api/v2/emulators/defs/channel/update")
+    def _api_post_api_v2_emulators_defs_channel_update(self, payload):
+        body = payload if isinstance(payload, dict) else {}
+        settings = load_state_view().get("settings", {})
+        if not bool(settings.get("emulator_defs_update_enabled", False)) and not body.get("force"):
+            raise ValueError("Enable the signed emulator definition update channel first.")
+        manifest_url = str(body.get("manifest_url") or settings.get("emulator_defs_channel_url") or "").strip()
+        signature_url = str(body.get("signature_url") or settings.get("emulator_defs_channel_sig_url") or "").strip()
+        if not manifest_url or not signature_url:
+            raise ValueError("Configure the signed definitions channel URL and signature URL first.")
+        result = fetch_defs_channel(manifest_url, signature_url)
+        version = str(result.get("version") or "")
+
+        def mutate(state):
+            target = state.setdefault("settings", {})
+            target["emulator_defs_last_check"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            target["emulator_defs_version"] = version
+
+        transact_state(mutate)
+        self.send_json(200, {**result, "installed_version": version})
+
+    # --- F14: background update download + apply on restart -----------------
+
+    @route("GET", "/api/v2/update/download/status")
+    def _api_get_api_v2_update_download_status(self, parsed):
+        settings = load_state_view().get("settings", {})
+        self.send_json(200, {
+            "current": updates.VERSION,
+            "auto_download": bool(settings.get("update_auto_download", False)),
+            "appimage": bool(os.environ.get("APPIMAGE")),
+            "installed": str(settings.get("update_downloaded_version") or ""),
+        })
+
+    @route("POST", "/api/v2/update/download")
+    def _api_post_api_v2_update_download(self, payload):
+        body = payload if isinstance(payload, dict) else {}
+        settings = load_state_view().get("settings", {})
+        if not bool(settings.get("update_auto_download", False)) and not body.get("force"):
+            raise ValueError("Enable background update downloads in Settings first.")
+        if not os.environ.get("APPIMAGE"):
+            raise ValueError("Background updates require the OpenBox AppImage.")
+
+        def worker(cancel_event):
+            release = updates.check_update()
+            if not release.get("available"):
+                return {"available": False, "current": release.get("current")}
+
+            def progress(downloaded, total):
+                if cancel_event is not None:
+                    # `current` reaches SSE frames; `downloaded` stays on the job record.
+                    cancel_event.progress(downloaded=downloaded, current=downloaded, total=total)
+
+            def cancelled():
+                return bool(cancel_event is not None and cancel_event.is_set())
+
+            result = updates.background_download_update(
+                release, progress=progress, cancelled=cancelled,
+            )
+            return {"available": True, **result}
+
+        job = JOB_MANAGER.submit("update-download", worker)
+        self.send_json(202, {"state": "queued", "job_id": job["job_id"]})
