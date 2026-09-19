@@ -387,12 +387,27 @@ class ProcessProbeTests(unittest.TestCase):
 
     def test_process_identity_of_this_process(self):
         pid = os.getpid()
-        self.assertIn("python", pc.process_name(pid).casefold())
-        self.assertIn("python", pc.process_command_line(pid).casefold())
         token = pc.process_start_token(pid)
         self.assertIsInstance(token, str)
         self.assertTrue(token)
         self.assertEqual(token, pc.process_start_token(pid))
+
+    def test_process_name_and_command_line_of_a_live_child(self):
+        """The kernel names the file it executed, not the interpreter.
+
+        The gate runs this suite through the ``coverage`` console script, and
+        for a shebang wrapper the process is named after the script, so on
+        POSIX this process reports ``coverage`` rather than the interpreter.
+        A child spawned directly carries its interpreter, which is what the
+        runtime probes when it tracks the processes it started.
+        """
+        child = _spawn_child("import time; time.sleep(30)")
+        try:
+            self.assertIn("python", pc.process_name(child.pid).casefold())
+            self.assertIn("python", pc.process_command_line(child.pid).casefold())
+        finally:
+            child.kill()
+            child.wait(timeout=10)
 
     def test_process_cwd_of_this_process(self):
         if pc.IS_WINDOWS:
