@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import os
+import re
+import string
 import sys
 import tempfile
 import unittest
@@ -37,6 +39,62 @@ class Result:
     returncode = 0
     stdout = ""
     stderr = ""
+
+
+# YAML double-quoted scalars only accept the escapes the specification defines;
+# anything else (``\c``, ``\m``) is a parse error for a strict loader. The
+# vendored fallback parser accepts them, and requirements-dev.txt installs no
+# PyYAML, so the defs have to be checked textually to stay loadable for the
+# installs that do have it.
+_YAML_SIMPLE_ESCAPES = set('0abtnvfre "\\/N_LP')
+_YAML_HEX_ESCAPES = {"x": 2, "u": 4, "U": 8}
+_YAML_DOUBLE_QUOTED = re.compile(r'"((?:[^"\\]|\\.)*)"')
+_YAML_SINGLE_QUOTED = re.compile(r"'([^']|'')*'")
+_YAML_BLOCK_SCALAR = re.compile(r":[ \t]*[|>][0-9]*[+-]?[+-]?[ \t]*$")
+
+
+def _drop_comment(line):
+    """Return *line* without a trailing comment (quotes outside one counted)."""
+    for match in re.finditer(r"(?<=\s)#", line):
+        if line[: match.start()].count('"') % 2 == 0:
+            return line[: match.start()]
+    return line
+
+
+def _invalid_yaml_escapes(body):
+    """Yield the escapes in a double-quoted scalar that YAML does not define."""
+    index = 0
+    while index < len(body):
+        if body[index] != "\\":
+            index += 1
+            continue
+        escape = body[index + 1 : index + 2]
+        if escape in _YAML_HEX_ESCAPES:
+            width = _YAML_HEX_ESCAPES[escape]
+            digits = body[index + 2 : index + 2 + width]
+            if not (len(digits) == width and all(digit in string.hexdigits for digit in digits)):
+                yield "\\" + escape + digits
+        elif escape not in _YAML_SIMPLE_ESCAPES:
+            yield "\\" + escape
+        index += 2
+
+
+def _invalid_double_quote_escapes(text):
+    """Yield ``(line_number, escape)`` for strict-invalid def YAML escapes."""
+    block_indent = None
+    for number, raw in enumerate(text.splitlines(), 1):
+        indent = len(raw) - len(raw.lstrip())
+        if block_indent is not None:
+            if not raw.strip() or indent > block_indent:
+                continue
+            block_indent = None
+        if _YAML_BLOCK_SCALAR.search(raw):
+            block_indent = indent
+            continue
+        line = _drop_comment(_YAML_SINGLE_QUOTED.sub('""', raw))
+        for match in _YAML_DOUBLE_QUOTED.finditer(line):
+            for escape in _invalid_yaml_escapes(match.group(1)):
+                yield number, escape
 
 
 class DummyEmulatorHandler(EmulatorsHandlers):
@@ -286,6 +344,39 @@ class TestRegistryHelpers(unittest.TestCase):
             )
         self.assertEqual(data["adapter_id"], "demo")
         self.assertEqual(data["extensions"], ["nes"])
+
+    def test_definitions_use_valid_yaml_quote_escapes(self):
+        """A backslash escape a strict YAML loader rejects must not ship.
+
+        ``- "{EmulatorDir}\\cores\\mame_libretro.dll"`` is a parse error for
+        PyYAML: only the vendored fallback parser tolerates it, and CI installs
+        no PyYAML, so the registry import broke for everyone who had it. Eight
+        defs carried that spelling; this keeps the strict parser's rules in the
+        gate without adding it as a dependency.
+        """
+        defs = sorted((Path(__file__).resolve().parent.parent / "emulator_defs").glob("*.yaml"))
+        self.assertTrue(defs, "no emulator defs found to check")
+        offenders = [
+            f"{path.name}:{number}: {escape!r}"
+            for path in defs
+            for number, escape in _invalid_double_quote_escapes(path.read_text(encoding="utf-8"))
+        ]
+        self.assertEqual(offenders, [])
+
+    def test_yaml_escape_check_flags_the_shipped_spelling(self):
+        """The lint has to fail on the spelling the eight defs shipped with.
+
+        ``- "{EmulatorDir}\\cores\\mame_libretro.dll"`` and ``"\\xZZ"`` are what
+        PyYAML rejects; single quotes, comments and block scalars keep a
+        backslash literal and must stay unflagged.
+        """
+        broken = 'startup_args_windows:\n  - "{EmulatorDir}\\cores\\mame_libretro.dll"\n'
+        self.assertEqual(list(_invalid_double_quote_escapes(broken)), [(2, "\\c"), (2, "\\m")])
+        self.assertEqual(list(_invalid_double_quote_escapes('note: "\\xZZ"\n')), [(1, "\\xZZ")])
+        self.assertEqual(list(_invalid_double_quote_escapes("note: '{EmulatorDir}\\cores\\x.dll'\n")), [])
+        self.assertEqual(list(_invalid_double_quote_escapes('exe: retroarch.exe  # "C:\\Users\\me"\n')), [])
+        self.assertEqual(list(_invalid_double_quote_escapes('note: |\n  "C:\\Users\\me"\n')), [])
+        self.assertEqual(list(_invalid_double_quote_escapes('note: "line\\nbreak\\x41"\n')), [])
 
     def test_registry_self_test_main(self):
         import pkg.parity.parity_emulator_defs as module
