@@ -129,8 +129,29 @@ jobs:
           npm ci --ignore-scripts --prefix scripts
           python3 -B scripts/check_frontend.py
 
+      # `npm audit` reports a registry outage and a real advisory with the same
+      # non-zero exit code. Only the endpoint error is retried - a maintenance
+      # window on registry.npmjs.org must not turn into a red gate that hides
+      # whether the rest of the gate passed - and the loop still fails closed
+      # when the service never answers.
       - name: Audit JavaScript dependencies
-        run: npm audit --prefix scripts --audit-level=high
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if output=$(npm audit --prefix scripts --audit-level=high 2>&1); then
+              printf '%s\n' "$output"
+              exit 0
+            fi
+            printf '%s\n' "$output"
+            case "$output" in
+              *"audit endpoint returned an error"*|*"503 Service Unavailable"*) ;;
+              *) exit 1 ;;
+            esac
+            if [ "$attempt" = 5 ]; then break; fi
+            echo "npm audit endpoint unavailable (attempt $attempt); retrying"
+            sleep $((attempt * 30))
+          done
+          echo "npm audit endpoint still unavailable" >&2
+          exit 1
 
       - name: Version sync
         run: python3 scripts/check_version_sync.py
