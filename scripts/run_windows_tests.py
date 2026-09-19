@@ -68,8 +68,11 @@ def run_file(path: Path, env: dict) -> dict:
         "status": "pass" if proc.returncode == 0 else "fail",
         "returncode": proc.returncode,
         "seconds": round(time.monotonic() - start, 1),
-        "stderr_tail": "\n".join(proc.stderr.strip().splitlines()[-12:]),
-        "stdout_tail": "\n".join(proc.stdout.strip().splitlines()[-6:]),
+        # Long enough for a full unittest traceback: the Windows job prints
+        # this inline, and a 12-line tail cut the frames that named the
+        # failing assertion.
+        "stderr_tail": "\n".join(proc.stderr.strip().splitlines()[-40:]),
+        "stdout_tail": "\n".join(proc.stdout.strip().splitlines()[-12:]),
     }
 
 
