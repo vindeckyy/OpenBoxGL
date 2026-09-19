@@ -50,7 +50,7 @@ def find_vars_used_outside_root(css_text: str):
     return set(v for v in VAR_USE_RE.findall(without) if v not in IGNORED_DYNAMIC)
 
 def test_app_vars_defined():
-    css = APP.read_text()
+    css = APP.read_text(encoding="utf-8")
     defs = parse_root_vars(css)
     used = find_vars_used_outside_root(css)
     missing = sorted(used - defs)
@@ -59,14 +59,14 @@ def test_app_vars_defined():
 
 def test_bigbox_video_snap_css():
     """Video snap class exists and is hidden under reduced-motion."""
-    css = APP.read_text()
+    css = APP.read_text(encoding="utf-8")
     assert ".bigbox-video-snap" in css, "bigbox-video-snap CSS class missing"
     assert "prefers-reduced-motion" in css, "reduced-motion media query missing"
 
 
 def test_bigbox_video_snap_js():
     """bigbox.js has scheduleVideoSnap and clearVideoSnap functions."""
-    js = (ROOT / "static" / "bigbox.js").read_text()
+    js = (ROOT / "static" / "bigbox.js").read_text(encoding="utf-8")
     assert "function scheduleVideoSnap" in js, "scheduleVideoSnap missing"
     assert "function clearVideoSnap" in js, "clearVideoSnap missing"
     assert "prefers-reduced-motion" not in js or "_reducedMotion" in js, "reduced-motion check missing"
@@ -74,16 +74,16 @@ def test_bigbox_video_snap_js():
 def test_themes_surface_deep():
     missing_themes = []
     for p in THEMES:
-        css = p.read_text()
+        css = p.read_text(encoding="utf-8")
         defs = parse_root_vars(css)
         if "surface-deep" not in defs:
             missing_themes.append(p.name)
     assert not missing_themes, f"themes missing --surface-deep: {missing_themes}"
 
 def test_themes_vars_defined():
-    app_defs = parse_root_vars(APP.read_text())
+    app_defs = parse_root_vars(APP.read_text(encoding="utf-8"))
     for p in THEMES:
-        css = p.read_text()
+        css = p.read_text(encoding="utf-8")
         defs = parse_root_vars(css) | app_defs
         used = find_vars_used_outside_root(css)
         missing = sorted(used - defs)
@@ -104,16 +104,16 @@ def _tool_menu_groups(html: str):
     return groups
 
 def test_tool_menu_group_membership():
-    html = INDEX.read_text()
+    html = INDEX.read_text(encoding="utf-8")
     groups = _tool_menu_groups(html)
     for key, expected in TOOL_GROUPS.items():
         assert key in groups, f"missing data-tool-group={key!r}"
         assert groups[key] == expected, f"{key} group ids {groups[key]!r} != {expected!r}"
 
 def test_time_machine_ui_surface():
-    html = INDEX.read_text()
-    js = (ROOT / "static" / "timemachine.js").read_text()
-    app = APP_JS.read_text()
+    html = INDEX.read_text(encoding="utf-8")
+    js = (ROOT / "static" / "timemachine.js").read_text(encoding="utf-8")
+    app = APP_JS.read_text(encoding="utf-8")
     assert 'id="timeMachineDialog"' in html
     assert 'id="timeMachineButton"' in html
     assert "openTimeMachine" in app
@@ -123,8 +123,8 @@ def test_time_machine_ui_surface():
     assert "confirmAction" in js
 
 def test_clip_deeplink_ui_surface():
-    app = APP_JS.read_text()
-    clips = (ROOT / "static" / "clips.js").read_text()
+    app = APP_JS.read_text(encoding="utf-8")
+    clips = (ROOT / "static" / "clips.js").read_text(encoding="utf-8")
     assert "import { openClip } from './clips.js';" in app
     assert "['clip', params => openClip(params.get('id'))]" in app
     assert "function openClip(clipId)" in clips
@@ -132,7 +132,7 @@ def test_clip_deeplink_ui_surface():
     assert "momentsTab" in clips
 
 def test_deeplink_dispatch_uses_explicit_allowlist():
-    app = APP_JS.read_text()
+    app = APP_JS.read_text(encoding="utf-8")
     actions = re.search(
         r"const DEEPLINK_ACTIONS = new Map\(\[(.*?)\n    \]\);",
         app,
@@ -148,7 +148,7 @@ def test_deeplink_dispatch_uses_explicit_allowlist():
     assert "if (typeof action === 'function') action(params);" in dispatch
 
 def test_game_dialog_path_browse_hosts():
-    html = INDEX.read_text()
+    html = INDEX.read_text(encoding="utf-8")
     game_dialog = re.search(r'id="gameDialog"[^>]*>(.*?)</dialog>', html, re.DOTALL)
     assert game_dialog, "missing #gameDialog"
     body = game_dialog.group(1)
@@ -168,26 +168,26 @@ def test_game_dialog_path_browse_hosts():
 
 
 def test_shelf_entry_editor_and_actions():
-    html = INDEX.read_text()
+    html = INDEX.read_text(encoding="utf-8")
     assert 'id="addShelfButton"' in html
     assert 'name="entry_type"' in html
     assert 'value="shelf"' in html
-    dialogs = (ROOT / "static" / "dialogs.js").read_text()
-    app = (ROOT / "static" / "app.js").read_text()
-    library = (ROOT / "static" / "library.js").read_text()
+    dialogs = (ROOT / "static" / "dialogs.js").read_text(encoding="utf-8")
+    app = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+    library = (ROOT / "static" / "library.js").read_text(encoding="utf-8")
     assert "manual-entry/update" in app
     assert "manual-entry/convert" in dialogs
     assert "Set up launch" in library
     assert "game.manual_entry" in library
 
 def test_statistics_sync_status_uses_current_label():
-    text = (ROOT / "static" / "settings.js").read_text()
+    text = (ROOT / "static" / "settings.js").read_text(encoding="utf-8")
     assert "const cloudLabel = AppState.appSettings.cloud_sync_beta ? 'Statistics sync (beta)' : 'Statistics sync';" in text
     assert "const cloudBeta = AppState.appSettings.cloud_sync_beta ? ' (beta)' : ' (beta)';" not in text
     assert "Cloud sync (beta)" not in text
 
 def test_f05_dialogs_no_window_prompt():
-    text = DIALOGS.read_text()
+    text = DIALOGS.read_text(encoding="utf-8")
     assert "window.prompt" not in text
     assert "window.confirm" not in text
     assert "promptInput" in text
@@ -195,7 +195,7 @@ def test_f05_dialogs_no_window_prompt():
     assert "bindContextMenuA11y" in text
 
 def test_f05_app_js_context_menu_a11y():
-    text = APP_JS.read_text()
+    text = APP_JS.read_text(encoding="utf-8")
     assert "bindContextMenuA11y" in text
     assert "addEventListener('contextmenu'" not in text
     assert "prompt(" not in text
@@ -222,7 +222,7 @@ def _function_body(source: str, name: str):
     return source[start:i - 1]
 
 def test_f05_state_native_fallbacks_no_prompt():
-    text = STATE_JS.read_text()
+    text = STATE_JS.read_text(encoding="utf-8")
     for name in ("nativePickFolder", "nativePickFile", "nativePrompt", "nativeConfirm"):
         body = _function_body(text, name)
         assert body, f"missing function {name}"

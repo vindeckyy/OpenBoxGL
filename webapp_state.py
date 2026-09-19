@@ -89,6 +89,7 @@ from pkg.state.registry import (
     RUNNING,
     SESSION_EVENTS,
 )
+from pkg.platform_compat import process_group_id  # noqa: F401  # re-export for tests/handlers
 from pkg.state.launch import (
     _ReattachedLease,
     _ReattachedProcess,

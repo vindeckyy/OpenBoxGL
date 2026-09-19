@@ -270,6 +270,11 @@ class TestRegistryHelpers(unittest.TestCase):
         sh.close()
         os.chmod(sh.name, 0o755)
         self.addCleanup(lambda: os.path.exists(sh.name) and os.unlink(sh.name))
+        if os.name == "nt":
+            with mock.patch("pkg.parity.parity_emulator_defs.shutil.which", return_value=None):
+                with self.assertRaises(FileNotFoundError):
+                    resolve_launch({"name": "Game", "path": sh.name, "platform": "Unknown"}, {})
+            return
         resolved = resolve_launch({"name": "Game", "path": sh.name, "platform": "Unknown"}, {})
         self.assertEqual(resolved["args"][0], "bash")
 
@@ -735,6 +740,57 @@ class TestStartLaunchCommandAdapter(unittest.TestCase):
         with mock.patch("pkg.parity.parity_emulator_defs.shutil.which", return_value=None):
             with self.assertRaises(ValueError):
                 _start_launch_command(game, {})
+
+
+class WindowsDefinitionTests(unittest.TestCase):
+    """Every adapter ships a Windows executable and core layout."""
+
+    def test_every_adapter_declares_a_windows_executable(self):
+        from parity_emulator_defs import load_adapters
+
+        missing = [a["adapter_id"] for a in load_adapters() if not a["native_exe_windows"]]
+        self.assertEqual(missing, [])
+
+    def test_windows_executables_are_windows_programs(self):
+        from parity_emulator_defs import load_adapters
+
+        for adapter in load_adapters():
+            self.assertTrue(
+                adapter["native_exe_windows"].casefold().endswith(".exe"),
+                adapter["adapter_id"],
+            )
+
+    def test_posix_executables_stay_posix(self):
+        from parity_emulator_defs import load_adapters
+
+        for adapter in load_adapters():
+            self.assertFalse(adapter["native_exe"].casefold().endswith(".exe"), adapter["adapter_id"])
+
+    @unittest.skipIf(os.name == "nt", "POSIX defs keep the libretro directory layout")
+    def test_posix_retroarch_uses_the_libretro_directory(self):
+        adapter = find_adapter("retroarch-snes")
+        self.assertIn("/usr/lib/libretro/snes9x_libretro.so", adapter["startup_args"])
+
+    @unittest.skipUnless(os.name == "nt", "Windows defs keep cores beside the executable")
+    def test_windows_retroarch_uses_cores_beside_the_executable(self):
+        adapter = find_adapter("retroarch-snes")
+        self.assertNotIn(".so", " ".join(adapter["startup_args"]))
+        self.assertIn("{EmulatorDir}\\cores\\snes9x_libretro.dll", adapter["startup_args"])
+
+    @unittest.skipUnless(os.name == "nt", "the Windows binary is only preferred there")
+    def test_windows_prefix_prefers_the_windows_binary(self):
+        from parity_emulator_defs import detect_adapter_prefix
+
+        adapter = find_adapter("retroarch-snes")
+        probed = []
+
+        def which(name):
+            probed.append(name)
+            return "C:\\emulators\\" + name
+
+        prefix = detect_adapter_prefix(adapter, which=which)
+        self.assertEqual(prefix, ["C:\\emulators\\retroarch.exe"])
+        self.assertEqual(probed[0], "retroarch.exe")
 
 
 if __name__ == "__main__":

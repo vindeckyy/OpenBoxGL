@@ -6,6 +6,7 @@ platform: PlayStation 3
 extensions:
   - iso
 native_exe: rpcs3
+native_exe_windows: rpcs3.exe
 flatpak_app_id: net.rpcs3.RPCS3
 startup_args:
   - "{path}"

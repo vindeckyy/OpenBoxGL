@@ -6,8 +6,6 @@ import logging
 import os
 from pathlib import Path
 import secrets
-import shlex
-import signal
 import subprocess
 import sys
 import threading
@@ -16,6 +14,18 @@ import time
 from automation import build_event
 from api_errors import Conflict
 from pkg.state.registry import EVENT_SEQUENCE, PENDING_LAUNCHES, PROCESS_LOCK, PROCESSES, RUNNING, SESSION_EVENTS  # noqa: F401
+from pkg.platform_compat import (
+    is_executable,
+    launch_kwargs,
+    process_alive,
+    process_command_line,
+    process_group_id,
+    process_start_token,
+    split_command,
+    suspend_process_tree,
+    resume_process_tree,
+    terminate_process_tree,
+)
 from backend_io import contained_path
 from catalog import apply_progress_automation
 from openbox import DATA, build_launch, load_state, update_state
@@ -152,22 +162,13 @@ def _release_obs_replay(settings, *, owned=False):
 
 
 def _read_proc_start_time(pid):
-    """Read process start time from /proc/<pid>/stat."""
-    try:
-        with open(f'/proc/{pid}/stat') as f:
-            fields = f.read().rsplit(')', 1)[-1].split()
-            return fields[19]  # starttime (field 22, 0-indexed as 19 after rparen split)
-    except (OSError, IndexError):
-        return None
+    """Read an opaque process start marker for a PID."""
+    return process_start_token(pid)
 
 
 def _read_proc_cmdline(pid):
-    """Read command fingerprint from /proc/<pid>/cmdline."""
-    try:
-        with open(f'/proc/{pid}/cmdline') as f:
-            return f.read().replace('\0', ' ')[:100]
-    except OSError:
-        return ''
+    """Read a short command fingerprint for a PID."""
+    return process_command_line(pid)
 
 
 def _verify_process_identity(session):
@@ -177,10 +178,9 @@ def _verify_process_identity(session):
     pid = session.get('pid')
     if not pid:
         return False
-    # Check PID exists
-    try:
-        os.kill(pid, 0)
-    except (OSError, ProcessLookupError):
+    # Check PID exists without signalling it (os.kill(pid, 0) is a terminate
+    # call on Windows, not a probe).
+    if not process_alive(pid):
         return False
     # Verify start time matches
     current_start = read_start(pid)
@@ -434,25 +434,14 @@ def _resolve_start_game(state, index, stable_game_id):
 
 
 def _terminate_owned_process(process):
-    """Send SIGTERM to a launched or reattached process group."""
+    """End a launched or reattached process and its descendants."""
     if process is None:
         return
-    if isinstance(process, _ReattachedProcess):
-        process_group = process.pgid
-    else:
-        try:
-            process_group = os.getpgid(process.pid)
-        except (OSError, ProcessLookupError):
-            process_group = getattr(process, "pid", None)
-    if not process_group:
+    pid = getattr(process, "pid", None)
+    if not pid:
         return
-    try:
-        os.killpg(process_group, signal.SIGTERM)
-    except (OSError, ProcessLookupError):
-        try:
-            process.terminate()
-        except (OSError, ProcessLookupError, AttributeError):
-            pass
+    pgid = getattr(process, "pgid", None)
+    terminate_process_tree(pid, force=False, pgid=pgid)
 
 
 def _rollback_failed_launch(launch_id, process=None, stable_game_id=""):
@@ -536,15 +525,15 @@ def _start_launch_command(game, profiles):
     """Build the launch argv and cwd, rejecting games that cannot run."""
     bld_launch = _ns("build_launch", build_launch)
     args, cwd = bld_launch(game, profiles)
-    game_command = shlex.split(str(game.get("launch", "")) or "")
-    profile_command = shlex.split(str(profiles.get(game.get("platform", ""), "")) or "")
+    game_command = split_command(str(game.get("launch", "")) or "")
+    profile_command = split_command(str(profiles.get(game.get("platform", ""), "")) or "")
     has_adapter = bool(str(game.get("emulator_adapter_id", "") or game.get("emulator_id", "")).strip())
     if (
         len(args) == 1
         and not game_command
         and not profile_command
         and not has_adapter
-        and not os.access(str(args[0]), os.X_OK)
+        and not is_executable(str(args[0]))
     ):
         raise ValueError(
             f"{game.get('name', 'This game')} has no launch command and its file is not executable. "
@@ -628,10 +617,7 @@ def _make_start_mutator(stable_game_id, index, started, process, entry, missing,
             "replay_buffer_owned": bool(replay_owned),
         })
 
-        try:
-            pgid = os.getpgid(process.pid)
-        except OSError:
-            pgid = process.pid
+        pgid = process_group_id(process.pid)
 
         session_record = {
             "game_id": stable_game_id,
@@ -741,7 +727,7 @@ def start_game(index=None, stable_game_id="", resume=False, allow_stale=False):
         # Apply MangoHud env if enabled in settings (1.7.2).
         launch_env = _apply_mangohud_from_state(state)
         launch_env = _apply_launch_env(launch_env, game)
-        process = subprocess.Popen(args, cwd=cwd, start_new_session=True, env=launch_env)
+        process = subprocess.Popen(args, cwd=cwd, env=launch_env, **launch_kwargs())
         started = datetime.now()
         replay_info = _toggle_obs_replay(state.get("settings", {}))
         if isinstance(replay_info, bool):
@@ -795,16 +781,19 @@ def control_game_session(launch_id, action):
         process_group = process.pgid if isinstance(process, _ReattachedProcess) else process.pid
         try:
             if action == "pause":
-                os.killpg(process_group, signal.SIGSTOP)
+                if not suspend_process_tree(process.pid, pgid=process_group):
+                    raise ValueError("Could not signal the game process.")
                 running["paused"] = True
             elif action == "resume":
-                os.killpg(process_group, signal.SIGCONT)
+                if not resume_process_tree(process.pid, pgid=process_group):
+                    raise ValueError("Could not signal the game process.")
                 running["paused"] = False
             elif action in {"stop", "restart", "kill"}:
                 running["restart"] = action == "restart"
                 if running.get("paused") and action != "kill":
-                    os.killpg(process_group, signal.SIGCONT)
-                os.killpg(process_group, signal.SIGKILL if action == "kill" else signal.SIGTERM)
+                    resume_process_tree(process.pid, pgid=process_group)
+                if not terminate_process_tree(process.pid, force=action == "kill", pgid=process_group):
+                    raise ValueError("Could not signal the game process.")
             else:
                 raise ValueError("Unknown session action.")
         except (ProcessLookupError, OSError) as error:

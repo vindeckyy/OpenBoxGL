@@ -3,6 +3,7 @@
 import hashlib
 import io
 import json
+import os
 import stat
 import sys
 import tempfile
@@ -48,7 +49,8 @@ class BackendHardeningTests(unittest.TestCase):
             recovered = store.recover()
             self.assertEqual(recovered["games"][0]["game_id"], stable_id)
             self.assertTrue(recovered["games"][0]["favorite"])
-            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
 
     def test_stable_ids_are_accepted_by_bulk_updates(self):
         games = [{"game_id": "game-a", "name": "A"}, {"game_id": "game-b", "name": "B"}]
@@ -104,11 +106,11 @@ class BackendHardeningTests(unittest.TestCase):
             store = JsonStateStore(path)
             store.save({"games": [{"name": "First"}], "profiles": {}, "history": []})
             store.save({"games": [{"name": "Second"}], "profiles": {}, "history": []})
-            backup = json.loads(store.backup_path.read_text())
+            backup = json.loads(store.backup_path.read_text(encoding="utf-8"))
             # The backup mirrors the latest committed primary; snapshots
             # hold earlier states. It must never contain uncommitted bytes.
             self.assertEqual(backup["games"][0]["name"], "Second")
-            primary = json.loads(path.read_text())
+            primary = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(primary["games"][0]["name"], "Second")
 
     def test_concurrent_update_writers_keep_both_changes(self):
@@ -140,7 +142,7 @@ class BackendHardeningTests(unittest.TestCase):
                 thread.start()
             for thread in threads:
                 thread.join()
-            final = json.loads(path.read_text())
+            final = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual([game["game_id"] for game in final["games"]], ["game-web"])
             self.assertTrue(final["settings"]["native_touched"])
 

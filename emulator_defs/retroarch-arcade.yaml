@@ -7,10 +7,17 @@ extensions:
   - zip
   - 7z
 native_exe: retroarch
+native_exe_windows: retroarch.exe
 flatpak_app_id: org.libretro.RetroArch
 startup_args:
   - -L
   - /usr/lib/libretro/mame_libretro.so
+  - "{path}"
+# RetroArch ships its cores next to the executable on Windows;
+# the Linux libretro directory does not exist there.
+startup_args_windows:
+  - -L
+  - "{EmulatorDir}\cores\mame_libretro.dll"
   - "{path}"
 recommended: true
 priority: 20

@@ -63,6 +63,32 @@ def get_db_connection(database_path):
     return conn
 
 
+def close_db_connections(database_path=None):
+    """Close this thread's cached LBDB connections, for one database or all.
+
+    Windows refuses to replace or delete a file another handle holds open (WAL
+    keeps the main database open), so callers drop the cached readers before
+    swapping in a rebuilt database or removing its directory. POSIX is
+    unaffected but benefits from not pinning the replaced inode.
+    """
+    conns = getattr(_LOCAL, "connections", None)
+    if not conns:
+        return
+    if database_path is None:
+        keys = list(conns)
+    else:
+        path = Path(database_path).resolve()
+        keys = [key for key in conns if key[0] == path]
+    for key in keys:
+        connection = conns.pop(key, None)
+        if connection is None:
+            continue
+        try:
+            connection.close()
+        except Exception:
+            pass
+
+
 # LBDB image type strings mapped to OpenBox media fields, in preference order.
 MEDIA_TYPE_MAP = {
     "cover": ("Box - Front", "Box - Front - Reconstructed"),
@@ -180,6 +206,7 @@ def build_database(metadata_zip, destination):
     database.commit()
     database.close()
     destination.parent.mkdir(parents=True, exist_ok=True)
+    close_db_connections(destination)
     temporary.replace(destination)
 
 

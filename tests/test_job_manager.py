@@ -1144,7 +1144,7 @@ class JobsAdapterTests(unittest.TestCase):
 
         save_root = DATA.parent / "save-fixture"
         save_root.mkdir(parents=True, exist_ok=True)
-        (save_root / "slot.sav").write_text("data")
+        (save_root / "slot.sav").write_text("data", encoding="utf-8")
         save_state({
             "games": [{
                 "name": "G",

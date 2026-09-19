@@ -138,6 +138,7 @@
       metadata_search: '/api/v1/metadata/search',
       import: '/api/v1/import', import_steam: '/api/v1/import/steam',
       import_heroic: '/api/v1/import/heroic', import_lutris: '/api/v1/import/lutris',
+      import_epic: '/api/v1/import/epic',
       import_arcade: '/api/v1/import/arcade', import_scummvm: '/api/v1/import/scummvm',
       import_rpcs3: '/api/v1/import/rpcs3', import_vita3k: '/api/v1/import/vita3k',
       emulators: '/api/v1/emulators', emulators_install: '/api/v1/emulators/install',

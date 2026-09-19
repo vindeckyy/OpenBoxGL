@@ -1,4 +1,4 @@
-name: Release AppImage
+name: Release
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-appimage
+  group: release
   cancel-in-progress: false
 
 jobs:
@@ -137,12 +137,124 @@ jobs:
           subject-name: OpenBox-${{ matrix.arch }}.AppImage
           subject-path: OpenBox-${{ matrix.arch }}.AppImage
 
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Validate release tag
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$') {
+            throw "invalid release tag: $tag"
+          }
+          $expected = (python -B -c "import updates; print(updates.VERSION)").Trim()
+          if ($tag -ne "v$expected") {
+            throw "tag $tag does not match updates.py version $expected"
+          }
+
+      - name: Run test suite
+        run: python -B scripts/run_windows_tests.py
+
+      # The released zip carries the WebView2 host, so users get the native
+      # window without a toolchain. Building it here also means a broken
+      # native_host_win.c fails the release instead of shipping silently;
+      # the windows CI job proves the same build on every push.
+      - name: Build the WebView2 native host
+        shell: pwsh
+        run: |
+          scripts/build_native_host_windows.ps1
+          if (-not (Test-Path -LiteralPath native_host.exe)) {
+            throw "native_host.exe was not produced; refusing to package a release without the Windows host"
+          }
+
+      - name: Package the portable release
+        shell: pwsh
+        run: |
+          # One top-level folder so scripts/install.ps1 can lift the whole tree
+          # into %LOCALAPPDATA%\OpenBox\share\openbox in a single move.
+          $root = Join-Path $env:RUNNER_TEMP 'OpenBox-windows/OpenBox'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          $skip = @('.git', '.github', '.venv-dev', 'build', 'node_modules', '__pycache__', '.coverage')
+          Get-ChildItem -Force -LiteralPath . |
+            Where-Object { $skip -notcontains $_.Name } |
+            ForEach-Object { Copy-Item -Recurse -Force -LiteralPath $_.FullName -Destination $root }
+          Get-ChildItem -Recurse -Force -Directory -LiteralPath $root |
+            Where-Object { $_.Name -eq '__pycache__' } |
+            Remove-Item -Recurse -Force
+          $asset = 'OpenBox-x86_64-windows.zip'
+          Compress-Archive -Path $root -DestinationPath $asset -CompressionLevel Optimal
+          # The native window is the point of the Windows build: fail the
+          # release if the packaged tree does not carry the host binary.
+          # Entry separators differ between Compress-Archive on PowerShell 5.1
+          # ("\") and 7 ("/"), so normalize before comparing.
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $asset))
+          try {
+            $hasHost = @($zip.Entries | Where-Object { ($_.FullName -replace '\\', '/') -eq 'OpenBox/native_host.exe' }).Count -eq 1
+          } finally {
+            $zip.Dispose()
+          }
+          if (-not $hasHost) {
+            throw "the release archive is missing OpenBox/native_host.exe"
+          }
+          $digest = (Get-FileHash -Algorithm SHA256 -LiteralPath $asset).Hash.ToLower()
+          # -NoNewline keeps this byte-identical to sha256sum output, which is
+          # what the publish job validates it with.
+          "$digest  $asset" | Set-Content -LiteralPath "$asset.sha256" -Encoding ascii -NoNewline
+
+      - name: Upload unsigned build outputs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # actions/upload-artifact@v7.0.1
+        with:
+          name: openbox-release-assets-windows
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            OpenBox-x86_64-windows.zip
+            OpenBox-x86_64-windows.zip.sha256
+
+  attest-windows:
+    needs: build-windows
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Download build output
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # actions/download-artifact@v8.0.1
+        with:
+          name: openbox-release-assets-windows
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # actions/attest-build-provenance@v4.2.2
+        with:
+          subject-name: OpenBox-x86_64-windows.zip
+          subject-path: OpenBox-x86_64-windows.zip
+
   publish:
-    needs: [build, attest]
+    needs: [build, attest, build-windows, attest-windows]
     runs-on: ubuntu-22.04
     timeout-minutes: 15
-    # AppImage and Flatpak publish jobs share one GitHub Release. Keep the
-    # uploads serialized while allowing their build matrices to run in parallel.
+    # AppImage, Windows and Flatpak publish jobs share one GitHub Release. Keep
+    # the uploads serialized while allowing their build matrices to run in
+    # parallel.
     concurrency:
       group: release-publish-${{ github.ref_name }}
       cancel-in-progress: false
@@ -214,7 +326,29 @@ jobs:
               "$appimage" \
               "$appimage.sig"
           done
+          # The Windows portable zip follows the same ladder: sign, confirm the
+          # signing key is the committed release key, then verify.
+          windows_asset="OpenBox-x86_64-windows.zip"
+          [ -f "$windows_asset" ] || {
+            echo "missing build artifact: $windows_asset" >&2
+            exit 1
+          }
+          python3 scripts/sign_release.py \
+            --key "$key_file" \
+            --public-key-out "$public_key_file" \
+            --out "$windows_asset.sig" \
+            "$windows_asset"
+          cmp -s "$public_key_file" openbox-release.pub || {
+            echo "OPENBOX_SIGNING_KEY does not match the committed release public key" >&2
+            exit 1
+          }
+          sha256sum --check --strict "$windows_asset.sha256"
+          python3 scripts/verify_release.py \
+            --key openbox-release.pub \
+            "$windows_asset" \
+            "$windows_asset.sig"
           cp scripts/install.sh install.sh
+          cp scripts/install.ps1 install.ps1
 
       - name: Compute release name
         id: relname
@@ -240,6 +374,10 @@ jobs:
             OpenBox-aarch64.AppImage.zsync
             OpenBox-aarch64.AppImage.sha256
             OpenBox-aarch64.AppImage.sig
+            OpenBox-x86_64-windows.zip
+            OpenBox-x86_64-windows.zip.sha256
+            OpenBox-x86_64-windows.zip.sig
             openbox-release.pub
             install.sh
+            install.ps1
             OpenBox-*-sbom.json

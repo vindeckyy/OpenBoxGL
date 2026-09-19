@@ -31,7 +31,7 @@ class AutoImportTests(unittest.TestCase):
                 games = Path(directory) / "games"
                 games.mkdir()
                 (games / "one.nes").write_bytes(b"NES\x1a")
-                (games / "ignore.txt").write_text("not a game")
+                (games / "ignore.txt").write_text("not a game", encoding="utf-8")
 
                 from openbox import load_state
                 from webapp_state import import_folder_path

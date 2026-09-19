@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import zipfile
@@ -194,9 +195,6 @@ def _flatpak_fs_allowed(app_id, rom_path, which, run):
     if "filesystem=host" in permissions or "filesystem=home" in permissions:
         return True
     resolved = Path(rom_path).expanduser().resolve()
-    home = Path.home().resolve()
-    if home == resolved or home in resolved.parents:
-        return "filesystem=home" in permissions
     for line in permissions.splitlines():
         if not line.strip().startswith("filesystem="):
             continue
@@ -208,16 +206,43 @@ def _flatpak_fs_allowed(app_id, rom_path, which, run):
                 return True
         except OSError:
             continue
+    # Explicit grants are checked first: Flatpak honours a path grant nested
+    # inside home even when ``filesystem=home`` itself is not granted.
+    home = Path.home().resolve()
+    if home == resolved or home in resolved.parents:
+        return "filesystem=home" in permissions
     return False
 
 
-def _retroarch_core_missing(adapter):
+EMULATOR_DIR_TOKEN = "{EmulatorDir}"
+
+
+def _resolve_core_path(core, emulator_path):
+    """Expand a configured core path against the installed emulator, or return None.
+
+    Defs may spell the core as an absolute path (Linux keeps cores in
+    ``/usr/lib/libretro``) or with the ``{EmulatorDir}`` token, which Windows
+    needs because RetroArch ships its cores beside the executable there.
+    """
+    if core.startswith(EMULATOR_DIR_TOKEN):
+        if not emulator_path:
+            return None
+        return str(Path(emulator_path).parent) + core[len(EMULATOR_DIR_TOKEN):]
+    if core.startswith(("/", "\\")) or os.path.isabs(core):
+        return core
+    return None
+
+
+def _retroarch_core_missing(adapter, emulator_path=""):
     startup_args = adapter.get("startup_args") or []
     for index, arg in enumerate(startup_args):
         if arg != "-L" or index + 1 >= len(startup_args):
             continue
         core = startup_args[index + 1]
-        if core.startswith("/") and not Path(core).is_file():
+        resolved = _resolve_core_path(core, emulator_path)
+        if resolved is None:
+            continue
+        if not Path(resolved).is_file():
             return core
     return None
 
@@ -482,10 +507,14 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None):
             pass
 
     install_mode = ""
+    emulator_path = ""
     if active_adapter:
-        native_exe = active_adapter.get("native_exe") or ""
+        from pkg.parity.parity_emulator_defs import adapter_executable
+
+        native_exe = adapter_executable(active_adapter)
         if native_exe and which(native_exe):
             install_mode = "native"
+            emulator_path = which(native_exe)
         elif _flatpak_installed(active_adapter.get("flatpak_app_id"), which, run):
             install_mode = "flatpak"
         elif native_exe or active_adapter.get("flatpak_app_id"):
@@ -507,7 +536,7 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None):
                     _fix_flatpak(app_id),
                 ))
 
-        missing_core = _retroarch_core_missing(active_adapter)
+        missing_core = _retroarch_core_missing(active_adapter, emulator_path)
         if missing_core:
             checks.append(_check(
                 "RETROARCH_CORE_MISSING",

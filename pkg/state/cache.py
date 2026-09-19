@@ -8,6 +8,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import posixpath
 import sys
 import threading
 import time
@@ -325,9 +326,15 @@ def _media_set_contains(media_set, path_value):
     p_str = str(path_value)
     if p_str in media_set:
         return True
+    # Normalize POSIX and Windows absolute paths so "C:\dir\.\file" and
+    # "C:\dir\file" (or the POSIX equivalents) compare equal.  POSIX-style
+    # paths keep POSIX separators even when the host is Windows, so a library
+    # imported from another platform still resolves.
     if p_str.startswith("/"):
-        norm = os.path.normpath(p_str)
-        if norm in media_set:
+        if posixpath.normpath(p_str) in media_set:
+            return True
+    elif os.path.isabs(p_str):
+        if os.path.normpath(p_str) in media_set:
             return True
     return False
 
@@ -566,7 +573,7 @@ def _ra_cache_record(game_id, data_parent):
         return {}
     path = Path(data_parent) / "cache" / "retroachievements" / f"{game_id}.json"
     try:
-        value = json.loads(path.read_text())
+        value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
     return value if isinstance(value, dict) else {}

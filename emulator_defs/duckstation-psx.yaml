@@ -11,6 +11,7 @@ extensions:
   - pbp
   - chd
 native_exe: duckstation-qt
+native_exe_windows: duckstation-qt-x64-ReleaseLTCG.exe
 flatpak_app_id: org.duckstation.DuckStation
 startup_args:
   - -batch

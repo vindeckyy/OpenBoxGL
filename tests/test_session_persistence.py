@@ -157,7 +157,7 @@ class TestSessionPersistence(unittest.TestCase):
         state["games"].append({
             "game_id": "game-1234",
             "name": "Test Game",
-            "path": "/bin/echo",
+            "path": sys.executable,
             "launch": "echo test"
         })
         mock_store.load.return_value = state
@@ -174,7 +174,7 @@ class TestSessionPersistence(unittest.TestCase):
 
         with patch('webapp_state._read_proc_start_time', return_value="1000"), \
              patch('webapp_state._read_proc_cmdline', return_value="test_command"), \
-             patch('os.getpgid', return_value=12345):
+             patch('webapp_state.process_group_id', return_value=12345):
             
             entry = start_game(index=0)
 

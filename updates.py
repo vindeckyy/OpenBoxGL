@@ -1,4 +1,10 @@
-"""Verified GitHub release updates for the OpenBox AppImage."""
+"""Verified GitHub release updates for OpenBox.
+
+Each platform has one release channel: an AppImage on Linux, a portable zip
+installed under ``%LOCALAPPDATA%\\OpenBox`` on Windows. Both verify the same
+Artifact: a SHA-256 checksum plus an Ed25519 signature from the committed
+release key; only the install step differs.
+"""
 
 import base64
 import hashlib
@@ -7,15 +13,21 @@ import logging
 import os
 import platform
 import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import zipfile
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from backend_io import atomic_write_bytes, atomic_write_text, download_file, fsync_directory, read_limited
+from pkg.platform_compat import IS_WINDOWS, start_menu_programs_dir, windows_install_dir
 
 logger = logging.getLogger("openbox")
 
-VERSION = "1.12.1"
+VERSION = "1.13.0"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
 TRUSTED_RELEASE_PREFIX = "https://github.com/vindeckyy/OpenBoxGL/releases/download/"
 
@@ -31,7 +43,9 @@ def _current_arch(machine=None):
 
 
 def _arch_asset(arch):
-    """The AppImage asset name for a given artifact architecture."""
+    """The release asset name for a given architecture on this platform."""
+    if IS_WINDOWS:
+        return f"OpenBox-{arch}-windows.zip"
     return f"OpenBox-{arch}.AppImage"
 
 
@@ -279,6 +293,43 @@ def verify_release_signature(update, artifact_digest, opener=urlopen):
     return verify_update_signature(update, artifact_digest, signature, public_key)
 
 
+def verify_artifact(artifact, signature_file, public_key_file) -> str:
+    """Verify a downloaded release artifact against its ``.sig`` and a raw key.
+
+    This is the portable equivalent of ``scripts/verify_release.py``: the
+    installer scripts verify with this so Windows never needs OpenSSL. Returns
+    the hex SHA-256 digest that was verified.
+    """
+    artifact, signature_file, public_key_file = (Path(path) for path in (artifact, signature_file, public_key_file))
+    payload = json.loads(signature_file.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("The release signature is invalid.")
+    if payload.get("algorithm") != "ed25519" or payload.get("digest_algorithm") != "sha256":
+        raise ValueError("The release signature does not use Ed25519 over SHA-256.")
+    expected = str(payload.get("digest", "")).lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise ValueError("The release signature is missing a valid digest.")
+    digest = hashlib.sha256()
+    with artifact.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    actual = digest.hexdigest()
+    if expected != actual:
+        raise ValueError("The artifact does not match the signed release digest.")
+    try:
+        signature = base64.b64decode(str(payload.get("signature", "")), validate=True)
+    except (TypeError, ValueError) as error:
+        raise ValueError("The release signature is missing a valid signature.") from error
+    public_key = public_key_file.read_bytes()
+    if len(public_key) != 32:
+        raise ValueError("The release public key is invalid.")
+    if public_key == PLACEHOLDER_PUBLIC_KEY:
+        raise ValueError("The committed OpenBox release public key is still the placeholder.")
+    if not _verify_ed25519(public_key, signature, bytes.fromhex(actual)):
+        raise ValueError("The release signature verification failed.")
+    return actual
+
+
 def check_update(opener=urlopen):
     try:
         with github_request(RELEASE_API, opener=opener) as response:
@@ -293,7 +344,7 @@ def check_update(opener=urlopen):
         raise ValueError("The GitHub releases payload is invalid.")
     version = str(release.get("tag_name", ""))
     urls, digests = parse_release_assets(release)
-    appimage = urls.get(ASSET, "")
+    artifact = urls.get(ASSET, "")
     checksum = digests.get(ASSET, "")
     checksum_url = urls.get(f"{ASSET}.sha256", "")
     sig_url = urls.get(SIGNATURE_ASSET, "")
@@ -304,12 +355,12 @@ def check_update(opener=urlopen):
     if release_available and re.search(r"[-+]", version):
         # Never auto-update to a pre-release or build-suffixed tag.
         release_available = False
-    if release_available and not appimage.startswith(TRUSTED_RELEASE_PREFIX):
+    if release_available and not artifact.startswith(TRUSTED_RELEASE_PREFIX):
         raise ValueError("The release is missing verified OpenBox update assets.")
     if release_available and not checksum and not checksum_url:
-        raise ValueError("The release is missing a SHA-256 checksum for the AppImage.")
+        raise ValueError("The release is missing a SHA-256 checksum for the download.")
     if release_available and not sig_url:
-        raise ValueError("The release is missing an Ed25519 signature for the AppImage.")
+        raise ValueError("The release is missing an Ed25519 signature.")
     if release_available and not sig_url.startswith(TRUSTED_RELEASE_PREFIX):
         raise ValueError("The release signature URL is not a trusted OpenBox release asset.")
     return {
@@ -317,7 +368,7 @@ def check_update(opener=urlopen):
         "latest": version.lstrip("v"),
         "available": release_available,
         "notes": str(release.get("body", ""))[:4000],
-        "appimage": appimage,
+        "artifact": artifact,
         "checksum": checksum,
         "checksum_url": checksum_url,
         "sig": bool(sig_url),
@@ -327,13 +378,20 @@ def check_update(opener=urlopen):
 
 
 def install_update(update, destination=None, opener=urlopen):
+    """Install a verified update through this platform's channel."""
+    if IS_WINDOWS:
+        return _install_update_windows(update, opener=opener)
+    return _install_update_appimage(update, destination, opener=opener)
+
+
+def _install_update_appimage(update, destination=None, opener=urlopen):
     # Resolve symlinks so the real AppImage is replaced, not the link.
     destination = Path(destination or os.environ.get("APPIMAGE", "")).expanduser().resolve()
     if not destination.is_file():
         raise ValueError("Automatic updates require the OpenBox AppImage.")
     if not update.get("available"):
         raise ValueError("OpenBox is already up to date.")
-    appimage = str(update.get("appimage", "")).strip()
+    appimage = str(update.get("artifact", "")).strip()
     if not appimage.startswith(TRUSTED_RELEASE_PREFIX):
         raise ValueError("The update URLs are not trusted OpenBox release assets.")
     expected = resolve_update_checksum(update, opener=opener)
@@ -343,7 +401,7 @@ def install_update(update, destination=None, opener=urlopen):
     temporary = destination.with_name(f".{destination.name}.update")
     try:
         download_file(
-            update["appimage"], temporary, max_bytes=2 * 1024 * 1024 * 1024,
+            update["artifact"], temporary, max_bytes=2 * 1024 * 1024 * 1024,
             timeout=60, opener=opener, sha256=expected,
         )
         temporary.chmod(destination.stat().st_mode)
@@ -363,6 +421,9 @@ def install_update(update, destination=None, opener=urlopen):
 
 
 def install_desktop_entry(appimage=None):
+    """Install the platform's desktop integration for this copy of OpenBox."""
+    if IS_WINDOWS:
+        return _install_windows_entry(appimage)
     appimage = Path(appimage or os.environ.get("APPIMAGE", "")).expanduser()
     if not appimage.is_file():
         raise ValueError("Desktop integration requires the OpenBox AppImage.")
@@ -394,7 +455,193 @@ def install_desktop_entry(appimage=None):
     return str(desktop)
 
 
-def main():
+# ---------------------------------------------------------------------------
+# Windows installation channel
+# ---------------------------------------------------------------------------
+
+WINDOWS_LAUNCHER = "openbox.cmd"
+
+
+if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
+
+    def _install_root() -> Path:
+        """The directory holding the running OpenBox tree."""
+        return Path(__file__).resolve().parent
+
+    def _installed_root() -> Path | None:
+        """The portable install tree, or None when running from a checkout.
+
+        Auto-updates only ever replace an installed copy, mirroring the
+        ``APPIMAGE`` requirement on Linux; a working tree is never moved.
+        """
+        root = windows_install_dir()
+        if root is None:
+            return None
+        share = root / "share" / "openbox"
+        return share if (share / "web_app.py").is_file() else None
+
+    def _powershell(script: str, *, detached: bool = False):
+        """Run PowerShell through -EncodedCommand, so quoting cannot bite."""
+        def _encode(text: str) -> str:
+            return base64.b64encode(text.encode("utf-16-le")).decode("ascii")
+
+        invocation = [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-EncodedCommand",
+        ]
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        if detached:
+            flags |= getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            return subprocess.Popen(invocation + [_encode(script)], creationflags=flags, close_fds=True)
+        # Windows PowerShell 5.1 encodes redirected stdout with the console
+        # codepage, which mangles any non-ASCII path in an error message; force
+        # UTF-8 so the capture below decodes exactly.
+        script = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\r\n" + script
+        return subprocess.run(
+            invocation + [_encode(script)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            creationflags=flags,
+        )
+
+    def _ps_quote(value) -> str:
+        return "'" + str(value).replace("'", "''") + "'"
+
+    def _create_shortcut(launcher: Path, link: Path, icon: Path | None) -> None:
+        script = [
+            "$ErrorActionPreference = 'Stop'",
+            "$shell = New-Object -ComObject WScript.Shell",
+            f"$shortcut = $shell.CreateShortcut({_ps_quote(link)})",
+            f"$shortcut.TargetPath = {_ps_quote(launcher)}",
+            f"$shortcut.WorkingDirectory = {_ps_quote(launcher.parent)}",
+            "$shortcut.Description = 'OpenBox game library'",
+        ]
+        if icon is not None:
+            script.append(f"$shortcut.IconLocation = {_ps_quote(icon)}")
+        script.append("$shortcut.Save()")
+        result = _powershell("\r\n".join(script))
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip()
+            raise ValueError(f"Could not create the Start Menu shortcut: {detail or result.returncode}")
+
+    def register_protocol(launcher: Path) -> None:
+        """Register the ``openbox://`` URI scheme for the current user."""
+        import winreg
+
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\openbox") as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "URL:OpenBox Protocol")
+            winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\openbox\shell\open\command") as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, f'"{launcher}" "%1"')
+
+    def _install_windows_entry(launcher=None) -> str:
+        launcher = Path(launcher or _install_root() / WINDOWS_LAUNCHER).expanduser().resolve()
+        if not launcher.is_file():
+            raise ValueError("Desktop integration requires the OpenBox launcher.")
+        programs = start_menu_programs_dir()
+        if programs is None:
+            raise ValueError("The Start Menu folder is unavailable.")
+        programs.mkdir(parents=True, exist_ok=True)
+        link = programs / "OpenBox.lnk"
+        icon = _install_root() / "openbox.ico"
+        _create_shortcut(launcher, link, icon if icon.is_file() else None)
+        register_protocol(launcher)
+        return str(link)
+
+    def _payload_root(directory: Path) -> Path:
+        """The single top-level folder of an extracted archive, when it has one."""
+        entries = [entry for entry in directory.iterdir() if not entry.name.startswith("__")]
+        folders = [entry for entry in entries if entry.is_dir()]
+        files = [entry for entry in entries if not entry.is_dir()]
+        return folders[0] if len(folders) == 1 and not files else directory
+
+    def _applier_script(pid: int, target: Path, staged: Path, scratch: Path) -> str:
+        """PowerShell that swaps the staged tree in once *pid* has exited.
+
+        A running ``.exe`` cannot be replaced in place, so the swap happens
+        after the app exits: the old tree is kept as ``<target>.previous``.
+        """
+        previous = Path(f"{target}.previous")
+        return "\r\n".join([
+            "$ErrorActionPreference = 'Stop'",
+            f"$targetPid = {int(pid)}",
+            f"$target = {_ps_quote(target)}",
+            f"$staged = {_ps_quote(staged)}",
+            f"$scratch = {_ps_quote(scratch)}",
+            f"$previous = {_ps_quote(previous)}",
+            "$deadline = (Get-Date).AddMinutes(10)",
+            "while (Get-Process -Id $targetPid -ErrorAction SilentlyContinue) {",
+            "    if ((Get-Date) -gt $deadline) { exit 1 }",
+            "    Start-Sleep -Milliseconds 250",
+            "}",
+            "if (Test-Path -LiteralPath $previous) { Remove-Item -LiteralPath $previous -Recurse -Force }",
+            "if (Test-Path -LiteralPath $target) { Move-Item -LiteralPath $target -Destination $previous }",
+            "Move-Item -LiteralPath $staged -Destination $target",
+            "Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue",
+        ])
+
+    def _install_update_windows(update, opener=urlopen) -> dict:
+        target = _installed_root()
+        if target is None:
+            raise ValueError("Automatic updates require an installed copy of OpenBox.")
+        if not update.get("available"):
+            raise ValueError("OpenBox is already up to date.")
+        archive_url = str(update.get("artifact", "")).strip()
+        if not archive_url.startswith(TRUSTED_RELEASE_PREFIX):
+            raise ValueError("The update URLs are not trusted OpenBox release assets.")
+        expected = resolve_update_checksum(update, opener=opener)
+        verify_release_signature(update, expected, opener=opener)
+
+        scratch = Path(tempfile.mkdtemp(prefix=f".{target.name}.next-", dir=target.parent))
+        try:
+            archive = scratch / ASSET
+            download_file(
+                archive_url, archive, max_bytes=2 * 1024 * 1024 * 1024,
+                timeout=60, opener=opener, sha256=expected,
+            )
+            payload = scratch / "payload"
+            payload.mkdir()
+            with zipfile.ZipFile(archive) as bundle:
+                bundle.extractall(payload)
+            staged = _payload_root(payload)
+            if not (staged / "web_app.py").is_file():
+                raise ValueError("The update archive is not an OpenBox installation.")
+            archive.unlink()
+            _powershell(_applier_script(os.getpid(), target, staged, scratch), detached=True)
+        except BaseException:
+            shutil.rmtree(scratch, ignore_errors=True)
+            raise
+        return {"installed": update["latest"], "backup": f"{target}.previous", "restart_required": True}
+
+
+def _cli_verify(argv) -> int:
+    if len(argv) != 3:
+        print("usage: updates.py verify <artifact> <signature> <public-key>", file=sys.stderr)
+        return 2
+    try:
+        digest = verify_artifact(*argv)
+    except (OSError, ValueError) as error:
+        print(f"verification failed: {error}", file=sys.stderr)
+        return 1
+    print(digest)
+    return 0
+
+
+def main(argv=None):
+    """``verify`` and ``install-desktop-entry`` are used by the installers."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["verify"]:
+        return _cli_verify(argv[1:])
+    if argv[:1] == ["install-desktop-entry"]:
+        print(install_desktop_entry(argv[1] if len(argv) > 1 else None))
+        return 0
     # RFC 8032 round-trip: malformed points must fail cleanly, not verify.
     # The canonical signer is exercised by test_release_signing.py; this
     # only proves the decoder rejects invalid and non-canonical points.
@@ -410,7 +657,8 @@ def main():
     except ValueError:
         pass
     print("ed25519 decoder self-test: ok")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

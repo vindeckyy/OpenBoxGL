@@ -223,7 +223,9 @@ def _resume_link(game, state, requested, *, snapshot_id=""):
         LOGGER.debug("Moments: immutable resume snapshot failed", exc_info=True)
         return None
     return {
-        "file": str(snapshot.relative_to(state_dir)),
+        # Relative snapshot references are stored POSIX-style so a library
+        # moved between platforms keeps resolving; readers normalize already.
+        "file": snapshot.relative_to(state_dir).as_posix(),
         "capture_id": str(current.get("capture_id") or ""),
         "snapshot_id": str(snapshot_id or ""),
         "immutable": True,

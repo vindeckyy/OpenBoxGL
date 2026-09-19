@@ -133,7 +133,7 @@ class RecapBase(unittest.TestCase):
         cache_dir.mkdir(parents=True, exist_ok=True)
         payload = {"game_id": game_id}
         payload.update(fields)
-        (cache_dir / f"{game_id}.json").write_text(json.dumps(payload))
+        (cache_dir / f"{game_id}.json").write_text(json.dumps(payload), encoding="utf-8")
         self.addCleanup(lambda: (cache_dir / f"{game_id}.json").unlink(missing_ok=True))
 
 
@@ -287,7 +287,7 @@ class RecapPublishTest(RecapBase):
         gid = self._seed_running()
         states_dir = Path(DATA).parent / "resume_states" / f"{gid}-slot0"
         states_dir.mkdir(parents=True, exist_ok=True)
-        (states_dir / "meta.json").write_text(json.dumps({"game_id": gid}))
+        (states_dir / "meta.json").write_text(json.dumps({"game_id": gid}), encoding="utf-8")
         self.addCleanup(lambda: __import__("shutil").rmtree(Path(DATA).parent / "resume_states", ignore_errors=True))
         with mock.patch(
             "pkg.parity.parity_resume.resume_status",

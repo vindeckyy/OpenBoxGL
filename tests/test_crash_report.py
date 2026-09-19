@@ -115,6 +115,12 @@ class CrashReportTests(unittest.TestCase):
             logger.warning("Credentials token=supersecret-value were rejected")
             report = build_report(directory, include_log=True)
             self.assertNotIn("supersecret-value", report)
+            # Windows keeps the log handle open; close it so the temp
+            # directory can be removed at the end of the test.
+            for handler in list(logger.handlers):
+                if getattr(handler, "_openbox_diagnostic", False):
+                    handler.close()
+                    logger.removeHandler(handler)
 
     def test_missing_library_is_not_fatal(self):
         with tempfile.TemporaryDirectory() as directory:

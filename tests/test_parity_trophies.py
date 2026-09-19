@@ -277,7 +277,7 @@ class PerfTest(unittest.TestCase):
 class I18nContractTest(unittest.TestCase):
     def test_every_rule_has_locale_strings_in_all_five(self):
         for locale in ("en", "es", "de", "fr", "pt"):
-            data = json.loads((ROOT / "locales" / f"{locale}.json").read_text())
+            data = json.loads((ROOT / "locales" / f"{locale}.json").read_text(encoding="utf-8"))
             rules = data.get("trophy", {}).get("rules", {})
             for rule in parity_trophies.TROPHY_RULES:
                 self.assertIn(rule["id"], rules, f"{locale} missing trophy rule {rule['id']}")

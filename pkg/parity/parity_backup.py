@@ -364,7 +364,7 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None, force=F
                 settings_file = root / "settings.json"
                 if settings_file.is_file():
                     try:
-                        with settings_file.open() as f:
+                        with settings_file.open(encoding="utf-8") as f:
                             existing_settings = json.load(f)
                     except json.JSONDecodeError:
                         pass

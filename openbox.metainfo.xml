@@ -40,6 +40,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.13.0" date="2026-09-19">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.13.0</url>
+      <description>
+        <p>Windows support: a WebView2 native window, PowerShell and CMD launchers, a signed portable install with verified in-app updates, Start Menu and openbox:// registration, Windows binary names for every emulator definition, and a windows-latest CI job running the full test suite. The Linux channels are unchanged.</p>
+      </description>
+    </release>
     <release version="1.12.1" date="2026-09-15">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.12.1</url>
       <description>

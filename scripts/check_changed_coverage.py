@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def _run(command: list[str], cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False)
+    return subprocess.run(command, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
 
 
 def _diff_base(ref: str | None) -> str:
@@ -77,9 +77,11 @@ def _load_coverage():
         # Load the pinned tool from that environment instead of making the
         # gate depend on a globally installed package.
         candidates = []
-        venv_lib = ROOT / ".venv-dev"
+        venv_lib = ROOT / ".venv-dev" / "Lib"  # Windows venv layout
+        if venv_lib.is_dir():
+            candidates.extend((venv_lib / "site-packages",))
         for lib_name in ("lib", "lib64"):
-            candidates.extend((venv_lib / lib_name).glob("python*/site-packages"))
+            candidates.extend((ROOT / ".venv-dev" / lib_name).glob("python*/site-packages"))
         for candidate in candidates:
             if (candidate / "coverage").is_dir():
                 sys.path.insert(0, str(candidate))

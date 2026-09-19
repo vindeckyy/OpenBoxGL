@@ -8,6 +8,7 @@ import urllib.request
 from pathlib import Path
 
 from backend_io import read_limited
+from pkg.platform_compat import python_command
 
 
 SCHEME = "openbox"
@@ -99,7 +100,7 @@ def handle_cli(argv, data_dir):
     args = list(argv)
     if "--help" in args or "-h" in args:
         print("Usage: openbox [OPTIONS]")
-        print("       python3 web_app.py [OPTIONS]\n")
+        print(f"       {python_command()} web_app.py [OPTIONS]\n")
         print("Options:")
         print("  -h, --help                 Show this help message and exit")
         print("  --web                      Launch loopback web server and open in browser")
@@ -146,7 +147,7 @@ def handle_cli(argv, data_dir):
 def dispatch_uri(uri, data_dir, host="127.0.0.1", port=None, token=None, open_browser=False):
     token_path = Path(data_dir) / "server.token"
     if token is None and token_path.is_file():
-        token = token_path.read_text().strip()
+        token = token_path.read_text(encoding="utf-8").strip()
     if port is None:
         port = read_port_file(data_dir)
     parsed = parse_uri(uri)
@@ -373,7 +374,7 @@ def read_port_file(data_dir):
     port_file = Path(data_dir) / "server.port"
     if port_file.is_file():
         try:
-            return int(port_file.read_text().strip())
+            return int(port_file.read_text(encoding="utf-8").strip())
         except ValueError:
             pass
     return 0

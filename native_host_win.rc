@@ -1,0 +1,4 @@
+// Icon resource for the Windows native host. The host also loads openbox.ico
+// at runtime for the window and tray icon, so the asset ships alongside the
+// executable.
+IDI_OPENBOX ICON "openbox.ico"

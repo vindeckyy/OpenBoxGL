@@ -15,7 +15,6 @@ or oversized remote data cannot leave a half-applied local state behind.
 from __future__ import annotations
 
 import copy
-import fcntl
 import hashlib
 import json
 import os
@@ -27,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from backend_io import atomic_write_text
+from pkg.platform_compat import lock_handle
 from pkg.parity.parity_library_sync import (
     SyncValidationError,
     SyncFolderError,
@@ -549,17 +549,15 @@ def _household_transport_lock(folder: str | os.PathLike[str], *, create: bool = 
     try:
         with lock_path.open("a+", encoding="utf-8") as lock_file:
             os.chmod(lock_path, 0o600)
+            acquired = False
             try:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-            except OSError as error:
-                raise SyncFolderError("Unable to lock household sync folder.") from error
-            try:
-                yield target
-            finally:
-                try:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-                except OSError:
-                    pass
+                with lock_handle(lock_file):
+                    acquired = True
+                    yield target
+            except TimeoutError as error:
+                if not acquired:
+                    raise SyncFolderError("Unable to lock household sync folder.") from error
+                raise
     except SyncFolderError:
         raise
     except OSError as error:

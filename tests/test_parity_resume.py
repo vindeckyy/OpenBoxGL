@@ -20,13 +20,17 @@ from pkg.parity import parity_resume  # noqa: E402
 from pkg.parity import launch_tokens  # noqa: E402
 from pkg.state import _deps  # noqa: E402
 
+# Adapter resolution requires the emulator binary to exist on this host, so the
+# fixtures point at a real executable instead of a POSIX-only stand-in.
+FAKE_EMULATOR = sys.executable
+
 
 def _game(**extra):
     game = {
         "game_id": "stable-1",
         "name": "Fixture Game",
         "platform": "SNES",
-        "path": "/bin/true",
+        "path": FAKE_EMULATOR,
         "emulator_adapter_id": "retroarch-snes",
     }
     game.update(extra)
@@ -233,7 +237,7 @@ class InjectArgsTests(unittest.TestCase):
             "label": "FakeRA",
             "platform": "SNES",
             "extensions": ["sfc"],
-            "native_exe": "/bin/true",
+            "native_exe": FAKE_EMULATOR,
             "flatpak_app_id": "",
             "startup_args": ["{path}"],
             "executable_patterns": [],
@@ -262,7 +266,7 @@ class InjectArgsTests(unittest.TestCase):
             "file": "resume.state",
             "captured_at": datetime.now().isoformat(timespec="seconds"),
         }
-        (sdir / "state.json").write_text(json.dumps(meta))
+        (sdir / "state.json").write_text(json.dumps(meta), encoding="utf-8")
         return state_file
 
     def test_normal_launch_arms_capture_and_writes_cfg(self):
@@ -275,7 +279,7 @@ class InjectArgsTests(unittest.TestCase):
         self.assertIn("--appendconfig", args)
         cfg = self._sdir() / parity_resume.RA_CONFIG_NAME
         self.assertTrue(cfg.is_file())
-        text = cfg.read_text()
+        text = cfg.read_text(encoding="utf-8")
         self.assertIn('savestate_auto_save = "true"', text)
         self.assertIn('savestate_auto_load = "false"', text)
         self.assertIn(f'savestate_directory = "{self._sdir()}"', text)
@@ -362,9 +366,9 @@ class InjectArgsTests(unittest.TestCase):
     def test_stale_state_requires_allow_stale(self):
         self._meta()
         meta_path = self._sdir() / "state.json"
-        meta = json.loads(meta_path.read_text())
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
         meta["emulator_version"] = "old-version"
-        meta_path.write_text(json.dumps(meta))
+        meta_path.write_text(json.dumps(meta), encoding="utf-8")
         with self.assertRaises(ValueError):
             parity_resume.inject_resume_args(
                 self.game, ["/bin/true"], profiles={}, settings={}, resume=True,
@@ -388,7 +392,7 @@ class CollectStateTests(unittest.TestCase):
             "label": "Fake",
             "platform": "SNES",
             "extensions": ["sfc"],
-            "native_exe": "/bin/true",
+            "native_exe": FAKE_EMULATOR,
             "flatpak_app_id": "",
             "startup_args": ["{path}"],
             "executable_patterns": [],
@@ -420,7 +424,7 @@ class CollectStateTests(unittest.TestCase):
         self.assertEqual(meta["emulator_version"], parity_resume.emulator_fingerprint(self.adapter))
         self.assertEqual(meta["launch_id"], "L1")
         self.assertTrue(meta["capture_id"].startswith("capture-"))
-        on_disk = json.loads((self.sdir / "state.json").read_text())
+        on_disk = json.loads((self.sdir / "state.json").read_text(encoding="utf-8"))
         self.assertEqual(on_disk["file"], "resume.state")
 
     def test_collect_picks_up_state_thumbnail(self):
@@ -575,7 +579,7 @@ class StatusAndStaleTests(unittest.TestCase):
             "label": "Fake",
             "platform": "SNES",
             "extensions": ["sfc"],
-            "native_exe": "/bin/true",
+            "native_exe": FAKE_EMULATOR,
             "flatpak_app_id": "",
             "startup_args": ["{path}"],
             "executable_patterns": [],
@@ -597,7 +601,7 @@ class StatusAndStaleTests(unittest.TestCase):
             "captured_at": "2026-09-12T00:00:00",
             "capture_id": "capture-test",
         }
-        (self.sdir / "state.json").write_text(json.dumps(meta))
+        (self.sdir / "state.json").write_text(json.dumps(meta), encoding="utf-8")
         return meta
 
     def test_status_available_fresh(self):
@@ -622,9 +626,9 @@ class StatusAndStaleTests(unittest.TestCase):
         self.assertTrue(status["available"])
         self.assertTrue(status["stale"])
         self.assertTrue(status["adapter_changed"] is False)
-        meta = json.loads((self.sdir / "state.json").read_text())
+        meta = json.loads((self.sdir / "state.json").read_text(encoding="utf-8"))
         meta["adapter_id"] = "other-adapter"
-        (self.sdir / "state.json").write_text(json.dumps(meta))
+        (self.sdir / "state.json").write_text(json.dumps(meta), encoding="utf-8")
         status = parity_resume.resume_status(self.game, {}, profiles={}, data_parent=self.data_parent)
         self.assertTrue(status["stale"])
         self.assertTrue(status["adapter_changed"])
@@ -641,7 +645,7 @@ class StatusAndStaleTests(unittest.TestCase):
         outside.write_bytes(b"must remain untouched")
         meta = self._write_meta()
         meta["file"] = "../outside.bin"
-        (self.sdir / "state.json").write_text(json.dumps(meta))
+        (self.sdir / "state.json").write_text(json.dumps(meta), encoding="utf-8")
         status = parity_resume.resume_status(self.game, {}, profiles={}, data_parent=self.data_parent)
         self.assertFalse(status["available"])
         with self.assertRaises(FileNotFoundError):
@@ -656,7 +660,7 @@ class StatusAndStaleTests(unittest.TestCase):
         except OSError:
             self.skipTest("symlinks unavailable in this environment")
         meta["file"] = "linked.bin"
-        (self.sdir / "state.json").write_text(json.dumps(meta))
+        (self.sdir / "state.json").write_text(json.dumps(meta), encoding="utf-8")
         status = parity_resume.resume_status(self.game, {}, profiles={}, data_parent=self.data_parent)
         self.assertFalse(status["available"])
         self.assertTrue(parity_resume.discard_resume_state(self.game, self.data_parent))
@@ -696,7 +700,7 @@ class LaunchPipelineTests(unittest.TestCase):
         self.addCleanup(PROCESSES.clear)
         self.addCleanup(PENDING_LAUNCHES.clear)
         self.state = {
-            "games": [{"game_id": "g1", "name": "Game", "path": "/bin/true"}],
+            "games": [{"game_id": "g1", "name": "Game", "path": FAKE_EMULATOR}],
             "profiles": {},
             "settings": {},
             "history": [],
@@ -713,7 +717,9 @@ class LaunchPipelineTests(unittest.TestCase):
             webapp_state,
             load_state=MagicMock(return_value=self.state),
             _resolve_start_game=MagicMock(return_value=(self.state["games"][0], 0)),
-            _start_launch_command=MagicMock(return_value=(["/bin/true"], "/tmp")),
+            _start_launch_command=MagicMock(
+                return_value=([FAKE_EMULATOR, "-c", "pass"], tempfile.gettempdir())
+            ),
             _apply_start_plugins=MagicMock(side_effect=lambda game, args, cwd: (args, cwd)),
             _validate_start_command=MagicMock(),
             apply_perf_profile=MagicMock(return_value=MagicMock(restore=MagicMock())),
@@ -721,7 +727,9 @@ class LaunchPipelineTests(unittest.TestCase):
             _annotate_gamescope_start=MagicMock(),
             _publish_start_events=MagicMock(),
             finish_session=MagicMock(),
-            subprocess=MagicMock(Popen=MagicMock(return_value=self.process)),
+        ), patch(
+            "pkg.state.launch.subprocess",
+            MagicMock(Popen=MagicMock(return_value=self.process)),
         ), patch("pkg.state.launch.threading.Thread"):
             entry = webapp_state.start_game(0, resume=True)
         self.assertTrue(entry["launch_id"])
@@ -736,7 +744,9 @@ class LaunchPipelineTests(unittest.TestCase):
             webapp_state,
             load_state=MagicMock(return_value=self.state),
             _resolve_start_game=MagicMock(return_value=(self.state["games"][0], 0)),
-            _start_launch_command=MagicMock(return_value=(["/bin/true"], "/tmp")),
+            _start_launch_command=MagicMock(
+                return_value=([FAKE_EMULATOR, "-c", "pass"], tempfile.gettempdir())
+            ),
             _apply_start_plugins=MagicMock(side_effect=lambda game, args, cwd: (args, cwd)),
             _validate_start_command=MagicMock(),
             apply_perf_profile=MagicMock(return_value=MagicMock(restore=MagicMock())),
@@ -744,7 +754,9 @@ class LaunchPipelineTests(unittest.TestCase):
             _annotate_gamescope_start=MagicMock(),
             _publish_start_events=MagicMock(),
             finish_session=MagicMock(),
-            subprocess=MagicMock(Popen=MagicMock(return_value=self.process)),
+        ), patch(
+            "pkg.state.launch.subprocess",
+            MagicMock(Popen=MagicMock(return_value=self.process)),
         ), patch("pkg.state.launch.threading.Thread"):
             entry = webapp_state.start_game(0)
         self.assertFalse(entry["resumed_from_state"])
@@ -792,7 +804,7 @@ class DeeplinkTests(unittest.TestCase):
         from pkg.parity import parity_deeplinks
         calls = []
         with tempfile.TemporaryDirectory() as tmp:
-            Path(tmp, "server.token").write_text("tok")
+            Path(tmp, "server.token").write_text("tok", encoding="utf-8")
             with patch.object(parity_deeplinks, "api_request", side_effect=lambda *a, **k: calls.append(a) or {"ok": True}):
                 rc = parity_deeplinks.dispatch_uri("openbox://resume/g1", tmp, port=8080)
         self.assertEqual(rc, 0)
@@ -804,7 +816,7 @@ class DeeplinkTests(unittest.TestCase):
         from pkg.parity import parity_deeplinks
         calls = []
         with tempfile.TemporaryDirectory() as tmp:
-            Path(tmp, "server.token").write_text("tok")
+            Path(tmp, "server.token").write_text("tok", encoding="utf-8")
             with patch.object(parity_deeplinks, "api_request", side_effect=lambda *a, **k: calls.append(a) or {"ok": True}):
                 rc = parity_deeplinks.dispatch_uri("openbox://resume/7", tmp, port=8080)
         self.assertEqual(rc, 0)
@@ -813,7 +825,7 @@ class DeeplinkTests(unittest.TestCase):
     def test_dispatch_moment_clip_open_shell_url(self):
         from pkg.parity import parity_deeplinks
         with tempfile.TemporaryDirectory() as tmp:
-            Path(tmp, "server.token").write_text("tok")
+            Path(tmp, "server.token").write_text("tok", encoding="utf-8")
             with patch("webbrowser.open") as opened:
                 rc = parity_deeplinks.dispatch_uri("openbox://moment/g9", tmp, port=8080, open_browser=True)
         self.assertEqual(rc, 0)

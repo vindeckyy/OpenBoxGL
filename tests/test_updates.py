@@ -2,10 +2,14 @@ import base64
 import hashlib
 import io
 import json
+import os
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from unittest import mock
 
+import updates
 from updates import (
     ASSET,
     RELEASE_API,
@@ -14,6 +18,7 @@ from updates import (
     check_update,
     install_update,
     load_checksum_file,
+    verify_artifact,
     verify_release_signature,
     version_tuple,
 )
@@ -75,13 +80,15 @@ def main():
     assert update["available"] and update["latest"] == latest
     assert update["checksum"] == digest
     assert update["sig"] is True
-    with mock.patch("updates._release_public_key", return_value=public_key):
-        with tempfile.TemporaryDirectory() as directory:
-            destination = Path(directory) / ASSET
-            destination.write_bytes(b"old appimage")
-            result = install_update(update, destination, opener)
-            assert destination.read_bytes() == payload
-            assert Path(result["backup"]).read_bytes() == b"old appimage"
+    if os.name != "nt":
+        # The AppImage channel replaces the running file in place.
+        with mock.patch("updates._release_public_key", return_value=public_key):
+            with tempfile.TemporaryDirectory() as directory:
+                destination = Path(directory) / ASSET
+                destination.write_bytes(b"old appimage")
+                result = install_update(update, destination, opener)
+                assert destination.read_bytes() == payload
+                assert Path(result["backup"]).read_bytes() == b"old appimage"
     try:
         unsigned = dict(release, assets=[asset for asset in release["assets"] if not asset["name"].endswith(".sig")])
         check_update(lambda request, timeout=0: Response(json.dumps(unsigned).encode()))
@@ -151,8 +158,9 @@ def main():
     # Architecture-aware updater: ASSET follows the host arch, and a release
     # without the matching-arch artifact is refused (ADR 0024).
     from updates import _arch_asset, _current_arch
-    assert _arch_asset("x86_64") == "OpenBox-x86_64.AppImage"
-    assert _arch_asset("aarch64") == "OpenBox-aarch64.AppImage"
+    asset_pattern = "OpenBox-{}-windows.zip" if os.name == "nt" else "OpenBox-{}.AppImage"
+    assert _arch_asset("x86_64") == asset_pattern.format("x86_64")
+    assert _arch_asset("aarch64") == asset_pattern.format("aarch64")
     assert _current_arch("x86_64") == "x86_64"
     assert _current_arch("amd64") == "x86_64"
     assert _current_arch("aarch64") == "aarch64"
@@ -204,26 +212,155 @@ def main():
     )
     assert parsed_sig["digest"] == "1" * 64
 
-    # A symlinked destination must update the real AppImage, not the link.
-    with mock.patch("updates._release_public_key", return_value=public_key):
-        with tempfile.TemporaryDirectory() as directory:
-            real = Path(directory) / "real.AppImage"
-            real.write_bytes(b"old appimage")
-            link = Path(directory) / "link.AppImage"
-            link.symlink_to(real)
-            install_update(update, link, opener)
-            assert link.is_symlink()
-            assert real.read_bytes() == payload
+    if os.name != "nt":
+        # A symlinked destination must update the real AppImage, not the link.
+        with mock.patch("updates._release_public_key", return_value=public_key):
+            with tempfile.TemporaryDirectory() as directory:
+                real = Path(directory) / "real.AppImage"
+                real.write_bytes(b"old appimage")
+                link = Path(directory) / "link.AppImage"
+                link.symlink_to(real)
+                install_update(update, link, opener)
+                assert link.is_symlink()
+                assert real.read_bytes() == payload
 
-    # '%' in the AppImage path must survive desktop-entry field codes.
-    from updates import install_desktop_entry
+        # '%' in the AppImage path must survive desktop-entry field codes.
+        from updates import install_desktop_entry
+        with tempfile.TemporaryDirectory() as directory:
+            app = Path(directory) / "Open Box%25.AppImage"
+            app.write_bytes(b"x")
+            with mock.patch("updates.Path.home", return_value=Path(directory)):
+                desktop = Path(install_desktop_entry(app))
+            exec_line = next(line for line in desktop.read_text(encoding="utf-8").splitlines() if line.startswith("Exec="))
+            assert "%%25" in exec_line and '\\"' not in exec_line
+
+    # verify_artifact is what the installers call, so it must work standalone.
     with tempfile.TemporaryDirectory() as directory:
-        app = Path(directory) / "Open Box%25.AppImage"
-        app.write_bytes(b"x")
-        with mock.patch("updates.Path.home", return_value=Path(directory)):
-            desktop = Path(install_desktop_entry(app))
-        exec_line = next(line for line in desktop.read_text().splitlines() if line.startswith("Exec="))
-        assert "%%25" in exec_line and '\\"' not in exec_line
+        artifact = Path(directory) / ASSET
+        artifact.write_bytes(payload)
+        signature_file = Path(directory) / f"{ASSET}.sig"
+        signature_file.write_text(json.dumps(signature_payload), encoding="utf-8")
+        key_file = Path(directory) / "openbox-release.pub"
+        key_file.write_bytes(public_key)
+        assert verify_artifact(artifact, signature_file, key_file) == digest
+        # The CLI surface the installers use reports success by exit code.
+        assert updates.main(["verify", str(artifact), str(signature_file), str(key_file)]) == 0
+        assert updates.main(["verify", str(artifact)]) == 2
+
+        artifact.write_bytes(payload + b"tampered")
+        try:
+            verify_artifact(artifact, signature_file, key_file)
+            raise AssertionError("tampered artifact should not verify")
+        except ValueError as error:
+            assert "digest" in str(error).casefold()
+        assert updates.main(["verify", str(artifact), str(signature_file), str(key_file)]) == 1
+
+        artifact.write_bytes(payload)
+        key_file.write_bytes(updates.PLACEHOLDER_PUBLIC_KEY)
+        try:
+            verify_artifact(artifact, signature_file, key_file)
+            raise AssertionError("placeholder release key should not verify")
+        except ValueError as error:
+            assert "placeholder" in str(error).casefold()
+
+    if os.name == "nt":
+        import zipfile
+
+        import winreg
+
+        from updates import _applier_script, _install_update_windows
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "OpenBox"
+            share = root / "share" / "openbox"
+            share.mkdir(parents=True)
+            (share / "web_app.py").write_text("# old\n", encoding="utf-8")
+
+            archive = Path(directory) / "payload.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("payload/web_app.py", "# new\n")
+                bundle.writestr("payload/pkg/__init__.py", "")
+            zip_bytes = archive.read_bytes()
+            windows_update = dict(
+                update,
+                artifact=f"{TRUSTED_RELEASE_PREFIX}{tag}/{ASSET}",
+                checksum=hashlib.sha256(zip_bytes).hexdigest(),
+            )
+            launched = []
+            with mock.patch.object(updates, "windows_install_dir", return_value=root), \
+                 mock.patch.object(updates, "verify_release_signature", return_value=True), \
+                 mock.patch.object(
+                     updates, "_powershell",
+                     side_effect=lambda script, detached=False: launched.append((script, detached)),
+                 ):
+                result = _install_update_windows(
+                    windows_update, lambda request, timeout=0: Response(zip_bytes)
+                )
+            assert result["restart_required"] is True
+            assert result["backup"] == f"{share}.previous"
+            assert launched and launched[0][1] is True, "the applier must run detached"
+            assert str(share) in launched[0][0]
+
+            # A checkout is never moved: updates require an installed copy.
+            with mock.patch.object(updates, "windows_install_dir", return_value=Path(directory) / "absent"):
+                try:
+                    _install_update_windows(windows_update, lambda request, timeout=0: Response(zip_bytes))
+                    raise AssertionError("an uninstalled copy must refuse to self-update")
+                except ValueError as error:
+                    assert "installed copy" in str(error).casefold()
+
+        # The applier genuinely swaps the tree once the old process is gone.
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "openbox"
+            target.mkdir()
+            (target / "web_app.py").write_text("# old\n", encoding="utf-8")
+            staged = Path(directory) / "staged"
+            staged.mkdir()
+            (staged / "web_app.py").write_text("# new\n", encoding="utf-8")
+            scratch = Path(directory) / "scratch"
+            scratch.mkdir()
+            reaped = subprocess.Popen([sys.executable, "-c", "pass"])
+            reaped.wait(timeout=30)
+            result = updates._powershell(_applier_script(reaped.pid, target, staged, scratch))
+            assert result.returncode == 0, result.stderr
+            assert (target / "web_app.py").read_text(encoding="utf-8") == "# new\n"
+            assert (Path(f"{target}.previous") / "web_app.py").read_text(encoding="utf-8") == "# old\n"
+            assert not staged.exists() and not scratch.exists()
+
+        # Desktop integration writes a real Start Menu shortcut and protocol.
+        with tempfile.TemporaryDirectory() as directory:
+            programs = Path(directory) / "Programs"
+            launcher = Path(directory) / "openbox.cmd"
+            launcher.write_text("@echo off\r\n", encoding="utf-8")
+            with mock.patch.object(updates, "start_menu_programs_dir", return_value=programs), \
+                 mock.patch.object(updates, "_install_root", return_value=Path(directory)):
+                link = Path(updates.install_desktop_entry(str(launcher)))
+            try:
+                assert link.is_file()
+                resolved = subprocess.run(
+                    [
+                        "powershell.exe", "-NoProfile", "-Command",
+                        f"(New-Object -ComObject WScript.Shell).CreateShortcut('{link}').TargetPath",
+                    ],
+                    capture_output=True, text=True, check=False,
+                )
+                assert resolved.stdout.strip() == str(launcher), resolved.stdout
+                with winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER, r"Software\Classes\openbox\shell\open\command"
+                ) as key:
+                    assert str(launcher) in winreg.QueryValueEx(key, "")[0]
+            finally:
+                for subkey in (
+                    r"Software\Classes\openbox\shell\open\command",
+                    r"Software\Classes\openbox\shell\open",
+                    r"Software\Classes\openbox\shell",
+                    r"Software\Classes\openbox",
+                ):
+                    try:
+                        winreg.DeleteKey(winreg.HKEY_CURRENT_USER, subkey)
+                    except FileNotFoundError:
+                        pass
+
     print("update self-test: ok")
 
 

@@ -65,7 +65,7 @@ def load_local_catalog():
     if not CATALOG_PATH.is_file():
         return []
     try:
-        payload = json.loads(CATALOG_PATH.read_text())
+        payload = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return []
     try:

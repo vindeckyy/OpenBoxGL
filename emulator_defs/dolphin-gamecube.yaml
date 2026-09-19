@@ -8,6 +8,7 @@ extensions:
   - gcz
   - rvz
 native_exe: dolphin-emu
+native_exe_windows: Dolphin.exe
 flatpak_app_id: org.DolphinEmu.dolphin-emu
 startup_args:
   - -b

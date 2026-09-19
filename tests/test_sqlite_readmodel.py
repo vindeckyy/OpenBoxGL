@@ -329,7 +329,7 @@ def test_query_limit_offset():
 
 def test_runtime_modules_has_sqlite():
     """runtime_modules.txt must include sqlite_readmodel.py."""
-    content = (ROOT / "runtime_modules.txt").read_text()
+    content = (ROOT / "runtime_modules.txt").read_text(encoding="utf-8")
     assert "sqlite_readmodel.py" in content, "sqlite_readmodel.py not in runtime_modules.txt"
 
 

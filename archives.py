@@ -2,11 +2,11 @@
 
 import hashlib
 import os
-import selectors
 import stat
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import zipfile
 from pathlib import Path
@@ -151,38 +151,55 @@ def safe_zip_extract(
 
 
 def _read_7z_listing(extractor, archive):
-    """Run 7z -slt and stream its listing back under strict bounds."""
+    """Run 7z -slt and stream its listing back under strict bounds.
+
+    A reader thread plus a deadline replaces ``selectors``: Windows only
+    supports select() on sockets, never on pipes.
+    """
     process = subprocess.Popen(
         [extractor, "l", "-slt", str(archive)],
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
     )
     output = bytearray()
-    selector = selectors.DefaultSelector()
+    failure: list[BaseException] = []
+    finished = threading.Event()
+
+    def reader():
+        try:
+            while True:
+                chunk = process.stdout.read1(64 * 1024)
+                if not chunk:
+                    break
+                output.extend(chunk)
+                if len(output) > MAX_ARCHIVE_LISTING_BYTES:
+                    raise ValueError("Archive listing is too large.")
+        except BaseException as error:  # noqa: BLE001 - re-raised on the main thread
+            failure.append(error)
+        finally:
+            finished.set()
+
+    thread = threading.Thread(target=reader, name="openbox-7z-listing", daemon=True)
+    thread.start()
     try:
-        selector.register(process.stdout, selectors.EVENT_READ)
         deadline = time.monotonic() + 60
-        while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise subprocess.TimeoutExpired(process.args, 60)
-            events = selector.select(remaining)
-            if not events:
-                raise subprocess.TimeoutExpired(process.args, 60)
-            chunk = process.stdout.read1(64 * 1024)
-            if not chunk:
-                break
-            output.extend(chunk)
-            if len(output) > MAX_ARCHIVE_LISTING_BYTES:
-                raise ValueError("Archive listing is too large.")
-        return_code = process.wait(timeout=60)
+        if not finished.wait(timeout=60):
+            raise subprocess.TimeoutExpired(process.args, 60)
+        if failure:
+            raise failure[0]
+        return_code = process.wait(timeout=max(0.1, deadline - time.monotonic()))
     except Exception:
         if process.poll() is None:
             process.kill()
         process.wait()
         raise
     finally:
-        selector.close()
+        thread.join(timeout=5)
+        if process.stdout is not None:
+            try:
+                process.stdout.close()
+            except OSError:
+                pass
     if return_code != 0:
         raise ValueError("7z could not inspect the archive.")
     return bytes(output).decode("utf-8", errors="replace")

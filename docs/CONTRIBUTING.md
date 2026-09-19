@@ -16,7 +16,7 @@ Participation in this project is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUC
 
 ### Requirements
 
-- Linux environment
+- Linux or Windows (both are supported targets; macOS is not)
 - Python 3.10 or newer
 - Git
 
@@ -28,6 +28,8 @@ cd OpenBoxGL
 python3 web_app.py
 ```
 
+On Windows use `python web_app.py`; `python3` there is a Microsoft Store alias that does not run scripts.
+
 Optional local configuration can be loaded from an explicit `OPENBOX_ENV_FILE`, the data directory (or its parent), `~/.env`, or `~/.config/openbox-game-launcher/.env`. See `.env.example`. Never commit secrets, tokens, or personal credentials.
 
 ### Native window
@@ -37,6 +39,10 @@ python3 web_app.py --no-browser   # loopback server (native host spawns this)
 ```
 
 Build the native host with `make native-host`, then run `./openbox-native.sh`.
+
+On Windows build the WebView2 host with `scripts\build_native_host_windows.ps1` (needs the MSVC build tools, and `cmake` on the PATH), then run `.\openbox-native.ps1`.
+
+Any platform-dependent behavior belongs in `pkg/platform_compat.py` — the single seam for locking, process control, command quoting, path openers, and data-dir resolution (ADR 0048). Windows-only branches there are marked `# pragma: no cover` and are exercised by the `windows-latest` CI job.
 
 ## Testing
 
@@ -59,6 +65,15 @@ Run an individual module when iterating:
 ```bash
 make test-one TEST=tests/test_catalog.py
 ```
+
+On Windows (no `make`, no bash) run the suite through the cross-platform runner, which reports `pass`/`fail`/`timeout` per file and exits non-zero on any failure:
+
+```powershell
+python scripts\run_windows_tests.py
+python scripts\run_windows_tests.py test_platform_compat.py
+```
+
+`make check` and `./run_all_tests.sh` stay Linux-only (coverage flooring, ruff, and the frontend/i18n/POSIX-packaging gates need the dev tooling and bash); `ci.yml` runs the same portable gates on `windows-latest`. A change that touches platform behavior must keep both jobs green.
 
 Check that the version in `updates.py` matches every published spot:
 

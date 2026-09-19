@@ -6,7 +6,6 @@ Extracted from webapp_state.py to keep that module a thin re-export shim.
 import copy
 from datetime import datetime
 import logging
-import shlex
 import threading
 from pathlib import Path
 
@@ -15,6 +14,7 @@ from importers import import_heroic, import_lutris, import_steam
 from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, load_state, update_state
 from parity_emulator_defs import list_scan_configs, scan_folder as scan_emulator_folder
 from pkg.parity.launch_tokens import build_launch_args
+from pkg.platform_compat import join_command
 from parity_gameyfin import GameyfinError, catalog_gameyfin
 from parity_identity import cross_source_identity, source_family, source_identities
 from parity_import import import_multi_platform, recommend_emulators
@@ -60,7 +60,7 @@ def _filled_launch_command(game):
     if not command:
         return ""
     args = build_launch_args(command, game, data_dir=str(DATA.parent))
-    return shlex.join(args)
+    return join_command(args)
 
 
 def _application_for_game(game):

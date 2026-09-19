@@ -620,7 +620,7 @@ class RegistrationTest(unittest.TestCase):
 
         import routes.registry as registry
 
-        manifest = (ROOT / "runtime_modules.txt").read_text()
+        manifest = (ROOT / "runtime_modules.txt").read_text(encoding="utf-8")
         self.assertIn("pkg/parity/parity_steamgrid.py", manifest)
         self.assertIn("handlers/steamgrid.py", manifest)
         self.assertIn("handlers.steamgrid", inspect.getsource(registry._ensure_handlers_loaded))

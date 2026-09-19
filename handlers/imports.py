@@ -10,7 +10,7 @@ from api_errors import BadRequest
 from arcade import import_arcade
 from emulators import install_emulator
 from routes.registry import route
-from importers import import_heroic, import_lutris, import_steam
+from importers import import_epic, import_heroic, import_lutris, import_steam
 from openbox import load_state
 from parity_import import import_rpcs3_hdd, import_scummvm, import_vita3k
 from parity_import_policy import add_exclusion, list_exclusions, remove_exclusion
@@ -89,6 +89,10 @@ class ImportsHandlers:
     @route("POST", "/api/import/lutris")
     def _api_post_api_import_lutris(self, payload):
         self.import_lutris_games()
+
+    @route("POST", "/api/import/epic")
+    def _api_post_api_import_epic(self, payload):
+        self.import_epic_games()
 
     @route("POST", "/api/import/arcade")
     def _api_post_api_import_arcade(self, payload):
@@ -329,6 +333,14 @@ class ImportsHandlers:
         added, found = merge_imported_games(
             imported,
             lambda game: ("heroic", str(game.get("source", "")), str(game.get("heroic_app_id", ""))),
+        )
+        _send_import_result(self, added, found)
+
+    def import_epic_games(self):
+        imported = import_epic()
+        added, found = merge_imported_games(
+            imported,
+            lambda game: ("epic", str(game.get("heroic_app_id", ""))),
         )
         _send_import_result(self, added, found)
 

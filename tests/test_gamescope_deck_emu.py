@@ -209,14 +209,12 @@ def api_post(base_url, path, body):
 
 def write_fake_steam(bin_dir: Path, log_path: Path):
     steam = bin_dir / "steam"
-    steam.write_text(
-        "#!/bin/bash\n"
+    steam.write_text("#!/bin/bash\n"
         f'echo "$@" >> "{log_path}"\n'
         'if [[ " $* " == *" -applaunch "* ]]; then\n'
         '  exec sleep 8\n'
         "fi\n"
-        "exit 0\n"
-    )
+        "exit 0\n", encoding="utf-8")
     steam.chmod(0o755)
     return steam
 
@@ -315,7 +313,7 @@ def main():
             env["SCB_NOSCOPE"] = "1"
 
             rom = Path(tmp) / "fake-rom"
-            rom.write_text("#!/bin/bash\nexec sleep 12\n")
+            rom.write_text("#!/bin/bash\nexec sleep 12\n", encoding="utf-8")
             rom.chmod(0o755)
 
             library = {
@@ -339,7 +337,7 @@ def main():
                 "settings": {"welcome_completed": True},
                 "playlists": [],
             }
-            (data_dir / "library.json").write_text(json.dumps(library, indent=2))
+            (data_dir / "library.json").write_text(json.dumps(library, indent=2), encoding="utf-8")
 
             server = subprocess.Popen(
                 [sys.executable, str(ROOT / "web_app.py"), "--game-mode", "--no-browser"],
@@ -447,7 +445,7 @@ def main():
                 steam_launch = api_post(url, "/api/launch", {"id": 1})
                 check("Steam title launch returns pid", bool(steam_launch.get("pid")), str(steam_launch))
                 time.sleep(0.6)
-                steam_log_text = steam_log.read_text() if steam_log.exists() else ""
+                steam_log_text = steam_log.read_text(encoding="utf-8") if steam_log.exists() else ""
                 check(
                     "fake steam received -applaunch (Input path intact)",
                     "-applaunch" in steam_log_text and "570" in steam_log_text,

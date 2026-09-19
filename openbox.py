@@ -5,7 +5,6 @@ Shared core for the web server and native host: data paths, state store, launch 
 """
 
 import os
-import shlex
 import shutil
 import sys
 from pathlib import Path
@@ -14,19 +13,20 @@ import pkg.parity  # noqa: F401  # register flat-import finder before parity_* i
 from archives import extract_game
 from parity_import import EXTENSIONS_EXTRA, PLATFORM_BY_EXTENSION_EXTRA
 from parity_emulator_defs import build_platform_by_extension, resolve_launch
+from pkg.platform_compat import IS_WINDOWS, default_data_dir, join_command, python_command, split_command
 from state_store import JsonStateStore
 
 CUSTOM_DATA_DIR = os.environ.get("OPENBOX_DATA_DIR")
-APP_DIR = Path(CUSTOM_DATA_DIR or Path.home() / ".local/share/openbox-game-launcher").expanduser()
+APP_DIR = (Path(CUSTOM_DATA_DIR).expanduser() if CUSTOM_DATA_DIR else default_data_dir())
 DATA = APP_DIR / "library.json"
-LEGACY_DATA = Path.home() / ".local" / "share" / "launchbox-linux" / "library.json"
+LEGACY_DATA = (Path(os.environ.get("USERPROFILE") or os.path.expanduser("~")) / ".local" / "share" / "launchbox-linux" / "library.json")
 if not CUSTOM_DATA_DIR and not DATA.exists() and LEGACY_DATA.is_file():
     APP_DIR.mkdir(parents=True, exist_ok=True)
     shutil.copy2(LEGACY_DATA, DATA)
 
 STATE_STORE = JsonStateStore(DATA)
 
-EXTENSIONS = {".sh", ".appimage", ".exe", ".iso", ".rom", ".nes", ".sfc", ".smc", ".gba", ".gb", ".gbc", ".zip", ".7z", ".rar"} | EXTENSIONS_EXTRA
+EXTENSIONS = {".sh", ".appimage", ".exe", ".bat", ".cmd", ".lnk", ".iso", ".rom", ".nes", ".sfc", ".smc", ".gba", ".gb", ".gbc", ".zip", ".7z", ".rar"} | EXTENSIONS_EXTRA
 PLATFORM_BY_EXTENSION = {
     ".nes": "NES", ".sfc": "SNES", ".smc": "SNES", ".gba": "Game Boy Advance",
     ".gb": "Game Boy", ".gbc": "Game Boy Color", ".iso": "Disc image",
@@ -176,12 +176,11 @@ def discover_profiles(which=shutil.which):
                 )
             except FileNotFoundError:
                 continue
-            profiles.setdefault(platform, shlex.join(command))
+            profiles.setdefault(platform, join_command(command))
             break
-    candidates = {
-        "DOSBox": ("dosbox", "dosbox {path}"),
-        "Windows": ("wine", "wine {path}"),
-    }
+    candidates = {"DOSBox": ("dosbox", "dosbox {path}")}
+    if os.name != "nt":
+        candidates["Windows"] = ("wine", "wine {path}")
     for platform, (binary, command) in candidates.items():
         if which(binary):
             profiles.setdefault(platform, command)
@@ -209,8 +208,11 @@ if __name__ == "__main__":
     if "--self-test" in sys.argv:
         assert {"games", "profiles", "history"} <= load_state().keys()
         assert "{path}" in "retroarch -L core.so {path}"
-        assert shlex.split("retroarch -L core.so {path}")[-1] == "{path}"
-        assert discover_profiles(lambda binary: f"/usr/bin/{binary}" if binary == "wine" else None) == {"Windows": "wine {path}"}
+        assert split_command("retroarch -L core.so {path}")[-1] == "{path}"
+        if os.name == "nt":
+            assert discover_profiles(lambda binary: f"C:\\tools\\{binary}.exe" if binary == "dosbox" else None) == {"DOSBox": "dosbox {path}"}
+        else:
+            assert discover_profiles(lambda binary: f"/usr/bin/{binary}" if binary == "wine" else None) == {"Windows": "wine {path}"}
         try:
             build_launch({"name": "Missing", "path": ""}, {})
         except ValueError:
@@ -220,8 +222,11 @@ if __name__ == "__main__":
         print("openbox self-test: ok")
     elif "--help" in sys.argv or "-h" in sys.argv:
         print("openbox.py is a core library module providing shared state, launch commands, and path utilities.")
-        print("To run the OpenBox web server: python3 web_app.py")
-        print("To run tests: ./run_all_tests.sh or make check")
+        print(f"To run the OpenBox web server: {python_command()} web_app.py")
+        if IS_WINDOWS:
+            print("To run tests: python -B scripts\\run_windows_tests.py")
+        else:
+            print("To run tests: ./run_all_tests.sh or make check")
         sys.exit(0)
     else:
         # Only the self-test above runs this module directly.

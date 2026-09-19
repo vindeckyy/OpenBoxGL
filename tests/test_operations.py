@@ -2,6 +2,7 @@
 """Tests for the durable operation service (F14)."""
 
 import json
+import os
 import stat
 import sys
 import tempfile
@@ -55,8 +56,9 @@ class OperationServiceTests(unittest.TestCase):
         self.assertTrue(self.service.persist())
         path = operations_path(self.data_path)
         self.assertTrue(path.is_file())
-        mode = stat.S_IMODE(path.stat().st_mode)
-        self.assertEqual(mode, 0o600)
+        if os.name != "nt":
+            mode = stat.S_IMODE(path.stat().st_mode)
+            self.assertEqual(mode, 0o600)
 
         reloaded = OperationService(self.data_path)
         restored = reloaded.get(op["job_id"])

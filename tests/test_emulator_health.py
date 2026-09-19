@@ -53,6 +53,7 @@ def test_health_bios_path_exists_no_sha1():
     with tempfile.NamedTemporaryFile(delete=False) as f:
         f.write(b"fake bios data")
         f.flush()
+        f.close()
         try:
             adapter = {"label": "Test", "bios_path": f.name}
             assert _bios_ok_for_adapter(adapter) is True
@@ -65,6 +66,7 @@ def test_health_bios_sha1_match():
     with tempfile.NamedTemporaryFile(delete=False) as f:
         f.write(b"correct bios content")
         f.flush()
+        f.close()
         try:
             sha1 = hashlib.sha1(b"correct bios content").hexdigest()
             adapter = {"label": "Test", "bios_path": f.name, "bios_sha1": sha1}
@@ -78,6 +80,7 @@ def test_health_bios_sha1_mismatch():
     with tempfile.NamedTemporaryFile(delete=False) as f:
         f.write(b"wrong bios content")
         f.flush()
+        f.close()
         try:
             adapter = {"label": "Test", "bios_path": f.name, "bios_sha1": "0000000000000000000000000000000000000000"}
             assert _bios_ok_for_adapter(adapter) is False
@@ -109,6 +112,7 @@ def test_file_sha1():
     with tempfile.NamedTemporaryFile(delete=False) as f:
         f.write(b"test content")
         f.flush()
+        f.close()
         try:
             expected = hashlib.sha1(b"test content").hexdigest()
             assert _file_sha1(f.name) == expected
@@ -163,6 +167,7 @@ def test_launch_doctor_sha1_drift():
     with tempfile.NamedTemporaryFile(delete=False, suffix=".bin") as f:
         f.write(b"wrong bios content")
         f.flush()
+        f.close()
         try:
             game = {
                 "game_id": "test-1",
@@ -193,7 +198,7 @@ def test_launch_doctor_sha1_drift():
 
 def test_health_tokens_in_css():
     """app.css should have health-related tokens."""
-    css = (ROOT / "static" / "app.css").read_text()
+    css = (ROOT / "static" / "app.css").read_text(encoding="utf-8")
     for token in ["--surface-health-ok", "--surface-health-warn", "--surface-health-fail",
                   "--text-health-ok", "--text-health-warn", "--text-health-fail"]:
         assert token in css, f"Token {token} not in app.css"
@@ -202,13 +207,13 @@ def test_health_tokens_in_css():
 def test_health_tokens_in_themes():
     """All 5 themes should have health-related tokens."""
     for theme_file in (ROOT / "themes").glob("*.css"):
-        content = theme_file.read_text()
+        content = theme_file.read_text(encoding="utf-8")
         assert "--surface-health-ok" in content, f"{theme_file.name} missing health tokens"
 
 
 def test_health_badge_css():
     """app.css should have health-badge CSS classes."""
-    css = (ROOT / "static" / "app.css").read_text()
+    css = (ROOT / "static" / "app.css").read_text(encoding="utf-8")
     assert ".health-badge" in css, "health-badge CSS class not in app.css"
     assert ".health-badge.ok" in css, "health-badge.ok CSS class not in app.css"
     assert ".health-badge.fail" in css, "health-badge.fail CSS class not in app.css"

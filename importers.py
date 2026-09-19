@@ -1,12 +1,13 @@
-"""Import installed game libraries from Linux storefronts."""
+"""Import installed game libraries from Windows and Linux storefronts."""
 
 import json
 import os
 import re
-import shlex
 import shutil
 import subprocess
 from pathlib import Path
+
+from pkg.platform_compat import IS_WINDOWS, epic_manifest_paths, join_command, steam_install_roots
 
 
 def vdf_values(text):
@@ -14,7 +15,9 @@ def vdf_values(text):
 
 
 def steam_roots(home=None):
-    home = home or Path.home()
+    if home is None:
+        return [root for root in steam_install_roots() if (root / "steamapps").is_dir()]
+    home = Path(home)
     candidates = (
         home / ".local/share/Steam",
         home / ".steam/steam",
@@ -35,7 +38,40 @@ def _flatpak_installed(app_id, run=subprocess.run):
     return result.returncode == 0
 
 
-def steam_command():
+def _url_opener() -> str | None:
+    """Return a command that opens a URL with the platform default handler."""
+    if opener := shutil.which("xdg-open"):
+        return opener
+    if IS_WINDOWS:
+        return os.environ.get("SYSTEMROOT", r"C:\Windows") + r"\explorer.exe"
+    return None
+
+
+def url_open_command(url) -> list[str]:
+    """Return argv that opens *url* with the platform default handler."""
+    opener = _url_opener()
+    if opener:
+        return [opener, str(url)]
+    return []
+
+
+def steam_command(home=None):
+    if IS_WINDOWS:
+        roots = steam_roots(home) if home is not None else steam_install_roots()
+        for root in roots:
+            executable = root / "steam.exe"
+            if executable.is_file():
+                return str(executable), join_command([str(executable), "-applaunch", "{app_id}"])
+        if binary := shutil.which("steam"):
+            return binary, "steam -applaunch {app_id}"
+        if _flatpak_installed("com.valvesoftware.Steam"):
+            return shutil.which("flatpak"), "flatpak run com.valvesoftware.Steam -applaunch {app_id}"
+        if binary := shutil.which("xdg-open"):
+            return binary, "xdg-open steam://rungameid/{app_id}"
+        opener = _url_opener()
+        if opener:
+            return opener, join_command(url_open_command("steam://rungameid/{app_id}"))
+        raise FileNotFoundError("The Steam installation could not be found.")
     if binary := shutil.which("steam"):
         return binary, "steam -applaunch {app_id}"
     if _flatpak_installed("com.valvesoftware.Steam"):
@@ -49,7 +85,7 @@ def steam_libraries(root):
     libraries = {root}
     file = root / "steamapps/libraryfolders.vdf"
     if file.is_file():
-        for path in re.findall(r'"path"\s+"([^"]+)"', file.read_text(errors="replace")):
+        for path in re.findall(r'"path"\s+"([^"]+)"', file.read_text(encoding="utf-8", errors="replace")):
             library = Path(path.replace("\\\\", "\\"))
             if (library / "steamapps").is_dir():
                 libraries.add(library)
@@ -117,17 +153,43 @@ def json_records(path):
 
 
 def heroic_bases(home=None):
-    home = home or Path.home()
-    candidates = (
-        home / ".config/heroic",
-        home / ".var/app/com.heroicgameslauncher.hgl/config/heroic",
-    )
+    if home is not None:
+        home = Path(home)
+        candidates = (
+            home / ".config/heroic",
+            home / ".var/app/com.heroicgameslauncher.hgl/config/heroic",
+        )
+        return [path for path in candidates if path.is_dir()]
+    candidates = []
+    if IS_WINDOWS:
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            candidates.append(Path(appdata) / "heroic")
+    else:
+        home = Path.home()
+        candidates.extend((
+            home / ".config/heroic",
+            home / ".var/app/com.heroicgameslauncher.hgl/config/heroic",
+        ))
     return [path for path in candidates if path.is_dir()]
 
 
+def _heroic_windows_executable(record, install_dir):
+    """Return a launchable Windows executable for a Heroic record, if any."""
+    candidate = str(record.get("executable") or record.get("executablePath") or "").strip()
+    if not candidate:
+        return ""
+    path = Path(candidate)
+    if not path.is_absolute() and install_dir:
+        path = Path(install_dir) / candidate
+    return str(path) if path.is_file() else ""
+
+
 def import_heroic(home=None):
+    if IS_WINDOWS and home is None:
+        return _import_heroic_windows(home)
     home = home or Path.home()
-    opener = shutil.which("xdg-open")
+    opener = _url_opener()
     if not opener:
         raise FileNotFoundError("xdg-open is required to launch imported Heroic games.")
     manifests = []
@@ -162,6 +224,78 @@ def import_heroic(home=None):
     return games
 
 
+def _import_heroic_windows(home=None):
+    """Import Heroic records on Windows, launching executables directly."""
+    base_candidates = heroic_bases(home)
+    if home is not None:
+        legacy = Path(home) / "AppData" / "Roaming" / "heroic"
+        if legacy.is_dir():
+            base_candidates.append(legacy)
+    manifests = []
+    for base in base_candidates:
+        manifests.extend((
+            ("Epic", base / "legendaryConfig/legendary/installed.json"),
+            ("GOG", base / "gog_store/installed.json"),
+            ("Amazon", base / "nile_config/installed.json"),
+        ))
+    games, seen = [], set()
+    for source, manifest in manifests:
+        for key, record in json_records(manifest):
+            app_id = str(record.get("app_name") or record.get("appName") or record.get("product_id") or record.get("id") or key)
+            title = record.get("title") or record.get("app_title") or record.get("name")
+            if not title or record.get("is_dlc") or (source, app_id) in seen:
+                continue
+            install_dir = str(record.get("install_path") or record.get("installPath") or record.get("path") or "")
+            executable = _heroic_windows_executable(record, install_dir)
+            if not executable:
+                continue
+            seen.add((source, app_id))
+            games.append({
+                "name": str(title),
+                "platform": "PC",
+                "source": source,
+                "collection": source,
+                "path": executable,
+                "launch": "",
+                "heroic_app_id": app_id,
+                "install_dir": install_dir,
+            })
+    return games
+
+
+def import_epic(home=None):
+    """Import Epic Games Launcher titles from its Windows manifests."""
+    games, seen = [], set()
+    for manifest in epic_manifest_paths():
+        try:
+            record = json.loads(manifest.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, json.JSONDecodeError, ValueError):
+            continue
+        if not isinstance(record, dict) or record.get("bIsIncompleteInstall"):
+            continue
+        app_id = str(record.get("AppName") or record.get("CatalogItemId") or "").strip()
+        title = str(record.get("DisplayName") or record.get("AppName") or "").strip()
+        install_dir = str(record.get("InstallLocation") or "").strip()
+        executable = str(record.get("LaunchExecutable") or "").strip()
+        if not app_id or not title or not install_dir or not executable or app_id in seen:
+            continue
+        launch_path = Path(install_dir) / executable
+        if not launch_path.is_file():
+            continue
+        seen.add(app_id)
+        games.append({
+            "name": title,
+            "platform": "PC",
+            "source": "Epic",
+            "collection": "Epic",
+            "path": str(launch_path),
+            "launch": "",
+            "heroic_app_id": app_id,
+            "install_dir": install_dir,
+        })
+    return games
+
+
 def _lutris_command(home, run, which):
     """Resolve the Lutris binary, or the Lutris Flatpak run command.
 
@@ -179,7 +313,7 @@ def _load_lutris_records(command, run):
     """Query Lutris and normalize the JSON game list."""
     result = run(
         command + ["--list-games", "--installed", "--json"],
-        capture_output=True, text=True, check=True, timeout=30,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", check=True, timeout=30,
     )
     output = result.stdout.strip()
     start, end = output.find("["), output.rfind("]")
@@ -229,7 +363,7 @@ def _lutris_game_entry(record, home, command, binary):
         "source": source,
         "collection": source,
         "path": binary or str(record.get("directory") or record.get("path") or command[0]),
-        "launch": shlex.join(command + ["lutris:rungameid/{lutris_id}"]),
+        "launch": join_command(command + ["lutris:rungameid/{lutris_id}"]),
         "lutris_id": game_id,
         "install_dir": str(record.get("directory") or record.get("path") or ""),
     }

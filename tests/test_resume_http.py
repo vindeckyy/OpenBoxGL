@@ -62,7 +62,8 @@ class ResumeHttpTests(unittest.TestCase):
             "label": "FakeRA",
             "platform": "SNES",
             "extensions": ["sfc"],
-            "native_exe": "/bin/true",
+            # Real executable: adapter resolution requires the binary to exist.
+            "native_exe": sys.executable,
             "flatpak_app_id": "",
             "startup_args": ["{path}"],
             "executable_patterns": [],
@@ -171,7 +172,7 @@ class ResumeHttpTests(unittest.TestCase):
             "file": "resume.state",
             "captured_at": "2026-09-12T00:00:00",
         }
-        (sdir / "state.json").write_text(json.dumps(meta))
+        (sdir / "state.json").write_text(json.dumps(meta), encoding="utf-8")
 
     def test_status_requires_auth(self):
         status, _payload = self.request("GET", f"/api/v2/resume/status?game_id={self.game_id}", token=None)

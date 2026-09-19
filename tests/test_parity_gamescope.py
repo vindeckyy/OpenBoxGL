@@ -4,11 +4,13 @@
 import unittest
 from unittest import mock
 
+import os
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
+import parity_gamescope
 from parity_gamescope import (
     OPENBOX_STEAM_GAME_ID,
     game_mode_url,
@@ -95,7 +97,7 @@ class UrlAndBrowserTests(unittest.TestCase):
         def fake_which(name):
             return "/bin/chromium" if name == "chromium" else None
 
-        def fake_popen(args, start_new_session=False, env=None):
+        def fake_popen(args, **kwargs):
             calls.append(args)
             return mock.Mock()
 
@@ -114,24 +116,27 @@ class UrlAndBrowserTests(unittest.TestCase):
     def test_open_ui_guest_falls_back_on_oserror(self):
         browsed = []
 
-        def fake_popen(args, start_new_session=False, env=None):
+        def fake_popen(args, **kwargs):
             raise OSError("spawn failed")
 
-        result = open_ui(
-            "http://127.0.0.1:1/?token=t",
-            guest=True,
-            popen=fake_popen,
-            browser_open=lambda url: browsed.append(url),
-            which=lambda name: "/bin/chromium" if "chrom" in name else None,
-        )
+        # The system opener must fail too, or Windows would stop here.
+        with mock.patch.object(parity_gamescope, "open_path", side_effect=OSError("no shell")):
+            result = open_ui(
+                "http://127.0.0.1:1/?token=t",
+                guest=True,
+                popen=fake_popen,
+                browser_open=lambda url: browsed.append(url),
+                which=lambda name: "/bin/chromium" if "chrom" in name else None,
+            )
         self.assertEqual(result["mode"], "webbrowser")
         self.assertIn("deeplink=bigbox", browsed[0])
 
+    @unittest.skipIf(os.name == "nt", "Windows opens the default browser instead of xdg-open")
     def test_open_ui_desktop_uses_xdg_open_with_clean_env(self):
         calls = []
 
-        def fake_popen(args, start_new_session=False, env=None):
-            calls.append((args, env))
+        def fake_popen(args, **kwargs):
+            calls.append((args, kwargs.get("env")))
             return mock.Mock(pid=55)
 
         result = open_ui(
@@ -154,15 +159,31 @@ class UrlAndBrowserTests(unittest.TestCase):
 
     def test_open_ui_desktop_falls_back_to_webbrowser(self):
         browsed = []
-        result = open_ui(
-            "http://127.0.0.1:1/?token=t",
-            guest=False,
-            popen=lambda *a, **k: self.fail("popen should not run"),
-            browser_open=lambda url: browsed.append(url),
-            which=lambda name: None,
-        )
+        # No system opener either: Windows must reach the same webbrowser path.
+        with mock.patch.object(parity_gamescope, "open_path", side_effect=OSError("no shell")):
+            result = open_ui(
+                "http://127.0.0.1:1/?token=t",
+                guest=False,
+                popen=lambda *a, **k: self.fail("popen should not run"),
+                browser_open=lambda url: browsed.append(url),
+                which=lambda name: None,
+            )
         self.assertEqual(result["mode"], "webbrowser")
         self.assertEqual(browsed, ["http://127.0.0.1:1/?token=t"])
+
+    @unittest.skipUnless(os.name == "nt", "Windows opens the default browser, not xdg-open")
+    def test_open_ui_desktop_uses_default_browser_on_windows(self):
+        with mock.patch.object(parity_gamescope, "open_path") as opener:
+            result = open_ui(
+                "http://127.0.0.1:1/?token=t",
+                guest=False,
+                popen=lambda *a, **k: self.fail("popen should not run"),
+                browser_open=lambda url: self.fail("webbrowser should not run"),
+                which=lambda name: "/usr/bin/xdg-open" if name == "xdg-open" else None,
+            )
+        self.assertEqual(result["mode"], "default")
+        self.assertEqual(result["browser"], "")
+        opener.assert_called_once_with("http://127.0.0.1:1/?token=t")
 
     def test_open_ui_native_window_uses_app_mode(self):
         calls = []
@@ -170,7 +191,7 @@ class UrlAndBrowserTests(unittest.TestCase):
         def fake_which(name):
             return "/bin/google-chrome" if name == "google-chrome" else None
 
-        def fake_popen(args, start_new_session=False, env=None):
+        def fake_popen(args, **kwargs):
             calls.append(args)
             return mock.Mock(pid=77)
 
@@ -187,13 +208,14 @@ class UrlAndBrowserTests(unittest.TestCase):
         self.assertTrue(any("--app=http://127.0.0.1:1/?token=t" == str(part) for part in calls[0]))
         self.assertEqual(result["pid"], 77)
 
+    @unittest.skipIf(os.name == "nt", "Windows opens the default browser instead of xdg-open")
     def test_open_ui_native_window_falls_back_to_xdg_open(self):
         calls = []
 
         def fake_which(name):
             return "/usr/bin/xdg-open" if name == "xdg-open" else None
 
-        def fake_popen(args, start_new_session=False, env=None):
+        def fake_popen(args, **kwargs):
             calls.append(args)
             return mock.Mock(pid=1)
 
@@ -214,7 +236,7 @@ class UrlAndBrowserTests(unittest.TestCase):
         def fake_which(name):
             return "/usr/bin/firefox" if name == "firefox" else None
 
-        def fake_popen(args, start_new_session=False, env=None):
+        def fake_popen(args, **kwargs):
             calls.append(args)
             return mock.Mock(pid=9)
 

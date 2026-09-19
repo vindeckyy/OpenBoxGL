@@ -330,7 +330,7 @@ def ra_cache_snapshot(data_parent, game_id):
         return {}
     path = Path(data_parent) / "cache" / "retroachievements" / f"{game_id}.json"
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}

@@ -38,7 +38,7 @@ def inject_retroachievements(credentials, home=None):
 
     def write_kv(path: Path, mapping: dict, separator=" = "):
         path.parent.mkdir(parents=True, exist_ok=True)
-        existing = path.read_text() if path.is_file() else ""
+        existing = path.read_text(encoding="utf-8") if path.is_file() else ""
         lines = existing.splitlines()
         keys = set(mapping)
         out = []
@@ -148,7 +148,7 @@ def load_emumovies_credentials(data_dir):
     path = Path(data_dir) / "emumovies.json"
     if path.is_file():
         try:
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             data = {}
         if isinstance(data, dict) and data.get("username"):
@@ -373,7 +373,7 @@ def import_highscores(game, import_dir, home=None):
     manifest = folder / "highscores.json"
     if manifest.is_file():
         try:
-            payload = json.loads(manifest.read_text())
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
             raise ValueError("High score bundle is invalid.") from error
         files = payload.get("files", []) if isinstance(payload, dict) else []

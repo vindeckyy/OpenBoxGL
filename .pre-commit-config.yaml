@@ -9,7 +9,9 @@ repos:
     hooks:
       - id: py-compile
         name: py-compile
-        entry: python3 -B -m py_compile
+        # ``python`` (not ``python3``): the dev venv provides it on every
+        # platform, while Windows only ships a broken ``python3`` store alias.
+        entry: python -B -m py_compile
         language: system
         types: [python]
         pass_filenames: true

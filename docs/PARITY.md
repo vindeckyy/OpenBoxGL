@@ -1,12 +1,14 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.12.1**, the Living Library release described in the CHANGELOG.
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.13.0**, the Windows platform-support release described in the CHANGELOG.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
 Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/about), [Windows changelog](https://www.launchbox-app.com/about/changelog), and [plugin overview](https://feedback.launchbox-app.com/help/articles/1605395-plugins-overview).
 
 `done` means the workflow is usable end to end on Linux. `partial` means a deliberate Linux equivalent exists but LaunchBox’s Windows/premium surface is broader or unavailable. `missing` means no usable equivalent yet.
+
+> **Platform note:** since [ADR 0048](adr/0048-windows-port.md) OpenBox also runs on Windows (signed portable install, WebView2 window), and the rows below describe Linux behavior. Rows that name Linux-only machinery — AppImage/Flatpak packaging, gamescope/Game Mode, XDG desktop entries, Flathub emulator management — remain Linux-only.
 
 ## Capability matrix
 

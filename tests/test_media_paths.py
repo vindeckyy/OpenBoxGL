@@ -97,6 +97,8 @@ class MediaPathTests(unittest.TestCase):
         handler.send_file.assert_not_called()
 
     def test_file_probe_rejects_non_regular_files(self):
+        if not hasattr(os, "mkfifo"):
+            self.skipTest("named pipes are not available on this platform")
         fifo = Path(self.tempdir.name) / "media.fifo"
         os.mkfifo(fifo)
         self.assertFalse(webapp_state.probe_path(fifo, file_only=True))

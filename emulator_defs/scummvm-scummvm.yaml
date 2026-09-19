@@ -6,6 +6,7 @@ platform: ScummVM
 extensions:
   - scummvm
 native_exe: scummvm
+native_exe_windows: scummvm.exe
 flatpak_app_id: org.scummvm.ScummVM
 startup_args:
   - "{path}"

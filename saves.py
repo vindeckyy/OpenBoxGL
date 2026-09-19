@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from backend_io import atomic_copy_stream, fsync_directory
+from pkg.platform_compat import IS_WINDOWS, steam_install_roots
 
 
 MAX_SAVE_ARCHIVE_MEMBER_BYTES = 4 * 1024 * 1024 * 1024
@@ -109,6 +110,8 @@ def save_roots(game):
 
 
 def discover_save_paths(game, home=None):
+    if home is None and IS_WINDOWS:
+        return _discover_save_paths_windows(game)
     home = Path(home or Path.home())
     candidates = []
     app_id = str(game.get("steam_app_id", ""))
@@ -174,6 +177,65 @@ def discover_save_paths(game, home=None):
         for path in root.rglob("*"):
             if path.is_file() and re.sub(r"[^a-z0-9]+", "", path.stem.casefold()) == title:
                 candidates.append({"path":str(path), "label":"RetroArch save", "shared":False})
+    unique = {}
+    for candidate in candidates:
+        unique[candidate["path"]] = candidate
+    return list(unique.values())
+
+
+def _windows_documents() -> Path:
+    documents = os.environ.get("USERPROFILE", "")
+    base = Path(documents) if documents else Path.home()
+    return base / "Documents"
+
+
+def _discover_save_paths_windows(game):
+    """Discover common Windows emulator and Steam save locations."""
+    home = Path.home()
+    documents = _windows_documents()
+    roaming = Path(os.environ.get("APPDATA") or home / "AppData" / "Roaming")
+    local = Path(os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local")
+    candidates = []
+    app_id = str(game.get("steam_app_id", ""))
+    if app_id.isdigit():
+        for steam in steam_install_roots():
+            userdata = steam / "userdata"
+            if not userdata.is_dir():
+                continue
+            candidates.extend(
+                {"path": str(path), "label": "Steam Cloud", "shared": False}
+                for path in userdata.glob(f"*/{app_id}/remote")
+                if path.is_dir()
+            )
+    platform = str(game.get("platform", ""))
+    shared = {
+        "PlayStation 2": [documents / "PCSX2" / "memcards", roaming / "PCSX2" / "memcards"],
+        "PSP": [documents / "PPSSPP" / "PSP" / "SAVEDATA"],
+        "PlayStation 3": [roaming / "rpcs3" / "dev_hdd0" / "home" / "00000001" / "savedata"],
+        "GameCube": [documents / "Dolphin Emulator" / "GC"],
+        "Wii": [documents / "Dolphin Emulator" / "Wii" / "title"],
+        "WiiWare": [documents / "Dolphin Emulator" / "Wii" / "title"],
+        "Sega Saturn": [roaming / "retroarch" / "saves", local / "retroarch" / "saves"],
+        "Wii U": [roaming / "Cemu" / "mlc01" / "usr" / "save"],
+    }
+    candidates.extend(
+        {"path": str(path), "label": f"{platform} shared saves", "shared": True}
+        for path in shared.get(platform, [])
+        if path.exists()
+    )
+    title = re.sub(r"[^a-z0-9]+", "", str(game.get("name") or Path(game.get("path", "")).stem).casefold())
+    retro_roots = (
+        roaming / "retroarch" / "saves",
+        roaming / "retroarch" / "states",
+        local / "retroarch" / "saves",
+        local / "retroarch" / "states",
+    )
+    for root in retro_roots:
+        if not root.is_dir() or not title:
+            continue
+        for path in root.rglob("*"):
+            if path.is_file() and re.sub(r"[^a-z0-9]+", "", path.stem.casefold()) == title:
+                candidates.append({"path": str(path), "label": "RetroArch save", "shared": False})
     unique = {}
     for candidate in candidates:
         unique[candidate["path"]] = candidate

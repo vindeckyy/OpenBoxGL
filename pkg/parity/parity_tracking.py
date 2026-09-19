@@ -1,9 +1,17 @@
-"""Per-game process tracking modes for Linux launch sessions."""
+"""Per-game process tracking modes for Linux and Windows launch sessions."""
 
-import os
 import time
 from collections import namedtuple
 from pathlib import Path
+
+from pkg.platform_compat import (
+    process_alive as _platform_alive,
+    process_command_line as _platform_cmdline,
+    process_cwd as _platform_cwd,
+    process_name as _platform_name,
+    find_pids_by_name as _platform_find_by_name,
+    find_pids_in_folder as _platform_find_in_folder,
+)
 
 WaitResult = namedtuple('WaitResult', ['exit_code', 'timed_out'])
 
@@ -37,59 +45,27 @@ def resolve_mode(game, settings):
 
 
 def _proc_name(pid):
-    try:
-        return (Path(f"/proc/{pid}/comm").read_text().strip())
-    except OSError:
-        return ""
+    return _platform_name(pid)
 
 
 def _proc_cmdline(pid):
-    try:
-        return Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
-    except OSError:
-        return ""
+    return _platform_cmdline(pid)
 
 
 def _proc_cwd(pid):
-    try:
-        return os.readlink(f"/proc/{pid}/cwd")
-    except OSError:
-        return ""
+    return _platform_cwd(pid)
 
 
 def _alive(pid):
-    try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
+    return _platform_alive(pid)
 
 
 def find_pids_by_name(pattern):
-    pattern = pattern.casefold()
-    matches = []
-    for entry in Path("/proc").iterdir():
-        if not entry.name.isdigit():
-            continue
-        pid = int(entry.name)
-        name = _proc_name(pid).casefold()
-        cmdline = _proc_cmdline(pid).casefold()
-        if pattern in name or pattern in cmdline:
-            matches.append(pid)
-    return matches
+    return _platform_find_by_name(pattern)
 
 
 def find_pids_in_folder(folder):
-    folder = str(Path(folder).resolve())
-    matches = []
-    for entry in Path("/proc").iterdir():
-        if not entry.name.isdigit():
-            continue
-        pid = int(entry.name)
-        cwd = _proc_cwd(pid)
-        if cwd == folder or cwd.startswith(folder + os.sep):
-            matches.append(pid)
-    return matches
+    return _platform_find_in_folder(folder)
 
 
 def wait_for_exit(process, game, settings, max_tracking_duration=3600):

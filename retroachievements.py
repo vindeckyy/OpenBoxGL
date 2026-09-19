@@ -56,7 +56,7 @@ def api_get(endpoint, params, credentials, opener=urlopen):
 
 def load_credentials(directory):
     try:
-        data = json.loads((Path(directory) / "retroachievements.json").read_text())
+        data = json.loads((Path(directory) / "retroachievements.json").read_text(encoding="utf-8"))
         if data.get("username") and data.get("api_key"):
             return data
     except (OSError, json.JSONDecodeError, AttributeError):
@@ -134,7 +134,7 @@ def cached(path, getter, max_age=604800):
     path = Path(path)
     try:
         if time() - path.stat().st_mtime < max_age:
-            return json.loads(path.read_text())
+            return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         pass
     data = getter()

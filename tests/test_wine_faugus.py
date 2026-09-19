@@ -40,6 +40,14 @@ class TestWine(unittest.TestCase):
 
     def test_get_prefix_for_game_wine_prefix(self):
         game = {"wine_prefix": "/tmp"}
+        if os.name == "nt":
+            # Path("/tmp") normalizes to "\\tmp" on Windows; use a real
+            # temporary directory so the directory check is meaningful.
+            import tempfile
+
+            with tempfile.TemporaryDirectory() as directory:
+                self.assertEqual(get_prefix_for_game({"wine_prefix": directory}), directory)
+            return
         # /tmp exists but no drive_c, still returns string
         self.assertEqual(get_prefix_for_game(game), "/tmp")
 
@@ -157,7 +165,7 @@ class TestFaugus(unittest.TestCase):
         from pathlib import Path
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "test-game.json"
-            p.write_text(json.dumps({"name": "Test Game", "game_id": "test-game", "prefix": "/tmp/prefix", "exe": "/tmp/game.exe"}))
+            p.write_text(json.dumps({"name": "Test Game", "game_id": "test-game", "prefix": "/tmp/prefix", "exe": "/tmp/game.exe"}), encoding="utf-8")
             games = scan_faugus_games(data_dirs=[tmp])
             self.assertEqual(len(games), 1)
             self.assertEqual(games[0]["faugus_id"], "test-game")

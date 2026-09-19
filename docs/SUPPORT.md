@@ -3,12 +3,12 @@
 ## Scale and architecture
 
 - **Formal library scale:** 20,000 games (blocking performance gates cover 10k and 20k scenarios). The optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) provides indexed search and facets for larger libraries while JSON remains canonical.
-- **CPU architecture:** OpenBox 1.12.1 publishes signed **x86_64 and aarch64 AppImages**. The Flatpak bundle is **x86_64 only**. The in-app updater and the release installer select the artifact that matches the running architecture and refuse a mismatched or unsigned artifact.
+- **CPU architecture:** OpenBox 1.13.0 publishes signed **x86_64 and aarch64 AppImages** and a signed **x86_64 Windows portable zip**. The Flatpak bundle is **x86_64 only**. The in-app updater and the release installers select the artifact that matches the running architecture and refuse a mismatched or unsigned artifact.
 - **Interface language:** English, Spanish, German, French, and Portuguese (v1.7.2+).
 
 ## Supported platforms
 
-OpenBox targets Linux on **x86_64 and aarch64**. Release CI validates the packaged paths and native host build; hardware and distro coverage below describes the strength of the evidence rather than a promise that every combination is physically tested:
+OpenBox targets Linux on **x86_64 and aarch64**, and Windows 10/11 on **x86_64**. Release CI validates the packaged paths and native host builds; hardware and distro coverage below describes the strength of the evidence rather than a promise that every combination is physically tested:
 
 | Environment | Status |
 |---|---|
@@ -17,6 +17,7 @@ OpenBox targets Linux on **x86_64 and aarch64**. Release CI validates the packag
 | Arch Linux | Best effort |
 | SteamOS / Steam Deck | Gamescope guest harness and controller-path coverage; physical maintainer pass unavailable |
 | aarch64 desktops / handhelds | Release-gated AppImage/native build and emulated smoke; physical hardware unverified |
+| Windows 10/11 (x86_64) | Full test suite on `windows-latest` CI; WebView2 host build exercised there; physical maintainer pass unavailable |
 | Other glibc distributions | Best effort |
 
 The aarch64 runner and emulated tests prove the build and packaged paths, not battery, display, controller, or gamescope behavior on a particular handheld. Report hardware-specific results with the model, distro image, and desktop/session details.
@@ -24,6 +25,8 @@ The aarch64 runner and emulated tests prove the build and packaged paths, not ba
 ## Supported runtimes
 
 - Python 3.10 or newer (CI runs 3.10 and 3.12)
+- Linux: the native window needs WebKitGTK 4.1; `--web` and `python3 web_app.py` need no host library
+- Windows: the native window needs the WebView2 runtime (shipped with Windows 11 and most Windows 10 systems); `openbox --web` and `python web_app.py` work without it
 - Chromium-family browsers get the chrome-less app window; Firefox opens a separate window; no compatible browser falls back to the default browser
 
 ## Reporting problems
@@ -36,8 +39,8 @@ Bug reports should include: OpenBox version, distro and desktop, Python version 
 
 See `docs/reliability.md` for the full edge case catalog. Highlights:
 
-- Graceful shutdown stops tracked sessions, persists cleanup, and drains shutdown work. If a tracked game remains alive after the two-second grace window, OpenBox force-kills its process group (falling back to the PID); the native host also force-kills its server process group if the server does not exit in time.
-- OpenBox data lives in `~/.local/share/openbox-game-launcher/` (override with `OPENBOX_DATA_DIR` in the process environment before launch, read at import time per `openbox.py:19-20`); deleting `library.json` resets the library while media files stay.
+- Graceful shutdown stops tracked sessions, persists cleanup, and drains shutdown work. If a tracked game remains alive after the two-second grace window, OpenBox force-kills its process tree (on Linux the process group, falling back to the PID; on Windows the tree via job object / `TerminateProcess`); the native hosts also force-kill their server process tree if the server does not exit in time.
+- OpenBox data lives in `~/.local/share/openbox-game-launcher/` on Linux and `%LOCALAPPDATA%\openbox-game-launcher\` on Windows (override with `OPENBOX_DATA_DIR` in the process environment before launch, read at import time per `openbox.py:19-20`); deleting `library.json` resets the library while media files stay.
 - The loopback server writes per-launch `server.token` and `server.port` into the data directory (`web_app.py:689-690`) and deletes both on exit; prefer the `X-OpenBox-Token` header over a `token` query parameter.
 - Optional `.env` discovery checks an explicit `OPENBOX_ENV_FILE` first, then the data directory and its parent, `~/.env`, and `~/.config/openbox-game-launcher/.env` (`env_config.py:116-140`). The data-directory choice itself must be exported before launch — a discovered `.env` is read too late for it.
 - The web UI is local-only. Sharing the token in the URL with another machine is equivalent to handing over control of the instance.

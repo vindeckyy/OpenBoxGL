@@ -2,12 +2,15 @@
 import hashlib
 import json
 import os
+import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from plugin_catalog import download_plugin_package, load_local_catalog, REMOTE_CATALOG
-from plugins import install_plugin, list_plugins, remove_plugin, run_plugins, set_plugin_enabled
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from plugin_catalog import download_plugin_package, load_local_catalog, REMOTE_CATALOG  # noqa: E402
+from plugins import install_plugin, list_plugins, remove_plugin, run_plugins, set_plugin_enabled  # noqa: E402
 
 
 def test():
@@ -66,7 +69,7 @@ def test():
             "id":"test.plugin", "name":"Test", "version":"2", "hooks":["before_launch"],
             "sha256": hashlib.sha256(b"test.plugin v2").hexdigest(),
         }))
-        (broken / "plugin.py").write_text("raise RuntimeError('boom')\n")
+        (broken / "plugin.py").write_text("raise RuntimeError('boom')\n", encoding="utf-8")
         with mock.patch("plugins.shutil.copytree", side_effect=OSError("disk full")):
             try:
                 install_plugin(broken, plugins)
@@ -113,12 +116,14 @@ def test():
                 from pathlib import Path as _Path
                 game_dir = _Path(data_dir) / "games"
                 game_dir.mkdir(parents=True)
-                game_file = game_dir / "game.sh"
-                game_file.write_text("#!/bin/sh\n")
+                game_file = game_dir / ("game.sh" if os.name != "nt" else "game.exe")
+                game_file.write_text("#!/bin/sh\n" if os.name != "nt" else "", encoding="utf-8")
                 save_state({"games": [{"name": "Escape", "path": str(game_file)}], "profiles": {}, "history": []})
 
                 def tamper(_directory, _hook, payload):
-                    payload["args"] = ["/bin/sh", "-c", "echo pwned > /tmp/plugin-escape"]
+                    payload["args"] = (["/bin/sh", "-c", "echo pwned > /tmp/plugin-escape"]
+                                       if os.name != "nt"
+                                       else [str(game_file), "--pwned"])
                     payload["cwd"] = "/"
                     return payload
 
@@ -129,7 +134,10 @@ def test():
                             webapp_state.start_game(0)
                 hook.assert_called_once()
                 launched = popen.call_args[0][0]
-                assert launched == ["bash", str(game_file)], launched
+                if os.name != "nt":
+                    assert launched == ["bash", str(game_file)], launched
+                else:
+                    assert launched == [str(game_file)], launched
                 # The production session watcher owns cleanup.  This test
                 # mocks finish_session, so release its registries explicitly
                 # before exercising a second launch.
@@ -171,7 +179,7 @@ def test():
         (plugin / "plugin.json").write_text(_json.dumps({
             "id": "env.dump", "name": "env dump", "version": "1",
             "entry": "plugin.py", "hooks": ["before_launch"],
-        }))
+        }), encoding="utf-8")
         dump = root / "env.json"
         env = dict(os.environ)
         env["GAMEYFIN_URL"] = "http://internal"
@@ -179,7 +187,7 @@ def test():
         env["ENV_DUMP"] = str(dump)
         with _mock.patch.dict(os.environ, {**env, "OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}, clear=True):
             _plugins.run_plugins(root, "before_launch", {"args": []})
-        leaked = _json.loads(dump.read_text())
+        leaked = _json.loads(dump.read_text(encoding="utf-8"))
         assert leaked == {}, leaked
     print("plugin self-test: ok")
 

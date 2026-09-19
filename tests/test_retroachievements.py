@@ -31,7 +31,8 @@ def test():
         def fetch(endpoint, params, credentials):
             return responses[endpoint]
         save_credentials(root, "player", "key", fetch)
-        assert (root / "retroachievements.json").stat().st_mode & 0o777 == 0o600
+        if hasattr(__import__("os"), "geteuid"):
+            assert (root / "retroachievements.json").stat().st_mode & 0o777 == 0o600
         game_id, matched_hash = match_game({"path":str(nes),"platform":"NES"}, {"username":"player","api_key":"key"}, root / "cache", fetch)
         assert (game_id, matched_hash) == (42, digest)
         progress = game_progress(game_id, {"username":"player","api_key":"key"}, fetch)

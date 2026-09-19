@@ -110,7 +110,7 @@ class FastPathTests(unittest.TestCase):
         state["games"] = [{"game_id": "game-aaa", "name": "Alpha", "tags": []}]
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "library.json"
-            path.write_text(json.dumps(state))
+            path.write_text(json.dumps(state), encoding="utf-8")
             store = JsonStateStore(path)
             loaded = store.load()
             self.assertEqual(loaded, state)
@@ -126,7 +126,7 @@ class FastPathTests(unittest.TestCase):
         state["games"] = [{"game_id": "game-aaa", "name": "Alpha"}]
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "library.json"
-            path.write_text(json.dumps(state))
+            path.write_text(json.dumps(state), encoding="utf-8")
             store = JsonStateStore(path)
             loaded = store.load()
             self.assertEqual(loaded["queue"], [])
@@ -140,12 +140,12 @@ class FastPathTests(unittest.TestCase):
         state["games"] = [{"game_id": "game-aaa", "name": "Alpha"}]
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "library.json"
-            path.write_text(json.dumps(state))
+            path.write_text(json.dumps(state), encoding="utf-8")
             store = JsonStateStore(path)
             loaded = store.load()
             self.assertEqual(loaded["queue"], [])
             self.assertEqual(loaded["notifications"], [])
-            persisted = json.loads(path.read_text())
+            persisted = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(persisted["queue"], [])
             self.assertEqual(persisted["notifications"], [])
 
@@ -157,12 +157,12 @@ class FastPathTests(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "library.json"
-            path.write_text(json.dumps(state))
+            path.write_text(json.dumps(state), encoding="utf-8")
             store = JsonStateStore(path)
             loaded = store.load()
             self.assertEqual(loaded["games"][0]["tags"], [])
             self.assertNotIn("tags", loaded["games"][1])
-            persisted = json.loads(path.read_text())
+            persisted = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(persisted["games"][0]["tags"], [])
 
     def test_fast_path_repairs_oversized_collections(self):
@@ -171,7 +171,7 @@ class FastPathTests(unittest.TestCase):
         state["notifications"] = [{"id": f"nt-{i}"} for i in range(NOTIFICATIONS_CAP + 10)]
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "library.json"
-            path.write_text(json.dumps(state))
+            path.write_text(json.dumps(state), encoding="utf-8")
             store = JsonStateStore(path)
             loaded = store.load()
             self.assertEqual(len(loaded["queue"]), QUEUE_CAP)
@@ -195,10 +195,10 @@ class TransactionValidationTests(unittest.TestCase):
             path = Path(directory) / "library.json"
             store = JsonStateStore(path)
             store.save(default_state())
-            before = path.read_text()
+            before = path.read_text(encoding="utf-8")
             with self.assertRaises(StateCorruptError):
                 store.update(lambda state: state.__setitem__("games", "not-a-list"))
-            self.assertEqual(path.read_text(), before)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
 
     def test_schema_remains_6_after_round_trip(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -244,14 +244,14 @@ class StoreIndexTests(unittest.TestCase):
             path = Path(directory) / "library.json"
             store = JsonStateStore(path)
             store.save(default_state())
-            before = path.read_text()
+            before = path.read_text(encoding="utf-8")
 
             def boom(_state):
                 raise RuntimeError("boom")
 
             with self.assertRaises(RuntimeError):
                 store.update(boom)
-            self.assertEqual(path.read_text(), before)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
 
 
 class CorruptionTests(unittest.TestCase):
@@ -347,7 +347,8 @@ class StoreWritePathTests(unittest.TestCase):
             target = Path(directory) / "secret.txt"
             secure_text_write(target, "token")
             self.assertEqual(target.read_text(encoding="utf-8"), "token")
-            self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
 
     def test_signature_none_when_file_missing(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -585,9 +586,9 @@ class StoreInternalsTests(unittest.TestCase):
             store = JsonStateStore(path)
             store.save(default_state())
             store.load()
-            on_disk = json.loads(path.read_text())
+            on_disk = json.loads(path.read_text(encoding="utf-8"))
             on_disk["settings"] = {"edited": True}
-            path.write_text(json.dumps(on_disk))
+            path.write_text(json.dumps(on_disk), encoding="utf-8")
             reloaded = store.load()
             self.assertEqual(reloaded["settings"], {"edited": True})
 
@@ -597,9 +598,9 @@ class StoreInternalsTests(unittest.TestCase):
             store = JsonStateStore(path)
             store.save(default_state())
             store.load_readonly()
-            on_disk = json.loads(path.read_text())
+            on_disk = json.loads(path.read_text(encoding="utf-8"))
             del on_disk["queue"]
-            path.write_text(json.dumps(on_disk))
+            path.write_text(json.dumps(on_disk), encoding="utf-8")
             view = store.load_readonly()
             self.assertEqual(view["queue"], [])
 
@@ -658,7 +659,7 @@ class StoreInternalsTests(unittest.TestCase):
             store = JsonStateStore(path)
             game = store.get_game_by_id("game-aaa")
             self.assertEqual(game["name"], "Alpha")
-            persisted = json.loads(path.read_text())
+            persisted = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(persisted["schema_version"], STATE_SCHEMA_VERSION)
 
     def test_snapshot_limit_zero_skips_rotation(self):
@@ -730,7 +731,7 @@ class StoreInternalsTests(unittest.TestCase):
             games = [{"game_id": f"g{i}", "name": f"G{i}", "path": f"/g{i}"} for i in range(600)]
             with mock.patch.object(state_store, "_orjson", None):
                 store.save({"games": games})
-            self.assertEqual(len(json.loads(store.path.read_text())["games"]), 600)
+            self.assertEqual(len(json.loads(store.path.read_text(encoding="utf-8"))["games"]), 600)
 
     def test_snapshot_rotation_ignores_stat_errors(self):
         with tempfile.TemporaryDirectory() as directory:

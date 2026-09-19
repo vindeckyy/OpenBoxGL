@@ -31,6 +31,18 @@ class DummyLaunchHandler(LaunchHandlers):
         self.responses.append((status, payload, kwargs))
 
 
+# Adapter defs name their Windows binaries separately (retroarch.exe), and the
+# doctor probes the binary for this host, so the doubles follow the platform.
+RETROARCH = "retroarch.exe" if os.name == "nt" else "retroarch"
+DUCKSTATION = "duckstation-qt-x64-ReleaseLTCG.exe" if os.name == "nt" else "duckstation-qt"
+
+
+def fake_which(*installed):
+    """``which`` stub that reports only the named binaries as installed."""
+    names = set(installed)
+    return lambda name: (f"/usr/bin/{name}" if name in names else None)
+
+
 class LaunchDoctorCoreTests(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
@@ -68,13 +80,13 @@ class LaunchDoctorCoreTests(unittest.TestCase):
             "platform": "NES",
             "emulator_adapter_id": "retroarch-nes",
         }
-        with mock.patch("pkg.parity.parity_launch_doctor.shutil.which", return_value="/usr/bin/retroarch"):
+        with mock.patch("pkg.parity.parity_launch_doctor.shutil.which", return_value=f"/usr/bin/{RETROARCH}"):
             result = preflight_single(
                 {"game_id": None, "candidate": None},
                 game=game,
                 profiles={},
                 data_dir=str(self.data_dir),
-                which=lambda name: "/usr/bin/retroarch" if name == "retroarch" else None,
+                which=fake_which(RETROARCH),
             )
         self.assertEqual(result["status"], "blocked")
         core_check = next(item for item in result["checks"] if item["code"] == "RETROARCH_CORE_MISSING")
@@ -94,10 +106,7 @@ class LaunchDoctorCoreTests(unittest.TestCase):
         core = self.data_dir / "fceumm_libretro.so"
         core.write_bytes(b"core")
 
-        def which(name):
-            if name == "retroarch":
-                return "/usr/bin/retroarch"
-            return None
+        which = fake_which(RETROARCH)
 
         with mock.patch("pkg.parity.parity_emulator_defs.shutil.which", side_effect=which):
             with mock.patch("pkg.parity.parity_launch_doctor._retroarch_core_missing", return_value=None):
@@ -138,10 +147,7 @@ class LaunchDoctorCoreTests(unittest.TestCase):
             "archive_member": None,
         }
 
-        def which(name):
-            if name == "retroarch":
-                return "/usr/bin/retroarch"
-            return None
+        which = fake_which(RETROARCH)
 
         with mock.patch("pkg.parity.parity_emulator_defs.shutil.which", side_effect=which):
             result = preflight_single(
@@ -202,10 +208,7 @@ class LaunchDoctorCoreTests(unittest.TestCase):
         core = self.data_dir / "fceumm_libretro.so"
         core.write_bytes(b"core")
 
-        def which(name):
-            if name == "retroarch":
-                return "/usr/bin/retroarch"
-            return None
+        which = fake_which(RETROARCH)
 
         with mock.patch("pkg.parity.parity_emulator_defs.shutil.which", side_effect=which):
             with mock.patch("pkg.parity.parity_launch_doctor._retroarch_core_missing", return_value=None):
@@ -307,10 +310,7 @@ class LaunchDoctorHandlerTests(unittest.TestCase):
         core = Path(self.tempdir.name) / "fceumm_libretro.so"
         core.write_bytes(b"core")
 
-        def which(name):
-            if name == "retroarch":
-                return "/usr/bin/retroarch"
-            return None
+        which = fake_which(RETROARCH)
 
         with mock.patch("pkg.parity.parity_emulator_defs.shutil.which", side_effect=which):
             with mock.patch("pkg.parity.parity_launch_doctor._retroarch_core_missing", return_value=None):
@@ -475,7 +475,7 @@ class LaunchDoctorCoverageTests(unittest.TestCase):
                 "path": str(rom),
                 "platform": "PlayStation",
                 "emulator_adapter_id": "retroarch-nes",
-            }, {}, str(self.data_dir), which=lambda name: "/usr/bin/retroarch" if name == "retroarch" else None)
+            }, {}, str(self.data_dir), which=fake_which(RETROARCH))
         codes = [item["code"] for item in checks]
         self.assertIn("BIOS_MISSING", codes)
         self.assertIn("FIRMWARE_MISSING", codes)
@@ -805,10 +805,7 @@ class TestFixActionCoverage(unittest.TestCase):
         rom.write_bytes(b"PSX")
         # Mock BIOS missing for DuckStation
         with mock.patch("pkg.parity.parity_launch_doctor.detect_dependencies", return_value={"missing": [{"name": "PSX BIOS (scph1001.bin)", "path": "/home/test/.local/share/duckstation/bios/scph1001.bin"}], "required": [{"name": "PSX BIOS (scph1001.bin)", "path": "/home/test/.local/share/duckstation/bios/scph1001.bin"}]}):
-            def which(name):
-                if name == "duckstation-qt":
-                    return "/usr/bin/duckstation-qt"
-                return None
+            which = fake_which(DUCKSTATION)
             with mock.patch("pkg.parity.parity_emulator_defs.shutil.which", side_effect=which):
                 checks = run_preflight_checks({"path": str(rom), "platform": "PlayStation", "emulator_adapter_id": "duckstation-psx"}, {}, str(self.data_dir), which=which)
         # BIOS_MISSING is warning, but should have fix_action reveal_bios_path

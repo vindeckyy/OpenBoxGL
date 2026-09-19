@@ -1,13 +1,13 @@
 """Service-agnostic game-stat syncing through a mounted cloud folder."""
 
 import json
-import fcntl
 from datetime import datetime
 from contextlib import contextmanager
 from pathlib import Path
 
 from backend_io import atomic_write_text
 from notifications import record_cloud_sync_outcome
+from pkg.platform_compat import file_lock
 from saves import SAVE_SYNC_LOCK
 
 STAT_FIELDS = ("play_count", "playtime_seconds", "last_played", "progress", "rating", "favorite")
@@ -74,20 +74,15 @@ def _timestamp(value):
 @contextmanager
 def _sync_lock(target):
     lock_path = Path(target).with_name(f".{Path(target).name}.lock")
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as lock_file:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+    with file_lock(lock_path):
+        yield
 
 
 def _load_remote_state(target):
     if not target.is_file():
         return {}, {}
     try:
-        remote = json.loads(target.read_text())
+        remote = json.loads(target.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise CloudRemoteInvalid("Remote cloud statistics file is invalid or unreadable.") from error
     if not isinstance(remote, dict):

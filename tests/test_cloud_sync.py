@@ -39,7 +39,7 @@ def main():
         assert game["progress"] == "Playing", "local progress must survive remote conflict"
         assert game["rating"] == 4.5
         assert game["favorite"] is True
-        assert json.loads(target.read_text())["format"] == 1
+        assert json.loads(target.read_text(encoding="utf-8"))["format"] == 1
         assert any(item.get("kind") == "cloud_sync" and item.get("level") == "info" for item in state["notifications"])
 
         # A game deleted locally must not be resurrected from the cloud.
@@ -47,7 +47,7 @@ def main():
         target.write_text(json.dumps({"generated_at": "2026-01-01T00:00:00", "games": {game_key(deleted): {"play_count": 2}}}))
         state2 = {"games": [], "settings": {}, "notifications": []}
         sync_statistics(state2, directory, "2026-04-01T00:00:00")
-        payload = json.loads(target.read_text())
+        payload = json.loads(target.read_text(encoding="utf-8"))
         assert game_key(deleted) not in payload["games"]
 
         # Local-wins timestamps must preserve local progress, favorite, and rating.
@@ -133,7 +133,7 @@ def main():
 
         # Corrupt remote JSON must raise CLOUD_REMOTE_INVALID and leave files untouched.
         bad_bytes = b"{not valid json"
-        target.write_text(bad_bytes.decode("utf-8"))
+        target.write_text(bad_bytes.decode("utf-8"), encoding="utf-8")
         corrupt_state = {"games": [], "settings": {"last_cloud_sync": "2026-01-01T00:00:00"}, "notifications": []}
         try:
             sync_statistics(corrupt_state, directory, "2026-06-01T00:00:00")
@@ -153,25 +153,23 @@ def main():
 
         legacy_game = {"name": "Legacy", "steam_app_id": "999", "play_count": 1}
         legacy_state = {"games": [legacy_game], "settings": {}, "notifications": []}
-        target.write_text(
-            json.dumps(
+        target.write_text(json.dumps(
                 {
                     "generated_at": "2026-01-01T00:00:00",
                     "games": {"steam:999": {"play_count": 4}},
                 }
-            )
-        )
+            ), encoding="utf-8")
         sync_statistics(legacy_state, directory, "2026-02-01T00:00:00")
         assert legacy_state["games"][0]["play_count"] == 4
 
-        target.write_text("[]")
+        target.write_text("[]", encoding="utf-8")
         try:
             sync_statistics({"games": [], "settings": {}, "notifications": []}, directory)
             raise AssertionError("expected CloudRemoteInvalid for non-object remote")
         except CloudRemoteInvalid:
             pass
 
-        target.write_text(json.dumps({"generated_at": "2026-01-01T00:00:00", "games": []}))
+        target.write_text(json.dumps({"generated_at": "2026-01-01T00:00:00", "games": []}), encoding="utf-8")
         try:
             sync_statistics({"games": [], "settings": {}, "notifications": []}, directory)
             raise AssertionError("expected CloudRemoteInvalid for non-dict games")
@@ -195,14 +193,12 @@ def main():
         # Resolve legacy remote entry when the canonical id key is absent.
         bridged = {"game_id": "g-bridge", "steam_app_id": "42", "play_count": 1}
         bridge_state = {"games": [bridged], "settings": {}, "notifications": []}
-        target.write_text(
-            json.dumps(
+        target.write_text(json.dumps(
                 {
                     "generated_at": "2026-01-01T00:00:00",
                     "games": {"steam:42": {"play_count": 9}, "id:g-bridge": "bad"},
                 }
-            )
-        )
+            ), encoding="utf-8")
         sync_statistics(bridge_state, directory, "2026-02-01T00:00:00")
         assert bridge_state["games"][0]["play_count"] == 9
 
@@ -223,7 +219,7 @@ def main():
         )
         sync_statistics(rating_state, directory, "2026-07-01T00:00:00")
         assert "rating" not in rating_state["games"][0] or rating_state["games"][0].get("rating") in (0, "bad")
-        remote_payload = json.loads(target.read_text())
+        remote_payload = json.loads(target.read_text(encoding="utf-8"))
         assert remote_payload["generated_at"] == "2026-07-01T00:00:00"
 
     print("cloud-sync self-test: ok")

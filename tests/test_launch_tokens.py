@@ -175,8 +175,14 @@ class TestBuildLaunchArgs(unittest.TestCase):
         self.assertEqual(args, ["emu", "/tmp/my game.iso", "--flag"])
 
     def test_unmatched_quotes_falls_back(self):
+        import os
         args = build_launch_args('emu "unclosed', {"path": "/rom.iso"})
-        self.assertEqual(args, ['emu', '"unclosed'])
+        if os.name == "nt":
+            # Windows command-line rules treat an unclosed quote as the start
+            # of a quoted argument; the value loses its opening quote.
+            self.assertEqual(args, ["emu", "unclosed"])
+        else:
+            self.assertEqual(args, ['emu', '"unclosed'])
 
 
 class TestLaunchExtra(unittest.TestCase):
@@ -191,7 +197,7 @@ class TestLaunchExtra(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             spaced = Path(tmp) / "my game.iso"
-            spaced.write_text("x")
+            spaced.write_text("x", encoding="utf-8")
             handler = SessionHandlers()
             handler.send_json = mock.Mock()
             state = {
@@ -222,7 +228,7 @@ class TestLaunchExtra(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             exe = Path(tmp) / "game.bin"
-            exe.write_text("x")
+            exe.write_text("x", encoding="utf-8")
             handler = SessionHandlers()
             handler.send_json = mock.Mock()
             state = {
@@ -249,7 +255,7 @@ class TestLaunchExtra(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             doc = Path(tmp) / "manual.pdf"
-            doc.write_text("x")
+            doc.write_text("x", encoding="utf-8")
             handler = SessionHandlers()
             handler.send_json = mock.Mock()
             state = {
@@ -259,14 +265,14 @@ class TestLaunchExtra(unittest.TestCase):
                 }],
             }
             with mock.patch("handlers.sessions.load_state", return_value=state), \
-                 mock.patch("handlers.sessions.shutil.which", return_value="/usr/bin/xdg-open"), \
-                 mock.patch("handlers.sessions.subprocess.Popen") as popen:
+                 mock.patch("handlers.sessions.open_path") as open_path:
                 handler.launch_extra({
                     "id": 0,
                     "kind": "documents",
                     "index": 0,
                 })
-            self.assertEqual(popen.call_args[0][0], ["/usr/bin/xdg-open", str(doc)])
+            open_path.assert_called_once()
+            self.assertEqual(str(open_path.call_args[0][0]), str(doc))
 
     def test_unknown_kind_raises(self):
         from unittest import mock

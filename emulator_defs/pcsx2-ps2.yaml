@@ -8,6 +8,7 @@ extensions:
   - chd
   - ciso
 native_exe: pcsx2-qt
+native_exe_windows: pcsx2-qt.exe
 flatpak_app_id: net.pcsx2.PCSX2
 startup_args:
   - -batch

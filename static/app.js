@@ -2,7 +2,7 @@ import { $, escapeHtml } from './util.js';
 import { token, AppState, api, notify, nativeFullscreen, detectNative, filteredGames, nativePickFile, selectedIds, resetQuery, resolveDeeplinkGameId } from './state.js';
 import { refresh, render, renderGrid, favorite, updateGameStatus, removeGame } from './library.js';
 import { openSettings, openProfiles, openThemes, openAchievements, openPlugins, health, openBackups, openFeature, bulkAction, saveFilter, savePreset, openPlaylists, createManualPlaylist, createFilterPlaylist, createNamedBackup, filterSettings, gracefulShutdown, loadTheme, addGamesToPlaylist } from './settings.js';
-import { importFolder, importSteam, importHeroic, importLutris, importArcade, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport } from './imports.js';
+import { importFolder, importSteam, importHeroic, importEpic, importLutris, importArcade, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport } from './imports.js';
 import { watchMetadata } from './metadata.js';
 import { openMediaManager } from './media.js';
 import { setReaderPage, resetReaderFrame } from './reader.js';
@@ -213,6 +213,7 @@ window.addEventListener('DOMContentLoaded', () => {
     $('saveStorefront').onclick = saveStorefrontSettings;
     $('importSteamStore').onclick = () => { $('storefrontDialog').close(); importSteam(); };
     $('importHeroicStore').onclick = () => { $('storefrontDialog').close(); importHeroic(); };
+    $('importEpicStore').onclick = () => { $('storefrontDialog').close(); importEpic(); };
     $('importLutrisStore').onclick = () => { $('storefrontDialog').close(); importLutris(); };
     if ($('importGameyfinStore')) $('importGameyfinStore').onclick = async () => {
       try {

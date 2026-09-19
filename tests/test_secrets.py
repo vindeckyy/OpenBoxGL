@@ -19,7 +19,7 @@ SECRET_PATTERNS = (
 
 class SecretSafetyTests(unittest.TestCase):
     def test_env_is_gitignored(self):
-        gitignore = (ROOT / ".gitignore").read_text()
+        gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
         self.assertIn(".env", gitignore)
         result = subprocess.run(
             ["git", "check-ignore", "-q", ".env"],
@@ -33,7 +33,7 @@ class SecretSafetyTests(unittest.TestCase):
         example = ROOT / ".env.example"
         self.assertTrue(example.is_file())
         for pattern in SECRET_PATTERNS:
-            self.assertIsNone(pattern.search(example.read_text()))
+            self.assertIsNone(pattern.search(example.read_text(encoding="utf-8")))
 
     def test_tracked_files_contain_no_github_tokens(self):
         tracked = subprocess.run(

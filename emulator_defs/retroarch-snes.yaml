@@ -7,10 +7,17 @@ extensions:
   - sfc
   - smc
 native_exe: retroarch
+native_exe_windows: retroarch.exe
 flatpak_app_id: org.libretro.RetroArch
 startup_args:
   - -L
   - /usr/lib/libretro/snes9x_libretro.so
+  - "{path}"
+# RetroArch ships its cores next to the executable on Windows;
+# the Linux libretro directory does not exist there.
+startup_args_windows:
+  - -L
+  - "{EmulatorDir}\cores\snes9x_libretro.dll"
   - "{path}"
 recommended: true
 priority: 10

@@ -2,6 +2,7 @@
 """Tests for Playnite-inspired parity helpers."""
 
 import json
+import os
 import stat
 import sys
 import tempfile
@@ -105,8 +106,8 @@ class DeeplinkTests(unittest.TestCase):
             code = dispatch_uri("openbox://showgame/42", data_dir)
             self.assertEqual(code, 1)
             # A real port makes it through to the API call.
-            (data_dir / "server.port").write_text("12345")
-            (data_dir / "server.token").write_text("tok")
+            (data_dir / "server.port").write_text("12345", encoding="utf-8")
+            (data_dir / "server.token").write_text("tok", encoding="utf-8")
             with mock.patch("parity_deeplinks.api_request", return_value={}):
                 code = dispatch_uri("openbox://showgame/42", data_dir, token="tok")
             self.assertEqual(code, 0)
@@ -116,8 +117,8 @@ class DeeplinkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
-            (data_dir / "server.port").write_text("12345")
-            (data_dir / "server.token").write_text("tok")
+            (data_dir / "server.port").write_text("12345", encoding="utf-8")
+            (data_dir / "server.token").write_text("tok", encoding="utf-8")
             with mock.patch("parity_deeplinks.api_request", return_value={}) as api_request:
                 code = dispatch_uri(
                     "openbox://launch/game-0123456789abcdef01234567-1",
@@ -139,8 +140,8 @@ class DeeplinkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
-            (data_dir / "server.port").write_text("12345")
-            (data_dir / "server.token").write_text("tok")
+            (data_dir / "server.port").write_text("12345", encoding="utf-8")
+            (data_dir / "server.token").write_text("tok", encoding="utf-8")
             with mock.patch("parity_deeplinks.api_request", return_value={}) as api_request:
                 code = dispatch_uri("openbox://launch/3", data_dir, token="tok")
             self.assertEqual(code, 0)
@@ -158,8 +159,8 @@ class DeeplinkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
-            (data_dir / "server.port").write_text("12345")
-            (data_dir / "server.token").write_text("tok")
+            (data_dir / "server.port").write_text("12345", encoding="utf-8")
+            (data_dir / "server.token").write_text("tok", encoding="utf-8")
             with mock.patch("webbrowser.open") as open_browser:
                 code = dispatch_uri(
                     "openbox://showgame/game-stable-id",
@@ -177,7 +178,7 @@ class DeeplinkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
-            (data_dir / "server.port").write_text("12345")
+            (data_dir / "server.port").write_text("12345", encoding="utf-8")
             code = dispatch_uri("openbox://launch/", data_dir, token="tok")
             self.assertEqual(code, 1)
 
@@ -186,7 +187,7 @@ class DeeplinkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
-            (data_dir / "server.port").write_text("12345")
+            (data_dir / "server.port").write_text("12345", encoding="utf-8")
             with mock.patch("webbrowser.open") as open_browser:
                 code = dispatch_uri(
                     "openbox://search/half%20life",
@@ -202,7 +203,7 @@ class DeeplinkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
-            (data_dir / "server.port").write_text("12345")
+            (data_dir / "server.port").write_text("12345", encoding="utf-8")
             with mock.patch("webbrowser.open") as open_browser:
                 self.assertEqual(dispatch_uri("openbox://bigbox", data_dir, open_browser=True), 0)
                 self.assertEqual(dispatch_uri("openbox://settings/general", data_dir, open_browser=True), 0)
@@ -234,9 +235,9 @@ class DeeplinkTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
             self.assertEqual(read_port_file(data_dir), 0)
-            (data_dir / "server.port").write_text("4321")
+            (data_dir / "server.port").write_text("4321", encoding="utf-8")
             self.assertEqual(read_port_file(data_dir), 4321)
-            (data_dir / "server.port").write_text("bad")
+            (data_dir / "server.port").write_text("bad", encoding="utf-8")
             self.assertEqual(read_port_file(data_dir), 0)
 
     def test_handle_cli_openbox_scheme_arg(self):
@@ -256,8 +257,8 @@ class DeeplinkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
-            (data_dir / "server.port").write_text("12345")
-            (data_dir / "server.token").write_text("tok")
+            (data_dir / "server.port").write_text("12345", encoding="utf-8")
+            (data_dir / "server.token").write_text("tok", encoding="utf-8")
             with mock.patch("webbrowser.open"):
                 code = dispatch_uri("openbox://start", data_dir, open_browser=True)
             self.assertEqual(code, 0)
@@ -267,7 +268,7 @@ class DeeplinkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
-            (data_dir / "server.port").write_text("12345")
+            (data_dir / "server.port").write_text("12345", encoding="utf-8")
             code = dispatch_uri("openbox://unknown/action", data_dir)
             self.assertEqual(code, 1)
 
@@ -316,7 +317,7 @@ class DeeplinkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
-            (data_dir / "server.port").write_text("12345")
+            (data_dir / "server.port").write_text("12345", encoding="utf-8")
             with mock.patch("builtins.print") as printer:
                 code = dispatch_uri("openbox://showgame/42", data_dir, open_browser=False)
             self.assertEqual(code, 0)
@@ -347,8 +348,8 @@ class DeeplinkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
-            (data_dir / "server.port").write_text("12345")
-            (data_dir / "server.token").write_text("tok")
+            (data_dir / "server.port").write_text("12345", encoding="utf-8")
+            (data_dir / "server.token").write_text("tok", encoding="utf-8")
             with mock.patch("webbrowser.open", side_effect=OSError("no browser")):
                 code = dispatch_uri("openbox://start", data_dir, open_browser=True)
             self.assertEqual(code, 0)
@@ -358,7 +359,7 @@ class DeeplinkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
-            (data_dir / "server.port").write_text("12345")
+            (data_dir / "server.port").write_text("12345", encoding="utf-8")
             with mock.patch("builtins.print") as printer:
                 self.assertEqual(dispatch_uri("openbox://search/quake", data_dir), 0)
                 self.assertEqual(dispatch_uri("openbox://bigbox", data_dir), 0)
@@ -374,7 +375,7 @@ class DeeplinkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
-            (data_dir / "server.port").write_text("12345")
+            (data_dir / "server.port").write_text("12345", encoding="utf-8")
             with mock.patch(
                 "parity_deeplinks.api_request",
                 side_effect=urllib.error.URLError("down"),
@@ -449,16 +450,17 @@ class BackupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             state = {"settings": {"theme": "dark"}, "games": [{"name": "Test"}]}
-            (root / "library.json").write_text("{}")
+            (root / "library.json").write_text("{}", encoding="utf-8")
             archive = create_backup(root, state, ["library", "settings"], keep=0)
             self.assertTrue(archive.is_file())
-            self.assertEqual(stat.S_IMODE(archive.stat().st_mode), 0o600)
-            self.assertEqual(stat.S_IMODE(archive.parent.stat().st_mode), 0o700)
+            if os.name != "nt":  # Windows chmod only toggles the read-only bit.
+                self.assertEqual(stat.S_IMODE(archive.stat().st_mode), 0o600)
+                self.assertEqual(stat.S_IMODE(archive.parent.stat().st_mode), 0o700)
             with zipfile.ZipFile(archive) as package:
                 manifest = json.loads(package.read("manifest.json"))
             self.assertEqual(set(manifest["items"]), {"library", "settings"})
             restore_backup(archive, root)
-            restored = json.loads((root / "library.json").read_text())
+            restored = json.loads((root / "library.json").read_text(encoding="utf-8"))
             self.assertEqual(restored["games"][0]["name"], "Test")
 
     def test_rotate_backups(self):
@@ -478,9 +480,9 @@ class BackupTests(unittest.TestCase):
             state = {"settings": {"theme": "dark", "volume": 7}, "games": [{"name": "Test"}]}
             archive = create_backup(root, state, ["library", "settings"], keep=0)
             # Simulate the running library diverging after the backup.
-            (root / "library.json").write_text(json.dumps({"settings": {"theme": "light"}, "games": []}))
+            (root / "library.json").write_text(json.dumps({"settings": {"theme": "light"}, "games": []}), encoding="utf-8")
             restore_backup(archive, root, force=True)
-            restored = json.loads((root / "library.json").read_text())
+            restored = json.loads((root / "library.json").read_text(encoding="utf-8"))
             # Archived settings are merged back into the restored state.
             self.assertEqual(restored["settings"]["theme"], "dark")
             self.assertEqual(restored["settings"]["volume"], 7)
@@ -496,12 +498,12 @@ class BackupTests(unittest.TestCase):
             # library so the backup is strictly older than the current state.
             _time.sleep(1.1)
             current = {"settings": {}, "games": [{"name": "New"}]}
-            (root / "library.json").write_text(json.dumps(current))
+            (root / "library.json").write_text(json.dumps(current), encoding="utf-8")
             with self.assertRaises(ValueError):
                 restore_backup(archive, root)
             # Force restores anyway.
             restore_backup(archive, root, force=True)
-            restored = json.loads((root / "library.json").read_text())
+            restored = json.loads((root / "library.json").read_text(encoding="utf-8"))
             self.assertEqual(restored["games"][0]["name"], "Old")
 
 

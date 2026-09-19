@@ -23,7 +23,7 @@ def _read_manifest() -> list[str]:
     if not MANIFEST.is_file():
         print(f"missing {MANIFEST}", file=sys.stderr)
         sys.exit(1)
-    lines = [line.strip() for line in MANIFEST.read_text().splitlines() if line.strip()]
+    lines = [line.strip() for line in MANIFEST.read_text(encoding="utf-8").splitlines() if line.strip()]
     return lines
 
 
@@ -61,7 +61,7 @@ def main() -> int:
         for path in ROOT.glob(pattern):
             if path.is_file():
                 # Skip __pycache__ already excluded by glob
-                rel = str(path.relative_to(ROOT))
+                rel = path.relative_to(ROOT).as_posix()
                 if rel not in manifest_set:
                     expected_missing.append(rel)
     if expected_missing:

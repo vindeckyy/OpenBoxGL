@@ -28,6 +28,7 @@ from parity_deeplinks import handle_cli
 from parity_emulator_defs import merge_profiles_from_definitions
 from parity_gameyfin import GameyfinError
 from parity_gamescope import OPENBOX_STEAM_GAME_ID, is_gamescope_guest, mark_process_windows, open_ui
+from pkg.platform_compat import process_alive, terminate_process_tree
 from routes import dispatch_get, dispatch_post
 from routes.registry import route
 from state_store import StateCorruptError, secure_text_write
@@ -87,28 +88,26 @@ def _sanitize_error_message(error):
     raw = str(error)
     if not raw:
         return raw
-    # If the message contains an absolute path, strip the path portion.
-    # Heuristic: absolute paths contain "/" and typical error prefixes contain ":"
-    if "/" in raw or raw.strip().startswith("~"):
-        if ":" in raw:
-            # Keep text before the first path-like segment
-            # e.g. "Folder does not exist: /tmp/foo" -> "Folder does not exist."
-            prefix = raw.split(":", 1)[0].strip()
-            # Only strip if the suffix looks like a path (contains /)
-            suffix = raw.split(":", 1)[1]
-            if "/" in suffix or "~" in suffix:
-                # Preserve a trailing period for consistency
-                if not prefix.endswith("."):
-                    prefix += "."
-                return prefix
-        # Fallback: replace any absolute path token with [path]
-        sanitized = _re.sub(r"(?:~)?/[^\s\"']*", "[path]", raw)
-        sanitized = _re.sub(r"\[path\](?:\s*\[path\])+", "[path]", sanitized)
-        # Collapse " : [path]" to "."
-        sanitized = _re.sub(r"\s*:\s*\[path\].*", ".", sanitized)
-        sanitized = sanitized.strip()
-        if sanitized:
-            return sanitized
+    # Absolute paths may be POSIX or Windows-shaped; strip either before the
+    # message can reach a client.
+    path_pattern = r"(?:~)?/[^\s\"']*|[A-Za-z]:\\[^\s\"']*|\\\\[^\s\"']+"
+    if not _re.search(path_pattern, raw):
+        return raw
+    match = _re.match(r"^([^:]*?):\s+(.*)$", raw)
+    if match and _re.search(path_pattern, match.group(2)):
+        prefix = match.group(1).strip()
+        # Preserve a trailing period for consistency
+        if not prefix.endswith("."):
+            prefix += "."
+        return prefix
+    # Fallback: replace any absolute path token with [path]
+    sanitized = _re.sub(path_pattern, "[path]", raw)
+    sanitized = _re.sub(r"\[path\](?:\s*\[path\])+", "[path]", sanitized)
+    # Collapse " : [path]" to "."
+    sanitized = _re.sub(r"\s*:\s*\[path\].*", ".", sanitized)
+    sanitized = sanitized.strip()
+    if sanitized:
+        return sanitized
     return raw
 
 
@@ -777,12 +776,9 @@ def main():
                     for sess in _active:
                         _pid = sess.get("pid")
                         if _pid:
-                            try:
-                                os.kill(_pid, 0)
+                            if process_alive(_pid):
                                 _alive_any = True
                                 break
-                            except OSError:
-                                pass
                     if not _alive_any:
                         break
                     _time.sleep(0.2)
@@ -790,18 +786,10 @@ def main():
                     _pid = sess.get("pid")
                     _pgid = sess.get("pgid")
                     if _pid:
-                        try:
-                            os.kill(_pid, 0)
-                        except OSError:
+                        if not process_alive(_pid):
                             continue
-                        # Still alive after window: force-kill pgid, fallback to pid.
-                        try:
-                            if _pgid:
-                                os.killpg(_pgid, signal.SIGKILL)
-                            else:
-                                os.kill(_pid, signal.SIGKILL)
-                        except OSError:
-                            pass
+                        # Still alive after window: force-kill the group/tree.
+                        terminate_process_tree(_pid, force=True, pgid=_pgid)
                 # Persist final state: remove stopping entries before shutdown.
                 def _remove_stopping(state):
                     state["active_sessions"] = [s for s in state.get("active_sessions", []) if s.get("status") != "stopping"]

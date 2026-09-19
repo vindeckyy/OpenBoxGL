@@ -11,17 +11,17 @@
 </h1>
 
 <p align="center">
-  Local-first game library and launcher for Linux
+  Local-first game library and launcher for Linux and Windows
 </p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.12.1"><img src="https://img.shields.io/badge/Release-v1.12.1-0052CC?style=for-the-badge" alt="Release v1.12.1"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.13.0"><img src="https://img.shields.io/badge/Release-v1.13.0-0052CC?style=for-the-badge" alt="Release v1.13.0"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-2EA44F?style=for-the-badge" alt="CI"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux-lightgrey?style=for-the-badge" alt="Linux"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-lightgrey?style=for-the-badge" alt="Linux and Windows"></a>
   <br>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.12.1</strong></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.13.0</strong></a>
 </p>
 
 <p align="center">
@@ -61,8 +61,8 @@
 
 ## Quick Start
 
-1. **Install.** Grab the [latest AppImage](https://github.com/vindeckyy/OpenBoxGL/releases/latest), or run from source with `python3 web_app.py` (Python 3.10+).
-2. **Open the UI.** `openbox` opens a native WebKitGTK window by default, and falls back to a chrome-less app window (then your default browser) when WebKitGTK is missing. `openbox --web` skips the WebKitGTK host and opens the loopback UI in a browser app window (plain tab fallback); from source, `python3 web_app.py` also opens the browser automatically with the token in the URL. Steam Deck / gamescope kiosk: `python3 web_app.py --game-mode` or `openbox --web --game-mode`. To open the UI manually, append the token from the data directory, e.g. open `http://127.0.0.1:PORT/?token=$(cat ~/.local/share/openbox-game-launcher/server.token)`. Treat token-bearing URLs as secrets; prefer the `X-OpenBox-Token` header for scripts and never paste or share the URL.
+1. **Install.** On Linux grab the [latest AppImage](https://github.com/vindeckyy/OpenBoxGL/releases/latest); on Windows run the signed `install.ps1` from the same release. Either way you can run from source with `python3 web_app.py` (Python 3.10+).
+2. **Open the UI.** `openbox` opens a native window (WebKitGTK on Linux, WebView2 on Windows) and falls back to a chrome-less app window, then your default browser, when the host runtime is missing. `openbox --web` skips the native host and opens the loopback UI in a browser app window (plain tab fallback); from source, `python3 web_app.py` also opens the browser automatically with the token in the URL. Steam Deck / gamescope kiosk: `python3 web_app.py --game-mode` or `openbox --web --game-mode`. To open the UI manually, append the token from the data directory, e.g. open `http://127.0.0.1:PORT/?token=$(cat ~/.local/share/openbox-game-launcher/server.token)`. Treat token-bearing URLs as secrets; prefer the `X-OpenBox-Token` header for scripts and never paste or share the URL.
 3. **Import games.** Click **Import Folder** and point at a directory of `.sh` files, or **Import Steam** to scan your installed games.
 4. **Press PLAY.** Sessions, play time, and history are tracked automatically.
 
@@ -72,7 +72,7 @@ For ROMs, emulators, Big Box, RetroAchievements, and everything else, see [Getti
 
 ## Overview
 
-OpenBox Game Launcher is an open-source game library manager and launcher for Linux. It puts Steam, Heroic (Epic/GOG/Amazon), Lutris, Faugus, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and Eden Switch collections, and local executables in one searchable catalog with advanced search, ordered playlists, artwork galleries, session tracking, save and library backups, launch profiles, and controller-ready Big Box mode. No account, no vendor cloud lock-in, and no telemetry; optional mounted-folder sync stays under your control.
+OpenBox Game Launcher is an open-source game library manager and launcher for Linux and Windows. It puts Steam, Heroic (Epic/GOG/Amazon), Lutris, Faugus, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and Eden Switch collections, and local executables in one searchable catalog with advanced search, ordered playlists, artwork galleries, session tracking, save and library backups, launch profiles, and controller-ready Big Box mode. No account, no vendor cloud lock-in, and no telemetry; optional mounted-folder sync stays under your control.
 
 OpenBox Game Launcher is unrelated to [Openbox](https://openbox.org/), the open-source Linux window manager. The projects have different maintainers, codebases, and purposes.
 
@@ -80,10 +80,10 @@ OpenBox provides one UI over two use-case entry points (the native host renders 
 
 | Entry point | Use when |
 | --- | --- |
-| `openbox` or `openbox-native` | Default desktop use; one WebKitGTK window renders the full UI |
+| `openbox` or `openbox-native` | Default desktop use; one native window (WebKitGTK on Linux, WebView2 on Windows) renders the full UI |
 | `openbox --web` or `python3 web_app.py` | Development and debugging; full feature set, REST API, Big Box mode |
 
-Library data is stored locally at `~/.local/share/openbox-game-launcher/library.json`. Set the `OPENBOX_DATA_DIR` environment variable to use a different data directory.
+Library data is stored locally at `~/.local/share/openbox-game-launcher/library.json` (`%LOCALAPPDATA%\openbox-game-launcher\library.json` on Windows). Set the `OPENBOX_DATA_DIR` environment variable to use a different data directory.
 
 > **Independence notice:** OpenBox Game Launcher is an independent open-source project. It is not affiliated with LaunchBox, Unbroken Software, LLC, or the Openbox window manager project. LaunchBox and Big Box are trademarks of Unbroken Software, LLC. See [DISCLAIMER.md](docs/DISCLAIMER.md).
 
@@ -109,6 +109,8 @@ Consider OpenBox if you:
 - Prefer local JSON library state over vendor cloud lock-in
 - Need Flathub-aware emulator install/update flows
 - Want RetroAchievements, save backups, session history, and Big Box in one app
+
+OpenBox also runs on Windows, installed from a signed portable zip and rendered in a WebView2 window. The Linux-specific machinery — AppImage and Flatpak packaging, gamescope/Game Mode, XDG desktop entries, and Flatpak-aware emulator installs — stays Linux-only.
 
 The full capability matrix with acceptance checks lives in [PARITY.md](docs/PARITY.md).
 
@@ -265,7 +267,8 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 
 | Method | Best for | Notes |
 | --- | --- | --- |
-| AppImage (installer) | Desktop, Steam Deck, handhelds, immutable systems | Architecture-matched signed installer and built-in verified updater; installs to `~/.local/bin` |
+| AppImage (installer) | Linux desktop, Steam Deck, handhelds, immutable systems | Architecture-matched signed installer and built-in verified updater; installs to `~/.local/bin` |
+| Windows (installer) | Windows 10/11 (x86_64) | Signed portable zip, verified updater, WebView2 window; installs to `%LOCALAPPDATA%\OpenBox` |
 | AppImage (manual) | Offline or custom path | `chmod +x` and run, no install step |
 | Flatpak | Sandboxed installs | `flatpak-builder` from manifest |
 | Source | Development, patching | `git clone` and `python3 web_app.py` |
@@ -276,7 +279,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 Download the installer from a specific signed release, inspect it, then run it. The installer detects `uname -m` (override with `OPENBOX_ARCH=x86_64` or `OPENBOX_ARCH=aarch64`), selects the matching AppImage, and verifies the release public-key pin, SHA-256 checksum, and Ed25519 signature before installing to `~/.local/bin`:
 
 ```bash
-VERSION=1.12.1
+VERSION=1.13.0
 curl --proto '=https' --tlsv1.2 --fail --location \
   --output install.sh \
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install.sh"
@@ -291,6 +294,44 @@ OPENBOX_RELEASE_TAG="v${VERSION}" bash install.sh --run
 ```
 
 Omit `OPENBOX_RELEASE_TAG` only when you intentionally want the latest stable release. Install to a different directory with `OPENBOX_INSTALL_DIR` (for example, `OPENBOX_INSTALL_DIR="$HOME/Applications"`).
+
+### Windows (installer)
+
+Windows 10/11 on x86_64 installs from the signed portable zip. Download
+`install.ps1` from a specific release, read it, then run it from Windows
+PowerShell 5.1 (it needs no `curl` and no OpenSSL — verification uses the same
+`updates.py` Ed25519 code path as the in-app updater):
+
+```powershell
+$Version = '1.13.0'
+Invoke-WebRequest -UseBasicParsing -OutFile install.ps1 `
+  "https://github.com/vindeckyy/OpenBoxGL/releases/download/v$Version/install.ps1"
+notepad install.ps1   # read it before running it
+.\install.ps1 -Tag "v$Version"
+```
+
+The installer resolves your CPU architecture, then verifies the release public
+key against the pinned trust anchor, the archive's SHA-256 sidecar, and the
+Ed25519 signature — nothing is extracted until all three pass. It installs to
+`%LOCALAPPDATA%\OpenBox\share\openbox`, keeps the previous tree at
+`share\openbox.previous`, adds the bin root to your user `PATH`, registers a
+Start Menu shortcut, and registers the `openbox://` protocol handler.
+
+| Option | Effect |
+| --- | --- |
+| `-Run` | Launch OpenBox when the install finishes |
+| `-InstallDir <path>` | Install somewhere else (or set `OPENBOX_INSTALL_DIR`) |
+| `-NoPathUpdate` | Leave the user `PATH` alone |
+| `-Tag vX.Y.Z` | Install a specific release instead of the latest |
+| `-Arch x86_64` | Override the detected architecture |
+| `-ReleaseBase <url>` / `-Repo <owner/name>` | Use a mirror (or set `OPENBOX_RELEASE_BASE`) |
+| `-PublicKeyPath <path>` | Trust a supplied release key (mirror/offline escape hatch) |
+
+`openbox` then opens the UI in a WebView2 window and falls back to the
+browser-based app window when the WebView2 runtime is absent; `openbox --web`
+forces the browser. The in-app updater verifies and swaps the installed tree the
+same way, and refuses to overwrite anything that is not an installed copy — a
+`git clone` updates with `git pull`.
 
 ### AppImage (manual)
 
@@ -334,7 +375,9 @@ cd OpenBoxGL
 python3 web_app.py
 ```
 
-Requirements: Python 3.10 or newer on a Linux system with standard desktop tooling. The native window additionally needs WebKitGTK 4.1 (`make native-host` builds `native_host`); `python3 web_app.py` runs without it.
+On Windows use `python web_app.py` (`python3` is a Microsoft Store alias that does not run scripts), or `.\openbox.cmd` after building the host with `scripts\build_native_host_windows.ps1`.
+
+Requirements: Python 3.10 or newer. The native window additionally needs WebKitGTK 4.1 on Linux (`make native-host` builds `native_host`) or the WebView2 runtime on Windows (present on Windows 11 and most Windows 10 systems); `python3 web_app.py` runs without either.
 
 Optional local configuration can be loaded from an explicit `OPENBOX_ENV_FILE`, the data directory (or its parent), `~/.env`, or `~/.config/openbox-game-launcher/.env`. See `.env.example`. Never commit secrets.
 
@@ -403,7 +446,7 @@ No OpenBox account is required. Optional integrations (RetroAchievements, EmuMov
 
 ### Is Windows supported?
 
-OpenBox targets Linux (desktop, Steam Deck, handhelds). Windows-only features are documented as boundaries in [PARITY.md](docs/PARITY.md). If you need Windows, LaunchBox remains a strong option.
+Yes. OpenBox runs on Windows 10/11 (x86_64) from a signed portable install: the same UI in a WebView2 window, the same library, imports, sessions, saves, Big Box mode, and REST API, with Windows binary names for every bundled emulator definition. Run `scripts/install.ps1` from a release, or `python web_app.py` from a checkout. Linux remains the primary target for the distro-integration surfaces — AppImage, Flatpak, gamescope/Game Mode, XDG desktop entries, and Flathub-aware emulator management are Linux-only, and the capability matrix in [PARITY.md](docs/PARITY.md) is written from the Linux side. See [ADR 0048](docs/adr/0048-windows-port.md) for the port's boundaries.
 
 ---
 
@@ -414,6 +457,8 @@ OpenBox targets Linux (desktop, Steam Deck, handhelds). Windows-only features ar
 ```
 OpenBox/
 ├── native_host.c           Native WebKitGTK host (spawns web_app.py)
+├── native_host_win.c       Native WebView2 host (spawns web_app.py)
+├── pkg/platform_compat.py  The only platform seam (locking, processes, quoting, paths)
 ├── handlers/               Route handler mixins (library, media, imports, settings, ...)
 ├── web_app.py              Loopback server + REST API (shared core)
 ├── webapp_state.py         SSE/event bus facade over the canonical state owner
@@ -461,11 +506,22 @@ OpenBox/
 ./run_all_tests.sh
 ```
 
-Build the native window host and the AppImage:
+On Windows (no bash required):
+
+```powershell
+python scripts\run_windows_tests.py          # every test file, per-file pass/fail/timeout
+python scripts\run_windows_tests.py test_platform_compat.py   # a subset
+```
+
+Build the native window hosts and the AppImage:
 
 ```bash
-make native-host     # WebKitGTK window host (needs libwebkit2gtk-4.1)
+make native-host                  # WebKitGTK window host (needs libwebkit2gtk-4.1)
 ./build_appimage.sh
+```
+
+```powershell
+scripts\build_native_host_windows.ps1   # WebView2 host (needs the MSVC build tools)
 ```
 
 Pull requests should pass the full test suite. See [CONTRIBUTING.md](docs/CONTRIBUTING.md).

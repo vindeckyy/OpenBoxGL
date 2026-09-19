@@ -26,8 +26,16 @@ def _fake_7z_script(root, *members):
             record += f"\nAttributes = {attributes[0]}"
         records.append(record)
     listing = "\n\n".join(records)
+    if sys.platform == "win32":
+        # A Python stand-in keeps the fixture executable on Windows without
+        # relying on a shell interpreter being installed.
+        script = root / "fake-7z.py"
+        script.write_text(f"import sys\nsys.stdout.write({listing!r})\n", encoding="utf-8")
+        launcher = root / "fake-7z.cmd"
+        launcher.write_text(f'@echo off\r\n"{sys.executable}" "%~dp0fake-7z.py"\r\n', encoding="utf-8")
+        return str(launcher)
     script = root / "fake-7z"
-    script.write_text(f"#!/bin/sh\nprintf '%b' {listing!r}\n")
+    script.write_text(f"#!/bin/sh\nprintf '%b' {listing!r}\n", encoding="utf-8")
     script.chmod(0o755)
     return str(script)
 
@@ -184,6 +192,11 @@ def test_zip_stream_fd_and_bounds():
             raise AssertionError("Expected regular file check failure")
         except ValueError as error:
             assert "regular file" in str(error)
+        except PermissionError:
+            # Windows refuses to open a directory as a file before the
+            # regular-file guard runs; that is the same rejection.
+            if sys.platform != "win32":
+                raise
 
         with patch("archives.MAX_ARCHIVE_TOTAL_BYTES", 5):
             try:

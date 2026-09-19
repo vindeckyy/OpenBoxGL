@@ -295,7 +295,7 @@ def _load_ra_cache(ra_cache_dir: str) -> dict[str, dict[str, Any]]:
         return by_game
     for path in base.glob("*.json"):
         try:
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
         if not isinstance(data, dict):

@@ -23,8 +23,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 VENV = ROOT / ".venv-dev"
-RUFF = VENV / "bin" / "ruff"
-COVERAGE = VENV / "bin" / "coverage"
+
+
+def _venv_bin(name: str) -> Path:
+    """Return the dev-venv executable, POSIX or Windows layout."""
+    scripts = VENV / ("Scripts" if os.name == "nt" else "bin")
+    for candidate in (scripts / f"{name}.exe", scripts / name):
+        if candidate.is_file():
+            return candidate
+    return scripts / name
+
+
+RUFF = _venv_bin("ruff")
+COVERAGE = _venv_bin("coverage")
 
 # Coverage floors. Ratcheted baseline: 83% total, 58% web_app.py.
 # Raise the floors as phases land; never lower them silently.
@@ -36,7 +47,7 @@ NEW_MODULE_FLOOR = 85.0
 
 def run(command):
     print(f"$ {' '.join(str(part) for part in command)}")
-    return subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
+    return subprocess.run(command, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
 
 
 def _git_diff_base() -> str:
@@ -64,7 +75,7 @@ def _check_new_module_coverage(coverage_bin: Path, failures: list[str]) -> None:
     base = _git_diff_base()
     current = {
         line.strip()
-        for line in (ROOT / "runtime_modules.txt").read_text().splitlines()
+        for line in (ROOT / "runtime_modules.txt").read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     }
     previous = _runtime_modules_at(base)
@@ -113,7 +124,7 @@ def main() -> int:
 
     # Stage 1: lint.
     if not RUFF.is_file():
-        print("Missing .venv-dev/bin/ruff. Run: make dev-venv")
+        print(f"Missing {RUFF}. Run: make dev-venv")
         failures.append("ruff missing")
     else:
         result = run([str(RUFF), "check", "."])
@@ -181,7 +192,7 @@ def main() -> int:
     if csp_check.returncode != 0:
         failures.append("csp")
 
-    modules = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip()]
+    modules = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text(encoding="utf-8").splitlines() if line.strip()]
     compile_failed = 0
     for module in modules:
         path = ROOT / module
@@ -213,7 +224,7 @@ def main() -> int:
         failures.append("py_compile")
     # Stage 3+4: tests under coverage in parallel, then the floor checks.
     if not COVERAGE.is_file():
-        print("Missing .venv-dev/bin/coverage. Run: make dev-venv")
+        print(f"Missing {COVERAGE}. Run: make dev-venv")
         failures.append("coverage missing")
     else:
         run([str(COVERAGE), "erase"])
@@ -227,7 +238,7 @@ def main() -> int:
         failed_tests = []
         # Ensure root is on PYTHONPATH so tests in tests/ can import flat modules
         env = os.environ.copy()
-        env["PYTHONPATH"] = str(ROOT) + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        env["PYTHONPATH"] = str(ROOT) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["COVERAGE_RUN"] = "1"
         # Isolate state: openbox.py binds DATA at import time per test
         # process. Without a suite-wide temp dir, any test importing state
@@ -244,7 +255,7 @@ def main() -> int:
             for _attempt in range(3):
                 result = subprocess.run(
                     command,
-                    cwd=ROOT, capture_output=True, text=True,
+                    cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
                     check=False, env=env,
                 )
                 code = result.returncode

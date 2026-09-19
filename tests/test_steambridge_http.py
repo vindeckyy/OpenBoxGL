@@ -135,7 +135,7 @@ class SteamBridgeRouteTests(unittest.TestCase):
         self.assertEqual(GET_TABLE["/api/v2/steambridge/status"], "handlers.steambridge.steambridge_status")
         self.assertEqual(POST_TABLE["/api/v2/steambridge/preview"], "handlers.steambridge.steambridge_preview")
         self.assertTrue(any(route.path == "/api/v2/steambridge/apply" for route in all_routes()))
-        self.assertIn("handlers/steambridge.py", (ROOT / "runtime_modules.txt").read_text())
+        self.assertIn("handlers/steambridge.py", (ROOT / "runtime_modules.txt").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

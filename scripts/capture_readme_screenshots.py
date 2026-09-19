@@ -272,7 +272,7 @@ def build_library() -> None:
             },
         },
     }
-    (DATA_DIR / "library.json").write_text(json.dumps(state, indent=2))
+    (DATA_DIR / "library.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 
 def start_server() -> tuple[subprocess.Popen[str], str, str]:

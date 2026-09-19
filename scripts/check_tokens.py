@@ -26,7 +26,7 @@ def main() -> int:
         if not path.is_file():
             print(f"missing {path}", file=sys.stderr)
             return 1
-        total += count_outside_root(path.read_text())
+        total += count_outside_root(path.read_text(encoding="utf-8"))
     print(f"raw hex outside :root: {total} (baseline {BASELINE})")
     if total > BASELINE:
         print(f"FAIL: raw hex count {total} > baseline {BASELINE}. Move colors to tokens in :root.", file=sys.stderr)

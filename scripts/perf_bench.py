@@ -486,7 +486,7 @@ def main():
     out_target = args.json_out or args.out or "build/perf.json"
     out_path = Path(out_target)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(results, indent=2, sort_keys=True) + "\n")
+    out_path.write_text(json.dumps(results, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(results, indent=2, sort_keys=True))
     print(f"results written to {out_path}")
 

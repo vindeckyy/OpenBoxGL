@@ -5,6 +5,26 @@ web UI, served by `web_app.py` over loopback. This document is the contract
 between the page and the host. Both directions must keep working when the host
 is absent, so the web UI remains usable in a plain browser for development.
 
+## Platform implementations
+
+Two hosts implement this contract: `native_host.c` (WebKitGTK, Linux, built by
+`make native-host`) and `native_host_win.c` (WebView2, Windows, built by
+`scripts\build_native_host_windows.ps1`). Where a clause below names a POSIX
+mechanism, the WebView2 host uses the equivalent Windows mechanism:
+
+| Clause | Linux (WebKitGTK) | Windows (WebView2) |
+|---|---|---|
+| Single instance | `AF_UNIX` socket in the data directory | named pipe opened with `FILE_FLAG_FIRST_PIPE_INSTANCE` (the atomic guard), same `focus`/`deeplink` forwarding |
+| Graceful stop of the Python child | `SIGTERM` to the child process group | `CTRL_BREAK` to the `CREATE_NEW_PROCESS_GROUP` child |
+| Force-kill backstop | `SIGKILL` to the process group | job object (`TerminateJobObject`), which also kills children |
+| Geometry persistence | `window-geometry`, `"<w> <h> <maximized>"` | same file, same format |
+| Tray flags | `native-host-flags` | same file |
+| `gamepad` capability | `"webkit"` (fixed; the page always uses the Web Gamepad API) | same |
+
+The bridge object, the HTTP native surface, the capability shapes, and the
+browser fallbacks are identical on both hosts; `handlers/native.py` produces the
+capabilities either way.
+
 ## Host entry
 
 The host spawns `web_app.py --no-browser` as a child, reads `server.port` and
