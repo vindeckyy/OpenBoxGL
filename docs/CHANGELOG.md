@@ -32,6 +32,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   stop, or shutdown signal the caller's own process group (or init) instead of
   the game; the launcher now validates the group, refuses PID 1 outright, and
   falls back to the game process's own group.
+- Import each memories root once when the same folder is configured through
+  more than one spelling (an 8.3 short name, a differing case, or a trailing
+  separator), instead of scanning it twice and importing every screenshot
+  again.
+- Canonicalize the resume state directory. A data root reached through an 8.3
+  alias or a junction used to produce one `argv` carrying the resolved state
+  file next to an unresolved `--appendconfig` path; the state directory and
+  everything under it now share one spelling.
 
 ## [1.12.1] - 2026-09-15
 
