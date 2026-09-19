@@ -27,7 +27,9 @@ class Handler:
 class ClipRouteTests(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
-        self.root = Path(self.tempdir.name)
+        # Production resolves every media path it hands back, so the fixture
+        # has to hold the canonical spelling: %TEMP% can be an 8.3 alias.
+        self.root = Path(self.tempdir.name).resolve()
         self.media = self.root / "media" / "clips" / "g1"
         self.media.mkdir(parents=True)
         self.clip_path = self.media / "clip.mp4"

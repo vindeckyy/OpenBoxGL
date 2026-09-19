@@ -32,13 +32,16 @@ class PerfCacheTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tempdir = tempfile.TemporaryDirectory()
+        # Production resolves the paths it stores and hands back, so the
+        # fixture holds the canonical spelling: %TEMP% can be an 8.3 alias.
+        cls.root = Path(cls.tempdir.name).resolve()
         cls._prev_data_dir = os.environ.get("OPENBOX_DATA_DIR")
-        os.environ["OPENBOX_DATA_DIR"] = cls.tempdir.name
+        os.environ["OPENBOX_DATA_DIR"] = str(cls.root)
         import openbox
         import webapp_state
         import handlers.extensions
         from state_store import JsonStateStore
-        openbox.DATA = Path(cls.tempdir.name) / "library.json"
+        openbox.DATA = cls.root / "library.json"
         openbox.STATE_STORE = JsonStateStore(openbox.DATA)
         webapp_state.DATA = openbox.DATA
         webapp_state.STATE_STORE = openbox.STATE_STORE
@@ -63,7 +66,7 @@ class PerfCacheTests(unittest.TestCase):
     def setUp(self):
         self.MEDIA_EPOCH["value"] = 0
         self.save_state({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
-        self.media_path = Path(self.tempdir.name) / "media" / "cover.png"
+        self.media_path = self.root / "media" / "cover.png"
         self.media_path.parent.mkdir(parents=True, exist_ok=True)
         self.media_path.write_bytes(b"fake-png-bytes")
 
@@ -212,7 +215,7 @@ class PerfCacheTests(unittest.TestCase):
     def test_theme_css_revalidates(self):
         from web_app import Handler
 
-        theme_dir = Path(self.tempdir.name) / "themes"
+        theme_dir = self.root / "themes"
         theme_dir.mkdir(parents=True, exist_ok=True)
         (theme_dir / "test-theme.css").write_text("body { color: red; }", encoding="utf-8")
         handler = self.make_handler()
@@ -245,7 +248,7 @@ class PerfCacheTests(unittest.TestCase):
         bump_media_epoch()
         self.assertEqual(self.MEDIA_EPOCH["value"], 1)
         with mock.patch("webapp_state.download_file", return_value="/tmp/fake.png") as downloader:
-            download_image("https://example.com/x.png", Path(self.tempdir.name) / "x.png")
+            download_image("https://example.com/x.png", self.root / "x.png")
         downloader.assert_called_once()
         self.assertEqual(self.MEDIA_EPOCH["value"], 2)
 
@@ -258,7 +261,7 @@ class PerfCacheTests(unittest.TestCase):
 
     def test_delete_game_with_media_bumps_epoch(self):
 
-        media = Path(self.tempdir.name) / "media" / "game" / "cover.png"
+        media = self.root / "media" / "game" / "cover.png"
         media.parent.mkdir(parents=True, exist_ok=True)
         media.write_bytes(b"png")
         self.save_state({
@@ -289,7 +292,7 @@ class PerfCacheTests(unittest.TestCase):
     def test_public_state_fast_projection(self):
         from webapp_state import _build_public_state
 
-        media = Path(self.tempdir.name) / "media" / "game" / "cover.png"
+        media = self.root / "media" / "game" / "cover.png"
         media.parent.mkdir(parents=True, exist_ok=True)
         media.write_bytes(b"png")
         from webapp_state import bump_media_epoch
@@ -324,7 +327,7 @@ class PerfCacheTests(unittest.TestCase):
             PUBLIC_STATE_CACHE,
         )
 
-        media = Path(self.tempdir.name) / "media" / "game" / "new_cover.png"
+        media = self.root / "media" / "game" / "new_cover.png"
         self.save_state({
             "games": [{"game_id": "g1", "name": "Alpha", "path": "/bin/true", "cover": str(media)}],
             "profiles": {}, "history": [], "settings": {}, "playlists": [],
@@ -351,7 +354,7 @@ class PerfCacheTests(unittest.TestCase):
         from urllib.parse import urlparse
         from web_app import Handler
 
-        media = Path(self.tempdir.name) / "media" / "cover.png"
+        media = self.root / "media" / "cover.png"
         self.save_state({
             "games": [
                 {"game_id": "game-alpha", "name": "Alpha", "path": "/bin/true", "cover": str(media), "legacy_game_ids": ["legacy-g1"]},
@@ -440,7 +443,7 @@ class PerfCacheTests(unittest.TestCase):
         self.assertEqual(sanitize_media_path(None), "")
 
         # Valid cached path
-        media_p = Path(self.tempdir.name) / "media" / "test.png"
+        media_p = self.root / "media" / "test.png"
         res1 = sanitize_media_path(str(media_p))
         self.assertEqual(res1, str(media_p))
         # Second call: cache hit
@@ -456,7 +459,7 @@ class PerfCacheTests(unittest.TestCase):
         try:
             webapp_state._SANITIZE_MEDIA_PATH_MAX = 5
             for i in range(10):
-                p = Path(self.tempdir.name) / "media" / f"test_{i}.png"
+                p = self.root / "media" / f"test_{i}.png"
                 sanitize_media_path(str(p))
             self.assertLessEqual(len(_SANITIZE_MEDIA_PATH_CACHE), 5)
         finally:
@@ -503,7 +506,7 @@ class PerfCacheTests(unittest.TestCase):
         import webapp_state
         from webapp_state import _build_known_media_set, MEDIA_ROOTS_ENV
 
-        extra_root = Path(self.tempdir.name) / "extra_media"
+        extra_root = self.root / "extra_media"
         extra_root.mkdir(parents=True, exist_ok=True)
         (extra_root / "pic.png").write_bytes(b"123")
 

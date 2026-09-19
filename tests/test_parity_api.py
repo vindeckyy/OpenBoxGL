@@ -17,8 +17,11 @@ from plugin_catalog import load_local_catalog
 class ParityApiTests(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
+        # Modules bind this directory at import time and resolve it back when
+        # they hand paths out, so keep the fixture's spelling canonical.
+        self.root = Path(self.tempdir.name).resolve()
         self._prev_data_dir = os.environ.get("OPENBOX_DATA_DIR")
-        os.environ["OPENBOX_DATA_DIR"] = self.tempdir.name
+        os.environ["OPENBOX_DATA_DIR"] = str(self.root)
         from openbox import save_state
         from web_app import Handler
 

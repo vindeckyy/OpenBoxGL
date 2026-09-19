@@ -332,6 +332,9 @@ def main():
             programs = Path(directory) / "Programs"
             launcher = Path(directory) / "openbox.cmd"
             launcher.write_text("@echo off\r\n", encoding="utf-8")
+            # The shortcut and the protocol registry keep the canonical path
+            # Windows stores, so compare against the resolved launcher.
+            launcher = launcher.resolve()
             with mock.patch.object(updates, "start_menu_programs_dir", return_value=programs), \
                  mock.patch.object(updates, "_install_root", return_value=Path(directory)):
                 link = Path(updates.install_desktop_entry(str(launcher)))
