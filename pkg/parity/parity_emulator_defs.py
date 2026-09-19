@@ -668,10 +668,17 @@ def resolve_launch(game, profiles, *, which=None, data_dir=""):
                     args = None
     if args is None:
         if Path(launch_path).suffix.lower() == ".sh":
-            shell = shutil.which("bash") or shutil.which("sh")
-            if shell is None and IS_WINDOWS:
+            # Probe for an interpreter but record the plain name: a host-specific
+            # path (/usr/bin/bash) would be replayed on hosts with another layout.
+            if which("bash"):
+                shell = "bash"
+            elif which("sh"):
+                shell = "sh"
+            elif IS_WINDOWS:
                 raise FileNotFoundError("Shell scripts require bash or sh on PATH.")
-            args = [shell or "bash", launch_path]
+            else:
+                shell = "bash"
+            args = [shell, launch_path]
         else:
             args = [launch_path]
         precedence = "direct_exe"
