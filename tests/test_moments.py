@@ -103,8 +103,9 @@ class MomentsTests(unittest.TestCase):
         self.assertEqual(item["note"], "A good run")
         self.assertEqual(item["trigger"], "pause")
         self.assertTrue(item["screenshot"].endswith(".png"))
-        self.assertIn("media", Path(item["screenshot"]).parts)
-        self.assertIn("moments", Path(item["screenshot"]).parts)
+        # Exact segment order, with separators normalised so the check means the
+        # same thing on both platforms.
+        self.assertIn("/media/moments/", item["screenshot"].replace("\\", "/"))
         self.assertEqual(item["screenshot_index"], 0)
         saved = openbox.load_state()["games"][0]
         self.assertEqual(len(saved["moments"]), 1)
