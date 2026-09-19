@@ -17,7 +17,7 @@ startup_args:
 # the Linux libretro directory does not exist there.
 startup_args_windows:
   - -L
-  - "{EmulatorDir}\cores\mame_libretro.dll"
+  - '{EmulatorDir}\cores\mame_libretro.dll'
   - "{path}"
 recommended: true
 priority: 20

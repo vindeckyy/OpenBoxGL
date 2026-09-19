@@ -98,7 +98,11 @@ def state_dir_for(game, data_parent):
         raise ValueError("Could not resolve resume state directory.") from error
     if resolved == resolved_root or resolved_root not in resolved.parents:
         raise ValueError("Resume state directory escapes the OpenBox data root.")
-    return candidate
+    # Return the resolved directory: the state files inside it are written and
+    # handed to the emulator through resolved paths, and a data root that is
+    # reached through an 8.3 alias or a junction would otherwise put two
+    # spellings of the same directory in one argv.
+    return resolved
 
 
 def adapter_state(adapter):
