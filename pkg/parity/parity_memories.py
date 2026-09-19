@@ -155,7 +155,14 @@ def discover_memory_roots(home=None, extra_roots=None):
     roots, skipped, seen = [], [], set()
     for kind, path in candidates:
         resolved = Path(path)
-        key = str(resolved)
+        # Dedupe on the canonical spelling: the same directory configured
+        # twice through different aliases (an 8.3 short name, a differing
+        # case, a trailing separator) is one root, or its screenshots import
+        # twice.
+        try:
+            key = str(resolved.resolve())
+        except (OSError, RuntimeError, ValueError):
+            key = str(resolved)
         if key in seen:
             continue
         seen.add(key)
