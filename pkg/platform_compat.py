@@ -202,12 +202,16 @@ def process_alive(pid) -> bool:
 
 
 def terminate_process(pid, *, force: bool = False) -> bool:
-    """Terminate a single process; ``force`` skips graceful close attempts."""
+    """Terminate a single process; ``force`` skips graceful close attempts.
+
+    PID 1 is refused: nothing OpenBox launches is the init process, and
+    signalling it would take the host (or the CI runner) down instead.
+    """
     try:
         pid = int(pid)
     except (TypeError, ValueError):
         return False
-    if pid <= 0:
+    if pid <= 1:
         return False
     if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
         if not force and _windows_graceful_close(pid):
@@ -229,29 +233,20 @@ def terminate_process_tree(pid, *, force: bool = False, pgid=None) -> bool:
         pid = int(pid)
     except (TypeError, ValueError):
         return False
-    if pid <= 0:
+    if pid <= 1:
         return False
     if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
         return _windows_terminate_tree(pid, force=force)
     else:  # pragma: no cover if IS_WINDOWS
-        target = None
-        if pgid:
+        target = _group_target(pid, pgid)
+        if target is not None:
             try:
-                target = int(pgid)
-            except (TypeError, ValueError):
-                target = None
-        if target is None:
-            try:
-                target = os.getpgid(pid)
-            except (OSError, ProcessLookupError):
-                target = pid
-        try:
-            os.killpg(target, signal.SIGKILL if force else signal.SIGTERM)
-            return True
-        except (ProcessLookupError, PermissionError):
-            pass
-        except OSError:
-            pass
+                os.killpg(target, signal.SIGKILL if force else signal.SIGTERM)
+                return True
+            except (ProcessLookupError, PermissionError):
+                pass
+            except OSError:
+                pass
         try:
             os.kill(pid, signal.SIGKILL if force else signal.SIGTERM)
             return True
@@ -267,19 +262,20 @@ def suspend_process_tree(pid, *, pgid=None) -> bool:
         pid = int(pid)
     except (TypeError, ValueError):
         return False
-    if pid <= 0:
+    if pid <= 1:
         return False
     if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
         return all(_windows_suspend_resume(item, suspend=True) for item in [pid, *child_pids(pid)])
     else:  # pragma: no cover if IS_WINDOWS
         target = _group_target(pid, pgid)
-        try:
-            os.killpg(target, signal.SIGSTOP)
-            return True
-        except (ProcessLookupError, PermissionError):
-            pass
-        except OSError:
-            pass
+        if target is not None:
+            try:
+                os.killpg(target, signal.SIGSTOP)
+                return True
+            except (ProcessLookupError, PermissionError):
+                pass
+            except OSError:
+                pass
         try:
             os.kill(pid, signal.SIGSTOP)
             return True
@@ -295,19 +291,20 @@ def resume_process_tree(pid, *, pgid=None) -> bool:
         pid = int(pid)
     except (TypeError, ValueError):
         return False
-    if pid <= 0:
+    if pid <= 1:
         return False
     if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
         return all(_windows_suspend_resume(item, suspend=False) for item in [pid, *child_pids(pid)])
     else:  # pragma: no cover if IS_WINDOWS
         target = _group_target(pid, pgid)
-        try:
-            os.killpg(target, signal.SIGCONT)
-            return True
-        except (ProcessLookupError, PermissionError):
-            pass
-        except OSError:
-            pass
+        if target is not None:
+            try:
+                os.killpg(target, signal.SIGCONT)
+                return True
+            except (ProcessLookupError, PermissionError):
+                pass
+            except OSError:
+                pass
         try:
             os.kill(pid, signal.SIGCONT)
             return True
@@ -317,13 +314,36 @@ def resume_process_tree(pid, *, pgid=None) -> bool:
             return False
 
 
-def _group_target(pid: int, pgid=None) -> int:
-    if pgid:
-        try:
-            return int(pgid)
-        except (TypeError, ValueError):
-            pass
-    return process_group_id(pid)
+def _coerce_pgid(value) -> int | None:
+    """Return *value* as a signalable process-group id, or None.
+
+    Only ints and digit strings are trusted.  Any other object reaches
+    ``int()`` through ``__int__`` and silently becomes 0 or 1 (``int`` of a
+    bare object or a test double is 1), which are the caller's own group and
+    the init group - signalling either takes down the host, not the game.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 1 else None
+
+
+def _group_target(pid: int, pgid=None) -> int | None:
+    """Return the process group to signal for *pid*, or None when unsafe.
+
+    An explicit ``pgid`` wins only when it is a usable group id; otherwise the
+    group is derived from the process itself, falling back to the PID.
+    """
+    explicit = _coerce_pgid(pgid)
+    if explicit is not None:
+        return explicit
+    derived = process_group_id(pid)
+    if derived > 1:
+        return derived
+    return pid if pid > 1 else None
 
 
 def process_group_id(pid) -> int:
