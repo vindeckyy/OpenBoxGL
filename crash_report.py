@@ -16,16 +16,18 @@ from pathlib import Path
 from openbox_logging import read_diagnostic_log
 
 _HOME_PATH_RE = re.compile(r"/home/[^/]+")
+_WINDOWS_HOME_PATH_RE = re.compile(r"[A-Za-z]:\\Users\\[^\\]+", re.IGNORECASE)
 _REQUEST_ID_RE = re.compile(r"\[([0-9a-f]{8})\]")
 
 
 def tokenize_home_paths(value):
-    """Replace home directories and /home/<user> segments with ~."""
+    """Replace home directories and /home/<user> or C:\\Users\\<user> segments with ~."""
     home = os.path.expanduser("~")
     if isinstance(value, str):
         if home:
             value = value.replace(home, "~")
-        return _HOME_PATH_RE.sub("~", value)
+        value = _HOME_PATH_RE.sub("~", value)
+        return _WINDOWS_HOME_PATH_RE.sub("~", value)
     if isinstance(value, dict):
         return {key: tokenize_home_paths(item) for key, item in value.items()}
     if isinstance(value, list):
@@ -57,6 +59,8 @@ def install_channel() -> str:
         return "flatpak"
     if os.environ.get("APPIMAGE"):
         return "appimage"
+    if os.name == "nt":  # pragma: no cover - Windows branch exercised on windows CI
+        return "windows"
     return "source"
 
 

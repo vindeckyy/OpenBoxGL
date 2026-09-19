@@ -3,13 +3,13 @@
 import email.utils
 import secrets
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 from urllib.parse import parse_qs
 
 from automation import DEFAULT_ATTEMPTS, DEFAULT_TIMEOUT, EVENT_TYPES, MAX_WEBHOOKS, test_ping, validate_webhook
 from openbox import DATA, load_state
+from pkg.platform_compat import open_path
 from plugin_catalog import download_plugin_package, fetch_plugin_catalog
 from plugins import install_plugin, list_plugins, remove_plugin, set_plugin_enabled
 from routes.registry import route
@@ -295,10 +295,10 @@ class ExtensionsHandlers:
         folder = DATA.parent / "themes"
         ensure_stock_themes(folder, ROOT)
         folder.mkdir(parents=True, exist_ok=True)
-        opener = shutil.which("xdg-open")
-        if not opener:
-            raise FileNotFoundError("xdg-open is required to open folders.")
-        subprocess.Popen([opener, str(folder)])
+        try:
+            open_path(folder)
+        except OSError as error:
+            raise FileNotFoundError("No application is available to open folders.") from error
         self.send_json(200, {"path": str(folder)})
 
 

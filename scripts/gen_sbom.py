@@ -53,7 +53,7 @@ def artifact_components(appdir, version):
                 "version": version,
                 "properties": [
                     {"name": "openbox:artifact-path", "value": relative},
-                    {"name": "openbox:symlink-target", "value": str(path.readlink())},
+                    {"name": "openbox:symlink-target", "value": path.readlink().as_posix()},
                 ],
             })
         elif path.is_file():
@@ -172,7 +172,7 @@ def main():
     try:
         from updates import VERSION as DEFAULT_VERSION
     except ImportError:
-        DEFAULT_VERSION = "1.12.1"
+        DEFAULT_VERSION = "1.13.0"
 
     parser = argparse.ArgumentParser(description="Generate a CycloneDX SBOM for OpenBox")
     parser.add_argument("pos_out", nargs="?", default=None, help="output JSON path")

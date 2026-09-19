@@ -11,7 +11,8 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from pkg.parity.launch_tokens import apply_tokens, build_launch_args  # noqa: E402
+from pkg.parity.launch_tokens import apply_tokens, build_launch_args, path_parent  # noqa: E402
+from pkg.platform_compat import IS_WINDOWS, join_command  # noqa: E402
 
 try:
     import yaml
@@ -175,8 +176,13 @@ def _normalize_adapter(raw):
     if isinstance(extensions, str):
         extensions = [extensions]
     native_exe = raw.get("native_exe", raw.get("native"))
+    native_exe_windows = raw.get("native_exe_windows", raw.get("native_windows"))
     flatpak_app_id = raw.get("flatpak_app_id", raw.get("flatpak"))
     startup_args = _compile_startup_args(raw)
+    if IS_WINDOWS and raw.get("startup_args_windows"):
+        # Windows builds live in different places than the POSIX ones (RetroArch
+        # cores beside the executable, for example), so defs may override them.
+        startup_args = [str(item) for item in raw["startup_args_windows"]]
     # Validate startup_args tokens against canonical launch_tokens table
     try:
         from pkg.parity.launch_tokens import validate_startup_args
@@ -209,6 +215,7 @@ def _normalize_adapter(raw):
         "platform": platform,
         "extensions": [ext.lower().lstrip(".") for ext in extensions],
         "native_exe": str(native_exe).strip() if native_exe else None,
+        "native_exe_windows": str(native_exe_windows).strip() if native_exe_windows else None,
         "flatpak_app_id": str(flatpak_app_id).strip() if flatpak_app_id else None,
         "startup_args": startup_args,
         "recommended": _as_bool(raw.get("recommended"), default=True),
@@ -438,7 +445,7 @@ def load_definitions(defs_dir=None):
             "name": adapter["label"],
             "extensions": list(adapter["extensions"]),
             "platforms": [adapter["platform"]],
-            "startup": shlex.join(adapter["startup_args"]),
+            "startup": join_command(adapter["startup_args"]),
             "startup_args": list(adapter["startup_args"]),
             "executable_patterns": list(adapter["executable_patterns"]),
             "flatpak": adapter["flatpak_app_id"] or "",
@@ -462,7 +469,7 @@ def build_emulators_dict(adapters=None):
         })
         if not entry["native"] and adapter["native_exe"]:
             entry["native"] = adapter["native_exe"]
-        entry["profiles"][adapter["platform"]] = shlex.join(adapter["startup_args"])
+        entry["profiles"][adapter["platform"]] = join_command(adapter["startup_args"])
     return emulators
 
 
@@ -516,15 +523,30 @@ def find_adapter(adapter_id="", emulator_id=""):
     return None
 
 
+def adapter_executable(adapter):
+    """Binary name for an adapter on this host.
+
+    Windows defs ship a separate binary name (``retroarch.exe``); the POSIX name
+    is only a fallback there.
+    """
+    native = adapter.get("native_exe") or ""
+    if IS_WINDOWS and adapter.get("native_exe_windows"):
+        return adapter["native_exe_windows"]
+    return native
+
+
 def detect_adapter_prefix(adapter, which=None):
     which = which or shutil.which
-    native = adapter.get("native_exe") or ""
+    native = adapter_executable(adapter)
     if native and which(native):
         return [which(native)]
     flatpak = adapter.get("flatpak_app_id") or ""
-    if flatpak and which("flatpak"):
+    if not IS_WINDOWS and flatpak and which("flatpak"):
         return ["flatpak", "run", flatpak]
-    for pattern in adapter.get("executable_patterns", []):
+    patterns = list(adapter.get("executable_patterns", []))
+    if IS_WINDOWS and adapter.get("native_exe_windows"):
+        patterns.insert(0, adapter["native_exe_windows"])
+    for pattern in patterns:
         found = which(pattern)
         if found:
             return [found]
@@ -549,7 +571,7 @@ def build_adapter_argv(adapter, game, rom_path, prefix=None, data_dir="", which=
     if not prefix:
         raise FileNotFoundError(f"No emulator found for {adapter.get('label', adapter.get('adapter_id'))}.")
     args = list(prefix)
-    emu_dir = str(Path(prefix[0]).parent) if prefix else ""
+    emu_dir = path_parent(prefix[0]) if prefix else ""
     for value in adapter.get("startup_args", []):
         args.append(
             apply_tokens(str(value), game, path=str(rom_path), emulator_dir=emu_dir, data_dir=data_dir)
@@ -593,7 +615,7 @@ def platform_for_extension(extension, definitions=None):
         "name": first["label"],
         "extensions": list(first["extensions"]),
         "platforms": [first["platform"]],
-        "startup": shlex.join(first["startup_args"]),
+        "startup": join_command(first["startup_args"]),
         "startup_args": list(first["startup_args"]),
         "executable_patterns": list(first["executable_patterns"]),
         "flatpak": first["flatpak_app_id"] or "",
@@ -646,7 +668,10 @@ def resolve_launch(game, profiles, *, which=None, data_dir=""):
                     args = None
     if args is None:
         if Path(launch_path).suffix.lower() == ".sh":
-            args = ["bash", launch_path]
+            shell = shutil.which("bash") or shutil.which("sh")
+            if shell is None and IS_WINDOWS:
+                raise FileNotFoundError("Shell scripts require bash or sh on PATH.")
+            args = [shell or "bash", launch_path]
         else:
             args = [launch_path]
         precedence = "direct_exe"
@@ -718,7 +743,7 @@ def merge_profiles_from_definitions(existing_profiles, defs_dir=None):
         if not prefix:
             continue
         command = build_adapter_argv(adapter, {"name": adapter["label"]}, "{path}", prefix=prefix)
-        profiles.setdefault(adapter["platform"], shlex.join(command))
+        profiles.setdefault(adapter["platform"], join_command(command))
     return profiles
 
 

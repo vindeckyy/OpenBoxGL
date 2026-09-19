@@ -96,7 +96,7 @@ def state_file(directory):
 
 def load_plugin_state(directory):
     try:
-        data = json.loads(state_file(directory).read_text())
+        data = json.loads(state_file(directory).read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
     except (OSError, json.JSONDecodeError):
         return {}
@@ -109,7 +109,7 @@ def save_plugin_state(directory, state):
 
 def read_manifest(path):
     try:
-        manifest = json.loads((path / "plugin.json").read_text())
+        manifest = json.loads((path / "plugin.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise ValueError("Plugin package needs a valid plugin.json.") from error
     plugin_id = str(manifest.get("id", ""))

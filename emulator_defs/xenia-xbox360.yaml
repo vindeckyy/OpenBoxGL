@@ -7,6 +7,7 @@ extensions:
   - xex
   - iso
 native_exe: xenia
+native_exe_windows: xenia_canary.exe
 flatpak_app_id: org.xenia.Xenia
 startup_args:
   - "{path}"

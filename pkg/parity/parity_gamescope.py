@@ -15,6 +15,15 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from pkg.platform_compat import (
+    IS_WINDOWS,
+    browser_application_commands,
+    launch_kwargs,
+    open_path,
+    resolve_browser_application,
+    windows_process_table as _platform_process_table,
+)
+
 
 # Dedicated id for OpenBox UI windows. Not 769 (Steam / main client).
 OPENBOX_STEAM_GAME_ID = 413091001
@@ -76,12 +85,21 @@ def resolve_kiosk_browser(which=None, run=None):
     """Return argv prefix for a kiosk/--app browser, or None."""
     finder = which or shutil.which
     runner = run or subprocess.run
-    for name in KIOSK_BROWSERS:
+    names = KIOSK_BROWSERS if which is not None else browser_application_commands()
+    for name in names:
+        if os.sep in name or Path(name).is_absolute():
+            if Path(name).is_file():
+                return [name]
+            continue
         path = finder(name)
         if path:
             return [path]
+    if which is None:
+        resolved = resolve_browser_application()
+        if resolved:
+            return [resolved]
     flatpak = finder("flatpak")
-    if flatpak:
+    if flatpak and not IS_WINDOWS:
         for app_id in FLATPAK_BROWSERS:
             try:
                 result = runner(
@@ -158,8 +176,8 @@ def open_ui(url, *, guest=False, force_game_mode=False, native_window=False, wid
             try:
                 process = opener(
                     kiosk_command(browser, target, width=width, height=height),
-                    start_new_session=True,
                     env=helper_env,
+                    **launch_kwargs(),
                 )
             except OSError:
                 browser = None
@@ -167,10 +185,17 @@ def open_ui(url, *, guest=False, force_game_mode=False, native_window=False, wid
                 pid = getattr(process, "pid", None)
                 return {"url": target, "mode": mode, "browser": browser[0], "pid": pid}
     finder = which or shutil.which
+    if IS_WINDOWS:
+        try:
+            open_path(target)
+        except OSError:
+            pass
+        else:
+            return {"url": target, "mode": "default", "browser": "", "pid": None}
     xdg = finder("xdg-open")
     if xdg:
         try:
-            process = opener([xdg, target], start_new_session=True, env=helper_env)
+            process = opener([xdg, target], env=helper_env, **launch_kwargs())
         except OSError:
             process = None
         else:
@@ -251,23 +276,29 @@ def set_steam_game_prop(window_id, app_id, *, xprop=None, display=None, runner=N
 
 
 def _child_pids(pid):
-    """Return pid plus descendants from /proc (best-effort)."""
+    """Return pid plus descendants (best-effort on this platform)."""
     try:
         root = int(pid)
     except (TypeError, ValueError):
         return []
+    if IS_WINDOWS:
+        return _windows_child_pids(root)
+    try:
+        entries = os.listdir("/proc")
+    except OSError:
+        return [root]
     found = {root}
     changed = True
     while changed:
         changed = False
-        for entry in Path("/proc").iterdir():
-            if not entry.name.isdigit():
+        for name in entries:
+            if not name.isdigit():
                 continue
-            child = int(entry.name)
+            child = int(name)
             if child in found:
                 continue
             try:
-                status = (entry / "status").read_text(encoding="utf-8", errors="replace")
+                status = Path("/proc", name, "status").read_text(encoding="utf-8", errors="replace")
             except OSError:
                 continue
             parent = None
@@ -279,6 +310,21 @@ def _child_pids(pid):
                         parent = None
                     break
             if parent in found:
+                found.add(child)
+                changed = True
+    return sorted(found)
+
+
+def _windows_child_pids(pid):
+    """Return pid plus descendants using the Windows process table."""
+    found = {pid}
+    changed = True
+    while changed:
+        changed = False
+        for entry in _platform_process_table():
+            child = entry.get("pid")
+            parent = entry.get("parent")
+            if child and parent in found and child not in found:
                 found.add(child)
                 changed = True
     return sorted(found)

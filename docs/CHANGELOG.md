@@ -4,6 +4,28 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0] - 2026-09-19
+
+### Added
+- **Windows support (ADR 0048).** OpenBox runs natively on Windows alongside
+  Linux: a WebView2 native window (`native_host.exe`) that renders the same one
+  UI in a real window, `openbox.cmd` / `openbox.ps1` / `openbox-native.ps1`
+  launchers following the same native-host-then-browser ladder as the shell
+  scripts, a signed portable release zip (`OpenBox-<arch>-windows.zip` with
+  `.sha256` and `.sig`) built, attested, and signed by the same release job as
+  the AppImages, an installer (`scripts/install.ps1`) that verifies the release
+  key anchor, the checksum, and the Ed25519 signature before extracting to
+  `%LOCALAPPDATA%\OpenBox\share\openbox`, Start Menu plus `openbox://` protocol
+  registration, and a `windows-latest` CI job that runs the full test suite and
+  the portable gates.
+- `pkg/platform_compat.py` is the single platform seam the port is built on:
+  file locking, process liveness/termination/suspend/resume, `/proc`
+  equivalents, command quoting, path openers, Steam discovery, and data-dir
+  resolution. The runtime stays dependency-free — stdlib plus `ctypes`.
+- Windows binary names for every emulator definition (`native_exe_windows`), so
+  adapter detection, resume, and launch doctor work with Windows builds of
+  Dolphin, RetroArch, PCSX2, RPCS3, and the rest.
+
 ## [1.12.1] - 2026-09-15
 
 ### Fixed
@@ -1021,7 +1043,8 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.12.1...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.13.0...HEAD
+[1.13.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.12.1...v1.13.0
 [1.12.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.10.0...v1.11.0

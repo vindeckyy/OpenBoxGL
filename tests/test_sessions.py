@@ -19,10 +19,11 @@ def main():
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
         prev_data_dir = os.environ.get("OPENBOX_DATA_DIR")
         os.environ["OPENBOX_DATA_DIR"] = directory
-        hold_script = os.path.join(directory, "hold.sh")
+        is_windows = os.name == "nt"
+        hold_script = os.path.join(directory, "hold.py")
         with open(hold_script, "w", encoding="utf-8") as script_file:
-            script_file.write("#!/bin/sh\nexec sleep 30\n")
-        os.chmod(hold_script, 0o755)
+            script_file.write("import time\ntime.sleep(30)\n")
+        wait_command = [sys.executable, hold_script]
         try:
             from openbox import load_state, save_state
             from web_app import RUNNING, control_game_session
@@ -31,20 +32,28 @@ def main():
             wait_patch = mock.patch("webapp_state.wait_for_exit", side_effect=_wait_for_exit_code)
             wait_patch.start()
 
-            save_state({"games":[{"name":"Session test", "path":hold_script}], "profiles":{}, "history":[]})
+            save_state({"games":[{"name":"Session test", "path":hold_script, "launch": " ".join(wait_command)}], "profiles":{}, "history":[]})
             session = start_game(0)
             control_game_session(session["launch_id"], "pause")
-            for _ in range(200):
-                with open(f"/proc/{session['pid']}/status", encoding="utf-8") as status_file:
-                    if "\nState:\tT" in status_file.read():
-                        break
-                time.sleep(.01)
+            if is_windows:
+                # Windows has no /proc state field; confirm the process still
+                # exists and is registered as paused instead.
+                from pkg.platform_compat import process_alive
+
+                assert process_alive(session["pid"])
+                assert RUNNING[session["launch_id"]]["paused"]
             else:
-                with open(f"/proc/{session['pid']}/status", encoding="utf-8") as status_file:
-                    assert "\nState:\tT" in status_file.read()
+                for _ in range(200):
+                    with open(f"/proc/{session['pid']}/status", encoding="utf-8") as status_file:
+                        if "\nState:\tT" in status_file.read():
+                            break
+                    time.sleep(.01)
+                else:
+                    with open(f"/proc/{session['pid']}/status", encoding="utf-8") as status_file:
+                        assert "\nState:\tT" in status_file.read()
             control_game_session(session["launch_id"], "resume")
             control_game_session(session["launch_id"], "resume")
-            with mock.patch("os.killpg", side_effect=OSError("No such process")):
+            with mock.patch("pkg.state.launch.suspend_process_tree", return_value=False):
                 try:
                     control_game_session(session["launch_id"], "pause")
                     raise AssertionError("expected ValueError for failed signal")
@@ -73,10 +82,14 @@ def main():
                 restart.assert_called_once_with(0, stable_game_id=load_state()["games"][0]["game_id"])
 
             # Deleting a game ahead of a running title must not credit the wrong entry.
+            short_script = os.path.join(directory, "short.py")
+            with open(short_script, "w", encoding="utf-8") as script_file:
+                script_file.write("import time\ntime.sleep(1)\n")
+            short_command = [sys.executable, short_script]
             save_state({
                 "games": [
-                    {"name": "Keep me", "path": "/bin/true", "playtime_seconds": 0},
-                    {"name": "Running", "path": "/bin/sleep", "launch": "sleep 1", "playtime_seconds": 0},
+                    {"name": "Keep me", "path": sys.executable, "playtime_seconds": 0},
+                    {"name": "Running", "path": short_script, "launch": " ".join(short_command), "playtime_seconds": 0},
                 ],
                 "profiles": {},
                 "history": [],

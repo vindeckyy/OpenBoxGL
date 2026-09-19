@@ -32,7 +32,7 @@ def run_ludusavi(action, game_name="", path="", force=True, which=shutil.which, 
         command.extend(["--path", str(Path(path).expanduser())])
     if game_name and action in {"backup", "restore", "find"}:
         command.append(str(game_name))
-    result = run(command, capture_output=True, text=True, timeout=600)
+    result = run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
     stdout = (result.stdout or "").strip()
     payload = {}
     if stdout:
@@ -57,7 +57,7 @@ def run_hoard(action, game_name="", which=shutil.which, run=subprocess.run):
         command = [binary, action, str(game_name)]
     else:
         command = [binary, action]
-    result = run(command, capture_output=True, text=True, timeout=600)
+    result = run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
     if result.returncode != 0:
         raise RuntimeError((result.stderr or result.stdout or "hoard failed").strip())
     return {"ok": True, "action": action, "output": (result.stdout or "").strip()}

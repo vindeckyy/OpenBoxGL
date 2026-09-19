@@ -7,8 +7,35 @@ and ``pkg.parity.parity_emulator_defs.build_launch_command``.
 
 from __future__ import annotations
 
-import shlex
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+
+from pkg.platform_compat import split_command
+
+
+def _path_parts(resolved: str):
+    """Return (dir, file, stem) using the path's own separator flavor.
+
+    Stored library paths may be POSIX-style even when the host is Windows
+    (imported catalogs, LaunchBox XML, synced libraries), so token expansion
+    must not rewrite them with host separators.
+    """
+    if resolved.startswith("/"):
+        candidate = PurePosixPath(resolved)
+        parent = str(candidate.parent)
+        if parent == ".":
+            parent = ""
+        return parent, candidate.name, candidate.stem
+    candidate = Path(resolved)
+    return str(candidate.parent), candidate.name, candidate.stem
+
+
+def path_parent(resolved: str) -> str:
+    """Parent directory of *resolved*, keeping its own separator flavor.
+
+    Callers that fill ``{EmulatorDir}`` from a possibly POSIX-style binary path
+    must not let ``Path.parent`` rewrite it with host separators.
+    """
+    return _path_parts(resolved)[0]
 
 
 def _build_context(game, *, path=None, data_dir="", emulator_dir="", state_path="", state_dir="", state_config="", state_name=""):
@@ -21,13 +48,13 @@ def _build_context(game, *, path=None, data_dir="", emulator_dir="", state_path=
     ``state:`` blocks; they stay empty for ordinary launch commands.
     """
     resolved = path if path is not None else str(game.get("path", ""))
-    rom_p = Path(resolved)
+    directory, filename, stem = _path_parts(resolved)
     return {
         "path": resolved,
         "name": str(game.get("name", "")),
-        "dir": str(rom_p.parent),
-        "file": rom_p.name,
-        "stem": rom_p.stem,
+        "dir": directory,
+        "file": filename,
+        "stem": stem,
         "platform": str(game.get("platform", "")),
         "app_id": str(game.get("steam_app_id", "")),
         "heroic_app_id": str(game.get("heroic_app_id", "")),
@@ -107,7 +134,7 @@ def apply_tokens(template, game, *, path=None, data_dir="", emulator_dir="", sta
 
 
 def build_launch_args(template, game, *, path=None, data_dir="", emulator_dir="", state_path="", state_dir="", state_config="", state_name=""):
-    """Shlex-split *template* and replace ``{token}`` placeholders in each arg.
+    """Split *template* with platform quoting and replace ``{token}`` placeholders.
 
     Parameters match :func:`apply_tokens`.
 
@@ -117,7 +144,7 @@ def build_launch_args(template, game, *, path=None, data_dir="", emulator_dir=""
         The argument list with all recognised tokens substituted.
     """
     try:
-        parts = shlex.split(str(template))
+        parts = split_command(str(template))
     except ValueError:
         parts = str(template).split()
     ctx = _build_context(game, path=path, data_dir=data_dir, emulator_dir=emulator_dir,

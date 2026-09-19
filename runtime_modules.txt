@@ -123,3 +123,4 @@ handlers/arcade.py
 pkg/parity/parity_collections.py
 pkg/parity/parity_story.py
 handlers/collections.py
+pkg/platform_compat.py

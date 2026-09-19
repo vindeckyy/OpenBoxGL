@@ -37,8 +37,8 @@ class ParityFeatureTests(unittest.TestCase):
             disc2.write_bytes(b"b")
             m3u = generate_m3u([disc1, disc2], root / "Game.m3u")
             self.assertTrue(m3u.is_file())
-            self.assertIn("Disc 1", m3u.read_text())
-            self.assertIn("Disc 2", m3u.read_text())
+            self.assertIn("Disc 1", m3u.read_text(encoding="utf-8"))
+            self.assertIn("Disc 2", m3u.read_text(encoding="utf-8"))
 
     def test_recommend_emulators(self):
         items = recommend_emulators("GameCube")
@@ -132,7 +132,7 @@ class ParityFeatureTests(unittest.TestCase):
     def test_launch_profile_override(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "game.sh"
-            path.write_text("#!/bin/sh\n")
+            path.write_text("#!/bin/sh\n", encoding="utf-8")
             import webapp_state
             from openbox import save_state
             save_state({

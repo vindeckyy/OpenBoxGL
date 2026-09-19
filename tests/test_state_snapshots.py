@@ -54,11 +54,11 @@ class SnapshotTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonStateStore(Path(directory) / "library.json")
             store.save(default_state())
-            backup_before = store.backup_path.read_text()
+            backup_before = store.backup_path.read_text(encoding="utf-8")
             store.path.write_text("{broken", encoding="utf-8")
             with self.assertRaises(StateCorruptError):
                 store.load()
-            self.assertEqual(store.backup_path.read_text(), backup_before)
+            self.assertEqual(store.backup_path.read_text(encoding="utf-8"), backup_before)
 
     def test_snapshot_debounce_skips_extra_rotations(self):
         with tempfile.TemporaryDirectory() as directory:

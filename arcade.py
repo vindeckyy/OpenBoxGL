@@ -2,12 +2,13 @@
 
 import io
 import os
-import shlex
 import shutil
 import subprocess
 import zipfile
 from pathlib import Path, PurePosixPath
 from xml.etree import ElementTree
+
+from pkg.platform_compat import join_command, split_command
 
 
 def parse_catalog(source):
@@ -95,8 +96,8 @@ def import_arcade(folder, dat_path="", command="", source="MAME", catalog=None):
         binary = shutil.which("mame" if source == "MAME" else "fbneo")
         if not binary:
             raise FileNotFoundError(f"{source} is not installed. Enter a launch command for the configured emulator.")
-        command = shlex.join([binary, "-rompath", str(root), "{rom_name}"]) if source == "MAME" else shlex.join([binary, "{path}"])
-    if not shlex.split(command):
+        command = join_command([binary, "-rompath", str(root), "{rom_name}"]) if source == "MAME" else join_command([binary, "{path}"])
+    if not split_command(command):
         raise ValueError("The arcade launch command is empty.")
     games = []
     for key, record in catalog.items():

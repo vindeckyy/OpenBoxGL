@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import fcntl
 import hashlib
 import json as _stdlib_json
 import types
@@ -80,6 +79,7 @@ from typing import Any
 from collections.abc import Callable
 
 from backend_io import fsync_directory
+from pkg.platform_compat import lock_handle
 
 LOGGER = logging.getLogger("openbox.state")
 
@@ -594,11 +594,8 @@ class JsonStateStore:
     def _file_lock(self, exclusive: bool):
         self._ensure_data_parent()
         with self.lock_path.open("a+", encoding="utf-8") as lock_file:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
-            try:
+            with lock_handle(lock_file, exclusive=exclusive):
                 yield
-            finally:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def _read_unlocked(self, path: Path) -> Any:
         if _orjson is not None:

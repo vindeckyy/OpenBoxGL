@@ -54,7 +54,7 @@ class TestSharedMedia(unittest.TestCase):
     def _create_media_file(self, name):
         path = self.media_root / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("dummy")
+        path.write_text("dummy", encoding="utf-8")
         return str(path)
 
     def test_shared_cover_retained(self):
@@ -121,7 +121,7 @@ class TestSharedMedia(unittest.TestCase):
         outside_dir = Path(self.test_dir) / "outside"
         outside_dir.mkdir()
         outside_file = outside_dir / "outside.jpg"
-        outside_file.write_text("dummy")
+        outside_file.write_text("dummy", encoding="utf-8")
         
         def mutate(state):
             state["games"] = [

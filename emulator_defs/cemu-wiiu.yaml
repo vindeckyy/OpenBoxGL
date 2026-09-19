@@ -9,6 +9,7 @@ extensions:
   - rpx
   - elf
 native_exe: cemu
+native_exe_windows: Cemu.exe
 flatpak_app_id: info.cemu.Cemu
 startup_args:
   - -g

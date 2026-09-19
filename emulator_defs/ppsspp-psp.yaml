@@ -8,6 +8,7 @@ extensions:
   - iso
   - cso
 native_exe: ppsspp
+native_exe_windows: PPSSPPSDL.exe
 flatpak_app_id: org.ppsspp.PPSSPP
 startup_args:
   - "{path}"

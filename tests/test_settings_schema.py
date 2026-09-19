@@ -25,7 +25,7 @@ from settings_schema import KNOWN_SETTINGS, prune_unknown_settings, sanitize_set
 def _form_collected_keys():
     """Parse the keys returned by collectSettings() in static/settings.js."""
     root = Path(__file__).resolve().parent.parent
-    src = (root / "static" / "settings.js").read_text()
+    src = (root / "static" / "settings.js").read_text(encoding="utf-8")
     match = re.search(r"function collectSettings\(\)\s*\{.*?return\s*\{(.*?)\n\s*\};", src, re.S)
     assert match, "collectSettings return block not found"
     keys = set(re.findall(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:", match.group(1), re.M))

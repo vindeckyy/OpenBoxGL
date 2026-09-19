@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import sys
 import tempfile
 import unittest
@@ -630,7 +631,8 @@ class HouseholdRecordTests(unittest.TestCase):
 
             event_files = list((Path(directory) / HOUSEHOLD_SYNC_DIRECTORY / HOUSEHOLD_EVENT_DIRECTORY).glob("*.json"))
             self.assertEqual(len(event_files), 3)
-            self.assertTrue(all((path.stat().st_mode & 0o777) == 0o600 for path in event_files))
+            if os.name != "nt":
+                self.assertTrue(all((path.stat().st_mode & 0o777) == 0o600 for path in event_files))
             self.assertNotIn("/desktop/", "".join(path.read_text(encoding="utf-8") for path in event_files))
 
     def test_duplicate_pull_is_idempotent_and_acknowledgement_clears_outbox(self):

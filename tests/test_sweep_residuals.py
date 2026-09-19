@@ -101,40 +101,40 @@ class TestSaveRestoreMissingRoots(unittest.TestCase):
             root = Path(directory)
             save_dir = root / "saves"
             save_dir.mkdir()
-            (save_dir / "slot1.sav").write_text("before")
+            (save_dir / "slot1.sav").write_text("before", encoding="utf-8")
             game = {"name": "G", "path": "/roms/g", "save_paths": [str(save_dir)]}
             archive = saves.backup_saves(game, root / "backups")
             for child in save_dir.iterdir():
                 child.unlink()
             save_dir.rmdir()
             restored = saves.restore_saves(game, root / "backups", archive.name)
-            self.assertEqual((save_dir / "slot1.sav").read_text(), "before")
+            self.assertEqual((save_dir / "slot1.sav").read_text(encoding="utf-8"), "before")
             self.assertTrue(restored.is_file())
 
     def test_restore_recreates_missing_save_file(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             save_file = root / "memcard.srm"
-            save_file.write_text("state")
+            save_file.write_text("state", encoding="utf-8")
             game = {"name": "G", "path": "/roms/g", "save_paths": [str(save_file)]}
             archive = saves.backup_saves(game, root / "backups")
             save_file.unlink()
             saves.restore_saves(game, root / "backups", archive.name)
-            self.assertEqual(save_file.read_text(), "state")
+            self.assertEqual(save_file.read_text(encoding="utf-8"), "state")
 
     def test_restore_with_no_existing_roots_skips_safety_backup(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             save_dir = root / "saves"
             save_dir.mkdir()
-            (save_dir / "a.sav").write_text("x")
+            (save_dir / "a.sav").write_text("x", encoding="utf-8")
             game = {"name": "G", "path": "/roms/g", "save_paths": [str(save_dir)]}
             archive = saves.backup_saves(game, root / "backups")
             (save_dir / "a.sav").unlink()
             save_dir.rmdir()
             # Pre-restore backup must not abort the restore when nothing exists.
             saves.restore_saves(game, root / "backups", archive.name)
-            self.assertEqual((save_dir / "a.sav").read_text(), "x")
+            self.assertEqual((save_dir / "a.sav").read_text(encoding="utf-8"), "x")
 
     def test_backup_saves_allow_empty(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -149,12 +149,12 @@ class TestSaveRestoreMissingRoots(unittest.TestCase):
             root = Path(directory)
             save_dir = root / "saves"
             save_dir.mkdir()
-            (save_dir / "a.sav").write_text("x")
+            (save_dir / "a.sav").write_text("x", encoding="utf-8")
             game = {"name": "G", "path": "/roms/g", "save_paths": [str(save_dir)]}
             archive = saves.backup_saves(game, root / "backups")
             (save_dir / "a.sav").unlink()
             save_dir.rmdir()
-            save_dir.write_text("now a file")
+            save_dir.write_text("now a file", encoding="utf-8")
             with self.assertRaises(ValueError):
                 saves.restore_saves(game, root / "backups", archive.name)
 
@@ -162,7 +162,7 @@ class TestSaveRestoreMissingRoots(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             real = root / "real.sav"
-            real.write_text("x")
+            real.write_text("x", encoding="utf-8")
             link = root / "link.sav"
             link.symlink_to(real)
             game = {"name": "G", "path": "/roms/g", "save_paths": [str(real)]}
@@ -173,7 +173,7 @@ class TestSaveRestoreMissingRoots(unittest.TestCase):
                 saves.backup_saves(game, root / "backups", label="bad label!")
             save_dir = root / "tree"
             save_dir.mkdir()
-            (save_dir / "a.sav").write_text("x")
+            (save_dir / "a.sav").write_text("x", encoding="utf-8")
             (save_dir / "evil.sav").symlink_to(real)
             game["save_paths"] = [str(save_dir)]
             with self.assertRaises(ValueError):
@@ -189,20 +189,20 @@ class TestSaveSyncLock(unittest.TestCase):
             root = Path(directory)
             save_dir = root / "saves"
             save_dir.mkdir()
-            (save_dir / "a.sav").write_text("x")
+            (save_dir / "a.sav").write_text("x", encoding="utf-8")
             game = {"name": "G", "path": "/roms/g", "save_paths": [str(save_dir)]}
             archive = saves.backup_saves(game, root / "backups")
-            (save_dir / "a.sav").write_text("y")
+            (save_dir / "a.sav").write_text("y", encoding="utf-8")
             # restore_saves calls backup_saves internally -> needs a reentrant lock.
             saves.restore_saves(game, root / "backups", archive.name)
-            self.assertEqual((save_dir / "a.sav").read_text(), "x")
+            self.assertEqual((save_dir / "a.sav").read_text(encoding="utf-8"), "x")
 
     def test_backup_waits_for_lock_holder(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             save_dir = root / "saves"
             save_dir.mkdir()
-            (save_dir / "a.sav").write_text("x")
+            (save_dir / "a.sav").write_text("x", encoding="utf-8")
             game = {"name": "G", "path": "/roms/g", "save_paths": [str(save_dir)]}
             done = threading.Event()
             saves.SAVE_SYNC_LOCK.acquire()
@@ -251,7 +251,7 @@ class TestBiosDependencyDetection(unittest.TestCase):
     def test_regular_file_dependency_is_found(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
-            result = self._detect(home, [lambda p: p.write_text("x")])
+            result = self._detect(home, [lambda p: p.write_text("x", encoding="utf-8")])
             self.assertTrue(result["required"][0]["found"])
             self.assertEqual(result["missing"], [])
 
@@ -261,7 +261,7 @@ class TestBiosDependencyDetection(unittest.TestCase):
 
             def make_full(p):
                 p.mkdir(parents=True)
-                (p / "bios.bin").write_text("x")
+                (p / "bios.bin").write_text("x", encoding="utf-8")
 
             def make_empty(p):
                 p.mkdir(parents=True)
@@ -551,7 +551,7 @@ class TestM3uWritePermissions(unittest.TestCase):
             with mock.patch.object(openbox, "APP_DIR", data_dir), mock.patch.object(
                 openbox, "DATA", data_dir / "library.json"
             ), mock.patch.object(openbox, "STATE_STORE", JsonStateStore(data_dir / "library.json")):
-                openbox.DATA.write_text(json.dumps({"schema_version": 6, "games": [], "settings": {}}))
+                openbox.DATA.write_text(json.dumps({"schema_version": 6, "games": [], "settings": {}}), encoding="utf-8")
                 preview = create_preview_record(
                     sources=[{"type": "files", "id": "f1", "paths": [str(disc1)]}],
                     options={},
@@ -585,7 +585,7 @@ class TestM3uWritePermissions(unittest.TestCase):
                 ):
                     result = commit_preview(preview["preview_id"], revision=1, emulator_choices=[], data_dir=data_dir)
                 self.assertEqual(result["added"], 1)
-                state = json.loads(openbox.DATA.read_text())
+                state = json.loads(openbox.DATA.read_text(encoding="utf-8"))
                 self.assertEqual(state["games"][0]["path"], str(disc1))
 
 
@@ -741,31 +741,31 @@ class TestFrontendResiduals(unittest.TestCase):
         return source[start:index - 1]
 
     def test_bigbox_video_snap_requires_has_video(self):
-        js = (ROOT / "static" / "bigbox.js").read_text()
+        js = (ROOT / "static" / "bigbox.js").read_text(encoding="utf-8")
         body = self._function_body(js, "scheduleVideoSnap")
         self.assertIn("has_video", body)
         self.assertIn("media(game, 'video')", body)
 
     def test_bigbox_screensaver_requires_has_video(self):
-        js = (ROOT / "static" / "bigbox.js").read_text()
+        js = (ROOT / "static" / "bigbox.js").read_text(encoding="utf-8")
         body = self._function_body(js, "startScreenSaver")
         self.assertIn("has_video", body)
         self.assertIn("has_cover", body)
 
     def test_reader_iframe_navigation_replaces_history(self):
-        js = (ROOT / "static" / "reader.js").read_text()
+        js = (ROOT / "static" / "reader.js").read_text(encoding="utf-8")
         body = self._function_body(js, "setReaderPage")
         self.assertIn("location.replace", body)
 
     def test_app_css_defines_green_token(self):
         import re
 
-        css = (ROOT / "static" / "app.css").read_text()
+        css = (ROOT / "static" / "app.css").read_text(encoding="utf-8")
         root_block = re.search(r":root\s*\{[^}]*\}", css, re.DOTALL)
         self.assertIsNotNone(root_block)
         self.assertRegex(root_block.group(0), r"--green\s*:")
         for theme in sorted((ROOT / "themes").glob("*.css")):
-            self.assertRegex(theme.read_text(), r"--green\s*:", theme.name)
+            self.assertRegex(theme.read_text(encoding="utf-8"), r"--green\s*:", theme.name)
 
 
 def _DATA_ROOT_PATH():

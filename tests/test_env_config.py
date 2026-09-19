@@ -1,17 +1,20 @@
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from env_config import bootstrap_env, load_dotenv
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from env_config import bootstrap_env, load_dotenv  # noqa: E402
 
 
 class EnvConfigTests(unittest.TestCase):
     def test_load_dotenv(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / ".env"
-            path.write_text('RETROACHIEVEMENTS_USERNAME="player"\nRETROACHIEVEMENTS_API_KEY=secret\n')
+            path.write_text('RETROACHIEVEMENTS_USERNAME="player"\nRETROACHIEVEMENTS_API_KEY=secret\n', encoding="utf-8")
             path.chmod(0o600)
             values = load_dotenv(path)
             self.assertEqual(values["RETROACHIEVEMENTS_USERNAME"], "player")
@@ -21,25 +24,25 @@ class EnvConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             path = root / ".env"
-            path.write_text("TOKEN=secret\n")
+            path.write_text("TOKEN=secret\n", encoding="utf-8")
             path.chmod(0o644)
             self.assertEqual(load_dotenv(path), {})
             target = root / "target.env"
-            target.write_text("TOKEN=secret\n")
+            target.write_text("TOKEN=secret\n", encoding="utf-8")
             target.chmod(0o600)
             link = root / "linked.env"
             link.symlink_to(target)
             self.assertEqual(load_dotenv(link), {})
 
     def test_load_dotenv_skips_unreadable_and_binary_files(self):
-        if os.geteuid() == 0:
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
             self.skipTest("permission bits are bypassed when running as root")
         with tempfile.TemporaryDirectory() as folder:
             binary = Path(folder) / ".env"
             binary.write_bytes(b"TOKEN=\xff\xfe\x00broken")
             self.assertEqual(load_dotenv(binary), {})
             unreadable = Path(folder) / "locked.env"
-            unreadable.write_text("TOKEN=secret\n")
+            unreadable.write_text("TOKEN=secret\n", encoding="utf-8")
             unreadable.chmod(0)
             try:
                 self.assertEqual(load_dotenv(unreadable), {})
@@ -62,7 +65,7 @@ class EnvConfigTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as folder:
                 path = Path(folder) / ".env"
-                path.write_text("LD_PRELOAD=/tmp/evil.so\nUNKNOWN_SETTING=bad\n")
+                path.write_text("LD_PRELOAD=/tmp/evil.so\nUNKNOWN_SETTING=bad\n", encoding="utf-8")
                 path.chmod(0o600)
                 self.assertEqual(load_dotenv(path), {})
                 self.assertNotIn("LD_PRELOAD", os.environ)
@@ -83,7 +86,7 @@ class EnvConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             home = Path(folder)
             env = home / ".env"
-            env.write_text("RA_USERNAME=boot\nRA_API_KEY=strap\n")
+            env.write_text("RA_USERNAME=boot\nRA_API_KEY=strap\n", encoding="utf-8")
             env.chmod(0o600)
             with mock.patch("env_config.Path.home", return_value=home):
                 bootstrap_env(None)
@@ -99,7 +102,7 @@ class EnvConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             current = Path(folder)
             env = current / ".env"
-            env.write_text("TOKEN=unsafe\n")
+            env.write_text("TOKEN=unsafe\n", encoding="utf-8")
             env.chmod(0o600)
             with mock.patch("env_config.Path.cwd", return_value=current):
                 self.assertNotIn(env, discover_env_files())
@@ -107,7 +110,7 @@ class EnvConfigTests(unittest.TestCase):
     def test_load_dotenv_loads_screenscraper_credentials(self):
         with tempfile.TemporaryDirectory() as folder:
             env = Path(folder) / ".env"
-            env.write_text("SCREENSCRAPER_USER=u\nSCREENSCRAPER_PASSWORD=p\n")
+            env.write_text("SCREENSCRAPER_USER=u\nSCREENSCRAPER_PASSWORD=p\n", encoding="utf-8")
             env.chmod(0o600)
             load_dotenv(env)
             try:

@@ -141,7 +141,7 @@ class HouseholdRouteTests(unittest.TestCase):
         self.assertTrue(any(route.path == "/api/v2/household/merge" for route in all_routes()))
         self.assertTrue(any(route.path == "/api/v2/household/sync/publish" for route in all_routes()))
         self.assertTrue(any(route.path == "/api/v2/household/sync/pull" for route in all_routes()))
-        self.assertIn("handlers/household.py", (ROOT / "runtime_modules.txt").read_text())
+        self.assertIn("handlers/household.py", (ROOT / "runtime_modules.txt").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

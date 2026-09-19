@@ -9,6 +9,7 @@ extensions:
   - nca
   - nro
 native_exe: eden
+native_exe_windows: eden.exe
 flatpak_app_id: io.github.eden-emu.eden
 startup_args:
   - "{path}"

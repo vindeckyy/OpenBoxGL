@@ -132,6 +132,12 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v1/import/epic"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v1/import/heroic"
     },
     {

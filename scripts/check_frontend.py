@@ -22,10 +22,19 @@ def _in_ci() -> bool:
     return os.environ.get("CI", "").lower() in {"1", "true", "yes"}
 
 
+def _local_node_bin(name: str) -> Path | None:
+    """Return a node_modules binary, preferring the Windows shim."""
+    base = SCRIPTS / "node_modules" / ".bin"
+    for candidate in (base / f"{name}.cmd", base / f"{name}.exe", base / name):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def check_eslint(files: list[Path]) -> bool:
     """Run eslint over static/*.js files."""
-    eslint = SCRIPTS / "node_modules" / ".bin" / "eslint"
-    if eslint.is_file():
+    eslint = _local_node_bin("eslint")
+    if eslint is not None:
         cmd = [str(eslint)]
     else:
         npx = shutil.which("npx")
@@ -39,7 +48,7 @@ def check_eslint(files: list[Path]) -> bool:
         cmd.extend(["--config", str(config_path.relative_to(ROOT))])
     cmd.extend([str(f.relative_to(ROOT)) for f in files])
 
-    res = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, check=False)
+    res = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
     if res.returncode == 0:
         print("eslint: OK")
         return True
@@ -51,9 +60,9 @@ def check_eslint(files: list[Path]) -> bool:
 
 def check_tsc() -> bool:
     """Run project tsc over static/*.js. Blocking when typescript is installed."""
-    tsc = SCRIPTS / "node_modules" / ".bin" / "tsc"
+    tsc = _local_node_bin("tsc")
     tsconfig = SCRIPTS / "tsconfig.json"
-    if tsc.is_file() and tsconfig.is_file():
+    if tsc is not None and tsconfig.is_file():
         cmd = [str(tsc), "-p", str(tsconfig.relative_to(ROOT))]
     else:
         npx = shutil.which("npx")
@@ -62,7 +71,7 @@ def check_tsc() -> bool:
             return not _in_ci()
         cmd = [npx, "tsc", "-p", str(tsconfig.relative_to(ROOT))]
 
-    res = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, check=False)
+    res = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
     if res.returncode == 0:
         print("tsc: OK")
         return True

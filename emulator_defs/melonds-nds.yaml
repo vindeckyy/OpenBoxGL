@@ -6,6 +6,7 @@ platform: Nintendo DS
 extensions:
   - nds
 native_exe: melonDS
+native_exe_windows: melonDS.exe
 flatpak_app_id: net.kuribo64.melonDS
 startup_args:
   - "{path}"

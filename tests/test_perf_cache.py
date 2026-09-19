@@ -214,7 +214,7 @@ class PerfCacheTests(unittest.TestCase):
 
         theme_dir = Path(self.tempdir.name) / "themes"
         theme_dir.mkdir(parents=True, exist_ok=True)
-        (theme_dir / "test-theme.css").write_text("body { color: red; }")
+        (theme_dir / "test-theme.css").write_text("body { color: red; }", encoding="utf-8")
         handler = self.make_handler()
         handler.authorized = mock.Mock(return_value=True)
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
@@ -596,10 +596,13 @@ class FacetCacheTests(unittest.TestCase):
         self.assertLessEqual(len(fc._store), 2)
 
     def test_facet_lru_budget_degraded(self):
+        import time
         from pkg.state.cache import FACET_CACHE
-        # 10k games with tiny budget should degrade
+        # 10k games with tiny budget should degrade; a zero budget makes the
+        # budget check deterministic instead of relying on wall-clock jitter.
         games = [{"game_id": f"g{i}", "platform": f"P{i%5}", "genre": "Action", "hidden": False} for i in range(8000)]
-        result = FACET_CACHE.compute_facets(games, "platform", limit=10, budget_ms=0.001)
+        with mock.patch("pkg.state.cache.time.monotonic", side_effect=[time.monotonic(), time.monotonic() + 1.0, time.monotonic() + 1.0]):
+            result = FACET_CACHE.compute_facets(games, "platform", limit=10, budget_ms=0.001)
         self.assertTrue(result["degraded"])
         self.assertEqual(result["code"], "DEGRADED")
         self.assertIn("facets", result)

@@ -1,16 +1,17 @@
-"""Install and configure supported Linux emulators."""
+"""Install and configure supported emulators (native on Windows, Flatpak on Linux)."""
 
 import shlex
 import shutil
 import subprocess
 
 from pkg.parity.parity_emulator_defs import EMULATORS, PLATFORM_EMULATORS
+from pkg.platform_compat import join_command, launch_kwargs
 from parity_import import recommend_emulators
 
 
 def commands_for(app_id, prefix):
     return {
-        platform: shlex.join(prefix + shlex.split(arguments))
+        platform: join_command(prefix + shlex.split(arguments))
         for platform, arguments in EMULATORS[app_id]["profiles"].items()
     }
 
@@ -50,14 +51,14 @@ def launch_emulator(app_id, which=shutil.which):
     native = which(emulator["native"])
     flatpak = which("flatpak")
     if native:
-        subprocess.Popen([native], start_new_session=True)
+        subprocess.Popen([native], **launch_kwargs())
         return {"mode": "native", "command": native}
     if flatpak and subprocess.run(
         [flatpak, "info", app_id],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         check=False,
     ).returncode == 0:
-        subprocess.Popen([flatpak, "run", app_id], start_new_session=True)
+        subprocess.Popen([flatpak, "run", app_id], **launch_kwargs())
         return {"mode": "flatpak", "command": f"flatpak run {app_id}"}
     raise FileNotFoundError(f"{emulator['name']} is not installed.")
 

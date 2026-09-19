@@ -62,7 +62,7 @@ class ParitySetupPreviewTests(unittest.TestCase):
         openbox.APP_DIR = self.data_dir
         openbox.DATA = self.data_dir / "library.json"
         openbox.STATE_STORE = JsonStateStore(openbox.DATA)
-        openbox.DATA.write_text(json.dumps({"schema_version": 6, "games": [], "settings": {}}))
+        openbox.DATA.write_text(json.dumps({"schema_version": 6, "games": [], "settings": {}}), encoding="utf-8")
 
     def tearDown(self):
         self.tempdir.cleanup()
@@ -248,7 +248,7 @@ class ParitySetupPreviewTests(unittest.TestCase):
             second = commit_preview(preview["preview_id"], revision=1, emulator_choices=[])
         self.assertEqual(first["added"], 1)
         self.assertEqual(second["added"], 1)
-        state = json.loads((self.data_dir / "library.json").read_text())
+        state = json.loads((self.data_dir / "library.json").read_text(encoding="utf-8"))
         self.assertEqual(len(state["games"]), 1)
 
     def test_decisions_persist_selected_fields(self):
@@ -301,9 +301,9 @@ class ParitySetupPreviewTests(unittest.TestCase):
 
     def test_library_signature_changes_when_library_changes(self):
         before = library_signature()
-        state = json.loads((self.data_dir / "library.json").read_text())
+        state = json.loads((self.data_dir / "library.json").read_text(encoding="utf-8"))
         state["games"] = [{"game_id": "1", "name": "Game", "platform": "NES", "path": "/g.nes"}]
-        (self.data_dir / "library.json").write_text(json.dumps(state))
+        (self.data_dir / "library.json").write_text(json.dumps(state), encoding="utf-8")
         import openbox
         from state_store import JsonStateStore
 
@@ -447,7 +447,7 @@ class ParitySetupPreviewTests(unittest.TestCase):
                     }
                 ],
             )
-        state = json.loads((self.data_dir / "library.json").read_text())
+        state = json.loads((self.data_dir / "library.json").read_text(encoding="utf-8"))
         game = state["games"][0]
         self.assertEqual(game["emulator_id"], "retroarch")
         self.assertEqual(game["emulator_adapter_id"], "retroarch-nes")
@@ -486,7 +486,7 @@ class ParitySetupPreviewTests(unittest.TestCase):
                     }
                 ],
             )
-        state = json.loads((self.data_dir / "library.json").read_text())
+        state = json.loads((self.data_dir / "library.json").read_text(encoding="utf-8"))
         game = state["games"][0]
         self.assertNotIn("emulator_id", game)
         self.assertNotIn("emulator_adapter_id", game)
@@ -886,15 +886,15 @@ class ParitySetupPreviewTests(unittest.TestCase):
         ]
         preview = self._preview_with_items(items)
         state_path = self.data_dir / "library.json"
-        state = json.loads(state_path.read_text())
+        state = json.loads(state_path.read_text(encoding="utf-8"))
         state["games"] = [existing]
-        state_path.write_text(json.dumps(state))
+        state_path.write_text(json.dumps(state), encoding="utf-8")
         with mock.patch("pkg.parity.parity_setup_preview.revalidate_preview_record", return_value=preview_document(preview)):
             result = commit_preview(preview["preview_id"], revision=1, emulator_choices=[])
         self.assertEqual(result["merged"], 1)
         self.assertEqual(result["skipped"], 1)
         self.assertEqual(result["added"], 1)
-        final = json.loads(state_path.read_text())
+        final = json.loads(state_path.read_text(encoding="utf-8"))
         self.assertEqual(len(final["games"]), 2)
         self.assertTrue(any(path.suffix == ".m3u" for path in generated_m3u_dir().iterdir()))
 
@@ -948,7 +948,12 @@ class ParitySetupPreviewTests(unittest.TestCase):
             "pkg.parity.parity_setup_preview._flatpak_installed",
             return_value=True,
         ):
-            self.assertTrue(_adapter_installed(adapter))
+            if os.name == "nt":
+                # Flatpak does not exist on Windows, so an adapter that is only
+                # available through Flatpak can never count as installed there.
+                self.assertFalse(_adapter_installed(adapter))
+            else:
+                self.assertTrue(_adapter_installed(adapter))
         with mock.patch("pkg.parity.parity_setup_preview._registry", return_value={"by_platform": {"MysteryNoAdapters": []}}):
             self.assertEqual(
                 classify_emulator_readiness({"platform": "MysteryNoAdapters", "path": "/x.bin"}),
@@ -1045,9 +1050,9 @@ class ParitySetupPreviewTests(unittest.TestCase):
         rom = self.data_dir / "keep.nes"
         rom.write_bytes(b"NES")
         state_path = self.data_dir / "library.json"
-        state = json.loads(state_path.read_text())
+        state = json.loads(state_path.read_text(encoding="utf-8"))
         state["games"] = [{"game_id": "exist", "name": "exist", "platform": "NES", "path": str(rom), "steam_app_id": "7"}]
-        state_path.write_text(json.dumps(state))
+        state_path.write_text(json.dumps(state), encoding="utf-8")
         item = {
             "candidate_id": "keep",
             "group": "additions",
@@ -1073,7 +1078,7 @@ class ParitySetupPreviewTests(unittest.TestCase):
                 emulator_choices=[{"candidate_id": "keep", "emulator_id": None, "adapter_id": None, "launch_setup": "keep_custom"}],
             )
         self.assertEqual(result["skipped"], 1)
-        final = json.loads(state_path.read_text())
+        final = json.loads(state_path.read_text(encoding="utf-8"))
         self.assertEqual(len(final["games"]), 1)
 
     def test_load_preview_corrupt_file(self):

@@ -107,7 +107,7 @@ class ManualEntryTest(unittest.TestCase):
             "settings": {}, "profiles": {},
         })
         executable = Path(self._tmp.name) / "catan.sh"
-        executable.write_text("#!/bin/sh\n")
+        executable.write_text("#!/bin/sh\n", encoding="utf-8")
 
         class MockHandler(LibraryHandlers):
             def send_json(self, code, body):

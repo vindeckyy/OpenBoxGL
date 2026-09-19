@@ -1,7 +1,5 @@
 """SessionHandlers capability handlers. Launch, session lifecycle, running/history, shutdown, recovery, and Big Box."""
 
-import shlex
-import shutil
 import subprocess
 from pathlib import Path
 from urllib.parse import parse_qs
@@ -9,6 +7,7 @@ from urllib.parse import parse_qs
 from openbox import STATE_STORE, load_state, recover_state as recover_library_state
 from pkg.parity.launch_tokens import build_launch_args
 from pkg.parity.parity_insights import timeline_groups
+from pkg.platform_compat import IS_WINDOWS, launch_kwargs, open_path, split_command
 from routes.registry import route
 from webapp_state import EVENT_SEQUENCE, PROCESS_LOCK, RUNNING, SESSION_EVENTS, STATE_LOCK, bump_media_epoch, control_game_session, game_from_payload, load_state_view, start_game
 
@@ -133,9 +132,9 @@ class SessionHandlers:
         key = "bigbox_shutdown_commands"
         for command in load_state().get("settings", {}).get(key, []):
             try:
-                args = shlex.split(str(command))
+                args = split_command(str(command))
                 args[0] = str(Path(args[0]).expanduser())
-                subprocess.Popen(args, start_new_session=True)
+                subprocess.Popen(args, **launch_kwargs())
             except (OSError, ValueError, IndexError):
                 import logging
                 logging.getLogger(__name__).debug('bigbox_mode_switch command failed', exc_info=True)
@@ -185,15 +184,19 @@ class SessionHandlers:
         if not path.exists():
             raise FileNotFoundError(f"File does not exist: {path}")
         if kind == "documents":
-            opener = shutil.which("xdg-open")
-            if not opener:
-                raise FileNotFoundError("xdg-open is required to open documents.")
-            args = [opener, str(path)]
+            try:
+                open_path(path)
+            except OSError as error:
+                if IS_WINDOWS:
+                    raise FileNotFoundError("No application is available to open documents.") from error
+                raise FileNotFoundError("xdg-open is required to open documents.") from error
+            self.send_json(200, {"ok": True})
+            return
         elif extra.get("command"):
             args = build_launch_args(extra["command"], {}, path=str(path))
         else:
             args = [str(path)]
-        subprocess.Popen(args, cwd=str(path.parent))
+        subprocess.Popen(args, cwd=str(path.parent), **launch_kwargs())
         self.send_json(200, {"ok": True})
 
 

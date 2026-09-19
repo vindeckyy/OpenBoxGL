@@ -58,7 +58,7 @@ class ReelTests(unittest.TestCase):
         manifest = reels.build_manifest([], [], str(cover), game_id="A game/1")
         destination = root / "reels" / "entry.manifest.json"
         self.assertEqual(reels.write_manifest(manifest, destination), str(destination))
-        self.assertEqual(json.loads(destination.read_text()), manifest)
+        self.assertEqual(json.loads(destination.read_text(encoding="utf-8")), manifest)
         self.assertEqual(reels.reel_path(root, game_id="A game/1"), root / "reels" / "A-game-1.mp4")
         self.assertEqual(reels.reel_path(root, year=2026), root / "reels" / "2026.mp4")
 
@@ -94,7 +94,7 @@ class ReelTests(unittest.TestCase):
         self.assertEqual(result["format"], "html")
         self.assertTrue(result["fallback"])
         self.assertEqual(Path(result["path"]), root / "reels" / "demo.html")
-        html = Path(result["path"]).read_text()
+        html = Path(result["path"]).read_text(encoding="utf-8")
         self.assertIn("<img", html)
         self.assertIn("A &lt;moment&gt;", html)
         self.assertIn("main", html)

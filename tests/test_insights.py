@@ -358,7 +358,7 @@ class InsightsHandlerTest(unittest.TestCase):
                 "game_id": gid,
                 "mastered": True,
                 "progress_pct": 100.0,
-            }))
+            }), encoding="utf-8")
             h = self.handler()
             parsed = urlparse("/api/v2/insights/mastery")
             h._api_get_api_v2_insights_mastery(parsed)

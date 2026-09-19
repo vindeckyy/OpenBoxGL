@@ -17,12 +17,10 @@ class StorefrontTests(unittest.TestCase):
             home = Path(directory)
             steamapps = home / ".local/share/Steam/steamapps"
             steamapps.mkdir(parents=True)
-            (steamapps / "appmanifest_42.acf").write_text(
-                '"AppState"\n{\n"appid" "42"\n"name" "Real Game"\n"installdir" "RealGame"\n}'
-            )
+            (steamapps / "appmanifest_42.acf").write_text('"AppState"\n{\n"appid" "42"\n"name" "Real Game"\n"installdir" "RealGame"\n}', encoding="utf-8")
             userdata = home / ".local/share/Steam/userdata/1/config"
             userdata.mkdir(parents=True)
-            (userdata / "localconfig.vdf").write_text('"Apps"\n{\n"42"\n{\n}\n"99"\n{\n}\n}')
+            (userdata / "localconfig.vdf").write_text('"Apps"\n{\n"42"\n{\n}\n"99"\n{\n}\n}', encoding="utf-8")
             catalog = catalog_steam(home)
             by_id = {item["id"]: item for item in catalog}
             self.assertTrue(by_id["42"]["installed"])

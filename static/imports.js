@@ -54,6 +54,13 @@ async function pickEmulatorForPlatform(platform, items) {
         notify(`${result.added} Heroic games imported · ${result.found} installed`);
       } catch(error) { notify(error.message); }
     }
+    async function importEpic() {
+      try {
+        const result = await api('/api/import/epic',{method:'POST',body:'{}'});
+        await refresh();
+        notify(`${result.added} Epic games imported · ${result.found} installed`);
+      } catch(error) { notify(error.message); }
+    }
     async function importLutris() {
       try {
         const result = await api('/api/import/lutris',{method:'POST',body:'{}'});
@@ -103,6 +110,7 @@ async function pickEmulatorForPlatform(platform, items) {
       const settings = AppState.appSettings.storefront_auto_import || {};
       if (settings.steam) await api('/api/import/steam',{method:'POST',body:'{}'}).catch(() => {});
       if (settings.heroic) await api('/api/import/heroic',{method:'POST',body:'{}'}).catch(() => {});
+      if (settings.epic) await api('/api/import/epic',{method:'POST',body:'{}'}).catch(() => {});
       if (settings.lutris) await api('/api/import/lutris',{method:'POST',body:'{}'}).catch(() => {});
       if (settings.gameyfin) await api('/api/storefront/import',{method:'POST',body:JSON.stringify({source:'gameyfin'})}).catch(() => {});
     }
@@ -331,4 +339,4 @@ function bindEsdeImport() {
   $('esdeXmlPath')?.addEventListener('input', invalidateEsdePreview);
 }
 
-export { importFolder, importSteam, importHeroic, importLutris, importArcade, importDroppedFolder, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport };
+export { importFolder, importSteam, importHeroic, importEpic, importLutris, importArcade, importDroppedFolder, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport };

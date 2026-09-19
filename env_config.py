@@ -4,6 +4,8 @@ import os
 import stat
 from pathlib import Path
 
+from pkg.platform_compat import env_file_roots, file_is_private
+
 
 ENV_FILE_ENV = "OPENBOX_ENV_FILE"
 MAX_ENV_FILE_BYTES = 1024 * 1024
@@ -39,8 +41,7 @@ def _secure_env_file(path):
         return False
     return (
         stat.S_ISREG(info.st_mode)
-        and info.st_uid == os.geteuid()
-        and not info.st_mode & 0o077
+        and file_is_private(info)
         and info.st_size <= MAX_ENV_FILE_BYTES
     )
 
@@ -83,8 +84,7 @@ def load_dotenv(path):
         info = os.fstat(descriptor)
         if (
             not stat.S_ISREG(info.st_mode)
-            or info.st_uid != os.geteuid()
-            or info.st_mode & 0o077
+            or not file_is_private(info)
             or info.st_size > MAX_ENV_FILE_BYTES
         ):
             os.close(descriptor)
@@ -124,10 +124,7 @@ def discover_env_files(*extra_roots):
     for root in extra_roots:
         if root:
             roots.append(Path(root).expanduser())
-    roots.extend([
-        Path.home(),
-        Path.home() / ".config/openbox-game-launcher",
-    ])
+    roots.extend(env_file_roots())
     seen = set()
     for path in files:
         seen.add(str(path))

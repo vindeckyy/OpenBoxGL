@@ -146,7 +146,7 @@ class ClipRouteTests(unittest.TestCase):
         self.assertEqual(POST_TABLE["/api/v2/clips/capture"], "handlers.clips.capture_clip")
         self.assertIn("/static/clips.js", PUBLIC_GET_PATHS)
         self.assertTrue(any(route.path == "/api/v2/reels/create" for route in all_routes()))
-        self.assertIn("handlers/clips.py", (ROOT / "runtime_modules.txt").read_text())
+        self.assertIn("handlers/clips.py", (ROOT / "runtime_modules.txt").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

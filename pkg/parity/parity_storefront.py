@@ -21,7 +21,7 @@ def steam_owned_app_ids(home=None):
             localconfig = account / "config/localconfig.vdf"
             if not localconfig.is_file():
                 continue
-            text = localconfig.read_text(errors="replace")
+            text = localconfig.read_text(encoding="utf-8", errors="replace")
             for app_id in re.findall(r'"(\d{1,8})"\s*\{', text):
                 if app_id.isdigit() and int(app_id) > 0:
                     app_ids.add(app_id)
@@ -41,7 +41,7 @@ def heroic_library_records(base):
         if not path.is_file():
             continue
         try:
-            payload = json.loads(path.read_text())
+            payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
         if isinstance(payload, dict):
@@ -151,7 +151,7 @@ def catalog_lutris(home=None, run=None, which=shutil.which):
         raise FileNotFoundError("Lutris or Flatpak is required to browse the Lutris catalog.")
     result = run(
         command + ["--list-games", "--json"],
-        capture_output=True, text=True, check=True, timeout=30,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", check=True, timeout=30,
     )
     output = result.stdout.strip()
     start, end = output.find("["), output.rfind("]")

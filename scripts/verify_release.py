@@ -109,7 +109,7 @@ def main():
         print("invalid public key length", file=sys.stderr)
         return 1
 
-    payload = json.loads(Path(args.signature_file).read_text())
+    payload = json.loads(Path(args.signature_file).read_text(encoding="utf-8"))
     if payload.get("algorithm") != "ed25519":
         print(f"unsupported algorithm: {payload.get('algorithm')}", file=sys.stderr)
         return 1

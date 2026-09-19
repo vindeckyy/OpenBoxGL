@@ -33,7 +33,7 @@ class ESDEImportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "gamelist.xml"
-            source.write_text(XML)
+            source.write_text(XML, encoding="utf-8")
             parsed = parse_gamelist(source)
         self.assertEqual(len(parsed["games"]), 2)
         first = parsed["games"][0]
@@ -41,8 +41,8 @@ class ESDEImportTests(unittest.TestCase):
         self.assertEqual(first["year"], "1996")
         self.assertEqual(first["rating"], 4.0)
         self.assertTrue(first["favorite"])
-        self.assertTrue(first["path"].endswith("/roms/quake.zip"))
-        self.assertTrue(first["cover"].endswith("/media/quake.png"))
+        self.assertEqual(Path(first["path"]).parts[-2:], Path("roms/quake.zip").parts)
+        self.assertEqual(Path(first["cover"]).parts[-2:], Path("media/quake.png").parts)
         self.assertEqual(first["source_identity"], "esde:q1")
 
     def test_parse_rejects_bad_root_and_giant_input(self):

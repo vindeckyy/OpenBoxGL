@@ -77,7 +77,7 @@ def main():
 
             cover = Path(directory) / "media" / "cover.jpg"
             cover.parent.mkdir(parents=True, exist_ok=True)
-            cover.write_text("cover")
+            cover.write_text("cover", encoding="utf-8")
             handler = object.__new__(Handler)
             handler.send_json = mock.Mock()
             handler.delete_game({"id": 0, "delete_media": True})

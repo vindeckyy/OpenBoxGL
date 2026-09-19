@@ -81,9 +81,7 @@ class ImportersUnitTests(unittest.TestCase):
             dir_path = Path(directory)
             steamapps = dir_path / ".local/share/Steam/steamapps"
             steamapps.mkdir(parents=True)
-            (steamapps / "appmanifest_42.acf").write_text(
-                '"AppState"\n{\n"appid" "42"\n"name" "Real Game"\n"installdir" "RealGame"\n}'
-            )
+            (steamapps / "appmanifest_42.acf").write_text('"AppState"\n{\n"appid" "42"\n"name" "Real Game"\n"installdir" "RealGame"\n}', encoding="utf-8")
             games = import_steam(dir_path)
             self.assertEqual(len(games), 1)
             self.assertEqual(games[0]["steam_app_id"], "42")
@@ -93,15 +91,9 @@ class ImportersUnitTests(unittest.TestCase):
             (heroic / "legendaryConfig/legendary").mkdir(parents=True)
             (heroic / "gog_store").mkdir()
             (heroic / "nile_config").mkdir()
-            (heroic / "legendaryConfig/legendary/installed.json").write_text(
-                '{"epic-id":{"title":"Epic Game","install_path":"/games/epic"}}'
-            )
-            (heroic / "gog_store/installed.json").write_text(
-                '{"gog-id":{"title":"GOG Game","install_path":"/games/gog"}}'
-            )
-            (heroic / "nile_config/installed.json").write_text(
-                '{"amazon-id":{"title":"Amazon Game","install_path":"/games/amazon"}}'
-            )
+            (heroic / "legendaryConfig/legendary/installed.json").write_text('{"epic-id":{"title":"Epic Game","install_path":"/games/epic"}}', encoding="utf-8")
+            (heroic / "gog_store/installed.json").write_text('{"gog-id":{"title":"GOG Game","install_path":"/games/gog"}}', encoding="utf-8")
+            (heroic / "nile_config/installed.json").write_text('{"amazon-id":{"title":"Amazon Game","install_path":"/games/amazon"}}', encoding="utf-8")
             heroic_games = import_heroic(dir_path)
             self.assertEqual({game["source"] for game in heroic_games}, {"Epic", "GOG", "Amazon"})
             self.assertTrue(all("heroic://launch/" in game["launch"] for game in heroic_games))
@@ -123,16 +115,14 @@ class ImportersUnitTests(unittest.TestCase):
             root = Path(directory)
             steam_root = root / ".local/share/Steam"
             (steam_root / "steamapps").mkdir(parents=True)
-            (steam_root / "steamapps/libraryfolders.vdf").write_text(
-                f'"libraryfolders"\n{{\n"0"\n{{\n"path" "{steam_root}"\n}}\n}}'
-            )
+            (steam_root / "steamapps/libraryfolders.vdf").write_text(f'"libraryfolders"\n{{\n"0"\n{{\n"path" "{steam_root}"\n}}\n}}', encoding="utf-8")
             roots = steam_roots(root)
             self.assertEqual(len(roots), 1)
             libs = steam_libraries(steam_root)
             self.assertEqual(len(libs), 1)
 
             json_file = root / "test.json"
-            json_file.write_text('{"g1": {"name": "Test"}}')
+            json_file.write_text('{"g1": {"name": "Test"}}', encoding="utf-8")
             records = json_records(json_file)
             self.assertEqual(len(records), 1)
             self.assertEqual(records[0][1]["name"], "Test")
@@ -157,7 +147,7 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
             (root / "snes" / "rpg" / "chrono.smc").write_bytes(b"SNES")
             (root / "psx" / "multi" / "ff7 (Disc 1).chd").write_bytes(b"CHD")
             (root / "psx" / "multi" / "ff7 (Disc 2).chd").write_bytes(b"CHD")
-            (root / "ignored" / "readme.txt").write_text("readme")
+            (root / "ignored" / "readme.txt").write_text("readme", encoding="utf-8")
             (root / "ignored" / "game.bin").write_bytes(b"BIN")
 
             exts = {".nes", ".smc", ".chd"}
@@ -192,6 +182,8 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "normal.chd").write_bytes(b"CHD")
+            if os.name == "nt":
+                self.skipTest("NTFS rejects invalid-UTF-8 byte names")
             # A filename that is not valid UTF-8 arrives via surrogateescape.
             fd = os.open(os.fsencode(root) + b"/bad\xff\xfe name.chd", os.O_WRONLY | os.O_CREAT, 0o644)
             os.write(fd, b"CHD")
@@ -288,9 +280,7 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
             root = Path(directory)
             scumm_dir = root / ".config/scummvm"
             scumm_dir.mkdir(parents=True)
-            (scumm_dir / "scummvm.ini").write_text(
-                "[monkey]\ndescription=The Secret of Monkey Island\npath=/games/monkey\n"
-            )
+            (scumm_dir / "scummvm.ini").write_text("[monkey]\ndescription=The Secret of Monkey Island\npath=/games/monkey\n", encoding="utf-8")
             scumm_games = import_scummvm(root)
             self.assertEqual(len(scumm_games), 1)
             self.assertEqual(scumm_games[0]["name"], "The Secret of Monkey Island")
@@ -341,7 +331,7 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
             m3u = Path(d2) / "game.m3u"
             out = generate_m3u([p1], m3u)
             self.assertTrue(out.is_file())
-            content = out.read_text()
+            content = out.read_text(encoding="utf-8")
             self.assertIn(str(p1), content)
 
         # parse_m3u nonexistent and OSError
@@ -405,7 +395,7 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
             root = Path(directory)
             steamapps = root / ".local/share/Steam/steamapps"
             steamapps.mkdir(parents=True)
-            (steamapps / "libraryfolders.vdf").write_text('"path" "x"')
+            (steamapps / "libraryfolders.vdf").write_text('"path" "x"', encoding="utf-8")
             errors = []
             with mock.patch.object(Path, "read_text", side_effect=PermissionError(13, "denied")):
                 games = import_steam(root, errors=errors)
@@ -416,7 +406,7 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
         self.assertEqual(json_records("/nonexistent/file.json"), [])
         with tempfile.TemporaryDirectory() as directory:
             corrupt = Path(directory) / "corrupt.json"
-            corrupt.write_text("{not valid json")
+            corrupt.write_text("{not valid json", encoding="utf-8")
             self.assertEqual(json_records(corrupt), [])
 
         # arcade catalog error and zip_members bad zip

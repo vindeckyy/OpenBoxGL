@@ -2,6 +2,7 @@
 import email.message
 import io
 import sys
+from contextlib import contextmanager
 from urllib.error import URLError
 import time
 import zipfile
@@ -11,7 +12,28 @@ from tempfile import TemporaryDirectory
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
-from metadata import IMAGE_URL, apply_game_metadata, build_database, search_games, sync_database
+from metadata import (
+    IMAGE_URL,
+    apply_game_metadata,
+    build_database,
+    close_db_connections,
+    search_games,
+    sync_database,
+)
+
+
+@contextmanager
+def _temp_dir():
+    """TemporaryDirectory that drops cached LBDB handles before cleanup.
+
+    SQLite keeps the database file open and Windows refuses to remove an open
+    file, so the connection cache is cleared before the directory goes away.
+    """
+    with TemporaryDirectory() as directory:
+        try:
+            yield Path(directory)
+        finally:
+            close_db_connections()
 
 
 class ImageResponse(io.BytesIO):
@@ -26,8 +48,7 @@ class ImageResponse(io.BytesIO):
 
 
 def test():
-    with TemporaryDirectory() as directory:
-        root = Path(directory)
+    with _temp_dir() as root:
         # A failed download must not leak the temp zip in the data dir.
         def failing_opener(request, timeout=0):
             raise OSError("network down")
@@ -87,8 +108,7 @@ def test():
 
 
 def test_platform_aliases():
-    with TemporaryDirectory() as directory:
-        root = Path(directory)
+    with _temp_dir() as root:
         package = root / "Metadata.zip"
         # One game per platform pairing: the LBDB spelling under the app's
         # short name plus a same-titled game on a decoy platform, so the
@@ -141,8 +161,7 @@ def test_platform_aliases():
 
 
 def test_batch_match():
-    with TemporaryDirectory() as directory:
-        root = Path(directory)
+    with _temp_dir() as root:
         package = root / "Metadata.zip"
         xml = """<LaunchBox>
           <Game><DatabaseID>1</DatabaseID><Name>Super Adventure</Name><Platform>Nintendo Entertainment System</Platform></Game>
@@ -173,8 +192,7 @@ def test_batch_match():
 
 
 def test_manual_import():
-    with TemporaryDirectory() as directory:
-        root = Path(directory)
+    with _temp_dir() as root:
         package = root / "Metadata.zip"
         xml = """<LaunchBox>
           <Game><DatabaseID>42</DatabaseID><Name>Manual Game</Name><Platform>NES</Platform></Game>
@@ -236,8 +254,7 @@ def test_manual_import():
 
 def test_batch_search_throughput():
     import time
-    with TemporaryDirectory() as directory:
-        root = Path(directory)
+    with _temp_dir() as root:
         package = root / "Metadata.zip"
         games = []
         for i in range(1, 1001):
@@ -269,8 +286,7 @@ def test_batch_search_throughput():
 
 
 def test_concurrent_media_downloads():
-    with TemporaryDirectory() as directory:
-        root = Path(directory)
+    with _temp_dir() as root:
         package = root / "Metadata.zip"
         xml = """<LaunchBox>
           <Game><DatabaseID>100</DatabaseID><Name>Multi Media Game</Name><Platform>NES</Platform></Game>
@@ -310,8 +326,7 @@ def test_concurrent_media_downloads():
 
 
 def test_edge_cases():
-    with TemporaryDirectory() as directory:
-        root = Path(directory)
+    with _temp_dir() as root:
         package = root / "Metadata.zip"
         xml = """<LaunchBox>
           <Game><DatabaseID>200</DatabaseID><Name>Edge Game</Name><Platform>NES</Platform></Game>
@@ -382,8 +397,7 @@ def test_edge_cases():
 
 
 def test_halo_platform_collision():
-    with TemporaryDirectory() as directory:
-        root = Path(directory)
+    with _temp_dir() as root:
         package = root / "Metadata.zip"
         xml = """<LaunchBox>
           <Game><DatabaseID>1</DatabaseID><Name>Halo</Name><Platform>Microsoft Xbox</Platform></Game>
@@ -447,8 +461,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
         with zipfile.ZipFile(package, "w") as archive:
             archive.writestr("Metadata.xml", xml)
         build_database(package, self.db_path)
-        self.openbox.DATA.write_text(
-            json.dumps(
+        self.openbox.DATA.write_text(json.dumps(
                 {
                     "schema_version": 6,
                     "games": [
@@ -458,10 +471,10 @@ class MatchPreviewV2Tests(unittest.TestCase):
                     ],
                     "settings": {},
                 }
-            )
-        )
+            ), encoding="utf-8")
 
     def tearDown(self):
+        close_db_connections()
         self.tempdir.cleanup()
 
     def test_classify_auto_exact_unique(self):
@@ -510,7 +523,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
         run_match_preview_job(
             preview["preview_id"],
             database_path=dup_db,
-            transact_state=lambda mutator: mutator(json.loads(self.openbox.DATA.read_text())),
+            transact_state=lambda mutator: mutator(json.loads(self.openbox.DATA.read_text(encoding="utf-8"))),
             data_dir=self.openbox.DATA,
         )
         loaded = load_match_preview(preview["preview_id"], data_dir=self.openbox.DATA)
@@ -612,8 +625,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
         return dup_db
 
     def test_preview_import_batch_and_expiry(self):
-        self.openbox.DATA.write_text(
-            json.dumps(
+        self.openbox.DATA.write_text(json.dumps(
                 {
                     "schema_version": 6,
                     "games": [
@@ -621,8 +633,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
                     ],
                     "settings": {},
                 }
-            )
-        )
+            ), encoding="utf-8")
         preview = create_match_preview_record(import_batch_id="batch-1", data_dir=self.openbox.DATA)
         self.assertEqual(preview["import_batch_id"], "batch-1")
         with self.assertRaises(PreviewNotFound):
@@ -641,9 +652,9 @@ class MatchPreviewV2Tests(unittest.TestCase):
         cancel.is_set.side_effect = [False, True]
 
         def fake_transact(mutator):
-            state = json.loads(self.openbox.DATA.read_text())
+            state = json.loads(self.openbox.DATA.read_text(encoding="utf-8"))
             mutator(state)
-            self.openbox.DATA.write_text(json.dumps(state))
+            self.openbox.DATA.write_text(json.dumps(state), encoding="utf-8")
             return state, None
 
         run_match_preview_job(
@@ -653,7 +664,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
             data_dir=self.openbox.DATA,
             cancel_event=cancel,
         )
-        state = json.loads(self.openbox.DATA.read_text())
+        state = json.loads(self.openbox.DATA.read_text(encoding="utf-8"))
         exact = next(game for game in state["games"] if game["game_id"] == "g-exact")
         self.assertEqual(exact.get("launchbox_db_id"), "10")
         loaded = load_match_preview(preview["preview_id"], data_dir=self.openbox.DATA)
@@ -665,7 +676,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
         run_match_preview_job(
             preview["preview_id"],
             database_path=dup_db,
-            transact_state=lambda mutator: mutator(json.loads(self.openbox.DATA.read_text())),
+            transact_state=lambda mutator: mutator(json.loads(self.openbox.DATA.read_text(encoding="utf-8"))),
             data_dir=self.openbox.DATA,
         )
         loaded = load_match_preview(preview["preview_id"], data_dir=self.openbox.DATA)
@@ -689,15 +700,15 @@ class MatchPreviewV2Tests(unittest.TestCase):
         self.assertEqual(rejections2, [("g-dup", proposed_id)])
 
         def fake_transact(mutator):
-            state = json.loads(self.openbox.DATA.read_text())
+            state = json.loads(self.openbox.DATA.read_text(encoding="utf-8"))
             mutator(state)
-            self.openbox.DATA.write_text(json.dumps(state))
+            self.openbox.DATA.write_text(json.dumps(state), encoding="utf-8")
             return state, None
 
         from metadata import persist_never_rejections
 
         persist_never_rejections(fake_transact, rejections2)
-        state = json.loads(self.openbox.DATA.read_text())
+        state = json.loads(self.openbox.DATA.read_text(encoding="utf-8"))
         self.assertIn(proposed_id, state["games"][1]["rejected_launchbox_ids"])
         preview2 = create_match_preview_record(game_ids=["g-dup"], data_dir=self.openbox.DATA)
         run_match_preview_job(
@@ -707,7 +718,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
             data_dir=self.openbox.DATA,
         )
         loaded2 = load_match_preview(preview2["preview_id"], data_dir=self.openbox.DATA)
-        state_after = json.loads(self.openbox.DATA.read_text())
+        state_after = json.loads(self.openbox.DATA.read_text(encoding="utf-8"))
         dup_game = next(game for game in state_after["games"] if game["game_id"] == "g-dup")
         self.assertIn(proposed_id, dup_game.get("rejected_launchbox_ids", []))
         self.assertIn("exact_review", loaded2.get("counts", {}))
@@ -720,7 +731,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
         run_match_preview_job(
             preview["preview_id"],
             database_path=dup_db,
-            transact_state=lambda mutator: mutator(json.loads(self.openbox.DATA.read_text())),
+            transact_state=lambda mutator: mutator(json.loads(self.openbox.DATA.read_text(encoding="utf-8"))),
             data_dir=self.openbox.DATA,
         )
         loaded = load_match_preview(preview["preview_id"], data_dir=self.openbox.DATA)
@@ -753,7 +764,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
         run_match_preview_job(
             preview["preview_id"],
             database_path=dup_db,
-            transact_state=lambda mutator: mutator(json.loads(self.openbox.DATA.read_text())),
+            transact_state=lambda mutator: mutator(json.loads(self.openbox.DATA.read_text(encoding="utf-8"))),
             data_dir=self.openbox.DATA,
         )
         loaded = load_match_preview(preview["preview_id"], data_dir=self.openbox.DATA)
@@ -768,9 +779,9 @@ class MatchPreviewV2Tests(unittest.TestCase):
         revision = loaded["revision"]
 
         def fake_transact(mutator):
-            state = json.loads(self.openbox.DATA.read_text())
+            state = json.loads(self.openbox.DATA.read_text(encoding="utf-8"))
             mutator(state)
-            self.openbox.DATA.write_text(json.dumps(state))
+            self.openbox.DATA.write_text(json.dumps(state), encoding="utf-8")
             return state, None
 
         apply_match_preview(
@@ -785,7 +796,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
                 data_parent=self.openbox.DATA.parent,
                 running_map={},
             )
-        state = json.loads(self.openbox.DATA.read_text())
+        state = json.loads(self.openbox.DATA.read_text(encoding="utf-8"))
         game = next(item for item in state["games"] if item["game_id"] == "g-dup")
         self.assertEqual(game.get("developer"), "Dev")
         with self.assertRaises(PreviewStale):
@@ -821,7 +832,7 @@ class MetadataHandlerRouteTests(MatchPreviewV2Tests):
         hm.METADATA_DATABASE = self.db_path
         with mock.patch("handlers.metadata.METADATA_DATABASE", self.db_path), \
              mock.patch("handlers.metadata.METADATA_JOB", {"state": "idle"}), \
-             mock.patch("handlers.metadata.load_state_view", return_value=json.loads(self.openbox.DATA.read_text())):
+             mock.patch("handlers.metadata.load_state_view", return_value=json.loads(self.openbox.DATA.read_text(encoding="utf-8"))):
             handler._api_get_api_metadata_status(mock.Mock())
             status, payload, _ = handler.responses[-1]
             self.assertEqual(status, 200)
@@ -840,7 +851,7 @@ class MetadataHandlerRouteTests(MatchPreviewV2Tests):
 
     def test_igdb_search_and_steam(self):
         handler = DummyMetadataHandler()
-        state = json.loads(self.openbox.DATA.read_text())
+        state = json.loads(self.openbox.DATA.read_text(encoding="utf-8"))
         with mock.patch("handlers.metadata.search_igdb_games", return_value=[{"id": 1}]), \
              mock.patch("handlers.metadata.update_steam_metadata"), \
              mock.patch("handlers.metadata.transact_state", side_effect=lambda m: (m(state), "Exact Game")), \
@@ -859,7 +870,7 @@ class MetadataHandlerRouteTests(MatchPreviewV2Tests):
         with mock.patch("handlers.metadata.METADATA_DATABASE", self.db_path), \
              mock.patch("handlers.metadata.sync_database") as mock_sync, \
              mock.patch("handlers.metadata.JOB_MANAGER") as mock_jm, \
-             mock.patch("handlers.metadata.load_state", return_value=json.loads(self.openbox.DATA.read_text())), \
+             mock.patch("handlers.metadata.load_state", return_value=json.loads(self.openbox.DATA.read_text(encoding="utf-8"))), \
              mock.patch("handlers.metadata.batch_match", return_value={}), \
              mock.patch("handlers.metadata.transact_state", side_effect=lambda m: m({"games": []})):
             mock_jm.submit.side_effect = lambda name, worker: worker()
@@ -876,10 +887,10 @@ class MetadataHandlerRouteTests(MatchPreviewV2Tests):
     def test_apply_metadata_and_igdb(self):
         handler = DummyMetadataHandler()
         with mock.patch("handlers.metadata.METADATA_DATABASE", self.db_path), \
-             mock.patch("handlers.metadata.load_state", return_value=json.loads(self.openbox.DATA.read_text())), \
+             mock.patch("handlers.metadata.load_state", return_value=json.loads(self.openbox.DATA.read_text(encoding="utf-8"))), \
              mock.patch("handlers.metadata.game_from_payload", side_effect=lambda s, p: next(g for g in s["games"] if g["game_id"] == p.get("game_id", "g-exact"))), \
              mock.patch("handlers.metadata.apply_game_metadata", return_value={"game_id": "g-exact", "developer": "Dev"}), \
-             mock.patch("handlers.metadata.transact_state", side_effect=lambda m: (m(json.loads(self.openbox.DATA.read_text())), None)), \
+             mock.patch("handlers.metadata.transact_state", side_effect=lambda m: (m(json.loads(self.openbox.DATA.read_text(encoding="utf-8"))), None)), \
              mock.patch("handlers.metadata.bump_media_epoch"):
             handler.apply_metadata({"game_id": "g-exact", "database_id": 10, "media": ["cover"], "overwrite": False})
             self.assertEqual(handler.responses[-1][0], 200)
@@ -895,7 +906,7 @@ class MetadataHandlerRouteTests(MatchPreviewV2Tests):
         run_match_preview_job(
             preview["preview_id"],
             database_path=dup_db,
-            transact_state=lambda mutator: mutator(json.loads(self.openbox.DATA.read_text())),
+            transact_state=lambda mutator: mutator(json.loads(self.openbox.DATA.read_text(encoding="utf-8"))),
             data_dir=self.openbox.DATA,
         )
         with mock.patch("handlers.metadata.METADATA_DATABASE", self.db_path), \
@@ -1058,7 +1069,7 @@ class MetadataHandlerRouteTests(MatchPreviewV2Tests):
         run_match_preview_job(
             preview["preview_id"],
             database_path=dup_db,
-            transact_state=lambda mutator: mutator(json.loads(self.openbox.DATA.read_text())),
+            transact_state=lambda mutator: mutator(json.loads(self.openbox.DATA.read_text(encoding="utf-8"))),
             data_dir=self.openbox.DATA,
         )
         with mock.patch("handlers.metadata.METADATA_DATABASE", dup_db), \
@@ -1108,8 +1119,7 @@ class MetadataHandlerRouteTests(MatchPreviewV2Tests):
 
 
 def test_download_media_for_type_helper():
-    with TemporaryDirectory() as directory:
-        root = Path(directory)
+    with _temp_dir() as root:
         package = root / "Metadata.zip"
         xml = """<LaunchBox>
           <Game><DatabaseID>1</DatabaseID><Name>Helper Game</Name><Platform>NES</Platform></Game>
@@ -1141,8 +1151,7 @@ def test_download_media_for_type_helper():
 
 
 def test_sync_database_success():
-    with TemporaryDirectory() as directory:
-        root = Path(directory)
+    with _temp_dir() as root:
         package = root / "Metadata.zip"
         xml = """<LaunchBox>
           <Game><DatabaseID>1</DatabaseID><Name>Sync Game</Name><Platform>NES</Platform></Game>
@@ -1193,8 +1202,7 @@ def test_metadata_policy_helpers():
     assert _year_from_record({"release_date": ""}) is None
     assert _media_categories_for_game({"cover": "/c.png", "screenshots": ["/s.png"]}) == ["cover", "screenshots"]
 
-    with TemporaryDirectory() as directory:
-        root = Path(directory)
+    with _temp_dir() as root:
         package = root / "Metadata.zip"
         xml = """<LaunchBox>
           <Game><Name>Bad</Name><Platform>NES</Platform></Game>
@@ -1211,12 +1219,12 @@ def test_metadata_policy_helpers():
         match_class, item, _ = classify_game_match(database, game)
         assert match_class in {"likely", "possible", "exact_review", "unmatched"}
         library = root / "library.json"
-        library.write_text(json.dumps({"games": [game], "settings": {}}))
+        library.write_text(json.dumps({"games": [game], "settings": {}}), encoding="utf-8")
         preview = create_match_preview_record(game_ids=["g1"], data_dir=library)
         run_match_preview_job(
             preview["preview_id"],
             database_path=database,
-            transact_state=lambda mutator: mutator(json.loads(library.read_text())),
+            transact_state=lambda mutator: mutator(json.loads(library.read_text(encoding="utf-8"))),
             data_dir=library,
             checkpoint={"last_game_id": "g0"},
         )
@@ -1254,8 +1262,7 @@ def test_metadata_decision_and_apply_edges():
         run_match_preview_job,
     )
 
-    with TemporaryDirectory() as directory:
-        root = Path(directory)
+    with _temp_dir() as root:
         package = root / "Metadata.zip"
         xml = """<LaunchBox>
           <Game><DatabaseID>7</DatabaseID><Name>Apply Me</Name><Platform>Nintendo Entertainment System</Platform><Developer>D</Developer><Overview>O</Overview><ReleaseDate>1999</ReleaseDate><MaxPlayers>2</MaxPlayers></Game>
@@ -1266,20 +1273,18 @@ def test_metadata_decision_and_apply_edges():
         database = root / "metadata.db"
         build_database(package, database)
         library = root / "library.json"
-        library.write_text(json.dumps({"games": [{"game_id": "g7", "name": "Apply Me", "platform": "NES"}], "settings": {}}))
+        library.write_text(json.dumps({"games": [{"game_id": "g7", "name": "Apply Me", "platform": "NES"}], "settings": {}}), encoding="utf-8")
         preview = create_match_preview_record(import_batch_id="batch-7", data_dir=library)
-        library.write_text(
-            json.dumps(
+        library.write_text(json.dumps(
                 {
                     "games": [{"game_id": "g7", "name": "Apply Me", "platform": "NES", "import_batch_id": "batch-7"}],
                     "settings": {},
                 }
-            )
-        )
+            ), encoding="utf-8")
         run_match_preview_job(
             preview["preview_id"],
             database_path=database,
-            transact_state=lambda mutator: mutator(json.loads(library.read_text())),
+            transact_state=lambda mutator: mutator(json.loads(library.read_text(encoding="utf-8"))),
             data_dir=library,
         )
         loaded = load_match_preview(preview["preview_id"], data_dir=library)
@@ -1294,9 +1299,9 @@ def test_metadata_decision_and_apply_edges():
             revision = loaded["revision"]
 
             def fake_transact(mutator):
-                state = json.loads(library.read_text())
+                state = json.loads(library.read_text(encoding="utf-8"))
                 mutator(state)
-                library.write_text(json.dumps(state))
+                library.write_text(json.dumps(state), encoding="utf-8")
                 return state, None
 
             cancel = mock.Mock()
@@ -1348,7 +1353,7 @@ def test_metadata_decision_and_apply_edges():
         assert game2.get("max_players") == "2"
         bad_preview = root / "match_previews" / "bad.json"
         bad_preview.parent.mkdir(parents=True, exist_ok=True)
-        bad_preview.write_text("{not json")
+        bad_preview.write_text("{not json", encoding="utf-8")
         with pytest_raises_api(PreviewNotFound):
             load_match_preview("bad", data_dir=library)
     print("metadata decision/apply edges self-test: ok")

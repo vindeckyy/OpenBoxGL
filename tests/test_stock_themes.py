@@ -147,7 +147,7 @@ class StockThemesTests(unittest.TestCase):
                             )
 
     def test_stock_themes_are_offline_and_token_only(self):
-        app_tokens = set(_parse_root_vars(APP_CSS.read_text()).keys())
+        app_tokens = set(_parse_root_vars(APP_CSS.read_text(encoding="utf-8")).keys())
         for path in stock_theme_sources(ROOT):
             css = path.read_text(encoding="utf-8")
             self.assertNotIn("http", css.lower(), f"{path.name} must not request remote assets")

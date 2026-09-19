@@ -38,6 +38,50 @@ jobs:
       - name: Run test suite
         run: ./run_all_tests.sh
 
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+
+      # The suite is standalone scripts; the runner reports per-file
+      # pass/fail/timeout and exits non-zero on any failure (ADR 0025).
+      - name: Run test suite
+        run: python -B scripts/run_windows_tests.py
+
+      # native_host_win.c is C and Windows-only, so this is the only automated
+      # proof that it still compiles against the WebView2 SDK (ADR 0048).
+      - name: Build the WebView2 native host
+        shell: pwsh
+        run: scripts/build_native_host_windows.ps1
+
+      - name: Runtime module manifest
+        run: python -B scripts/check_runtime_modules.py
+
+      - name: v1 route contract
+        run: python -B scripts/check_v1_contract.py
+
+      - name: Version sync
+        run: python -B scripts/check_version_sync.py
+
+      - name: i18n keys
+        run: python -B scripts/check_i18n.py
+
+      - name: CSP framing contract
+        run: python -B scripts/check_csp.py
+
+      - name: Design tokens
+        run: python -B scripts/check_tokens.py
+
   gate:
     strategy:
       fail-fast: false

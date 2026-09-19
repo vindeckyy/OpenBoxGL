@@ -430,6 +430,11 @@ def _archive_file(path, state_dir):
         return False
 
 
+def _relative_posix(path, state_dir):
+    """Stored state references always use POSIX separators (portable libraries)."""
+    return path.relative_to(state_dir).as_posix()
+
+
 def _canonicalize(picked, state_dir, state):
     """Move the newest capture to the canonical resume name, or leave in place."""
     template = " ".join(state["template"])
@@ -439,17 +444,17 @@ def _canonicalize(picked, state_dir, state):
         canonical_name = f"{RESUME_BASENAME}{_state_suffix(picked)}"
     else:
         # Slot-managed saves (ScummVM) keep their emulator-chosen names.
-        return str(picked.relative_to(state_dir))
+        return _relative_posix(picked, state_dir)
     canonical = picked.parent / canonical_name
     if picked != canonical:
         try:
             if canonical.exists():
                 if not _archive_file(canonical, state_dir):
-                    return str(picked.relative_to(state_dir))
+                    return _relative_posix(picked, state_dir)
             picked.replace(canonical)
         except OSError:
-            return str(picked.relative_to(state_dir))
-    return str(canonical.relative_to(state_dir))
+            return _relative_posix(picked, state_dir)
+    return _relative_posix(canonical, state_dir)
 
 
 def _select_thumbnail(state_dir, game, data_parent, picked):

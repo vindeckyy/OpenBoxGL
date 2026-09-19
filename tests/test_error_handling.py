@@ -18,7 +18,7 @@ class RunConfiguredCommandsTests(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         os.environ["OPENBOX_DATA_DIR"] = self.tmpdir.name
-        (Path(self.tmpdir.name) / "openbox.json").write_text("{}")
+        (Path(self.tmpdir.name) / "openbox.json").write_text("{}", encoding="utf-8")
 
     def tearDown(self):
         self.tmpdir.cleanup()
@@ -59,7 +59,7 @@ class RunConfiguredCommandsTests(unittest.TestCase):
         """Exceptions outside OSError/SubprocessError should propagate, not be swallowed."""
         state = {"settings": {"startup_commands": ["echo hello"]}}
         with patch("pkg.state.commands.load_state", return_value=state):
-            with patch("shlex.split", side_effect=RuntimeError("unexpected")):
+            with patch("pkg.state.commands.split_command", side_effect=RuntimeError("unexpected")):
                 with self.assertRaises(RuntimeError):
                     self._call()
 
@@ -74,6 +74,16 @@ class RunConfiguredCommandsTests(unittest.TestCase):
     def test_malformed_command_value_error_logged(self):
         """Unclosed quotes raising ValueError should be caught and logged as warning."""
         state = {"settings": {"startup_commands": ['echo "unclosed quote']}}
+        if os.name == "nt":
+            # MSVCRT quoting has no unterminated form, so the same stored command
+            # parses cleanly on Windows: nothing is logged and nothing crashes.
+            with patch("pkg.state.commands.load_state", return_value=state), patch(
+                "subprocess.Popen"
+            ) as popen:
+                with self.assertNoLogs("openbox", level="WARNING"):
+                    self._call()
+            self.assertEqual(popen.call_args.args[0], ["echo", "unclosed quote"])
+            return
         with patch("pkg.state.commands.load_state", return_value=state):
             with self.assertLogs("openbox", level="WARNING") as captured:
                 self._call()
@@ -86,7 +96,7 @@ class RunConfiguredCommandsTests(unittest.TestCase):
         """Empty args list from shlex or index error should be handled cleanly."""
         state = {"settings": {"startup_commands": ["something"]}}
         with patch("pkg.state.commands.load_state", return_value=state):
-            with patch("shlex.split", side_effect=IndexError("simulated index error")):
+            with patch("pkg.state.commands.split_command", side_effect=IndexError("simulated index error")):
                 with self.assertLogs("openbox", level="WARNING") as captured:
                     self._call()
         self.assertTrue(

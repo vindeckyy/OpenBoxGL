@@ -179,7 +179,7 @@ class GameyfinTests(unittest.TestCase):
             install_dir = Path(directory) / "keep-saves"
             install_dir.mkdir()
             save_file = install_dir / "save.dat"
-            save_file.write_text("precious")
+            save_file.write_text("precious", encoding="utf-8")
 
             class Client(GameyfinClient):
                 def __init__(self):
@@ -195,7 +195,7 @@ class GameyfinTests(unittest.TestCase):
             with self.assertRaises(GameyfinError):
                 install_gameyfin_game(settings, 9, client=Client())
             self.assertTrue(save_file.exists())
-            self.assertEqual(save_file.read_text(), "precious")
+            self.assertEqual(save_file.read_text(encoding="utf-8"), "precious")
 
     def test_storefront_rejects_unknown(self):
         with self.assertRaises(ValueError):
@@ -208,7 +208,7 @@ class SaveToolTests(unittest.TestCase):
         self.assertTrue(status["ludusavi"])
         self.assertFalse(status["hoard"])
 
-        def run(command, capture_output=True, text=True, timeout=600):
+        def run(command, **kwargs):
             self.assertIn("--api", command)
             self.assertIn("--force", command)
             return mock.Mock(returncode=0, stdout='{"overall":{"processedGames":1}}', stderr="")

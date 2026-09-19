@@ -15,6 +15,16 @@ import shutil
 from urllib.request import urlopen
 from xml.etree import ElementTree
 
+def _posix_only(function):
+    """Skip packaging checks that only apply to the POSIX/AppImage flow."""
+    def wrapper():
+        if os.name == "nt":
+            print(f"  {function.__name__}: skipped on Windows (POSIX packaging only)")
+            return
+        return function()
+    return wrapper
+
+
 def _repo_root() -> Path:
     candidate = Path(__file__).resolve().parent
     if (candidate / "runtime_modules.txt").is_file():
@@ -25,7 +35,7 @@ def _repo_root() -> Path:
 
 ROOT = _repo_root()
 sys.path.insert(0, str(ROOT))
-PYTHON_MODULES = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
+PYTHON_MODULES = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text(encoding="utf-8").splitlines() if line.strip() and not line.lstrip().startswith("#")]
 DATA_FILES = ["index.html", "openbox.svg"] + [f"static/{p.name}" for p in sorted((ROOT / "static").glob("*.js"))] + [f"static/{p.name}" for p in sorted((ROOT / "static").glob("*.css"))] + [f"locales/{p.name}" for p in sorted((ROOT / "locales").glob("*.json"))]
 
 def _doc_path(name: str) -> Path:
@@ -86,7 +96,7 @@ def test_appdir_structure():
         desktop = appdir / "usr" / "share" / "applications" / "io.openbox.GameLauncher.desktop"
         assert desktop.is_file(), "missing desktop file"
         if appimage_path:
-            content = desktop.read_text()
+            content = desktop.read_text(encoding="utf-8")
             assert "Exec=AppRun %u" in content, "AppImage desktop entry must launch AppRun"
             assert "Icon=io.openbox.GameLauncher" in content, "AppImage desktop icon id must be unique"
             assert "X-AppImage-Version=" in content, "AppImage desktop entry must expose version"
@@ -109,6 +119,7 @@ def test_makefile_install():
     print("  Makefile scripts: ok")
 
 
+@_posix_only
 def test_staged_install_locale_endpoints():
     """A staged Makefile install must serve every public locale endpoint."""
     locales = sorted((ROOT / "locales").glob("*.json"))
@@ -174,7 +185,7 @@ def test_staged_install_locale_endpoints():
 
 def test_runtime_manifest():
     manifest = ROOT / "runtime_modules.txt"
-    modules = [line.strip() for line in manifest.read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    modules = [line.strip() for line in manifest.read_text(encoding="utf-8").splitlines() if line.strip() and not line.lstrip().startswith("#")]
     assert len(modules) == len(set(modules)), "runtime module manifest contains duplicates"
     missing = [module for module in modules if not (ROOT / module).is_file()]
     assert not missing, f"runtime module manifest has missing files: {missing}"
@@ -183,8 +194,8 @@ def test_runtime_manifest():
     for mod in modules:
         assert not mod.endswith(".pyc"), f"manifest should not contain pyc files: {mod}"
         assert not mod.startswith("build/"), f"manifest should not contain build files: {mod}"
-    build_script = (ROOT / "build_appimage.sh").read_text()
-    flatpak = (ROOT / "io.openbox.GameLauncher.yml").read_text()
+    build_script = (ROOT / "build_appimage.sh").read_text(encoding="utf-8")
+    flatpak = (ROOT / "io.openbox.GameLauncher.yml").read_text(encoding="utf-8")
     assert "runtime_modules.txt" in build_script
     assert "runtime_modules.txt" in flatpak
     print("  Runtime module manifest: ok")
@@ -192,7 +203,7 @@ def test_runtime_manifest():
 
 def test_runtime_import_closure():
     manifest = {
-        line.strip() for line in (ROOT / "runtime_modules.txt").read_text().splitlines()
+        line.strip() for line in (ROOT / "runtime_modules.txt").read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     }
     # Support both flat (parity_*.py at root) and packaged (pkg/parity/) layouts
@@ -278,12 +289,111 @@ def test_sbom_hash_verification():
     print("  SBOM hash verification: ok")
 
 
+def _windows_powershell():
+    """The Windows PowerShell host, when this machine has one."""
+    return shutil.which("powershell") or shutil.which("pwsh")
+
+
+def _run_launcher(launcher, arguments, share_dir, local_app_data=None):
+    """Run a Windows launcher against a stand-in web app and return the result."""
+    env = dict(os.environ)
+    env["OPENBOX_SHARE"] = str(share_dir)
+    env["OPENBOX_PYTHON"] = sys.executable
+    env["PYTHONPATH"] = str(ROOT)
+    if local_app_data is not None:
+        # Keeps the install-dir candidate from reaching a real %LOCALAPPDATA%
+        # install while the launcher resolves its share dir.
+        env["LOCALAPPDATA"] = str(local_app_data)
+    return subprocess.run(
+        [_windows_powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+         str(launcher), *arguments],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=120, check=False,
+    )
+
+
+def test_windows_launchers():
+    """Each Windows entry point resolves the share dir and forwards its flags."""
+    if os.name != "nt" or not _windows_powershell():
+        print("  Windows launchers: skipped (needs Windows PowerShell)")
+        return
+    for name in ("openbox.cmd", "openbox.ps1", "openbox-native.ps1"):
+        assert (ROOT / name).is_file(), f"missing Windows launcher: {name}"
+
+    with tempfile.TemporaryDirectory() as directory:
+        share = Path(directory) / "share"
+        share.mkdir()
+        marker = Path(directory) / "argv.txt"
+        # The stand-in records the flags it was handed, so a launcher that
+        # resolved the wrong share dir or dropped arguments cannot pass.
+        (share / "web_app.py").write_text(
+            "import pathlib, sys\n"
+            f"pathlib.Path({str(marker)!r}).write_text(' '.join(sys.argv[1:]), encoding='utf-8')\n",
+            encoding="utf-8",
+        )
+
+        # ``--web`` opts out of the native host and forwards the rest verbatim.
+        result = _run_launcher(ROOT / "openbox.ps1", ["--web", "--no-browser", "--width", "1024"], share)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert marker.read_text(encoding="utf-8") == "--no-browser --width 1024"
+
+        # Without a native host the native launcher falls back to the web app
+        # instead of failing.
+        marker.unlink()
+        result = _run_launcher(ROOT / "openbox-native.ps1", ["--no-browser", "--width", "1024"], share)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert marker.read_text(encoding="utf-8") == "--no-browser --width 1024"
+        # Write-Warning lands on stdout when PowerShell's streams are redirected.
+        assert "falling back" in result.stdout + result.stderr
+
+        # A launcher that cannot find web_app.py must fail loudly rather than
+        # start something arbitrary. Its own directory is a candidate, so this
+        # needs a copy outside the repo with every candidate pointed elsewhere.
+        elsewhere = Path(directory) / "elsewhere"
+        elsewhere.mkdir()
+        shutil.copy2(ROOT / "openbox.ps1", elsewhere / "openbox.ps1")
+        result = _run_launcher(elsewhere / "openbox.ps1", ["--web"], elsewhere, local_app_data=elsewhere)
+        assert result.returncode != 0
+        assert "web_app.py" in result.stdout + result.stderr
+    print("  Windows launchers: ok")
+
+
+def test_windows_installer_contract():
+    """scripts/install.ps1 pins the committed release key and parses."""
+    installer = (ROOT / "scripts" / "install.ps1").read_text(encoding="utf-8")
+    # The bootstrap anchor is the only thing standing between a download and an
+    # install, so it must track the committed public key exactly.
+    anchor = hashlib.sha256((ROOT / "openbox-release.pub").read_bytes()).hexdigest()
+    assert anchor in installer, "install.ps1 must pin the committed release public key"
+    assert "share\\openbox" in installer, "install.ps1 must install into the share dir the launchers resolve"
+    assert "updates.py" in installer, "install.ps1 must verify signatures with the in-repo verifier"
+
+    if os.name != "nt" or not _windows_powershell():
+        print("  Windows installer: contract ok (parse check needs Windows PowerShell)")
+        return
+    env = dict(os.environ)
+    for name in ("scripts/install.ps1", "openbox.ps1", "openbox-native.ps1"):
+        env["OPENBOX_SCRIPT_UNDER_TEST"] = str(ROOT / name)
+        result = subprocess.run(
+            [_windows_powershell(), "-NoProfile", "-Command",
+             "$null = [scriptblock]::Create((Get-Content -Raw -LiteralPath $env:OPENBOX_SCRIPT_UNDER_TEST))"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=120, check=False,
+        )
+        assert result.returncode == 0, f"{name} does not parse: {result.stderr}"
+    print("  Windows installer: ok")
+
+
 def test_build_appimage_validation():
     build_script = (ROOT / "build_appimage.sh").read_text(encoding="utf-8")
     assert "runtime_modules.txt" in build_script
     assert "missing runtime module" in build_script
     assert "sbom-manifest.json" in build_script
     assert "gen_sbom.py" in build_script
+
+    if os.name == "nt":
+        # The validation loop below is bash; the AppImage build has no Windows
+        # counterpart, so only the script references are checked here.
+        print("  Build AppImage validation: script references ok (bash loop skipped on Windows)")
+        return
 
     # Test validation failure on missing module in a mock loop
     test_script = """
@@ -386,13 +496,13 @@ def test_ci_flatpak_validate_job():
 def test_flatpak_manifest():
     manifest = ROOT / "io.openbox.GameLauncher.yml"
     assert manifest.exists(), "missing Flatpak manifest"
-    content = manifest.read_text()
+    content = manifest.read_text(encoding="utf-8")
     assert "app-id: io.openbox.GameLauncher" in content
     assert "runtime: org.gnome.Platform" in content
     assert "runtime-version: '49'" in content
     assert "command: openbox" in content
     assert "openbox.sh" in content
-    runtime_modules = (ROOT / "runtime_modules.txt").read_text()
+    runtime_modules = (ROOT / "runtime_modules.txt").read_text(encoding="utf-8")
     assert "openbox_logging.py" in runtime_modules
     assert "openbox-release.pub" in runtime_modules
     assert "runtime_modules.txt" in content
@@ -418,14 +528,14 @@ def test_release_flatpak_workflow():
     assert "flatpak build-bundle" in content
     assert "group: release-publish-${{ github.ref_name }}" in content
     assert "body_path: docs/RELEASE_NOTES.md" in content
-    appimage = (ROOT / ".github" / "workflows" / "release-appimage.yml").read_text(encoding="utf-8")
+    appimage = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     assert "group: release-publish-${{ github.ref_name }}" in appimage
     print("  Release Flatpak workflow: ok")
 
 
 def test_desktop_entry():
     desktop = ROOT / "openbox.desktop"
-    content = desktop.read_text()
+    content = desktop.read_text(encoding="utf-8")
     assert "Name=OpenBox Game Launcher" in content
     assert "Icon=io.openbox.GameLauncher" in content
     assert "Categories=Game" in content
@@ -436,7 +546,7 @@ def test_desktop_entry():
 
 def test_metainfo():
     xml = ROOT / "openbox.metainfo.xml"
-    content = xml.read_text()
+    content = xml.read_text(encoding="utf-8")
     assert "io.openbox.GameLauncher" in content
     assert '<launchable type="desktop-id">io.openbox.GameLauncher.desktop</launchable>' in content
     assert "<name>OpenBox Game Launcher</name>" in content
@@ -447,10 +557,12 @@ def test_metainfo():
 
 
 def test_legal_policy():
-    disclaimer = (_doc_path("DISCLAIMER.md")).read_text()
-    trademarks = (_doc_path("TRADEMARKS.md")).read_text()
-    readme = (ROOT / "README.md").read_text()
-    security = (_doc_path("SECURITY.md")).read_text()
+    from updates import VERSION
+
+    disclaimer = (_doc_path("DISCLAIMER.md")).read_text(encoding="utf-8")
+    trademarks = (_doc_path("TRADEMARKS.md")).read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    security = (_doc_path("SECURITY.md")).read_text(encoding="utf-8")
     assert "https://github.com/contact/dmca" in disclaimer
     assert "github-trademark-policy" in disclaimer
     assert "security/advisories/new" in disclaimer
@@ -460,7 +572,10 @@ def test_legal_policy():
     assert "Openbox window manager" in trademarks
     assert "| 0.8.x | No — upgrade required |" in security
     assert "| 1.0.x | No — upgrade required |" in security
-    assert "| 1.12.x | Yes (current) |" in security
+    # The supported-versions table must mark the minor line of the declared
+    # version as current, so a release only has to bump updates.py.
+    supported = ".".join(VERSION.split(".")[:2])
+    assert f"| {supported}.x | Yes (current) |" in security, f"SECURITY.md should mark {supported}.x current"
     assert "| 1.11.x | No — upgrade required |" in security
     assert "| < 0.4.0 | No |" in security
     print("  Legal policy: ok")
@@ -469,13 +584,13 @@ def test_legal_policy():
 def test_version_consistency():
     from updates import VERSION
     metainfo = ROOT / "openbox.metainfo.xml"
-    content = metainfo.read_text()
+    content = metainfo.read_text(encoding="utf-8")
     assert f'version="{VERSION}"' in content, f"Version mismatch: updates={VERSION}"
-    parity = (_doc_path("PARITY.md")).read_text()
+    parity = (_doc_path("PARITY.md")).read_text(encoding="utf-8")
     assert f"**v{VERSION}**" in parity, f"PARITY.md latest release should be v{VERSION}"
-    bug_report = (ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml").read_text()
+    bug_report = (ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml").read_text(encoding="utf-8")
     assert f"v{VERSION}" in bug_report, f"bug_report.yml should mention v{VERSION}"
-    readme = (ROOT / "README.md").read_text()
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert f"Release-v{VERSION}" in readme, f"README release badge should be v{VERSION}"
     assert "cd OpenBoxGL" in readme, "README clone steps should cd into OpenBoxGL"
     print("  Version consistency: ok")
@@ -486,7 +601,7 @@ def test_update_verification():
     assert version_tuple("0.1.0") < version_tuple("0.2.0")
     assert version_tuple("1.0.0") > version_tuple("0.9.9")
     assert version_tuple("1.2.3") == version_tuple("1.2.3")
-    installer = (ROOT / "scripts" / "install.sh").read_text()
+    installer = (ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
     assert "RELEASE_KEY_SHA256" in installer
     assert "openssl pkeyutl -verify" in installer
     assert "SIG_ASSET" in installer
@@ -501,7 +616,7 @@ def test_update_verification():
 
 def test_appimage_update_info():
     build_script = ROOT / "build_appimage.sh"
-    content = build_script.read_text()
+    content = build_script.read_text(encoding="utf-8")
     assert "OPENBOX_UPDATE_INFORMATION" in content
     assert "gh-releases-zsync|vindeckyy|OpenBoxGL|latest" in content
     assert "OPENBOX_APPDIR" in content
@@ -509,10 +624,11 @@ def test_appimage_update_info():
     print("  AppImage update info: ok")
 
 
+@_posix_only
 def test_appimage_library_scope():
-    build_script = (ROOT / "build_appimage.sh").read_text()
+    build_script = (ROOT / "build_appimage.sh").read_text(encoding="utf-8")
     app_run = build_script.split('install -m 755 /dev/stdin "$appdir/AppRun" <<\'EOF\'', 1)[1].split("\nEOF\n", 1)[0]
-    native_launcher = (ROOT / "openbox-native.sh").read_text()
+    native_launcher = (ROOT / "openbox-native.sh").read_text(encoding="utf-8")
     assert "OPENBOX_BUNDLED_LIB_PATH" in app_run
     assert "unset LD_LIBRARY_PATH" in app_run
     assert "export LD_LIBRARY_PATH" not in app_run
@@ -530,13 +646,13 @@ def test_appimage_library_scope():
         (root / "usr" / "bin").mkdir(parents=True)
         share.mkdir(parents=True)
         app_run_path = root / "AppRun"
-        app_run_path.write_text("#!/bin/bash\n" + app_run + "\n")
+        app_run_path.write_text("#!/bin/bash\n" + app_run + "\n", encoding="utf-8")
         app_run_path.chmod(0o755)
-        (share / "openbox-native.sh").write_text((ROOT / "openbox-native.sh").read_text())
+        (share / "openbox-native.sh").write_text((ROOT / "openbox-native.sh").read_text(encoding="utf-8"))
         (share / "openbox-native.sh").chmod(0o755)
         marker = root / "native-env"
         native = share / "native_host"
-        native.write_text("#!/bin/sh\nprintf '%s' \"$LD_LIBRARY_PATH\" > \"$OPENBOX_TEST_ENV\"\n")
+        native.write_text("#!/bin/sh\nprintf '%s' \"$LD_LIBRARY_PATH\" > \"$OPENBOX_TEST_ENV\"\n", encoding="utf-8")
         native.chmod(0o755)
         env = os.environ.copy()
         env.update({
@@ -546,22 +662,22 @@ def test_appimage_library_scope():
             "LD_LIBRARY_PATH": "/host/incompatible/readline",
         })
         subprocess.run([str(app_run_path)], env=env, check=True, timeout=10)
-        assert marker.read_text() == f"{root / 'usr' / 'lib'}:{root / 'usr' / 'lib64'}"
+        assert marker.read_text(encoding="utf-8") == f"{root / 'usr' / 'lib'}:{root / 'usr' / 'lib64'}"
 
         marker.unlink()
         native.unlink()
         python = root / "usr" / "bin" / "python3"
-        python.write_text("#!/bin/sh\nprintf '%s' \"$LD_LIBRARY_PATH\" > \"$OPENBOX_TEST_ENV\"\n")
+        python.write_text("#!/bin/sh\nprintf '%s' \"$LD_LIBRARY_PATH\" > \"$OPENBOX_TEST_ENV\"\n", encoding="utf-8")
         python.chmod(0o755)
         subprocess.run([str(app_run_path)], env=env, check=True, timeout=10)
-        assert marker.read_text() == f"{root / 'usr' / 'lib'}:{root / 'usr' / 'lib64'}"
+        assert marker.read_text(encoding="utf-8") == f"{root / 'usr' / 'lib'}:{root / 'usr' / 'lib64'}"
     print("  AppImage library scope: ok")
 
 
-def test_release_appimage_workflow():
-    workflow = ROOT / ".github" / "workflows" / "release-appimage.yml"
-    assert workflow.is_file(), "missing release AppImage workflow"
-    content = workflow.read_text()
+def test_release_workflow():
+    workflow = ROOT / ".github" / "workflows" / "release.yml"
+    assert workflow.is_file(), "missing release workflow"
+    content = workflow.read_text(encoding="utf-8")
     assert "ubuntu-22.04" in content
     assert "ubuntu-latest" not in content
     assert "tags:" in content and '"v*"' in content
@@ -589,7 +705,14 @@ def test_release_appimage_workflow():
     assert "overwrite_files: false" in content
     assert "softprops/action-gh-release@" in content
     assert "contents: write" in content
-    print("  Release AppImage workflow: ok")
+    # The Windows portable channel is built, attested and signed by the same
+    # release (ADR 0048).
+    assert "windows-latest" in content
+    assert "openbox-release-assets-windows" in content
+    assert "OpenBox-x86_64-windows.zip" in content
+    assert "OpenBox-x86_64-windows.zip.sig" in content
+    assert "scripts/install.ps1" in content
+    print("  Release workflow: ok")
 def test_markdown_locations():
     root_md = {p.name for p in ROOT.glob("*.md")}
     approved_root_md = {"README.md", "AGENTS.md", "CLAUDE.md", "ARCHITECTURE.md"}
@@ -622,7 +745,9 @@ def main():
     test_update_verification()
     test_appimage_update_info()
     test_appimage_library_scope()
-    test_release_appimage_workflow()
+    test_release_workflow()
+    test_windows_launchers()
+    test_windows_installer_contract()
     test_markdown_locations()
     test_sbom_hash_verification()
     test_build_appimage_validation()

@@ -9,6 +9,7 @@ import tempfile
 import unittest
 import urllib.error
 import urllib.request
+from contextlib import ExitStack
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -23,6 +24,10 @@ from api_errors import Conflict  # noqa: E402
 from pkg.parity.parity_perf import PerfLease  # noqa: E402
 from pkg.state import launch as launch_state  # noqa: E402
 from pkg.state.registry import PENDING_LAUNCHES, PROCESSES, RUNNING  # noqa: E402
+
+# Real launch args/cwd, valid on every host (Windows cannot spawn "/bin/true").
+LAUNCH_COMMAND = [sys.executable, "-c", "pass"]
+LAUNCH_CWD = tempfile.gettempdir()
 
 
 class LaunchReservationTests(unittest.TestCase):
@@ -47,9 +52,12 @@ class LaunchReservationTests(unittest.TestCase):
         PROCESSES.clear()
         PENDING_LAUNCHES.clear()
 
-    def _launch_patches(self, command=(['/bin/true'], '/tmp'), *, popen=None):
+    def _launch_patches(self, command=(LAUNCH_COMMAND, LAUNCH_CWD), *, popen=None):
         popen = popen or (lambda *args, **kwargs: self.process)
-        return patch.multiple(
+        # ``start_game`` lives in pkg.state.launch, so its ``subprocess`` module
+        # global (not webapp_state's) is the seam that intercepts the spawn.
+        stack = ExitStack()
+        stack.enter_context(patch.multiple(
             webapp_state,
             load_state=MagicMock(return_value=self.state),
             _resolve_start_game=MagicMock(return_value=(self.state["games"][0], 0)),
@@ -61,8 +69,11 @@ class LaunchReservationTests(unittest.TestCase):
             _annotate_gamescope_start=MagicMock(),
             _publish_start_events=MagicMock(),
             finish_session=MagicMock(),
-            subprocess=MagicMock(Popen=MagicMock(side_effect=popen)),
+        ))
+        stack.enter_context(
+            patch("pkg.state.launch.subprocess", MagicMock(Popen=MagicMock(side_effect=popen)))
         )
+        return stack
 
     def test_concurrent_requests_reserve_once(self):
         entered = threading.Event()
@@ -71,7 +82,7 @@ class LaunchReservationTests(unittest.TestCase):
         def slow_command(game, profiles):
             entered.set()
             release.wait(timeout=2)
-            return ["/bin/true"], "/tmp"
+            return LAUNCH_COMMAND, LAUNCH_CWD
 
         with self._launch_patches(), patch.object(webapp_state, "_start_launch_command", side_effect=slow_command), patch(
             "pkg.state.launch.threading.Thread"
@@ -115,7 +126,7 @@ class LaunchReservationTests(unittest.TestCase):
 
     def test_validation_failure_releases_reservation_for_retry(self):
         bad = ValueError("invalid working directory")
-        with self._launch_patches(), patch.object(webapp_state, "_start_launch_command", side_effect=[bad, (["/bin/true"], "/tmp")]), patch.object(
+        with self._launch_patches(), patch.object(webapp_state, "_start_launch_command", side_effect=[bad, (LAUNCH_COMMAND, LAUNCH_CWD)]), patch.object(
             webapp_state, "_validate_start_command", side_effect=[None, None]
         ), patch("pkg.state.launch.threading.Thread"):
             with self.assertRaises(ValueError):
@@ -131,7 +142,7 @@ class LaunchReservationTests(unittest.TestCase):
 
         def command(game, profiles):
             gate.wait(timeout=2)
-            return ["/bin/true"], "/tmp"
+            return LAUNCH_COMMAND, LAUNCH_CWD
 
         entries = []
         with self._launch_patches(), patch.object(webapp_state, "_start_launch_command", side_effect=command), patch(

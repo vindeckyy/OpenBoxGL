@@ -192,12 +192,14 @@ class ParityApiTests(unittest.TestCase):
         from openbox import load_state, save_state
         from web_app import Handler
 
+        watch_dir = Path(self.tempdir.name) / "watch"
+        watch_dir.mkdir()
         save_state({
             "games": [],
             "profiles": {},
             "history": [],
             "settings": {
-                "watch_folders": ["/tmp"],
+                "watch_folders": [str(watch_dir)],
                 "screensaver_seconds": 120,
                 "storefront_auto_import": {"steam": True, "heroic": False, "lutris": False, "gameyfin": False},
             },
@@ -210,7 +212,7 @@ class ParityApiTests(unittest.TestCase):
             "gameyfin_url": "http://gameyfin.local",
         })
         settings = load_state()["settings"]
-        self.assertEqual(settings["watch_folders"], ["/tmp"])
+        self.assertEqual(settings["watch_folders"], [str(watch_dir)])
         self.assertEqual(settings["screensaver_seconds"], 120)
         self.assertTrue(settings["storefront_auto_import"]["heroic"])
         self.assertFalse(settings["storefront_auto_import"]["steam"])
@@ -368,6 +370,8 @@ class ParityApiTests(unittest.TestCase):
         from openbox import load_state, save_state
         from web_app import Handler
 
+        install_dir = Path(self.tempdir.name) / "gameyfin"
+        install_dir.mkdir()
         save_state({
             "games": [],
             "profiles": {},
@@ -376,7 +380,7 @@ class ParityApiTests(unittest.TestCase):
                 "gameyfin_url": "http://gameyfin.local",
                 "gameyfin_username": "player",
                 "gameyfin_password": "secret",
-                "gameyfin_install_dir": "/tmp/gameyfin",
+                "gameyfin_install_dir": str(install_dir),
             },
             "playlists": [],
         })
@@ -387,7 +391,7 @@ class ParityApiTests(unittest.TestCase):
         self.assertEqual(settings["gameyfin_url"], "http://gameyfin.local")
         self.assertEqual(settings["gameyfin_username"], "player")
         self.assertEqual(settings["gameyfin_password"], "secret")
-        self.assertEqual(settings["gameyfin_install_dir"], "/tmp/gameyfin")
+        self.assertEqual(settings["gameyfin_install_dir"], str(install_dir))
 
     def test_settings_save_preserves_obs_password_when_ui_omits_it(self):
         from openbox import load_state, save_state

@@ -26,8 +26,8 @@ class PerfWriteTests(unittest.TestCase):
             store.save({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
             store.save({"games": [{"game_id": "g1", "name": "One"}], "profiles": {}, "history": [], "settings": {}, "playlists": []})
             self.assertTrue(store.backup_path.is_file())
-            primary = json.loads(store.path.read_text())
-            backup = json.loads(store.backup_path.read_text())
+            primary = json.loads(store.path.read_text(encoding="utf-8"))
+            backup = json.loads(store.backup_path.read_text(encoding="utf-8"))
             self.assertEqual(primary["games"][0]["name"], "One")
             self.assertEqual(backup["games"][0]["name"], "One")
 
@@ -36,8 +36,8 @@ class PerfWriteTests(unittest.TestCase):
             store = self.make_store(directory)
             store.save({"games": [{"game_id": "g1", "name": "First"}], "profiles": {}, "history": [], "settings": {}, "playlists": []})
             store.save({"games": [{"game_id": "g1", "name": "Second"}], "profiles": {}, "history": [], "settings": {}, "playlists": []})
-            primary = json.loads(store.path.read_text())
-            backup = json.loads(store.backup_path.read_text())
+            primary = json.loads(store.path.read_text(encoding="utf-8"))
+            backup = json.loads(store.backup_path.read_text(encoding="utf-8"))
             self.assertEqual(primary["games"][0]["name"], "Second")
             self.assertEqual(backup["games"][0]["name"], "Second")
 
@@ -48,8 +48,8 @@ class PerfWriteTests(unittest.TestCase):
             with mock.patch("os.replace", side_effect=OSError("simulated failure")):
                 with self.assertRaises(OSError):
                     store.save({"games": [{"game_id": "g1", "name": "After"}], "profiles": {}, "history": [], "settings": {}, "playlists": []})
-            primary = json.loads(store.path.read_text())
-            backup = json.loads(store.backup_path.read_text())
+            primary = json.loads(store.path.read_text(encoding="utf-8"))
+            backup = json.loads(store.backup_path.read_text(encoding="utf-8"))
             self.assertEqual(primary["games"][0]["name"], "Before")
             self.assertEqual(backup["games"][0]["name"], "Before", "backup must hold the previous good state")
 
@@ -59,7 +59,7 @@ class PerfWriteTests(unittest.TestCase):
             games = [{"game_id": f"g{i}", "name": f"Game {i}", "description": "x" * 200} for i in range(20000)]
             state = {"games": games, "profiles": {}, "history": [], "settings": {}, "playlists": []}
             store.save(state)
-            raw = store.path.read_text()
+            raw = store.path.read_text(encoding="utf-8")
             self.assertNotIn("\n  \"game_id\"", raw, "large libraries must be serialized compactly")
             self.assertGreater(store.path.stat().st_size, 1024 * 1024)
             loaded = json.loads(raw)
@@ -70,7 +70,7 @@ class PerfWriteTests(unittest.TestCase):
             store = self.make_store(directory)
             state = {"games": [{"game_id": "g1", "name": "One"}], "profiles": {}, "history": [], "settings": {}, "playlists": []}
             store.save(state)
-            raw = store.path.read_text()
+            raw = store.path.read_text(encoding="utf-8")
             self.assertGreater(raw.count("\n"), 1, "small library files should remain human-readable")
             self.assertEqual(json.loads(raw)["games"][0]["name"], "One")
 
@@ -157,8 +157,8 @@ class PerfWriteTests(unittest.TestCase):
             with mock.patch("os.replace", side_effect=OSError("simulated failure")):
                 with self.assertRaises(OSError):
                     store.save({"games": [{"game_id": "g1", "name": "After"}], "profiles": {}, "history": [], "settings": {}, "playlists": []})
-            primary = json.loads(store.path.read_text())
-            backup = json.loads(store.backup_path.read_text())
+            primary = json.loads(store.path.read_text(encoding="utf-8"))
+            backup = json.loads(store.backup_path.read_text(encoding="utf-8"))
             self.assertEqual(primary["games"][0]["name"], "Before")
             self.assertEqual(backup["games"][0]["name"], "Before")
 
@@ -169,7 +169,7 @@ class PerfWriteTests(unittest.TestCase):
             store.path.write_text("{corrupt", encoding="utf-8")
             recovered = store.recover()
             self.assertEqual(recovered["games"][0]["name"], "Good")
-            self.assertEqual(json.loads(store.path.read_text())["games"][0]["name"], "Good")
+            self.assertEqual(json.loads(store.path.read_text(encoding="utf-8"))["games"][0]["name"], "Good")
 
     def test_mutation_latency_under_load(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -290,7 +290,7 @@ class PerfWriteTests(unittest.TestCase):
             with mock.patch("os.link", side_effect=OSError("Cross-device link")):
                 store.save({"games": [{"game_id": "g1", "name": "Fallback"}]})
             self.assertTrue(store.backup_path.is_file())
-            backup = json.loads(store.backup_path.read_text())
+            backup = json.loads(store.backup_path.read_text(encoding="utf-8"))
             self.assertEqual(backup["games"][0]["name"], "Fallback")
 
     def test_schema_migrations_v1_through_v6(self):
@@ -311,8 +311,9 @@ class PerfWriteTests(unittest.TestCase):
             target = Path(directory) / "secret.token"
             secure_text_write(target, "super-secret-token")
             self.assertEqual(target.read_text(encoding="utf-8"), "super-secret-token")
-            # Verify owner-only permissions (0o600)
-            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+            # Verify owner-only permissions (0o600) where POSIX modes exist.
+            if os.name != "nt":
+                self.assertEqual(target.stat().st_mode & 0o777, 0o600)
 
     def test_backend_io_helpers(self):
         from backend_io import (
@@ -328,7 +329,7 @@ class PerfWriteTests(unittest.TestCase):
 
             p_txt = Path(directory) / "test.txt"
             atomic_write_text(p_txt, "text-data")
-            self.assertEqual(p_txt.read_text(), "text-data")
+            self.assertEqual(p_txt.read_text(encoding="utf-8"), "text-data")
 
             p_stream = Path(directory) / "stream.bin"
             stream = io.BytesIO(b"stream-data")

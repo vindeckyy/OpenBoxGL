@@ -1,5 +1,4 @@
 import copy
-import signal
 import sys
 import os
 import tempfile
@@ -60,7 +59,7 @@ class TestLaunchPhases(unittest.TestCase):
         mock_process.pid = 4321
         webapp_state.RUNNING["sig-fail"] = {"game": "Test", "paused": False}
         webapp_state.PROCESSES["sig-fail"] = mock_process
-        with patch("os.killpg", side_effect=OSError("No such process")):
+        with patch("pkg.state.launch.suspend_process_tree", return_value=False):
             with self.assertRaises(ValueError):
                 webapp_state.control_game_session("sig-fail", "pause")
 
@@ -112,20 +111,19 @@ class TestLaunchPhases(unittest.TestCase):
         from pkg.state.launch import _ReattachedProcess, _terminate_owned_process
 
         proc = _ReattachedProcess({"pid": 100, "pgid": 200})
-        with patch("os.killpg") as killpg:
+        with patch("pkg.state.launch.terminate_process_tree") as terminate_tree:
             _terminate_owned_process(proc)
-            killpg.assert_called_once_with(200, signal.SIGTERM)
+            terminate_tree.assert_called_once_with(100, force=False, pgid=200)
 
     def test_terminate_owned_process_killpg_fallback(self):
         from pkg.state.launch import _terminate_owned_process
 
         proc = MagicMock()
         proc.pid = 100
-        with patch("os.getpgid", return_value=100), patch(
-            "os.killpg", side_effect=OSError("gone")
-        ), patch.object(proc, "terminate") as terminate:
+        proc.pgid = None
+        with patch("pkg.state.launch.terminate_process_tree") as terminate_tree:
             _terminate_owned_process(proc)
-            terminate.assert_called_once()
+            terminate_tree.assert_called_once_with(100, force=False, pgid=None)
 
     def test_plugin_rejection_restores_perf(self):
         self.mock_apply_start_plugins.side_effect = ValueError("Plugin rejected launch")
@@ -147,11 +145,11 @@ class TestLaunchPhases(unittest.TestCase):
         
     def test_state_commit_failure_restores_perf(self):
         self.mock_update_state.side_effect = RuntimeError("State commit failed")
-        self.mock_killpg = patch('os.killpg').start()
+        self.mock_terminate = patch('pkg.state.launch.terminate_process_tree').start()
         with self.assertRaises(RuntimeError):
             webapp_state.start_game(index=0)
         self.mock_restore.assert_called_once()
-        self.mock_killpg.assert_called_once()
+        self.mock_terminate.assert_called_once()
         
     def test_normal_exit_restores_perf(self):
         # We need to test the watcher thread finish_session
@@ -381,9 +379,9 @@ class TestLaunchModuleCoverage(unittest.TestCase):
             with self.assertRaises(IndexError):
                 _resolve_start_game(state, 0, "missing")
 
-        with patch("webapp_state.build_launch", return_value=(["/bin/true"], "/tmp")):
+        with patch("webapp_state.build_launch", return_value=([sys.executable], "/tmp")):
             args, cwd = _start_launch_command(state["games"][0], {})
-            self.assertEqual(args[0], "/bin/true")
+            self.assertEqual(args[0], sys.executable)
         with patch("webapp_state.build_launch", return_value=(["/no/such/file"], "/tmp")):
             with self.assertRaises(ValueError):
                 _start_launch_command({"name": "Bad", "platform": "Linux"}, {})
@@ -427,10 +425,10 @@ class TestLaunchModuleCoverage(unittest.TestCase):
         _terminate_owned_process(None)
         proc = MagicMock()
         proc.pid = 100
-        with patch("os.getpgid", side_effect=OSError("gone")), patch.object(
-            proc, "terminate", side_effect=ProcessLookupError("gone")
-        ):
+        proc.pgid = None
+        with patch("pkg.state.launch.terminate_process_tree") as terminate_tree:
             _terminate_owned_process(proc)
+            terminate_tree.assert_called_once_with(100, force=False, pgid=None)
 
         webapp_state.RUNNING["rb-1"] = {}
         webapp_state.PROCESSES["rb-1"] = MagicMock()
@@ -444,7 +442,9 @@ class TestLaunchModuleCoverage(unittest.TestCase):
         mock_process.pid = 100
         webapp_state.RUNNING["ctrl"] = {"game": "Test", "paused": False}
         webapp_state.PROCESSES["ctrl"] = mock_process
-        with patch("os.killpg") as killpg:
+        with patch("pkg.state.launch.suspend_process_tree", return_value=True) as suspend, patch(
+            "pkg.state.launch.resume_process_tree", return_value=True
+        ) as resume, patch("pkg.state.launch.terminate_process_tree", return_value=True) as terminate_tree:
             webapp_state.control_game_session("ctrl", "pause")
             self.assertTrue(webapp_state.RUNNING["ctrl"]["paused"])
             webapp_state.control_game_session("ctrl", "resume")
@@ -457,7 +457,7 @@ class TestLaunchModuleCoverage(unittest.TestCase):
             webapp_state.RUNNING["ctrl3"] = {"game": "Test", "paused": False}
             webapp_state.PROCESSES["ctrl3"] = mock_process
             webapp_state.control_game_session("ctrl3", "kill")
-            self.assertGreaterEqual(killpg.call_count, 4)
+            self.assertGreaterEqual(suspend.call_count + resume.call_count + terminate_tree.call_count, 4)
         with self.assertRaises(ValueError):
             webapp_state.control_game_session("missing", "pause")
         webapp_state.RUNNING["dead"] = {"game": "Test"}

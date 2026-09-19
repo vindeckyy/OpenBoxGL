@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import fcntl
 from contextlib import contextmanager
 from pathlib import Path
 
 from backend_io import atomic_write_text
+from pkg.platform_compat import lock_handle
 
 
 REGION_PRIORITY_DEFAULT = ["North America", "World", "Europe", "Japan", ""]
@@ -42,7 +42,7 @@ def load_media_queue(queue_path):
     if not path.is_file():
         return []
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return []
     return data if isinstance(data, list) else []
@@ -59,11 +59,8 @@ def _queue_lock(queue_path):
     lock_path = path.with_name(f".{path.name}.lock")
     path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+", encoding="utf-8") as lock_file:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-        try:
+        with lock_handle(lock_file):
             yield
-        finally:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def enqueue_media_job(queue_path, job_dict):

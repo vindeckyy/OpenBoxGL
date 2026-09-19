@@ -19,6 +19,7 @@ from http.cookiejar import CookieJar
 from pathlib import Path
 
 from backend_io import fsync_directory, read_limited
+from pkg.platform_compat import is_group_or_world_writable, owned_by_current_user
 
 DEFAULT_PROVIDER = "org.gameyfin.plugins.download.direct.DirectDownloadPlugin$DirectDownloadProvider"
 GAMEYFIN_ID_RE = re.compile(r"[0-9]{1,20}\Z")
@@ -333,7 +334,7 @@ def _canonical_install_root(install_root):
         raise GameyfinError("Gameyfin install directory must be absolute.")
     _reject_symlink_components(raw)
     root = raw.resolve(strict=False)
-    if root == Path("/"):
+    if root == Path("/") or root == Path(root.anchor):
         raise GameyfinError("Refusing to use the filesystem root for Gameyfin installs.")
     try:
         info = root.lstat()
@@ -341,7 +342,7 @@ def _canonical_install_root(install_root):
         return root
     except OSError as error:
         raise GameyfinError(f"Could not inspect Gameyfin install root: {root}") from error
-    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or (info.st_mode & 0o022):
+    if not stat.S_ISDIR(info.st_mode) or not owned_by_current_user(info) or is_group_or_world_writable(info):
         raise GameyfinError("Gameyfin install root must be an owner-controlled, non-group-writable directory.")
     return root
 

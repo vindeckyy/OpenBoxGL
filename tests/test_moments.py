@@ -103,7 +103,8 @@ class MomentsTests(unittest.TestCase):
         self.assertEqual(item["note"], "A good run")
         self.assertEqual(item["trigger"], "pause")
         self.assertTrue(item["screenshot"].endswith(".png"))
-        self.assertIn("/media/moments/", item["screenshot"])
+        self.assertIn("media", Path(item["screenshot"]).parts)
+        self.assertIn("moments", Path(item["screenshot"]).parts)
         self.assertEqual(item["screenshot_index"], 0)
         saved = openbox.load_state()["games"][0]
         self.assertEqual(len(saved["moments"]), 1)
@@ -185,7 +186,7 @@ class MomentsTests(unittest.TestCase):
         game["ra_game_id"] = "123"
         cache_path = self.root / "cache" / "retroachievements" / f"{self.game_id}.json"
         cache_path.parent.mkdir(parents=True)
-        cache_path.write_text('{"earned": 7, "total": 20, "progress_pct": 35, "mastered": false}')
+        cache_path.write_text('{"earned": 7, "total": 20, "progress_pct": 35, "mastered": false}', encoding="utf-8")
         from pkg.state.cache import _project_game
         projected = _project_game(game, 0, set(), set(), None, {}, 0)
         self.assertEqual(projected["ra_achievements_earned"], 7)
@@ -209,7 +210,7 @@ class MomentsTests(unittest.TestCase):
         self.assertEqual(POST_TABLE["/api/v2/moments/delete"], "handlers.moments.moments_delete")
         self.assertIn("/static/moments.js", PUBLIC_GET_PATHS)
         self.assertTrue(any(route.path == "/api/v2/moments" for route in all_routes()))
-        self.assertIn("handlers/moments.py", (ROOT / "runtime_modules.txt").read_text())
+        self.assertIn("handlers/moments.py", (ROOT / "runtime_modules.txt").read_text(encoding="utf-8"))
 
         source = {name: (ROOT / "static" / name).read_text(encoding="utf-8") for name in (
             "moments.js", "app.js", "navigation.js", "bigbox.js", "library.js",

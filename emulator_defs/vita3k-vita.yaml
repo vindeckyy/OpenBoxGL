@@ -6,6 +6,7 @@ platform: PlayStation Vita
 extensions:
   - vpk
 native_exe: Vita3K
+native_exe_windows: Vita3K.exe
 flatpak_app_id: org.vita3k.Vita3K
 startup_args:
   - "{path}"

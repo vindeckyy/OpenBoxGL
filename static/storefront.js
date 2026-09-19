@@ -37,6 +37,7 @@ import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
       const settings = AppState.appSettings.storefront_auto_import || {};
       $('storefrontAutoImportSteam').checked = Boolean(settings.steam);
       $('storefrontAutoImportHeroic').checked = Boolean(settings.heroic);
+      if ($('storefrontAutoImportEpic')) $('storefrontAutoImportEpic').checked = Boolean(settings.epic);
       $('storefrontAutoImportLutris').checked = Boolean(settings.lutris);
       if ($('storefrontAutoImportGameyfin')) $('storefrontAutoImportGameyfin').checked = Boolean(settings.gameyfin);
       if ($('storefrontGameyfinUrl')) $('storefrontGameyfinUrl').value = AppState.appSettings.gameyfin_url || '';
@@ -56,6 +57,7 @@ import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
         storefront_auto_import:{
           steam:$('storefrontAutoImportSteam').checked,
           heroic:$('storefrontAutoImportHeroic').checked,
+          epic:Boolean($('storefrontAutoImportEpic')?.checked),
           lutris:$('storefrontAutoImportLutris').checked,
           gameyfin:Boolean($('storefrontAutoImportGameyfin')?.checked),
         },

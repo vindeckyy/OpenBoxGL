@@ -8,6 +8,10 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+@unittest.skipIf(
+    os.name == "nt",
+    "native_host.c is WebKitGTK/GTK3; Windows uses the WebView2 host instead",
+)
 class TestNativeHost(unittest.TestCase):
     def _compile_argument_harness(self, directory):
         """Compile the native argument/dispatch helpers without opening GTK."""
