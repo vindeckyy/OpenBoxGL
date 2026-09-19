@@ -324,6 +324,30 @@ class ProcessProbeTests(unittest.TestCase):
         self.assertEqual(pc._group_target(os.getpid(), pgid="4242"), 4242)
         self.assertEqual(pc._group_target(os.getpid(), pgid="broken"), pc.process_group_id(os.getpid()))
 
+    def test_group_target_never_returns_group_zero_or_one(self):
+        """Group 0 is the caller's own group and group 1 is init.
+
+        Any non-numeric object coerces to 1 through ``int()`` (a bare test
+        double does), which used to turn "terminate this game" into SIGTERM for
+        the whole CI runner process group.
+        """
+
+        class CoercesToOne:
+            def __int__(self):
+                return 1
+
+        for pgid in (0, 1, -5, True, False, "0", "1", CoercesToOne()):
+            target = pc._group_target(os.getpid(), pgid=pgid)
+            self.assertNotIn(target, (0, 1), msg=f"pgid={pgid!r} produced {target!r}")
+        self.assertEqual(pc._group_target(os.getpid(), pgid="4242"), 4242)
+        self.assertEqual(pc._group_target(os.getpid(), pgid=1), pc.process_group_id(os.getpid()))
+
+    def test_process_signals_refuse_the_init_process(self):
+        self.assertFalse(pc.terminate_process(1))
+        self.assertFalse(pc.terminate_process_tree(1))
+        self.assertFalse(pc.suspend_process_tree(1))
+        self.assertFalse(pc.resume_process_tree(1))
+
     def test_launch_kwargs_shape(self):
         kwargs = pc.launch_kwargs()
         if pc.IS_WINDOWS:
