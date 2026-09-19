@@ -26,6 +26,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   adapter detection, resume, and launch doctor work with Windows builds of
   Dolphin, RetroArch, PCSX2, RPCS3, and the rest.
 
+### Fixed
+- Process-group signalling can no longer reach group `0` or `1`. A stored
+  session whose `pgid` was missing, zero, or not a number could make pause,
+  stop, or shutdown signal the caller's own process group (or init) instead of
+  the game; the launcher now validates the group, refuses PID 1 outright, and
+  falls back to the game process's own group.
+
 ## [1.12.1] - 2026-09-15
 
 ### Fixed
