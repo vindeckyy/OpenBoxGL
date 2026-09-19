@@ -87,6 +87,12 @@ def main() -> int:
     for name in names:
         results[name] = run_file(TESTS / name, env)
         print(f"{results[name]['status']:8} {name} ({results[name]['seconds']}s)", flush=True)
+        if results[name]["status"] != "pass":
+            # The JSON only survives locally, so CI needs the tail inline.
+            for line in results[name]["stderr_tail"].splitlines():
+                print(f"    {line}", flush=True)
+            for line in results[name]["stdout_tail"].splitlines():
+                print(f"    {line}", flush=True)
 
     output = _results_path()
     output.write_text(json.dumps(results, indent=2), encoding="utf-8")
