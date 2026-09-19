@@ -114,6 +114,21 @@ class DiscoveryTests(unittest.TestCase):
             self.assertEqual(roots, [])
             self.assertEqual(len(skipped), 2)
 
+    def test_malformed_configured_root_is_reported_not_raised(self):
+        # A configured root that cannot even be resolved (an embedded NUL) must
+        # not abort discovery for every other root.
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            good = home / "shots"
+            good.mkdir()
+            malformed = str(home / "bad\x00name")
+            with self.assertLogs("openbox", level="WARNING"):
+                roots, skipped = discover_memory_roots(
+                    home=home, extra_roots=[malformed, str(good)]
+                )
+            self.assertEqual([root["path"] for root in roots if root["kind"] == "custom"], [good])
+            self.assertEqual([entry["reason"] for entry in skipped], ["missing"])
+
     def test_retroarch_cfg_screenshot_directory_is_honored(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
