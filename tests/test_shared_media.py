@@ -22,14 +22,16 @@ class DummyHandler(LibraryHandlers):
 
 class TestSharedMedia(unittest.TestCase):
     def setUp(self):
-        # We need a temporary openbox directory for DATA
-        self.test_dir = tempfile.mkdtemp()
-        self.media_root = Path(self.test_dir) / "media"
+        # We need a temporary openbox directory for DATA. The media roots and
+        # DATA are compared against resolved production output, so hold the
+        # canonical spelling: %TEMP% can be an 8.3 alias.
+        self.test_dir = Path(tempfile.mkdtemp()).resolve()
+        self.media_root = self.test_dir / "media"
         self.media_root.mkdir(parents=True)
         
         # Override DATA to use our test directory
         self.old_data = openbox.DATA
-        openbox.DATA = Path(self.test_dir) / "openbox" / "openbox.json"
+        openbox.DATA = self.test_dir / "openbox" / "openbox.json"
         
         self.old_media_roots_env = os.environ.get(webapp_state.MEDIA_ROOTS_ENV)
         os.environ[webapp_state.MEDIA_ROOTS_ENV] = str(self.media_root)
@@ -118,7 +120,7 @@ class TestSharedMedia(unittest.TestCase):
 
     def test_media_outside_approved_roots(self):
         # create a file outside media root
-        outside_dir = Path(self.test_dir) / "outside"
+        outside_dir = self.test_dir / "outside"
         outside_dir.mkdir()
         outside_file = outside_dir / "outside.jpg"
         outside_file.write_text("dummy", encoding="utf-8")

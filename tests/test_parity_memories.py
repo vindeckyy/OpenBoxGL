@@ -23,7 +23,9 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 _DATA_ROOT = tempfile.TemporaryDirectory(prefix="openbox-memories-test-")
-os.environ["OPENBOX_DATA_DIR"] = _DATA_ROOT.name
+# Media paths are stored resolved by the import pipeline, so the data root has
+# to carry the canonical spelling: %TEMP% can be an 8.3 alias.
+os.environ["OPENBOX_DATA_DIR"] = str(Path(_DATA_ROOT.name).resolve())
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "pkg" / "parity"))
 

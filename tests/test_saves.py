@@ -37,17 +37,22 @@ def test():
         steam_save.mkdir(parents=True)
         assert discover_save_paths({"name":"Steam Game","steam_app_id":"42"}, root)[0]["path"] == str(steam_save)
 
-        # A relative save_paths entry must back up and restore against the
-        # resolved path, not the process cwd.
+        # A relative save_paths entry resolves against the process cwd, so run
+        # this part from the fixture root: Windows cannot spell a relative path
+        # across drives, and the temp dir may sit on a different one.
         relative = root / "relative-saves"
         relative.mkdir()
         rel_file = relative / "slot.sav"
         rel_file.write_text("rel", encoding="utf-8")
-        rel_path = os.path.relpath(relative, Path.cwd())
-        rel_game = {"name":"Relative", "path":"/games/rel", "save_paths":[rel_path]}
-        rel_archive = backup_saves(rel_game, root / "backups")
-        rel_file.write_text("rel2", encoding="utf-8")
-        restore_saves(rel_game, root / "backups", rel_archive.name)
+        previous_cwd = os.getcwd()
+        os.chdir(root)
+        try:
+            rel_game = {"name":"Relative", "path":"/games/rel", "save_paths":["relative-saves"]}
+            rel_archive = backup_saves(rel_game, root / "backups")
+            rel_file.write_text("rel2", encoding="utf-8")
+            restore_saves(rel_game, root / "backups", rel_archive.name)
+        finally:
+            os.chdir(previous_cwd)
         assert rel_file.read_text(encoding="utf-8") == "rel"
     print("save self-test: ok")
 

@@ -44,7 +44,10 @@ def _game(game_id, name, **extra):
 class TrashRouteTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
-        os.environ["OPENBOX_DATA_DIR"] = str(self._tmp.name)
+        # Production resolves paths back through the media roots, so the
+        # fixture holds the canonical spelling: %TEMP% can be an 8.3 alias.
+        self.root = Path(self._tmp.name).resolve()
+        os.environ["OPENBOX_DATA_DIR"] = str(self.root)
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -304,7 +307,7 @@ class TrashRouteTest(unittest.TestCase):
             handler._api_post_api_v2_library_trash_purge({"ids": "trash-x"})
 
     def test_v2_delete_with_media_removes_files(self):
-        media_dir = Path(self._tmp.name) / "media"
+        media_dir = self.root / "media"
         media_dir.mkdir(exist_ok=True)
         cover = media_dir / "cover.png"
         cover.write_bytes(b"png")
@@ -339,7 +342,7 @@ class TrashRouteTest(unittest.TestCase):
         self.assertEqual(state["trash"][0]["playlists"], ["Manual"])
 
     def test_v2_delete_media_keeps_shared_media(self):
-        media_dir = Path(self._tmp.name) / "media"
+        media_dir = self.root / "media"
         media_dir.mkdir(exist_ok=True)
         cover = media_dir / "shared.png"
         cover.write_bytes(b"png")
@@ -359,7 +362,7 @@ class TrashRouteTest(unittest.TestCase):
     def test_v2_delete_media_tolerates_broken_remaining_path(self):
         # A remaining game's malformed media path (embedded NUL) must not
         # break the shared-media scan during a delete_media trash.
-        media_dir = Path(self._tmp.name) / "media"
+        media_dir = self.root / "media"
         media_dir.mkdir(exist_ok=True)
         cover = media_dir / "kept.png"
         cover.write_bytes(b"png")
@@ -377,9 +380,9 @@ class TrashRouteTest(unittest.TestCase):
         self.assertEqual([g["game_id"] for g in load_state_view()["games"]], ["game-s2"])
 
     def test_v2_delete_media_ignores_unapproved_path(self):
-        media_dir = Path(self._tmp.name) / "media"
+        media_dir = self.root / "media"
         media_dir.mkdir(exist_ok=True)
-        outsider = Path(self._tmp.name) / "outside.png"
+        outsider = self.root / "outside.png"
         outsider.write_bytes(b"png")
         os.environ["OPENBOX_MEDIA_ROOTS"] = str(media_dir)
         try:
