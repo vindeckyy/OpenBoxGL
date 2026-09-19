@@ -18,7 +18,7 @@ startup_args:
 # the Linux libretro directory does not exist there.
 startup_args_windows:
   - -L
-  - "{EmulatorDir}\cores\mupen64plus_next_libretro.dll"
+  - '{EmulatorDir}\cores\mupen64plus_next_libretro.dll'
   - "{path}"
 recommended: true
 priority: 10

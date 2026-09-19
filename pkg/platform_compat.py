@@ -692,8 +692,11 @@ def reveal_path(target) -> None:
             os.startfile(os.path.normpath(str(path)))
         return
     else:  # pragma: no cover if IS_WINDOWS
-        folder = path.parent if path.is_file() else path
-        open_path(folder)
+        # xdg-open has no select-this-file verb: opening the folder is the whole
+        # reveal. The check is "is this a folder", not "is this an existing
+        # file", so a path that does not exist yet still reveals its parent
+        # instead of handing the missing path to the opener.
+        open_path(path if path.is_dir() else path.parent)
 
 
 def open_url(url) -> None:

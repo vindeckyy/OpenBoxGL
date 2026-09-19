@@ -40,13 +40,18 @@ def _dead_child_pid():
     return child.pid
 
 
-def _wait_dead(pid, *, timeout=10.0):
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if not pc.process_alive(pid):
-            return True
-        time.sleep(0.05)
-    return not pc.process_alive(pid)
+def _wait_dead(child, *, timeout=10.0):
+    """Wait for *child* to exit and reap it.
+
+    A terminated POSIX child stays a zombie - still a live pid, so still
+    ``process_alive`` - until its parent collects it, so the assertion has to
+    reap through the ``Popen`` rather than poll the pid.
+    """
+    try:
+        child.wait(timeout=timeout)
+        return True
+    except subprocess.TimeoutExpired:
+        return False
 
 
 class PlatformFlagTests(unittest.TestCase):
@@ -252,7 +257,7 @@ class ProcessProbeTests(unittest.TestCase):
         try:
             self.assertTrue(pc.process_alive(child.pid))
             self.assertTrue(pc.terminate_process(child.pid))
-            self.assertTrue(_wait_dead(child.pid))
+            self.assertTrue(_wait_dead(child))
         finally:
             child.kill()
             child.wait(timeout=10)
@@ -264,7 +269,7 @@ class ProcessProbeTests(unittest.TestCase):
         child = _spawn_child("import time; time.sleep(30)")
         try:
             self.assertTrue(pc.terminate_process_tree(child.pid))
-            self.assertTrue(_wait_dead(child.pid))
+            self.assertTrue(_wait_dead(child))
         finally:
             child.kill()
             child.wait(timeout=10)
@@ -274,7 +279,7 @@ class ProcessProbeTests(unittest.TestCase):
         child = _spawn_child("import time; time.sleep(30)")
         try:
             self.assertTrue(pc.terminate_process_tree(child.pid, pgid=999999999))
-            self.assertTrue(_wait_dead(child.pid))
+            self.assertTrue(_wait_dead(child))
         finally:
             child.kill()
             child.wait(timeout=10)
