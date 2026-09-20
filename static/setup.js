@@ -980,6 +980,7 @@ function goBack() {
 }
 
 function saveAndClose() {
+  AppState.setupDismissed = true;
   const dialog = $('setupCenter');
   if (dialog?.open) dialog.close();
 }
@@ -1001,9 +1002,7 @@ function initSetupCenter() {
   ensureSetupShell();
   const dialog = $('setupCenter');
   if (dialog) {
-    dialog.addEventListener('close', () => {
-      AppState.setupDismissed = true; // closing does not cancel operations, but stops the auto-nag for this session
-    });
+    dialog.addEventListener('cancel', () => { AppState.setupDismissed = true; });
   }
   renderPanel();
 }

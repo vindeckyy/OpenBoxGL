@@ -111,7 +111,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const openSetupCenter = () => $('setupCenter').showModal();
     if ($('setupLibraryButton')) $('setupLibraryButton').onclick = openSetupCenter;
     if ($('reopenWelcome')) $('reopenWelcome').onclick = openSetupCenter;
-    if ($('closeSetupCenter')) $('closeSetupCenter').onclick = () => $('setupCenter').close();
+    if ($('closeSetupCenter')) $('closeSetupCenter').onclick = () => { AppState.setupDismissed = true; $('setupCenter').close(); };
 
     document.querySelectorAll('.game-editor-nav-item').forEach(button => {
       button.onclick = () => {

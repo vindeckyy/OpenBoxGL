@@ -393,7 +393,10 @@ document.addEventListener('mousedown', event => {
     if (!(topDialog.id === 'gameDialog' && gameFormDirty()) && !topDialog.contains(event.target)) {
       const rect = topDialog.getBoundingClientRect();
       const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
-      if (!inside) topDialog.close();
+      if (!inside) {
+        if (topDialog.id === 'setupCenter') AppState.setupDismissed = true;
+        topDialog.close();
+      }
     }
   }
   [
