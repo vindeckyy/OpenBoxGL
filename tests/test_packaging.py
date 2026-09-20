@@ -711,6 +711,11 @@ def test_release_workflow():
     assert "openbox-release-assets-windows" in content
     assert "OpenBox-x86_64-windows.zip" in content
     assert "OpenBox-x86_64-windows.zip.sig" in content
+    # The compiled host ships twice: inside the zip, and as its own signed and
+    # attested asset for source checkouts.
+    assert "OpenBox-x86_64-windows-native-host.exe" in content
+    assert "OpenBox-x86_64-windows-native-host.exe.sha256" in content
+    assert "OpenBox-x86_64-windows-native-host.exe.sig" in content
     assert "scripts/install.ps1" in content
     print("  Release workflow: ok")
 def test_markdown_locations():

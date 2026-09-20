@@ -215,6 +215,13 @@ jobs:
           # -NoNewline keeps this byte-identical to sha256sum output, which is
           # what the publish job validates it with.
           "$digest  $asset" | Set-Content -LiteralPath "$asset.sha256" -Encoding ascii -NoNewline
+          # The same host binary also ships as its own asset for source
+          # checkouts, which otherwise need MSVC plus the WebView2 SDK to get a
+          # native window. Copied after the archive so the zip is unchanged.
+          $hostAsset = 'OpenBox-x86_64-windows-native-host.exe'
+          Copy-Item -LiteralPath 'native_host.exe' -Destination $hostAsset -Force
+          $hostDigest = (Get-FileHash -Algorithm SHA256 -LiteralPath $hostAsset).Hash.ToLower()
+          "$hostDigest  $hostAsset" | Set-Content -LiteralPath "$hostAsset.sha256" -Encoding ascii -NoNewline
 
       - name: Upload unsigned build outputs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # actions/upload-artifact@v7.0.1
@@ -225,6 +232,8 @@ jobs:
           path: |
             OpenBox-x86_64-windows.zip
             OpenBox-x86_64-windows.zip.sha256
+            OpenBox-x86_64-windows-native-host.exe
+            OpenBox-x86_64-windows-native-host.exe.sha256
 
   attest-windows:
     needs: build-windows
@@ -247,6 +256,12 @@ jobs:
         with:
           subject-name: OpenBox-x86_64-windows.zip
           subject-path: OpenBox-x86_64-windows.zip
+
+      - name: Attest the native host provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # actions/attest-build-provenance@v4.2.2
+        with:
+          subject-name: OpenBox-x86_64-windows-native-host.exe
+          subject-path: OpenBox-x86_64-windows-native-host.exe
 
   publish:
     needs: [build, attest, build-windows, attest-windows]
@@ -347,6 +362,27 @@ jobs:
             --key openbox-release.pub \
             "$windows_asset" \
             "$windows_asset.sig"
+          # The standalone WebView2 host is the same binary the zip carries, so
+          # it follows the same ladder rather than shipping unsigned.
+          host_asset="OpenBox-x86_64-windows-native-host.exe"
+          [ -f "$host_asset" ] || {
+            echo "missing build artifact: $host_asset" >&2
+            exit 1
+          }
+          python3 scripts/sign_release.py \
+            --key "$key_file" \
+            --public-key-out "$public_key_file" \
+            --out "$host_asset.sig" \
+            "$host_asset"
+          cmp -s "$public_key_file" openbox-release.pub || {
+            echo "OPENBOX_SIGNING_KEY does not match the committed release public key" >&2
+            exit 1
+          }
+          sha256sum --check --strict "$host_asset.sha256"
+          python3 scripts/verify_release.py \
+            --key openbox-release.pub \
+            "$host_asset" \
+            "$host_asset.sig"
           cp scripts/install.sh install.sh
           cp scripts/install.ps1 install.ps1
 
@@ -377,6 +413,9 @@ jobs:
             OpenBox-x86_64-windows.zip
             OpenBox-x86_64-windows.zip.sha256
             OpenBox-x86_64-windows.zip.sig
+            OpenBox-x86_64-windows-native-host.exe
+            OpenBox-x86_64-windows-native-host.exe.sha256
+            OpenBox-x86_64-windows-native-host.exe.sig
             openbox-release.pub
             install.sh
             install.ps1

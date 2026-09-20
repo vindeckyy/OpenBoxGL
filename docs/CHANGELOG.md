@@ -13,11 +13,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   launchers following the same native-host-then-browser ladder as the shell
   scripts, a signed portable release zip (`OpenBox-<arch>-windows.zip` with
   `.sha256` and `.sig`) built, attested, and signed by the same release job as
-  the AppImages, an installer (`scripts/install.ps1`) that verifies the release
-  key anchor, the checksum, and the Ed25519 signature before extracting to
-  `%LOCALAPPDATA%\OpenBox\share\openbox`, Start Menu plus `openbox://` protocol
-  registration, and a `windows-latest` CI job that runs the full test suite and
-  the portable gates.
+  the AppImages, the compiled WebView2 host published as its own signed asset
+  (`OpenBox-x86_64-windows-native-host.exe`) so a source checkout gets the
+  native window without a toolchain, an installer (`scripts/install.ps1`) that
+  verifies the release key anchor, the checksum, and the Ed25519 signature
+  before extracting to `%LOCALAPPDATA%\OpenBox\share\openbox`, Start Menu plus
+  `openbox://` protocol registration, and a `windows-latest` CI job that runs
+  the full test suite and the portable gates.
 - `pkg/platform_compat.py` is the single platform seam the port is built on:
   file locking, process liveness/termination/suspend/resume, `/proc`
   equivalents, command quoting, path openers, Steam discovery, and data-dir
