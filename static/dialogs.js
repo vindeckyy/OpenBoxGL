@@ -51,7 +51,6 @@ function ensureA11yDialogHosts() {
   if (a11yHostsReady) return;
   a11yHostsReady = true;
   const wrap = document.createElement('div');
-  wrap.hidden = true;
   wrap.innerHTML = `
     <dialog id="a11yInputDialog" aria-modal="true" aria-labelledby="a11yInputTitle">
       <form id="a11yInputForm">
@@ -389,13 +388,14 @@ async function bindGameEditorBrowse() {
 document.addEventListener('mousedown', event => {
   if (document.activeElement?.tagName === 'SELECT') return;
   if (event.target.closest?.('select, option')) return;
-  document.querySelectorAll('dialog[open]').forEach(dialog => {
-    if (dialog.id === 'gameDialog' && gameFormDirty()) return;
-    if (dialog.contains(event.target)) return;
-    const rect = dialog.getBoundingClientRect();
-    const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
-    if (!inside) dialog.close();
-  });
+  const topDialog = [...document.querySelectorAll('dialog[open]')].at(-1);
+  if (topDialog) {
+    if (!(topDialog.id === 'gameDialog' && gameFormDirty()) && !topDialog.contains(event.target)) {
+      const rect = topDialog.getBoundingClientRect();
+      const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+      if (!inside) topDialog.close();
+    }
+  }
   [
     [$('bigBoxMenu'), '.bigbox-menu-panel', closeBigBoxMenu],
     [$('bigBoxPause'), '.bigbox-pause-panel', () => { $('bigBoxPause').hidden = true; }],
@@ -522,7 +522,6 @@ function ensureTrophyCaseHost() {
   if (trophyCaseReady) return;
   trophyCaseReady = true;
   const wrap = document.createElement('div');
-  wrap.hidden = true;
   wrap.innerHTML = `
     <dialog id="trophyCaseDialog" aria-modal="true" aria-labelledby="trophyCaseTitle">
       <div class="dialog-head"><h2 id="trophyCaseTitle"></h2><button type="button" id="trophyCaseClose" aria-label="Close">×</button></div>

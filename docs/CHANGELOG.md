@@ -4,6 +4,35 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Utility dialogs (prompt, choice, confirm, trophy case) were rendered inside a
+  `hidden` wrapper, so they opened invisibly — every path prompt and
+  confirmation was a silent dead end, including the unsaved-changes guard on
+  the game editor.
+- Clicking outside a nested dialog closed every open dialog instead of only the
+  topmost one, which could dismiss the whole setup wizard mid-flow.
+- `input { width: 100% }` also applied to checkboxes and radios, detaching them
+  from their labels app-wide; they are now excluded from the full-width rule.
+- Setup wizard: source tiles used emoji icons that render as tofu boxes without
+  an emoji font (now monograms), selected sources never highlighted (the
+  selection key was never written), duplicate sources piled up, and there was
+  no way to remove a selected source. Completed steps are clickable, "More
+  sources" stays expanded across re-renders, the scan-empty message no longer
+  tells you to start a scan that already ran, the raw preview hash is no longer
+  shown on Confirm, and Finish hides actions that do nothing on an empty
+  import.
+- The setup wizard re-opened on every library refresh while the library was
+  empty, even after closing it; dismissing it now holds for the session.
+- The empty library hid the "Start your library" call-to-action below a full
+  screen of empty insights widgets; the insights panel is now hidden until the
+  library has games.
+- Big Box on an empty view showed only a fleeting toast; it now explains the
+  prerequisite and opens the setup wizard.
+- Saving the game editor with a required field on a hidden tab failed silently;
+  the editor now jumps to the section containing the invalid field.
+
 ## [1.13.0] - 2026-09-19
 
 ### Added
