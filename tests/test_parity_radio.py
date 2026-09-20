@@ -516,10 +516,13 @@ class HandlerTest(unittest.TestCase):
     def test_get_radio_reuses_fresh(self):
         import handlers.insights as mod
         state = self._state()
+        # The handler's staleness check reads the wall clock, so the stored
+        # playlist has to be generated now; the fixture's fixed NOW would fall
+        # past RADIO_STALE_DAYS as soon as the suite runs a week after it.
         parity_radio.materialize_playlist(
             state,
             parity_radio.build_playlist(state["games"], state["history"], now=NOW),
-            now=NOW)
+            now=datetime.now(timezone.utc))
         h = self._handler()
         called = []
         with mock.patch.object(mod, "load_state", return_value=state), \
