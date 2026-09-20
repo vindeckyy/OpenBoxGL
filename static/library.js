@@ -513,7 +513,8 @@ function markFilterAria() {
       applyLocaleStrings();
       applyStoredSort();
       dispatchStateRefreshed();
-      if (!AppState.appSettings.welcome_completed && !AppState.games.length) $('setupCenter').showModal();
+      if ($('insightsPanel')) $('insightsPanel').hidden = !AppState.games.length;
+      if (!AppState.appSettings.welcome_completed && !AppState.games.length && !AppState.setupDismissed) $('setupCenter').showModal();
       setTimeout(() => { try { warmSearchIndex(); } catch(error) { AppState.searchIndexError = error.message; } }, 0);
       const fingerprint = `${AppState.games.length}:${AppState.games[0]?.id || ''}:${AppState.games.at(-1)?.id || ''}`;
       if (lastFacetsFingerprint !== fingerprint) {

@@ -154,7 +154,7 @@ import { t } from './i18n.js';
       } catch(error) { notify(error.message); }
     }
     function maybeShowWelcome() {
-      if (!AppState.appSettings.welcome_completed && !AppState.games.length) $('setupCenter').showModal();
+      if (!AppState.appSettings.welcome_completed && !AppState.games.length && !AppState.setupDismissed) $('setupCenter').showModal();
     }
     function collectSettings() {
       return {

@@ -19,20 +19,21 @@ const STEPS = [
   {id: 7, label: 'Confirm', help: 'Revalidate the preview and commit to your library.'},
   {id: 8, label: 'Finish', help: 'Enrich imported games and review completion counts.'},
 ];
+// Monogram glyphs instead of emoji — stock systems without emoji fonts render tofu.
 const PRIMARY_SOURCES = [
-  {type: 'folder', label: 'Folder', icon: '📁'},
-  {type: 'steam', label: 'Steam', icon: '🎮'},
-  {type: 'heroic', label: 'Heroic', icon: '🦸'},
-  {type: 'lutris', label: 'Lutris', icon: '🎯'},
-  {type: 'gameyfin', label: 'Gameyfin', icon: '📚'},
+  {type: 'folder', label: 'Folder', icon: 'F'},
+  {type: 'steam', label: 'Steam', icon: 'S'},
+  {type: 'heroic', label: 'Heroic', icon: 'H'},
+  {type: 'lutris', label: 'Lutris', icon: 'L'},
+  {type: 'gameyfin', label: 'Gameyfin', icon: 'G'},
 ];
 const MORE_SOURCES = [
-  {type: 'faugus', label: 'Faugus', icon: '🕹️'},
-  {type: 'xbox360', label: 'Xbox 360', icon: '🟢'},
-  {type: 'arcade', label: 'Arcade', icon: '👾'},
-  {type: 'scummvm', label: 'ScummVM', icon: '🧭'},
-  {type: 'rpcs3', label: 'RPCS3', icon: '🎲'},
-  {type: 'vita3k', label: 'Vita3K', icon: '📱'},
+  {type: 'faugus', label: 'Faugus', icon: 'Fa'},
+  {type: 'xbox360', label: 'Xbox 360', icon: 'X'},
+  {type: 'arcade', label: 'Arcade', icon: 'A'},
+  {type: 'scummvm', label: 'ScummVM', icon: 'Sv'},
+  {type: 'rpcs3', label: 'RPCS3', icon: 'R3'},
+  {type: 'vita3k', label: 'Vita3K', icon: 'V3'},
 ];
 const MEDIA_TYPES = [
   'cover', 'background', 'screenshots', 'box_back', 'box_spine', 'box_3d',
@@ -48,6 +49,7 @@ function blankState() {
     step: 1,
     summary: null,
     sources: [],
+    moreSourcesOpen: false,
     options: {
       include_owned_uninstalled: false,
       watch_folders: false,
@@ -118,6 +120,9 @@ function renderStepList() {
     </li>
   `;
   }).join('');
+  list.querySelectorAll('.setup-step-item.done').forEach(item => {
+    item.onclick = () => { state.step = Number(item.dataset.setupStep); renderPanel(); };
+  });
   const help = $('setupHelp');
   if (help) help.textContent = STEPS.find(s => s.id === state.step)?.help || '';
 }
@@ -257,25 +262,23 @@ function renderOverview() {
 }
 
 function renderSources() {
-  const selected = new Set(state.sources.map(s => s._key));
+  const selected = new Set(state.sources.map(s => s.type));
   const renderCard = source => `
-    <button type="button" class="setup-source-card${selected.has(source._key) ? ' selected' : ''}" data-source-key="${escapeHtml(source._key)}">
-      <span class="setup-source-icon">${source.icon || '📦'}</span>
+    <button type="button" class="setup-source-card${selected.has(source.type) ? ' selected' : ''}" data-source-key="${escapeHtml(source.type)}">
+      <span class="setup-source-icon" aria-hidden="true">${escapeHtml(source.icon || '')}</span>
       <span class="setup-source-label">${escapeHtml(source.label)}</span>
     </button>
   `;
-  const primary = PRIMARY_SOURCES.map(s => ({...s, _key: s.type}));
-  const more = MORE_SOURCES.map(s => ({...s, _key: s.type}));
   const selectedList = state.sources.length
-    ? `<ul class="setup-source-selected">${state.sources.map(s => `<li>${escapeHtml(s.label || s.type)}${s.path ? `: ${escapeHtml(s.path)}` : ''}</li>`).join('')}</ul>`
+    ? `<ul class="setup-source-selected">${state.sources.map((s, index) => `<li>${escapeHtml(s.label || s.type)}${s.path ? `: ${escapeHtml(s.path)}` : ''} <button type="button" class="setup-source-remove" data-remove-source="${index}" aria-label="Remove ${escapeHtml(s.label || s.type)}">×</button></li>`).join('')}</ul>`
     : '<p class="description setup-empty">No sources selected yet.</p>';
   return `
     <div class="setup-sources" data-setup-panel="sources">
       <h3 class="setup-section-title">Detected &amp; common sources</h3>
-      <div class="setup-source-grid">${primary.map(renderCard).join('')}</div>
-      <details class="setup-more-sources">
+      <div class="setup-source-grid">${PRIMARY_SOURCES.map(renderCard).join('')}</div>
+      <details class="setup-more-sources"${state.moreSourcesOpen ? ' open' : ''}>
         <summary>More sources</summary>
-        <div class="setup-source-grid">${more.map(renderCard).join('')}</div>
+        <div class="setup-source-grid">${MORE_SOURCES.map(renderCard).join('')}</div>
       </details>
       <h3 class="setup-section-title">Selected sources</h3>
       ${selectedList}
@@ -338,7 +341,7 @@ function renderPreview() {
       ${humanMessage}
       ${progressCopy}
       <p class="setup-preview-counts">${countText}</p>
-      <div class="setup-preview-list">${rows || '<p class="description setup-empty">No preview items yet. Continue to start a scan.</p>'}</div>
+      <div class="setup-preview-list">${rows || (state.previewDoc ? '<p class="description setup-empty">Scan finished — no importable games found in the selected sources. Go back to Sources to add more.</p>' : '<p class="description setup-empty">No preview items yet. Continue to start a scan.</p>')}</div>
       ${state.previewCursor ? '<button type="button" class="setup-load-more" id="setupLoadMorePreview">Load more</button>' : ''}
     </div>
   `;
@@ -468,7 +471,7 @@ function renderConfirm() {
       ${staleNudge}
       <p class="description">Revalidate scans sources again, then commit writes imported games to your library.</p>
       <div class="setup-confirm-summary">
-        <p>Preview <strong>${escapeHtml(state.previewId || '—')}</strong> revision <strong>${doc.revision ?? state.revision}</strong></p>
+        <p>Preview revision <strong>${doc.revision ?? state.revision}</strong></p>
         <p>Candidates: <strong>${state.previewItems.length}</strong></p>
         <p>Import actions: <strong>${selectedImportCandidates().length}</strong></p>
       </div>
@@ -490,11 +493,12 @@ function renderFinish() {
   return `
     <div class="setup-finish" data-setup-panel="finish">
       <div class="setup-finish-counts">${countCards}</div>
+      ${(counts.added ?? 0) + (counts.merged ?? 0) === 0 ? '<p class="description">No games were imported — open Activity Center for details, or go Back to adjust sources.</p>' : ''}
       <div class="setup-finish-actions">
-        <button type="button" class="primary" id="setupViewImported">View imported games</button>
-        <button type="button" id="setupReviewMetadata">Review unmatched metadata</button>
-        <button type="button" id="setupFixLaunch">Fix launch blockers</button>
-        <button type="button" id="setupRetryWork">Retry failed work</button>
+        ${(counts.added ?? 0) + (counts.merged ?? 0) > 0 ? '<button type="button" class="primary" id="setupViewImported">View imported games</button>' : ''}
+        ${(counts.unmatched ?? 0) > 0 ? '<button type="button" id="setupReviewMetadata">Review unmatched metadata</button>' : ''}
+        ${((counts.warning ?? 0) + (counts.failed ?? 0)) > 0 ? '<button type="button" id="setupFixLaunch">Fix launch blockers</button>' : ''}
+        ${(counts.failed ?? 0) > 0 ? '<button type="button" id="setupRetryWork">Retry failed work</button>' : ''}
         <button type="button" id="setupOpenActivity">Open Activity Center</button>
       </div>
     </div>
@@ -537,6 +541,11 @@ function bindPanelEvents() {
   document.querySelectorAll('.setup-source-card').forEach(btn => {
     btn.onclick = () => addSource(btn.dataset.sourceKey);
   });
+  document.querySelectorAll('[data-remove-source]').forEach(btn => {
+    btn.onclick = () => { state.sources.splice(Number(btn.dataset.removeSource), 1); renderPanel(); };
+  });
+  const moreSources = document.querySelector('.setup-more-sources');
+  if (moreSources) moreSources.addEventListener('toggle', () => { state.moreSourcesOpen = moreSources.open; });
   const includeUninstalled = $('setupIncludeUninstalled');
   if (includeUninstalled) includeUninstalled.onchange = () => { state.options.include_owned_uninstalled = includeUninstalled.checked; };
   const watchFolders = $('setupWatchFolders');
@@ -591,6 +600,15 @@ function bindPanelEvents() {
   if (openAct) openAct.onclick = () => openActivity();
 }
 
+function pushSource(entry) {
+  if (state.sources.some(s => s.id === entry.id)) {
+    notify('info', `${entry.label || entry.type} is already in the source list`);
+    return;
+  }
+  state.sources.push(entry);
+  renderPanel();
+}
+
 async function addSource(type) {
   const def = [...PRIMARY_SOURCES, ...MORE_SOURCES].find(s => s.type === type);
   if (!def) return;
@@ -603,15 +621,13 @@ async function addSource(type) {
       choices: [{value: 'yes', label: 'Yes, recurse'}, {value: 'no', label: 'Top level only'}],
       defaultValue: 'yes',
     });
-    state.sources.push({type: 'folder', id: path, path, label: def.label, recursive: recursive !== 'no'});
-    renderPanel();
+    pushSource({type: 'folder', id: path, path, label: def.label, recursive: recursive !== 'no'});
     return;
   }
   if (type === 'xbox360') {
     const path = await nativePickFolder('Absolute path of the Xbox 360 content folder.');
     if (!path) return;
-    state.sources.push({type: 'xbox360', id: path, path, label: def.label});
-    renderPanel();
+    pushSource({type: 'xbox360', id: path, path, label: def.label});
     return;
   }
   if (type === 'arcade') {
@@ -630,28 +646,24 @@ async function addSource(type) {
       message: 'Optional launch command. Use {rom_name} and {path}.',
       defaultValue: '',
     })) ?? '';
-    state.sources.push({
+    pushSource({
       type: 'arcade', id: path, path, label: def.label,
       set_type: setType, dat_path: dat, command,
       adapter_id: setType === 'FinalBurn Neo' ? 'fbneo' : 'mame',
     });
-    renderPanel();
     return;
   }
   if (['scummvm', 'rpcs3', 'vita3k'].includes(type)) {
     const path = await nativePickFolder(`Absolute path for ${def.label} import.`);
     if (!path) return;
-    state.sources.push({type, id: path, path, label: def.label});
-    renderPanel();
+    pushSource({type, id: path, path, label: def.label});
     return;
   }
   if (type === 'faugus') {
-    state.sources.push({type: 'faugus', id: 'faugus', label: def.label});
-    renderPanel();
+    pushSource({type: 'faugus', id: 'faugus', label: def.label});
     return;
   }
-  state.sources.push({type, id: type, label: def.label});
-  renderPanel();
+  pushSource({type, id: type, label: def.label});
 }
 
 async function applyEmulatorChoice(candidateId, value) {
@@ -989,7 +1001,9 @@ function initSetupCenter() {
   ensureSetupShell();
   const dialog = $('setupCenter');
   if (dialog) {
-    dialog.addEventListener('close', () => { /* close does not cancel operations */ });
+    dialog.addEventListener('close', () => {
+      AppState.setupDismissed = true; // closing does not cancel operations, but stops the auto-nag for this session
+    });
   }
   renderPanel();
 }

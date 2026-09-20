@@ -122,6 +122,14 @@ window.addEventListener('DOMContentLoaded', () => {
         });
       };
     });
+    // A required field on a hidden tab would fail validation silently — jump to it.
+    $('gameForm').addEventListener('invalid', event => {
+      const section = event.target.closest?.('.game-editor-section');
+      if (!section?.hidden) return;
+      const target = section.dataset.gameSection;
+      document.querySelectorAll('.game-editor-nav-item').forEach(item => item.classList.toggle('active', item.dataset.gameSection === target));
+      document.querySelectorAll('.game-editor-section').forEach(panel => { panel.hidden = panel.dataset.gameSection !== target; });
+    }, true);
 
     $('gameForm').onsubmit = async event => {
       event.preventDefault();
