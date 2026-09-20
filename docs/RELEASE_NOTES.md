@@ -26,6 +26,14 @@ every push — so the released zip runs the native window out of the box. Source
 checkouts build it with `scripts/build_native_host_windows.ps1`; when the binary
 is absent the launchers open the same UI in a browser app window.
 
+The same binary is attached to this release as
+`OpenBox-x86_64-windows-native-host.exe` — attested and signed with the release
+key, exactly like the zip it also ships inside — so a source checkout that does
+not want to install MSVC and the WebView2 SDK can save it beside `web_app.py` as
+`native_host.exe` (or point `OPENBOX_NATIVE_HOST` at it) and get the native
+window. It is the window host only: the rest of the tree stays the source
+checkout's, and without the WebView2 runtime `--web` runs the browser UI.
+
 ### Launchers and a verified install
 
 `openbox.cmd`, `openbox.ps1`, and `openbox-native.ps1` follow the same ladder as
@@ -91,13 +99,16 @@ runtime is required (present on Windows 11 and most Windows 10 systems), and
 | `OpenBox-aarch64.AppImage` | ARM64 | AppImage |
 | `OpenBox-x86_64.flatpak` | x86_64 | Flatpak |
 | `OpenBox-x86_64-windows.zip` | x86_64 | Windows portable (signed) |
+| `OpenBox-x86_64-windows-native-host.exe` | x86_64 | WebView2 window host (signed) |
 
 **Windows:** download `install.ps1` and `OpenBox-x86_64-windows.zip` from this
 release and run the installer in Windows PowerShell 5.1; it needs no `curl` and
-no OpenSSL. **Linux:** pick the AppImage that matches your CPU, or install the
-Flatpak for a sandboxed desktop setup. AppImages are signed and include SHA-256
-checksums, zsync metadata for delta updates, and SBOMs. Verify with
-`openbox-release.pub` and `install.sh`.
+no OpenSSL. Running from a checkout instead? Take
+`OpenBox-x86_64-windows-native-host.exe` and save it beside `web_app.py` as
+`native_host.exe`. **Linux:** pick the AppImage that matches your CPU, or
+install the Flatpak for a sandboxed desktop setup. AppImages are signed and
+include SHA-256 checksums, zsync metadata for delta updates, and SBOMs. Verify
+with `openbox-release.pub` and `install.sh`.
 
 Already running OpenBox? Use the built-in updater or download the matching artifact from the release page.
 

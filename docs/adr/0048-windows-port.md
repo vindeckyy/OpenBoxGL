@@ -47,7 +47,10 @@ keep every existing gate meaningful.
    meaningless.
 5. **The update channel is a signed portable zip.** Release assets
    `OpenBox-<arch>-windows.zip`, `.sha256`, and `.sig` are produced by the same
-   release job and signed with the same Ed25519 key as the AppImages.
+   release job and signed with the same Ed25519 key as the AppImages; the
+   compiled host also ships on its own as
+   `OpenBox-x86_64-windows-native-host.exe` (`.sha256`, `.sig`, attested the
+   same way) for source checkouts that have no MSVC toolchain.
    `scripts/install.ps1` mirrors `scripts/install.sh`'s ladder (key anchor
    pinned to the committed key's SHA-256, sidecar digest, then signature) and
    installs the whole tree into `%LOCALAPPDATA%\OpenBox\share\openbox`, keeping
@@ -85,11 +88,13 @@ keep every existing gate meaningful.
   the browser.
 - The released zip carries a compiled `native_host.exe` built by the release job
   (MSVC plus the WebView2 SDK on `windows-latest`), so a Windows install opens
-  the native window with no toolchain. The same build runs in the
-  `windows-latest` CI job on every push, and the release asserts the binary is
-  inside the archive before signing, so a broken `native_host_win.c` fails the
-  build instead of shipping. Source checkouts (no compiled host beside
-  `web_app.py`) fall back to the same UI in a browser app window.
+  the native window with no toolchain; the same binary is attached to the
+  release as `OpenBox-x86_64-windows-native-host.exe` for source checkouts. The
+  same build runs in the `windows-latest` CI job on every push, and the release
+  asserts the binary is inside the archive before signing, so a broken
+  `native_host_win.c` fails the build instead of shipping. Source checkouts (no
+  compiled host beside `web_app.py`) fall back to the same UI in a browser app
+  window.
 - `scripts/run_windows_tests.py` is a dev tool, deliberately absent from
   `runtime_modules.txt`.
 - Stored launch commands use platform quoting, so a command written on one

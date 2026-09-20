@@ -333,6 +333,12 @@ forces the browser. The in-app updater verifies and swaps the installed tree the
 same way, and refuses to overwrite anything that is not an installed copy — a
 `git clone` updates with `git pull`.
 
+Each release also carries `OpenBox-x86_64-windows-native-host.exe` (with
+`.sha256` and `.sig`): the compiled WebView2 host the zip ships, published on
+its own so a source checkout gets a native window without the MSVC toolchain.
+Save it beside `web_app.py` as `native_host.exe`, or point `OPENBOX_NATIVE_HOST`
+at it.
+
 ### AppImage (manual)
 
 Download the latest release from [GitHub Releases](https://github.com/vindeckyy/OpenBoxGL/releases/latest). Release artifacts are built for both **x86_64** and **aarch64**; pick the one matching your CPU (`uname -m`).
@@ -375,7 +381,7 @@ cd OpenBoxGL
 python3 web_app.py
 ```
 
-On Windows use `python web_app.py` (`python3` is a Microsoft Store alias that does not run scripts), or `.\openbox.cmd` after building the host with `scripts\build_native_host_windows.ps1`.
+On Windows use `python web_app.py` (`python3` is a Microsoft Store alias that does not run scripts), or `.\openbox.cmd` with the WebView2 host: either build it with `scripts\build_native_host_windows.ps1` or download `OpenBox-x86_64-windows-native-host.exe` from a release and save it beside `web_app.py` as `native_host.exe`.
 
 Requirements: Python 3.10 or newer. The native window additionally needs WebKitGTK 4.1 on Linux (`make native-host` builds `native_host`) or the WebView2 runtime on Windows (present on Windows 11 and most Windows 10 systems); `python3 web_app.py` runs without either.
 
