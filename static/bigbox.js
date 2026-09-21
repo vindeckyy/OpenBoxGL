@@ -41,7 +41,12 @@ import { captureClip } from './clips.js';
       AppState.bigBoxSearchMode = false;
       if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').value = '';
       AppState.bigBoxGames = filteredBigBoxGames();
-      if (!AppState.bigBoxGames.length) { notify('No games are available in the current view'); return; }
+      if (!AppState.bigBoxGames.length) {
+        notify('info', 'Big Box needs games in the current view — add sources to build your library');
+        const setup = $('setupCenter');
+        if (setup && !setup.open) setup.showModal();
+        return;
+      }
       AppState.bigBoxIndex = Math.max(0,AppState.bigBoxGames.findIndex(game => game.id === AppState.selectedId));
       AppState.bigBoxLastInput = performance.now();
       AppState.gamepadState = {};

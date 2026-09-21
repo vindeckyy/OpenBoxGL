@@ -772,6 +772,7 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "steam_app_id": steam_id,
         "lutris_id": lutris_id,
         "install_dir": game.get("install_dir", ""),
+        "import_batch_id": game.get("import_batch_id", ""),
         "heroic_app_id": heroic_id,
         "rom_name": game.get("rom_name", ""),
         "clone_of": game.get("clone_of", ""),

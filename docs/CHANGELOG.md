@@ -4,6 +4,63 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Utility dialogs (prompt, choice, confirm, trophy case) were rendered inside a
+  `hidden` wrapper, so they opened invisibly — every path prompt and
+  confirmation was a silent dead end, including the unsaved-changes guard on
+  the game editor.
+- Clicking outside a nested dialog closed every open dialog instead of only the
+  topmost one, which could dismiss the whole setup wizard mid-flow.
+- `input { width: 100% }` also applied to checkboxes and radios, detaching them
+  from their labels app-wide; they are now excluded from the full-width rule.
+- Setup wizard: source tiles used emoji icons that render as tofu boxes without
+  an emoji font (now monograms), selected sources never highlighted (the
+  selection key was never written), duplicate sources piled up, and there was
+  no way to remove a selected source. Completed steps are clickable, "More
+  sources" stays expanded across re-renders, the scan-empty message no longer
+  tells you to start a scan that already ran, the raw preview hash is no longer
+  shown on Confirm, and Finish hides actions that do nothing on an empty
+  import.
+- The setup wizard re-opened on every library refresh while the library was
+  empty, even after closing it; dismissing it now holds for the session.
+- The empty library hid the "Start your library" call-to-action below a full
+  screen of empty insights widgets; the insights panel is now hidden until the
+  library has games.
+- Big Box on an empty view showed only a fleeting toast; it now explains the
+  prerequisite and opens the setup wizard.
+- Saving the game editor with a required field on a hidden tab failed silently;
+  the editor now jumps to the section containing the invalid field.
+- Reloading the page dropped the session token (it is stripped from the URL
+  after first load), forcing a fresh sign-in; the token is now kept in
+  sessionStorage for the tab's lifetime.
+- "View imported games" after a scan landed on an empty library because
+  `import_batch_id` was stored but never projected to the library payload.
+- Setup wizard Readiness rows and Activity Center job titles showed raw
+  candidate/job hashes; they now show the detected title and a cleaned-up
+  fallback name.
+- "Scan all save paths" reported a bogus updated count; it now points to the
+  Activity Center where the queued scan reports progress.
+- The Play Insights panel pushed the game grid below the fold at short
+  viewports; it is now collapsible and the choice persists.
+- "Hidden sidebar sections" was a comma-separated free-text field; it is now
+  a checkbox group.
+- The game editor showed Prev/Next navigation while adding a new game.
+- The Activity badge rendered "0" before the jobs stream connected and was then
+  destroyed by the i18n pass (`data-i18n` on the button overwrote its child
+  spans); the label moved onto its own span and the badge starts hidden.
+- The game editor's Media tab showed ~22 path rows at once; the 16 rarely used
+  media types are now behind a "Show more media types" toggle that
+  auto-expands when the game already has values there.
+- Static JS/CSS was served `immutable` for a year, so app updates could run
+  stale modules until the cache expired; app statics now send `no-cache` and
+  rely on the ETag for cheap revalidation.
+- Hiding a sidebar section in settings only hid its header — the `.platforms`
+  grid overrode the `hidden` attribute.
+- Switching tabs inside the game editor with a dirty form prompted "Discard
+  unsaved changes?" even though tab switches discard nothing.
+
 ## [1.13.0] - 2026-09-19
 
 ### Added

@@ -3,7 +3,9 @@ import { render } from './library.js';
 
 
 
-const token = new URLSearchParams(location.search).get('token') || '';
+// The launcher's ?token= param is scrubbed from the URL on load; keep it in
+// sessionStorage so reloads stay authenticated for the tab session.
+const token = new URLSearchParams(location.search).get('token') || sessionStorage.getItem('openbox.token') || '';
     /**
      * Central client application state container.
      * @type {Record<string, any>}
