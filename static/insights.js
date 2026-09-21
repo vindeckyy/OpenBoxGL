@@ -11,12 +11,21 @@ import { openWrapped } from './wrapped.js';
 
 const LEVEL_CLASS = ['level-0', 'level-1', 'level-2', 'level-3', 'level-4'];
 const RANGE_KEY = 'openbox-insights-range';
+const COLLAPSE_KEY = 'openbox-insights-collapsed';
 const REFRESH_DEBOUNCE_MS = 2000;
 
 let rangeDays = 365;
 let refreshTimer = 0;
 let observer = null;
 let loaded = false;
+let collapsed = false;
+
+function storedCollapsed() {
+  try {
+    return localStorage.getItem(COLLAPSE_KEY) === '1';
+  } catch { /* storage unavailable */ }
+  return false;
+}
 
 function formatHours(seconds) {
   if (!seconds) return '0h';
@@ -237,10 +246,20 @@ function ensurePanelHeader(force) {
           <option value="365">${escapeHtml(t('insights.range_365'))}</option>
         </select>
         <button type="button" class="icon-button" id="insightsRefresh" aria-label="${escapeHtml(t('insights.refresh'))}">↻</button>
+        <button type="button" class="icon-button" id="insightsToggle" aria-label="${collapsed ? 'Show' : 'Hide'} insights">${collapsed ? '▸' : '▾'}</button>
       </div>
     </div>
-    <div id="insightsBody"></div>
+    <div id="insightsBody"${collapsed ? ' hidden' : ''}></div>
   `;
+  const toggle = $('insightsToggle');
+  if (toggle) toggle.onclick = () => {
+    collapsed = !collapsed;
+    try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* storage unavailable */ }
+    const body = $('insightsBody');
+    if (body) body.hidden = collapsed;
+    toggle.textContent = collapsed ? '▸' : '▾';
+    toggle.setAttribute('aria-label', collapsed ? 'Show insights' : 'Hide insights');
+  };
   $('insightsRange').value = String(rangeDays);
   $('insightsRange').onchange = () => {
     rangeDays = Number($('insightsRange').value) || 365;
@@ -258,6 +277,7 @@ function ensurePanelHeader(force) {
 
 function bindInsights() {
   rangeDays = storedRange();
+  collapsed = storedCollapsed();
   const panel = $('insightsPanel');
   if (panel && typeof IntersectionObserver === 'function' && !observer) {
     observer = new IntersectionObserver(entries => {

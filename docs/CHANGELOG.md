@@ -32,6 +32,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   prerequisite and opens the setup wizard.
 - Saving the game editor with a required field on a hidden tab failed silently;
   the editor now jumps to the section containing the invalid field.
+- Reloading the page dropped the session token (it is stripped from the URL
+  after first load), forcing a fresh sign-in; the token is now kept in
+  sessionStorage for the tab's lifetime.
+- "View imported games" after a scan landed on an empty library because
+  `import_batch_id` was stored but never projected to the library payload.
+- Setup wizard Readiness rows and Activity Center job titles showed raw
+  candidate/job hashes; they now show the detected title and a cleaned-up
+  fallback name.
+- "Scan all save paths" reported a bogus updated count; it now points to the
+  Activity Center where the queued scan reports progress.
+- The Play Insights panel pushed the game grid below the fold at short
+  viewports; it is now collapsible and the choice persists.
+- "Hidden sidebar sections" was a comma-separated free-text field; it is now
+  a checkbox group.
+- The game editor showed Prev/Next navigation while adding a new game.
 
 ## [1.13.0] - 2026-09-19
 

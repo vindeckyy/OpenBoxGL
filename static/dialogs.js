@@ -479,10 +479,12 @@ async function openGameDialog(game = null, options = {}) {
   const prevBtn = $('prevGameDialog');
   const nextBtn = $('nextGameDialog');
   if (prevBtn) {
+    prevBtn.hidden = !game;
     prevBtn.disabled = !game || currentIndex <= 0;
     prevBtn.onclick = (game && currentIndex > 0) ? () => guardUnsavedGameEditor(() => openGameDialog(visible[currentIndex - 1])) : null;
   }
   if (nextBtn) {
+    nextBtn.hidden = !game;
     nextBtn.disabled = !game || currentIndex === -1 || currentIndex >= visible.length - 1;
     nextBtn.onclick = (game && currentIndex !== -1 && currentIndex < visible.length - 1) ? () => guardUnsavedGameEditor(() => openGameDialog(visible[currentIndex + 1])) : null;
   }
