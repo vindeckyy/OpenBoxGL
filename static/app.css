@@ -337,7 +337,7 @@
     .sidebar,.details { background:var(--panel); }
     .sidebar { border-right:1px solid var(--line); padding:var(--space-md) var(--space-md); overflow:auto; }
     .field { display:block; margin-bottom:var(--space-sm); }
-    .field[hidden], .media-rare[hidden] { display:none; }
+    .field[hidden], .media-rare[hidden], .platforms[hidden] { display:none; }
     .field span { display:block; color:var(--label-muted); font-size:var(--font-label); margin-bottom:var(--space-2xs); }
     input,select,textarea {
       width:100%; border:1px solid var(--border-control); border-radius:3px; background:var(--surface-field); color:var(--white); padding:var(--space-xs) var(--space-sm);
