@@ -187,12 +187,12 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         last_modified = email.utils.formatdate(stat_result.st_mtime, usegmt=True)
         return etag, last_modified
 
-    def send_file(self, status, path, content_type=None, extra_headers=None, frameable=False):
+    def send_file(self, status, path, content_type=None, extra_headers=None, frameable=False, cache_control=None):
         path = Path(path)
         stat_result = path.stat()
         size = stat_result.st_size
         etag, last_modified = self._cache_headers(path, stat_result)
-        request_cache_control = "private, max-age=31536000, immutable"
+        request_cache_control = cache_control or "private, max-age=31536000, immutable"
         headers = getattr(self, "headers", None) or {}
         conditional = headers.get("If-None-Match", "")
         if etag in {item.strip() for item in conditional.split(",")}:
@@ -446,8 +446,9 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
     ], public=True)
     def _api_get_static(self, parsed):
         # Static UI assets (app.js/app.css plus the ES-module chunks) live
-        # next to index.html. Serve them with long-lived caching keyed on
-        # mtime+size ETags.
+        # next to index.html. JS/CSS change between releases, so serve them
+        # no-cache: the mtime+size ETag still answers 304 for unchanged files,
+        # but clients revalidate instead of running stale modules for a year.
         name = Path(parsed.path).name
         if not (name.endswith(".js") or name in {"app.css", "logo.png"}):
             raise RouteNotFound("Not found")
@@ -461,7 +462,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         if not asset.is_file():
             raise RouteNotFound("Not found")
         content_type = "text/javascript; charset=utf-8" if name.endswith(".js") else "text/css; charset=utf-8"
-        self.send_file(200, asset, content_type)
+        self.send_file(200, asset, content_type, cache_control="no-cache")
         return
 
     @route("GET", ["/locales/en.json", "/locales/es.json", "/locales/de.json", "/locales/fr.json", "/locales/pt.json"], public=True)

@@ -339,20 +339,6 @@ async function guardUnsavedAndCloseGameDialog() {
 function bindGameEditorUnsavedGuard() {
   $('closeDialog').onclick = () => guardUnsavedAndCloseGameDialog();
   $('cancelDialog').onclick = () => guardUnsavedAndCloseGameDialog();
-  document.querySelectorAll('.game-editor-nav-item').forEach(button => {
-    button.addEventListener('click', event => {
-      if (!gameFormDirty()) return;
-      event.stopImmediatePropagation();
-      event.preventDefault();
-      guardUnsavedGameEditor(() => {
-        document.querySelectorAll('.game-editor-nav-item').forEach(item => item.classList.toggle('active', item === button));
-        const target = button.dataset.gameSection;
-        document.querySelectorAll('.game-editor-section').forEach(panel => {
-          panel.hidden = panel.dataset.gameSection !== target;
-        });
-      });
-    }, true);
-  });
   const gameDialog = $('gameDialog');
   if (gameDialog) {
     gameDialog.addEventListener('close', () => { gameFormSnapshot = ''; }, true);
