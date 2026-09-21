@@ -488,6 +488,15 @@ async function openGameDialog(game = null, options = {}) {
     nextBtn.disabled = !game || currentIndex === -1 || currentIndex >= visible.length - 1;
     nextBtn.onclick = (game && currentIndex !== -1 && currentIndex < visible.length - 1) ? () => guardUnsavedGameEditor(() => openGameDialog(visible[currentIndex + 1])) : null;
   }
+  const mediaToggle = $('mediaMoreToggle');
+  const rareRows = [...$('gameDialog').querySelectorAll('.media-rare')];
+  const expandRare = rareRows.some(row => row.querySelector('[name]')?.value.trim());
+  rareRows.forEach(row => { row.hidden = !expandRare; });
+  if (mediaToggle) {
+    const setLabel = show => { mediaToggle.textContent = show ? 'Show fewer media types' : `Show ${rareRows.length} more media types`; mediaToggle.setAttribute('aria-expanded', String(show)); };
+    setLabel(expandRare);
+    mediaToggle.onclick = () => { const show = rareRows[0]?.hidden ?? true; rareRows.forEach(row => { row.hidden = !show; }); setLabel(show); };
+  }
   syncGameEntryType();
   gameFormSnapshot = snapshotGameForm();
   openDialog($('gameDialog'));
