@@ -97,6 +97,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const qs = new URLSearchParams(location.search);
   qs.delete('token');
   const q = qs.toString();
+  if (token) sessionStorage.setItem('openbox.token', token);
   history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
 }
 
@@ -264,7 +265,7 @@ window.addEventListener('DOMContentLoaded', () => {
         notify(`Removed ${result.paths.length} duplicate file${result.paths.length === 1 ? '' : 's'}`);
       } catch(error) { notify(error.message); }
     };
-    $('scanAllSaves').onclick = async () => { try { const result = await api('/api/saves/scan/apply',{method:'POST',body:'{}'}); await refresh(); notify(`Added save paths on ${result.updated} location${result.updated === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
+    $('scanAllSaves').onclick = async () => { try { await api('/api/saves/scan/apply',{method:'POST',body:'{}'}); notify('info', 'Save path scan queued — progress and results are in Activity Center'); } catch(error) { notify(error.message); } };
     $('bigBoxPause').onclick = event => { if (event.target === $('bigBoxPause')) $('bigBoxPause').hidden = true; };
     $('loadStorefrontCatalog').onclick = loadStorefrontCatalog;
     $('importStorefrontInstalled').onclick = () => importStorefrontCatalog(false);

@@ -105,10 +105,10 @@ function renderStepList() {
   const list = $('setupStepList');
   if (!list) return;
   const progressByStep = {
-    3: state.previewDoc?.message || (state.previewDoc?.scanned_entries ? `Found ${state.previewDoc.scanned_entries} games` : ''),
+    3: state.previewDoc?.scanned_entries ? `Found ${state.previewDoc.scanned_entries} games` : (state.previewDoc ? 'Scanned' : ''),
     4: state.previewItems.length ? `${state.previewItems.filter(i => (state.decisions.get(i.candidate_id)?.action || i.intended_action) === 'review').length} need review` : '',
     5: state.preflight?.totals ? `Ready ${state.preflight.totals.ready ?? 0} · Blocked ${state.preflight.totals.blocked ?? 0}` : '',
-    7: state.previewDoc?.message || '',
+    7: state.previewDoc ? `Rev ${state.previewDoc.revision ?? state.revision}` : '',
   };
   list.innerHTML = STEPS.map(step => {
     const progress = progressByStep[step.id] || '';
@@ -400,7 +400,7 @@ function renderReadiness() {
     return `
       <article class="setup-readiness-row" data-candidate-id="${escapeHtml(result.candidate_id || '')}" data-preflight-status="${escapeHtml(result.status || '')}">
         <div class="setup-readiness-head">
-          <strong>${escapeHtml(result.candidate_id || result.game_id || 'Candidate')}</strong>
+          <strong>${escapeHtml(item?.detected_title || result.candidate_id || result.game_id || 'Candidate')}</strong>
           <span class="setup-readiness-status">${escapeHtml(result.status || '')}</span>
         </div>
         <ul class="setup-check-list">${checks || '<li>No checks</li>'}</ul>
