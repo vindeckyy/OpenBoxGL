@@ -47,8 +47,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - "Hidden sidebar sections" was a comma-separated free-text field; it is now
   a checkbox group.
 - The game editor showed Prev/Next navigation while adding a new game.
-- The Activity badge rendered "0" before the jobs stream connected; it starts
-  hidden now.
+- The Activity badge rendered "0" before the jobs stream connected and was then
+  destroyed by the i18n pass (`data-i18n` on the button overwrote its child
+  spans); the label moved onto its own span and the badge starts hidden.
 - The game editor's Media tab showed ~22 path rows at once; the 16 rarely used
   media types are now behind a "Show more media types" toggle that
   auto-expands when the game already has values there.
