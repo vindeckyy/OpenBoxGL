@@ -144,7 +144,8 @@
     "shelf_entries": "Entradas de coleção",
     "any_rating": "Qualquer classificação",
     "unrated": "Sem classificação",
-    "smart_collections": "Coleções"
+    "smart_collections": "Coleções",
+    "filters": "Filtros"
   },
   "library": {
     "all_games": "Todos os jogos",
@@ -728,7 +729,7 @@
     "layout_coverflow": "CoverFlow",
     "show_playlist_actions": "Mostrar ações de lista de reprodução no Big Box",
     "dynamic_play_button": "Usar rótulos dinâmicos no botão Jogar",
-    "hidden_sidebar": "Seções ocultas da barra lateral, separadas por vírgula",
+    "hidden_sidebar": "Seções ocultas da barra lateral",
     "emumovies_user": "Nome de usuário do EmuMovies",
     "emumovies_pass": "Senha do EmuMovies",
     "progress_automation": "Ativar automação de progresso do jogo",

@@ -154,7 +154,7 @@ import { t } from './i18n.js';
       } catch(error) { notify(error.message); }
     }
     function maybeShowWelcome() {
-      if (!AppState.appSettings.welcome_completed && !AppState.games.length) $('setupCenter').showModal();
+      if (!AppState.appSettings.welcome_completed && !AppState.games.length && !AppState.setupDismissed) $('setupCenter').showModal();
     }
     function collectSettings() {
       return {
@@ -187,7 +187,7 @@ import { t } from './i18n.js';
         show_insights:$('showInsights').checked,
         mood_match_enabled:$('moodMatchEnabled').checked,
         mood_match_bigbox:$('moodMatchBigbox').checked,
-        hidden_sidebar_sections:$('hiddenSidebarSections').value.split(',').map(value => value.trim()).filter(Boolean),
+        hidden_sidebar_sections:[...document.querySelectorAll('[data-hide-section]:checked')].map(input => input.dataset.hideSection),
         obs_auto_attach:$('obsAutoAttach').checked,
         obs_recording_path:$('obsRecordingPath').value.trim(),
         obs_replay_enabled:$('obsReplayEnabled')?.checked || false,
@@ -306,7 +306,8 @@ import { t } from './i18n.js';
         $('showInsights').checked = AppState.appSettings.show_insights !== false;
         if ($('moodMatchEnabled')) $('moodMatchEnabled').checked = Boolean(AppState.appSettings.mood_match_enabled);
         if ($('moodMatchBigbox')) $('moodMatchBigbox').checked = Boolean(AppState.appSettings.mood_match_bigbox);
-        $('hiddenSidebarSections').value = (AppState.appSettings.hidden_sidebar_sections || []).join(', ');
+        { const hiddenSections = new Set(AppState.appSettings.hidden_sidebar_sections || []);
+          document.querySelectorAll('[data-hide-section]').forEach(input => { input.checked = hiddenSections.has(input.dataset.hideSection); }); }
         $('obsAutoAttach').checked = AppState.appSettings.obs_auto_attach !== false;
         $('obsRecordingPath').value = AppState.appSettings.obs_recording_path || '';
         if ($('obsReplayEnabled')) $('obsReplayEnabled').checked = AppState.appSettings.obs_replay_enabled === true;

@@ -110,7 +110,7 @@ def operation_title_for_name(name: str) -> str:
         return "Save backup"
     if name.startswith("saves-restore:"):
         return "Save restore"
-    return name.replace("-", " ").replace(":", " ").strip().title() or "Background job"
+    return name.split(":", 1)[0].replace("-", " ").strip().title() or "Background job"
 
 
 def _get_operation_service():

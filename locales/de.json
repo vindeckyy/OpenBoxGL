@@ -144,7 +144,8 @@
     "shelf_entries": "Sammeleinträge",
     "any_rating": "Beliebige Altersfreigabe",
     "unrated": "Ohne Altersfreigabe",
-    "smart_collections": "Sammlungen"
+    "smart_collections": "Sammlungen",
+    "filters": "Filter"
   },
   "library": {
     "all_games": "Alle Spiele",
@@ -728,7 +729,7 @@
     "layout_coverflow": "CoverFlow",
     "show_playlist_actions": "Playlist-Aktionen in Big Box anzeigen",
     "dynamic_play_button": "Dynamische Play-Schaltflächen-Beschriftungen verwenden",
-    "hidden_sidebar": "Ausgeblendete Seitenleistenbereiche, durch Komma getrennt",
+    "hidden_sidebar": "Ausgeblendete Seitenleistenbereiche",
     "emumovies_user": "EmuMovies-Benutzername",
     "emumovies_pass": "EmuMovies-Passwort",
     "progress_automation": "Spielfortschritt-Automatisierung aktivieren",

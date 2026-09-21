@@ -51,7 +51,6 @@ function ensureA11yDialogHosts() {
   if (a11yHostsReady) return;
   a11yHostsReady = true;
   const wrap = document.createElement('div');
-  wrap.hidden = true;
   wrap.innerHTML = `
     <dialog id="a11yInputDialog" aria-modal="true" aria-labelledby="a11yInputTitle">
       <form id="a11yInputForm">
@@ -340,20 +339,6 @@ async function guardUnsavedAndCloseGameDialog() {
 function bindGameEditorUnsavedGuard() {
   $('closeDialog').onclick = () => guardUnsavedAndCloseGameDialog();
   $('cancelDialog').onclick = () => guardUnsavedAndCloseGameDialog();
-  document.querySelectorAll('.game-editor-nav-item').forEach(button => {
-    button.addEventListener('click', event => {
-      if (!gameFormDirty()) return;
-      event.stopImmediatePropagation();
-      event.preventDefault();
-      guardUnsavedGameEditor(() => {
-        document.querySelectorAll('.game-editor-nav-item').forEach(item => item.classList.toggle('active', item === button));
-        const target = button.dataset.gameSection;
-        document.querySelectorAll('.game-editor-section').forEach(panel => {
-          panel.hidden = panel.dataset.gameSection !== target;
-        });
-      });
-    }, true);
-  });
   const gameDialog = $('gameDialog');
   if (gameDialog) {
     gameDialog.addEventListener('close', () => { gameFormSnapshot = ''; }, true);
@@ -389,13 +374,17 @@ async function bindGameEditorBrowse() {
 document.addEventListener('mousedown', event => {
   if (document.activeElement?.tagName === 'SELECT') return;
   if (event.target.closest?.('select, option')) return;
-  document.querySelectorAll('dialog[open]').forEach(dialog => {
-    if (dialog.id === 'gameDialog' && gameFormDirty()) return;
-    if (dialog.contains(event.target)) return;
-    const rect = dialog.getBoundingClientRect();
-    const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
-    if (!inside) dialog.close();
-  });
+  const topDialog = [...document.querySelectorAll('dialog[open]')].at(-1);
+  if (topDialog) {
+    if (!(topDialog.id === 'gameDialog' && gameFormDirty()) && !topDialog.contains(event.target)) {
+      const rect = topDialog.getBoundingClientRect();
+      const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+      if (!inside) {
+        if (topDialog.id === 'setupCenter') AppState.setupDismissed = true;
+        topDialog.close();
+      }
+    }
+  }
   [
     [$('bigBoxMenu'), '.bigbox-menu-panel', closeBigBoxMenu],
     [$('bigBoxPause'), '.bigbox-pause-panel', () => { $('bigBoxPause').hidden = true; }],
@@ -476,12 +465,23 @@ async function openGameDialog(game = null, options = {}) {
   const prevBtn = $('prevGameDialog');
   const nextBtn = $('nextGameDialog');
   if (prevBtn) {
+    prevBtn.hidden = !game;
     prevBtn.disabled = !game || currentIndex <= 0;
     prevBtn.onclick = (game && currentIndex > 0) ? () => guardUnsavedGameEditor(() => openGameDialog(visible[currentIndex - 1])) : null;
   }
   if (nextBtn) {
+    nextBtn.hidden = !game;
     nextBtn.disabled = !game || currentIndex === -1 || currentIndex >= visible.length - 1;
     nextBtn.onclick = (game && currentIndex !== -1 && currentIndex < visible.length - 1) ? () => guardUnsavedGameEditor(() => openGameDialog(visible[currentIndex + 1])) : null;
+  }
+  const mediaToggle = $('mediaMoreToggle');
+  const rareRows = [...$('gameDialog').querySelectorAll('.media-rare')];
+  const expandRare = rareRows.some(row => row.querySelector('[name]')?.value.trim());
+  rareRows.forEach(row => { row.hidden = !expandRare; });
+  if (mediaToggle) {
+    const setLabel = show => { mediaToggle.textContent = show ? 'Show fewer media types' : `Show ${rareRows.length} more media types`; mediaToggle.setAttribute('aria-expanded', String(show)); };
+    setLabel(expandRare);
+    mediaToggle.onclick = () => { const show = rareRows[0]?.hidden ?? true; rareRows.forEach(row => { row.hidden = !show; }); setLabel(show); };
   }
   syncGameEntryType();
   gameFormSnapshot = snapshotGameForm();
@@ -522,7 +522,6 @@ function ensureTrophyCaseHost() {
   if (trophyCaseReady) return;
   trophyCaseReady = true;
   const wrap = document.createElement('div');
-  wrap.hidden = true;
   wrap.innerHTML = `
     <dialog id="trophyCaseDialog" aria-modal="true" aria-labelledby="trophyCaseTitle">
       <div class="dialog-head"><h2 id="trophyCaseTitle"></h2><button type="button" id="trophyCaseClose" aria-label="Close">×</button></div>
