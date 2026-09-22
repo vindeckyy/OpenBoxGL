@@ -196,12 +196,40 @@
     const coverBucketOf = ratio => ratio == null ? 'portrait' : ratio < .85 ? 'portrait' : ratio <= 1.15 ? 'square' : 'landscape';
 
     /**
-     * Render a metadata fact row HTML snippet.
+     * Render a metadata fact row HTML snippet. Values that validate as
+     * http(s) URLs become links (escaped href/text, safe target and rel);
+     * everything else renders as escaped text.
      * @param {string} label
      * @param {unknown} value
      * @returns {string}
      */
-    const fact = (label,value) => `<div class="fact"><small>${escapeHtml(label)}</small><span>${escapeHtml(value ?? '-')}</span></div>`;
+    const HTTP_URL_RE = /^https?:\/\/\S+$/i;
+    const fact = (label,value) => {
+      const text = value == null ? '-' : String(value);
+      const url = text.trim();
+      const body = HTTP_URL_RE.test(url)
+        ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`
+        : escapeHtml(text);
+      return `<div class="fact"><small>${escapeHtml(label)}</small><span>${body}</span></div>`;
+    };
+
+    /**
+     * Store/website link anchors for a game. Only the canonical Steam store
+     * pattern (numeric app id) and validated http(s) website URLs are used;
+     * numeric IGDB/GOG ids have no verifiable store URL pattern and are skipped.
+     * @param {object} game
+     * @returns {string} HTML anchors joined with middots, or ''.
+     */
+    const gameLinks = game => {
+      const links = [];
+      const steamId = String(game?.steam_app_id ?? '').trim();
+      if (/^\d+$/.test(steamId)) links.push(['Steam', `https://store.steampowered.com/app/${steamId}`]);
+      const website = String(game?.website_url ?? '').trim();
+      if (HTTP_URL_RE.test(website)) links.push(['Website', website]);
+      return links
+        .map(([label, url]) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`)
+        .join(' · ');
+    };
 
     // Shared trigram helpers for worker.search.js parity (identical logic in worker)
     const SEARCH_TRIGRAM_MAX_TERM = 32;
@@ -233,4 +261,4 @@
       return common / q.size;
     }
 
-export { $, escapeHtml, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches, trigramsOf, expandTrigrams, trigramScore };
+export { $, escapeHtml, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, gameLinks, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches, trigramsOf, expandTrigrams, trigramScore };

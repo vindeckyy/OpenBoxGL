@@ -7,6 +7,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- Effortless metadata (Flagship 2): new `POST /api/v2/metadata/auto-scrape`
+  queues exactly two jobs per import batch — `metadata-match:{batch}` (offline
+  LaunchBox match preview plus opted-in ScreenScraper dual-hash and IGDB
+  exact-title passes) and `metadata-media:{batch}` (LaunchBox media for
+  confidently matched games, then SteamGridDB fill for anything still
+  missing). All providers stay off by default; each runs only when its opt-in
+  setting is enabled and the provider is configured, with per-run budgets, and
+  a single game's failure never aborts a pass. The setup wizard's Options step
+  gains an "Automatically match metadata and download media after import"
+  toggle (default on) plus opt-in checkboxes for ScreenScraper, IGDB, and
+  SteamGridDB (all default off), persisted through the new
+  `GET`/`POST /api/v2/metadata/scrape-settings` (the master toggle, provider
+  opt-ins, and empty media-type lists are honored: unchecking every media type
+  runs match-only). The wizard drives one auto-scrape call and leaves the
+  match-review preview available for anything the automatic pass could not
+  resolve.
+- ScreenScraper ROM-hash confidence (ADR 0056): independent MD5-only and
+  CRC32-only lookups must agree on the same ScreenScraper game id (`dual`
+  confidence) before anything auto-applies; weaker evidence stays review-only.
+  `/api/v2/screenscraper/match` accepts `apply_confident` for bulk runs.
+- Thumbnail chooser: every LaunchBox, SteamGridDB, and ScreenScraper search
+  result now offers a Thumbnails button that opens a chooser dialog with all
+  image candidates grouped by media kind; picking one applies exactly that
+  image (`media_urls` on the three apply routes) instead of the top pick. New
+  `GET /api/v2/metadata/media-candidates` lists LaunchBox image candidates.
+  Chosen URLs are downloaded only when they match a candidate the
+  provider/database returned for that record, so a client cannot make the
+  server fetch an arbitrary URL.
+- Information card: "Time to beat" fact (from IGDB, projected into the game
+  list), validated `http:`/`https:` fact values now render as safe links, and
+  a Links row derives Steam store and custom website URLs.
 - Plugin API v1 is frozen (ADR 0050, `docs/plugin-api.md`): manifests declare
   `api_version` (default 1; newer versions are refused and surfaced with an
   error), a `command` hook, and up to 32 palette `commands` (`{id, label,

@@ -389,7 +389,13 @@
     "esde_source_required": "Elige primero un gamelist.xml de ES-DE.",
     "esde_preview_required": "Previsualiza este archivo ES-DE antes de aplicarlo.",
     "esde_applied": "Importación ES-DE aplicada: {added} añadidos, {merged} combinados.",
-    "esde_select_file": "Elige un gamelist.xml de ES-DE."
+    "esde_select_file": "Elige un gamelist.xml de ES-DE.",
+    "choose_thumbnails": "Miniaturas",
+    "artwork_chooser_title": "Elegir ilustración",
+    "artwork_chooser_hint": "Elige una miniatura para aplicar exactamente esa imagen.",
+    "artwork_chooser_empty": "No se encontraron imágenes candidatas.",
+    "artwork_applying": "Aplicando la ilustración elegida",
+    "artwork_applied": "Ilustración aplicada"
   },
   "media_manager": {
     "title": "Gestor de multimedia",

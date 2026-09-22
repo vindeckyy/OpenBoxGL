@@ -293,6 +293,86 @@ def _text(node):
     return str(node or "").strip()
 
 
+# ── ROM-hash confidence tiers (Flagship 2) ────────────────────────────────
+# Auto-apply requires HASH_TIER_DUAL: two independent single-hash lookups
+# (MD5-only and CRC32-only) that agree on the same ScreenScraper game id.
+# Anything weaker stays review-only and is never auto-applied.
+HASH_TIER_DUAL = "dual"
+HASH_TIER_SINGLE = "single"
+HASH_TIER_TITLE = "title"
+HASH_TIER_NONE = "none"
+HASH_AUTO_APPLY_TIERS = frozenset({HASH_TIER_DUAL})
+
+
+def auto_apply_allowed(tier):
+    """True only for confidence tiers at/above the auto-apply bar."""
+    return tier in HASH_AUTO_APPLY_TIERS
+
+
+def hash_lookup(rom_path, hashes, *, hash_kind, system_id=None, cache_dir=None):
+    """Targeted jeuInfos lookup using exactly one local hash kind.
+
+    hash_kind is "md5" or "crc"; *hashes* is a hash_rom() result so the ROM
+    is only streamed once per confident_hash_match() call. Raises ValueError
+    when ScreenScraper has no game for that hash.
+    """
+    if hash_kind not in ("md5", "crc"):
+        raise ValueError("hash_kind must be 'md5' or 'crc'.")
+    params = {
+        "romtype": rom_type_for(rom_path),
+        "rommd5" if hash_kind == "md5" else "romcrc": hashes[hash_kind],
+    }
+    if system_id:
+        params["systemeid"] = int(system_id)
+    if cache_dir is not None:
+        cached = cache_get(cache_dir, params)
+        if cached is not None:
+            return _normalize_jeu(cached)
+    payload = ss_request("jeuInfos.php", params)
+    jeu = ((payload.get("response") or {}).get("jeu")) or {}
+    if not jeu:
+        raise ValueError("Game not found on ScreenScraper.")
+    if cache_dir is not None:
+        cache_put(cache_dir, params, payload)
+    return _normalize_jeu(payload)
+
+
+def hash_tier(md5_metadata, crc_metadata):
+    """Confidence tier for two independent single-hash lookups of one ROM."""
+    md5_id = (md5_metadata or {}).get("id")
+    crc_id = (crc_metadata or {}).get("id")
+    if md5_id and md5_id == crc_id:
+        return HASH_TIER_DUAL
+    if md5_id or crc_id:
+        return HASH_TIER_SINGLE
+    return HASH_TIER_NONE
+
+
+def confident_hash_match(rom_path, *, system_id=None, cache_dir=None):
+    """Match a ROM by hash, returning (metadata, tier).
+
+    Runs an MD5-only and a CRC32-only lookup and requires both to agree on
+    the same game for the dual tier. Returns the MD5 lookup's metadata when
+    it exists, else the CRC lookup's. Raises ValueError when neither hash
+    finds a game.
+    """
+    hashes = hash_rom(rom_path)
+    md5_metadata = crc_metadata = None
+    for kind in ("md5", "crc"):
+        try:
+            result = hash_lookup(rom_path, hashes, hash_kind=kind, system_id=system_id, cache_dir=cache_dir)
+        except ValueError:
+            continue
+        if kind == "md5":
+            md5_metadata = result
+        else:
+            crc_metadata = result
+    metadata = md5_metadata or crc_metadata
+    if metadata is None:
+        raise ValueError("Game not found on ScreenScraper.")
+    return metadata, hash_tier(md5_metadata, crc_metadata)
+
+
 def _normalize_jeu(payload):
     jeu = (payload.get("response") or {}).get("jeu") or {}
     media_entries = []

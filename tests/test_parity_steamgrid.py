@@ -512,7 +512,88 @@ class SteamgridHandlerTest(unittest.TestCase):
         self.assertEqual(game.get("steamgrid_id"), 9)
         self.assertEqual(game.get("name"), "Alpha Remapped")
 
-    def test_apply_falls_back_to_name_search(self):
+    def test_apply_uses_exact_media_url(self):
+        """Thumbnail chooser: media_urls overrides the choose_media top pick."""
+        game = {"game_id": "game-a", "name": "Alpha", "platform": "SNES"}
+        state = {"games": [game], "settings": {}}
+        metadata = {"id": 9, "name": "Alpha", "media": [
+            {"kind": "cover", "url": "https://sg/top.png", "score": 9},
+            {"kind": "cover", "url": "https://sg/exact.png", "score": 3},
+        ]}
+        with tempfile.TemporaryDirectory() as tmp:
+            media_root = Path(tmp)
+            with mock.patch.object(self.module, "provider_available", return_value=True), \
+                 mock.patch.object(self.module.openbox, "load_state", return_value=state), \
+                 mock.patch.object(self.module, "game_from_payload", side_effect=lambda state_, payload_: game), \
+                 mock.patch.object(self.module, "game_info", return_value=metadata), \
+                 mock.patch.object(self.module, "choose_media", return_value={"cover": "https://sg/top.png"}), \
+                 mock.patch.object(self.module, "download_bytes", return_value=str(media_root / "cover.png")) as download, \
+                 mock.patch.object(self.module, "transact_state", side_effect=lambda mutate: (None, mutate(state))), \
+                 mock.patch.object(self.module, "bump_media_epoch"), \
+                 mock.patch.object(self.module, "JOB_MANAGER", self.job_manager()), \
+                 mock.patch.object(self.module.openbox, "DATA", Path(tmp)):
+                h = self.handler()
+                self.module.steamgrid_apply(h, {
+                    "id": "game-a", "steamgrid_id": 9, "media": ["cover"],
+                    "media_urls": {"cover": "https://sg/exact.png"},
+                })
+        self.assertEqual(h.responses[0][0], 202)
+        download.assert_called_once()
+        self.assertEqual(download.call_args[0][0], "https://sg/exact.png")
+        self.assertEqual(game.get("cover"), str(media_root / "cover.png"))
+
+    def test_apply_rejects_invalid_media_urls(self):
+        """Non-http(s) or unknown-kind media_urls are dropped; top pick wins."""
+        game = {"game_id": "game-a", "name": "Alpha", "platform": "SNES"}
+        state = {"games": [game], "settings": {}}
+        metadata = {"id": 9, "name": "Alpha", "media": []}
+        with tempfile.TemporaryDirectory() as tmp:
+            media_root = Path(tmp)
+            with mock.patch.object(self.module, "provider_available", return_value=True), \
+                 mock.patch.object(self.module.openbox, "load_state", return_value=state), \
+                 mock.patch.object(self.module, "game_from_payload", side_effect=lambda state_, payload_: game), \
+                 mock.patch.object(self.module, "game_info", return_value=metadata), \
+                 mock.patch.object(self.module, "choose_media", return_value={"cover": "https://sg/top.png"}), \
+                 mock.patch.object(self.module, "download_bytes", return_value=str(media_root / "cover.png")) as download, \
+                 mock.patch.object(self.module, "transact_state", side_effect=lambda mutate: (None, mutate(state))), \
+                 mock.patch.object(self.module, "bump_media_epoch"), \
+                 mock.patch.object(self.module, "JOB_MANAGER", self.job_manager()), \
+                 mock.patch.object(self.module.openbox, "DATA", Path(tmp)):
+                h = self.handler()
+                self.module.steamgrid_apply(h, {
+                    "id": "game-a", "steamgrid_id": 9, "media": ["cover"],
+                    "media_urls": {"cover": "javascript:alert(1)", "nope": "https://sg/x.png"},
+                })
+        download.assert_called_once()
+        self.assertEqual(download.call_args[0][0], "https://sg/top.png")
+
+    def test_apply_rejects_url_outside_provider_media(self):
+        """Trust boundary: syntactically valid URL absent from the provider's
+        media for the chosen game id is dropped; the top pick wins instead."""
+        game = {"game_id": "game-a", "name": "Alpha", "platform": "SNES"}
+        state = {"games": [game], "settings": {}}
+        metadata = {"id": 9, "name": "Alpha", "media": [
+            {"kind": "cover", "url": "https://sg/top.png", "score": 9},
+        ]}
+        with tempfile.TemporaryDirectory() as tmp:
+            media_root = Path(tmp)
+            with mock.patch.object(self.module, "provider_available", return_value=True), \
+                 mock.patch.object(self.module.openbox, "load_state", return_value=state), \
+                 mock.patch.object(self.module, "game_from_payload", side_effect=lambda state_, payload_: game), \
+                 mock.patch.object(self.module, "game_info", return_value=metadata), \
+                 mock.patch.object(self.module, "choose_media", return_value={"cover": "https://sg/top.png"}), \
+                 mock.patch.object(self.module, "download_bytes", return_value=str(media_root / "cover.png")) as download, \
+                 mock.patch.object(self.module, "transact_state", side_effect=lambda mutate: (None, mutate(state))), \
+                 mock.patch.object(self.module, "bump_media_epoch"), \
+                 mock.patch.object(self.module, "JOB_MANAGER", self.job_manager()), \
+                 mock.patch.object(self.module.openbox, "DATA", Path(tmp)):
+                h = self.handler()
+                self.module.steamgrid_apply(h, {
+                    "id": "game-a", "steamgrid_id": 9, "media": ["cover"],
+                    "media_urls": {"cover": "https://attacker.example/evil.png"},
+                })
+        download.assert_called_once()
+        self.assertEqual(download.call_args[0][0], "https://sg/top.png")
         game = {"game_id": "game-a", "name": "Alpha"}
         state = {"games": [game], "settings": {}}
         with tempfile.TemporaryDirectory() as tmp, \
