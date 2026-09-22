@@ -204,6 +204,12 @@ def _clean_backup_auto(merged):
     return enabled, keep
 
 
+def normalize_health_rescan(value):
+    """Library health rescan cadence: daily / weekly / on_startup / off (default weekly)."""
+    from pkg.parity.parity_library_health import normalize_rescan_setting
+    return normalize_rescan_setting(value)
+
+
 def _clean_media_types(merged):
     auto_import_media_types = merged.get("auto_import_media_types", [])
     if not isinstance(auto_import_media_types, list) or not set(auto_import_media_types) <= MEDIA_TYPES_ALL:
@@ -521,6 +527,7 @@ def clean_settings(merged):
             "household_stats_sharing": bool(merged.get("household_stats_sharing", False)),
             "museum_kiosk_enabled": bool(merged.get("museum_kiosk_enabled", False)),
             "museum_kiosk_pin_hash": str(merged.get("museum_kiosk_pin_hash", ""))[:512],
+            "health_rescan": normalize_health_rescan(merged.get("health_rescan", "weekly")),
     }
 
 

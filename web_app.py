@@ -655,6 +655,28 @@ def bigbox_launch_url(url):
     return url
 
 
+def _health_rescan_tick():
+    """Queue the scheduled library-health rescan when due (Flagship 8, H6). Best-effort."""
+    try:
+        from pkg.parity.parity_library_health import rescan_due
+        if RUNNING:
+            return  # never contend with an active game session
+        settings = load_state().get("settings", {})
+        if not rescan_due(settings):
+            return
+        from handlers.library_health import SCAN_JOB_NAME, run_health_scan
+        JOB_MANAGER.submit(SCAN_JOB_NAME, run_health_scan, replace=True)
+        LOGGER.info("Scheduled library health rescan queued")
+    except Exception:
+        LOGGER.exception("Scheduled health rescan failed")
+
+
+def _health_rescan_worker():
+    """Hourly tick; WATCH_STOP wakes it for shutdown."""
+    while not WATCH_STOP.wait(3600):
+        _health_rescan_tick()
+
+
 def main():
     bootstrap_env(DATA.parent)
     configure_logging(DATA.parent)
@@ -711,6 +733,15 @@ def main():
     WATCH_STOP.clear()
     JOB_MANAGER.submit("auto-import", auto_import_worker)
     threading.Thread(target=_auto_backup_worker, name="auto-backup", daemon=True).start()
+    threading.Thread(target=_health_rescan_worker, name="health-rescan", daemon=True).start()
+    # "On startup" rescan: run once at boot unless a game session is active.
+    try:
+        from pkg.parity.parity_library_health import normalize_rescan_setting
+        if normalize_rescan_setting(load_state().get("settings", {}).get("health_rescan")) == "on_startup" and not RUNNING:
+            from handlers.library_health import SCAN_JOB_NAME, run_health_scan
+            JOB_MANAGER.submit(SCAN_JOB_NAME, run_health_scan, replace=True)
+    except Exception:
+        LOGGER.exception("On-startup health rescan failed")
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     run_configured_commands("startup_commands")
     # Lifecycle event (F1e): the app finished starting. Best-effort.

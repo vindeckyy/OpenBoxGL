@@ -5,6 +5,7 @@ import { applyLibraryMusic } from './bigbox.js';
 import { confirmAction, promptInput, closeDialog } from './dialogs.js';
 import { openSetupCenter } from './setup.js';
 import { t } from './i18n.js';
+import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.js';
 
 
 
@@ -176,6 +177,7 @@ import { t } from './i18n.js';
         backup_on_close:$('backupOnClose').checked,
         backup_auto_enabled:$('backupAutoEnabled').checked,
         backup_auto_keep:Math.max(1, Number($('backupAutoKeep').value) || 4),
+        health_rescan:$('healthRescanCadence')?.value || 'weekly',
         save_backup_limit:Number($('saveBackupLimit').value),
         media_download_limit:Number($('mediaDownloadLimit').value),
         auto_import_media_types:$('autoImportMediaTypes').value.split(',').map(value => value.trim()).filter(Boolean),
@@ -282,6 +284,7 @@ import { t } from './i18n.js';
         $('backupOnClose').checked = Boolean(AppState.appSettings.backup_on_close);
         $('backupAutoEnabled').checked = Boolean(AppState.appSettings.backup_auto_enabled);
         $('backupAutoKeep').value = AppState.appSettings.backup_auto_keep ?? 4;
+        if ($('healthRescanCadence')) $('healthRescanCadence').value = AppState.appSettings.health_rescan || 'weekly';
         const lastAuto = AppState.appSettings.last_auto_backup || '';
         if ($('lastAutoBackupLine')) {
           $('lastAutoBackupLine').hidden = !lastAuto;
@@ -704,6 +707,12 @@ import { t } from './i18n.js';
       const dialog = $('healthDialog');
       const actions = dialog?.querySelector('.dialog-actions');
       if (!actions || actions.querySelector('#repairButton')) return;
+      const score = document.createElement('button');
+      score.type = 'button';
+      score.id = 'healthScoreButton';
+      score.className = 'icon-button';
+      score.textContent = t('health.open');
+      score.onclick = () => { dialog.close(); openHealthScore(); };
       const repair = document.createElement('button');
       repair.type = 'button';
       repair.id = 'repairButton';
@@ -718,6 +727,8 @@ import { t } from './i18n.js';
       duplicates.onclick = () => { dialog.close(); openDuplicatesDialog(); };
       actions.insertBefore(duplicates, actions.firstChild);
       actions.insertBefore(repair, duplicates);
+      actions.insertBefore(score, repair);
+      initHealthSse();
     }
     async function health() {
       try {
@@ -730,6 +741,7 @@ import { t } from './i18n.js';
         document.querySelectorAll('[data-audit-game]').forEach(button => button.onclick = () => { AppState.selectedId = Number(button.dataset.auditGame); $('healthDialog').close(); render(); });
         $('dedupeButton').disabled = !result.duplicates;
         ensureHealthTools();
+        renderHealthScoreCard();
         renderJobsPanel();
         if (!$('healthDialog').open) $('healthDialog').showModal();
       } catch(error) { notify(error.message); }
