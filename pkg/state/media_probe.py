@@ -35,7 +35,7 @@ FIELDS = {
     "source", "steam_app_id", "lutris_id", "install_dir",
     "heroic_app_id", "rom_name", "clone_of", "set_type", "ra_game_id", "ra_hash", "launchbox_db_id", "archive_member", "video", "music",
     "video_snap", "video_theme", "video_trailer", "video_recording",
-    "progress", "rating", "notes", "region", "play_mode", "sort_title", "added_at",
+    "progress", "rating", "user_rating", "notes", "region", "play_mode", "sort_title", "added_at",
     "alternate_names", "max_players", "wikipedia_url", "video_url", "hide_in_bigbox", "esrb",
     "broken", "portable", "controller_support", "disc_count",
     "gameyfin_id", "gameyfin_provider", "store_catalog", "store_installed", "owned",

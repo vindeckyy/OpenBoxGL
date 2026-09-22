@@ -203,6 +203,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         progress_automation_play_minutes:Number($('progressAutomationMinutes').value),
         progress_automation_idle_days:Number($('progressAutomationIdleDays').value),
         progress_on_first_play:$('progressOnFirstPlay').value,
+        backlog_progress_suggest:$('backlogProgressSuggest').checked,
         tracking_mode:$('trackingMode').value,
         tracking_delay:Number($('trackingDelay').value),
         tracking_frequency:Number($('trackingFrequency').value),
@@ -294,6 +295,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         $('progressAutomationMinutes').value = AppState.appSettings.progress_automation_play_minutes ?? 30;
         $('progressAutomationIdleDays').value = AppState.appSettings.progress_automation_idle_days ?? 30;
         if ($('progressOnFirstPlay')) $('progressOnFirstPlay').value = AppState.appSettings.progress_on_first_play ?? 'Playing';
+        if ($('backlogProgressSuggest')) $('backlogProgressSuggest').checked = AppState.appSettings.backlog_progress_suggest !== false;
         if ($('trackingMode')) $('trackingMode').value = AppState.appSettings.tracking_mode || 'default';
         if ($('trackingDelay')) $('trackingDelay').value = AppState.appSettings.tracking_delay ?? 0;
         if ($('trackingFrequency')) $('trackingFrequency').value = AppState.appSettings.tracking_frequency ?? 2;

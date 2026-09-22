@@ -40,27 +40,28 @@ class RouteRegistryTests(unittest.TestCase):
         # /api/import/epic; hygiene fix/undo, repair preview/apply, and
         # duplicate preview/merge add six more; plugin command adds one;
         # library health adds scan, fix, and undo; Plugins 2.0 adds trust,
-        # permissions, and settings routes).
+        # permissions, and settings routes; backlog adds 8 playtime/notes
+        # routes).
         self.assertEqual(len(GET_TABLE), 187)
-        self.assertEqual(len(POST_TABLE), 222)
+        self.assertEqual(len(POST_TABLE), 230)
         self.assertEqual(len(V1_ALIASED_PREFIXES), 61)
 
     def test_base_routes_count(self):
         base_get = [p for p in GET_TABLE if not p.startswith("/api/v1")]
         base_post = [p for p in POST_TABLE if not p.startswith("/api/v1")]
         self.assertEqual(len(base_get), 162)
-        self.assertEqual(len(base_post), 179)
-        self.assertEqual(len(base_get) + len(base_post), 341)
+        self.assertEqual(len(base_post), 187)
+        self.assertEqual(len(base_get) + len(base_post), 349)
 
     def test_all_routes_registered(self):
         routes = all_routes()
-        # 342 = 341 table paths + the /api/v1/jobs dual-registration.
-        self.assertEqual(len(routes), 342)
+        # 350 = 349 table paths + the /api/v1/jobs dual-registration.
+        self.assertEqual(len(routes), 350)
 
         get_routes = [r for r in routes if r.method == "GET"]
         post_routes = [r for r in routes if r.method == "POST"]
         self.assertEqual(len(get_routes), 163)
-        self.assertEqual(len(post_routes), 179)
+        self.assertEqual(len(post_routes), 187)
 
     def test_every_registered_route_matches_live_table(self):
         routes = all_routes()

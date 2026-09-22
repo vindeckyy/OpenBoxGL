@@ -11,7 +11,7 @@ from pkg.platform_compat import file_lock
 from saves import SAVE_SYNC_LOCK
 
 STAT_FIELDS = ("play_count", "playtime_seconds", "last_played", "progress", "rating", "favorite")
-PROGRESS = {"", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned"}
+PROGRESS = {"", "Unplayed", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned"}
 
 
 class CloudSyncError(Exception):
