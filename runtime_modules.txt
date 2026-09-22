@@ -110,6 +110,8 @@ handlers/steamgrid.py
 pkg/parity/parity_radio.py
 pkg/parity/parity_query.py
 pkg/parity/parity_time_machine.py
+pkg/parity/parity_library_health.py
+handlers/library_health.py
 pkg/parity/parity_esde_import.py
 handlers/timemachine.py
 pkg/parity/parity_obs_bridge.py
