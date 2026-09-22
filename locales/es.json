@@ -764,6 +764,7 @@
     "custom_fields": "Campos personalizados, uno por línea: Nombre|Opción1,Opción2",
     "bigbox_startup_video": "Ruta del vídeo de inicio de Big Box",
     "bigbox_shutdown_apps": "Aplicaciones a ejecutar al cambiar a Big Box, un comando por línea",
+    "bigbox_start_at_launch": "Iniciar en modo Big Box",
     "attract_delay": "Retardo del modo atractivo en segundos",
     "tray_enabled": "Activar integración con la bandeja del sistema",
     "minimize_to_tray": "Minimizar a la bandeja al cerrar la ventana",
@@ -896,6 +897,10 @@
     "screensaver_prompt": "Pulsa Jugar para iniciar, o cualquier otro control para volver.",
     "running_game": "Juego en ejecución",
     "search_platform": "Buscar en esta plataforma",
+    "osk_space": "Espacio",
+    "osk_letters": "Letras",
+    "osk_symbols": "Símbolos",
+    "osk_title": "Teclado en pantalla",
     "empty_view_setup": "Big Box necesita juegos en la vista actual — añade fuentes para crear tu biblioteca",
     "empty_view_now_empty": "La vista actual está vacía"
   },

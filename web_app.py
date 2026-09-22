@@ -644,6 +644,16 @@ def _auto_backup_worker():
         _auto_backup_tick()
 
 
+def bigbox_launch_url(url):
+    """Append the Big Box deeplink to the opened URL when --bigbox is passed.
+
+    Manual sys.argv scan, mirroring the --game-mode handling in main().
+    """
+    if "--bigbox" in sys.argv:
+        return f"{url}&deeplink=bigbox"
+    return url
+
+
 def main():
     bootstrap_env(DATA.parent)
     configure_logging(DATA.parent)
@@ -717,6 +727,7 @@ def main():
     print(f"http://127.0.0.1:{port}/", flush=True)
     LOGGER.info("OpenBox web UI URL: %s", safe_url)
     force_game_mode = "--game-mode" in sys.argv
+    url = bigbox_launch_url(url)
     guest = is_gamescope_guest(force=force_game_mode)
     # Desktop sessions open the UI in a chrome-less app window by default;
     # flags override.

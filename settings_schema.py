@@ -58,6 +58,7 @@ KNOWN_SETTINGS = {
     # big box and display
     "bigbox_mode",
     "bigbox_quick",
+    "bigbox_start_at_launch",
     "bigbox_startup_video",
     "bigbox_shutdown_commands",
     "attract_mode_seconds",

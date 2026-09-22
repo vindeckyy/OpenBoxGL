@@ -491,6 +491,7 @@ def _public_settings_uncached(state):
         "library_music": settings.get("library_music", ""),
         "video_bgm_mix": settings.get("video_bgm_mix", False),
         "bigbox_mode": settings.get("bigbox_mode", "stage"),
+        "bigbox_start_at_launch": settings.get("bigbox_start_at_launch", False),
         "show_insights": settings.get("show_insights", True),
         "show_playlist_actions": settings.get("show_playlist_actions", True),
         "sidebar_sections": settings.get("sidebar_sections", ["search", "view", "platforms", "playlists", "filters"]),

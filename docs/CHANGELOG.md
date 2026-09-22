@@ -30,6 +30,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Bulk media downloads now commit one transaction for large batches and keep
   per-game commits for small ones; malformed `Range` requests map to 416
   without masking missing files as range errors.
+- Big Box boot: a new "Start in Big Box mode" checkbox in Settings → Big Box
+  (`bigbox_start_at_launch`) and a `--bigbox` CLI flag that opens the UI with
+  `?deeplink=bigbox`, so a Deck/HTPC can boot straight into Big Box like
+  Steam Big Picture.
+- Big Box on-screen keyboard: a d-pad-navigable QWERTY + symbols grid that
+  opens when the hybrid search takes focus, types into it via input events
+  (reusing the existing filter), and sits on the gamepad loop just below the
+  pause overlay. Big Box-native for v1.
+- Steam Bridge now copies cached SteamGridDB artwork (cover → capsule,
+  background → hero, clear logo → logo) into the account's Steam grid
+  directory after shortcuts are applied, so bridged games are no longer grey
+  tiles in Game Mode. Original bytes are copied as-is (no resize); skips are
+  logged and reported, and nothing is ever written outside a detected Steam
+  account directory.
 
 ### Fixed
 - Big Box pause overlay trapped gamepad users: with the panel open, the pad

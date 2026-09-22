@@ -764,6 +764,7 @@
     "custom_fields": "Champs personnalisés, un par ligne : Nom|Option1,Option2",
     "bigbox_startup_video": "Chemin de la vidéo de démarrage Big Box",
     "bigbox_shutdown_apps": "Applications à exécuter lors du passage en Big Box, une commande par ligne",
+    "bigbox_start_at_launch": "Démarrer en mode Big Box",
     "attract_delay": "Délai du mode attractif en secondes",
     "tray_enabled": "Activer l'intégration à la zone de notification du bureau",
     "minimize_to_tray": "Réduire dans la zone de notification à la fermeture de la fenêtre",
@@ -896,6 +897,10 @@
     "screensaver_prompt": "Appuyez sur Jouer pour lancer, ou sur toute autre commande pour revenir.",
     "running_game": "Jeu en cours",
     "search_platform": "Rechercher dans cette plateforme",
+    "osk_space": "Espace",
+    "osk_letters": "Lettres",
+    "osk_symbols": "Symboles",
+    "osk_title": "Clavier à l'écran",
     "empty_view_setup": "Big Box a besoin de jeux dans la vue actuelle — ajoutez des sources pour construire votre bibliothèque",
     "empty_view_now_empty": "La vue actuelle est désormais vide"
   },
