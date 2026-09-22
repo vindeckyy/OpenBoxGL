@@ -25,7 +25,7 @@
      */
     const duration = seconds => { const minutes = Math.floor((seconds || 0) / 60), hours = Math.floor(minutes / 60); return hours ? `${hours}h ${minutes % 60}m` : `${minutes}m`; };
 
-    const defaultBadges = ['favorite','installed','saves','documents','progress','storefront','achievements','rating'];
+    const defaultBadges = ['favorite','installed','saves','documents','progress','storefront','achievements','rating','user_rating','manual'];
 
     /**
      * Check if a game is considered installed on the local system or storefront.
@@ -177,6 +177,7 @@
      */
     function sortGames(list, sort, dir) {
       const cmp = (a, b) => sort === 'rating' ? Number(b.rating || 0) - Number(a.rating || 0) || String(a.name || '').localeCompare(String(b.name || ''))
+        : sort === 'user_rating' ? Number(b.user_rating || 0) - Number(a.user_rating || 0) || String(a.name || '').localeCompare(String(b.name || ''))
         : sort === 'recent' ? String(b.last_played || '').localeCompare(String(a.last_played || '')) || String(a.sort_title || a.name || '').localeCompare(String(b.sort_title || b.name || ''))
         : sort === 'recent_activity' ? recentActivityValue(b) - recentActivityValue(a) || String(a.name || '').localeCompare(String(b.name || ''))
         : sort === 'playtime' ? Number(b.playtime_seconds || 0) - Number(a.playtime_seconds || 0) || String(a.sort_title || a.name || '').localeCompare(String(b.sort_title || b.name || ''))

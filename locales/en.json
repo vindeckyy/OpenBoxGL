@@ -146,7 +146,8 @@
     "any_rating": "Any rating",
     "unrated": "Unrated",
     "smart_collections": "Collections",
-    "filters": "Filters"
+    "filters": "Filters",
+    "unplayed": "Unplayed"
   },
   "library": {
     "all_games": "All Games",
@@ -189,7 +190,8 @@
     "game_details": "Game details",
     "resize_details": "Resize details pane",
     "jump_view": "Jump through the current view",
-    "play_insights": "Play insights"
+    "play_insights": "Play insights",
+    "sort_my_rating": "My rating"
   },
   "dialog": {
     "add_game": "Add game",
@@ -484,7 +486,8 @@
     "clear": "Clear",
     "favorite": "Favorite",
     "hidden": "Hidden",
-    "reset_stats": "Reset play count, play time, and last played date"
+    "reset_stats": "Reset play count, play time, and last played date",
+    "my_rating": "My rating"
   },
   "playlists": {
     "title": "Playlists",
@@ -849,7 +852,8 @@
     "health_rescan_daily": "Daily",
     "health_rescan_weekly": "Weekly",
     "health_rescan_on_startup": "On startup",
-    "health_rescan_off": "Off"
+    "health_rescan_off": "Off",
+    "backlog_progress_suggest": "Suggest marking games as Playing on first play"
   },
   "picker": {
     "title": "What should I play?",
@@ -880,7 +884,8 @@
       "rated": "You rated {name} {rating} stars.",
       "fits_session": "{name} fits in about {minutes} minutes.",
       "favorite": "{name} is a favorite you haven't touched in {days} days.",
-      "random": "A random pick from your library."
+      "random": "A random pick from your library.",
+      "rated_backlog": "You rated {name} {stars} stars, never started it, and it takes ~{ttb}h to beat."
     }
   },
   "storefront": {
@@ -1273,5 +1278,35 @@
     "merge": "Merge",
     "merged": "Merged {count} duplicate entries",
     "failed": "Merge failed"
+  },
+  "backlog": {
+    "section": "Backlog",
+    "status": "Status",
+    "unplayed": "Unplayed",
+    "stars": "stars",
+    "my_rating": "My rating",
+    "rating_saved": "Rating saved",
+    "status_saved": "Status saved",
+    "manual_time": "Manual playtime",
+    "total_time": "Total playtime",
+    "log_playtime": "Log playtime",
+    "playtime_saved": "Playtime logged",
+    "playtime_deleted": "Playtime entry deleted",
+    "playtime_range": "Enter between 1 minute and 24 hours",
+    "edit": "Edit",
+    "delete": "Delete",
+    "add_note": "Add note",
+    "notes": "Notes",
+    "note_saved": "Note saved",
+    "note_deleted": "Note deleted",
+    "note": "Note",
+    "hours": "Hours",
+    "minutes": "Minutes",
+    "date": "Date",
+    "save": "Save",
+    "cancel": "Cancel",
+    "suggest_title": "Update your backlog?",
+    "suggest_message": "You started {name}. Mark it as Playing?",
+    "suggest_confirm": "Mark as Playing"
   }
 }

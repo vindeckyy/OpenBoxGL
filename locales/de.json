@@ -146,7 +146,8 @@
     "any_rating": "Beliebige Altersfreigabe",
     "unrated": "Ohne Altersfreigabe",
     "smart_collections": "Sammlungen",
-    "filters": "Filter"
+    "filters": "Filter",
+    "unplayed": "Ungespielt"
   },
   "library": {
     "all_games": "Alle Spiele",
@@ -189,7 +190,8 @@
     "game_details": "Spieldetails",
     "resize_details": "Detailbereich skalieren",
     "jump_view": "Durch die aktuelle Ansicht springen",
-    "play_insights": "Spielanalysen"
+    "play_insights": "Spielanalysen",
+    "sort_my_rating": "Meine Bewertung"
   },
   "dialog": {
     "add_game": "Spiel hinzufügen",
@@ -484,7 +486,8 @@
     "clear": "Leeren",
     "favorite": "Favorit",
     "hidden": "Ausgeblendet",
-    "reset_stats": "Spielzähler, Spielzeit und zuletzt gespielt zurücksetzen"
+    "reset_stats": "Spielzähler, Spielzeit und zuletzt gespielt zurücksetzen",
+    "my_rating": "Meine Bewertung"
   },
   "playlists": {
     "title": "Playlists",
@@ -849,7 +852,8 @@
     "health_rescan_daily": "Täglich",
     "health_rescan_weekly": "Wöchentlich",
     "health_rescan_on_startup": "Beim Start",
-    "health_rescan_off": "Aus"
+    "health_rescan_off": "Aus",
+    "backlog_progress_suggest": "Vorschlagen, Spiele beim ersten Start als „Spielt“ zu markieren"
   },
   "picker": {
     "title": "Was soll ich spielen?",
@@ -880,7 +884,8 @@
       "rated": "Du hast {name} mit {rating} Sternen bewertet.",
       "fits_session": "{name} passt in ca. {minutes} Minuten.",
       "favorite": "{name} ist ein Favorit, den du seit {days} Tagen nicht gespielt hast.",
-      "random": "Eine zufällige Auswahl aus deiner Bibliothek."
+      "random": "Eine zufällige Auswahl aus deiner Bibliothek.",
+      "rated_backlog": "Du hast {name} mit {stars} Sternen bewertet, nie gestartet – ca. {ttb} Std. bis zum Durchspielen."
     }
   },
   "storefront": {
@@ -1273,5 +1278,35 @@
     "merge": "Zusammenführen",
     "merged": "{count} doppelte Einträge zusammengeführt",
     "failed": "Zusammenführen fehlgeschlagen"
+  },
+  "backlog": {
+    "section": "Backlog",
+    "status": "Status",
+    "unplayed": "Ungespielt",
+    "stars": "Sterne",
+    "my_rating": "Meine Bewertung",
+    "rating_saved": "Bewertung gespeichert",
+    "status_saved": "Status gespeichert",
+    "manual_time": "Manuelle Spielzeit",
+    "total_time": "Gesamtspielzeit",
+    "log_playtime": "Spielzeit eintragen",
+    "playtime_saved": "Spielzeit eingetragen",
+    "playtime_deleted": "Spielzeiteintrag gelöscht",
+    "playtime_range": "Zwischen 1 Minute und 24 Stunden eingeben",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "add_note": "Notiz hinzufügen",
+    "notes": "Notizen",
+    "note_saved": "Notiz gespeichert",
+    "note_deleted": "Notiz gelöscht",
+    "note": "Notiz",
+    "hours": "Stunden",
+    "minutes": "Minuten",
+    "date": "Datum",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "suggest_title": "Backlog aktualisieren?",
+    "suggest_message": "Du hast {name} gestartet. Als „Spielt“ markieren?",
+    "suggest_confirm": "Als „Spielt“ markieren"
   }
 }

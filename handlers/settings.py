@@ -343,6 +343,11 @@ def _clean_progress_first_play(merged):
     return progress_on_first_play
 
 
+def _clean_progress_suggest(merged):
+    # F4a: kill switch for the one-time "Playing?" auto-suggest; on by default.
+    return bool(merged.get("backlog_progress_suggest", True))
+
+
 def _clean_apply_perf(merged):
     apply_perf = str(merged.get("apply_perf", "auto")).strip().casefold()
     if apply_perf not in {"off", "auto", "always"}:
@@ -435,6 +440,7 @@ def clean_settings(merged):
     hidden_sidebar_sections = _clean_hidden_sections(merged)
     tracking_mode, tracking_delay, tracking_frequency = _clean_tracking(merged)
     progress_on_first_play = _clean_progress_first_play(merged)
+    backlog_progress_suggest = _clean_progress_suggest(merged)
     apply_perf = _clean_apply_perf(merged)
     gameyfin_password = _clean_password(merged)
     controller_prompt_hint = _clean_controller_prompt_hint(merged)
@@ -515,6 +521,7 @@ def clean_settings(merged):
             "controller_prompt_pack": str(merged.get("controller_prompt_pack", "xbox")).strip()[:20],
             "apply_perf": apply_perf,
             "progress_on_first_play": progress_on_first_play,
+            "backlog_progress_suggest": backlog_progress_suggest,
             "auto_close_store_clients": bool(merged.get("auto_close_store_clients", False)),
             "gamescope_preset": str(merged.get("gamescope_preset", "")).strip()[:30],
             "gamescope_custom_presets": _clean_gamescope_presets(merged),

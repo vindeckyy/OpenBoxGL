@@ -27,6 +27,7 @@ KNOWN_SETTINGS = {
     "progress_automation_play_minutes",
     "progress_automation_idle_days",
     "progress_on_first_play",
+    "backlog_progress_suggest",
     "auto_close_store_clients",
     "apply_perf",
     # library presentation

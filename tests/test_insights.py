@@ -101,6 +101,19 @@ class TotalsTest(unittest.TestCase):
         self.assertEqual(totals["total_playtime_seconds"], 3600)
         self.assertEqual(totals["total_sessions"], 1)
 
+    def test_totals_include_manual_playtime(self):
+        """F4c: manual logged time counts in totals; streak stays history-only."""
+        games = [
+            {"platform": "PC", "playtime_seconds": 100, "manual_playtime_seconds": 200},
+            {"platform": "PC", "playtime_seconds": 0, "manual_playtime_seconds": 50},
+        ]
+        totals = compute_totals(games, [])
+        self.assertEqual(totals["total_playtime_seconds"], 350)
+        self.assertEqual(totals["played"], 2)
+        # Streaks and heatmaps only see observed history entries.
+        self.assertEqual(compute_streak(compute_heatmap([], days=7))["longest"], 0)
+        self.assertEqual(totals["total_sessions"], 0)
+
 
 class TopPlatformsTest(unittest.TestCase):
     def test_top_platforms(self):

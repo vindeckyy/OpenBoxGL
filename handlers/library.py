@@ -9,7 +9,7 @@ import secrets
 from urllib.parse import parse_qs
 
 from api_errors import BadRequest, GameNotFound
-from catalog import PROGRESS, bulk_update, game_media_paths, related_game_ids, tag_counts
+from catalog import PROGRESS, bulk_update, canon_progress, clean_user_rating, game_media_paths, normalize_manual_sessions, normalize_notes, related_game_ids, tag_counts
 from handlers._shared import clean_extras as _clean_extras_shared
 from notifications import clear as clear_notifications, mark_read as mark_notifications_read, unread_count
 from openbox import load_state, load_state_readonly, local_only_mutation
@@ -38,14 +38,20 @@ def _clean_game_fields(source):
             game["disc_count"] = max(0, int(source.get("disc_count") or 0))
         except (TypeError, ValueError) as error:
             raise ValueError("Disc count must be a number.") from error
-    if game.get("progress", "") not in PROGRESS:
+    progress = canon_progress(game.get("progress", ""))
+    if progress not in PROGRESS:
         raise ValueError("Unknown progress value.")
+    # "Unplayed" is the UI label for unset; it is always stored as "".
+    game["progress"] = progress
     try:
         game["rating"] = float(game.get("rating") or 0)
     except (TypeError, ValueError) as error:
         raise ValueError("Rating must be a number from 0 to 5.") from error
     if not 0 <= game["rating"] <= 5:
         raise ValueError("Rating must be between 0 and 5.")
+    # F4b: personal star rating, distinct from the metadata ``rating`` float.
+    if "user_rating" in source:
+        game["user_rating"] = clean_user_rating(source.get("user_rating"))
     return game
 
 
@@ -827,6 +833,193 @@ class LibraryHandlers:
         _, game_id = transact_state(mutate)
         clear_file_probe_cache()
         self.send_json(200, {"ok": True, "game_id": game_id, "manual_entry": True})
+
+    # ── Backlog management (F4) v2 routes ──────────────────────────────────
+    # Playtime logging (F4c), per-game notes (F4d), and single-field setters
+    # for progress (F4a) / personal rating (F4b). The /manual-entry namespace
+    # is reserved for shelf entries; manual playtime lives under /playtime.
+
+    @staticmethod
+    def _clean_playtime_entry(seconds, date=None, note=None):
+        """Validate one manual playtime entry; returns a bounded dict."""
+        try:
+            seconds = int(seconds)
+        except (TypeError, ValueError):
+            raise BadRequest("seconds must be an integer.") from None
+        if seconds <= 0 or seconds > 24 * 3600:
+            raise BadRequest("seconds must be between 1 and 86400.")
+        date = str(date or "").strip()
+        if date and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+            raise BadRequest("date must be YYYY-MM-DD.")
+        note = str(note or "").strip()
+        if len(note) > 200:
+            raise BadRequest("note is limited to 200 characters.")
+        return {"date": date, "seconds": seconds, "note": note}
+
+    @staticmethod
+    def _resync_manual_playtime(game):
+        """Recompute the additive total from the normalized session list."""
+        sessions = normalize_manual_sessions(game.get("manual_sessions"))
+        game["manual_sessions"] = sessions
+        game["manual_playtime_seconds"] = sum(entry["seconds"] for entry in sessions)
+
+    @route("POST", "/api/v2/library/playtime/log")
+    def _api_post_api_v2_library_playtime_log(self, payload):
+        """Append a manual playtime entry; totals include it (badged manual)."""
+        entry = self._clean_playtime_entry(
+            payload.get("seconds"), date=payload.get("date"), note=payload.get("note"))
+
+        def mutate(state):
+            game = game_from_payload(state, payload)
+            sessions = normalize_manual_sessions(game.get("manual_sessions"))
+            sessions.append(entry)
+            game["manual_sessions"] = sessions
+            self._resync_manual_playtime(game)
+            return game.get("game_id", "")
+
+        _, game_id = transact_state(mutate)
+        self.send_json(200, {"ok": True, "game_id": game_id, "entry": entry})
+
+    @route("POST", "/api/v2/library/playtime/update")
+    def _api_post_api_v2_library_playtime_update(self, payload):
+        """Replace one manual playtime entry by index."""
+        try:
+            index = int(payload.get("index"))
+        except (TypeError, ValueError):
+            raise BadRequest("index must be an integer.") from None
+        entry = self._clean_playtime_entry(
+            payload.get("seconds"), date=payload.get("date"), note=payload.get("note"))
+
+        def mutate(state):
+            game = game_from_payload(state, payload)
+            sessions = normalize_manual_sessions(game.get("manual_sessions"))
+            if not 0 <= index < len(sessions):
+                raise BadRequest("Unknown playtime entry.")
+            sessions[index] = entry
+            game["manual_sessions"] = sessions
+            self._resync_manual_playtime(game)
+            return game.get("game_id", "")
+
+        _, game_id = transact_state(mutate)
+        self.send_json(200, {"ok": True, "game_id": game_id, "entry": entry})
+
+    @route("POST", "/api/v2/library/playtime/delete")
+    def _api_post_api_v2_library_playtime_delete(self, payload):
+        """Delete one manual playtime entry by index."""
+        try:
+            index = int(payload.get("index"))
+        except (TypeError, ValueError):
+            raise BadRequest("index must be an integer.") from None
+
+        def mutate(state):
+            game = game_from_payload(state, payload)
+            sessions = normalize_manual_sessions(game.get("manual_sessions"))
+            if not 0 <= index < len(sessions):
+                raise BadRequest("Unknown playtime entry.")
+            sessions.pop(index)
+            game["manual_sessions"] = sessions
+            self._resync_manual_playtime(game)
+            return game.get("game_id", "")
+
+        _, game_id = transact_state(mutate)
+        self.send_json(200, {"ok": True, "game_id": game_id})
+
+    @route("POST", "/api/v2/library/notes/add")
+    def _api_post_api_v2_library_notes_add(self, payload):
+        """Append a dated note entry; legacy string notes migrate on read."""
+        text = str(payload.get("text") or "").strip()
+        if not text:
+            raise BadRequest("Note text is required.")
+        if len(text) > 2000:
+            raise BadRequest("Note text is limited to 2000 characters.")
+        stamp = datetime.now().isoformat(timespec="seconds")
+
+        def mutate(state):
+            game = game_from_payload(state, payload)
+            entries = normalize_notes(game.get("notes"))
+            entries.append({"ts": stamp, "text": text})
+            game["notes"] = entries
+            return game.get("game_id", "")
+
+        _, game_id = transact_state(mutate)
+        self.send_json(200, {"ok": True, "game_id": game_id})
+
+    @route("POST", "/api/v2/library/notes/update")
+    def _api_post_api_v2_library_notes_update(self, payload):
+        """Replace one note entry's text by index (keeps its timestamp)."""
+        try:
+            index = int(payload.get("index"))
+        except (TypeError, ValueError):
+            raise BadRequest("index must be an integer.") from None
+        text = str(payload.get("text") or "").strip()
+        if not text:
+            raise BadRequest("Note text is required.")
+        if len(text) > 2000:
+            raise BadRequest("Note text is limited to 2000 characters.")
+
+        def mutate(state):
+            game = game_from_payload(state, payload)
+            entries = normalize_notes(game.get("notes"))
+            if not 0 <= index < len(entries):
+                raise BadRequest("Unknown note entry.")
+            entries[index] = {"ts": entries[index].get("ts", ""), "text": text}
+            game["notes"] = entries
+            return game.get("game_id", "")
+
+        _, game_id = transact_state(mutate)
+        self.send_json(200, {"ok": True, "game_id": game_id})
+
+    @route("POST", "/api/v2/library/notes/delete")
+    def _api_post_api_v2_library_notes_delete(self, payload):
+        """Delete one note entry by index."""
+        try:
+            index = int(payload.get("index"))
+        except (TypeError, ValueError):
+            raise BadRequest("index must be an integer.") from None
+
+        def mutate(state):
+            game = game_from_payload(state, payload)
+            entries = normalize_notes(game.get("notes"))
+            if not 0 <= index < len(entries):
+                raise BadRequest("Unknown note entry.")
+            entries.pop(index)
+            game["notes"] = entries
+            return game.get("game_id", "")
+
+        _, game_id = transact_state(mutate)
+        self.send_json(200, {"ok": True, "game_id": game_id})
+
+    @route("POST", "/api/v2/library/progress/set")
+    def _api_post_api_v2_library_progress_set(self, payload):
+        """Set one game's progress (F4a). "Unplayed" stores as "" (unset)."""
+        progress = canon_progress(payload.get("progress", ""))
+        if progress not in PROGRESS:
+            raise BadRequest("Unknown progress value.")
+
+        def mutate(state):
+            game = game_from_payload(state, payload)
+            game["progress"] = progress
+            game["progress_suggested"] = True  # a deliberate choice ends the auto-suggest
+            return game.get("game_id", "")
+
+        _, game_id = transact_state(mutate)
+        self.send_json(200, {"ok": True, "game_id": game_id, "progress": progress})
+
+    @route("POST", "/api/v2/library/rating/set")
+    def _api_post_api_v2_library_rating_set(self, payload):
+        """Set one game's personal star rating 0-5 (F4b); 0 clears it."""
+        try:
+            user_rating = clean_user_rating(payload.get("user_rating"))
+        except ValueError as error:
+            raise BadRequest(str(error)) from None
+
+        def mutate(state):
+            game = game_from_payload(state, payload)
+            game["user_rating"] = user_rating
+            return game.get("game_id", "")
+
+        _, game_id = transact_state(mutate)
+        self.send_json(200, {"ok": True, "game_id": game_id, "user_rating": user_rating})
 
     @route("GET", "/api/v2/library/search")
     def _api_get_api_v2_library_search(self, parsed):

@@ -3,11 +3,136 @@
 import re
 from datetime import datetime
 
-PROGRESS = {"", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned"}
+PROGRESS = {"", "Unplayed", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned"}
+# Coordinator decision (ADR-0051): do NOT create a parallel completion_status
+# field. "" stays the stored "unset" value; UI and queries display it as
+# "Unplayed". "Abandoned" covers the plan's "Dropped" wording.
 MEDIA_FIELDS = ("cover", "background", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "cart_front", "cart_back", "disc", "advertisement", "manual", "video", "music")
 MAX_TAGS = 50
 MAX_TAG_LENGTH = 64
 _WORD_RE = re.compile(r"\w+")
+
+
+def canon_progress(value):
+    """Canonical stored progress: "Unplayed" (any case) maps to "" (unset)."""
+    text = str(value or "").strip()
+    if text.casefold() == "unplayed":
+        return ""
+    return text
+
+
+def display_progress(value):
+    """UI label for progress: unset "" renders as "Unplayed"."""
+    text = str(value or "").strip()
+    return "Unplayed" if not text else text
+
+
+def clean_user_rating(value):
+    """Personal 1-5 star rating, distinct from metadata ``rating`` float.
+
+    Stored as int; 0 means unrated. Raises ValueError outside 0-5.
+    """
+    try:
+        rating = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("User rating must be an integer from 0 to 5.") from None
+    if not 0 <= rating <= 5:
+        raise ValueError("User rating must be an integer from 0 to 5.")
+    return rating
+
+
+def normalize_notes(value):
+    """Normalize notes to a list of {ts, text} entries (F4d).
+
+    Backward compatible: a legacy single string becomes one entry with an
+    empty timestamp; None/missing becomes []. Entries with empty text after
+    stripping are dropped.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        return [{"ts": "", "text": text}] if text else []
+    if not isinstance(value, list):
+        return []
+    entries = []
+    for item in value:
+        if not isinstance(item, dict):
+            text = str(item or "").strip()
+            if text:
+                entries.append({"ts": "", "text": text})
+            continue
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
+        entries.append({"ts": str(item.get("ts") or "").strip(), "text": text})
+    return entries
+
+
+def normalize_manual_sessions(value):
+    """Normalize manual playtime sessions to [{date, seconds, note}] (F4c).
+
+    Entries are bounded: non-positive seconds are dropped.
+    """
+    if not isinstance(value, list):
+        return []
+    sessions = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        try:
+            seconds = int(item.get("seconds") or 0)
+        except (TypeError, ValueError):
+            continue
+        if seconds <= 0:
+            continue
+        sessions.append({
+            "date": str(item.get("date") or "").strip(),
+            "seconds": seconds,
+            "note": str(item.get("note") or "").strip(),
+        })
+    return sessions
+
+
+def total_playtime_seconds(game):
+    """Observed playtime plus manual playtime, seconds (F4c)."""
+    if not isinstance(game, dict):
+        return 0
+    try:
+        observed = int(game.get("playtime_seconds") or 0)
+    except (TypeError, ValueError):
+        observed = 0
+    try:
+        manual = int(game.get("manual_playtime_seconds") or 0)
+    except (TypeError, ValueError):
+        manual = 0
+    return max(0, observed) + max(0, manual)
+
+
+def progress_suggest_due(game, settings):
+    """True when the one-time "Playing?" auto-suggest may fire (F4a).
+
+    Fires only when the progress automation would not have set a status
+    already (``progress_on_first_play`` is explicitly empty/None; the
+    launch default "Playing" counts as active automation), the kill-switch
+    setting ``backlog_progress_suggest`` is not False, and the per-game
+    ``progress_suggested`` flag is not set.
+    """
+    if not isinstance(game, dict):
+        return False
+    settings = settings if isinstance(settings, dict) else {}
+    if settings.get("backlog_progress_suggest") is False:
+        return False
+    # The launch automation defaults to "Playing" when the setting is
+    # absent, matching _make_start_mutator; only an explicit empty/None
+    # value leaves room for the suggest.
+    if settings.get("progress_on_first_play", "Playing"):
+        return False  # automation already handles the status; stay quiet
+    if str(game.get("progress") or "").strip():
+        return False
+    if game.get("progress_suggested"):
+        return False
+    return True
 
 
 def normalize_tags(value):
@@ -96,7 +221,7 @@ def related_game_ids(games, selected, limit=8):
 
 
 _BULK_ALLOWED = {
-    "platform", "genre", "progress", "rating", "favorite", "hidden", "esrb",
+    "platform", "genre", "progress", "rating", "user_rating", "favorite", "hidden", "esrb",
     "custom_fields", "tags", "tags_add", "tags_remove", "reset_stats",
     "play_count", "playtime_seconds", "last_played",
 }
@@ -140,14 +265,17 @@ def _clean_bulk_fields(changes):
         elif field == "last_played":
             clean[field] = str(value).strip()
         elif field == "progress":
-            if str(value) not in PROGRESS:
+            value = canon_progress(value)
+            if value not in PROGRESS:
                 raise ValueError("Unknown progress value.")
-            clean[field] = str(value)
+            clean[field] = value
         elif field == "rating":
             rating = float(value)
             if not 0 <= rating <= 5:
                 raise ValueError("Rating must be between 0 and 5.")
             clean[field] = rating
+        elif field == "user_rating":
+            clean[field] = clean_user_rating(value)
         elif field == "esrb":
             clean[field] = str(value).strip()
         elif field == "custom_fields":

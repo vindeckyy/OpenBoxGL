@@ -22,6 +22,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   prefix with notification support. New `GET/POST /api/v2/plugins/trust`,
   `POST /api/v2/plugins/permissions`, `GET/POST /api/v2/plugins/settings`,
   and `GET /api/v2/plugins/catalog` routes.
+- Backlog management (ADRs 0054, 0058). Every game now has a personal
+  backlog layer on top of the existing progress field:
+  - Status stays on the existing `progress` enum; unset renders as
+    "Unplayed" everywhere (cards, details, badges, explorer facets, filters).
+    "Dropped" maps to `Abandoned`. New smart-query grammar: `progress:unplayed`,
+    `my 4 stars`, `unrated by me`, `myrating:4`, plus `user_rating_min` /
+    `user_rating_unrated` clause kinds distinct from the metadata `rating`
+    predicates.
+  - Personal star rating (`user_rating` 0-5, distinct from metadata `rating`):
+    hover star widgets on cards and in details, card badges, a "My rating"
+    sort option, "My rating" bulk field, and picker weighting that favors
+    highly-rated unplayed games with a composite reason
+    ("rated {stars} stars, never started it, ~{ttb}h to beat").
+  - Manual playtime: log sessions (date, seconds, note) from the details pane
+    with edit/delete; stats and playtime totals include manual time while
+    streaks still count observed sessions only; exports carry the new fields.
+  - Dated notes: legacy single-string notes migrate to `{ts, text}` entries
+    on read (no bulk rewrite), with add/edit/delete in the details pane.
+  - Optional one-time "Mark as Playing?" prompt on first launch for unplayed
+    games, with a settings kill switch and per-game prompted-once persistence.
+    Never sets progress silently. New v2 routes under
+    `/api/v2/library/playtime/*`, `/api/v2/library/notes/*`,
+    `/api/v2/library/progress/set`, and `/api/v2/library/rating/set`; v1 is
+    frozen.
 - Plugin API v1 is frozen (ADR 0050, `docs/plugin-api.md`): manifests declare
   `api_version` (default 1; newer versions are refused and surfaced with an
   error), a `command` hook, and up to 32 palette `commands` (`{id, label,

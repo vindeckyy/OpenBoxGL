@@ -58,6 +58,15 @@ FIXTURES = [
      []),
     # played / recency
     ("unplayed", {}, [{"kind": "unplayed"}], []),
+    # F4a/F4b backlog predicates: exact typed queries
+    ("progress:unplayed", {"progress": "Unplayed"}, [], []),
+    ("progress:dropped", {"progress": "Abandoned"}, [], []),
+    ("my 4 stars", {}, [{"kind": "user_rating_min", "value": 4}], []),
+    ("my 4+ stars", {}, [{"kind": "user_rating_min", "value": 4}], []),
+    ("my rating at least 3", {}, [{"kind": "user_rating_min", "value": 3}], []),
+    ("myrating:4", {}, [{"kind": "user_rating_min", "value": 4}], []),
+    ("unrated by me", {}, [{"kind": "user_rating_unrated"}], []),
+    ("not rated by me", {}, [{"kind": "user_rating_unrated"}], []),
     ("never played", {}, [{"kind": "unplayed"}], []),
     ("haven't played", {}, [{"kind": "unplayed"}], []),
     ("not played", {}, [{"kind": "unplayed"}], []),
@@ -509,6 +518,72 @@ class ClauseMatchTest(unittest.TestCase):
         self.assertTrue(parity_query.game_matches_query(None, parse("unplayed"), now=NOW))
         self.assertFalse(parity_query.game_matches_query(self.game(), {"clauses": [{"kind": "bogus"}]}, now=NOW))
         self.assertFalse(parity_query.game_matches_query(self.game(), "junk", now=NOW))
+
+
+class BacklogClauseTest(unittest.TestCase):
+    """F4 backlog predicates: exact matching for unplayed/progress alias,
+    personal rating (distinct from metadata rating), and dated notes."""
+
+    def _match(self, phrase, game):
+        return parity_query.game_matches_query(game, parse(phrase), now=NOW)
+
+    def setUp(self):
+        self.days_ago = lambda n: (NOW - timedelta(days=n)).isoformat(timespec="seconds")
+        self.unplayed = {"name": "Backlog Game", "progress": "", "rating": 4.5,
+                         "user_rating": 0, "play_count": 0, "last_played": "",
+                         "notes": "", "time_to_beat_hours": 12}
+        self.playing = {"name": "Active Game", "progress": "Playing",
+                        "rating": 3.0, "user_rating": 3, "play_count": 5,
+                        "last_played": self.days_ago(2), "notes": "",
+                        "time_to_beat_hours": 20}
+
+    def test_progress_unplayed_matches_unset_only(self):
+        self.assertTrue(self._match("progress:unplayed", self.unplayed))
+        self.assertFalse(self._match("progress:unplayed", self.playing))
+
+    def test_progress_any_unplayed_alias(self):
+        self.assertTrue(parity_query._progress_matches("", "Unplayed"))
+        self.assertTrue(parity_query._progress_matches("", "unplayed"))
+        self.assertFalse(parity_query._progress_matches("Playing", "Unplayed"))
+        self.assertTrue(parity_query._progress_matches("Playing", "Playing"))
+
+    def test_progress_dropped_maps_to_abandoned(self):
+        abandoned = dict(self.unplayed, progress="Abandoned")
+        self.assertTrue(self._match("progress:dropped", abandoned))
+        self.assertFalse(self._match("progress:dropped", self.unplayed))
+
+    def test_my_stars_uses_personal_rating_not_metadata(self):
+        self.assertTrue(self._match("my 4 stars", dict(self.unplayed, user_rating=5)))
+        self.assertFalse(self._match("my 4 stars", self.unplayed))  # rating 4.5 is metadata
+        self.assertFalse(self._match("my 4 stars", self.playing))   # user_rating 3
+        self.assertTrue(self._match("myrating:4", dict(self.unplayed, user_rating=4)))
+        self.assertTrue(self._match("my rating at least 3", self.playing))
+
+    def test_unrated_by_me_distinct_from_metadata_unrated(self):
+        self.assertTrue(self._match("unrated by me", self.unplayed))
+        self.assertFalse(self._match("unrated by me", self.playing))
+        self.assertFalse(self._match("unrated", dict(self.unplayed, rating=4.5)))
+        self.assertTrue(self._match("unrated", dict(self.unplayed, rating=0)))
+
+    def test_dated_notes_searchable(self):
+        noted = dict(self.unplayed, notes=[{"ts": "2026-01-02T00:00:00", "text": "secret boss arena"}])
+        self.assertTrue(self._match("boss", noted))
+        self.assertTrue(self._match("notes:yes", noted))
+        self.assertFalse(self._match("notes:yes", self.unplayed))
+        # legacy single-string notes still match
+        legacy = dict(self.unplayed, notes="secret boss arena")
+        self.assertTrue(self._match("boss", legacy))
+        self.assertTrue(parity_query._flag_value(noted, "notes"))
+        self.assertFalse(parity_query._flag_value(self.unplayed, "notes"))
+        # haystack joins entry texts
+        self.assertIn("secret", parity_query._haystack(noted))
+
+    def test_chips_render_for_backlog_clauses(self):
+        chips = parse("my 4 stars")["chips"]
+        star_chip = next(c for c in chips if c["key"] == "user_rating_min")
+        self.assertIn("4", star_chip["display"])
+        keys = {c["key"] for c in parse("unrated by me")["chips"]}
+        self.assertIn("user_rating_unrated", keys)
 
 
 class TokenizerTest(unittest.TestCase):

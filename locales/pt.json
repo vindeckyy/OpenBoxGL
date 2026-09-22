@@ -146,7 +146,8 @@
     "any_rating": "Qualquer classificação",
     "unrated": "Sem classificação",
     "smart_collections": "Coleções",
-    "filters": "Filtros"
+    "filters": "Filtros",
+    "unplayed": "Não jogado"
   },
   "library": {
     "all_games": "Todos os jogos",
@@ -189,7 +190,8 @@
     "game_details": "Detalhes do jogo",
     "resize_details": "Redimensionar painel de detalhes",
     "jump_view": "Navegar pela visualização atual",
-    "play_insights": "Estatísticas de jogo"
+    "play_insights": "Estatísticas de jogo",
+    "sort_my_rating": "Minha avaliação"
   },
   "dialog": {
     "add_game": "Adicionar jogo",
@@ -484,7 +486,8 @@
     "clear": "Limpar",
     "favorite": "Favorito",
     "hidden": "Oculto",
-    "reset_stats": "Redefinir contagem de jogos, tempo de jogo e data do último jogo"
+    "reset_stats": "Redefinir contagem de jogos, tempo de jogo e data do último jogo",
+    "my_rating": "Minha avaliação"
   },
   "playlists": {
     "title": "Listas de reprodução",
@@ -849,7 +852,8 @@
     "health_rescan_daily": "Diária",
     "health_rescan_weekly": "Semanal",
     "health_rescan_on_startup": "Na inicialização",
-    "health_rescan_off": "Desligada"
+    "health_rescan_off": "Desligada",
+    "backlog_progress_suggest": "Sugerir marcar jogos como «Jogando» na primeira partida"
   },
   "picker": {
     "title": "O que devo jogar?",
@@ -880,7 +884,8 @@
       "rated": "Você avaliou {name} com {rating} estrelas.",
       "fits_session": "{name} cabe em cerca de {minutes} minutos.",
       "favorite": "{name} é um favorito que você não toca há {days} dias.",
-      "random": "Uma escolha aleatória da sua biblioteca."
+      "random": "Uma escolha aleatória da sua biblioteca.",
+      "rated_backlog": "Você avaliou {name} com {stars} estrelas, nunca começou, e leva ~{ttb} h para zerar."
     }
   },
   "storefront": {
@@ -1273,5 +1278,35 @@
     "merge": "Mesclar",
     "merged": "{count} entradas duplicadas mescladas",
     "failed": "Falha na mesclagem"
+  },
+  "backlog": {
+    "section": "Pendentes",
+    "status": "Estado",
+    "unplayed": "Não jogado",
+    "stars": "estrelas",
+    "my_rating": "Minha avaliação",
+    "rating_saved": "Avaliação salva",
+    "status_saved": "Estado salvo",
+    "manual_time": "Tempo de jogo manual",
+    "total_time": "Tempo de jogo total",
+    "log_playtime": "Registrar tempo de jogo",
+    "playtime_saved": "Tempo de jogo registrado",
+    "playtime_deleted": "Entrada de tempo excluída",
+    "playtime_range": "Digite entre 1 minuto e 24 horas",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "add_note": "Adicionar nota",
+    "notes": "Notas",
+    "note_saved": "Nota salva",
+    "note_deleted": "Nota excluída",
+    "note": "Nota",
+    "hours": "Horas",
+    "minutes": "Minutos",
+    "date": "Data",
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "suggest_title": "Atualizar seu backlog?",
+    "suggest_message": "Você iniciou {name}. Marcar como «Jogando»?",
+    "suggest_confirm": "Marcar como «Jogando»"
   }
 }
