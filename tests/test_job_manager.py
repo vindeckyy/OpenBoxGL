@@ -552,6 +552,14 @@ class OperationMappingTests(unittest.TestCase):
         self.assertEqual(operation_title_for_name("saves-backup:g1"), "Save backup")
         self.assertEqual(operation_title_for_name("custom-job"), "Custom Job")
 
+    def test_setup_commit_title_hides_raw_id(self):
+        # Row 11: the title fallback (job_manager.py:113) must not leak the
+        # raw "<name>:<id>" suffix into Activity Center titles.
+        title = operation_title_for_name("setup-commit:preview-abc123")
+        self.assertEqual(title, "Setup Commit")
+        self.assertNotIn("preview-abc123", title)
+        self.assertEqual(operation_title_for_name("saves-scan"), "Save path scan")
+
     def test_legacy_snapshot_fields_additive(self):
         job = {"name": "library-backup", "state": "done", "error": "plain"}
         operation = {
@@ -1164,7 +1172,21 @@ class JobsAdapterTests(unittest.TestCase):
             scan_status, scan_payload = self.request("POST", "/api/saves/scan/apply", {})
             self.assertEqual(scan_status, 202)
             self.assertIn("job_id", scan_payload)
-            _wait_for(webapp_state.JOB_MANAGER, "saves-scan", {"done"})
+            finished = _wait_for(webapp_state.JOB_MANAGER, "saves-scan", {"done"})
+            # Row 12: the finished job must carry the real worker payload —
+            # the pre-fix UI read `result.updated` off the 202 body, which
+            # never had the field. The payload ({"updated", "games"}) is
+            # preserved on the job snapshot itself (note: the operation
+            # record's `result` normalizes to null because
+            # _normalize_result's allowlist drops "updated" — a backend
+            # inconsistency outside this patch's file scope).
+            self.assertEqual(finished["state"], "done")
+            self.assertIsInstance(finished.get("updated"), int)
+            self.assertIsInstance(finished.get("games"), int)
+            # …and the job appears in the Activity Center listing.
+            list_status, listing = self.request("GET", "/api/jobs")
+            self.assertEqual(list_status, 200)
+            self.assertIn("saves-scan", listing["jobs"])
 
     def test_gameyfin_install_creates_operation(self):
         from openbox import save_state

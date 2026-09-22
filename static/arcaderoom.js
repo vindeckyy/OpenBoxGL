@@ -829,6 +829,8 @@ class ArcadeRoom {
     this.frame = 0;
   }
 
+  // INVARIANT: exactly one gamepad poll loop per surface — this is the arcade room's
+  // (bigbox.js and navigation.js run their own); do not add a second.
   startGamepadPoll() {
     if (!this.opened || this.gamepadFrame || !hasWindow() || typeof navigator?.getGamepads !== 'function') return;
     const poll = () => {

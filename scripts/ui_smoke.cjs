@@ -590,6 +590,155 @@ const failures = [];
   }, setupFixture);
   console.log('setup ui:', JSON.stringify(setupUi, null, 2));
 
+  // F18b Setup Center behavior pins (1.13.1 §2.1): source cards, stepper,
+  // empty scan/finish states, dismissal, insights, and Big Box empty view.
+  // A query-string import gives this block its own setup.js instance/state.
+  const setupBehavior = await page.evaluate(async () => {
+    const results = {};
+    const tick = (ms = 150) => new Promise(r => setTimeout(r, ms));
+    const origFetch = window.fetch;
+    const jsonResponse = (body, status = 200) => {
+      const text = JSON.stringify(body);
+      return {ok: status >= 200 && status < 300, status, text: async () => text, json: async () => body};
+    };
+    const summaryFixture = {
+      library_count: 0, source_coverage: [], metadata_match_percent: 0, media_gaps: 0,
+      duplicate_count: 0, missing_paths: 0,
+      emulator_readiness: {ready: 0, warning: 0, blocked: 0, unknown: 0},
+      active_operations: 0, next_action: {id: 'add_sources', label: 'Add game sources', step: 2},
+    };
+    window.fetch = async (url, opts = {}) => {
+      const href = String(url);
+      const method = (opts.method || 'GET').toUpperCase();
+      if (href.includes('/api/v2/setup/summary') && method === 'GET') return jsonResponse(summaryFixture);
+      if (href.includes('/api/v2/setup/preview/revalidate') && method === 'POST')
+        return jsonResponse({preview_id: 'p-empty', revision: 2, job_id: null, state: 'queued'});
+      if (href.includes('/api/v2/setup/preview') && method === 'POST' && !href.includes('/preview/'))
+        return jsonResponse({preview_id: 'p-empty', revision: 1, job_id: null, state: 'queued'}, 202);
+      if (href.includes('/api/v2/setup/preview?') && method === 'GET')
+        return jsonResponse({preview_id: 'p-empty', revision: 1, state: 'ready', revalidated: true, scanned_entries: 0, counts: {additions: 0, merges: 0}});
+      if (href.includes('/api/v2/setup/preview/items') && method === 'GET')
+        return jsonResponse({preview_id: 'p-empty', revision: 1, items: [], next_cursor: null});
+      if (href.includes('/api/v2/setup/commit') && method === 'POST')
+        return jsonResponse({preview_id: 'p-empty', revision: 2, job_id: 'job-commit-empty', import_batch_id: ''}, 202);
+      if (href.includes('/api/v2/jobs'))
+        return jsonResponse({jobs: [{job_id: 'job-commit-empty', state: 'done', type: 'setup.commit', result: {added: 0, merged: 0, skipped: 4}, can_cancel: false, can_retry: false, can_resume: false}], next_cursor: null});
+      if (href.includes('/api/library') || href.includes('/api/v1/library'))
+        return jsonResponse({games: [], playlists: [], settings: {locale: 'en'}, filter_presets: [], media_epoch: 0});
+      if (href.includes('/api/settings') && method === 'POST') {
+        const body = opts.body ? JSON.parse(opts.body) : {};
+        return jsonResponse(body);
+      }
+      if (href.includes('/api/v2/insights/summary'))
+        return jsonResponse({heatmap: [], totals: {}, top_platforms: [], top_genres: [], top_games: [], streak: null, momentum: null});
+      if (href.includes('/api/v2/insights/radio') || href.includes('/api/v2/insights/radar'))
+        return jsonResponse({});
+      return origFetch(url, opts);
+    };
+    const mod = await import('/static/setup.js?f18b=' + Date.now());
+    const libraryMod = await import('/static/library.js');
+    const insightsMod = await import('/static/insights.js');
+    const savedGames = AppState.games;
+    const savedBigBoxGames = AppState.bigBoxGames;
+    AppState.appSettings.welcome_completed = false;
+    AppState.setupDismissed = false;
+
+    // --- sources (step 2) ---
+    await mod.openSetupCenter({step: 2});
+    await tick();
+    const icons = [...document.querySelectorAll('.setup-source-icon')];
+    results.sourceIconsMonogram = icons.length > 0 && icons.every(el => /^[A-Za-z0-9]{1,2}$/.test(el.textContent.trim()));
+    document.querySelector('[data-source-key="steam"]')?.click();
+    await tick();
+    results.selectedSourceCard = Boolean(document.querySelector('[data-source-key="steam"].selected'))
+      && document.querySelectorAll('.setup-source-selected li').length === 1;
+    document.querySelector('[data-source-key="steam"]')?.click();
+    await tick();
+    results.duplicateSourceBlocked = document.querySelectorAll('.setup-source-selected li').length === 1;
+    document.querySelector('[data-remove-source]')?.click();
+    await tick();
+    results.removeSelectedSource = document.querySelectorAll('.setup-source-selected li').length === 0
+      && !document.querySelector('[data-source-key="steam"].selected');
+    results.onlyCompletedStepsClickable = [...document.querySelectorAll('.setup-step-item')]
+      .every(item => (Number(item.dataset.setupStep) < 2) === Boolean(item.onclick));
+    const details = document.querySelector('.setup-more-sources');
+    details.open = true;
+    details.dispatchEvent(new Event('toggle'));
+    document.querySelector('[data-source-key="faugus"]')?.click();
+    await tick();
+    results.moreSourcesSurvivesRerender = document.querySelector('.setup-more-sources')?.open === true;
+
+    // --- empty scan (step 2 -> 3) ---
+    document.getElementById('setupContinue')?.click();
+    await tick(900);
+    const emptyMsg = document.querySelector('.setup-preview-list .setup-empty');
+    results.emptyScanMessage = Boolean(emptyMsg) && /no importable games/i.test(emptyMsg.textContent);
+
+    // --- dismiss via close button, then library refresh: no reopen ---
+    document.getElementById('closeSetupCenter')?.click();
+    await tick();
+    results.dismissedFlag = AppState.setupDismissed === true;
+    await libraryMod.refresh();
+    await tick();
+    results.dismissNoReopen = document.getElementById('setupCenter').open !== true;
+    results.insightsHiddenOnEmpty = document.getElementById('insightsPanel')?.hidden === true;
+
+    // --- zero-import finish (drive steps 3 -> 8) ---
+    AppState.setupDismissed = true; // keep refresh() inside the finish pipeline from reopening the wizard
+    await mod.openSetupCenter({step: 3});
+    await tick();
+    for (let i = 0; i < 5; i++) {
+      document.getElementById('setupContinue')?.click();
+      await tick(900);
+    }
+    await tick(1500);
+    const finishPanel = document.querySelector('[data-setup-panel="finish"]');
+    results.zeroImportHidesViewImported = Boolean(finishPanel) && !document.getElementById('setupViewImported');
+    results.zeroImportMessage = Boolean(finishPanel) && /No games were imported/.test(finishPanel.textContent);
+
+    // --- reopening the wizard refreshes step/state ---
+    await mod.openSetupCenter({step: 2});
+    await tick();
+    await mod.openSetupCenter({step: 1});
+    await tick();
+    results.reopenRefreshesStep = document.querySelector('.setup-step-item.active')?.dataset.setupStep === '1'
+      && document.getElementById('setupCenter').open === true;
+    document.getElementById('setupCenter')?.close();
+
+    // --- Big Box empty view explains and opens the wizard ---
+    const bigboxMod = await import('/static/bigbox.js');
+    AppState.games = [];
+    bigboxMod.openBigBox();
+    await tick();
+    results.bigboxEmptyExplains = (document.getElementById('toast')?.textContent || '').length > 20;
+    results.bigboxEmptyOpensWizard = document.getElementById('setupCenter').open === true
+      && document.getElementById('bigBox').hidden === true;
+    document.getElementById('setupCenter')?.close();
+
+    // --- insights collapse persists via localStorage ---
+    const panel = document.getElementById('insightsPanel');
+    panel.hidden = false;
+    localStorage.setItem('openbox-insights-collapsed', '1');
+    insightsMod.bindInsights();
+    document.getElementById('insightsBody')?.remove();
+    await insightsMod.loadInsights();
+    await tick(600);
+    results.insightsCollapsePersists = document.getElementById('insightsBody')?.hidden === true
+      && document.getElementById('insightsToggle')?.textContent === '▸';
+    document.getElementById('insightsToggle')?.click();
+    await tick();
+    results.insightsToggleWritesStorage = localStorage.getItem('openbox-insights-collapsed') === '0'
+      && document.getElementById('insightsBody')?.hidden === false;
+    localStorage.setItem('openbox-insights-collapsed', '0'); // leave clean
+
+    AppState.appSettings = {...AppState.appSettings, locale: 'en', welcome_completed: false};
+    AppState.games = savedGames; // the gamepad/party sections below need the real library
+    AppState.bigBoxGames = savedBigBoxGames;
+    window.fetch = origFetch;
+    return results;
+  });
+  console.log('setup behavior:', JSON.stringify(setupBehavior, null, 2));
+
   // 6. Dialog focus management test
   const dialogFocusOk = await page.evaluate(async () => {
     const addBtn = document.getElementById('addButton');
@@ -603,6 +752,41 @@ const failures = [];
     return document.activeElement === addBtn;
   });
   console.log('dialog focus restore:', {dialogFocusOk});
+
+  // 6b. G-D2: click-outside on a nested dialog closes only the topmost dialog
+  // (routed through closeDialog) and restores focus to a connected element.
+  const nestedDialogOk = await page.evaluate(async () => {
+    const dialogsMod = await import('/static/dialogs.js');
+    const opener = document.getElementById('addButton');
+    opener.focus();
+    opener.click();
+    await new Promise(r => setTimeout(r, 400));
+    const gameDialog = document.getElementById('gameDialog');
+    if (!gameDialog?.open) return {gameOpen: false};
+    // Lazily created (body-appended) nested dialog, same path as
+    // promptChoice/confirmAction.
+    const choice = dialogsMod.promptChoice({title: 'Smoke', message: 'Pick one', choices: [{value: 'a', label: 'A'}]});
+    await new Promise(r => setTimeout(r, 400));
+    const nested = document.getElementById('a11yChoiceDialog');
+    if (!nested?.open) { dialogsMod.closeDialog(gameDialog); return {nestedOpen: false}; }
+    // The nested dialog autofocuses its <select>; the click-outside handler
+    // ignores mousedowns while a SELECT is focused, so move focus first.
+    nested.querySelector('button')?.focus();
+    const rect = nested.getBoundingClientRect();
+    document.dispatchEvent(new MouseEvent('mousedown', {
+      bubbles: true, cancelable: true, clientX: rect.left - 50, clientY: rect.top - 50,
+    }));
+    await new Promise(r => setTimeout(r, 400));
+    const out = {
+      nestedClosed: !nested.open,
+      gameStillOpen: gameDialog.open,
+      focusRestored: document.activeElement !== document.body && Boolean(document.activeElement?.isConnected),
+    };
+    choice.then(() => {}, () => {});
+    if (gameDialog.open) dialogsMod.closeDialog(gameDialog);
+    return out;
+  });
+  console.log('nested dialog click-outside:', nestedDialogOk);
 
   // 7. Reader dialog cleanup test
   const readerCleanedOk = await page.evaluate(async () => {
@@ -1389,6 +1573,26 @@ const failures = [];
   (!setupUi.decisionsIncludeLaunch) && failures.push("setupUi.decisionsIncludeLaunch");
   (!setupUi.welcomeCompleted) && failures.push("setupUi.welcomeCompleted");
   (!setupUi.setupCssVarsOnly) && failures.push("setupUi.setupCssVarsOnly");
+  (!setupBehavior.sourceIconsMonogram) && failures.push("setupBehavior.sourceIconsMonogram");
+  (!setupBehavior.selectedSourceCard) && failures.push("setupBehavior.selectedSourceCard");
+  (!setupBehavior.duplicateSourceBlocked) && failures.push("setupBehavior.duplicateSourceBlocked");
+  (!setupBehavior.removeSelectedSource) && failures.push("setupBehavior.removeSelectedSource");
+  (!setupBehavior.onlyCompletedStepsClickable) && failures.push("setupBehavior.onlyCompletedStepsClickable");
+  (!setupBehavior.moreSourcesSurvivesRerender) && failures.push("setupBehavior.moreSourcesSurvivesRerender");
+  (!setupBehavior.emptyScanMessage) && failures.push("setupBehavior.emptyScanMessage");
+  (!setupBehavior.dismissedFlag) && failures.push("setupBehavior.dismissedFlag");
+  (!setupBehavior.dismissNoReopen) && failures.push("setupBehavior.dismissNoReopen");
+  (!setupBehavior.insightsHiddenOnEmpty) && failures.push("setupBehavior.insightsHiddenOnEmpty");
+  (!setupBehavior.zeroImportHidesViewImported) && failures.push("setupBehavior.zeroImportHidesViewImported");
+  (!setupBehavior.zeroImportMessage) && failures.push("setupBehavior.zeroImportMessage");
+  (!setupBehavior.reopenRefreshesStep) && failures.push("setupBehavior.reopenRefreshesStep");
+  (!setupBehavior.bigboxEmptyExplains) && failures.push("setupBehavior.bigboxEmptyExplains");
+  (!setupBehavior.bigboxEmptyOpensWizard) && failures.push("setupBehavior.bigboxEmptyOpensWizard");
+  (!setupBehavior.insightsCollapsePersists) && failures.push("setupBehavior.insightsCollapsePersists");
+  (!setupBehavior.insightsToggleWritesStorage) && failures.push("setupBehavior.insightsToggleWritesStorage");
+  (!nestedDialogOk.nestedClosed) && failures.push("nestedDialogOk.nestedClosed");
+  (!nestedDialogOk.gameStillOpen) && failures.push("nestedDialogOk.gameStillOpen");
+  (!nestedDialogOk.focusRestored) && failures.push("nestedDialogOk.focusRestored");
   (!dialogFocusOk) && failures.push("dialogFocusOk");
   (!readerCleanedOk) && failures.push("readerCleanedOk");
   (!gamepadLoopStopped) && failures.push("gamepadLoopStopped");

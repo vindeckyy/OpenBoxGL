@@ -263,5 +263,26 @@ class SettingsSchemaTests(unittest.TestCase):
             self.assertIn("Controller button mappings must use buttons 0 through 31", str(ctx.exception))
 
 
+    def test_hidden_sidebar_sections_shape_and_drop(self):
+        # Row 14: the free-text setting became a checkbox group. The schema
+        # key must accept a list of section ids and reject non-lists.
+        from handlers.settings import _clean_hidden_sections
+
+        self.assertEqual(
+            _clean_hidden_sections({"hidden_sidebar_sections": ["search", "filters"]}),
+            ["search", "filters"],
+        )
+        self.assertEqual(_clean_hidden_sections({}), [])
+        with self.assertRaises(ValueError):
+            _clean_hidden_sections({"hidden_sidebar_sections": "search"})
+        # The whitelist keeps the key and drops unknown siblings.
+        clean, dropped = sanitize_settings({
+            "hidden_sidebar_sections": ["search"],
+            "bogus_sidebar_key": True,
+        })
+        self.assertEqual(clean["hidden_sidebar_sections"], ["search"])
+        self.assertIn("bogus_sidebar_key", dropped)
+
+
 if __name__ == "__main__":
     unittest.main()

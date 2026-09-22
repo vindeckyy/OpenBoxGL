@@ -197,6 +197,9 @@
     "basics": "Général",
     "launch": "Lancement",
     "media": "Médias",
+    "media_show_more": "Afficher {count} types de médias supplémentaires",
+    "media_show_fewer": "Afficher moins de types de médias",
+    "media_show_more_initial": "Afficher plus de types de médias",
     "saves_documents": "Sauvegardes & Documents",
     "advanced": "Avancé",
     "name": "Nom",
@@ -890,7 +893,9 @@
     "ra_not_matched": "Non correspondants",
     "screensaver_prompt": "Appuyez sur Jouer pour lancer, ou sur toute autre commande pour revenir.",
     "running_game": "Jeu en cours",
-    "search_platform": "Rechercher dans cette plateforme"
+    "search_platform": "Rechercher dans cette plateforme",
+    "empty_view_setup": "Big Box a besoin de jeux dans la vue actuelle — ajoutez des sources pour construire votre bibliothèque",
+    "empty_view_now_empty": "La vue actuelle est désormais vide"
   },
   "errors": {
     "copy_details": "Copier les détails",
