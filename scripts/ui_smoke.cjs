@@ -736,6 +736,11 @@ const failures = [];
     AppState.appSettings = {...AppState.appSettings, locale: 'en', welcome_completed: false};
     AppState.games = savedGames; // the gamepad/party sections below need the real library
     AppState.bigBoxGames = savedBigBoxGames;
+    // Restoring games must invalidate the filter cache: the bigbox empty-view
+    // check above emptied AppState.games and invalidated, so without this the
+    // gamepad/party sections below would see a stale empty filteredGames().
+    AppState._refreshCounter = (AppState._refreshCounter || 0) + 1;
+    (await import('/static/state.js')).invalidateFilterCache();
     window.fetch = origFetch;
     return results;
   });
