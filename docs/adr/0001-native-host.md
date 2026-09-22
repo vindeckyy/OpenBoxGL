@@ -75,7 +75,10 @@ the library is absent.
 
 - Positive: one renderer, two hosts; feature parity is free; the Python runtime
   stays stdlib-only.
-- Negative: a small amount of C to maintain (now ~1000 lines in `native_host.c`, grown past the original ~600-line budget as dialogs, gamepad stub, and single-instance handling landed); a system
+- Negative: a small amount of C to maintain (now ~1,800 lines in `native_host.c`,
+  grown past the original ~600-line budget as dialogs, gamepad stub, and
+  single-instance handling landed), plus a second Windows host
+  (`native_host_win.c`, WebView2 — see ADR 0048); a system
   dependency on WebKitGTK.
 - Neutral: the loopback server remains the application core; only the product
   surface changes.

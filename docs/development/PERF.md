@@ -137,6 +137,10 @@ CI job `perf-20k` is blocking on pull requests and pushes to master.
 
 ## 1.7.2 SQLite Read Model
 
+> Historical note: this section describes the original 1.7.2 opt-in behavior.
+> Since 1.12.0 (ADR 0047) the read model self-enables at 5,000+ games unless
+> opted out with `OPENBOX_ENABLE_SQLITE_READ=0`.
+
 - **Optional Acceleration**: `pkg/state/sqlite_readmodel.py` provides an alternative read path using stdlib `sqlite3`, enabled via `OPENBOX_ENABLE_SQLITE_READ=1` env flag.
 - **FTS5 Search**: Full-text search via SQLite FTS5 virtual tables with automatic LIKE fallback for builds without FTS5 support.
 - **Indexed Queries**: Filtered lookups on platform, genre, favorite, hidden, installed with limit/offset pagination via SQL WHERE clauses.
