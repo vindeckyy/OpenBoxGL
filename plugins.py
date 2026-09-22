@@ -1,4 +1,9 @@
-"""Local OpenBox plugin packages and hooks."""
+"""Local OpenBox plugin packages and hooks.
+
+The plugin surface is frozen as API v1 (see docs/plugin-api.md): manifest
+hooks, palette commands, a bounded library read, and a notification post.
+Everything else is internal and may change.
+"""
 
 import json
 import logging
@@ -15,12 +20,57 @@ from archives import safe_zip_extract
 from backend_io import atomic_write_text
 
 
-HOOKS = {"before_launch", "after_session", "library"}
+HOOKS = {"before_launch", "after_session", "library", "command"}
 PLUGIN_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
+COMMAND_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+PLUGIN_API_VERSION = 1
 RUNNER = Path(__file__).with_name("plugin_runner.py")
 LOGGER = logging.getLogger("openbox.plugins")
 MAX_PLUGIN_PAYLOAD = 2 * 1024 * 1024
+MAX_COMMANDS = 32
+MAX_LIBRARY_ENTRIES = 500
 UNSANDBOXED_PLUGINS_ENV = "OPENBOX_ALLOW_UNSANDBOXED_PLUGINS"
+
+
+def sandbox_status():
+    """Report the sandbox mode the host will use for plugin execution."""
+    if os.environ.get(UNSANDBOXED_PLUGINS_ENV) == "1":
+        return "disabled"
+    if not shutil.which("bwrap"):
+        return "unavailable"
+    try:
+        return "ready" if _sandbox_available() else "unavailable"
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        # A mocked or broken subprocess layer must fail toward "unavailable"
+        # (skip the plugin) rather than break session bookkeeping.
+        return "unavailable"
+
+
+def _clean_commands(raw, plugin_id):
+    if raw in (None, []):
+        return []
+    if not isinstance(raw, list) or len(raw) > MAX_COMMANDS:
+        raise ValueError("Plugin commands must be a bounded list.")
+    commands = []
+    seen = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            raise ValueError("Plugin commands must be objects with id and label.")
+        command_id = str(item.get("id") or "").strip()
+        label = str(item.get("label") or "").strip()
+        if not COMMAND_ID.fullmatch(command_id) or not label:
+            raise ValueError("Plugin commands need a valid id and a label.")
+        if command_id in seen:
+            raise ValueError("Plugin command ids must be unique.")
+        seen.add(command_id)
+        commands.append({
+            "id": command_id,
+            "label": label[:80],
+            "description": str(item.get("description") or "")[:280],
+            "plugin_id": plugin_id,
+            "source": "manifest",
+        })
+    return commands
 
 
 def _sandboxed_command(package_root, entry, hook):
@@ -119,26 +169,153 @@ def read_manifest(path):
         raise ValueError("Plugin id, name, and version are required.")
     if not isinstance(hooks, list) or not set(hooks) <= HOOKS:
         raise ValueError("Plugin declares an unsupported hook.")
+    api_version = manifest.get("api_version", PLUGIN_API_VERSION)
+    if isinstance(api_version, bool) or not isinstance(api_version, int) or api_version < 1:
+        raise ValueError("Plugin api_version must be a positive integer.")
+    if api_version > PLUGIN_API_VERSION:
+        raise ValueError(f"Plugin requires API v{api_version}; this build supports v{PLUGIN_API_VERSION}.")
     entry_path = (path / entry).resolve()
     if path.resolve() not in entry_path.parents or not entry_path.is_file() or entry_path.suffix != ".py":
         raise ValueError("Plugin entry must be a Python file inside the package.")
-    return {**manifest, "id":plugin_id, "entry":entry, "hooks":hooks}
+    commands = _clean_commands(manifest.get("commands"), plugin_id)
+    return {
+        **manifest,
+        "id": plugin_id,
+        "entry": entry,
+        "hooks": hooks,
+        "api_version": api_version,
+        "commands": commands,
+    }
 
 
 def list_plugins(directory):
+    """List installed plugins, including malformed packages that fail validation.
+
+    Malformed and unsandboxed plugins are surfaced with ``valid: False`` and a
+    sandbox status instead of being hidden, so the manager can explain why a
+    plugin cannot run.
+    """
     root = Path(directory)
     disabled = set(load_plugin_state(root).get("disabled", []))
-    plugins = []
+    candidates = []
     if root.is_dir():
-        for path in sorted(root.iterdir()):
-            if not path.is_dir() or path.name.startswith("."):
-                continue
-            try:
-                manifest = read_manifest(path)
-            except ValueError:
-                continue
-            plugins.append({**manifest, "enabled":manifest["id"] not in disabled})
+        candidates = [
+            path for path in sorted(root.iterdir())
+            if path.is_dir() and not path.name.startswith(".")
+        ]
+    sandbox = sandbox_status() if candidates else "ready"
+    plugins = []
+    for path in candidates:
+        try:
+            manifest = read_manifest(path)
+        except ValueError as error:
+            plugins.append({
+                "id": path.name,
+                "name": path.name,
+                "version": "",
+                "valid": False,
+                "error": str(error),
+                "enabled": False,
+                "sandbox": sandbox,
+                "commands": [],
+                "hooks": [],
+            })
+            continue
+        plugins.append({
+            **manifest,
+            "valid": True,
+            "enabled": manifest["id"] not in disabled,
+            "sandbox": sandbox,
+        })
     return plugins
+
+
+def plugin_commands(directory, *, include_disabled=False):
+    """Return palette commands declared by valid plugin manifests."""
+    commands = []
+    for manifest in list_plugins(directory):
+        if not manifest.get("valid") or (not include_disabled and not manifest.get("enabled")):
+            continue
+        commands.extend(manifest.get("commands") or [])
+    return commands
+
+
+def run_plugin_hook(directory, plugin_id, hook, payload):
+    """Run one plugin hook and return ``(result, error)``.
+
+    ``error`` is a human-readable reason when the plugin was skipped (invalid
+    plugin id, unsandboxed host, oversized payload, missing runner). The result
+    is the parsed dict output or None.
+    """
+    root = Path(directory)
+    try:
+        manifest = read_manifest(root / str(plugin_id))
+    except ValueError as error:
+        return None, str(error)
+    if hook not in manifest["hooks"]:
+        return None, f"Plugin does not declare the {hook} hook."
+    return _run_manifest_hook(root, manifest, hook, payload)
+
+
+def _run_manifest_hook(root, manifest, hook, payload):
+    package_root = root / manifest["id"]
+    entry = package_root / manifest["entry"]
+    encoded = json.dumps(payload)
+    if len(encoded.encode("utf-8")) > MAX_PLUGIN_PAYLOAD:
+        return None, "Payload is too large for plugin execution."
+    command = _plugin_command(package_root, entry, hook)
+    if command is None:
+        return None, "bubblewrap is unavailable; the plugin was not run unsandboxed."
+    try:
+        plugin_env = _plugin_environment()
+        with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+            completed = subprocess.run(
+                command,
+                input=encoded.encode("utf-8"), stdout=stdout_file, stderr=stderr_file,
+                timeout=5, env=plugin_env, start_new_session=True,
+                check=False,
+            )
+            stdout_file.seek(0)
+            stdout = stdout_file.read(MAX_PLUGIN_PAYLOAD + 1)
+            stderr_file.seek(0, 2)
+            stderr_file.seek(max(0, stderr_file.tell() - 400))
+            stderr = stderr_file.read().decode("utf-8", errors="replace")
+    except (OSError, subprocess.SubprocessError) as error:
+        return None, str(error)
+    if len(stdout) > MAX_PLUGIN_PAYLOAD:
+        return None, "Plugin output exceeded the payload limit."
+    if completed.returncode:
+        return None, f"Plugin exited with status {completed.returncode}: {stderr}"
+    output = stdout.decode("utf-8", errors="replace")
+    if not output.strip():
+        return None, ""
+    try:
+        candidate = json.loads(output)
+    except json.JSONDecodeError:
+        return None, "Plugin returned invalid JSON."
+    if not isinstance(candidate, dict):
+        return None, "Plugin output must be a JSON object."
+    return candidate, ""
+
+
+def _plugin_environment():
+    plugin_env = os.environ.copy()
+    for key in ("PYTHONPATH", "PYTHONHOME", "LD_PRELOAD", "LD_LIBRARY_PATH"):
+        plugin_env.pop(key, None)
+    # Strip credentials and OpenBox-internal configuration so plugins
+    # cannot read tokens, secrets, or host state out of the environment.
+    sensitive = (
+        "TOKEN", "PASSWORD", "SECRET", "API_KEY",
+        "OPENBOX_", "RETROACHIEVEMENTS_", "EMUMOVIES_", "GITHUB_",
+        "RA_", "IGDB_", "GAMEYFIN_",
+    )
+    upper_env = {key.upper(): key for key in plugin_env}
+    for pattern in sensitive:
+        for upper_key in list(upper_env):
+            if pattern in upper_key:
+                plugin_env.pop(upper_env.pop(upper_key), None)
+    plugin_env["PYTHONNOUSERSITE"] = "1"
+    return plugin_env
 
 
 def install_plugin(source, directory):
@@ -214,62 +391,14 @@ def remove_plugin(directory, plugin_id):
 
 
 def run_plugins(directory, hook, payload):
+    root = Path(directory)
     result = payload
-    for manifest in list_plugins(directory):
-        if not manifest["enabled"] or hook not in manifest["hooks"]:
+    for manifest in list_plugins(root):
+        if not manifest.get("valid") or not manifest["enabled"] or hook not in manifest["hooks"]:
             continue
-        package_root = Path(directory) / manifest["id"]
-        entry = package_root / manifest["entry"]
-        encoded = json.dumps(result)
-        if len(encoded.encode("utf-8")) > MAX_PLUGIN_PAYLOAD:
-            LOGGER.warning("Skipping plugin %s for %s because the payload is too large", manifest["id"], hook)
-            continue
-        command = _plugin_command(package_root, entry, hook)
-        if command is None:
-            continue
-        try:
-            plugin_env = os.environ.copy()
-            for key in ("PYTHONPATH", "PYTHONHOME", "LD_PRELOAD", "LD_LIBRARY_PATH"):
-                plugin_env.pop(key, None)
-            # Strip credentials and OpenBox-internal configuration so plugins
-            # cannot read tokens, secrets, or host state out of the environment.
-            sensitive = (
-                "TOKEN", "PASSWORD", "SECRET", "API_KEY",
-                "OPENBOX_", "RETROACHIEVEMENTS_", "EMUMOVIES_", "GITHUB_",
-                "RA_", "IGDB_", "GAMEYFIN_",
-            )
-            upper_env = {key.upper(): key for key in plugin_env}
-            for pattern in sensitive:
-                for upper_key in list(upper_env):
-                    if pattern in upper_key:
-                        plugin_env.pop(upper_env.pop(upper_key), None)
-            plugin_env["PYTHONNOUSERSITE"] = "1"
-            with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
-                completed = subprocess.run(
-                    command,
-                    input=encoded.encode("utf-8"), stdout=stdout_file, stderr=stderr_file,
-                    timeout=5, env=plugin_env, start_new_session=True,
-                    check=False,
-                )
-                stdout_file.seek(0)
-                stdout = stdout_file.read(MAX_PLUGIN_PAYLOAD + 1)
-                stderr_file.seek(0, 2)
-                stderr_file.seek(max(0, stderr_file.tell() - 400))
-                stderr = stderr_file.read().decode("utf-8", errors="replace")
-        except (OSError, subprocess.SubprocessError) as error:
+        candidate, error = _run_manifest_hook(root, manifest, hook, result)
+        if candidate is not None:
+            result = candidate
+        elif error:
             LOGGER.warning("Plugin %s failed for %s: %s", manifest["id"], hook, error)
-            continue
-        if len(stdout) > MAX_PLUGIN_PAYLOAD:
-            LOGGER.warning("Ignoring oversized output from plugin %s", manifest["id"])
-            continue
-        output = stdout.decode("utf-8", errors="replace")
-        if completed.returncode == 0 and output.strip():
-            try:
-                candidate = json.loads(output)
-                if isinstance(candidate, dict):
-                    result = candidate
-            except json.JSONDecodeError:
-                LOGGER.warning("Ignoring invalid JSON from plugin %s", manifest["id"])
-        elif completed.returncode:
-            LOGGER.warning("Plugin %s exited with status %s: %s", manifest["id"], completed.returncode, stderr)
     return result

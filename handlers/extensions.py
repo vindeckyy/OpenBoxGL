@@ -11,7 +11,17 @@ from automation import DEFAULT_ATTEMPTS, DEFAULT_TIMEOUT, EVENT_TYPES, MAX_WEBHO
 from openbox import DATA, load_state
 from pkg.platform_compat import open_path
 from plugin_catalog import download_plugin_package, fetch_plugin_catalog
-from plugins import install_plugin, list_plugins, remove_plugin, set_plugin_enabled
+from plugins import (
+    MAX_LIBRARY_ENTRIES,
+    install_plugin,
+    list_plugins,
+    plugin_commands,
+    read_manifest,
+    remove_plugin,
+    run_plugin_hook,
+    sandbox_status,
+    set_plugin_enabled,
+)
 from routes.registry import route
 from stock_themes import ensure_stock_themes
 from webapp_state import PLUGIN_EPOCH, ROOT, game_from_payload, load_state_view, public_webhook_configs, transact_state, webhook_configs
@@ -52,7 +62,59 @@ class ExtensionsHandlers:
 
     @route("GET", "/api/plugins")
     def _api_get_api_plugins(self, parsed):
-        self.send_json(200, {"plugins":list_plugins(DATA.parent / "plugins")})
+        self.send_json(200, {
+            "plugins": list_plugins(DATA.parent / "plugins"),
+            "api_version": 1,
+            "sandbox": sandbox_status(),
+        })
+        return
+
+    @route("GET", "/api/v2/plugins/commands")
+    def _api_get_api_v2_plugins_commands(self, parsed):
+        """Palette commands declared by enabled plugins plus host builtins."""
+        self.send_json(200, {
+            "api_version": 1,
+            "sandbox": sandbox_status(),
+            "commands": plugin_commands(DATA.parent / "plugins"),
+        })
+        return
+
+    @route("POST", "/api/v2/plugins/command")
+    def _api_post_api_v2_plugins_command(self, payload):
+        """Run one palette command through the sandboxed plugin runner."""
+        body = payload if isinstance(payload, dict) else {}
+        plugin_id = str(body.get("plugin_id") or "").strip()
+        command = str(body.get("command") or "").strip()
+        if not plugin_id or not command:
+            raise ValueError("plugin_id and command are required.")
+        try:
+            manifest = read_manifest(DATA.parent / "plugins" / plugin_id)
+        except ValueError as error:
+            raise ValueError(str(error)) from error
+        declared = {entry.get("id") for entry in manifest.get("commands") or []}
+        if command not in declared:
+            raise ValueError("This plugin does not declare that command.")
+        state = load_state_view()
+        library = [
+            {
+                "game_id": str(game.get("game_id") or ""),
+                "name": str(game.get("name") or ""),
+                "platform": str(game.get("platform") or ""),
+                "progress": str(game.get("progress") or ""),
+                "favorite": bool(game.get("favorite")),
+                "playtime_seconds": int(game.get("playtime_seconds") or 0),
+            }
+            for game in (state.get("games") or [])[:MAX_LIBRARY_ENTRIES]
+        ]
+        result, error = run_plugin_hook(
+            DATA.parent / "plugins", plugin_id, "command",
+            {"command": command, "library": library},
+        )
+        if result is None and error:
+            raise ValueError(error)
+        notification = result.get("notification") if isinstance(result, dict) else None
+        self.send_json(200, {"ok": True, "plugin_id": plugin_id, "command": command, "result": result, "notification": notification})
+        return
         return
 
     @route("GET", "/api/plugins/catalog")
