@@ -415,7 +415,13 @@
     "esde_source_required": "Wähle zuerst eine ES-DE-gamelist.xml.",
     "esde_preview_required": "Zeige diese ES-DE-Datei vor dem Anwenden als Vorschau.",
     "esde_applied": "ES-DE-Import angewendet: {added} hinzugefügt, {merged} zusammengeführt.",
-    "esde_select_file": "Wähle eine ES-DE-gamelist.xml."
+    "esde_select_file": "Wähle eine ES-DE-gamelist.xml.",
+    "choose_thumbnails": "Vorschaubilder",
+    "artwork_chooser_title": "Artwork wählen",
+    "artwork_chooser_hint": "Wähle ein Vorschaubild, um genau dieses Bild zu übernehmen.",
+    "artwork_chooser_empty": "Keine Bildkandidaten gefunden.",
+    "artwork_applying": "Gewähltes Artwork wird übernommen",
+    "artwork_applied": "Artwork übernommen"
   },
   "media_manager": {
     "title": "Medien-Manager",

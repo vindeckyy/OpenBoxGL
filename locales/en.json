@@ -415,7 +415,13 @@
     "esde_source_required": "Choose an ES-DE gamelist.xml first.",
     "esde_preview_required": "Preview this ES-DE file before applying it.",
     "esde_applied": "ES-DE import applied: {added} added, {merged} merged.",
-    "esde_select_file": "Choose an ES-DE gamelist.xml file."
+    "esde_select_file": "Choose an ES-DE gamelist.xml file.",
+    "choose_thumbnails": "Thumbnails",
+    "artwork_chooser_title": "Choose artwork",
+    "artwork_chooser_hint": "Pick a thumbnail to apply exactly that image.",
+    "artwork_chooser_empty": "No image candidates found.",
+    "artwork_applying": "Applying chosen artwork",
+    "artwork_applied": "Artwork applied"
   },
   "media_manager": {
     "title": "Media Manager",
