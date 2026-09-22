@@ -172,6 +172,7 @@ window.addEventListener('DOMContentLoaded', () => {
       for (const field of ['platform','genre']) if (values[field].trim()) changes[field] = values[field].trim();
       if (values.progress) changes.progress = values.progress === '__clear' ? '' : values.progress;
       if (values.rating !== '') changes.rating = Number(values.rating);
+      if (values.user_rating !== '') changes.user_rating = Number(values.user_rating);
       for (const field of ['favorite','hidden']) if (values[field]) changes[field] = values[field] === 'true';
       if (values.esrb) changes.esrb = values.esrb;
       if (values.reset_stats) changes.reset_stats = true;

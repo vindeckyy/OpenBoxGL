@@ -685,6 +685,14 @@
     .badge { display:inline-flex; align-items:center; gap:var(--space-3xs); padding:var(--space-2xs) var(--space-xs); border:1px solid var(--badge-pending-border); border-radius:4px; color:var(--badge-pending-fg); background:var(--badge-pending-bg); font-size:10px; line-height:1.2; }
     .badge.favorite,.badge.progress { color:var(--badge-progress-fg); }
     .badge.danger { color:var(--badge-danger-fg); border-color:var(--badge-danger-border); }
+    .badge.user-rating { color:var(--gold); }
+    .card .star-widget { position:absolute; left:var(--space-sm); right:var(--space-sm); bottom:var(--space-sm); display:flex; gap:var(--space-2xs); justify-content:center; align-items:center; padding:var(--space-2xs); border-radius:var(--radius-pill-large); background:var(--surface-card); opacity:0; transition:opacity .15s ease; }
+    .card:hover .star-widget,.card:focus-within .star-widget { opacity:1; }
+    .star-widget .star { background:none; border:0; padding:0; color:var(--text-soft); font-size:var(--font-action); cursor:pointer; line-height:1; }
+    .star-widget .star.on { color:var(--gold); }
+    .backlog-controls { display:flex; flex-wrap:wrap; gap:var(--space-sm); align-items:center; margin:var(--space-sm) 0; }
+    .backlog-row { display:flex; gap:var(--space-xs); align-items:center; justify-content:space-between; padding:var(--space-2xs) 0; border-top:1px solid var(--line); font-size:var(--font-body-small); }
+    .backlog-row .grow { flex:1; min-width:0; }
     .collection-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--space-sm); margin-top:var(--space-md); }
     .collection-stat { padding:var(--space-sm); border:1px solid var(--line); border-radius:6px; background:var(--surface-card); }
     .collection-stat small,.collection-stat strong { display:block; }

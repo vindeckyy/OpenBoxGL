@@ -319,6 +319,30 @@ def _rating_stars(words, now=None):
     return _clause(kind="rating_min", value=float(value))
 
 
+def _user_rating_stars(words, now=None):
+    """F4b: personal star rating predicate ("my 4 stars")."""
+    value = _numword(words[1].rstrip("+"))
+    if value is None:
+        return None
+    return _clause(kind="user_rating_min", value=int(value))
+
+
+def _user_rating_at_least(words, now=None):
+    """F4b: "my rating at least 4" -> personal star rating floor."""
+    value = _numword(words[-1].rstrip("+"))
+    if value is None:
+        return None
+    return _clause(kind="user_rating_min", value=int(value))
+
+
+def _user_rating_rated(words, now=None):
+    """F4b: typed myrating:4 -> personal star rating floor."""
+    try:
+        return _clause(kind="user_rating_min", value=int(float(words[0].rstrip("+"))))
+    except (TypeError, ValueError):
+        return None
+
+
 def _decade(words, now=None):
     digits = re.sub(r"\D", "", words[0])
     if len(digits) == 4:
@@ -455,11 +479,15 @@ def _typed(words, now=None):
     if key == "region":
         return _clause(kind="region", term=value)
     if key == "progress":
-        canon = next((item for item in ("Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned")
+        if value.casefold() == "dropped":
+            value = "Abandoned"
+        canon = next((item for item in ("Unplayed", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned")
                       if item.casefold() == value.casefold()), None)
         if canon is None:
             return _clause(kind="progress_any", values=[value])
         return _rule("progress", canon)
+    if key in ("myrating", "my_rating", "my-rating"):
+        return _user_rating_rated([value])
     if key == "esrb":
         canon = _ESRB_CANON.get(value.casefold(), value.upper())
         return _rule("esrb", canon)
@@ -585,6 +613,10 @@ def _build_grammar():
         (("top", "rated"), lambda w, now=None: _clause(kind="rating_min", value=TOP_RATING_MIN)),
         (("best", "rated"), lambda w, now=None: _clause(kind="rating_min", value=TOP_RATING_MIN)),
         (("unrated",), lambda w, now=None: _clause(kind="unrated")),
+        (("unrated", "by", "me"), lambda w, now=None: _clause(kind="user_rating_unrated")),
+        (("not", "rated", "by", "me"), lambda w, now=None: _clause(kind="user_rating_unrated")),
+        (("my", "rating", "at", "least", _NUMWORD), _user_rating_at_least),
+        (("my", _RATING, _STARS), _user_rating_stars),
         (("no", "rating"), lambda w, now=None: _clause(kind="unrated")),
         (("not", "rated"), lambda w, now=None: _clause(kind="unrated")),
         # esrb
@@ -866,6 +898,7 @@ def _clause_chip(clause):
     labels = {
         "unplayed": "Unplayed", "played": "Played", "backlog": "Backlog",
         "not_finished": "Not finished", "unrated": "Unrated",
+        "user_rating_min": "My rating", "user_rating_unrated": "Unrated by me",
         "multiplayer": "Multiplayer", "coop": "Co-op", "owned": "Owned",
         "year_range": "Year", "rating_min": "Rating",
         "players_min": "Players", "players_max": "Players",
@@ -890,6 +923,9 @@ def _clause_chip(clause):
     elif kind in ("rating_min",):
         chip["value"] = clause["value"]
         chip["display"] = f"\u2265 {clause['value']:g}"
+    elif kind == "user_rating_min":
+        chip["value"] = clause["value"]
+        chip["display"] = f"\u2265 {int(clause['value'])}\u2605"
     elif kind == "players_min":
         chip["value"] = clause["value"]
         chip["display"] = f"{clause['value']}+"
@@ -1082,8 +1118,40 @@ def _sub(term, value):
     return str(term).casefold() in str(value or "").casefold()
 
 
+def _progress_matches(stored, wanted):
+    """Progress equality with the F4a "Unplayed" display label.
+
+    The stored value stays "" for unset; "Unplayed" (any case) is the UI
+    alias and matches the same games.
+    """
+    stored = str(stored or "")
+    if str(wanted).casefold() == "unplayed":
+        return stored == "" or stored.casefold() == "unplayed"
+    return stored == str(wanted)
+
+
+def _user_rating(game):
+    try:
+        return int(game.get("user_rating") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _notes_text(game):
+    """Joined note text for search; handles legacy strings and entries."""
+    notes = game.get("notes")
+    if isinstance(notes, list):
+        return " ".join(
+            str(item.get("text") if isinstance(item, dict) else item or "").strip()
+            for item in notes
+        )
+    return str(notes or "")
+
+
 def _haystack(game):
-    return " ".join(str(game.get(field, "")) for field in _HAYSTACK_FIELDS).casefold()
+    fields = [str(game.get(field, "")) for field in _HAYSTACK_FIELDS if field != "notes"]
+    fields.append(_notes_text(game))
+    return " ".join(fields).casefold()
 
 
 def _int_or(value, default):
@@ -1160,7 +1228,7 @@ def _days_between(now, then):
 
 def _flag_value(game, field):
     if field == "notes":
-        return bool(str(game.get("notes") or "").strip())
+        return bool(_notes_text(game).strip())
     if field == "controller_support":
         return bool(str(game.get("controller_support") or "").strip())
     return bool(game.get(field))
@@ -1178,7 +1246,8 @@ def _clause_matches(game, clause, now):
     if kind == "not_finished":
         return str(game.get("progress") or "") not in FINISHED_PROGRESS
     if kind == "progress_any":
-        return str(game.get("progress") or "") in (clause.get("values") or [])
+        stored = str(game.get("progress") or "")
+        return any(_progress_matches(stored, value) for value in clause.get("values") or [])
     if kind == "year_range":
         year = _year(game)
         if year is None:
@@ -1189,6 +1258,10 @@ def _clause_matches(game, clause, now):
         return _rating(game) >= float(clause.get("value") or 0)
     if kind == "unrated":
         return _rating(game) <= 0
+    if kind == "user_rating_min":
+        return _user_rating(game) >= _int_or(clause.get("value"), 0)
+    if kind == "user_rating_unrated":
+        return _user_rating(game) <= 0
     if kind == "players_min":
         return _players(game) >= _int_or(clause.get("value"), 1)
     if kind == "players_max":

@@ -597,7 +597,9 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         id(game), index, media_epoch,
         game.get("favorite"), game.get("hidden"), game.get("hide_in_bigbox"),
         game.get("last_played"), game.get("play_count"), game.get("playtime_seconds"),
-        game.get("progress"), game.get("rating"), game.get("notes"),
+        game.get("progress"), game.get("rating"), repr(game.get("notes")),
+        game.get("user_rating"), game.get("manual_playtime_seconds"),
+        repr(game.get("manual_sessions")),
         game.get("name"), game.get("path"), game.get("cover"), game.get("background"),
         game.get("platform"), index in save_indices,
         game.get("manual_entry"),
@@ -671,6 +673,26 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
     tags = game.get("tags", [])
     if not isinstance(tags, list):
         tags = []
+
+    # F4 backlog fields: personal star rating, manual playtime, dated notes.
+    # Notes migrate from the legacy single string on read; absent fields
+    # project to their defaults so old libraries load unchanged.
+    from catalog import normalize_manual_sessions, normalize_notes
+    note_entries = _ns("normalize_notes", normalize_notes)(game.get("notes"))
+    manual_sessions = _ns("normalize_manual_sessions", normalize_manual_sessions)(game.get("manual_sessions"))
+    try:
+        manual_seconds = sum(entry["seconds"] for entry in manual_sessions)
+    except (TypeError, ValueError):
+        manual_seconds = 0
+    try:
+        user_rating = int(game.get("user_rating") or 0)
+    except (TypeError, ValueError):
+        user_rating = 0
+    user_rating = max(0, min(5, user_rating))
+    try:
+        observed_seconds = int(game.get("playtime_seconds") or 0)
+    except (TypeError, ValueError):
+        observed_seconds = 0
 
     documents = san_doc(game.get("documents", []))
     raw_screenshots = game.get("screenshots", [])
@@ -794,7 +816,11 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "video_recording": san_med(game.get("video_recording", "")),
         "progress": game.get("progress", ""),
         "rating": game.get("rating", ""),
-        "notes": game.get("notes", ""),
+        "notes": note_entries,
+        "user_rating": user_rating,
+        "manual_playtime_seconds": manual_seconds,
+        "manual_sessions": manual_sessions,
+        "total_playtime_seconds": max(0, observed_seconds) + manual_seconds,
         "region": game.get("region", ""),
         "play_mode": game.get("play_mode", ""),
         "sort_title": game.get("sort_title", ""),
