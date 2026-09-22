@@ -1,5 +1,5 @@
 import { $, escapeHtml, duration } from './util.js';
-import { api, notify, AppState, token, setButtonBusy } from './state.js';
+import { api, notify, AppState, token, setButtonBusy, registerLifecycleStream, unregisterLifecycleStream } from './state.js';
 import { refresh, launchExtra } from './library.js';
 import { renderTimelineTab } from './timeline.js';
 import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
@@ -68,9 +68,19 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
     }
     let sessionPollBusy = false;
     let sessionPollIdle = false;
+    // Module-level (not a per-call const): reconnecting must close the
+    // previous EventSource first, or every reconnect leaks a stream.
+    let sessionEventSource = null;
     function connectSessionEvents() {
+      if (sessionEventSource) {
+        try { sessionEventSource.close(); } catch { /* already closed */ }
+        unregisterLifecycleStream(sessionEventSource);
+        sessionEventSource = null;
+      }
       try {
         const source = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
+        sessionEventSource = source;
+        registerLifecycleStream(source);
         let _sseRefreshTimer = null;
         // Events arrive as named SSE frames (event: <kind>), so each kind needs
         // its own listener — onmessage only covers unnamed messages.
@@ -96,7 +106,12 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
             handleStateChanged();
           }
         };
-        source.onerror = () => { source.close(); /* fall back to polling */ };
+        source.onerror = () => {
+          unregisterLifecycleStream(source);
+          source.close();
+          if (sessionEventSource === source) sessionEventSource = null;
+          /* fall back to polling */
+        };
       } catch { /* EventSource unsupported; polling stays */ }
     }
     function scheduleSessionPoll(delay) { setTimeout(pollSessions, delay); }

@@ -123,6 +123,12 @@ _AUTH_FAILURES_LOCK = threading.Lock()
 _AUTH_MAX_FAILURES = 10
 _AUTH_WINDOW_SECONDS = 60.0
 
+# SSE subscriber-cap rejection: when register_event_subscriber() reports the
+# cap is full, answer 503 immediately instead of opening a heartbeat-only
+# stream that would never deliver events. Retry-After nudges the client to
+# retry once another tab closes its stream.
+SSE_BUSY_RETRY_AFTER = 5
+
 # Security headers shared by every response (including the SSE stream) so the
 # policy can't drift between code paths.
 CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.bunny.net; font-src 'self' https://fonts.bunny.net; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
@@ -486,6 +492,15 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
     @route("GET", "/api/events")
     def _api_get_api_events(self, parsed):
         subscriber_queue = queue_module.Queue(maxsize=SSE_QUEUE_SIZE)
+        if not register_event_subscriber(subscriber_queue):
+            # Subscriber cap reached: fail fast with 503 instead of opening
+            # a stream that would only ever send heartbeats and no events.
+            self.send_json(
+                503,
+                {"error": "Server is busy. Close an unused tab and try again.", "code": "SSE_BUSY", "retry_after": SSE_BUSY_RETRY_AFTER},
+                extra_headers={"Retry-After": str(SSE_BUSY_RETRY_AFTER)},
+            )
+            return
         try:
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -497,7 +512,6 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
             self.send_header("Content-Security-Policy", CSP_DEFAULT)
             self.send_header("X-Frame-Options", "DENY")
             self.end_headers()
-            register_event_subscriber(subscriber_queue)
             self.connection.settimeout(SSE_WRITE_TIMEOUT)
             while True:
                 try:
