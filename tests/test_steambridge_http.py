@@ -138,5 +138,100 @@ class SteamBridgeRouteTests(unittest.TestCase):
         self.assertIn("handlers/steambridge.py", (ROOT / "runtime_modules.txt").read_text(encoding="utf-8"))
 
 
+class SteamBridgeGridArtTests(unittest.TestCase):
+    """F5d: after apply, cached artwork lands in the Steam grid dir."""
+
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory()
+        base = Path(self.tempdir.name)
+        self.config = base / "Steam" / "userdata" / "424242" / "config"
+        self.config.mkdir(parents=True)
+        self.shortcuts = self.config / "shortcuts.vdf"
+        self.shortcuts.write_bytes(encode_shortcuts({"shortcuts": {}}))
+        media = base / "media"
+        media.mkdir()
+        self.cover = media / "cover.png"
+        self.cover.write_bytes(b"cover-bytes")
+        self.hero = media / "background.jpg"
+        self.hero.write_bytes(b"hero-bytes")
+        self.logo = media / "clear_logo.png"
+        self.logo.write_bytes(b"logo-bytes")
+        self.game = {
+            "game_id": "g1",
+            "name": "Grid Game",
+            "cover": str(self.cover),
+            "background": str(self.hero),
+            "clear_logo": str(self.logo),
+        }
+        self.state = {"games": [self.game]}
+
+    def tearDown(self):
+        self.tempdir.cleanup()
+
+    def _apply(self, path, shortcut_side_effect=None):
+        from pkg.parity.parity_steam_bridge import shortcut_from_game  # noqa: E402
+
+        preview_handler = Handler()
+        body = {"path": str(path), "game_ids": ["g1"], "launcher_exe": "/usr/bin/openbox"}
+        roots = (self.config.parents[2],)  # <tmp>/Steam: the fake Steam root
+        with mock.patch.object(steambridge, "_steam_roots", return_value=roots), mock.patch.object(
+            steambridge, "load_state_view", return_value=self.state
+        ):
+            steambridge.steambridge_preview(preview_handler, body)
+        plan = preview_handler.responses[-1][1]
+        self.assertEqual(plan["added"], 1)
+        apply_handler = Handler()
+        with mock.patch.object(steambridge, "_steam_roots", return_value=roots), mock.patch.object(
+            steambridge, "load_state_view", return_value=self.state
+        ):
+            if shortcut_side_effect is not None:
+                with mock.patch.object(steambridge, "shortcut_from_game", side_effect=shortcut_side_effect):
+                    steambridge.steambridge_apply(apply_handler, {**body, "plan": plan})
+            else:
+                steambridge.steambridge_apply(apply_handler, {**body, "plan": plan})
+        result = apply_handler.responses[-1][1]
+        self.assertTrue(result["written"])
+        appid = shortcut_from_game(self.game, launcher_exe="/usr/bin/openbox")["appid"]
+        return result, appid
+
+    def test_apply_writes_capsule_hero_logo(self):
+        result, appid = self._apply(self.shortcuts)
+        grid = self.config / "grid"
+        self.assertTrue((grid / f"{appid}p.png").is_file())
+        self.assertTrue((grid / f"{appid}_hero.png").is_file())
+        self.assertTrue((grid / f"{appid}_logo.png").is_file())
+        # Original bytes copied as-is (v1: no resize), jpg hero keeps its bytes.
+        self.assertEqual((grid / f"{appid}p.png").read_bytes(), b"cover-bytes")
+        self.assertEqual((grid / f"{appid}_hero.png").read_bytes(), b"hero-bytes")
+        self.assertEqual((grid / f"{appid}_logo.png").read_bytes(), b"logo-bytes")
+        self.assertEqual(result["grid_art"], {"applied": 1, "skipped": 0})
+
+    def test_missing_artwork_is_skipped_honestly(self):
+        self.game.update({"cover": "", "background": "", "clear_logo": str(Path(self.tempdir.name) / "nope.png")})
+        result, _ = self._apply(self.shortcuts)
+        self.assertEqual(result["grid_art"], {"applied": 0, "skipped": 1})
+        grid = self.config / "grid"
+        self.assertEqual(list(grid.iterdir()) if grid.is_dir() else [], [])
+
+    def test_grid_dir_outside_detected_accounts_is_never_written(self):
+        outside = Path(self.tempdir.name) / "elsewhere" / "config" / "shortcuts.vdf"
+        outside.parent.mkdir(parents=True)
+        outside.write_bytes(encode_shortcuts({"shortcuts": {}}))
+        result, _ = self._apply(outside)
+        self.assertEqual(result["grid_art"], {"applied": 0, "skipped": 1})
+        self.assertFalse((outside.parent / "grid").exists())
+
+    def test_uncreatable_grid_dir_skips_honestly(self):
+        (self.config / "grid").write_text("not a dir")
+        result, _ = self._apply(self.shortcuts)
+        self.assertEqual(result["grid_art"], {"applied": 0, "skipped": 1})
+
+    def test_appid_mapping_failure_skips_game(self):
+        from pkg.parity.parity_steam_bridge import SteamBridgeError  # noqa: E402
+
+        result, _ = self._apply(self.shortcuts, shortcut_side_effect=SteamBridgeError("no appid"))
+        self.assertEqual(result["grid_art"], {"applied": 0, "skipped": 1})
+
+
 if __name__ == "__main__":
     unittest.main()

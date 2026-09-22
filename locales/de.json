@@ -788,6 +788,7 @@
     "custom_fields": "Benutzerdefinierte Felder, eines pro Zeile: Name|Option1,Option2",
     "bigbox_startup_video": "Big Box-Startvideo-Pfad",
     "bigbox_shutdown_apps": "Anwendungen, die beim Wechsel in Big Box ausgeführt werden, ein Befehl pro Zeile",
+    "bigbox_start_at_launch": "Im Big-Box-Modus starten",
     "attract_delay": "Attract-Mode-Verzögerung in Sekunden",
     "tray_enabled": "Desktop-Tray-Integration aktivieren",
     "minimize_to_tray": "Beim Schließen des Fensters in Tray minimieren",
@@ -920,6 +921,10 @@
     "screensaver_prompt": "Play drücken zum Starten oder eine andere Taste zum Zurückkehren.",
     "running_game": "Laufendes Spiel",
     "search_platform": "Diese Plattform durchsuchen",
+    "osk_space": "Leertaste",
+    "osk_letters": "Buchstaben",
+    "osk_symbols": "Symbole",
+    "osk_title": "Bildschirmtastatur",
     "empty_view_setup": "Big Box benötigt Spiele in der aktuellen Ansicht — füge Quellen hinzu, um deine Bibliothek aufzubauen",
     "empty_view_now_empty": "Die aktuelle Ansicht ist jetzt leer"
   },

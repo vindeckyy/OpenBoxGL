@@ -31,3 +31,39 @@ print("seeded")
 EOF
 
 TOKEN="$TOKEN" PORT="$PORT" node scripts/ui_smoke.cjs
+MAIN_STATUS=$?
+
+# --- Flagship 5 pass: boot with --bigbox, land in Big Box, OSK filters ---
+BB_DIR=$(mktemp -d /tmp/obx-ui-smoke-bb.XXXXXX)
+export OPENBOX_DATA_DIR="$BB_DIR"
+
+python3 -B web_app.py --bigbox --no-browser > "$BB_DIR/server.log" 2>&1 &
+BB_PID=$!
+trap 'kill $SERVER_PID 2>/dev/null; wait $SERVER_PID 2>/dev/null; rm -rf "$DATA_DIR"; kill $BB_PID 2>/dev/null; wait $BB_PID 2>/dev/null; rm -rf "$BB_DIR"' EXIT
+
+# wait for the server token
+for i in $(seq 1 30); do
+  [ -f "$BB_DIR/server.token" ] && [ -f "$BB_DIR/server.port" ] && break
+  sleep 0.5
+done
+BB_TOKEN=$(cat "$BB_DIR/server.token")
+BB_PORT=$(cat "$BB_DIR/server.port")
+
+# seed the library; hybrid Big Box mode keeps the search input visible
+python3 -B - <<'EOF'
+from openbox import save_state
+save_state({"games": [
+    {"name": "Quake", "platform": "PC", "genre": "FPS", "year": "1996", "developer": "id Software", "path": "/bin/true"},
+    {"name": "Chrono Trigger", "platform": "SNES", "genre": "RPG", "year": "1995", "path": "/bin/true"},
+], "profiles": {}, "history": [], "settings": {"bigbox_mode": "hybrid", "bigbox_start_at_launch": True}, "playlists": []})
+print("seeded")
+EOF
+
+TOKEN="$BB_TOKEN" PORT="$BB_PORT" SMOKE_DEEPLINK=bigbox node scripts/ui_smoke_bigbox.cjs
+BB_STATUS=$?
+
+if [ "$MAIN_STATUS" -ne 0 ] || [ "$BB_STATUS" -ne 0 ]; then
+  echo "UI SMOKE FAILED (main=$MAIN_STATUS bigbox=$BB_STATUS)" >&2
+  exit 1
+fi
+echo "UI SMOKE PASSED (including Big Box boot + OSK)"

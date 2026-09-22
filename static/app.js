@@ -471,6 +471,6 @@ window.addEventListener('DOMContentLoaded', () => {
       connectSessionEvents();
       pollSessions();
       await runStartupStorefrontImports().catch(() => {});
-      if (deeplink.get('deeplink') !== 'bigbox' && AppState.appSettings.gamescope_guest) openBigBox();
+      if (deeplink.get('deeplink') !== 'bigbox' && (AppState.appSettings.gamescope_guest || AppState.appSettings.bigbox_start_at_launch)) openBigBox();
       dispatchDeeplink(deeplink);
     }).catch(error => notify(error.message));

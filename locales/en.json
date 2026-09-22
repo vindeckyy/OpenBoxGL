@@ -788,6 +788,7 @@
     "custom_fields": "Custom fields, one per line: Name|Option1,Option2",
     "bigbox_startup_video": "Big Box startup video path",
     "bigbox_shutdown_apps": "Applications to run when switching into Big Box, one command per line",
+    "bigbox_start_at_launch": "Start in Big Box mode",
     "attract_delay": "Attract mode delay in seconds",
     "tray_enabled": "Enable desktop tray integration",
     "minimize_to_tray": "Minimize to tray when window closes",
@@ -920,6 +921,10 @@
     "screensaver_prompt": "Press Play to launch, or any other control to return.",
     "running_game": "Running game",
     "search_platform": "Search this platform",
+    "osk_space": "Space",
+    "osk_letters": "Letters",
+    "osk_symbols": "Symbols",
+    "osk_title": "On-screen keyboard",
     "empty_view_setup": "Big Box needs games in the current view — add sources to build your library",
     "empty_view_now_empty": "The current view is now empty"
   },

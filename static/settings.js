@@ -183,6 +183,7 @@ import { t } from './i18n.js';
         library_music:$('libraryMusic').value.trim(),
         video_bgm_mix:$('videoBgmMix').checked,
         bigbox_mode:$('bigBoxMode').value,
+        bigbox_start_at_launch:$('bigBoxStartAtLaunch').checked,
         show_playlist_actions:$('showPlaylistActions').checked,
         dynamic_play_button:$('dynamicPlayButton').checked,
         show_insights:$('showInsights').checked,
@@ -302,6 +303,7 @@ import { t } from './i18n.js';
         $('libraryMusic').value = AppState.appSettings.library_music || '';
         $('videoBgmMix').checked = Boolean(AppState.appSettings.video_bgm_mix);
         $('bigBoxMode').value = AppState.appSettings.bigbox_mode || 'stage';
+        $('bigBoxStartAtLaunch').checked = Boolean(AppState.appSettings.bigbox_start_at_launch);
         $('showPlaylistActions').checked = AppState.appSettings.show_playlist_actions !== false;
         $('dynamicPlayButton').checked = AppState.appSettings.dynamic_play_button !== false;
         $('showInsights').checked = AppState.appSettings.show_insights !== false;
