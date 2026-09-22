@@ -413,10 +413,14 @@ def test_sandbox_process_group_cleanup():
         pid = int(pid_file.read_text(encoding="utf-8"))
         try:
             os.kill(pid, 0)
-        except ProcessLookupError:
-            cleaned = True
         except PermissionError:
+            # Process exists but we cannot signal it: still alive.
             cleaned = False
+        except OSError:
+            # No such process. POSIX raises ProcessLookupError (an OSError
+            # subclass) for a dead PID; Windows raises OSError [WinError 87]
+            # ("The parameter is incorrect") instead.
+            cleaned = True
         else:
             cleaned = False
         assert cleaned, "timed-out plugin left a live process behind"
