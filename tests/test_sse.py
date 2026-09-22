@@ -137,7 +137,6 @@ class SseTests(unittest.TestCase):
         # The (n+1)th concurrent subscriber must get 503 SSE_BUSY with a
         # Retry-After header instead of a heartbeat-only stream that never
         # delivers events; the first n keep streaming normally.
-        import webapp_state
         from pkg.state import sse as sse_module
 
         with mock.patch.object(sse_module, "SSE_MAX_SUBSCRIBERS", 2):

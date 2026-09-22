@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Release-pipeline dry-run: tag and asset gates, without publishing anything.
 
 Honest scope: this tests the *gate logic* of .github/workflows/release.yml —

@@ -401,7 +401,6 @@ def test_sandbox_process_group_isolation():
 
 def test_sandbox_process_group_cleanup():
     """A timed-out plugin's process is killed and reaped — nothing lingers."""
-    import time
     with TemporaryDirectory() as directory:
         root = Path(directory)
         _make_plugin(root, "linger.plugin",

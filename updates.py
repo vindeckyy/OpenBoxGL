@@ -27,7 +27,7 @@ from pkg.platform_compat import IS_WINDOWS, start_menu_programs_dir, windows_ins
 
 logger = logging.getLogger("openbox")
 
-VERSION = "1.13.0"
+VERSION = "1.13.1"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
 TRUSTED_RELEASE_PREFIX = "https://github.com/vindeckyy/OpenBoxGL/releases/download/"
 

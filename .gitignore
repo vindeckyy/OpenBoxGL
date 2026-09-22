@@ -51,6 +51,7 @@ output/
 /COVERAGE.md
 /PERF.md
 docs/*.local.md
+docs/NEXT_UPDATE_PLAN-*.md
 .agents/
 .mimocode/
 local/

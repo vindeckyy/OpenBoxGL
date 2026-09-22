@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regression pins for static-asset HTTP caching (plan row 15).
 
 Row 4: frontend modules must be served `no-cache` (revalidated, never
