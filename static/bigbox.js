@@ -216,7 +216,7 @@ import { t } from './i18n.js';
       if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').hidden = mode !== 'hybrid';
       const playLabel = game.gameyfin_id && !game.store_installed
         ? '⬇ INSTALL'
-        : (AppState.appSettings.dynamic_play_button === false ? '▶ PLAY' : game.versions.length ? '▶ PLAY DEFAULT' : game.applications.length ? '▶ PLAY GAME' : '▶ PLAY');
+        : (AppState.appSettings.dynamic_play_button === false ? '▶ PLAY' : (game.versions || []).length ? '▶ PLAY DEFAULT' : (game.applications || []).length ? '▶ PLAY GAME' : '▶ PLAY');
       if (mode === 'hybrid') {
         clearVideoSnap();
         const platforms = [...new Set(AppState.bigBoxGames.map(item => item.platform || 'Unspecified'))].sort();
