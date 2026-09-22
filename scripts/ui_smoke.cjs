@@ -812,6 +812,8 @@ const failures = [];
   console.log('reader cleanup:', {readerCleanedOk});
   const gamepadLoopStopped = await page.evaluate(async () => {
     const bigboxMod = await import('/static/bigbox.js');
+    const {AppState} = await import('/static/state.js');
+    AppState.bigBoxPlatform = 'all'; // the platform test above left a specific platform selected
     bigboxMod.openBigBox();
     const openVisible = !document.getElementById('bigBox').hidden;
     bigboxMod.closeBigBox();
