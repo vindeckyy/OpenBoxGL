@@ -60,8 +60,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   grid overrode the `hidden` attribute.
 - Switching tabs inside the game editor with a dirty form prompted "Discard
   unsaved changes?" even though tab switches discard nothing.
-- On Windows, "Reveal in Explorer" from the native host opened the wrong
-  target; the folder path is now passed to `explorer.exe` in the executable
+- On Windows, "Reveal in Explorer" from the native host never opened anything;
+  the command line passed to `CreateProcessW` started with `/select,"<path>"`
+  with no `explorer.exe` first token (a dead `wchar_t explorer[]` variable sat
+  unused); the folder path is now passed to `explorer.exe` in the executable
   position.
 - Rejected or malformed messages on the native WebView2 bridge used to leave
   the pending frontend promise hanging forever; they now reject it so the UI
@@ -88,9 +90,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   routes through `closeDialog()` so focus restoration stays consistent.
 - Every Setup Center open path goes through the single refresh-and-render
   entry point, so reopening the wizard never shows stale content.
-- Three user-visible strings were never translated (the game editor's media
-  toggle labels and two Big Box empty-view messages); they now go through
-  i18n in all five locales.
+- Six user-visible strings were never translated (the game editor's media
+  toggle labels, two Big Box empty-view messages, and the sidebar Filters
+  label); they now go through i18n in all five locales.
+- A test file that fails and then passes on retry now prints the first
+  failed attempt's output, so the defect is identifiable instead of
+  passing silently on the retry.
+- The standalone changed-line checker now applies ADR 0025 itself: changed
+  files excluded from coverage measurement (tests, scripts) no longer count
+  as misses, and a touched module fails only at 0% instead of an
+  unenforceable whole-file 95%.
 
 ## [1.13.0] - 2026-09-19
 
@@ -99,7 +108,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Linux: a WebView2 native window (`native_host.exe`) that renders the same one
   UI in a real window, `openbox.cmd` / `openbox.ps1` / `openbox-native.ps1`
   launchers following the same native-host-then-browser ladder as the shell
-  scripts, a signed portable release zip (`OpenBox-<arch>-windows.zip` with
+  scripts, a signed portable release zip (`OpenBox-x86_64-windows.zip` with
   `.sha256` and `.sig`) built, attested, and signed by the same release job as
   the AppImages, the compiled WebView2 host published as its own signed asset
   (`OpenBox-x86_64-windows-native-host.exe`) so a source checkout gets the
@@ -115,9 +124,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Windows binary names for every emulator definition (`native_exe_windows`), so
   adapter detection, resume, and launch doctor work with Windows builds of
   Dolphin, RetroArch, PCSX2, RPCS3, and the rest.
-- A test file that fails and then passes on retry now prints the first
-  failed attempt's output, so the defect is identifiable instead of
-  passing silently on the retry.
 
 ### Fixed
 - Process-group signalling can no longer reach group `0` or `1`. A stored
@@ -133,11 +139,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   alias or a junction used to produce one `argv` carrying the resolved state
   file next to an unresolved `--appendconfig` path; the state directory and
   everything under it now share one spelling.
-- The standalone changed-line checker now applies ADR 0025 itself: changed
-  files excluded from coverage measurement (tests, scripts) no longer count
-  as misses, and a touched module fails only at 0% instead of an
-  unenforceable whole-file 95%. The old behavior made any release commit
-  that edited a test file or `updates.py` (77% covered) fail locally.
 
 ## [1.12.1] - 2026-09-15
 
@@ -1156,7 +1157,8 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.13.0...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.13.1...HEAD
+[1.13.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.12.1...v1.13.0
 [1.12.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.11.0...v1.12.0

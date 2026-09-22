@@ -85,9 +85,9 @@ function Resolve-Arch {
     switch ("$candidate".ToLowerInvariant()) {
         'x86_64' { return 'x86_64' }
         'amd64' { return 'x86_64' }
-        'aarch64' { return 'aarch64' }
-        'arm64' { return 'aarch64' }
-        default { Die "Unsupported architecture: '$candidate' (expected x86_64 or aarch64)." }
+        'aarch64' { Die "OpenBox publishes Windows builds for x86_64 only; there is no aarch64 Windows zip (got '$candidate')." }
+        'arm64' { Die "OpenBox publishes Windows builds for x86_64 only; there is no ARM64 Windows zip (got '$candidate')." }
+        default { Die "Unsupported architecture: '$candidate' (expected x86_64)." }
     }
 }
 

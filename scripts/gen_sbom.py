@@ -8,7 +8,7 @@ release can answer "what is inside this artifact" with zero new runtime
 dependencies.
 
 Usage:
-  python3 scripts/gen_sbom.py --version 1.11.0 --appdir build/OpenBox.AppDir --out sbom.json
+  python3 scripts/gen_sbom.py --version 1.13.1 --appdir build/OpenBox.AppDir --out sbom.json
 """
 
 import argparse

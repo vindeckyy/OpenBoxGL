@@ -31,7 +31,7 @@ fetch() {
 
 command -v curl >/dev/null 2>&1 || die "curl is required."
 command -v python3 >/dev/null 2>&1 || die "python3 is required."
-command -v openssl >/dev/null 2>&1 || die "openssl 3 is required for Ed25519 verification."
+command -v openssl >/dev/null 2>&1 || die "openssl is required for Ed25519 verification."
 command -v sha256sum >/dev/null 2>&1 || die "sha256sum is required."
 
 # Resolve a release tag, then require a stable semantic-version tag before it

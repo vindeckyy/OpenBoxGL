@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.13.1"><img src="https://img.shields.io/badge/Release-v1.13.1-0052CC?style=for-the-badge" alt="Release v1.13.1"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-2EA44F?style=for-the-badge" alt="CI"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-lightgrey?style=for-the-badge" alt="Linux and Windows"></a>
   <br>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.13.1</strong></a>
@@ -61,9 +61,9 @@
 
 ## Quick Start
 
-1. **Install.** On Linux grab the [latest AppImage](https://github.com/vindeckyy/OpenBoxGL/releases/latest); on Windows run the signed `install.ps1` from the same release. Either way you can run from source with `python3 web_app.py` (Python 3.10+).
+1. **Install.** On Linux grab the [latest AppImage](https://github.com/vindeckyy/OpenBoxGL/releases/latest); on Windows download `OpenBox-x86_64-windows.zip` from the same release, extract it, and run `OpenBox\scripts\install.ps1` (the installer verifies the signed release before installing; requires Python 3.10+). You can also run from source with `python3 web_app.py` on Linux/macOS (`python web_app.py` on Windows, Python 3.10+).
 2. **Open the UI.** `openbox` opens a native window (WebKitGTK on Linux, WebView2 on Windows) and falls back to a chrome-less app window, then your default browser, when the host runtime is missing. `openbox --web` skips the native host and opens the loopback UI in a browser app window (plain tab fallback); from source, `python3 web_app.py` also opens the browser automatically with the token in the URL. Steam Deck / gamescope kiosk: `python3 web_app.py --game-mode` or `openbox --web --game-mode`. To open the UI manually, append the token from the data directory, e.g. open `http://127.0.0.1:PORT/?token=$(cat ~/.local/share/openbox-game-launcher/server.token)`. Treat token-bearing URLs as secrets; prefer the `X-OpenBox-Token` header for scripts and never paste or share the URL.
-3. **Import games.** Click **Import Folder** and point at a directory of `.sh` files, or **Import Steam** to scan your installed games.
+3. **Import games.** Click **Import folder** and point at a directory of `.sh` files, or **Import Steam** to scan your installed games.
 4. **Press PLAY.** Sessions, play time, and history are tracked automatically.
 
 For ROMs, emulators, Big Box, RetroAchievements, and everything else, see [Getting started](https://openboxgl.github.io/getting-started/) and [Installation](https://openboxgl.github.io/install/).
@@ -173,7 +173,7 @@ Local-first playtime analytics with a 366-day activity heatmap (levels 0–4), c
 
 ### Big Box & Handhelds
 
-Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attract mode, optional startup video, library BGM, **video snaps** (looping gameplay videos in Stage mode with debounce and BGM ducking), **Game Night party mode** (couch-multiplayer queue, spinning wheel, up-next strip, persistent rounds), Steam Game Mode guest (`--game-mode`), gamescope presets (Steam Deck, Steam Deck HD, 1080p, 1440p, 4K, integer scale, stretch, borderless) plus **custom user-defined presets with per-game override**, MangoHud performance overlay toggle, controller bench with live gamepad SVG visualization, localization (English, Spanish, German, French, Portuguese).
+Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attract mode, optional startup video, library BGM, **video snaps** (looping gameplay videos in Stage mode with debounce and BGM ducking), **Game Night party mode** (couch-multiplayer queue, spinning wheel, up-next strip, persistent rounds), Steam Game Mode guest (`--game-mode`), gamescope presets (Steam Deck, Steam Deck (HD), 1080p, 1440p, 4K, integer scale, stretch, borderless) plus **custom user-defined presets with per-game override**, MangoHud performance overlay toggle, controller bench with live gamepad SVG visualization, localization (English, Spanish, German, French, Portuguese).
 
 ### Scale & Backups
 
@@ -267,7 +267,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 
 | Method | Best for | Notes |
 | --- | --- | --- |
-| AppImage (installer) | Linux desktop, Steam Deck, handhelds, immutable systems | Architecture-matched signed installer and built-in verified updater; installs to `~/.local/bin` |
+| AppImage (installer) | Linux desktop, Steam Deck, handhelds, immutable systems | Architecture-matched installer that verifies the signed release and built-in verified updater; installs to `~/.local/bin` |
 | Windows (installer) | Windows 10/11 (x86_64) | Signed portable zip, verified updater, WebView2 window; installs to `%LOCALAPPDATA%\OpenBox` |
 | AppImage (manual) | Offline or custom path | `chmod +x` and run, no install step |
 | Flatpak | Sandboxed installs | `flatpak-builder` from manifest |
@@ -298,24 +298,33 @@ Omit `OPENBOX_RELEASE_TAG` only when you intentionally want the latest stable re
 ### Windows (installer)
 
 Windows 10/11 on x86_64 installs from the signed portable zip. Download
-`install.ps1` from a specific release, read it, then run it from Windows
-PowerShell 5.1 (it needs no `curl` and no OpenSSL — verification uses the same
-`updates.py` Ed25519 code path as the in-app updater):
+`OpenBox-x86_64-windows.zip` from a specific release, extract it, then run the
+bundled installer from Windows PowerShell 5.1. Requires Python 3.10+ on `PATH`
+(or set `OPENBOX_PYTHON`); verification needs no `curl` and no OpenSSL — it
+uses the same `updates.py` Ed25519 code path as the in-app updater:
 
 ```powershell
 $Version = '1.13.1'
-Invoke-WebRequest -UseBasicParsing -OutFile install.ps1 `
-  "https://github.com/vindeckyy/OpenBoxGL/releases/download/v$Version/install.ps1"
-notepad install.ps1   # read it before running it
-.\install.ps1 -Tag "v$Version"
+Invoke-WebRequest -UseBasicParsing -OutFile OpenBox-x86_64-windows.zip `
+  "https://github.com/vindeckyy/OpenBoxGL/releases/download/v$Version/OpenBox-x86_64-windows.zip"
+Expand-Archive OpenBox-x86_64-windows.zip -DestinationPath .
+notepad .\OpenBox\scripts\install.ps1   # read it before running it
+powershell -ExecutionPolicy Bypass -File .\OpenBox\scripts\install.ps1 -Tag "v$Version"
 ```
 
-The installer resolves your CPU architecture, then verifies the release public
-key against the pinned trust anchor, the archive's SHA-256 sidecar, and the
-Ed25519 signature — nothing is extracted until all three pass. It installs to
-`%LOCALAPPDATA%\OpenBox\share\openbox`, keeps the previous tree at
-`share\openbox.previous`, adds the bin root to your user `PATH`, registers a
-Start Menu shortcut, and registers the `openbox://` protocol handler.
+(The `-ExecutionPolicy Bypass` flag scopes the bypass to that one invocation,
+in case your execution policy blocks downloaded scripts.)
+
+The installer checks your CPU architecture (Windows builds are x86_64-only; on
+ARM64 it exits with a clear message instead of downloading), then verifies the
+release public key against the pinned trust anchor, the archive's SHA-256
+sidecar, and the Ed25519 signature — nothing is extracted until all three
+pass. It installs to `%LOCALAPPDATA%\OpenBox\share\openbox`, keeps the previous
+tree at `share\openbox.previous`, adds
+`%LOCALAPPDATA%\OpenBox\share\openbox` to your user `PATH`, registers a
+Start Menu shortcut, and registers the `openbox://` protocol handler. If Start
+Menu or protocol registration fails, the previous installation tree is restored
+instead of leaving a half-registered install.
 
 | Option | Effect |
 | --- | --- |
@@ -452,7 +461,7 @@ No OpenBox account is required. Optional integrations (RetroAchievements, EmuMov
 
 ### Is Windows supported?
 
-Yes. OpenBox runs on Windows 10/11 (x86_64) from a signed portable install: the same UI in a WebView2 window, the same library, imports, sessions, saves, Big Box mode, and REST API, with Windows binary names for every bundled emulator definition. Run `scripts/install.ps1` from a release, or `python web_app.py` from a checkout. Linux remains the primary target for the distro-integration surfaces — AppImage, Flatpak, gamescope/Game Mode, XDG desktop entries, and Flathub-aware emulator management are Linux-only, and the capability matrix in [PARITY.md](docs/PARITY.md) is written from the Linux side. See [ADR 0048](docs/adr/0048-windows-port.md) for the port's boundaries.
+Yes. OpenBox runs on Windows 10/11 (x86_64) from a signed portable install: the same UI in a WebView2 window, the same library, imports, sessions, saves, Big Box mode, and REST API, with Windows binary names for every bundled emulator definition. Extract `OpenBox-x86_64-windows.zip` from a release and run `OpenBox\scripts\install.ps1` (requires Python 3.10+), or `python web_app.py` from a checkout. Linux remains the primary target for the distro-integration surfaces — AppImage, Flatpak, gamescope/Game Mode, XDG desktop entries, and Flathub-aware emulator management are Linux-only, and the capability matrix in [PARITY.md](docs/PARITY.md) is written from the Linux side. See [ADR 0048](docs/adr/0048-windows-port.md) for the port's boundaries.
 
 ---
 

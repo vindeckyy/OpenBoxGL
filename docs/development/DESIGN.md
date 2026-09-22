@@ -1,6 +1,6 @@
 ---
 name: OpenBox
-description: Local-first game library and launcher for Linux
+description: Local-first game library and launcher for Linux and Windows
 colors:
   bg: "#11100e"
   topbar: "#171513"

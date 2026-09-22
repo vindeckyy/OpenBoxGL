@@ -32,7 +32,7 @@ regression test.
   confirm, Trophy Case) now share the focus-restoration wiring of static
   dialogs; click-outside dismissal routes through the shared close path; every
   Setup Center open path goes through the single refresh-and-render entry
-  point; three untranslated strings now go through i18n in all five locales.
+  point; six untranslated strings now go through i18n in all five locales.
 - **Trust chain and update verification.** Valid signatures over wrong bytes,
   tampered artifacts, and missing signatures are all rejected and covered by
   tests; the CLI fails loudly with a machine-readable marker.
@@ -40,6 +40,9 @@ regression test.
   1.13.0 is now covered by regression tests: session token survival, import
   batch projection, job titles, static cache headers, settings schema, and
   more.
+- **Changed-line checker honors ADR 0025.** Test and script edits no longer
+  count as coverage misses, and a touched module fails only at 0% instead of
+  an unenforceable whole-file 95%.
 
 ---
 
@@ -52,12 +55,20 @@ regression test.
 | `OpenBox-x86_64.flatpak` | x86_64 | Flatpak |
 | `OpenBox-x86_64-windows.zip` | x86_64 | Windows portable (signed) |
 | `OpenBox-x86_64-windows-native-host.exe` | x86_64 | WebView2 window host (signed) |
+| `install.sh` | x86_64 / ARM64 | Linux installer (verifies the signed release) |
+| `install.ps1` | x86_64 | Windows installer (verifies the signed release) |
+| `openbox-release.pub` | — | Release public key (Ed25519) |
+| `OpenBox-1.13.1-sbom.json` | x86_64 | SBOM |
+| `OpenBox-1.13.1-aarch64-sbom.json` | ARM64 | SBOM |
 
-**Windows:** download `install.ps1` and `OpenBox-x86_64-windows.zip` from this
-release and run the installer in Windows PowerShell 5.1. **Linux:** pick the
-AppImage that matches your CPU, or install the Flatpak. Already running
-OpenBox? Use the built-in updater or download the matching artifact from the
-release page.
+Every binary asset also ships `.sha256` and `.sig` sidecars; both AppImages
+include `.zsync` metadata for delta updates.
+
+**Windows:** download `OpenBox-x86_64-windows.zip` from this release, extract
+it, and run `OpenBox\scripts\install.ps1` in Windows PowerShell 5.1 (requires
+Python 3.10+). **Linux:** pick the AppImage that matches your CPU, or install
+the Flatpak. Already running OpenBox? Use the built-in updater or download the
+matching artifact from the release page.
 
 ---
 
@@ -146,9 +157,6 @@ Flatpak, and system-install paths are untouched.
 - **SQLite handles before an atomic swap.** The metadata database closes its
   cached thread-local connections before replacing the file, so a live resync
   cannot fail with a locked `metadata.db` on Windows.
-- The standalone changed-line/touched-module checker now honors ADR 0025:
-  test and script edits no longer count as coverage misses, and a touched
-  module fails only at 0% instead of an unenforceable whole-file 95%.
 
 ## Windows boundaries
 
@@ -170,10 +178,18 @@ runtime is required (present on Windows 11 and most Windows 10 systems), and
 | `OpenBox-x86_64.flatpak` | x86_64 | Flatpak |
 | `OpenBox-x86_64-windows.zip` | x86_64 | Windows portable (signed) |
 | `OpenBox-x86_64-windows-native-host.exe` | x86_64 | WebView2 window host (signed) |
+| `install.sh` | x86_64 / ARM64 | Linux installer (verifies the signed release) |
+| `install.ps1` | x86_64 | Windows installer (verifies the signed release) |
+| `openbox-release.pub` | — | Release public key (Ed25519) |
+| `OpenBox-1.13.0-sbom.json` | x86_64 | SBOM |
+| `OpenBox-1.13.0-aarch64-sbom.json` | ARM64 | SBOM |
 
-**Windows:** download `install.ps1` and `OpenBox-x86_64-windows.zip` from this
-release and run the installer in Windows PowerShell 5.1; it needs no `curl` and
-no OpenSSL. Running from a checkout instead? Take
+Every binary asset also ships `.sha256` and `.sig` sidecars; both AppImages
+include `.zsync` metadata for delta updates.
+
+**Windows:** download `OpenBox-x86_64-windows.zip` from this release, extract
+it, and run `OpenBox\scripts\install.ps1` in Windows PowerShell 5.1 (requires
+Python 3.10+); it needs no `curl` and no OpenSSL. Running from a checkout instead? Take
 `OpenBox-x86_64-windows-native-host.exe` and save it beside `web_app.py` as
 `native_host.exe`. **Linux:** pick the AppImage that matches your CPU, or
 install the Flatpak for a sandboxed desktop setup. AppImages are signed and
