@@ -4,6 +4,19 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Plugin API v1 is frozen (ADR 0050, `docs/plugin-api.md`): manifests declare
+  `api_version` (default 1; newer versions are refused and surfaced with an
+  error), a `command` hook, and up to 32 palette `commands` (`{id, label,
+  description?}`). New `GET /api/v2/plugins/commands` and
+  `POST /api/v2/plugins/command` run palette commands through the sandboxed
+  runner with a bounded read-only library projection (500 entries) and support
+  a `notification` post; `GET /api/plugins` now also reports `api_version` and
+  `sandbox` status. Malformed packages and unavailable sandboxes are surfaced
+  in the Plugins manager instead of being hidden.
+
 ## [1.13.1] - 2026-09-22
 
 ### Fixed
