@@ -15,7 +15,7 @@ the validator, the runner, and the docs with every new event.
 
 One manifest hook named `events`. The stdin payload always carries an
 `event` field naming the event plus a small bounded event-specific
-payload, e.g. `{"event": "game_added", "game_id": ..., "name": ...}`.
+payload, e.g. `{"event": "game_added", "game_ids": [...]}`.
 A plugin opts into lifecycle events by declaring `events` in its `hooks`
 list and dispatches on `payload["event"]` itself.
 

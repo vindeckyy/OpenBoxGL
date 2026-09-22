@@ -17,7 +17,7 @@ steps that remain when that decision is made.
 
 ## Remaining manual steps (at submission time)
 
-- [x] **Screenshot hosting.** `openbox.metainfo.xml` now points all four screenshots at immutable raw GitHub URLs for the 1.11.0 tag. The docs-site mirror is useful for the README but is not the Flathub submission source of truth; keep these raw URLs or move the images into the Flathub metadata repository when submitting. The 1.11.0 screenshots predate the logo rebrand and the 1.12 UI additions, so they must be refreshed to a 1.13.x tag before submission (TODO).
+- [x] **Screenshot hosting.** `openbox.metainfo.xml` now points all four screenshots at immutable raw GitHub URLs for the 1.11.0 tag. The docs-site mirror is useful for the README but is not the Flathub submission source of truth; keep these raw URLs or move the images into the Flathub metadata repository when submitting. The 1.11.0 screenshots predate the logo rebrand and the 1.12 UI additions, so they must be refreshed to a 1.14.0 tag before submission.
 - [ ] **Runtime re-verify.** Re-confirm `org.gnome.Platform//49` still ships `webkit2gtk-4.1` (the native host builds with `pkg-config webkit2gtk-4.1`). The CI `flatpak-validate` job's `flatpak-builder --dry-run` is the gate; if a future GNOME runtime drops the GTK3 WebKit, either pin the last runtime that has it or build webkit2gtk-4.1 in the manifest.
 - [ ] **Flathub repo setup.** Create `flathub/io.openbox.GameLauncher`, add the maintainers, transfer the manifest + screenshots.
 - [ ] **flathubbot PR.** Open the initial submission PR; flathubbot runs validation and review.

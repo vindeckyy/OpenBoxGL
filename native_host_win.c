@@ -1582,8 +1582,10 @@ dispatch_native_api_request(const NativeRequest *request)
  * Ask the server to stop. /api/shutdown stops running game sessions through
  * the same code path the web UI uses; CTRL_BREAK_EVENT then raises
  * KeyboardInterrupt in the child's main thread so web_app.py's finally block
- * runs its full teardown (web_app.py registers SIGBREAK alongside SIGTERM and
- * SIGINT for exactly this reason). The job object is the backstop.
+ * runs its full teardown (web_app.py registers only SIGTERM and SIGINT
+ * handlers, both raising KeyboardInterrupt; SIGBREAK is left at CPython's
+ * default disposition, which raises KeyboardInterrupt on Windows). The job
+ * object is the backstop.
  */
 static void
 stop_server(void)

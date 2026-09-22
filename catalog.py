@@ -28,7 +28,7 @@ def display_progress(value):
 
 
 def clean_user_rating(value):
-    """Personal 1-5 star rating, distinct from metadata ``rating`` float.
+    """Personal 0-5 star rating, distinct from metadata ``rating`` float.
 
     Stored as int; 0 means unrated. Raises ValueError outside 0-5.
     """

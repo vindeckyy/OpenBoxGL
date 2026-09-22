@@ -117,18 +117,22 @@ through the capability resolver with a browser fallback.
 | `navigator.getBattery` | optional; hide status when absent |
 | `navigator.getGamepads` | Web Gamepad API always (host `onGamepad` is a no-op stub; capabilities report `"webkit"`) |
 | `location.search` (token, deeplink) | unchanged; the host loads the same URL |
-| `beforeunload` (shutdown) | page requests `/api/shutdown` when tracked games remain; native host sends `SIGTERM` on window close |
+| `beforeunload` (shutdown) | page requests `/api/shutdown` when tracked games remain; the native host signals the Python child on window close — `SIGTERM` on Linux, `CTRL_BREAK` on Windows (see Server lifecycle) |
 
 ## Server lifecycle
 
 - The host is the parent; it owns the Python child.
 - On window close, the page requests `POST /api/shutdown` when tracked games
-  remain, while the native host sends `SIGTERM` to the Python child process
-  group as the lifecycle owner.
+  remain, while the native host signals the Python child as the lifecycle
+  owner: on Linux it sends `SIGTERM` to the child process group; on Windows
+  (`native_host_win.c`) it sends `CTRL_BREAK` to the `CREATE_NEW_PROCESS_GROUP`
+  child.
 - `web_app.py` performs graceful teardown by stopping tracked sessions, waiting
   up to two seconds, force-killing known game process groups (or their PIDs),
   persisting final cleanup, and draining webhooks. The native host also waits
-  for the child and sends `SIGKILL` to its process group if it remains alive.
+  for the child and, on Linux, sends `SIGKILL` to its process group if it remains
+  alive; on Windows (`native_host_win.c`) the backstop is `TerminateJobObject`
+  on the child's job object, which also kills children.
 - The host holds no credentials. The token stays in the URL and the
   owner-readable `server.token` file, unchanged from the current threat model.
 

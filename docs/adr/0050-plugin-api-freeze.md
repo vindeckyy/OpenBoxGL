@@ -2,6 +2,7 @@
 
 **Date:** 2026-09-16
 **Status:** Accepted
+**Amended by:** ADR 0056 (replaced the trust model with per-plugin, checksum-bound trust)
 
 ## Context
 

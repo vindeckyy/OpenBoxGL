@@ -1,5 +1,9 @@
 # OpenBox 1.11 — Every Second Counts
 
+> **Archived release notes.** These notes describe the OpenBox 1.11 release as
+> shipped; they are retained for traceability, not as current documentation.
+> See `docs/CHANGELOG.md` for the maintained release history.
+
 Your collection keeps growing, and every session leaves a little more context
 behind. OpenBox 1.11 keeps that context close: resume where you stopped,
 capture the moment, find the right next game, and turn your library into

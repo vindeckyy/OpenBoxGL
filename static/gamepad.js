@@ -2,7 +2,8 @@
  *
  * Surfaces register a {priority, isActive, tick, wantsLoop} handler; each
  * frame the loop dispatches to the highest-priority active surface:
- *   Big Box pause overlay (10) → arcade room (20) → Big Box (30) → library (40).
+ *   Big Box pause overlay (10) → on-screen keyboard (15) → arcade room (20)
+ *   → Big Box (30) → library (40).
  * wantsLoop keeps the loop alive for surfaces that need frames with no pad
  * connected (Big Box attract/screensaver timer); otherwise pad presence
  * drives it. Surfaces own their input handling — this module only owns the

@@ -1,4 +1,4 @@
-"""Missing-file repair wizard (P5): relink games and media after a move.
+"""Missing-file repair wizard: relink games and media after a move.
 
 Health already reports missing paths; this module turns the report into a fix
 without ever touching the filesystem state directly:

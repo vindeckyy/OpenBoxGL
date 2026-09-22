@@ -5,7 +5,7 @@ sub-scores, and a deduction ledger come out. Every deduction names its
 dimension, the points lost, a human reason, and the offending game ids,
 so the score is fully explainable by construction.
 
-Dimension weights are documented in docs/adr/0056-library-health-score.md.
+Dimension weights are documented in docs/adr/0053-library-health-score.md.
 Detectors are extracted from ``LibraryHandlers.health()`` (handlers/library.py)
 so the v1 audit route and the health score can never disagree about what
 counts as an issue. The only I/O is cached path probes via
@@ -23,7 +23,7 @@ from pathlib import Path
 from collections.abc import Callable
 from typing import Any
 
-# Dimension weights. Sum must be 100. See ADR 0056.
+# Dimension weights. Sum must be 100. See ADR 0053.
 DIMENSION_WEIGHTS = {
     "file_integrity": 35,
     "duplicates": 20,

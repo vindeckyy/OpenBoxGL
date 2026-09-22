@@ -5,6 +5,7 @@
 | Version | Supported |
 | --- | --- |
 | 1.14.x | Yes (current) |
+| 1.13.x | No — upgrade required |
 | 1.12.x | No — upgrade required |
 | 1.11.x | No — upgrade required |
 | 1.10.x | No — upgrade required |

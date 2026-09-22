@@ -118,6 +118,25 @@ The full capability matrix with acceptance checks lives in [PARITY.md](docs/PARI
 
 ## Features
 
+### Library Intelligence (1.14.0)
+
+**Plugins 2.0** brings a catalog browser with one-click install/update,
+per-plugin checksum-bound trust, Android-style permission prompts, settings
+forms generated from the plugin manifest, a `library_source` importer hook, an
+`events` lifecycle hook, and palette commands. **Effortless metadata** matches
+and downloads artwork automatically after import (providers opt-in), with a
+thumbnail chooser on search results and a "Time to beat" fact card.
+**Backlog management** adds a personal layer to every game: Unplayed/Playing
+statuses, 0–5 star ratings, manual playtime logging, dated notes, and a
+one-time "Mark as Playing?" prompt. **Couch-ready Big Box** boots straight
+into Big Box (`--bigbox` flag or Settings checkbox), adds a d-pad on-screen
+keyboard, and copies Steam grid artwork for bridged games. The **library
+health score** grades your collection 0–100 across five dimensions with a
+fix-all queue, undo, Artwork Doctor, missing-file repair, and duplicate
+merging. **Game DNA** is fully offline smart search: a Title | Smart toggle
+powered by BM25 and a 151-concept lexicon in five languages, with
+explanation chips and "More like this".
+
 ### Living Library (1.12.0)
 
 Saved Backlog Radio searches pin as named **smart collections** that
@@ -189,7 +208,7 @@ The SQLite read model is opt-in via `OPENBOX_ENABLE_SQLITE_READ=1`, auto-enabled
 
 ### Extensibility
 
-REST API with token auth, Python plugins (`library`, `before_launch`, `after_session` hooks), local CSS themes with instant apply, HMAC-signed webhooks, mounted-folder statistics sync, `openbox://` deep links.
+REST API with token auth, Python plugins (`library`, `before_launch`, `after_session`, `command`, `library_source`, `events` hooks), local CSS themes with instant apply, HMAC-signed webhooks, mounted-folder statistics sync, `openbox://` deep links.
 
 [Full feature list in the documentation](https://openboxgl.github.io/)
 

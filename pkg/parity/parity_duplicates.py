@@ -1,4 +1,4 @@
-"""Duplicate detection and merge (P5).
+"""Duplicate detection and merge.
 
 Three collision shapes are reported, in priority order:
 

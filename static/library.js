@@ -1882,7 +1882,7 @@ function openArtworkDoctor() {
 
 document.addEventListener('app:palette-artwork-doctor', () => openArtworkDoctor());
 
-// ── Missing-file repair wizard (P5) ─────────────────────────────────────────
+// ── Missing-file repair wizard ─────────────────────────────────────────
 // Health already reports missing paths; this dialog fixes records. Preview and
 // apply both send the picked folder (never raw paths), so the server re-plans
 // and the transaction only writes targets that matched inside the folder.
@@ -2022,7 +2022,7 @@ export function openRepairWizard() {
   scanRepair();
 }
 
-// ── Duplicate detection & merge (P5) ────────────────────────────────────────
+// ── Duplicate detection & merge ────────────────────────────────────────
 let duplicatesDialog = null;
 let duplicateGroups = [];
 
