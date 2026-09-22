@@ -55,6 +55,13 @@ const token = new URLSearchParams(location.search).get('token') || sessionStorag
       // The v1 surface is the stable contract; unmapped call sites keep the
       // legacy paths until they are migrated one by one.
       const target = API_V1[path.replace(/^\/api\//, '').replace(/\//g, '_')] || path;
+      const method = String(options.method || 'GET').toUpperCase();
+      if (pageHidden && method !== 'GET' && method !== 'HEAD' && path !== '/api/shutdown') {
+        // A hidden tab holds stale AppState; never let it save over newer
+        // state written by the visible tab. /api/shutdown is exempt: it fires
+        // from beforeunload while the page is already hidden.
+        throw new Error('State changes are paused while the tab is hidden.');
+      }
       let response;
       try {
         response = await fetch(target, { ...options, headers:{'X-OpenBox-Token':token,'Content-Type':'application/json',...(options.headers || {})} });
@@ -75,6 +82,37 @@ const token = new URLSearchParams(location.search).get('token') || sessionStorag
       }
       return payload;
     }
+    // Page lifecycle: a hidden tab must not save stale AppState over the
+    // visible tab, and must not hold SSE streams open (the server reaps them
+    // only via the 15 s heartbeat). pageHidden gates state-mutating api()
+    // calls above; the stream registry lets SSE owners close on pagehide.
+    let pageHidden = document.visibilityState === 'hidden';
+    const lifecycleStreams = new Set();
+    function isPageHidden() { return pageHidden; }
+    function registerLifecycleStream(source) {
+      if (source && typeof source.close === 'function') lifecycleStreams.add(source);
+      return source;
+    }
+    function unregisterLifecycleStream(source) { lifecycleStreams.delete(source); }
+    function closeLifecycleStreams() {
+      for (const source of lifecycleStreams) {
+        try { source.close(); } catch { /* already closed */ }
+      }
+      lifecycleStreams.clear();
+    }
+    function markPageHidden() {
+      pageHidden = true;
+      closeLifecycleStreams();
+    }
+    function markPageVisible() { pageHidden = false; }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) markPageHidden();
+      else markPageVisible();
+    });
+    // pagehide also fires for bfcache navigations where visibilitychange may
+    // not; pageshow re-arms the tab if it comes back.
+    window.addEventListener('pagehide', markPageHidden);
+    window.addEventListener('pageshow', markPageVisible);
     const nativeBridge = typeof window.openboxNative === 'object' ? window.openboxNative : null;
     const nativeCaps = { webview:false, dialogs:false, tray:false, single_instance:false, gamepad:'webkit', fullscreen:true, clipboard:true };
     async function detectNative() {
@@ -439,4 +477,4 @@ const token = new URLSearchParams(location.search).get('token') || sessionStorag
       }
     }
 
-export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId };
+export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId, isPageHidden, registerLifecycleStream, unregisterLifecycleStream };

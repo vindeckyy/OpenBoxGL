@@ -133,6 +133,41 @@ class SseTests(unittest.TestCase):
             for subscriber in registered:
                 webapp_state.unregister_event_subscriber(subscriber)
 
+    def test_cap_reached_subscriber_rejected_with_503(self):
+        # The (n+1)th concurrent subscriber must get 503 SSE_BUSY with a
+        # Retry-After header instead of a heartbeat-only stream that never
+        # delivers events; the first n keep streaming normally.
+        import webapp_state
+        from pkg.state import sse as sse_module
+
+        with mock.patch.object(sse_module, "SSE_MAX_SUBSCRIBERS", 2):
+            streams = []
+            try:
+                for _ in range(2):
+                    req = urllib.request.Request(
+                        self.origin + "/api/events",
+                        headers={"X-OpenBox-Token": "sse-test-token", "Accept": "text/event-stream"},
+                    )
+                    resp = urllib.request.urlopen(req, timeout=6)
+                    self.assertEqual(resp.status, 200)
+                    self.assertTrue(resp.headers["Content-Type"].startswith("text/event-stream"))
+                    streams.append(resp)
+                over = urllib.request.Request(
+                    self.origin + "/api/events",
+                    headers={"X-OpenBox-Token": "sse-test-token", "Accept": "text/event-stream"},
+                )
+                with self.assertRaises(urllib.error.HTTPError) as ctx:
+                    urllib.request.urlopen(over, timeout=6)
+                self.assertEqual(ctx.exception.code, 503)
+                self.assertEqual(
+                    ctx.exception.headers.get("Retry-After"),
+                    str(self.web_app.SSE_BUSY_RETRY_AFTER),
+                )
+                self.assertIn("SSE_BUSY", ctx.exception.read().decode())
+            finally:
+                for resp in streams:
+                    resp.close()
+
     def test_operation_terminal_event_on_sse(self):
         import webapp_state
         from pkg.state.operations import get_operation_service
