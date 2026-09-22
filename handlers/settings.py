@@ -467,6 +467,7 @@ def clean_settings(merged):
             "library_music": library_music,
             "video_bgm_mix": bool(merged.get("video_bgm_mix", False)),
             "bigbox_mode": bigbox_mode,
+            "bigbox_start_at_launch": bool(merged.get("bigbox_start_at_launch", False)),
             "show_playlist_actions": bool(merged.get("show_playlist_actions", True)),
             "show_insights": bool(merged.get("show_insights", True)),
             "hidden_sidebar_sections": [str(item) for item in hidden_sidebar_sections][:20],
