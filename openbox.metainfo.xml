@@ -40,6 +40,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.13.1" date="2026-09-22">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.13.1</url>
+      <description>
+        <p>The Windows debut, made solid: a patch release of regression fixes and hardening. Story and history timelines group late-night moments by the viewer's local day, hidden tabs can no longer overwrite newer visible-tab state, the SSE subscriber cap answers 503 instead of opening dead streams, the Windows installer rolls back when shortcut or protocol registration fails, and the native host's Reveal in Explorer plus bridge error handling are repaired. Twenty previously shipped fixes are pinned by regression tests.</p>
+      </description>
+    </release>
     <release version="1.13.0" date="2026-09-19">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.13.0</url>
       <description>

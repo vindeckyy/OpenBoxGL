@@ -1,3 +1,70 @@
+# OpenBox 1.13.1 — The Windows debut, made solid
+
+A strict patch release: no new features, just regression fixes, hardening,
+and audits on top of 1.13.0's Windows debut. Every fix below is pinned by a
+regression test.
+
+---
+
+## Fixed
+
+- **Late-night moments filed under the wrong day.** Timezone-aware timestamps
+  (stored in UTC, e.g. moments) were grouped by their UTC calendar date in the
+  story view and the history timeline. Both now convert to the viewer's local
+  day first, so a moment captured at 23:30 local sits with its session instead
+  of the next day.
+- **Hidden tabs overwrote newer state.** A background tab holding stale
+  `AppState` could send state-changing requests that clobbered what the
+  visible tab had written. Mutations from hidden tabs are now blocked (shutdown
+  excepted), and SSE streams close when the tab hides.
+- **SSE subscriber cap opened dead streams.** When every event slot was taken,
+  the server opened a stream that only ever sent heartbeats. It now answers
+  `503 SSE_BUSY` with `Retry-After`, and session reconnects close the previous
+  `EventSource` instead of leaking it.
+- **Windows installer left half-registered installs.** If Start Menu or
+  `openbox://` protocol registration failed, the installer now restores the
+  previous installation tree. The WebView2 SDK hash is pinned and verified at
+  build time.
+- **Native host repairs.** "Reveal in Explorer" passed the folder in the wrong
+  argument position so it always failed; rejected or malformed WebView2 bridge
+  messages left the pending frontend promise hanging instead of rejecting it.
+- **Dialog and wizard consistency.** Lazily created dialogs (prompt, choice,
+  confirm, Trophy Case) now share the focus-restoration wiring of static
+  dialogs; click-outside dismissal routes through the shared close path; every
+  Setup Center open path goes through the single refresh-and-render entry
+  point; three untranslated strings now go through i18n in all five locales.
+- **Trust chain and update verification.** Valid signatures over wrong bytes,
+  tampered artifacts, and missing signatures are all rejected and covered by
+  tests; the CLI fails loudly with a machine-readable marker.
+- **Twenty previously shipped fixes pinned.** The full Unreleased fix list from
+  1.13.0 is now covered by regression tests: session token survival, import
+  batch projection, job titles, static cache headers, settings schema, and
+  more.
+
+---
+
+## Download
+
+| Asset | Architecture | Type |
+|-------|-------------|------|
+| `OpenBox-x86_64.AppImage` | x86_64 | AppImage |
+| `OpenBox-aarch64.AppImage` | ARM64 | AppImage |
+| `OpenBox-x86_64.flatpak` | x86_64 | Flatpak |
+| `OpenBox-x86_64-windows.zip` | x86_64 | Windows portable (signed) |
+| `OpenBox-x86_64-windows-native-host.exe` | x86_64 | WebView2 window host (signed) |
+
+**Windows:** download `install.ps1` and `OpenBox-x86_64-windows.zip` from this
+release and run the installer in Windows PowerShell 5.1. **Linux:** pick the
+AppImage that matches your CPU, or install the Flatpak. Already running
+OpenBox? Use the built-in updater or download the matching artifact from the
+release page.
+
+---
+
+**Full Changelog**: https://github.com/vindeckyy/OpenBoxGL/compare/v1.13.0...v1.13.1
+
+---
+
 # OpenBox 1.13.0 — Windows
 
 OpenBox now runs natively on Windows alongside Linux: the same library and the
