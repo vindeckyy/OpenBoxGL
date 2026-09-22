@@ -18,7 +18,7 @@ from pkg.parity.parity_steam_bridge import (
     shortcut_from_game,
 )
 from routes.registry import route
-from webapp_state import load_state_view
+from webapp_state import LOGGER, load_state_view
 
 
 MAX_BRIDGE_GAMES = 500
@@ -107,6 +107,95 @@ def _plan_error(error):
     raise BadRequest(str(error), code="STEAMBRIDGE_INVALID_PLAN") from error
 
 
+# Game media field -> Steam grid filename suffix. Capsule art comes from the
+# portrait cover (SteamGridDB grids 600x900), hero from the hero background,
+# logo from the clear logo. v1 copies the original bytes as-is: no Python
+# image resize exists in the codebase, and the plan forbids building one.
+_GRID_ART_FIELDS = (("cover", "p"), ("background", "_hero"), ("clear_logo", "_logo"))
+
+
+def _grid_dirs():
+    """Steam per-account grid art dirs, mirroring _candidate_paths() account iteration."""
+    grid_dirs = []
+    for root in _steam_roots():
+        userdata = root / "userdata"
+        if not userdata.is_dir():
+            continue
+        try:
+            accounts = sorted((item for item in userdata.iterdir() if item.is_dir()), key=lambda item: item.name)
+        except OSError:
+            continue
+        grid_dirs.extend(account / "config" / "grid" for account in accounts)
+    return grid_dirs
+
+
+def _copy_grid_art(grid_dir, appid, game):
+    """Copy cached artwork into the grid dir as Steam capsule/hero/logo files.
+
+    Returns the number of files written. Bytes are copied as-is (no resize);
+    the Steam-prescribed .png names are used even when the cached original
+    has another extension, and that is logged.
+    """
+    written = 0
+    for field, suffix in _GRID_ART_FIELDS:
+        source = game.get(field)
+        if not source:
+            continue
+        source_path = Path(str(source))
+        if not source_path.is_file():
+            LOGGER.warning("Steam grid art: %s file missing for %r (%s); skipping", field, game.get("name"), source_path)
+            continue
+        destination = grid_dir / f"{appid}{suffix}.png"
+        try:
+            shutil.copy2(source_path, destination)
+        except OSError as error:
+            LOGGER.warning("Steam grid art: cannot copy %s -> %s (%s); skipping", source_path, destination, error)
+            continue
+        if source_path.suffix.casefold() != ".png":
+            LOGGER.info("Steam grid art: copied %s bytes as %s (cached original was %s)", field, destination.name, source_path.suffix)
+        written += 1
+    return written
+
+
+def _apply_grid_art(path, body):
+    """Copy cached SteamGridDB art for bridged games into the Steam grid dir.
+
+    Runs after apply_shortcuts() succeeds. Only ever writes inside a detected
+    Steam account dir; every skip is logged honestly.
+    """
+    games = _games(load_state_view(), body)
+    if not games:
+        LOGGER.info("Steam grid art: no bridged games in this plan; nothing to copy")
+        return {"applied": 0, "skipped": 0}
+    grid_dir = path.parent / "grid"
+    if grid_dir not in _grid_dirs():
+        LOGGER.warning("Steam grid art: %s is not inside a detected Steam account dir; skipping", grid_dir)
+        return {"applied": 0, "skipped": len(games)}
+    try:
+        grid_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        LOGGER.warning("Steam grid art: cannot create %s (%s); skipping", grid_dir, error)
+        return {"applied": 0, "skipped": len(games)}
+    launcher = str(body.get("launcher_exe") or _launcher_executable()).strip()
+    applied = 0
+    skipped = 0
+    for game in games:
+        try:
+            appid = shortcut_from_game(game, launcher_exe=launcher)["appid"]
+        except SteamBridgeError as error:
+            LOGGER.warning("Steam grid art: cannot map bridged appid for %r (%s); skipping", game.get("name"), error)
+            skipped += 1
+            continue
+        written = _copy_grid_art(grid_dir, appid, game)
+        if written:
+            applied += 1
+            LOGGER.info("Steam grid art: wrote %d file(s) for appid %s (%s)", written, appid, game.get("name"))
+        else:
+            LOGGER.info("Steam grid art: no cached artwork for %r (appid %s); skipping", game.get("name"), appid)
+            skipped += 1
+    return {"applied": applied, "skipped": skipped}
+
+
 @route("GET", "/api/v2/steambridge/status", spec="handlers.steambridge.steambridge_status")
 def steambridge_status(handler, parsed):
     path = _path({})
@@ -146,6 +235,14 @@ def steambridge_apply(handler, payload):
         result = apply_shortcuts(path, plan=plan)
     except (OSError, ValueError, SteamBridgeError) as error:
         _plan_error(error)
+    # Deck Game Mode art: copy cached artwork into the Steam grid dir for the
+    # account the shortcuts were just written to. Never raises: skips are
+    # logged and reported, never fatal to the apply.
+    try:
+        result["grid_art"] = _apply_grid_art(path, body)
+    except Exception:
+        LOGGER.exception("Steam grid art copy failed; shortcuts were still applied")
+        result["grid_art"] = {"applied": 0, "skipped": 0, "error": "copy_failed"}
     handler.send_json(200, result)
 
 

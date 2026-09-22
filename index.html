@@ -549,6 +549,7 @@
         <label class="check settings-field settings-panel" data-settings-panel="appearance" data-setting="video bgm mix background music"><input type="checkbox" id="videoBgmMix"> <span data-i18n="settings.video_bgm_mix">Mix video audio with background music</span></label>
         <label class="field settings-field settings-panel" data-settings-panel="bigbox" data-setting="big box mode hybrid coverflow stage"><span data-i18n="settings.bigbox_layout">Big Box layout</span><select id="bigBoxMode"><option value="stage">Stage</option><option value="hybrid">Hybrid</option><option value="coverflow">CoverFlow</option></select></label>
         <label class="check settings-field settings-panel" data-settings-panel="bigbox" data-setting="show playlist actions big box menu"><input type="checkbox" id="showPlaylistActions" checked> <span data-i18n="settings.show_playlist_actions">Show playlist actions in Big Box</span></label>
+        <label class="check settings-field settings-panel" data-settings-panel="bigbox" data-setting="big box start launch boot startup"><input type="checkbox" id="bigBoxStartAtLaunch"> <span data-i18n="settings.bigbox_start_at_launch">Start in Big Box mode</span></label>
         <label class="check settings-field settings-panel" data-settings-panel="bigbox" data-setting="dynamic play button launch"><input type="checkbox" id="dynamicPlayButton" checked> <span data-i18n="settings.dynamic_play_button">Use dynamic Play button labels</span></label>
         <label class="check settings-field settings-panel" data-settings-panel="appearance library" data-setting="insights play dashboard heatmap show"><input type="checkbox" id="showInsights" checked> Show Play Insights in the library</label>
         <label class="check settings-field settings-panel" data-settings-panel="appearance" data-setting="mood match cover adaptive theming color"><input type="checkbox" id="moodMatchEnabled"> <span data-i18n="settings.mood_match">Adaptive cover theming</span></label>
@@ -682,6 +683,7 @@
     </div>
     <div class="screensaver" id="screenSaver" hidden><video id="screenSaverVideo" muted autoplay loop></video><div class="screensaver-copy"><div class="hero-kicker" id="screenSaverPlatform"></div><h2 id="screenSaverTitle"></h2><p>Press Play to launch, or any other control to return.</p></div></div>
     <div class="bigbox-pause" id="bigBoxPause" hidden><div class="bigbox-pause-panel"><h2 id="bigBoxPauseTitle">Running game</h2><p class="description" id="bigBoxPauseMeta"></p><div class="extras" id="bigBoxPauseActions"></div><div class="dialog-actions"><button class="icon-button" id="closeBigBoxPause" type="button" data-i18n="bigbox.pause_close">Close</button></div></div></div>
+    <div class="bigbox-osk" id="bigBoxOsk" hidden></div>
     <div class="party-overlay" id="partyOverlay" hidden></div>
   </section>
 
@@ -752,5 +754,6 @@
   </dialog>
 
   <script type="module" src="/static/app.js"></script>
+  <script type="module" src="/static/osk.js"></script>
 </body>
 </html>
