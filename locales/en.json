@@ -1314,5 +1314,21 @@
     "suggest_title": "Update your backlog?",
     "suggest_message": "You started {name}. Mark it as Playing?",
     "suggest_confirm": "Mark as Playing"
+  },
+  "dna": {
+    "mode_label": "Search mode",
+    "mode_title": "Title",
+    "mode_smart": "Smart",
+    "search_placeholder_smart": "Describe the vibe, mood, or mechanics…",
+    "results_title": "Smart results",
+    "no_results": "No smart matches. Try a different vibe or mechanic.",
+    "empty_coverage": "No game descriptions yet — smart search needs text to work with. Run Metadata → Fill missing to add descriptions.",
+    "open_metadata": "Open metadata",
+    "building": "Smart index building… {pct}%",
+    "cancel_build": "Cancel build",
+    "degraded_note": "Smart index unavailable — showing title matches.",
+    "search_failed": "Smart search failed.",
+    "privacy_note": "100% local · no AI cloud, no downloads",
+    "more_like_this": "More like this"
   }
 }

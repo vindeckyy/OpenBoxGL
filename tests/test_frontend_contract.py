@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Frontend contract: var(--*) defined, surface-deep in themes, app shell markup."""
+import json
 import re
 import pathlib
 
@@ -602,6 +603,58 @@ def test_gamepad_unified_loop():
     assert 'data-i18n="bigbox.pause_close"' in INDEX.read_text(encoding="utf-8"), (
         "index.html pause panel must carry a dismiss control with an i18n key"
     )
+
+def test_dna_search_surface():
+    """Game DNA search: toggle, results panel, why-chips, more-like-this,
+    Big Box search-toggle region, tokens in app.css + all themes, i18n keys."""
+    index = INDEX.read_text(encoding="utf-8")
+    assert 'id="contextDna"' in index, "context menu needs #contextDna"
+    assert 'data-i18n="dna.more_like_this"' in index, "contextDna needs an i18n key"
+    assert 'id="bigBoxDnaToggle"' in index, "Big Box needs #bigBoxDnaToggle"
+    assert 'data-dna-mode' in index, "Big Box toggle must carry data-dna-mode"
+    dna = (ROOT / "static" / "dna.js").read_text(encoding="utf-8")
+    for symbol in ("initDnaSearch", "dnaMoreLikeThis", "dnaMoreLikeThisBigBox",
+                   "dnaSearchMode", "setDnaSearchMode", "scheduleBigBoxSmartSearch"):
+        assert symbol in dna, f"dna.js must export {symbol}"
+    assert "250" in dna, "dna.js must debounce at 250 ms"
+    assert "/api/v2/library/dna/search" in dna, "dna.js must call the v2 search route"
+    assert "/api/v2/jobs/cancel" in dna, "dna.js must support cancelling the build job"
+    assert "no AI cloud" in dna, "dna.js must state the no-AI-cloud promise"
+    assert "r.game_id" in dna, "dna.js must read the backend game_id field"
+    assert "persist" in dna, "dna.js must support non-persisted mode syncs"
+    library = (ROOT / "static" / "library.js").read_text(encoding="utf-8")
+    assert "initDnaSearch()" in library, "library.js must initialize DNA search"
+    assert 'id="dnaMoreLikeThis"' in library, "details pane needs a More-like-this button"
+    app_js = APP_JS.read_text(encoding="utf-8")
+    assert '$(\'contextDna\').onclick' in app_js or '$("contextDna").onclick' in app_js, \
+        "app.js must wire the context menu More-like-this item"
+    bigbox = BIGBOX_JS.read_text(encoding="utf-8")
+    assert "bigBoxHybridSearch" in bigbox and "scheduleBigBoxSmartSearch" in bigbox, \
+        "bigbox.js smart mode must feed the existing hybrid search input"
+    assert "bigbox-dna-why" in bigbox, "bigbox.js must render why-chips as subtitle lines"
+    assert "dnaMoreLikeThisBigBox" in bigbox, "bigbox.js must wire More-like-this"
+    assert "entry.game_id" in bigbox, "bigbox.js must map results on the backend game_id field"
+    css = APP.read_text(encoding="utf-8")
+    defs = parse_root_vars(css)
+    for token in ("dna-chip-bg", "dna-chip-border", "dna-chip-fg",
+                  "dna-panel-bg", "dna-panel-border", "dna-panel-shadow",
+                  "dna-toggle-active-bg", "dna-toggle-active-fg"):
+        assert token in defs, f"app.css :root must define --{token}"
+        for theme in THEMES:
+            assert token in parse_root_vars(theme.read_text(encoding="utf-8")), \
+                f"{theme.name} :root must define --{token}"
+    for cls in (".dna-search-wrap", ".dna-mode-toggle", ".dna-results",
+                ".dna-result", ".dna-chip", ".bigbox-dna-why"):
+        assert cls in css, f"app.css must style {cls}"
+    for locale in ("en", "de", "es", "fr", "pt"):
+        strings = json.loads((ROOT / "locales" / f"{locale}.json").read_text(encoding="utf-8"))
+        section = strings.get("dna", {})
+        for key in ("mode_label", "mode_title", "mode_smart", "search_placeholder_smart",
+                    "results_title", "no_results", "empty_coverage", "open_metadata",
+                    "building", "cancel_build", "degraded_note", "search_failed",
+                    "privacy_note", "more_like_this"):
+            assert section.get(key), f"locales/{locale}.json missing dna.{key}"
+
 
 if __name__ == "__main__":
     tests = sorted(
