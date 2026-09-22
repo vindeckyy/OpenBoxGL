@@ -1167,5 +1167,43 @@
     "issue_low_res": "Faible résolution",
     "issue_wrong_aspect": "Mauvais rapport d'aspect",
     "issue_duplicate": "Illustration en double"
+  },
+  "repair": {
+    "title": "Réparer les fichiers manquants",
+    "open": "Réparer les chemins",
+    "scanning": "Analyse de la bibliothèque…",
+    "summary": "{count} chemins manquants",
+    "empty": "Aucun chemin manquant trouvé.",
+    "find_folder": "Chercher dans un dossier…",
+    "matches": "{count} correspondances",
+    "unmatched": "{count} sans correspondance",
+    "ambiguous": "{count} nécessitent un choix manuel",
+    "ambiguous_hint": "Les correspondances ambiguës sont ignorées ; précisez le dossier et relancez l’analyse.",
+    "no_matches": "Aucun fichier de ce dossier ne correspond aux chemins manquants.",
+    "apply": "Relier {count}",
+    "applied": "{count} chemins reliés",
+    "nothing_applied": "Aucun chemin n’a été relié",
+    "skipped": "{count} chemins ont changé depuis l’analyse et ont été ignorés",
+    "kind_game": "Fichier de jeu",
+    "kind_media": "Média"
+  },
+  "duplicates": {
+    "title": "Jeux en double",
+    "open": "Trouver les doublons",
+    "scanning": "Recherche des doublons…",
+    "empty": "Aucun jeu en double trouvé.",
+    "summary": "{count} groupes de doublons",
+    "kind_identity": "Même identifiant de jeu",
+    "kind_path": "Même chemin",
+    "kind_title": "Même titre",
+    "row_stats": "{sessions} sessions · {hours} h",
+    "preview": "Aperçu de la fusion",
+    "primary": "Conserver {name}",
+    "absorbed": "{count} entrées iront à la corbeille (annulable)",
+    "changes": "{count} champs seront complétés depuis les doublons",
+    "restore_hint": "Restaurez les entrées fusionnées depuis la corbeille.",
+    "merge": "Fusionner",
+    "merged": "{count} entrées en double fusionnées",
+    "failed": "Échec de la fusion"
   }
 }

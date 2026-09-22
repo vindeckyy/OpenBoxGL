@@ -1167,5 +1167,43 @@
     "issue_low_res": "Resolução baixa",
     "issue_wrong_aspect": "Proporção incorreta",
     "issue_duplicate": "Arte duplicada"
+  },
+  "repair": {
+    "title": "Reparar arquivos ausentes",
+    "open": "Reparar caminhos",
+    "scanning": "Analisando a biblioteca…",
+    "summary": "{count} caminhos ausentes",
+    "empty": "Nenhum caminho ausente encontrado.",
+    "find_folder": "Procurar na pasta…",
+    "matches": "{count} correspondências",
+    "unmatched": "{count} sem correspondência",
+    "ambiguous": "{count} precisam de escolha manual",
+    "ambiguous_hint": "Correspondências ambíguas são ignoradas; restrinja a pasta e analise de novo.",
+    "no_matches": "Nenhum arquivo dessa pasta corresponde aos caminhos ausentes.",
+    "apply": "Religar {count}",
+    "applied": "{count} caminhos religados",
+    "nothing_applied": "Nenhum caminho foi religado",
+    "skipped": "{count} caminhos mudaram desde a análise e foram ignorados",
+    "kind_game": "Arquivo do jogo",
+    "kind_media": "Mídia"
+  },
+  "duplicates": {
+    "title": "Jogos duplicados",
+    "open": "Encontrar duplicados",
+    "scanning": "Procurando duplicados…",
+    "empty": "Nenhum jogo duplicado encontrado.",
+    "summary": "{count} grupos de duplicados",
+    "kind_identity": "Mesmo id de jogo",
+    "kind_path": "Mesmo caminho",
+    "kind_title": "Mesmo título",
+    "row_stats": "{sessions} sessões · {hours} h",
+    "preview": "Prévia da mesclagem",
+    "primary": "Manter {name}",
+    "absorbed": "{count} entradas vão para a lixeira (reversível)",
+    "changes": "{count} campos serão preenchidos a partir dos duplicados",
+    "restore_hint": "Restaure as entradas mescladas na lixeira.",
+    "merge": "Mesclar",
+    "merged": "{count} entradas duplicadas mescladas",
+    "failed": "Falha na mesclagem"
   }
 }
