@@ -18,7 +18,7 @@ def test_module_is_dependency_free_and_uses_app_contracts():
     text = source()
     imports = re.findall(r"^import\s+.*?from\s+['\"]([^'\"]+)['\"]", text, re.MULTILINE)
     assert imports, "Arcade Room must use ES module imports"
-    assert set(imports) == {"./util.js", "./state.js"}, imports
+    assert set(imports) == {"./util.js", "./state.js", "./gamepad.js"}, imports
     assert "escapeHtml" in text and "defaultControllerMap" in text
     assert "var(--surface-deep)" in text
     assert "var(--text)" in text
