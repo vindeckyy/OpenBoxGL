@@ -363,6 +363,11 @@
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneHealth">Done</button></div>
   </dialog>
+  <dialog id="healthScoreDialog" aria-modal="true" aria-labelledby="healthScoreDialogTitle">
+    <div class="dialog-head"><h2 id="healthScoreDialogTitle" data-i18n="health.title">Library health</h2><button type="button" id="closeHealthScore" aria-label="Close library health dialog">×</button></div>
+    <div class="dialog-body" id="healthScoreBody"></div>
+    <div class="dialog-actions"><button type="button" class="primary" id="doneHealthScore" data-i18n="common.done">Done</button></div>
+  </dialog>
   <dialog id="bulkDialog" aria-modal="true" aria-labelledby="bulkDialogTitle">
     <form id="bulkForm">
       <div class="dialog-head"><h2 id="bulkDialogTitle">Bulk Edit</h2><button type="button" id="closeBulk" aria-label="Close Bulk Edit dialog">×</button></div>
@@ -531,6 +536,7 @@
         <label class="field settings-field settings-panel" data-settings-panel="sessions" data-setting="state retention resume states keep"><span data-i18n="settings.state_retention">Resume states kept per game</span><input id="stateRetention" type="number" min="1" max="20"></label>
         <label class="check settings-field settings-panel" data-settings-panel="sessions" data-setting="backup on close saves"><input type="checkbox" id="backupOnClose"> <span data-i18n="settings.backup_on_close">Back up saves when a game session ends</span></label>
         <label class="check settings-field settings-panel" data-settings-panel="sessions" data-setting="automatic backup weekly library"><input type="checkbox" id="backupAutoEnabled"> Back up the library automatically each week</label>
+        <label class="field settings-field settings-panel" data-settings-panel="sessions" data-setting="library health rescan cadence"><span data-i18n="settings.health_rescan">Library health rescan</span><select id="healthRescanCadence"><option value="daily" data-i18n="settings.health_rescan_daily">Daily</option><option value="weekly" data-i18n="settings.health_rescan_weekly" selected>Weekly</option><option value="on_startup" data-i18n="settings.health_rescan_on_startup">On startup</option><option value="off" data-i18n="settings.health_rescan_off">Off</option></select></label>
         <label class="field settings-field settings-panel" data-settings-panel="sessions" data-setting="automatic backup retention keep"><span>Automatic backups kept</span><input id="backupAutoKeep" type="number" min="1" max="52"></label>
         <p class="wide description settings-field settings-panel" data-settings-panel="sessions" data-setting="automatic backup last" id="lastAutoBackupLine" hidden></p>
         <label class="check settings-field settings-panel" data-settings-panel="sessions" data-setting="obs recording attach auto"><input type="checkbox" id="obsAutoAttach" checked> <span data-i18n="settings.obs_auto_attach">Auto-attach latest OBS recording when a session ends</span></label>

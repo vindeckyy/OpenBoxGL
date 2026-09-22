@@ -129,6 +129,7 @@ def _ensure_handlers_loaded() -> None:
         "handlers.resume",
         "handlers.moments",
         "handlers.steamgrid",
+        "handlers.library_health",
         "handlers.timemachine",
         "handlers.household",
         "handlers.clips",

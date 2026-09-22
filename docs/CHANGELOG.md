@@ -30,6 +30,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Bulk media downloads now commit one transaction for large batches and keep
   per-game commits for small ones; malformed `Range` requests map to 416
   without masking missing files as range errors.
+- Library health score: a 0–100 score with five weighted dimensions (file
+  integrity 35, duplicates 20, artwork 20, metadata 15, launch readiness 10),
+  where every deduction names its games. The audit dialog gained a health card
+  and a breakdown dialog with per-dimension issue lists, a "Fix all in this
+  dimension" queue (dry-run preview first, every fix undoable), a Big Box
+  health tile with re-scan, and a scheduled rescan (daily/weekly/on
+  startup/off, default weekly) that skips active game sessions. Weights and
+  the never-auto-fix principle are recorded in ADR 0056.
 
 ### Fixed
 - Big Box pause overlay trapped gamepad users: with the panel open, the pad

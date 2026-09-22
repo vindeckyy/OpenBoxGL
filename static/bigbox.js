@@ -107,6 +107,7 @@ import { registerGamepadSurface, ensureGamepadLoop, stopGamepadLoop, syncGamepad
       return result;
     }
     function openBigBoxMenu() {
+      ensureBigBoxHealthTile();
       $('bigBoxFilter').value = AppState.bigBoxFilter;
       $('bigBoxSort').value = AppState.bigBoxSort;
       $('bigBoxRaFilter').value = AppState.bigBoxRaFilter;
@@ -117,6 +118,65 @@ import { registerGamepadSurface, ensureGamepadLoop, stopGamepadLoop, syncGamepad
       $('bigBoxMenu').hidden = true;
       $('bigBox').focus();
       AppState.bigBoxLastInput = performance.now();
+    }
+    // ── Library health tile (Flagship 8, H5) ───────────────────────────────
+    // Read-only on the couch: cached score + worst dimension, controller-
+    // navigable breakdown, and a "Re-scan library" action. No fix flows here.
+    const HEALTH_DIMENSIONS = ['file_integrity', 'duplicates', 'artwork', 'metadata', 'launch_readiness'];
+    function ensureBigBoxHealthTile() {
+      const panel = document.querySelector('#bigBoxMenu .bigbox-menu-panel .dialog-actions');
+      if (!panel || panel.querySelector('#bigBoxHealthButton')) return;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.id = 'bigBoxHealthButton';
+      button.className = 'icon-button';
+      button.dataset.i18n = 'health.open';
+      button.textContent = t('health.open');
+      button.onclick = () => { closeBigBoxMenu(); openBigBoxHealth(); };
+      panel.appendChild(button);
+    }
+    function healthTileDialog() {
+      let dialog = $('bigBoxHealthDialog');
+      if (dialog) return dialog;
+      dialog = document.createElement('dialog');
+      dialog.id = 'bigBoxHealthDialog';
+      dialog.setAttribute('aria-modal', 'true');
+      dialog.innerHTML = `<div class="dialog-head"><h2 data-i18n="health.title">${escapeHtml(t('health.title'))}</h2><button type="button" class="icon-button" data-health-close aria-label="${escapeHtml(t('health.dismiss'))}">×</button></div><div class="dialog-body" data-health-body><p class="description">${escapeHtml(t('common.loading'))}</p></div><div class="dialog-actions"><button type="button" class="primary" data-health-rescan>${escapeHtml(t('health.rescan'))}</button><button type="button" class="icon-button" data-health-close>${escapeHtml(t('health.dismiss'))}</button></div>`;
+      document.body.appendChild(dialog);
+      dialog.querySelectorAll('[data-health-close]').forEach(button => button.onclick = () => { dialog.close(); $('bigBox')?.focus(); });
+      dialog.querySelector('[data-health-rescan]').onclick = async () => {
+        try {
+          await api('/api/v2/library/health/scan', { method: 'POST', body: '{}' });
+          notify(t('health.scan_queued'));
+        } catch (error) { notify(error.message); }
+      };
+      return dialog;
+    }
+    async function openBigBoxHealth() {
+      const dialog = healthTileDialog();
+      const body = dialog.querySelector('[data-health-body]');
+      if (!dialog.open) dialog.showModal();
+      try {
+        const snapshot = await api('/api/v2/library/health');
+        if (!snapshot.scanned) {
+          body.innerHTML = `<p class="description">${escapeHtml(t('health.no_scan'))}</p>`;
+        } else {
+        const dims = snapshot.dimensions || {};
+        const worst = HEALTH_DIMENSIONS.reduce((acc, dim) => (!acc || (dims[dim]?.score ?? 100) < (dims[acc]?.score ?? 100) ? dim : acc), null);
+        body.innerHTML = `<div class="health-hero">
+          <div class="health-score ${snapshot.score >= 85 ? 'health-great' : snapshot.score >= 60 ? 'health-ok' : 'health-poor'}">${snapshot.score}</div>
+          <div class="health-hero-meta"><div class="description">${escapeHtml(t('health.computed', { count: snapshot.game_count }))}</div>
+          ${worst ? `<div class="description">${escapeHtml(t('health.weakest', { dimension: t(`health.dim_${worst}`, worst) }))}</div>` : ''}</div>
+        </div>
+        <div class="health-dims">${HEALTH_DIMENSIONS.map(dim => {
+          const sub = dims[dim]?.score ?? 0;
+          return `<div class="health-dim"><span class="health-dim-name">${escapeHtml(t(`health.dim_${dim}`, dim))}</span><span class="health-bar"><span class="health-bar-fill" style="width:${sub}%"></span></span><span class="health-dim-score">${sub}</span></div>`;
+        }).join('')}</div>`;
+        }
+      } catch (error) {
+        body.innerHTML = `<p class="description">${escapeHtml(error.message)}</p>`;
+      }
+      dialog.querySelector('[data-health-rescan]')?.focus();
     }
     function applyBigBoxMenu() {
       const currentId = AppState.bigBoxGames[AppState.bigBoxIndex]?.id;

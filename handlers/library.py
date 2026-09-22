@@ -24,7 +24,7 @@ from pkg.parity.parity_repair import apply_repair, plan_repair, scan_candidates 
 from pkg.parity.parity_repair import resolve_folder as resolve_repair_folder
 from play_queue import advance as advance_queue, enqueue as enqueue_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
 from state_store import _stable_game_id, prune_trash
-from webapp_state import FIELDS, MEDIA_PATH_FIELDS, _public_state_cached, approved_media_path, bump_media_epoch, clear_file_probe_cache, consolidate_existing_games, game_from_payload, game_from_query, game_identity, load_state_view, public_state, public_state_bytes, public_state_etag, public_settings, transact_state
+from webapp_state import FIELDS, MEDIA_PATH_FIELDS, _public_state_cached, approved_media_path, bump_media_epoch, clear_file_probe_cache, consolidate_existing_games, game_from_payload, game_from_query, load_state_view, public_state, public_state_bytes, public_state_etag, public_settings, transact_state
 
 
 def _clean_game_fields(source):
@@ -645,58 +645,28 @@ class LibraryHandlers:
         self.send_json(200, {"deleted": name})
 
     def health(self):
+        # Detection lives in pkg.parity.parity_library_health so the v1 audit
+        # and the health score can never disagree. The response shape below is
+        # pinned by scripts/check_v1_contract.py: do not change it.
+        from pkg.parity.parity_library_health import detect_issues
         state = load_state()
-        # Use canonical identity when available, fallback to legacy game_identity
-        try:
-            from pkg.parity.parity_identity import cross_source_identity, detect_duplicate_identities, normalize_identity
-            has_canonical = True
-        except ImportError:
-            has_canonical = False
-        seen, duplicates, issues = {}, [], []
-        if has_canonical:
-            dup_groups = detect_duplicate_identities(state["games"], include_cross_source=True)
-            dup_index_by_id = {}
-            for grp in dup_groups:
-                for gid in grp["games"]:
-                    dup_index_by_id[gid] = grp["identity"]
-        else:
-            dup_index_by_id = {}
-        for index, game in enumerate(state["games"]):
-            if has_canonical:
-                identity = dup_index_by_id.get(game.get("game_id") or game.get("id"))
-                if not identity:
-                    identity = cross_source_identity(game) or normalize_identity(game) or game_identity(game)
-            else:
-                identity = game_identity(game)
-            if identity in seen:
-                duplicates.append(index)
-                issues.append({"id":index, "game":game.get("name", ""), "type":"Duplicate", "detail":f"Matches {state['games'][seen[identity]].get('name', '')}; identity {identity}"})
-            else:
-                seen[identity] = index
-            path = Path(game.get("path", ""))
-            if game.get("manual_entry"):
-                continue
-            if not game.get("path") or not path.exists():
-                issues.append({"id":index, "game":game.get("name", ""), "type":"Missing game", "detail":str(path)})
-            if not Path(game.get("cover", "")).is_file():
-                issues.append({"id":index, "game":game.get("name", ""), "type":"Missing box front", "detail":"No local cover image"})
-            for kind in ("applications", "versions", "documents"):
-                for extra in game.get(kind, []):
-                    if not Path(extra.get("path", "")).exists():
-                        issues.append({"id":index, "game":game.get("name", ""), "type":"Missing extra", "detail":extra.get("path", "")})
-            for path in game.get("save_paths", []):
-                if not Path(path).exists():
-                    issues.append({"id":index, "game":game.get("name", ""), "type":"Missing save path", "detail":path})
-            suffix = Path(game.get("path", "")).suffix.casefold()
-            if suffix in {".rom", ".nes", ".sfc", ".smc", ".gba", ".gb", ".gbc", ".iso"} and not game.get("launch") and not state["profiles"].get(game.get("platform", "")):
-                issues.append({"id":index, "game":game.get("name", ""), "type":"No emulator", "detail":game.get("platform", "Unspecified")})
+        detected = detect_issues(state["games"], state)
+        legacy = [issue for issue in detected if issue.get("legacy")]
         self.send_json(200, {
             "games": len(state["games"]),
-            "missing": sum(issue["type"] == "Missing game" for issue in issues),
-            "duplicates": len(duplicates),
+            "missing": sum(issue["legacy"]["type"] == "Missing game" for issue in legacy),
+            "duplicates": sum(issue["legacy"]["type"] == "Duplicate" for issue in legacy),
             "unconfigured": sum(not game.get("path") and not game.get("manual_entry") for game in state["games"]),
-            "missing_media": sum(issue["type"] == "Missing box front" for issue in issues),
-            "issues":issues,
+            "missing_media": sum(issue["legacy"]["type"] == "Missing box front" for issue in legacy),
+            "issues": [
+                {
+                    "id": issue["index"],
+                    "game": issue["name"],
+                    "type": issue["legacy"]["type"],
+                    "detail": issue["legacy"]["detail"],
+                }
+                for issue in legacy
+            ],
         })
 
     def dedupe(self):
