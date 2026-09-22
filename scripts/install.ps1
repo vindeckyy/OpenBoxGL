@@ -222,9 +222,24 @@ try {
     Move-Item -LiteralPath $tree -Destination $target
     Say "Installed to $target"
 
+    # Rollback hook, registered immediately after the new tree replaces the
+    # old one: if desktop-entry/protocol registration fails, the previous
+    # tree (still intact at $previous) is restored so the install is never
+    # left without its shortcut and protocol handler.
+    $RestorePreviousInstall = {
+        if (Test-Path -LiteralPath $previous) {
+            if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+            Move-Item -LiteralPath $previous -Destination $target
+            Say "Restored the previous install from $previous"
+        }
+    }
+
     Say 'Registering the Start Menu shortcut and the openbox:// protocol...'
     & $python -B (Join-Path $target 'updates.py') install-desktop-entry (Join-Path $target 'openbox.cmd')
-    if ($LASTEXITCODE -ne 0) { Die 'Could not register the desktop integration.' }
+    if ($LASTEXITCODE -ne 0) {
+        & $RestorePreviousInstall
+        Die 'Could not register the desktop integration.'
+    }
 
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     if (-not $userPath) { $userPath = '' }

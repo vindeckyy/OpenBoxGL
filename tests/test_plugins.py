@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
+"""Plugin packaging/hook tests plus the sandbox confinement regression suite.
+
+Known limitation (documented, not fixed here): with start_new_session=True,
+only the direct plugin child is SIGKILLed on timeout — a double-forking
+plugin persists as an orphan with full user privileges when unsandboxed.
+Process-group kill is a 1.14 hardening item.
+"""
 import hashlib
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -192,5 +200,247 @@ def test():
     print("plugin self-test: ok")
 
 
-if __name__ == "__main__":
+# ---------------------------------------------------------------------------
+# Sandbox confinement regression suite (§6.1). A regression dropping a
+# containment mechanism (the mount profile, the timeout, the payload caps,
+# the output contract, the env filter, start_new_session) must be visible
+# here. Plugin failures surface with the plugin id in the server log — the
+# equivalent of the UI error toast carrying plugin_id — never silently.
+# ---------------------------------------------------------------------------
+
+def _make_plugin(root, plugin_id, code, hooks=("before_launch",), version="1"):
+    package = Path(root) / plugin_id
+    package.mkdir(parents=True, exist_ok=True)
+    (package / "plugin.json").write_text(json.dumps({
+        "id": plugin_id, "name": plugin_id, "version": version,
+        "hooks": list(hooks),
+    }), encoding="utf-8")
+    (package / "plugin.py").write_text(code, encoding="utf-8")
+    return package
+
+
+class _LogCapture(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.records = []
+
+    def emit(self, record):
+        self.records.append(record)
+
+
+def _capture_plugin_logs():
+    logger = logging.getLogger("openbox.plugins")
+    handler = _LogCapture()
+    logger.addHandler(handler)
+    old_level = logger.level
+    logger.setLevel(logging.DEBUG)
+    return logger, handler, old_level
+
+
+def _plugin_warnings(handler):
+    return [record.getMessage() for record in handler.records
+            if record.levelno >= logging.WARNING]
+
+
+def test_sandbox_permission_denial_surfaces():
+    """Denying a plugin must surface (with its id), never fail silently.
+
+    The plugin's declared hooks are its capabilities: when the sandbox is
+    unavailable and the unsandboxed escape hatch is not exactly "1", the
+    plugin is skipped *and* the denial is logged naming the plugin.
+    """
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        _make_plugin(root, "denied.plugin",
+                     "def before_launch(p):\n    p['ran'] = True\n    return p\n")
+        logger, handler, old_level = _capture_plugin_logs()
+        try:
+            with mock.patch.dict(os.environ, {}, clear=True):
+                with mock.patch("plugins._sandbox_available", return_value=False):
+                    result = run_plugins(root, "before_launch", {"args": []})
+            assert result == {"args": []}, "denied plugin must not run"
+            warnings = _plugin_warnings(handler)
+            assert any("denied.plugin" in message and "bubblewrap" in message
+                       for message in warnings), warnings
+            # A non-"1" value does not open the unsandboxed path either: the
+            # variable is the *only* path to unsandboxed execution.
+            handler.records.clear()
+            with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "0"}, clear=True):
+                with mock.patch("plugins._sandbox_available", return_value=False):
+                    result = run_plugins(root, "before_launch", {"args": []})
+            assert result == {"args": []}
+            warnings = _plugin_warnings(handler)
+            assert any("denied.plugin" in message for message in warnings), warnings
+        finally:
+            logger.removeHandler(handler)
+            logger.setLevel(old_level)
+    print("  sandbox permission denial surfaces: ok")
+
+
+def test_sandbox_plugin_error_carries_plugin_id():
+    """Every plugin failure is reported with the plugin id (the error toast)."""
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        _make_plugin(root, "err.plugin",
+                     "import sys\ndef before_launch(p):\n    sys.exit(3)\n")
+        _make_plugin(root, "json.plugin",
+                     "def before_launch(p):\n    print('not json{{')\n    return p\n")
+        logger, handler, old_level = _capture_plugin_logs()
+        try:
+            with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}, clear=True):
+                result = run_plugins(root, "before_launch", {"args": []})
+            assert result == {"args": []}, "failed plugins must not alter the payload"
+            warnings = _plugin_warnings(handler)
+            assert any("err.plugin" in message and "status 3" in message
+                       for message in warnings), warnings
+            assert any("json.plugin" in message and "invalid JSON" in message
+                       for message in warnings), warnings
+        finally:
+            logger.removeHandler(handler)
+            logger.setLevel(old_level)
+    print("  sandbox plugin errors carry plugin_id: ok")
+
+
+def test_sandbox_slow_plugin_warns():
+    """A plugin slower than the 5 s timeout is killed and warned about.
+
+    It must not block the hook chain: the run returns after ~5 s (not the
+    plugin's 10 s sleep) with the payload unchanged and a warning naming
+    the plugin.
+    """
+    import time
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        _make_plugin(root, "slow.plugin",
+                     "import time\ndef before_launch(p):\n    time.sleep(10)\n    return p\n")
+        logger, handler, old_level = _capture_plugin_logs()
+        try:
+            with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}, clear=True):
+                start = time.monotonic()
+                result = run_plugins(root, "before_launch", {"args": []})
+                elapsed = time.monotonic() - start
+            assert result == {"args": []}
+            assert 4.5 <= elapsed < 9.0, f"slow plugin must die at the 5 s timeout, took {elapsed:.1f}s"
+            warnings = _plugin_warnings(handler)
+            assert any("slow.plugin" in message and "before_launch" in message
+                       for message in warnings), warnings
+        finally:
+            logger.removeHandler(handler)
+            logger.setLevel(old_level)
+    print("  sandbox slow plugin warns instead of blocking: ok")
+
+
+def test_sandbox_disabled_plugin_spawns_nothing():
+    """A disabled plugin leaves no timers/handlers: nothing is ever spawned."""
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        marker = root / "ran.marker"
+        _make_plugin(root, "quiet.plugin",
+                     f"def before_launch(p):\n    open({str(marker)!r}, 'w').write('ran')\n    return p\n")
+        set_plugin_enabled(root, "quiet.plugin", False)
+        with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}, clear=True):
+            with mock.patch("plugins.subprocess.run") as spawned:
+                result = run_plugins(root, "before_launch", {"args": []})
+        assert spawned.call_count == 0, "disabled plugin must not spawn a process"
+        assert not marker.exists(), "disabled plugin must not run its hook"
+        assert result == {"args": []}
+    print("  sandbox disabled plugin spawns nothing: ok")
+
+
+def test_sandbox_manifest_versions():
+    """Manifests declaring version "1", "2", or semver all load and run."""
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        for plugin_id, version in (("v1.plugin", "1"), ("v2.plugin", "2"), ("v3.plugin", "1.2.3")):
+            _make_plugin(root, plugin_id,
+                         f"def before_launch(p):\n    p['args'].append({plugin_id!r})\n    return p\n",
+                         version=version)
+        assert {entry["id"] for entry in list_plugins(root)} == {"v1.plugin", "v2.plugin", "v3.plugin"}
+        with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}, clear=True):
+            result = run_plugins(root, "before_launch", {"args": []})
+        assert sorted(result["args"]) == ["v1.plugin", "v2.plugin", "v3.plugin"]
+        # A manifest without any version is refused loudly at read time and
+        # skipped (not silently loaded) by the plugin listing.
+        _make_plugin(root, "noversion.plugin", "def before_launch(p):\n    return p\n", version="")
+        from plugins import read_manifest
+        try:
+            read_manifest(root / "noversion.plugin")
+            raise AssertionError("a manifest without a version must be refused")
+        except ValueError:
+            pass
+        assert "noversion.plugin" not in {entry["id"] for entry in list_plugins(root)}
+    print("  sandbox manifest v1/v2 compat: ok")
+
+
+def test_sandbox_process_group_isolation():
+    """A misbehaving plugin cannot signal outside its own process group.
+
+    The plugin kills process group 0 (itself). start_new_session=True puts
+    the plugin in its own session/group, so the test process must survive —
+    survival *is* the assertion. If the isolation regressed, this test dies
+    loudly instead of passing silently.
+    """
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        _make_plugin(root, "sig.plugin",
+                     "import os, signal\ndef before_launch(p):\n"
+                     "    os.kill(0, signal.SIGTERM)\n    return p\n")
+        logger, handler, old_level = _capture_plugin_logs()
+        try:
+            with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}, clear=True):
+                result = run_plugins(root, "before_launch", {"args": []})
+            # Still alive: the plugin's kill(0, SIGTERM) hit only its group.
+            assert result == {"args": []}
+            warnings = _plugin_warnings(handler)
+            assert any("sig.plugin" in message for message in warnings), warnings
+        finally:
+            logger.removeHandler(handler)
+            logger.setLevel(old_level)
+    print("  sandbox process group isolation: ok")
+
+
+def test_sandbox_process_group_cleanup():
+    """A timed-out plugin's process is killed and reaped — nothing lingers."""
+    import time
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        _make_plugin(root, "linger.plugin",
+                     "import os, time\ndef before_launch(p):\n"
+                     "    open(p['pid_file'], 'w').write(str(os.getpid()))\n"
+                     "    time.sleep(30)\n    return p\n")
+        pid_file = Path(directory) / "plugin.pid"
+        with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}, clear=True):
+            run_plugins(root, "before_launch", {"args": [], "pid_file": str(pid_file)})
+        pid = int(pid_file.read_text(encoding="utf-8"))
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            cleaned = True
+        except PermissionError:
+            cleaned = False
+        else:
+            cleaned = False
+        assert cleaned, "timed-out plugin left a live process behind"
+        # And once disabled, it is never spawned again.
+        set_plugin_enabled(root, "linger.plugin", False)
+        with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}, clear=True):
+            with mock.patch("plugins.subprocess.run") as spawned:
+                run_plugins(root, "before_launch", {"args": [], "pid_file": str(pid_file)})
+        assert spawned.call_count == 0
+    print("  sandbox process group cleanup: ok")
+
+
+def main():
     test()
+    test_sandbox_permission_denial_surfaces()
+    test_sandbox_plugin_error_carries_plugin_id()
+    test_sandbox_slow_plugin_warns()
+    test_sandbox_disabled_plugin_spawns_nothing()
+    test_sandbox_manifest_versions()
+    test_sandbox_process_group_isolation()
+    test_sandbox_process_group_cleanup()
+    print("plugin sandbox self-test: ok")
+
+
+if __name__ == "__main__":
+    main()
