@@ -4,6 +4,7 @@
 Shared core for the web server and native host: data paths, state store, launch commands, profile discovery.
 """
 
+import logging
 import os
 import shutil
 import sys
@@ -135,22 +136,58 @@ def _sync_wrapped_mutator(mutator):
     return wrapped
 
 
+def _library_event_snapshot():
+    """Snapshot the library for plugin game_added/removed/updated diffs.
+
+    Returns None when the state cannot be read; the diff is then skipped.
+    The import is local: plugins.py must stay importable without openbox.
+    """
+    try:
+        from plugins import snapshot_library
+        return snapshot_library(load_state_readonly())
+    except Exception:
+        return None
+
+
+def _emit_library_diff(before):
+    """Emit plugin lifecycle events for games added/removed/updated.
+
+    Runs after the transaction commits — never inside the state lock — and
+    never raises: event fan-out must not break the mutation that triggered it.
+    """
+    if before is None:
+        return
+    try:
+        from plugins import emit_library_diff
+        emit_library_diff(DATA.parent / "plugins", before, _library_event_snapshot())
+    except Exception:
+        logging.getLogger("openbox.state").exception("Plugin library diff failed")
+
+
 def update_state(mutator):
     """Apply one state mutation under the cross-process transaction lock."""
     wrapped = _sync_wrapped_mutator(mutator)
+    before = _library_event_snapshot()
     if isinstance(STATE_STORE, JsonStateStore):
-        return STATE_STORE.update(wrapped, isolate=False)
+        result = STATE_STORE.update(wrapped, isolate=False)
     # Keep lightweight test doubles and embedding adapters compatible with the
     # original one-argument store protocol.
-    return STATE_STORE.update(wrapped)
+    else:
+        result = STATE_STORE.update(wrapped)
+    _emit_library_diff(before)
+    return result
 
 
 def update_state_with_result(mutator):
     """Apply a mutation and return both the committed state and callback result."""
     wrapped = _sync_wrapped_mutator(mutator)
+    before = _library_event_snapshot()
     if isinstance(STATE_STORE, JsonStateStore):
-        return STATE_STORE.update_with_result(wrapped, isolate=False)
-    return STATE_STORE.update_with_result(wrapped)
+        result = STATE_STORE.update_with_result(wrapped, isolate=False)
+    else:
+        result = STATE_STORE.update_with_result(wrapped)
+    _emit_library_diff(before)
+    return result
 
 
 def recover_state():

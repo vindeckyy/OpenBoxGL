@@ -589,7 +589,360 @@ def main():
     test_sandbox_process_group_cleanup()
     test_plugin_api_v1()
     test_plugin_routes()
+    test_plugin_trust_flow()
+    test_plugin_trust_gates_unsandboxed_execution()
+    test_plugin_share_net_argv()
+    test_plugin_permissions()
+    test_plugin_settings_validation()
+    test_plugin_settings_roundtrip_and_stdin()
+    test_plugin_remove_clears_trust_permissions_settings()
+    test_plugin_library_source_merge()
+    test_plugin_lifecycle_events()
+    test_plugin_v2_routes()
     print("plugin sandbox self-test: ok")
+
+
+# ---------------------------------------------------------------------------
+# Plugins 2.0 (F1a/F1b/F1c/F1d/F1e/F1f) coverage.
+# ---------------------------------------------------------------------------
+
+def _make_20_plugin(root, plugin_id, code, manifest_extra=None):
+    package = Path(root) / plugin_id
+    package.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "id": plugin_id, "name": plugin_id, "version": "1.0.0",
+        "api_version": 1, "hooks": ["events"],
+    }
+    manifest.update(manifest_extra or {})
+    (package / "plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (package / "plugin.py").write_text(code, encoding="utf-8")
+    return package
+
+
+def test_plugin_trust_flow():
+    """F1a: trust grants are per-plugin, checksum-bound, and revocable."""
+    import plugins as _plugins
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        _make_plugin(root, "trust.plugin", "def before_launch(p):\n    return p\n")
+        status = _plugins.plugin_trust_status(root, "trust.plugin")
+        assert status["trusted"] is False and status["checksum_matches"] is False
+        assert status["checksum"], "checksum is reported even before trust"
+        # Deny-by-default: nothing trusted without an explicit grant.
+        assert _plugins.set_plugin_trust(root, "trust.plugin", True) is True
+        status = _plugins.plugin_trust_status(root, "trust.plugin")
+        assert status["trusted"] is True and status["checksum_matches"] is True
+        # A package update changes the checksum and re-prompts.
+        (root / "trust.plugin" / "plugin.py").write_text("def before_launch(p):\n    return {}\n")
+        status = _plugins.plugin_trust_status(root, "trust.plugin")
+        assert status["trusted"] is False and status["checksum_matches"] is False
+        # Re-grant on the new package, then revoke.
+        _plugins.set_plugin_trust(root, "trust.plugin", True)
+        assert _plugins.plugin_trust_status(root, "trust.plugin")["trusted"] is True
+        _plugins.set_plugin_trust(root, "trust.plugin", False)
+        status = _plugins.plugin_trust_status(root, "trust.plugin")
+        assert status["trusted"] is False
+    print("  plugin trust flow: ok")
+
+
+def test_plugin_trust_gates_unsandboxed_execution():
+    """F1a: untrusted plugins stay inert on sandbox-unavailable hosts."""
+    import plugins as _plugins
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        _make_plugin(root, "gate.plugin", "def before_launch(p):\n    p['ran'] = True\n    return p\n")
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch("plugins._sandbox_available", return_value=False):
+            assert _plugins.run_plugins(root, "before_launch", {"args": []}) == {"args": []}
+        _plugins.set_plugin_trust(root, "gate.plugin", True)
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch("plugins._sandbox_available", return_value=False):
+            assert _plugins.run_plugins(root, "before_launch", {"args": []}) == {"args": [], "ran": True}
+        # Revoking restores the inert state.
+        _plugins.set_plugin_trust(root, "gate.plugin", False)
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch("plugins._sandbox_available", return_value=False):
+            assert _plugins.run_plugins(root, "before_launch", {"args": []}) == {"args": []}
+    print("  plugin trust gates unsandboxed execution: ok")
+
+
+def test_plugin_share_net_argv():
+    """F1b: --share-net sits directly after --unshare-all, only when granted."""
+    import plugins as _plugins
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        package = _make_plugin(root, "net.plugin", "x = 1\n", {"hooks": []})
+        entry = package / "plugin.py"
+        with mock.patch("plugins.shutil.which", return_value="/usr/bin/bwrap"):
+            granted = _plugins._sandboxed_command(package, entry, "before_launch", share_net=True)
+            assert granted[granted.index("--unshare-all") + 1] == "--share-net"
+            denied = _plugins._sandboxed_command(package, entry, "before_launch", share_net=False)
+            assert "--share-net" not in denied
+            # No bubblewrap on the host means no command at all.
+        with mock.patch("plugins.shutil.which", return_value=None):
+            assert _plugins._sandboxed_command(package, entry, "before_launch", share_net=True) is None
+    print("  plugin --share-net argv: ok")
+
+
+def test_plugin_permissions():
+    """F1b: unknown permissions are rejected; grants default to deny."""
+    import plugins as _plugins
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        _make_20_plugin(root, "perm.plugin", "x = 1\n", {"hooks": [], "permissions": ["network"]})
+        assert _plugins.plugin_permission_grants(root, "perm.plugin") == []
+        with pytest_raises(ValueError):
+            _plugins.set_plugin_permissions(root, "perm.plugin", ["network", "everything"])
+        # Rejected grants leave the previous (empty) state untouched.
+        assert _plugins.plugin_permission_grants(root, "perm.plugin") == []
+        _plugins.set_plugin_permissions(root, "perm.plugin", ["network"])
+        assert _plugins.plugin_permission_grants(root, "perm.plugin") == ["network"]
+        # Removal clears the grant: a reinstall must re-prompt.
+        _plugins.remove_plugin(root, "perm.plugin")
+        with TemporaryDirectory() as other:
+            _make_20_plugin(Path(other), "perm.plugin", "x = 1\n", {"hooks": []})
+            assert _plugins.plugin_permission_grants(Path(other), "perm.plugin") == []
+    print("  plugin permissions: ok")
+
+
+def test_plugin_settings_validation():
+    """F1c: schema validation for types, enums, ranges, required, defaults."""
+    import plugins as _plugins
+    schema = {
+        "type": "object",
+        "properties": {
+            "api_key": {"type": "string", "format": "password", "title": "API key"},
+            "region": {"type": "string", "enum": ["us", "eu"], "default": "us"},
+            "timeout": {"type": "integer", "minimum": 1, "maximum": 60, "default": 10},
+            "verbose": {"type": "boolean", "default": False},
+        },
+        "required": ["api_key"],
+    }
+    cleaned = _plugins.validate_plugin_settings(schema, {"api_key": "sekret"})
+    assert cleaned == {"api_key": "sekret", "region": "us", "timeout": 10, "verbose": False}
+    for bad in (
+        {},  # missing required api_key
+        {"api_key": "x", "region": "mars"},  # bad enum
+        {"api_key": "x", "timeout": 0},  # below minimum
+        {"api_key": "x", "timeout": 61},  # above maximum
+        {"api_key": "x", "timeout": 1.5},  # non-integer for integer
+        {"api_key": "x", "verbose": "yes"},  # non-boolean
+        {"api_key": "x", "unknown_key": 1},  # unknown keys rejected
+    ):
+        with pytest_raises(ValueError):
+            _plugins.validate_plugin_settings(schema, bad)
+    print("  plugin settings validation: ok")
+
+
+def test_plugin_settings_roundtrip_and_stdin():
+    """F1c: stored settings validate, persist, and reach hooks via stdin."""
+    import plugins as _plugins
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        schema = {
+            "type": "object",
+            "properties": {"timeout": {"type": "integer", "minimum": 1, "default": 5}},
+        }
+        _make_20_plugin(
+            root, "settings.plugin",
+            "def events(payload):\n    return {'saw': payload['settings']['timeout']}\n",
+            {"settings": schema},
+        )
+        stored = _plugins.set_plugin_settings(root, "settings.plugin", {"timeout": 30})
+        assert stored == {"timeout": 30}
+        form = _plugins.get_plugin_settings(root, "settings.plugin")
+        assert form["values"] == {"timeout": 30}
+        assert form["schema"]["properties"]["timeout"]["default"] == 5
+        # Settings travel in the stdin JSON payload.
+        _plugins.set_plugin_trust(root, "settings.plugin", True)
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch("plugins._sandbox_available", return_value=False):
+            result, error = _plugins.run_plugin_hook(root, "settings.plugin", "events", {"event": "app_startup"})
+        assert error == "", error
+        assert result["saw"] == 30
+        # A schema update that invalidates stored values falls back to defaults.
+        _plugins.set_plugin_settings(root, "settings.plugin", {"timeout": 30})
+        raw = _plugins.load_plugin_state(root)
+        raw["settings"]["settings.plugin"]["timeout"] = "not-an-int"
+        _plugins.save_plugin_state(root, raw)
+        manifest = _plugins.read_manifest(root / "settings.plugin")
+        assert _plugins.plugin_settings_values(root, manifest) == {"timeout": 5}
+    print("  plugin settings roundtrip and stdin: ok")
+
+
+def test_plugin_remove_clears_trust_permissions_settings():
+    """F1a/F1b/F1c: removing a plugin drops all of its approval state."""
+    import plugins as _plugins
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        _make_20_plugin(
+            root, "stateful.plugin", "def events(p):\n    return p\n",
+            {"permissions": ["network"],
+             "settings": {"type": "object", "properties": {"x": {"type": "integer", "default": 1}}}},
+        )
+        _plugins.set_plugin_trust(root, "stateful.plugin", True)
+        _plugins.set_plugin_permissions(root, "stateful.plugin", ["network"])
+        _plugins.set_plugin_settings(root, "stateful.plugin", {"x": 2})
+        assert _plugins.plugin_trust_status(root, "stateful.plugin")["trusted"] is True
+        _plugins.remove_plugin(root, "stateful.plugin")
+        state = _plugins.load_plugin_state(root)
+        assert "stateful.plugin" not in state.get("trust", {})
+        assert "stateful.plugin" not in state.get("permissions", {})
+        assert "stateful.plugin" not in state.get("settings", {})
+    print("  plugin remove clears trust/permissions/settings: ok")
+
+
+def test_plugin_library_source_merge():
+    """F1d: namespaced ids, provenance, dedupe, disable-drop, validation."""
+    import plugins as _plugins
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        data_parent = root / "data"
+        plugins_dir = data_parent / "plugins"
+        plugins_dir.mkdir(parents=True)
+        _make_20_plugin(
+            plugins_dir, "source.plugin",
+            "def library_source(p):\n    return {'games': []}\n",
+            {"hooks": ["library_source"], "name": "Source Plugin"},
+        )
+        base = [{"game_id": "g1", "name": "Base Game"}]
+
+        def fake_run_hook(directory, plugin_id, hook, payload):
+            assert hook == "library_source"
+            return ({"games": [
+                {"id": "ext-1", "name": "External One", "platform": "PC"},
+                {"id": "ext-1", "name": "External One Duplicate"},
+                {"id": "ext-2", "name": "External Two"},
+                "not-a-dict",
+                {"name": "Nameless Entry"},
+            ]}, "")
+
+        with mock.patch("plugins.run_plugin_hook", side_effect=fake_run_hook):
+            merged = _plugins.merge_library_source_games(list(base), data_parent)
+        assert len(merged) == 1 + 3, [game["name"] for game in merged]
+        imported = merged[1:]
+        assert imported[0]["game_id"] == "plugin:source.plugin:ext-1"
+        assert imported[0]["plugin_source"] == "source.plugin"
+        assert imported[0]["plugin_source_name"] == "Source Plugin"
+        assert all(game["id"] == 1 + offset for offset, game in enumerate(imported))
+        # Disabling the plugin drops its games on the next merge.
+        _plugins.set_plugin_enabled(plugins_dir, "source.plugin", False)
+        with mock.patch("plugins.run_plugin_hook", side_effect=fake_run_hook):
+            merged = _plugins.merge_library_source_games(list(base), data_parent)
+        assert merged == base
+    print("  plugin library_source merge: ok")
+
+
+def test_plugin_lifecycle_events():
+    """F1e: unified events hook payloads and centralized game diffs."""
+    import plugins as _plugins
+    calls = []
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        _make_20_plugin(root, "events.plugin", "def events(p):\n    return p\n")
+        with mock.patch("plugins.run_plugins", side_effect=lambda directory, hook, payload: calls.append((hook, payload)) or payload):
+            _plugins.emit_plugin_event(root, "app_startup", {})
+            _plugins.emit_plugin_event(root, "scan_finished", {"folder": "/games", "added": 3, "scanned": 40})
+            _plugins.emit_plugin_event(root, "playtime_milestone", {"game_id": "g1", "hours": 2})
+        assert calls[0] == ("events", {"event": "app_startup"})
+        assert calls[1][1]["event"] == "scan_finished" and calls[1][1]["added"] == 3
+        assert calls[2][1]["event"] == "playtime_milestone" and calls[2][1]["hours"] == 2
+        # One hook name for every event (ADR 0057), never per-event hooks.
+        assert all(hook == "events" for hook, _ in calls)
+        # Safe mode suppresses all emission.
+        calls.clear()
+        with mock.patch.dict(os.environ, {"OPENBOX_SAFE_MODE": "1"}):
+            _plugins.emit_plugin_event(root, "app_startup", {})
+        assert calls == []
+        # Game diffs: add/remove/update with bounded payloads.
+        calls.clear()
+        before = _plugins.snapshot_library({"games": [
+            {"game_id": "g1", "name": "Same"},
+            {"game_id": "g2", "name": "Gone"},
+            {"game_id": "g3", "name": "Changed", "favorite": False},
+        ]})
+        after = _plugins.snapshot_library({"games": [
+            {"game_id": "g1", "name": "Same"},
+            {"game_id": "g3", "name": "Changed", "favorite": True},
+            {"game_id": "g4", "name": "New"},
+        ]})
+        with mock.patch("plugins.run_plugins", side_effect=lambda directory, hook, payload: calls.append(payload) or payload):
+            _plugins.emit_library_diff(root, before, after)
+        by_event = {payload["event"]: payload for payload in calls}
+        assert by_event["game_added"]["game_ids"] == ["g4"]
+        assert by_event["game_removed"]["game_ids"] == ["g2"]
+        assert by_event["game_updated"]["changes"] == [{"game_id": "g3", "changed": ["favorite"]}]
+        # Payloads carry ids only, never full game objects.
+        for payload in calls:
+            assert "games" not in payload
+    print("  plugin lifecycle events: ok")
+
+
+def test_plugin_v2_routes():
+    """F1a/F1b/F1c/F1f: trust, permissions, settings, and enriched catalog."""
+    import plugins as _plugins
+    from types import SimpleNamespace
+    from handlers.extensions import ExtensionsHandlers
+    from plugin_catalog import load_local_catalog
+
+    class Dummy(ExtensionsHandlers):
+        def __init__(self):
+            self.responses = []
+
+        def send_json(self, status, payload, **kwargs):
+            self.responses.append((status, payload))
+
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        plugins_dir = root / "plugins"
+        plugins_dir.mkdir()
+        schema = {"type": "object", "properties": {"level": {"type": "integer", "default": 1}}}
+        _make_20_plugin(
+            plugins_dir, "route.plugin", "def events(p):\n    return p\n",
+            {"permissions": ["network"], "settings": schema},
+        )
+        with mock.patch("handlers.extensions.DATA", root / "library.json"):
+            trust = Dummy()
+            trust._api_get_api_v2_plugins_trust(SimpleNamespace(query="id=route.plugin"))
+            assert trust.responses[-1][0] == 200
+            assert trust.responses[-1][1]["trusted"] is False
+            trust._api_post_api_v2_plugins_trust({"id": "route.plugin", "trusted": True})
+            assert trust.responses[-1][1]["trusted"] is True
+            assert trust.responses[-1][1]["id"] == "route.plugin"
+            trust._api_get_api_v2_plugins_trust(SimpleNamespace(query="id=route.plugin"))
+            assert trust.responses[-1][1]["trusted"] is True
+            with pytest_raises(ValueError):
+                trust._api_post_api_v2_plugins_trust({"id": "route.plugin"})  # missing trusted flag
+            with pytest_raises(ValueError):
+                trust._api_post_api_v2_plugins_trust({"id": "nope.plugin", "trusted": True})
+
+            perms = Dummy()
+            with pytest_raises(ValueError):
+                perms._api_post_api_v2_plugins_permissions({"id": "route.plugin", "permissions": ["root"]})
+            perms._api_post_api_v2_plugins_permissions({"id": "route.plugin", "permissions": ["network"]})
+            assert perms.responses[-1][1]["permissions"] == ["network"]
+            assert perms.responses[-1][1]["id"] == "route.plugin"
+            listed = _plugins.list_plugins(plugins_dir)
+            assert listed[0]["granted_permissions"] == ["network"]
+
+            settings = Dummy()
+            settings._api_get_api_v2_plugins_settings(SimpleNamespace(query="id=route.plugin"))
+            assert settings.responses[-1][1]["values"] == {"level": 1}
+            settings._api_post_api_v2_plugins_settings({"id": "route.plugin", "values": {"level": 3}})
+            assert settings.responses[-1][1]["values"] == {"level": 3}
+            with pytest_raises(ValueError):
+                settings._api_post_api_v2_plugins_settings({"id": "route.plugin", "values": {"level": "high"}})
+
+            catalog = Dummy()
+            local_entries = load_local_catalog()
+            assert local_entries, "expected bundled local catalog entries"
+            with mock.patch("handlers.extensions.fetch_plugin_catalog", return_value=local_entries):
+                catalog._api_get_api_v2_plugins_catalog(SimpleNamespace(query=""))
+            status, payload = catalog.responses[-1]
+            assert status == 200
+            assert isinstance(payload["catalog"], list)
+            assert all("installed" in entry and "update_available" in entry for entry in payload["catalog"])
+    print("  plugin v2 routes: ok")
 
 
 if __name__ == "__main__":
