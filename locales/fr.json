@@ -107,7 +107,8 @@
     "notifications": "Notifications",
     "constellation": "Constellation",
     "mastery": "Maîtrise",
-    "time_machine": "Machine à remonter le temps"
+    "time_machine": "Machine à remonter le temps",
+    "artwork_doctor": "Docteur des illustrations"
   },
   "constellation": {
     "title": "Constellation",
@@ -1143,5 +1144,67 @@
         "desc": "Joue 7 jours d'affilée"
       }
     }
+  },
+  "artwork_doctor": {
+    "title": "Docteur des illustrations",
+    "scanning": "Analyse des illustrations…",
+    "rescan": "Réanalyser",
+    "fix_all": "Tout corriger avec SteamGridDB",
+    "undo": "Annuler le dernier lot",
+    "summary": "{count} jeux analysés.",
+    "attribution": "Les corrections d'illustrations utilisent {provider}.",
+    "empty": "Aucun problème d'illustration détecté.",
+    "last_batch": "Dernier lot {batch} · {count} fichiers",
+    "report_failed": "Impossible de générer le rapport d'illustrations.",
+    "fixing": "Correction de {done} sur {total}…",
+    "cancelled": "Correction des illustrations annulée.",
+    "fix_failed": "La tâche de correction des illustrations a échoué.",
+    "fixed": "Illustrations corrigées pour {count} entrées.",
+    "no_batch": "Aucun lot d'illustrations terminé à annuler.",
+    "undone": "{count} entrées d'illustrations restaurées.",
+    "issue_unknown": "Problème d'illustration",
+    "issue_missing_cover": "Jaquette manquante",
+    "issue_missing_file": "Fichier d'illustration manquant",
+    "issue_low_res": "Faible résolution",
+    "issue_wrong_aspect": "Mauvais rapport d'aspect",
+    "issue_duplicate": "Illustration en double"
+  },
+  "repair": {
+    "title": "Réparer les fichiers manquants",
+    "open": "Réparer les chemins",
+    "scanning": "Analyse de la bibliothèque…",
+    "summary": "{count} chemins manquants",
+    "empty": "Aucun chemin manquant trouvé.",
+    "find_folder": "Chercher dans un dossier…",
+    "matches": "{count} correspondances",
+    "unmatched": "{count} sans correspondance",
+    "ambiguous": "{count} nécessitent un choix manuel",
+    "ambiguous_hint": "Les correspondances ambiguës sont ignorées ; précisez le dossier et relancez l’analyse.",
+    "no_matches": "Aucun fichier de ce dossier ne correspond aux chemins manquants.",
+    "apply": "Relier {count}",
+    "applied": "{count} chemins reliés",
+    "nothing_applied": "Aucun chemin n’a été relié",
+    "skipped": "{count} chemins ont changé depuis l’analyse et ont été ignorés",
+    "kind_game": "Fichier de jeu",
+    "kind_media": "Média"
+  },
+  "duplicates": {
+    "title": "Jeux en double",
+    "open": "Trouver les doublons",
+    "scanning": "Recherche des doublons…",
+    "empty": "Aucun jeu en double trouvé.",
+    "summary": "{count} groupes de doublons",
+    "kind_identity": "Même identifiant de jeu",
+    "kind_path": "Même chemin",
+    "kind_title": "Même titre",
+    "row_stats": "{sessions} sessions · {hours} h",
+    "preview": "Aperçu de la fusion",
+    "primary": "Conserver {name}",
+    "absorbed": "{count} entrées iront à la corbeille (annulable)",
+    "changes": "{count} champs seront complétés depuis les doublons",
+    "restore_hint": "Restaurez les entrées fusionnées depuis la corbeille.",
+    "merge": "Fusionner",
+    "merged": "{count} entrées en double fusionnées",
+    "failed": "Échec de la fusion"
   }
 }

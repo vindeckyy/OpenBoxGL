@@ -19,7 +19,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pkg.parity  # noqa: F401  # register flat-import finder before parity_* imports
-from api_errors import ApiError, BadRequest, RouteNotFound
+from api_errors import ApiError, BadRequest, RangeParseError, RouteNotFound
 from env_config import bootstrap_env
 from openbox_logging import configure_logging
 from openbox import DATA, load_state, purge_demo_games, update_state
@@ -231,15 +231,18 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         range_header = headers.get("Range", "")
         if range_header.startswith("bytes="):
             spec = range_header[6:].split(",", 1)[0].strip()
-            if "-" not in spec:
-                raise ValueError("Invalid byte range.")
-            left, right = spec.split("-", 1)
-            if left:
-                start = int(left)
-                end = int(right) if right else end
-            elif right:
-                length = int(right)
-                start = max(0, size - length)
+            try:
+                if "-" not in spec:
+                    raise RangeParseError("Invalid byte range.")
+                left, right = spec.split("-", 1)
+                if left:
+                    start = int(left)
+                    end = int(right) if right else end
+                elif right:
+                    length = int(right)
+                    start = max(0, size - length)
+            except ValueError as error:
+                raise RangeParseError("Invalid byte range.") from error
             if start < 0 or start >= size or end < start:
                 self.send_response(416)
                 self.headers_common(content_type or "application/octet-stream", cache_control=request_cache_control, frameable=frameable)

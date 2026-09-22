@@ -13,6 +13,7 @@ const ACTIONS = [
   { id: 'arcade-room', label: () => t('tools.arcade_room'), event: 'open-arcade-room' },
   { id: 'household', label: () => t('tools.household'), event: 'open-household' },
   { id: 'whats-new', label: () => t('common.whats_new'), event: 'open-whats-new' },
+  { id: 'artwork-doctor', label: () => t('tools.artwork_doctor'), event: 'artwork-doctor' },
   { id: 'surprise', label: () => t('library.surprise_me'), event: 'surprise' },
   { id: 'search', label: () => t('common.search'), event: 'focus-search' },
 ];

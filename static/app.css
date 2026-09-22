@@ -618,6 +618,28 @@
     .setup-status { margin:0; color:var(--setup-stat-label-fg); font-style:italic; }
     .setup-empty { margin:0; }
     .dialog-actions { display:flex; justify-content:flex-end; gap:var(--space-sm); padding:0 var(--space-md) var(--space-md); }
+    /* Artwork Doctor, repair wizard, duplicate merge dialogs. */
+    .artwork-doctor-dialog { width:min(720px,94vw); }
+    .artwork-doctor-body { display:grid; gap:var(--space-xs); max-height:60vh; overflow:auto; }
+    .artwork-doctor-counts { display:flex; flex-wrap:wrap; gap:var(--space-xs); }
+    .artwork-count-chip { padding:var(--space-3xs) var(--space-xs); border:1px solid var(--border-card); border-radius:999px; background:var(--surface-field); color:var(--muted); font-size:var(--font-label); }
+    .artwork-count-chip strong { color:var(--text); }
+    .artwork-doctor-list { margin:0; padding:0; list-style:none; display:grid; gap:var(--space-2xs); }
+    .artwork-issue-row { display:grid; grid-template-columns:1fr auto auto; gap:var(--space-xs); align-items:baseline; padding:var(--space-2xs) var(--space-xs); border:1px solid var(--border-card); border-radius:6px; background:var(--surface-card); font-size:var(--font-body-small); }
+    .artwork-issue-label { color:var(--gold); }
+    .artwork-issue-detail { color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:20rem; }
+    .artwork-doctor-status { min-height:1.2em; color:var(--muted); font-size:var(--font-meta); }
+    .artwork-doctor-actions { padding:0 var(--space-md) var(--space-md); }
+    .repair-body, .duplicates-body { padding:0 var(--space-md); max-height:55vh; overflow:auto; }
+    .repair-list, .duplicate-rows { display:grid; gap:var(--space-2xs); margin-top:var(--space-sm); }
+    .repair-row { display:flex; gap:var(--space-xs); align-items:flex-start; padding:var(--space-xs); border:1px solid var(--border-card); border-radius:6px; background:var(--surface-field); }
+    .repair-row-main { display:grid; gap:var(--space-3xs); }
+    .repair-row small, .duplicate-row small { color:var(--muted); font-size:var(--font-micro); overflow-wrap:anywhere; }
+    .repair-target { color:var(--fact-value); }
+    .duplicate-group { margin-top:var(--space-sm); padding:var(--space-xs); border:1px solid var(--border-card); border-radius:6px; background:var(--surface-field); }
+    .duplicate-group h3 { margin:0 0 var(--space-2xs); color:var(--section-muted); font-size:var(--font-micro); text-transform:uppercase; letter-spacing:.06em; }
+    .duplicate-row { display:grid; gap:var(--space-3xs); padding:var(--space-2xs) 0; border-bottom:1px solid var(--line); }
+    .duplicate-group button { margin-top:var(--space-xs); }
     .dialog-nav { display:flex; gap:var(--space-xs); margin-right:auto; }
     .primary { border:0; border-radius:4px; padding:var(--space-xs) var(--space-md); background:var(--action); color:var(--action-ink); font-weight:800; }
     .error-banner { position:fixed; left:50%; bottom:64px; transform:translateX(-50%); display:flex; align-items:center; gap:var(--space-xs); max-width:min(640px,calc(100vw - 32px)); background:var(--danger); color:var(--text); border:1px solid var(--border-control); border-radius:6px; padding:var(--space-sm) var(--space-md); box-shadow:0 10px 30px var(--shadow-dialog); z-index:400; font-size:13px; line-height:var(--leading-normal); }

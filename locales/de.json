@@ -107,7 +107,8 @@
     "notifications": "Benachrichtigungen",
     "constellation": "Konstellation",
     "mastery": "Meisterschaft",
-    "time_machine": "Zeitmaschine"
+    "time_machine": "Zeitmaschine",
+    "artwork_doctor": "Artwork-Doktor"
   },
   "constellation": {
     "title": "Konstellation",
@@ -1143,5 +1144,67 @@
         "desc": "Spiele 7 Tage in Folge"
       }
     }
+  },
+  "artwork_doctor": {
+    "title": "Artwork-Doktor",
+    "scanning": "Artwork wird geprüft…",
+    "rescan": "Erneut prüfen",
+    "fix_all": "Alles mit SteamGridDB reparieren",
+    "undo": "Letzten Stapel rückgängig machen",
+    "summary": "{count} Spiele geprüft.",
+    "attribution": "Artwork-Korrekturen nutzen {provider}.",
+    "empty": "Keine Artwork-Probleme gefunden.",
+    "last_batch": "Letzter Stapel {batch} · {count} Dateien",
+    "report_failed": "Der Artwork-Bericht konnte nicht erstellt werden.",
+    "fixing": "{done} von {total} werden repariert…",
+    "cancelled": "Artwork-Reparatur abgebrochen.",
+    "fix_failed": "Der Artwork-Reparaturjob ist fehlgeschlagen.",
+    "fixed": "Artwork für {count} Einträge repariert.",
+    "no_batch": "Es gibt keinen abgeschlossenen Artwork-Stapel zum Rückgängigmachen.",
+    "undone": "{count} Artwork-Einträge wiederhergestellt.",
+    "issue_unknown": "Artwork-Problem",
+    "issue_missing_cover": "Cover fehlt",
+    "issue_missing_file": "Artwork-Datei fehlt",
+    "issue_low_res": "Niedrige Auflösung",
+    "issue_wrong_aspect": "Falsches Seitenverhältnis",
+    "issue_duplicate": "Doppeltes Artwork"
+  },
+  "repair": {
+    "title": "Fehlende Dateien reparieren",
+    "open": "Pfade reparieren",
+    "scanning": "Bibliothek wird durchsucht…",
+    "summary": "{count} fehlende Pfade",
+    "empty": "Keine fehlenden Pfade gefunden.",
+    "find_folder": "Im Ordner suchen…",
+    "matches": "{count} Treffer",
+    "unmatched": "{count} ohne Treffer",
+    "ambiguous": "{count} brauchen eine manuelle Auswahl",
+    "ambiguous_hint": "Mehrdeutige Treffer werden übersprungen; Ordner eingrenzen und erneut suchen.",
+    "no_matches": "Keine Dateien in diesem Ordner passten zu den fehlenden Pfaden.",
+    "apply": "{count} neu verknüpfen",
+    "applied": "{count} Pfade neu verknüpft",
+    "nothing_applied": "Keine Pfade wurden neu verknüpft",
+    "skipped": "{count} Pfade haben sich seit dem Scan geändert und wurden übersprungen",
+    "kind_game": "Spieldatei",
+    "kind_media": "Medium"
+  },
+  "duplicates": {
+    "title": "Doppelte Spiele",
+    "open": "Duplikate finden",
+    "scanning": "Suche nach Duplikaten…",
+    "empty": "Keine doppelten Spiele gefunden.",
+    "summary": "{count} Duplikatgruppen",
+    "kind_identity": "Gleiche Spiel-ID",
+    "kind_path": "Gleicher Pfad",
+    "kind_title": "Gleicher Titel",
+    "row_stats": "{sessions} Sitzungen · {hours} Std.",
+    "preview": "Zusammenführung prüfen",
+    "primary": "{name} behalten",
+    "absorbed": "{count} Einträge wandern in den Papierkorb (rückgängig machbar)",
+    "changes": "{count} Felder werden aus Duplikaten übernommen",
+    "restore_hint": "Zusammengeführte Einträge lassen sich im Papierkorb wiederherstellen.",
+    "merge": "Zusammenführen",
+    "merged": "{count} doppelte Einträge zusammengeführt",
+    "failed": "Zusammenführen fehlgeschlagen"
   }
 }
