@@ -1,6 +1,6 @@
 # Flathub submission checklist
 
-OpenBox 1.13.1 keeps the release-gated x86_64 Flatpak path and maintains the
+OpenBox 1.14.0 keeps the release-gated x86_64 Flatpak path and maintains the
 manifest/AppStream metadata ready for a future Flathub submission. **Submission
 itself remains a maintainer decision** (ADR 0013); this list tracks the manual
 steps that remain when that decision is made.
@@ -11,7 +11,7 @@ steps that remain when that decision is made.
 - [x] `scripts/validate_flatpak_manifest.py` and `tests/test_packaging.py::test_flatpak_manifest` updated to `'49'`.
 - [x] AppStream `<content_rating type="oars-1.1">` added (`social-info=mild`; the launcher itself ships no mature content).
 - [x] AppStream `<developer id="io.openboxgl">` and `<screenshots>` block added (four 1920×1080 16:9 screenshots).
-- [x] `openbox.metainfo.xml` release history current through 1.13.1.
+- [x] `openbox.metainfo.xml` release history current through 1.14.0.
 - [x] `scripts/capture_readme_screenshots.py` already produces 1920×1080 16:9 screenshots (no extension needed).
 - [x] The v1.11.0 release workflow established the x86_64 bundle gate against GNOME Platform/SDK 49.
 

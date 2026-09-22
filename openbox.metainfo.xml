@@ -40,6 +40,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.14.0" date="2026-09-22">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.14.0</url>
+      <description>
+        <p>The library grows up: Plugins 2.0 with per-plugin trust, permissions, settings and a catalog browser; effortless metadata with auto-scrape, a thumbnail chooser and ROM-hash confidence; backlog management with statuses, personal star ratings, manual playtime and dated notes; couch-ready Big Box with boot-to-Big-Box, an on-screen keyboard and Steam grid art; a 0-100 library health score with one-click fixes; and offline Game DNA smart search.</p>
+      </description>
+    </release>
     <release version="1.13.1" date="2026-09-22">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.13.1</url>
       <description>

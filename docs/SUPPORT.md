@@ -3,7 +3,7 @@
 ## Scale and architecture
 
 - **Formal library scale:** 20,000 games (blocking performance gates cover 10k and 20k scenarios). The optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) provides indexed search and facets for larger libraries while JSON remains canonical.
-- **CPU architecture:** OpenBox 1.13.1 publishes signed **x86_64 and aarch64 AppImages** and a signed **x86_64 Windows portable zip**. The Flatpak bundle is **x86_64 only**. The in-app updater and the release installers select the artifact that matches the running architecture and refuse a mismatched or unsigned artifact.
+- **CPU architecture:** OpenBox 1.14.0 publishes signed **x86_64 and aarch64 AppImages** and a signed **x86_64 Windows portable zip**. The Flatpak bundle is **x86_64 only**. The in-app updater and the release installers select the artifact that matches the running architecture and refuse a mismatched or unsigned artifact.
 
   The Windows native host is **x86_64 only** and is built against the WebView2 SDK pinned in `scripts/build_native_host_windows.ps1`: after downloading the SDK NuGet package the script verifies its SHA-256 against a committed hash (`$WEBVIEW2_SDK_SHA256`, overridable with the `WEBVIEW2_SDK_SHA256` environment variable when trying a new SDK version) and refuses to build when the hash does not match. To rotate the SDK, bump the script's default version, download the new package, and replace the pinned hash with the new package's SHA-256.
 - **Interface language:** English, Spanish, German, French, and Portuguese (v1.7.2+).
