@@ -822,6 +822,57 @@ const failures = [];
   });
   console.log('gamepad loop lifecycle:', {gamepadLoopStopped});
 
+  // G-P1: Big Box pause overlay owns the gamepad while open — the pause
+  // button opens it, d-pad moves focus between its buttons, and B dismisses
+  // only the overlay (Big Box itself stays open).
+  const gamepadPauseTrap = await page.evaluate(async () => {
+    const bigboxMod = await import('/static/bigbox.js');
+    const {AppState} = await import('/static/state.js');
+    const {defaultControllerMap} = await import('/static/util.js');
+    const mapping = {...defaultControllerMap, ...(AppState.appSettings.controller_map || {})};
+    const result = {dismissControl: false, opened: false, focusMoved: false, dismissed: false, bigBoxAlive: false};
+    result.dismissControl = Boolean(document.getElementById('closeBigBoxPause'));
+    // Fake gamepad: the unified loop polls navigator.getGamepads() every frame.
+    const pad = {id: 'smoke-pad', connected: true, axes: [0, 0, 0, 0],
+      buttons: Array.from({length: 17}, () => ({pressed: false}))};
+    Object.defineProperty(navigator, 'getGamepads', {value: () => [pad], configurable: true});
+    const press = async index => {
+      pad.buttons[index].pressed = true;
+      await new Promise(r => setTimeout(r, 150));
+      pad.buttons[index].pressed = false;
+      await new Promise(r => setTimeout(r, 150));
+    };
+    try {
+      bigboxMod.openBigBox();
+      await new Promise(r => setTimeout(r, 200));
+      // Seed a running session so the pause overlay has something to show.
+      // pollSessions() can overwrite AppState.runningGames from the server at
+      // any moment, so (re)seed right before each attempt and retry.
+      const game = AppState.games[0];
+      const seedRunning = () => {
+        AppState.runningGames = [{game_id: game.id, game: game.name, launch_id: 'smoke-pause', paused: false, started: '2026-09-22T12:00:00'}];
+      };
+      for (let attempt = 0; attempt < 3 && !result.opened; attempt++) {
+        seedRunning();
+        await press(mapping.pause); // gamepad opens pause
+        result.opened = !document.getElementById('bigBoxPause').hidden;
+      }
+      const first = document.activeElement;
+      await press(13); // d-pad down moves focus
+      const buttons = [...document.querySelectorAll('#bigBoxPauseActions button')];
+      result.focusMoved = buttons.includes(document.activeElement) && document.activeElement !== first;
+      await press(mapping.back); // B dismisses ONLY the overlay
+      result.dismissed = document.getElementById('bigBoxPause').hidden;
+      result.bigBoxAlive = !document.getElementById('bigBox').hidden;
+    } finally {
+      delete navigator.getGamepads;
+      AppState.runningGames = [];
+      bigboxMod.closeBigBox();
+    }
+    return result;
+  });
+  console.log('gamepad pause trap:', gamepadPauseTrap);
+
   // M5 Mastery Map: dialog opens and renders platform/decade bars (or empty state).
   const masterySmoke = await page.evaluate(async () => {
     const masteryMod = await import('/static/mastery.js');
@@ -1606,6 +1657,10 @@ const failures = [];
   (!dialogFocusOk) && failures.push("dialogFocusOk");
   (!readerCleanedOk) && failures.push("readerCleanedOk");
   (!gamepadLoopStopped) && failures.push("gamepadLoopStopped");
+  (!gamepadPauseTrap.dismissControl) && failures.push("pause panel carries a dismiss control");
+  (!gamepadPauseTrap.opened) && failures.push("gamepad pause button opens the pause overlay");
+  (!gamepadPauseTrap.focusMoved) && failures.push("gamepad d-pad moves focus between pause buttons");
+  (!gamepadPauseTrap.dismissed || !gamepadPauseTrap.bigBoxAlive) && failures.push("gamepad B dismisses only the pause overlay");
   (!bigboxCorrectness.activateExported) && failures.push("bigboxCorrectness.activateExported");
   (!bigboxCorrectness.appUsesActivate) && failures.push("bigboxCorrectness.appUsesActivate");
   (!bigboxCorrectness.preflightLaunch) && failures.push("bigboxCorrectness.preflightLaunch");

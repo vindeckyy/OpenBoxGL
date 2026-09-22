@@ -110,7 +110,7 @@ function partyKeydown(event) {
   }
 }
 
-/* Gamepad entry point, called from pollGamepads edge detection in bigbox.js:
+/* Gamepad entry point, called from pollBigBoxGamepads edge detection in bigbox.js:
  * left/right adjust setup values, play = primary (build/spin/launch),
  * back = close, menu = exit to the Big Box menu. */
 function partyGamepad(edge) {
