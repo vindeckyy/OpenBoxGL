@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- Plugins 2.0 (ADR 0056, ADR 0057): per-plugin checksum-bound trust for
+  sandbox-unavailable hosts (no global trust toggle; updates re-prompt);
+  Android-style permission prompts at install/enable time (`network`
+  permission grants `--share-net`); per-plugin settings forms generated
+  from a manifest JSON Schema subset (text, number, boolean, enum,
+  password) and delivered to hooks as `payload["settings"]`; a
+  `library_source` importer hook that merges plugin games into the library
+  with a source badge (disable/removal drops them on rebuild); a single
+  `events` lifecycle hook (`app_startup`, `app_shutdown`, `scan_finished`,
+  `playtime_milestone`, `game_added`, `game_removed`, `game_updated`);
+  a catalog browser tab with per-entry Install/Update and installed/update
+  state; and palette integration listing plugin commands under the `>`
+  prefix with notification support. New `GET/POST /api/v2/plugins/trust`,
+  `POST /api/v2/plugins/permissions`, `GET/POST /api/v2/plugins/settings`,
+  and `GET /api/v2/plugins/catalog` routes.
 - Plugin API v1 is frozen (ADR 0050, `docs/plugin-api.md`): manifests declare
   `api_version` (default 1; newer versions are refused and surfaced with an
   error), a `command` hook, and up to 32 palette `commands` (`{id, label,
