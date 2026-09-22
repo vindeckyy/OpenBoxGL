@@ -8,6 +8,7 @@
  */
 import { $, escapeHtml, duration, defaultControllerMap } from './util.js';
 import { AppState, media } from './state.js';
+import { registerGamepadSurface } from './gamepad.js';
 
 const MAX_TEXTURE_CACHE = 48;
 const MAX_DPR = 3;
@@ -502,7 +503,6 @@ class ArcadeRoom {
     this._onTouchStart = event => this.handleTouchStart(event);
     this._onTouchEnd = event => this.handleTouchEnd(event);
     this._onWheel = event => this.handleWheel(event);
-    this._onGamepadConnected = () => { if (this.opened) this.startGamepadPoll(); };
     this._onMotionChange = event => {
       this.reducedMotion = Boolean(event.matches);
       if (this.reducedMotion) this.stopAnimation();
@@ -705,7 +705,6 @@ class ArcadeRoom {
     this.renderStartedAt = clock();
     this.noteActivity();
     safeFocus(this.root);
-    this.startGamepadPoll();
     if (!this.reducedMotion) this.startAnimation();
     dispatchDocumentEvent('app:arcade-room-opened', { room: this });
   }
@@ -715,7 +714,7 @@ class ArcadeRoom {
     this.exitMuseumMode({ schedule: false });
     this.opened = false;
     this.stopAnimation();
-    this.stopGamepadPoll();
+    this.gamepadState = {};
     this.clearIdleTimer();
     if (this.root && this.ownsRoot) this.root.hidden = true;
     if (restoreFocus) safeFocus(this.previousFocus);
@@ -751,7 +750,6 @@ class ArcadeRoom {
     if (hasWindow()) {
       window.addEventListener('resize', this._onResize);
       window.addEventListener('orientationchange', this._onResize);
-      window.addEventListener('gamepadconnected', this._onGamepadConnected);
       if (typeof window.matchMedia === 'function') {
         try {
           this.mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -785,7 +783,6 @@ class ArcadeRoom {
     if (hasWindow()) {
       window.removeEventListener('resize', this._onResize);
       window.removeEventListener('orientationchange', this._onResize);
-      window.removeEventListener('gamepadconnected', this._onGamepadConnected);
       this.mediaQuery?.removeEventListener?.('change', this._onMotionChange);
       this.mediaQuery?.removeListener?.(this._onMotionChange);
     }
@@ -829,25 +826,8 @@ class ArcadeRoom {
     this.frame = 0;
   }
 
-  // INVARIANT: exactly one gamepad poll loop per surface — this is the arcade room's
-  // (bigbox.js and navigation.js run their own); do not add a second.
-  startGamepadPoll() {
-    if (!this.opened || this.gamepadFrame || !hasWindow() || typeof navigator?.getGamepads !== 'function') return;
-    const poll = () => {
-      this.gamepadFrame = 0;
-      if (!this.opened) return;
-      this.pollGamepads();
-      this.gamepadFrame = requestFrame(poll);
-    };
-    this.gamepadFrame = requestFrame(poll);
-  }
-
-  stopGamepadPoll() {
-    if (this.gamepadFrame) cancelFrame(this.gamepadFrame);
-    this.gamepadFrame = 0;
-    this.gamepadState = {};
-  }
-
+  // Surface handler for the unified loop (gamepad.js): handles one frame of
+  // input; the loop itself owns frame scheduling.
   controllerMap() {
     return { ...defaultControllerMap, ...(this.state?.appSettings?.controller_map || {}), ...(this.options.controllerMap || {}) };
   }
@@ -1354,6 +1334,14 @@ function renderArcadeRoom(timestamp) {
 function getArcadeRoom() {
   return activeRoom;
 }
+
+// Surface registration for the unified loop (gamepad.js): the arcade room
+// wins over Big Box and the library view while open.
+registerGamepadSurface({
+  priority: 20,
+  isActive: () => getArcadeRoom()?.opened === true,
+  tick: () => getArcadeRoom().pollGamepads(),
+});
 
 function moveArcadeRoom(delta, axis = 'cabinet') {
   return activeRoom?.move(delta, axis) || false;

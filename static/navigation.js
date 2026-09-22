@@ -11,6 +11,7 @@ import { AppState } from './state.js';
 import { visibleGameIds, focusGameIndex, gridMetrics, favorite, selectGame } from './library.js';
 import { openContextMenu } from './dialogs.js';
 import { captureMomentInteractive } from './moments.js';
+import { registerGamepadSurface, syncGamepadLoop } from './gamepad.js';
 
 const HINT_DISMISS_AFTER_MS = 6000;
 
@@ -106,7 +107,6 @@ function handleKey(event) {
 }
 
 // ── Gamepad ────────────────────────────────────────────────────────────────
-let gamepadFrame = 0;
 let gamepadPrev = {};
 
 function gamepadActions(pad) {
@@ -127,15 +127,13 @@ function gamepadActions(pad) {
   };
 }
 
-// INVARIANT: exactly one gamepad poll loop per surface — this is the library view's
-// (bigbox.js and arcaderoom.js run their own); do not add a second.
-function pollGamepads() {
-  gamepadFrame = 0;
+// Surface handler for the unified loop (gamepad.js): handles one frame of
+// input; the loop itself owns frame scheduling.
+function pollNavigationGamepads() {
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
   const pad = pads[0];
   if (!pad || navigationBlocked()) {
     gamepadPrev = {};
-    gamepadFrame = requestAnimationFrame(pollGamepads);
     return;
   }
   const current = gamepadActions(pad);
@@ -164,18 +162,9 @@ function pollGamepads() {
     }
   }
   gamepadPrev = current;
-  gamepadFrame = requestAnimationFrame(pollGamepads);
 }
 
-function startGamepadPoll() {
-  if (!gamepadFrame) gamepadFrame = requestAnimationFrame(pollGamepads);
-}
-
-function stopGamepadPoll() {
-  if (gamepadFrame) cancelAnimationFrame(gamepadFrame);
-  gamepadFrame = 0;
-  gamepadPrev = {};
-}
+registerGamepadSurface({ priority: 40, isActive: () => !navigationBlocked(), tick: pollNavigationGamepads });
 
 // ── Hint chip ──────────────────────────────────────────────────────────────
 let hintTimer = 0;
@@ -200,19 +189,16 @@ export function initNavigation() {
   document.addEventListener('keydown', handleKey);
   window.addEventListener('gamepadconnected', () => {
     showGamepadHint();
-    startGamepadPoll();
+    syncGamepadLoop();
   });
   window.addEventListener('gamepaddisconnected', () => {
     hideGamepadHint();
-    if (!(navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean).length : 0)) stopGamepadPoll();
+    syncGamepadLoop();
   });
-  if (navigator.getGamepads && [...navigator.getGamepads()].filter(Boolean).length) {
-    startGamepadPoll();
-  }
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) stopGamepadPoll();
-    else if (navigator.getGamepads && [...navigator.getGamepads()].filter(Boolean).length) startGamepadPoll();
+    syncGamepadLoop();
   });
+  syncGamepadLoop();
 }
 
 export { showGamepadHint, hideGamepadHint };

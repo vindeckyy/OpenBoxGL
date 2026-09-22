@@ -9,7 +9,7 @@ import { setReaderPage, resetReaderFrame } from './reader.js';
 import { openSessions, openHistory, launch, connectSessionEvents, pollSessions } from './sessions.js';
 import { openSessionRecap } from './recap.js';
 import { openDiscovery, openStorefronts, saveStorefrontSettings, importStorefrontCatalog, loadStorefrontCatalog } from './storefront.js';
-import { openBigBox, closeBigBox, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, stopScreenSaver, favoriteBigBox, openBigBoxPause, filteredBigBoxGames, applyLibraryMusic, activateCurrentGame, bigBoxTypingActive } from './bigbox.js';
+import { openBigBox, closeBigBox, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, stopScreenSaver, favoriteBigBox, openBigBoxPause, closeBigBoxPause, filteredBigBoxGames, applyLibraryMusic, activateCurrentGame, bigBoxTypingActive } from './bigbox.js';
 import { openPicker } from './picker.js';
 import { openConstellation } from './constellation.js';
 import { openMastery } from './mastery.js';
@@ -392,6 +392,7 @@ window.addEventListener('DOMContentLoaded', () => {
     bindLaunchBoxMigration();
     bindEsdeImport();
     $('closeBigBoxMenu').onclick = closeBigBoxMenu;
+    $('closeBigBoxPause').onclick = closeBigBoxPause;
     $('applyBigBoxMenu').onclick = applyBigBoxMenu;
     $('screenSaver').onclick = stopScreenSaver;
     $('closeMedia').onclick = () => { $('mediaDialog').close(); $('mediaDialog').querySelectorAll('img').forEach(el => el.remove()); };
@@ -424,7 +425,11 @@ window.addEventListener('DOMContentLoaded', () => {
       if (event.key.toLowerCase() === 'm') openBigBoxMenu();
       if (event.key.toLowerCase() === 'r') { AppState.bigBoxIndex = Math.floor(Math.random() * AppState.bigBoxGames.length); renderBigBox(); }
       if (event.key.toLowerCase() === 'f') favoriteBigBox();
-      if (event.key === 'Escape' || event.key === 'Backspace') closeBigBox();
+      if (event.key === 'Escape' || event.key === 'Backspace') {
+        // The pause overlay dismisses alone; only a bare Big Box exits the mode.
+        if (!$('bigBoxPause').hidden) closeBigBoxPause();
+        else closeBigBox();
+      }
     };
 
     // ?deeplink= dispatch map (S2 owns the shape). 'search' stays above — it
