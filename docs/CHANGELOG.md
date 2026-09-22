@@ -11,6 +11,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   low-resolution and wrong-aspect artwork, and duplicate images, then fix all
   with SteamGridDB in one cancelable batch job. Every replacement is
   attributable to its provider and undoable per batch.
+- Duplicate games: detection now groups identity, path, and title collisions,
+  with a merge preview that picks the record with the most play history, unions
+  media and list fields, and moves absorbed entries to the Trash so merges are
+  reversible. The health dialog's dedupe button opens the merge dialog.
+- Repair missing files: a wizard that scans for missing game and media paths,
+  matches them against a folder you pick, and relinks only the matches that are
+  still missing, skipping anything that changed since the scan.
 - Bulk media downloads now commit one transaction for large batches and keep
   per-game commits for small ones; malformed `Range` requests map to 416
   without masking missing files as range errors.

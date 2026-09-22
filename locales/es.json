@@ -1167,5 +1167,43 @@
     "issue_low_res": "Resolución baja",
     "issue_wrong_aspect": "Relación de aspecto incorrecta",
     "issue_duplicate": "Carátula duplicada"
+  },
+  "repair": {
+    "title": "Reparar archivos faltantes",
+    "open": "Reparar rutas",
+    "scanning": "Analizando la biblioteca…",
+    "summary": "{count} rutas faltantes",
+    "empty": "No se encontraron rutas faltantes.",
+    "find_folder": "Buscar en carpeta…",
+    "matches": "{count} coincidencias",
+    "unmatched": "{count} sin coincidencia",
+    "ambiguous": "{count} necesitan elección manual",
+    "ambiguous_hint": "Las coincidencias ambiguas se omiten; acota la carpeta y vuelve a analizar.",
+    "no_matches": "Ningún archivo de esa carpeta coincidió con las rutas faltantes.",
+    "apply": "Revincular {count}",
+    "applied": "{count} rutas revinculadas",
+    "nothing_applied": "No se revinculó ninguna ruta",
+    "skipped": "{count} rutas cambiaron desde el análisis y se omitieron",
+    "kind_game": "Archivo de juego",
+    "kind_media": "Multimedia"
+  },
+  "duplicates": {
+    "title": "Juegos duplicados",
+    "open": "Buscar duplicados",
+    "scanning": "Buscando duplicados…",
+    "empty": "No se encontraron juegos duplicados.",
+    "summary": "{count} grupos de duplicados",
+    "kind_identity": "Mismo id de juego",
+    "kind_path": "Misma ruta",
+    "kind_title": "Mismo título",
+    "row_stats": "{sessions} sesiones · {hours} h",
+    "preview": "Vista previa de fusión",
+    "primary": "Conservar {name}",
+    "absorbed": "{count} entradas pasarán a la papelera (reversible)",
+    "changes": "Se rellenarán {count} campos desde los duplicados",
+    "restore_hint": "Restaura las entradas fusionadas desde la papelera.",
+    "merge": "Fusionar",
+    "merged": "{count} entradas duplicadas fusionadas",
+    "failed": "La fusión falló"
   }
 }

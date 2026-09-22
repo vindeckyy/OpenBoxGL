@@ -1,8 +1,8 @@
 import { $, escapeHtml, formatBytes, defaultBadges, defaultControllerMap, fact } from './util.js';
 import { AppState, api, notify, token, selectedIds, playlistFor, applySidebarVisibility, nativePickFile, nativePickFolder } from './state.js';
-import { refresh, render, renderGrid } from './library.js';
+import { refresh, render, renderGrid, openRepairWizard, openDuplicatesDialog } from './library.js';
 import { applyLibraryMusic } from './bigbox.js';
-import { confirmAction, promptInput } from './dialogs.js';
+import { confirmAction, promptInput, closeDialog } from './dialogs.js';
 import { openSetupCenter } from './setup.js';
 import { t } from './i18n.js';
 
@@ -550,6 +550,25 @@ import { t } from './i18n.js';
         $('jobsPanel').hidden = false;
       } catch (error) { /* jobs view is best-effort; never block the audit */ }
     }
+    function ensureHealthTools() {
+      const dialog = $('healthDialog');
+      const actions = dialog?.querySelector('.dialog-actions');
+      if (!actions || actions.querySelector('#repairButton')) return;
+      const repair = document.createElement('button');
+      repair.type = 'button';
+      repair.id = 'repairButton';
+      repair.className = 'icon-button';
+      repair.textContent = t('repair.open');
+      repair.onclick = () => { dialog.close(); openRepairWizard(); };
+      const duplicates = document.createElement('button');
+      duplicates.type = 'button';
+      duplicates.id = 'duplicatesButton';
+      duplicates.className = 'icon-button';
+      duplicates.textContent = t('duplicates.open');
+      duplicates.onclick = () => { dialog.close(); openDuplicatesDialog(); };
+      actions.insertBefore(duplicates, actions.firstChild);
+      actions.insertBefore(repair, duplicates);
+    }
     async function health() {
       try {
         const result = await api('/api/health',{method:'POST',body:'{}'});
@@ -560,6 +579,7 @@ import { t } from './i18n.js';
         $('healthIssues').innerHTML = result.issues.length ? result.issues.map(issue => `<button type="button" class="metadata-result icon-button" data-audit-game="${issue.id}"><div><strong>${escapeHtml(issue.game)}</strong><small>${escapeHtml(issue.type)} · ${escapeHtml(issue.detail)}</small></div></button>`).join('') : '<p class="description">No library issues found.</p>';
         document.querySelectorAll('[data-audit-game]').forEach(button => button.onclick = () => { AppState.selectedId = Number(button.dataset.auditGame); $('healthDialog').close(); render(); });
         $('dedupeButton').disabled = !result.duplicates;
+        ensureHealthTools();
         renderJobsPanel();
         if (!$('healthDialog').open) $('healthDialog').showModal();
       } catch(error) { notify(error.message); }
@@ -1093,13 +1113,10 @@ import { t } from './i18n.js';
       try { await api('/api/themes/import',{method:'POST',body:JSON.stringify({path})}); await openThemes(); notify('Theme imported'); } catch(error) { notify(error.message); }
     };
     $('dedupeButton').onclick = async () => {
-      const ok = await confirmAction({
-        title: 'Remove duplicates',
-        message: 'Remove duplicate library entries?',
-        consequence: 'Game files will not be deleted.',
-      });
-      if (!ok) return;
-      try { const result = await api('/api/health/dedupe',{method:'POST',body:'{}'}); await refresh(); await health(); notify(`${result.removed.length} duplicate entries removed`); } catch(error) { notify(error.message); }
+      // The merge dialog supersedes the old blind dedupe: it previews the
+      // primary record and every field union, and moves duplicates to Trash.
+      closeDialog($('healthDialog'));
+      openDuplicatesDialog();
     };
     let featureMode = '';
     async function openFeature(mode) {

@@ -53,6 +53,9 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/launch/preflight` | `_api_post_api_v2_launch_preflight` |
 | POST | `/api/v2/launch/preflight/batch` | `_api_post_api_v2_launch_preflight_batch` |
 | GET | `/api/v2/library/constellation` | `_api_get_api_v2_library_constellation` |
+| GET | `/api/v2/library/duplicates` | `_api_get_api_v2_library_duplicates` |
+| POST | `/api/v2/library/duplicates/merge` | `_api_post_api_v2_library_duplicates_merge` |
+| POST | `/api/v2/library/duplicates/preview` | `_api_post_api_v2_library_duplicates_preview` |
 | POST | `/api/v2/library/export` | `_api_post_api_v2_library_export` |
 | GET | `/api/v2/library/export/download` | `_api_get_api_v2_library_export_download` |
 | GET | `/api/v2/library/export/exports` | `_api_get_api_v2_library_export_exports` |
@@ -61,6 +64,9 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/library/manual-entry/update` | `_api_post_api_v2_library_manual_entry_update` |
 | POST | `/api/v2/library/pick` | `_api_post_api_v2_library_pick` |
 | POST | `/api/v2/library/query/parse` | `_api_post_api_v2_library_query_parse` |
+| GET | `/api/v2/library/repair` | `_api_get_api_v2_library_repair` |
+| POST | `/api/v2/library/repair/apply` | `_api_post_api_v2_library_repair_apply` |
+| POST | `/api/v2/library/repair/preview` | `_api_post_api_v2_library_repair_preview` |
 | GET | `/api/v2/library/search` | `_api_get_api_v2_library_search` |
 | POST | `/api/v2/library/sync/apply` | `_api_post_api_v2_library_sync_apply` |
 | POST | `/api/v2/library/sync/preview` | `_api_post_api_v2_library_sync_preview` |
@@ -125,7 +131,7 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/steamgrid/test` | `handlers.steamgrid.steamgrid_test` |
 | GET | `/api/v2/story` | `_api_get_api_v2_story` |
 
-_114 routes._
+_120 routes._
 
 ## API v1 (frozen)
 
