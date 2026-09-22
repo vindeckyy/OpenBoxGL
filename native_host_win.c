@@ -50,6 +50,15 @@
 #define MAX_IPC_MESSAGE_BYTES 8192
 #define MAX_BRIDGE_MESSAGE_BYTES 8192
 
+/*
+ * Version strings surfaced in openbox-native.log at startup and echoed by
+ * the Windows CI job (.github/workflows/ci.yml). WEBVIEW2_SDK_VERSION must
+ * match the SdkVersion default in scripts/build_native_host_windows.ps1;
+ * the SDK's NuGet cache key is microsoft.web.webview2/<version>.
+ */
+#define NATIVE_HOST_VERSION "1.13.1"
+#define WEBVIEW2_SDK_VERSION "1.0.2651.64"
+
 #define WM_APP_NATIVE_REQUEST (WM_APP + 1)
 #define WM_APP_NATIVE_FOCUS (WM_APP + 2)
 #define WM_APP_TRAY (WM_APP + 3)
@@ -2118,10 +2127,19 @@ handle_reveal(const char *id, const char *path)
                     /*
                      * Security: /select, opens the containing folder with the
                      * item highlighted; it never executes the path itself.
+                     *
+                     * Keep the lpCommandLine-only CreateProcessW pattern used
+                     * by boot_server: with lpApplicationName NULL,
+                     * CreateProcessW takes the first white-space-delimited
+                     * token of the command line as the module name, so the
+                     * executable must be an explicit first token here. (An
+                     * earlier revision passed only /select,"<path>" and left
+                     * an unused explorer.exe variable behind, so reveal
+                     * always failed.)
                      */
                     StrBuf command;
                     sb_init(&command);
-                    sb_append_str(&command, "/select,\"");
+                    sb_append_str(&command, "explorer.exe /select,\"");
                     char *narrow = wide_to_utf8(canonical);
                     sb_append_str(&command, narrow ? narrow : "");
                     free(narrow);
@@ -2135,7 +2153,6 @@ handle_reveal(const char *id, const char *path)
                         memset(&startup, 0, sizeof(startup));
                         memset(&process, 0, sizeof(process));
                         startup.cb = sizeof(startup);
-                        wchar_t explorer[] = L"explorer.exe";
                         if (CreateProcessW(NULL, wide_command, NULL, NULL, FALSE,
                                            CREATE_NO_WINDOW, NULL, NULL, &startup, &process)) {
                             ok = 1;
@@ -2144,7 +2161,6 @@ handle_reveal(const char *id, const char *path)
                         } else {
                             log_line("native_host: reveal failed (error %lu)\n", GetLastError());
                         }
-                        (void)explorer;
                         free(wide_command);
                     }
                 }
@@ -2435,6 +2451,121 @@ message_handler_release(ICoreWebView2WebMessageReceivedEventHandler *self)
     return (ULONG)remaining;
 }
 
+/*
+ * Best-effort recovery of the "id" field from a rejected bridge payload.
+ * The strict json_parse_flat_object clears every field when the payload is
+ * malformed, so this scanner tolerates truncated or hostile JSON and
+ * extracts just the id string (escapes decoded the same way as the strict
+ * parser; anything unrecognised aborts the scan). Returns a heap string, or
+ * NULL when no id can be recovered. The id is only a lookup key for
+ * window.__openboxResolve and is single-quote escaped by resolve_bridge
+ * before splicing, so a hostile value cannot break out of the call.
+ */
+static char *
+bridge_rejected_id(const char *json)
+{
+    const char *cursor = json;
+    for (;;) {
+        cursor = strstr(cursor, "\"id\"");
+        if (!cursor) {
+            return NULL;
+        }
+        const char *value = cursor + 4;
+        while (*value == ' ' || *value == '\t') {
+            value++;
+        }
+        if (*value == '\0') {
+            return NULL;
+        }
+        if (*value++ != ':') {
+            cursor = value;
+            continue;
+        }
+        while (*value == ' ' || *value == '\t') {
+            value++;
+        }
+        if (*value == '\0') {
+            return NULL;
+        }
+        if (*value++ != '"') {
+            cursor = value;
+            continue;
+        }
+        StrBuf id;
+        sb_init(&id);
+        int complete = 0;
+        while (*value) {
+            unsigned char character = (unsigned char)*value;
+            if (character < 0x20) {
+                break;
+            }
+            if (character == '"') {
+                complete = id.length <= MAX_NATIVE_VALUE_BYTES;
+                break;
+            }
+            if (character != '\\') {
+                if (!sb_append_c(&id, (char)character)) {
+                    break;
+                }
+                value++;
+                continue;
+            }
+            value++;
+            switch (*value) {
+            case '"': character = '"'; break;
+            case '\\': character = '\\'; break;
+            case '/': character = '/'; break;
+            case 'b': character = '\b'; break;
+            case 'f': character = '\f'; break;
+            case 'n': character = '\n'; break;
+            case 'r': character = '\r'; break;
+            case 't': character = '\t'; break;
+            default: character = 0; break;
+            }
+            if (!character) {
+                break;
+            }
+            if (!sb_append_c(&id, (char)character) || id.length > MAX_NATIVE_VALUE_BYTES) {
+                break;
+            }
+            value++;
+        }
+        if (complete) {
+            return sb_take(&id);
+        }
+        sb_free(&id);
+        return NULL;
+    }
+}
+
+/*
+ * Resolve (with an error) the frontend promise for a bridge message that
+ * failed the origin gate or JSON parse. Without this, the page's
+ * window.__openboxResolve promise hangs forever: the bridge contract is
+ * that every postMessage gets a resolution. Unknown ids are a harmless
+ * no-op in the page's resolver.
+ */
+static void
+reject_bridge_message(ICoreWebView2WebMessageReceivedEventArgs *args)
+{
+    LPWSTR payload = NULL;
+    if (FAILED(ICoreWebView2WebMessageReceivedEventArgs_TryGetWebMessageAsString(args, &payload)) ||
+        !payload) {
+        return;
+    }
+    char *json = wide_to_utf8(payload);
+    CoTaskMemFree(payload);
+    if (!json) {
+        return;
+    }
+    char *id = bridge_rejected_id(json);
+    free(json);
+    if (id) {
+        resolve_bridge(id, "{\"ok\":false,\"error\":\"bridge: rejected\"}");
+        free(id);
+    }
+}
+
 static HRESULT STDMETHODCALLTYPE
 message_handler_invoke(ICoreWebView2WebMessageReceivedEventHandler *self,
                        ICoreWebView2 *sender, ICoreWebView2WebMessageReceivedEventArgs *args)
@@ -2451,6 +2582,7 @@ message_handler_invoke(ICoreWebView2WebMessageReceivedEventHandler *self,
         if (!allowed) {
             /* Security: only the exact booted app origin may drive the bridge. */
             log_line("native_host: rejecting bridge message from unexpected origin\n");
+            reject_bridge_message(args);
             return S_OK;
         }
     } else {
@@ -2472,6 +2604,7 @@ message_handler_invoke(ICoreWebView2WebMessageReceivedEventHandler *self,
     BridgeMessage message;
     if (!json_parse_flat_object(json, &message)) {
         log_line("native_host: rejecting malformed bridge message\n");
+        reject_bridge_message(args);
         free(json);
         return S_OK;
     }
@@ -3103,6 +3236,8 @@ wWinMain(HINSTANCE instance, HINSTANCE previous, LPWSTR command_line, int show_c
         free(log_file);
     }
     log_line("=== native_host (windows) starting ===\n");
+    log_line("native_host version %s; WebView2 SDK cache key microsoft.web.webview2/%s\n",
+             NATIVE_HOST_VERSION, WEBVIEW2_SDK_VERSION);
 
     wchar_t *geometry_file = path_join(g_data_dir_wide, L"window-geometry");
     if (geometry_file) {

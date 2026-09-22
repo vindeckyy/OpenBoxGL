@@ -62,7 +62,15 @@ jobs:
       # proof that it still compiles against the WebView2 SDK (ADR 0048).
       - name: Build the WebView2 native host
         shell: pwsh
-        run: scripts/build_native_host_windows.ps1
+        run: |
+          scripts/build_native_host_windows.ps1
+          # Surface the exact host/SDK versions in the job log so a red build
+          # is triageable without downloading artifacts. Single source of
+          # truth: the #defines at the top of native_host_win.c.
+          $hostVersion = (Select-String -Path native_host_win.c -Pattern '^#define NATIVE_HOST_VERSION "([^"]+)"').Matches[0].Groups[1].Value
+          $sdkVersion = (Select-String -Path native_host_win.c -Pattern '^#define WEBVIEW2_SDK_VERSION "([^"]+)"').Matches[0].Groups[1].Value
+          echo "native_host version: $hostVersion"
+          echo "WebView2 SDK cache key: microsoft.web.webview2/$sdkVersion"
 
       - name: Runtime module manifest
         run: python -B scripts/check_runtime_modules.py
