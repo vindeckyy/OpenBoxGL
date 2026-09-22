@@ -359,8 +359,9 @@ def test_sandbox_manifest_versions():
         with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}, clear=True):
             result = run_plugins(root, "before_launch", {"args": []})
         assert sorted(result["args"]) == ["v1.plugin", "v2.plugin", "v3.plugin"]
-        # A manifest without any version is refused loudly at read time and
-        # skipped (not silently loaded) by the plugin listing.
+        # A manifest without any version is refused loudly at read time; the
+        # frozen API surfaces it (valid: False) rather than hiding it, and the
+        # runner skips it.
         _make_plugin(root, "noversion.plugin", "def before_launch(p):\n    return p\n", version="")
         from plugins import read_manifest
         try:
@@ -368,7 +369,11 @@ def test_sandbox_manifest_versions():
             raise AssertionError("a manifest without a version must be refused")
         except ValueError:
             pass
-        assert "noversion.plugin" not in {entry["id"] for entry in list_plugins(root)}
+        entry = next(item for item in list_plugins(root) if item["id"] == "noversion.plugin")
+        assert entry["valid"] is False and entry["error"]
+        with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}, clear=True):
+            result = run_plugins(root, "before_launch", {"args": []})
+        assert "noversion.plugin" not in result["args"]
     print("  sandbox manifest v1/v2 compat: ok")
 
 
@@ -433,6 +438,146 @@ def test_sandbox_process_group_cleanup():
     print("  sandbox process group cleanup: ok")
 
 
+def test_plugin_api_v1():
+    """Frozen API v1 surface — commands, invalid surfacing."""
+    import json as _json
+    import tempfile as _tempfile
+    from pathlib import Path as _Path
+    import plugins as _plugins
+
+    with _tempfile.TemporaryDirectory() as directory:
+        root = _Path(directory)
+        package = root / "command.plugin"
+        package.mkdir()
+        (package / "plugin.json").write_text(_json.dumps({
+            "id": "command.plugin", "name": "Command", "version": "1.0.0",
+            "api_version": 1, "hooks": ["command"],
+            "commands": [{"id": "do-it", "label": "Do it", "description": "test"}],
+        }))
+        (package / "plugin.py").write_text(
+            "def command(payload):\n"
+            "    return {'notification': {'level': 'success', 'message': 'did ' + payload['command']}}\n"
+        )
+        broken = root / "broken.plugin"
+        broken.mkdir()
+        (broken / "plugin.json").write_text("{ not json")
+        listed = _plugins.list_plugins(root)
+        by_id = {item["id"]: item for item in listed}
+        assert by_id["command.plugin"]["valid"] is True
+        assert by_id["command.plugin"]["api_version"] == 1
+        assert by_id["broken.plugin"]["valid"] is False
+        assert by_id["broken.plugin"]["error"]
+        assert by_id["broken.plugin"]["sandbox"] in {"ready", "unavailable", "disabled"}
+
+        commands = _plugins.plugin_commands(root)
+        assert [item["id"] for item in commands] == ["do-it"]
+        assert commands[0]["plugin_id"] == "command.plugin"
+        _plugins.set_plugin_enabled(root, "command.plugin", False)
+        assert _plugins.plugin_commands(root) == []
+        assert len(_plugins.plugin_commands(root, include_disabled=True)) == 1
+        _plugins.set_plugin_enabled(root, "command.plugin", True)
+
+        with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}):
+            result, error = _plugins.run_plugin_hook(root, "command.plugin", "command", {"command": "do-it", "library": []})
+        assert error == "", error
+        assert result["notification"]["message"] == "did do-it"
+        result, error = _plugins.run_plugin_hook(root, "command.plugin", "before_launch", {})
+        assert result is None and "hook" in error
+        result, error = _plugins.run_plugin_hook(root, "broken.plugin", "command", {})
+        assert result is None and error
+
+        # Unavailable sandbox refuses to run instead of silently falling back.
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch("plugins._sandbox_available", return_value=False):
+            assert _plugins.sandbox_status() == "unavailable"
+            result, error = _plugins.run_plugin_hook(root, "command.plugin", "command", {"command": "do-it"})
+        assert result is None and "bubblewrap" in error
+
+        # A manifest that requires a newer API version is surfaced, not hidden.
+        newer = root / "newer.plugin"
+        newer.mkdir()
+        (newer / "plugin.json").write_text(_json.dumps({
+            "id": "newer.plugin", "name": "Newer", "version": "1",
+            "api_version": 99, "hooks": ["command"],
+        }))
+        (newer / "plugin.py").write_text("def command(payload):\n    return payload\n")
+        entry = next(item for item in _plugins.list_plugins(root) if item["id"] == "newer.plugin")
+        assert entry["valid"] is False and "API v99" in entry["error"]
+    print("  plugin api v1: ok")
+
+
+def test_plugin_routes():
+    """The palette command routes run plugins through the sandbox."""
+    import json as _json
+    import tempfile as _tempfile
+    from pathlib import Path as _Path
+    from types import SimpleNamespace
+
+    from handlers.extensions import ExtensionsHandlers
+
+    class Dummy(ExtensionsHandlers):
+        def __init__(self):
+            self.responses = []
+
+        def send_json(self, status, payload, **kwargs):
+            self.responses.append((status, payload))
+
+    with _tempfile.TemporaryDirectory() as directory:
+        root = _Path(directory)
+        package = root / "plugins" / "command.plugin"
+        package.mkdir(parents=True)
+        (package / "plugin.json").write_text(_json.dumps({
+            "id": "command.plugin", "name": "Command", "version": "1.0.0",
+            "api_version": 1, "hooks": ["command"],
+            "commands": [{"id": "do-it", "label": "Do it"}],
+        }))
+        (package / "plugin.py").write_text(
+            "def command(payload):\n"
+            "    return {'notification': {'level': 'success', 'message': 'did ' + payload['command'] + ' for ' + str(len(payload['library']))}}\n"
+        )
+        with mock.patch("handlers.extensions.DATA", root / "library.json"), mock.patch(
+            "handlers.extensions.load_state_view",
+            return_value={"games": [{"game_id": "g1", "name": "Game"}]},
+        ), mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}):
+            commands = Dummy()
+            commands._api_get_api_v2_plugins_commands(SimpleNamespace(query=""))
+            status, payload = commands.responses[-1]
+            assert status == 200 and payload["api_version"] == 1
+            assert payload["commands"][0]["id"] == "do-it"
+            assert payload["commands"][0]["plugin_id"] == "command.plugin"
+
+            listed = Dummy()
+            listed._api_get_api_plugins(SimpleNamespace(query=""))
+            assert listed.responses[-1][1]["sandbox"] == "disabled"
+
+            run = Dummy()
+            run._api_post_api_v2_plugins_command({"plugin_id": "command.plugin", "command": "do-it"})
+            assert run.responses[-1][1]["notification"]["message"] == "did do-it for 1"
+
+            with mock.patch("handlers.extensions.read_manifest", side_effect=ValueError), pytest_raises(ValueError):
+                run._api_post_api_v2_plugins_command({"plugin_id": "command.plugin", "command": "do-it"})
+            try:
+                run._api_post_api_v2_plugins_command({"plugin_id": "command.plugin", "command": "unknown"})
+                raise AssertionError("unknown command accepted")
+            except ValueError as error:
+                assert "declare" in str(error)
+    print("  plugin routes: ok")
+
+
+class pytest_raises:
+    """Tiny context manager so this stdlib-only suite avoids pytest imports."""
+
+    def __init__(self, exception):
+        self.exception = exception
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is None:
+            raise AssertionError(f"expected {self.exception.__name__}")
+        return issubclass(exc_type, self.exception)
+
+
 def main():
     test()
     test_sandbox_permission_denial_surfaces()
@@ -442,6 +587,8 @@ def main():
     test_sandbox_manifest_versions()
     test_sandbox_process_group_isolation()
     test_sandbox_process_group_cleanup()
+    test_plugin_api_v1()
+    test_plugin_routes()
     print("plugin sandbox self-test: ok")
 
 
