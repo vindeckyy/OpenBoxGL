@@ -4,7 +4,7 @@
 
 | Version | Supported |
 | --- | --- |
-| 1.13.x | Yes (current) |
+| 1.14.x | Yes (current) |
 | 1.12.x | No — upgrade required |
 | 1.11.x | No — upgrade required |
 | 1.10.x | No — upgrade required |
@@ -26,7 +26,7 @@
 | 0.4.x | Best effort |
 | < 0.4.0 | No |
 
-Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. The 1.13.x line is the current maintained release; the older rows document the historical support policy and should not be read as promises of backported fixes.
+Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. The 1.14.x line is the current maintained release; the older rows document the historical support policy and should not be read as promises of backported fixes.
 
 ## Reporting a vulnerability
 

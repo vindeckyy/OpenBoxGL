@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-09-22
+
 ### Added
 - Plugins 2.0 (ADR 0056, ADR 0057): per-plugin checksum-bound trust for
   sandbox-unavailable hosts (no global trust toggle; updates re-prompt);
