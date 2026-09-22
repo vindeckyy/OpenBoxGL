@@ -27,6 +27,64 @@ from state_store import _stable_game_id, prune_trash
 from webapp_state import FIELDS, MEDIA_PATH_FIELDS, _public_state_cached, approved_media_path, bump_media_epoch, clear_file_probe_cache, consolidate_existing_games, game_from_payload, game_from_query, game_identity, load_state_view, public_state, public_state_bytes, public_state_etag, public_settings, transact_state
 
 
+def _dna_note_upserted(games):
+    """Incremental DNA index update after a library mutation (Flagship 9).
+
+    Best-effort by design: the DNA index is derived data, so a failure
+    here must never break the mutation that triggered it. Heavier drift
+    (e.g. metadata refreshes, which are not hooked) is corrected by the
+    reconciliation pass in handlers/discovery.py.
+    """
+    try:
+        from pkg.parity import parity_dna
+
+        index = parity_dna.load_index()
+        if index is None:
+            return
+        for game in games:
+            if isinstance(game, dict):
+                parity_dna.note_game_upserted(index, game)
+        parity_dna.save_index_atomic(index)
+    except Exception:
+        pass
+
+
+def _dna_note_removed(game_ids):
+    """Incremental DNA index removal after a library deletion (Flagship 9)."""
+    try:
+        from pkg.parity import parity_dna
+
+        index = parity_dna.load_index()
+        if index is None:
+            return
+        for game_id in game_ids:
+            parity_dna.note_game_removed(index, str(game_id))
+        parity_dna.save_index_atomic(index)
+    except Exception:
+        pass
+
+
+def _dna_refresh_ids(game_ids):
+    """Refresh DNA vectors for games identified by payload ids.
+
+    Used after bulk mutations where only ids (not game dicts) are handy;
+    resolves against a fresh readonly state.
+    """
+    try:
+        wanted = {str(raw) for raw in game_ids or []}
+        if not wanted:
+            return
+        state = load_state_readonly()
+        matched = [
+            game for game in state.get("games", [])
+            if isinstance(game, dict)
+            and (str(game.get("game_id")) in wanted or str(game.get("id")) in wanted)
+        ]
+        _dna_note_upserted(matched)
+    except Exception:
+        pass
+
+
 def _clean_game_fields(source):
     game = {key: str(source[key]).strip() for key in FIELDS if key in source}
     game["extract_archive"] = bool(source.get("extract_archive"))
@@ -501,6 +559,7 @@ class LibraryHandlers:
         def mutate(state):
             return bulk_update(state["games"], ids, changes)
         _, updated = transact_state(mutate)
+        _dna_refresh_ids(payload.get("ids"))
         self.send_json(200, {"updated": updated, "tags": tag_counts(load_state()["games"])})
 
     def save_game(self, payload):
@@ -544,12 +603,14 @@ class LibraryHandlers:
             _save_game_mutate(state, payload, game)
         transact_state(mutate)
         clear_file_probe_cache()
+        _dna_note_upserted([game])
         self.send_json(200, {"ok": True})
 
     def bulk_edit(self, payload):
         def mutate(state):
             return bulk_update(state["games"], payload.get("ids"), payload.get("changes"))
         _, changed = transact_state(mutate)
+        _dna_refresh_ids(payload.get("ids"))
         self.send_json(200, {"updated": changed})
 
     def delete_game(self, payload):
@@ -569,9 +630,9 @@ class LibraryHandlers:
                             referenced_media.add(os.path.realpath(str(path)))
                         except Exception:
                             pass
-            return game.get("name", "")
+            return game.get("name", ""), str(game.get("game_id", ""))
             
-        _, removed = transact_state(mutate)
+        _, (removed, removed_id) = transact_state(mutate)
 
         deleted_media = []
         shared_media = []
@@ -581,6 +642,8 @@ class LibraryHandlers:
             bump_media_epoch()
 
         clear_file_probe_cache()
+        if removed_id:
+            _dna_note_removed([removed_id])
         self.send_json(200, {
             "removed": removed,
             "deleted_media": deleted_media,
@@ -590,9 +653,12 @@ class LibraryHandlers:
     def delete_steam_games(self, payload):
         def mutate(state):
             games = state["games"]
+            removed_ids = [str(game.get("game_id", "")) for game in games
+                           if str(game.get("source", "")).casefold() == "steam"]
             state["games"] = [game for game in games if str(game.get("source", "")).casefold() != "steam"]
-            return len(games) - len(state["games"])
-        _, removed = transact_state(mutate)
+            return len(games) - len(state["games"]), removed_ids
+        _, (removed, removed_ids) = transact_state(mutate)
+        _dna_note_removed([game_id for game_id in removed_ids if game_id])
         self.send_json(200, {"removed": removed})
 
     @staticmethod
@@ -625,6 +691,7 @@ class LibraryHandlers:
         def mutate(state):
             return bulk_update(state["games"], payload.get("ids"), changes)
         _, changed = transact_state(mutate)
+        _dna_refresh_ids(payload.get("ids"))
         self.send_json(200, {"updated": changed, "fields": list(changes.keys())})
 
     def save_filter_preset(self, payload):
@@ -810,6 +877,7 @@ class LibraryHandlers:
 
         transact_state(mutate)
         clear_file_probe_cache()
+        _dna_note_upserted([game])
         self.send_json(200, {"ok": True, "name": game.get("name")})
 
     @route("POST", "/api/v2/library/manual-entry/convert")
@@ -856,6 +924,7 @@ class LibraryHandlers:
 
         _, game_id = transact_state(mutate)
         clear_file_probe_cache()
+        _dna_refresh_ids([game_id])
         self.send_json(200, {"ok": True, "game_id": game_id, "manual_entry": True})
 
     @route("GET", "/api/v2/library/search")

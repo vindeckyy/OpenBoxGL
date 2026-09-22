@@ -7,6 +7,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- Game DNA search (ADR 0056): offline smart search with a Title | Smart toggle
+  on the sidebar search box (default Title, persisted). Smart mode runs
+  classical IR only — BM25 + a curated 151-concept lexicon (en/de/es/fr/pt) +
+  1024-dimensional feature hashing — with a 250 ms debounce, "why" explanation
+  chips, and honest building (cancelable) / degraded / no-description states.
+  New `/api/v2` routes in `handlers/discovery.py` (`library/dna/search`,
+  `library/dna/status`, `library/dna/index/rebuild`); the atomic sidecar index
+  lives at `<APP_DIR>/dna_index.json` and is excluded from cloud sync. Taste
+  boosting uses the F4 `progress` / `user_rating` fields; library mutations
+  invalidate the index best-effort, and the picker gains additive
+  `seed_query` / `dna_boost` parameters. "More like this" is available in the
+  details pane, the card context menu, and Big Box (gamepad-operable toggle
+  feeding `#bigBoxHybridSearch`, why-chips as subtitle lines). No AI cloud, no
+  downloads — everything runs locally with the standard library.
 - Plugin API v1 is frozen (ADR 0050, `docs/plugin-api.md`): manifests declare
   `api_version` (default 1; newer versions are refused and surfaced with an
   error), a `command` hook, and up to 32 palette `commands` (`{id, label,

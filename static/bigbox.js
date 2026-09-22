@@ -13,6 +13,7 @@ import { captureClip } from './clips.js';
 import { openSetupCenter } from './setup.js';
 import { t } from './i18n.js';
 import { registerGamepadSurface, ensureGamepadLoop, stopGamepadLoop, syncGamepadLoop } from './gamepad.js';
+import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBoxSmartSearch, dnaMoreLikeThisBigBox } from './dna.js';
 
 
 
@@ -36,6 +37,7 @@ import { registerGamepadSurface, ensureGamepadLoop, stopGamepadLoop, syncGamepad
       AppState.bigBoxHybridQuery = '';
       AppState.bigBoxSearchMode = false;
       if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').value = '';
+      AppState.games.forEach(item => { delete item._dnaWhy; });
       AppState.bigBoxGames = filteredBigBoxGames();
       if (!AppState.bigBoxGames.length) {
         // Keep Big Box hidden when there is nothing to show: a previous open
@@ -78,6 +80,32 @@ import { registerGamepadSurface, ensureGamepadLoop, stopGamepadLoop, syncGamepad
       applyMoodForGame(game).catch(() => {});
       api('/api/bigbox/mode',{method:'POST',body:JSON.stringify({entering:false})}).catch(() => {});
       if (document.fullscreenElement || nativeFullscreenOn) nativeFullscreen().catch(() => {});
+    }
+    function applyBigBoxDnaResults(payload) {
+      const results = (payload && payload.results) || [];
+      if (payload && payload.building) {
+        if ($('bigBoxStatus')) $('bigBoxStatus').textContent = t('dna.building', { pct: 0 });
+        AppState.bigBoxGames = [];
+        AppState.bigBoxIndex = 0;
+        renderBigBox();
+        return;
+      }
+      const byId = new Map();
+      AppState.games.forEach(item => {
+        if (item.game_id != null) byId.set(String(item.game_id), item);
+        byId.set(String(item.id), item);
+      });
+      const games = [];
+      results.forEach(entry => {
+        const game = byId.get(String(entry.game_id ?? ''));
+        if (game) { game._dnaWhy = entry.why || []; games.push(game); }
+      });
+      // In smart mode an empty result set is a real answer ("no matches"),
+      // not a reason to fall back to the title-filtered list.
+      AppState.bigBoxGames = games;
+      if (!games.length && $('bigBoxStatus')) $('bigBoxStatus').textContent = t('dna.no_results');
+      AppState.bigBoxIndex = 0;
+      renderBigBox();
     }
     function filteredBigBoxGames() {
       let result = filteredGames().filter(game => !game.hide_in_bigbox);
@@ -208,6 +236,7 @@ import { registerGamepadSurface, ensureGamepadLoop, stopGamepadLoop, syncGamepad
       }
       const mode = AppState.appSettings.bigbox_mode || 'stage';
       if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').hidden = mode !== 'hybrid';
+      if ($('bigBoxDnaToggle')) { $('bigBoxDnaToggle').hidden = mode !== 'hybrid'; setDnaSearchMode(dnaSearchMode(), { search: false }); }
       const playLabel = game.gameyfin_id && !game.store_installed
         ? '⬇ INSTALL'
         : (AppState.appSettings.dynamic_play_button === false ? '▶ PLAY' : (game.versions || []).length ? '▶ PLAY DEFAULT' : (game.applications || []).length ? '▶ PLAY GAME' : '▶ PLAY');
@@ -224,9 +253,15 @@ import { registerGamepadSurface, ensureGamepadLoop, stopGamepadLoop, syncGamepad
         const canAct = (game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed);
         const ownedLabel = game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : '';
         const uninstallBtn = game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:var(--space-sm)">Uninstall</button>' : '';
-        $('bigBoxStage').innerHTML = `<div class="bigbox-platforms">${platforms.map(name => `<button class="bigbox-platform ${AppState.bigBoxPlatform === name ? 'active' : ''}" data-bigbox-platform="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}</div>`;
+        $('bigBoxStage').innerHTML = `<div class="bigbox-platforms">${platforms.map(name => `<button class="bigbox-platform ${AppState.bigBoxPlatform === name ? 'active' : ''}" data-bigbox-platform="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p>${game._dnaWhy && game._dnaWhy.length ? `<p class="bigbox-dna-why">${game._dnaWhy.map(chip => `<span class="dna-chip">${escapeHtml(chip)}</span>`).join('')}</p>` : ''}<button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}<button class="icon-button" id="bigBoxDnaSimilar" style="margin-left:var(--space-sm)">${escapeHtml(t('dna.more_like_this'))}</button></div>`;
         document.querySelectorAll('[data-bigbox-platform]').forEach(button => button.onclick = () => {
           AppState.bigBoxPlatform = button.dataset.bigboxPlatform;
+          // In smart mode with a query, re-run smart search (platform goes
+          // to the DNA filters) instead of dropping to title filtering.
+          if (dnaSearchMode() === 'smart' && AppState.bigBoxHybridQuery) {
+            $('bigBoxHybridSearch')?.dispatchEvent(new Event('input', { bubbles: true }));
+            return;
+          }
           AppState.bigBoxGames = filteredBigBoxGames();
           AppState.bigBoxIndex = 0;
           renderBigBox();
@@ -252,6 +287,7 @@ import { registerGamepadSurface, ensureGamepadLoop, stopGamepadLoop, syncGamepad
         scheduleVideoSnap(game);
       }
       $('bigBoxPlay').onclick = () => activateCurrentGame(game);
+      if ($('bigBoxDnaSimilar')) $('bigBoxDnaSimilar').onclick = () => dnaMoreLikeThisBigBox(game.name);
       if ($('bigBoxUninstall')) $('bigBoxUninstall').onclick = () => uninstallGameyfin(game);
       applyLibraryMusic();
     }
@@ -450,9 +486,26 @@ import { registerGamepadSurface, ensureGamepadLoop, stopGamepadLoop, syncGamepad
       $('partyMenuButton')?.addEventListener('click', () => { closeBigBoxMenu(); openParty(); });      $('bigBoxHybridSearch')?.addEventListener('blur', () => { AppState.bigBoxSearchMode = false; });
       $('bigBoxHybridSearch')?.addEventListener('input', event => {
         AppState.bigBoxHybridQuery = event.target.value.trim();
+        if (dnaSearchMode() === 'smart' && AppState.bigBoxHybridQuery) {
+          const filters = AppState.bigBoxPlatform !== 'all' ? { platform: AppState.bigBoxPlatform } : {};
+          scheduleBigBoxSmartSearch(AppState.bigBoxHybridQuery, filters, (error, payload) => {
+            if (!$('bigBox') || $('bigBox').hidden) return;
+            if (error) { if ($('bigBoxStatus')) $('bigBoxStatus').textContent = error.message; return; }
+            applyBigBoxDnaResults(payload);
+          });
+          return;
+        }
+        cancelBigBoxSmartSearch();
+        AppState.games.forEach(item => { delete item._dnaWhy; });
         AppState.bigBoxGames = filteredBigBoxGames();
         AppState.bigBoxIndex = 0;
         renderBigBox();
+      });
+      $('bigBoxDnaToggle')?.addEventListener('click', () => {
+        setDnaSearchMode(dnaSearchMode() === 'smart' ? 'title' : 'smart', { search: false });
+        const input = $('bigBoxHybridSearch');
+        if (input && !input.hidden) input.dispatchEvent(new Event('input', { bubbles: true }));
+        else renderBigBox();
       });
     }
 

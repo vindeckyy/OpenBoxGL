@@ -1206,5 +1206,21 @@
     "merge": "Fusionner",
     "merged": "{count} entrées en double fusionnées",
     "failed": "Échec de la fusion"
+  },
+  "dna": {
+    "mode_label": "Mode de recherche",
+    "mode_title": "Titre",
+    "mode_smart": "Smart",
+    "search_placeholder_smart": "Décris l’ambiance, l’humeur ou les mécaniques…",
+    "results_title": "Résultats intelligents",
+    "no_results": "Aucun résultat intelligent. Essaie une autre ambiance ou mécanique.",
+    "empty_coverage": "Aucune description de jeu pour l’instant — la recherche intelligente a besoin de texte. Utilise Métadonnées → Compléter les manquants pour ajouter des descriptions.",
+    "open_metadata": "Ouvrir les métadonnées",
+    "building": "Création de l’index intelligent… {pct} %",
+    "cancel_build": "Annuler la création",
+    "degraded_note": "Index intelligent indisponible — affichage des correspondances de titre.",
+    "search_failed": "La recherche intelligente a échoué.",
+    "privacy_note": "100 % local · aucun cloud IA, aucun téléchargement",
+    "more_like_this": "Plus comme celui-ci"
   }
 }

@@ -660,13 +660,14 @@
     <select id="contextPlaylist" role="menuitem" aria-label="Playlist"><option value="">Add to playlist...</option></select>
     <button type="button" class="icon-button" id="contextAddPlaylist" role="menuitem">Add selected game</button>
     <button type="button" class="icon-button" id="contextNewPlaylist" role="menuitem">New playlist from game</button>
+    <button type="button" class="icon-button" id="contextDna" role="menuitem" data-i18n="dna.more_like_this">More like this</button>
     <button type="button" class="icon-button" id="contextResetStats" role="menuitem">Reset play statistics</button>
     <button type="button" class="icon-button" id="contextRemove" role="menuitem">Remove from library</button>
   </div>
   <section class="lifecycle" id="lifecycle" role="status" aria-live="polite" hidden><div><small id="lifecycleKind"></small><h2 id="lifecycleGame"></h2><p id="lifecycleMessage"></p></div></section>
   <section class="bigbox" id="bigBox" hidden tabindex="0">
     <video class="bigbox-startup-video" id="bigBoxStartupVideo" muted loop playsinline hidden></video>
-    <div class="bigbox-head"><strong>OpenBox</strong><input class="hybrid-search" id="bigBoxHybridSearch" type="search" placeholder="Search this platform" hidden><span class="bigbox-status" id="bigBoxStatus"></span><span id="bigBoxCounter"></span></div>
+    <div class="bigbox-head"><strong>OpenBox</strong><input class="hybrid-search" id="bigBoxHybridSearch" type="search" placeholder="Search this platform" hidden><button type="button" class="dna-mode single" id="bigBoxDnaToggle" data-dna-mode="title" title="Smart search is 100% local" hidden>Title</button><span class="bigbox-status" id="bigBoxStatus"></span><span id="bigBoxCounter"></span></div>
     <div class="bigbox-stage" id="bigBoxStage"></div>
     <div class="bigbox-foot"><span>← → Browse</span><span>Enter / A Play</span><span>P Pause</span><span>M Filters</span><span>F / X Favorite</span><span>Esc / B Back</span></div>
     <div class="bigbox-menu" id="bigBoxMenu" hidden>
