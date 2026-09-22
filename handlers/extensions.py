@@ -10,18 +10,23 @@ from urllib.parse import parse_qs
 from automation import DEFAULT_ATTEMPTS, DEFAULT_TIMEOUT, EVENT_TYPES, MAX_WEBHOOKS, test_ping, validate_webhook
 from openbox import DATA, load_state
 from pkg.platform_compat import open_path
-from plugin_catalog import download_plugin_package, fetch_plugin_catalog
 from plugins import (
     MAX_LIBRARY_ENTRIES,
+    get_plugin_settings,
     install_plugin,
     list_plugins,
     plugin_commands,
+    plugin_trust_status,
     read_manifest,
     remove_plugin,
     run_plugin_hook,
     sandbox_status,
     set_plugin_enabled,
+    set_plugin_permissions,
+    set_plugin_settings,
+    set_plugin_trust,
 )
+from plugin_catalog import download_plugin_package, fetch_plugin_catalog
 from routes.registry import route
 from stock_themes import ensure_stock_themes
 from webapp_state import PLUGIN_EPOCH, ROOT, game_from_payload, load_state_view, public_webhook_configs, transact_state, webhook_configs
@@ -115,11 +120,84 @@ class ExtensionsHandlers:
         notification = result.get("notification") if isinstance(result, dict) else None
         self.send_json(200, {"ok": True, "plugin_id": plugin_id, "command": command, "result": result, "notification": notification})
         return
-        return
 
     @route("GET", "/api/plugins/catalog")
     def _api_get_api_plugins_catalog(self, parsed):
         self.send_json(200, {"catalog": fetch_plugin_catalog()})
+        return
+
+    # --- Plugins 2.0 (F1a/F1b/F1c/F1f): trust, permissions, settings, browser.
+    # The v1 surface stays frozen; everything new lives under /api/v2.
+    # (Static paths: this router has no path parameters, so the plugin id
+    # travels in the query string for GET and the JSON body for POST.)
+
+    @route("GET", "/api/v2/plugins/trust")
+    def _api_get_api_v2_plugins_trust(self, parsed):
+        """Trust status for one plugin (F1a): granted, checksum, match."""
+        plugin_id = parse_qs(parsed.query).get("id", [""])[0].strip()
+        read_manifest(DATA.parent / "plugins" / plugin_id)  # validates
+        self.send_json(200, {"id": plugin_id, **plugin_trust_status(DATA.parent / "plugins", plugin_id)})
+        return
+
+    @route("POST", "/api/v2/plugins/trust")
+    def _api_post_api_v2_plugins_trust(self, payload):
+        """Grant or revoke unsandboxed-execution trust for one plugin (F1a)."""
+        body = payload if isinstance(payload, dict) else {}
+        plugin_id = str(body.get("id") or "").strip()
+        if "trusted" not in body:
+            raise ValueError("trusted is required.")
+        trusted = set_plugin_trust(DATA.parent / "plugins", plugin_id, bool(body.get("trusted")))
+        PLUGIN_EPOCH["value"] += 1
+        self.send_json(200, {"id": plugin_id, "trusted": trusted})
+        return
+
+    @route("POST", "/api/v2/plugins/permissions")
+    def _api_post_api_v2_plugins_permissions(self, payload):
+        """Record a user permission grant for one plugin (F1b)."""
+        body = payload if isinstance(payload, dict) else {}
+        plugin_id = str(body.get("id") or "").strip()
+        granted = set_plugin_permissions(DATA.parent / "plugins", plugin_id, body.get("permissions") or [])
+        PLUGIN_EPOCH["value"] += 1
+        self.send_json(200, {"id": plugin_id, "permissions": granted})
+        return
+
+    @route("GET", "/api/v2/plugins/settings")
+    def _api_get_api_v2_plugins_settings(self, parsed):
+        """Settings schema + current values for one plugin (F1c)."""
+        plugin_id = parse_qs(parsed.query).get("id", [""])[0].strip()
+        self.send_json(200, {"id": plugin_id, **get_plugin_settings(DATA.parent / "plugins", plugin_id)})
+        return
+
+    @route("POST", "/api/v2/plugins/settings")
+    def _api_post_api_v2_plugins_settings(self, payload):
+        """Validate and store per-plugin settings (F1c)."""
+        body = payload if isinstance(payload, dict) else {}
+        plugin_id = str(body.get("id") or "").strip()
+        values = set_plugin_settings(DATA.parent / "plugins", plugin_id, body.get("values") or {})
+        PLUGIN_EPOCH["value"] += 1
+        self.send_json(200, {"id": plugin_id, "values": values})
+        return
+
+    @route("GET", "/api/v2/plugins/catalog")
+    def _api_get_api_v2_plugins_catalog(self, parsed):
+        """Community catalog joined with installed state (F1f browser)."""
+        installed = {
+            manifest["id"]: manifest
+            for manifest in list_plugins(DATA.parent / "plugins")
+            if manifest.get("valid")
+        }
+        entries = []
+        for entry in fetch_plugin_catalog():
+            plugin_id = str(entry.get("id") or "")
+            current = installed.get(plugin_id)
+            catalog_version = str(entry.get("version") or "")
+            entries.append({
+                **entry,
+                "installed": current is not None,
+                "installed_version": str(current.get("version") or "") if current else "",
+                "update_available": bool(current) and catalog_version != str(current.get("version") or ""),
+            })
+        self.send_json(200, {"catalog": entries, "sandbox": sandbox_status()})
         return
 
     @route("GET", "/api/webhooks")

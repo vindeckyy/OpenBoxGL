@@ -1,6 +1,6 @@
 /* Command palette (T4): deterministic game search plus real application actions. */
 import { $, escapeHtml } from './util.js';
-import { AppState } from './state.js';
+import { AppState, api, notify } from './state.js';
 import { launch } from './sessions.js';
 import { t } from './i18n.js';
 import { searchWithFallback } from './library.js';
@@ -32,7 +32,9 @@ function recentCounts() {
   try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '{}'); } catch { return {}; }
 }
 function rowKey(row) {
-  return row.type === 'game' ? `game:${row.value.game_id || row.value.id}` : `${row.type}:${row.value.id || row.value.event || ''}`;
+  if (row.type === 'game') return `game:${row.value.game_id || row.value.id}`;
+  if (row.type === 'plugin-command') return `plugin-command:${row.value.plugin_id}:${row.value.id}`;
+  return `${row.type}:${row.value.id || row.value.event || ''}`;
 }
 function rankRecent(rows) {
   const counts = recentCounts();
@@ -71,11 +73,25 @@ function shortcutRows() {
   }));
 }
 
+// Plugins 2.0 (F1f): manifest `command` hooks listed under the `>` prefix.
+let pluginCommandCache = null;
+async function pluginCommandRows(query) {
+  try {
+    if (!pluginCommandCache) {
+      const result = await api('/api/v2/plugins/commands');
+      pluginCommandCache = result.commands || [];
+    }
+    return pluginCommandCache
+      .filter(command => !query || String(command.label || '').toLowerCase().includes(query))
+      .map(command => ({ type: 'plugin-command', value: command, label: `${command.plugin_id} · ${command.label}` }));
+  } catch { return []; }
+}
 function filteredResults(query) {
   const text = String(query || '').trim().toLowerCase();
   if (text.startsWith('>')) {
     const actionQuery = text.slice(1).trim();
-    return ACTIONS.filter(action => !actionQuery || action.label().toLowerCase().includes(actionQuery)).map(action => ({ type: 'action', value: action, label: action.label() }));
+    const builtin = ACTIONS.filter(action => !actionQuery || action.label().toLowerCase().includes(actionQuery)).map(action => ({ type: 'action', value: action, label: action.label() }));
+    return pluginCommandRows(actionQuery).then(pluginRows => [...builtin, ...pluginRows]);
   }
   if (text === '?') return shortcutRows();
   if (!text) return AppState.games.slice(0, 12).map(game => ({ type: 'game', value: game, label: gameLabel(game) }));
@@ -91,7 +107,7 @@ async function renderResults() {
   resultRows = rankRecent(rows && typeof rows.then === 'function' ? await rows : rows);
   if (request !== resultsRequest || !paletteResults) return;
   selectedIndex = Math.max(0, Math.min(selectedIndex, resultRows.length - 1));
-  paletteResults.innerHTML = resultRows.length ? resultRows.map((row, index) => `<button type="button" class="detail-card palette-row${index === selectedIndex ? ' active' : ''}" role="option" aria-selected="${index === selectedIndex}" data-palette-index="${index}">${escapeHtml(row.type === 'action' ? `> ${row.label}` : row.label)}</button>`).join('') : `<p class="description">${escapeHtml(t('common.no_results'))}</p>`;
+  paletteResults.innerHTML = resultRows.length ? resultRows.map((row, index) => `<button type="button" class="detail-card palette-row${index === selectedIndex ? ' active' : ''}" role="option" aria-selected="${index === selectedIndex}" data-palette-index="${index}">${escapeHtml(row.type === 'action' || row.type === 'plugin-command' ? `> ${row.label}` : row.label)}</button>`).join('') : `<p class="description">${escapeHtml(t('common.no_results'))}</p>`;
   paletteResults.querySelectorAll('[data-palette-index]').forEach(button => {
     button.onclick = () => choose(Number(button.dataset.paletteIndex));
   });
@@ -130,6 +146,13 @@ function choose(index) {
     return;
   }
   if (row.type === 'help') return;
+  if (row.type === 'plugin-command') {
+    const command = row.value;
+    api('/api/v2/plugins/command',{method:'POST',body:JSON.stringify({plugin_id:command.plugin_id,command:command.id})})
+      .then(result => { notify(result.notification || t('plugins.cmd_done')); })
+      .catch(error => { notify(error.message); });
+    return;
+  }
   document.dispatchEvent(new CustomEvent(`app:palette-${row.value.event}`));
 }
 

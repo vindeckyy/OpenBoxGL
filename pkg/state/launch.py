@@ -35,7 +35,7 @@ from parity_perf import apply_perf_profile, effective_profile_name, restore_perf
 from parity_resume import collect_resume_state, inject_resume_args
 from parity_saves import enforce_backup_limit
 from parity_tracking import close_store_client, wait_for_exit
-from plugins import run_plugins
+from plugins import emit_plugin_event, run_plugins
 from saves import backup_saves
 
 LOGGER = logging.getLogger("openbox")
@@ -920,12 +920,14 @@ def finish_session(launch_id, game_index, started, process, lease):
                 LOGGER.exception("Resume-state capture failed for session %s", launch_id)
 
         session_result = {"game_name": original_game_name, "session": {}}
+        playtime_before = {"total": 0}
 
         def mutate(state):
             settings = state.get("settings", {})
             game = res_game(state, identity, fallback_index=game_index)
             if game is not None:
-                game["playtime_seconds"] = game.get("playtime_seconds", 0) + seconds
+                playtime_before["total"] = int(game.get("playtime_seconds", 0) or 0)
+                game["playtime_seconds"] = playtime_before["total"] + seconds
                 apply_progress_automation(game, settings)
                 for key in ("video_recording", "recording", "last_recording"):
                     if key in game_snapshot:
@@ -954,6 +956,17 @@ def finish_session(launch_id, game_index, started, process, lease):
         session_committed = True
         game_name = session_result["game_name"]
         session = session_result["session"]
+        # Lifecycle event (F1e): playtime milestone when a session crosses an
+        # hour boundary. Small payload: ids + the new hour count only.
+        hours_before = playtime_before["total"] // 3600
+        hours_after = (playtime_before["total"] + seconds) // 3600
+        if hours_after > hours_before:
+            emit_plugin_event(data_parent / "plugins", "playtime_milestone", {
+                "game_id": session.get("game_id", ""),
+                "name": game_name,
+                "hours": hours_after,
+                "playtime_seconds": playtime_before["total"] + seconds,
+            })
     finally:
         if not session_committed:
             try:

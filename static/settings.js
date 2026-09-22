@@ -516,23 +516,171 @@ import { t } from './i18n.js';
     async function openPlugins() {
       try {
         const result = await api('/api/plugins');
-        $('pluginList').innerHTML = result.plugins.length ? result.plugins.map(plugin => `<div class="emulator-item"><div><strong>${escapeHtml(plugin.name)} · ${escapeHtml(plugin.version)}</strong><small>${escapeHtml(plugin.id)} · ${escapeHtml(plugin.hooks.join(', ') || 'no hooks')}</small></div><button type="button" class="icon-button" data-toggle-plugin="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled}">${plugin.enabled ? 'Disable' : 'Enable'}</button><button type="button" class="playlist-delete" data-remove-plugin="${escapeHtml(plugin.id)}" aria-label="Remove ${escapeHtml(plugin.name)}">×</button></div>`).join('') : '<p class="description">No plugins installed.</p>';
-        document.querySelectorAll('[data-toggle-plugin]').forEach(button => button.onclick = async () => {
+        renderInstalledPlugins(result);
+        wirePluginTabs();
+        if (!$('pluginsDialog').open) $('pluginsDialog').showModal();
+      } catch(error) { notify(error.message); }
+    }
+    // Plugins 2.0 (F1a/F1b/F1c/F1f): trust prompts, permission prompts,
+    // per-plugin settings forms, and the catalog browser tab.
+    function renderInstalledPlugins(result) {
+      // The trust prompt is the sandbox-unavailable signal: /api/plugins
+      // reports sandbox status per host, no separate platform flag needed.
+      const sandboxUnavailable = result.sandbox === 'unavailable';
+      $('pluginList').hidden = false;
+      $('pluginBrowse').hidden = true;
+      $('pluginList').innerHTML = result.plugins.length ? result.plugins.map(plugin => {
+        const trustUi = plugin.valid && sandboxUnavailable
+          ? (plugin.trusted
+            ? `<span class="badge">${escapeHtml(t('plugins.trust_trusted'))}</span> <button type="button" class="icon-button" data-revoke-trust="${escapeHtml(plugin.id)}">${escapeHtml(t('plugins.trust_revoke'))}</button>`
+            : `<button type="button" class="icon-button" data-trust-plugin="${escapeHtml(plugin.id)}" data-trust-name="${escapeHtml(plugin.name)}" data-trust-version="${escapeHtml(plugin.version)}" data-trust-checksum="${escapeHtml(plugin.checksum || '')}">${escapeHtml(t('plugins.trust_run'))}</button>`)
+          : '';
+        const settingsUi = plugin.valid && plugin.settings && Object.keys(plugin.settings.properties || {}).length
+          ? ` <button type="button" class="icon-button" data-plugin-settings="${escapeHtml(plugin.id)}">${escapeHtml(t('plugins.settings_title'))}</button>`
+          : '';
+        const permUi = plugin.valid && (plugin.permissions || []).length
+          ? `<small> · ${escapeHtml((plugin.permissions || []).join(', '))}</small>`
+          : '';
+        return `<div class="emulator-item"><div><strong>${escapeHtml(plugin.name)} · ${escapeHtml(plugin.version)}</strong><small>${escapeHtml(plugin.id)} · ${escapeHtml((plugin.hooks || []).join(', ') || 'no hooks')}</small>${permUi}</div><span>${trustUi}${settingsUi}</span><button type="button" class="icon-button" data-toggle-plugin="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled}">${plugin.enabled ? 'Disable' : 'Enable'}</button><button type="button" class="playlist-delete" data-remove-plugin="${escapeHtml(plugin.id)}" aria-label="Remove ${escapeHtml(plugin.name)}">×</button></div>`;
+      }).join('') : '<p class="description">No plugins installed.</p>';
+      document.querySelectorAll('[data-toggle-plugin]').forEach(button => button.onclick = async () => {
+        try {
+          const enable = button.dataset.enabled !== 'true';
+          await api('/api/plugins/toggle',{method:'POST',body:JSON.stringify({id:button.dataset.togglePlugin,enabled:enable})});
+          await openPlugins();
+          if (enable) await maybePromptPluginPermissions(button.dataset.togglePlugin);
+        } catch(error) { notify(error.message); }
+      });
+      document.querySelectorAll('[data-remove-plugin]').forEach(button => button.onclick = async () => {
+        const ok = await confirmAction({
+          title: 'Remove plugin',
+          message: `Remove ${button.dataset.removePlugin}?`,
+          consequence: 'A recoverable copy will be retained.',
+        });
+        if (!ok) return;
+        try { await api('/api/plugins/remove',{method:'POST',body:JSON.stringify({id:button.dataset.removePlugin})}); await openPlugins(); notify('Plugin removed'); } catch(error) { notify(error.message); }
+      });
+      document.querySelectorAll('[data-trust-plugin]').forEach(button => button.onclick = () => promptPluginTrust(button));
+      document.querySelectorAll('[data-revoke-trust]').forEach(button => button.onclick = async () => {
+        try {
+          await api('/api/v2/plugins/trust',{method:'POST',body:JSON.stringify({id:button.dataset.revokeTrust,trusted:false})});
+          await openPlugins();
+        } catch(error) { notify(error.message); }
+      });
+      document.querySelectorAll('[data-plugin-settings]').forEach(button => button.onclick = () => openPluginSettings(button.dataset.pluginSettings));
+    }
+    function permissionLabel(permission) {
+      const key = `plugins.perm_${permission}`;
+      const label = t(key);
+      return label === key ? permission : label;
+    }
+    async function maybePromptPluginPermissions(pluginId) {
+      // Android-style grant prompt at install/enable time (F1b).
+      try {
+        const result = await api('/api/plugins');
+        const plugin = (result.plugins || []).find(item => item.id === pluginId);
+        const wanted = ((plugin && plugin.permissions) || []).filter(permission => !((plugin && plugin.granted_permissions) || []).includes(permission));
+        if (!plugin || !plugin.valid || !wanted.length) return;
+        const ok = await confirmAction({
+          title: t('plugins.perm_title'),
+          message: `${plugin.name}: ${t('plugins.perm_intro')}`,
+          consequence: wanted.map(permissionLabel).join('\n'),
+          confirmLabel: t('plugins.perm_grant'),
+        });
+        if (!ok) return;
+        await api('/api/v2/plugins/permissions',{method:'POST',body:JSON.stringify({id:pluginId,permissions:wanted})});
+        await openPlugins();
+      } catch(error) { notify(error.message); }
+    }
+    async function promptPluginTrust(button) {
+      // Per-plugin trust prompt for sandbox-unavailable hosts (F1a). The
+      // grant is bound to the package checksum; updates re-prompt.
+      const ok = await confirmAction({
+        title: t('plugins.trust_title'),
+        message: `${button.dataset.trustName} ${button.dataset.trustVersion}: ${t('plugins.trust_intro')}`,
+        consequence: `${t('plugins.trust_checksum')}: ${button.dataset.trustChecksum}`,
+        confirmLabel: t('plugins.trust_run'),
+      });
+      if (!ok) return;
+      try {
+        await api('/api/v2/plugins/trust',{method:'POST',body:JSON.stringify({id:button.dataset.trustPlugin,trusted:true})});
+        await openPlugins();
+        notify(t('plugins.trust_trusted'));
+      } catch(error) { notify(error.message); }
+    }
+    async function openPluginSettings(pluginId) {
+      // Settings form renderer from the manifest JSON Schema (F1c):
+      // text / number / boolean / enum / password fields.
+      try {
+        const result = await api(`/api/v2/plugins/settings?id=${encodeURIComponent(pluginId)}`);
+        const properties = (result.schema && result.schema.properties) || {};
+        const values = result.values || {};
+        const fields = Object.entries(properties).map(([name, field]) => {
+          const value = values[name] !== undefined ? values[name] : field.default;
+          const label = `<span>${escapeHtml(field.title || name)}${(result.schema.required || []).includes(name) ? ' *' : ''}</span>`;
+          const desc = field.description ? `<small>${escapeHtml(field.description)}</small>` : '';
+          const fieldName = escapeHtml(name);
+          let input;
+          if (field.enum) {
+            input = `<select name="${fieldName}">${field.enum.map(option => `<option value="${escapeHtml(String(option))}"${String(option) === String(value ?? '') ? ' selected' : ''}>${escapeHtml(String(option))}</option>`).join('')}</select>`;
+          } else if (field.type === 'boolean') {
+            input = `<input type="checkbox" name="${fieldName}"${value ? ' checked' : ''}>`;
+          } else if (field.type === 'integer' || field.type === 'number') {
+            input = `<input type="number" name="${fieldName}" value="${escapeHtml(String(value ?? ''))}"${field.minimum !== undefined ? ` min="${field.minimum}"` : ''}${field.maximum !== undefined ? ` max="${field.maximum}"` : ''}${field.type === 'integer' ? ' step="1"' : ' step="any"'}>`;
+          } else if (field.format === 'password') {
+            input = `<input type="password" name="${fieldName}" value="${escapeHtml(String(value ?? ''))}" autocomplete="new-password">`;
+          } else {
+            input = `<input type="text" name="${fieldName}" value="${escapeHtml(String(value ?? ''))}"${field.maxLength ? ` maxlength="${field.maxLength}"` : ''}>`;
+          }
+          return `<label class="field wide">${label}${input}${desc}</label>`;
+        }).join('');
+        $('pluginList').innerHTML = `<h3>${escapeHtml(t('plugins.settings_title'))}</h3><div class="form-grid">${fields || `<p class="description">${escapeHtml(t('plugins.browse_empty'))}</p>`}</div><div class="extras"><button type="button" class="primary" id="savePluginSettings">${escapeHtml(t('plugins.settings_save'))}</button><button type="button" class="icon-button" id="backPluginSettings">${escapeHtml(t('plugins.browse_back'))}</button></div>`;
+        $('backPluginSettings').onclick = () => openPlugins();
+        $('savePluginSettings').onclick = async () => {
+          const body = {};
+          document.querySelectorAll('#pluginList [name]').forEach(input => {
+            const field = properties[input.name];
+            if (!field) return;
+            if (field.type === 'boolean') body[input.name] = input.checked;
+            else if (field.type === 'integer') { if (input.value !== '') body[input.name] = parseInt(input.value, 10); }
+            else if (field.type === 'number') { if (input.value !== '') body[input.name] = parseFloat(input.value); }
+            else body[input.name] = input.value;
+          });
           try {
-            await api('/api/plugins/toggle',{method:'POST',body:JSON.stringify({id:button.dataset.togglePlugin,enabled:button.dataset.enabled !== 'true'})});
+            await api('/api/v2/plugins/settings',{method:'POST',body:JSON.stringify({id:pluginId,values:body})});
+            notify(t('plugins.settings_saved'));
             await openPlugins();
           } catch(error) { notify(error.message); }
+        };
+      } catch(error) { notify(error.message); }
+    }
+    function wirePluginTabs() {
+      const showInstalled = () => { $('pluginList').hidden = false; $('pluginBrowse').hidden = true; };
+      const showBrowse = () => { $('pluginList').hidden = true; $('pluginBrowse').hidden = false; renderPluginBrowse(); };
+      $('pluginTabInstalled').onclick = showInstalled;
+      $('pluginTabBrowse').onclick = showBrowse;
+    }
+    async function renderPluginBrowse() {
+      // Catalog browser tab (F1f): enriched entries with install/update state.
+      try {
+        const result = await api('/api/v2/plugins/catalog');
+        const entries = result.catalog || [];
+        $('pluginBrowse').innerHTML = entries.length ? entries.map(entry => {
+          const stateBadge = entry.installed
+            ? `<span class="badge">${escapeHtml(t(entry.update_available ? 'plugins.browse_update' : 'plugins.browse_installed'))}</span>`
+            : '';
+          const action = entry.local_only || (entry.installed && !entry.update_available) ? '' :
+            `<button type="button" class="icon-button" data-install-catalog="${escapeHtml(entry.id)}" data-install-name="${escapeHtml(entry.name)}">${escapeHtml(t(entry.update_available ? 'plugins.browse_update' : 'plugins.browse_install'))}</button>`;
+          return `<div class="emulator-item"><div><strong>${escapeHtml(entry.name)} · ${escapeHtml(entry.version)}</strong><small>${escapeHtml(entry.description || '')}</small></div><span>${stateBadge}</span>${action}</div>`;
+        }).join('') : `<p class="description">${escapeHtml(t('plugins.browse_empty'))}</p>`;
+        document.querySelectorAll('[data-install-catalog]').forEach(button => button.onclick = async () => {
+          try {
+            await api('/api/plugins/catalog/install',{method:'POST',body:JSON.stringify({id:button.dataset.installCatalog})});
+            await openPlugins();
+            await maybePromptPluginPermissions(button.dataset.installCatalog);
+            notify(`${button.dataset.installName} installed from catalog`);
+          } catch(error) { notify(error.message); }
         });
-        document.querySelectorAll('[data-remove-plugin]').forEach(button => button.onclick = async () => {
-          const ok = await confirmAction({
-            title: 'Remove plugin',
-            message: `Remove ${button.dataset.removePlugin}?`,
-            consequence: 'A recoverable copy will be retained.',
-          });
-          if (!ok) return;
-          try { await api('/api/plugins/remove',{method:'POST',body:JSON.stringify({id:button.dataset.removePlugin})}); await openPlugins(); notify('Plugin removed'); } catch(error) { notify(error.message); }
-        });
-        if (!$('pluginsDialog').open) $('pluginsDialog').showModal();
       } catch(error) { notify(error.message); }
     }
     async function renderJobsPanel() {
@@ -1087,23 +1235,14 @@ import { t } from './i18n.js';
         notify(`Connected ${result.username}`);
       } catch(error) { notify(error.message); }
     };
-    $('browsePluginCatalog').onclick = async () => {
-      try {
-        const result = await api('/api/plugins/catalog');
-        const entry = result.catalog?.[0];
-        if (!entry) return notify('No community plugins are listed yet.');
-        if (entry.local_only) return notify(`${entry.name}: install local plugin packages manually.`);
-        await api('/api/plugins/catalog/install',{method:'POST',body:JSON.stringify({id:entry.id})});
-        await openPlugins();
-        notify(`${entry.name} installed from catalog`);
-      } catch(error) { notify(error.message); }
-    };
+    $('browsePluginCatalog').onclick = () => { $('pluginTabBrowse').click(); };
     $('installPlugin').onclick = async () => {
       const path = await nativePickFile('Absolute path of the plugin directory or ZIP package');
       if (!path) return;
       try {
         const result = await api('/api/plugins/install',{method:'POST',body:JSON.stringify({path})});
         await openPlugins();
+        await maybePromptPluginPermissions(result.plugin.id);
         notify(`${result.plugin.name} ${result.plugin.updated ? 'updated' : 'installed'}`);
       } catch(error) { notify(error.message); }
     };

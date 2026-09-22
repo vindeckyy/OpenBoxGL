@@ -23,6 +23,7 @@ from api_errors import ApiError, BadRequest, RangeParseError, RouteNotFound
 from env_config import bootstrap_env
 from openbox_logging import configure_logging
 from openbox import DATA, load_state, purge_demo_games, update_state
+from plugins import emit_plugin_event
 from parity_backup import AUTO_BACKUP_ITEMS, AUTO_BACKUP_KEEP, auto_backup_due, create_backup, restore_backup
 from parity_deeplinks import handle_cli
 from parity_emulator_defs import merge_profiles_from_definitions
@@ -702,6 +703,8 @@ def main():
     threading.Thread(target=_auto_backup_worker, name="auto-backup", daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     run_configured_commands("startup_commands")
+    # Lifecycle event (F1e): the app finished starting. Best-effort.
+    emit_plugin_event(DATA.parent / "plugins", "app_startup", {})
     port = server.server_address[1]
     secure_text_write(DATA.parent / "server.port", str(port))
     secure_text_write(DATA.parent / "server.token", TOKEN)
@@ -817,6 +820,9 @@ def main():
                     LOGGER.exception("Failed to remove stopping sessions on shutdown")
         except Exception:
             LOGGER.exception("Graceful shutdown session cleanup failed")
+        # Lifecycle event (F1e): the app is shutting down. Best-effort and
+        # bounded by the per-plugin timeout; never blocks teardown.
+        emit_plugin_event(DATA.parent / "plugins", "app_shutdown", {})
         shutdown_webhooks(wait_seconds=2.0)
 
     def request_shutdown(_signum, _frame):
