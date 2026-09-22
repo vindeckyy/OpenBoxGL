@@ -109,6 +109,8 @@ KNOWN_SETTINGS = {
     "welcome_completed",
     # misc UI toggles
     "show_playlist_actions",
+    # library health (Flagship 8)
+    "health_rescan",
     "dynamic_play_button",
     "gamescope_guest",
     "show_insights",
