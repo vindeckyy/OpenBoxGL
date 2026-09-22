@@ -56,6 +56,7 @@ from webapp_state import (
     unregister_event_subscriber,
 )
 from handlers.data import DataHandlers
+from handlers.discovery import DiscoveryHandlers
 from handlers.emulators import EmulatorsHandlers
 from handlers.export import ExportHandlers
 from handlers.extensions import ExtensionsHandlers
@@ -139,7 +140,7 @@ CSP_FRAMEABLE = CSP_DEFAULT.replace("frame-ancestors 'none'", "frame-ancestors '
 
 
 
-class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, TimeMachineHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, ExportHandlers, LaunchHandlers, SetupHandlers, DataHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, ScreenScraperHandlers, PickerHandlers, ConstellationHandlers, PartyHandlers, BaseHTTPRequestHandler):
+class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, TimeMachineHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, ExportHandlers, LaunchHandlers, SetupHandlers, DataHandlers, DiscoveryHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, ScreenScraperHandlers, PickerHandlers, ConstellationHandlers, PartyHandlers, BaseHTTPRequestHandler):
     server_version = "OpenBox/1"
     protocol_version = "HTTP/1.1"
     MAX_BODY = 65536

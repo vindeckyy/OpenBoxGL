@@ -1314,5 +1314,21 @@
     "suggest_title": "Backlog aktualisieren?",
     "suggest_message": "Du hast {name} gestartet. Als „Spielt“ markieren?",
     "suggest_confirm": "Als „Spielt“ markieren"
+  },
+  "dna": {
+    "mode_label": "Suchmodus",
+    "mode_title": "Titel",
+    "mode_smart": "Smart",
+    "search_placeholder_smart": "Stimmung, Atmosphäre oder Mechaniken beschreiben…",
+    "results_title": "Smarte Ergebnisse",
+    "no_results": "Keine smarten Treffer. Versuche eine andere Stimmung oder Mechanik.",
+    "empty_coverage": "Noch keine Spielbeschreibungen — die smarte Suche braucht Text. Nutze Metadaten → Fehlendes ergänzen, um Beschreibungen hinzuzufügen.",
+    "open_metadata": "Metadaten öffnen",
+    "building": "Smart-Index wird erstellt… {pct} %",
+    "cancel_build": "Erstellung abbrechen",
+    "degraded_note": "Smart-Index nicht verfügbar — Titelsuche wird gezeigt.",
+    "search_failed": "Smarte Suche fehlgeschlagen.",
+    "privacy_note": "100 % lokal · keine KI-Cloud, keine Downloads",
+    "more_like_this": "Mehr davon"
   }
 }

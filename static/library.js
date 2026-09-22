@@ -13,6 +13,7 @@ import { applyMoodForGame, clearMood } from './mood.js';
 import { t } from './i18n.js';
 import { mountMomentsPanel, mountResumeAffordance } from './moments.js';
 import { openSetupCenter } from './setup.js';
+import { initDnaSearch, dnaMoreLikeThis, dnaSearchMode } from './dna.js';
 
 const DETAILS_WIDTH_KEY = 'openbox-details-width';
 
@@ -1053,7 +1054,7 @@ function markFilterAria() {
           <section class="detail-tab-panel" id="detailsOverview" role="tabpanel" aria-labelledby="detailsOverviewTab">
           <div class="rating"><strong>${game.favorite ? '★ Favorite' : game.rating ? `${game.rating} ★` : 'Library'}</strong><span>${escapeHtml(game.progress || game.genre || '')}</span><span class="badge-row">${renderBadges(game)}</span></div>
           <button class="play" id="playButton" ${shelfEntry ? '' : game.path_exists && game.store_installed !== false ? '' : game.gameyfin_id && !game.store_installed ? '' : 'disabled'}>${shelfEntry ? 'SET UP LAUNCH' : game.gameyfin_id && !game.store_installed ? '⬇ INSTALL' : '▶ PLAY'}</button>
-          <div class="detail-actions"><span id="resumeActionSlot" class="resume-action-slot"></span><button class="icon-button" id="momentsButton">${escapeHtml(t('moments.tab'))}</button><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">${shelfEntry ? 'Edit shelf entry' : 'Edit metadata'}</button>${shelfEntry ? '<button class="icon-button" id="convertShelfButton">Set up launch</button>' : ''}<button class="icon-button" id="databaseMetadataButton">Find metadata</button>${game.steam_app_id ? '<button class="icon-button" id="steamMetadataButton">Use Steam data</button>' : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="uninstallGameyfin">Uninstall Gameyfin copy</button>' : ''}${game.path ? '<button class="icon-button" id="showInFolderButton">Show in folder</button>' : ''}<button class="icon-button" id="removeGameButton">Remove game</button></div>
+          <div class="detail-actions"><span id="resumeActionSlot" class="resume-action-slot"></span><button class="icon-button" id="momentsButton">${escapeHtml(t('moments.tab'))}</button><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">${shelfEntry ? 'Edit shelf entry' : 'Edit metadata'}</button>${shelfEntry ? '<button class="icon-button" id="convertShelfButton">Set up launch</button>' : ''}<button class="icon-button" id="databaseMetadataButton">Find metadata</button><button class="icon-button" id="dnaMoreLikeThis">${escapeHtml(t('dna.more_like_this'))}</button>${game.steam_app_id ? '<button class="icon-button" id="steamMetadataButton">Use Steam data</button>' : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="uninstallGameyfin">Uninstall Gameyfin copy</button>' : ''}${game.path ? '<button class="icon-button" id="showInFolderButton">Show in folder</button>' : ''}<button class="icon-button" id="removeGameButton">Remove game</button></div>
           <div class="detail-card"><h3>Information</h3><div class="facts">
             ${fact('Release date',game.year)}${fact('Developer',game.developer)}${fact('Publisher',game.publisher)}${fact('ESRB',game.esrb)}${fact('Source',game.source)}${fact('Category',platformCategoryFor(game))}${Object.entries(game.custom_fields || {}).map(([key,value]) => fact(key,value)).join('')}${fact('Max players',game.max_players)}${fact('Controller support',game.controller_support)}${fact('Disc count',game.disc_count)}${fact('Play time',duration(game.playtime_seconds))}${fact('Time to beat',game.time_to_beat_hours != null && game.time_to_beat_hours !== '' ? `${game.time_to_beat_hours} h` : '')}
             ${fact('Launches',game.play_count)}${fact('Last played',game.last_played ? game.last_played.replace('T',' ') : '')}${fact('Progress',game.progress)}${fact('Rating',game.rating ? `${game.rating} / 5` : '')}${fact('Region',game.region)}${fact('Play mode',game.play_mode)}${fact('Wikipedia',game.wikipedia_url)}${fact('Video URL',game.video_url)}${(() => { const links = gameLinks(game); return links ? `<div class="fact"><small>Links</small><span>${links}</span></div>` : ''; })()}
@@ -1126,6 +1127,7 @@ function markFilterAria() {
       wireBacklogControls(game);
       if ($('convertShelfButton')) $('convertShelfButton').onclick = () => $('playButton').click();
       $('databaseMetadataButton').onclick = () => openMetadata(game);
+      if ($('dnaMoreLikeThis')) $('dnaMoreLikeThis').onclick = () => dnaMoreLikeThis(game.name);
       if ($('steamMetadataButton')) $('steamMetadataButton').onclick = () => steamMetadata(game.id);
       if ($('captureScreenshot')) $('captureScreenshot').onclick = () => captureScreenshot(game.id);
       if ($('downloadBezel')) $('downloadBezel').onclick = () => downloadBezel(game.platform);
@@ -1604,6 +1606,7 @@ function markFilterAria() {
     ensureTrashViewOption();
     document.addEventListener('localechange', ensureTrashViewOption);
     $('sidebarSearch').oninput = () => {
+      if (dnaSearchMode() === 'smart') return; // Smart mode is handled by dna.js
       leaveActivePreset();
       AppState.activePlaylist = '';
       const query = $('sidebarSearch').value;
@@ -1613,6 +1616,7 @@ function markFilterAria() {
         renderGrid();
       });
     };
+    initDnaSearch();
     $('view').onchange = () => { leaveActivePreset(); AppState.activePlaylist = ''; renderPlaylists(); renderGrid(); };
     $('sort').onchange = () => {
       AppState.appSettings.list_sort = $('sort').value;

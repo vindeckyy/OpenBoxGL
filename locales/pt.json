@@ -1314,5 +1314,21 @@
     "suggest_title": "Atualizar seu backlog?",
     "suggest_message": "Você iniciou {name}. Marcar como «Jogando»?",
     "suggest_confirm": "Marcar como «Jogando»"
+  },
+  "dna": {
+    "mode_label": "Modo de pesquisa",
+    "mode_title": "Título",
+    "mode_smart": "Smart",
+    "search_placeholder_smart": "Descreve o clima, o humor ou as mecânicas…",
+    "results_title": "Resultados inteligentes",
+    "no_results": "Sem resultados inteligentes. Tenta outro clima ou mecânica.",
+    "empty_coverage": "Ainda sem descrições — a pesquisa inteligente precisa de texto. Usa Metadados → Preencher em falta para adicionar descrições.",
+    "open_metadata": "Abrir metadados",
+    "building": "A criar índice inteligente… {pct} %",
+    "cancel_build": "Cancelar criação",
+    "degraded_note": "Índice inteligente indisponível — a mostrar resultados de título.",
+    "search_failed": "A pesquisa inteligente falhou.",
+    "privacy_note": "100 % local · sem nuvem de IA, sem transferências",
+    "more_like_this": "Mais como este"
   }
 }

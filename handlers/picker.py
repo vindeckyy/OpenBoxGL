@@ -54,6 +54,21 @@ class PickerHandlers:
             raise BadRequest(f"scope must be one of {sorted(VALID_SCOPES)}")
         scope_name = str(body.get("scope_name", "")).strip()
 
+        # Game DNA integration (Flagship 9): additive optional params.
+        # seed_query runs the query through DNA search; dna_boost (>0)
+        # re-weights picks toward DNA-similar games. Defaults keep the
+        # legacy behavior bit-for-bit identical.
+        seed_query = str(body.get("seed_query", "") or "").strip()
+        dna_boost = 0.0
+        raw_dna_boost = body.get("dna_boost")
+        if raw_dna_boost is not None:
+            try:
+                dna_boost = float(raw_dna_boost)
+            except (TypeError, ValueError) as error:
+                raise BadRequest("dna_boost must be a number") from error
+            if dna_boost < 0:
+                raise BadRequest("dna_boost must be >= 0")
+
         state = load_state_readonly()
         # Pass raw game dicts to pick_games (it does safe .get() with
         # defaults); skip _game_for_picker projection to avoid 10k throwaway
@@ -86,5 +101,38 @@ class PickerHandlers:
         # candidates. Do not cache final picks: repeated requests must be able
         # to produce a new suggestion without waiting for a library mutation.
         picks = pick_games(games, history, criteria)
+        if seed_query and dna_boost > 0:
+            picks = _apply_dna_boost(picks, games, seed_query, dna_boost, state)
         self.send_json(200, {"picks": picks})
         return
+
+
+def _apply_dna_boost(picks, games, seed_query, dna_boost, state):
+    """Re-weight picks toward games similar to ``seed_query`` (DNA search).
+
+    Additive-only: with no seed_query/dna_boost the caller never reaches
+    here, so default pick behavior is unchanged.
+    """
+    from handlers.discovery import dna_index_for_search
+    from pkg.parity import parity_dna
+
+    settings = state.get("settings") or {}
+    locale = str(settings.get("locale") or "en")[:5]
+    index, _degraded, _building = dna_index_for_search(state)
+    if index is None:
+        return picks
+    outcome = parity_dna.parse_dna_query(seed_query, games, index, locale, limit=100)
+    dna_scores = {row["game_id"]: row["score"] for row in outcome.get("results", [])}
+    if not dna_scores:
+        return picks
+    top = max(dna_scores.values()) or 1.0
+    boosted = []
+    for pick in picks:
+        pick = dict(pick)
+        dna_score = dna_scores.get(str(pick.get("game_id", "")), 0.0)
+        if dna_score > 0:
+            pick["score"] = round(pick.get("score", 0) * (1.0 + dna_boost * dna_score / top), 2)
+            pick["dna_seed"] = True
+        boosted.append(pick)
+    boosted.sort(key=lambda item: (-item.get("score", 0), str(item.get("game_id", ""))))
+    return boosted
