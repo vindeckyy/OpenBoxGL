@@ -708,6 +708,8 @@ const failures = [];
     // --- Big Box empty view explains and opens the wizard ---
     const bigboxMod = await import('/static/bigbox.js');
     AppState.games = [];
+    AppState._refreshCounter = (AppState._refreshCounter || 0) + 1;
+    (await import('/static/state.js')).invalidateFilterCache();
     bigboxMod.openBigBox();
     await tick();
     results.bigboxEmptyExplains = (document.getElementById('toast')?.textContent || '').length > 20;
@@ -1329,6 +1331,7 @@ const failures = [];
     document.getElementById('setupCenter')?.close();
     AppState.games = [];
     AppState.appSettings.welcome_completed = false;
+    AppState.setupDismissed = false; // reset: the dismiss test above left this true
     AppState._refreshCounter = (AppState._refreshCounter || 0) + 1;
     state.invalidateFilterCache();
     const origFetch = window.fetch;
