@@ -2,7 +2,7 @@ import { $, escapeHtml, duration, fact, RATIO_BUCKETS, RATIO_REP, coverBucketOf,
 import { token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
 import { loadTheme, deletePlaylist } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importDroppedFolder } from './imports.js';
-import { openGameDialog, convertShelfEntry, confirmAction, promptInput } from './dialogs.js';
+import { openGameDialog, convertShelfEntry, confirmAction, promptInput, openDialog, closeDialog } from './dialogs.js';
 import { syncHash } from './router.js';
 import { openMetadata, steamMetadata, loadAchievements } from './metadata.js';
 import { captureScreenshot, downloadBezel } from './media.js';
@@ -1596,5 +1596,139 @@ function markFilterAria() {
     bindDetailsResize();
     bindFilterDrawer();
     applyDetailsLayout();
+
+// --- Artwork Doctor (F5) ---------------------------------------------------
+// Bulk hygiene report plus a cancelable, undoable SteamGridDB fill job. The
+// dialog is built in JS so the shared index.html stays untouched.
+const ARTWORK_ISSUE_KEYS = {
+  missing_cover: 'artwork_doctor.issue_missing_cover',
+  missing_file: 'artwork_doctor.issue_missing_file',
+  low_res: 'artwork_doctor.issue_low_res',
+  wrong_aspect: 'artwork_doctor.issue_wrong_aspect',
+  duplicate: 'artwork_doctor.issue_duplicate',
+};
+let artworkDoctorDialog = null;
+let artworkDoctorReport = null;
+let artworkDoctorJobId = '';
+
+function artworkIssueLabel(issue) {
+  return t(ARTWORK_ISSUE_KEYS[issue] || 'artwork_doctor.issue_unknown');
+}
+
+function artworkIssueDetail(issue) {
+  if (issue.issue === 'low_res') return `${issue.width}×${issue.height}`;
+  if (issue.issue === 'wrong_aspect') return `${issue.aspect} → ${issue.expected_aspect}`;
+  return issue.path || '';
+}
+
+function ensureArtworkDoctorDialog() {
+  if (artworkDoctorDialog) return artworkDoctorDialog;
+  artworkDoctorDialog = document.createElement('dialog');
+  artworkDoctorDialog.id = 'artworkDoctorDialog';
+  artworkDoctorDialog.className = 'detail-dialog artwork-doctor-dialog';
+  artworkDoctorDialog.setAttribute('aria-modal', 'true');
+  artworkDoctorDialog.innerHTML = `<div class="dialog-head"><h2>${escapeHtml(t('artwork_doctor.title'))}</h2><button type="button" class="icon-button" data-artwork-close aria-label="${escapeHtml(t('common.cancel'))}">×</button></div><div class="artwork-doctor-body" id="artworkDoctorBody"><p class="description">${escapeHtml(t('artwork_doctor.scanning'))}</p></div><div class="extras artwork-doctor-actions"><button type="button" class="icon-button" id="artworkDoctorRefresh">${escapeHtml(t('artwork_doctor.rescan'))}</button><button type="button" class="primary" id="artworkDoctorFix">${escapeHtml(t('artwork_doctor.fix_all'))}</button><button type="button" class="icon-button" id="artworkDoctorUndo">${escapeHtml(t('artwork_doctor.undo'))}</button></div>`;
+  document.body.appendChild(artworkDoctorDialog);
+  artworkDoctorDialog.querySelector('[data-artwork-close]').onclick = () => artworkDoctorDialog.close();
+  artworkDoctorDialog.addEventListener('cancel', event => { event.preventDefault(); artworkDoctorDialog.close(); });
+  $('artworkDoctorRefresh').onclick = () => renderArtworkDoctor();
+  $('artworkDoctorFix').onclick = () => startArtworkFix();
+  $('artworkDoctorUndo').onclick = () => undoArtworkBatch();
+  return artworkDoctorDialog;
+}
+
+function renderArtworkReport(report) {
+  const counts = report.counts || {};
+  const chips = Object.entries(ARTWORK_ISSUE_KEYS).map(([issue, key]) => `
+    <span class="artwork-count-chip" data-artwork-count="${escapeHtml(issue)}"><strong>${counts[issue] || 0}</strong> ${escapeHtml(t(key))}</span>
+  `).join('');
+  const issues = (report.issues || []).slice(0, 200).map(issue => `
+    <li class="artwork-issue-row" data-artwork-issue="${escapeHtml(issue.issue)}" data-artwork-field="${escapeHtml(issue.field || '')}">
+      <span class="artwork-issue-game">${escapeHtml(issue.name || issue.game_id || '')}</span>
+      <span class="artwork-issue-label">${escapeHtml(artworkIssueLabel(issue))}</span>
+      <span class="artwork-issue-detail">${escapeHtml(artworkIssueDetail(issue))}</span>
+    </li>
+  `).join('');
+  const batches = report.batches || [];
+  const attribution = report.provider_attribution ? `<p class="description">${escapeHtml(t('artwork_doctor.attribution', {provider: report.provider_attribution}))}</p>` : '';
+  return `<p class="description">${escapeHtml(t('artwork_doctor.summary', {count: report.scanned ?? 0}))}</p>${attribution}<div class="artwork-doctor-counts">${chips}</div><div class="artwork-doctor-status" id="artworkDoctorStatus"></div><ul class="artwork-doctor-list">${issues || `<li class="description">${escapeHtml(t('artwork_doctor.empty'))}</li>`}</ul><p class="description" id="artworkDoctorLastBatch">${batches.length ? escapeHtml(t('artwork_doctor.last_batch', {batch: batches[0].batch_id, count: batches[0].count})) : ''}</p>`;
+}
+
+async function renderArtworkDoctor() {
+  ensureArtworkDoctorDialog();
+  if (!artworkDoctorDialog.open) openDialog(artworkDoctorDialog);
+  const body = $('artworkDoctorBody');
+  body.innerHTML = `<p class="description">${escapeHtml(t('artwork_doctor.scanning'))}</p>`;
+  try {
+    artworkDoctorReport = await api('/api/v2/steamgrid/hygiene/report');
+  } catch (error) {
+    body.innerHTML = `<p class="description">${escapeHtml(t('artwork_doctor.report_failed'))}</p>`;
+    notify('error', error?.message || String(error));
+    return;
+  }
+  body.innerHTML = renderArtworkReport(artworkDoctorReport);
+}
+
+async function pollArtworkJob(jobId, {timeoutMs = 120000} = {}) {
+  // Poll the job list until the fix job leaves queued/running. Progress
+  // frames update the counter; the terminal frame carries result/error.
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const page = await api('/api/v2/jobs?limit=100');
+    const job = (page.jobs || []).find(entry => entry.job_id === jobId) || null;
+    if (job && !['queued', 'running', 'cancelling'].includes(job.state)) return job;
+    const status = $('artworkDoctorProgress') || $('artworkDoctorStatus');
+    if (status && job) status.textContent = t('artwork_doctor.fixing', {done: job.current ?? 0, total: job.total ?? 0});
+    if (Date.now() >= deadline) throw new Error(`Timed out waiting for job ${jobId}`);
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+}
+
+async function startArtworkFix() {
+  const button = $('artworkDoctorFix');
+  const status = $('artworkDoctorStatus');
+  if (status) status.textContent = t('artwork_doctor.scanning');
+  setButtonBusy(button, true, t('artwork_doctor.fixing', {done: 0, total: 0}));
+  try {
+    const queued = await api('/api/v2/steamgrid/hygiene/fix', {method: 'POST', body: JSON.stringify({fields: ['cover']})});
+    artworkDoctorJobId = queued.job_id;
+    if (status) status.innerHTML = `<span id="artworkDoctorProgress">${escapeHtml(t('artwork_doctor.fixing', {done: 0, total: 0}))}</span> <button type="button" class="icon-button" id="artworkDoctorCancel">${escapeHtml(t('common.cancel'))}</button>`;
+    $('artworkDoctorCancel')?.addEventListener('click', async () => {
+      try { await api('/api/v2/jobs/cancel', {method: 'POST', body: JSON.stringify({job_id: artworkDoctorJobId})}); } catch { /* job may have finished */ }
+    });
+    const job = await pollArtworkJob(queued.job_id);
+    if (job?.state === 'cancelled') notify('warning', t('artwork_doctor.cancelled'));
+    else if (job?.state === 'error') notify('error', t('artwork_doctor.fix_failed'));
+    else notify('success', t('artwork_doctor.fixed', {count: job?.result?.applied ?? 0}));
+    await refresh();
+    await renderArtworkDoctor();
+  } catch (error) {
+    notify('error', error?.message || String(error));
+  } finally {
+    setButtonBusy(button, false);
+  }
+}
+
+async function undoArtworkBatch() {
+  const batch = artworkDoctorReport?.batches?.[0];
+  if (!batch) {
+    notify('warning', t('artwork_doctor.no_batch'));
+    return;
+  }
+  try {
+    const result = await api('/api/v2/steamgrid/hygiene/undo', {method: 'POST', body: JSON.stringify({batch_id: batch.batch_id})});
+    notify('success', t('artwork_doctor.undone', {count: (result.restored || []).length}));
+    await refresh();
+    await renderArtworkDoctor();
+  } catch (error) {
+    notify('error', error?.message || String(error));
+  }
+}
+
+function openArtworkDoctor() {
+  renderArtworkDoctor();
+}
+
+document.addEventListener('app:palette-artwork-doctor', () => openArtworkDoctor());
 
 export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated, isVirtualEnabled, getSearchWorker, workerSearch, searchWithFallback, verifyWorkerParity, ensureVirtualObserver, visibleGameIds, focusGameIndex, gridMetrics, isTrashView, renderTrashView, showTrashUndoToast, restoreTrashEntry };

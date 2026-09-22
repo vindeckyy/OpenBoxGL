@@ -107,7 +107,8 @@
     "notifications": "Benachrichtigungen",
     "constellation": "Konstellation",
     "mastery": "Meisterschaft",
-    "time_machine": "Zeitmaschine"
+    "time_machine": "Zeitmaschine",
+    "artwork_doctor": "Artwork-Doktor"
   },
   "constellation": {
     "title": "Konstellation",
@@ -1142,5 +1143,29 @@
         "desc": "Spiele 7 Tage in Folge"
       }
     }
+  },
+  "artwork_doctor": {
+    "title": "Artwork-Doktor",
+    "scanning": "Artwork wird geprüft…",
+    "rescan": "Erneut prüfen",
+    "fix_all": "Alles mit SteamGridDB reparieren",
+    "undo": "Letzten Stapel rückgängig machen",
+    "summary": "{count} Spiele geprüft.",
+    "attribution": "Artwork-Korrekturen nutzen {provider}.",
+    "empty": "Keine Artwork-Probleme gefunden.",
+    "last_batch": "Letzter Stapel {batch} · {count} Dateien",
+    "report_failed": "Der Artwork-Bericht konnte nicht erstellt werden.",
+    "fixing": "{done} von {total} werden repariert…",
+    "cancelled": "Artwork-Reparatur abgebrochen.",
+    "fix_failed": "Der Artwork-Reparaturjob ist fehlgeschlagen.",
+    "fixed": "Artwork für {count} Einträge repariert.",
+    "no_batch": "Es gibt keinen abgeschlossenen Artwork-Stapel zum Rückgängigmachen.",
+    "undone": "{count} Artwork-Einträge wiederhergestellt.",
+    "issue_unknown": "Artwork-Problem",
+    "issue_missing_cover": "Cover fehlt",
+    "issue_missing_file": "Artwork-Datei fehlt",
+    "issue_low_res": "Niedrige Auflösung",
+    "issue_wrong_aspect": "Falsches Seitenverhältnis",
+    "issue_duplicate": "Doppeltes Artwork"
   }
 }

@@ -107,7 +107,8 @@
     "notifications": "Notifications",
     "constellation": "Constellation",
     "mastery": "Mastery",
-    "time_machine": "Time Machine"
+    "time_machine": "Time Machine",
+    "artwork_doctor": "Artwork Doctor"
   },
   "constellation": {
     "title": "Constellation",
@@ -1142,5 +1143,29 @@
         "desc": "Play 7 days in a row"
       }
     }
+  },
+  "artwork_doctor": {
+    "title": "Artwork Doctor",
+    "scanning": "Scanning artwork…",
+    "rescan": "Scan again",
+    "fix_all": "Fix all with SteamGridDB",
+    "undo": "Undo last batch",
+    "summary": "Scanned {count} games.",
+    "attribution": "Artwork fixes use {provider}.",
+    "empty": "No artwork issues found.",
+    "last_batch": "Last batch {batch} · {count} files",
+    "report_failed": "Could not build the artwork report.",
+    "fixing": "Fixing {done} of {total}…",
+    "cancelled": "Artwork fix cancelled.",
+    "fix_failed": "The artwork fix job failed.",
+    "fixed": "Fixed artwork for {count} entries.",
+    "no_batch": "There is no finished artwork batch to undo.",
+    "undone": "Restored {count} artwork entries.",
+    "issue_unknown": "Artwork issue",
+    "issue_missing_cover": "Missing cover",
+    "issue_missing_file": "Artwork file missing",
+    "issue_low_res": "Low resolution",
+    "issue_wrong_aspect": "Wrong aspect ratio",
+    "issue_duplicate": "Duplicate artwork"
   }
 }

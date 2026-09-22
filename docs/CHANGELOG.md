@@ -4,6 +4,17 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Artwork Doctor: scan the library for missing covers, missing files,
+  low-resolution and wrong-aspect artwork, and duplicate images, then fix all
+  with SteamGridDB in one cancelable batch job. Every replacement is
+  attributable to its provider and undoable per batch.
+- Bulk media downloads now commit one transaction for large batches and keep
+  per-game commits for small ones; malformed `Range` requests map to 416
+  without masking missing files as range errors.
+
 ## [1.13.1] - 2026-09-22
 
 ### Fixed

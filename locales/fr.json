@@ -107,7 +107,8 @@
     "notifications": "Notifications",
     "constellation": "Constellation",
     "mastery": "Maîtrise",
-    "time_machine": "Machine à remonter le temps"
+    "time_machine": "Machine à remonter le temps",
+    "artwork_doctor": "Docteur des illustrations"
   },
   "constellation": {
     "title": "Constellation",
@@ -1142,5 +1143,29 @@
         "desc": "Joue 7 jours d'affilée"
       }
     }
+  },
+  "artwork_doctor": {
+    "title": "Docteur des illustrations",
+    "scanning": "Analyse des illustrations…",
+    "rescan": "Réanalyser",
+    "fix_all": "Tout corriger avec SteamGridDB",
+    "undo": "Annuler le dernier lot",
+    "summary": "{count} jeux analysés.",
+    "attribution": "Les corrections d'illustrations utilisent {provider}.",
+    "empty": "Aucun problème d'illustration détecté.",
+    "last_batch": "Dernier lot {batch} · {count} fichiers",
+    "report_failed": "Impossible de générer le rapport d'illustrations.",
+    "fixing": "Correction de {done} sur {total}…",
+    "cancelled": "Correction des illustrations annulée.",
+    "fix_failed": "La tâche de correction des illustrations a échoué.",
+    "fixed": "Illustrations corrigées pour {count} entrées.",
+    "no_batch": "Aucun lot d'illustrations terminé à annuler.",
+    "undone": "{count} entrées d'illustrations restaurées.",
+    "issue_unknown": "Problème d'illustration",
+    "issue_missing_cover": "Jaquette manquante",
+    "issue_missing_file": "Fichier d'illustration manquant",
+    "issue_low_res": "Faible résolution",
+    "issue_wrong_aspect": "Mauvais rapport d'aspect",
+    "issue_duplicate": "Illustration en double"
   }
 }

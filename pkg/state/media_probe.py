@@ -96,6 +96,63 @@ def probe_path(path, *, file_only=False):
     return result
 
 
+def probe_paths_batch(paths, *, file_only=True):
+    """Probe many paths with one cache lock pass and one stat per unique path.
+
+    Returns ``{str(path): bool}``. Duplicate paths are collapsed, which keeps
+    a 20k-game media audit from doing 300k cache lookups (P2-7).
+    """
+    now = time.monotonic()
+    unique = []
+    seen = set()
+    for path in paths:
+        value = str(path or "")
+        if value and value not in seen:
+            seen.add(value)
+            unique.append(value)
+    results = {}
+    misses = []
+    max_entries = _ns("FILE_PROBE_MAX", FILE_PROBE_MAX)
+    with FILE_PROBE_LOCK:
+        for value in unique:
+            key = (value, file_only)
+            cached = FILE_PROBE_CACHE.get(key)
+            if cached is not None and now - cached[0] < FILE_PROBE_TTL:
+                FILE_PROBE_CACHE.move_to_end(key)
+                results[value] = cached[1]
+            else:
+                misses.append(value)
+    for value in misses:
+        try:
+            if file_only:
+                st = os.stat(value)
+                result = stat.S_ISREG(st.st_mode)
+            else:
+                os.stat(value)
+                result = True
+        except OSError:
+            result = False
+        results[value] = result
+        with FILE_PROBE_LOCK:
+            FILE_PROBE_CACHE[(value, file_only)] = (now, result)
+            while len(FILE_PROBE_CACHE) > max_entries:
+                FILE_PROBE_CACHE.popitem(last=False)
+    return results
+
+
+def media_probe_paths_batch(values):
+    """Batch equivalent of :func:`media_probe_path` for audit aggregations."""
+    sanitized = {}
+    for value in values:
+        key = str(value or "")
+        if key not in sanitized:
+            sanitized[key] = sanitize_media_path(key)
+    probed = probe_paths_batch(
+        [safe for safe in sanitized.values() if safe], file_only=True
+    )
+    return {key: bool(probed.get(safe)) for key, safe in sanitized.items()}
+
+
 def _reject_media_symlink_components(path):
     cursor = Path(path)
     while True:

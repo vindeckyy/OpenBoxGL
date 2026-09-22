@@ -107,7 +107,8 @@
     "notifications": "Notificações",
     "constellation": "Constelação",
     "mastery": "Domínio",
-    "time_machine": "Máquina do tempo"
+    "time_machine": "Máquina do tempo",
+    "artwork_doctor": "Doutor de arte"
   },
   "constellation": {
     "title": "Constelação",
@@ -1142,5 +1143,29 @@
         "desc": "Jogue 7 dias seguidos"
       }
     }
+  },
+  "artwork_doctor": {
+    "title": "Doutor de arte",
+    "scanning": "Analisando arte…",
+    "rescan": "Analisar novamente",
+    "fix_all": "Corrigir tudo com o SteamGridDB",
+    "undo": "Desfazer o último lote",
+    "summary": "{count} jogos analisados.",
+    "attribution": "As correções de arte usam o {provider}.",
+    "empty": "Nenhum problema de arte encontrado.",
+    "last_batch": "Último lote {batch} · {count} ficheiros",
+    "report_failed": "Não foi possível criar o relatório de arte.",
+    "fixing": "A corrigir {done} de {total}…",
+    "cancelled": "Correção de arte cancelada.",
+    "fix_failed": "A tarefa de correção de arte falhou.",
+    "fixed": "Arte corrigida em {count} entradas.",
+    "no_batch": "Não há nenhum lote de arte concluído para desfazer.",
+    "undone": "Restauradas {count} entradas de arte.",
+    "issue_unknown": "Problema de arte",
+    "issue_missing_cover": "Capa em falta",
+    "issue_missing_file": "Ficheiro de arte em falta",
+    "issue_low_res": "Resolução baixa",
+    "issue_wrong_aspect": "Proporção incorreta",
+    "issue_duplicate": "Arte duplicada"
   }
 }

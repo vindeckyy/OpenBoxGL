@@ -107,7 +107,8 @@
     "notifications": "Notificaciones",
     "constellation": "Constelación",
     "mastery": "Dominio",
-    "time_machine": "Máquina del tiempo"
+    "time_machine": "Máquina del tiempo",
+    "artwork_doctor": "Doctor de carátulas"
   },
   "constellation": {
     "title": "Constelación",
@@ -1142,5 +1143,29 @@
         "desc": "Juega 7 días seguidos"
       }
     }
+  },
+  "artwork_doctor": {
+    "title": "Doctor de carátulas",
+    "scanning": "Analizando carátulas…",
+    "rescan": "Analizar de nuevo",
+    "fix_all": "Arreglar todo con SteamGridDB",
+    "undo": "Deshacer el último lote",
+    "summary": "Se analizaron {count} juegos.",
+    "attribution": "Las correcciones de carátulas usan {provider}.",
+    "empty": "No se encontraron problemas de carátulas.",
+    "last_batch": "Último lote {batch} · {count} archivos",
+    "report_failed": "No se pudo generar el informe de carátulas.",
+    "fixing": "Arreglando {done} de {total}…",
+    "cancelled": "Corrección de carátulas cancelada.",
+    "fix_failed": "La tarea de corrección de carátulas falló.",
+    "fixed": "Carátulas corregidas en {count} entradas.",
+    "no_batch": "No hay ningún lote de carátulas terminado que deshacer.",
+    "undone": "Se restauraron {count} entradas de carátulas.",
+    "issue_unknown": "Problema de carátula",
+    "issue_missing_cover": "Falta la carátula",
+    "issue_missing_file": "Falta el archivo de imagen",
+    "issue_low_res": "Resolución baja",
+    "issue_wrong_aspect": "Relación de aspecto incorrecta",
+    "issue_duplicate": "Carátula duplicada"
   }
 }
