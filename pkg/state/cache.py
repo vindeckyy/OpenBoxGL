@@ -853,6 +853,7 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "last_played": game.get("last_played", ""),
         "play_count": game.get("play_count", 0),
         "playtime_seconds": game.get("playtime_seconds", 0),
+        "time_to_beat_hours": game.get("time_to_beat_hours"),
         "path_exists": path_exists,
         "has_cover": has_cov,
         "has_background": med_cnt(media_set, bg),

@@ -399,7 +399,8 @@ function mergeSteamgridResults(results) {
     box.insertAdjacentHTML('beforeend', `<p class="description" data-provider="steamgrid">${escapeHtml(t('metadata.steamgrid_no_results'))}</p>`);
     return;
   }
-  box.insertAdjacentHTML('beforeend', results.map(item => `<div class="metadata-result" data-provider="steamgrid"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(t('metadata.steamgrid_provider'))}${item.year ? ` · ${escapeHtml(item.year)}` : ''}</small></div><button type="button" class="primary" data-apply-sgdb="${Number(item.id) || ''}">${escapeHtml(t('common.apply'))}</button></div>`).join(''));
+  box.insertAdjacentHTML('beforeend', results.map(item => `<div class="metadata-result" data-provider="steamgrid"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(t('metadata.steamgrid_provider'))}${item.year ? ` · ${escapeHtml(item.year)}` : ''}</small></div><div class="extras"><button type="button" class="icon-button" data-choose-sgdb="${Number(item.id) || ''}">${escapeHtml(t('metadata.choose_thumbnails'))}</button><button type="button" class="primary" data-apply-sgdb="${Number(item.id) || ''}">${escapeHtml(t('common.apply'))}</button></div></div>`).join(''));
+  box.querySelectorAll('[data-choose-sgdb]').forEach(button => button.onclick = () => chooseSteamgridArt(button.dataset.chooseSgdb));
   box.querySelectorAll('[data-apply-sgdb]').forEach(button => button.onclick = async () => {
     const checked = STEAMGRID_KINDS.filter(kind => $(`matchReviewMedia_${kind}`)?.checked);
     try {
@@ -445,8 +446,9 @@ function renderMetadataStatus(status = {}) {
 async function searchMetadata() {
   try {
     const result = await api(`/api/metadata/search?id=${AppState.metadataGameId}&q=${encodeURIComponent($('metadataQuery').value)}`);
-    $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platform)}${item.release_date ? ` · ${escapeHtml(item.release_date)}` : ''}${item.developer ? ` · ${escapeHtml(item.developer)}` : ''}</small></div><button type="button" class="primary" data-apply-metadata="${Number(item.database_id) || ''}">Use</button></div>`).join('') : '<p class="description">No matching games found.</p>';
+    $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platform)}${item.release_date ? ` · ${escapeHtml(item.release_date)}` : ''}${item.developer ? ` · ${escapeHtml(item.developer)}` : ''}</small></div><div class="extras"><button type="button" class="icon-button" data-choose-lb="${Number(item.database_id) || ''}">${escapeHtml(t('metadata.choose_thumbnails'))}</button><button type="button" class="primary" data-apply-metadata="${Number(item.database_id) || ''}">Use</button></div></div>`).join('') : '<p class="description">No matching games found.</p>';
     document.querySelectorAll('[data-apply-metadata]').forEach(button => button.onclick = () => applyMetadata(button.dataset.applyMetadata));
+    document.querySelectorAll('[data-choose-lb]').forEach(button => button.onclick = () => chooseLaunchBoxArt(button.dataset.chooseLb));
   } catch(error) { notify(error.message); }
 }
 if ($('metadataSearchForm')) $('metadataSearchForm').onsubmit = event => { event.preventDefault(); searchMetadata(); };
@@ -468,7 +470,8 @@ $('searchScreenscraper').onclick = async () => {
   const game = AppState.games.find(item => item.id === AppState.metadataGameId);
   try {
     const result = await api(`/api/v2/screenscraper/search?q=${encodeURIComponent($('metadataQuery').value)}&platform=${encodeURIComponent(game?.platform || '')}`);
-    $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.system_name || '')}${item.year ? ` · ${escapeHtml(item.year)}` : ''}</small></div><button type="button" class="primary" data-apply-ss="${Number(item.id) || ''}">Use</button></div>`).join('') : '<p class="description">No ScreenScraper matches found.</p>';
+    $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.system_name || '')}${item.year ? ` · ${escapeHtml(item.year)}` : ''}</small></div><div class="extras"><button type="button" class="icon-button" data-choose-ss="${Number(item.id) || ''}">${escapeHtml(t('metadata.choose_thumbnails'))}</button><button type="button" class="primary" data-apply-ss="${Number(item.id) || ''}">Use</button></div></div>`).join('') : '<p class="description">No ScreenScraper matches found.</p>';
+    document.querySelectorAll('[data-choose-ss]').forEach(button => button.onclick = () => chooseScreenscraperArt(button.dataset.chooseSs));
     document.querySelectorAll('[data-apply-ss]').forEach(button => button.onclick = async () => {
       try {
         await api('/api/v2/screenscraper/apply',{method:'POST',body:JSON.stringify({id:AppState.games.find(item => item.id === AppState.metadataGameId)?.game_id,scraper_id:Number(button.dataset.applySs),media:['cover','screenshots','fanart','clear_logo']})});
@@ -517,14 +520,125 @@ $('searchIgdb').onclick = async () => {
     });
   } catch(error) { notify(error.message); }
 };
+function checkedMediaKinds() {
+  return MEDIA_ALLOW_OPTIONS.filter(([,id]) => $(id)?.checked).map(([name]) => name);
+}
+
 async function applyMetadata(databaseId) {
-  const media = MEDIA_ALLOW_OPTIONS.filter(([,id]) => $(id)?.checked).map(([name]) => name);
+  const media = checkedMediaKinds();
   try {
     notify('Downloading selected metadata and media');
     const result = await api('/api/metadata/apply',{method:'POST',body:JSON.stringify({id:AppState.metadataGameId,database_id:databaseId,media,overwrite:$('metadataOverwrite').checked})});
     closeDialog($('metadataDialog'));
     await refresh();
     notify((result.notes || []).length ? result.notes.join(' · ') : 'Metadata applied');
+  } catch(error) { notify(error.message); }
+}
+
+// Thumbnail chooser (Flagship 2): shows every image candidate grouped by
+// media kind and applies the exact thumbnail the user picks instead of the
+// top pick. Reuses the dialog, grid, and button classes already in app.css.
+async function openArtworkChooser({title, candidates, onPick}) {
+  let dialog = $('artworkChooser');
+  if (!dialog) {
+    dialog = document.createElement('dialog');
+    dialog.id = 'artworkChooser';
+    dialog.setAttribute('aria-label', title);
+    document.body.appendChild(dialog);
+  }
+  const groups = new Map();
+  for (const item of candidates || []) {
+    const kind = item.kind || item.type || 'other';
+    if (!groups.has(kind)) groups.set(kind, []);
+    groups.get(kind).push(item);
+  }
+  dialog.innerHTML = `
+    <div class="dialog-head"><h2>${escapeHtml(title)}</h2><button type="button" class="icon-button" id="artworkChooserClose" aria-label="${escapeHtml(t('common.close'))}">×</button></div>
+    <p class="description">${escapeHtml(t('metadata.artwork_chooser_hint'))}</p>
+    <div class="metadata-results">${[...groups.entries()].map(([kind, items]) => `
+      <div class="wide section-title">${escapeHtml(kind.replace(/_/g, ' '))}</div>
+      <div class="wide screenshot-grid">${items.map(item => `
+        <button type="button" data-kind="${escapeHtml(item.kind || '')}" data-url="${escapeHtml(item.url || '')}" title="${escapeHtml([item.type, item.style, item.region].filter(Boolean).join(' · ') || kind)}">
+          <img src="${escapeHtml(item.thumb || item.url || '')}" alt="${escapeHtml(kind)}" loading="lazy">
+        </button>`).join('')}</div>`).join('') || `<p class="description">${escapeHtml(t('metadata.artwork_chooser_empty'))}</p>`}</div>`;
+  $('artworkChooserClose').onclick = () => closeDialog(dialog);
+  dialog.querySelectorAll('.screenshot-grid button').forEach(button => {
+    button.onclick = async () => {
+      closeDialog(dialog);
+      try {
+        await onPick(button.dataset.kind, button.dataset.url);
+      } catch(error) { notify(error.message); }
+    };
+  });
+  openDialog(dialog);
+}
+
+async function applyExactLaunchBoxArt(databaseId, kind, url) {
+  if (!kind || !url) return;
+  const media = checkedMediaKinds();
+  if (!media.includes(kind)) media.push(kind);
+  notify(t('metadata.artwork_applying'));
+  await api('/api/metadata/apply', {method:'POST', body:JSON.stringify({
+    id: AppState.metadataGameId, database_id: Number(databaseId),
+    media, media_urls: {[kind]: url}, overwrite: $('metadataOverwrite').checked,
+  })});
+  await refresh();
+  notify(t('metadata.artwork_applied'));
+}
+
+async function applyExactSteamgridArt(steamgridId, kind, url) {
+  if (!kind || !url) return;
+  notify(t('metadata.artwork_applying'));
+  await api('/api/v2/steamgrid/apply', {method:'POST', body:JSON.stringify({
+    id: AppState.games.find(item => item.id === AppState.metadataGameId)?.game_id,
+    steamgrid_id: Number(steamgridId), media: [kind], media_urls: {[kind]: url},
+  })});
+  await refresh();
+  notify(t('metadata.artwork_applied'));
+}
+
+async function applyExactScreenscraperArt(scraperId, kind, url) {
+  if (!kind || !url) return;
+  notify(t('metadata.artwork_applying'));
+  await api('/api/v2/screenscraper/apply', {method:'POST', body:JSON.stringify({
+    id: AppState.games.find(item => item.id === AppState.metadataGameId)?.game_id,
+    scraper_id: Number(scraperId), media: [kind], media_urls: {[kind]: url},
+    fields: ['description', 'year', 'genre', 'developer', 'publisher'],
+  })});
+  await refresh();
+  notify(t('metadata.artwork_applied'));
+}
+
+async function chooseLaunchBoxArt(databaseId) {
+  try {
+    const result = await api(`/api/v2/metadata/media-candidates?database_id=${Number(databaseId) || ''}`);
+    await openArtworkChooser({
+      title: t('metadata.artwork_chooser_title'),
+      candidates: result.candidates || [],
+      onPick: (kind, url) => applyExactLaunchBoxArt(databaseId, kind, url),
+    });
+  } catch(error) { notify(error.message); }
+}
+
+async function chooseSteamgridArt(steamgridId) {
+  try {
+    const metadata = await api('/api/v2/steamgrid/info', {method:'POST', body:JSON.stringify({steamgrid_id: Number(steamgridId)})});
+    await openArtworkChooser({
+      title: `${t('metadata.artwork_chooser_title')} · ${metadata.name || ''}`,
+      candidates: metadata.media || [],
+      onPick: (kind, url) => applyExactSteamgridArt(steamgridId, kind, url),
+    });
+  } catch(error) { notify(error.message); }
+}
+
+async function chooseScreenscraperArt(scraperId) {
+  try {
+    const metadata = await api('/api/v2/screenscraper/info', {method:'POST', body:JSON.stringify({scraper_id: Number(scraperId)})});
+    await openArtworkChooser({
+      title: `${t('metadata.artwork_chooser_title')} · ${metadata.name || ''}`,
+      candidates: metadata.media || [],
+      onPick: (kind, url) => applyExactScreenscraperArt(scraperId, kind, url),
+    });
   } catch(error) { notify(error.message); }
 }
 async function watchMatchMetadata() {
