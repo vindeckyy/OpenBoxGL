@@ -36,6 +36,8 @@ const token = new URLSearchParams(location.search).get('token') || sessionStorag
         visible.has('documents') && badge('Docs', game.has_documents),
         visible.has('versions') && badge('Versions', game.has_versions),
         visible.has('storefront') && badge(game.source || 'Storefront', Boolean(game.source)),
+        // [F1d importer plugins] source tag for plugin-imported games.
+        game.plugin_source && badge(game.plugin_source_name || game.plugin_source, true, 'source'),
         visible.has('achievements') && badge('Achievements', game.has_achievements),
         visible.has('highscores') && badge('High scores', game.has_highscores),
         visible.has('progress') && badge(game.progress, Boolean(game.progress), 'progress'),

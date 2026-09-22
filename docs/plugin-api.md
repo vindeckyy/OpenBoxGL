@@ -33,7 +33,7 @@ malformed packages are shown in the Plugins manager instead of being hidden.
 | `version` | yes | Free-form; shown verbatim |
 | `api_version` | no | Integer, default `1`; newer versions are refused and surfaced with an error |
 | `entry` | no | Python file inside the package, default `plugin.py` |
-| `hooks` | yes | Subset of `before_launch`, `after_session`, `library`, `command` |
+| `hooks` | yes | Subset of `before_launch`, `after_session`, `library`, `command`, `library_source`, `events` |
 | `commands` | no | Up to 32 `{id, label, description?}` entries (used by `command`) |
 
 ## Hooks
@@ -79,6 +79,100 @@ message: "..."}`.
   from a local package.
 - Enabling/disabling: `POST /api/plugins/toggle` with `{id, enabled}`.
   Removing keeps a recoverable copy under `<data>/plugins/.removed/`.
+
+## Plugins 2.0 additions (1.14.0)
+
+Additive on top of the frozen v1 surface; nothing above changed.
+
+### Permissions
+
+A manifest may declare `"permissions": ["network"]` (the only permission in
+1.14.0). Declared permissions are denied by default: the plugin runs without
+network unless the user grants it at install/enable time (Android-style
+prompt in the Plugins manager). Granting `network` adds `--share-net` to
+the sandbox argv; without the grant the plugin keeps the no-network
+sandbox. Grants are stored per plugin and cleared on removal.
+
+### Settings
+
+A manifest may declare a JSON Schema subset under `"settings"`:
+
+```json
+"settings": {
+  "type": "object",
+  "properties": {
+    "api_key": {"type": "string", "format": "password", "title": "API key"},
+    "region": {"type": "string", "enum": ["us", "eu"], "default": "us"},
+    "timeout": {"type": "integer", "minimum": 1, "maximum": 60, "default": 10},
+    "verbose": {"type": "boolean", "default": false}
+  },
+  "required": ["api_key"]
+}
+```
+
+Supported types: `string`, `number`, `integer`, `boolean`, plus `enum`.
+`minLength`/`maxLength` and `minimum`/`maximum` are enforced. The Plugins
+manager renders a settings form from the schema (text, number, checkbox,
+select, password), stores validated values per plugin, and injects them
+into every hook stdin payload as `payload["settings"]`. Unset optional
+fields fall back to their `default`.
+
+### Trust (sandbox-unavailable hosts)
+
+On hosts without bubblewrap, plugins do nothing until the user trusts them
+individually in the Plugins manager ("Trust and run", per ADR 0056). The
+grant is bound to the installed package's SHA-256: any update that changes
+the package invalidates the grant and re-prompts. There is no global trust
+switch; the legacy `OPENBOX_ALLOW_UNSANDBOXED_PLUGINS=1` env override is
+unchanged for operators who need it.
+
+### `library_source` hook (importer)
+
+Declaring `library_source` makes the plugin a library importer: the hook
+receives `{"settings": {...}}` on stdin and returns a list of game entries
+on stdout. Entries are validated like folder imports, namespaced as
+`plugin:<plugin_id>:<their_id>`, and merged into the public library on
+every state build with `plugin_source` / `plugin_source_name` provenance
+(the UI shows a source badge). Disabling or removing the plugin drops its
+games on the next rebuild. Returned lists are capped at the library entry
+limit.
+
+### `events` hook (lifecycle)
+
+One hook for all lifecycle events (ADR 0057). The stdin payload always
+carries an `event` field plus a small bounded payload:
+
+| Event | Payload fields |
+|---|---|
+| `app_startup` | — |
+| `app_shutdown` | — |
+| `scan_finished` | `folder`, `added`, `scanned` |
+| `playtime_milestone` | `game_id`, `name`, `hours`, `playtime_seconds` |
+| `game_added` | `game_id`, `name` |
+| `game_removed` | `game_id`, `name` |
+| `game_updated` | `game_id`, `name` |
+
+All emission is best-effort and bounded by the standard per-plugin
+timeout; failures never break the host operation.
+
+```python
+def events(payload):
+    if payload["event"] == "playtime_milestone":
+        # congratulate the player every hour
+        return {"notification": {"level": "success", "message": f"{payload['hours']}h in {payload['name']}!"}}
+    return {}
+```
+
+### New v2 routes
+
+- `GET /api/v2/plugins/trust?id=<id>` / `POST /api/v2/plugins/trust`
+  `{id, trusted}` — per-plugin sandbox-bypass trust (checksum-bound).
+- `POST /api/v2/plugins/permissions` `{id, permissions}` — grant
+  declared permissions (currently `network` only).
+- `GET /api/v2/plugins/settings?id=<id>` / `POST /api/v2/plugins/settings`
+  `{id, values}` — schema, stored values, and validated save.
+- `GET /api/v2/plugins/catalog` — catalog entries enriched with
+  `installed`, `installed_version`, `update_available`, and `sandbox`.
 
 ## Compatibility checklist for authors
 

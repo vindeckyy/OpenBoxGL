@@ -261,7 +261,12 @@
     <div class="dialog-head"><h2 id="pluginsDialogTitle">Plugins</h2><button type="button" id="closePlugins" aria-label="Close Plugins dialog">×</button></div>
     <div class="form-grid">
       <div class="wide description">Plugins are trusted local Python code. Install only packages you trust.</div>
+      <div class="wide extras">
+        <button type="button" class="icon-button" id="pluginTabInstalled" data-i18n="plugins.tab_installed">Installed</button>
+        <button type="button" class="icon-button" id="pluginTabBrowse" data-i18n="plugins.tab_browse">Browse</button>
+      </div>
       <div class="wide emulator-list" id="pluginList"></div>
+      <div class="wide emulator-list" id="pluginBrowse" hidden></div>
       <button type="button" class="icon-button" id="browsePluginCatalog">Browse community catalog</button>
       <button type="button" class="icon-button" id="installPlugin">Install or update package</button>
     </div>

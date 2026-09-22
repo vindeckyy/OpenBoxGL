@@ -28,7 +28,7 @@ from parity_premium import LIST_COLUMNS_DEFAULT, category_for_platform, custom_f
 from parity_saves import games_with_saves
 from parity_save_tools import save_tool_status
 from parity_steamgrid import is_configured as steamgrid_is_configured
-from plugins import run_plugins
+from plugins import merge_library_source_games, run_plugins
 from retroachievements import load_credentials as load_ra_credentials
 from updates import VERSION
 
@@ -947,6 +947,11 @@ def _build_public_state():
         for index, game in enumerate(games):
             game["id"] = index
             game.setdefault("game_id", state["games"][index].get("game_id", ""))
+    # Importer plugins (F1d): merge `library_source` games with plugin-
+    # namespaced ids and provenance. Runs on every build, so disabling or
+    # removing a plugin drops its games on the next rebuild.
+    if not os.environ.get("OPENBOX_SAFE_MODE"):
+        games = merge_library_source_games(games, data_parent)
     return {
         "games": games,
         "playlists": state.get("playlists", []),

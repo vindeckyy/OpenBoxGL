@@ -12,6 +12,7 @@ from pathlib import Path
 from cloud_sync import sync_statistics
 from importers import import_heroic, import_lutris, import_steam
 from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, load_state, update_state
+from plugins import emit_plugin_event
 from parity_emulator_defs import list_scan_configs, scan_folder as scan_emulator_folder
 from pkg.parity.launch_tokens import build_launch_args
 from pkg.platform_compat import join_command
@@ -223,6 +224,13 @@ def import_folder_path(folder, recommend=True, chosen_emulators=None):
                 "media": sorted(media_types),
             })
             queued += 1
+    # Lifecycle event (F1e): a folder scan finished. game_added for the new
+    # entries is emitted separately by the update_state diff.
+    emit_plugin_event(DATA.parent / "plugins", "scan_finished", {
+        "folder": str(folder),
+        "added": len(result["additions"]),
+        "scanned": len(candidates),
+    })
     return len(result["additions"]), len(candidates), result["recommendations"]
 
 
