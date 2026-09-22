@@ -17,6 +17,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `sandbox` status. Malformed packages and unavailable sandboxes are surfaced
   in the Plugins manager instead of being hidden.
 
+### Fixed
+- Big Box pause overlay trapped gamepad users: with the panel open, the pad
+  kept driving the grid behind it, A launched the highlighted game, and B
+  killed the whole Big Box mode. The overlay now owns the pad while open —
+  d-pad moves focus between its buttons, A activates the focused button, and
+  B (or Escape, or the new Close button) dismisses only the overlay.
+- Attract mode could start over the Big Box pause panel and the Game Night
+  party overlay; the overlay guard dropped by a461edd is restored.
+- Opening the Big Box pause overlay for a game without attached documents
+  crashed on a missing documents list; it now treats a missing list as empty.
+
+### Changed
+- The three per-surface gamepad poll loops (Big Box, library view, arcade
+  room) are unified into a single rAF loop in `static/gamepad.js` that
+  dispatches each frame to the highest-priority active surface. No input
+  behavior changes.
+
 ## [1.13.1] - 2026-09-22
 
 ### Fixed

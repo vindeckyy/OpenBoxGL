@@ -12,10 +12,9 @@ import { captureMomentInteractive } from './moments.js';
 import { captureClip } from './clips.js';
 import { openSetupCenter } from './setup.js';
 import { t } from './i18n.js';
+import { registerGamepadSurface, ensureGamepadLoop, stopGamepadLoop, syncGamepadLoop } from './gamepad.js';
 
 
-
-    let gamepadFrame = null;
 
     async function activateCurrentGame(game, trigger) {
       if (!game) return;
@@ -24,11 +23,6 @@ import { t } from './i18n.js';
         return;
       }
       await launch(game, trigger || $('bigBoxPlay') || $('playButton'));
-    }
-
-    function stopGamepadPoll() {
-      if (gamepadFrame) cancelAnimationFrame(gamepadFrame);
-      gamepadFrame = null;
     }
 
     function bigBoxTypingActive() {
@@ -72,11 +66,11 @@ import { t } from './i18n.js';
       renderBigBox();
       api('/api/bigbox/mode',{method:'POST',body:JSON.stringify({entering:true})}).catch(() => {});
       nativeFullscreen().catch(() => {});
-      requestAnimationFrame(pollGamepads);
+      ensureGamepadLoop();
     }
     function closeBigBox() {
       stopScreenSaver();
-      stopGamepadPoll();
+      syncGamepadLoop();
       $('bigBoxMenu').hidden = true;
       $('bigBox').hidden = true;
       if ($('bigBoxStartupVideo')) { $('bigBoxStartupVideo').pause(); $('bigBoxStartupVideo').hidden = true; }
@@ -269,13 +263,21 @@ import { t } from './i18n.js';
       if ($('bigBox').hidden) { AppState.libraryBgm.pause(); return; }
       AppState.libraryBgm.play().catch(() => {});
     }
+    function closeBigBoxPause() {
+      $('bigBoxPause').hidden = true;
+      AppState.bigBoxLastInput = performance.now();
+    }
+    function bigBoxPauseOpen() {
+      const panel = $('bigBoxPause');
+      return Boolean(panel && !panel.hidden);
+    }
     function openBigBoxPause() {
       const session = AppState.runningGames[0];
       if (!session) return openSessions();
       const game = AppState.games.find(item => item.id === session.game_id);
       $('bigBoxPauseTitle').textContent = session.game;
       $('bigBoxPauseMeta').textContent = `${session.paused ? 'Paused' : 'Running'} · started ${String(session.started || '').replace('T',' ')}`;
-      $('bigBoxPauseActions').innerHTML = `<button class="primary" data-pause-action="${session.launch_id}:${session.paused ? 'resume' : 'pause'}">${session.paused ? 'Resume' : 'Pause'}</button><button class="icon-button" data-pause-action="${session.launch_id}:stop">Exit game</button>${game ? '<button class="icon-button" id="pauseMoment">Capture moment</button><button class="icon-button" id="pauseClip">Clip it</button>' : ''}${game?.documents.map((item,index) => `<button class="icon-button" data-pause-doc="${game.id}:${index}">Read ${escapeHtml(item.name)}</button>`).join('') || ''}${AppState.raConfigured ? `<button class="icon-button" id="pauseAchievements">Achievements</button>` : ''}`;
+      $('bigBoxPauseActions').innerHTML = `<button class="primary" data-pause-action="${session.launch_id}:${session.paused ? 'resume' : 'pause'}">${session.paused ? 'Resume' : 'Pause'}</button><button class="icon-button" data-pause-action="${session.launch_id}:stop">Exit game</button>${game ? '<button class="icon-button" id="pauseMoment">Capture moment</button><button class="icon-button" id="pauseClip">Clip it</button>' : ''}${(game?.documents || []).map((item,index) => `<button class="icon-button" data-pause-doc="${game.id}:${index}">Read ${escapeHtml(item.name)}</button>`).join('') || ''}${AppState.raConfigured ? `<button class="icon-button" id="pauseAchievements">Achievements</button>` : ''}`;
       document.querySelectorAll('[data-pause-action]').forEach(button => button.onclick = async () => {
         const [launch_id,action] = button.dataset.pauseAction.split(':');
         await api('/api/session/control',{method:'POST',body:JSON.stringify({launch_id,action})});
@@ -291,6 +293,8 @@ import { t } from './i18n.js';
       if ($('pauseClip')) $('pauseClip').onclick = async () => { try { await captureClip({ game, launchId: session.launch_id }); } catch (error) { notify(error.message); } };
       if ($('pauseAchievements')) $('pauseAchievements').onclick = () => { $('bigBoxPause').hidden = true; openAchievements(); };
       $('bigBoxPause').hidden = false;
+      // Give the gamepad something to activate: A clicks the focused button.
+      $('bigBoxPauseActions').querySelector('button')?.focus();
     }
     function startScreenSaver() {
       const visible = filteredBigBoxGames();
@@ -329,23 +333,56 @@ import { t } from './i18n.js';
         } catch(error) { notify(error.message); }
       }
     }
-    // INVARIANT: exactly one gamepad poll loop per surface — this is the big box's
-    // (navigation.js and arcaderoom.js run their own); do not add a second.
-    function pollGamepads() {
-      if ($('bigBox').hidden || document.hidden || !document.hasFocus()) {
-        stopGamepadPoll();
+    // Gamepad surface handlers for the unified loop (gamepad.js): each tick the
+    // loop dispatches to the highest-priority active surface, so these handle
+    // one frame of input each and never schedule frames themselves.
+    function firstGamepad() {
+      const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+      return pads[0];
+    }
+    function bigBoxPadState(pad) {
+      const mapping = {...defaultControllerMap,...AppState.appSettings.controller_map};
+      const pressed = action => Boolean(pad.buttons[mapping[action]]?.pressed);
+      return {left:pad.buttons[14]?.pressed || pad.axes[0] < -.6,right:pad.buttons[15]?.pressed || pad.axes[0] > .6,up:pad.buttons[12]?.pressed || pad.axes[1] < -.6,down:pad.buttons[13]?.pressed || pad.axes[1] > .6,play:pressed('play'),back:pressed('back'),favorite:pressed('favorite'),random:pressed('random'),pageLeft:pressed('page_left'),pageRight:pressed('page_right'),pause:pressed('pause'),menu:pressed('menu')};
+    }
+    function focusPauseButton(buttons, offset) {
+      if (!buttons.length) return;
+      let index = buttons.indexOf(document.activeElement);
+      if (index < 0) index = offset > 0 ? 0 : buttons.length - 1;
+      else index = (index + offset + buttons.length) % buttons.length;
+      buttons[index].focus();
+    }
+    function pollBigBoxPause() {
+      if (document.hidden || !document.hasFocus()) {
+        stopGamepadLoop();
         return;
       }
-      const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
-      const pad = pads[0];
+      const pad = firstGamepad();
+      if (!pad) return;
+      const current = bigBoxPadState(pad);
+      const edge = action => current[action] && !AppState.gamepadState[action];
+      const buttons = [...$('bigBoxPauseActions').querySelectorAll('button')].filter(button => !button.disabled);
+      if (edge('up') || edge('left')) focusPauseButton(buttons, -1);
+      if (edge('down') || edge('right')) focusPauseButton(buttons, 1);
+      if (edge('play')) {
+        const focused = document.activeElement?.closest?.('#bigBoxPause button');
+        (focused || buttons[0])?.click();
+      }
+      if (edge('back')) closeBigBoxPause();
+      if (Object.keys(current).some(edge)) AppState.bigBoxLastInput = performance.now();
+      AppState.gamepadState = current;
+    }
+    function pollBigBoxGamepads() {
+      if (document.hidden || !document.hasFocus()) {
+        stopGamepadLoop();
+        return;
+      }
+      const pad = firstGamepad();
       if (pad) {
-        const mapping = {...defaultControllerMap,...AppState.appSettings.controller_map};
-        const pressed = action => Boolean(pad.buttons[mapping[action]]?.pressed);
-        const current = {left:pad.buttons[14]?.pressed || pad.axes[0] < -.6,right:pad.buttons[15]?.pressed || pad.axes[0] > .6,up:pad.buttons[12]?.pressed || pad.axes[1] < -.6,down:pad.buttons[13]?.pressed || pad.axes[1] > .6,play:pressed('play'),back:pressed('back'),favorite:pressed('favorite'),random:pressed('random'),pageLeft:pressed('page_left'),pageRight:pressed('page_right'),pause:pressed('pause'),menu:pressed('menu')};
+        const current = bigBoxPadState(pad);
         const edge = action => current[action] && !AppState.gamepadState[action];
         if (bigBoxTypingActive()) {
           AppState.gamepadState = current;
-          gamepadFrame = requestAnimationFrame(pollGamepads);
           return;
         }
         if (!$('screenSaver').hidden && Object.keys(current).some(edge)) {
@@ -353,7 +390,6 @@ import { t } from './i18n.js';
           stopScreenSaver();
           if (edge('play') && game) activateCurrentGame(game);
           AppState.gamepadState = current;
-          gamepadFrame = requestAnimationFrame(pollGamepads);
           return;
         }
         if (partyOverlayOpen()) {
@@ -396,18 +432,20 @@ import { t } from './i18n.js';
         if (Object.keys(current).some(edge)) AppState.bigBoxLastInput = performance.now();
         AppState.gamepadState = current;
       }
-      if ($('screenSaver').hidden && $('bigBoxMenu').hidden && (() => {
+      // Attract mode must not cover an open overlay: the pause panel and the
+      // Party game-night overlay both own the screen while visible.
+      // (Port: this guard was dropped by a461edd; restored.)
+      if ($('screenSaver').hidden && $('bigBoxMenu').hidden && $('bigBoxPause').hidden && !partyOverlayOpen() && (() => {
         const delay = Number(AppState.appSettings.attract_mode_seconds ?? AppState.appSettings.screensaver_seconds ?? 0);
         return delay && performance.now() - AppState.bigBoxLastInput >= delay * 1000;
       })()) startScreenSaver();
-      gamepadFrame = requestAnimationFrame(pollGamepads);
     }
 
+    registerGamepadSurface({ priority: 10, isActive: bigBoxPauseOpen, tick: pollBigBoxPause });
+    registerGamepadSurface({ priority: 30, isActive: () => !$('bigBox')?.hidden, tick: pollBigBoxGamepads, wantsLoop: () => !$('bigBox')?.hidden });
+
     if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden || $('bigBox')?.hidden) stopGamepadPoll();
-        else if ($('bigBox') && !$('bigBox').hidden) pollGamepads();
-      });
+      // (visibilitychange/gamepad lifecycle is owned by the unified loop in gamepad.js)
       $('bigBoxHybridSearch')?.addEventListener('focus', () => { AppState.bigBoxSearchMode = true; });
       $('partyMenuButton')?.addEventListener('click', () => { closeBigBoxMenu(); openParty(); });      $('bigBoxHybridSearch')?.addEventListener('blur', () => { AppState.bigBoxSearchMode = false; });
       $('bigBoxHybridSearch')?.addEventListener('input', event => {
@@ -418,4 +456,4 @@ import { t } from './i18n.js';
       });
     }
 
-export { openBigBox, closeBigBox, filteredBigBoxGames, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, applyLibraryMusic, openBigBoxPause, startScreenSaver, stopScreenSaver, favoriteBigBox, pollGamepads, activateCurrentGame, stopGamepadPoll, bigBoxTypingActive };
+export { openBigBox, closeBigBox, filteredBigBoxGames, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, applyLibraryMusic, openBigBoxPause, closeBigBoxPause, bigBoxPauseOpen, startScreenSaver, stopScreenSaver, favoriteBigBox, activateCurrentGame, bigBoxTypingActive };

@@ -551,10 +551,17 @@ def test_story_local_day_key_contract():
     assert "localDayKey(event.at)" in mount, "mountStoryPanel must group via localDayKey(event.at)"
     assert "slice(0, 10)" not in mount, "mountStoryPanel must not group by raw string slicing anymore"
 
-def test_gamepad_single_loop_invariant():
-    # Plan §9 item 3: exactly one gamepad poll loop per surface, all using the
-    # same current && !prev edge pattern. Pin the INVARIANT comment in all
-    # three surfaces and the single loop owner + edge pattern in each.
+def test_gamepad_unified_loop():
+    # Exactly one gamepad rAF loop for the whole app, owned by static/gamepad.js.
+    # The three surfaces (bigbox, navigation, arcaderoom) only register frame
+    # handlers via registerGamepadSurface and never schedule their own frames.
+    gamepad_js = ROOT / "static" / "gamepad.js"
+    assert gamepad_js.exists(), "static/gamepad.js must own the unified gamepad loop"
+    gamepad = gamepad_js.read_text(encoding="utf-8")
+    assert gamepad.count("requestAnimationFrame(tick)") == 2, (
+        "gamepad.js must schedule the loop exactly twice (tick reschedule + ensure)"
+    )
+    assert "registerGamepadSurface" in gamepad
     surfaces = {
         "bigbox.js": BIGBOX_JS,
         "navigation.js": NAVIGATION_JS,
@@ -562,23 +569,38 @@ def test_gamepad_single_loop_invariant():
     }
     for name, path in surfaces.items():
         text = path.read_text(encoding="utf-8")
-        assert "// INVARIANT: exactly one gamepad poll loop per surface" in text, (
-            f"{name} must carry the single-loop INVARIANT comment"
+        assert "registerGamepadSurface(" in text, (
+            f"{name} must register with the unified gamepad loop"
+        )
+        assert "requestAnimationFrame(pollGamepads)" not in text, (
+            f"{name} must not schedule its own gamepad poll loop"
+        )
+        assert "INVARIANT: exactly one gamepad poll loop per surface" not in text, (
+            f"{name} must not carry the stale per-surface INVARIANT comment"
         )
         assert re.search(r"const edge = \w+ => current\[\w+\] && !", text), (
             f"{name} must use the current && !prev edge pattern"
         )
+    # Dispatch priority, highest first: pause overlay > arcade room > big box > library.
+    priorities = {}
+    for name, path in surfaces.items():
+        text = path.read_text(encoding="utf-8")
+        priorities[name] = [int(m) for m in re.findall(r"registerGamepadSurface\(\{\s*priority:\s*(\d+)", text)]
+    assert priorities["bigbox.js"] == [10, 30], (
+        f"bigbox.js must register pause(10) then bigbox(30), got {priorities['bigbox.js']}"
+    )
+    assert priorities["arcaderoom.js"] == [20], (
+        f"arcaderoom.js must register arcade(20), got {priorities['arcaderoom.js']}"
+    )
+    assert priorities["navigation.js"] == [40], (
+        f"navigation.js must register library(40), got {priorities['navigation.js']}"
+    )
+    # Pause overlay owns the pad while open: d-pad moves focus, A activates, B dismisses.
     bigbox = BIGBOX_JS.read_text(encoding="utf-8")
-    assert bigbox.count("function pollGamepads()") == 1, (
-        "bigbox.js must define exactly one pollGamepads loop"
-    )
-    navigation = NAVIGATION_JS.read_text(encoding="utf-8")
-    assert navigation.count("function pollGamepads()") == 1, (
-        "navigation.js must define exactly one pollGamepads loop"
-    )
-    arcade = ARCADEROOM_JS.read_text(encoding="utf-8")
-    assert arcade.count("startGamepadPoll() {") == 1, (
-        "arcaderoom.js must own exactly one poll loop via startGamepadPoll"
+    assert "function pollBigBoxPause()" in bigbox, "bigbox.js must define the pause-overlay gamepad branch"
+    assert "closeBigBoxPause()" in bigbox, "bigbox.js must define closeBigBoxPause"
+    assert 'data-i18n="bigbox.pause_close"' in INDEX.read_text(encoding="utf-8"), (
+        "index.html pause panel must carry a dismiss control with an i18n key"
     )
 
 if __name__ == "__main__":
