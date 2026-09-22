@@ -25,6 +25,7 @@ import { initPalette } from './palette.js';
 import { initWhatsNew } from './whatsnew.js';
 import { applyHash } from './router.js';
 import { initMood } from './mood.js';
+import { openSetupCenter } from './setup.js';
 import { init as i18nInit, setLocale, getSupportedLocales, t } from './i18n.js';
 import './activity.js';
 
@@ -106,10 +107,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const welcomeShim = $('welcomeDialog');
     if (welcomeShim) {
-      welcomeShim.showModal = () => $('setupCenter').showModal();
+      // The legacy welcomeDialog is a shim over the setup wizard: route
+      // through the single open entry point so it never shows stale content.
+      welcomeShim.showModal = () => openSetupCenter();
       welcomeShim.close = () => $('setupCenter').close();
     }
-    const openSetupCenter = () => $('setupCenter').showModal();
     if ($('setupLibraryButton')) $('setupLibraryButton').onclick = openSetupCenter;
     if ($('reopenWelcome')) $('reopenWelcome').onclick = openSetupCenter;
     if ($('closeSetupCenter')) $('closeSetupCenter').onclick = () => { AppState.setupDismissed = true; $('setupCenter').close(); };

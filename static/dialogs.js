@@ -85,9 +85,8 @@ function ensureA11yDialogHosts() {
       <div class="dialog-actions"><button type="button" id="a11yConfirmCancel">Cancel</button><button type="button" class="primary" id="a11yConfirmOk">Confirm</button></div>
     </dialog>`;
   document.body.appendChild(wrap);
-  document.querySelectorAll('#a11yInputDialog,#a11yChoiceDialog,#a11yConfirmDialog').forEach(dialog => {
-    dialog.setAttribute('closedby', 'closerequest');
-  });
+  // G-D1: lazy hosts get the same focus-restoration wiring as static dialogs.
+  document.querySelectorAll('#a11yInputDialog,#a11yChoiceDialog,#a11yConfirmDialog').forEach(wireDialogFocus);
 }
 
 function settleDialog(dialog, resolve, value) {
@@ -374,6 +373,11 @@ async function bindGameEditorBrowse() {
 document.addEventListener('mousedown', event => {
   if (document.activeElement?.tagName === 'SELECT') return;
   if (event.target.closest?.('select, option')) return;
+  // G-D3 (known limitation, 1.13.1): "topmost" is DOM order, not true
+  // stacking order. This holds only because lazily created dialogs are
+  // appended to document.body (hence last). A dialog inserted earlier in
+  // the DOM, or inside a shadow root, would break the nesting assumption
+  // silently — a real stacking-order comparator is 1.14 work.
   const topDialog = [...document.querySelectorAll('dialog[open]')].at(-1);
   if (topDialog) {
     if (!(topDialog.id === 'gameDialog' && gameFormDirty()) && !topDialog.contains(event.target)) {
@@ -381,7 +385,9 @@ document.addEventListener('mousedown', event => {
       const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
       if (!inside) {
         if (topDialog.id === 'setupCenter') AppState.setupDismissed = true;
-        topDialog.close();
+        // G-D2: always route through closeDialog() so focus restoration
+        // and the recorded-trigger contract match every other close path.
+        closeDialog(topDialog);
       }
     }
   }
@@ -394,7 +400,11 @@ document.addEventListener('mousedown', event => {
     if (overlay.contains(event.target)) close();
   });
 });
-document.querySelectorAll('dialog').forEach(dialog => {
+// G-D1: shared dialog wiring. The module-load block below wires every
+// dialog present in index.html at load; lazily created hosts
+// (ensureA11yDialogHosts / ensureTrophyCaseHost) call this too, so they get
+// the same closedby/aria/focus-restoration wiring as static dialogs.
+function wireDialogFocus(dialog) {
   dialog.setAttribute('closedby', 'closerequest');
   const heading = dialog.querySelector('h2');
   if (heading) {
@@ -410,7 +420,8 @@ document.querySelectorAll('dialog').forEach(dialog => {
     dialogTriggers.delete(dialog);
     if (trigger?.isConnected) trigger.focus({ preventScroll: true });
   });
-});
+}
+document.querySelectorAll('dialog').forEach(wireDialogFocus);
 
 async function openGameDialog(game = null, options = {}) {
   await ensureProfiles();
@@ -479,7 +490,7 @@ async function openGameDialog(game = null, options = {}) {
   const expandRare = rareRows.some(row => row.querySelector('[name]')?.value.trim());
   rareRows.forEach(row => { row.hidden = !expandRare; });
   if (mediaToggle) {
-    const setLabel = show => { mediaToggle.textContent = show ? 'Show fewer media types' : `Show ${rareRows.length} more media types`; mediaToggle.setAttribute('aria-expanded', String(show)); };
+    const setLabel = show => { mediaToggle.textContent = show ? t('dialog.media_show_fewer') : t('dialog.media_show_more', {count: rareRows.length}); mediaToggle.setAttribute('aria-expanded', String(show)); };
     setLabel(expandRare);
     mediaToggle.onclick = () => { const show = rareRows[0]?.hidden ?? true; rareRows.forEach(row => { row.hidden = !show; }); setLabel(show); };
   }
@@ -530,7 +541,7 @@ function ensureTrophyCaseHost() {
     </dialog>`;
   document.body.appendChild(wrap);
   const dialog = $('trophyCaseDialog');
-  dialog.setAttribute('closedby', 'closerequest');
+  wireDialogFocus(dialog);
   $('trophyCaseClose').onclick = () => closeDialog(dialog);
 }
 

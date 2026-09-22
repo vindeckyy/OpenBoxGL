@@ -3,6 +3,7 @@ import { AppState, api, notify, token, selectedIds, playlistFor, applySidebarVis
 import { refresh, render, renderGrid } from './library.js';
 import { applyLibraryMusic } from './bigbox.js';
 import { confirmAction, promptInput } from './dialogs.js';
+import { openSetupCenter } from './setup.js';
 import { t } from './i18n.js';
 
 
@@ -154,7 +155,7 @@ import { t } from './i18n.js';
       } catch(error) { notify(error.message); }
     }
     function maybeShowWelcome() {
-      if (!AppState.appSettings.welcome_completed && !AppState.games.length && !AppState.setupDismissed) $('setupCenter').showModal();
+      if (!AppState.appSettings.welcome_completed && !AppState.games.length && !AppState.setupDismissed) openSetupCenter();
     }
     function collectSettings() {
       return {

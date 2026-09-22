@@ -197,6 +197,24 @@ def test_placeholders_preserved():
         assert not missing, f"{locale}.json missing placeholders: {missing}"
 
 
+def test_dialog_and_bigbox_keys_present():
+    """Row 16: the five keys added for the dialog/Big Box fixes (media
+    toggle i18n + empty-view strings) must exist in every locale."""
+    required = {
+        "dialog.media_show_more",
+        "dialog.media_show_fewer",
+        "dialog.media_show_more_initial",
+        "bigbox.empty_view_setup",
+        "bigbox.empty_view_now_empty",
+    }
+    for locale in SUPPORTED_LOCALES:
+        path = LOCALES_DIR / f"{locale}.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        keys = _flatten_keys(data)
+        missing = required - keys
+        assert not missing, f"{locale}.json missing keys: {sorted(missing)}"
+
+
 def run_all_tests():
     tests = [
         test_locale_files_exist,
@@ -213,6 +231,7 @@ def run_all_tests():
         test_locales_in_flatpak,
         test_meta_native_names,
         test_placeholders_preserved,
+        test_dialog_and_bigbox_keys_present,
     ]
     failures = 0
     for test in tests:

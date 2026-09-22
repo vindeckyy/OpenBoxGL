@@ -127,6 +127,8 @@ function gamepadActions(pad) {
   };
 }
 
+// INVARIANT: exactly one gamepad poll loop per surface — this is the library view's
+// (bigbox.js and arcaderoom.js run their own); do not add a second.
 function pollGamepads() {
   gamepadFrame = 0;
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];

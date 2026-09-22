@@ -197,6 +197,9 @@
     "basics": "Basics",
     "launch": "Launch",
     "media": "Media",
+    "media_show_more": "Show {count} more media types",
+    "media_show_fewer": "Show fewer media types",
+    "media_show_more_initial": "Show more media types",
     "saves_documents": "Saves & Documents",
     "advanced": "Advanced",
     "name": "Name",
@@ -890,7 +893,9 @@
     "ra_not_matched": "Not matched",
     "screensaver_prompt": "Press Play to launch, or any other control to return.",
     "running_game": "Running game",
-    "search_platform": "Search this platform"
+    "search_platform": "Search this platform",
+    "empty_view_setup": "Big Box needs games in the current view — add sources to build your library",
+    "empty_view_now_empty": "The current view is now empty"
   },
   "errors": {
     "copy_details": "Copy details",

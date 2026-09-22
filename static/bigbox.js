@@ -10,6 +10,8 @@ import { applyMoodForGame, clearMood } from './mood.js';
 import { openParty, partyOverlayOpen, partyGamepad } from './party.js';
 import { captureMomentInteractive } from './moments.js';
 import { captureClip } from './clips.js';
+import { openSetupCenter } from './setup.js';
+import { t } from './i18n.js';
 
 
 
@@ -42,9 +44,8 @@ import { captureClip } from './clips.js';
       if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').value = '';
       AppState.bigBoxGames = filteredBigBoxGames();
       if (!AppState.bigBoxGames.length) {
-        notify('info', 'Big Box needs games in the current view — add sources to build your library');
-        const setup = $('setupCenter');
-        if (setup && !setup.open) setup.showModal();
+        notify('info', t('bigbox.empty_view_setup'));
+        openSetupCenter();
         return;
       }
       AppState.bigBoxIndex = Math.max(0,AppState.bigBoxGames.findIndex(game => game.id === AppState.selectedId));
@@ -319,12 +320,14 @@ import { captureClip } from './clips.js';
           await api('/api/favorite',{method:'POST',body:JSON.stringify({id:game.id})});
           await refresh();
           AppState.bigBoxGames = filteredBigBoxGames();
-          if (!AppState.bigBoxGames.length) { closeBigBox(); notify('The current view is now empty'); return; }
+          if (!AppState.bigBoxGames.length) { closeBigBox(); notify(t('bigbox.empty_view_now_empty')); return; }
           AppState.bigBoxIndex = Math.max(0,AppState.bigBoxGames.findIndex(g => g.id === game.id));
           renderBigBox();
         } catch(error) { notify(error.message); }
       }
     }
+    // INVARIANT: exactly one gamepad poll loop per surface — this is the big box's
+    // (navigation.js and arcaderoom.js run their own); do not add a second.
     function pollGamepads() {
       if ($('bigBox').hidden || document.hidden || !document.hasFocus()) {
         stopGamepadPoll();

@@ -197,6 +197,9 @@
     "basics": "Datos básicos",
     "launch": "Ejecución",
     "media": "Multimedia",
+    "media_show_more": "Mostrar {count} tipos de medios más",
+    "media_show_fewer": "Mostrar menos tipos de medios",
+    "media_show_more_initial": "Mostrar más tipos de medios",
     "saves_documents": "Guardados y documentos",
     "advanced": "Avanzado",
     "name": "Nombre",
@@ -890,7 +893,9 @@
     "ra_not_matched": "No coincidentes",
     "screensaver_prompt": "Pulsa Jugar para iniciar, o cualquier otro control para volver.",
     "running_game": "Juego en ejecución",
-    "search_platform": "Buscar en esta plataforma"
+    "search_platform": "Buscar en esta plataforma",
+    "empty_view_setup": "Big Box necesita juegos en la vista actual — añade fuentes para crear tu biblioteca",
+    "empty_view_now_empty": "La vista actual está vacía"
   },
   "errors": {
     "copy_details": "Copiar detalles",

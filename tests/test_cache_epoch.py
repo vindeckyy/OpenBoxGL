@@ -290,6 +290,24 @@ class CacheEpochTests(unittest.TestCase):
         self.assertEqual(game["screenshots"], [])
         self.assertTrue(game["has_highscores"])
 
+    def test_public_state_projects_import_batch_id(self):
+        # Row 10 (2b59eb8): "View imported games" landed on an empty library
+        # because _project_game dropped import_batch_id. Pin the projection:
+        # the id survives public_state(), defaulting to "" when absent.
+        self.save_state({
+            "games": [
+                {"game_id": "g-batch", "name": "Batched", "path": "/bin/true",
+                 "import_batch_id": "batch-abc123"},
+                {"game_id": "g-nobatch", "name": "Plain", "path": "/bin/false"},
+            ],
+            "profiles": {}, "history": [], "settings": {}, "playlists": [],
+        })
+        from webapp_state import public_state
+
+        games = {game["name"]: game for game in public_state()["games"]}
+        self.assertEqual(games["Batched"]["import_batch_id"], "batch-abc123")
+        self.assertEqual(games["Plain"]["import_batch_id"], "")
+
     def test_media_roots_env_is_scanned(self):
         import os
         from webapp_state import _build_known_media_set, bump_media_epoch

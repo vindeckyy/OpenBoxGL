@@ -12,12 +12,29 @@ import { openReader } from './reader.js';
 import { applyMoodForGame, clearMood } from './mood.js';
 import { t } from './i18n.js';
 import { mountMomentsPanel, mountResumeAffordance } from './moments.js';
+import { openSetupCenter } from './setup.js';
 
 const DETAILS_WIDTH_KEY = 'openbox-details-width';
 
 // Story reuses the History → Timeline markup (timeline-group/entry/meta) so
 // the per-game narrative needs no new styles or design tokens.
 const STORY_KIND_LABELS = {added: 'Added', first_played: 'First played', session: 'Session', milestone: 'Milestone', progress: 'Progress', moment: 'Moment'};
+// Story day grouping: event timestamps arrive in two flavors — UTC-aware
+// ISO strings (moments) and naive-local ISO strings (sessions). Group by the
+// viewer's LOCAL calendar day: `new Date()` converts aware values to local
+// and parses naive values as local (the existing convention), so reading the
+// local Y/M/D components below groups a 23:30 local moment with its session
+// instead of under the following UTC date.
+function localDayKey(isoString) {
+  const text = String(isoString || '').trim();
+  if (!text) return 'Unknown date';
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return 'Unknown date';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 async function mountStoryPanel(game, container) {
   if (!container || !game) return;
   container.innerHTML = '<p class="description">Loading story…</p>';
@@ -27,7 +44,7 @@ async function mountStoryPanel(game, container) {
     const totals = story.totals || {};
     const groups = {};
     events.forEach(event => {
-      const day = String(event.at || '').slice(0, 10) || 'Unknown date';
+      const day = localDayKey(event.at);
       if (!groups[day]) groups[day] = [];
       groups[day].push(event);
     });
@@ -514,7 +531,7 @@ function markFilterAria() {
       applyStoredSort();
       dispatchStateRefreshed();
       if ($('insightsPanel')) $('insightsPanel').hidden = !AppState.games.length;
-      if (!AppState.appSettings.welcome_completed && !AppState.games.length && !AppState.setupDismissed) $('setupCenter').showModal();
+      if (!AppState.appSettings.welcome_completed && !AppState.games.length && !AppState.setupDismissed) openSetupCenter();
       setTimeout(() => { try { warmSearchIndex(); } catch(error) { AppState.searchIndexError = error.message; } }, 0);
       const fingerprint = `${AppState.games.length}:${AppState.games[0]?.id || ''}:${AppState.games.at(-1)?.id || ''}`;
       if (lastFacetsFingerprint !== fingerprint) {
@@ -888,7 +905,7 @@ function markFilterAria() {
         $('grid').innerHTML = AppState.games.length
           ? `<div class="empty"><div><h2>No games match this view</h2><p>Change the active filters or search the library again.</p></div></div>`
           : `<div class="empty"><div><h2>Start your library</h2><p>Bring your games into OpenBox, then search, filter, and launch them from one collection.</p><div class="empty-actions"><button id="emptySetupLibrary">Set up library</button><button id="emptyAdd">Add game</button><button class="empty-secondary" id="emptyImport">Import folder</button><button class="empty-secondary" id="emptySteam">Import Steam</button><button class="empty-secondary" id="emptyHeroic">Import Heroic</button><button class="empty-secondary" id="emptyLutris">Import Lutris</button></div></div></div>`;
-        if ($('emptySetupLibrary')) $('emptySetupLibrary').onclick = () => $('setupCenter').showModal();
+        if ($('emptySetupLibrary')) $('emptySetupLibrary').onclick = () => openSetupCenter();
         if ($('emptyAdd')) $('emptyAdd').onclick = () => openGameDialog();
         if ($('emptyImport')) $('emptyImport').onclick = () => importFolder();
         if ($('emptySteam')) $('emptySteam').onclick = () => importSteam();
