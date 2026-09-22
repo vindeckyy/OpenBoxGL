@@ -123,6 +123,14 @@
       --path-browse-border:var(--border-control);
       --query-chip-bg:var(--surface-card);
       --query-chip-border:var(--border-control);
+      --dna-chip-bg:var(--surface-card);
+      --dna-chip-border:var(--border-control);
+      --dna-chip-fg:var(--section-muted);
+      --dna-panel-bg:var(--panel);
+      --dna-panel-border:var(--border-card);
+      --dna-panel-shadow:#00000059;
+      --dna-toggle-active-bg:var(--active);
+      --dna-toggle-active-fg:var(--white);
       --details-resize-bg:var(--line);
       --filter-drawer-bg:var(--panel);
       --match-review-current-bg:var(--surface-field);
@@ -1018,3 +1026,23 @@
       .mood-active .play:hover,.mood-active .bigbox-play:hover,.mood-active .bigbox-cover { transition:none !important; }
       .bigbox-video-snap { display:none; }
     }
+
+/* Game DNA smart search (Flagship 9) — token-only styling */
+.dna-search-wrap { position:relative; display:flex; align-items:center; gap:var(--space-2xs); flex:1 1 auto; min-width:0; }
+.dna-search-wrap #sidebarSearch { flex:1 1 auto; min-width:0; }
+.dna-mode-toggle { display:inline-flex; border:1px solid var(--border-control); border-radius:var(--radius-hairline); overflow:hidden; flex:none; }
+.dna-mode { border:0; background:var(--surface-card); color:var(--icon-text); font-size:var(--font-label); padding:var(--space-3xs) var(--space-xs); cursor:pointer; }
+.dna-mode + .dna-mode { border-left:1px solid var(--border-control); }
+.dna-mode.active { background:var(--dna-toggle-active-bg); color:var(--dna-toggle-active-fg); }
+.dna-mode.single { border:1px solid var(--border-control); border-radius:var(--radius-hairline); }
+.dna-results { position:absolute; top:calc(100% + var(--space-2xs)); left:0; right:0; z-index:60; max-height:24rem; overflow:auto; background:var(--dna-panel-bg); border:1px solid var(--dna-panel-border); border-radius:var(--radius-panel); padding:var(--space-xs); box-shadow:0 8px 24px var(--dna-panel-shadow); }
+.dna-result { display:flex; flex-direction:column; gap:var(--space-3xs); width:100%; text-align:left; background:transparent; border:0; border-bottom:1px solid var(--dna-panel-border); padding:var(--space-xs) var(--space-2xs); cursor:pointer; color:inherit; }
+.dna-result:last-of-type { border-bottom:0; }
+.dna-result:hover { background:var(--surface-hover); }
+.dna-result-name { font-size:var(--font-body); font-weight:600; }
+.dna-chips { display:flex; flex-wrap:wrap; gap:var(--space-3xs); }
+.dna-chip { display:inline-block; font-size:var(--font-micro); color:var(--dna-chip-fg); background:var(--dna-chip-bg); border:1px solid var(--dna-chip-border); border-radius:var(--radius-pill-large); padding:var(--space-3xs) var(--space-2xs); line-height:1.4; }
+.dna-state { padding:var(--space-sm); font-size:var(--font-body-small); color:var(--section-muted); }
+.dna-degraded { font-size:var(--font-micro); color:var(--dna-chip-fg); margin:0 0 var(--space-xs); }
+.dna-privacy { font-size:var(--font-micro); color:var(--empty-muted); margin:var(--space-xs) 0 0; }
+.bigbox-dna-why { display:flex; flex-wrap:wrap; gap:var(--space-3xs); margin:var(--space-xs) 0; }

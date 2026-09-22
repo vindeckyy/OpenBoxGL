@@ -25,6 +25,7 @@ import { initPalette } from './palette.js';
 import { initWhatsNew } from './whatsnew.js';
 import { applyHash } from './router.js';
 import { initMood } from './mood.js';
+import { dnaMoreLikeThis } from './dna.js';
 import { openSetupCenter } from './setup.js';
 import { init as i18nInit, setLocale, getSupportedLocales, t } from './i18n.js';
 import './activity.js';
@@ -322,6 +323,7 @@ window.addEventListener('DOMContentLoaded', () => {
     };
     $('contextAddPlaylist').onclick = () => { const name = $('contextPlaylist').value; const id = AppState.contextGameId; closeContextMenu(); if (name && id !== null) addGamesToPlaylist(name, [id]); };
     $('contextNewPlaylist').onclick = () => { const id = AppState.contextGameId; closeContextMenu(); if (id !== null) createManualPlaylist(id); };
+    $('contextDna').onclick = () => { const game = AppState.games.find(item => item.id === AppState.contextGameId); closeContextMenu(); if (game) dnaMoreLikeThis(game.name); };
     $('contextResetStats').onclick = async () => {
       const id = AppState.contextGameId;
       closeContextMenu();

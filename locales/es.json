@@ -1206,5 +1206,21 @@
     "merge": "Fusionar",
     "merged": "{count} entradas duplicadas fusionadas",
     "failed": "La fusión falló"
+  },
+  "dna": {
+    "mode_label": "Modo de búsqueda",
+    "mode_title": "Título",
+    "mode_smart": "Smart",
+    "search_placeholder_smart": "Describe el ambiente, el ánimo o las mecánicas…",
+    "results_title": "Resultados inteligentes",
+    "no_results": "Sin coincidencias inteligentes. Prueba con otro ambiente o mecánica.",
+    "empty_coverage": "Aún no hay descripciones — la búsqueda inteligente necesita texto. Usa Metadatos → Rellenar faltantes para añadir descripciones.",
+    "open_metadata": "Abrir metadatos",
+    "building": "Creando índice inteligente… {pct} %",
+    "cancel_build": "Cancelar creación",
+    "degraded_note": "Índice inteligente no disponible — mostrando coincidencias de título.",
+    "search_failed": "La búsqueda inteligente falló.",
+    "privacy_note": "100 % local · sin nube de IA, sin descargas",
+    "more_like_this": "Más como este"
   }
 }
