@@ -448,7 +448,7 @@ class LibraryHealthEngineTests(unittest.TestCase):
             helpers = health_engine._identity_helpers()
             self.assertIsNotNone(helpers)
             self.assertEqual(
-                helpers["legacy_identity"]({"path": "/x"}), ("path", "/x")
+                helpers["legacy_identity"]({"path": "/x"}), ("path", str(Path("/x")))
             )
 
     def test_media_types_fallback(self):
@@ -1126,12 +1126,12 @@ class ArtworkHygieneTests(unittest.TestCase):
         self.assertIsNone(artwork_hygiene.resolve_artwork_path(None))
         self.assertIsNone(artwork_hygiene.resolve_artwork_path("https://x/y.png"))
         self.assertEqual(
-            str(artwork_hygiene.resolve_artwork_path("/abs/cover.png")),
-            "/abs/cover.png",
+            artwork_hygiene.resolve_artwork_path("/abs/cover.png"),
+            Path("/abs/cover.png"),
         )
         self.assertEqual(
-            str(artwork_hygiene.resolve_artwork_path("rel/cover.png", "/media")),
-            "/media/rel/cover.png",
+            artwork_hygiene.resolve_artwork_path("rel/cover.png", "/media"),
+            Path("/media/rel/cover.png"),
         )
 
     def test_aspect_issue(self):
@@ -1831,11 +1831,14 @@ class WebAppRangeTests(unittest.TestCase):
         return handler, written
 
     def test_send_file_suffix_range(self):
-        with tempfile.NamedTemporaryFile() as tmp:
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
             tmp.write(b"0123456789")
-            tmp.flush()
+            tmp_name = tmp.name
+        try:
             handler, written = self._handler("bytes=-3")
-            web_app.Handler.send_file(handler, 200, tmp.name)
+            web_app.Handler.send_file(handler, 200, tmp_name)
+        finally:
+            os.unlink(tmp_name)
         self.assertEqual(b"".join(written), b"789")
 
     def test_send_file_invalid_range(self):

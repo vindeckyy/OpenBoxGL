@@ -55,10 +55,10 @@ def existing_for(games):
 
 
 def make_probe(existing):
-    existing = {str(path) for path in existing}
+    existing = {str(Path(path)) for path in existing}
 
     def probe(path, *, file_only=False):
-        return str(path or "") in existing
+        return str(Path(str(path or ""))) in existing
 
     return probe
 
@@ -150,7 +150,7 @@ class EngineContractTests(unittest.TestCase):
         self.assertIn("Duplicate", types)
         for kind, detail in legacy:
             if kind == "Missing game":
-                self.assertEqual(detail, missing)
+                self.assertEqual(detail, str(Path(missing)))
             if kind == "Missing box front":
                 self.assertEqual(detail, "No local cover image")
 
