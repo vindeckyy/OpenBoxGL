@@ -987,13 +987,16 @@ function saveAndClose() {
 
 export async function openSetupCenter({step = 1} = {}) {
   ensureSetupShell();
-  if (!state.summary) {
-    try { await loadSummary(); } catch { /* offline overview */ }
-  }
   state.step = step;
   renderPanel();
   const dialog = $('setupCenter');
   if (dialog && !dialog.open) dialog.showModal();
+  // Load the summary after the dialog is visible: every call site invokes
+  // this without awaiting, and the wizard must open synchronously as it did
+  // before the unified open path (ui-smoke pins this timing).
+  if (!state.summary) {
+    try { await loadSummary(); renderPanel(); } catch { /* offline overview */ }
+  }
 }
 
 function initSetupCenter() {
