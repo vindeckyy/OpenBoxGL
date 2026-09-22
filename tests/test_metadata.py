@@ -1368,6 +1368,277 @@ def pytest_raises_api(exc):
     return _ApiRaises(exc)
 
 
+class AutoScrapeTests(unittest.TestCase):
+    """Flagship 2: queue_auto_scrape submits exactly two jobs; offline default."""
+
+    def _job_manager(self):
+        submitted = []
+
+        class FakeJobManager:
+            def submit(self, name, worker, **kwargs):
+                submitted.append({"name": name, "operation_type": kwargs.get("operation_type")})
+                return {"job_id": f"job-{name}"}
+
+            def snapshot(self, name):
+                return {"state": "done"}
+
+        return submitted, FakeJobManager()
+
+    def test_queue_submits_exactly_two_jobs(self):
+        import handlers.metadata as hm
+
+        submitted, fake_jm = self._job_manager()
+        with mock.patch("handlers.metadata.JOB_MANAGER", fake_jm), \
+             mock.patch("handlers.metadata.METADATA_DATABASE") as mock_db, \
+             mock.patch("handlers.metadata.load_state", return_value={"settings": {}}):
+            mock_db.is_file.return_value = False
+            match_id, media_id, preview_id = hm.queue_auto_scrape("batch-1", media_types=["cover"])
+        self.assertEqual(
+            [entry["name"] for entry in submitted],
+            ["metadata-match:batch-1", "metadata-media:batch-1"],
+        )
+        self.assertEqual(submitted[0]["operation_type"], "metadata.match_auto")
+        self.assertEqual(submitted[1]["operation_type"], "metadata.media_auto")
+        self.assertEqual(match_id, "job-metadata-match:batch-1")
+        self.assertEqual(media_id, "job-metadata-media:batch-1")
+        self.assertIsNone(preview_id)
+
+    def test_media_worker_runs_steamgrid_fill_without_lbdb(self):
+        """The media worker still runs the opted-in SteamGridDB fill when the
+        LaunchBox database is unavailable."""
+        import handlers.metadata as hm
+
+        state = {"games": [{"game_id": "g-1", "name": "Alpha", "import_batch_id": "b-9",
+                            "screenscraper_id": 7}], "settings": {}}
+        submitted, fake_jm = self._job_manager()
+        with mock.patch("handlers.metadata.JOB_MANAGER", fake_jm), \
+             mock.patch("handlers.metadata.METADATA_DATABASE") as mock_db, \
+             mock.patch("handlers.metadata.load_state", return_value=state), \
+             mock.patch("handlers.metadata._auto_scrape_steamgrid_fill",
+                        return_value={"filled": 1}) as fill:
+            mock_db.is_file.return_value = False
+            summary = hm._auto_scrape_media_worker(None, "b-9", ["cover"], False)
+        self.assertEqual(summary["lbdb"]["skipped"], "metadata database not downloaded")
+        fill.assert_called_once()
+        self.assertEqual(summary["steamgrid"], {"filled": 1})
+
+    def test_queue_allows_empty_media_types_match_only(self):
+        """Empty media_types is valid: the match job still runs (match-only)."""
+        import handlers.metadata as hm
+
+        submitted, fake_jm = self._job_manager()
+        with mock.patch("handlers.metadata.JOB_MANAGER", fake_jm), \
+             mock.patch("handlers.metadata.METADATA_DATABASE") as mock_db, \
+             mock.patch("handlers.metadata.load_state", return_value={"settings": {}}):
+            mock_db.is_file.return_value = False
+            match_id, media_id, _ = hm.queue_auto_scrape("batch-1", media_types=[])
+        self.assertEqual([entry["name"] for entry in submitted],
+                         ["metadata-match:batch-1", "metadata-media:batch-1"])
+
+    def test_scrape_settings_round_trip(self):
+        """GET/POST /api/v2/metadata/scrape-settings persist the four keys with
+        defaults, bool coercion, and no other keys."""
+        import handlers.metadata as hm
+
+        store = {"settings": {}}
+        handler = DummyMetadataHandler()
+
+        def fake_transact(mutate):
+            mutate(store)
+            return (None, None)
+
+        with mock.patch("handlers.metadata.load_state", return_value=store), \
+             mock.patch("handlers.metadata.transact_state", side_effect=fake_transact):
+            hm._api_get_api_v2_metadata_scrape_settings(handler, mock.Mock())
+            status, payload, _ = handler.responses[-1]
+            self.assertEqual(status, 200)
+            self.assertEqual(payload, {
+                "scrape_after_import": True,
+                "scrape_screenscraper_enabled": False,
+                "scrape_igdb_enabled": False,
+                "scrape_steamgrid_enabled": False,
+            })
+            hm._api_post_api_v2_metadata_scrape_settings(handler, {
+                "scrape_after_import": 1,
+                "scrape_steamgrid_enabled": "yes",
+                "unknown_key": True,
+            })
+            status, payload, _ = handler.responses[-1]
+            self.assertEqual(status, 200)
+            self.assertEqual(payload["scrape_after_import"], True)
+            self.assertEqual(payload["scrape_steamgrid_enabled"], True)
+            self.assertEqual(payload["scrape_screenscraper_enabled"], False)
+            self.assertNotIn("unknown_key", store["settings"])
+            self.assertNotIn("unknown_key", payload)
+
+    def test_queue_validates_input(self):
+        import handlers.metadata as hm
+
+        with self.assertRaises(ValueError):
+            hm.queue_auto_scrape("  ")
+        with mock.patch("handlers.metadata.JOB_MANAGER"), \
+             mock.patch("handlers.metadata.load_state", return_value={"settings": {}}):
+            with self.assertRaises(ValueError):
+                hm.queue_auto_scrape("batch-1", media_types=["nope"])
+
+    def test_route_queues_when_enabled(self):
+        import handlers.metadata as hm
+
+        handler = DummyMetadataHandler()
+        submitted, fake_jm = self._job_manager()
+        with mock.patch("handlers.metadata.load_state", return_value={"settings": {"scrape_after_import": True}}), \
+             mock.patch("handlers.metadata.JOB_MANAGER", fake_jm), \
+             mock.patch("handlers.metadata.METADATA_DATABASE") as mock_db:
+            mock_db.is_file.return_value = False
+            hm.metadata_auto_scrape(handler, {"import_batch_id": "batch-2", "media_types": ["cover"]})
+        status, payload, _ = handler.responses[-1]
+        self.assertEqual(status, 202)
+        self.assertTrue(payload["queued"])
+        self.assertEqual(payload["match_job_id"], "job-metadata-match:batch-2")
+        self.assertEqual(payload["media_job_id"], "job-metadata-media:batch-2")
+        self.assertEqual(len(submitted), 2)
+
+    def test_route_respects_disabled_toggle(self):
+        import handlers.metadata as hm
+
+        handler = DummyMetadataHandler()
+        with mock.patch("handlers.metadata.load_state", return_value={"settings": {"scrape_after_import": False}}), \
+             mock.patch("handlers.metadata.JOB_MANAGER") as mock_jm:
+            hm.metadata_auto_scrape(handler, {"import_batch_id": "batch-1"})
+        status, payload, _ = handler.responses[-1]
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["queued"])
+        mock_jm.submit.assert_not_called()
+
+    def test_route_rejects_missing_batch(self):
+        import handlers.metadata as hm
+
+        handler = DummyMetadataHandler()
+        with self.assertRaises(BadRequest):
+            hm.metadata_auto_scrape(handler, {})
+
+    def test_scrape_settings_defaults(self):
+        import handlers.metadata as hm
+
+        with mock.patch("handlers.metadata.load_state", return_value={"settings": {}}):
+            settings = hm._auto_scrape_settings()
+        self.assertTrue(settings["scrape_after_import"])
+        self.assertFalse(settings["screenscraper"])
+        self.assertFalse(settings["igdb"])
+        self.assertFalse(settings["steamgrid"])
+
+    def test_offline_default_invokes_no_online_provider(self):
+        import handlers.metadata as hm
+
+        # Default settings: all provider opt-ins off. Passes must skip
+        # without touching provider configuration or network functions.
+        with mock.patch("handlers.metadata.load_state", return_value={"settings": {}}), \
+             mock.patch("handlers.metadata.screenscraper_configured") as ss_cfg, \
+             mock.patch("handlers.metadata.confident_hash_match") as ss_match, \
+             mock.patch("handlers.metadata.search_igdb_games") as igdb_search, \
+             mock.patch("handlers.metadata.fetch_igdb_game") as igdb_fetch, \
+             mock.patch("handlers.metadata.search_steamgrid_games") as sgdb_search:
+            summary = {}
+            hm._auto_scrape_screenscraper_pass("batch-1", None, summary)
+            hm._auto_scrape_igdb_pass("batch-1", None, summary)
+            fill = hm._auto_scrape_steamgrid_fill("batch-1", ["cover"], None)
+        self.assertTrue(summary["screenscraper"]["skipped"])
+        self.assertTrue(summary["igdb"]["skipped"])
+        self.assertTrue(fill["skipped"])
+        ss_cfg.assert_not_called()
+        ss_match.assert_not_called()
+        igdb_search.assert_not_called()
+        igdb_fetch.assert_not_called()
+        sgdb_search.assert_not_called()
+
+
+class ExactCandidateApplyTests(unittest.TestCase):
+    """Flagship 2: thumbnail chooser exact-candidate apply (LaunchBox)."""
+
+    def test_apply_metadata_uses_exact_candidate(self):
+        game = {"game_id": "g-1", "name": "Alpha"}
+        state = {"games": [game], "settings": {}}
+        with mock.patch("handlers.metadata.METADATA_DATABASE") as mock_db, \
+             mock.patch("handlers.metadata.load_state", return_value=state), \
+             mock.patch("handlers.metadata.game_from_payload", side_effect=lambda s, p: game), \
+             mock.patch("handlers.metadata.apply_game_metadata", return_value={"background": "/media/bg.png"}) as auto, \
+             mock.patch("handlers.metadata.download_bytes", return_value="/media/exact-cover.png") as download, \
+             mock.patch("handlers.metadata._lbdb_candidate_urls",
+                        return_value={("cover", "https://images.launchbox-app.com/exact.png")}), \
+             mock.patch("handlers.metadata.transact_state", side_effect=lambda m: (m(state), None)), \
+             mock.patch("handlers.metadata.bump_media_epoch"):
+            mock_db.is_file.return_value = True
+            handler = DummyMetadataHandler()
+            handler.apply_metadata({
+                "game_id": "g-1", "database_id": 10,
+                "media": ["cover", "background"], "overwrite": False,
+                "media_urls": {
+                    "cover": "https://images.launchbox-app.com/exact.png",
+                    "banner": "not-a-url",
+                },
+            })
+        self.assertEqual(handler.responses[-1][0], 200)
+        # The exact kind skips the top-pick; the invalid banner URL is dropped.
+        self.assertEqual(auto.call_args[0][3], ["background"])
+        download.assert_called_once()
+        self.assertEqual(download.call_args[0][0], "https://images.launchbox-app.com/exact.png")
+        self.assertEqual(game.get("cover"), "/media/exact-cover.png")
+        self.assertEqual(game.get("background"), "/media/bg.png")
+
+    def test_apply_metadata_rejects_url_outside_candidates(self):
+        game = {"game_id": "g-1", "name": "Alpha"}
+        state = {"games": [game], "settings": {}}
+        with mock.patch("handlers.metadata.METADATA_DATABASE") as mock_db, \
+             mock.patch("handlers.metadata.load_state", return_value=state), \
+             mock.patch("handlers.metadata.game_from_payload", side_effect=lambda s, p: game), \
+             mock.patch("handlers.metadata.apply_game_metadata", return_value={}), \
+             mock.patch("handlers.metadata.download_bytes", return_value="/media/x.png") as download, \
+             mock.patch("handlers.metadata._lbdb_candidate_urls", return_value=set()), \
+             mock.patch("handlers.metadata.transact_state", side_effect=lambda m: (m(state), None)), \
+             mock.patch("handlers.metadata.bump_media_epoch"):
+            mock_db.is_file.return_value = True
+            handler = DummyMetadataHandler()
+            handler.apply_metadata({
+                "game_id": "g-1", "database_id": 10,
+                "media": ["cover"], "overwrite": False,
+                # Trust boundary: syntactically valid but not a candidate for
+                # this record — must be dropped so the server never fetches it.
+                "media_urls": {"cover": "https://attacker.example/evil.png"},
+            })
+        self.assertEqual(handler.responses[-1][0], 200)
+        download.assert_not_called()
+        self.assertNotIn("cover", game)
+
+    def test_media_candidates_route(self):
+        import sqlite3
+
+        handler = DummyMetadataHandler()
+        with TemporaryDirectory() as tmp:
+            db = Path(tmp) / "metadata.db"
+            connection = sqlite3.connect(db)
+            connection.execute("CREATE TABLE images (database_id INTEGER, filename TEXT, type TEXT, region TEXT)")
+            connection.executemany("INSERT INTO images VALUES (?,?,?,?)", [
+                (7, "box.png", "Box - Front", "World"),
+                (7, "box-eu.png", "Box - Front", "Europe"),
+                (7, "flyer.png", "Advertisement Flyer - Front", "World"),
+                (7, "manual.pdf", "Manual", "World"),
+                (8, "other.png", "Box - Front", "World"),
+            ])
+            connection.commit()
+            connection.close()
+            with mock.patch("handlers.metadata.METADATA_DATABASE", db):
+                handler._api_get_api_v2_metadata_media_candidates(mock.Mock(query="database_id=7"))
+                with self.assertRaises(BadRequest):
+                    handler._api_get_api_v2_metadata_media_candidates(mock.Mock(query=""))
+        status, payload, _ = handler.responses[-1]
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["database_id"], 7)
+        self.assertEqual([c["kind"] for c in payload["candidates"]], ["advertisement", "cover", "cover"])
+        self.assertTrue(all(
+            c["url"].startswith("https://images.launchbox-app.com/") for c in payload["candidates"]
+        ))
+
+
 class _ApiRaises:
     def __init__(self, exc):
         self.exc = exc
@@ -1384,7 +1655,7 @@ class _ApiRaises:
 def run_match_preview_unittests():
     loader = unittest.defaultTestLoader
     suite = unittest.TestSuite()
-    for case in (MatchPreviewV2Tests, MetadataHandlerRouteTests):
+    for case in (MatchPreviewV2Tests, MetadataHandlerRouteTests, AutoScrapeTests, ExactCandidateApplyTests):
         suite.addTests(loader.loadTestsFromTestCase(case))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     if not result.wasSuccessful():

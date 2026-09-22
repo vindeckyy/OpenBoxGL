@@ -55,6 +55,12 @@ KNOWN_SETTINGS = {
     "library_music",
     "video_bgm_mix",
     "active_media_packs",
+    # automatic post-import scrape (Flagship 2): master toggle plus per-provider
+    # opt-ins. Online providers stay off unless explicitly opted in.
+    "scrape_after_import",
+    "scrape_screenscraper_enabled",
+    "scrape_igdb_enabled",
+    "scrape_steamgrid_enabled",
     # big box and display
     "bigbox_mode",
     "bigbox_quick",

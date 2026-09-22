@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import re
 import sys
 import uuid
 from pathlib import Path
@@ -96,6 +97,23 @@ def _media_root(game, fallback="game"):
 def _ext_for(url, default):
     candidate = Path(str(url).split("?")[0]).suffix.casefold()
     return candidate if candidate else default
+
+
+def _clean_exact_media_urls(value, allowed):
+    """Validate an exact-candidate ``{kind: url}`` map for thumbnail chooser apply.
+
+    Only http(s) URLs for known media kinds that appear in ``allowed``
+    (the candidate set for the chosen SteamGridDB game) survive; anything
+    else is dropped so the client cannot pick an arbitrary download URL.
+    """
+    cleaned = {}
+    if isinstance(value, dict):
+        for kind, url in value.items():
+            kind = str(kind or "").strip()
+            url = str(url or "").strip()
+            if kind in _DEFAULT_MEDIA_KINDS and re.match(r"^https?://\S+$", url, re.IGNORECASE) and (kind, url) in allowed:
+                cleaned[kind] = url
+    return cleaned
 
 
 def _download_media(media_urls, original, media_root, replace_existing):
@@ -196,6 +214,15 @@ def steamgrid_apply(handler, payload):
             sgd_id = found[0].get("id")
         metadata = game_info(sgd_id, cache_dir=_cache_dir())
         media_urls = choose_media(metadata, media_kinds)
+        # Exact-candidate apply from the thumbnail chooser wins over the top
+        # pick — but only for URLs the provider returned for this game id, so
+        # the client cannot make the server fetch an arbitrary URL.
+        allowed = {
+            (str(entry.get("kind") or "").strip(), str(entry.get("url") or "").strip())
+            for entry in (metadata.get("media") or [])
+            if isinstance(entry, dict) and entry.get("url")
+        }
+        media_urls.update(_clean_exact_media_urls(payload.get("media_urls"), allowed))
         media_root = _media_root(original, stable_id)
         downloaded = _download_media(media_urls, original, media_root, replace_existing)
 

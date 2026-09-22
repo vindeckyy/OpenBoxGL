@@ -64,6 +64,65 @@ class HashRomTest(unittest.TestCase):
                 ss.hash_rom(big)
 
 
+class HashConfidenceTest(unittest.TestCase):
+    def test_tier_dual_when_lookups_agree(self):
+        md5 = {"id": 42, "name": "Game"}
+        crc = {"id": 42, "name": "Game"}
+        self.assertEqual(ss.hash_tier(md5, crc), ss.HASH_TIER_DUAL)
+
+    def test_tier_single_on_mismatch(self):
+        self.assertEqual(ss.hash_tier({"id": 1}, {"id": 2}), ss.HASH_TIER_SINGLE)
+
+    def test_tier_single_on_partial_evidence(self):
+        self.assertEqual(ss.hash_tier(None, {"id": 2}), ss.HASH_TIER_SINGLE)
+        self.assertEqual(ss.hash_tier({"id": 1}, None), ss.HASH_TIER_SINGLE)
+
+    def test_tier_none_without_evidence(self):
+        self.assertEqual(ss.hash_tier(None, None), ss.HASH_TIER_NONE)
+
+    def test_auto_apply_only_at_dual(self):
+        self.assertTrue(ss.auto_apply_allowed(ss.HASH_TIER_DUAL))
+        for tier in (ss.HASH_TIER_SINGLE, ss.HASH_TIER_TITLE, ss.HASH_TIER_NONE, "bogus"):
+            self.assertFalse(ss.auto_apply_allowed(tier))
+
+    def _patched_match(self, lookups):
+        hashes = {"md5": "m", "crc": "c", "sha1": "s"}
+        return (
+            mock.patch.object(ss, "hash_rom", return_value=hashes),
+            mock.patch.object(ss, "hash_lookup", side_effect=lookups),
+        )
+
+    def test_confident_match_dual(self):
+        hash_patch, lookup_patch = self._patched_match([{"id": 7, "name": "G"}, {"id": 7, "name": "G"}])
+        with hash_patch, lookup_patch as lookup:
+            metadata, tier = ss.confident_hash_match("/tmp/game.sfc")
+        self.assertEqual(tier, ss.HASH_TIER_DUAL)
+        self.assertEqual(metadata["id"], 7)
+        kinds = [call.kwargs["hash_kind"] for call in lookup.call_args_list]
+        self.assertEqual(kinds, ["md5", "crc"])
+        # Each lookup carries exactly one hash kind: dual evidence, not one query.
+        for call in lookup.call_args_list:
+            params = call.args[1] if len(call.args) > 1 else call.kwargs.get("hashes")
+            self.assertIn(call.kwargs["hash_kind"], params)
+
+    def test_confident_match_mismatch_is_single(self):
+        hash_patch, lookup_patch = self._patched_match([{"id": 1, "name": "A"}, {"id": 2, "name": "B"}])
+        with hash_patch, lookup_patch:
+            metadata, tier = ss.confident_hash_match("/tmp/game.sfc")
+        self.assertEqual(tier, ss.HASH_TIER_SINGLE)
+        self.assertEqual(metadata["id"], 1)
+
+    def test_confident_match_not_found(self):
+        hash_patch, lookup_patch = self._patched_match([ValueError("no md5"), ValueError("no crc")])
+        with hash_patch, lookup_patch:
+            with self.assertRaises(ValueError):
+                ss.confident_hash_match("/tmp/game.sfc")
+
+    def test_hash_lookup_rejects_unknown_kind(self):
+        with self.assertRaises(ValueError):
+            ss.hash_lookup("/tmp/game.sfc", {"md5": "m", "crc": "c"}, hash_kind="sha1")
+
+
 class ChooseMediaTest(unittest.TestCase):
     METADATA = {
         "media": [
@@ -332,6 +391,67 @@ class ScreenScraperHandlerTest(unittest.TestCase):
             transact.assert_called_once()
             self.assertEqual(game.get("cover"), str(media_root / "cover.jpg"))
 
+    def test_apply_uses_exact_media_url(self):
+        """Thumbnail chooser: media_urls overrides the choose_media top pick."""
+        import handlers.screenscraper as handler_module
+
+        game = {"game_id": "game-a", "name": "Alpha", "platform": "SNES", "path": "/tmp/rom.sfc"}
+        state = {"games": [game], "settings": {"region_priority": ["Japan"]}}
+        metadata = {"id": 9, "name": "Alpha", "media": [
+            {"kind": "cover", "url": "https://ss/top.png", "order": 0},
+            {"kind": "cover", "url": "https://ss/exact.png", "order": 1},
+        ]}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            media_root = Path(tmp)
+            with mock.patch.object(handler_module, "load_state", return_value=state), \
+                 mock.patch.object(handler_module, "game_from_payload", side_effect=lambda state_, payload_: game), \
+                 mock.patch.object(handler_module, "game_info", return_value=metadata), \
+                 mock.patch.object(handler_module, "choose_media", return_value={"cover": "https://ss/top.png"}), \
+                 mock.patch.object(handler_module, "clean_media_url", side_effect=lambda url: url), \
+                 mock.patch.object(handler_module, "download_bytes", return_value=str(media_root / "cover.jpg")) as download, \
+                 mock.patch.object(handler_module, "transact_state", side_effect=lambda mutate: (None, mutate(state))), \
+                 mock.patch.object(handler_module, "JOB_MANAGER", self.job_manager()):
+                h = self.handler()
+                h._api_post_api_v2_screenscraper_apply({
+                    "id": "game-a", "scraper_id": 9, "media": ["cover"],
+                    "media_urls": {"cover": "https://ss/exact.png"},
+                })
+            self.assertEqual(h.responses[0][0], 202)
+            download.assert_called_once()
+            self.assertEqual(download.call_args[0][0], "https://ss/exact.png")
+            self.assertEqual(game.get("cover"), str(media_root / "cover.jpg"))
+
+    def test_apply_rejects_url_outside_provider_media(self):
+        """Trust boundary: syntactically valid URL absent from the provider's
+        media for the chosen game id is dropped; the top pick wins instead."""
+        import handlers.screenscraper as handler_module
+
+        game = {"game_id": "game-a", "name": "Alpha", "platform": "SNES", "path": "/tmp/rom.sfc"}
+        state = {"games": [game], "settings": {"region_priority": ["Japan"]}}
+        metadata = {"id": 9, "name": "Alpha", "media": [
+            {"kind": "cover", "url": "https://ss/top.png", "order": 0},
+        ]}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            media_root = Path(tmp)
+            with mock.patch.object(handler_module, "load_state", return_value=state), \
+                 mock.patch.object(handler_module, "game_from_payload", side_effect=lambda state_, payload_: game), \
+                 mock.patch.object(handler_module, "game_info", return_value=metadata), \
+                 mock.patch.object(handler_module, "choose_media", return_value={"cover": "https://ss/top.png"}), \
+                 mock.patch.object(handler_module, "clean_media_url", side_effect=lambda url: url), \
+                 mock.patch.object(handler_module, "download_bytes", return_value=str(media_root / "cover.jpg")) as download, \
+                 mock.patch.object(handler_module, "transact_state", side_effect=lambda mutate: (None, mutate(state))), \
+                 mock.patch.object(handler_module, "JOB_MANAGER", self.job_manager()):
+                h = self.handler()
+                h._api_post_api_v2_screenscraper_apply({
+                    "id": "game-a", "scraper_id": 9, "media": ["cover"],
+                    "media_urls": {"cover": "https://attacker.example/evil.png"},
+                })
+            self.assertEqual(h.responses[0][0], 202)
+            download.assert_called_once()
+            self.assertEqual(download.call_args[0][0], "https://ss/top.png")
+
     def test_test_route_reports_connection(self):
         with mock.patch.object(ss, "user_info", return_value={"response": {"ssuser": {"quota": {"requeststoday": 5}}}}):
             h = self.handler()
@@ -352,8 +472,8 @@ class ScreenScraperHandlerTest(unittest.TestCase):
             ]
             state = {"games": games, "settings": {}}
             with mock.patch.object(handler_module, "load_state", return_value=state), \
-                 mock.patch.object(ss, "hash_rom", return_value={"md5": "x"}), \
-                 mock.patch.object(handler_module, "game_info", side_effect=[{"id": 12, "name": "Match"}, ValueError("rate limited")]), \
+                 mock.patch.object(handler_module, "confident_hash_match", side_effect=[({"id": 12, "name": "Match"}, "dual"), ValueError("rate limited")]), \
+                 mock.patch.object(handler_module, "search_games", return_value=[]), \
                  mock.patch.object(handler_module, "JOB_MANAGER", self.job_manager()):
                 h = self.handler()
                 h._api_post_api_v2_screenscraper_match({"ids": ["game-a", "game-b", "game-c"]})
@@ -361,7 +481,57 @@ class ScreenScraperHandlerTest(unittest.TestCase):
         result = self.last_job["result"]
         self.assertEqual(result["matches"][0]["status"], "no_rom")
         self.assertEqual(result["matches"][1]["status"], "matched")
-        self.assertEqual(result["matches"][2]["status"], "error")
+        self.assertEqual(result["matches"][1]["matched_by"], "hash")
+        self.assertEqual(result["matches"][1]["confidence"], "dual")
+        self.assertNotIn("applied", result["matches"][1])
+        self.assertEqual(result["matches"][2]["status"], "not_found")
+
+    def test_match_job_title_fallback_on_hash_mismatch(self):
+        import handlers.screenscraper as handler_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = Path(tmp) / "c.sfc"
+            rom.write_bytes(b"rom-bytes")
+            games = [{"game_id": "game-d", "name": "Conflict", "platform": "SNES", "path": str(rom)}]
+            state = {"games": games, "settings": {}}
+            with mock.patch.object(handler_module, "load_state", return_value=state), \
+                 mock.patch.object(handler_module, "confident_hash_match", return_value=({"id": 1, "name": "Hash Hit"}, "single")), \
+                 mock.patch.object(handler_module, "search_games", return_value=[{"id": 2, "name": "Title Hit"}]), \
+                 mock.patch.object(handler_module, "JOB_MANAGER", self.job_manager()):
+                h = self.handler()
+                h._api_post_api_v2_screenscraper_match({"ids": ["game-d"], "apply_confident": True})
+        result = self.last_job["result"]
+        entry = result["matches"][0]
+        # Hash mismatch falls through to title; title is review-only, never applied.
+        self.assertEqual(entry["status"], "matched")
+        self.assertEqual(entry["matched_by"], "title")
+        self.assertEqual(entry["confidence"], "title")
+        self.assertEqual(entry["scraper_id"], 2)
+        self.assertNotIn("applied", entry)
+
+    def test_match_job_apply_confident_applies_only_dual(self):
+        import handlers.screenscraper as handler_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = Path(tmp) / "d.sfc"
+            rom.write_bytes(b"rom-bytes")
+            game = {"game_id": "game-e", "name": "Dual", "platform": "SNES", "path": str(rom)}
+            state = {"games": [game], "settings": {}}
+            metadata = {"id": 21, "name": "Dual Hit", "media": []}
+            with mock.patch.object(handler_module, "load_state", return_value=state), \
+                 mock.patch.object(handler_module, "game_from_payload", side_effect=lambda state_, payload_: game), \
+                 mock.patch.object(handler_module, "confident_hash_match", return_value=(metadata, "dual")), \
+                 mock.patch.object(handler_module, "transact_state", side_effect=lambda mutate: (None, mutate(state))) as transact, \
+                 mock.patch.object(handler_module, "JOB_MANAGER", self.job_manager()):
+                h = self.handler()
+                h._api_post_api_v2_screenscraper_match({"ids": ["game-e"], "apply_confident": True})
+        result = self.last_job["result"]
+        entry = result["matches"][0]
+        self.assertTrue(entry.get("applied"))
+        transact.assert_called_once()
+        self.assertEqual(game.get("screenscraper_id"), 21)
+        self.assertEqual(game.get("matched_by"), "hash")
+        self.assertEqual(game.get("match_confidence"), "dual")
 
     def job_manager(self):
         captured = {}

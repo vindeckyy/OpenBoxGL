@@ -54,6 +54,10 @@ function blankState() {
       include_owned_uninstalled: false,
       watch_folders: false,
       metadata_sync: false,
+      scrape_after_import: true,
+      scrape_screenscraper_enabled: false,
+      scrape_igdb_enabled: false,
+      scrape_steamgrid_enabled: false,
       media_types: ['cover', 'background'],
       region_preference: 'world',
       download_limit: 0,
@@ -439,8 +443,15 @@ function renderOptions() {
   return `
     <div class="setup-options" data-setup-panel="options">
       <label class="field setup-checkbox"><input type="checkbox" id="setupMetadataSync" ${state.options.metadata_sync ? 'checked' : ''}> Download / update LaunchBox metadata database after import</label>
+      <label class="field setup-checkbox"><input type="checkbox" id="setupScrapeAfterImport" ${state.options.scrape_after_import ? 'checked' : ''}> Automatically match metadata and download media after import</label>
       <fieldset class="setup-fieldset">
-        <legend>Media types to download (fill missing only by default)</legend>
+        <legend>Online providers for automatic matching (optional; each needs its credentials configured in Settings)</legend>
+        <label class="field setup-checkbox"><input type="checkbox" id="setupScrapeScreenscraper" ${state.options.scrape_screenscraper_enabled ? 'checked' : ''}> ScreenScraper (dual ROM-hash match)</label>
+        <label class="field setup-checkbox"><input type="checkbox" id="setupScrapeIgdb" ${state.options.scrape_igdb_enabled ? 'checked' : ''}> IGDB (exact title match)</label>
+        <label class="field setup-checkbox"><input type="checkbox" id="setupScrapeSteamgrid" ${state.options.scrape_steamgrid_enabled ? 'checked' : ''}> SteamGridDB (missing artwork fill)</label>
+      </fieldset>
+      <fieldset class="setup-fieldset">
+        <legend>Media types to download (fill missing only by default; uncheck all to match metadata without downloading media)</legend>
         <div class="setup-media-grid">${mediaChecks}</div>
       </fieldset>
       <label class="field">Region preference
@@ -572,6 +583,12 @@ function bindPanelEvents() {
   });
   const metadataSync = $('setupMetadataSync');
   if (metadataSync) metadataSync.onchange = () => { state.options.metadata_sync = metadataSync.checked; };
+  const scrapeAfterImport = $('setupScrapeAfterImport');
+  if (scrapeAfterImport) scrapeAfterImport.onchange = () => { state.options.scrape_after_import = scrapeAfterImport.checked; };
+  for (const [id, key] of [['setupScrapeScreenscraper', 'scrape_screenscraper_enabled'], ['setupScrapeIgdb', 'scrape_igdb_enabled'], ['setupScrapeSteamgrid', 'scrape_steamgrid_enabled']]) {
+    const box = $(id);
+    if (box) box.onchange = () => { state.options[key] = box.checked; };
+  }
   const replaceExisting = $('setupReplaceExisting');
   if (replaceExisting) replaceExisting.onchange = () => { state.options.replace_existing = replaceExisting.checked; };
   const region = $('setupRegionPreference');
@@ -850,43 +867,47 @@ async function runFinishPipeline() {
   }
   if (state.importBatchId) {
     try {
-      const preview = await api('/api/v2/metadata/matches/preview', {
+      // Persist the auto-scrape preferences through the owned v2 endpoint so
+      // the settings handler's normalization stays untouched.
+      await api('/api/v2/metadata/scrape-settings', {
         method: 'POST',
-        body: JSON.stringify({game_ids: null, import_batch_id: state.importBatchId}),
+        body: JSON.stringify({
+          scrape_after_import: state.options.scrape_after_import,
+          scrape_screenscraper_enabled: state.options.scrape_screenscraper_enabled,
+          scrape_igdb_enabled: state.options.scrape_igdb_enabled,
+          scrape_steamgrid_enabled: state.options.scrape_steamgrid_enabled,
+        }),
       });
-      if (preview.job_id) await waitForJob(preview.job_id);
-      const doc = await api(`/api/v2/metadata/matches/preview?preview_id=${encodeURIComponent(preview.preview_id)}`);
-      finishCounts.unmatched = (doc.counts?.unmatched ?? 0) + (doc.counts?.exact_review ?? 0) + (doc.counts?.likely ?? 0) + (doc.counts?.possible ?? 0);
-      const needsReview = (doc.counts?.exact_review || 0) + (doc.counts?.likely || 0) + (doc.counts?.possible || 0) + (doc.counts?.unmatched || 0);
-      if (needsReview > 0) {
-        state._openMatchReview = true;
-      }
     } catch (error) {
-      notify('warning', `Metadata match preview failed: ${error.message}`);
+      notify('warning', `Could not save auto-scrape preference: ${error.message}`);
     }
   }
-  if (state.options.media_types.length) {
+  // One auto-scrape call queues exactly the match + media jobs; review
+  // stays available for matches the automatic pass could not resolve.
+  // Matching still runs when no media types are selected (match-only).
+  if (state.importBatchId && state.options.scrape_after_import) {
     try {
-      await refresh();
-      const gameIds = AppState.games
-        .filter(game => game.import_batch_id === state.importBatchId)
-        .map(game => String(game.game_id || game.id))
-        .filter(Boolean);
-      state.importedGameIds = gameIds;
-      if (gameIds.length) {
-        const bulk = await api('/api/media/bulk', {
-          method: 'POST',
-          body: JSON.stringify({
-            game_ids: gameIds,
-            media: state.options.media_types,
-            overwrite: state.options.replace_existing,
-          }),
-        });
-        if (bulk.job_id) await waitForJob(bulk.job_id);
-        finishCounts.media_complete = gameIds.length;
+      const scrape = await api('/api/v2/metadata/auto-scrape', {
+        method: 'POST',
+        body: JSON.stringify({
+          import_batch_id: state.importBatchId,
+          media_types: state.options.media_types,
+          overwrite: state.options.replace_existing,
+        }),
+      });
+      if (scrape.queued) {
+        if (scrape.match_job_id) await waitForJob(scrape.match_job_id, {timeoutMs: 600000});
+        if (scrape.media_job_id) await waitForJob(scrape.media_job_id, {timeoutMs: 600000});
+        if (scrape.preview_id) {
+          const doc = await api(`/api/v2/metadata/matches/preview?preview_id=${encodeURIComponent(scrape.preview_id)}`);
+          finishCounts.unmatched = (doc.counts?.unmatched ?? 0) + (doc.counts?.exact_review ?? 0) + (doc.counts?.likely ?? 0) + (doc.counts?.possible ?? 0);
+          if (finishCounts.unmatched > 0) {
+            state._openMatchReview = true;
+          }
+        }
       }
     } catch (error) {
-      notify('warning', `Media download failed: ${error.message}`);
+      notify('warning', `Automatic metadata scrape failed: ${error.message}`);
     }
   }
   try {
