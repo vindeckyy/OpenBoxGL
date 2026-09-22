@@ -1014,9 +1014,11 @@ class ArtworkHygieneTests(unittest.TestCase):
     def test_resolve_artwork_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertIsNone(artwork_hygiene.resolve_artwork_path("", tmp))
+            # Absolute path (with drive on Windows) is returned unchanged.
+            abs_path = Path(tmp) / "does-not-exist-xyz.png"
             self.assertEqual(
-                artwork_hygiene.resolve_artwork_path("/tmp/does-not-exist-xyz.png", tmp),
-                Path("/tmp/does-not-exist-xyz.png"),
+                artwork_hygiene.resolve_artwork_path(str(abs_path), tmp),
+                abs_path,
             )
             image = Path(tmp) / "art.png"
             image.write_bytes(self._png(16, 16))
