@@ -227,7 +227,10 @@ class RepairRouteTests(unittest.TestCase):
         self.assertEqual(result["updated"], 1)
 
         from webapp_state import load_state_view
-        self.assertEqual(load_state_view()["games"][0]["path"], str(self.folder / "relink.rom"))
+        self.assertEqual(
+            load_state_view()["games"][0]["path"],
+            str((self.folder / "relink.rom").resolve()),
+        )
 
     def test_preview_rejects_bad_folder(self):
         from api_errors import BadRequest

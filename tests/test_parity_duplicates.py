@@ -89,8 +89,10 @@ class DuplicatesPureTests(unittest.TestCase):
         path_state = {
             "history": [],
             "games": [
-                {"game_id": "g1", "name": "One", "platform": "PC", "path": "/roms/a.ROM"},
-                {"game_id": "g2", "name": "Two", "platform": "PC", "path": "/roms/A.rom"},
+                {"game_id": "g1", "name": "One", "platform": "PC", "path": "/roms/a.ROM",
+                 "source_identities": ["test:g1"]},
+                {"game_id": "g2", "name": "Two", "platform": "PC", "path": "/roms/A.rom",
+                 "source_identities": ["test:g2"]},
             ],
         }
         payload = find_duplicates(path_state)
