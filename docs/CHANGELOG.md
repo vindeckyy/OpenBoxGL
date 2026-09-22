@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+- In-app What's New dialog now highlights the 1.14.0 flagships instead of
+  the 1.11 highlights.
+
 ## [1.14.0] - 2026-09-22
 
 ### Added
@@ -28,7 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   backlog layer on top of the existing progress field:
   - Status stays on the existing `progress` enum; unset renders as
     "Unplayed" everywhere (cards, details, badges, explorer facets, filters).
-    "Dropped" maps to `Abandoned`. New smart-query grammar: `progress:unplayed`,
+    "Abandoned" covers the plan's "Dropped" wording; only "Unplayed"
+    canonicalizes (to unset). New smart-query grammar: `progress:unplayed`,
     `my 4 stars`, `unrated by me`, `myrating:4`, plus `user_rating_min` /
     `user_rating_unrated` clause kinds distinct from the metadata `rating`
     predicates.
@@ -1309,7 +1314,8 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.13.1...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.12.1...v1.13.0
 [1.12.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.12.0...v1.12.1

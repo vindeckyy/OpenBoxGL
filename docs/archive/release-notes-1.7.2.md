@@ -1,5 +1,9 @@
 # OpenBox v1.7.2
 
+> **Archived release notes.** These notes describe the OpenBox 1.7.2 release as
+> shipped; they are retained for traceability, not as current documentation.
+> See `docs/CHANGELOG.md` for the maintained release history.
+
 ## Localization
 
 - Full **i18n system**: `data-i18n` attributes in `index.html`, `t(key)` in JS via `static/i18n.js`, JSON locale files for **English, Spanish, German, French, and Portuguese** in `locales/`.

@@ -3,21 +3,22 @@
 Six flagships that make the library smarter, more personal, and couch-ready.
 No account, no cloud, no telemetry — everything runs locally.
 
----
+## What's New
 
-## Added
-
-- **Plugins 2.0.** Per-plugin checksum-bound trust (updates re-prompt, no
-  global trust toggle), Android-style permission prompts at install/enable
-  time, per-plugin settings forms generated from the manifest, a
-  `library_source` importer hook that merges plugin games into the library
-  with a source badge, a single `events` lifecycle hook, a catalog browser
-  tab with Install/Update, and palette integration for plugin commands.
-- **Effortless metadata.** One auto-scrape pass after import: offline
-  match preview plus opt-in ScreenScraper dual-hash and IGDB passes, then
-  media fill from LaunchBox and SteamGridDB. All providers off by default
-  with per-run budgets. New thumbnail chooser on every search result, ROM-hash
-  confidence before anything auto-applies, and a "Time to beat" fact card.
+- **Plugins 2.0.** Per-plugin trust bound to the package checksum — updates
+  re-prompt, no global trust toggle. Android-style permission prompts at
+  install and enable time, per-plugin settings forms generated from the
+  manifest, a `library_source` importer hook that merges plugin games into
+  the library with a source badge, a single `events` lifecycle hook, a
+  catalog browser tab with per-entry Install/Update, and palette integration
+  for plugin commands.
+- **Effortless metadata.** One auto-scrape pass after import: offline match
+  preview plus opt-in ScreenScraper dual-hash and IGDB passes, then media
+  fill from LaunchBox and SteamGridDB. All providers stay off by default
+  with per-run budgets, ROM-hash confidence gates anything that
+  auto-applies, and a thumbnail chooser on LaunchBox, SteamGridDB, and
+  ScreenScraper search results lets you pick the exact image. Plus a
+  "Time to beat" fact card.
 - **Backlog management.** Every game gets a personal backlog layer: Unplayed
   status rendering, personal 0–5 star ratings with picker weighting, manual
   playtime logging, dated notes, and an optional one-time "Mark as Playing?"
@@ -33,8 +34,8 @@ No account, no cloud, no telemetry — everything runs locally.
   missing-file repair wizard, and duplicate merge.
 - **Game DNA search.** Fully offline smart search: a Title | Smart toggle on
   the search box, BM25 plus a curated 151-concept lexicon in five languages,
-  "why" explanation chips, "More like this" in the details pane, card menu,
-  and Big Box. No AI cloud, no downloads — standard library only.
+  "why" explanation chips, and "More like this" in the details pane, card
+  menu, and Big Box. No AI cloud, no downloads — standard library only.
 
 ## Fixed
 
@@ -45,13 +46,6 @@ No account, no cloud, no telemetry — everything runs locally.
   party overlay; the overlay guard is restored.
 - Opening the Big Box pause overlay for a game without attached documents no
   longer crashes.
-
-## Changed
-
-- The three per-surface gamepad poll loops are unified into a single rAF loop
-  in `static/gamepad.js`. No input behavior changes.
-- Plugin API v1 is frozen (ADR 0050): manifests declare `api_version`, with a
-  `command` hook and up to 32 palette commands.
 
 ---
 

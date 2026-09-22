@@ -227,7 +227,7 @@ The palette is a unified warm ramp built from the OpenBox logo orange (`#f06000`
 
 **Label/Mono Font:** No distinct mono face is defined in the base system. Labels use the same sans family with uppercase tracking.
 
-**Character:** The base type system is compact, assertive, and easy to scan at small sizes. Stock themes may replace the base stack; Midnight Circuit, for example, uses Syne for display-like labels and Manrope for body copy, while Cinema Marquee uses Bebas Neue for headings.
+**Character:** The base type system is compact, assertive, and easy to scan at small sizes. Stock themes may replace the base stack through `:root` token overrides; the shipped themes define no custom font faces, so all type renders in the base stack unless a future theme adds one.
 
 ### Hierarchy
 - **Display** (900, `clamp(34px, 6vw, 78px)`, 1): Lifecycle and screensaver statements.

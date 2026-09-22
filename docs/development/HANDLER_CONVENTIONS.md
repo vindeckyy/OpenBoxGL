@@ -8,7 +8,7 @@ How handlers are structured, validated, and wired in OpenBox.
 - `NotFound` (404): requested resource does not exist. Use `GameNotFound`, `DocumentNotFound`, `PlatformDocumentNotFound` as appropriate.
 - `Conflict` (409): operation cannot proceed due to current state (e.g., metadata database not downloaded).
 - `ValueError`: caught by the framework and mapped to 400. Prefer raising `BadRequest` directly for machine-readable codes.
-- `FileNotFoundError`: caught by the framework and mapped to 404.
+- `FileNotFoundError`: caught by the framework alongside `ValueError` and mapped to 400 via `BadRequest`. Raise `GameNotFound`/`DocumentNotFound` for a missing game or document when the client should see 404.
 
 ## State access
 

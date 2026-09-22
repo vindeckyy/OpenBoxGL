@@ -139,6 +139,11 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Per-game Game Story | done | Detail-pane Story tab narrates added/first-played/milestone/moment history via `GET /api/v2/story` (1.12.0, ADR 0047) |
 | Per-game launch environment and confirm | done | `launch_env` KEY=value overrides merge over the launch environment and `launch_confirm` asks before preflight, per game (1.12.0, ADR 0047) |
 | Scheduled library backups | done | Opt-in weekly automatic backups with retention and a last-run line via `auto_backup_due()` (1.12.0, ADR 0047) |
+| Library health score | done | A 0–100 score across five weighted dimensions (file integrity, duplicates, artwork, metadata, launch readiness) with a "Fix all" queue (dry-run preview first, every fix undoable), a Big Box health tile, and a scheduled rescan (1.14.0, ADR 0053) |
+| Artwork Doctor | done | Bulk SteamGridDB artwork hygiene report with safe fix/undo helpers via `parity_artwork_hygiene.py` (1.14.0) |
+| Missing-file repair wizard | done | Missing-path reports become fixable: relink games and media after a move, with candidate matching and review before apply (1.14.0, ADR 0051) |
+| Duplicate game-record merge | done | Duplicate detection with reviewable merge plans that consolidate duplicate game records (1.14.0, ADR 0051) |
+| Game DNA offline search | done | Title | Smart toggle on the search box; Smart mode runs BM25 plus a curated 151-concept lexicon (English, German, Spanish, French, Portuguese) with "why" explanation chips and "More like this", fully offline (1.14.0, ADR 0052) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 

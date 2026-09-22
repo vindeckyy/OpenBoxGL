@@ -1,5 +1,9 @@
 # OpenBox v1.8.0: Navigation, Scraping & ARM64
 
+> **Archived release notes.** These notes describe the OpenBox 1.8.0 release as
+> shipped; they are retained for traceability, not as current documentation.
+> See `docs/CHANGELOG.md` for the maintained release history.
+
 **OpenBox v1.8.0** introduces keyboard and gamepad library navigation, hash routing, a ScreenScraper per-ROM-hash scraping provider, custom gamescope presets with per-game override, library export to JSON/CSV, and aarch64 AppImage release artifacts alongside x86_64.
 
 ---

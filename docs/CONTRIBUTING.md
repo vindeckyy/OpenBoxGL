@@ -169,32 +169,26 @@ docs: update parity matrix for OBS attach workflow
 
 ## Plugins
 
-Plugins are optional Python packages installed in the user plugins directory. Each plugin requires:
+The canonical plugin reference is `docs/plugin-api.md` (frozen v1 surface,
+ADR 0050; Plugins 2.0 additions in 1.14.0). Summary of the essentials:
 
-- `plugin.json` with `id`, `name`, and `version` (`entry` defaults to `plugin.py`, `hooks` defaults to `[]`)
-- An entry Python module that exports one function per declared hook (`def library(payload)`, `def before_launch(payload)`, `def after_session(payload)`); the runner feeds each hook a decoded JSON payload and writes the returned dict back as JSON
-
-Supported hooks:
-
-| Hook | Purpose |
-| --- | --- |
-| `library` | Observe or transform library state |
-| `before_launch` | Adjust launch payload before execution |
-| `after_session` | React to completed or stopped sessions |
-
-Example manifest:
-
-```json
-{
-  "id": "example-plugin",
-  "name": "Example Plugin",
-  "version": "1.0.0",
-  "entry": "main.py",
-  "hooks": ["library"]
-}
-```
-
-Bundled catalog entries live in `plugins/catalog.json` and `plugin_catalog.py`.
+- Plugins are Python packages under `<data>/plugins/<id>/` with a
+  `plugin.json` manifest (`id`, `name`, `version` required; `entry` defaults
+  to `plugin.py`, `hooks` defaults to `[]`, `api_version` defaults to `1`).
+- Six hooks: `before_launch`, `after_session`, `library`, `command`,
+  `library_source` (importer), `events` (lifecycle). Each hook is a function
+  named after the hook that reads one JSON object on stdin and returns a
+  JSON object on stdout.
+- Sandboxed with bubblewrap (no network, no home dir, 5 s timeout, 2 MiB
+  payload cap). On hosts without bubblewrap, plugins run only after
+  per-plugin trust ("Trust and run", checksum-bound, ADR 0056); the legacy
+  `OPENBOX_ALLOW_UNSANDBOXED_PLUGINS=1` operator override is unchanged.
+- A manifest may declare `permissions` (currently only `network`, granted
+  via an Android-style prompt), `settings` (JSON Schema subset rendered as
+  a form and injected into stdin payloads), and up to 32 `commands` for the
+  command palette.
+- Bundled catalog entries live in `plugins/catalog.json` and
+  `plugin_catalog.py`.
 
 ## Documentation
 

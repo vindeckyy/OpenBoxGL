@@ -81,7 +81,7 @@ keep every existing gate meaningful.
 
 ## Consequences
 
-- The same source tree, tests, and gates now serve Windows; `tests/` is 135
+- The same source tree, tests, and gates now serve Windows; `tests/` is 153
   files and passes in full on Windows.
 - Windows users install from a signed zip rather than an AppImage, and get a
   real window through WebView2 instead of a browser tab; `--web` still forces

@@ -75,4 +75,5 @@ Structured errors use `JOB_STATE_CONFLICT`, `JOB_NOT_CANCELLABLE`, and `JOB_NOT_
 
 - Activity Center reads one durable snapshot, then subscribes to SSE.
 - Partial success remains visibly distinct from success and failure.
-- Legacy job consumers continue to work for one release via the adapter.
+- Legacy job consumers keep working through the adapter; it remains in place at
+  1.14.0 with no removal scheduled.
