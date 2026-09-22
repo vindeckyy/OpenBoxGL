@@ -18,6 +18,19 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Pinned SHA-256 of the WebView2 SDK .nupkg for the default $SdkVersion,
+# verified after every download (fail closed, like every other artifact gate
+# in this repo). $env:WEBVIEW2_SDK_SHA256 overrides the pin when trying a new
+# SDK version without editing the script.
+# Rotation procedure: bump $SdkVersion, download the new package, and replace
+# the hash below with the new package's SHA-256, e.g.
+#   (Get-FileHash -Algorithm SHA256 -LiteralPath <nupkg>).Hash.ToLowerInvariant()
+$WEBVIEW2_SDK_SHA256 = if ($env:WEBVIEW2_SDK_SHA256) {
+    $env:WEBVIEW2_SDK_SHA256
+} else {
+    'c7909cdab68a56d1b8eeb1d5b18b0e00122ed812a075a8be785ed48de689eeca'
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $source = Join-Path $repoRoot 'native_host_win.c'
 if (-not (Test-Path -LiteralPath $source)) {
@@ -58,6 +71,16 @@ function Find-WebView2Sdk {
     $nupkg = "$staging.nupkg"
     $url = "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/$SdkVersion"
     Invoke-WebRequest -Uri $url -OutFile $nupkg -UseBasicParsing
+
+    # Fail closed: never build against an SDK whose bytes are not the pinned
+    # ones. The expected hash covers the default SDK version; bump the version
+    # together with $WEBVIEW2_SDK_SHA256 (or set the env override) — see above.
+    $actualSdkHash = (Get-FileHash -LiteralPath $nupkg -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualSdkHash -ne $WEBVIEW2_SDK_SHA256.ToLowerInvariant()) {
+        Remove-Item -Force -LiteralPath $nupkg -ErrorAction SilentlyContinue
+        throw "WebView2 SDK $SdkVersion failed hash verification (expected $($WEBVIEW2_SDK_SHA256.ToLowerInvariant()), got $actualSdkHash). Refusing to build against an unverified SDK."
+    }
+    Write-Host "WebView2 SDK $SdkVersion hash verified."
 
     if (Test-Path -LiteralPath $staging) { Remove-Item -Recurse -Force -LiteralPath $staging }
     Add-Type -AssemblyName System.IO.Compression.FileSystem

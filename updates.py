@@ -628,7 +628,11 @@ def _cli_verify(argv) -> int:
     try:
         digest = verify_artifact(*argv)
     except (OSError, ValueError) as error:
+        # TEST-UPDATE-FAIL is the machine-readable refusal marker the
+        # trust-chain tests grep for: a tampered, unsigned, or otherwise
+        # unverifiable artifact must fail loudly, never silently.
         print(f"verification failed: {error}", file=sys.stderr)
+        print("TEST-UPDATE-FAIL", file=sys.stderr)
         return 1
     print(digest)
     return 0

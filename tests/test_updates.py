@@ -364,6 +364,64 @@ def main():
                     except FileNotFoundError:
                         pass
 
+    # Trust-chain tamper refusal, through the `verify` CLI surface the
+    # installers actually invoke: every refusal exits non-zero and prints the
+    # machine-readable TEST-UPDATE-FAIL marker; a fully valid archive exits 0.
+    def _run_verify_cli(*args):
+        proc = subprocess.run(
+            [sys.executable, "-B", str(Path(updates.__file__).resolve()), "verify",
+             *[str(arg) for arg in args]],
+            capture_output=True, text=True,
+            cwd=str(Path(updates.__file__).resolve().parent),
+            check=False,
+        )
+        return proc.returncode, proc.stdout + proc.stderr
+
+    with tempfile.TemporaryDirectory() as directory:
+        cli_artifact = Path(directory) / ASSET
+        cli_artifact.write_bytes(payload)
+        cli_signature = Path(directory) / f"{ASSET}.sig"
+        cli_signature.write_text(json.dumps(signature_payload), encoding="utf-8")
+        cli_key = Path(directory) / "openbox-release.pub"
+        cli_key.write_bytes(public_key)
+
+        # (a) The manifest signature is cryptographically valid — it verifies
+        # over the manifest digest with the committed key — but it signs
+        # *different* bytes than the artifact on disk. Refused.
+        assert updates._verify_ed25519(public_key, signature, bytes.fromhex(digest))
+        cli_artifact.write_bytes(b"entirely different bytes, validly signed elsewhere")
+        code, output = _run_verify_cli(cli_artifact, cli_signature, cli_key)
+        assert code != 0, "valid signature over different bytes must be refused"
+        assert "TEST-UPDATE-FAIL" in output
+        assert "digest" in output.casefold()
+
+        # (b) The classic tamper: the signed payload with trailing bytes
+        # appended, presented with the still-valid manifest signature. Refused,
+        # and the artifact on disk is left exactly as the attacker left it.
+        cli_artifact.write_bytes(payload + b"tampered")
+        before = cli_artifact.read_bytes()
+        code, output = _run_verify_cli(cli_artifact, cli_signature, cli_key)
+        assert code != 0, "tampered artifact must be refused"
+        assert "TEST-UPDATE-FAIL" in output
+        assert cli_artifact.read_bytes() == before
+
+        # (c) A missing signature file is a refusal, not a crash: OSError from
+        # the read is caught by the CLI and reported with the marker.
+        cli_artifact.write_bytes(payload)
+        missing_sig = Path(directory) / "absent.sig"
+        assert not missing_sig.exists()
+        code, output = _run_verify_cli(cli_artifact, missing_sig, cli_key)
+        assert code != 0, "missing signature file must be refused"
+        assert "TEST-UPDATE-FAIL" in output
+
+        # (d) A fully valid archive still verifies: exit 0, the digest on
+        # stdout, and no refusal marker anywhere in the output.
+        code, output = _run_verify_cli(cli_artifact, cli_signature, cli_key)
+        assert code == 0, f"valid archive must verify: {output}"
+        assert digest in output
+        assert "TEST-UPDATE-FAIL" not in output
+
+    print("trust-chain tamper refusal: ok")
     print("update self-test: ok")
 
 

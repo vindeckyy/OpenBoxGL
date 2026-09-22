@@ -364,6 +364,9 @@ def test_windows_installer_contract():
     # install, so it must track the committed public key exactly.
     anchor = hashlib.sha256((ROOT / "openbox-release.pub").read_bytes()).hexdigest()
     assert anchor in installer, "install.ps1 must pin the committed release public key"
+    pinned = re.search(r"\$ReleaseKeySha256 = '([0-9a-fA-F]{64})'", installer)
+    assert pinned, "install.ps1 must pin the trust anchor as a 64-hex SHA-256"
+    assert pinned.group(1).lower() == anchor, "install.ps1 anchor must equal sha256(openbox-release.pub)"
     assert "share\\openbox" in installer, "install.ps1 must install into the share dir the launchers resolve"
     assert "updates.py" in installer, "install.ps1 must verify signatures with the in-repo verifier"
 
@@ -380,6 +383,54 @@ def test_windows_installer_contract():
         )
         assert result.returncode == 0, f"{name} does not parse: {result.stderr}"
     print("  Windows installer: ok")
+
+
+def test_windows_installer_rollback():
+    """install.ps1 must restore the previous tree when desktop registration fails.
+
+    The script is PowerShell, so this is a structural tripwire rather than an
+    execution test: it pins that a backup is taken before the new tree
+    replaces the old one, that the rollback hook is registered immediately
+    after the replace, and that a simulated post-replace desktop-entry failure
+    invokes the hook — removing the broken tree and moving the backup back —
+    before the installer dies.
+    """
+    installer = (ROOT / "scripts" / "install.ps1").read_text(encoding="utf-8")
+    backup_move = "Move-Item -LiteralPath $target -Destination $previous"
+    replace_move = "Move-Item -LiteralPath $tree -Destination $target"
+    hook = "$RestorePreviousInstall"
+    assert backup_move in installer, "install.ps1 must back up the old tree before replacing it"
+    assert replace_move in installer, "install.ps1 must move the new tree into place"
+    assert installer.index(backup_move) < installer.index(replace_move), \
+        "the backup must be taken before the new tree replaces the old one"
+    assert hook in installer, "install.ps1 must register a rollback hook"
+    assert installer.index(replace_move) < installer.index(hook), \
+        "the rollback hook must be registered immediately after the replace"
+    desktop_entry = "install-desktop-entry (Join-Path $target 'openbox.cmd')"
+    assert desktop_entry in installer
+    assert installer.index(hook) < installer.index(desktop_entry), \
+        "the rollback hook must be registered before desktop-entry registration"
+    # The hook body itself must remove the broken new tree and move the
+    # previous tree back into place.
+    hook_def = "$RestorePreviousInstall = {"
+    assert hook_def in installer
+    hook_body = installer.split(hook_def, 1)[1].split(desktop_entry, 1)[0]
+    assert "Remove-Item -LiteralPath $target -Recurse -Force" in hook_body, \
+        "rollback must remove the broken new tree"
+    assert "Move-Item -LiteralPath $previous -Destination $target" in hook_body, \
+        "rollback must restore the previous tree"
+    # A simulated post-replace failure: everything after the desktop-entry
+    # invocation is the failure path under test. It must invoke the rollback
+    # hook before the installer dies.
+    failure_path = installer.split(desktop_entry, 1)[1]
+    assert "$LASTEXITCODE" in failure_path, "desktop-entry failure must be detected via $LASTEXITCODE"
+    invoke = "& $RestorePreviousInstall"
+    assert invoke in failure_path, "a post-replace failure must invoke the rollback hook"
+    die = "Die 'Could not register the desktop integration.'"
+    assert die in failure_path
+    assert failure_path.index(invoke) < failure_path.index(die), \
+        "the previous tree must be restored before the installer dies"
+    print("  Windows installer rollback: ok")
 
 
 def test_build_appimage_validation():
@@ -753,6 +804,7 @@ def main():
     test_release_workflow()
     test_windows_launchers()
     test_windows_installer_contract()
+    test_windows_installer_rollback()
     test_markdown_locations()
     test_sbom_hash_verification()
     test_build_appimage_validation()
