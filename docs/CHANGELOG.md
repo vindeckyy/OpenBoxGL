@@ -60,6 +60,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   grid overrode the `hidden` attribute.
 - Switching tabs inside the game editor with a dirty form prompted "Discard
   unsaved changes?" even though tab switches discard nothing.
+- On Windows, "Reveal in Explorer" from the native host opened the wrong
+  target; the folder path is now passed to `explorer.exe` in the executable
+  position.
+- Rejected or malformed messages on the native WebView2 bridge used to leave
+  the pending frontend promise hanging forever; they now reject it so the UI
+  can surface the error.
+- When every SSE subscriber slot was taken, the server opened a stream that
+  only ever sent heartbeats and no events; it now answers `503 SSE_BUSY` with
+  `Retry-After` so clients retry once another tab closes.
+- Reconnecting the session event stream leaked the previous `EventSource`; it
+  is closed before a new one opens, and streams close when the tab hides.
+- A hidden tab could send state-changing requests with stale `AppState` and
+  overwrite newer state written by the visible tab; mutations from hidden tabs
+  are now blocked (except shutdown) and close on hide.
+- The Windows installer left a half-registered installation behind when Start
+  Menu or protocol registration failed; it now restores the previous
+  installation tree.
+- Late-night moments were filed under the wrong day in the story view and the
+  history timeline: timezone-aware timestamps are now converted to the
+  viewer's local day before grouping, so a moment captured at 23:30 local
+  sits with its session instead of the next day.
+- Utility dialogs created lazily (prompt, choice, confirm, Trophy Case) missed
+  the focus-restoration wiring of dialogs in the page markup; they now share
+  the same wiring, so opener focus is restored consistently.
+- Clicking outside a dialog bypassed the shared close path; dismissal now
+  routes through `closeDialog()` so focus restoration stays consistent.
+- Every Setup Center open path goes through the single refresh-and-render
+  entry point, so reopening the wizard never shows stale content.
+- Three user-visible strings were never translated (the game editor's media
+  toggle labels and two Big Box empty-view messages); they now go through
+  i18n in all five locales.
 
 ## [1.13.0] - 2026-09-19
 

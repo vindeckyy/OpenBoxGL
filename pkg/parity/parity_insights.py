@@ -32,6 +32,10 @@ def _parse_date(value: str) -> datetime.date | None:
     try:
         if "T" in text:
             dt = datetime.datetime.fromisoformat(text)
+            if dt.tzinfo is not None:
+                # Aware timestamps: .date() alone would yield the UTC date.
+                # Convert to local first; naive strings are local already.
+                dt = dt.astimezone()
             return dt.date()
         dt = datetime.datetime.strptime(text[:10], "%Y-%m-%d")
         return dt.date()
@@ -545,14 +549,12 @@ def timeline_groups(state: dict[str, Any], days: int = 90) -> dict[str, Any]:
         seconds = max(0, int(entry.get("seconds", 0) or 0))
         recording = _basename(entry.get("recording"))
         started = str(entry.get("started", "") or "")
-        ended = str(entry.get("ended", "") or "")
         by_date.setdefault(d, []).append({
             "game_id": game_id,
             "name": str(game.get("name", "")),
             "cover": bool(game.get("has_cover")),
             "seconds": seconds,
             "started": started,
-            "ended": ended,
             "recording": recording,
         })
 
