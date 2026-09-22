@@ -13,6 +13,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import sys
+import uuid
 from pathlib import Path
 from urllib.parse import parse_qs
 
@@ -24,6 +25,16 @@ import pkg.parity  # noqa: F401,E402  # installs the flat parity_* import finder
 import openbox  # noqa: E402
 from api_errors import BadRequest  # noqa: E402
 from parity_premium import download_bytes  # noqa: E402
+from pkg.parity.parity_artwork_hygiene import (  # noqa: E402
+    PROVIDER_ATTRIBUTION,
+    build_report,
+    list_undo_batches,
+    load_undo_manifest,
+    select_fixable,
+    snapshot_for_replacement,
+    undo_batch,
+    write_undo_manifest,
+)
 from pkg.parity.parity_steamgrid import (  # noqa: E402
     apply_to_game,
     choose_media,
@@ -40,6 +51,7 @@ from routes.registry import route  # noqa: E402
 from webapp_state import JOB_MANAGER, bump_media_epoch, game_from_payload, transact_state  # noqa: E402
 
 MATCH_BATCH_LIMIT = 100
+HYGIENE_BATCH_LIMIT = 200
 _DEFAULT_MEDIA_KINDS = ("cover", "background", "clear_logo", "icon", "banner")
 
 
@@ -241,6 +253,168 @@ def steamgrid_match(handler, payload):
 
     job = JOB_MANAGER.submit("steamgrid-match", worker)
     handler.send_json(202, {"state": "queued", "job_id": job["job_id"]})
+
+
+@route("GET", "/api/v2/steamgrid/hygiene/report", spec="handlers.steamgrid.steamgrid_hygiene_report")
+def steamgrid_hygiene_report(handler, parsed):
+    """Read-only Artwork Doctor report: gaps, resolution, aspect, duplicates."""
+    if not handler.authorized():
+        handler.handle_unauthorized()
+        return
+    query = parse_qs(parsed.query or "")
+    limit_raw = (query.get("limit", [""])[0] or "").strip()
+    media_root = openbox.DATA.parent / "media"
+    games = openbox.load_state().get("games", []) or []
+    if limit_raw.isdigit():
+        games = games[: max(1, int(limit_raw))]
+    report = build_report(games, media_root=media_root)
+    report["batches"] = list_undo_batches(_cache_dir())
+    handler.send_json(200, report)
+
+
+@route("POST", "/api/v2/steamgrid/hygiene/fix", spec="handlers.steamgrid.steamgrid_hygiene_fix")
+def steamgrid_hygiene_fix(handler, payload):
+    """Queue the "fix all with SteamGridDB" batch job (cancelable, undoable)."""
+    if not handler.authorized():
+        handler.handle_unauthorized()
+        return
+    _require_available(_settings())
+    payload = payload if isinstance(payload, dict) else {}
+    game_ids = payload.get("game_ids") if isinstance(payload.get("game_ids"), list) else []
+    fields = payload.get("fields") if isinstance(payload.get("fields"), list) else ["cover"]
+    issues = payload.get("issues") if isinstance(payload.get("issues"), list) else None
+    limit = payload.get("limit")
+    try:
+        limit = max(1, min(int(limit), HYGIENE_BATCH_LIMIT)) if limit is not None else HYGIENE_BATCH_LIMIT
+    except (TypeError, ValueError):
+        raise BadRequest("limit must be an integer.") from None
+
+    def worker(cancel_event):
+        state = openbox.load_state()
+        games = state.get("games", []) or []
+        report = build_report(games, media_root=openbox.DATA.parent / "media")
+        targets = select_fixable(
+            report,
+            issues=[str(item) for item in issues] if issues else None,
+            fields=[str(item) for item in fields],
+            game_ids=[str(item) for item in game_ids] if game_ids else None,
+        )[:limit]
+        batch_id = uuid.uuid4().hex
+        records = []
+        results = []
+        for index, target in enumerate(targets):
+            if cancel_event is not None and cancel_event.is_set():
+                break
+            if cancel_event is not None:
+                cancel_event.progress(processed=index, current=index, total=len(targets), applied=len(records))
+            entry = {"game_id": target["game_id"], "name": target["name"], "field": target["field"]}
+            game = next((item for item in games if str(item.get("game_id")) == target["game_id"]), None)
+            if game is None:
+                entry["status"] = "game_missing"
+                results.append(entry)
+                continue
+            try:
+                _hygiene_replace_one(game, target, batch_id, records, entry)
+            except ValueError as error:
+                entry["status"] = "error"
+                entry["error"] = str(error)
+            results.append(entry)
+        if records:
+            write_undo_manifest(_cache_dir(), batch_id, records, provider=PROVIDER_ATTRIBUTION)
+        applied = sum(1 for entry in results if entry.get("status") == "applied")
+        return {
+            "batch_id": batch_id,
+            "provider": PROVIDER_ATTRIBUTION,
+            "applied": applied,
+            "failed": len(results) - applied,
+            "total": len(targets),
+            "cancelled": bool(cancel_event is not None and cancel_event.is_set()),
+            "results": results,
+        }
+
+    job = JOB_MANAGER.submit("steamgrid-hygiene-fix", worker)
+    handler.send_json(202, {"state": "queued", "job_id": job["job_id"], "provider": PROVIDER_ATTRIBUTION})
+
+
+def _hygiene_replace_one(game, target, batch_id, records, entry):
+    stable_id = target["game_id"]
+    field = target["field"]
+    name = str(game.get("name") or "").strip()
+    if not name:
+        raise ValueError("This game has no name to search with.")
+    found = search_games(name, limit=1, cache_dir=_cache_dir())
+    if not found:
+        entry["status"] = "not_found"
+        return
+    sgd_id = found[0].get("id")
+    entry["steamgrid_id"] = sgd_id
+    urls = choose_media({"media": game_assets(sgd_id, cache_dir=_cache_dir())}, [field])
+    media_url = clean_media_url(urls.get(field, ""))
+    if not media_url:
+        entry["status"] = "not_found"
+        return
+    previous = str(game.get(field) or "")
+    media_root = _media_root(game, stable_id)
+    record = snapshot_for_replacement(_cache_dir(), batch_id, stable_id, field, previous)
+    downloaded = download_bytes(media_url, media_root / f"{field}{_ext_for(media_url, '.png')}")
+    record["new"] = str(downloaded)
+
+    def mutate(state):
+        target_game = game_from_payload(state, {"game_id": stable_id})
+        target_game[field] = str(downloaded)
+        target_game["artwork_provider"] = PROVIDER_ATTRIBUTION
+        target_game["steamgrid_id"] = sgd_id
+
+    transact_state(mutate)
+    records.append(record)
+    bump_media_epoch()
+    entry["status"] = "applied"
+    entry["media"] = str(downloaded)
+
+
+@route("POST", "/api/v2/steamgrid/hygiene/undo", spec="handlers.steamgrid.steamgrid_hygiene_undo")
+def steamgrid_hygiene_undo(handler, payload):
+    """Restore artwork replaced by a hygiene batch and clear new files."""
+    if not handler.authorized():
+        handler.handle_unauthorized()
+        return
+    batch_id = str((payload or {}).get("batch_id") or "").strip()
+    if not batch_id:
+        raise BadRequest("batch_id is required.")
+    try:
+        manifest = load_undo_manifest(_cache_dir(), batch_id)
+        restored = undo_batch(_cache_dir(), batch_id)
+    except ValueError as error:
+        raise BadRequest(str(error), code="ARTWORK_UNDO_MISSING") from None
+    previous_by_key = {
+        (str(record.get("game_id")), str(record.get("field"))): str(record.get("previous") or "")
+        for record in manifest["records"]
+        if isinstance(record, dict)
+    }
+    counts = {"removed": 0, "restored": 0}
+
+    def mutate(state):
+        for record in restored:
+            field = str(record.get("field") or "")
+            stable_id = str(record.get("game_id") or "")
+            if not field or not stable_id:
+                continue
+            try:
+                game = game_from_payload(state, {"game_id": stable_id})
+            except BadRequest:
+                continue
+            if record.get("action") == "restored":
+                previous = previous_by_key.get((stable_id, field), "")
+                if previous:
+                    game[field] = previous
+                    counts["restored"] += 1
+            elif record.get("action") == "removed":
+                game[field] = ""
+                counts["removed"] += 1
+
+    transact_state(mutate)
+    bump_media_epoch()
+    handler.send_json(200, {"batch_id": batch_id, "restored": restored, "counts": counts})
 
 
 def _match_one(game, name, media_kinds, entry):
