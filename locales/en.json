@@ -107,7 +107,8 @@
     "notifications": "Notifications",
     "constellation": "Constellation",
     "mastery": "Mastery",
-    "time_machine": "Time Machine"
+    "time_machine": "Time Machine",
+    "artwork_doctor": "Artwork Doctor"
   },
   "constellation": {
     "title": "Constellation",
@@ -1143,5 +1144,67 @@
         "desc": "Play 7 days in a row"
       }
     }
+  },
+  "artwork_doctor": {
+    "title": "Artwork Doctor",
+    "scanning": "Scanning artwork…",
+    "rescan": "Scan again",
+    "fix_all": "Fix all with SteamGridDB",
+    "undo": "Undo last batch",
+    "summary": "Scanned {count} games.",
+    "attribution": "Artwork fixes use {provider}.",
+    "empty": "No artwork issues found.",
+    "last_batch": "Last batch {batch} · {count} files",
+    "report_failed": "Could not build the artwork report.",
+    "fixing": "Fixing {done} of {total}…",
+    "cancelled": "Artwork fix cancelled.",
+    "fix_failed": "The artwork fix job failed.",
+    "fixed": "Fixed artwork for {count} entries.",
+    "no_batch": "There is no finished artwork batch to undo.",
+    "undone": "Restored {count} artwork entries.",
+    "issue_unknown": "Artwork issue",
+    "issue_missing_cover": "Missing cover",
+    "issue_missing_file": "Artwork file missing",
+    "issue_low_res": "Low resolution",
+    "issue_wrong_aspect": "Wrong aspect ratio",
+    "issue_duplicate": "Duplicate artwork"
+  },
+  "repair": {
+    "title": "Repair missing files",
+    "open": "Repair paths",
+    "scanning": "Scanning library…",
+    "summary": "{count} missing paths",
+    "empty": "No missing paths found.",
+    "find_folder": "Find in folder…",
+    "matches": "{count} matches",
+    "unmatched": "{count} without a match",
+    "ambiguous": "{count} need a manual pick",
+    "ambiguous_hint": "Ambiguous matches are skipped; narrow the folder and scan again.",
+    "no_matches": "No files in that folder matched the missing paths.",
+    "apply": "Relink {count}",
+    "applied": "Relinked {count} paths",
+    "nothing_applied": "No paths were relinked",
+    "skipped": "{count} paths changed since the scan and were skipped",
+    "kind_game": "Game file",
+    "kind_media": "Media"
+  },
+  "duplicates": {
+    "title": "Duplicate games",
+    "open": "Find duplicates",
+    "scanning": "Scanning for duplicates…",
+    "empty": "No duplicate games found.",
+    "summary": "{count} duplicate groups",
+    "kind_identity": "Same game id",
+    "kind_path": "Same path",
+    "kind_title": "Same title",
+    "row_stats": "{sessions} sessions · {hours} h",
+    "preview": "Merge preview",
+    "primary": "Keep {name}",
+    "absorbed": "{count} entries will move to the trash (undoable)",
+    "changes": "{count} fields will be filled from duplicates",
+    "restore_hint": "Restore merged entries from the Trash view.",
+    "merge": "Merge",
+    "merged": "Merged {count} duplicate entries",
+    "failed": "Merge failed"
   }
 }

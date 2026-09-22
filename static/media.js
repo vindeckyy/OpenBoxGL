@@ -4,6 +4,16 @@ import { refresh } from './library.js';
 
 
 
+    let bulkMediaTimer = 0;
+    let bulkMediaWatch = 0;
+    function stopBulkMediaWatch() {
+      // Bumping the generation invalidates any watcher already inside its
+      // status fetch, so a closed dialog can neither reschedule nor reopen.
+      bulkMediaWatch += 1;
+      if (bulkMediaTimer) { clearTimeout(bulkMediaTimer); bulkMediaTimer = 0; }
+    }
+    const mediaManagerDialog = $('mediaManagerDialog');
+    if (mediaManagerDialog) mediaManagerDialog.addEventListener('close', stopBulkMediaWatch);
     async function openMediaManager() {
       if (!$('mediaManagerDialog').open) $('mediaManagerDialog').showModal();
       try {
@@ -38,11 +48,18 @@ import { refresh } from './library.js';
       } catch(error) { notify(error.message); }
     };
     async function watchBulkMedia() {
+      const token = ++bulkMediaWatch;
+      if (bulkMediaTimer) { clearTimeout(bulkMediaTimer); bulkMediaTimer = 0; }
       try {
         const result = await api('/api/media/bulk/status');
+        if (token !== bulkMediaWatch) return; // dialog closed mid-fetch
         renderBulkMediaStatus(result.job);
-        if (result?.job?.state === 'running') return setTimeout(watchBulkMedia, 1200);
+        if (result?.job?.state === 'running') {
+          bulkMediaTimer = setTimeout(watchBulkMedia, 1200);
+          return;
+        }
         await refresh();
+        if (token !== bulkMediaWatch) return;
         await openMediaManager();
         notify('Bulk media download finished');
       } catch(error) { notify(error.message); }

@@ -107,7 +107,8 @@
     "notifications": "Notificaciones",
     "constellation": "Constelación",
     "mastery": "Dominio",
-    "time_machine": "Máquina del tiempo"
+    "time_machine": "Máquina del tiempo",
+    "artwork_doctor": "Doctor de carátulas"
   },
   "constellation": {
     "title": "Constelación",
@@ -1143,5 +1144,67 @@
         "desc": "Juega 7 días seguidos"
       }
     }
+  },
+  "artwork_doctor": {
+    "title": "Doctor de carátulas",
+    "scanning": "Analizando carátulas…",
+    "rescan": "Analizar de nuevo",
+    "fix_all": "Arreglar todo con SteamGridDB",
+    "undo": "Deshacer el último lote",
+    "summary": "Se analizaron {count} juegos.",
+    "attribution": "Las correcciones de carátulas usan {provider}.",
+    "empty": "No se encontraron problemas de carátulas.",
+    "last_batch": "Último lote {batch} · {count} archivos",
+    "report_failed": "No se pudo generar el informe de carátulas.",
+    "fixing": "Arreglando {done} de {total}…",
+    "cancelled": "Corrección de carátulas cancelada.",
+    "fix_failed": "La tarea de corrección de carátulas falló.",
+    "fixed": "Carátulas corregidas en {count} entradas.",
+    "no_batch": "No hay ningún lote de carátulas terminado que deshacer.",
+    "undone": "Se restauraron {count} entradas de carátulas.",
+    "issue_unknown": "Problema de carátula",
+    "issue_missing_cover": "Falta la carátula",
+    "issue_missing_file": "Falta el archivo de imagen",
+    "issue_low_res": "Resolución baja",
+    "issue_wrong_aspect": "Relación de aspecto incorrecta",
+    "issue_duplicate": "Carátula duplicada"
+  },
+  "repair": {
+    "title": "Reparar archivos faltantes",
+    "open": "Reparar rutas",
+    "scanning": "Analizando la biblioteca…",
+    "summary": "{count} rutas faltantes",
+    "empty": "No se encontraron rutas faltantes.",
+    "find_folder": "Buscar en carpeta…",
+    "matches": "{count} coincidencias",
+    "unmatched": "{count} sin coincidencia",
+    "ambiguous": "{count} necesitan elección manual",
+    "ambiguous_hint": "Las coincidencias ambiguas se omiten; acota la carpeta y vuelve a analizar.",
+    "no_matches": "Ningún archivo de esa carpeta coincidió con las rutas faltantes.",
+    "apply": "Revincular {count}",
+    "applied": "{count} rutas revinculadas",
+    "nothing_applied": "No se revinculó ninguna ruta",
+    "skipped": "{count} rutas cambiaron desde el análisis y se omitieron",
+    "kind_game": "Archivo de juego",
+    "kind_media": "Multimedia"
+  },
+  "duplicates": {
+    "title": "Juegos duplicados",
+    "open": "Buscar duplicados",
+    "scanning": "Buscando duplicados…",
+    "empty": "No se encontraron juegos duplicados.",
+    "summary": "{count} grupos de duplicados",
+    "kind_identity": "Mismo id de juego",
+    "kind_path": "Misma ruta",
+    "kind_title": "Mismo título",
+    "row_stats": "{sessions} sesiones · {hours} h",
+    "preview": "Vista previa de fusión",
+    "primary": "Conservar {name}",
+    "absorbed": "{count} entradas pasarán a la papelera (reversible)",
+    "changes": "Se rellenarán {count} campos desde los duplicados",
+    "restore_hint": "Restaura las entradas fusionadas desde la papelera.",
+    "merge": "Fusionar",
+    "merged": "{count} entradas duplicadas fusionadas",
+    "failed": "La fusión falló"
   }
 }

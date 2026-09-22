@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs
 
-from api_errors import BadgeNotFound, MediaNotFound
+from api_errors import BadgeNotFound, MediaNotFound, RangeParseError
 from metadata import apply_game_metadata
 from openbox import load_state
 from routes.registry import route
@@ -15,7 +15,7 @@ from parity_integrations import attach_recording, capture_screenshot, download_b
 from parity_media import active_video, cleanup_duplicates, find_duplicate_media, load_media_queue
 from parity_memories import IMPORT_JOB_NAME, MEMORIES_FIELD, UNASSIGNED_FIELD, apply_import_plan, collect_imports, configured_roots, memories_import_enabled
 from parity_premium import apply_media_pack, download_gog_media, download_steam_trailer, list_media_packs, platform_categories, strings_for
-from webapp_state import DATA, JOB_MANAGER, MEDIA_JOB, MEDIA_TYPES_ALL, METADATA_DATABASE, PROCESS_LOCK, approved_media_path, bump_media_epoch, download_image, game_from_payload, game_from_query, load_state_view, media_probe_path, public_settings, transact_state
+from webapp_state import DATA, JOB_MANAGER, MEDIA_JOB, MEDIA_TYPES_ALL, METADATA_DATABASE, PROCESS_LOCK, approved_media_path, bump_media_epoch, download_image, game_from_payload, game_from_query, load_state_view, public_settings, transact_state
 
 
 # EmuMovies media type -> library game field.  Unknown types are rejected so a
@@ -54,39 +54,58 @@ EMUMOVIES_TYPE_FIELDS = {
     "advertisement": "advertisement",
 }
 
+# Bulk media downloads at or below this many targets keep the historical
+# one-transaction-per-game granularity; larger batches commit once.
+BULK_MEDIA_BATCH_THRESHOLD = 25
+
 
 class MediaHandlers:
     @route("GET", "/api/media/audit")
     def _api_get_api_media_audit(self, parsed):
+        from pkg.state.media_probe import media_probe_paths_batch
         query = parse_qs(parsed.query)
         platform = query.get("platform", ["all"])[0]
         games = [
             game for game in load_state_view()["games"]
             if platform == "all" or game.get("platform") == platform
         ]
-        def screenshot_paths(game):
-            screenshots = game.get("screenshots", [])
-            return screenshots if isinstance(screenshots, list) else []
-        self.send_json(200, {
-            "games":len(games),
-            "matched":sum(bool(game.get("launchbox_db_id")) for game in games),
-            "missing_cover":sum(not media_probe_path(game.get("cover")) for game in games),
-            "missing_background":sum(not media_probe_path(game.get("background")) for game in games),
-            "missing_screenshots":sum(not any(media_probe_path(path) for path in screenshot_paths(game) if path) for game in games),
-            "missing_box_back":sum(not media_probe_path(game.get("box_back")) for game in games),
-            "missing_box_spine":sum(not media_probe_path(game.get("box_spine")) for game in games),
-            "missing_box_3d":sum(not media_probe_path(game.get("box_3d")) for game in games),
-            "missing_clear_logo":sum(not media_probe_path(game.get("clear_logo")) for game in games),
-            "missing_fanart":sum(not media_probe_path(game.get("fanart")) for game in games),
-            "missing_banner":sum(not media_probe_path(game.get("banner")) for game in games),
-            "missing_icon":sum(not media_probe_path(game.get("icon")) for game in games),
-            "missing_title_screen":sum(not media_probe_path(game.get("title_screen")) for game in games),
-            "missing_cart_front":sum(not media_probe_path(game.get("cart_front")) for game in games),
-            "missing_cart_back":sum(not media_probe_path(game.get("cart_back")) for game in games),
-            "missing_disc":sum(not media_probe_path(game.get("disc")) for game in games),
-            "missing_advertisement":sum(not media_probe_path(game.get("advertisement")) for game in games),
-            "missing_manual":sum(not media_probe_path(game.get("manual")) for game in games),
-        })
+        audit_fields = (
+            "cover", "background", "screenshots", "box_back", "box_spine",
+            "box_3d", "clear_logo", "fanart", "banner", "icon",
+            "title_screen", "cart_front", "cart_back", "disc",
+            "advertisement", "manual",
+        )
+        values = []
+        for game in games:
+            for field in audit_fields:
+                if field == "screenshots":
+                    screenshots = game.get("screenshots", [])
+                    if isinstance(screenshots, list):
+                        values.extend(screenshots)
+                else:
+                    values.append(game.get(field))
+        # One batched stat pass for the whole audit instead of 300k individual
+        # probe calls that thrash the file-probe cache (P2-7).
+        probed = media_probe_paths_batch(values)
+        payload = {
+            "games": len(games),
+            "matched": sum(bool(game.get("launchbox_db_id")) for game in games),
+        }
+        for field in audit_fields:
+            if field == "screenshots":
+                payload["missing_screenshots"] = sum(
+                    1 for game in games
+                    if not any(
+                        probed.get(str(path or ""), False)
+                        for path in (game.get("screenshots") if isinstance(game.get("screenshots"), list) else [])
+                        if path
+                    )
+                )
+                continue
+            payload[f"missing_{field}"] = sum(
+                1 for game in games if not probed.get(str(game.get(field) or ""), False)
+            )
+        self.send_json(200, payload)
         return
 
     @route("GET", "/api/media/bulk/status")
@@ -136,13 +155,23 @@ class MediaHandlers:
             else:
                 raise ValueError
             media = approved_media_path(media, must_exist=True)
-            try:
-                self.send_file(200, media)
-            except ValueError:
-                self._send_range_unsatisfiable(media)
+            self._serve_media(media)
         except (KeyError, IndexError, ValueError, FileNotFoundError):
             raise MediaNotFound("Media not found") from None
         return
+
+    def _serve_media(self, media):
+        """Serve *media*, mapping only a malformed ``Range`` request to 416.
+
+        ``send_file`` signals a bad range spec with ``RangeParseError`` (a
+        ``ValueError``). Missing files raise ``OSError`` and stay a 404, and
+        unrelated ``ValueError`` failures propagate instead of being answered
+        as an unsatisfiable range.
+        """
+        try:
+            self.send_file(200, media)
+        except RangeParseError:
+            self._send_range_unsatisfiable(media)
 
     def _send_range_unsatisfiable(self, media):
         """Answer a malformed ``Range`` header with 416 + ``Content-Range``.
@@ -262,6 +291,11 @@ class MediaHandlers:
 
         def worker(cancel_event=None):
             state = load_state()
+            games_by_id = {
+                str(game.get("game_id")): game
+                for game in state["games"]
+                if game.get("game_id")
+            }
             targets = [
                 (str(game.get("game_id")), str(game.get("launchbox_db_id")))
                 for game in state["games"]
@@ -280,6 +314,10 @@ class MediaHandlers:
             updated_count = 0
             errors = []
             manual_missing = 0
+            # Large batches accumulate changes and commit once; small batches
+            # keep the historical per-game transaction granularity (P2-6).
+            changes_by_id = {}
+            names_by_id = {}
             for current, (stable_id, database_id) in enumerate(targets, 1):
                 if cancel_event is not None and cancel_event.is_set():
                     break
@@ -287,8 +325,8 @@ class MediaHandlers:
                     continue
                 original = {}
                 try:
-                    state = load_state()
-                    original = dict(game_from_payload(state, {"game_id": stable_id}))
+                    original = dict(games_by_id.get(stable_id) or {})
+                    names_by_id[stable_id] = str(original.get("name") or stable_id)
                     updated = apply_game_metadata(
                         dict(original), METADATA_DATABASE, int(database_id), media_types,
                         DATA.parent / "media/launchbox", overwrite,
@@ -298,11 +336,9 @@ class MediaHandlers:
                         manual_missing += 1
                     changes = {key: value for key, value in updated.items() if original.get(key) != value}
                     if changes:
-                        def mutate(state, stable_id=stable_id, changes=changes):
-                            game_from_payload(state, {"game_id": stable_id}).update(changes)
-                        transact_state(mutate)
-                        updated_count += 1
-                    completed_set.add(stable_id)
+                        changes_by_id[stable_id] = changes
+                    else:
+                        completed_set.add(stable_id)
                     failed_set.discard(stable_id)
                 except (OSError, ValueError, sqlite3.Error, Exception) as error:
                     errors.append(f"{original.get('name', stable_id)}: {error}")
@@ -313,6 +349,40 @@ class MediaHandlers:
                         "updated": updated_count,
                         "errors": errors[-20:],
                         "manual_missing": manual_missing,
+                        "completed_game_ids": sorted(completed_set),
+                        "failed_game_ids": sorted(failed_set),
+                    })
+
+            def mutate(state, changes_by_id=changes_by_id):
+                for stable_id, changes in changes_by_id.items():
+                    game_from_payload(state, {"game_id": stable_id}).update(changes)
+
+            pending = list(changes_by_id)
+            if pending and len(targets) <= BULK_MEDIA_BATCH_THRESHOLD:
+                for stable_id in pending:
+                    try:
+                        transact_state(
+                            lambda state, stable_id=stable_id, changes=changes_by_id[stable_id]:
+                            game_from_payload(state, {"game_id": stable_id}).update(changes)
+                        )
+                        updated_count += 1
+                        completed_set.add(stable_id)
+                    except (OSError, ValueError, sqlite3.Error, Exception) as error:
+                        errors.append(f"{names_by_id.get(stable_id, stable_id)}: {error}")
+                        failed_set.add(stable_id)
+            elif pending:
+                try:
+                    transact_state(mutate)
+                    updated_count += len(pending)
+                    completed_set.update(pending)
+                except (OSError, ValueError, sqlite3.Error, Exception) as error:
+                    errors.append(f"batch state update failed: {error}")
+                    failed_set.update(pending)
+            if pending:
+                with PROCESS_LOCK:
+                    MEDIA_JOB.update({
+                        "updated": updated_count,
+                        "errors": errors[-20:],
                         "completed_game_ids": sorted(completed_set),
                         "failed_game_ids": sorted(failed_set),
                     })
@@ -489,10 +559,7 @@ class MediaHandlers:
             index = int(query["index"][0])
             entry = source[index]
             media = approved_media_path(entry.get("path"), must_exist=True)
-            try:
-                self.send_file(200, media)
-            except ValueError:
-                self._send_range_unsatisfiable(media)
+            self._serve_media(media)
         except (KeyError, IndexError, ValueError, TypeError, AttributeError, FileNotFoundError):
             raise MediaNotFound("Media not found") from None
         return

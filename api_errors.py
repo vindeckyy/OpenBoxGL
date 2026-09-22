@@ -102,3 +102,12 @@ class PreviewLimitExceeded(BadRequest):
 
 class PreviewEntryLimitExceeded(BadRequest):
     code = "PREVIEW_ENTRY_LIMIT_EXCEEDED"
+
+
+class RangeParseError(ValueError):
+    """``send_file`` could not parse the request's ``Range`` header.
+
+    A ``ValueError`` subclass so legacy ``except ValueError`` handlers keep
+    working; byte-serving routes catch this exact type to answer 416 without
+    also swallowing unrelated validation errors.
+    """

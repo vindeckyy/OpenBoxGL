@@ -29,33 +29,35 @@ from scripts import check_v1_contract  # noqa: E402
 
 class RouteRegistryTests(unittest.TestCase):
     def test_route_table_sizes(self):
-        # 153 base GET + 25 v1 aliases = 178 total (v2 additions remain
+        # 157 base GET + 25 v1 aliases = 182 total (v2 additions remain
         # additive, including their public static module rows; 1.12 adds
-        # /api/v2/collections and /api/v2/story).
-        # 166 base POST + 43 v1 aliases = 209 total (v2 feature CRUD rows are
+        # /api/v2/collections and /api/v2/story; artwork hygiene, missing-file
+        # repair, and duplicate merge add three more; plugin commands adds one).
+        # 173 base POST + 43 v1 aliases = 216 total (v2 feature CRUD rows are
         # additive to the existing query/trash/memories/resume surface;
         # 1.12 adds collections save + delete; the Windows port adds
-        # /api/import/epic).
-        self.assertEqual(len(GET_TABLE), 178)
-        self.assertEqual(len(POST_TABLE), 209)
+        # /api/import/epic; hygiene fix/undo, repair preview/apply, and
+        # duplicate preview/merge add six more; plugin command adds one).
+        self.assertEqual(len(GET_TABLE), 182)
+        self.assertEqual(len(POST_TABLE), 216)
         self.assertEqual(len(V1_ALIASED_PREFIXES), 61)
 
     def test_base_routes_count(self):
         base_get = [p for p in GET_TABLE if not p.startswith("/api/v1")]
         base_post = [p for p in POST_TABLE if not p.startswith("/api/v1")]
-        self.assertEqual(len(base_get), 153)
-        self.assertEqual(len(base_post), 166)
-        self.assertEqual(len(base_get) + len(base_post), 319)
+        self.assertEqual(len(base_get), 157)
+        self.assertEqual(len(base_post), 173)
+        self.assertEqual(len(base_get) + len(base_post), 330)
 
     def test_all_routes_registered(self):
         routes = all_routes()
-        # 320 = 319 table paths + the /api/v1/jobs dual-registration.
-        self.assertEqual(len(routes), 320)
+        # 331 = 330 table paths + the /api/v1/jobs dual-registration.
+        self.assertEqual(len(routes), 331)
 
         get_routes = [r for r in routes if r.method == "GET"]
         post_routes = [r for r in routes if r.method == "POST"]
-        self.assertEqual(len(get_routes), 154)
-        self.assertEqual(len(post_routes), 166)
+        self.assertEqual(len(get_routes), 158)
+        self.assertEqual(len(post_routes), 173)
 
     def test_every_registered_route_matches_live_table(self):
         routes = all_routes()

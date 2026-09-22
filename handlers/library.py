@@ -19,6 +19,9 @@ from parity_discovery import discovery_lists, related_with_reasons
 from parity_filter_presets import bigbox_quick_presets, delete_preset, explorer_facets, list_presets, save_preset
 from parity_media import normalize_video_fields
 from parity_premium import bulk_wizard_changes, custom_field_defs, normalize_custom_fields
+from pkg.parity.parity_duplicates import apply_merge, find_duplicates, merge_plan
+from pkg.parity.parity_repair import apply_repair, plan_repair, scan_candidates as scan_repair_candidates, scan_missing_paths
+from pkg.parity.parity_repair import resolve_folder as resolve_repair_folder
 from play_queue import advance as advance_queue, enqueue as enqueue_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
 from state_store import _stable_game_id, prune_trash
 from webapp_state import FIELDS, MEDIA_PATH_FIELDS, _public_state_cached, approved_media_path, bump_media_epoch, clear_file_probe_cache, consolidate_existing_games, game_from_payload, game_from_query, game_identity, load_state_view, public_state, public_state_bytes, public_state_etag, public_settings, transact_state
@@ -701,6 +704,86 @@ class LibraryHandlers:
             return consolidate_existing_games(state["games"])
         _, removed = transact_state(mutate)
         self.send_json(200, {"removed": removed})
+
+    # ── Missing-file repair wizard ───────────────────────────────────────────
+    @route("GET", "/api/v2/library/repair")
+    def _api_get_api_v2_library_repair(self, parsed):
+        """List missing game/media paths without mutating anything."""
+        qs = parse_qs(parsed.query or "")
+        include_media = (qs.get("media", ["1"])[0] or "1").strip().lower() not in {"0", "false", "no"}
+        self.send_json(200, scan_missing_paths(load_state_view(), include_media=include_media))
+
+    @route("POST", "/api/v2/library/repair/preview")
+    def _api_post_api_v2_library_repair_preview(self, payload):
+        """Dry-run: match missing basenames against a user-picked folder."""
+        include_media, fields, folder = self._repair_request(payload)
+        candidates = scan_repair_candidates(folder)
+        scan = scan_missing_paths(load_state_view(), include_media=include_media)
+        plan = plan_repair(scan["items"], candidates, fields=fields)
+        plan["folder"] = str(folder)
+        plan["scanned"] = scan["count"]
+        plan["candidates"] = len(candidates)
+        self.send_json(200, plan)
+
+    @route("POST", "/api/v2/library/repair/apply")
+    def _api_post_api_v2_library_repair_apply(self, payload):
+        """Re-plan inside the transaction and relink only still-missing rows."""
+        include_media, fields, folder = self._repair_request(payload)
+        selection = payload.get("selection")
+        if selection is not None and not isinstance(selection, list):
+            raise BadRequest("selection must be a list of [id, field] pairs or ids.")
+        candidates = scan_repair_candidates(folder)
+
+        def mutate(state):
+            scan = scan_missing_paths(state, include_media=include_media)
+            plan = plan_repair(scan["items"], candidates, fields=fields)
+            return apply_repair(state, plan["matches"], selection=selection)
+
+        _, result = transact_state(mutate)
+        clear_file_probe_cache()
+        self.send_json(200, result)
+
+    def _repair_request(self, payload):
+        payload = payload or {}
+        try:
+            folder = resolve_repair_folder(payload.get("folder"))
+        except ValueError as error:
+            raise BadRequest(str(error)) from error
+        fields = payload.get("fields")
+        if fields is not None and not isinstance(fields, list):
+            raise BadRequest("fields must be a list of field names.")
+        return bool(payload.get("include_media", True)), fields, folder
+
+    # ── Duplicate detection & merge ───────────────────────────────────────
+    @route("GET", "/api/v2/library/duplicates")
+    def _api_get_api_v2_library_duplicates(self, parsed):
+        qs = parse_qs(parsed.query or "")
+        include_title = (qs.get("title", ["1"])[0] or "1").strip().lower() not in {"0", "false", "no"}
+        self.send_json(200, find_duplicates(load_state_view(), include_title=include_title))
+
+    @route("POST", "/api/v2/library/duplicates/preview")
+    def _api_post_api_v2_library_duplicates_preview(self, payload):
+        indexes = (payload or {}).get("ids")
+        if not isinstance(indexes, list):
+            raise BadRequest("ids must be a list of game indexes.")
+        try:
+            plan = merge_plan(load_state_view(), indexes)
+        except ValueError as error:
+            raise BadRequest(str(error)) from error
+        self.send_json(200, plan)
+
+    @route("POST", "/api/v2/library/duplicates/merge")
+    def _api_post_api_v2_library_duplicates_merge(self, payload):
+        indexes = (payload or {}).get("ids")
+        if not isinstance(indexes, list) or len(indexes) < 2:
+            raise BadRequest("A merge needs at least two game indexes.")
+
+        def mutate(state):
+            return apply_merge(state, indexes, trash_game=_trash_entry_for)
+
+        _, result = transact_state(mutate)
+        clear_file_probe_cache()
+        self.send_json(200, result)
 
     @route("POST", "/api/v2/library/manual-entry")
     def _api_post_api_v2_library_manual_entry(self, payload):
