@@ -77,12 +77,8 @@ def _jpeg_size(blob):
         if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
             index += 2
             continue
-        if index + 4 > len(blob):
-            return None
         length = struct.unpack(">H", blob[index + 2:index + 4])[0]
         if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
-            if index + 9 > len(blob):
-                return None
             height, width = struct.unpack(">HH", blob[index + 5:index + 9])
             return width, height
         index += 2 + max(length, 2)
