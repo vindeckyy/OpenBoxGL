@@ -146,7 +146,8 @@
     "any_rating": "Toute classification",
     "unrated": "Non classés",
     "smart_collections": "Collections",
-    "filters": "Filtres"
+    "filters": "Filtres",
+    "unplayed": "Non joué"
   },
   "library": {
     "all_games": "Tous les jeux",
@@ -189,7 +190,8 @@
     "game_details": "Détails du jeu",
     "resize_details": "Redimensionner le panneau de détails",
     "jump_view": "Parcourir la vue actuelle",
-    "play_insights": "Statistiques de jeu"
+    "play_insights": "Statistiques de jeu",
+    "sort_my_rating": "Ma note"
   },
   "dialog": {
     "add_game": "Ajouter un jeu",
@@ -427,7 +429,8 @@
     "clear": "Effacer",
     "favorite": "Favori",
     "hidden": "Masqué",
-    "reset_stats": "Réinitialiser le nombre de parties, le temps de jeu et la date de dernière partie"
+    "reset_stats": "Réinitialiser le nombre de parties, le temps de jeu et la date de dernière partie",
+    "my_rating": "Ma note"
   },
   "playlists": {
     "title": "Listes de lecture",
@@ -786,7 +789,8 @@
     "install_desktop": "Installer le raccourci sur le bureau",
     "show_insights": "Afficher les statistiques de jeu dans la bibliothèque",
     "mood_match": "Thème adaptatif de la jaquette",
-    "mood_match_bigbox": "Thème adaptatif dans Big Box"
+    "mood_match_bigbox": "Thème adaptatif dans Big Box",
+    "backlog_progress_suggest": "Proposer de marquer les jeux « En cours » à la première partie"
   },
   "picker": {
     "title": "À quoi devrais-je jouer ?",
@@ -817,7 +821,8 @@
       "rated": "Vous avez noté {name} {rating} étoiles.",
       "fits_session": "{name} tient en environ {minutes} minutes.",
       "favorite": "{name} est un favori que vous n'avez pas touché depuis {days} jours.",
-      "random": "Un choix aléatoire dans votre bibliothèque."
+      "random": "Un choix aléatoire dans votre bibliothèque.",
+      "rated_backlog": "Vous avez noté {name} {stars} étoiles, jamais commencé, et il faut ~{ttb} h pour le terminer."
     }
   },
   "storefront": {
@@ -1206,5 +1211,35 @@
     "merge": "Fusionner",
     "merged": "{count} entrées en double fusionnées",
     "failed": "Échec de la fusion"
+  },
+  "backlog": {
+    "section": "En attente",
+    "status": "Statut",
+    "unplayed": "Non joué",
+    "stars": "étoiles",
+    "my_rating": "Ma note",
+    "rating_saved": "Note enregistrée",
+    "status_saved": "Statut enregistré",
+    "manual_time": "Temps de jeu manuel",
+    "total_time": "Temps de jeu total",
+    "log_playtime": "Enregistrer du temps de jeu",
+    "playtime_saved": "Temps de jeu enregistré",
+    "playtime_deleted": "Entrée de temps de jeu supprimée",
+    "playtime_range": "Saisissez entre 1 minute et 24 heures",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "add_note": "Ajouter une note",
+    "notes": "Notes",
+    "note_saved": "Note enregistrée",
+    "note_deleted": "Note supprimée",
+    "note": "Note",
+    "hours": "Heures",
+    "minutes": "Minutes",
+    "date": "Date",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "suggest_title": "Mettre à jour votre backlog ?",
+    "suggest_message": "Vous avez lancé {name}. Le marquer comme « En cours » ?",
+    "suggest_confirm": "Marquer comme « En cours »"
   }
 }

@@ -214,6 +214,54 @@ class ParityPickerTests(unittest.TestCase):
         s = _score(game, [], {"mood": "any", "players": 1, "minutes": 0}, now)
         self.assertGreater(s, 10)
 
+    def test_five_star_unplayed_outranks_three_star_playing(self):
+        """F4a/F4b weighting fixture: personal rating + unplayed bonus beat
+        a played game with a higher metadata rating. Scored deterministically
+        (pick order is weighted-random and must not be asserted exactly)."""
+        now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+        criteria = {"mood": "any", "players": 1, "minutes": 0}
+        five = self._game(id=1, name="Five Star Backlog", user_rating=5, progress="")
+        three = self._game(id=2, name="Three Star Active", user_rating=3,
+                           progress="Playing", play_count=4, rating=4.8)
+        self.assertGreater(_score(five, [], criteria, now), _score(three, [], criteria, now))
+        # Sanity: both are still pickable.
+        self.assertEqual({pick["id"] for pick in pick_games([five, three], [], {})}, {1, 2})
+
+    def test_rated_backlog_reason_is_transparent(self):
+        game = self._game(id=1, name="Backlog Gem", user_rating=5, progress="",
+                          time_to_beat_hours=12)
+        picks = pick_games([game], [], {})
+        self.assertEqual(len(picks), 1)
+        self.assertEqual(picks[0]["reason_key"], "picker.reason.rated_backlog")
+        self.assertEqual(picks[0]["reason_params"]["stars"], 5)
+        self.assertEqual(picks[0]["reason_params"]["ttb"], 12)
+
+    def test_personal_rating_counts_for_favorite_familiarity(self):
+        game = self._game(id=1, name="Rated Favorite", user_rating=4, progress="")
+        now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+        eligible, reason_key, _ = _eligibility(
+            game, [], {"mood": "any", "players": 1, "minutes": 0, "familiarity": "favorite"}, now)
+        self.assertTrue(eligible)
+        self.assertEqual(reason_key, "picker.reason.rated_backlog")
+
+
+    def test_malformed_user_rating_counts_as_unrated(self):
+        """F4b: malformed user_rating never crashes the picker; it scores 0."""
+        for bad in ("high", [5], {"stars": 5}):
+            game = self._game(id=1, name="Broken Rating", user_rating=bad, progress="")
+            now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+            eligible, _, params = _eligibility(
+                game, [], {"mood": "any", "players": 1, "minutes": 0}, now)
+            self.assertTrue(eligible, bad)
+            plain = _score(self._game(id=1, name="Plain", progress=""), [], {"mood": "any", "players": 1, "minutes": 0}, now)
+            broken = _score(game, [], {"mood": "any", "players": 1, "minutes": 0}, now)
+            # Malformed input counts as unrated: same score as no rating.
+            self.assertEqual(broken, plain, bad)
+        picks = pick_games(
+            [self._game(id=1, name="Broken Rating", user_rating="high", progress="")], [], {})
+        self.assertEqual(len(picks), 1)
+        self.assertNotEqual(picks[0]["reason_key"], "picker.reason.rated_backlog")
+
 
 if __name__ == "__main__":
     unittest.main()

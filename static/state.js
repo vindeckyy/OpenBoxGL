@@ -38,8 +38,10 @@ const token = new URLSearchParams(location.search).get('token') || sessionStorag
         visible.has('storefront') && badge(game.source || 'Storefront', Boolean(game.source)),
         visible.has('achievements') && badge('Achievements', game.has_achievements),
         visible.has('highscores') && badge('High scores', game.has_highscores),
-        visible.has('progress') && badge(game.progress, Boolean(game.progress), 'progress'),
+        visible.has('progress') && badge(game.progress || 'Unplayed', true, 'progress'),
         visible.has('rating') && badge(`${game.rating} stars`, Number(game.rating) > 0),
+        visible.has('user_rating') && badge(`${'\u2605'.repeat(Number(game.user_rating) || 0)}`, Number(game.user_rating) > 0, 'user-rating'),
+        visible.has('manual') && badge('Manual time', Number(game.manual_playtime_seconds) > 0, 'manual-time'),
         visible.has('broken') && badge('Broken', game.broken, 'danger'),
         visible.has('portable') && badge('Portable', game.portable),
         visible.has('controller') && badge(game.controller_support, Boolean(game.controller_support)),
@@ -414,7 +416,7 @@ const token = new URLSearchParams(location.search).get('token') || sessionStorag
         const installed = gameInstalled(game);
         const ownedUninstalled = Boolean(game.owned || game.store_catalog || game.gameyfin_id) && !installed;
         const effectiveView = presetRules.view || view;
-        const viewMatch = (effectiveView === 'all' && !game.hidden) || (effectiveView === 'favorites' && game.favorite && !game.hidden) || (effectiveView === 'recent' && game.last_played && !game.hidden) || (effectiveView === 'never' && !game.play_count && !game.hidden) || (effectiveView === 'playing' && ['Playing','Paused'].includes(game.progress) && !game.hidden) || (effectiveView === 'completed' && completed && !game.hidden) || (effectiveView === 'installed' && installed && !game.hidden) || (effectiveView === 'owned' && ownedUninstalled && !game.hidden) || (effectiveView === 'saves' && game.has_saves && !game.hidden) || (effectiveView === 'shelf' && game.manual_entry && !game.hidden) || (effectiveView === 'hidden' && game.hidden) || (effectiveView === 'missing' && !game.path_exists && !game.manual_entry && !game.hidden);
+        const viewMatch = (effectiveView === 'all' && !game.hidden) || (effectiveView === 'favorites' && game.favorite && !game.hidden) || (effectiveView === 'recent' && game.last_played && !game.hidden) || (effectiveView === 'never' && !game.play_count && !game.hidden) || (effectiveView === 'playing' && ['Playing','Paused'].includes(game.progress) && !game.hidden) || (effectiveView === 'completed' && completed && !game.hidden) || (effectiveView === 'unplayed' && !game.progress && !game.hidden) || (effectiveView === 'installed' && installed && !game.hidden) || (effectiveView === 'owned' && ownedUninstalled && !game.hidden) || (effectiveView === 'saves' && game.has_saves && !game.hidden) || (effectiveView === 'shelf' && game.manual_entry && !game.hidden) || (effectiveView === 'hidden' && game.hidden) || (effectiveView === 'missing' && !game.path_exists && !game.manual_entry && !game.hidden);
         const effectivePlatform = presetRules.platform || AppState.platform;
         const platformMatch = effectivePlatform === 'all' || game.platform === effectivePlatform;
         const category = presetRules.platform_category || AppState.platformCategory;
@@ -464,7 +466,7 @@ const token = new URLSearchParams(location.search).get('token') || sessionStorag
               if (button.dataset.explorerField === 'genre') $('sidebarSearch').value = `genre:"${button.dataset.explorerValue}"`;
               else if (button.dataset.explorerField === 'developer') $('sidebarSearch').value = `developer:"${button.dataset.explorerValue}"`;
               else if (button.dataset.explorerField === 'platform') AppState.platform = button.dataset.explorerValue;
-              else if (button.dataset.explorerField === 'progress') AppState.explorerRules = {progress:button.dataset.explorerValue === 'Unset' ? '__unset' : button.dataset.explorerValue};
+              else if (button.dataset.explorerField === 'progress') AppState.explorerRules = {progress:button.dataset.explorerValue === 'Unplayed' || button.dataset.explorerValue === 'Unset' ? '__unset' : button.dataset.explorerValue};
               else if (button.dataset.explorerField === 'esrb' && $('esrbFilter')) $('esrbFilter').value = button.dataset.explorerValue === 'Unrated' ? 'Unrated' : button.dataset.explorerValue;
               render();
             };

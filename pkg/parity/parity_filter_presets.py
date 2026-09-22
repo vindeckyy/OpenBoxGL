@@ -116,8 +116,14 @@ def _matches_esrb_progress(game, rules):
     if esrb and str(game.get("esrb", "")) != esrb:
         return False
     progress = str(rules.get("progress", "")).strip()
-    if progress and str(game.get("progress", "")) != progress:
-        return False
+    if progress:
+        # F4a: "Unplayed" is the UI label for unset ""; they match each other.
+        stored = str(game.get("progress", ""))
+        if progress.casefold() == "unplayed":
+            if stored not in ("", "Unplayed"):
+                return False
+        elif stored != progress:
+            return False
     return True
 
 
@@ -251,7 +257,7 @@ def explorer_facets(games, field, limit=40):
             label = str(game.get("platform", "Unspecified")).strip() or "Unspecified"
             counts[label] = counts.get(label, 0) + 1
         elif field == "progress":
-            label = str(game.get("progress", "")).strip() or "Unset"
+            label = str(game.get("progress", "")).strip() or "Unplayed"
             counts[label] = counts.get(label, 0) + 1
         elif field == "esrb":
             label = str(game.get("esrb", "")).strip() or "Unrated"

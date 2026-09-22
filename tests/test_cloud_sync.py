@@ -3,9 +3,14 @@ import tempfile
 from pathlib import Path
 
 from cloud_sync import CloudRemoteInvalid, game_key, legacy_game_key, sync_statistics
+from catalog import PROGRESS as CATALOG_PROGRESS
+import cloud_sync
 
 
 def main():
+    # F4a: the cloud_sync PROGRESS mirror must stay synchronized with catalog.
+    assert cloud_sync.PROGRESS == CATALOG_PROGRESS, (
+        f"progress mirror drift: {cloud_sync.PROGRESS ^ CATALOG_PROGRESS}")
     with tempfile.TemporaryDirectory() as directory:
         game = {
             "name": "Game",

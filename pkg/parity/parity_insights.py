@@ -13,6 +13,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from catalog import total_playtime_seconds
+
 
 def _basename(value: Any) -> str:
     if not value:
@@ -150,10 +152,9 @@ def compute_totals(games: list[dict[str, Any]], history: list[dict[str, Any]]) -
     for game in games if isinstance(games, list) else []:
         if not isinstance(game, dict):
             continue
-        try:
-            pt = int(game.get("playtime_seconds", 0) or 0)
-        except (TypeError, ValueError):
-            pt = 0
+        # F4c: totals count manual logged time alongside observed playtime;
+        # streaks/heatmap stay history-only by construction elsewhere.
+        pt = total_playtime_seconds(game)
         total_playtime += max(0, pt)
         if pt > 0 or game.get("last_played"):
             if game.get("last_played") or pt > 0:
@@ -177,11 +178,8 @@ def compute_top_platforms(
             continue
         platform = str(game.get("platform", "") or "Unspecified").strip() or "Unspecified"
         counter[platform] += 1
-        try:
-            pt = int(game.get("playtime_seconds", 0) or 0)
-        except (TypeError, ValueError):
-            pt = 0
-        playtime[platform] += max(0, pt)
+        # F4c: platform totals include manual logged time.
+        playtime[platform] += max(0, total_playtime_seconds(game))
     items = []
     for platform, count in counter.most_common(limit):
         items.append({"platform": platform, "count": count, "playtime_seconds": playtime[platform]})
@@ -211,11 +209,8 @@ def compute_top_games(games: list[dict[str, Any]], limit: int = 10) -> list[dict
     for game in games if isinstance(games, list) else []:
         if not isinstance(game, dict):
             continue
-        try:
-            pt = int(game.get("playtime_seconds", 0) or 0)
-        except (TypeError, ValueError):
-            pt = 0
-        pt = max(0, pt)
+        # F4c: top games rank by observed + manual playtime.
+        pt = max(0, total_playtime_seconds(game))
         if pt <= 0:
             continue
         try:

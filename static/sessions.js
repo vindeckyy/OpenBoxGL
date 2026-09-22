@@ -1,6 +1,7 @@
 import { $, escapeHtml, duration } from './util.js';
 import { api, notify, AppState, token, setButtonBusy, registerLifecycleStream, unregisterLifecycleStream } from './state.js';
 import { refresh, launchExtra } from './library.js';
+import { t } from './i18n.js';
 import { renderTimelineTab } from './timeline.js';
 import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
 
@@ -55,6 +56,21 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
         const result = await api('/api/launch', { method: 'POST', body: JSON.stringify({ game_id }) });
         showLifecycle('Starting', result.game, 'The game process is running', 1800);
         await refresh();
+        // F4a: one-time dismissible "mark as Playing?" suggestion. The
+        // backend only returns progress_suggest once per game; the dialog
+        // never sets progress on its own.
+        if (result.progress_suggest) {
+          const { confirmAction } = await import('./dialogs.js');
+          const marked = await confirmAction({
+            title: t('backlog.suggest_title'),
+            message: t('backlog.suggest_message', { name: result.game || 'Untitled' }),
+            confirmLabel: t('backlog.suggest_confirm'),
+          });
+          if (marked) {
+            await api('/api/v2/library/progress/set', { method: 'POST', body: JSON.stringify({ game_id, progress: 'Playing' }) });
+            await refresh();
+          }
+        }
       } catch(error) { notify(error.message); }
       finally { setButtonBusy(trigger, false); }
     }

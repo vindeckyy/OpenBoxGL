@@ -62,8 +62,16 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/library/manual-entry` | `_api_post_api_v2_library_manual_entry` |
 | POST | `/api/v2/library/manual-entry/convert` | `_api_post_api_v2_library_manual_entry_convert` |
 | POST | `/api/v2/library/manual-entry/update` | `_api_post_api_v2_library_manual_entry_update` |
+| POST | `/api/v2/library/notes/add` | `_api_post_api_v2_library_notes_add` |
+| POST | `/api/v2/library/notes/delete` | `_api_post_api_v2_library_notes_delete` |
+| POST | `/api/v2/library/notes/update` | `_api_post_api_v2_library_notes_update` |
 | POST | `/api/v2/library/pick` | `_api_post_api_v2_library_pick` |
+| POST | `/api/v2/library/playtime/delete` | `_api_post_api_v2_library_playtime_delete` |
+| POST | `/api/v2/library/playtime/log` | `_api_post_api_v2_library_playtime_log` |
+| POST | `/api/v2/library/playtime/update` | `_api_post_api_v2_library_playtime_update` |
+| POST | `/api/v2/library/progress/set` | `_api_post_api_v2_library_progress_set` |
 | POST | `/api/v2/library/query/parse` | `_api_post_api_v2_library_query_parse` |
+| POST | `/api/v2/library/rating/set` | `_api_post_api_v2_library_rating_set` |
 | GET | `/api/v2/library/repair` | `_api_get_api_v2_library_repair` |
 | POST | `/api/v2/library/repair/apply` | `_api_post_api_v2_library_repair_apply` |
 | POST | `/api/v2/library/repair/preview` | `_api_post_api_v2_library_repair_preview` |
@@ -96,6 +104,8 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/party/next` | `_api_post_api_v2_party_next` |
 | GET | `/api/v2/party/queue` | `_api_get_api_v2_party_queue` |
 | POST | `/api/v2/party/queue` | `_api_post_api_v2_party_queue` |
+| POST | `/api/v2/plugins/command` | `_api_post_api_v2_plugins_command` |
+| GET | `/api/v2/plugins/commands` | `_api_get_api_v2_plugins_commands` |
 | GET | `/api/v2/reels` | `handlers.clips.reel_manifest` |
 | POST | `/api/v2/reels/create` | `handlers.clips.create_reel_job` |
 | POST | `/api/v2/resume` | `handlers.resume.resume_launch` |
@@ -131,7 +141,7 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/steamgrid/test` | `handlers.steamgrid.steamgrid_test` |
 | GET | `/api/v2/story` | `_api_get_api_v2_story` |
 
-_120 routes._
+_130 routes._
 
 ## API v1 (frozen)
 

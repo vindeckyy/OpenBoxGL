@@ -27,6 +27,14 @@ def _normalize_text(value: Any) -> str:
     return str(value).lower()
 
 
+def _clean_user_rating(game: dict) -> int:
+    """Personal 0-5 rating, clamped; malformed raw data counts as unrated."""
+    try:
+        return max(0, min(5, int(float(game.get("user_rating") or 0))))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _median(values: list[float]) -> float:
     if not values:
         return 0.0
@@ -247,7 +255,8 @@ def _eligibility(game: dict, history: list[dict], criteria: dict, now: datetime)
     play_count = int(game.get("play_count") or 0)
     if familiarity == "new" and play_count > 0:
         return False, None, {}
-    if familiarity == "favorite" and not (game.get("favorite") or float(game.get("rating") or 0) >= 4):
+    user_rating = _clean_user_rating(game)
+    if familiarity == "favorite" and not (game.get("favorite") or float(game.get("rating") or 0) >= 4 or user_rating >= 4):
         return False, None, {}
 
     if not _fits_minutes(game, history, minutes):
@@ -255,6 +264,8 @@ def _eligibility(game: dict, history: list[dict], criteria: dict, now: datetime)
 
     reason_key = None
     reason_params = {"name": str(game.get("name") or "game")}
+    user_rating = _clean_user_rating(game)
+    unplayed_progress = str(game.get("progress") or "") in ("", "Unplayed")
     if play_count == 0:
         reason_key = "picker.reason.never_played"
     elif game.get("favorite"):
@@ -278,6 +289,11 @@ def _eligibility(game: dict, history: list[dict], criteria: dict, now: datetime)
     if reason_key is None and minutes:
         reason_key = "picker.reason.fits_session"
         reason_params["minutes"] = minutes
+    # F4b: strongest signal wins — highly-rated unplayed backlog title.
+    if user_rating >= 4 and unplayed_progress:
+        ttb = game.get("time_to_beat_hours") or round(_estimated_minutes_for_unplayed(game) / 60)
+        reason_key = "picker.reason.rated_backlog"
+        reason_params = {"name": str(game.get("name") or "game"), "stars": user_rating, "ttb": ttb}
 
     return True, reason_key, reason_params
 
@@ -299,6 +315,13 @@ def _score(game: dict, history: list[dict], criteria: dict, now: datetime) -> fl
     rating = float(game.get("rating") or 0)
     if rating:
         score += rating * 3.0
+    # F4b: personal star ratings outrank critic metadata ratings.
+    user_rating = _clean_user_rating(game)
+    if user_rating:
+        score += user_rating * 4.0
+    # F4a: unplayed backlog titles surface first.
+    if str(game.get("progress") or "") in ("", "Unplayed"):
+        score += 5.0
 
     # Recency: older last play gets more points, capped at one year.
     days = _days_since_last_play(game, history, now)
@@ -388,7 +411,8 @@ def pick_games(
         if familiarity == "new" and play_count > 0:
             continue
         rating = float(game.get("rating") or 0)
-        if familiarity == "favorite" and not (game.get("favorite") or rating >= 4):
+        user_rating = _clean_user_rating(game)
+        if familiarity == "favorite" and not (game.get("favorite") or rating >= 4 or user_rating >= 4):
             continue
         fits_minutes = _indexed_fits_minutes(game, history_sessions, minutes, genre, estimate_cache)
         if not fits_minutes:
@@ -420,6 +444,7 @@ def pick_games(
                 days = max(0, (now - dt).days)
         reason_key = None
         reason_params = {"name": str(game.get("name") or "game")}
+        unplayed_progress = str(game.get("progress") or "") in ("", "Unplayed")
         if play_count == 0:
             reason_key = "picker.reason.never_played"
         elif game.get("favorite"):
@@ -446,6 +471,12 @@ def pick_games(
             score += 10.0
         if rating:
             score += rating * 3.0
+        # F4b: personal star ratings outrank critic metadata ratings.
+        if user_rating:
+            score += user_rating * 4.0
+        # F4a: unplayed backlog titles surface first.
+        if unplayed_progress:
+            score += 5.0
         score += min(days, 365) / 365.0 * 8.0 if days is not None else 8.0
         if mood != "any" and mood_match:
             score += 6.0
@@ -463,6 +494,8 @@ def pick_games(
             "fits_minutes": fits_minutes,
             "play_count": play_count,
             "rating": rating,
+            "user_rating": user_rating,
+            "unplayed_progress": unplayed_progress,
         })
 
     if not eligible:
@@ -506,7 +539,13 @@ def pick_games(
         play_count = item["play_count"]
 
         # Rewrite reason to the strongest signal, in priority order.
-        if play_count == 0:
+        # F4b: a highly-rated unplayed backlog title gets the transparent
+        # composite reason ("5★, unplayed, ~12h to beat").
+        if item["user_rating"] >= 4 and item["unplayed_progress"]:
+            ttb = game.get("time_to_beat_hours") or round(_estimated_minutes_for_unplayed(game) / 60)
+            reason_key = "picker.reason.rated_backlog"
+            reason_params = {"name": g_name, "stars": item["user_rating"], "ttb": ttb}
+        elif play_count == 0:
             reason_key = "picker.reason.never_played"
         elif game.get("favorite") and (days is None or days > 14):
             reason_key = "picker.reason.favorite"

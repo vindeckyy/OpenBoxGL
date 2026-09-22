@@ -441,7 +441,7 @@ function renderQueryChips() {
   } else if (state.query) {
     addChip('search', `Search: ${state.query}`, () => { $('sidebarSearch').value = ''; refreshSmartQuery(''); });
   }
-  if (state.explorer.progress) addChip('explorer', `Progress: ${state.explorer.progress === '__unset' ? 'Unset' : state.explorer.progress}`, () => { AppState.explorerRules = {}; });
+  if (state.explorer.progress) addChip('explorer', `Progress: ${state.explorer.progress === '__unset' ? t('backlog.unplayed') : state.explorer.progress}`, () => { AppState.explorerRules = {}; });
   if (state.importBatchId) addChip('import_batch', `Import batch: ${state.importBatchId}`, () => { AppState.importBatchId = ''; invalidateFilterCache(); });
   if (state.smart.has_achievements) addChip('smart_achievements', 'Achievements', () => { delete AppState.smartFilterRules.has_achievements; });
   if (state.smart.has_missing_media) addChip('smart_missing_media', 'Missing media', () => { delete AppState.smartFilterRules.has_missing_media; });
@@ -789,6 +789,7 @@ function markFilterAria() {
         <button type="button" class="card-main" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><div class="cover ${AppState.appSettings.bigbox_mode === 'coverflow' ? 'jewel-3d' : ''}">${imageMarkup(game,imageGroup)}</div>
         <h3>${escapeHtml(game.name)}${game.moments_count ? `<span class="card-moments-count" aria-label="${escapeHtml(t('moments.count', {count: game.moments_count}))}">${escapeHtml(String(game.moments_count))}</span>` : ''}</h3><p>${escapeHtml(game.developer || game.platform || '')}</p>
         <div class="badge-row">${renderBadges(game)}</div></button>
+        <div class="star-widget" data-star-game="${game.id}" role="radiogroup" aria-label="${escapeHtml(t('backlog.my_rating'))}">${[1,2,3,4,5].map(n => `<button type="button" class="star${n <= (game.user_rating || 0) ? ' on' : ''}" data-star="${n}" aria-label="${n} ${escapeHtml(t('backlog.stars'))}">★</button>`).join('')}</div>
         ${game.moments_count ? `<button type="button" class="card-moments" data-moments-card="${game.id}" aria-label="${escapeHtml(t('moments.open_card', {count: game.moments_count}))}">${escapeHtml(t('moments.tab'))}</button>` : ''}
       </article>`;
     }
@@ -990,6 +991,19 @@ function markFilterAria() {
         selectGame(Number(button.dataset.momentsCard));
         setTimeout(() => document.getElementById('momentsTab')?.click(), 0);
       });
+      document.querySelectorAll('[data-star-game]').forEach(wrap => {
+        const id = Number(wrap.dataset.starGame);
+        wrap.querySelectorAll('.star').forEach(button => button.onclick = async event => {
+          event.preventDefault();
+          event.stopPropagation();
+          try {
+            await api('/api/v2/library/rating/set', { method: 'POST', body: JSON.stringify({ id, user_rating: Number(button.dataset.star) }) });
+            const game = AppState.games.find(item => item.id === id);
+            if (game) game.user_rating = Number(button.dataset.star);
+            renderGrid();
+          } catch(error) { notify(error.message); }
+        });
+      });
       document.querySelectorAll('[data-list-sort]').forEach(button => button.onclick = () => toggleListSort(button.dataset.listSort));
       document.querySelectorAll('[data-manual-tile]').forEach(tile => {
         const game = AppState.games.find(item => item.id === Number(tile.dataset.manualTile));
@@ -1043,9 +1057,27 @@ function markFilterAria() {
           <div class="detail-card"><h3>Information</h3><div class="facts">
             ${fact('Release date',game.year)}${fact('Developer',game.developer)}${fact('Publisher',game.publisher)}${fact('ESRB',game.esrb)}${fact('Source',game.source)}${fact('Category',platformCategoryFor(game))}${Object.entries(game.custom_fields || {}).map(([key,value]) => fact(key,value)).join('')}${fact('Max players',game.max_players)}${fact('Controller support',game.controller_support)}${fact('Disc count',game.disc_count)}${fact('Play time',duration(game.playtime_seconds))}
             ${fact('Launches',game.play_count)}${fact('Last played',game.last_played ? game.last_played.replace('T',' ') : '')}${fact('Progress',game.progress)}${fact('Rating',game.rating ? `${game.rating} / 5` : '')}${fact('Region',game.region)}${fact('Play mode',game.play_mode)}${fact('Wikipedia',game.wikipedia_url)}${fact('Video URL',game.video_url)}
-          </div>${game.description ? `<p class="description">${escapeHtml(game.description)}</p>` : ''}${game.notes ? `<p class="description"><strong>Notes</strong><br>${escapeHtml(game.notes)}</p>` : ''}
+          </div>${game.description ? `<p class="description">${escapeHtml(game.description)}</p>` : ''}
           ${applications.length || versions.length || documents.length ? `<div class="extras">${applications.map((item,index) => `<button class="icon-button" data-extra="applications:${index}">App · ${escapeHtml(item.name)}</button>`).join('')}${versions.map((item,index) => `<button class="icon-button" data-extra="versions:${index}">Version · ${escapeHtml(item.name)}</button>`).join('')}${documents.map((item,index) => `<button class="icon-button" data-document="${index}">Read ${escapeHtml(item.name)}</button><button class="icon-button" data-extra="documents:${index}" aria-label="Open ${escapeHtml(item.name)} externally">↗</button>`).join('')}</div>` : ''}</div>
           ${game.has_video ? `<div class="detail-card"><h3>Video</h3><video class="media-player" controls preload="metadata" src="${media(game,'video')}"></video></div>` : ''}
+          <div class="detail-card"><h3>${escapeHtml(t('backlog.section'))}</h3><div class="facts">
+            ${fact(t('backlog.status'), game.progress || t('backlog.unplayed'))}
+            ${fact(t('backlog.my_rating'), game.user_rating ? `${game.user_rating} / 5` : '')}
+            ${fact(t('backlog.manual_time'), duration(game.manual_playtime_seconds || 0))}
+            ${fact(t('backlog.total_time'), duration(game.total_playtime_seconds || game.playtime_seconds || 0))}
+          </div>
+          <div class="backlog-controls">
+            <label class="field"><span>${escapeHtml(t('backlog.status'))}</span><select id="backlogProgress">
+              <option value=""${game.progress ? '' : ' selected'}>${escapeHtml(t('backlog.unplayed'))}</option>
+              ${['Playing','Paused','Beaten','Completed','Mastered','Abandoned'].map(status => `<option${status === game.progress ? ' selected' : ''}>${status}</option>`).join('')}
+            </select></label>
+            <div class="star-widget" data-star-detail="${game.id}" role="radiogroup" aria-label="${escapeHtml(t('backlog.my_rating'))}">${[1,2,3,4,5].map(n => `<button type="button" class="star${n <= (game.user_rating || 0) ? ' on' : ''}" data-star="${n}" aria-label="${n} ${escapeHtml(t('backlog.stars'))}">★</button>`).join('')}</div>
+            <button class="icon-button" id="logPlaytimeButton">${escapeHtml(t('backlog.log_playtime'))}</button>
+          </div>
+          ${(game.manual_sessions || []).map((entry, index) => `<div class="backlog-row"><span class="grow">${escapeHtml(entry.date || '')} · ${escapeHtml(duration(entry.seconds || 0))}${entry.note ? ` — ${escapeHtml(entry.note)}` : ''}</span><button class="icon-button" data-session-edit="${index}">${escapeHtml(t('backlog.edit'))}</button><button class="icon-button" data-session-delete="${index}">${escapeHtml(t('backlog.delete'))}</button></div>`).join('')}
+          <div class="backlog-controls"><strong>${escapeHtml(t('backlog.notes'))}</strong><button class="icon-button" id="addNoteButton">${escapeHtml(t('backlog.add_note'))}</button></div>
+          ${(game.notes || []).map((entry, index) => `<div class="backlog-row"><span class="grow">${entry.ts ? `<small>${escapeHtml(entry.ts)}</small> ` : ''}${escapeHtml(entry.text || '')}</span><button class="icon-button" data-note-edit="${index}">${escapeHtml(t('backlog.edit'))}</button><button class="icon-button" data-note-delete="${index}">${escapeHtml(t('backlog.delete'))}</button></div>`).join('')}
+          </div>
           ${game.has_music ? `<div class="detail-card"><h3>Music</h3><audio class="media-player" controls preload="metadata" src="${media(game,'music')}"></audio></div>` : ''}
           ${screenshots.length ? `<div class="detail-card"><h3>Screenshots</h3><div class="screenshot-grid">${screenshots.map(index => `<button data-screenshot="${index}" aria-label="Open screenshot ${index + 1}"><img src="${media(game,'screenshot',index)}" alt="" loading="lazy" decoding="async"></button>`).join('')}</div></div>` : ''}
           ${renderArtwork(game)}
@@ -1091,6 +1123,7 @@ function markFilterAria() {
       };
       $('favoriteButton').onclick = () => favorite(game.id);
       $('editButton').onclick = () => openGameDialog(game);
+      wireBacklogControls(game);
       if ($('convertShelfButton')) $('convertShelfButton').onclick = () => $('playButton').click();
       $('databaseMetadataButton').onclick = () => openMetadata(game);
       if ($('steamMetadataButton')) $('steamMetadataButton').onclick = () => steamMetadata(game.id);
@@ -1246,10 +1279,124 @@ function markFilterAria() {
     function render() { renderQueryChips(); renderPlatformCategories(); renderPlatforms(); renderPlaylists(); renderFilterPresets(); renderSmartCollections(); renderGrid(); renderDetails(); markFilterAria(); applyDetailsLayout(); applySidebarVisibility(); syncHash(); $('status').textContent = `${AppState.games.length} games · local library`; }
     function collectionStats(items) {
       const completed = items.filter(game => ['Beaten','Completed','Mastered'].includes(game.progress)).length;
-      const playtime = items.reduce((total, game) => total + Number(game.playtime_seconds || 0), 0);
+      const playtime = items.reduce((total, game) => total + Number(game.total_playtime_seconds || game.playtime_seconds || 0), 0);
       const plays = items.reduce((total, game) => total + Number(game.play_count || 0), 0);
       return `<div class="collection-summary"><div class="collection-stat"><small>Games</small><strong>${items.length}</strong></div><div class="collection-stat"><small>Completed</small><strong>${completed}</strong></div><div class="collection-stat"><small>Play time</small><strong>${duration(playtime)}</strong></div><div class="collection-stat"><small>Launches</small><strong>${plays}</strong></div><div class="collection-stat"><small>Favorites</small><strong>${items.filter(game => game.favorite).length}</strong></div><div class="collection-stat"><small>Missing files</small><strong>${items.filter(game => !game.path_exists).length}</strong></div></div>`;
     }
+    // ── Backlog management (F4) ──────────────────────────────────────────
+    // Re-fetch library state and re-render after a backlog mutation.
+    async function backlogRefresh() {
+      await refresh();
+    }
+    function wireBacklogControls(game) {
+      const progressSelect = $('backlogProgress');
+      if (progressSelect) progressSelect.onchange = async () => {
+        try {
+          await api('/api/v2/library/progress/set', { method: 'POST', body: JSON.stringify({ id: game.id, progress: progressSelect.value || 'Unplayed' }) });
+          game.progress = progressSelect.value;
+          renderGrid();
+          renderDetails();
+          notify(t('backlog.status_saved'));
+        } catch(error) { notify(error.message); }
+      };
+      document.querySelectorAll('[data-star-detail]').forEach(wrap => {
+        wrap.querySelectorAll('.star').forEach(button => button.onclick = async () => {
+          try {
+            await api('/api/v2/library/rating/set', { method: 'POST', body: JSON.stringify({ id: game.id, user_rating: Number(button.dataset.star) }) });
+            game.user_rating = Number(button.dataset.star);
+            renderGrid();
+            renderDetails();
+            notify(t('backlog.rating_saved'));
+          } catch(error) { notify(error.message); }
+        });
+      });
+      if ($('logPlaytimeButton')) $('logPlaytimeButton').onclick = () => openPlaytimeDialog(game);
+      document.querySelectorAll('[data-session-edit]').forEach(button => button.onclick = () => openPlaytimeDialog(game, Number(button.dataset.sessionEdit)));
+      document.querySelectorAll('[data-session-delete]').forEach(button => button.onclick = async () => {
+        try {
+          await api('/api/v2/library/playtime/delete', { method: 'POST', body: JSON.stringify({ id: game.id, index: Number(button.dataset.sessionDelete) }) });
+          await backlogRefresh();
+          notify(t('backlog.playtime_deleted'));
+        } catch(error) { notify(error.message); }
+      });
+      if ($('addNoteButton')) $('addNoteButton').onclick = () => openNoteDialog(game);
+      document.querySelectorAll('[data-note-edit]').forEach(button => button.onclick = () => openNoteDialog(game, Number(button.dataset.noteEdit)));
+      document.querySelectorAll('[data-note-delete]').forEach(button => button.onclick = async () => {
+        try {
+          await api('/api/v2/library/notes/delete', { method: 'POST', body: JSON.stringify({ id: game.id, index: Number(button.dataset.noteDelete) }) });
+          await backlogRefresh();
+          notify(t('backlog.note_deleted'));
+        } catch(error) { notify(error.message); }
+      });
+    }
+    // Manual playtime log/edit dialog. One shared <dialog> reused per game.
+    function openPlaytimeDialog(game, editIndex = null) {
+      const sessions = game.manual_sessions || [];
+      const existing = editIndex === null ? {} : (sessions[editIndex] || {});
+      let dialog = $('playtimeDialog');
+      if (!dialog) {
+        dialog = document.createElement('dialog');
+        dialog.id = 'playtimeDialog';
+        dialog.innerHTML = `<form method="dialog"><div class="dialog-head"><h2>${escapeHtml(t('backlog.log_playtime'))}</h2><button type="button" id="closePlaytime" aria-label="${escapeHtml(t('common.close'))}">×</button></div><div class="form-grid">
+          <label class="field"><span>${escapeHtml(t('backlog.hours'))}</span><input id="playtimeHours" type="number" min="0" max="24"></label>
+          <label class="field"><span>${escapeHtml(t('backlog.minutes'))}</span><input id="playtimeMinutes" type="number" min="0" max="59"></label>
+          <label class="field"><span>${escapeHtml(t('backlog.date'))}</span><input id="playtimeDate" type="date"></label>
+          <label class="field wide"><span>${escapeHtml(t('backlog.note'))}</span><input id="playtimeNote" maxlength="200"></label>
+        </div><div class="dialog-actions"><button type="button" class="icon-button" id="cancelPlaytime">${escapeHtml(t('backlog.cancel'))}</button><button class="primary" id="savePlaytime">${escapeHtml(t('backlog.save'))}</button></div></form>`;
+        document.body.append(dialog);
+      }
+      const seconds = Number(existing.seconds || 0);
+      $('playtimeHours').value = Math.floor(seconds / 3600);
+      $('playtimeMinutes').value = Math.floor((seconds % 3600) / 60);
+      $('playtimeDate').value = existing.date || new Date().toISOString().slice(0, 10);
+      $('playtimeNote').value = existing.note || '';
+      $('closePlaytime').onclick = () => dialog.close();
+      $('cancelPlaytime').onclick = () => dialog.close();
+      $('savePlaytime').onclick = async event => {
+        event.preventDefault();
+        const total = Number($('playtimeHours').value || 0) * 3600 + Number($('playtimeMinutes').value || 0) * 60;
+        if (!(total >= 1 && total <= 86400)) return notify(t('backlog.playtime_range'));
+        const body = { id: game.id, date: $('playtimeDate').value, seconds: total, note: $('playtimeNote').value };
+        if (editIndex !== null) body.index = editIndex;
+        try {
+          await api(editIndex === null ? '/api/v2/library/playtime/log' : '/api/v2/library/playtime/update', { method: 'POST', body: JSON.stringify(body) });
+          dialog.close();
+          await backlogRefresh();
+          notify(t('backlog.playtime_saved'));
+        } catch(error) { notify(error.message); }
+      };
+      dialog.showModal();
+    }
+    // Dated note add/edit dialog.
+    function openNoteDialog(game, editIndex = null) {
+      const existing = editIndex === null ? '' : ((game.notes || [])[editIndex] || {}).text || '';
+      let dialog = $('noteDialog');
+      if (!dialog) {
+        dialog = document.createElement('dialog');
+        dialog.id = 'noteDialog';
+        dialog.innerHTML = `<form method="dialog"><div class="dialog-head"><h2>${escapeHtml(t('backlog.add_note'))}</h2><button type="button" id="closeNote" aria-label="${escapeHtml(t('common.close'))}">×</button></div><div class="form-grid">
+          <label class="field wide"><span>${escapeHtml(t('backlog.note'))}</span><textarea id="noteText" maxlength="2000" rows="4"></textarea></label>
+        </div><div class="dialog-actions"><button type="button" class="icon-button" id="cancelNote">${escapeHtml(t('backlog.cancel'))}</button><button class="primary" id="saveNote">${escapeHtml(t('backlog.save'))}</button></div></form>`;
+        document.body.append(dialog);
+      }
+      $('noteText').value = existing;
+      $('closeNote').onclick = () => dialog.close();
+      $('cancelNote').onclick = () => dialog.close();
+      $('saveNote').onclick = async event => {
+        event.preventDefault();
+        try {
+          const body = { id: game.id, text: $('noteText').value };
+          if (editIndex !== null) body.index = editIndex;
+          await api(editIndex === null ? '/api/v2/library/notes/add' : '/api/v2/library/notes/update', { method: 'POST', body: JSON.stringify(body) });
+          dialog.close();
+          await backlogRefresh();
+          notify(t('backlog.note_saved'));
+        } catch(error) { notify(error.message); }
+      };
+      dialog.showModal();
+    }
+
+    // ── End backlog management ─────────────────────────────────────────
     function renderCollectionDetails(title, items, kind) {
       const lastPlayed = [...items].filter(game => game.last_played).sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)))[0];
       const mostPlayed = [...items].sort((a,b) => Number(b.play_count || 0) - Number(a.play_count || 0))[0];

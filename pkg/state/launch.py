@@ -27,7 +27,7 @@ from pkg.platform_compat import (
     terminate_process_tree,
 )
 from backend_io import contained_path
-from catalog import apply_progress_automation
+from catalog import apply_progress_automation, progress_suggest_due
 from openbox import DATA, build_launch, load_state, update_state
 from parity_gamescope import is_gamescope_guest, is_steam_launch, mark_process_windows, steam_game_id_for, apply_mangohud_env, merge_gamescope_preset, should_nest_gamescope
 from parity_integrations import auto_attach_obs_recording
@@ -598,6 +598,15 @@ def _make_start_mutator(stable_game_id, index, started, process, entry, missing,
         current["play_count"] = current.get("play_count", 0) + 1
         if not current.get("progress") and state.get("settings", {}).get("progress_on_first_play", "Playing"):
             current["progress"] = state.get("settings", {}).get("progress_on_first_play", "Playing")
+        # F4a: one-time dismissible "Playing?" auto-suggest. Fires only when
+        # the progress automation above would not have set a status, the
+        # kill-switch setting is on, and this game was never prompted before.
+        # The flag is marked at session start so the prompt can never repeat,
+        # even if the user dismisses it without answering.
+        suggest_fn = _ns("progress_suggest_due", progress_suggest_due)
+        progress_suggest = suggest_fn(current, state.get("settings", {}))
+        if progress_suggest:
+            current["progress_suggested"] = True
         entry.update({
             "launch_id": launch_id,
             "game_id": current_index,
@@ -615,6 +624,7 @@ def _make_start_mutator(stable_game_id, index, started, process, entry, missing,
             "resumed_from_state": bool(resumed),
             "replay_buffer_armed": bool(replay_armed),
             "replay_buffer_owned": bool(replay_owned),
+            "progress_suggest": progress_suggest,
         })
 
         pgid = process_group_id(process.pid)

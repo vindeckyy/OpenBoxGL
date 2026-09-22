@@ -502,6 +502,33 @@ class PerfCacheTests(unittest.TestCase):
         self.assertEqual(proj["tags"], [])
         self.assertEqual(proj["screenshots"], [])
 
+    def test_project_game_backlog_defaults(self):
+        """F4: old libraries project defaults; legacy notes migrate; totals add up."""
+        from webapp_state import _project_game
+
+        old = {"game_id": "old", "name": "Old Game", "path": "/bin/true",
+               "notes": "legacy note", "playtime_seconds": 600}
+        proj = _project_game(old, 0, set(), set(), None, {}, 0)
+        self.assertEqual(proj["progress"], "")
+        self.assertEqual(proj["user_rating"], 0)
+        self.assertEqual(proj["manual_playtime_seconds"], 0)
+        self.assertEqual(proj["manual_sessions"], [])
+        self.assertEqual(proj["total_playtime_seconds"], 600)
+        self.assertEqual(proj["notes"], [{"ts": "", "text": "legacy note"}])
+
+        new = {"game_id": "new", "name": "New Game", "path": "/bin/true",
+               "user_rating": 5, "playtime_seconds": 100,
+               "manual_playtime_seconds": 200,
+               "manual_sessions": [{"date": "2026-01-01", "seconds": 200, "note": ""}],
+               "notes": [{"ts": "2026-01-02T00:00:00", "text": "hi"}]}
+        proj2 = _project_game(new, 1, set(), set(), None, {}, 0)
+        self.assertEqual(proj2["user_rating"], 5)
+        self.assertEqual(proj2["manual_playtime_seconds"], 200)
+        self.assertEqual(proj2["manual_sessions"],
+                         [{"date": "2026-01-01", "seconds": 200, "note": ""}])
+        self.assertEqual(proj2["total_playtime_seconds"], 300)
+        self.assertEqual(proj2["notes"], [{"ts": "2026-01-02T00:00:00", "text": "hi"}])
+
     def test_media_roots_env_and_capping(self):
         import webapp_state
         from webapp_state import _build_known_media_set, MEDIA_ROOTS_ENV
