@@ -44,6 +44,9 @@ import { t } from './i18n.js';
       if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').value = '';
       AppState.bigBoxGames = filteredBigBoxGames();
       if (!AppState.bigBoxGames.length) {
+        // Keep Big Box hidden when there is nothing to show: a previous open
+        // may have left it visible, but the empty view defers to the wizard.
+        $('bigBox').hidden = true;
         notify('info', t('bigbox.empty_view_setup'));
         openSetupCenter();
         return;
