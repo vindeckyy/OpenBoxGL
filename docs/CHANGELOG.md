@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+- Fixed the web UI failing to boot (`Cannot access 'AppState' before
+  initialization`): the Game DNA search initializer ran at module load time,
+  before the app state module finished evaluating. It now runs after module
+  evaluation completes.
+- Fixed `POST /api/v2/metadata/scrape-settings` (and its `GET` counterpart)
+  returning 400: the routes were registered with bare handler names that the
+  dispatcher could not resolve to the module-level functions in
+  `handlers/metadata.py`. Both now use dotted specs.
+- Restored the `window.AppState` / `window.filteredGames` page globals used by
+  the UI smoke harness.
+
 ### Changed
 - In-app What's New dialog now highlights the 1.14.0 flagships instead of
   the 1.11 highlights.

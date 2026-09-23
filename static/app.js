@@ -30,6 +30,11 @@ import { openSetupCenter } from './setup.js';
 import { init as i18nInit, setLocale, getSupportedLocales, t } from './i18n.js';
 import './activity.js';
 
+// Expose the app state and game filter to the page global scope for the
+// ui-smoke harness (page.evaluate) and other page-level consumers.
+window.AppState = AppState;
+window.filteredGames = filteredGames;
+
 // Initialize i18n after the page has settled so it doesn't hold network
 // connections during initial load (which would block networkidle2 in tests).
 // Populate the locale selector from public_settings once settings are loaded.
