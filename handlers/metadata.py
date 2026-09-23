@@ -823,7 +823,7 @@ SCRAPE_SETTING_DEFAULTS = {
 }
 
 
-@route("GET", "/api/v2/metadata/scrape-settings")
+@route("GET", "/api/v2/metadata/scrape-settings", spec="handlers.metadata._api_get_api_v2_metadata_scrape_settings")
 def _api_get_api_v2_metadata_scrape_settings(handler, parsed):
     """Read the auto-scrape master toggle + provider opt-ins (owned persistence).
 
@@ -837,7 +837,7 @@ def _api_get_api_v2_metadata_scrape_settings(handler, parsed):
     })
 
 
-@route("POST", "/api/v2/metadata/scrape-settings")
+@route("POST", "/api/v2/metadata/scrape-settings", spec="handlers.metadata._api_post_api_v2_metadata_scrape_settings")
 def _api_post_api_v2_metadata_scrape_settings(handler, payload):
     """Persist the auto-scrape master toggle + provider opt-ins (owned persistence).
 

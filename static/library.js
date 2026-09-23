@@ -1616,7 +1616,10 @@ function markFilterAria() {
         renderGrid();
       });
     };
-    initDnaSearch();
+    // Deferred past module evaluation: initDnaSearch reads AppState, which is
+    // still uninitialized while this module loads inside the state.js import
+    // cycle. A microtask runs after the module graph finishes evaluating.
+    queueMicrotask(() => initDnaSearch());
     $('view').onchange = () => { leaveActivePreset(); AppState.activePlaylist = ''; renderPlaylists(); renderGrid(); };
     $('sort').onchange = () => {
       AppState.appSettings.list_sort = $('sort').value;

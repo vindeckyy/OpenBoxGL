@@ -496,6 +496,10 @@ const failures = [];
         calls.finishOrder.push('metadata_sync');
         return jsonResponse({job_id: 'job-meta-sync'});
       }
+      if (href.includes('/api/v2/metadata/auto-scrape') && method === 'POST') {
+        calls.finishOrder.push('auto_scrape');
+        return jsonResponse({queued: false});
+      }
       if (href.includes('/api/v2/metadata/matches/preview') && method === 'POST') {
         calls.finishOrder.push('matches_preview');
         return jsonResponse({preview_id: 'match-preview', job_id: 'job-match', revision: 1}, 202);
