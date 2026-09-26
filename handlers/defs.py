@@ -1,4 +1,4 @@
-"""Emulator definition update routes (ADR 0049).
+"""Emulator definition update routes (ADR 0060).
 
 ``GET  /api/v2/emulators/defs/status``  local definition state: what the
 bundled set provides, what the channel installed, and which files are
@@ -24,7 +24,6 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 import pkg.parity  # noqa: F401,E402  # installs the flat parity_* import finder
-import notifications  # noqa: E402
 import openbox  # noqa: E402
 from parity_emulator_defs_update import (  # noqa: E402
     DefinitionError,
@@ -58,10 +57,13 @@ def _api_post_api_v2_emulators_defs_update(handler, parsed):
     try:
         result = _install(data_dir=_data_parent())
     except SignatureError as exc:
-        # A failed signature is a security event, so it earns a notification
-        # rather than disappearing into a job log.
-        notifications.add_notification(
-            openbox.load_state(),
+        # A failed signature is a security event, so it earns a persisted
+        # notification rather than disappearing into a job log. load_state()
+        # returns a detached copy, so add_notification on its result would be
+        # discarded; emit_notification persists through transact_state.
+        from pkg.state.sse import emit_notification
+
+        emit_notification(
             kind="security",
             level="error",
             title="Emulator definition update rejected",

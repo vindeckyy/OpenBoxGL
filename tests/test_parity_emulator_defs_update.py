@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the signed emulator-definition update channel (ADR 0049).
+"""Tests for the signed emulator-definition update channel (ADR 0060).
 
 The 1.12.1 release shipped four signature-verification bugs at once, so these
 tests are adversarial by design: the interesting cases are the ones that must
@@ -124,6 +124,31 @@ class ReadPackTests(unittest.TestCase):
             upd.read_pack(make_tar({"../escape.yaml": VALID_DEF}))
         self.assertIn("unsafe path", str(ctx.exception))
 
+    def test_rejects_absolute_path(self):
+        with self.assertRaises(upd.DefinitionError):
+            upd.read_pack(make_tar({"/abs.yaml": VALID_DEF}))
+
+    def test_symlink_members_are_ignored(self):
+        # A symlink must never be materialized, so it is simply not read.
+        defs = upd.read_pack(make_tar({"evil.yaml": None, "ok.yaml": VALID_DEF}))
+        self.assertEqual({"ok.yaml"}, set(defs))
+
+    def test_empty_pack_is_rejected(self):
+        with self.assertRaises(upd.DefinitionError):
+            upd.read_pack(make_tar({"notes.txt": "hello"}))
+
+    def test_non_yaml_members_are_ignored(self):
+        defs = upd.read_pack(make_tar({"a.yaml": VALID_DEF, "README.md": "hi"}))
+        self.assertEqual({"a.yaml"}, set(defs))
+
+    def test_basename_collision_is_rejected(self):
+        members = {
+            "defs/a.yaml": VALID_DEF,
+            "other/a.yaml": VALID_DEF,
+        }
+        with self.assertRaises(upd.DefinitionError):
+            upd.read_pack(make_tar(members))
+
 
 
 class VerificationTests(unittest.TestCase):
@@ -210,6 +235,53 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(["new-emu.yaml"], result["kept_local"])
         self.assertEqual([], result["installed"])
         self.assertIn("hand-tuned", mine.read_text(encoding="utf-8"))
+
+    def test_channel_owned_file_is_refreshed_by_a_later_pack(self):
+        # Re-running install refreshes files the channel owns; only user-local
+        # files are kept. Without this the channel could never update.
+        self._install({"new-emu.yaml": VALID_DEF})
+        newer = VALID_DEF.replace("label: Test Emulator", "label: Test Emulator v2")
+        result = self._install({"new-emu.yaml": newer}, version="2.1.0")
+        self.assertEqual(["new-emu.yaml"], result["updated"])
+        self.assertEqual([], result["installed"])
+        text = (self.data / "emulator_defs" / "new-emu.yaml").read_text(encoding="utf-8")
+        self.assertIn("v2", text)
+
+    def test_install_persists_rollback_ledger(self):
+        self._install({"new-emu.yaml": VALID_DEF})
+        result = upd.status(self.data)
+        self.assertEqual(["new-emu.yaml"], result["installed"])
+        self.assertEqual("2.0.0", result["version"])
+
+    def test_partial_pack_is_not_applied(self):
+        # One bad definition in the pack means nothing is installed at all.
+        broken = "\n".join(
+            line for line in VALID_DEF.splitlines() if not line.startswith("native_exe_windows")
+        )
+        with self.assertRaises(upd.DefinitionError):
+            self._install({"good.yaml": VALID_DEF, "bad.yaml": broken})
+        self.assertFalse((self.data / "emulator_defs" / "good.yaml").exists())
+
+    def test_verification_failure_installs_nothing(self):
+        def boom(**_kwargs):
+            raise upd.SignatureError("nope")
+
+        original = upd.download_and_verify
+        upd.download_and_verify = boom
+        self.addCleanup(lambda: setattr(upd, "download_and_verify", original))
+        with self.assertRaises(upd.SignatureError):
+            upd.install(data_dir=self.data)
+        self.assertFalse((self.data / "emulator_defs").exists())
+
+    def test_rollback_removes_only_installed_files(self):
+        self._install({"new-emu.yaml": VALID_DEF})
+        local = self.data / "emulator_defs"
+        mine = local / "mine.yaml"
+        mine.write_text(VALID_DEF, encoding="utf-8")
+        result = upd.rollback(self.data)
+        self.assertEqual(["new-emu.yaml"], result["removed"])
+        self.assertFalse((local / "new-emu.yaml").exists())
+        self.assertTrue(mine.is_file(), "rollback must not delete a user's own file")
 
 
 class StatusTests(unittest.TestCase):
@@ -336,52 +408,3 @@ class RouteWiringTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-
-
-    def test_partial_pack_is_not_applied(self):
-        # One bad definition in the pack means nothing is installed at all.
-        broken = "\n".join(
-            line for line in VALID_DEF.splitlines() if not line.startswith("native_exe_windows")
-        )
-        with self.assertRaises(upd.DefinitionError):
-            self._install({"good.yaml": VALID_DEF, "bad.yaml": broken})
-        self.assertFalse((self.data / "emulator_defs" / "good.yaml").exists())
-
-    def test_verification_failure_installs_nothing(self):
-        def boom(**_kwargs):
-            raise upd.SignatureError("nope")
-
-        original = upd.download_and_verify
-        upd.download_and_verify = boom
-        self.addCleanup(lambda: setattr(upd, "download_and_verify", original))
-        with self.assertRaises(upd.SignatureError):
-            upd.install(data_dir=self.data)
-        self.assertFalse((self.data / "emulator_defs").exists())
-
-    def test_rollback_removes_only_installed_files(self):
-        self._install({"new-emu.yaml": VALID_DEF})
-        local = self.data / "emulator_defs"
-        mine = local / "mine.yaml"
-        mine.write_text(VALID_DEF, encoding="utf-8")
-        result = upd.rollback(self.data)
-        self.assertEqual(["new-emu.yaml"], result["removed"])
-        self.assertFalse((local / "new-emu.yaml").exists())
-        self.assertTrue(mine.is_file(), "rollback must not delete a user's own file")
-
-    def test_rejects_absolute_path(self):
-        with self.assertRaises(upd.DefinitionError):
-            upd.read_pack(make_tar({"/abs.yaml": VALID_DEF}))
-
-    def test_symlink_members_are_ignored(self):
-        # A symlink must never be materialized, so it is simply not read.
-        defs = upd.read_pack(make_tar({"evil.yaml": None, "ok.yaml": VALID_DEF}))
-        self.assertEqual({"ok.yaml"}, set(defs))
-
-    def test_empty_pack_is_rejected(self):
-        with self.assertRaises(upd.DefinitionError):
-            upd.read_pack(make_tar({"notes.txt": "hello"}))
-
-    def test_non_yaml_members_are_ignored(self):
-        defs = upd.read_pack(make_tar({"a.yaml": VALID_DEF, "README.md": "hi"}))
-        self.assertEqual({"a.yaml"}, set(defs))
-
