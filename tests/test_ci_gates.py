@@ -102,6 +102,54 @@ class CiGatesTests(unittest.TestCase):
             check_exec_modes.tracked_modes = original_reader
         self.assertEqual(0, run_gate(), "gate must pass again once restored")
 
+
+    def test_exec_bit_gate_honours_a_narrowed_suffix_set(self):
+        """find_offenders must respect the suffix set it is given.
+
+        The suffix filter is the one input that can silently stop the gate
+        checking whole classes of file -- the same failure mode as the bug
+        this gate exists to catch. Exercised against a temp dir rather than
+        the repo so the assertion cannot be satisfied by accident.
+        """
+        import tempfile
+
+        from scripts import check_exec_modes
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "script.sh").write_text("#!/bin/sh\necho hi\n", encoding="utf-8")
+            (root / "tool.py").write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+            (root / "notes.md").write_text("#!/bin/sh\n", encoding="utf-8")
+            (root / "no_shebang.py").write_text("print('x')\n", encoding="utf-8")
+
+            modes = {
+                "script.sh": "100644",
+                "tool.py": "100644",
+                "notes.md": "100644",
+                "no_shebang.py": "100644",
+            }
+            # Default set: .sh and .py are checked, .md is not a script.
+            default = {p for p, _ in check_exec_modes.find_offenders(modes, root)}
+            self.assertEqual({"script.sh", "tool.py"}, default)
+
+            # Narrowed to shell only: the Python file must drop out.
+            shell_only = {p for p, _ in check_exec_modes.find_offenders(modes, root, (".sh",))}
+            self.assertEqual({"script.sh"}, shell_only,
+                             "the suffix parameter must actually narrow the scan")
+
+            # Narrowed to a suffix nothing matches: no offenders, not all of them.
+            none = check_exec_modes.find_offenders(modes, root, (".rb",))
+            self.assertEqual([], none, "an unmatched suffix must select nothing, not everything")
+
+            # A file without a shebang is never an offender, whatever the mode.
+            self.assertNotIn("no_shebang.py", default)
+
+            # A shebang file already at 100755 is never an offender.
+            self.assertEqual(
+                [],
+                check_exec_modes.find_offenders({"script.sh": "100755"}, root),
+            )
+
     def test_check_tests_floor_constants(self):
         from scripts import check_tests
 
