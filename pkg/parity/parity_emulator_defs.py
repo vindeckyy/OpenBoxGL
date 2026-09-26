@@ -479,9 +479,28 @@ def _registry():
     return _REGISTRY_CACHE
 
 
+def _replace_in_place(target: dict, fresh: dict) -> None:
+    """Swap a dict's contents without replacing the object itself."""
+    target.clear()
+    target.update(fresh)
+
+
 def _reset_registry_cache():
+    """Drop the memoized registry and refresh the module-level snapshots.
+
+    ``EMULATORS`` and ``PLATFORM_EMULATORS`` are built once at import, and
+    ``emulators.py`` and ``parity_import.py`` import them by value. Clearing
+    only the cache therefore left a running server half-updated:
+    ``find_adapter`` saw a freshly installed definition while every emulator
+    list still answered from the pre-install snapshot, so the update appeared
+    not to apply until restart. The contents are swapped in place rather than
+    rebound, because a rebind would not reach the modules that already hold
+    the old object.
+    """
     global _REGISTRY_CACHE
     _REGISTRY_CACHE = None
+    _replace_in_place(EMULATORS, build_emulators_dict())
+    _replace_in_place(PLATFORM_EMULATORS, build_platform_emulators())
 
 
 def load_definitions(defs_dir=None):

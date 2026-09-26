@@ -407,8 +407,12 @@ def compare(
     """Read-only diff of the library at two points in the journal.
 
     Both sides are produced by ``materialize_as_of``, so this adds no new source
-    of truth: it folds the journal twice and reports what changed. The older
-    date may be omitted to compare a date against the current library.
+    of truth: it folds the journal twice and reports what changed. Omitting the
+    older date does not diff against the current library -- nothing is folded
+    against "now" -- so the whole catalog as of ``after`` reads as ``added``
+    and ``removed``/``changed`` are always zero. That is the useful default for
+    a restore-point listing, which is what it is for; to ask "what changed
+    since X", pass ``before=X`` explicitly.
 
     ``fields`` bounds which catalog fields are compared; omitting it compares
     every shared field. Paths and launch configuration are reported as changed

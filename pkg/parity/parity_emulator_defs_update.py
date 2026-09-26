@@ -291,8 +291,12 @@ def status(data_dir=None) -> dict:
 def install(opener=urlopen, data_dir=None, key_file=None) -> dict:
     """Fetch, verify, validate, and install the pack. All-or-nothing.
 
-    Local definitions are preserved: a filename already present in the data
-    directory is never overwritten, because that file is a user edit.
+    A user's own definitions are preserved: a filename already in the data
+    directory that the channel does not own is never overwritten, because
+    that file is a deliberate edit. A file the channel does own *is*
+    refreshed, and one this pack no longer ships is removed, so the local
+    directory converges on the pack instead of accumulating every version
+    ever installed.
     """
     target = local_defs_dir(data_dir)
     archive = download_and_verify(opener=opener, key_file=key_file)
@@ -305,7 +309,7 @@ def install(opener=urlopen, data_dir=None, key_file=None) -> dict:
     version = _index_version(opener=opener)
     previous = _read_state(target)
     channel_owned = set(previous.get("installed", []))
-    kept, installed, updated = [], [], []
+    kept, installed, updated, removed = [], [], [], []
     target.mkdir(parents=True, exist_ok=True)
     for name, text in sorted(definitions.items()):
         destination = target / name
@@ -323,6 +327,16 @@ def install(opener=urlopen, data_dir=None, key_file=None) -> dict:
             continue
         destination.write_text(text, encoding="utf-8")
         installed.append(name)
+    # A pack that no longer ships a definition the channel installed has
+    # retracted it. Leaving the file in place would keep it shadowing the
+    # bundled set until a full rollback, which also removes everything else the
+    # pack installed -- so an update has to honor the retraction itself.
+    for name in sorted(channel_owned - set(definitions)):
+        stale = target / name
+        if stale.is_file():
+            stale.unlink()
+            removed.append(name)
+
 
     from pkg.parity import parity_emulator_defs
 
@@ -330,10 +344,10 @@ def install(opener=urlopen, data_dir=None, key_file=None) -> dict:
 
     payload = {
         "version": version or previous.get("version", ""),
-        # installed covers everything the channel owns: new writes, refreshed
-        # writes, and files an older pack installed that this pack dropped
-        # (they still shadow the bundled set and rollback still owns them).
-        "installed": sorted(installed + updated + list(channel_owned - set(definitions))),
+        # installed is what the channel still owns on disk: new writes and
+        # refreshed writes. A retracted file is no longer installed, so it
+        # stops shadowing the bundled definition immediately.
+        "installed": sorted(installed + updated),
         "kept_local": sorted(kept),
         "previous_version": previous.get("version", ""),
     }
@@ -343,6 +357,7 @@ def install(opener=urlopen, data_dir=None, key_file=None) -> dict:
         "version": payload["version"],
         "installed": sorted(installed),
         "updated": sorted(updated),
+        "removed": sorted(removed),
         "kept_local": payload["kept_local"],
         "dir": str(target),
     }
