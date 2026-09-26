@@ -13,7 +13,7 @@ from pathlib import Path
 import pkg.parity  # noqa: F401  # register flat-import finder before parity_* imports
 from archives import extract_game
 from parity_import import EXTENSIONS_EXTRA, PLATFORM_BY_EXTENSION_EXTRA
-from parity_emulator_defs import build_platform_by_extension, resolve_launch
+from parity_emulator_defs import build_platform_by_extension, register_import_snapshot as _register_import_snapshot, resolve_launch
 from pkg.platform_compat import IS_WINDOWS, default_data_dir, join_command, python_command, split_command
 from state_store import JsonStateStore
 
@@ -28,12 +28,22 @@ if not CUSTOM_DATA_DIR and not DATA.exists() and LEGACY_DATA.is_file():
 STATE_STORE = JsonStateStore(DATA)
 
 EXTENSIONS = {".sh", ".appimage", ".exe", ".bat", ".cmd", ".lnk", ".iso", ".rom", ".nes", ".sfc", ".smc", ".gba", ".gb", ".gbc", ".zip", ".7z", ".rar"} | EXTENSIONS_EXTRA
-PLATFORM_BY_EXTENSION = {
-    ".nes": "NES", ".sfc": "SNES", ".smc": "SNES", ".gba": "Game Boy Advance",
-    ".gb": "Game Boy", ".gbc": "Game Boy Color", ".iso": "Disc image",
-    **build_platform_by_extension(),
-    **PLATFORM_BY_EXTENSION_EXTRA,
-}
+
+def _build_platform_by_extension():
+    return {
+        ".nes": "NES", ".sfc": "SNES", ".smc": "SNES", ".gba": "Game Boy Advance",
+        ".gb": "Game Boy", ".gbc": "Game Boy Color", ".iso": "Disc image",
+        **build_platform_by_extension(),
+        **PLATFORM_BY_EXTENSION_EXTRA,
+    }
+
+
+
+# openbox owns this map, so it registers here rather than in the registry
+# module, which cannot import it back without a cycle. Registering keeps the
+# install/rollback path able to refresh it in place once definitions change.
+PLATFORM_BY_EXTENSION = _build_platform_by_extension()
+_register_import_snapshot("openbox", "PLATFORM_BY_EXTENSION", _build_platform_by_extension)
 
 # Development-only screenshot fixtures must never ship in user libraries.
 DEMO_PATH_MARKERS = ("/tmp/openbox-screenshots/",)

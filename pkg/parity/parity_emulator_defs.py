@@ -485,22 +485,31 @@ def _replace_in_place(target: dict, fresh: dict) -> None:
     target.update(fresh)
 
 
-def _reset_registry_cache():
-    """Drop the memoized registry and refresh the module-level snapshots.
+def _refresh_import_snapshots() -> None:
+    for module_name, attribute, builder in _IMPORT_TIME_SNAPSHOTS:
+        module = sys.modules.get(module_name)
+        if module is None:
+            continue  # not imported yet: it will be built from current data
+        _replace_in_place(getattr(module, attribute), builder())
 
-    ``EMULATORS`` and ``PLATFORM_EMULATORS`` are built once at import, and
-    ``emulators.py`` and ``parity_import.py`` import them by value. Clearing
-    only the cache therefore left a running server half-updated:
-    ``find_adapter`` saw a freshly installed definition while every emulator
-    list still answered from the pre-install snapshot, so the update appeared
-    not to apply until restart. The contents are swapped in place rather than
-    rebound, because a rebind would not reach the modules that already hold
-    the old object.
+
+def _reset_registry_cache():
+    """Drop the memoized registry and refresh every import-time snapshot.
+
+    ``EMULATORS``, ``PLATFORM_EMULATORS`` and ``openbox.PLATFORM_BY_EXTENSION``
+    are built once at import, and ``emulators.py``, ``parity_import.py``,
+    ``pkg.state.imports`` and ``pkg.parity.parity_setup_preview`` import them by
+    value. Clearing only the cache therefore left a running server
+    half-updated: ``find_adapter`` saw a freshly installed definition while
+    every emulator list -- and folder import, which could not recognize a new
+    extension -- still answered from the pre-install snapshot, so the update
+    appeared not to apply until restart. Contents are swapped in place rather
+    than rebound, because a rebind would not reach modules already holding the
+    old object.
     """
     global _REGISTRY_CACHE
     _REGISTRY_CACHE = None
-    _replace_in_place(EMULATORS, build_emulators_dict())
-    _replace_in_place(PLATFORM_EMULATORS, build_platform_emulators())
+    _refresh_import_snapshots()
 
 
 def load_definitions(defs_dir=None):
@@ -576,6 +585,30 @@ def build_platform_by_extension(adapters=None):
 
 EMULATORS = build_emulators_dict()
 PLATFORM_EMULATORS = build_platform_emulators()
+
+
+# Import-time snapshots of registry-derived data, so they can be refreshed when
+# the definitions on disk change. Each entry is (module_name, attribute,
+# builder) and is resolved through sys.modules at refresh time: the target may
+# live in a module that has not been imported yet, and it must be refreshed in
+# place because other modules import these objects by value.
+_IMPORT_TIME_SNAPSHOTS = [
+    (__name__, "EMULATORS", build_emulators_dict),
+    (__name__, "PLATFORM_EMULATORS", build_platform_emulators),
+]
+
+
+def register_import_snapshot(module_name: str, attribute: str, builder) -> None:
+    """Register an import-time snapshot owned by another module.
+
+    A module that derives a dict from this registry at import time should
+    register it here, or a definition update will leave that surface stale
+    until the process restarts. ``openbox.PLATFORM_BY_EXTENSION`` is the case
+    that motivated this: folder import maps a file extension to a platform, so
+    a newly installed definition with a new extension would otherwise be
+    unrecognised.
+    """
+    _IMPORT_TIME_SNAPSHOTS.append((module_name, attribute, builder))
 
 
 def find_adapter(adapter_id="", emulator_id=""):
