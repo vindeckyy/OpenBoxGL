@@ -343,17 +343,21 @@ class ClockCouplingTest(unittest.TestCase):
     def test_an_unmarked_pinned_date_is_reported(self):
         # Row 46 of the reliability catalog. The gate's whole value is that a
         # fixture pinning a literal date against a rolling window is caught
-        # *before* the day it starts failing, so this writes exactly that shape
-        # into tests/ and asserts the detector fires on it.
-        pinned = TESTS_DIR / "test_zz_clock_probe.py"
-        pinned.write_text(
-            "import parity_radio\n\nNOW = '2026-01-01'\n",
-            encoding="utf-8",
-        )
-        try:
-            problems = self.gate.scan()
-        finally:
-            pinned.unlink()
+        # *before* the day it starts failing, so this feeds the real scanner
+        # exactly that shape and asserts the detector fires.
+        #
+        # The scan is pointed at a temp directory rather than the real tests/
+        # so a killed or cancelled run cannot strand a probe file in the
+        # repository, where it would fail every later gate and be picked up
+        # as a suite of its own.
+        with tempfile.TemporaryDirectory() as directory:
+            probe_dir = Path(directory)
+            (probe_dir / "test_zz_clock_probe.py").write_text(
+                "import parity_radio\n\nNOW = '2026-01-01'\n",
+                encoding="utf-8",
+            )
+            with mock.patch.object(self.gate, "TESTS", probe_dir):
+                problems = self.gate.scan()
         self.assertTrue(
             any("test_zz_clock_probe.py" in problem for problem in problems),
             f"a fixture pinning NOW against a rolling window must be reported, got {problems}",
