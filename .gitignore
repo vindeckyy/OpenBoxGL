@@ -55,4 +55,14 @@ docs/NEXT_UPDATE_PLAN-*.md
 .agents/
 .mimocode/
 local/
+# Scratch output from one-off API/CI probes. Ad-hoc curl calls write these
+# into the repo root; they must never reach a commit.
+/st.json
+/r.json
+/j.json
+/c.json
+/run.json
+/gl.zip
+/ui.log
+/w.log
 
