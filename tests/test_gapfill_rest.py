@@ -1316,6 +1316,20 @@ class DiscoveryEngineTests(unittest.TestCase):
         self.assertEqual((degraded, building), (False, False))
         self.assertEqual(index["doc_count"], 1)
 
+    def test_dna_index_for_search_sync_build_survives_save_failure(self):
+        # The synchronous build shares the index file with the background
+        # rebuild job, so its write can lose that race. The freshly built
+        # index is still returned; losing the persist must not fail the
+        # search, and the next call reconciles and writes it.
+        games = [{"game_id": "g1", "name": "Doom", "description": "demons shooter"}]
+        with mock.patch.object(dna, "load_index", return_value=None), \
+             mock.patch.object(dna, "save_index_atomic", side_effect=OSError("boom")):
+            index, degraded, building = discovery.dna_index_for_search(
+                {"games": games, "settings": {}}
+            )
+        self.assertEqual((degraded, building), (False, False))
+        self.assertEqual(index["doc_count"], 1)
+
     def test_dna_index_for_search_save_failure(self):
         games = [{"game_id": "g1", "name": "Doom", "description": "demons shooter"}]
         index = dna.rebuild_index(games, "en")
