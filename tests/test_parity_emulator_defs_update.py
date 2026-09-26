@@ -403,6 +403,53 @@ class LoaderPrecedenceTests(unittest.TestCase):
                     os.environ["OPENBOX_DATA_DIR"] = previous
                 defs._reset_registry_cache()
 
+    def test_renamed_local_override_wins_on_every_lookup_path(self):
+        """A local edit saved under a new name must still shadow by adapter_id.
+
+        Regression: precedence was decided by filename while the id map was
+        last-writer-wins, so a renamed local file loaded but find_adapter
+        returned the bundled definition and the platform/emulator lists ranked
+        the local one first. Which definition won depended on the lookup path.
+        """
+        from pkg.parity import parity_emulator_defs as defs
+
+        bundled_text = (upd.BUNDLED_DEFS / "pcsx2-ps2.yaml").read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as directory:
+            local = Path(directory) / "emulator_defs"
+            local.mkdir(parents=True)
+            (local / "pcsx2-custom.yaml").write_text(
+                bundled_text.replace("label: PCSX2", "label: CUSTOM PCSX2"), encoding="utf-8"
+            )
+            previous = os.environ.get("OPENBOX_DATA_DIR")
+            os.environ["OPENBOX_DATA_DIR"] = directory
+            try:
+                defs._reset_registry_cache()
+                # Every path must name the same definition.
+                self.assertEqual(
+                    "CUSTOM PCSX2", defs.find_adapter(adapter_id="pcsx2-ps2")["label"]
+                )
+                self.assertEqual(
+                    [("net.pcsx2.PCSX2", "CUSTOM PCSX2")],
+                    defs.build_platform_emulators().get("PlayStation 2"),
+                )
+                self.assertEqual(
+                    "CUSTOM PCSX2", defs.build_emulators_dict()["net.pcsx2.PCSX2"]["name"]
+                )
+                # The shadowed definition is not also shipped: one adapter, not two.
+                loaded = defs.load_adapters()
+                self.assertEqual(1, len([a for a in loaded if a["adapter_id"] == "pcsx2-ps2"]))
+                # Definitions that legitimately share an emulator_id stay separate.
+                self.assertEqual(
+                    4,
+                    len([a for a in loaded if a["emulator_id"] == "org.DolphinEmu.dolphin-emu"]),
+                )
+            finally:
+                if previous is None:
+                    os.environ.pop("OPENBOX_DATA_DIR", None)
+                else:
+                    os.environ["OPENBOX_DATA_DIR"] = previous
+                defs._reset_registry_cache()
+
     def test_bundled_only_load_is_unchanged(self):
         from pkg.parity import parity_emulator_defs as defs
 

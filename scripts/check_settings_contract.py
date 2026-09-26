@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Ratchet the persisted settings schema so a user's saved preferences survive.
 
 ``settings_schema.KNOWN_SETTINGS`` is a destructive allowlist:
@@ -28,12 +28,14 @@ See ADR 0060.
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import contract_ratchet  # noqa: E402  (scripts/ is not a package)
 
 BASELINE = ROOT / "scripts" / "contracts" / "settings.json"
 
@@ -73,23 +75,6 @@ def load_baseline() -> dict | None:
         raise SystemExit(1) from exc
 
 
-def committed_baseline() -> dict | None:
-    """Return the baseline as committed in HEAD, or None when unavailable."""
-    try:
-        result = subprocess.run(
-            ["git", "show", "HEAD:scripts/contracts/settings.json"],
-            cwd=ROOT, capture_output=True, text=True, check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if result.returncode != 0 or not result.stdout.strip():
-        return None
-    try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return None
-
-
 def write_baseline(live: set[str], retired: dict[str, str] | None = None) -> None:
     payload = {
         "version": 1,
@@ -123,34 +108,34 @@ def main() -> int:
         if key not in live:
             failures.append(f"REMOVED {key} (stored state for this key would be pruned)")
 
-    # Layer 2: the baseline is ratcheted against itself.
-    committed = committed_baseline()
-    if committed is None:
-        print("settings contract: git unavailable, baseline-vs-git ratchet skipped")
+    # Ledger hygiene holds even where no reference commit is available.
+    failures.extend(contract_ratchet.ledger_consistency(baseline, retired))
+
+    # Layer 2: the baseline may only shrink into the documented retired list.
+    reference, reference_label = contract_ratchet.reference_data("settings.json")
+    if reference is None:
+        print(f"settings contract: layer 2 skipped - {reference_label}")
     else:
-        committed_keys, committed_retired = _parse(committed)
-        for key in sorted(set(committed_keys) - baseline):
-            if key not in retired:
-                failures.append(
-                    f"BASELINE-SHRINK {key} was dropped from settings.json without a retired entry"
-                )
-        for key, reason in sorted(retired.items()):
-            if not str(reason).strip():
-                failures.append(f"RETIRED-NO-REASON {key} has an empty reason")
-            if key in baseline:
-                failures.append(f"RETIRED-STILL-LIVE {key} is in both keys and retired")
-            if key not in set(committed_keys) and key not in committed_retired:
-                failures.append(f"RETIRED-FABRICATED {key} was never in the committed baseline")
-            if key in USER_DATA_KEYS and "migrat" not in str(reason).lower():
-                failures.append(
-                    f"RETIRED-USER-DATA {key} holds persisted user data; the reason must name "
-                    f"the migration that preserves it (include the word 'migration')"
-                )
-        for key in sorted(committed_retired):
-            if key not in retired:
-                failures.append(f"RETIRED-REMOVED {key} was deleted from the retired ledger")
-            elif committed_retired[key] != retired[key]:
-                failures.append(f"RETIRED-REWRITTEN {key}: the recorded reason was changed")
+        ref_keys, ref_retired = _parse(reference)
+        failures.extend(
+            contract_ratchet.ledger_failures(
+                set(ref_keys),
+                ref_retired,
+                baseline,
+                retired,
+                noun="setting",
+                drop_reason="was dropped from settings.json and is not in the retired ledger;",
+                drop_remedy="add a retired entry naming the migration that preserves it",
+            )
+        )
+
+    # Gate-specific: a retired key holding user data must name its migration.
+    for key, reason in sorted(retired.items()):
+        if key in USER_DATA_KEYS and "migrat" not in str(reason).lower():
+            failures.append(
+                f"RETIRED-USER-DATA {key} holds persisted user data; the reason must name "
+                f"the migration that preserves it (include the word 'migration')"
+            )
 
     if failures:
         print(f"FAIL: settings schema regressed ({len(failures)} problem(s)):")
@@ -170,7 +155,7 @@ def main() -> int:
 
     print(
         f"settings contract OK: {len(live)} live, {len(baseline)} baselined, "
-        f"{len(retired)} retired, 0 regressions"
+        f"{len(retired)} retired, 0 regressions ({reference_label})"
     )
     return 0
 

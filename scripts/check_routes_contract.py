@@ -31,12 +31,14 @@ Regenerate:   python3 -B scripts/check_routes_contract.py --update
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import contract_ratchet  # noqa: E402  (scripts/ is not a package)
 
 BASELINE = ROOT / "scripts" / "contracts" / "routes.json"
 
@@ -78,28 +80,6 @@ def load_baseline() -> dict | None:
         raise SystemExit(1) from exc
 
 
-def committed_baseline() -> dict | None:
-    """Return the baseline as committed in HEAD, or None when unavailable.
-
-    Used to ratchet the baseline against itself. Any environment without git
-    (a source tarball, a container copy) skips this layer rather than failing,
-    because layer 1 still protects the shipped artifact.
-    """
-    try:
-        result = subprocess.run(
-            ["git", "show", "HEAD:scripts/contracts/routes.json"],
-            cwd=ROOT, capture_output=True, text=True, check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if result.returncode != 0 or not result.stdout.strip():
-        return None
-    try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return None
-
-
 def write_baseline(live: dict[str, list[str]], retired: dict[str, str] | None = None) -> None:
     payload = {
         "version": 1,
@@ -134,35 +114,26 @@ def main() -> int:
         elif baseline[path] != live[path]:
             failures.append(f"CHANGED {path}: {baseline[path]} -> {live[path]}")
 
+    # Ledger hygiene holds even where no reference commit is available.
+    failures.extend(contract_ratchet.ledger_consistency(baseline, retired))
+
     # Layer 2: the baseline may only shrink into the documented retired list.
-    committed = committed_baseline()
-    if committed is None:
-        print("routes contract: git unavailable, baseline-vs-git ratchet skipped")
+    reference, reference_label = contract_ratchet.reference_data("routes.json")
+    if reference is None:
+        print(f"routes contract: layer 2 skipped - {reference_label}")
     else:
-        committed_routes, committed_retired = _parse(committed)
-        for path in sorted(committed_routes):
-            if path in baseline:
-                continue
-            if path not in retired:
-                failures.append(
-                    f"BASELINE-SHRINK {path} was dropped from routes.json without a retired "
-                    f'entry; add {{"path": "{path}", "reason": "..."}} to the retired list'
-                )
-        for path, reason in sorted(retired.items()):
-            if not str(reason).strip():
-                failures.append(f"RETIRED-NO-REASON {path} has an empty reason")
-            if path in baseline:
-                failures.append(f"RETIRED-STILL-LIVE {path} is in both routes and retired")
-            if path not in committed_routes and path not in committed_retired:
-                failures.append(
-                    f"RETIRED-FABRICATED {path} was never in the committed baseline; "
-                    f"the retired ledger is a record of real removals, not a place to add entries"
-                )
-        for path in sorted(committed_retired):
-            if path not in retired:
-                failures.append(f"RETIRED-REMOVED {path} was deleted from the retired ledger")
-            elif committed_retired[path] != retired[path]:
-                failures.append(f"RETIRED-REWRITTEN {path}: the recorded reason was changed")
+        ref_routes, ref_retired = _parse(reference)
+        failures.extend(
+            contract_ratchet.ledger_failures(
+                ref_routes,
+                ref_retired,
+                baseline,
+                retired,
+                noun="route",
+                drop_reason="was dropped from routes.json and is not in the retired ledger;",
+                drop_remedy='add {"path": "{key}", "reason": "..."} to the retired list',
+            )
+        )
 
     if failures:
         print(f"FAIL: HTTP route surface regressed ({len(failures)} problem(s)):")
@@ -183,7 +154,7 @@ def main() -> int:
 
     print(
         f"routes contract OK: {len(live)} live, {len(baseline)} baselined, "
-        f"{len(retired)} retired, 0 regressions"
+        f"{len(retired)} retired, 0 regressions ({reference_label})"
     )
     return 0
 
