@@ -1,4 +1,4 @@
-"""Signed update channel for emulator definitions (ADR 0049).
+"""Signed update channel for emulator definitions (ADR 0060).
 
 24 definitions ship in ``emulator_defs/``, but there was no way to receive a
 *newer* one: a user on a fresh Dolphin or PCSX2 build had to hand-edit YAML.
@@ -131,7 +131,7 @@ def _strip_comment(line: str) -> str:
 
 
 def _fetch(url: str, opener=urlopen) -> bytes:
-    request = Request(url, headers={"User-Agent": "OpenBox/1.14 definition channel"})
+    request = Request(url, headers={"User-Agent": "OpenBox/1.14.1 definition channel"})
     with opener(request, timeout=FETCH_TIMEOUT) as response:
         payload = response.read(MAX_PACK_BYTES + 1)
     if len(payload) > MAX_PACK_BYTES:
@@ -195,7 +195,12 @@ def read_pack(archive: bytes) -> dict:
             handle = tar.extractfile(member)
             if handle is None:
                 continue
-            definitions[Path(name).name] = handle.read(MAX_DEFINITION_BYTES + 1).decode(
+            basename = Path(name).name
+            if basename in definitions:
+                raise DefinitionError(
+                    f"The pack contains two definitions named {basename} ({name})."
+                )
+            definitions[basename] = handle.read(MAX_DEFINITION_BYTES + 1).decode(
                 "utf-8", errors="strict"
             )
     if not definitions:
@@ -215,8 +220,20 @@ def _read_state(data_dir: Path) -> dict:
 
 
 def _write_state(data_dir: Path, payload: dict) -> None:
+    """Persist the install ledger atomically so rollback knows what it owns."""
     data_dir.mkdir(parents=True, exist_ok=True)
-
+    state_path = data_dir / STATE_FILE
+    handle, tmp = tempfile.mkstemp(prefix=state_path.name + ".", dir=data_dir)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, indent=2, sort_keys=True)
+        os.replace(tmp, state_path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 def check(opener=urlopen, data_dir=None) -> dict:
     """Report whether a newer pack exists, without installing anything."""
@@ -254,16 +271,20 @@ def status(data_dir=None) -> dict:
     target = local_defs_dir(data_dir)
     state = _read_state(target)
     local_files = sorted(p.name for p in target.glob("*.yaml")) if target.is_dir() else []
+    channel_owned = set(state.get("installed", []))
     bundled = sorted(p.name for p in BUNDLED_DEFS.glob("*.yaml")) if BUNDLED_DEFS.is_dir() else []
     return {
         "ok": True,
         "version": str(state.get("version", "")),
         "dir": str(target),
-        "installed": list(state.get("installed", [])),
+        "installed": sorted(channel_owned),
         "kept_local": list(state.get("kept_local", [])),
         "local_definitions": local_files,
         "bundled_definitions": bundled,
-        "locally_modified": sorted(set(local_files) & set(bundled)),
+        # Files the user shadowed by hand: local files matching a bundled name
+        # that the channel did not install (channel-owned files are not user
+        # edits).
+        "locally_modified": sorted(set(local_files) & set(bundled) - channel_owned),
     }
 
 
@@ -283,12 +304,21 @@ def install(opener=urlopen, data_dir=None, key_file=None) -> dict:
 
     version = _index_version(opener=opener)
     previous = _read_state(target)
-    kept, installed = [], []
+    channel_owned = set(previous.get("installed", []))
+    kept, installed, updated = [], [], []
     target.mkdir(parents=True, exist_ok=True)
     for name, text in sorted(definitions.items()):
         destination = target / name
         if destination.exists():
-            # A local definition wins: never clobber a deliberate edit.
+            if name in channel_owned:
+                # The channel owns this file: a newer pack refreshes it.
+                # A user-edited copy under a channel-owned name is refreshed
+                # too — the rollback ledger already records that this file is
+                # not the user's.
+                destination.write_text(text, encoding="utf-8")
+                updated.append(name)
+                continue
+            # A user's own definition wins: never clobber a deliberate edit.
             kept.append(name)
             continue
         destination.write_text(text, encoding="utf-8")
@@ -300,7 +330,10 @@ def install(opener=urlopen, data_dir=None, key_file=None) -> dict:
 
     payload = {
         "version": version or previous.get("version", ""),
-        "installed": sorted(installed),
+        # installed covers everything the channel owns: new writes, refreshed
+        # writes, and files an older pack installed that this pack dropped
+        # (they still shadow the bundled set and rollback still owns them).
+        "installed": sorted(installed + updated + list(channel_owned - set(definitions))),
         "kept_local": sorted(kept),
         "previous_version": previous.get("version", ""),
     }
@@ -308,7 +341,8 @@ def install(opener=urlopen, data_dir=None, key_file=None) -> dict:
     return {
         "ok": True,
         "version": payload["version"],
-        "installed": payload["installed"],
+        "installed": sorted(installed),
+        "updated": sorted(updated),
         "kept_local": payload["kept_local"],
         "dir": str(target),
     }
