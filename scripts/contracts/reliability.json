@@ -24,6 +24,27 @@
     "20:20-000-game-library",
     "21:300-character-game-names",
     "22:selected-game-deleted-while-a-dialog-is-open",
-    "23:rapid-filter-switching-during-render"
+    "23:rapid-filter-switching-during-render",
+    "24:library-data-directory-resolution",
+    "25:start-menu-shortcut-location",
+    "26:launch-command-with-spaces-quotes-and-non-ascii-characters",
+    "27:stored-command-does-not-round-trip-byte-for-byte-across-plat",
+    "28:a-liveness-probe-must-never-kill-the-running-game",
+    "29:pausing-a-running-game",
+    "30:closing-a-game-that-spawned-children",
+    "31:signalling-must-never-reach-process-group-0-or-1",
+    "32:two-openbox-processes-at-once-windows-lock-semantics",
+    "33:steam-and-epic-library-discovery-on-windows",
+    "34:profile-owned-files-are-treated-as-private",
+    "35:process-identity-probes",
+    "36:emulator-executable-detection",
+    "37:browser-fallback-when-no-native-host-is-present",
+    "38:home-directory-missing-from-the-environment",
+    "39:webview2-runtime-not-installed",
+    "40:native-host-exe-blocked-by-smartscreen-defender-or-mark-of-t",
+    "41:second-instance-with-the-same-data-directory",
+    "42:openbox-deeplink-with-the-app-closed",
+    "43:update-applied-while-openbox-is-running",
+    "44:path-longer-than-260-characters"
   ]
 }

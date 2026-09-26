@@ -136,6 +136,7 @@ def _ensure_handlers_loaded() -> None:
         "handlers.steambridge",
         "handlers.arcade",
         "handlers.collections",
+        "handlers.defs",
         "web_app",
     )
     for mod in modules:

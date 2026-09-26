@@ -68,13 +68,14 @@ class StockThemesTests(unittest.TestCase):
     def test_bundled_sources_exist(self):
         sources = stock_theme_sources(ROOT)
         names = {path.stem for path in sources}
-        self.assertGreaterEqual(len(sources), 5)
+        self.assertGreaterEqual(len(sources), 6)
         for expected in (
             "Midnight Circuit",
             "Phosphor Terminal",
             "Harbor Light",
             "Cinema Marquee",
             "Nordic Mist",
+            "High Contrast",
         ):
             self.assertIn(expected, names)
             self.assertTrue(is_stock_theme(ROOT / "themes" / f"{expected}.css"))
@@ -83,7 +84,11 @@ class StockThemesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "themes"
             installed = ensure_stock_themes(destination, ROOT)
-            self.assertEqual(len(installed), 5)
+            # One entry per bundled stock theme; High Contrast (ADR 0049) is the
+            # sixth. Derived from the sources so adding a theme never requires
+            # editing this assertion.
+            self.assertEqual(len(installed), len(stock_theme_sources(ROOT)))
+            self.assertIn("High Contrast", installed)
             custom = destination / "My Custom.css"
             custom.write_text("body { background: pink; }\n", encoding="utf-8")
             stock = destination / "Midnight Circuit.css"
