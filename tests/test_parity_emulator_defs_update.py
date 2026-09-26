@@ -305,6 +305,62 @@ class InstallTests(unittest.TestCase):
         self.assertFalse((local / "new-emu.yaml").exists())
         self.assertTrue(mine.is_file(), "rollback must not delete a user's own file")
 
+    def test_retracted_definition_stops_shadowing_the_bundled_set(self):
+        # A pack that drops a definition it once shipped has retracted it.
+        # Keeping the stale file would leave it shadowing the bundled
+        # definition until a full rollback, which also removes everything
+        # else the pack installed -- so the update itself must honor it.
+        self._install({"old-emu.yaml": VALID_DEF, "new-emu.yaml": VALID_DEF.replace("testemu", "secondemu").replace("adapter_id: testemu", "adapter_id: secondemu")})
+        local = self.data / "emulator_defs"
+        self.assertTrue((local / "old-emu.yaml").is_file())
+
+        result = self._install({"new-emu.yaml": VALID_DEF.replace("testemu", "secondemu").replace("adapter_id: testemu", "adapter_id: secondemu")}, version="3.0.0")
+
+        self.assertEqual(["old-emu.yaml"], result["removed"])
+        self.assertFalse((local / "old-emu.yaml").exists(), "a retracted definition must not linger")
+        self.assertTrue((local / "new-emu.yaml").is_file(), "the rest of the pack stays installed")
+        # Rollback then only has to clear what the latest pack owns.
+        self.assertEqual(["new-emu.yaml"], upd.rollback(self.data)["removed"])
+
+    def test_retraction_never_deletes_a_user_file(self):
+        # A name the user owns is not channel-owned, so a pack that omits it
+        # has no authority to remove it.
+        local = self.data / "emulator_defs"
+        local.mkdir(parents=True)
+        (local / "mine.yaml").write_text(VALID_DEF, encoding="utf-8")
+        self._install({"new-emu.yaml": VALID_DEF})
+        result = self._install({"other.yaml": VALID_DEF}, version="3.0.0")
+        self.assertNotIn("mine.yaml", result["removed"])
+        self.assertTrue((local / "mine.yaml").is_file())
+
+    def test_install_refreshes_live_surfaces_without_restart(self):
+        # EMULATORS/PLATFORM_EMULATORS are module-level snapshots, and both
+        # emulators.py and parity_import.py import them by value. A cache reset
+        # that left the snapshot alone left a running server half-updated:
+        # find_adapter saw the new definition while every emulator list still
+        # answered from before the install, so the update looked like a no-op.
+        from pkg.parity import parity_emulator_defs as defs
+        import emulators
+        from parity_import import PLATFORM_EMULATORS as import_surfaces
+
+        emu_id = VALID_DEF.split("emulator_id:")[1].splitlines()[0].strip()
+        platform = VALID_DEF.split("platform:")[1].splitlines()[0].strip()
+        previous = os.environ.get("OPENBOX_DATA_DIR")
+        os.environ["OPENBOX_DATA_DIR"] = str(self.data)
+        try:
+            self._install({"new-emu.yaml": VALID_DEF})
+            self.assertIsNotNone(defs.find_adapter("testemu"), "lookup path must see it")
+            self.assertIn(emu_id, emulators.EMULATORS, "emulators.py must not stay stale")
+            self.assertIn(emu_id, dict(import_surfaces.get(platform, [])), "import surface must not stay stale")
+            upd.rollback(self.data)
+            self.assertNotIn(emu_id, emulators.EMULATORS, "rollback must clear the live surfaces too")
+        finally:
+            if previous is None:
+                os.environ.pop("OPENBOX_DATA_DIR", None)
+            else:
+                os.environ["OPENBOX_DATA_DIR"] = previous
+            defs._reset_registry_cache()
+
 
 class StatusTests(unittest.TestCase):
     def test_status_reports_bundled_definitions(self):
