@@ -84,6 +84,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Restored the `window.AppState` / `window.filteredGames` page globals used by
   the UI smoke harness.
 
+- **A definition update did not take effect until restart.** Installing a pack
+  cleared the memoized registry but not the import-time snapshots that
+  `emulators.py`, `parity_import.py` and `openbox` share by value, so
+  `find_adapter` saw the new definition while every emulator list — and folder
+  import, which could not recognize a new extension — kept answering from the
+  pre-install data. Those snapshots are now refreshed in place through a
+  registry of them, so a module that derives data at import time can register
+  rather than drift silently.
+- **A retracted definition kept shadowing the bundled set.** A pack that no
+  longer shipped a definition the channel had installed left the old file in
+  place, and only a full rollback — which removes everything the pack
+  installed — could clear it. An update now honors the retraction it declares.
+
 - **What's New advertised the wrong version for two releases.** All five
   locales hardcoded `"What's new in OpenBox 1.11"` in the dialog title while
   1.12 and 1.13 shipped, and `check_version_sync.py` never read the locale

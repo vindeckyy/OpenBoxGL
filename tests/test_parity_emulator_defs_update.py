@@ -310,17 +310,17 @@ class InstallTests(unittest.TestCase):
         # Keeping the stale file would leave it shadowing the bundled
         # definition until a full rollback, which also removes everything
         # else the pack installed -- so the update itself must honor it.
-        self._install({"old-emu.yaml": VALID_DEF, "new-emu.yaml": VALID_DEF.replace("testemu", "secondemu").replace("adapter_id: testemu", "adapter_id: secondemu")})
+        self._install({"old-emu.yaml": VALID_DEF})
         local = self.data / "emulator_defs"
         self.assertTrue((local / "old-emu.yaml").is_file())
 
-        result = self._install({"new-emu.yaml": VALID_DEF.replace("testemu", "secondemu").replace("adapter_id: testemu", "adapter_id: secondemu")}, version="3.0.0")
+        result = self._install({"other.yaml": VALID_DEF}, version="3.0.0")
 
         self.assertEqual(["old-emu.yaml"], result["removed"])
         self.assertFalse((local / "old-emu.yaml").exists(), "a retracted definition must not linger")
-        self.assertTrue((local / "new-emu.yaml").is_file(), "the rest of the pack stays installed")
+        self.assertTrue((local / "other.yaml").is_file(), "the rest of the pack stays installed")
         # Rollback then only has to clear what the latest pack owns.
-        self.assertEqual(["new-emu.yaml"], upd.rollback(self.data)["removed"])
+        self.assertEqual(["other.yaml"], upd.rollback(self.data)["removed"])
 
     def test_retraction_never_deletes_a_user_file(self):
         # A name the user owns is not channel-owned, so a pack that omits it
@@ -334,17 +334,30 @@ class InstallTests(unittest.TestCase):
         self.assertTrue((local / "mine.yaml").is_file())
 
     def test_install_refreshes_live_surfaces_without_restart(self):
-        # EMULATORS/PLATFORM_EMULATORS are module-level snapshots, and both
-        # emulators.py and parity_import.py import them by value. A cache reset
-        # that left the snapshot alone left a running server half-updated:
-        # find_adapter saw the new definition while every emulator list still
-        # answered from before the install, so the update looked like a no-op.
+        # EMULATORS/PLATFORM_EMULATORS and openbox.PLATFORM_BY_EXTENSION are
+        # import-time snapshots, imported by value into emulators.py,
+        # parity_import.py, pkg.state.imports and parity_setup_preview. A cache
+        # reset that left the snapshots alone left a running server
+        # half-updated: find_adapter saw the new definition while every
+        # emulator list -- and folder import, which could not recognize the
+        # new extension -- kept answering from before the install, so the
+        # update looked like a no-op.
         from pkg.parity import parity_emulator_defs as defs
         import emulators
         from parity_import import PLATFORM_EMULATORS as import_surfaces
+        import openbox
+        from pkg.state import imports as state_imports
 
-        emu_id = VALID_DEF.split("emulator_id:")[1].splitlines()[0].strip()
-        platform = VALID_DEF.split("platform:")[1].splitlines()[0].strip()
+        def field(key):
+            for line in VALID_DEF.splitlines():
+                if line.startswith(key + ":"):
+                    return line.split(":", 1)[1].strip()
+            raise AssertionError(f"{key} missing from VALID_DEF")
+
+        emu_id = field("emulator_id")
+        platform = field("platform")
+        # The extension list is a block: take the first entry under the key.
+        extension = VALID_DEF.split("extensions:", 1)[1].splitlines()[1].strip().lstrip("- ").lstrip(".")
         previous = os.environ.get("OPENBOX_DATA_DIR")
         os.environ["OPENBOX_DATA_DIR"] = str(self.data)
         try:
@@ -352,8 +365,11 @@ class InstallTests(unittest.TestCase):
             self.assertIsNotNone(defs.find_adapter("testemu"), "lookup path must see it")
             self.assertIn(emu_id, emulators.EMULATORS, "emulators.py must not stay stale")
             self.assertIn(emu_id, dict(import_surfaces.get(platform, [])), "import surface must not stay stale")
+            self.assertEqual(platform, openbox.PLATFORM_BY_EXTENSION.get(f".{extension}"), "extension map must not stay stale")
+            self.assertEqual(platform, state_imports.PLATFORM_BY_EXTENSION.get(f".{extension}"), "folder import must not stay stale")
             upd.rollback(self.data)
             self.assertNotIn(emu_id, emulators.EMULATORS, "rollback must clear the live surfaces too")
+            self.assertIsNone(openbox.PLATFORM_BY_EXTENSION.get(f".{extension}"))
         finally:
             if previous is None:
                 os.environ.pop("OPENBOX_DATA_DIR", None)
