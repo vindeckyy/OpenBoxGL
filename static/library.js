@@ -49,7 +49,7 @@ const STORY_RULE = '#d8d0c6';
 const STORY_BG = '#fbf7f2';
 const STORY_ACCENT = '#f06000';
 
-// Export the already-fetched story as a PNG (1.14.0). This is deliberately
+// Export the already-fetched story as a PNG (1.14.1). This is deliberately
 // client-side: the server already returns every field the card needs, so a PNG
 // is a render of data in hand rather than a new endpoint or a dependency. A
 // pure-Python image encoder was rejected in 1.12 for good reason; the browser

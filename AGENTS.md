@@ -25,7 +25,7 @@ New integration goes in `pkg/parity/` or `handlers/` as appropriate, never at ro
 ## Non-negotiables
 - Runtime stays dependency-free. `pyproject.toml` dev deps are not installed in AppImage.
 - v1 route surface is frozen (`scripts/check_v1_contract.py` + `v1_contracts.json`). Drift fails the gate.
-- **The whole feature surface is ratcheted** (ADR 0049, `scripts/contracts/`).
+- **The whole feature surface is ratcheted** (ADR 0060, `scripts/contracts/`).
   Routes, `KNOWN_SETTINGS`, emulator definitions, frontend modules, and the
   reliability catalog may **grow freely** and may only **shrink** by moving
   the entry to a `retired` ledger with a reason. Each baseline is itself

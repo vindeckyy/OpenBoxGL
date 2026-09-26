@@ -84,7 +84,7 @@ class StockThemesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "themes"
             installed = ensure_stock_themes(destination, ROOT)
-            # One entry per bundled stock theme; High Contrast (ADR 0049) is the
+            # One entry per bundled stock theme; High Contrast (ADR 0060) is the
             # sixth. Derived from the sources so adding a theme never requires
             # editing this assertion.
             self.assertEqual(len(installed), len(stock_theme_sources(ROOT)))

@@ -76,7 +76,7 @@ def _materialized_map(view):
 
 
 class CompareTests(unittest.TestCase):
-    """Read-only two-date diff (1.14.0). No new source of truth: both sides come
+    """Read-only two-date diff (1.14.1). No new source of truth: both sides come
     from materialize_as_of, so the journal stays the only authority."""
 
     def _state_with_events(self):

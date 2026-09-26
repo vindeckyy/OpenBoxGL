@@ -6,8 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **Signed emulator-definition update channel (ADR 0060).** A verified
+  community definition pack installs into the per-user data directory and
+  shadows the bundled set without ever overwriting it. Fetch is verified with
+  the release Ed25519 key via `updates.verify_artifact`; a signature failure
+  raises a security notification instead of a silent skip. Local definitions
+  win: a file already in the data directory is never clobbered. New v2
+  routes: `GET /api/v2/emulators/defs/status`, `GET`/`POST
+  `/api/v2/emulators/defs/update`, and `POST /api/v2/emulators/defs/rollback`.
+- **High Contrast theme.** A sixth stock theme redeclaring every `:root`
+  token with a maximum-contrast palette (21:1 body text, AAA foregrounds) —
+  and the proof that the token contract holds end to end.
+- **Time Machine compare.** `GET /api/v2/library/time-machine/compare?after=`
+  (&optional `before=`, `fields=`, `limit=`) diffs the library between two
+  journal points read-only: added, removed, and per-field changed rows with
+  true totals even when the page truncates.
+- **Story PNG export.** The per-game Story card gains a PNG export rendered
+  entirely client-side on a canvas — no new endpoint and no dependency.
+
 ### Documentation & Gates
-- **Feature-regression ratchets (ADR 0049).** The gate suite proved a great
+- **Feature-regression ratchets (ADR 0060).** The gate suite proved a great
   deal about code and almost nothing about features. Six new gates now pin
   every surface a feature can disappear from, so a regression is a failing
   check instead of a 404 in a user's browser:
