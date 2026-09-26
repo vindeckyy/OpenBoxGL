@@ -1,4 +1,4 @@
-﻿"""Tests for the ADR 0049 feature-regression ratchets.
+﻿"""Tests for the ADR 0060 feature-regression ratchets.
 
 Each gate is verified three ways: it passes on the real tree, it fails on a
 simulated regression, and it fails on the bypass where the baseline itself is
@@ -268,7 +268,7 @@ class ContractFilesTest(unittest.TestCase):
 
 
 class StockThemeContractTest(unittest.TestCase):
-    """The High Contrast theme (ADR 0049) must stay complete and legible."""
+    """The High Contrast theme (ADR 0060) must stay complete and legible."""
 
     THEME = ROOT / "themes" / "High Contrast.css"
 

@@ -19,6 +19,10 @@ try:
 except ImportError:
     yaml = None
 
+# Parse failures from either yaml backend must behave like a missing file:
+# the bundled definition is the always-valid fallback.
+_YAML_ERRORS = (yaml.YAMLError,) if yaml is not None else ()
+
 SCHEMA_VERSION = 1
 _REGISTRY_CACHE: dict | None = None
 
@@ -235,7 +239,7 @@ def _definition_search_path(defs_dir=None):
     """Return the folders to read, highest precedence first.
 
     The per-user data directory shadows the bundled set so an installed
-    definition pack (ADR 0049) and a user's hand-edited definition both take
+    definition pack (ADR 0060) and a user's hand-edited definition both take
     effect without ever rewriting the shipped files. Bundled definitions stay
     the always-valid fallback: nothing is deleted, and removing the installed
     pack returns the library to the shipped set.
@@ -270,10 +274,9 @@ def _load_raw_adapters(defs_dir=None):
         for path in sorted(folder.glob("*.yaml")):
             if path.name in seen:
                 continue
-            seen.add(path.name)
             try:
                 payload = _parse_yaml(path.read_text(encoding="utf-8"))
-            except OSError:
+            except (OSError, UnicodeDecodeError, *_YAML_ERRORS):
                 continue
             if not isinstance(payload, dict):
                 continue
@@ -281,6 +284,10 @@ def _load_raw_adapters(defs_dir=None):
                 adapters.append(_normalize_adapter(payload))
             except ValueError:
                 continue
+            # Only a successful load shadows the bundled definition, so a
+            # corrupt local file falls back instead of silently removing the
+            # adapter.
+            seen.add(path.name)
     return adapters
 
 
