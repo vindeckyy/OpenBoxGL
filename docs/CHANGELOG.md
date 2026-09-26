@@ -89,6 +89,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   fixture slowly aged out of its own window and began failing for a reason
   unrelated to the code under test. Timestamps are now offsets from the
   fixture's own `now`.
+- Fixed a class of flake that could only ever appear in CI. `run_windows_tests.py`
+  — the runner behind the `windows-latest` job — ran each suite exactly once,
+  while the local gate allows three attempts. A wall-clock assertion such as the
+  10k-ROM import budget therefore failed on a loaded shared runner and passed on
+  every developer machine. The runner now retries with the same budget, marks a
+  retried suite as passed, and prints the first attempt's failure so a genuine
+  intermittent bug still surfaces.
 - Fixed the web UI failing to boot (`Cannot access 'AppState' before
   initialization`): the Game DNA search initializer ran at module load time,
   before the app state module finished evaluating. It now runs after module
