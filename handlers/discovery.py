@@ -129,7 +129,15 @@ def dna_index_for_search(state):
             return None, True, True
         started = time.perf_counter()
         index = parity_dna.rebuild_index(games, locale, signature)
-        parity_dna.save_index_atomic(index)
+        # This build shares the index file with the background rebuild job and
+        # with any other in-flight request, so its write can lose that race.
+        # The freshly built index is already returned to the caller below, so
+        # failing to persist it is not a request failure -- the next search
+        # reconciles and writes it.
+        try:
+            parity_dna.save_index_atomic(index)
+        except OSError:
+            pass
         global _last_build_ms
         _last_build_ms = (time.perf_counter() - started) * 1000.0
         return index, False, False
