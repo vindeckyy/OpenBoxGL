@@ -147,7 +147,11 @@ def parse_cue(cue_path: Path | str) -> list[Path]:
     except OSError:
         return []
     entries = []
-    for match in re.finditer(r'FILE\s+["\']?([^"\']+)["\']?\s+BINARY', content, re.I):
+    # The file type token after the name is BINARY in most sheets, but
+    # MOTOROLA, WAVE and AIFF are all valid and appear in mixed-mode and
+    # legacy tooling. Matching only BINARY let those sheets' data files
+    # through as a second import of the same game.
+    for match in re.finditer(r'FILE\s+["\']?([^"\']+)["\']?\s+(\w+)', content, re.I):
         filename = match.group(1).strip()
         if filename:
             try:
@@ -369,7 +373,19 @@ def import_multi_platform(
             path = group[0]
             name = path.stem
         platform = platform_map.get(path.suffix.lower(), "Imported")
-        if path.suffix.lower() == ".m3u":
+        # A sheet describes a disc, but the emulator that matters is the one
+        # for the file it points at: a .cue under "Disc image" recommends
+        # nothing, while its .bin maps to the actual platform. The m3u branch
+        # already inherits the inner file's platform for the same reason; a
+        # cue needs the target it named, which the group no longer holds
+        # because that file was excluded from the scan.
+        if path.suffix.lower() == ".cue":
+            for ref in parse_cue(path):
+                inherited = platform_map.get(ref.suffix.lower())
+                if inherited:
+                    platform = inherited
+                    break
+        elif path.suffix.lower() == ".m3u":
             platform = platform_map.get(group[0].suffix.lower(), platform)
         additions.append({
             "name": name,

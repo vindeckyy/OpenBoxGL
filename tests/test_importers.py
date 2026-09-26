@@ -244,6 +244,50 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
             self.assertEqual(1, len(imported))
             self.assertEqual("Ghost.cue", Path(imported[0]["path"]).name)
 
+    def test_non_binary_cue_sheet_also_suppresses_its_data_file(self):
+        # BINARY is the common file type, but MOTOROLA, WAVE and AIFF are all
+        # valid and appear in mixed-mode and legacy tooling. Matching only
+        # BINARY let those sheets' data file through as a second row.
+        for file_type in ("BINARY", "MOTOROLA", "WAVE", "AIFF"):
+            with self.subTest(file_type=file_type), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "g.cue").write_text(
+                    f'FILE "g.bin" {file_type}\n  TRACK 01 MODE1/2352\n', encoding="utf-8"
+                )
+                (root / "g.bin").write_bytes(b"BIN")
+                imported = import_multi_platform(
+                    root, {".cue", ".bin"}, {".cue": "Disc image", ".bin": "PlayStation"}
+                )
+                self.assertEqual(1, len(imported))
+                self.assertEqual("g.cue", Path(imported[0]["path"]).name)
+
+    def test_cue_row_inherits_the_platform_of_the_file_it_names(self):
+        # "Disc image" recommends no emulator, so a PlayStation cue left
+        # under it offers the user nothing while its .bin maps to a real
+        # platform. The m3u branch already inherits the inner file's.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Crash.cue").write_bytes(b'FILE "Crash.bin" BINARY\n  TRACK 01 MODE1/2352\n')
+            (root / "Crash.bin").write_bytes(b"BIN")
+            imported = import_multi_platform(
+                root, {".cue", ".bin"}, {".cue": "Disc image", ".bin": "PlayStation"}
+            )
+            self.assertEqual(1, len(imported))
+            self.assertEqual("PlayStation", imported[0]["platform"])
+
+    def test_cue_without_a_mappable_target_keeps_its_own_platform(self):
+        # A sheet whose target maps to nothing must not be rewritten to a
+        # blank platform; it keeps the platform the map gives the .cue.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Unknown.cue").write_bytes(b'FILE "Unknown.qqq" BINARY\n  TRACK 01 MODE1\n')
+            (root / "Unknown.qqq").write_bytes(b"DATA")
+            imported = import_multi_platform(
+                root, {".cue", ".qqq"}, {".cue": "Disc image"}
+            )
+            self.assertEqual(1, len(imported))
+            self.assertEqual("Disc image", imported[0]["platform"])
+
     def test_group_multi_disc_formats(self):
         formats = [
             ("Final Fantasy VII (Disc 1).chd", "Final Fantasy VII (Disc 2).chd", "Final Fantasy VII"),
