@@ -260,35 +260,42 @@ const failures = [];
   console.log('match review:', JSON.stringify(matchReview, null, 2));
 
   // F19 Activity UI
+  // Job timestamps are offsets from now, not pinned calendar dates. The recent
+  // partition is a rolling 30-day window (RECENT_MS in static/activity.js), so
+  // a literal date silently ages out and the smoke test starts failing months
+  // later for a reason that has nothing to do with the code under test.
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const activityNow = Date.now();
+  const ago = (days) => new Date(activityNow - days * DAY_MS).toISOString();
   const activityFixture = {
-    now: Date.now(),
+    now: activityNow,
     jobs: [
       {
         job_id: 'job-active', root_job_id: 'job-active', retry_of: null, resume_of: null,
         type: 'setup.scan', title: 'Library scan', state: 'running', phase: 'scan',
         current: 2, total: 10, message: 'Scanning folders',
-        created_at: '2026-08-25T10:00:00', updated_at: '2026-08-25T10:05:00', started_at: '2026-08-25T10:00:00', finished_at: null,
+        created_at: ago(2), updated_at: ago(2), started_at: ago(2), finished_at: null,
         can_cancel: true, can_retry: false, can_resume: false, input: {}, checkpoint: null, result: null, error: null,
       },
       {
         job_id: 'job-attention', root_job_id: 'job-attention', retry_of: null, resume_of: null,
         type: 'media.bulk_download', title: 'Media download', state: 'partial', phase: 'download',
         current: 3, total: 5, message: 'Some downloads failed',
-        created_at: '2026-08-25T09:00:00', updated_at: '2026-08-25T09:30:00', started_at: '2026-08-25T09:00:00', finished_at: '2026-08-25T09:30:00',
+        created_at: ago(3), updated_at: ago(3), started_at: ago(3), finished_at: ago(3),
         can_cancel: false, can_retry: true, can_resume: false, input: {}, checkpoint: {failed_game_ids: ['g1']}, result: null, error: null,
       },
       {
         job_id: 'job-recent', root_job_id: 'job-recent', retry_of: null, resume_of: null,
         type: 'library.backup', title: 'Library backup', state: 'done', phase: 'complete',
         current: 1, total: 1, message: 'Backup complete',
-        created_at: '2026-08-24T08:00:00', updated_at: '2026-08-24T08:10:00', started_at: '2026-08-24T08:00:00', finished_at: '2026-08-24T08:10:00',
+        created_at: ago(2), updated_at: ago(2), started_at: ago(2), finished_at: ago(2),
         can_cancel: false, can_retry: false, can_resume: false, input: {}, checkpoint: null, result: {path: '/tmp/backup.zip'}, error: null,
       },
       {
         job_id: 'job-stale', root_job_id: 'job-stale', retry_of: null, resume_of: null,
         type: 'cloud.sync', title: 'Cloud sync', state: 'error', phase: 'sync',
         current: 0, total: 1, message: 'Auth failed',
-        created_at: '2026-06-01T08:00:00', updated_at: '2026-06-01T08:01:00', started_at: '2026-06-01T08:00:00', finished_at: '2026-06-01T08:01:00',
+        created_at: ago(120), updated_at: ago(120), started_at: ago(120), finished_at: ago(120),
         can_cancel: false, can_retry: false, can_resume: false, input: {}, checkpoint: null, result: null, error: {code: 'AUTH', message: 'Token expired'},
       },
     ],
