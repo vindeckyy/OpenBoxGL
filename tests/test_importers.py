@@ -288,6 +288,22 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
             self.assertEqual(1, len(imported))
             self.assertEqual("Disc image", imported[0]["platform"])
 
+    def test_playlist_absolute_entry_with_dot_dot_still_suppresses_its_target(self):
+        # A sheet may name its target with an absolute path carrying ".."
+        # segments. The parsers hand absolute entries back verbatim, so those
+        # segments have to be normalized on both sides of the comparison or
+        # the same game imports twice.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            detour = f"{root / '..' / root.name / 'g.bin'}"
+            (root / "g.m3u").write_text(f"{detour}\n", encoding="utf-8")
+            (root / "g.bin").write_bytes(b"BIN")
+            imported = import_multi_platform(
+                root, {".m3u", ".bin"}, {".m3u": "Playlist", ".bin": "PlayStation"}
+            )
+            self.assertEqual(1, len(imported))
+            self.assertEqual("g.m3u", Path(imported[0]["path"]).name)
+
     def test_group_multi_disc_formats(self):
         formats = [
             ("Final Fantasy VII (Disc 1).chd", "Final Fantasy VII (Disc 2).chd", "Final Fantasy VII"),
