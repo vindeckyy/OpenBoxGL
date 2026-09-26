@@ -52,6 +52,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     rolling `*_DAYS` window, and a `# clock-coupled` marker alone does not
     exempt a test: the exemption has to be recorded in the contract to be
     reviewed.
+  - `check_exec_modes.py` requires the exec bit on every tracked file that
+    carries a shebang. ruff's `EXE001` reports a missing exec bit only on
+    Linux, so the failure was **structurally invisible from a Windows
+    checkout**: every local gate and the `windows-latest` job stayed green
+    while the Linux `gate` job was red. The gate reads the git index, which
+    records the mode on every platform, so the defect is now caught pre-push.
 - **Every gate is a two-layer ratchet.** A single-layer ratchet is defeated by
   editing its own baseline, so each contract is also ratcheted against a
   **reference commit that predates the change** — the merge-base with the
@@ -73,6 +79,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `check_version_sync.py` now reads the locale files.
 
 ### Fixed
+- Fixed the CI **Lint** step failing on both Linux architectures, and red on
+  every commit since `f605e27`. Eight files that carry a shebang had lost the
+  exec bit (`100644`), which ruff's `EXE001` rejects on Linux. Because Windows
+  has no exec bit, no local gate and not the `windows-latest` job could see it.
+- Fixed the UI smoke test failing `activityUi.partitionRecent.includes('job-recent')`
+  on every run since 2026-09-23. The activity fixture pinned absolute job
+  timestamps while the recent partition is a rolling 30-day window, so the
+  fixture slowly aged out of its own window and began failing for a reason
+  unrelated to the code under test. Timestamps are now offsets from the
+  fixture's own `now`.
 - Fixed the web UI failing to boot (`Cannot access 'AppState' before
   initialization`): the Game DNA search initializer ran at module load time,
   before the app state module finished evaluating. It now runs after module

@@ -114,6 +114,12 @@ jobs:
       - name: Clock-coupled tests
         run: python -B scripts/check_clock_coupling.py
 
+      # ruff EXE001 cannot run on Windows, so this is where a lost exec bit
+      # gets caught before the Linux Lint step turns red. Reads the git index,
+      # which records the mode on every platform.
+      - name: Exec bit on shebang files
+        run: python -B scripts/check_exec_modes.py
+
   gate:
     strategy:
       fail-fast: false

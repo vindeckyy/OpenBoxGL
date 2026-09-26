@@ -41,9 +41,10 @@ holds ten such window constants.
 
 ## Decision
 
-Six gates, each a **ratchet** stored in `scripts/contracts/`, all run by
-`scripts/check_tests.py` (Stage 2.9–2.14) and by both the Linux `gate` and
-`windows-latest` CI jobs.
+Seven gates, all run by `scripts/check_tests.py` (Stage 2.9–2.15) and by both
+the Linux `gate` and `windows-latest` CI jobs. Six are **ratchets** stored in
+`scripts/contracts/`; the seventh reads the git index directly, for a failure
+the contract-baseline shape cannot reach.
 
 1. **`check_routes_contract.py`** — the full route surface, not just v1. A
    baselined route that disappears, is renamed, or changes method fails.
@@ -60,6 +61,18 @@ Six gates, each a **ratchet** stored in `scripts/contracts/`, all run by
 6. **`check_clock_coupling.py`** — a test pinning a calendar constant while
    exercising a rolling `*_DAYS` window must carry a `# clock-coupled:` marker
    and a recorded exemption.
+7. **`check_exec_modes.py`** — every tracked `*.py`/`*.sh` carrying a shebang
+   must be mode `100755`. This one is not a ratchet against a stored baseline
+   but a direct read of the git *index*, because that is the only place the
+   mode exists on a platform without an exec bit.
+
+   It earns a gate for an asymmetry worth naming: ruff's `EXE001` reports a
+   missing exec bit only on Linux, so the failure is **structurally invisible
+   from a Windows checkout**. Every local gate, and the `windows-latest` job,
+   stays green while the Linux `gate` job is red. Commit `f605e27` landed eight
+   files that way and CI stayed red for twelve commits, each of which looked
+   locally clean. Reading the index closes that hole on the platform that needs
+   it, so the defect is now caught pre-push instead of post-push.
 
 
 ### The two-layer rule

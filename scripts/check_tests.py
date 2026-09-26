@@ -195,11 +195,12 @@ def main() -> int:
     if csp_check.returncode != 0:
         failures.append("csp")
 
-    # Stage 2.9-2.14: the feature-regression ratchets (ADR 0060). Each one
+    # Stage 2.9-2.15: the feature-regression ratchets (ADR 0060). Each one
     # pins a surface that can shrink without any test noticing: the HTTP route
     # table, the destructive settings allowlist, the emulator definitions, the
-    # frontend module graph, the reliability catalog, and calendar-coupled
-    # tests. A feature may be added freely; removing one fails here.
+    # frontend module graph, the reliability catalog, calendar-coupled
+    # tests, and the exec bit on shebang files. A feature may be added freely;
+    # removing one fails here.
     ratchet_gates = (
         ("routes_contract", "check_routes_contract.py"),
         ("settings_contract", "check_settings_contract.py"),
@@ -207,6 +208,7 @@ def main() -> int:
         ("frontend_modules", "check_frontend_modules.py"),
         ("reliability_catalog", "check_reliability_catalog.py"),
         ("clock_coupling", "check_clock_coupling.py"),
+        ("exec_modes", "check_exec_modes.py"),
     )
     for label, script in ratchet_gates:
         result = run([sys.executable, "-B", str(ROOT / "scripts" / script)])
