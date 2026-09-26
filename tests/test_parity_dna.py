@@ -282,9 +282,10 @@ class IndexIoTests(unittest.TestCase):
         # write the same index from threads in one process, while searches
         # read it. A single shared temp name let one writer's rename move the
         # file out from under another, which surfaced to users as a 400 from
-        # an unrelated search; writes are now serialized and each write gets
-        # its own temp name. Readers must keep working throughout, because
-        # that reader hold is the only thing the rename retry is for.
+        # an unrelated search. Each write now gets its own temp name, and the
+        # rename rides out a reader still holding the previous index open --
+        # that reader hold is the only thing the retry is for, so readers
+        # must keep working throughout the writes.
         errors: list[BaseException] = []
 
         def writer(tmp: str) -> None:
