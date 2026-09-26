@@ -18,7 +18,7 @@ STATIC_FILES = $(wildcard static/*.js) $(wildcard static/*.css)
 LOCALE_FILES = $(wildcard locales/*.json)
 NATIVE_HOST = native_host
 
-.PHONY: install uninstall appimage check version-check dev-venv test-one native-host contracts
+.PHONY: install uninstall appimage check version-check dev-venv test-one native-host contracts ratchets
 
 # Feature-regression ratchets (ADR 0060). Regenerates the frozen contracts in
 # scripts/contracts/ after an intentional surface change. Run this only when a

@@ -48,45 +48,82 @@ WINDOW_DAYS_RE = re.compile(r"^[A-Z_]*_DAYS\s*[:=]\s*[0-9]", re.MULTILINE)
 MARKER_RE = re.compile(r"#\s*clock-coupled", re.IGNORECASE)
 
 
-def _module_under_test(text: str) -> set[str]:
-    """Return the runtime modules a test imports from the repository."""
+_IMPORT_RE = re.compile(
+    r"^\s*(?:from\s+([A-Za-z_][\w.]*)\s+import\s+([^\n#]*)|import\s+([^\n#]*))", re.MULTILINE
+)
+
+
+def _modules_under_test(text: str) -> set[str]:
+    """Return the leaf module names a test imports from the repository.
+
+    Tests reach runtime code through several shapes, so every dotted identifier
+    in an import statement counts: ``import parity_radio``,
+    ``from pkg.parity import parity_radio``, ``from state_store import
+    JsonStateStore``, ``from pkg.parity.parity_backup import ...``. Comparing a
+    bare module name against a dotted path is why this gate found nothing.
+    """
     names: set[str] = set()
-    pattern = re.compile(r"^\s*(?:import|from)\s+([A-Za-z_][A-Za-z0-9_.]*)", re.MULTILINE)
-    for match in pattern.finditer(text):
-        names.add(match.group(1))
+    for source, from_clause, plain in _IMPORT_RE.findall(text):
+        candidates: list[str] = []
+        if source:
+            candidates.append(source)
+        for clause in (from_clause, plain):
+            if clause:
+                candidates.extend(part.split(" as ")[0] for part in clause.split(","))
+        for candidate in candidates:
+            candidate = candidate.strip()
+            if re.fullmatch(r"[A-Za-z_][\w.]*", candidate):
+                names.add(candidate.rsplit(".", 1)[-1])
     return names
+
+
+def _runtime_modules() -> list[Path]:
+    """Every module the runtime ships, taken from the canonical manifest.
+
+    Root-level modules such as ``state_store.py`` carry rolling windows too, and
+    an ad-hoc glob of a few directories keeps missing them as the tree grows.
+    runtime_modules.txt is already kept complete by its own gate.
+    """
+    manifest = ROOT / "runtime_modules.txt"
+    if not manifest.is_file():
+        return []
+    listed = [ROOT / line.strip() for line in manifest.read_text(encoding="utf-8").splitlines()]
+    # The manifest also names shipped non-Python files (the release public key).
+    return [path for path in listed if path.suffix == ".py" and path.is_file()]
 
 
 def _runtime_windows() -> dict[str, set[str]]:
     """Map importable module name -> its rolling *_DAYS constants."""
     windows: dict[str, set[str]] = {}
-    candidates = [ROOT / "web_app.py"]
-    candidates += sorted((ROOT / "pkg" / "parity").glob("parity_*.py"))
-    candidates += sorted((ROOT / "pkg" / "state").glob("*.py"))
-    for path in candidates:
-        if not path.is_file():
-            continue
+    for path in _runtime_modules():
         found = set(WINDOW_DAYS_RE.findall(path.read_text(encoding="utf-8")))
-        if not found:
-            continue
-        name = path.stem
-        if name == "__init__":
-            name = path.parent.name
-        windows[name] = found
+        if found:
+            windows[path.stem] = found
     return windows
 
 
+def _exemptions() -> dict[str, str]:
+    """Return the reviewed clock-coupling exemptions."""
+    if not CONTRACT.is_file():
+        return {}
+    try:
+        return dict(json.loads(CONTRACT.read_text(encoding="utf-8")).get("exempt", {}))
+    except json.JSONDecodeError:
+        return {}
+
+
 def scan() -> list[str]:
-    """Return one problem string per unmarked clock-coupled test module."""
+    """Return one problem string per unmarked or unreviewed clock-coupled test."""
     windows = _runtime_windows()
     if not windows:
         return ["no rolling *_DAYS windows found; the check may be misconfigured"]
+    exemptions = _exemptions()
     problems: list[str] = []
     for path in sorted(TESTS.glob("test_*.py")):
         text = path.read_text(encoding="utf-8")
         if not PINNED_CLOCK_RE.search(text):
             continue
-        imported = _module_under_test(text)
+        imported = _modules_under_test(text)
         coupled = sorted(
             f"{module}.{const.split('=')[0].strip().rstrip(':')}"
             for module, consts in windows.items()
@@ -96,6 +133,13 @@ def scan() -> list[str]:
         if not coupled:
             continue
         if MARKER_RE.search(text):
+            # A marker alone must not exempt itself: the point of the ledger is
+            # that a human reviewed why this coupling is safe.
+            if path.name not in exemptions:
+                problems.append(
+                    f"{path.name}: carries a '# clock-coupled' marker but has no entry in "
+                    f"{CONTRACT.name}; an exemption has to be recorded to be reviewed"
+                )
             continue
         problems.append(
             f"{path.name}: pins a calendar constant and exercises rolling window(s) "

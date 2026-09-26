@@ -24,6 +24,12 @@ import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
 from pkg.parity import parity_query  # noqa: E402
 
+# clock-coupled: safe because every parity_query call in this file injects
+# now=NOW explicitly (parse -> parse_query, and game_matches_query), so the
+# pinned 2026 literals in FIXTURES ("this year" -> {"year": 2026}) come from
+# that injected clock rather than the wall clock. parity_query only falls back
+# to datetime.now() when a caller omits now, which no case here does.
+
 NOW = datetime(2026, 9, 12, 12, 0, 0)
 
 

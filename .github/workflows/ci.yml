@@ -47,6 +47,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
         with:
           persist-credentials: false
+          # The feature-regression ratchets compare each contract against a
+          # reference commit that predates the change. A depth-1 checkout has
+          # no such commit, so layer 2 would silently degrade to layer 1.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # actions/setup-python@v7.0.0
@@ -90,7 +94,7 @@ jobs:
       - name: Design tokens
         run: python -B scripts/check_tokens.py
 
-      # Feature-regression ratchets (ADR 0049). Pure-Python and platform
+      # Feature-regression ratchets (ADR 0060). Pure-Python and platform
       # independent, so the Windows job is the proof they behave off Linux too.
       - name: HTTP route surface ratchet
         run: python -B scripts/check_routes_contract.py
@@ -129,6 +133,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
         with:
           persist-credentials: false
+          # The feature-regression ratchets compare each contract against a
+          # reference commit that predates the change. A depth-1 checkout has
+          # no such commit, so layer 2 would silently degrade to layer 1.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # actions/setup-python@v7.0.0
@@ -184,7 +192,7 @@ jobs:
       - name: Version sync
         run: python3 scripts/check_version_sync.py
 
-      # Feature-regression ratchets (ADR 0049). Also covered by the full gate
+      # Feature-regression ratchets (ADR 0060). Also covered by the full gate
       # below; run standalone here so a regression names itself in the log
       # instead of only appearing as a non-zero exit from check_tests.py.
       - name: Feature-regression ratchets

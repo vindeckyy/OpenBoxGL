@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Verify the frontend module graph is intact and the shipped set cannot shrink.
 
 The UI is 35 ES modules loaded from ``index.html``. Two failure modes are
@@ -28,19 +28,25 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import contract_ratchet  # noqa: E402  (scripts/ is not a package)
 
 STATIC = ROOT / "static"
 INDEX = ROOT / "index.html"
 BASELINE = ROOT / "scripts" / "contracts" / "frontend_modules.json"
 
 # ES module imports of a sibling file, with or without an extension.
-IMPORT_RE = re.compile(r"""(?:^|\s)(?:import|export)[^'"]*from\s*['"]\./([A-Za-z0-9_.\-]+)['"]""")
-BARE_IMPORT_RE = re.compile(r"""(?:^|\s)import\s*['"]\./([A-Za-z0-9_.\-]+)['"]""")
+IMPORT_RE = re.compile(r"""(?:^|\s)(?:import|export)[^'"]*from\s*['"]\./([A-Za-z0-9_./\-]+)['"]""")
+BARE_IMPORT_RE = re.compile(r"""(?:^|\s)import\s*['"]\./([A-Za-z0-9_./\-]+)['"]""")
+# `await import('./x.js')`: the lazy form, so a dangling specifier here only
+# breaks a feature the first time the user opens it.
+DYNAMIC_IMPORT_RE = re.compile(r"""import\s*\(\s*['"]\./([A-Za-z0-9_./\-]+)['"]""")
 # The search worker is loaded by the worker constructor, not by app.js.
 WORKER_MODULES = {"worker.search.js"}
 # Every module index.html loads with a script tag is an entry point; the tag
@@ -75,7 +81,12 @@ def check_graph() -> list[str]:
 
     for path in sorted(STATIC.glob("*.js")):
         text = path.read_text(encoding="utf-8")
-        for specifier in set(IMPORT_RE.findall(text)) | set(BARE_IMPORT_RE.findall(text)):
+        specifiers = (
+            set(IMPORT_RE.findall(text))
+            | set(BARE_IMPORT_RE.findall(text))
+            | set(DYNAMIC_IMPORT_RE.findall(text))
+        )
+        for specifier in specifiers:
             target = resolve(specifier)
             if target is None:
                 problems.append(
@@ -102,23 +113,6 @@ def check_graph() -> list[str]:
                 f"unreachable even though the file still ships)"
             )
     return problems
-
-
-def committed_baseline() -> dict | None:
-    """Return the contract as committed in HEAD, or None when unavailable."""
-    try:
-        result = subprocess.run(
-            ["git", "show", "HEAD:scripts/contracts/frontend_modules.json"],
-            cwd=ROOT, capture_output=True, text=True, check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if result.returncode != 0 or not result.stdout.strip():
-        return None
-    try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return None
 
 
 def write_baseline(modules: set[str], retired: dict[str, str] | None = None) -> None:
@@ -157,29 +151,29 @@ def main() -> int:
                     f"REMOVED {name}: a shipped frontend module disappeared; add a retired "
                     f"entry with a reason in the SAME commit"
                 )
-        for name, reason in sorted(retired.items()):
-            if not str(reason).strip():
-                failures.append(f"RETIRED-NO-REASON {name} has an empty reason")
-            if name in modules:
-                failures.append(f"RETIRED-STILL-LIVE {name} is both present and retired")
+        # Ledger hygiene holds even where no reference commit is available.
+        failures.extend(contract_ratchet.ledger_consistency(baselined, retired))
 
-        committed = committed_baseline()
-        if committed is None:
-            print("frontend modules: git unavailable, baseline-vs-git ratchet skipped")
+        # Layer 2: the baseline may only shrink into the documented retired list.
+        reference, reference_label = contract_ratchet.reference_data("frontend_modules.json")
+        if reference is None:
+            print(f"frontend modules: layer 2 skipped - {reference_label}")
         else:
-            committed_modules = set(committed.get("modules", []))
-            committed_retired = {e["module"]: e.get("reason", "") for e in committed.get("retired", [])}
-            for name in sorted(committed_modules - baselined):
-                if name not in retired:
-                    failures.append(f"BASELINE-SHRINK {name} was dropped from the baseline")
-            for name in sorted(committed_retired):
-                if name not in retired:
-                    failures.append(f"RETIRED-REMOVED {name} was deleted from the retired ledger")
-                elif committed_retired[name] != retired[name]:
-                    failures.append(f"RETIRED-REWRITTEN {name}: the recorded reason was changed")
-            for name in sorted(retired):
-                if name not in committed_modules and name not in committed_retired:
-                    failures.append(f"RETIRED-FABRICATED {name} was never in the committed baseline")
+            ref_modules = set(reference.get("modules", []))
+            ref_retired = {
+                entry["module"]: entry.get("reason", "") for entry in reference.get("retired", [])
+            }
+            failures.extend(
+                contract_ratchet.ledger_failures(
+                    ref_modules,
+                    ref_retired,
+                    baselined,
+                    retired,
+                    noun="module",
+                    drop_reason="a shipped frontend module disappeared;",
+                    drop_remedy="add a retired entry with a reason in the SAME commit",
+                )
+            )
 
     if failures:
         print(f"FAIL: frontend module graph regressed ({len(failures)} problem(s)):")
@@ -189,7 +183,7 @@ def main() -> int:
 
     print(
         f"frontend modules OK: {len(modules)} modules, graph resolved, "
-        f"{len(retired)} retired, 0 regressions"
+        f"{len(retired)} retired, 0 regressions ({reference_label})"
     )
     return 0
 

@@ -44,16 +44,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - `check_frontend_modules.py` resolves every ES module import against the
     filesystem: no dangling imports (which break the whole page at runtime)
     and no orphaned modules (features unreachable while still shipping).
+    Dynamic `await import('./x.js')` and subdirectory specifiers count too — a
+    dangling lazy import broke its feature at runtime with the gate green.
   - `check_reliability_catalog.py` requires every `Tested` row in
     `docs/reliability.md` to name a test that actually exists.
   - `check_clock_coupling.py` fails when a test pins a calendar date against a
-    rolling `*_DAYS` window.
+    rolling `*_DAYS` window, and a `# clock-coupled` marker alone does not
+    exempt a test: the exemption has to be recorded in the contract to be
+    reviewed.
 - **Every gate is a two-layer ratchet.** A single-layer ratchet is defeated by
-  editing its own baseline, so each contract is also ratcheted against git:
-  deleting an entry to hide a removal is itself a failure. Surfaces may only
-  shrink through an append-only `retired` ledger carrying a reason, so
+  editing its own baseline, so each contract is also ratcheted against a
+  **reference commit that predates the change** — the merge-base with the
+  default branch, or the parent commit on a direct push. The reference is
+  deliberately *not* `git HEAD`: in CI that is the file under test, so
+  comparing against it compares the contract with itself and the layer is
+  inert. Each gate reports the reference it used, and the two CI jobs that run
+  the ratchets check out with `fetch-depth: 0` so the layer is real rather than
+  skipped. Deleting an entry to hide a removal is itself a failure: surfaces
+  may only shrink through an append-only `retired` ledger carrying a reason, so
   **removal stays possible but never silent** and always leaves a reviewable
-  record. Growth is free and expected.
+  record. Growth is free and expected. The rule lives once, in
+  `scripts/contract_ratchet.py`, and every gate calls it.
 - `make ratchets` runs the six gates alone; `make contracts` regenerates the
   frozen baselines after an intentional change. Both run in `scripts/check_tests.py`
   and in the Linux `gate` and `windows-latest` CI jobs.
@@ -79,9 +90,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   files, so the drift was invisible to the gate by construction. The title is
   now a `{version}` template filled from the live settings payload, and any
   `OpenBox 1.x` literal in a locale now fails the version gate.
-- `tests/test_parity_radio.py` carries an explicit `# clock-coupled:` marker
-  recording that every call injects `now=NOW`, which is why its pinned date is
-  safe.
+- `tests/test_parity_radio.py` and `tests/test_parity_query.py` carry an
+  explicit `# clock-coupled:` marker recording that every call injects
+  `now=NOW`, which is why their pinned dates are safe. The query marker was
+  added after the gate was fixed and immediately found that coupling.
+- **A local emulator definition saved under a new filename was silently
+  ignored.** Precedence was decided by filename while the `adapter_id` map was
+  last-writer-wins, so `pcsx2-custom.yaml` loaded but `find_adapter` returned
+  the bundled definition, while the platform and emulator lists ranked the
+  local one first — which definition won depended on the lookup path. The
+  higher-precedence folder now wins by `adapter_id` on every path.
+- A corrupt definition file in the data directory crashed definition loading
+  outright instead of falling back to the bundled file of the same name.
 
 ### Changed
 - In-app What's New dialog now highlights the 1.14.0 flagships instead of

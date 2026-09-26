@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Keep ``docs/reliability.md`` honest: every row must name a real test.
 
 The reliability catalog is the document that claims to list "each failure mode a
@@ -27,11 +27,14 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import contract_ratchet  # noqa: E402  (scripts/ is not a package)
 
 CATALOG = ROOT / "docs" / "reliability.md"
 CONTRACT = ROOT / "scripts" / "contracts" / "reliability.json"
@@ -112,22 +115,6 @@ def _scenario_ids() -> list[str]:
     return out
 
 
-def committed_contract() -> dict | None:
-    try:
-        result = subprocess.run(
-            ["git", "show", "HEAD:scripts/contracts/reliability.json"],
-            cwd=ROOT, capture_output=True, text=True, check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if result.returncode != 0 or not result.stdout.strip():
-        return None
-    try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return None
-
-
 def write_contract() -> None:
     payload = {
         "version": 1,
@@ -147,18 +134,25 @@ def main() -> int:
     if not CONTRACT.is_file():
         problems.append(f"{CONTRACT.relative_to(ROOT)} is missing; run with --update to create it")
     else:
-        committed = committed_contract()
-        if committed is None:
-            print("reliability catalog: git unavailable, baseline-vs-git ratchet skipped")
+        # Rows have no retired ledger: a dropped failure mode is simply a
+        # regression. Compare against a reference that predates the change,
+        # since HEAD is the commit under test and would ratchet against itself.
+        reference, reference_label = contract_ratchet.reference_data("reliability.json")
+        if reference is None:
+            print(f"reliability catalog: layer 2 skipped - {reference_label}")
         else:
-            before = committed.get("scenarios", [])
-            for identity in before:
-                if identity not in scenarios:
-                    number = identity.split(":", 1)[0]
-                    problems.append(
-                        f"REMOVED row {number}: a failure mode was dropped from the catalog; "
-                        f"restore it or record the removal in the changelog"
-                    )
+            problems.extend(
+                contract_ratchet.ledger_failures(
+                    set(reference.get("scenarios", [])),
+                    {},
+                    set(scenarios),
+                    {},
+                    noun="row",
+                    drop_label="REMOVED row",
+                    drop_reason="a failure mode was dropped from the catalog;",
+                    drop_remedy="restore it or record the removal in the changelog",
+                )
+            )
 
     if problems:
         print(f"FAIL: reliability catalog regressed ({len(problems)} problem(s)):")
@@ -168,7 +162,7 @@ def main() -> int:
 
     print(
         f"reliability catalog OK: {len(rows)} rows, every Tested row names a real test, "
-        f"0 regressions"
+        f"0 regressions ({reference_label})"
     )
     return 0
 

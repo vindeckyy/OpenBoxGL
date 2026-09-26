@@ -27,12 +27,14 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import contract_ratchet  # noqa: E402  (scripts/ is not a package)
 
 DEFS_DIR = ROOT / "emulator_defs"
 BASELINE = ROOT / "scripts" / "contracts" / "emulator_defs.json"
@@ -116,23 +118,6 @@ def inspect() -> tuple[dict[str, set[str]], list[str]]:
 
 
 
-def committed_baseline() -> dict | None:
-    """Return the contract as committed in HEAD, or None when unavailable."""
-    try:
-        result = subprocess.run(
-            ["git", "show", "HEAD:scripts/contracts/emulator_defs.json"],
-            cwd=ROOT, capture_output=True, text=True, check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if result.returncode != 0 or not result.stdout.strip():
-        return None
-    try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return None
-
-
 def write_baseline(files: dict[str, set[str]], retired: dict[str, str] | None = None) -> None:
     payload = {
         "version": 1,
@@ -166,32 +151,36 @@ def main() -> int:
         retired = {e["file"]: e.get("reason", "") for e in data.get("retired", [])}
 
         # The set of definitions may only shrink through the retired ledger.
-        for name in sorted(set(baselined) - set(files)):
+        baselined_names = set(baselined)
+        for name in sorted(baselined_names - set(files)):
             if name not in retired:
                 failures.append(
                     f"REMOVED {name}: dropping a definition removes an emulator users can launch; "
                     f"add a retired entry with a reason in the SAME commit"
                 )
-        for name, reason in sorted(retired.items()):
-            if not str(reason).strip():
-                failures.append(f"RETIRED-NO-REASON {name} has an empty reason")
-            if name in files:
-                failures.append(f"RETIRED-STILL-LIVE {name} is both present and retired")
+        # Ledger hygiene holds even where no reference commit is available.
+        failures.extend(contract_ratchet.ledger_consistency(baselined_names, retired))
 
-        committed = committed_baseline()
-        if committed is None:
-            print("emulator defs: git unavailable, baseline-vs-git ratchet skipped")
+        # Layer 2: dropping a definition *and* its baseline entry is not a way
+        # to make layer 1 quiet. Compare against a reference that predates the
+        # change, since HEAD is the commit under test.
+        reference, reference_label = contract_ratchet.reference_data("emulator_defs.json")
+        if reference is None:
+            print(f"emulator defs: layer 2 skipped - {reference_label}")
         else:
-            committed_defs = {e["file"] for e in committed.get("definitions", [])}
-            committed_retired = {e["file"]: e.get("reason", "") for e in committed.get("retired", [])}
-            for name in sorted(committed_retired):
-                if name not in retired:
-                    failures.append(f"RETIRED-REMOVED {name} was deleted from the retired ledger")
-                elif committed_retired[name] != retired[name]:
-                    failures.append(f"RETIRED-REWRITTEN {name}: the recorded reason was changed")
-            for name in sorted(retired):
-                if name not in committed_defs and name not in committed_retired:
-                    failures.append(f"RETIRED-FABRICATED {name} was never in the committed baseline")
+            ref_names = {e["file"] for e in reference.get("definitions", [])}
+            ref_retired = {e["file"]: e.get("reason", "") for e in reference.get("retired", [])}
+            failures.extend(
+                contract_ratchet.ledger_failures(
+                    ref_names,
+                    ref_retired,
+                    baselined_names,
+                    retired,
+                    noun="definition",
+                    drop_reason="was dropped from the contract and is not in the retired ledger;",
+                    drop_remedy="add a retired entry with a reason in the SAME commit",
+                )
+            )
 
     if failures:
         print(f"FAIL: emulator definitions regressed ({len(failures)} problem(s)):")
@@ -204,7 +193,7 @@ def main() -> int:
 
     print(
         f"emulator defs OK: {len(files)} definitions, {len(REQUIRED_KEYS)} required keys each, "
-        f"{len(retired)} retired, 0 regressions"
+        f"{len(retired)} retired, 0 regressions ({reference_label})"
     )
     return 0
 

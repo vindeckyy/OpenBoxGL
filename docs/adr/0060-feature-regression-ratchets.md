@@ -68,14 +68,37 @@ A one-layer ratchet is trivially defeated by editing its own baseline, so every
 contract gate is ratcheted in two layers:
 
 - **Layer 1** compares live code against the committed baseline.
-- **Layer 2** compares the baseline against the copy in `git HEAD`. Deleting an
-  entry to hide a removal is itself a failure.
+- **Layer 2** compares the baseline against a **reference commit that predates
+  the change**. Deleting an entry to hide a removal is itself a failure.
+
+The reference is emphatically *not* `git HEAD`. CI checks out the commit under
+test, so `HEAD:<contract>` is the very file being tested, the comparison is
+against itself, and the bypass passes. `scripts/contract_ratchet.py` resolves a
+real reference instead, and every gate reports the one it used:
+
+1. `$OPENBOX_CONTRACT_REF` when set, so the rule is testable without history.
+2. The **merge-base with the default branch** — the fork point, so every commit
+   on a local branch is judged at once rather than only the last one.
+3. **The parent commit** — the case of a push straight to the default branch.
+4. Nothing, in a shallow clone, an export, or a source tarball. Layer 2 prints
+   that it was skipped; layer 1 still holds, because it needs no history.
+
+Cases 2 and 3 need history, so the two CI jobs that run the ratchets check out
+with `fetch-depth: 0`. Without it the gates would silently degrade to layer 1
+while still appearing to be authoritative, so the log names the reference and
+CI carries the history to make it real.
+
+The rule lives once, in `contract_ratchet.ledger_failures`, and every gate calls
+it. Its reference-free half (`ledger_consistency`: a record needs a reason, and
+cannot be both live and retired) runs even where no reference exists.
 
 A surface may only shrink by moving the entry into a `retired` ledger with a
 non-empty reason. The ledger is itself append-only: entries cannot be deleted
 or reworded, cannot be fabricated for something that never existed, and cannot
-duplicate a live route. This is the key property — **removal is possible but
-never silent, and always leaves a permanent, reviewable record.**
+duplicate a live entry. This is the key property — **removal is possible but
+never silent, and always leaves a permanent, reviewable record.** An entry added
+and dropped again within one branch never appears in the reference, so it needs
+no ledger entry; that is correct, because nothing shipped.
 
 Where the runtime prunes on save (settings), a retired reason must also name
 the data-preservation migration.
@@ -87,20 +110,46 @@ definition, module, or reliability row is free and expected; the gate prints
 the delta and points at `--update`. Removing one is a deliberate act. This is
 what lets the suite stay useful while a feature-dense project keeps shipping
 features.
-
-### Calibration
-
 Baselines are generated from the tree with `--update` (`make contracts`). The
-git layer is skipped with a printed notice when git is unavailable (source
-tarball, container copy) rather than failing, because Layer 1 still protects
-the shipped artifact.
+git layer is skipped with a printed notice when no reference commit is
+available (shallow clone, source tarball, container copy) rather than failing,
+because Layer 1 still protects the shipped artifact.
 
-Two real defects were found while calibrating, and both are fixed:
+Four real defects were found while calibrating, and all four are fixed:
 
 - The What's New title hardcoded a version in all five locales. It is now a
   `{version}` template filled from the live settings payload, and
   `check_version_sync.py` fails on any `OpenBox 1.x` literal in a locale.
 - `test_parity_radio.py` was genuinely clock-coupled; it now carries a
+  `# clock-coupled:` marker recording that every call injects `now=NOW`.
+
+Four more surfaced when the gates were reviewed against their own claims, which
+is the point of reviewing them:
+
+- **Layer 2 compared the contract to itself.** It read `git show HEAD:<contract>`,
+  which in CI is the file under test, so the layer was inert for every committed
+  change. Now the reference is the merge-base with the default branch (or the
+  parent commit on a direct push), and CI carries the history it needs.
+- **`check_emulator_defs.py` never checked the set for shrinkage.** It computed
+  the reference's definitions and then used them only for ledger checks, so
+  deleting a definition *and* its baseline entry together passed. It now shares
+  the same rule as every other gate.
+- **`check_clock_coupling.py` detected nothing.** It compared a bare module name
+  against a dotted import path (`pkg.parity` vs `parity_radio`), and scanned
+  three directories rather than the runtime manifest, so `state_store.py` was
+  invisible. With both fixed it immediately found a genuine coupling in
+  `test_parity_query.py`, which is now marked and recorded after review: every
+  call injects `now=NOW`, so its pinned 2026 fixtures cannot expire.
+- **`check_frontend_modules.py` missed dynamic imports.** `await import('./x.js')`
+  and subdirectory specifiers were not matched, so a dangling lazy import broke
+  the feature at runtime with the gate green. Both forms are matched now.
+
+The first two also meant the old `test_feature_contracts.py` claimed coverage it
+did not have, since it re-asserted `baseline == live` and called that a
+regression test. The suite now drives each gate through the bypass itself — the
+feature and its baseline entry deleted together, with a reference that still
+holds the entry — and asserts the specific failure. Breaking the shared rule is
+caught by seven of the new tests.
   `# clock-coupled:` marker recording that every call injects `now=NOW`.
 
 ## Consequences

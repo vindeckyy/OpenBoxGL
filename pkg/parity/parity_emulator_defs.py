@@ -262,12 +262,17 @@ def _definition_search_path(defs_dir=None):
 def _load_raw_adapters(defs_dir=None):
     """Load adapters from every definition folder, earlier folders winning.
 
-    A filename present in a higher-precedence folder shadows the same filename
-    below it, so a local edit or an installed pack replaces the bundled
-    definition instead of colliding with it.
+    Two things shadow: a filename present in a higher-precedence folder replaces
+    the same filename below it, and an ``adapter_id`` already claimed by a
+    higher-precedence folder wins regardless of filename. Without the second
+    rule a local definition saved under a new name (``pcsx2-custom.yaml``)
+    loaded but was then silently ignored by ``find_adapter``, while the
+    platform and emulator lists ranked it first -- so which definition won
+    depended on which lookup path the caller used.
     """
     adapters = []
     seen = set()
+    claimed: set[str] = set()
     for folder in _definition_search_path(defs_dir):
         if not folder.is_dir():
             continue
@@ -281,13 +286,18 @@ def _load_raw_adapters(defs_dir=None):
             if not isinstance(payload, dict):
                 continue
             try:
-                adapters.append(_normalize_adapter(payload))
+                adapter = _normalize_adapter(payload)
             except ValueError:
                 continue
             # Only a successful load shadows the bundled definition, so a
             # corrupt local file falls back instead of silently removing the
             # adapter.
             seen.add(path.name)
+            adapter_id = str(adapter.get("adapter_id") or "")
+            if adapter_id in claimed:
+                continue
+            claimed.add(adapter_id)
+            adapters.append(adapter)
     return adapters
 
 

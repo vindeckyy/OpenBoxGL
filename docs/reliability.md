@@ -1,4 +1,4 @@
-﻿# Reliability scenarios
+# Reliability scenarios
 
 Each row is a failure mode a real user can hit. Status means:
 
