@@ -131,3 +131,5 @@ pkg/platform_compat.py
 pkg/parity/parity_artwork_hygiene.py
 pkg/parity/parity_repair.py
 pkg/parity/parity_duplicates.py
+pkg/parity/parity_emulator_defs_update.py
+handlers/defs.py

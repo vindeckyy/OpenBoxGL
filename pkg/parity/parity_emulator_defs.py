@@ -231,22 +231,56 @@ def _normalize_adapter(raw):
     }
 
 
+def _definition_search_path(defs_dir=None):
+    """Return the folders to read, highest precedence first.
+
+    The per-user data directory shadows the bundled set so an installed
+    definition pack (ADR 0049) and a user's hand-edited definition both take
+    effect without ever rewriting the shipped files. Bundled definitions stay
+    the always-valid fallback: nothing is deleted, and removing the installed
+    pack returns the library to the shipped set.
+    """
+    if defs_dir is not None:
+        return [Path(defs_dir)]
+    folders = []
+    try:
+        from pkg.parity.parity_emulator_defs_update import local_defs_dir
+
+        user_dir = local_defs_dir()
+    except Exception:  # pragma: no cover - defensive: the channel is optional
+        user_dir = None
+    if user_dir is not None:
+        folders.append(Path(user_dir))
+    folders.append(Path(DEFS_DIR))
+    return folders
+
+
 def _load_raw_adapters(defs_dir=None):
-    folder = Path(defs_dir or DEFS_DIR)
+    """Load adapters from every definition folder, earlier folders winning.
+
+    A filename present in a higher-precedence folder shadows the same filename
+    below it, so a local edit or an installed pack replaces the bundled
+    definition instead of colliding with it.
+    """
     adapters = []
-    if not folder.is_dir():
-        return adapters
-    for path in sorted(folder.glob("*.yaml")):
-        try:
-            payload = _parse_yaml(path.read_text(encoding="utf-8"))
-        except OSError:
+    seen = set()
+    for folder in _definition_search_path(defs_dir):
+        if not folder.is_dir():
             continue
-        if not isinstance(payload, dict):
-            continue
-        try:
-            adapters.append(_normalize_adapter(payload))
-        except ValueError:
-            continue
+        for path in sorted(folder.glob("*.yaml")):
+            if path.name in seen:
+                continue
+            seen.add(path.name)
+            try:
+                payload = _parse_yaml(path.read_text(encoding="utf-8"))
+            except OSError:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            try:
+                adapters.append(_normalize_adapter(payload))
+            except ValueError:
+                continue
     return adapters
 
 

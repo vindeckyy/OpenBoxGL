@@ -8,7 +8,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 
 `done` means the workflow is usable end to end on Linux. `partial` means a deliberate Linux equivalent exists but LaunchBox’s Windows/premium surface is broader or unavailable. `missing` means no usable equivalent yet.
 
-> **Platform note:** since [ADR 0048](adr/0048-windows-port.md) OpenBox also runs on Windows (signed portable install, WebView2 window), and the rows below describe Linux behavior. Rows that name Linux-only machinery — AppImage/Flatpak packaging, gamescope/Game Mode, XDG desktop entries, Flathub emulator management — remain Linux-only.
+> **Platform note:** since [ADR 0048](adr/0048-windows-port.md) OpenBox also runs on Windows (signed portable install, WebView2 window). The rows below describe **Linux** behavior; the Windows channel has its own section below. Rows that name Linux-only machinery — AppImage/Flatpak packaging, gamescope/Game Mode, XDG desktop entries, Flathub emulator management — remain Linux-only and are marked so in the Windows section.
 
 ## Capability matrix
 
@@ -43,7 +43,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Steam Game Mode / gamescope guest | done | `--game-mode` opens Big Box; guest detection; Steam launches keep Input; non-Steam windows get best-effort STEAM_GAME props |
 | Gamescope presets | done | 8 deck/display profiles (Steam Deck, HD, 1080p, 1440p, 4K, integer, stretch, borderless) selectable from Settings → Controller (1.7.2) |
 | MangoHud performance overlay | done | Optional on-screen performance overlay via `MANGOHUD=1` env on launch; toggle in Settings → Controller (1.7.2) |
-| Themes and per-platform themes | done | Five stock CSS themes ship with the Web UI; import, persist, apply live, and open-folder access work |
+| Themes and per-platform themes | done | Six stock CSS themes ship with the Web UI (five styled themes plus a WCAG-AAA High Contrast theme that proves the token contract); import, persist, apply live, and open-folder access work |
 | Plugin manager and extension API | done | Local packages install and run hooks; curated community catalog is bundled |
 | Backups and restore | done | The web UI lists archives, shows manifests, restores selected archives, and creates a pre-restore safety copy. Backup diff API (`GET /api/v2/backup/diff`) compares current library against archives (1.7.2) |
 | Library audit and missing-file checks | done | Files, provider-aware duplicates, media, extras, saves, and emulator configuration are audited |
@@ -146,6 +146,30 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Game DNA offline search | done | Title | Smart toggle on the search box; Smart mode runs BM25 plus a curated 151-concept lexicon (English, German, Spanish, French, Portuguese) with "why" explanation chips and "More like this", fully offline (1.14.0, ADR 0052) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
+
+## Windows channel (x86_64)
+
+Since [ADR 0048](adr/0048-windows-port.md) the same source tree, the same tests, and
+the same gates run on Windows. These rows record what is true on that channel
+specifically; the matrix above is Linux behavior. `partial` means the Windows
+build has a deliberate, documented narrower surface.
+
+| Capability | Status | Acceptance check |
+|---|---|---|
+| Native window | done | `native_host_win.c` (WebView2) renders the same UI in a real window, with remembered geometry, tray/minimize-to-tray, `openbox://` deeplinks, and one instance per data directory via a named pipe (1.13.0) |
+| Portable install and verified update | done | `scripts/install.ps1` verifies the release key anchor, the SHA-256 sidecar, and the Ed25519 signature before extracting to `%LOCALAPPDATA%\OpenBox\share\openbox`, keeps `share\openbox.previous`, and registers Start Menu plus the `openbox://` handler; the in-app updater refuses to replace anything that is not an installed copy (1.13.0) |
+| Compiled host without a toolchain | done | The release job builds, attests, and signs `native_host.exe` into the zip and publishes it standalone as `OpenBox-x86_64-windows-native-host.exe`; a source checkout can save it beside `web_app.py` and get the native window with no MSVC or WebView2 SDK (1.13.0) |
+| Launcher ladder | done | `openbox.cmd` / `openbox.ps1` / `openbox-native.ps1` mirror the shell scripts: native host, else browser app window, else a plain tab; `openbox --web` forces the browser (1.13.0) |
+| Emulator detection and launch | done | Every bundled definition carries `native_exe_windows`, enforced by `scripts/check_emulator_defs.py`, so adapter prefix detection, resume state, and Launch Doctor work with Windows builds (1.13.0, ADR 0049) |
+| Library data location | done | `%LOCALAPPDATA%\openbox-game-launcher`; `OPENBOX_DATA_DIR` overrides everything and stored relative references keep POSIX separators so a library moves between platforms (1.13.0) |
+| Reliability catalog | done | Windows-specific failure modes are catalogued in `docs/reliability.md` with the same Tested/Manual discipline as the shared rows (1.14.0, ADR 0049) |
+| AppImage / Flatpak packaging | not applicable | Linux-only channels; the Windows artifact is the signed portable zip (ADR 0013) |
+| gamescope / Steam Game Mode presets | not applicable | Linux-only; the gamescope preset setting persists but has no effect on Windows |
+| XDG desktop entry | not applicable | Replaced by the Start Menu shortcut and `HKCU` protocol registration |
+| Flathub emulator management | not applicable | Flathub is a Linux store; Windows emulators are installed by the user |
+| ARM64 Windows build | missing | Only x86_64 is released, while Linux ships an aarch64 AppImage (ADR 0024) |
+| Cross-platform launch-command round-trip | partial | Stored commands use platform quoting rules (`shlex` on POSIX, MSVCRT on Windows), so a command written on one platform may not round-trip byte-for-byte to the other. Documented limitation, not a bug (ADR 0048) |
+
 
 ## Intentionally not replicated on Linux
 

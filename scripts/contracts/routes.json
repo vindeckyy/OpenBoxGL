@@ -958,6 +958,25 @@
     },
     {
       "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/emulators/defs/rollback"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/emulators/defs/status"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/emulators/defs/update"
+    },
+    {
+      "methods": [
         "GET"
       ],
       "path": "/api/v2/emulators/registry"

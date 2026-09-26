@@ -27,6 +27,10 @@ I18N_ATTRS = ("data-i18n", "data-i18n-placeholder", "data-i18n-title", "data-i18
 # Regex for t('key') or t("key") calls in JS
 T_CALL_RE = re.compile(r"""\bt\(\s*['"]([a-zA-Z0-9_.]+)['"]""")
 
+# i18n keys held in a string array, e.g. `const TIPS = ['a.b', 'c.d']`. These
+# are passed to t() through a variable, so T_CALL_RE cannot see them.
+KEY_ARRAY_RE = re.compile(r"""^\s*['"]([a-z][a-zA-Z0-9_]*(?:\.[a-z0-9_]+)+)['"]\s*,?\s*$""", re.MULTILINE)
+
 
 def _flatten_keys(obj, prefix=""):
     """Flatten nested dict keys into dot-separated paths."""
@@ -57,13 +61,20 @@ def _extract_html_keys():
 
 
 def _extract_js_keys():
-    """Extract all t('key') calls from static/*.js."""
+    """Extract all t('key') calls from static/*.js.
+
+    Also picks up keys held in a module-level array of i18n key strings. A key
+    that is only ever referenced through a variable (``t(tipKey)``) is invisible
+    to the literal-call regex, so a rename could drop it from every locale
+    without this noticing. ``whatsnew.js`` does exactly that with its TIPS list.
+    """
     keys = set()
     if not STATIC_DIR.exists():
         return keys
     for js_file in STATIC_DIR.glob("*.js"):
         text = js_file.read_text(encoding="utf-8")
         keys |= set(T_CALL_RE.findall(text))
+        keys |= set(KEY_ARRAY_RE.findall(text))
     return keys
 
 
