@@ -331,13 +331,9 @@ def _sheet_platform(sheet: Path, platform_map: dict[str, str], fallback: str) ->
         if current in seen:
             continue
         seen.add(current)
-        suffix = current.suffix.casefold()
-        if suffix == ".cue":
-            targets = parse_cue(current)
-        elif suffix == ".m3u":
-            targets = parse_m3u(current)
-        else:
-            return platform_map.get(suffix, fallback)
+        # Only sheets are ever queued: the seed is one, and a target is
+        # appended below only when its own suffix is a sheet.
+        targets = parse_cue(current) if current.suffix.casefold() == ".cue" else parse_m3u(current)
         for target in targets:
             mapped = platform_map.get(target.suffix.casefold())
             if mapped and target.suffix.casefold() not in (".cue", ".m3u"):
