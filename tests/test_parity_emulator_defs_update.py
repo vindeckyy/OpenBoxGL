@@ -236,6 +236,28 @@ class InstallTests(unittest.TestCase):
         self.assertEqual([], result["installed"])
         self.assertIn("hand-tuned", mine.read_text(encoding="utf-8"))
 
+    def test_corrupt_local_file_falls_back_to_bundled(self):
+        # A corrupt local definition must not shadow the bundled file of the
+        # same name — the shipped set stays the always-valid fallback.
+        from pkg.parity import parity_emulator_defs as defs
+
+        local = self.data / "emulator_defs"
+        local.mkdir(parents=True)
+        (local / "pcsx2-ps2.yaml").write_text(": not yaml :", encoding="utf-8")
+        previous = os.environ.get("OPENBOX_DATA_DIR")
+        os.environ["OPENBOX_DATA_DIR"] = str(self.data)
+        try:
+            defs._reset_registry_cache()
+            adapters = defs.load_adapters()
+            ids = {a["adapter_id"] for a in adapters}
+            self.assertIn("pcsx2-ps2", ids)
+        finally:
+            if previous is None:
+                os.environ.pop("OPENBOX_DATA_DIR", None)
+            else:
+                os.environ["OPENBOX_DATA_DIR"] = previous
+            defs._reset_registry_cache()
+
     def test_channel_owned_file_is_refreshed_by_a_later_pack(self):
         # Re-running install refreshes files the channel owns; only user-local
         # files are kept. Without this the channel could never update.

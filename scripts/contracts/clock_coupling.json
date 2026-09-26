@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Clock-coupling exemptions for scripts/check_clock_coupling.py. A test listed here pins a calendar constant AND exercises a rolling *_DAYS window; each entry must also carry a '# clock-coupled: <mitigation>' marker in the test file itself. See ADR 0049.",
+  "note": "Clock-coupling exemptions for scripts/check_clock_coupling.py. A test listed here pins a calendar constant AND exercises a rolling *_DAYS window; each entry must also carry a '# clock-coupled: <mitigation>' marker in the test file itself. See ADR 0060.",
   "exempt": {
     "test_parity_radio.py": "Fixed in 71d75ec: the fixture is materialized against the current time instead of a pinned 2026-09-12, so the constant no longer decides reuse."
   }
