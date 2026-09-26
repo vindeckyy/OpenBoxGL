@@ -60,18 +60,39 @@ def tracked_modes() -> dict[str, str]:
     return modes
 
 
-def main() -> int:
+def has_shebang(root: Path, path: str) -> bool:
+    """True when the file's first line is a shebang."""
+    try:
+        with (root / path).open("rb") as handle:
+            first = handle.readline(64)
+    except OSError:
+        return False
+    return first.startswith(b"#!")
+
+
+def find_offenders(
+    modes: dict[str, str],
+    root: Path = ROOT,
+    suffixes: tuple[str, ...] = SHEBANG_SUFFIXES,
+) -> list[tuple[str, str]]:
+    """Tracked files that carry a shebang but are not mode 100755.
+
+    The suffix set is a parameter rather than an inline branch so a test can
+    narrow it: a gate that quietly stopped checking .py files would be the
+    same class of silent regression this gate exists to prevent, and that is
+    exactly the mistake that is invisible without an assertion on the input.
+    """
     offenders: list[tuple[str, str]] = []
-    for path, mode in sorted(tracked_modes().items()):
-        if not path.endswith(SHEBANG_SUFFIXES):
+    for path, mode in sorted(modes.items()):
+        if not path.endswith(suffixes):
             continue
-        try:
-            with (ROOT / path).open("rb") as handle:
-                first = handle.readline(64)
-        except OSError:
-            continue
-        if first.startswith(b"#!") and mode != REGULAR_EXECUTABLE:
+        if has_shebang(root, path) and mode != REGULAR_EXECUTABLE:
             offenders.append((path, mode))
+    return offenders
+
+
+def main() -> int:
+    offenders = find_offenders(tracked_modes())
 
     if not offenders:
         print("exec modes OK: every shebang file is mode 100755")
