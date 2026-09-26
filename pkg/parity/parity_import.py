@@ -344,15 +344,16 @@ def import_multi_platform(
             refs = parse_cue(path)
         else:
             continue
-        # parse_m3u and parse_cue both resolve their targets and swallow the
-        # OSError themselves, returning only what they could resolve, so
-        # there is nothing left to guard here.
+        # parse_m3u and parse_cue resolve relative entries, but hand back an
+        # absolute one verbatim, so a sheet may name its target with ".."
+        # segments that the resolved scan paths no longer match. Normalizing
+        # both sides is what makes the comparison mean the same thing.
         for ref in refs:
-            referenced.add(str(ref))
+            referenced.add(str(Path(os.path.normpath(ref))))
 
     filtered_found = [
         p for p in found
-        if str(p.resolve() if p.exists() else p) not in referenced
+        if str(Path(os.path.normpath(p.resolve() if p.exists() else p))) not in referenced
     ] if referenced else found
 
     additions = []

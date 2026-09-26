@@ -116,6 +116,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   and the surviving row was left on "Disc image", which recommends no emulator
   at all, so a PlayStation disc offered no DuckStation suggestion. The row now
   inherits the platform of the file the sheet names, as the m3u path already did.
+  A sheet may also name its target with an absolute path carrying `..` segments,
+  which the parsers hand back verbatim and which therefore never matched the
+  resolved scan paths; both sides of that comparison are now normalized.
 
 
 - **What's New advertised the wrong version for two releases.** All five
