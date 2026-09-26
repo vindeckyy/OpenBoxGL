@@ -96,6 +96,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   longer shipped a definition the channel had installed left the old file in
   place, and only a full rollback — which removes everything the pack
   installed — could clear it. An update now honors the retraction it declares.
+- **Folder import silently ignored ten file extensions the bundled set
+  already supports.** The scan whitelist was a hand-written literal that no
+  definition ever fed, so `.nca`, `.xiso`, `.img`, `.bin`, `.scummvm`, `.cso`,
+  `.nro`, `.rpx`, `.wud` and `.wux` were filtered out before the platform map
+  was consulted — a folder of Switch, Xbox, ScummVM or PlayStation discs
+  imported nothing at all. The whitelist is now the static floor (launchers,
+  scripts and archives, which have no definition) unioned with what the
+  registry declares, and it refreshes on install like the platform map does.
+
 
 - **What's New advertised the wrong version for two releases.** All five
   locales hardcoded `"What's new in OpenBox 1.11"` in the dialog title while
