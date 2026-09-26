@@ -158,6 +158,29 @@ class CiGatesTests(unittest.TestCase):
         self.assertEqual(check_tests.CHANGED_LINE_FLOOR, 95.0)
         self.assertEqual(check_tests.NEW_MODULE_FLOOR, 85.0)
 
+    def test_import_benchmark_is_warmed_and_best_of_n(self):
+        """Row 47 of the reliability catalog: a wall-clock budget must not be
+        measured once, cold.
+
+        This one failed intermittently in the Windows job and passed on every
+        developer machine, so the runner gained a retry to absorb it. The retry
+        was the containment, not the fix: a regression back to a single cold
+        sample would reappear as the same flake, so assert the measurement
+        contract itself — a warm-up call, and a best-of-N assertion.
+        """
+        text = (ROOT / "tests" / "test_auto_import.py").read_text(encoding="utf-8")
+        body = text.split("def test_large_directory_import_throughput", 1)[1]
+        self.assertIn("group_multi_disc(synthetic_paths[:2000])", body,
+                      "the benchmark must warm up before timing a cold call")
+        self.assertIn("min(samples)", body,
+                      "the benchmark must assert its best sample, not a single reading")
+        self.assertIn("dedupe_ranked_imports(additions[:200])", body,
+                      "dedupe imports parity_premium lazily, so it needs its own warm-up")
+        self.assertIn("min(dedupe_samples)", body,
+                      "dedupe must be timed the same way as grouping")
+        self.assertIn("max_allowed = 0.50 if sys.gettrace() is not None else 0.25", body,
+                      "the 250ms budget is the contract and must not be relaxed")
+
 
 if __name__ == "__main__":
     unittest.main()
