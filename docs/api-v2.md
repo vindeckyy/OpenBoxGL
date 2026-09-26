@@ -19,6 +19,10 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | GET | `/api/v2/collections` | `handlers.collections.collections_list` |
 | POST | `/api/v2/collections` | `handlers.collections.collections_save` |
 | POST | `/api/v2/collections/delete` | `handlers.collections.collections_delete` |
+| POST | `/api/v2/emulators/defs/rollback` | `handlers.defs._api_post_api_v2_emulators_defs_rollback` |
+| GET | `/api/v2/emulators/defs/status` | `handlers.defs._api_get_api_v2_emulators_defs_status` |
+| GET | `/api/v2/emulators/defs/update` | `handlers.defs._api_get_api_v2_emulators_defs_update` |
+| POST | `/api/v2/emulators/defs/update` | `handlers.defs._api_post_api_v2_emulators_defs_update` |
 | GET | `/api/v2/emulators/registry` | `_api_get_api_v2_emulators_registry` |
 | GET | `/api/v2/history/timeline` | `_api_get_api_v2_history_timeline` |
 | GET | `/api/v2/household` | `handlers.household.household_status` |
@@ -89,6 +93,7 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/library/sync/publish` | `_api_post_api_v2_library_sync_publish` |
 | POST | `/api/v2/library/sync/pull` | `_api_post_api_v2_library_sync_pull` |
 | GET | `/api/v2/library/time-machine/as-of` | `_api_get_api_v2_library_time_machine_as_of` |
+| GET | `/api/v2/library/time-machine/compare` | `_api_get_api_v2_library_time_machine_compare` |
 | GET | `/api/v2/library/time-machine/events` | `_api_get_api_v2_library_time_machine_events` |
 | POST | `/api/v2/library/time-machine/revert` | `_api_post_api_v2_library_time_machine_revert` |
 | GET | `/api/v2/library/trash` | `_api_get_api_v2_library_trash` |
@@ -106,8 +111,8 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | GET | `/api/v2/metadata/matches/preview` | `_api_get_api_v2_metadata_matches_preview` |
 | POST | `/api/v2/metadata/matches/preview` | `_api_post_api_v2_metadata_matches_preview` |
 | GET | `/api/v2/metadata/media-candidates` | `_api_get_api_v2_metadata_media_candidates` |
-| GET | `/api/v2/metadata/scrape-settings` | `_api_get_api_v2_metadata_scrape_settings` |
-| POST | `/api/v2/metadata/scrape-settings` | `_api_post_api_v2_metadata_scrape_settings` |
+| GET | `/api/v2/metadata/scrape-settings` | `handlers.metadata._api_get_api_v2_metadata_scrape_settings` |
+| POST | `/api/v2/metadata/scrape-settings` | `handlers.metadata._api_post_api_v2_metadata_scrape_settings` |
 | GET | `/api/v2/moments` | `handlers.moments.moments_list` |
 | POST | `/api/v2/moments` | `handlers.moments.moments_create` |
 | POST | `/api/v2/moments/delete` | `handlers.moments.moments_delete` |
@@ -159,7 +164,7 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/steamgrid/test` | `handlers.steamgrid.steamgrid_test` |
 | GET | `/api/v2/story` | `_api_get_api_v2_story` |
 
-_148 routes._
+_153 routes._
 
 ## API v1 (frozen)
 

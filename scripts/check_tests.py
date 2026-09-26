@@ -4,7 +4,7 @@
 Stages:
   1. ruff lint (gate rule set from pyproject.toml)
   2. runtime_modules drift, v1 contract, version sync, frontend lint, i18n keys,
-     CSP framing, and the ADR 0049 feature-regression ratchets (HTTP routes,
+     CSP framing, and the ADR 0060 feature-regression ratchets (HTTP routes,
      settings schema, emulator defs, frontend module graph, reliability
      catalog, clock-coupled tests)
   3. py_compile over all runtime modules, test files, and scripts
@@ -195,7 +195,7 @@ def main() -> int:
     if csp_check.returncode != 0:
         failures.append("csp")
 
-    # Stage 2.9-2.14: the feature-regression ratchets (ADR 0049). Each one
+    # Stage 2.9-2.14: the feature-regression ratchets (ADR 0060). Each one
     # pins a surface that can shrink without any test noticing: the HTTP route
     # table, the destructive settings allowlist, the emulator definitions, the
     # frontend module graph, the reliability catalog, and calendar-coupled

@@ -55,6 +55,14 @@
   --path-browse-border: var(--border-control);
   --query-chip-bg: var(--surface-card);
   --query-chip-border: var(--border-control);
+  --dna-chip-bg: var(--surface-card);
+  --dna-chip-border: var(--border-control);
+  --dna-chip-fg: var(--text);
+  --dna-panel-bg: var(--panel);
+  --dna-panel-border: var(--border-card);
+  --dna-panel-shadow: none;
+  --dna-toggle-active-bg: var(--active);
+  --dna-toggle-active-fg: var(--white);
   --radius-cover: 5px;
   --radius-hairline: 2px;
   --radius-panel: 12px;

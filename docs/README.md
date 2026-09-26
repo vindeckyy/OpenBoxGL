@@ -21,7 +21,7 @@ The files under this `docs/` folder are engineering, process, and release docume
 
 ## Gates
 
-`make check` runs the full gate. The feature-regression ratchets (ADR 0049)
+`make check` runs the full gate. The feature-regression ratchets (ADR 0060)
 can also be run alone with `make ratchets`, and their frozen contracts are
 regenerated with `make contracts` after an intentional surface change.
 

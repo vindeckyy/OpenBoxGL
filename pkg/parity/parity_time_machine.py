@@ -59,7 +59,7 @@ AS_OF_CACHE_SIZE = 16
 EVENT_PAGE_DEFAULT = 200
 EVENT_PAGE_MAX = 1000
 REVERT_FORMAT = "time-machine-revert-v1"
-# Read-side two-date comparison (1.14.0). Bounded like every other list surface
+# Read-side two-date comparison (1.14.1). Bounded like every other list surface
 # in this module so a large library cannot turn a diff into an unbounded payload.
 COMPARE_PAGE_DEFAULT = 200
 COMPARE_PAGE_MAX = 1000

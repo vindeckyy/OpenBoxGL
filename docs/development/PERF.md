@@ -2,9 +2,9 @@
 
 Measured by `scripts/perf_bench.py` against a synthetic library served by the real server (loopback, gzip enabled). Reference machine: this workstation.
 
-## 1.14.0 measurements (2026-09-26)
+## 1.14.1 measurements (2026-09-26)
 
-Five-run strict local sampling on the 1.14.0 worktree passed all sixteen 10k and
+Five-run strict local sampling on the 1.14.1 worktree passed all sixteen 10k and
 20k gates. Values below are p95 milliseconds from
 `python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5`; the generated
 evidence is written by `--out` and the run is reproducible with the command
@@ -41,7 +41,7 @@ unchanged from 1.11.0.
 No dedicated measurement run was recorded for the 1.12.0 release. The
 SQLite read model self-enables at 5,000+ games unless opted out (ADR 0047), so
 large-library search defaults to the FTS path rather than the JSON path those
-older tables measured. The 1.14.0 run above supersedes this section.
+older tables measured. The 1.14.1 run above supersedes this section.
 
 ## Final 1.11.0 measurements (2026-09-12)
 

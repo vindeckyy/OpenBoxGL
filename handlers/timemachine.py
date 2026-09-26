@@ -86,7 +86,7 @@ class TimeMachineHandlers:
 
     @route("GET", "/api/v2/library/time-machine/compare")
     def _api_get_api_v2_library_time_machine_compare(self, parsed):
-        """Read-only diff of the library at two dates (1.14.0).
+        """Read-only diff of the library at two dates (1.14.1).
 
         `after` is required; `before` defaults to the current library, so
         "?date=..." against now answers "what did this date look like".

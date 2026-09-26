@@ -20,7 +20,7 @@ NATIVE_HOST = native_host
 
 .PHONY: install uninstall appimage check version-check dev-venv test-one native-host contracts
 
-# Feature-regression ratchets (ADR 0049). Regenerates the frozen contracts in
+# Feature-regression ratchets (ADR 0060). Regenerates the frozen contracts in
 # scripts/contracts/ after an intentional surface change. Run this only when a
 # removal is deliberate; the gate then diffs the result against git.
 contracts:

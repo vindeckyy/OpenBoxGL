@@ -22,7 +22,7 @@ The marker convention is deliberate: the automated check cannot prove a fixture
 is correct, so a human records why this particular coupling is safe.
 
 Run directly:  python3 -B scripts/check_clock_coupling.py
-See ADR 0049.
+See ADR 0060.
 """
 
 
