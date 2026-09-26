@@ -59,6 +59,11 @@ AS_OF_CACHE_SIZE = 16
 EVENT_PAGE_DEFAULT = 200
 EVENT_PAGE_MAX = 1000
 REVERT_FORMAT = "time-machine-revert-v1"
+# Read-side two-date comparison (1.14.0). Bounded like every other list surface
+# in this module so a large library cannot turn a diff into an unbounded payload.
+COMPARE_PAGE_DEFAULT = 200
+COMPARE_PAGE_MAX = 1000
+COMPARE_FORMAT = "time-machine-compare-v1"
 AMBIGUOUS_BASE_MARKER = "__sync_ambiguous_bases__"
 
 _VALIDATED_CACHE: dict[str, Any] = {"fingerprint": None, "events": {}, "corrupt": []}
@@ -391,6 +396,76 @@ def _validate_revert_fields(fields: Any) -> list[str] | None:
     return fields
 
 
+def compare(
+    state: dict[str, Any],
+    before: Any,
+    after: Any,
+    *,
+    fields: list[str] | None = None,
+    limit: int = COMPARE_PAGE_DEFAULT,
+) -> dict[str, Any]:
+    """Read-only diff of the library at two points in the journal.
+
+    Both sides are produced by ``materialize_as_of``, so this adds no new source
+    of truth: it folds the journal twice and reports what changed. The older
+    date may be omitted to compare a date against the current library.
+
+    ``fields`` bounds which catalog fields are compared; omitting it compares
+    every shared field. Paths and launch configuration are reported as changed
+    but are never actionable here: reverting them is what ``apply_revert`` and
+    its whitelist exist for, and this endpoint deliberately does not widen that.
+    """
+    if not journal_enabled(state):
+        raise SyncValidationError("time-machine compare requires the library journal")
+    after_dt = parse_as_of_date(after)
+    before_dt = parse_as_of_date(before) if before else None
+    if before_dt is not None and before_dt > after_dt:
+        raise SyncValidationError("compare dates are reversed: 'before' is later than 'after'")
+
+    later = materialize_as_of(state, after_dt)
+    earlier = materialize_as_of(state, before_dt) if before_dt is not None else None
+
+    def by_key(view):
+        """materialize_as_of returns {'games': [{sync_key, ...}, ...]}."""
+        return {row.get("sync_key"): row for row in (view.get("games") or [])}
+
+    if earlier is None:
+        # No earlier date: the whole later catalog is "added" relative to nothing.
+        new_catalog = by_key(later)
+        added = dict(new_catalog)
+        removed: dict[str, Any] = {}
+        changed: list[dict[str, Any]] = []
+    else:
+        old_catalog = by_key(earlier)
+        new_catalog = by_key(later)
+        added = {k: r for k, r in new_catalog.items() if k not in old_catalog}
+        removed = {k: r for k, r in old_catalog.items() if k not in new_catalog}
+        wanted = set(fields) if fields else None
+        changed = []
+        for gid in sorted(set(old_catalog) & set(new_catalog), key=lambda v: str(v)):
+            delta = _diff(old_catalog[gid], new_catalog[gid])
+            if wanted is not None:
+                delta = {k: v for k, v in delta.items() if k in wanted}
+            if delta:
+                changed.append({"sync_key": gid, "fields": delta})
+
+    page = max(1, min(int(limit or COMPARE_PAGE_DEFAULT), COMPARE_PAGE_MAX))
+    return {
+        "format": COMPARE_FORMAT,
+        "before": _iso(before_dt) if before_dt else None,
+        "after": _iso(after_dt),
+        "summary": {
+            "added": len(added),
+            "removed": len(removed),
+            "changed": len(changed),
+        },
+        "added": [{"sync_key": k, "record": r} for k, r in sorted(added.items(), key=lambda kv: str(kv[0]))[:page]],
+        "removed": [{"sync_key": k, "record": r} for k, r in sorted(removed.items(), key=lambda kv: str(kv[0]))[:page]],
+        "changed": changed[:page],
+        "truncated": max(len(added), len(removed), len(changed)) > page,
+    }
+
+
 def plan_revert(
     state: dict[str, Any],
     *,
@@ -650,6 +725,9 @@ def maybe_compact_journal(state: dict[str, Any], *, now: Any = None) -> dict[str
 
 __all__ = [
     "AS_OF_CACHE_SIZE",
+    "COMPARE_FORMAT",
+    "COMPARE_PAGE_DEFAULT",
+    "COMPARE_PAGE_MAX",
     "EVENT_PAGE_DEFAULT",
     "EVENT_PAGE_MAX",
     "JOURNAL_COMPACT_CHECK_HOURS",
@@ -657,6 +735,7 @@ __all__ = [
     "JOURNAL_RETENTION_DAYS",
     "REVERT_FORMAT",
     "apply_revert",
+    "compare",
     "compact_journal",
     "list_events",
     "materialize_as_of",

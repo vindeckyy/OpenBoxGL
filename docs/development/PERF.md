@@ -2,14 +2,46 @@
 
 Measured by `scripts/perf_bench.py` against a synthetic library served by the real server (loopback, gzip enabled). Reference machine: this workstation.
 
+## 1.14.0 measurements (2026-09-26)
+
+Five-run strict local sampling on the 1.14.0 worktree passed all sixteen 10k and
+20k gates. Values below are p95 milliseconds from
+`python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5`; the generated
+evidence is written by `--out` and the run is reproducible with the command
+above. **These replace the 1.11.0 tables below, which are kept only as
+history.**
+
+| Library size | Full library | Gzip | Favorite write | Write path | Picker | Constellation |
+|---|---:|---:|---:|---:|---:|---:|
+| 10,000 games | 22.4 ms | 2.5 ms | 187.4 ms | 193.8 ms | 41.3 ms | 385.6 ms |
+| 20,000 games | 78.8 ms | 3.5 ms | 504.2 ms | 434.3 ms | 85.7 ms | 404.7 ms |
+
+Read paths are now an order of magnitude inside their budgets. The two
+operations that matter are the ones still close to a line:
+
+| Operation | 10k p95 | 20k p95 | 20k budget | Headroom |
+|---|---:|---:|---:|---:|
+| `facet_ms_p95` | 612.1 ms | 1395.5 ms | 2000 ms | **1.4x** |
+| `20k_write_ms_p95` | — | 434.3 ms | 1000 ms | 2.3x |
+| `picker_score_ms_p95` | 41.3 ms | 85.7 ms | 200 ms | 2.3x |
+
+**`facet` is the binding constraint.** It is the only operation inside 2x of its
+budget at 20k, and it is exactly the one still computed on the UI thread: 1.12
+deferred "search-worker facet move" and `static/worker.search.js` still contains
+no facet logic. Facet counting at 20k nearly doubles between 10k (612 ms) and 20k
+(1395.5 ms), which is the superlinear shape you would expect from a single-threaded
+pass. Moving that pass into the worker is the highest-value performance change
+available and is why this row is called out rather than buried in the table.
+
+Native host cold start (launch to server ready) measured **242 ms** on this run,
+unchanged from 1.11.0.
+
 ## 1.12.0 measurements
 
 No dedicated measurement run was recorded for the 1.12.0 release. The
-blocking 10k/20k gates below remain the release evidence. Note that the
-SQLite read model now self-enables at 5,000+ games unless opted out
-(ADR 0047), so large-library search defaults to the FTS path rather than
-the JSON path measured below. Re-run `python3 -B scripts/perf_bench.py
---sizes 10000,20000 --runs 5` on the release tree to refresh this table.
+SQLite read model self-enables at 5,000+ games unless opted out (ADR 0047), so
+large-library search defaults to the FTS path rather than the JSON path those
+older tables measured. The 1.14.0 run above supersedes this section.
 
 ## Final 1.11.0 measurements (2026-09-12)
 

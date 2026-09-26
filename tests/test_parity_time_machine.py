@@ -1,4 +1,4 @@
-"""Tests for pkg/parity/parity_time_machine — journal mode, as-of replay, field revert (T2-core).
+"""Tests for pkg/parity/parity_time_machine â€” journal mode, as-of replay, field revert (T2-core).
 
 Covers the spec acceptance battery: replay-correctness fuzz, revert-as-event,
 stale preview rejection, journal-off zero overhead, crash-mid-write safety,
@@ -72,6 +72,122 @@ def _record(state, before, after, seconds):
 
 def _materialized_map(view):
     return {row["sync_key"]: {k: v for k, v in row.items() if k != "sync_key"} for row in view["games"]}
+
+
+
+class CompareTests(unittest.TestCase):
+    """Read-only two-date diff (1.14.0). No new source of truth: both sides come
+    from materialize_as_of, so the journal stays the only authority."""
+
+    def _state_with_events(self):
+        state = {"games": [], "settings": {"library_journal_enabled": True}}
+        bootstrap_local_catalog(state, now=_ts(0))
+        return state
+
+    def test_added_removed_and_changed_are_reported(self):
+        state = self._state_with_events()
+        before = [_game("Quake", "g1"), _game("Doom", "g2")]
+        _record(state, [], before, 10)
+        # Later: g1 gains a field, g2 is deleted, g3 is added.
+        after = [dict(before[0], genre="FPS"), _game("Hexen", "g3")]
+        _record(state, before, after, 20)
+
+        result = tm.compare(state, _ts(15), _ts(25))
+        self.assertEqual(tm.COMPARE_FORMAT, result["format"])
+        added = {row["sync_key"] for row in result["added"]}
+        removed = {row["sync_key"] for row in result["removed"]}
+        changed = {row["sync_key"] for row in result["changed"]}
+        self.assertIn(stable_sync_key(_game("Hexen", "g3")), added)
+        self.assertIn(stable_sync_key(_game("Doom", "g2")), removed)
+        self.assertIn(stable_sync_key(_game("Quake", "g1")), changed)
+        self.assertEqual(1, result["summary"]["added"])
+        self.assertEqual(1, result["summary"]["removed"])
+        self.assertEqual(1, result["summary"]["changed"])
+
+    def test_identical_dates_report_nothing(self):
+        state = self._state_with_events()
+        games = [_game("Quake", "g1")]
+        _record(state, [], games, 10)
+        # Both dates sit after the event, so the two snapshots are identical.
+        result = tm.compare(state, _ts(11), _ts(15))
+        self.assertEqual(
+            {"added": 0, "removed": 0, "changed": 0},
+            result["summary"],
+        )
+        self.assertFalse(result["truncated"])
+
+    def test_omitted_before_reports_everything_as_added(self):
+        state = self._state_with_events()
+        games = [_game("Quake", "g1"), _game("Doom", "g2")]
+        _record(state, [], games, 10)
+        result = tm.compare(state, None, _ts(15))
+        self.assertIsNone(result["before"])
+        self.assertEqual(2, result["summary"]["added"])
+        self.assertEqual(0, result["summary"]["removed"])
+
+    def test_reversed_dates_are_rejected(self):
+        state = self._state_with_events()
+        _record(state, [], [_game("Quake", "g1")], 10)
+        with self.assertRaises(SyncValidationError):
+            tm.compare(state, _ts(30), _ts(5))
+
+    def test_unparsable_date_is_rejected(self):
+        state = self._state_with_events()
+        _record(state, [], [_game("Quake", "g1")], 10)
+        with self.assertRaises(SyncValidationError):
+            tm.compare(state, _ts(5), "not-a-date")
+
+    def test_journal_off_is_refused(self):
+        state = {"games": [], "settings": {"library_journal_enabled": False}}
+        with self.assertRaises(SyncValidationError):
+            tm.compare(state, _ts(5), _ts(15))
+
+    def test_field_filter_narrows_the_diff(self):
+        state = self._state_with_events()
+        before = [_game("Quake", "g1")]
+        _record(state, [], before, 10)
+        after = [dict(before[0], genre="FPS", publisher="Newco")]
+        _record(state, before, after, 20)
+
+        wide = tm.compare(state, _ts(15), _ts(25))
+        narrow = tm.compare(state, _ts(15), _ts(25), fields=["publisher"])
+        self.assertEqual(1, wide["summary"]["changed"])
+        self.assertEqual(1, narrow["summary"]["changed"])
+        for row in narrow["changed"]:
+            for field in row["fields"]:
+                self.assertEqual("publisher", field)
+
+    def test_limit_truncates_the_page_but_not_the_summary(self):
+        state = self._state_with_events()
+        first = [_game("Base", "b1")]
+        _record(state, [], first, 10)
+        # Six new titles in the second event, so the page bound is what truncates.
+        second = first + [_game(f"New{i}", f"n{i}") for i in range(6)]
+        _record(state, first, second, 20)
+
+        result = tm.compare(state, _ts(15), _ts(25), limit=2)
+        self.assertTrue(result["truncated"])
+        self.assertEqual(2, len(result["added"]))
+        # The summary must report the true total, not the page size.
+        self.assertEqual(6, result["summary"]["added"])
+
+    def test_limit_is_clamped_to_the_maximum(self):
+        state = self._state_with_events()
+        games = [_game(f"G{i}", f"g{i}") for i in range(4)]
+        _record(state, [], games, 10)
+        result = tm.compare(state, _ts(5), _ts(15), limit=10 ** 9)
+        self.assertLessEqual(len(result["added"]), tm.COMPARE_PAGE_MAX)
+        self.assertFalse(result["truncated"])
+
+    def test_compare_does_not_mutate_the_state(self):
+        state = self._state_with_events()
+        before = [_game("Quake", "g1")]
+        _record(state, [], before, 10)
+        after = [dict(before[0], genre="FPS")]
+        _record(state, before, after, 20)
+        snapshot = copy.deepcopy(state)
+        tm.compare(state, _ts(15), _ts(25))
+        self.assertEqual(snapshot, state, "compare must be read-only")
 
 
 class JournalGateTests(unittest.TestCase):
@@ -609,6 +725,45 @@ class TimeMachineHttpTests(unittest.TestCase):
                 return error.code, json.loads(error.read())
             finally:
                 error.close()
+
+    def test_compare_requires_a_date(self):
+        status, body = self.request("GET", "/api/v2/library/time-machine/compare")
+        self.assertEqual(400, status)
+        self.assertEqual("TM_INVALID_DATE", body.get("code"))
+
+    def test_compare_rejects_an_unparsable_date(self):
+        status, body = self.request(
+            "GET", "/api/v2/library/time-machine/compare?after=not-a-date"
+        )
+        self.assertEqual(400, status)
+        self.assertEqual("TM_INVALID_DATE", body.get("code"))
+
+    def test_compare_rejects_reversed_dates(self):
+        status, body = self.request(
+            "GET",
+            "/api/v2/library/time-machine/compare"
+            "?before=2026-02-01T00:00:00Z&after=2026-01-01T00:00:00Z",
+        )
+        self.assertEqual(400, status)
+        self.assertEqual("TM_INVALID_DATE", body.get("code"))
+
+    def test_compare_returns_the_documented_shape(self):
+        status, body = self.request(
+            "GET", "/api/v2/library/time-machine/compare?after=2026-01-01T00:00:00Z"
+        )
+        self.assertEqual(200, status)
+        self.assertEqual(tm.COMPARE_FORMAT, body["format"])
+        self.assertIsNone(body["before"])
+        for key in ("summary", "added", "removed", "changed", "truncated"):
+            self.assertIn(key, body)
+
+    def test_compare_requires_authentication(self):
+        status, _ = self.request(
+            "GET",
+            "/api/v2/library/time-machine/compare?after=2026-01-01T00:00:00Z",
+            token="",
+        )
+        self.assertEqual(403, status)
 
     def test_events_route_lists_journal(self):
         status, body = self.request("GET", "/api/v2/library/time-machine/events")
