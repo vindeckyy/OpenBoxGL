@@ -1267,6 +1267,12 @@
       "methods": [
         "GET"
       ],
+      "path": "/api/v2/library/time-machine/compare"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
       "path": "/api/v2/library/time-machine/events"
     },
     {

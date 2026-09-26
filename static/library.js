@@ -36,6 +36,104 @@ function localDayKey(isoString) {
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+const STORY_EXPORT_WIDTH = 900;
+const STORY_ROW_HEIGHT = 44;
+const STORY_HEADER_HEIGHT = 128;
+const STORY_PAD = 32;
+const STORY_FONT = '"Segoe UI", system-ui, -apple-system, sans-serif';
+// Colours mirror the light palette tokens in static/app.css. The export is a
+// standalone PNG the user keeps or shares, so it cannot inherit theme tokens.
+const STORY_INK = '#1a1614';
+const STORY_MUTED = '#6b6259';
+const STORY_RULE = '#d8d0c6';
+const STORY_BG = '#fbf7f2';
+const STORY_ACCENT = '#f06000';
+
+// Export the already-fetched story as a PNG (1.14.0). This is deliberately
+// client-side: the server already returns every field the card needs, so a PNG
+// is a render of data in hand rather than a new endpoint or a dependency. A
+// pure-Python image encoder was rejected in 1.12 for good reason; the browser
+// canvas is already here.
+function exportStoryPng(story) {
+  const events = (story && story.events) || [];
+  const totals = (story && story.totals) || {};
+  const name = (story && story.name) || 'Story';
+  const groups = {};
+  events.forEach(event => {
+    const day = localDayKey(event.at);
+    if (!groups[day]) groups[day] = [];
+    groups[day].push(event);
+  });
+  const days = Object.keys(groups).sort();
+  const rows = days.reduce((total, day) => total + 1 + groups[day].length, 0);
+  const height = Math.max(
+    STORY_HEADER_HEIGHT,
+    STORY_HEADER_HEIGHT + rows * STORY_ROW_HEIGHT + STORY_PAD
+  );
+
+  const canvas = document.createElement('canvas');
+  canvas.width = STORY_EXPORT_WIDTH;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.fillStyle = STORY_BG;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = STORY_ACCENT;
+  ctx.fillRect(0, 0, canvas.width, 6);
+
+  ctx.fillStyle = STORY_INK;
+  ctx.font = `700 30px ${STORY_FONT}`;
+  ctx.textBaseline = 'top';
+  ctx.fillText(name, STORY_PAD, 28);
+  ctx.fillStyle = STORY_MUTED;
+  const summary = `${totals.sessions || 0} sessions · ${duration(totals.playtime_seconds || 0)}${totals.progress ? ` · ${totals.progress}` : ''}`;
+  ctx.fillText(summary, STORY_PAD, 70);
+
+  ctx.strokeStyle = STORY_RULE;
+  ctx.beginPath();
+  ctx.moveTo(STORY_PAD, 104.5);
+  ctx.lineTo(canvas.width - STORY_PAD, 104.5);
+  ctx.stroke();
+
+  let y = STORY_HEADER_HEIGHT;
+  days.forEach(day => {
+    ctx.fillStyle = STORY_ACCENT;
+    ctx.font = `700 15px ${STORY_FONT}`;
+    ctx.fillText(day, STORY_PAD, y);
+    y += 22;
+    groups[day].forEach(event => {
+      ctx.fillStyle = STORY_INK;
+      ctx.font = `400 16px ${STORY_FONT}`;
+      ctx.fillText(String(event.title || ''), STORY_PAD + 12, y);
+      const meta = [STORY_KIND_LABELS[event.kind] || event.kind || '', event.detail || '']
+        .filter(Boolean).join(' · ');
+      if (meta) {
+        ctx.fillStyle = STORY_MUTED;
+        ctx.font = `400 13px ${STORY_FONT}`;
+        ctx.textAlign = 'right';
+        ctx.fillText(meta, canvas.width - STORY_PAD, y + 3);
+        ctx.textAlign = 'left';
+      }
+      y += STORY_ROW_HEIGHT;
+    });
+  });
+  return canvas;
+}
+
+function downloadStoryPng(story) {
+  const canvas = exportStoryPng(story);
+  if (!canvas) return false;
+  const link = document.createElement('a');
+  const slug = String((story && story.name) || 'story')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'story';
+  link.download = `openbox-story-${slug}.png`;
+  link.href = canvas.toDataURL('image/png');
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  return true;
+}
 async function mountStoryPanel(game, container) {
   if (!container || !game) return;
   container.innerHTML = '<p class="description">Loading story…</p>';
@@ -50,7 +148,12 @@ async function mountStoryPanel(game, container) {
       groups[day].push(event);
     });
     const days = Object.keys(groups).sort();
-    container.innerHTML = `<div class="detail-card"><h3>${escapeHtml(story.name || game.name || 'Story')}</h3><p class="description">${totals.sessions || 0} sessions · ${escapeHtml(duration(totals.playtime_seconds || 0))}${totals.progress ? ` · ${escapeHtml(totals.progress)}` : ''}</p>${days.length ? days.map(day => `<div class="timeline-group"><h3 class="timeline-date">${escapeHtml(day)}</h3>${groups[day].map(event => `<div class="timeline-entry"><div class="timeline-meta"><div class="timeline-name">${escapeHtml(event.title || '')}</div><div class="timeline-duration">${escapeHtml(STORY_KIND_LABELS[event.kind] || event.kind || '')}${event.detail ? ` · ${escapeHtml(event.detail)}` : ''}</div></div></div>`).join('')}</div>`).join('') : '<p class="description">No recorded history for this game yet.</p>'}</div>`;
+    container.innerHTML = `<div class="detail-card"><div class="dialog-head"><h3>${escapeHtml(story.name || game.name || 'Story')}</h3><button type="button" class="icon-button" data-story-png aria-label="Export story as PNG">PNG</button></div><p class="description">${totals.sessions || 0} sessions · ${escapeHtml(duration(totals.playtime_seconds || 0))}${totals.progress ? ` · ${escapeHtml(totals.progress)}` : ''}</p>${days.length ? days.map(day => `<div class="timeline-group"><h3 class="timeline-date">${escapeHtml(day)}</h3>${groups[day].map(event => `<div class="timeline-entry"><div class="timeline-meta"><div class="timeline-name">${escapeHtml(event.title || '')}</div><div class="timeline-duration">${escapeHtml(STORY_KIND_LABELS[event.kind] || event.kind || '')}${event.detail ? ` · ${escapeHtml(event.detail)}` : ''}</div></div></div>`).join('')}</div>`).join('') : '<p class="description">No recorded history for this game yet.</p>'}</div>`;
+    const exportButton = container.querySelector('[data-story-png]');
+    if (exportButton) {
+      exportButton.setAttribute('aria-label', t('story.export_png'));
+      exportButton.onclick = () => downloadStoryPng(story);
+    }
   } catch (error) {
     container.innerHTML = `<p class="description">${escapeHtml(error.message || 'Story unavailable.')}</p>`;
   }
@@ -2112,4 +2215,4 @@ export function openDuplicatesDialog() {
 document.addEventListener('app:open-repair-wizard', () => openRepairWizard());
 document.addEventListener('app:open-duplicates', () => openDuplicatesDialog());
 
-export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated, isVirtualEnabled, getSearchWorker, workerSearch, searchWithFallback, verifyWorkerParity, ensureVirtualObserver, visibleGameIds, focusGameIndex, gridMetrics, isTrashView, renderTrashView, showTrashUndoToast, restoreTrashEntry };
+export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated, isVirtualEnabled, getSearchWorker, workerSearch, searchWithFallback, verifyWorkerParity, ensureVirtualObserver, visibleGameIds, focusGameIndex, gridMetrics, isTrashView, renderTrashView, showTrashUndoToast, restoreTrashEntry, exportStoryPng };

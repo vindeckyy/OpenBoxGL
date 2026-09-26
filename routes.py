@@ -103,6 +103,7 @@ GET_TABLE = {
     "/api/v2/library/trash": "_api_get_api_v2_library_trash",
     "/api/v2/library/time-machine/events": "_api_get_api_v2_library_time_machine_events",
     "/api/v2/library/time-machine/as-of": "_api_get_api_v2_library_time_machine_as_of",
+    "/api/v2/library/time-machine/compare": "_api_get_api_v2_library_time_machine_compare",
     "/api/v2/party/queue": "_api_get_api_v2_party_queue",
     "/api/v2/plugins/commands": "_api_get_api_v2_plugins_commands",
     "/api/v2/plugins/trust": "_api_get_api_v2_plugins_trust",

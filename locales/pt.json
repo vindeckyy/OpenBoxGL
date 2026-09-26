@@ -1334,5 +1334,8 @@
     "search_failed": "A pesquisa inteligente falhou.",
     "privacy_note": "100 % local · sem nuvem de IA, sem transferências",
     "more_like_this": "Mais como este"
+  },
+  "story": {
+    "export_png": "Exportar historia como PNG"
   }
 }

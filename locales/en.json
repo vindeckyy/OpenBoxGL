@@ -1334,5 +1334,8 @@
     "search_failed": "Smart search failed.",
     "privacy_note": "100% local · no AI cloud, no downloads",
     "more_like_this": "More like this"
+  },
+  "story": {
+    "export_png": "Export story as PNG"
   }
 }
