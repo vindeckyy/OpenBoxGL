@@ -450,7 +450,7 @@ def compare(
                 changed.append({"sync_key": gid, "fields": delta})
 
     page = max(1, min(int(limit or COMPARE_PAGE_DEFAULT), COMPARE_PAGE_MAX))
-    return {
+    result = {
         "format": COMPARE_FORMAT,
         "before": _iso(before_dt) if before_dt else None,
         "after": _iso(after_dt),
@@ -463,7 +463,19 @@ def compare(
         "removed": [{"sync_key": k, "record": r} for k, r in sorted(removed.items(), key=lambda kv: str(kv[0]))[:page]],
         "changed": changed[:page],
         "truncated": max(len(added), len(removed), len(changed)) > page,
+        "later_truncated": bool(later.get("truncated")),
+        "later_before_first_event": bool(later.get("before_first_event")),
     }
+    if earlier is not None:
+        # A baseline that predates the compacted journal is incomplete: rows
+        # that vanished before the horizon read as "added" downstream, so the
+        # caller must see that the diff's floor is unreliable.
+        result["earlier_truncated"] = bool(earlier.get("truncated"))
+        result["earlier_before_first_event"] = bool(earlier.get("before_first_event"))
+        result["baseline_incomplete"] = bool(
+            earlier.get("truncated") or earlier.get("before_first_event")
+        )
+    return result
 
 
 def plan_revert(

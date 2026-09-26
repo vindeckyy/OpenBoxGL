@@ -88,15 +88,15 @@ class TimeMachineHandlers:
     def _api_get_api_v2_library_time_machine_compare(self, parsed):
         """Read-only diff of the library at two dates (1.14.1).
 
-        `after` is required; `before` defaults to the current library, so
-        "?date=..." against now answers "what did this date look like".
+        `after` is required; omitting `before` diffs the date against an
+        empty baseline, so every game reads as added — a restore-point view.
         """
         params = parse_qs(getattr(parsed, "query", "") or "", keep_blank_values=True)
         after = _first(params, "after") or _first(params, "date")
         if not after:
             raise BadRequest("after is required", code="TM_INVALID_DATE")
         before = _first(params, "before")
-        fields = [part for part in _first(params, "fields").split(",") if part.strip()] or None
+        fields = [part.strip() for part in _first(params, "fields").split(",") if part.strip()] or None
         limit = _integer(params, "limit", time_machine.COMPARE_PAGE_DEFAULT)
         try:
             result = time_machine.compare(
