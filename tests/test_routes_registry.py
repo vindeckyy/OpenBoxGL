@@ -36,7 +36,9 @@ class RouteRegistryTests(unittest.TestCase):
         # library health adds /api/v2/library/health and /api/v2/library/health/issues;
         # effortless metadata adds /api/v2/metadata/media-candidates and
         # /api/v2/metadata/scrape-settings; Game DNA adds
-        # /api/v2/library/dna/status).
+        # /api/v2/library/dna/status; 1.14.1 adds
+        # /api/v2/emulators/defs/status, /api/v2/emulators/defs/update, and
+        # /api/v2/library/time-machine/compare).
         # 191 base POST + 43 v1 aliases = 234 total (v2 feature CRUD rows are
         # additive to the existing query/trash/memories/resume surface;
         # 1.12 adds collections save + delete; the Windows port adds
@@ -46,27 +48,28 @@ class RouteRegistryTests(unittest.TestCase):
         # permissions, and settings routes; backlog adds 8 playtime/notes
         # routes; effortless metadata adds /api/v2/metadata/auto-scrape and
         # /api/v2/metadata/scrape-settings; Game DNA adds
-        # /api/v2/library/dna/search and /api/v2/library/dna/index/rebuild).
-        self.assertEqual(len(GET_TABLE), 190)
-        self.assertEqual(len(POST_TABLE), 234)
+        # /api/v2/library/dna/search and /api/v2/library/dna/index/rebuild;
+        # 1.14.1 adds /api/v2/emulators/defs/update and /api/v2/emulators/defs/rollback).
+        self.assertEqual(len(GET_TABLE), 193)
+        self.assertEqual(len(POST_TABLE), 236)
         self.assertEqual(len(V1_ALIASED_PREFIXES), 61)
 
     def test_base_routes_count(self):
         base_get = [p for p in GET_TABLE if not p.startswith("/api/v1")]
         base_post = [p for p in POST_TABLE if not p.startswith("/api/v1")]
-        self.assertEqual(len(base_get), 165)
-        self.assertEqual(len(base_post), 191)
-        self.assertEqual(len(base_get) + len(base_post), 356)
+        self.assertEqual(len(base_get), 168)
+        self.assertEqual(len(base_post), 193)
+        self.assertEqual(len(base_get) + len(base_post), 361)
 
     def test_all_routes_registered(self):
         routes = all_routes()
-        # 357 = 356 table paths + the /api/v1/jobs dual-registration.
-        self.assertEqual(len(routes), 357)
+        # 362 = 361 table paths + the /api/v1/jobs dual-registration.
+        self.assertEqual(len(routes), 362)
 
         get_routes = [r for r in routes if r.method == "GET"]
         post_routes = [r for r in routes if r.method == "POST"]
-        self.assertEqual(len(get_routes), 166)
-        self.assertEqual(len(post_routes), 191)
+        self.assertEqual(len(get_routes), 169)
+        self.assertEqual(len(post_routes), 193)
 
     def test_every_registered_route_matches_live_table(self):
         routes = all_routes()
