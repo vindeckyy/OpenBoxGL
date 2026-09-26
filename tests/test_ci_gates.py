@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """CI gate contract tests for workflows and Dependabot."""
 
+import contextlib
+import io
 import re
 import sys
 import unittest
@@ -53,6 +55,38 @@ class CiGatesTests(unittest.TestCase):
         self.assertIn("python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5", ci)
         self.assertIn("python3 -B scripts/check_changed_coverage.py --fail-under=95", ci)
 
+    def test_exec_bit_gate_is_wired_and_catches_a_lost_mode(self):
+        """The exec bit is undetectable from a Windows checkout, so the gate
+        must run in CI *and* actually fail when a mode is lost."""
+        from scripts import check_exec_modes
+
+        ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        self.assertIn("check_exec_modes.py", ci, "CI must run the exec-bit gate")
+        self.assertIn("check_exec_modes.py", (ROOT / "scripts" / "check_tests.py").read_text(encoding="utf-8"),
+                      "the local gate must run it too, so it is caught pre-push")
+
+        def run_gate():
+            # The gate prints one line per offender; on a real failure that
+            # output is the point, but here it would bury the test output.
+            with contextlib.redirect_stdout(io.StringIO()):
+                return check_exec_modes.main()
+
+        # The repo itself must be clean...
+        self.assertEqual(0, run_gate(), "repo has a shebang file without the exec bit")
+
+        # ...and the gate must notice when a mode is lost, which is the whole
+        # reason it exists. The mode is read straight from the index, the same
+        # way a Linux runner sees it.
+        modes = check_exec_modes.tracked_modes()
+        victim = "scripts/contract_ratchet.py"
+        self.assertEqual("100755", modes[victim], "precondition: victim starts executable")
+        original = check_exec_modes.REGULAR_EXECUTABLE
+        check_exec_modes.REGULAR_EXECUTABLE = "100644"
+        try:
+            self.assertEqual(1, run_gate(), "gate must fail on a lost exec bit")
+        finally:
+            check_exec_modes.REGULAR_EXECUTABLE = original
+        self.assertEqual(0, run_gate(), "gate must pass again once restored")
 
     def test_check_tests_floor_constants(self):
         from scripts import check_tests
