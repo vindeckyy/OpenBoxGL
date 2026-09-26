@@ -104,6 +104,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   imported nothing at all. The whitelist is now the static floor (launchers,
   scripts and archives, which have no definition) unioned with what the
   registry declares, and it refreshes on install like the platform map does.
+- **A cue sheet and the disc image it names imported as two games.** Only
+  files named by an `.m3u` were excluded from the scan, never the ones a
+  `.cue` points at, so `Game.cue` and `Game.bin` each became a row. They land
+  in different platform buckets, which the ranked-import dedupe cannot merge
+  on, so this is two entries for one game — and a folder of disc images grew
+  noisier the more definitions the scan learned about. Cue-referenced files
+  are now excluded the same way m3u-referenced ones are.
 
 
 - **What's New advertised the wrong version for two releases.** All five

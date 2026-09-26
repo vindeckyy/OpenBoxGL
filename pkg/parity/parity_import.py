@@ -326,19 +326,30 @@ def import_multi_platform(
         raise ValueError(f"Folder does not exist: {folder}")
     found = _parallel_scandir(folder, extensions_set, progress_callback=progress_callback)
 
-    m3u_referenced: set[str] = set()
+    # A .m3u or a .cue sheet points at the files it describes, so those
+    # targets are imported through their sheet and not again on their own.
+    # A cue and its .bin land in different platform buckets ("Disc image" vs
+    # the adapter's own platform), so dedupe_ranked_imports cannot merge them:
+    # without this the pair imports as two rows of the same game.
+    referenced: set[str] = set()
     for path in found:
-        if path.suffix.casefold() == ".m3u":
-            for ref in parse_m3u(path):
-                try:
-                    m3u_referenced.add(str(ref.resolve() if ref.exists() else ref))
-                except OSError:
-                    m3u_referenced.add(str(ref))
+        suffix = path.suffix.casefold()
+        if suffix == ".m3u":
+            refs = parse_m3u(path)
+        elif suffix == ".cue":
+            refs = parse_cue(path)
+        else:
+            continue
+        for ref in refs:
+            try:
+                referenced.add(str(ref.resolve() if ref.exists() else ref))
+            except OSError:
+                referenced.add(str(ref))
 
     filtered_found = [
         p for p in found
-        if str(p.resolve() if p.exists() else p) not in m3u_referenced
-    ] if m3u_referenced else found
+        if str(p.resolve() if p.exists() else p) not in referenced
+    ] if referenced else found
 
     additions = []
     now = datetime.now().isoformat(timespec="seconds")
