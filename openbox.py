@@ -27,7 +27,8 @@ if not CUSTOM_DATA_DIR and not DATA.exists() and LEGACY_DATA.is_file():
 
 STATE_STORE = JsonStateStore(DATA)
 
-EXTENSIONS = {".sh", ".appimage", ".exe", ".bat", ".cmd", ".lnk", ".iso", ".rom", ".nes", ".sfc", ".smc", ".gba", ".gb", ".gbc", ".zip", ".7z", ".rar"} | EXTENSIONS_EXTRA
+_BASE_EXTENSIONS = {".sh", ".appimage", ".exe", ".bat", ".cmd", ".lnk", ".iso", ".rom", ".nes", ".sfc", ".smc", ".gba", ".gb", ".gbc", ".zip", ".7z", ".rar"} | EXTENSIONS_EXTRA
+
 
 def _build_platform_by_extension():
     return {
@@ -38,12 +39,30 @@ def _build_platform_by_extension():
     }
 
 
+def _build_extensions():
+    """Extensions the folder scan looks for, unioned with what definitions declare.
 
-# openbox owns this map, so it registers here rather than in the registry
-# module, which cannot import it back without a cycle. Registering keeps the
-# install/rollback path able to refresh it in place once definitions change.
+    A static list silently excluded every extension an emulator definition
+    claims but the list predates -- .nca, .xiso, .img, .bin and .scummvm all
+    ship in the bundled set and were therefore unscannable. An installed pack
+    shipping a new extension had the same problem. The base list is kept for
+    launchers, scripts and archives that have no definition, so it is still the
+    floor; the registry only widens it.
+    """
+    # build_platform_by_extension already returns dotted keys; definitions may
+    # spell them either way, so normalize rather than assume.
+    return _BASE_EXTENSIONS | {
+        ext if ext.startswith(".") else f".{ext}" for ext in build_platform_by_extension()
+    }
+
+
+# openbox owns these, so it registers here rather than in the registry module,
+# which cannot import it back without a cycle. Registering keeps the
+# install/rollback path able to refresh them in place once definitions change.
 PLATFORM_BY_EXTENSION = _build_platform_by_extension()
+EXTENSIONS = _build_extensions()
 _register_import_snapshot("openbox", "PLATFORM_BY_EXTENSION", _build_platform_by_extension)
+_register_import_snapshot("openbox", "EXTENSIONS", _build_extensions)
 
 # Development-only screenshot fixtures must never ship in user libraries.
 DEMO_PATH_MARKERS = ("/tmp/openbox-screenshots/",)

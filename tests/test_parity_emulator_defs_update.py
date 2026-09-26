@@ -367,15 +367,38 @@ class InstallTests(unittest.TestCase):
             self.assertIn(emu_id, dict(import_surfaces.get(platform, [])), "import surface must not stay stale")
             self.assertEqual(platform, openbox.PLATFORM_BY_EXTENSION.get(f".{extension}"), "extension map must not stay stale")
             self.assertEqual(platform, state_imports.PLATFORM_BY_EXTENSION.get(f".{extension}"), "folder import must not stay stale")
+            # The scan whitelist is a separate object: the platform map naming
+            # an extension is useless if _parallel_scandir filters it out
+            # first, which is what made a new-extension pack undiscoverable.
+            self.assertIn(f".{extension}", openbox.EXTENSIONS, "scan whitelist must not stay stale")
+            self.assertIn(f".{extension}", state_imports.EXTENSIONS, "folder import must not stay stale")
             upd.rollback(self.data)
             self.assertNotIn(emu_id, emulators.EMULATORS, "rollback must clear the live surfaces too")
             self.assertIsNone(openbox.PLATFORM_BY_EXTENSION.get(f".{extension}"))
+            self.assertNotIn(f".{extension}", openbox.EXTENSIONS)
         finally:
             if previous is None:
                 os.environ.pop("OPENBOX_DATA_DIR", None)
             else:
                 os.environ["OPENBOX_DATA_DIR"] = previous
             defs._reset_registry_cache()
+
+    def test_scan_whitelist_covers_extensions_definitions_declare(self):
+        # A static scan list silently excluded every extension a bundled
+        # definition claims but the list predates -- .nca, .xiso, .img, .bin
+        # and .scummvm among them -- so those ROMs were invisible to folder
+        # import even with no channel involved at all.
+        import openbox
+        from pkg.parity import parity_emulator_defs as defs
+
+        # build_platform_by_extension returns dotted keys already.
+        declared = set(defs.build_platform_by_extension())
+        missing = declared - openbox.EXTENSIONS
+        self.assertEqual(set(), missing, f"scan whitelist omits {sorted(missing)}")
+        # The base list still covers what has no definition: launchers,
+        # scripts and archives.
+        for extension in (".sh", ".exe", ".bat", ".appimage", ".lnk", ".rar"):
+            self.assertIn(extension, openbox.EXTENSIONS)
 
 
 class StatusTests(unittest.TestCase):

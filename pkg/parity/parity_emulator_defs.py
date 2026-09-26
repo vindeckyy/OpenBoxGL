@@ -479,8 +479,12 @@ def _registry():
     return _REGISTRY_CACHE
 
 
-def _replace_in_place(target: dict, fresh: dict) -> None:
-    """Swap a dict's contents without replacing the object itself."""
+def _replace_in_place(target, fresh) -> None:
+    """Swap a collection's contents without replacing the object itself.
+
+    Works for dicts and sets alike: a module that registered a dict has its
+    keys replaced, one that registered a set has its members replaced.
+    """
     target.clear()
     target.update(fresh)
 
@@ -601,12 +605,14 @@ _IMPORT_TIME_SNAPSHOTS = [
 def register_import_snapshot(module_name: str, attribute: str, builder) -> None:
     """Register an import-time snapshot owned by another module.
 
-    A module that derives a dict from this registry at import time should
-    register it here, or a definition update will leave that surface stale
-    until the process restarts. ``openbox.PLATFORM_BY_EXTENSION`` is the case
-    that motivated this: folder import maps a file extension to a platform, so
-    a newly installed definition with a new extension would otherwise be
-    unrecognised.
+    A module that derives a dict or set from this registry at import time
+    should register it here, or a definition update will leave that surface
+    stale until the process restarts. The case that motivated this is
+    folder import: it consults two separate objects, the extension scan
+    whitelist and the extension-to-platform map, so refreshing one without
+    the other leaves an installed definition either unrecognised or
+    undiscoverable -- the map naming an extension the scan filter rejects is
+    no better than not knowing it at all.
     """
     _IMPORT_TIME_SNAPSHOTS.append((module_name, attribute, builder))
 
