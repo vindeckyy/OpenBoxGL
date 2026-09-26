@@ -340,11 +340,11 @@ def import_multi_platform(
             refs = parse_cue(path)
         else:
             continue
+        # parse_m3u and parse_cue both resolve their targets and swallow the
+        # OSError themselves, returning only what they could resolve, so
+        # there is nothing left to guard here.
         for ref in refs:
-            try:
-                referenced.add(str(ref.resolve() if ref.exists() else ref))
-            except OSError:
-                referenced.add(str(ref))
+            referenced.add(str(ref))
 
     filtered_found = [
         p for p in found
