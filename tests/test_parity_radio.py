@@ -12,6 +12,10 @@ sys.path.insert(0, str(ROOT))
 
 from pkg.parity import parity_radio  # noqa: E402
 
+# clock-coupled: safe because every parity_radio call in this file injects
+# now=NOW explicitly (build_habit_model/radio scoring), so the pinned date drives
+# the assertions instead of the wall clock. Commit 71d75ec fixed the one case
+# that did not inject and would have expired after RADIO_STALE_DAYS=7 days.
 NOW = datetime(2026, 9, 12, 20, 0, 0, tzinfo=timezone.utc)  # evening daypart
 
 

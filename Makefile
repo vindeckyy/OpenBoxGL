@@ -8,12 +8,38 @@ LICENSEDIR = $(PREFIX)/share/licenses/openbox
 
 PYTHON_SOURCES = $(shell sed '/^[[:space:]]*#/d;/^[[:space:]]*$$/d' runtime_modules.txt)
 
+# Interpreter for the dev-only contract/ratchet targets. Overridable so the
+# same Makefile works on Windows, where `python3` is a Store alias (ADR 0048).
+PYTHON ?= python3
+
+
 DATA_FILES = index.html openbox.svg openbox.metainfo.xml LICENSE assets/openbox-logo.png
 STATIC_FILES = $(wildcard static/*.js) $(wildcard static/*.css)
 LOCALE_FILES = $(wildcard locales/*.json)
 NATIVE_HOST = native_host
 
-.PHONY: install uninstall appimage check version-check dev-venv test-one native-host
+.PHONY: install uninstall appimage check version-check dev-venv test-one native-host contracts
+
+# Feature-regression ratchets (ADR 0049). Regenerates the frozen contracts in
+# scripts/contracts/ after an intentional surface change. Run this only when a
+# removal is deliberate; the gate then diffs the result against git.
+contracts:
+	$(PYTHON) -B scripts/check_routes_contract.py --update
+	$(PYTHON) -B scripts/check_settings_contract.py --update
+	$(PYTHON) -B scripts/check_emulator_defs.py --update
+	$(PYTHON) -B scripts/check_frontend_modules.py --update
+	$(PYTHON) -B scripts/check_reliability_catalog.py --update
+	@echo "Contracts regenerated. Review the diff, then commit it with the change."
+
+# Run only the feature-regression ratchets, without the coverage stage.
+ratchets:
+	$(PYTHON) -B scripts/check_routes_contract.py
+	$(PYTHON) -B scripts/check_settings_contract.py
+	$(PYTHON) -B scripts/check_emulator_defs.py
+	$(PYTHON) -B scripts/check_frontend_modules.py
+	$(PYTHON) -B scripts/check_reliability_catalog.py
+	$(PYTHON) -B scripts/check_clock_coupling.py
+
 
 native-host:
 	gcc -O2 native_host.c -o $(NATIVE_HOST) $$(pkg-config --cflags --libs webkit2gtk-4.1)

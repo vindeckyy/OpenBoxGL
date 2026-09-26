@@ -15,6 +15,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# 1.14.0 (ADR 0049): the What's New title hardcoded the version in every
+# locale and kept advertising 1.11 through two releases because this script did
+# not read the locale files. The string is now a template; these guard it.
+LOCALE_HARDCODED_VERSION_RE = re.compile(r"OpenBox\s+1\.\d+")
+
 
 def _doc_path(name: str) -> Path:
     # Support both flat (docs at root) and docs/ layout after reorg
@@ -119,6 +124,20 @@ def main() -> int:
         if not sbom_default or sbom_default.group(1) != version:
             print(f"gen_sbom.py: fallback DEFAULT_VERSION is {sbom_default.group(1) if sbom_default else 'missing'}, expected {version}")
             failures.append("gen_sbom DEFAULT_VERSION")
+    # 1.14.0 (ADR 0049): the What's New title used to hardcode the version in
+    # every locale, so it kept advertising 1.11 through two releases while this
+    # script never looked at the locale files. The string is now a template and
+    # the client substitutes the live version; this guard stops it regressing.
+    locales_dir = ROOT / "locales"
+    for locale_path in sorted(locales_dir.glob("*.json")) if locales_dir.is_dir() else []:
+        content = locale_path.read_text(encoding="utf-8")
+        if LOCALE_HARDCODED_VERSION_RE.search(content):
+            print(
+                f"{locale_path.name}: contains a hardcoded OpenBox 1.x version string; "
+                f"read the live version from the server payload instead"
+            )
+            failures.append(f"{locale_path.name} hardcoded version")
+
     if failures:
         print(f"version sync failed: {', '.join(failures)}")
         return 1

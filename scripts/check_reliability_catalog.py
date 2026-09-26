@@ -1,0 +1,186 @@
+﻿#!/usr/bin/env python3
+"""Keep ``docs/reliability.md`` honest: every row must name a real test.
+
+The reliability catalog is the document that claims to list "each failure mode a
+real user can hit". A row is only worth reading if its ``Tested`` status points
+at a test that exists and is still run. Nothing enforced that, so a renamed or
+deleted test file leaves the catalog asserting coverage that no longer exists --
+the exact way a catalog becomes fiction.
+
+This gate:
+
+1. Parses the table and requires the row numbers to be contiguous from 1.
+2. Requires every ``Tested`` row to name at least one ``tests/test_*.py`` file
+   that actually exists, so a stale claim fails.
+3. Requires every row to carry a recognised status (``Tested``, ``Manual``,
+   ``Documented``, or ``Gated``), so the vocabulary cannot drift.
+4. Ratchets the row count and the set of scenario identities against git, so a
+   failure mode cannot be quietly dropped from the catalog.
+
+Run directly:  python3 -B scripts/check_reliability_catalog.py
+See ADR 0049.
+"""
+
+
+
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+CATALOG = ROOT / "docs" / "reliability.md"
+CONTRACT = ROOT / "scripts" / "contracts" / "reliability.json"
+
+ROW_RE = re.compile(r"^\|\s*(\d+)\s*\|\s*(.+?)\s*\|(.+?)\|(.+?)\|\s*$")
+# A "Tested" row must point at a real harness. Most name a standalone test file
+# under tests/; the Big Box / layout scenarios are covered by the Puppeteer
+# smoke suite (scripts/ui_smoke.cjs), which is run by the ui-smoke CI job.
+TEST_REF_RE = re.compile(r"(tests/)?(test_[A-Za-z0-9_]+\.py)")
+UI_SMOKE_REF = "ui_smoke"
+UI_SMOKE_FILE = Path("scripts") / "ui_smoke.cjs"
+KNOWN_STATUSES = ("Tested", "Manual", "Documented", "Gated")
+
+
+def parse_rows() -> list[tuple[int, str, str, str]]:
+    """Return (number, scenario, expected, status) for every catalog row."""
+    rows: list[tuple[int, str, str, str]] = []
+    if not CATALOG.is_file():
+        return rows
+    for line in CATALOG.read_text(encoding="utf-8").splitlines():
+        match = ROW_RE.match(line.strip())
+        if match:
+            rows.append(
+                (int(match.group(1)), match.group(2), match.group(3), match.group(4).strip())
+            )
+    return rows
+
+
+def check() -> list[str]:
+    rows = parse_rows()
+    if not rows:
+        return [f"{CATALOG.relative_to(ROOT)} has no parseable rows"]
+
+    problems: list[str] = []
+    numbers = [number for number, *_ in rows]
+    expected = list(range(1, len(rows) + 1))
+    if numbers != expected:
+        missing = sorted(set(expected) - set(numbers))
+        problems.append(
+            f"row numbers are not contiguous from 1 (found {len(rows)} rows"
+            + (f", missing {missing}" if missing else "")
+            + ")"
+        )
+
+    for number, scenario, _expected, status in rows:
+        if not any(status.startswith(word) for word in KNOWN_STATUSES):
+            problems.append(
+                f"row {number} ({scenario[:40]}) has unrecognised status "
+                f"{status[:40]!r}; use one of {', '.join(KNOWN_STATUSES)}"
+            )
+        if status.startswith("Tested"):
+            refs = TEST_REF_RE.findall(status)
+            names_ui_smoke = UI_SMOKE_REF in status
+            if not refs and not names_ui_smoke:
+                problems.append(
+                    f"row {number} ({scenario[:40]}) claims Tested but names no test file"
+                )
+            if names_ui_smoke and not (ROOT / UI_SMOKE_FILE).is_file():
+                problems.append(
+                    f"row {number} ({scenario[:40]}) claims Tested via {UI_SMOKE_REF}, "
+                    f"which does not exist at {UI_SMOKE_FILE.as_posix()}"
+                )
+            for _prefix, filename in refs:
+                if not (ROOT / "tests" / filename).is_file():
+                    problems.append(
+                        f"row {number} ({scenario[:40]}) claims Tested via {filename}, "
+                        f"which does not exist in tests/"
+                    )
+    return problems
+
+
+def _scenario_ids() -> list[str]:
+    """Stable identity per row: number plus a slug of the scenario text."""
+    out = []
+    for number, scenario, _expected, _status in parse_rows():
+        slug = re.sub(r"[^a-z0-9]+", "-", scenario.lower()).strip("-")[:60]
+        out.append(f"{number}:{slug}")
+    return out
+
+
+def committed_contract() -> dict | None:
+    try:
+        result = subprocess.run(
+            ["git", "show", "HEAD:scripts/contracts/reliability.json"],
+            cwd=ROOT, capture_output=True, text=True, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+
+def write_contract() -> None:
+    payload = {
+        "version": 1,
+        "note": "Generated by scripts/check_reliability_catalog.py --update. Rows may be added "
+        "freely; dropping a failure mode fails the gate. See ADR 0049.",
+        "scenarios": _scenario_ids(),
+    }
+    CONTRACT.parent.mkdir(parents=True, exist_ok=True)
+    CONTRACT.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def main() -> int:
+    problems = check()
+    rows = parse_rows()
+    scenarios = _scenario_ids()
+
+    if not CONTRACT.is_file():
+        problems.append(f"{CONTRACT.relative_to(ROOT)} is missing; run with --update to create it")
+    else:
+        committed = committed_contract()
+        if committed is None:
+            print("reliability catalog: git unavailable, baseline-vs-git ratchet skipped")
+        else:
+            before = committed.get("scenarios", [])
+            for identity in before:
+                if identity not in scenarios:
+                    number = identity.split(":", 1)[0]
+                    problems.append(
+                        f"REMOVED row {number}: a failure mode was dropped from the catalog; "
+                        f"restore it or record the removal in the changelog"
+                    )
+
+    if problems:
+        print(f"FAIL: reliability catalog regressed ({len(problems)} problem(s)):")
+        for line in problems:
+            print(f"  {line}")
+        return 1
+
+    print(
+        f"reliability catalog OK: {len(rows)} rows, every Tested row names a real test, "
+        f"0 regressions"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    if "--update" in sys.argv:
+        problems = check()
+        if problems:
+            for problem in problems:
+                print(f"FAIL: {problem}")
+            raise SystemExit(1)
+        write_contract()
+        print(f"Wrote {CONTRACT.relative_to(ROOT)}")
+        raise SystemExit(0)
+    raise SystemExit(main())

@@ -25,8 +25,20 @@ New integration goes in `pkg/parity/` or `handlers/` as appropriate, never at ro
 ## Non-negotiables
 - Runtime stays dependency-free. `pyproject.toml` dev deps are not installed in AppImage.
 - v1 route surface is frozen (`scripts/check_v1_contract.py` + `v1_contracts.json`). Drift fails the gate.
+- **The whole feature surface is ratcheted** (ADR 0049, `scripts/contracts/`).
+  Routes, `KNOWN_SETTINGS`, emulator definitions, frontend modules, and the
+  reliability catalog may **grow freely** and may only **shrink** by moving
+  the entry to a `retired` ledger with a reason. Each baseline is itself
+  ratcheted against git, so deleting an entry to hide a removal also fails.
+  Run `make contracts` after an intentional change; `make ratchets` runs the
+  gates alone.
 - Coverage floors go up, never down. `COVERAGE_FLOOR` and `WEB_APP_FLOOR` in `scripts/check_tests.py` are ratcheted.
 - New runtime module must be added to `runtime_modules.txt` (enforced for root `*.py`, `handlers/`, `pkg/state/`, `pkg/parity/`, `routes/`) and have a `test_*.py` (convention, not gate-enforced).
+- Every emulator definition must carry `native_exe_windows` and the other keys
+  in `scripts/check_emulator_defs.py::REQUIRED_KEYS`.
+- A test that pins a calendar date while exercising a rolling `*_DAYS` window
+  needs a `# clock-coupled: <mitigation>` marker plus an entry in
+  `scripts/contracts/clock_coupling.json`.
 
 ## Tests
 - One `test_*.py` per module, standalone-script style.

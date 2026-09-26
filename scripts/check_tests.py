@@ -3,7 +3,10 @@
 
 Stages:
   1. ruff lint (gate rule set from pyproject.toml)
-  2. runtime_modules drift, v1 contract, version sync, frontend lint, i18n keys
+  2. runtime_modules drift, v1 contract, version sync, frontend lint, i18n keys,
+     CSP framing, and the ADR 0049 feature-regression ratchets (HTTP routes,
+     settings schema, emulator defs, frontend module graph, reliability
+     catalog, clock-coupled tests)
   3. py_compile over all runtime modules, test files, and scripts
   4. full test suite under coverage, run serially (gamescope/X tests collide
      in parallel workers)
@@ -191,6 +194,28 @@ def main() -> int:
         print(csp_check.stderr.strip())
     if csp_check.returncode != 0:
         failures.append("csp")
+
+    # Stage 2.9-2.14: the feature-regression ratchets (ADR 0049). Each one
+    # pins a surface that can shrink without any test noticing: the HTTP route
+    # table, the destructive settings allowlist, the emulator definitions, the
+    # frontend module graph, the reliability catalog, and calendar-coupled
+    # tests. A feature may be added freely; removing one fails here.
+    ratchet_gates = (
+        ("routes_contract", "check_routes_contract.py"),
+        ("settings_contract", "check_settings_contract.py"),
+        ("emulator_defs", "check_emulator_defs.py"),
+        ("frontend_modules", "check_frontend_modules.py"),
+        ("reliability_catalog", "check_reliability_catalog.py"),
+        ("clock_coupling", "check_clock_coupling.py"),
+    )
+    for label, script in ratchet_gates:
+        result = run([sys.executable, "-B", str(ROOT / "scripts" / script)])
+        if result.stdout.strip():
+            print(result.stdout.strip())
+        if result.stderr.strip():
+            print(result.stderr.strip())
+        if result.returncode != 0:
+            failures.append(label)
 
     modules = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text(encoding="utf-8").splitlines() if line.strip()]
     compile_failed = 0

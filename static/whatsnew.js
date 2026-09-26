@@ -1,6 +1,7 @@
 /* What's New + rotating tips (S8). Keep the release surface local and dismissible. */
 import { $, escapeHtml } from './util.js';
 import { t } from './i18n.js';
+import { AppState } from './state.js';
 
 const TIPS = [
   'whats_new.tip_search',
@@ -35,10 +36,20 @@ function ensureDialog() {
   return dialog;
 }
 
+/* The title carries a {version} placeholder so it can never go stale again:
+   two releases shipped while every locale still hardcoded "1.11". The live
+   version comes from the settings payload the page already loaded. */
+function titleText() {
+  const template = t('whats_new.title');
+  const version = AppState?.appSettings?.version;
+  if (typeof version !== 'string' || !version) return template.replace('{version}', '');
+  return template.replace('{version}', version);
+}
+
 function render() {
   ensureDialog();
   const tipKey = TIPS[tipIndex % TIPS.length];
-  dialog.innerHTML = `<div class="dialog-head"><h2>${escapeHtml(t('whats_new.title'))}</h2><button type="button" class="icon-button" data-whats-new-close aria-label="${escapeHtml(t('common.close'))}">×</button></div><div class="whats-new-content"><p class="description">${escapeHtml(t('whats_new.intro'))}</p><div class="whats-new-highlights"><article class="detail-card"><h3>${escapeHtml(t('whats_new.plugins_title'))}</h3><p>${escapeHtml(t('whats_new.plugins_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.metadata_title'))}</h3><p>${escapeHtml(t('whats_new.metadata_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.backlog_title'))}</h3><p>${escapeHtml(t('whats_new.backlog_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.bigbox_title'))}</h3><p>${escapeHtml(t('whats_new.bigbox_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.health_title'))}</h3><p>${escapeHtml(t('whats_new.health_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.dna_title'))}</h3><p>${escapeHtml(t('whats_new.dna_body'))}</p></article></div><section class="whats-new-tip detail-card"><div class="dialog-head"><h3>${escapeHtml(t('whats_new.tip_label'))}</h3><button type="button" class="icon-button" data-whats-new-next>${escapeHtml(t('whats_new.next_tip'))}</button></div><p>${escapeHtml(t(tipKey))}</p></section></div><div class="dialog-actions"><button type="button" class="primary" data-whats-new-close>${escapeHtml(t('whats_new.dismiss'))}</button></div>`;
+  dialog.innerHTML = `<div class="dialog-head"><h2>${escapeHtml(titleText())}</h2><button type="button" class="icon-button" data-whats-new-close aria-label="${escapeHtml(t('common.close'))}">×</button></div><div class="whats-new-content"><p class="description">${escapeHtml(t('whats_new.intro'))}</p><div class="whats-new-highlights"><article class="detail-card"><h3>${escapeHtml(t('whats_new.plugins_title'))}</h3><p>${escapeHtml(t('whats_new.plugins_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.metadata_title'))}</h3><p>${escapeHtml(t('whats_new.metadata_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.backlog_title'))}</h3><p>${escapeHtml(t('whats_new.backlog_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.bigbox_title'))}</h3><p>${escapeHtml(t('whats_new.bigbox_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.health_title'))}</h3><p>${escapeHtml(t('whats_new.health_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.dna_title'))}</h3><p>${escapeHtml(t('whats_new.dna_body'))}</p></article></div><section class="whats-new-tip detail-card"><div class="dialog-head"><h3>${escapeHtml(t('whats_new.tip_label'))}</h3><button type="button" class="icon-button" data-whats-new-next>${escapeHtml(t('whats_new.next_tip'))}</button></div><p>${escapeHtml(t(tipKey))}</p></section></div><div class="dialog-actions"><button type="button" class="primary" data-whats-new-close>${escapeHtml(t('whats_new.dismiss'))}</button></div>`;
   dialog.querySelectorAll('[data-whats-new-close]').forEach(button => { button.onclick = () => dialog.close(); });
   dialog.querySelector('[data-whats-new-next]').onclick = () => {
     tipIndex = (tipIndex + 1) % TIPS.length;
