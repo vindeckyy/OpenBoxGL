@@ -20,6 +20,8 @@ import json
 import math
 import os
 import re
+import threading
+import time
 import unicodedata
 from typing import Any
 
@@ -28,6 +30,8 @@ INDEX_FORMAT = 1
 LEXICON_VERSION = 3
 INDEX_FILENAME = "dna_index.json"
 TERMS_PER_GAME_CAP = 400
+_REPLACE_ATTEMPTS = 5
+_REPLACE_BACKOFF = 0.05
 HASHED_DIM = 1024
 
 # ── Corpus field weights ───────────────────────────────────────────────────
@@ -574,15 +578,38 @@ def load_index(data_dir: "str | None" = None) -> dict[str, Any] | None:
 def save_index_atomic(index: dict[str, Any], data_dir: "str | None" = None) -> None:
     """Atomic write (tmp + rename): a crash mid-write keeps the old index."""
     path = index_path(data_dir)
-    tmp_path = path + ".tmp"
     os.makedirs(os.path.dirname(path), exist_ok=True)
     # Memory-only caches (keys starting with "_") are never persisted.
     payload = {key: value for key, value in index.items() if not key.startswith("_")}
-    with open(tmp_path, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, separators=(",", ":"), ensure_ascii=False)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(tmp_path, path)
+    # A per-write temp name, not one shared "dna_index.json.tmp": this write
+    # races the background rebuild and any in-flight reconcile, and a shared
+    # name lets one writer's replace move the file out from under another,
+    # which surfaces as a spurious "file not found". A unique sibling also
+    # replaces cleanly while a reader holds the previous index open.
+    tmp_path = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"), ensure_ascii=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        # Windows can still refuse the replace while a reader briefly holds
+        # the previous index open. The reader is fine either way -- the old
+        # index is a complete, valid snapshot -- so a short bounded retry
+        # rides that out instead of surfacing a failed write to the user.
+        for attempt in range(_REPLACE_ATTEMPTS):
+            try:
+                os.replace(tmp_path, path)
+                return
+            except PermissionError:
+                if attempt == _REPLACE_ATTEMPTS - 1:
+                    raise
+                time.sleep(_REPLACE_BACKOFF * (attempt + 1))
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def empty_index(state_signature: Any = None) -> dict[str, Any]:

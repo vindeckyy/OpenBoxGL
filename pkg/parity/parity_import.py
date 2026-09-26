@@ -316,6 +316,37 @@ def _parallel_scandir(
     return sorted(found_paths, key=lambda p: (str(p.parent), p.name.casefold()))
 
 
+def _sheet_platform(sheet: Path, platform_map: dict[str, str], fallback: str) -> str:
+    """Resolve the platform a disc sheet's row should carry.
+
+    A sheet only describes its targets, and the useful platform is whatever
+    maps to a real emulator. Redump-style sets chain a playlist to cue sheets
+    to disc images, so a playlist's targets are followed through the sheets
+    they name. A sheet whose targets map to nothing keeps the fallback.
+    """
+    pending = [sheet]
+    seen: set[Path] = set()
+    while pending:
+        current = pending.pop(0)
+        if current in seen:
+            continue
+        seen.add(current)
+        suffix = current.suffix.casefold()
+        if suffix == ".cue":
+            targets = parse_cue(current)
+        elif suffix == ".m3u":
+            targets = parse_m3u(current)
+        else:
+            return platform_map.get(suffix, fallback)
+        for target in targets:
+            mapped = platform_map.get(target.suffix.casefold())
+            if mapped and target.suffix.casefold() not in (".cue", ".m3u"):
+                return mapped
+            if target.suffix.casefold() in (".cue", ".m3u"):
+                pending.append(target)
+    return fallback
+
+
 def import_multi_platform(
     folder: Path | str,
     extensions_set: Iterable[str],
@@ -374,20 +405,13 @@ def import_multi_platform(
             path = group[0]
             name = path.stem
         platform = platform_map.get(path.suffix.lower(), "Imported")
-        # A sheet describes a disc, but the emulator that matters is the one
-        # for the file it points at: a .cue under "Disc image" recommends
-        # nothing, while its .bin maps to the actual platform. The m3u branch
-        # already inherits the inner file's platform for the same reason; a
-        # cue needs the target it named, which the group no longer holds
-        # because that file was excluded from the scan.
-        if path.suffix.lower() == ".cue":
-            for ref in parse_cue(path):
-                inherited = platform_map.get(ref.suffix.lower())
-                if inherited:
-                    platform = inherited
-                    break
-        elif path.suffix.lower() == ".m3u":
-            platform = platform_map.get(group[0].suffix.lower(), platform)
+        # A sheet names a disc, but the emulator that matters is the one for
+        # a file it points at: "Disc image" recommends nothing, so a sheet left
+        # on it offers the user no suggestion. The group cannot be trusted for
+        # this -- the sheet's own targets were excluded from the scan, and a
+        # shipped playlist that was not written here is a group of one.
+        if path.suffix.lower() in (".cue", ".m3u"):
+            platform = _sheet_platform(path, platform_map, platform)
         additions.append({
             "name": name,
             "platform": platform,

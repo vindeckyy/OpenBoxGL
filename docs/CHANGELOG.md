@@ -119,7 +119,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   A sheet may also name its target with an absolute path carrying `..` segments,
   which the parsers hand back verbatim and which therefore never matched the
   resolved scan paths; both sides of that comparison are now normalized.
-
+- **A disc sheet's own row recommended no emulator.** A `.cue` or `.m3u` row
+  kept the platform the map gives the sheet, "Disc image", which
+  `recommend_emulators` returns nothing for — so a PlayStation disc imported
+  with no suggestion at all. The row now follows the sheet to a file it names
+  and takes that platform, walking playlist-to-cue chains the way Redump-style
+  sets arrange them. A sheet whose targets map to nothing keeps its own
+  platform rather than becoming blank.
+- **A concurrent search could fail with a 400.** The DNA index was written
+  through one shared temp file, so the background rebuild job and an
+  in-flight search could each rename the other's file out from under it —
+  surfacing as `[WinError 32]` or `[WinError 2]` from an unrelated search. The
+  temp file is now per-write, the rename rides out a reader holding the old
+  index open, and the synchronous build no longer turns a lost write race
+  into a failed request.
 
 - **What's New advertised the wrong version for two releases.** All five
   locales hardcoded `"What's new in OpenBox 1.11"` in the dialog title while

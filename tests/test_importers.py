@@ -304,6 +304,54 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
             self.assertEqual(1, len(imported))
             self.assertEqual("g.m3u", Path(imported[0]["path"]).name)
 
+    def test_playlist_chaining_to_cue_sheets_resolves_the_real_platform(self):
+        # Redump-style sets ship Game.m3u alongside Game (Disc N).cue/.bin
+        # pairs. Every target is a sheet that maps to "Disc image", which
+        # recommends nothing, so the row has to be followed through to the
+        # disc image to find the platform the user can actually launch.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Game.m3u").write_text(
+                "\n".join(str(root / f"Game (Disc {i}).cue") for i in (1, 2)) + "\n",
+                encoding="utf-8",
+            )
+            for index in (1, 2):
+                (root / f"Game (Disc {index}).cue").write_text(
+                    f'FILE "Game (Disc {index}).bin" BINARY\n  TRACK 01 MODE1/2352\n',
+                    encoding="utf-8",
+                )
+                (root / f"Game (Disc {index}).bin").write_bytes(b"BIN")
+            imported = import_multi_platform(
+                root,
+                {".m3u", ".cue", ".bin"},
+                {".m3u": "Playlist", ".cue": "Disc image", ".bin": "PlayStation"},
+            )
+            self.assertEqual(1, len(imported))
+            self.assertEqual("PlayStation", imported[0]["platform"])
+
+    def test_shipped_playlist_resolves_platform_from_its_target(self):
+        # A playlist that was not written by this importer is a group of one
+        # once its targets are excluded, so the group's own suffix says
+        # nothing about the platform.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Sonic.m3u").write_text("Sonic.bin\n", encoding="utf-8")
+            (root / "Sonic.bin").write_bytes(b"BIN")
+            imported = import_multi_platform(
+                root,
+                {".m3u", ".bin"},
+                {".m3u": "Playlist", ".bin": "PlayStation"},
+            )
+            self.assertEqual(1, len(imported))
+            self.assertEqual("PlayStation", imported[0]["platform"])
+
+    def test_self_referential_sheet_terminates_without_recursing(self):
+        # A sheet naming itself must resolve to its own platform, not spin.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Loop.cue").write_bytes(b'FILE "Loop.cue" BINARY\n  TRACK 01 MODE1\n')
+            import_multi_platform(root, {".cue"}, {".cue": "Disc image"})
+
     def test_group_multi_disc_formats(self):
         formats = [
             ("Final Fantasy VII (Disc 1).chd", "Final Fantasy VII (Disc 2).chd", "Final Fantasy VII"),

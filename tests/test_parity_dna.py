@@ -5,10 +5,12 @@ Standalone-script style (``python3 -B tests/test_parity_dna.py``).
 
 from __future__ import annotations
 
+import glob
 import os
 import random
 import sys
 import tempfile
+import threading
 import time
 import unittest
 
@@ -263,15 +265,41 @@ class IndexIoTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             index = dna.rebuild_index(FIXTURE_GAMES, "en")
             dna.save_index_atomic(index, tmp)
-            # Simulate a crash mid-write: garbage in the tmp file must not
-            # touch the committed index.
-            tmp_path = dna.index_path(tmp) + ".tmp"
+            # Simulate a crash mid-write: garbage left in a temp file must not
+            # touch the committed index. save_index_atomic writes to a
+            # per-write sibling, so the leftover has to be named like one.
+            tmp_path = f"{dna.index_path(tmp)}.{os.getpid()}.{threading.get_ident()}.tmp"
             with open(tmp_path, "w", encoding="utf-8") as handle:
                 handle.write("{not valid json")
             loaded = dna.load_index(tmp)
             self.assertIsNotNone(loaded)
             self.assertEqual(loaded["doc_count"], 4)
             self.assertNotIn("_hashed", loaded)
+
+    def test_concurrent_writers_do_not_collide_on_one_temp_file(self):
+        # The background rebuild job and in-flight searches write the same
+        # index concurrently. A single shared temp name let one writer's
+        # rename move the file out from under another, which surfaced to
+        # users as a 400 from an unrelated search.
+        errors: list[BaseException] = []
+
+        def writer(tmp: str) -> None:
+            try:
+                for _ in range(20):
+                    dna.save_index_atomic(dna.rebuild_index(FIXTURE_GAMES, "en"), tmp)
+            except BaseException as exc:  # noqa: BLE001 - reported below
+                errors.append(exc)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            dna.save_index_atomic(dna.rebuild_index(FIXTURE_GAMES, "en"), tmp)
+            threads = [threading.Thread(target=writer, args=(tmp,)) for _ in range(6)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=60)
+            self.assertEqual([], [str(error) for error in errors])
+            self.assertEqual(4, dna.load_index(tmp)["doc_count"])
+            self.assertEqual([], glob.glob(os.path.join(tmp, "*.tmp")))
 
     def test_load_missing_returns_none(self):
         with tempfile.TemporaryDirectory() as tmp:
