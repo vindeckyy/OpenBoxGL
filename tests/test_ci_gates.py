@@ -74,18 +74,32 @@ class CiGatesTests(unittest.TestCase):
         # The repo itself must be clean...
         self.assertEqual(0, run_gate(), "repo has a shebang file without the exec bit")
 
-        # ...and the gate must notice when a mode is lost, which is the whole
-        # reason it exists. The mode is read straight from the index, the same
-        # way a Linux runner sees it.
-        modes = check_exec_modes.tracked_modes()
-        victim = "scripts/contract_ratchet.py"
-        self.assertEqual("100755", modes[victim], "precondition: victim starts executable")
-        original = check_exec_modes.REGULAR_EXECUTABLE
-        check_exec_modes.REGULAR_EXECUTABLE = "100644"
+        # ...and it must notice a *real* 100644 from the index, not merely a
+        # flipped constant. Feeding the gate a genuine non-executable mode is
+        # what proves it keys on the mode rather than on anything else -- a
+        # swapped comparison would pass the constant-flip test and fail this.
+        original_modes = check_exec_modes.tracked_modes()
+        self.assertEqual("100755", original_modes["scripts/contract_ratchet.py"],
+                         "precondition: the victim starts executable")
+
+        def with_mode(path, mode):
+            patched = dict(original_modes)
+            patched[path] = mode
+            return patched
+
+        original_reader = check_exec_modes.tracked_modes
         try:
-            self.assertEqual(1, run_gate(), "gate must fail on a lost exec bit")
+            # A real 100644 on a shebang file must fail...
+            check_exec_modes.tracked_modes = lambda: with_mode(
+                "scripts/contract_ratchet.py", "100644")
+            self.assertEqual(1, run_gate(), "gate must fail on a real 100644")
+
+            # ...and a 120000 symlink must not be mistaken for one.
+            check_exec_modes.tracked_modes = lambda: with_mode(
+                "scripts/contract_ratchet.py", "120000")
+            self.assertEqual(1, run_gate(), "gate must reject a non-regular mode too")
         finally:
-            check_exec_modes.REGULAR_EXECUTABLE = original
+            check_exec_modes.tracked_modes = original_reader
         self.assertEqual(0, run_gate(), "gate must pass again once restored")
 
     def test_check_tests_floor_constants(self):
