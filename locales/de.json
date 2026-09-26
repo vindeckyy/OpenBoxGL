@@ -35,7 +35,7 @@
     "whats_new": "Neuigkeiten"
   },
   "whats_new": {
-    "title": "Neu in OpenBox 1.14",
+    "title": "Neu in OpenBox {version}",
     "intro": "Sechs Highlights, die die Bibliothek smarter, persönlicher und couchtauglich machen. Kein Konto, keine Cloud — alles läuft lokal.",
     "plugins_title": "Plugins 2.0",
     "plugins_body": "Vertrauen pro Plugin, gebunden an die Paket-Prüfsumme, Berechtigungsdialoge im Android-Stil, ein Katalog-Browser mit Ein-Klick-Installation und -Updates sowie Paletten-Integration für Plugin-Befehle.",

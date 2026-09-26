@@ -13,6 +13,35 @@ The files under this `docs/` folder are engineering, process, and release docume
 - `plugin-api.md` — plugin API v1 reference: manifest, hooks, sandbox, trust, catalog (frozen per ADR 0050)
 - `development/` — development conventions: `DESIGN.md` (design system: colors, typography, components), `HANDLER_CONVENTIONS.md`, `PERF.md` (performance budgets and measurements)
 - `adr/` — Architectural Decision Records (ADR 0001 through 0059) covering native host, repository layout, parity shims, theme tokens, cache hierarchy, gate completion, lock ordering, state decomposition, namespace migration, setup preview, durable operations, emulator registry, artifact gates, SQLite read model, i18n system, gamescope presets, controller settings UI, BIOS SHA1 drift detection, backup diff API, smart collection chips, hash routing, ScreenScraper, library export, aarch64 artifacts, changed-line coverage, mood-match theming, library constellation, picker, wrapped timeline, mastery map, game night, SQLite read-model graduation, LaunchBox XML migration, Big Box video snaps, mounted-folder library sync, manual shelf entries, causal sync safety, reviewable LaunchBox source identity, the docs archive layout, perf-gate warm-up with trimmed p95, the Library Time Machine journal contract, the deterministic query grammar contract, the Every Second Counts local-first surfaces, the Living Library additions (smart collections, Game Story, per-game launch options, scheduled backups, SQLite auto-enable, CSP framing gate), the Windows port, Windows installer rollback, the plugin API freeze, library repair and duplicate-merge contracts, Game DNA search, the library health score, the backlog progress enum, artwork hygiene, the plugin trust model, the plugin events hook, dated-notes migration, and ROM-hash match auto-scrape
+  match auto-scrape, and the feature-regression ratchets
+- `NEXT_UPDATE_PLAN-1.14.md` — the active 1.14.1 plan (Two Platforms, One
+  Library): the Windows reliability contract, the emulator definition update
+  channel, the calendar-coupled-test class, accessibility debt, and the
+  performance re-baseline
+
+## Gates
+
+`make check` runs the full gate. The feature-regression ratchets (ADR 0049)
+can also be run alone with `make ratchets`, and their frozen contracts are
+regenerated with `make contracts` after an intentional surface change.
+
+- `scripts/contracts/` — the frozen baselines. Every one is a **ratchet**: a
+  surface may grow freely, and may only shrink by moving an entry to a
+  `retired` ledger with a reason. Each baseline is itself ratcheted against
+  git, so deleting an entry to hide a removal also fails.
+- `check_routes_contract.py` — the full HTTP route surface (the v1 contract
+  covers only 61 routes).
+- `check_settings_contract.py` — the destructive `KNOWN_SETTINGS` allowlist;
+  retiring a user-data key requires a named data-preservation migration.
+- `check_emulator_defs.py` — every definition carries `native_exe_windows`
+  (ADR 0048) and the other required keys.
+- `check_frontend_modules.py` — the ES module graph: no dangling imports, no
+  orphaned modules.
+- `check_reliability_catalog.py` — every `Tested` row in `reliability.md` names
+  a test that exists.
+- `check_clock_coupling.py` — no unmarked test pins a calendar date against a
+  rolling `*_DAYS` window.
+
 
 ## Release
 
@@ -21,7 +50,7 @@ The files under this `docs/` folder are engineering, process, and release docume
 - `flathub-checklist.md` — remaining steps toward Flathub store submission
 
 The current shipped release is **v1.14.0**. The planning and execution records
-below are historical archives, not an unfinished active roadmap.
+below are historical archives; `NEXT_UPDATE_PLAN-1.14.md` above is the active roadmap.
 
 ## Process and policies
 

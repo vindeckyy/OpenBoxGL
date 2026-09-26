@@ -35,7 +35,7 @@
     "whats_new": "Novidades"
   },
   "whats_new": {
-    "title": "Novidades do OpenBox 1.14",
+    "title": "Novidades do OpenBox {version}",
     "intro": "Seis novidades que tornam a biblioteca mais inteligente, mais pessoal e pronta para o sofá. Sem conta, sem nuvem — tudo funciona localmente.",
     "plugins_title": "Plugins 2.0",
     "plugins_body": "Confiança por plug-in vinculada à soma de verificação do pacote, permissões no estilo Android, catálogo com instalação e atualização em um clique e integração de comandos na paleta.",

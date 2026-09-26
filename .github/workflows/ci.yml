@@ -90,6 +90,26 @@ jobs:
       - name: Design tokens
         run: python -B scripts/check_tokens.py
 
+      # Feature-regression ratchets (ADR 0049). Pure-Python and platform
+      # independent, so the Windows job is the proof they behave off Linux too.
+      - name: HTTP route surface ratchet
+        run: python -B scripts/check_routes_contract.py
+
+      - name: Settings schema ratchet
+        run: python -B scripts/check_settings_contract.py
+
+      - name: Emulator definition contract
+        run: python -B scripts/check_emulator_defs.py
+
+      - name: Frontend module graph
+        run: python -B scripts/check_frontend_modules.py
+
+      - name: Reliability catalog
+        run: python -B scripts/check_reliability_catalog.py
+
+      - name: Clock-coupled tests
+        run: python -B scripts/check_clock_coupling.py
+
   gate:
     strategy:
       fail-fast: false
@@ -163,6 +183,19 @@ jobs:
 
       - name: Version sync
         run: python3 scripts/check_version_sync.py
+
+      # Feature-regression ratchets (ADR 0049). Also covered by the full gate
+      # below; run standalone here so a regression names itself in the log
+      # instead of only appearing as a non-zero exit from check_tests.py.
+      - name: Feature-regression ratchets
+        run: |
+          for gate in check_routes_contract check_settings_contract \
+                      check_emulator_defs check_frontend_modules \
+                      check_reliability_catalog check_clock_coupling; do
+            echo "::group::$gate"
+            python3 -B "scripts/$gate.py" || exit 1
+            echo "::endgroup::"
+          done
 
       - name: Compile runtime modules
         run: |

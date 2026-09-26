@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Documentation & Gates
+- **Feature-regression ratchets (ADR 0049).** The gate suite proved a great
+  deal about code and almost nothing about features. Six new gates now pin
+  every surface a feature can disappear from, so a regression is a failing
+  check instead of a 404 in a user's browser:
+  - `check_routes_contract.py` freezes the **full** HTTP route surface.
+    The v1 contract only covered 61 routes, so every `/api/v2/*` route and
+    every unversioned route could be deleted unnoticed.
+  - `check_settings_contract.py` protects the `KNOWN_SETTINGS` allowlist, which
+    is *destructive*: removing one key erases that setting from every existing
+    library on the next save. Retiring a key that holds user data now requires
+    a reason naming the migration that preserves it.
+  - `check_emulator_defs.py` requires `native_exe_windows` and the other
+    required keys on every definition, and ratchets the set. ADR 0048 added
+    that key to all definitions but nothing enforced it, so a new emulator
+    could ship Linux-only and silently fail on Windows.
+  - `check_frontend_modules.py` resolves every ES module import against the
+    filesystem: no dangling imports (which break the whole page at runtime)
+    and no orphaned modules (features unreachable while still shipping).
+  - `check_reliability_catalog.py` requires every `Tested` row in
+    `docs/reliability.md` to name a test that actually exists.
+  - `check_clock_coupling.py` fails when a test pins a calendar date against a
+    rolling `*_DAYS` window.
+- **Every gate is a two-layer ratchet.** A single-layer ratchet is defeated by
+  editing its own baseline, so each contract is also ratcheted against git:
+  deleting an entry to hide a removal is itself a failure. Surfaces may only
+  shrink through an append-only `retired` ledger carrying a reason, so
+  **removal stays possible but never silent** and always leaves a reviewable
+  record. Growth is free and expected.
+- `make ratchets` runs the six gates alone; `make contracts` regenerates the
+  frozen baselines after an intentional change. Both run in `scripts/check_tests.py`
+  and in the Linux `gate` and `windows-latest` CI jobs.
+  `tests/test_feature_contracts.py` covers them, including that each gate stays
+  wired into the orchestrator and CI so it cannot be quietly unhooked.
+- `check_version_sync.py` now reads the locale files.
+
 ### Fixed
 - Fixed the web UI failing to boot (`Cannot access 'AppState' before
   initialization`): the Game DNA search initializer ran at module load time,
@@ -17,6 +53,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `handlers/metadata.py`. Both now use dotted specs.
 - Restored the `window.AppState` / `window.filteredGames` page globals used by
   the UI smoke harness.
+
+- **What's New advertised the wrong version for two releases.** All five
+  locales hardcoded `"What's new in OpenBox 1.11"` in the dialog title while
+  1.12 and 1.13 shipped, and `check_version_sync.py` never read the locale
+  files, so the drift was invisible to the gate by construction. The title is
+  now a `{version}` template filled from the live settings payload, and any
+  `OpenBox 1.x` literal in a locale now fails the version gate.
+- `tests/test_parity_radio.py` carries an explicit `# clock-coupled:` marker
+  recording that every call injects `now=NOW`, which is why its pinned date is
+  safe.
 
 ### Changed
 - In-app What's New dialog now highlights the 1.14.0 flagships instead of
