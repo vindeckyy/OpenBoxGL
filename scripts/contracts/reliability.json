@@ -45,6 +45,10 @@
     "41:second-instance-with-the-same-data-directory",
     "42:openbox-deeplink-with-the-app-closed",
     "43:update-applied-while-openbox-is-running",
-    "44:path-longer-than-260-characters"
+    "44:path-longer-than-260-characters",
+    "45:a-file-carrying-a-shebang-loses-its-exec-bit",
+    "46:a-ui-fixture-pins-an-absolute-date-against-a-rolling-window",
+    "47:a-wall-clock-budget-is-measured-once-cold",
+    "48:the-windows-ci-runner-gives-a-suite-a-single-chance"
   ]
 }
