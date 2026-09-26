@@ -316,30 +316,40 @@ def _parallel_scandir(
     return sorted(found_paths, key=lambda p: (str(p.parent), p.name.casefold()))
 
 
-def _sheet_platform(sheet: Path, platform_map: dict[str, str], fallback: str) -> str:
+def _sheet_platform(
+    sheet: Path,
+    platform_map: dict[str, str],
+    fallback: str,
+    targets: list[Path] | None = None,
+) -> str:
     """Resolve the platform a disc sheet's row should carry.
 
     A sheet only describes its targets, and the useful platform is whatever
     maps to a real emulator. Redump-style sets chain a playlist to cue sheets
     to disc images, so a playlist's targets are followed through the sheets
     they name. A sheet whose targets map to nothing keeps the fallback.
+    ``targets`` lets the caller hand over the parse it already did, since the
+    exclusion pass reads every sheet anyway.
     """
-    pending = [sheet]
+    pending = [(sheet, targets)]
     seen: set[Path] = set()
     while pending:
-        current = pending.pop(0)
+        current, current_targets = pending.pop(0)
         if current in seen:
             continue
         seen.add(current)
         # Only sheets are ever queued: the seed is one, and a target is
         # appended below only when its own suffix is a sheet.
-        targets = parse_cue(current) if current.suffix.casefold() == ".cue" else parse_m3u(current)
-        for target in targets:
+        if current_targets is None:
+            current_targets = (
+                parse_cue(current) if current.suffix.casefold() == ".cue" else parse_m3u(current)
+            )
+        for target in current_targets:
             mapped = platform_map.get(target.suffix.casefold())
             if mapped and target.suffix.casefold() not in (".cue", ".m3u"):
                 return mapped
             if target.suffix.casefold() in (".cue", ".m3u"):
-                pending.append(target)
+                pending.append((target, None))
     return fallback
 
 
@@ -363,6 +373,7 @@ def import_multi_platform(
     # the adapter's own platform), so dedupe_ranked_imports cannot merge them:
     # without this the pair imports as two rows of the same game.
     referenced: set[str] = set()
+    sheet_targets: dict[Path, list[Path]] = {}
     for path in found:
         suffix = path.suffix.casefold()
         if suffix == ".m3u":
@@ -371,13 +382,13 @@ def import_multi_platform(
             refs = parse_cue(path)
         else:
             continue
+        sheet_targets[path] = refs
         # parse_m3u and parse_cue resolve relative entries, but hand back an
         # absolute one verbatim, so a sheet may name its target with ".."
         # segments that the resolved scan paths no longer match. Normalizing
         # both sides is what makes the comparison mean the same thing.
         for ref in refs:
             referenced.add(str(Path(os.path.normpath(ref))))
-
     filtered_found = [
         p for p in found
         if str(Path(os.path.normpath(p.resolve() if p.exists() else p))) not in referenced
@@ -407,7 +418,7 @@ def import_multi_platform(
         # this -- the sheet's own targets were excluded from the scan, and a
         # shipped playlist that was not written here is a group of one.
         if path.suffix.lower() in (".cue", ".m3u"):
-            platform = _sheet_platform(path, platform_map, platform)
+            platform = _sheet_platform(path, platform_map, platform, sheet_targets.get(path))
         additions.append({
             "name": name,
             "platform": platform,
