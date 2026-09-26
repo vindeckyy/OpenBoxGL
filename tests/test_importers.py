@@ -194,6 +194,56 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
             imported = import_multi_platform(root, {".chd"}, {".chd": "Disc image"})
             self.assertEqual(len(imported), 2)
 
+    def test_cue_referenced_bin_is_not_imported_twice(self):
+        # A cue sheet and the .bin it names are one game. They land in
+        # different platform buckets ("Disc image" vs the adapter's platform),
+        # so the ranked-import dedupe cannot merge them -- the bin has to be
+        # excluded at the scan, the way an m3u target already is.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Crash Bandicoot.cue").write_bytes(
+                b'FILE "Crash Bandicoot.bin" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n'
+            )
+            (root / "Crash Bandicoot.bin").write_bytes(b"BIN")
+            imported = import_multi_platform(
+                root, {".cue", ".bin"}, {".cue": "Disc image", ".bin": "PlayStation"}
+            )
+            self.assertEqual(1, len(imported))
+            self.assertEqual("Crash Bandicoot.cue", Path(imported[0]["path"]).name)
+
+    def test_m3u_referenced_bin_is_not_imported_twice(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Sonic.m3u").write_bytes(b"Sonic.bin\n")
+            (root / "Sonic.bin").write_bytes(b"BIN")
+            imported = import_multi_platform(
+                root, {".m3u", ".bin"}, {".m3u": "Disc image", ".bin": "PlayStation"}
+            )
+            self.assertEqual(1, len(imported))
+            self.assertEqual("Sonic.m3u", Path(imported[0]["path"]).name)
+
+    def test_unreferenced_bin_still_imports(self):
+        # Excluding referenced files must not exclude a bin nobody points at.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Standalone.bin").write_bytes(b"BIN")
+            imported = import_multi_platform(
+                root, {".cue", ".bin"}, {".cue": "Disc image", ".bin": "PlayStation"}
+            )
+            self.assertEqual(1, len(imported))
+            self.assertEqual("Standalone.bin", Path(imported[0]["path"]).name)
+
+    def test_cue_whose_target_is_missing_still_imports(self):
+        # A sheet pointing at a file that is not present is still a game.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Ghost.cue").write_bytes(b'FILE "missing.bin" BINARY\n  TRACK 01 MODE1\n')
+            imported = import_multi_platform(
+                root, {".cue", ".bin"}, {".cue": "Disc image", ".bin": "PlayStation"}
+            )
+            self.assertEqual(1, len(imported))
+            self.assertEqual("Ghost.cue", Path(imported[0]["path"]).name)
+
     def test_group_multi_disc_formats(self):
         formats = [
             ("Final Fantasy VII (Disc 1).chd", "Final Fantasy VII (Disc 2).chd", "Final Fantasy VII"),
