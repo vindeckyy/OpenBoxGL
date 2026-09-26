@@ -13,6 +13,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pkg", "parity"))
@@ -312,6 +313,47 @@ class IndexIoTests(unittest.TestCase):
                 self.assertFalse(thread.is_alive(), "a writer or reader deadlocked")
             self.assertEqual([], [str(error) for error in errors])
             self.assertEqual(4, dna.load_index(tmp)["doc_count"])
+            self.assertEqual([], glob.glob(os.path.join(tmp, "*.tmp")))
+
+    def test_temp_file_is_removed_when_the_replace_never_succeeds(self):
+        # If the rename cannot complete, the half-written temp file must not
+        # be left behind: it is a full-looking index sitting next to the real
+        # one, and the next write would carry it forward.
+        index = dna.rebuild_index(FIXTURE_GAMES, "en")
+        with tempfile.TemporaryDirectory() as tmp:
+            dna.save_index_atomic(index, tmp)
+            with mock.patch("os.replace", side_effect=PermissionError(13, "held open")):
+                with self.assertRaises(PermissionError):
+                    dna.save_index_atomic(index, tmp)
+            self.assertEqual([], glob.glob(os.path.join(tmp, "*.tmp")))
+            # The previously committed index is untouched by the failed write.
+            self.assertEqual(4, dna.load_index(tmp)["doc_count"])
+
+    def test_temp_cleanup_tolerates_a_vanished_temp_file(self):
+        # The cleanup unlink can lose its own race (another writer, or an
+        # external delete). That must not mask the write failure that caused
+        # the cleanup in the first place.
+        index = dna.rebuild_index(FIXTURE_GAMES, "en")
+        with tempfile.TemporaryDirectory() as tmp:
+            state = {"calls": 0}
+
+            def replace_then_vanish(src, dst, _unlink=os.unlink):
+                # Hold the target for the whole retry budget, then take the
+                # temp file away as well -- the cleanup unlink then loses its
+                # own race, which is what the tolerance is for. The real
+                # unlink is a default so the later patch cannot shadow it.
+                state["calls"] += 1
+                if state["calls"] >= dna._REPLACE_ATTEMPTS:
+                    _unlink(src)
+                raise PermissionError(13, "held open")
+
+            with mock.patch("os.replace", side_effect=replace_then_vanish), \
+                 mock.patch("time.sleep"), \
+                 mock.patch("os.unlink", side_effect=FileNotFoundError("gone")) as unlink:
+                with self.assertRaises(PermissionError):
+                    dna.save_index_atomic(index, tmp)
+            self.assertEqual(dna._REPLACE_ATTEMPTS, state["calls"])
+            self.assertTrue(unlink.called, "the cleanup must have tried to remove the temp file")
             self.assertEqual([], glob.glob(os.path.join(tmp, "*.tmp")))
 
     def test_load_missing_returns_none(self):
