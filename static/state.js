@@ -1,5 +1,4 @@
 import { escapeHtml, API_V1, badge, defaultBadges, sortGames, advancedQueryMatches, parseQueryTokens, gameInstalled, $, motionMs } from './util.js';
-import { render } from './library.js';
 
 
 
@@ -509,7 +508,9 @@ try {
               else if (button.dataset.explorerField === 'platform') AppState.platform = button.dataset.explorerValue;
               else if (button.dataset.explorerField === 'progress') AppState.explorerRules = {progress:button.dataset.explorerValue === 'Unplayed' || button.dataset.explorerValue === 'Unset' ? '__unset' : button.dataset.explorerValue};
               else if (button.dataset.explorerField === 'esrb' && $('esrbFilter')) $('esrbFilter').value = button.dataset.explorerValue === 'Unrated' ? 'Unrated' : button.dataset.explorerValue;
-              render();
+              // Lazy: a static import makes state.js and library.js a cycle whose evaluation order depends on the
+              // engine, and library.js then touches AppState before this module has initialized it.
+              import('./library.js').then(library => library.render());
             };
           } else {
             button.onclick = () => loadExplorerFacets(button.dataset.explorerField);
