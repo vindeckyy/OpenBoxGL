@@ -273,6 +273,16 @@
     @keyframes overlay-out {
       to { opacity:0; }
     }
+    @keyframes stage-next {
+      from { opacity:0; transform:translateX(24px); }
+      to { opacity:1; transform:translateX(0); }
+    }
+    @keyframes stage-prev {
+      from { opacity:0; transform:translateX(-24px); }
+      to { opacity:1; transform:translateX(0); }
+    }
+    .bigbox-stage.nav-next > * { animation:stage-next var(--dur-base) var(--ease-out) both; }
+    .bigbox-stage.nav-prev > * { animation:stage-prev var(--dur-base) var(--ease-out) both; }
     @keyframes spinner {
       to { transform:rotate(360deg); }
     }
