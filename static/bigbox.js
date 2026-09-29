@@ -238,6 +238,14 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       AppState.selectedId = AppState.bigBoxGames[AppState.bigBoxIndex].id;
       AppState.bigBoxLastInput = performance.now();
       renderBigBox();
+      // The stage is rebuilt on every step, so slide the new content in from the direction of travel
+      // (ADR 0063). Durations are tokens, so reduced motion makes this instant.
+      const stage = $('bigBoxStage');
+      if (stage && change) {
+        stage.classList.remove('nav-next', 'nav-prev');
+        void stage.offsetWidth;
+        stage.classList.add(change > 0 ? 'nav-next' : 'nav-prev');
+      }
     }
 
     // --- Video snap player (1.9.0) ---
