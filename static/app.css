@@ -392,7 +392,8 @@
     .grid-spacer { grid-column:1/-1; pointer-events:none; }
     .ratio-head { grid-column:1/-1; display:flex; align-items:baseline; gap:var(--space-xs); padding:var(--space-sm) var(--space-3xs) var(--space-2xs); border-bottom:1px solid var(--line); color:var(--section-muted); font-size:var(--font-label); font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
     .ratio-count { color:var(--platform-dot); font-weight:700; }
-    .card { position:relative; min-width:0; color:var(--ink-strong); contain:layout style paint; content-visibility:auto; contain-intrinsic-size:auto 260px; }
+    /* paint containment clips to the padding box, so the selection ring and 2px hover lift need this breathing room; the negative margin keeps the grid geometry unchanged. */
+    .card { position:relative; min-width:0; padding:4px; margin:-4px; color:var(--ink-strong); contain:layout style paint; content-visibility:auto; contain-intrinsic-size:auto 260px; }
     .card-main {
       display:block; width:100%; border:0; padding:0; color:inherit; background:transparent;
       font:inherit; text-align:left; cursor:pointer;
