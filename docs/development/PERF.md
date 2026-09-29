@@ -2,7 +2,26 @@
 
 Measured by `scripts/perf_bench.py` against a synthetic library served by the real server (loopback, gzip enabled). Reference machine: this workstation.
 
-## 1.15 measurements (2026-09-26, pre-polish)
+## 1.15.0 measurements (2026-09-29, release tree)
+
+Five-run strict local sampling on the 1.15.0 tree passed all performance gates
+(`python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5`, p95 milliseconds). The
+1.15 polish is client-side (CSS, dialogs, toasts, grid attributes), so the server numbers
+are expected to sit within run-to-run noise of the pre-polish run below, and they do.
+
+| Library size | Full library | Gzip | Favorite write | Write path | Picker | Constellation | Facet |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 10,000 games | 37.6 ms | 16.8 ms | 211.2 ms | 166.6 ms | 44.4 ms | 279.7 ms | 485.2 ms |
+| 20,000 games | 73.9 ms | 4.2 ms | 388.6 ms | 440.0 ms | 98.2 ms | 303.5 ms | 1219.1 ms |
+
+`facet` is still the binding constraint: 1219 ms against a 2000 ms budget at 20k (1.6x
+headroom), and it is still counted on the UI thread. The search-worker facet move stays
+deferred; it is only worth building if a long-task probe shows animation jank during a facet
+recompute. Not measured, and not claimed: frame time, long tasks and layout shift in the
+browser. `perf_bench.py --browser` is still a placeholder and `cold_start_ms` in its output is a
+constant, so the 242 ms cold-start figure below is carried over, not re-measured.
+
+## 1.15 pre-polish measurements (2026-09-26)
 
 Five-run strict local sampling on the 1.15 development worktree passed all sixteen 10k and
 20k gates. Values below are p95 milliseconds from
