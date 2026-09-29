@@ -195,6 +195,16 @@ def main() -> int:
     if csp_check.returncode != 0:
         failures.append("csp")
 
+    # Stage 2.85: docs/api-v2.md is generated from the route registry; a stale copy fails here
+    # instead of drifting until someone notices a route the reference does not list.
+    api_docs = run([sys.executable, "-B", str(ROOT / "scripts" / "gen_api_docs.py"), "--v2", "--check"])
+    if api_docs.stdout.strip():
+        print(api_docs.stdout.strip())
+    if api_docs.stderr.strip():
+        print(api_docs.stderr.strip())
+    if api_docs.returncode != 0:
+        failures.append("api_docs")
+
     # Stage 2.9-2.15: the feature-regression ratchets (ADR 0060). Each one
     # pins a surface that can shrink without any test noticing: the HTTP route
     # table, the destructive settings allowlist, the emulator definitions, the

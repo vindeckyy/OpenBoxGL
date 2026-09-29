@@ -8,6 +8,7 @@
     "bigbox.js",
     "clips.js",
     "constellation.js",
+    "defs.js",
     "dialogs.js",
     "dna.js",
     "gamepad.js",

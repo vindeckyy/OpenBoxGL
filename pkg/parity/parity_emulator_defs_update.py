@@ -37,15 +37,14 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from updates import verify_artifact
+from updates import VERSION, verify_artifact
 
-# The pack lives beside the release key's repository, pinned to an immutable
-# commit exactly as plugin_catalog.py pins its catalog URL. Pinning a commit
-# rather than a branch is the point: the bytes cannot change under us.
-PACK_BASE = (
-    "https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/"
-    "566f57e276cd5fffb587675c970bc86f50dfbccb/emulator_defs"
-)
+# The pack is published as assets of a rolling GitHub release by scripts/build_defs_pack.py plus a
+# maintainer signing step. The location is mutable on purpose (a new pack replaces the old one), and
+# that is safe: the archive is only ever installed after its Ed25519 signature verifies against the
+# release key, and the index is just a cheap "is there something newer" hint. Until a pack is
+# published the index 404s, which the UI reports as "no pack published yet", not as an error.
+PACK_BASE = "https://github.com/vindeckyy/OpenBoxGL/releases/download/emulator-defs"
 PACK_INDEX = f"{PACK_BASE}/index.json"
 PACK_ARCHIVE = f"{PACK_BASE}/community-defs.tar.gz"
 MAX_PACK_BYTES = 8 * 1024 * 1024
@@ -131,7 +130,7 @@ def _strip_comment(line: str) -> str:
 
 
 def _fetch(url: str, opener=urlopen) -> bytes:
-    request = Request(url, headers={"User-Agent": "OpenBox/1.14.1 definition channel"})
+    request = Request(url, headers={"User-Agent": f"OpenBox/{VERSION} definition channel"})
     with opener(request, timeout=FETCH_TIMEOUT) as response:
         payload = response.read(MAX_PACK_BYTES + 1)
     if len(payload) > MAX_PACK_BYTES:

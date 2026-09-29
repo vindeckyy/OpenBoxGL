@@ -1,4 +1,4 @@
-# ADR 0050: Library repair wizard and duplicate merge contracts
+# ADR 0051: Library repair wizard and duplicate merge contracts
 
 **Date:** 2026-09-22
 **Status:** Accepted

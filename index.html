@@ -94,7 +94,7 @@
 
     <main class="library" aria-label="Game library" data-i18n-aria-label="library.game_library">
       <div class="library-head">
-        <div><h1 id="libraryTitle" data-i18n="library.all_games">All Games</h1><p id="libraryMeta">0 games</p></div>
+        <div><h1 id="libraryTitle" data-i18n="library.all_games">All Games</h1><p id="libraryMeta" aria-live="polite">0 games</p></div>
         <div class="query-chips" id="queryChips" aria-label="Active filters" data-i18n-aria-label="library.active_filters"></div>
         <select class="search" id="sort" aria-label="Sort games"><option value="title" data-i18n="library.sort_title">Title</option><option value="rating" data-i18n="library.sort_rating">Rating</option><option value="user_rating" data-i18n="library.sort_my_rating">My rating</option><option value="recent" data-i18n="library.sort_recent">Recently played</option><option value="recent_activity" data-i18n="library.sort_recent_activity">Recent activity</option><option value="playtime" data-i18n="library.sort_playtime">Play time</option><option value="added" data-i18n="library.sort_added">Date added</option><option value="platform" data-i18n="library.sort_platform">Platform</option><option value="genre" data-i18n="library.sort_genre">Genre</option></select>
         <select class="search" id="imageGroup" aria-label="Image group"><option value="default" data-i18n="library.image_group_default">Use default</option><option value="cover" data-i18n="library.image_group_cover">Box fronts</option><option value="background" data-i18n="library.image_group_background">Backgrounds</option><option value="screenshot" data-i18n="library.image_group_screenshot">Screenshots</option><option value="clear_logo" data-i18n="library.image_group_clear_logo">Clear logos</option><option value="fanart" data-i18n="library.image_group_fanart">Fanart</option><option value="banner" data-i18n="library.image_group_banner">Banners</option><option value="box_back" data-i18n="library.image_group_box_back">Box backs</option><option value="box_spine" data-i18n="library.image_group_box_spine">Box spines</option><option value="box_3d" data-i18n="library.image_group_box_3d">3D boxes</option><option value="title_screen" data-i18n="library.image_group_title_screen">Title screens</option><option value="cart_front" data-i18n="library.image_group_cart_front">Cart fronts</option><option value="cart_back" data-i18n="library.image_group_cart_back">Cart backs</option><option value="disc" data-i18n="library.image_group_disc">Discs</option><option value="advertisement" data-i18n="library.image_group_advertisement">Ads / flyers</option><option value="manual" data-i18n="library.image_group_manual">Manuals</option></select>
@@ -106,7 +106,7 @@
       <button type="button" class="drop-zone" id="dropZone" data-i18n="library.drop_zone">Drop ROM folders or game files here to import</button>
       <section id="insightsPanel" class="insights-panel" aria-label="Play insights" data-i18n-aria-label="library.play_insights"></section>
       <div class="arrange-wrap">
-        <section class="grid" id="grid"></section>
+        <section class="grid" id="grid"><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div></section>
         <div class="arrange-bar" id="arrangeBar" hidden role="button" tabindex="0" aria-label="Jump through the current view" data-i18n-aria-label="library.jump_view"></div>
       </div>
     </main>
@@ -227,6 +227,16 @@
         <label class="field wide"><span>One profile per line: Platform = command. Use {path} for the ROM.</span><textarea id="profilesText"></textarea></label>
         <div class="wide" id="detectedProfiles"></div>
         <div class="wide"><div class="section-title">Handheld performance</div><p class="description">Set a TDP limit (watts) applied via ryzenadj when a game from this profile launches, and an optional restore limit when the session ends. Requires ryzenadj on PATH.</p><div class="form-grid" id="perfProfiles"></div></div>
+        <div class="wide detail-card" id="defsPanel">
+          <div class="section-title" data-i18n="defs.title">Emulator definitions</div>
+          <p class="description" id="defsStatus"></p>
+          <div class="extras">
+            <button type="button" class="icon-button" id="defsCheck" data-i18n="defs.check">Check for definition updates</button>
+            <button type="button" class="primary" id="defsInstall" data-i18n="defs.install" hidden>Install update</button>
+            <button type="button" class="icon-button" id="defsRollback" data-i18n="defs.rollback" hidden>Roll back to bundled</button>
+          </div>
+          <p class="description" id="defsDetail" role="status"></p>
+        </div>
         <div class="wide"><div class="section-title">Install and configure</div><div class="emulator-list" id="emulatorCatalog"></div></div>
       </div>
       <div class="dialog-actions"><button type="button" class="icon-button" id="cancelProfiles">Cancel</button><button class="primary">Save</button></div>
@@ -428,6 +438,7 @@
     <div class="dialog-tabs" role="tablist" aria-label="Time Machine views">
       <button type="button" class="dialog-tab active" role="tab" id="tmEventsTab" aria-selected="true" data-i18n="time_machine.timeline">Timeline</button>
       <button type="button" class="dialog-tab" role="tab" id="tmAsOfTab" aria-selected="false" data-i18n="time_machine.as_of">Browse as of</button>
+      <button type="button" class="dialog-tab" role="tab" id="tmCompareTab" aria-selected="false" data-i18n="time_machine.compare">Compare</button>
     </div>
     <div class="form-grid" id="timeMachineEventsPane">
       <label class="field"><span data-i18n="time_machine.kind">Kind</span><select id="tmKind"><option value="" data-i18n="time_machine.all_kinds">All events</option><option value="add" data-i18n="time_machine.kind_add">Add</option><option value="edit" data-i18n="time_machine.kind_edit">Edit</option><option value="delete" data-i18n="time_machine.kind_delete">Delete</option><option value="restore" data-i18n="time_machine.kind_restore">Restore</option><option value="revert" data-i18n="time_machine.kind_revert">Revert</option></select></label>
@@ -441,6 +452,13 @@
       <div class="field"><span>&nbsp;</span><button type="button" class="icon-button" id="tmAsOfButton" data-i18n="time_machine.reconstruct">Reconstruct</button></div>
       <p class="wide description" id="timeMachineAsOfMeta"></p>
       <div class="wide" id="timeMachineAsOfBody"><p class="muted" data-i18n="time_machine.no_date">Choose a date.</p></div>
+    </div>
+    <div class="form-grid" id="timeMachineComparePane" hidden>
+      <label class="field"><span data-i18n="time_machine.compare_before">From (optional)</span><input id="tmCompareBefore" type="date"></label>
+      <label class="field"><span data-i18n="time_machine.compare_after">To</span><input id="tmCompareAfter" type="date"></label>
+      <div class="field"><span>&nbsp;</span><button type="button" class="icon-button" id="tmCompareButton" data-i18n="time_machine.compare_run">Compare</button></div>
+      <p class="wide description" id="timeMachineCompareMeta" data-i18n="time_machine.compare_hint">Pick a date, or two dates to see what changed between them.</p>
+      <div class="wide timeline" id="timeMachineCompareBody"></div>
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneTimeMachine" data-i18n="common.done">Done</button></div>
   </dialog>
@@ -483,8 +501,17 @@
           <button type="button" class="settings-nav-item" data-settings-category="appearance" data-i18n="settings.appearance">Appearance</button>
           <button type="button" class="settings-nav-item" data-settings-category="controller" data-i18n="settings.controller">Controller</button>
           <button type="button" class="settings-nav-item" data-settings-category="advanced" data-i18n="settings.advanced">Advanced</button>
+          <button type="button" class="settings-nav-item" data-settings-category="about" data-i18n="settings.about">About</button>
         </nav>
       <div class="form-grid settings-panels">
+        <div class="wide settings-field settings-panel detail-card" data-settings-panel="about" data-setting="about version platform data folder native window browser webview">
+          <dl class="about-facts">
+            <dt data-i18n="settings.about_version">Version</dt><dd id="aboutVersion"></dd>
+            <dt data-i18n="settings.about_platform">Platform</dt><dd id="aboutPlatform"></dd>
+            <dt data-i18n="settings.about_data_dir">Data folder</dt><dd id="aboutDataDir"></dd>
+            <dt data-i18n="settings.about_host">Window</dt><dd id="aboutHost"></dd>
+          </dl>
+        </div>
         <label class="field wide settings-field" data-settings-exempt="search" data-setting="search watched folders cloud screensaver startup shutdown session history backup progress automation image group controller gamepad"><span data-i18n="settings.search_settings">Search settings</span><input id="settingsSearch" class="settings-search" type="search" data-i18n-placeholder="settings.search_placeholder" placeholder="Type to filter settings"></label>
         <label class="field wide settings-field settings-panel" data-settings-panel="library imports" data-setting="watched folders import auto"><span data-i18n="settings.watched_folders">Automatically watched game folders, one absolute path per line</span><span class="path-input-row"><textarea id="watchFolders"></textarea><button type="button" class="path-browse" data-browse-for="watchFolders" data-browse-kind="folder">Browse</button></span></label>
         <div class="wide settings-field settings-panel detail-card" data-settings-panel="library imports" data-setting="memories screenshots import steam retroarch dolphin folders auto">
@@ -658,7 +685,8 @@
     <div class="reader-toolbar"><button type="button" class="icon-button" id="readerPrev">Previous page</button><button type="button" class="icon-button" id="readerNext">Next page</button><span class="description" id="readerPageLabel">Page 1</span><button type="button" class="icon-button" data-reader-layout="single">Single page</button><button type="button" class="icon-button" data-reader-layout="spread">Two-page spread</button><button type="button" class="icon-button" data-reader-theme="light">Light</button><button type="button" class="icon-button" data-reader-theme="dark">Dark</button></div>
     <div class="reader-viewport" id="readerViewport"><iframe id="readerFrame" title="Document reader"></iframe></div>
   </dialog>
-  <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div class="toast" id="toast" popover="manual"></div>
+  <div class="visually-hidden" id="toastLive" role="status" aria-live="polite" aria-atomic="true"></div>
   <div class="gamepad-hint" id="gamepadHint" role="status" hidden></div>
   <div class="error-banner" id="errorBanner" role="alert" hidden>
     <span id="errorBannerText"></span>
@@ -678,12 +706,12 @@
     <button type="button" class="icon-button" id="contextRemove" role="menuitem">Remove from library</button>
   </div>
   <section class="lifecycle" id="lifecycle" role="status" aria-live="polite" hidden><div><small id="lifecycleKind"></small><h2 id="lifecycleGame"></h2><p id="lifecycleMessage"></p></div></section>
-  <section class="bigbox" id="bigBox" hidden tabindex="0">
+  <section class="bigbox" id="bigBox" role="dialog" aria-modal="true" aria-label="Big Box" hidden tabindex="0">
     <video class="bigbox-startup-video" id="bigBoxStartupVideo" muted loop playsinline hidden></video>
     <div class="bigbox-head"><strong>OpenBox</strong><input class="hybrid-search" id="bigBoxHybridSearch" type="search" placeholder="Search this platform" hidden><button type="button" class="dna-mode single" id="bigBoxDnaToggle" data-dna-mode="title" title="Smart search is 100% local" hidden>Title</button><span class="bigbox-status" id="bigBoxStatus"></span><span id="bigBoxCounter"></span></div>
     <div class="bigbox-stage" id="bigBoxStage"></div>
     <div class="bigbox-foot"><span>← → Browse</span><span>Enter / A Play</span><span>P Pause</span><span>M Filters</span><span>F / X Favorite</span><span>Esc / B Back</span></div>
-    <div class="bigbox-menu" id="bigBoxMenu" hidden>
+    <div class="bigbox-menu" id="bigBoxMenu" role="dialog" aria-modal="true" aria-label="Big Box menu" hidden>
       <div class="bigbox-menu-panel">
         <h2>Filter and Sort</h2>
         <label class="field"><span>Show</span><select id="bigBoxFilter"><option value="all">Current library view</option><option value="installed">Installed games</option><option value="owned">All owned games</option><option value="favorites">Favorites</option><option value="playing">In progress</option><option value="completed">Completed</option></select></label>
@@ -694,8 +722,8 @@
         <div class="dialog-actions"><button class="icon-button" id="partyMenuButton" type="button" data-i18n="party.open">Game Night</button></div>
       </div>
     </div>
-    <div class="screensaver" id="screenSaver" hidden><video id="screenSaverVideo" muted autoplay loop></video><div class="screensaver-copy"><div class="hero-kicker" id="screenSaverPlatform"></div><h2 id="screenSaverTitle"></h2><p>Press Play to launch, or any other control to return.</p></div></div>
-    <div class="bigbox-pause" id="bigBoxPause" hidden><div class="bigbox-pause-panel"><h2 id="bigBoxPauseTitle">Running game</h2><p class="description" id="bigBoxPauseMeta"></p><div class="extras" id="bigBoxPauseActions"></div><div class="dialog-actions"><button class="icon-button" id="closeBigBoxPause" type="button" data-i18n="bigbox.pause_close">Close</button></div></div></div>
+    <div class="screensaver" id="screenSaver" role="dialog" aria-modal="true" aria-label="Screensaver" hidden><video id="screenSaverVideo" muted autoplay loop></video><div class="screensaver-copy"><div class="hero-kicker" id="screenSaverPlatform"></div><h2 id="screenSaverTitle"></h2><p>Press Play to launch, or any other control to return.</p></div></div>
+    <div class="bigbox-pause" id="bigBoxPause" role="dialog" aria-modal="true" aria-label="Running game" hidden><div class="bigbox-pause-panel"><h2 id="bigBoxPauseTitle">Running game</h2><p class="description" id="bigBoxPauseMeta"></p><div class="extras" id="bigBoxPauseActions"></div><div class="dialog-actions"><button class="icon-button" id="closeBigBoxPause" type="button" data-i18n="bigbox.pause_close">Close</button></div></div></div>
     <div class="bigbox-osk" id="bigBoxOsk" hidden></div>
     <div class="party-overlay" id="partyOverlay" hidden></div>
   </section>

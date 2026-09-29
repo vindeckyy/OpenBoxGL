@@ -194,6 +194,21 @@ class VerificationTests(unittest.TestCase):
         self.assertTrue(issubclass(upd.SignatureError, upd.DefinitionError))
 
 
+class UnpublishedChannelTests(unittest.TestCase):
+    """A fresh channel has no pack yet: that is a normal state the UI words gently, never a crash."""
+
+    def test_check_reports_a_missing_index_as_not_ok_and_names_the_status(self):
+        from urllib.error import HTTPError
+
+        def opener(request, timeout=None):
+            raise HTTPError(request.full_url, 404, "Not Found", {}, None)
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = upd.check(opener=opener, data_dir=directory)
+        self.assertFalse(result["ok"])
+        self.assertIn("404", result["error"], "the UI keys its 'no pack published' wording on the 404")
+
+
 class InstallTests(unittest.TestCase):
     """Install behavior, exercised with verification stubbed out.
 

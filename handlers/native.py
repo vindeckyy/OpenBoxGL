@@ -9,6 +9,7 @@ connected, so the web UI stays usable in a plain browser.
 from __future__ import annotations
 
 import os
+import sys
 from api_errors import BadRequest
 from routes.registry import route
 
@@ -18,6 +19,16 @@ def _handle_unauthorized(handler):
         handler.handle_unauthorized()
     else:
         handler.send_json(403, {"error": "Unauthorized"})
+
+
+def _version():
+    from updates import VERSION
+    return VERSION
+
+
+def _data_dir():
+    from openbox import APP_DIR
+    return str(APP_DIR)
 
 
 @route("GET", "/api/native/capabilities")
@@ -42,6 +53,10 @@ def capabilities(handler, parsed):
         "gamepad": "webkit",
         "fullscreen": True,
         "clipboard": True,
+        # Read by Settings > About: "where is my stuff" and "why is this a browser tab".
+        "version": _version(),
+        "platform": sys.platform,
+        "data_dir": _data_dir(),
     })
 
 

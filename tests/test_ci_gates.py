@@ -37,7 +37,7 @@ class CiGatesTests(unittest.TestCase):
 
     def test_ci_required_jobs(self):
         ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        for job in ("shellcheck", "desktop-appstream", "flatpak-validate", "perf-20k"):
+        for job in ("shellcheck", "desktop-appstream", "flatpak-validate", "perf-20k", "ui-smoke"):
             self.assertIsNotNone(re.search(rf"^\s+{job}:", ci, re.MULTILINE), msg=f"missing job {job}")
             block = ci.split(f"{job}:", 1)[1].split("\n  ", 1)[0]
             self.assertNotIn("continue-on-error: true", block, msg=f"{job} must not continue on error")
@@ -52,6 +52,9 @@ class CiGatesTests(unittest.TestCase):
             "validate_flatpak_manifest.py" in ci or "flatpak-builder --dry-run" in ci,
             "flatpak-validate must dry-run or validate the manifest",
         )
+        self.assertIn("./scripts/ui_smoke.sh", ci, "the ui-smoke job must run the browser smoke")
+        self.assertIn('"--v2", "--check"', (ROOT / "scripts" / "check_tests.py").read_text(encoding="utf-8"),
+                      "the local gate must verify docs/api-v2.md is fresh")
         self.assertIn("python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5", ci)
         self.assertIn("python3 -B scripts/check_changed_coverage.py --fail-under=95", ci)
 

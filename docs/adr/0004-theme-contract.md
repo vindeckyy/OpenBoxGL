@@ -27,3 +27,7 @@ Visual output must not change, but token hygiene must ratchet.
 - No visual regression: hex values preserved via indirection, verified by `content-visibility` and `contain-intrinsic-size` unchanged.
 
 - Themes now correctly render library and screenshot grid backgrounds per theme palette.
+
+## Update (1.15)
+
+There are now six stock themes (High Contrast joined in 1.14). Semantic ink tokens (`--ink-strong`, `--on-active`, `--on-danger`, `--border-input`, `--state-hover`, `--state-press`) replace the use of `--white` as a text colour, and a contrast matrix in `tests/test_stock_themes.py` checks every theme. Motion tokens are structural and must not be redeclared by a theme; see ADR 0063.

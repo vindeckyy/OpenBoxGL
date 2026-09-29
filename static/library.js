@@ -1,5 +1,5 @@
 import { $, escapeHtml, duration, fact, gameLinks, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds, trigramsOf, expandTrigrams } from './util.js';
-import { token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
+import { revealToast, hideToast, token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
 import { loadTheme, deletePlaylist } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importDroppedFolder } from './imports.js';
 import { openGameDialog, convertShelfEntry, confirmAction, promptInput, openDialog, closeDialog } from './dialogs.js';
@@ -49,7 +49,7 @@ const STORY_RULE = '#d8d0c6';
 const STORY_BG = '#fbf7f2';
 const STORY_ACCENT = '#f06000';
 
-// Export the already-fetched story as a PNG (1.14.1). This is deliberately
+// Export the already-fetched story as a PNG (1.15). This is deliberately
 // client-side: the server already returns every field the card needs, so a PNG
 // is a render of data in hand rather than a new endpoint or a dependency. A
 // pure-Python image encoder was rejected in 1.12 for good reason; the browser
@@ -611,7 +611,8 @@ function markFilterAria() {
   document.querySelectorAll('[data-game]').forEach(card => {
     const id = Number(card.dataset.game);
     const selected = AppState.selectedId === id || selectedIds.has(id);
-    card.setAttribute('aria-selected', selected ? 'true' : 'false');
+    // aria-selected is not valid on a plain button; aria-current marks the open/selected game.
+    card.setAttribute('aria-current', selected ? 'true' : 'false');
   });
 }
 
@@ -798,7 +799,11 @@ function markFilterAria() {
       }
       if (available) {
         const index = imageGroup === 'screenshot' ? game.available_screenshots[0] : '';
-        return `<img class="cover-skeleton" src="${media(game,imageGroup,index)}" alt="" loading="lazy" decoding="async" data-gid="${game.id}">`;
+        // Reserve the box before the image arrives (known ratio, else the portrait default) so the card
+        // does not collapse to zero height and jump when the cover loads; the shimmer is then actually visible.
+        const ratio = Number(AppState.coverRatios[game.id]);
+        const reserve = ratio > 0.2 && ratio < 5 ? ratio.toFixed(3) : '0.72';
+        return `<img class="cover-skeleton" style="aspect-ratio:${reserve}" src="${media(game,imageGroup,index)}" alt="" loading="lazy" decoding="async" data-gid="${game.id}">`;
       }
       return `<div class="cover-title">${escapeHtml(game.name)}</div>`;
     }
@@ -870,7 +875,7 @@ function markFilterAria() {
       if (!isVirtualEnabled()) {
         let cardIndex = 0;
         const rendered = rows.map(row => row.kind === 'header'
-          ? `<div class="ratio-head">${row.label}<span class="ratio-count">${row.count}</span></div>`
+          ? `<div class="ratio-head" role="presentation">${row.label}<span class="ratio-count">${row.count}</span></div>`
           : row.games.map(game => gridCardHTML(game, cardIndex++, imageGroup, fromScroll, motionClass, row.section.key)).join('')).join('');
         return {topSpacer:'', bottomSpacer:'', rendered, geometry:{rows, cols, totalHeight}};
       }
@@ -883,12 +888,16 @@ function markFilterAria() {
       const lastBottom = windowRows.length ? windowRows[windowRows.length - 1].top + windowRows[windowRows.length - 1].height : 0;
       let cardIndex = 0;
       const rendered = windowRows.map(row => row.kind === 'header'
-        ? `<div class="ratio-head">${row.label}<span class="ratio-count">${row.count}</span></div>`
+        ? `<div class="ratio-head" role="presentation">${row.label}<span class="ratio-count">${row.count}</span></div>`
         : row.games.map(game => gridCardHTML(game, cardIndex++, imageGroup, fromScroll, motionClass, row.section.key)).join('')).join('');
-      return {topSpacer:`<div class="grid-spacer" style="height:${firstTop}px;contain-intrinsic-size:auto ${firstTop}px"></div>`, bottomSpacer:`<div class="grid-spacer" style="height:${Math.max(0, totalHeight - lastBottom)}px;contain-intrinsic-size:auto ${Math.max(0, totalHeight - lastBottom)}px"></div>`, rendered, geometry:{rows, cols, totalHeight}};
+      return {topSpacer:`<div class="grid-spacer" aria-hidden="true" style="height:${firstTop}px;contain-intrinsic-size:auto ${firstTop}px"></div>`, bottomSpacer:`<div class="grid-spacer" aria-hidden="true" style="height:${Math.max(0, totalHeight - lastBottom)}px;contain-intrinsic-size:auto ${Math.max(0, totalHeight - lastBottom)}px"></div>`, rendered, geometry:{rows, cols, totalHeight}};
     }
+    // True list position in visual order (grouped sections reorder), so a screen reader hears the real total
+    // and place even though only a window of cards is in the DOM.
+    let gridTotal = 0;
+    let gridPos = new Map();
     function gridCardHTML(game, index, imageGroup, fromScroll, motionClass, bucketKey = '') {
-      return `<article class="card${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${bucketKey ? ` data-ratio="${bucketKey}"` : ''}${fromScroll ? '' : ` style="--motion-index:${Math.min(index,10)}"`}>
+      return `<article role="listitem" aria-setsize="${gridTotal}" aria-posinset="${gridPos.get(game.id) || ''}" class="card${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${bucketKey ? ` data-ratio="${bucketKey}"` : ''}${fromScroll ? '' : ` style="--motion-index:${Math.min(index,10)}"`}>
         ${AppState.bulkMode ? `<input class="card-picker" type="checkbox" data-game-picker="${game.id}" ${selectedIds.has(game.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(game.name)}">` : ''}
         <button type="button" class="card-main" data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><div class="cover ${AppState.appSettings.bigbox_mode === 'coverflow' ? 'jewel-3d' : ''}">${imageMarkup(game,imageGroup)}</div>
         <h3>${escapeHtml(game.name)}${game.moments_count ? `<span class="card-moments-count" aria-label="${escapeHtml(t('moments.count', {count: game.moments_count}))}">${escapeHtml(String(game.moments_count))}</span>` : ''}</h3><p>${escapeHtml(game.developer || game.platform || '')}</p>
@@ -985,6 +994,10 @@ function markFilterAria() {
       const lastRow = Math.min(rows - 1, Math.ceil((gridScrollTop + paneHeight) / gridRowHeight) + 2);
       return [Math.min(total, firstRow * gridCols), Math.min(total, (lastRow + 1) * gridCols)];
     }
+    // Entrance animation is for view changes (first paint, platform/playlist/preset/view switch), never for
+    // data-driven re-renders (search keystrokes, favourite, bulk toggle, resize, cover-ratio regroup): those
+    // would replay the whole grid's fade-in on every keystroke (ADR 0063).
+    let lastGridViewKey = null;
     function renderGrid({fromScroll} = {}) {
       if (isTrashView()) { renderTrashView({fromScroll}); return; }
       const pane = gridPane();
@@ -1007,9 +1020,11 @@ function markFilterAria() {
       }
       if (!visible.length) {
         $('grid').className = 'grid';
+        $('grid').removeAttribute('role');
         $('grid').innerHTML = AppState.games.length
-          ? `<div class="empty"><div><h2>No games match this view</h2><p>Change the active filters or search the library again.</p></div></div>`
+          ? `<div class="empty"><div><h2>${escapeHtml(t('library.no_match_title'))}</h2><p>${escapeHtml(t('library.no_match_hint'))}</p><div class="empty-actions"><button type="button" id="emptyClearFilters">${escapeHtml(t('library.clear_filters'))}</button></div></div></div>`
           : `<div class="empty"><div><h2>Start your library</h2><p>Bring your games into OpenBox, then search, filter, and launch them from one collection.</p><div class="empty-actions"><button id="emptySetupLibrary">Set up library</button><button id="emptyAdd">Add game</button><button class="empty-secondary" id="emptyImport">Import folder</button><button class="empty-secondary" id="emptySteam">Import Steam</button><button class="empty-secondary" id="emptyHeroic">Import Heroic</button><button class="empty-secondary" id="emptyLutris">Import Lutris</button></div></div></div>`;
+        if ($('emptyClearFilters')) $('emptyClearFilters').onclick = () => { AppState.smartFilterRules = {}; resetQuery(); render(); };
         if ($('emptySetupLibrary')) $('emptySetupLibrary').onclick = () => openSetupCenter();
         if ($('emptyAdd')) $('emptyAdd').onclick = () => openGameDialog();
         if ($('emptyImport')) $('emptyImport').onclick = () => importFolder();
@@ -1027,13 +1042,20 @@ function markFilterAria() {
       else $('grid').style.containIntrinsicSize = '';
       const total = visible.length;
       const grouped = !listView && (AppState.appSettings.cover_grouping || 'shape') === 'shape';
+      if (listView) $('grid').removeAttribute('role'); else $('grid').setAttribute('role', 'list');
+      gridTotal = total;
+      gridPos = new Map();
+      (grouped ? groupedSections(visible).flatMap(section => section.games) : visible).forEach((game, i) => gridPos.set(game.id, i + 1));
       // Entrance animation only runs on full (state-driven) renders; scroll
       // renders must not re-trigger the staggered surface-in on every row
       // crossing. fromScroll drops both the class and the inline delay.
-      const motionClass = fromScroll ? '' : ' motion-enter';
+      const viewKey = [AppState.platform, AppState.activePlaylist, AppState.activeFilterPreset, $('view')?.value, listView].join('|');
+      const animate = !fromScroll && viewKey !== lastGridViewKey;
+      if (!fromScroll) lastGridViewKey = viewKey;
+      const motionClass = animate ? ' motion-enter' : '';
       let topSpacer = '', bottomSpacer = '', rendered = '';
       if (grouped) {
-        const result = renderGroupedGrid(visible, imageGroup, fromScroll, motionClass);
+        const result = renderGroupedGrid(visible, imageGroup, !animate, motionClass);
         topSpacer = result.topSpacer; bottomSpacer = result.bottomSpacer; rendered = result.rendered;
         groupedGeo = result.geometry;
       } else {
@@ -1045,20 +1067,20 @@ function markFilterAria() {
         if (!isVirtualEnabled()) {
           topSpacer = ''; bottomSpacer = '';
         } else {
-          topSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${topHeight}px;contain-intrinsic-size:auto ${topHeight}px"></div>` : '';
-          bottomSpacer = gridRowHeight ? `<div class="grid-spacer" style="height:${bottomHeight}px;contain-intrinsic-size:auto ${bottomHeight}px"></div>` : '';
+          topSpacer = gridRowHeight ? `<div class="grid-spacer" aria-hidden="true" style="height:${topHeight}px;contain-intrinsic-size:auto ${topHeight}px"></div>` : '';
+          bottomSpacer = gridRowHeight ? `<div class="grid-spacer" aria-hidden="true" style="height:${bottomHeight}px;contain-intrinsic-size:auto ${bottomHeight}px"></div>` : '';
         }
         const chunk = isVirtualEnabled() ? visible.slice(start, end) : visible;
         rendered = chunk.map((game,index) => listView
-           ? `<button type="button" class="list-row${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${fromScroll ? '' : ` style="--motion-index:${Math.min(index,10)}"`} data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
-           : gridCardHTML(game, index, imageGroup, fromScroll, motionClass)).join('');
+           ? `<button type="button" class="list-row${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${!animate ? '' : ` style="--motion-index:${Math.min(index,10)}"`} data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
+           : gridCardHTML(game, index, imageGroup, !animate, motionClass)).join('');
       }
       const focusedGameId = $('grid')?.contains(document.activeElement) ? document.activeElement?.closest?.('[data-game]')?.dataset.game : null;
       const focusedPickerId = $('grid')?.contains(document.activeElement) ? document.activeElement?.closest?.('[data-game-picker]')?.dataset.gamePicker : null;
       const listHeadCell = (key, label) => key
-        ? `<button type="button" class="list-head-cell" data-list-sort="${key}" aria-sort="${(AppState.appSettings.list_sort || 'title') === key ? (AppState.appSettings.list_sort_dir === 'reversed' ? 'descending' : 'ascending') : 'none'}">${label}${(AppState.appSettings.list_sort || 'title') === key ? (AppState.appSettings.list_sort_dir === 'reversed' ? ' ↓' : ' ↑') : ''}</button>`
+        ? `<span role="columnheader" class="list-head-col" aria-sort="${(AppState.appSettings.list_sort || 'title') === key ? (AppState.appSettings.list_sort_dir === 'reversed' ? 'descending' : 'ascending') : 'none'}"><button type="button" class="list-head-cell" data-list-sort="${key}">${label}${(AppState.appSettings.list_sort || 'title') === key ? (AppState.appSettings.list_sort_dir === 'reversed' ? ' ↓' : ' ↑') : ''}</button></span>`
         : `<span>${label}</span>`;
-      const listHead = `<div class="list-head">${listHeadCell('title','Title')}${listHeadCell('platform','Platform')}${listHeadCell('genre','Genre')}<span>ESRB</span><span>Progress</span><span>Plays</span>${listHeadCell('rating','Rating')}</div>`;
+      const listHead = `<div class="list-head" role="row">${listHeadCell('title','Title')}${listHeadCell('platform','Platform')}${listHeadCell('genre','Genre')}<span role="columnheader">ESRB</span><span role="columnheader">Progress</span><span role="columnheader">Plays</span>${listHeadCell('rating','Rating')}</div>`;
       $('grid').innerHTML = listView ? `${listHead}${topSpacer}${rendered}${bottomSpacer}` : `${topSpacer}${rendered}${bottomSpacer}`;
       // After virtual render, observe spacers via IntersectionObserver
       if (isVirtualEnabled()) ensureVirtualObserver();
@@ -1591,7 +1613,6 @@ function markFilterAria() {
     const TRASH_VIEW = 'trash';
     const TRASH_TOAST_MS = 8000;
     let _trashItems = null;
-    let _trashToastTimer = 0;
     function isTrashView() { return $('view')?.value === TRASH_VIEW; }
     function ensureTrashViewOption() {
       const select = $('view');
@@ -1605,21 +1626,16 @@ function markFilterAria() {
       option.textContent = t('trash.view');
     }
     function hideTrashToast() {
-      clearTimeout(_trashToastTimer);
-      const toast = $('toast');
-      if (toast) toast.classList.remove('show');
+      hideToast();
     }
     function showTrashUndoToast(name, trashId) {
       const toast = $('toast');
       if (!toast || !trashId) { notify(t('trash.moved', {name})); return; }
-      clearTimeout(_trashToastTimer);
-      if (notify.timer) clearTimeout(notify.timer);
       toast.dataset.notifyLevel = 'info';
       toast.innerHTML = `<span class="trash-toast-text">${escapeHtml(t('trash.moved', {name}))}</span><button type="button" class="trash-undo" id="trashUndoButton">${escapeHtml(t('trash.undo'))}</button>`;
-      toast.classList.add('show');
+      revealToast(TRASH_TOAST_MS);
       const undo = $('trashUndoButton');
       if (undo) undo.onclick = () => { hideTrashToast(); restoreTrashEntry(trashId); };
-      _trashToastTimer = setTimeout(hideTrashToast, TRASH_TOAST_MS);
     }
     async function loadTrashItems() {
       try {
@@ -1802,8 +1818,14 @@ function markFilterAria() {
       const img = event.target;
       if (img.tagName === 'IMG' && img.dataset.gid) {
         img.classList.remove('cover-skeleton');
+        img.classList.add('cover-loaded');
         recordCoverRatio(img);
       }
+    }, true);
+    // A cover that fails to load falls back to the title tile instead of leaving a shimmering hole.
+    $('grid').addEventListener('error', event => {
+      const img = event.target;
+      if (img.tagName === 'IMG' && img.dataset.gid) img.closest('.cover')?.classList.add('cover-failed');
     }, true);
     $('grouping').onchange = async () => {
       AppState.appSettings.cover_grouping = $('grouping').value;

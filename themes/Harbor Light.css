@@ -1,4 +1,4 @@
-/* OpenBox Stock Theme v3: Harbor Light */
+/* OpenBox Stock Theme v4: Harbor Light */
 
 :root {
   color-scheme: light;
@@ -163,14 +163,14 @@
   --surface-field: #ffffff;
   --surface-hover: #e8f4f9;
   --surface-sheet: #171513dd;
-  --overlay-insight-cell-0: #1b1916;
-  --overlay-insight-cell-1: #3d2b1f;
-  --overlay-insight-cell-2: #7a4a1f;
-  --overlay-insight-cell-3: #c46a1f;
-  --overlay-insight-cell-4: #f06000;
-  --border-insight: #4b4338;
+  --overlay-insight-cell-0: #eef2f6;
+  --overlay-insight-cell-1: #cfe8f5;
+  --overlay-insight-cell-2: #8fc9e6;
+  --overlay-insight-cell-3: #3aa0cf;
+  --overlay-insight-cell-4: #0b7ea8;
+  --border-insight: #d5dde8;
   --shadow-insight: #0007;
-  --surface-insight-card: #211e1a;
+  --surface-insight-card: #f5f8fc;
   --radio-chip-bg: var(--surface-field);
   --radio-chip-fg: var(--muted);
   --radio-chip-border: var(--border-card);
@@ -185,23 +185,23 @@
   --surface-gamepad-btn-active: #f06000;
   --border-gamepad: #3a3530;
   --text-controller-status: #8a8270;
-  --surface-health-ok: #2d4a2d;
-  --surface-health-warn: #4a4030;
-  --surface-health-fail: #4a2d2d;
+  --surface-health-ok: #e3f4e6;
+  --surface-health-warn: #fbf1d8;
+  --surface-health-fail: #fbe4e0;
   --border-health-ok: #4a8a4a;
   --border-health-warn: #8a7a4a;
   --border-health-fail: #8a4a4a;
-  --text-health-ok: #6abf6a;
-  --text-health-warn: #c4a84a;
-  --text-health-fail: #c46a6a;
+  --text-health-ok: #14663a;
+  --text-health-warn: #7a5200;
+  --text-health-fail: #a5271a;
   --toast-success-border: #4a8a4a;
-  --toast-success-fg: #6abf6a;
+  --toast-success-fg: #0a6b46;
   --toast-info-border: #4a6a8a;
-  --toast-info-fg: #7aa8c4;
+  --toast-info-fg: #1f5f8f;
   --toast-warning-border: #8a7a4a;
-  --toast-warning-fg: #c4a84a;
+  --toast-warning-fg: #8a5a00;
   --toast-error-border: #8a4a4a;
-  --toast-error-fg: #c46a6a;
+  --toast-error-fg: #b02a1c;
   --trash-accent: var(--action);
   --trash-accent-ink: var(--action-ink);
   --trash-row-bg: var(--surface-card);
@@ -214,12 +214,17 @@
   --text-soft: #5f6d83;
   --top-status: #5f6d83;
   --white: #ffffff;
+  --ink-strong: var(--text);
+  --on-active: #ffffff;
+  --on-danger: #ffffff;
+  --border-input: var(--muted);
+  --state-hover: #00000012;
+  --state-press: #00000022;
   --mood-primary: var(--brand);
   --mood-ink: var(--white);
   --mood-secondary: var(--accent);
   --mood-glow: var(--accent-ghost);
   --mood-tint: transparent;
-  --mood-transition: 240ms;
   --constellation-edge-series: #5e8c6a;
   --constellation-edge-developer: #6c91b6;
   --constellation-edge-publisher: #a27cb6;
@@ -276,6 +281,3 @@
   --measure-narrow: 50ch; --measure-default: 60ch; --measure-wide: 70ch;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  :root { --motion-duration: 0ms; }
-}

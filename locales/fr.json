@@ -54,9 +54,11 @@
     "dismiss": "Compris",
     "tip_search": "Utilisez Ctrl/Cmd-K pour ouvrir la palette de commandes et accéder à un jeu ou un outil.",
     "tip_clip": "Le panneau de pause Big Box garde Clip it à portée de main pendant la partie.",
-    "tip_time_machine": "Time Machine affiche l'état de la bibliothèque avant toute restauration.",
+    "tip_time_machine": "Time Machine peut comparer votre bibliothèque entre deux dates, ou l'afficher à une date antérieure, avant toute restauration.",
     "tip_big_box": "La disposition hybride de Big Box associe la barre des plateformes à la scène pensée pour la manette.",
-    "say_it_body": "Essayez « short unplayed RPG » ou « co-op for 4 » dans la recherche. Les filtres interprétés deviennent des puces."
+    "say_it_body": "Essayez « short unplayed RPG » ou « co-op for 4 » dans la recherche. Les filtres interprétés deviennent des puces.",
+    "tip_defs": "Dans Émulateurs, le bouton de mise à jour des définitions installe des définitions communautaires signées sans toucher à celles que vous avez modifiées.",
+    "tip_about": "Réglages > À propos affiche la version, la plateforme, le dossier de données et si OpenBox est dans sa fenêtre native ou un onglet de navigateur."
   },
   "shortcuts": {
     "command_palette": "Palette de commandes",
@@ -196,7 +198,10 @@
     "resize_details": "Redimensionner le panneau de détails",
     "jump_view": "Parcourir la vue actuelle",
     "play_insights": "Statistiques de jeu",
-    "sort_my_rating": "Ma note"
+    "sort_my_rating": "Ma note",
+    "no_match_title": "Aucun jeu ne correspond à cette vue",
+    "no_match_hint": "Modifiez les filtres actifs ou relancez la recherche dans la bibliothèque.",
+    "clear_filters": "Effacer les filtres"
   },
   "dialog": {
     "add_game": "Ajouter un jeu",
@@ -863,7 +868,14 @@
     "health_rescan_weekly": "Hebdomadaire",
     "health_rescan_on_startup": "Au démarrage",
     "health_rescan_off": "Désactivée",
-    "backlog_progress_suggest": "Proposer de marquer les jeux « En cours » à la première partie"
+    "backlog_progress_suggest": "Proposer de marquer les jeux « En cours » à la première partie",
+    "about": "À propos",
+    "about_version": "Version",
+    "about_platform": "Plateforme",
+    "about_data_dir": "Dossier de données",
+    "about_host": "Fenêtre",
+    "about_host_native": "Fenêtre native (WebView)",
+    "about_host_browser": "Onglet du navigateur. La fenêtre native n'est pas lancée, ce qui est un mode d'utilisation pris en charge."
   },
   "picker": {
     "title": "À quoi devrais-je jouer ?",
@@ -1144,7 +1156,19 @@
     "kind_edit": "Modifier",
     "kind_delete": "Supprimer",
     "kind_restore": "Restaurer",
-    "kind_revert": "Rétablir"
+    "kind_revert": "Rétablir",
+    "compare": "Comparer",
+    "compare_before": "De (facultatif)",
+    "compare_after": "À",
+    "compare_run": "Comparer",
+    "compare_hint": "Choisissez une date, ou deux, pour voir ce qui a changé entre elles. Sans date de début, chaque jeu apparaît comme ajouté.",
+    "compare_need_after": "Choisissez d'abord la date de fin.",
+    "compare_added": "Ajoutés",
+    "compare_removed": "Supprimés",
+    "compare_changed": "Modifiés",
+    "compare_showing": "{shown} affichés sur {total}",
+    "compare_none": "Rien ne diffère entre ces dates.",
+    "compare_baseline_incomplete": "La date de début précède l'historique conservé ; certains jeux déjà présents peuvent apparaître comme ajoutés."
   },
   "trash": {
     "view": "Corbeille",
@@ -1337,5 +1361,22 @@
   },
   "story": {
     "export_png": "Exporter l'histoire en PNG"
+  },
+  "defs": {
+    "title": "Définitions d'émulateurs",
+    "status_bundled": "Les définitions fournies avec OpenBox sont utilisées.",
+    "status_pack": "Pack communautaire {version} installé ({count} définitions).",
+    "locally_modified": "Modifiées par vous et jamais écrasées : {names}",
+    "check": "Rechercher des mises à jour de définitions",
+    "install": "Installer la mise à jour",
+    "rollback": "Revenir aux définitions fournies",
+    "checking": "Vérification…",
+    "up_to_date": "Les définitions sont à jour ({version}).",
+    "available": "Mise à jour disponible : {version}. {notes}",
+    "none_published": "Aucun pack de définitions communautaire n'est encore publié. Les définitions fournies continuent de fonctionner.",
+    "check_failed": "Impossible de rechercher des mises à jour : {error}",
+    "installed": "Pack {version} installé : {count} nouvelles, {updated} mises à jour, {kept} conservées car vous les avez modifiées.",
+    "rejected": "Le pack téléchargé a échoué à la vérification de signature et a été écarté. Rien n'a été modifié. Voir les notifications.",
+    "rolled_back": "{count} définitions installées par le canal supprimées."
   }
 }

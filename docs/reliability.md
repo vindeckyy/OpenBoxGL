@@ -64,7 +64,7 @@ and known limits are `Documented`.
 | 41 | Second instance with the same data directory | The named pipe created with `FILE_FLAG_FIRST_PIPE_INSTANCE` is the atomic guard; the second process forwards `focus` and the first window raises. Verify by launching two instances against one data dir | Manual (CI only compiles `native_host_win.c`; it does not drive two windows) |
 | 42 | `openbox://` deeplink with the app closed | A cold-start browser dispatch reaches the running or newly started window. Verify by closing OpenBox, then opening an `openbox://` link | Manual (requires a registered protocol handler) |
 | 43 | Update applied while OpenBox is running | The detached PowerShell applier completes the swap after the server stops, keeping `openbox.previous`; a refusal to replace a non-installed tree is reported | Manual (requires an installed tree; the update path is exercised end to end by the release job, not by unit tests) |
-| 44 | Path longer than 260 characters | Behavior depends on the system long-path opt-in; without it, an explicit error naming the path is expected rather than a truncated launch | Documented (Windows MAX_PATH; long paths are not normalized by `platform_compat` in 1.14.1) |
+| 44 | Path longer than 260 characters | Behavior depends on the system long-path opt-in; without it, an explicit error naming the path is expected rather than a truncated launch | Documented (Windows MAX_PATH; long paths are not normalized by `platform_compat` in 1.15) |
 
 ## Contributor channel
 
@@ -80,3 +80,11 @@ happened, and its status says what stops it happening again.
 | 46 | A UI fixture pins an absolute date against a rolling window | The fixture ages out of its own window and fails for a reason unrelated to the code under test. The activity smoke fixture did exactly this on 2026-09-23, once it was 30 days older than its hardcoded timestamps | Tested (`tests/test_feature_contracts.py` `ClockCouplingTest` writes a date-pinned fixture and asserts `check_clock_coupling.py` reports it; the marker and ledger live in `scripts/contracts/clock_coupling.json`) |
 | 47 | A wall-clock budget is measured once, cold | The reading charges the algorithm for the interpreter's lazy initialization and the runner's scheduling noise, so it fails on a loaded shared runner and passes on every developer machine. The 10k-ROM import budget sat at a 231ms median against a 250ms budget for exactly this reason | Tested (`tests/test_ci_gates.py` `test_import_benchmark_is_warmed_and_best_of_n` pins the warm-up of both functions, the best-of-N assertion, and the unchanged 250ms budget; proven behaviorally by extracting the pre-change file and running both forms under escalating CPU load, where the old form fails at 8 and 10 threads and the new form passes at up to 16) |
 | 48 | The Windows CI runner gives a suite a single chance | A timing flake is reported as a hard failure, so only CI can see it and every developer machine stays green. `run_windows_tests.py` ran each suite once while the local gate allows three attempts | Tested (`scripts/run_windows_tests.py` retries like `check_tests.py`, marks a retried suite as passed, and still prints the first attempt's failure so a real intermittent bug surfaces; covered by `tests/test_windows_runner.py`) |
+
+## Windows lifecycle
+
+Added after the contributor rows so existing row numbers stay stable.
+
+| # | Scenario | Expected behavior | Status |
+|---|---|---|---|
+| 49 | Uninstalling OpenBox on Windows | `scripts/uninstall.ps1` removes the install tree and its `openbox.previous` rollback copy, the user PATH entry, the Start Menu shortcut, and the `openbox://` registration, and nothing else: the library and settings in the data folder (shown in Settings > About) survive so a reinstall picks them up. `-WhatIf` previews it | Tested (test_uninstall_script.py) |

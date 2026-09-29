@@ -762,8 +762,9 @@ const failures = [];
     const addBtn = document.getElementById('addButton');
     addBtn.focus();
     addBtn.click();
-    await new Promise(r => setTimeout(r, 300));
     const gameDialog = document.getElementById('gameDialog');
+    // opening awaits ensureProfiles() (an API call); a fixed 300ms is too short on a slow loopback
+    for (let i = 0; i < 40 && !gameDialog?.open; i++) await new Promise(r => setTimeout(r, 50));
     if (!gameDialog?.open) return false;
     document.getElementById('closeDialog').click();
     await new Promise(r => setTimeout(r, 300));
@@ -904,7 +905,7 @@ const failures = [];
   // M6 Game Night: overlay opens from the Big Box menu, builds a wheel, Escape closes.
   // Seed two couch-eligible games server-side (node owns /tmp fixture files;
   // the page cannot create them). Cleaned up right after this block.
-  const partySeedDir = fs.mkdtempSync('/tmp/obx-party-seed-');
+  const partySeedDir = fs.mkdtempSync(require('path').join(require('os').tmpdir(), 'obx-party-seed-'));
   const partySeedIds = [];
   try {
     for (const [name, rom] of [['Party Kart', 'kart.bin'], ['Couch Brawler', 'brawl.bin']]) {
@@ -1577,6 +1578,61 @@ const failures = [];
   hardening.filter = {...hardening.filter, ...filterResult};
   console.log('rapid filter:', JSON.stringify(hardening.filter));
 
+  // 15. Motion contract (ADR 0063): exits animate, reduced motion is instant, and data-driven
+  // re-renders (a search keystroke) never replay the grid entrance.
+  const motion = {};
+  // Headless Chrome inherits the OS animation setting (Windows can report reduce), so pin it explicitly.
+  await page.emulateMediaFeatures([{name: 'prefers-reduced-motion', value: 'no-preference'}]);
+  motion.gridEntrance = await page.evaluate(async () => {
+    const search = document.getElementById('sidebarSearch');
+    search.value = '';
+    search.dispatchEvent(new Event('input', {bubbles: true}));
+    await new Promise(r => setTimeout(r, 600));
+    document.querySelectorAll('.motion-enter').forEach(el => el.classList.remove('motion-enter'));
+    search.value = 'Chrono';
+    search.dispatchEvent(new Event('input', {bubbles: true}));
+    await new Promise(r => setTimeout(r, 800));
+    const replayed = document.querySelectorAll('.card.motion-enter,.list-row.motion-enter').length;
+    search.value = '';
+    search.dispatchEvent(new Event('input', {bubbles: true}));
+    return {replayed, cards: document.querySelectorAll('.card,.list-row').length};
+  });
+  console.log('motion grid entrance:', JSON.stringify(motion.gridEntrance));
+  motion.dialogExit = await page.evaluate(async () => {
+    const d = document.getElementById('themesDialog');
+    d.showModal();
+    await new Promise(r => setTimeout(r, 300));
+    d.close();
+    const during = d.open && d.classList.contains('closing');
+    await new Promise(r => setTimeout(r, 500));
+    return {during, after: !d.open && !d.classList.contains('closing')};
+  });
+  console.log('motion dialog exit:', JSON.stringify(motion.dialogExit));
+  motion.toast = await page.evaluate(async () => {
+    const st = await import('/static/state.js');
+    const toast = document.getElementById('toast');
+    toast.innerHTML = '<span>Moved</span><button type="button" class="trash-undo">Undo</button>';
+    toast.dataset.notifyLevel = 'info';
+    st.revealToast(8000);
+    st.notify('other message');
+    const kept = !!toast.querySelector('.trash-undo');
+    const topLayer = toast.matches(':popover-open');
+    st.hideToast();
+    await new Promise(r => setTimeout(r, 600));
+    return {kept, topLayer, flushed: toast.textContent === 'other message'};
+  });
+  console.log('motion toast:', JSON.stringify(motion.toast));
+  await page.emulateMediaFeatures([{name: 'prefers-reduced-motion', value: 'reduce'}]);
+  motion.reduced = await page.evaluate(async () => {
+    const dur = getComputedStyle(document.documentElement).getPropertyValue('--dur-slow');
+    const d = document.getElementById('themesDialog');
+    d.showModal();
+    await new Promise(r => setTimeout(r, 100));
+    d.close();
+    return {tokenZero: parseFloat(dur) <= 1, closedSync: !d.open, animations: document.getAnimations().filter(a => a.playState === 'running' && a.effect?.getTiming().iterations === 1 / 0 ? false : a.playState === 'running').length};
+  });
+  await page.emulateMediaFeatures([{name: 'prefers-reduced-motion', value: 'no-preference'}]);
+  console.log('motion reduced:', JSON.stringify(motion.reduced));
   (perfChecks.coverflowNodes > 11) && failures.push("perfChecks.coverflowNodes <= 11");
   (!perfChecks.gridNodeCount) && failures.push("perfChecks.gridNodeCount");
   (perfChecks.gridNodeCount >= perfChecks.visibleCount) && failures.push("perfChecks.gridNodeCount < perfChecks.visibleCount");
@@ -1586,6 +1642,16 @@ const failures = [];
   (!perfChecks.searchIndexStats || perfChecks.searchIndexStats.games !== 20000) && failures.push("search index covers all 20000 games");
   (perfChecks.searchMs > 20) && failures.push("perfChecks.searchMs <= 20");
 
+  (motion.gridEntrance.cards < 1) && failures.push("motion.gridEntrance.cards");
+  (motion.gridEntrance.replayed > 0) && failures.push("motion: a search keystroke must not replay the grid entrance");
+  (!motion.dialogExit.during) && failures.push("motion.dialogExit.during (exit animation plays)");
+  (!motion.dialogExit.after) && failures.push("motion.dialogExit.after (dialog finishes closing)");
+  (!motion.toast.kept) && failures.push("motion.toast: a notify() must not clobber an Undo toast");
+  (!motion.toast.topLayer) && failures.push("motion.toast: toast must live in the top layer");
+  (!motion.toast.flushed) && failures.push("motion.toast: the held message shows after the Undo toast closes");
+  (!motion.reduced.tokenZero) && failures.push("motion.reduced.tokenZero");
+  (!motion.reduced.closedSync) && failures.push("motion.reduced.closedSync");
+  (motion.reduced.animations > 0) && failures.push("motion.reduced.animations (nothing may animate)");
   console.log('JS errors:', errors.length ? errors.join('\n') : 'none');
   await browser.close();
   (errors.length) && failures.push("no page or console errors");
