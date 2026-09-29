@@ -86,7 +86,7 @@ class TimeMachineHandlers:
 
     @route("GET", "/api/v2/library/time-machine/compare")
     def _api_get_api_v2_library_time_machine_compare(self, parsed):
-        """Read-only diff of the library at two dates (1.14.1).
+        """Read-only diff of the library at two dates (1.15).
 
         `after` is required; omitting `before` diffs the date against an
         empty baseline, so every game reads as added — a restore-point view.

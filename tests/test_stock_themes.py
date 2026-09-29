@@ -20,6 +20,15 @@ VAR_DEF_RE = re.compile(r"--([\w-]+)\s*:\s*([^;]+);")
 HEX_RE = re.compile(r"#(?:[0-9a-fA-F]{3}){1,2}\b")
 
 
+# Motion tokens are structural (ADR 0063): themes must not redeclare them, or a theme
+# stylesheet loaded after app.css would defeat the single reduced-motion override.
+STRUCTURAL = ("dur-", "ease-", "stagger", "mood-transition")
+
+
+def _is_structural(name: str) -> bool:
+    return name.startswith(STRUCTURAL)
+
+
 def _parse_root_vars(css_text: str):
     match = ROOT_BLOCK_RE.search(css_text)
     if not match:
@@ -125,7 +134,7 @@ class StockThemesTests(unittest.TestCase):
             installed = ensure_stock_themes(destination, ROOT)
             self.assertIn("Cinema Marquee", installed)
             refreshed = stale.read_text(encoding="utf-8")
-            self.assertIn("v3", refreshed)
+            self.assertIn("v4", refreshed)
             self.assertNotIn("backdrop-filter: blur(8px)", refreshed)
             # A second run with the current version is a no-op.
             self.assertEqual(ensure_stock_themes(destination, ROOT), [])
@@ -152,7 +161,7 @@ class StockThemesTests(unittest.TestCase):
                             )
 
     def test_stock_themes_are_offline_and_token_only(self):
-        app_tokens = set(_parse_root_vars(APP_CSS.read_text(encoding="utf-8")).keys())
+        app_tokens = {n for n in _parse_root_vars(APP_CSS.read_text(encoding="utf-8")) if not _is_structural(n)}
         for path in stock_theme_sources(ROOT):
             css = path.read_text(encoding="utf-8")
             self.assertNotIn("http", css.lower(), f"{path.name} must not request remote assets")
@@ -160,6 +169,8 @@ class StockThemesTests(unittest.TestCase):
             outside = ROOT_BLOCK_RE.sub("", css)
             self.assertEqual(len(HEX_RE.findall(outside)), 0, f"{path.name} must be token-only outside :root")
             theme_tokens = set(_parse_root_vars(css).keys())
+            redeclared = sorted(n for n in theme_tokens if _is_structural(n))
+            self.assertFalse(redeclared, f"{path.name} must not redeclare structural motion tokens: {redeclared}")
             missing = sorted(app_tokens - theme_tokens)
             self.assertFalse(missing, f"{path.name} missing :root tokens: {missing[:8]}")
 
@@ -174,6 +185,43 @@ class StockThemesTests(unittest.TestCase):
             self.assertGreaterEqual(_contrast_ratio(text, bg), 4.5, f"{path.name} text/bg contrast")
             if muted:
                 self.assertGreaterEqual(_contrast_ratio(muted, bg), 4.5, f"{path.name} muted/bg contrast")
+
+
+# Contrast matrix (ADR 0063): every stock theme, every foreground/background pair a component
+# actually pairs. A single list so a new theme or token cannot dodge it. (fg, bg, minimum, label)
+CONTRAST_PAIRS = [
+    ("text", "bg", 4.5, "body text"),
+    ("muted", "bg", 4.5, "muted text"),
+    ("ink-strong", "surface-card", 4.5, "card title"),
+    ("ink-strong", "surface-field", 4.5, "input text"),
+    ("ink-strong", "surface-hover", 4.5, "hovered nav item"),
+    ("ink-strong", "rating-badge-bg", 4.5, "rating badge"),
+    ("text", "surface-insight-card", 4.5, "insight card"),
+    ("on-active", "active", 4.5, "text on the active colour"),
+    ("on-active", "accent", 4.5, "text on the accent colour"),
+    ("on-danger", "danger", 4.5, "text on danger"),
+    ("toast-success-fg", "surface-card", 4.5, "success toast"),
+    ("toast-info-fg", "surface-card", 4.5, "info toast"),
+    ("toast-warning-fg", "surface-card", 4.5, "warning toast"),
+    ("toast-error-fg", "surface-card", 4.5, "error toast"),
+    ("text-health-ok", "surface-health-ok", 4.5, "health ok"),
+    ("text-health-warn", "surface-health-warn", 4.5, "health warn"),
+    ("text-health-fail", "surface-health-fail", 4.5, "health fail"),
+    ("border-input", "surface-field", 3.0, "input boundary (WCAG 1.4.11)"),
+    ("focus", "surface-card", 3.0, "focus ring"),
+]
+
+
+class ContrastMatrixTests(unittest.TestCase):
+    def test_every_stock_theme_meets_the_matrix(self):
+        for path in [APP_CSS, *stock_theme_sources(ROOT)]:
+            tokens = _parse_root_vars(path.read_text(encoding="utf-8"))
+            for fg, bg, minimum, label in CONTRAST_PAIRS:
+                a, b = _resolve_color(tokens, fg), _resolve_color(tokens, bg)
+                self.assertIsNotNone(a, f"{path.name}: --{fg} must resolve to a colour")
+                self.assertIsNotNone(b, f"{path.name}: --{bg} must resolve to a colour")
+                self.assertGreaterEqual(_contrast_ratio(a, b), minimum,
+                                        f"{path.name}: {label} (--{fg} on --{bg}) is {_contrast_ratio(a, b):.2f}:1")
 
 
 def _css_blocks(css):

@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.14.0**, the library-intelligence release described in the CHANGELOG.
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.15.0**, the library-intelligence release described in the CHANGELOG.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -162,7 +162,7 @@ build has a deliberate, documented narrower surface.
 | Launcher ladder | done | `openbox.cmd` / `openbox.ps1` / `openbox-native.ps1` mirror the shell scripts: native host, else browser app window, else a plain tab; `openbox --web` forces the browser (1.13.0) |
 | Emulator detection and launch | done | Every bundled definition carries `native_exe_windows`, enforced by `scripts/check_emulator_defs.py`, so adapter prefix detection, resume state, and Launch Doctor work with Windows builds (1.13.0, ADR 0060) |
 | Library data location | done | `%LOCALAPPDATA%\openbox-game-launcher`; `OPENBOX_DATA_DIR` overrides everything and stored relative references keep POSIX separators so a library moves between platforms (1.13.0) |
-| Reliability catalog | done | Windows-specific failure modes are catalogued in `docs/reliability.md` with the same Tested/Manual discipline as the shared rows (1.14.1, ADR 0060) |
+| Reliability catalog | done | Windows-specific failure modes are catalogued in `docs/reliability.md` with the same Tested/Manual discipline as the shared rows (1.15, ADR 0062) |
 | AppImage / Flatpak packaging | not applicable | Linux-only channels; the Windows artifact is the signed portable zip (ADR 0013) |
 | gamescope / Steam Game Mode presets | not applicable | Linux-only; the gamescope preset setting persists but has no effect on Windows |
 | XDG desktop entry | not applicable | Replaced by the Start Menu shortcut and `HKCU` protocol registration |

@@ -49,6 +49,7 @@
     "45:a-file-carrying-a-shebang-loses-its-exec-bit",
     "46:a-ui-fixture-pins-an-absolute-date-against-a-rolling-window",
     "47:a-wall-clock-budget-is-measured-once-cold",
-    "48:the-windows-ci-runner-gives-a-suite-a-single-chance"
+    "48:the-windows-ci-runner-gives-a-suite-a-single-chance",
+    "49:uninstalling-openbox-on-windows"
   ]
 }

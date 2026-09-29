@@ -166,6 +166,50 @@ async function loadAsOf() {
   }
 }
 
+function compareSection(label, rows, total, renderRow) {
+  if (!total) return '';
+  const showing = t('time_machine.compare_showing', { shown: rows.length, total });
+  return `<div class="timeline-group"><h3 class="timeline-date">${escapeHtml(label)} (${total}${rows.length < total ? `, ${escapeHtml(showing)}` : ''})</h3>${rows.map(renderRow).join('')}</div>`;
+}
+
+function compareRowName(entry) {
+  return entry.record?.name || entry.sync_key || t('common.none');
+}
+
+// Read-only two-date diff (ADR 0044: nothing here can revert or touch paths or launch config).
+async function loadCompare() {
+  const body = $('timeMachineCompareBody');
+  const meta = $('timeMachineCompareMeta');
+  const after = $('tmCompareAfter')?.value?.trim();
+  const before = $('tmCompareBefore')?.value?.trim();
+  if (!body || !meta) return;
+  if (!after) {
+    meta.textContent = t('time_machine.compare_need_after');
+    body.innerHTML = '';
+    return;
+  }
+  meta.textContent = t('time_machine.loading');
+  body.innerHTML = '';
+  try {
+    const params = new URLSearchParams({ after });
+    if (before) params.set('before', before);
+    const result = await api(`/api/v2/library/time-machine/compare?${params}`);
+    const { added = [], removed = [], changed = [], summary = {} } = result;
+    const notes = [];
+    if (result.baseline_incomplete) notes.push(t('time_machine.compare_baseline_incomplete'));
+    if (result.later_truncated) notes.push(t('time_machine.truncated', { date: result.after }));
+    meta.textContent = [`${summary.added || 0} ${t('time_machine.compare_added')} · ${summary.removed || 0} ${t('time_machine.compare_removed')} · ${summary.changed || 0} ${t('time_machine.compare_changed')}`, ...notes].join(' · ');
+    const row = (entry, extra = '') => `<article class="timeline-entry"><div class="timeline-meta"><div class="timeline-name">${escapeHtml(compareRowName(entry))}</div>${extra}</div></article>`;
+    const html = compareSection(t('time_machine.compare_added'), added, summary.added || 0, entry => row(entry))
+      + compareSection(t('time_machine.compare_removed'), removed, summary.removed || 0, entry => row(entry))
+      + compareSection(t('time_machine.compare_changed'), changed, summary.changed || 0, entry => row(entry, `<div class="tm-changes">${renderChanges(entry.fields)}</div>`));
+    body.innerHTML = html || `<p class="muted">${escapeHtml(t('time_machine.compare_none'))}</p>`;
+  } catch (error) {
+    meta.textContent = '';
+    body.innerHTML = `<p class="muted">${escapeHtml(error.message || String(error))}</p>`;
+  }
+}
+
 async function previewRevert(button) {
   let fields = [];
   try { fields = JSON.parse(button.dataset.tmFields || '[]'); } catch { fields = []; }
@@ -212,15 +256,20 @@ function notifyRevertError(error) {
   notify(error.message || String(error));
 }
 
+const TABS = { events: ['tmEventsTab', 'timeMachineEventsPane'], asof: ['tmAsOfTab', 'timeMachineAsOfPane'], compare: ['tmCompareTab', 'timeMachineComparePane'] };
+
 function showTab(tab) {
-  const events = tab === 'events';
-  $('timeMachineEventsPane').hidden = !events;
-  $('timeMachineAsOfPane').hidden = events;
-  $('tmEventsTab').setAttribute('aria-selected', String(events));
-  $('tmAsOfTab').setAttribute('aria-selected', String(!events));
-  $('tmEventsTab').classList.toggle('active', events);
-  $('tmAsOfTab').classList.toggle('active', !events);
-  if (!events && !$('timeMachineAsOfBody').dataset.loaded) loadAsOf();
+  Object.entries(TABS).forEach(([name, [tabId, paneId]]) => {
+    const active = name === tab;
+    $(paneId).hidden = !active;
+    $(tabId).setAttribute('aria-selected', String(active));
+    $(tabId).classList.toggle('active', active);
+  });
+  if (tab === 'asof' && !$('timeMachineAsOfBody').dataset.loaded) loadAsOf();
+}
+
+function currentTab() {
+  return Object.keys(TABS).find(name => !$(TABS[name][1]).hidden) || 'events';
 }
 
 function bindTimeMachine() {
@@ -231,6 +280,8 @@ function bindTimeMachine() {
   $('closeTimeMachine').onclick = () => target.close();
   $('tmEventsTab').onclick = () => showTab('events');
   $('tmAsOfTab').onclick = () => showTab('asof');
+  $('tmCompareTab').onclick = () => showTab('compare');
+  $('tmCompareButton').onclick = () => loadCompare();
   $('tmRefresh').onclick = () => loadEvents(true);
   $('tmKind').onchange = () => loadEvents(true);
   $('tmDays').onchange = () => loadEvents(true);
@@ -243,8 +294,9 @@ function bindTimeMachine() {
   target.addEventListener('close', () => { $('timeMachineAsOfBody').dataset.loaded = ''; });
   document.addEventListener('localechange', () => {
     if (target.open) {
-      showTab($('timeMachineEventsPane').hidden ? 'asof' : 'events');
-      if (!$('timeMachineEventsPane').hidden) loadEvents(true);
+      const tab = currentTab();
+      showTab(tab);
+      if (tab === 'events') loadEvents(true);
     }
   });
 }

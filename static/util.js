@@ -262,4 +262,11 @@
       return common / q.size;
     }
 
-export { $, escapeHtml, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, gameLinks, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches, trigramsOf, expandTrigrams, trigramScore };
+// Read a duration token (ADR 0063) in ms at call time, so an OS reduced-motion toggle is honoured live
+// (the reduced-motion block zeroes every --dur-* token).
+function motionMs(name) {
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(v) ? v : 0;
+}
+
+export { $, escapeHtml, motionMs, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, gameLinks, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches, trigramsOf, expandTrigrams, trigramScore };

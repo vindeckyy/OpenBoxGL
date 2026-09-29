@@ -54,9 +54,11 @@
     "dismiss": "Got it",
     "tip_search": "Use Ctrl/Cmd-K to open the command palette and jump to a game or tool.",
     "tip_clip": "The Big Box pause panel keeps Clip it close while a game is running.",
-    "tip_time_machine": "Time Machine can show the state of your library as of an earlier event before you revert anything.",
+    "tip_time_machine": "Time Machine can compare your library between two dates, or show it as of an earlier date, before you revert anything.",
     "tip_big_box": "In Big Box, the hybrid layout keeps a searchable platform rail beside the controller-first stage.",
-    "say_it_body": "Try phrases like “short unplayed RPG” or “co-op for 4” in the library search bar. The interpreted filters appear as chips."
+    "say_it_body": "Try phrases like “short unplayed RPG” or “co-op for 4” in the library search bar. The interpreted filters appear as chips.",
+    "tip_defs": "Emulators has a Check for definition updates button that installs signed community definitions without touching the ones you edited.",
+    "tip_about": "Settings > About shows your version, platform, data folder, and whether OpenBox is in its native window or a browser tab."
   },
   "shortcuts": {
     "command_palette": "Command palette",
@@ -196,7 +198,10 @@
     "resize_details": "Resize details pane",
     "jump_view": "Jump through the current view",
     "play_insights": "Play insights",
-    "sort_my_rating": "My rating"
+    "sort_my_rating": "My rating",
+    "no_match_title": "No games match this view",
+    "no_match_hint": "Change the active filters or search the library again.",
+    "clear_filters": "Clear filters"
   },
   "dialog": {
     "add_game": "Add game",
@@ -863,7 +868,14 @@
     "health_rescan_weekly": "Weekly",
     "health_rescan_on_startup": "On startup",
     "health_rescan_off": "Off",
-    "backlog_progress_suggest": "Suggest marking games as Playing on first play"
+    "backlog_progress_suggest": "Suggest marking games as Playing on first play",
+    "about": "About",
+    "about_version": "Version",
+    "about_platform": "Platform",
+    "about_data_dir": "Data folder",
+    "about_host": "Window",
+    "about_host_native": "Native window (WebView)",
+    "about_host_browser": "Browser tab. The native window is not running, which is a supported way to use OpenBox."
   },
   "picker": {
     "title": "What should I play?",
@@ -1144,7 +1156,19 @@
     "kind_edit": "Edit",
     "kind_delete": "Delete",
     "kind_restore": "Restore",
-    "kind_revert": "Revert"
+    "kind_revert": "Revert",
+    "compare": "Compare",
+    "compare_before": "From (optional)",
+    "compare_after": "To",
+    "compare_run": "Compare",
+    "compare_hint": "Pick a date, or two dates to see what changed between them. Without a start date every game reads as added.",
+    "compare_need_after": "Choose the end date first.",
+    "compare_added": "Added",
+    "compare_removed": "Removed",
+    "compare_changed": "Changed",
+    "compare_showing": "showing {shown} of {total}",
+    "compare_none": "Nothing differs between these dates.",
+    "compare_baseline_incomplete": "The start date predates the kept history, so some games may read as added that were already there."
   },
   "trash": {
     "view": "Trash",
@@ -1337,5 +1361,22 @@
   },
   "story": {
     "export_png": "Export story as PNG"
+  },
+  "defs": {
+    "title": "Emulator definitions",
+    "status_bundled": "Using the definitions that ship with OpenBox.",
+    "status_pack": "Community pack {version} installed ({count} definitions).",
+    "locally_modified": "Edited by you and never overwritten: {names}",
+    "check": "Check for definition updates",
+    "install": "Install update",
+    "rollback": "Roll back to bundled",
+    "checking": "Checking…",
+    "up_to_date": "Definitions are up to date ({version}).",
+    "available": "Update available: {version}. {notes}",
+    "none_published": "No community definition pack is published yet. The bundled definitions keep working.",
+    "check_failed": "Could not check for updates: {error}",
+    "installed": "Installed pack {version}: {count} new, {updated} updated, {kept} kept because you edited them.",
+    "rejected": "The downloaded pack failed signature verification and was discarded. Nothing was changed. See Notifications.",
+    "rolled_back": "Removed {count} definitions the channel installed."
   }
 }

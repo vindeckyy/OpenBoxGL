@@ -1,11 +1,10 @@
 /* party.js — Game Night Big Box party mode: setup, wheel, up-next, launch. */
-import { $, escapeHtml } from './util.js';
+import { $, escapeHtml, motionMs } from './util.js';
 import { t } from './i18n.js';
 import { AppState, api, media, notify } from './state.js';
 import { launch } from './sessions.js';
 
 const WHEEL_COLORS = ['var(--brand)', 'var(--accent)', 'var(--active)', 'var(--focus)'];
-const SPIN_MS = 2400;
 const SESSION_LENGTHS = [0, 15, 30, 45, 60, 90, 120];
 
 let players = 2;
@@ -321,7 +320,8 @@ function spinWheel() {
   const target = currentRotation + 360 * 5 + (((-(queueIndex + 0.5) * seg - currentRotation) % 360 + 360) % 360);
   currentRotation = target;
   const wheel = $('partyWheel');
-  wheel.style.transition = `transform ${SPIN_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
+  const spinMs = motionMs('--dur-spin');
+  wheel.style.transition = 'transform var(--dur-spin) var(--ease-out)';
   // Force style recalc so the transition runs from the current angle.
   void wheel.offsetWidth;
   wheel.style.transform = `rotate(${target.toFixed(2)}deg)`;
@@ -329,7 +329,7 @@ function spinWheel() {
     spinning = false;
     spun = true;
     renderWinner();
-  }, SPIN_MS + 60);
+  }, spinMs + 60);
 }
 
 function launchWinner() {

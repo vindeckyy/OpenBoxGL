@@ -8,6 +8,8 @@ const TIPS = [
   'whats_new.tip_clip',
   'whats_new.tip_time_machine',
   'whats_new.tip_big_box',
+  'whats_new.tip_defs',
+  'whats_new.tip_about',
 ];
 
 let dialog = null;

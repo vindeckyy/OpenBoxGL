@@ -235,7 +235,7 @@ function renderJobRow(job) {
     </div>
     <div class="activity-row-meta">
       <span class="activity-row-phase">${escapeHtml(job.phase || '')}</span>
-      ${progress ? `<span class="activity-row-progress">${escapeHtml(progress)}</span>` : ''}
+      ${progress ? `<span class="activity-row-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${Number(job.total)}" aria-valuenow="${Math.min(Number(job.current) || 0, Number(job.total))}" aria-valuetext="${escapeHtml(progress)}" style="--progress:${Math.round(100 * Math.min(Number(job.current) || 0, Number(job.total)) / Number(job.total))}%">${escapeHtml(progress)}</span>` : ''}
       <span class="activity-row-elapsed">${escapeHtml(formatElapsed(job))}</span>
     </div>
     ${job.message ? `<p class="activity-row-message">${escapeHtml(job.message)}</p>` : ''}

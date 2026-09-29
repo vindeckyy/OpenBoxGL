@@ -314,3 +314,74 @@ Big Box is the signature fullscreen component. It enlarges the same cover, title
 - **Don't** replace the dense library workflow with a generic dashboard of oversized cards.
 - **Don't** add a new type family or palette role to the base system without a theme or product decision.
 - **Don't** use permanent glow or deep shadows on every component; reserve them for state and elevation.
+
+
+## Shipped truth (1.15)
+
+The sections above are the original design intent. Where they disagree with `static/app.css`,
+`static/app.css` and the sections below win. Known drift, so nobody designs against it:
+
+- **Font.** No web font is loaded. The body stack is `ui-sans-serif, system-ui, sans-serif`, and there is
+  no font-family token, so a theme cannot change the typeface.
+- **Blur.** There is no `backdrop-filter` anywhere; it was removed for scroll performance.
+- **Scales.** The real spacing scale is `--space-3xs..2xl` (2/4/8/12/16/24/32/48 px). Radius tokens are
+  `--radius-hairline` 2, `--radius-cover` 5, `--radius-panel` 12 and `--radius-pill-large` 28 px. Font sizes are
+  the `--font-*` tokens (`--font-label` 12 px, `--font-micro` 10 px). Line height is `--leading-normal` 1.45.
+- **Colours.** `panel2` and `mark-*` are not tokens. `--green` is `#6abf6a` in the default theme.
+
+### Text on colour: semantic ink tokens
+
+Never use `--white` as a text colour. Dark themes set it to their text tone and Harbor Light sets it to pure white,
+which made light-theme inputs and cards unreadable. Use:
+
+| Token | For |
+|---|---|
+| `--ink-strong` | strong text on cards, fields, hovered nav items |
+| `--on-active` | text on `--active` / `--accent` (dark ink on the bright dark-theme accents, white on Harbor Light) |
+| `--on-danger` | text on `--danger` |
+| `--border-input` | the boundary of an input, at least 3:1 against `--surface-field` |
+| `--state-hover`, `--state-press` | translucent overlays, applied with `background-image: linear-gradient(...)` so they work over any base colour |
+
+`tests/test_stock_themes.py` runs a contrast matrix over every theme; add a pair there when you add a pairing.
+
+### Motion (ADR 0063)
+
+Every duration and easing is a token. Raw `ms`/`s` values and `cubic-bezier()` outside `:root` fail
+`scripts/check_tokens.py`.
+
+| Token | Value | Use |
+|---|---|---|
+| `--dur-fast` | 150 ms | hover, press, focus ring, star fade, coverflow |
+| `--dur-base` | 200 ms | menus, toasts, cover fade-in, theme cross-fade |
+| `--dur-slow` | 240 ms | dialog and overlay entrances, surface entrance, mood colour |
+| `--dur-out` | 140 ms | every exit |
+| `--dur-spin` | 2400 ms | party wheel |
+| `--stagger` | 20 ms | entrance stagger step (capped at 10 items) |
+| `--ease-out` | `cubic-bezier(.2,.8,.2,1)` | enters |
+| `--ease-in` | `cubic-bezier(.4,0,1,1)` | exits |
+| `--ease-move` | `cubic-bezier(.4,0,.2,1)` | position and size changes |
+
+Rules: animate `transform` and `opacity`; enters rise 8 px, exits fall 4 px; an exit is shorter than its enter; an
+entrance plays for a view change, never for a data-driven re-render; no persistent `will-change`; every script-driven
+loop reads `motionMs()` and cancels on teardown. Motion tokens are structural: a theme must not redeclare them.
+
+Reduced motion is one block that zeroes the tokens (using `:root:root` so it beats a theme's `:root`). Do not add
+per-component `prefers-reduced-motion` rules for durations; do add one only to switch off an infinite loop or to hide
+decorative video.
+
+### Layers
+
+`.toast` and the error banner sit in the top layer (`popover="manual"`), above modal backdrops and Big Box. Dialogs use
+the native top layer. The remaining `z-index` values in `app.css` are legacy and counted by `check_tokens.py`; do not
+add new ones.
+
+### Breakpoints
+
+| Query | Why |
+|---|---|
+| `max-width: 1120px` | the three-column workspace needs 190 + 520 + 410 px; below that the details pane stacks |
+| `max-width: 760px` | phone layout |
+| `max-width: 620px` | narrow phone tweaks |
+| `(hover: hover) and (pointer: fine)` | hover styling and transitions only |
+| `(pointer: coarse)` | 44 px targets, always-visible star widget, larger hit areas |
+| `(forced-colors: active)` | system colours; selection and focus use `outline`, which forced colours keeps |

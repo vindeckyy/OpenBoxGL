@@ -511,7 +511,9 @@ class StockThemeContractTest(unittest.TestCase):
             # \w, not [a-z0-9-]: app.css ships --constellation-edge-co_played.
             return set(re.findall(r"(--[\w-]+)\s*:", block))
 
-        app = tokens(ROOT / "static" / "app.css")
+        # Structural motion tokens (ADR 0063) are deliberately not themable.
+        structural = ("--dur-", "--ease-", "--stagger", "--mood-transition")
+        app = {name for name in tokens(ROOT / "static" / "app.css") if not name.startswith(structural)}
         self.assertTrue(app)
         self.assertEqual(
             set(),

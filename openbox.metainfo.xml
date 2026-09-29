@@ -40,6 +40,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.15.0" date="2026-09-29">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.15.0</url>
+      <description>
+        <p>Finish the surface: one motion system with a single reduced-motion switch, exit animations on every dialog, a readable Harbor Light theme, a top-layer toast that never hides behind a modal, list semantics and live regions for the grid, a definitions panel for signed emulator updates, a Time Machine Compare tab, Settings About, and a Windows uninstaller.</p>
+      </description>
+    </release>
     <release version="1.14.0" date="2026-09-22">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.14.0</url>
       <description>

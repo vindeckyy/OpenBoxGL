@@ -1,10 +1,11 @@
-import { $, escapeHtml, formatBytes, defaultBadges, defaultControllerMap, fact } from './util.js';
-import { AppState, api, notify, token, selectedIds, playlistFor, applySidebarVisibility, nativePickFile, nativePickFolder } from './state.js';
+import { $, escapeHtml, formatBytes, defaultBadges, defaultControllerMap, fact, motionMs } from './util.js';
+import { AppState, api, notify, token, nativeCaps, selectedIds, playlistFor, applySidebarVisibility, nativePickFile, nativePickFolder } from './state.js';
 import { refresh, render, renderGrid, openRepairWizard, openDuplicatesDialog } from './library.js';
 import { applyLibraryMusic } from './bigbox.js';
 import { confirmAction, promptInput, closeDialog } from './dialogs.js';
 import { openSetupCenter } from './setup.js';
 import { t } from './i18n.js';
+import { initDefs } from './defs.js';
 import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.js';
 
 
@@ -252,9 +253,18 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       $('shutdownMessage').textContent = 'Running shutdown applications...';
       window.close();
     }
+    // Settings > About: answers "where is my stuff" and "why is this a browser tab" from the host report.
+    function renderAbout() {
+      const set = (id, value) => { const el = $(id); if (el) el.textContent = value; };
+      set('aboutVersion', nativeCaps.version || '');
+      set('aboutPlatform', { win32: 'Windows', linux: 'Linux', darwin: 'macOS' }[nativeCaps.platform] || nativeCaps.platform || '');
+      set('aboutDataDir', nativeCaps.data_dir || '');
+      set('aboutHost', nativeCaps.webview ? t('settings.about_host_native') : t('settings.about_host_browser'));
+    }
     async function openSettings() {
       try {
         AppState.appSettings = await api('/api/settings');
+        renderAbout();
         $('watchFolders').value = AppState.appSettings.watch_folders.join('\n');
         if ($('memoriesImportEnabled')) $('memoriesImportEnabled').checked = Boolean(AppState.appSettings.memories_import_enabled);
         if ($('memoriesImportRoots')) $('memoriesImportRoots').value = (AppState.appSettings.memories_import_roots || []).join('\n');
@@ -421,6 +431,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       container.querySelectorAll('[data-core-path]').forEach(btn => btn.onclick = () => { const p = btn.dataset.corePath; notify('Core missing: ' + p + ' — pick alternative core'); });
     }
     function renderEmulators(emulators) {
+      initDefs();
       $('emulatorCatalog').innerHTML = `<div class="extras"><button type="button" class="primary" id="installAllEmulators">Install all available emulators</button><button type="button" class="icon-button" id="updateAllEmulators">Update installed emulators</button></div>` + emulators.map(emulator => {
         const state = emulator.job.state || (emulator.installed ? 'installed' : 'available');
         const label = state === 'installing' ? 'Installing...' : emulator.installed ? 'Add profiles' : state === 'error' ? 'Retry' : 'Install';
@@ -490,14 +501,36 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       } catch(error) { notify(error.message); }
     }
     let perfDraft = {};
-    async function loadTheme() {
-      const result = await api(`/api/themes?platform=${encodeURIComponent(AppState.platform === 'all' ? '' : AppState.platform)}`);
-      $('themeStylesheet').href = result.selected ? `/api/theme.css?name=${encodeURIComponent(result.selected)}&token=${encodeURIComponent(token)}` : '';
+    // Per-platform answers are cached: the sidebar calls this on every platform click, and the selection
+    // only changes through the themes dialog (which asks for a fresh read).
+    const themeCache = new Map();
+    async function loadTheme(fresh = false) {
+      const platform = AppState.platform === 'all' ? '' : AppState.platform;
+      if (fresh) themeCache.clear();
+      let result = themeCache.get(platform);
+      if (!result) {
+        result = await api(`/api/themes?platform=${encodeURIComponent(platform)}`);
+        themeCache.set(platform, result);
+      }
+      const link = $('themeStylesheet');
+      const href = result.selected ? `/api/theme.css?name=${encodeURIComponent(result.selected)}&token=${encodeURIComponent(token)}` : '';
+      if (link.getAttribute('href') !== href) {
+        const root = document.documentElement;
+        // Cross-fade a live theme switch (not the first paint); reduced motion zeroes the token so it is skipped.
+        if (link.hasAttribute('href') && motionMs('--dur-base') > 1) {
+          root.classList.add('theme-switching');
+          const done = () => setTimeout(() => root.classList.remove('theme-switching'), motionMs('--dur-base') + 50);
+          link.addEventListener('load', done, { once: true });
+          setTimeout(() => root.classList.remove('theme-switching'), 1500);
+        }
+        link.href = href;
+      }
+      if (!platform) { try { localStorage.setItem('openbox.theme', result.selected || ''); } catch {} }
       return result;
     }
     async function openThemes() {
       try {
-        const result = await loadTheme();
+        const result = await loadTheme(true);
         const platforms = [...new Set(AppState.games.map(game => game.platform).filter(Boolean))].sort();
         $('themeScope').innerHTML = '<option value="">All platforms</option>' + platforms.map(name => `<option>${escapeHtml(name)}</option>`).join('');
         $('themeScope').value = AppState.platform === 'all' ? '' : AppState.platform;
@@ -1240,7 +1273,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
     };
     $('themesForm').onsubmit = async event => {
       event.preventDefault();
-      try { await api('/api/themes/select',{method:'POST',body:JSON.stringify({name:$('themeSelect').value,platform:$('themeScope').value})}); $('themesDialog').close(); await loadTheme(); notify('Theme applied'); } catch(error) { notify(error.message); }
+      try { await api('/api/themes/select',{method:'POST',body:JSON.stringify({name:$('themeSelect').value,platform:$('themeScope').value})}); $('themesDialog').close(); await loadTheme(true); notify('Theme applied'); } catch(error) { notify(error.message); }
     };
     $('achievementsForm').onsubmit = async event => {
       event.preventDefault();

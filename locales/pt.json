@@ -54,9 +54,11 @@
     "dismiss": "Entendi",
     "tip_search": "Use Ctrl/Cmd-K para abrir a paleta de comandos e ir direto a um jogo ou ferramenta.",
     "tip_clip": "O painel de pausa do Big Box mantém Clip it à mão durante o jogo.",
-    "tip_time_machine": "A Time Machine mostra o estado da biblioteca antes de qualquer reversão.",
+    "tip_time_machine": "O Time Machine pode comparar sua biblioteca entre duas datas, ou mostrá-la em uma data anterior, antes de reverter qualquer coisa.",
     "tip_big_box": "O layout híbrido do Big Box combina a barra de plataformas com o palco voltado ao controle.",
-    "say_it_body": "Experimente frases como “short unplayed RPG” ou “co-op for 4” na busca. Os filtros aparecem como chips."
+    "say_it_body": "Experimente frases como “short unplayed RPG” ou “co-op for 4” na busca. Os filtros aparecem como chips.",
+    "tip_defs": "Em Emuladores, o botão de atualizações de definições instala definições assinadas da comunidade sem mexer nas que você editou.",
+    "tip_about": "Configurações > Sobre mostra sua versão, plataforma, pasta de dados e se o OpenBox está na janela nativa ou em uma aba do navegador."
   },
   "shortcuts": {
     "command_palette": "Paleta de comandos",
@@ -196,7 +198,10 @@
     "resize_details": "Redimensionar painel de detalhes",
     "jump_view": "Navegar pela visualização atual",
     "play_insights": "Estatísticas de jogo",
-    "sort_my_rating": "Minha avaliação"
+    "sort_my_rating": "Minha avaliação",
+    "no_match_title": "Nenhum jogo corresponde a esta vista",
+    "no_match_hint": "Altere os filtros ativos ou pesquise a biblioteca novamente.",
+    "clear_filters": "Limpar filtros"
   },
   "dialog": {
     "add_game": "Adicionar jogo",
@@ -863,7 +868,14 @@
     "health_rescan_weekly": "Semanal",
     "health_rescan_on_startup": "Na inicialização",
     "health_rescan_off": "Desligada",
-    "backlog_progress_suggest": "Sugerir marcar jogos como «Jogando» na primeira partida"
+    "backlog_progress_suggest": "Sugerir marcar jogos como «Jogando» na primeira partida",
+    "about": "Sobre",
+    "about_version": "Versão",
+    "about_platform": "Plataforma",
+    "about_data_dir": "Pasta de dados",
+    "about_host": "Janela",
+    "about_host_native": "Janela nativa (WebView)",
+    "about_host_browser": "Aba do navegador. A janela nativa não está em execução, uma forma de uso compatível."
   },
   "picker": {
     "title": "O que devo jogar?",
@@ -1144,7 +1156,19 @@
     "kind_edit": "Editar",
     "kind_delete": "Excluir",
     "kind_restore": "Restaurar",
-    "kind_revert": "Reverter"
+    "kind_revert": "Reverter",
+    "compare": "Comparar",
+    "compare_before": "De (opcional)",
+    "compare_after": "Até",
+    "compare_run": "Comparar",
+    "compare_hint": "Escolha uma data, ou duas, para ver o que mudou entre elas. Sem data inicial, todos os jogos aparecem como adicionados.",
+    "compare_need_after": "Escolha primeiro a data final.",
+    "compare_added": "Adicionados",
+    "compare_removed": "Removidos",
+    "compare_changed": "Alterados",
+    "compare_showing": "mostrando {shown} de {total}",
+    "compare_none": "Nada difere entre essas datas.",
+    "compare_baseline_incomplete": "A data inicial é anterior ao histórico mantido, então alguns jogos que já existiam podem aparecer como adicionados."
   },
   "trash": {
     "view": "Lixeira",
@@ -1337,5 +1361,22 @@
   },
   "story": {
     "export_png": "Exportar historia como PNG"
+  },
+  "defs": {
+    "title": "Definições de emuladores",
+    "status_bundled": "Usando as definições que acompanham o OpenBox.",
+    "status_pack": "Pacote da comunidade {version} instalado ({count} definições).",
+    "locally_modified": "Editadas por você e nunca sobrescritas: {names}",
+    "check": "Verificar atualizações de definições",
+    "install": "Instalar atualização",
+    "rollback": "Voltar às incluídas",
+    "checking": "Verificando…",
+    "up_to_date": "As definições estão atualizadas ({version}).",
+    "available": "Atualização disponível: {version}. {notes}",
+    "none_published": "Ainda não há um pacote de definições da comunidade publicado. As definições incluídas continuam funcionando.",
+    "check_failed": "Não foi possível verificar atualizações: {error}",
+    "installed": "Pacote {version} instalado: {count} novas, {updated} atualizadas, {kept} mantidas porque você as editou.",
+    "rejected": "O pacote baixado falhou na verificação de assinatura e foi descartado. Nada foi alterado. Veja as notificações.",
+    "rolled_back": "Removidas {count} definições instaladas pelo canal."
   }
 }

@@ -54,9 +54,11 @@
     "dismiss": "Verstanden",
     "tip_search": "Mit Ctrl/Cmd-K öffnest du die Befehlspalette und springst zu einem Spiel oder Werkzeug.",
     "tip_clip": "Das Big-Box-Pausenmenü hält Clip it während des Spiels griffbereit.",
-    "tip_time_machine": "Time Machine zeigt den Bibliotheksstand vor einer Rücksetzung.",
+    "tip_time_machine": "Time Machine kann deine Bibliothek zwischen zwei Daten vergleichen oder zu einem früheren Datum anzeigen, bevor du etwas zurücksetzt.",
     "tip_big_box": "Das hybride Big-Box-Layout verbindet die Plattformleiste mit der controllerfreundlichen Bühne.",
-    "say_it_body": "Probiere Suchsätze wie „short unplayed RPG“ oder „co-op for 4“. Die erkannten Filter erscheinen als Chips."
+    "say_it_body": "Probiere Suchsätze wie „short unplayed RPG“ oder „co-op for 4“. Die erkannten Filter erscheinen als Chips.",
+    "tip_defs": "Unter Emulatoren prüft die Schaltfläche für Definitions-Updates signierte Community-Definitionen, ohne deine bearbeiteten anzutasten.",
+    "tip_about": "Einstellungen > Info zeigt Version, Plattform, Datenordner und ob OpenBox im nativen Fenster oder im Browser-Tab läuft."
   },
   "shortcuts": {
     "command_palette": "Befehlspalette",
@@ -196,7 +198,10 @@
     "resize_details": "Detailbereich skalieren",
     "jump_view": "Durch die aktuelle Ansicht springen",
     "play_insights": "Spielanalysen",
-    "sort_my_rating": "Meine Bewertung"
+    "sort_my_rating": "Meine Bewertung",
+    "no_match_title": "Keine Spiele passen zu dieser Ansicht",
+    "no_match_hint": "Ändere die aktiven Filter oder suche erneut in der Bibliothek.",
+    "clear_filters": "Filter zurücksetzen"
   },
   "dialog": {
     "add_game": "Spiel hinzufügen",
@@ -863,7 +868,14 @@
     "health_rescan_weekly": "Wöchentlich",
     "health_rescan_on_startup": "Beim Start",
     "health_rescan_off": "Aus",
-    "backlog_progress_suggest": "Vorschlagen, Spiele beim ersten Start als „Spielt“ zu markieren"
+    "backlog_progress_suggest": "Vorschlagen, Spiele beim ersten Start als „Spielt“ zu markieren",
+    "about": "Info",
+    "about_version": "Version",
+    "about_platform": "Plattform",
+    "about_data_dir": "Datenordner",
+    "about_host": "Fenster",
+    "about_host_native": "Natives Fenster (WebView)",
+    "about_host_browser": "Browser-Tab. Das native Fenster läuft nicht, das ist eine unterstützte Nutzungsart."
   },
   "picker": {
     "title": "Was soll ich spielen?",
@@ -1144,7 +1156,19 @@
     "kind_edit": "Bearbeiten",
     "kind_delete": "Löschen",
     "kind_restore": "Wiederherstellen",
-    "kind_revert": "Zurücksetzen"
+    "kind_revert": "Zurücksetzen",
+    "compare": "Vergleichen",
+    "compare_before": "Von (optional)",
+    "compare_after": "Bis",
+    "compare_run": "Vergleichen",
+    "compare_hint": "Wähle ein Datum oder zwei Daten, um Änderungen dazwischen zu sehen. Ohne Startdatum gilt jedes Spiel als hinzugefügt.",
+    "compare_need_after": "Wähle zuerst das Enddatum.",
+    "compare_added": "Hinzugefügt",
+    "compare_removed": "Entfernt",
+    "compare_changed": "Geändert",
+    "compare_showing": "{shown} von {total} angezeigt",
+    "compare_none": "Zwischen diesen Daten gibt es keine Unterschiede.",
+    "compare_baseline_incomplete": "Das Startdatum liegt vor dem aufbewahrten Verlauf, daher können bereits vorhandene Spiele als hinzugefügt erscheinen."
   },
   "trash": {
     "view": "Papierkorb",
@@ -1337,5 +1361,22 @@
   },
   "story": {
     "export_png": "Story als PNG exportieren"
+  },
+  "defs": {
+    "title": "Emulator-Definitionen",
+    "status_bundled": "Es werden die mit OpenBox gelieferten Definitionen verwendet.",
+    "status_pack": "Community-Paket {version} installiert ({count} Definitionen).",
+    "locally_modified": "Von dir bearbeitet und nie überschrieben: {names}",
+    "check": "Nach Definitions-Updates suchen",
+    "install": "Update installieren",
+    "rollback": "Auf mitgelieferte zurücksetzen",
+    "checking": "Prüfe…",
+    "up_to_date": "Die Definitionen sind aktuell ({version}).",
+    "available": "Update verfügbar: {version}. {notes}",
+    "none_published": "Noch ist kein Community-Definitionspaket veröffentlicht. Die mitgelieferten Definitionen funktionieren weiter.",
+    "check_failed": "Suche nach Updates fehlgeschlagen: {error}",
+    "installed": "Paket {version} installiert: {count} neu, {updated} aktualisiert, {kept} behalten, weil du sie bearbeitet hast.",
+    "rejected": "Das heruntergeladene Paket hat die Signaturprüfung nicht bestanden und wurde verworfen. Nichts wurde geändert. Siehe Benachrichtigungen.",
+    "rolled_back": "{count} vom Kanal installierte Definitionen entfernt."
   }
 }

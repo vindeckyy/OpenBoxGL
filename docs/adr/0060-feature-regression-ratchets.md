@@ -1,7 +1,7 @@
 # ADR 0060: Feature-regression ratchets
 
 **Date:** 2026-09-26
-**Status:** Accepted (1.14.1)
+**Status:** Accepted (1.15)
 
 ## Context
 

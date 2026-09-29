@@ -1,5 +1,5 @@
-import { $, escapeHtml } from './util.js';
-import { AppState, api, ensureProfiles, filteredGames, nativePickFile } from './state.js';
+import { $, escapeHtml, motionMs } from './util.js';
+import { AppState, api, ensureProfiles, filteredGames, nativePickFile, revealToast, hideToast } from './state.js';
 import { t } from './i18n.js';
 import { closeBigBoxMenu } from './bigbox.js';
 import { resetReaderFrame } from './reader.js';
@@ -17,6 +17,36 @@ const dialogObserver = new MutationObserver(() => {
 });
 dialogObserver.observe(document.body, {subtree:true, attributes:true, attributeFilter:['open']});
 
+// ADR 0063: one choke point gives every dialog an exit animation and the shared focus wiring, without
+// sweeping every raw .close()/.showModal() call site. close() plays .closing for --dur-out, then closes;
+// with reduced motion the token is ~0 and it closes at once. Callers that need "closed" must listen for
+// the 'close' event, which is what closeDialog() does below.
+const nativeShowModal = HTMLDialogElement.prototype.showModal;
+const nativeClose = HTMLDialogElement.prototype.close;
+HTMLDialogElement.prototype.showModal = function () {
+  wireDialogFocus(this);
+  if (this.classList.contains('closing')) { this.classList.remove('closing'); return; } // reopened mid-exit
+  return nativeShowModal.call(this);
+};
+HTMLDialogElement.prototype.close = function (returnValue) {
+  if (!this.open || this.classList.contains('closing')) return;
+  const ms = motionMs('--dur-out');
+  if (ms <= 1) { nativeClose.call(this, returnValue); return; }
+  this.classList.add('closing');
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    this.removeEventListener('animationend', onEnd);
+    if (!this.classList.contains('closing')) return; // showModal() cancelled the exit
+    this.classList.remove('closing');
+    if (this.open) nativeClose.call(this, returnValue);
+  };
+  const onEnd = event => { if (event.target === this) finish(); };
+  this.addEventListener('animationend', onEnd);
+  setTimeout(finish, ms + 60);
+};
+
 function openDialog(dialog, trigger = lastDialogTrigger || document.activeElement) {
   const opener = trigger instanceof HTMLElement ? trigger : null;
   if (opener) dialogTriggers.set(dialog, opener);
@@ -31,11 +61,19 @@ function closeDialog(dialog) {
   // blur the restored target afterwards — this runs inside the consuming
   // handler, before later listeners fire).
   const trigger = dialogTriggers.get(dialog);
-  if (dialog.open && typeof dialog.close === 'function') dialog.close();
-  else dialog.removeAttribute('open');
-  try {
-    if (trigger?.isConnected && typeof trigger.focus === 'function') trigger.focus({ preventScroll: true });
-  } catch {}
+  const restore = () => {
+    try {
+      if (trigger?.isConnected && typeof trigger.focus === 'function') trigger.focus({ preventScroll: true });
+    } catch {}
+  };
+  if (dialog.open && typeof dialog.close === 'function') {
+    // The exit animation delays the real close; focus can only return once the modal is gone.
+    dialog.addEventListener('close', restore, { once: true });
+    dialog.close();
+  } else {
+    dialog.removeAttribute('open');
+    restore();
+  }
 }
 
 document.addEventListener('keydown', event => {
@@ -405,6 +443,8 @@ document.addEventListener('mousedown', event => {
 // (ensureA11yDialogHosts / ensureTrophyCaseHost) call this too, so they get
 // the same closedby/aria/focus-restoration wiring as static dialogs.
 function wireDialogFocus(dialog) {
+  if (dialog.dataset.focusWired) return;
+  dialog.dataset.focusWired = '1';
   dialog.setAttribute('closedby', 'closerequest');
   const heading = dialog.querySelector('h2');
   if (heading) {
@@ -599,10 +639,8 @@ function showTrophyToast(awards) {
   const text = awards.length > 1 ? t('trophy.unlocked_more', {name, count: awards.length - 1}) : t('trophy.unlocked', {name});
   toast.innerHTML = `<span class="trophy-toast-text">${escapeHtml(text)}</span><button type="button" class="trophy-view" id="trophyViewCase">${escapeHtml(t('trophy.view_case'))}</button>`;
   toast.dataset.notifyLevel = 'success';
-  toast.classList.add('show');
-  $('trophyViewCase').onclick = () => { toast.classList.remove('show'); openTrophyCase(); };
-  clearTimeout(showTrophyToast.timer);
-  showTrophyToast.timer = setTimeout(() => toast.classList.remove('show'), 4000);
+  revealToast(4000);
+  $('trophyViewCase').onclick = () => { hideToast(); openTrophyCase(); };
 }
 
 let trophyCheckTimer = 0;

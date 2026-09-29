@@ -1,4 +1,4 @@
-import { escapeHtml, API_V1, badge, defaultBadges, sortGames, advancedQueryMatches, parseQueryTokens, gameInstalled, $ } from './util.js';
+import { escapeHtml, API_V1, badge, defaultBadges, sortGames, advancedQueryMatches, parseQueryTokens, gameInstalled, $, motionMs } from './util.js';
 import { render } from './library.js';
 
 
@@ -6,6 +6,13 @@ import { render } from './library.js';
 // The launcher's ?token= param is scrubbed from the URL on load; keep it in
 // sessionStorage so reloads stay authenticated for the tab session.
 const token = new URLSearchParams(location.search).get('token') || sessionStorage.getItem('openbox.token') || '';
+// First paint: apply the last known theme before the API answers, so a light theme does not open dark.
+// (The real selection still arrives via loadTheme() and corrects this if it changed.)
+try {
+  const bootTheme = localStorage.getItem('openbox.theme');
+  const bootLink = document.getElementById('themeStylesheet');
+  if (bootTheme && bootLink && !bootLink.getAttribute('href')) bootLink.href = `/api/theme.css?name=${encodeURIComponent(bootTheme)}&token=${encodeURIComponent(token)}`;
+} catch {}
     /**
      * Central client application state container.
      * @type {Record<string, any>}
@@ -209,11 +216,15 @@ const token = new URLSearchParams(location.search).get('token') || sessionStorag
       }
       const toast = $('toast');
       if (toast) {
-        toast.textContent = text;
-        toast.dataset.notifyLevel = level;
-        toast.classList.add('show');
-        clearTimeout(notify.timer);
-        notify.timer = setTimeout(() => toast.classList.remove('show'), 2800);
+        // An action toast (Undo, View) must not be overwritten by an unrelated message: hold the
+        // newest one and show it when the action toast goes away.
+        if (toast.classList.contains('show') && toast.querySelector('button')) {
+          toastState.pending = [level, text, opts];
+        } else {
+          toast.textContent = text;
+          toast.dataset.notifyLevel = level;
+          revealToast(2800);
+        }
       }
       if (level === 'error' && opts.actionable) {
         const banner = $('errorBanner');
@@ -224,6 +235,34 @@ const token = new URLSearchParams(location.search).get('token') || sessionStorag
           clearTimeout(showErrorBanner.timer);
         }
       }
+    }
+    // One toast surface (ADR 0063). It lives in the top layer (popover) so it is never dimmed by a modal
+    // backdrop or hidden under Big Box; screen readers hear a separate always-rendered live region.
+    const toastState = { timer: 0, hideTimer: 0, pending: null };
+    function popoverOpen(el) { try { return el.matches(':popover-open'); } catch { return false; } }
+    function revealToast(ms) {
+      const toast = $('toast');
+      if (!toast) return;
+      clearTimeout(toastState.timer);
+      clearTimeout(toastState.hideTimer);
+      if (typeof toast.showPopover === 'function' && !popoverOpen(toast)) { try { toast.showPopover(); } catch {} }
+      void toast.offsetWidth; // let the enter transition start from the hidden state
+      toast.classList.add('show');
+      const live = $('toastLive');
+      if (live) live.textContent = toast.textContent;
+      toastState.timer = setTimeout(hideToast, ms);
+    }
+    function hideToast() {
+      const toast = $('toast');
+      if (!toast) return;
+      clearTimeout(toastState.timer);
+      toast.classList.remove('show');
+      const wait = motionMs('--dur-base') + 40;
+      clearTimeout(toastState.hideTimer);
+      toastState.hideTimer = setTimeout(() => { try { if (popoverOpen(toast)) toast.hidePopover(); } catch {} }, wait);
+      const next = toastState.pending;
+      toastState.pending = null;
+      if (next) setTimeout(() => notify(next[0], next[1], next[2]), wait);
     }
     let lastBannerDetails = '';
     function showErrorBanner(error) {
@@ -481,4 +520,4 @@ const token = new URLSearchParams(location.search).get('token') || sessionStorag
       }
     }
 
-export { token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId, isPageHidden, registerLifecycleStream, unregisterLifecycleStream };
+export { nativeCaps, revealToast, hideToast, token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId, isPageHidden, registerLifecycleStream, unregisterLifecycleStream };

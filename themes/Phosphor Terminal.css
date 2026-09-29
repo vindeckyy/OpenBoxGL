@@ -1,4 +1,4 @@
-/* OpenBox Stock Theme v3: Phosphor Terminal */
+/* OpenBox Stock Theme v4: Phosphor Terminal */
 
 :root {
   color-scheme: dark;
@@ -191,9 +191,9 @@
   --border-health-ok: #4a8a4a;
   --border-health-warn: #8a7a4a;
   --border-health-fail: #8a4a4a;
-  --text-health-ok: #6abf6a;
-  --text-health-warn: #c4a84a;
-  --text-health-fail: #c46a6a;
+  --text-health-ok: #86d886;
+  --text-health-warn: #dcc264;
+  --text-health-fail: #f09a9a;
   --toast-success-border: #4a8a4a;
   --toast-success-fg: #6abf6a;
   --toast-info-border: #4a6a8a;
@@ -201,7 +201,7 @@
   --toast-warning-border: #8a7a4a;
   --toast-warning-fg: #c4a84a;
   --toast-error-border: #8a4a4a;
-  --toast-error-fg: #c46a6a;
+  --toast-error-fg: #dc8585;
   --trash-accent: var(--action);
   --trash-accent-ink: var(--action-ink);
   --trash-row-bg: var(--surface-card);
@@ -214,12 +214,17 @@
   --text-soft: #5d9a68;
   --top-status: #5d9a68;
   --white: #c8ffc8;
+  --ink-strong: var(--white);
+  --on-active: #111111;
+  --on-danger: #111111;
+  --border-input: var(--muted);
+  --state-hover: #ffffff14;
+  --state-press: #ffffff26;
   --mood-primary: var(--brand);
   --mood-ink: var(--white);
   --mood-secondary: var(--accent);
   --mood-glow: var(--accent-ghost);
   --mood-tint: transparent;
-  --mood-transition: 240ms;
   --constellation-edge-series: #5e8c6a;
   --constellation-edge-developer: #6c91b6;
   --constellation-edge-publisher: #a27cb6;
@@ -276,6 +281,3 @@
   --measure-narrow: 50ch; --measure-default: 60ch; --measure-wide: 70ch;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  :root { --motion-duration: 0ms; }
-}

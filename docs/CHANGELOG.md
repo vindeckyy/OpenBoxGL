@@ -6,8 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-09-29
+
 ### Added
-- **Signed emulator-definition update channel (ADR 0060).** A verified
+- **Signed emulator-definition update channel (ADR 0061).** A verified
   community definition pack installs into the per-user data directory and
   shadows the bundled set without ever overwriting it. Fetch is verified with
   the release Ed25519 key via `updates.verify_artifact`; a signature failure
@@ -24,6 +26,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   true totals even when the page truncates.
 - **Story PNG export.** The per-game Story card gains a PNG export rendered
   entirely client-side on a canvas — no new endpoint and no dependency.
+
+- **Emulator definitions panel (ADR 0061).** Settings > Emulators can check for, install and
+  roll back the signed community pack, shows which definitions you edited (never overwritten), and
+  says plainly when no pack has been published yet. `scripts/build_defs_pack.py` builds the
+  byte-deterministic archive and index; signing stays a maintainer step. `PACK_BASE` moved from a
+  pinned commit that never held an index to a rolling `emulator-defs` release.
+- **Time Machine Compare tab.** Pick one date, or two, and see games added, removed and changed
+  with true totals ("showing 200 of 1,340") and a warning when the start date predates the kept
+  history. Read-only; revert is exactly as bounded as before.
+- **Settings > About.** Version, platform, data folder, and whether OpenBox is in its native
+  window or a browser tab, from the host report. The capabilities response gained `version`,
+  `platform` and `data_dir`.
+- **`scripts/uninstall.ps1` (ADR 0062).** Removes exactly what `install.ps1` creates: the install
+  tree and its rollback copy, the user PATH entry, the Start Menu shortcut and the `openbox://`
+  registration. The library and settings are never touched. `-WhatIf` previews it.
+- **Motion tokens and one reduced-motion switch (ADR 0063).** Every duration and easing is a
+  token; a single block zeroes them, so reduced motion cannot regress by omission. Every dialog
+  now plays an exit, the toast is one queue-safe surface in the top layer, and a live theme
+  switch cross-fades.
+- **Semantic ink tokens and a theme contrast matrix.** `--ink-strong`, `--on-active`,
+  `--on-danger`, `--border-input`, `--state-hover`, `--state-press`, checked against every theme
+  by a contrast matrix in `tests/test_stock_themes.py`.
+- **Grid list semantics.** The card grid is a list with the true `aria-setsize` and
+  `aria-posinset`; Big Box, its menu, pause panel and the screensaver announce as dialogs; job
+  rows expose a progressbar; the result count is a live region; forced-colors mode gets outlines.
+- A **Clear filters** button on the "No games match this view" state.
 
 ### Documentation & Gates
 - **Feature-regression ratchets (ADR 0060).** The gate suite proved a great
@@ -79,6 +107,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `check_version_sync.py` now reads the locale files.
 
 ### Fixed
+- Fixed **Harbor Light (the light theme) being unreadable**: `--white` was used as a text colour in
+  15 places and is literally white there, so inputs, card titles and the active nav item were
+  white on white, insight cards were dark on dark, and toast and health text sat between 2.3:1
+  and 3.7:1. Text now uses semantic ink tokens, Harbor Light's leaked dark-theme colours were
+  re-derived, and the accent and danger text that failed in five of six themes now passes.
+- Fixed the **grid replaying its entrance animation on every search keystroke**, favourite, bulk
+  toggle and cover-ratio regroup. It now plays for a view change only.
+- Fixed **toasts hiding behind modal backdrops and Big Box**, and an Undo toast being overwritten
+  by any message sent while it was showing.
+- Fixed the **party wheel showing "Spinning" for 2.4 s under reduced motion**, the
+  **constellation layout ignoring reduced motion and never stopping when the dialog closed**
+  (about 259 frames of O(n^2) layout), and `.library-head` ignoring reduced motion.
+- Fixed **covers collapsing to zero height and jumping on load** (the shimmer was on an element
+  that had no height); the box is reserved, the cover fades in, and a failed cover falls back to
+  the title tile.
+- Fixed the lightbox arrows **jumping about 17 px on mouse-down**: the global press style
+  outranked their positioning transform.
+- Fixed the **busy state blanking the label** on dark buttons; it now keeps the label and trails a
+  spinner (an ellipsis under reduced motion).
+- Fixed the workspace **clipping between 1101 and 1119 px**: the breakpoint was 1100 but the
+  three columns need 1120.
+- Fixed a **light theme opening dark**: the last theme is remembered and applied before the API
+  answers, and the theme list is no longer re-fetched on every sidebar click.
+- Fixed lazily built dialogs missing the shared focus wiring and focus restore.
+- The def-update channel's User-Agent now reads the running version instead of a hardcoded string.
+- `ui_smoke.cjs` now runs on Windows (`scripts/run_ui_smoke.py`) and waits for the add-game
+  dialog instead of a fixed 300 ms.
+
 - Fixed the CI **Lint** step failing on both Linux architectures, and red on
   every commit since `f605e27`. Eight files that carry a shebang had lost the
   exec bit (`100644`), which ruff's `EXE001` rejects on Linux. Because Windows

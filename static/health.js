@@ -7,7 +7,7 @@
  * records an undo token in the fix journal.
  */
 import { $, escapeHtml } from './util.js';
-import { AppState, api, notify, token, nativePickFolder } from './state.js';
+import { AppState, api, notify, token, nativePickFolder, revealToast, hideToast } from './state.js';
 import { t } from './i18n.js';
 import { render } from './library.js';
 import { confirmAction } from './dialogs.js';
@@ -15,7 +15,6 @@ import { confirmAction } from './dialogs.js';
 const DIMENSIONS = ['file_integrity', 'duplicates', 'artwork', 'metadata', 'launch_readiness'];
 const PAGE_SIZE = 25;
 let _lastScore = null;
-let _healthUndoTimer = null;
 let _sseStarted = false;
 
 export function dimensionLabel(dimension) {
@@ -173,13 +172,11 @@ export async function rescanLibrary() {
 function showHealthUndoToast(message, fixId, undoKind) {
   const toast = $('toast');
   if (!toast) { notify(message); return; }
-  clearTimeout(_healthUndoTimer);
-  if (notify.timer) clearTimeout(notify.timer);
   toast.dataset.notifyLevel = 'info';
   toast.innerHTML = `<span class="trash-toast-text">${escapeHtml(message)}</span><button type="button" class="trash-undo" id="healthUndoButton">${escapeHtml(t('trash.undo'))}</button>`;
-  toast.classList.add('show');
+  revealToast(8000);
   $('healthUndoButton').onclick = async () => {
-    toast.classList.remove('show');
+    hideToast();
     try {
       await api('/api/v2/library/health/undo', { method: 'POST', body: JSON.stringify({ fix_id: fixId }) });
       notify(t('health.undone'));
@@ -187,7 +184,6 @@ function showHealthUndoToast(message, fixId, undoKind) {
       openHealthScore();
     } catch (error) { notify(error.message); }
   };
-  _healthUndoTimer = setTimeout(() => toast.classList.remove('show'), 8000);
 }
 
 async function fixDimension(dimension) {

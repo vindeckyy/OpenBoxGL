@@ -43,7 +43,7 @@ GAME_DIALOG_PATH_FIELDS = [
 ROOT_BLOCK_RE = re.compile(r":root\s*\{[^}]*\}", re.DOTALL)
 VAR_DEF_RE = re.compile(r"--([\w-]+)\s*:")
 VAR_USE_RE = re.compile(r"var\(--([\w-]+)")
-IGNORED_DYNAMIC = {"motion-index", "coverflow-offset"}
+IGNORED_DYNAMIC = {"motion-index", "coverflow-offset", "progress"}
 
 def parse_root_vars(css_text: str):
     m = ROOT_BLOCK_RE.search(css_text)
@@ -61,6 +61,21 @@ def test_app_vars_defined():
     used = find_vars_used_outside_root(css)
     missing = sorted(used - defs)
     assert not missing, f"app.css uses vars not defined in :root: {missing}\n defined: {sorted(defs)}"
+
+
+def test_js_motion_uses_duration_tokens():
+    """ADR 0063: JS-owned motion reads the --dur-* tokens, so the single reduced-motion override reaches it.
+    A transition set from script must name a token, and the canvas/rAF animation modules must consult
+    motionMs() or prefers-reduced-motion."""
+    static = ROOT / "static"
+    for path in sorted(static.glob("*.js")):
+        src = path.read_text(encoding="utf-8")
+        for line in src.splitlines():
+            if "style.transition" in line:
+                assert "var(--dur-" in line, f"{path.name}: script-set transition must use a --dur-* token: {line.strip()}"
+    for name in ("constellation.js", "arcaderoom.js", "bigbox.js", "party.js"):
+        src = (static / name).read_text(encoding="utf-8")
+        assert "motionMs(" in src or "prefers-reduced-motion" in src, f"{name} animates but never consults motion preferences"
 
 
 def test_bigbox_video_snap_css():
@@ -126,6 +141,7 @@ def test_time_machine_ui_surface():
     assert "/api/v2/library/time-machine/events" in js
     assert "/api/v2/library/time-machine/as-of" in js
     assert "/api/v2/library/time-machine/revert" in js
+    assert "/api/v2/library/time-machine/compare" in js
     assert "confirmAction" in js
 
 def test_clip_deeplink_ui_surface():

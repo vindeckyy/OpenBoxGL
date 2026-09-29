@@ -1,5 +1,5 @@
 /* constellation.js — library relationship graph (force-directed canvas). */
-import { $, escapeHtml } from './util.js';
+import { $, escapeHtml, motionMs } from './util.js';
 import { t } from './i18n.js';
 import { AppState, api, media } from './state.js';
 
@@ -52,6 +52,14 @@ import { AppState, api, media } from './state.js';
     let lastMouse = { x: 0, y: 0 };
     let nodePos = [];
     let sim = null;
+    let simFrame = 0;
+    let simGen = 0;
+
+    // Invalidate the running layout: a superseded or closed sim must not keep burning frames.
+    function stopSim() {
+      simGen++;
+      cancelAnimationFrame(simFrame);
+    }
 
     function openConstellation() {
       if (!dialog) initDom();
@@ -72,6 +80,7 @@ import { AppState, api, media } from './state.js';
       ctx = canvas.getContext('2d');
 
       $('closeConstellation').onclick = () => dialog.close();
+      dialog.addEventListener('close', stopSim);
       $('constellationRelayout').onclick = () => { startSim(); };
       renderKindLabels();
       $('constellationLimit').onchange = () => loadAndRender();
@@ -181,6 +190,10 @@ import { AppState, api, media } from './state.js';
 
     function startSim() {
       palette = resolveColors();
+      stopSim();
+      const gen = simGen;
+      // Reduced motion: converge synchronously and paint once instead of animating the settle.
+      const instant = motionMs('--dur-base') <= 1;
       // ponytail: O(n²) per tick with clamped steps. If libraries grow past
       // the 1000-node cap or layout feels slow, graduate to Barnes-Hut.
       const MAX_STEP = 24;
@@ -196,7 +209,7 @@ import { AppState, api, media } from './state.js';
       const k = Math.sqrt((canvas.width * canvas.height) / data.nodes.length) * 0.5;
       const repel = k * k;
       function tick() {
-        if (!alpha) return;
+        if (!alpha || gen !== simGen) return;
         // Repulsion
         for (let i = 0; i < data.nodes.length; i++) {
           for (let j = i + 1; j < data.nodes.length; j++) {
@@ -250,8 +263,8 @@ import { AppState, api, media } from './state.js';
           }
         }
         alpha *= 0.985;
-        draw();
-        if (alpha > 0.02) requestAnimationFrame(tick);
+        if (!instant) draw();
+        if (alpha > 0.02) { if (instant) tick(); else simFrame = requestAnimationFrame(tick); }
         else { alpha = 0; draw(); }
       }
       tick();
