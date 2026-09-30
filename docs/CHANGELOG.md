@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+- Fixed the **ScreenScraper credential aliases being accepted but ignored**: the four
+  `OPENBOX_SCREENSCRAPER_*` names are in `ENV_KEYS`, so `load_dotenv()` kept them, but
+  `credentials()` read only the bare names — a user who set an alias got a provider that
+  reported itself unconfigured. They now resolve through `env_value()`, bare name first,
+  like every other credential provider.
+
 ## [1.15.0] - 2026-09-29
 
 ### Added
@@ -1555,7 +1562,8 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.15.0...HEAD
+[1.15.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.12.1...v1.13.0

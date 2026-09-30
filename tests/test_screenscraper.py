@@ -12,6 +12,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+
+def _no_env_load():
+    # Keep tests hermetic: pretend .env discovery already ran.
+    return mock.patch("env_config._env_bootstrapped", True)
+
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -315,7 +321,44 @@ class RequestTest(unittest.TestCase):
         self.assertEqual(ss.clean_media_url(""), "")
 
     def test_credentials_require_env(self):
-        with mock.patch.dict(os.environ, {}, clear=True):
+        with mock.patch.dict(os.environ, {}, clear=True), _no_env_load():
+            with self.assertRaises(ValueError):
+                ss.credentials()
+
+    def test_credentials_read_openbox_aliases(self):
+        env = {
+            "OPENBOX_SCREENSCRAPER_USER": "alias-user",
+            "OPENBOX_SCREENSCRAPER_PASSWORD": "alias-pass",
+            "OPENBOX_SCREENSCRAPER_DEV_ID": "alias-dev",
+            "OPENBOX_SCREENSCRAPER_DEV_PASSWORD": "alias-devpass",
+        }
+        with mock.patch.dict(os.environ, env, clear=True), _no_env_load():
+            self.assertEqual(
+                ss.credentials(),
+                ("alias-user", "alias-pass", "alias-dev", "alias-devpass"),
+            )
+            self.assertTrue(ss.is_configured())
+
+    def test_bare_names_win_over_aliases(self):
+        env = {
+            "SCREENSCRAPER_USER": "bare-user",
+            "SCREENSCRAPER_PASSWORD": "bare-pass",
+            "SCREENSCRAPER_DEV_ID": "bare-dev",
+            "SCREENSCRAPER_DEV_PASSWORD": "bare-devpass",
+            "OPENBOX_SCREENSCRAPER_USER": "alias-user",
+            "OPENBOX_SCREENSCRAPER_PASSWORD": "alias-pass",
+            "OPENBOX_SCREENSCRAPER_DEV_ID": "alias-dev",
+            "OPENBOX_SCREENSCRAPER_DEV_PASSWORD": "alias-devpass",
+        }
+        with mock.patch.dict(os.environ, env, clear=True), _no_env_load():
+            self.assertEqual(
+                ss.credentials(),
+                ("bare-user", "bare-pass", "bare-dev", "bare-devpass"),
+            )
+
+    def test_alias_user_without_password_still_raises(self):
+        env = {"OPENBOX_SCREENSCRAPER_USER": "alias-user"}
+        with mock.patch.dict(os.environ, env, clear=True), _no_env_load():
             with self.assertRaises(ValueError):
                 ss.credentials()
 
