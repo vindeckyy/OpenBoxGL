@@ -13,6 +13,8 @@ const failures = [];
   if (executablePath) launchOpts.executablePath = executablePath;
   const browser = await puppeteer.launch(launchOpts);
   const page = await browser.newPage();
+  // Pin reduced motion for the functional flows: headless Chrome inherits the OS setting, so leaving it unset makes\r\n  // dialog closes synchronous on Windows and animated on Linux. The motion block below turns real motion on explicitly.
+  await page.emulateMediaFeatures([{name: 'prefers-reduced-motion', value: 'reduce'}]);
   page.on('pageerror', e => failures.push('pageerror: ' + e.message));
 
   const deeplink = process.env.SMOKE_DEEPLINK ? `&deeplink=${process.env.SMOKE_DEEPLINK}` : '';
