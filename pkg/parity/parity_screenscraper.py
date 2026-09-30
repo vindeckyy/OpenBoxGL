@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import threading
 import time
@@ -23,7 +22,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from backend_io import read_limited
-from env_config import ensure_env_loaded
+from env_config import ensure_env_loaded, env_value
 from updates import VERSION
 
 SS_ENDPOINT = "https://www.screenscraper.fr/api2"
@@ -91,12 +90,12 @@ _ROM_TYPE_BY_SUFFIX = {
 def credentials():
     """Return (user, password, dev_id, dev_password) from ~/.env."""
     ensure_env_loaded()
-    user = os.environ.get("SCREENSCRAPER_USER", "").strip()
-    password = os.environ.get("SCREENSCRAPER_PASSWORD", "").strip()
+    user = env_value("SCREENSCRAPER_USER", "OPENBOX_SCREENSCRAPER_USER")
+    password = env_value("SCREENSCRAPER_PASSWORD", "OPENBOX_SCREENSCRAPER_PASSWORD")
     if not user or not password:
         raise ValueError("Set SCREENSCRAPER_USER and SCREENSCRAPER_PASSWORD in ~/.env to use ScreenScraper.")
-    dev_id = os.environ.get("SCREENSCRAPER_DEV_ID", "").strip()
-    dev_password = os.environ.get("SCREENSCRAPER_DEV_PASSWORD", "").strip()
+    dev_id = env_value("SCREENSCRAPER_DEV_ID", "OPENBOX_SCREENSCRAPER_DEV_ID")
+    dev_password = env_value("SCREENSCRAPER_DEV_PASSWORD", "OPENBOX_SCREENSCRAPER_DEV_PASSWORD")
     return user, password, dev_id, dev_password
 
 
