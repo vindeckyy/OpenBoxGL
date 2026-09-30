@@ -59,6 +59,6 @@ below are historical archives, not an unfinished active roadmap.
 
 ## Archive
 
-- `archive/` — superseded planning documents and historical release notes kept for traceability: `NEXT_UPDATE_PLAN.md` (the executed 1.9.0→1.10.0 plan), `NEXT_UPDATE_PLAN-1.11.md` (the 1.11.0 planning record), `NEXT_UPDATE_PLAN-1.12.md` (the executed 1.12.0 plan), `NEXT_UPDATE_PLAN-1.14.1.md` (the 1.14.1 plan, folded into 1.15), `NEXT_UPDATE_EXECUTION.md` (the executed 1.9.0→1.10.0 ledger), `NEXT_UPDATE_EXECUTION-1.11.md` (the executed 1.11.0 ledger), `HANDOFF-WINDOWS-PORT.md` (the Windows port handoff, shipped under ADR 0048), `release-notes-1.7.2.md`, `release-notes-1.8.0.md`, `release-notes-1.11.0.md`, `release-notes-1.14.0.md`
+- `archive/` — superseded planning documents and historical release notes kept for traceability: `NEXT_UPDATE_PLAN.md` (the executed 1.9.0→1.10.0 plan), `NEXT_UPDATE_PLAN-1.11.md` (the executed 1.11.0 planning record), `NEXT_UPDATE_PLAN-1.12.md` (the executed 1.12.0 plan), `NEXT_UPDATE_PLAN-1.14.1.md` (the 1.14.1 plan, folded into 1.15 and never cut as a patch release), `NEXT_UPDATE_EXECUTION.md` (the executed 1.9.0→1.10.0 ledger), `NEXT_UPDATE_EXECUTION-1.11.md` (the executed 1.11.0 ledger), `HANDOFF-WINDOWS-PORT.md` (the Windows port handoff, shipped under ADR 0048), `release-notes-1.7.2.md`, `release-notes-1.8.0.md`, `release-notes-1.11.0.md`, `release-notes-1.12.x-1.13.x.md`, `release-notes-1.14.0.md`
 
 Do not add user-facing markdown here. Edit the docs site repo instead.
