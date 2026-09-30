@@ -12,6 +12,8 @@ const failures = [];
   if (executablePath) launchOpts.executablePath = executablePath;
   const browser = await puppeteer.launch(launchOpts);
   const page = await browser.newPage();
+  // Pin reduced motion for the functional flows: headless Chrome inherits the OS setting, so leaving it unset makes\r\n  // dialog closes synchronous on Windows and animated on Linux. The motion block below turns real motion on explicitly.
+  await page.emulateMediaFeatures([{name: 'prefers-reduced-motion', value: 'reduce'}]);
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('console', m => {
@@ -1631,7 +1633,7 @@ const failures = [];
     d.close();
     return {tokenZero: parseFloat(dur) <= 1, closedSync: !d.open, animations: document.getAnimations().filter(a => a.playState === 'running' && a.effect?.getTiming().iterations === 1 / 0 ? false : a.playState === 'running').length};
   });
-  await page.emulateMediaFeatures([{name: 'prefers-reduced-motion', value: 'no-preference'}]);
+  await page.emulateMediaFeatures([{name: 'prefers-reduced-motion', value: 'reduce'}]);
   console.log('motion reduced:', JSON.stringify(motion.reduced));
   (perfChecks.coverflowNodes > 11) && failures.push("perfChecks.coverflowNodes <= 11");
   (!perfChecks.gridNodeCount) && failures.push("perfChecks.gridNodeCount");
