@@ -118,6 +118,23 @@ The full capability matrix with acceptance checks lives in [PARITY.md](docs/PARI
 
 ## Features
 
+### Signed Packs & Live Library (1.15.0)
+
+The **emulator-definition update channel** installs a signed community
+definition pack into the per-user data directory, shadowing the bundled set
+without ever overwriting it: the fetch is verified with the release Ed25519
+key, a signature failure raises a security notification instead of a silent
+skip, and a definition you have edited locally is never clobbered. The
+**Time Machine compare** tab diffs the library between two journal points
+read-only — added, removed, and per-field changed rows with true totals even
+when the page truncates — and every game **Story** card gains a PNG export
+rendered client-side, with no new endpoint. **Settings > About** reports the
+version, platform, data folder, and whether OpenBox is in its native window or
+a browser tab. A sixth stock **High Contrast** theme redeclares every token
+against a maximum-contrast palette, one **reduced-motion switch** zeroes every
+duration and easing at once, and **Windows install and removal are symmetric**:
+`scripts/uninstall.ps1` removes exactly what `install.ps1` creates.
+
 ### Library Intelligence (1.14.0)
 
 **Plugins 2.0** brings a catalog browser with one-click install/update,
@@ -367,6 +384,26 @@ its own so a source checkout gets a native window without the MSVC toolchain.
 Save it beside `web_app.py` as `native_host.exe`, or point `OPENBOX_NATIVE_HOST`
 at it.
 
+To remove the install, run the uninstaller that ships inside it. It removes
+exactly what the installer creates — the install tree and its
+`openbox.previous` rollback copy, the user `PATH` entry, the Start Menu
+shortcut, and the `openbox://` registration — and never touches your library
+or settings, so a reinstall picks them straight back up. The installed copy
+lives at `%LOCALAPPDATA%\OpenBox\share\openbox\scripts\uninstall.ps1`; add
+`-WhatIf` to preview the removals:
+
+```powershell
+# Default install (%LOCALAPPDATA%\OpenBox)
+powershell -ExecutionPolicy Bypass `
+  -File "$env:LOCALAPPDATA\OpenBox\share\openbox\scripts\uninstall.ps1" -WhatIf
+powershell -ExecutionPolicy Bypass `
+  -File "$env:LOCALAPPDATA\OpenBox\share\openbox\scripts\uninstall.ps1"
+
+# Pass the same -InstallDir you installed with
+powershell -ExecutionPolicy Bypass `
+  -File "D:\Apps\OpenBox\share\openbox\scripts\uninstall.ps1" -InstallDir "D:\Apps\OpenBox"
+```
+
 ### AppImage (manual)
 
 Download the latest release from [GitHub Releases](https://github.com/vindeckyy/OpenBoxGL/releases/latest). Release artifacts are built for both **x86_64** and **aarch64**; pick the one matching your CPU (`uname -m`).
@@ -528,7 +565,7 @@ OpenBox/
 ├── plugin_catalog.py       Bundled community catalog
 ├── catalog.py              Search, filters, bulk edits
 ├── stock_themes.py         Bundled CSS theme installer
-├── themes/                 Stock themes (5 CSS files)
+├── themes/                 Stock themes (6 CSS files)
 ├── emulator_defs/          YAML definition packs
 ├── scripts/                Build, test, screenshot capture
 ├── tests/test_*.py         Standalone test files run by ./run_all_tests.sh

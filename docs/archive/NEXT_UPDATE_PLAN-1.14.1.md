@@ -1,9 +1,11 @@
 # OpenBox 1.14.1 — Two Platforms, One Library
 
-Status: **in progress**. Authored 2026-09-26, one week after 1.13.0 shipped.
-Originally baselined at `71d75ec`, it was rebased onto post-1.14.0 `master`
-(`1b9fcf6`) when 1.14.0 shipped, so this plan now targets the **1.14.1**
-patch release.
+Status: **folded into 1.15** (2026-09-29). 1.14.1 was never cut as a patch release; it
+was archived per the docs-archive convention (ADR 0041) and its remaining items were
+re-planned and shipped as 1.15.0. See the execution ledger at the end of this file and
+`docs/NEXT_UPDATE_PLAN-1.15.md` (a local-only, untracked plan) for the shipped result. Authored
+2026-09-26, one week after 1.13.0 shipped; originally baselined at `71d75ec` and rebased
+onto post-1.14.0 `master` (`1b9fcf6`) when 1.14.0 shipped.
 
 1.11 was *Every Second Counts* (features). 1.12 was *Living Library*
 (consolidation). 1.13 was the *Windows port* (a new platform). 1.14.1 does

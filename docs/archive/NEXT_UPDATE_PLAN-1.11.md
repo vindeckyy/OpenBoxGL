@@ -65,7 +65,7 @@ framework rewrite, no new v1 routes.
 | Screenshot capture (gnome-screenshot/spectacle/scrot/import), OBS auto-attach | `pkg/parity/parity_integrations.py`, `handlers/media.py` | Moments, Record That |
 | Optional-tool convention: degrade silently when a binary isn't on `PATH` (ryzenadj, ludusavi, spectacle, OBS) | throughout | ffmpeg reels, obs-websocket, emulator state flags |
 | `openbox://` deep links + `dispatch_uri` + `--launcher` rofi/wofi | `pkg/parity/parity_deeplinks.py` | `--play` for Steam Bridge, `openbox://moment`, `openbox://clip` |
-| Search worker `{id, type:'search'|'expand'|'warm'}` trigram protocol + acronym index | `static/worker.search.js` | Palette, smart query bar |
+| Search worker `{id, type}` trigram protocol (`search` \| `expand` \| `warm`) + acronym index | `static/worker.search.js` | Palette, smart query bar |
 | Constellation edge computation (series/dev/publisher/genre/co-play) | `pkg/parity/parity_constellation.py` | Backlog Radio similarity |
 | Picker scoring (time/mood/familiarity/players) | `pkg/parity/parity_picker.py` | Smart query target semantics |
 | Durable operations + Activity drawer | `pkg/state/operations.py`, `static/activity.js` | all long jobs |
@@ -352,7 +352,7 @@ Smaller, still user-visible; each exists partly because the flagships need it.
 
 | # | Item | Why it's here | Key files |
 |---|---|---|---|
-| S1 | **Steam Bridge** (`shortcuts.vdf` preview/apply/remove + `openbox --play <id>` boot-and-launch) | Resume/moments must be reachable from Game Mode; still the #1 handheld ask | `pkg/parity/parity_steam_bridge.py` (new vdf codec: `\x00`-record/int32/string tags, `appid=crc32(exe+name)\|0x80000000`), `handlers/steambridge.py`, `parity_deeplinks.py` |
+| S1 | **Steam Bridge** (`shortcuts.vdf` preview/apply/remove + `openbox --play <id>` boot-and-launch) | Resume/moments must be reachable from Game Mode; still the #1 handheld ask | `pkg/parity/parity_steam_bridge.py` (new vdf codec: `\x00`-record/int32/string tags, `appid=crc32(exe+name)` or'd with `0x80000000`), `handlers/steambridge.py`, `parity_deeplinks.py` |
 | S2 | **Session recap card** | the capture surface for moments/clips; progress quick-actions; RA delta | `pkg/state/launch.py` finish payload + SSE, `static/recap.js`, `GET /api/v2/sessions/recap` |
 | S3 | **Undo/trash bin** (bounded `trash` state list, toast undo, restore with identity/playlists) | Time Machine UX expects deletions to be visible/revertible | `handlers/library.py` v2 `trash*` routes; v1 remove semantics decided in M0 (default: v1 keeps hard delete, v2 moves to trash) |
 | S4 | **SteamGridDB provider** | moments/reels/room all get better when art coverage is better; the provider gap users notice most | `pkg/parity/parity_steamgrid.py` mirroring `parity_screenscraper.py` discipline (env creds, https-only, cache, 429 backoff), v2 routes, metadata+bulk UI |

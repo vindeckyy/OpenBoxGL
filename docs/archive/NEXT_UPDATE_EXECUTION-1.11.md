@@ -1,6 +1,6 @@
 # Archived next-update execution checkpoint — 1.10.1 + 1.11.0 "Every Second Counts"
 
-> **Completed progress ledger** for `docs/NEXT_UPDATE_PLAN.md`. Created
+> **Completed progress ledger** for `docs/archive/NEXT_UPDATE_PLAN-1.11.md`. Created
 > 2026-09-12 at the M0c baseline gate and archived after M11 completion.
 > Publishing and external submissions needed explicit authorization and were
 > not performed.
@@ -113,7 +113,7 @@ modules: 100.0% (191/191 executable changed lines hit). Full log:
 
 Baseline is green; LG1 (1.10.1 sweep residuals) and all feature lanes may build
 on it. Working tree at gate time was clean except the untracked spec document
-`docs/NEXT_UPDATE_PLAN.md` itself.
+`docs/archive/NEXT_UPDATE_PLAN-1.11.md` itself.
 
 ## Ledger rules
 
