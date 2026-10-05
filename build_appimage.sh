@@ -152,16 +152,19 @@ if [ -n "${OPENBOX_APPDIR:-}" ]; then
   cp -a "$appdir"/. "$preserved_appdir"/
 fi
 
-tool="$build_root/tools/appimagetool-$arch.AppImage"
+# Pinned to the tagged 1.9.1 release, not `continuous`: that tag is rebuilt in
+# place, so a pin on it breaks the release build whenever upstream pushes (it
+# did on 2026-10-04). Both hashes match the digests GitHub publishes for the
+# 1.9.1 assets. To bump, pick a new tag and recompute both.
+appimagetool_version="1.9.1"
+tool="$build_root/tools/appimagetool-$appimagetool_version-$arch.AppImage"
+tool_url="https://github.com/AppImage/appimagetool/releases/download/$appimagetool_version/appimagetool-$arch.AppImage"
 case "$arch" in
   x86_64)
-    tool_url="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
-    tool_sha256="a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0"
+    tool_sha256="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
     ;;
   aarch64)
-    tool_url="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-aarch64.AppImage"
-    # Pinned 2026-09-02 from the continuous release; recompute when bumping.
-    tool_sha256="1b00524ba8c6b678dc15ef88a5c25ec24def36cdfc7e3abb32ddcd068e8007fe"
+    tool_sha256="f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158"
     ;;
 esac
 if [ ! -x "$tool" ]; then
