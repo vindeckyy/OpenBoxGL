@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.15.0**, the "Finish the surface" release described in the CHANGELOG (motion contract, light-theme contrast, signed emulator-definition updates, Time Machine Compare, Settings > About, the Windows uninstaller, and accessibility); 1.14.0 was the library-intelligence release.
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.16.0**, the "Make it true" release described in the CHANGELOG (Launch Readiness, Restore Preview, security and data-integrity fixes, and corrections to four 1.15.0 claims); 1.15.0 was the "Finish the surface" release.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -155,6 +155,8 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | High Contrast stock theme | done | A sixth stock theme redeclares every `:root` token with a maximum-contrast palette (21:1 body text, AAA foregrounds), proving the token contract holds end to end; every theme is checked by a contrast matrix (1.15.0) |
 | Motion and reduced-motion contract | done | Every duration and easing is a motion token and one block zeroes them so reduced motion cannot regress by omission; dialogs play an exit, the toast is a single top-layer queue, and a live theme switch cross-fades (1.15.0, ADR 0063) |
 | Settings > About | done | Reports version, platform, data folder, and whether OpenBox is in its native window or a browser tab, from the capabilities response (which gained `version`, `platform`, and `data_dir`) (1.15.0) |
+| Launch Readiness | done | `POST /api/v2/launch/audit/scan` runs the Launch Doctor over every game in a cancellable job; `GET /api/v2/launch/audit` serves ready/warning/blocked totals, one row per root cause, and paginated member lists. Same check codes as the single-game Doctor; `flatpak` probes cached per app id (1.16.0) |
+| Restore Preview | done | Selecting a backup shows what the restore would remove, bring back, and overwrite (per-field), with true totals and a settings line; the restore button exists only after a successful diff (1.16.0) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 

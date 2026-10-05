@@ -6,12 +6,124 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-10-05
+
+### Security
+- **`preview_id` path traversal (S2).** `parity_setup_preview` and the Launch Doctor's
+  `validate_preview` joined a request's `preview_id` into a path unchecked, so a
+  `../`-laden id returned any `*.json` on disk, `settings.json` included. One validator
+  (`safe_identifier`) and a containment check (`contained_path`) in `pkg/platform_compat.py`
+  now guard both paths. `tests/test_path_traversal.py`.
+- **`rom_name` write traversal (S3).** The high-score restore built its destination name from
+  `rom_name`; it is now reduced by `safe_filename_component` and the destination is checked to
+  stay inside the high-score folder.
+- **Plugin sandbox data-dir mask (S4).** The bubblewrap command masked five fixed paths, so a
+  data directory moved with `OPENBOX_DATA_DIR` was readable by sandboxed plugins. The resolved
+  data directory is now masked wherever it is. `tests/test_plugin_sandbox.py`.
+- **Wrapped report escaping (S1b, S41).** All four interpolations and the error message are
+  escaped, and `test_unescaped_untrusted_data_never_reaches_an_html_sink` fails if a bare
+  `game.*`/`top.*`/`data.*` property reaches `innerHTML` again.
+- **`orjson` removed (S1).** State writes used `orjson` when it happened to be installed, with
+  output that could diverge from the standard library. The runtime is standard-library only;
+  `scripts/check_dependencies.py` enforces it, with `yaml` and `py7zr` as the two reviewed,
+  parity-tested exceptions.
+- RetroAchievements cache names are built from `int(console["ID"])` (S5), and both
+  `flatpak info` probes have a 5 s timeout (S6) that is now caught, so a hung Flatpak reports
+  "not installed" instead of failing the request.
+
+### Added
+- **Launch Readiness (F1).** `POST /api/v2/launch/audit/scan` queues a cancellable
+  `launch-audit` job that runs `run_preflight_checks` over every game, and
+  `GET /api/v2/launch/audit` serves the cached report: ready/warning/blocked totals, one row
+  per root cause (code plus subject, such as the Flatpak app id or file extension), and
+  paginated member lists (`?group=`, at most 500 per page). The Doctor is reused unchanged, so
+  the audit's codes are the Doctor's. `ProbeCache` (`pkg/parity/parity_launch_audit.py`)
+  memoizes the `flatpak info` result per argv and `which` per name, so a 2,000-game audit makes
+  at most two spawns per distinct app id (28 with the shipped definitions) instead of 4,000.
+  The report lives in `cache/launch_audit.json`, never in `library.json`. Deep mode (archive
+  listing and BIOS hashing) is opt-in; `run_preflight_checks` gained `deep=True` so the
+  single-game path is unchanged. The Library health dialog shows the report, with an
+  *Install* action for Flatpak causes and "show me" links to each game.
+- **Restore Preview (F2).** Selecting a backup fetches `GET /api/v2/backup/diff` and renders
+  what the restore would remove, bring back and overwrite (per-field from/to), with true
+  totals and explicit truncation, plus a settings line when `settings.json` would change. The
+  restore button is built only from a successful diff; a failed diff offers a retry and no
+  restore. `parity_backup.diff_manifests` was rewritten around `restore.will_remove`,
+  `will_add` and `will_change`.
+- Singular forms for counted strings: `t()` prefers `<key>_one` when `count` is 1 (S19), and
+  every counted string has one in all five locales.
+
 ### Fixed
+- **A failed launch was reported as a success (S26).** The `stopped` event carried the
+  `WaitResult` namedtuple, which JSON serializes as `[1,false]`, so the client's exit-code
+  check was always false. The exit code is now an int with a separate `timed_out` bool on both
+  the session event and the `session.stopped` webhook (whose allowlist gained `timed_out`).
+- **The import wizard imported candidates it said needed review (S27).** `review` was posted as
+  `import`; it is now left undecided, so the server's unresolved-candidate guard applies, and
+  the Confirm step counts the candidates still waiting.
+- **Deleted game's playtime credited to the last game (S7).** The "not found" index was `-1`,
+  which indexes the last element; it is now `None`. `tests/test_playtime_attribution.py`.
+- **A user's `.m3u` overwritten on import (S8)**, and its sheet's platform read from a stale
+  parse. `tests/test_import_playlist_safety.py`.
+- Data integrity and concurrency: cloud sync re-merges inside the write (S9); definition
+  installs are two-phase with full rollback (S10); a replaced job is cancelled, archived and
+  notified, and a finished job's id stops resolving to its name before anything is told it
+  finished (S11); SQLite read-model readers take the lock and a superseded rebuild does nothing
+  (S12, S13); the platform-category cache keys on a content hash (S14); a failed Windows update
+  restores the install (S15); unchanged state is not rewritten (S16); the definition registry
+  is published complete under a lock (S17). Snapshot names now order themselves, fixing a
+  flaky snapshot test.
+- Frontend: request sequencing and `AbortSignal` in the details pane (F5); a 60 s `api()`
+  timeout with caller signals (F9); the 20k list view stays windowed (F3); quoted query
+  phrases, empty tokens and unknown keys (F7, F11, F12); a truncated query match count is shown
+  (F10); and F1, F2, F4, F6, F8, F13, F14.
+- Trust bugs: the session card's game lookup (S28), the palette launching the shown game
+  (S29), Big Box video snaps on close (S30), gamepad input after blur (S31), a zero-length
+  guard and a session-control failure in Big Box (S32, S33), the constellation's reduced-motion
+  path freezing the page and its stuck spinner (S34, S35), the mood pipeline hanging after one
+  bad image (S36), silent metadata bulk-accept failures (S37), setup decision and preflight
+  failures (S38), the Arcade Room closing on a cancelled launch (S39), forked session polls
+  (S40), timeline covers requesting `id=undefined` (S42), overlapping match reviews sharing a
+  revision (S43), Time Machine pagination dying on a double click (S44), a false "timed out"
+  for a pruned job (S45), stale emulator choices after a failed setup (S46), double-escaped
+  definition errors (S47), a silently reverted DNA search mode (S48), duplicate insights
+  navigation after a language switch (S49), confirmation and sample notes on the LaunchBox and
+  ES-DE apply paths (S50, S51), dead mastery clicks (S52), an uncancellable Gameyfin install
+  watch (S53), and the museum PIN prompt with no backoff (S54).
+- Artwork chooser candidates without an `http(s)` URL are no longer offered.
 - Fixed the **ScreenScraper credential aliases being accepted but ignored**: the four
   `OPENBOX_SCREENSCRAPER_*` names are in `ENV_KEYS`, so `load_dotenv()` kept them, but
   `credentials()` read only the bare names — a user who set an alias got a provider that
   reported itself unconfigured. They now resolve through `env_value()`, bare name first,
   like every other credential provider.
+
+### Corrections to 1.15.0
+The 1.15.0 entry below described four behaviours that had shipped as documentation only.
+They are corrected here rather than by editing that entry (ADR 0064, rule 4).
+- **"Every dialog now plays an exit"** held only for JS `close()`. Escape and backdrop clicks
+  bypass it, so 21 of 29 dialogs snapped shut and lost focus. One delegated, bubble-phase
+  `cancel` listener that honours `defaultPrevented`, plus a backdrop handler, now route every
+  close through `closeDialog` (B1).
+- **The toast queue** was one element with several writers. `state.js` now owns a toast
+  manager (`TOAST_LIMIT = 3`, per-toast timers that pause on hover and focus) and the
+  `#toasts` container is a `popover="manual"` that is raised above open dialogs (B2–B5).
+- **Definition-channel atomicity** did not hold on failure; see S10 above.
+- **The reduced-motion gate** accepted either of two reads (an OR), so a module using neither
+  passed. It is an AND over a reviewed allow-list, and `motionMs()` is the only motion read (S22).
+
+### Documentation & Gates
+- **ADR 0064, the changelog-truth contract.** A claim is written only after the gate that
+  proves it; gates test behaviour, not presence; a gate that cannot fail is fixed or removed;
+  a shipped claim is re-checked at the next release.
+- New gates: `check_dependencies.py`; i18n placeholder parity in `check_i18n.py` (S20); the
+  `--dur-loop` completeness check (S21); the counted-string singular gate with a self-policing
+  exemption list (S19); `tests/test_launch_audit.py` asserting the Flatpak spawn count, not the
+  wall clock; and `ui_smoke` cases for the restore preview and Launch Readiness that assert
+  non-empty lists. The vacuous `if errors:` guard is gone (S25).
+- `docs/reliability.md` rows 50–54 (Restore Preview, Launch Readiness ×2, S7, S8), each naming
+  a test that exists. `docs/development/PERF.md` records `launch_audit_ms_p95` (3.3 s at 20k,
+  documented, not gated). `docs/SECURITY.md` leads with the security class fixed in this
+  release; 1.15.x is no longer supported.
 
 ## [1.15.0] - 2026-09-29
 
