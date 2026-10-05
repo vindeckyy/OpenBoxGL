@@ -757,12 +757,31 @@ class TestFixActionCoverage(unittest.TestCase):
             {"path": str(self.rom), "platform": "PlayStation", "emulator_adapter_id": "retroarch-nes"},  # NATIVE_EXE_MISSING
         ]
         (self.data_dir / "folder").mkdir(exist_ok=True)
+        # S25: this used to call the assertion behind `if errors:`, so if preflight
+        # ever stopped returning errors the test went green -- and this is the
+        # test enforcing the Doctor's own contract that every blocking check
+        # carries a fix_action. Collect the errors across every fixture, assert
+        # they exist, and only then check them.
+        found_codes = []
         for game in games:
             checks = run_preflight_checks(game, {}, str(self.data_dir), which=lambda _: None)
-            # filter at least one error per case except maybe not; ensure we actually get errors
             errors = [c for c in checks if c["severity"] == "error"]
-            if errors:
-                self._assert_every_error_has_fix_action(checks)
+            found_codes.extend(c["code"] for c in errors)
+            self._assert_every_error_has_fix_action(checks)
+
+        self.assertGreater(
+            len(found_codes), 0,
+            "preflight returned no errors for any fixture, so the fix_action "
+            "contract was never actually exercised",
+        )
+        # Every fixture is meant to be blocking; a fixture that stopped being
+        # blocking is as much a regression as one that lost its fix action.
+        for expected in ("PATH_MISSING", "ADAPTER_UNKNOWN", "TEMPLATE_INVALID"):
+            self.assertIn(
+                expected, found_codes,
+                f"{expected} no longer fires for its fixture; the list of blocking "
+                f"checks has changed and this test can no longer see it (saw {found_codes})",
+            )
 
     def test_ambiguous_iso_returns_picker_chips(self):
         from pkg.parity.parity_launch_doctor import run_preflight_checks

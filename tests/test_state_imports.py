@@ -96,7 +96,7 @@ class TestStateImports(unittest.TestCase):
             },
         }
         with mock.patch("pkg.state.imports.load_state", return_value=state), \
-             mock.patch("pkg.state.imports.import_folder_path") as folder_import, \
+             mock.patch("pkg.state.imports.import_folder_path", return_value=(0, 0, {})) as folder_import, \
              mock.patch("pkg.state.imports.import_steam", return_value=[]), \
              mock.patch("pkg.state.imports.import_heroic", return_value=[]), \
              mock.patch("pkg.state.imports.import_lutris", return_value=[]), \
@@ -107,6 +107,31 @@ class TestStateImports(unittest.TestCase):
             watch_stop.wait.side_effect = [False, True]
             auto_import_worker()
         folder_import.assert_called_once_with("/tmp/watch")
+
+    def test_auto_import_worker_counts_through_the_real_merge(self):
+        """The worker read merge_imported_games(...)["added"] on a (added, found)
+        tuple, a TypeError no except clause caught, so the first storefront tick
+        killed the auto-import thread. The other tests mocked the merge with a
+        dict and could not see it; this one runs the real merge."""
+        from pkg.state.imports import auto_import_worker
+
+        library = {"games": [], "settings": {}}
+        state = {"settings": {"storefront_auto_import": {"steam": True}, "emulator_scan_configs": []}}
+
+        def update_state(mutator):
+            mutator(library)
+            return library
+
+        steam_game = {"name": "Portal", "path": "steam://rungameid/400", "steam_app_id": "400", "source": "steam"}
+        with mock.patch("pkg.state.imports.load_state", return_value=state), \
+             mock.patch("pkg.state.imports.update_state", side_effect=update_state), \
+             mock.patch("pkg.state.imports.import_steam", return_value=[steam_game]), \
+             mock.patch("pkg.state.imports.LOGGER") as logger, \
+             mock.patch("pkg.state.imports.WATCH_STOP") as watch_stop:
+            watch_stop.wait.side_effect = [False, True]
+            auto_import_worker()
+        self.assertEqual([game["name"] for game in library["games"]], ["Portal"])
+        logger.warning.assert_not_called()
 
     def test_auto_import_worker_handles_load_failure(self):
         from pkg.state.imports import auto_import_worker

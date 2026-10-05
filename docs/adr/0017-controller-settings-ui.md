@@ -24,5 +24,5 @@ The SVG gamepad is markup-only (no external assets), keeping the feature depende
 
 - Controller-related settings are grouped in one tab instead of scattered.
 - Users can verify controller connectivity without launching a game.
-- 6 new design tokens added to `:root` and all 5 themes; token baseline remains 0.
+- 6 new design tokens added to `:root` and all 6 themes; token baseline remains 0.
 - `navigator.getGamepads()` polling runs only while the Controller tab is open.

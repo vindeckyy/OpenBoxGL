@@ -290,16 +290,33 @@ def _match_path_and_name(games, path, name):
 
 
 def _match_fallback_index(games, fallback_index, name, path):
-    """Resolve by array index with name/path sanity checks, else None."""
-    if fallback_index is not None:
-        try:
-            candidate = games[int(fallback_index)]
-        except (IndexError, TypeError, ValueError):
-            return None
-        candidate_name = str(candidate.get("name", ""))
-        candidate_path = str(candidate.get("path", ""))
-        if (not name and not path) or candidate_name == name or candidate_path == path:
-            return candidate
+    """Resolve by array index with name/path sanity checks, else None.
+
+    A negative index is rejected explicitly, and the bounds check happens before
+    the lookup. ``games[-1]`` is the *last* game in Python -- not an IndexError --
+    so the ``except (IndexError, TypeError, ValueError)`` this function used to
+    rely on could never catch the "not found" sentinel. With a deleted game, the
+    deleted game has no name and no path, so the name/path sanity check below
+    passed unconditionally and returned ``games[-1]``; the caller then wrote the
+    session's playtime onto whichever game happened to be last in the library.
+
+    Callers pass ``None`` for "not found" now, but sessions persisted by an older
+    build still carry ``-1``, so the guard belongs here rather than at the call
+    sites.
+    """
+    if fallback_index is None or isinstance(fallback_index, bool):
+        return None
+    try:
+        index = int(fallback_index)
+    except (TypeError, ValueError):
+        return None
+    if index < 0 or index >= len(games):
+        return None
+    candidate = games[index]
+    candidate_name = str(candidate.get("name", ""))
+    candidate_path = str(candidate.get("path", ""))
+    if (not name and not path) or candidate_name == name or candidate_path == path:
+        return candidate
     return None
 
 
@@ -371,7 +388,10 @@ def reattach_session(session, state=None):
     stable_game_id = str(session.get("game_id") or "").strip()
     game = res_game(state, {"stable_game_id": stable_game_id})
     games = state.get("games", [])
-    game_index = games.index(game) if game in games else -1
+    # ``None``, not ``-1``: "not found" must be a value that cannot index. See
+    # _match_fallback_index -- a -1 here resolved to games[-1] and credited the
+    # deleted session's playtime to the last game in the library.
+    game_index = games.index(game) if game in games else None
     game = game or {}
     started_value = str(session.get("start_time") or "").strip()
     try:
@@ -995,13 +1015,24 @@ def finish_session(launch_id, game_index, started, process, lease):
             lease.restore()
         except Exception:  # never let performance tuning break session bookkeeping
             LOGGER.exception("restore_perf failed")
-    sess_ev("stopped", launch_id, game_name, exit_code=exit_code, seconds=seconds)
+    # S26: `exit_code` is a `WaitResult` namedtuple at this point, and json.dumps
+    # serializes a tuple as an *array* -- so the client received
+    # `"exit_code":[1,false]`, `Number([1,false])` was NaN, and the "Session
+    # failed" branch was dead code. Every failed launch was reported to the user
+    # as a success. History already had `_history_exit_code` for exactly this
+    # shape (1.10.0 persisted the same array); these two events just never went
+    # through it. Normalize once, here, and publish the int plus the timeout flag
+    # separately so nothing downstream has to know a namedtuple existed.
+    settled_exit_code = _history_exit_code(exit_code)
+    settled_timed_out = bool(exit_code[1]) if isinstance(exit_code, (list, tuple)) and len(exit_code) > 1 else False
+    sess_ev("stopped", launch_id, game_name, exit_code=settled_exit_code, timed_out=settled_timed_out, seconds=seconds)
     pub_sess_ev(build_event("session.stopped", {
         "launch_id": launch_id,
         "game_id": running_snapshot.get("stable_game_id", ""),
         "name": game_name,
         "seconds": seconds,
-        "exit_code": exit_code,
+        "exit_code": settled_exit_code,
+        "timed_out": settled_timed_out,
         "started_at": session.get("started", ""),
         "stopped_at": datetime.now().isoformat(timespec="seconds"),
     }))

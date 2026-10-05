@@ -14,11 +14,11 @@ import pkg.parity  # noqa: F401  # register flat-import finder before parity_* i
 from archives import extract_game
 from parity_import import EXTENSIONS_EXTRA, PLATFORM_BY_EXTENSION_EXTRA
 from parity_emulator_defs import build_platform_by_extension, register_import_snapshot as _register_import_snapshot, resolve_launch
-from pkg.platform_compat import IS_WINDOWS, default_data_dir, join_command, python_command, split_command
+from pkg.platform_compat import IS_WINDOWS, join_command, python_command, resolved_data_dir, split_command
 from state_store import JsonStateStore
 
 CUSTOM_DATA_DIR = os.environ.get("OPENBOX_DATA_DIR")
-APP_DIR = (Path(CUSTOM_DATA_DIR).expanduser() if CUSTOM_DATA_DIR else default_data_dir())
+APP_DIR = resolved_data_dir()
 DATA = APP_DIR / "library.json"
 LEGACY_DATA = (Path(os.environ.get("USERPROFILE") or os.path.expanduser("~")) / ".local" / "share" / "launchbox-linux" / "library.json")
 if not CUSTOM_DATA_DIR and not DATA.exists() and LEGACY_DATA.is_file():

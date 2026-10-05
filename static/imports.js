@@ -2,7 +2,7 @@ import './setup.js';
 import { $, escapeHtml } from './util.js';
 import { api, notify, nativePickFolder, nativePickFile, AppState } from './state.js';
 import { refresh } from './library.js';
-import { promptChoice, promptInput } from './dialogs.js';
+import { confirmAction, promptChoice, promptInput } from './dialogs.js';
 import { t } from './i18n.js';
 
 async function pickEmulatorForPlatform(platform, items) {
@@ -178,11 +178,20 @@ function renderLaunchBoxReport(report) {
     if (operation.review_fields?.length) details.push(`${t('metadata.launchbox_review')}: ${operation.review_fields.join(', ')}`);
     return `<div class="detail-card"><strong>${escapeHtml(launchBoxActionLabel(operation.action))}</strong> ${escapeHtml(game.name || operation.source_id || t('metadata.launchbox_unnamed'))}${details.length ? `<p class="description">${escapeHtml(details.join(' · '))}</p>` : ''}</div>`;
   }).join('');
+  // S51: the review list was silently cut at 50 while the summary above it showed
+  // the true totals, so a user with 400 operations reviewed 50 of them and then
+  // clicked Apply. The Apply path rewrites the whole library, so the review has
+  // to say it is a sample -- and the same has to be true for the ESDe panel, or
+  // the two disagree about what "reviewed" means.
+  const hidden = Math.max(0, operations.length - 50);
+  const overflow = hidden
+    ? `<p class="description" role="status">${escapeHtml(t('metadata.launchbox_more', {shown: Math.min(50, operations.length), total: operations.length}))}</p>`
+    : '';
   const warnings = [];
   if (plan?.emulator_ids?.length) warnings.push(`${t('metadata.launchbox_emulators')}: ${plan.emulator_ids.join(', ')}`);
   if (plan?.errors?.length) warnings.push(`${t('metadata.launchbox_errors')}: ${plan.errors.join(' · ')}`);
   if (plan?.unsupported_fields?.length) warnings.push(`${t('metadata.launchbox_unsupported')}: ${plan.unsupported_fields.join(', ')}`);
-  reportElement.innerHTML = `<div class="detail-card"><strong>${escapeHtml(summary)}</strong>${warnings.length ? `<p class="description">${escapeHtml(warnings.join(' · '))}</p>` : ''}</div>${rows || `<p class="description">${escapeHtml(t('metadata.launchbox_no_operations'))}</p>`}`;
+  reportElement.innerHTML = `<div class="detail-card"><strong>${escapeHtml(summary)}</strong>${warnings.length ? `<p class="description">${escapeHtml(warnings.join(' · '))}</p>` : ''}</div>${rows || `<p class="description">${escapeHtml(t('metadata.launchbox_no_operations'))}</p>`}${overflow}`;
   reportElement.hidden = false;
   status.textContent = t('metadata.launchbox_preview_ready');
   const apply = $('applyLaunchBox');
@@ -218,6 +227,23 @@ async function applyLaunchBox() {
   const xmlPath = $('launchboxXmlPath')?.value.trim() || '';
   if (!xmlPath || !launchBoxPreview?.plan) return notify(t('metadata.launchbox_preview_required'));
   const button = $('applyLaunchBox');
+  // S50: this is the only bulk-mutating action in the app with no confirm
+  // dialog, and it rewrites the whole library from the user's XML. The plan is
+  // in hand, so the consequence can be stated exactly -- including the review
+  // list being a sample (S51), which is exactly the case a confirmation is for.
+  const planned = launchBoxPreview.plan?.operations?.length ?? 0;
+  const ok = await confirmAction({
+    title: t('metadata.launchbox_confirm_title'),
+    message: t('metadata.launchbox_confirm_message'),
+    consequence: t('metadata.launchbox_confirm_consequence', {
+      total: planned,
+      added: launchBoxPreview.plan?.counts?.added ?? 0,
+      merged: launchBoxPreview.plan?.counts?.merged ?? 0,
+    }),
+    confirmLabel: t('metadata.launchbox_confirm_button'),
+    destructive: true,
+  });
+  if (!ok) return;
   try {
     const options = collectLaunchBoxOptions();
     if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); }
@@ -286,7 +312,14 @@ function renderEsdeReport(report) {
     return `<div class="detail-card"><strong>${escapeHtml(action)}</strong> ${escapeHtml(game.name || t('metadata.esde_unnamed'))}${escapeHtml(review)}</div>`;
   }).join('');
   const errors = (report?.errors || []).slice(0, 10);
-  reportElement.innerHTML = `<div class="detail-card"><strong>${escapeHtml(summary)}</strong>${errors.length ? `<p class="description">${escapeHtml(`${t('metadata.esde_errors')}: ${errors.join(' · ')}`)}</p>` : ''}</div>${rows || `<p class="description">${escapeHtml(t('metadata.esde_no_operations'))}</p>`}`;
+  // S51: same silent 50-row cut as the LaunchBox panel; both have to agree that
+  // the visible list is a sample, or "reviewed 50" means something different in
+  // each place.
+  const esdeHidden = Math.max(0, operations.length - 50);
+  const esdeOverflow = esdeHidden
+    ? `<p class="description" role="status">${escapeHtml(t('metadata.launchbox_more', {shown: Math.min(50, operations.length), total: operations.length}))}</p>`
+    : '';
+  reportElement.innerHTML = `<div class="detail-card"><strong>${escapeHtml(summary)}</strong>${errors.length ? `<p class="description">${escapeHtml(`${t('metadata.esde_errors')}: ${errors.join(' · ')}`)}</p>` : ''}</div>${rows || `<p class="description">${escapeHtml(t('metadata.esde_no_operations'))}</p>`}${esdeOverflow}`;
   reportElement.hidden = false;
   status.textContent = t('metadata.esde_preview_ready');
   const apply = $('applyEsde');
@@ -314,6 +347,20 @@ async function applyEsde() {
   const xmlPath = $('esdeXmlPath')?.value.trim() || '';
   if (!xmlPath || !esdePreview?.preview_token) return notify(t('metadata.esde_preview_required'));
   const button = $('applyEsde');
+  // S50: same whole-library rewrite, same missing confirmation.
+  const counts = esdePreview.counts || esdePreview.plan?.counts || {};
+  const ok = await confirmAction({
+    title: t('metadata.esde_confirm_title'),
+    message: t('metadata.esde_confirm_message'),
+    consequence: t('metadata.esde_confirm_consequence', {
+      total: esdePreview.operations?.length ?? counts.total ?? 0,
+      added: counts.added ?? 0,
+      merged: counts.merged ?? 0,
+    }),
+    confirmLabel: t('metadata.esde_confirm_button'),
+    destructive: true,
+  });
+  if (!ok) return;
   try {
     if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); }
     const result = await api('/api/v2/import/esde/apply', {method: 'POST', body: JSON.stringify({xml_path: xmlPath, plan: esdePreview, preview_token: esdePreview.preview_token})});

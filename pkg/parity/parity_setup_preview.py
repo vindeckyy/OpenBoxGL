@@ -27,6 +27,7 @@ from pkg.parity.parity_emulator_defs import _registry, detect_adapter_prefix, fi
 from pkg.parity.parity_identity import cross_source_identity, normalize_path_identity, source_identities
 from pkg.parity.parity_import import generated_m3u_dir, import_multi_platform
 from pkg.parity.parity_import_policy import exclusion_set, filter_imported
+from pkg.platform_compat import contained_path, safe_identifier
 from pkg.state.imports import _index_existing_games, _merge_imported_game
 from pkg.state.operations import ACTIVE_STATES, get_operation_service
 from state_store import JsonStateStore
@@ -54,7 +55,16 @@ def previews_dir(data_dir: Path | None = None) -> Path:
 
 
 def preview_path(preview_id: str, data_dir: Path | None = None) -> Path:
-    return previews_dir(data_dir) / f"{preview_id}.json"
+    """Resolve a preview id to its file, refusing anything that is not one component.
+
+    ``preview_id`` is minted server-side but supplied by the client on every
+    read and write, so it is request input. Joining it unchecked let
+    ``../../../../home/user/.config/.../settings`` select any ``*.json`` on the
+    filesystem: the read path parses the result as JSON, so ``settings.json``
+    -- which holds provider credentials -- was reachable.
+    """
+    name = safe_identifier(preview_id, field="preview_id")
+    return contained_path(previews_dir(data_dir), f"{name}.json")
 
 
 def library_signature(data_path: Path | None = None) -> str:

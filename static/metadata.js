@@ -1,4 +1,4 @@
-import { $, escapeHtml, fact } from './util.js';
+import { $, escapeHtml, fact, HTTP_URL_RE } from './util.js';
 import { api, notify, AppState, token } from './state.js';
 import { refresh, renderDetails } from './library.js';
 import { confirmAction, promptChoice, openDialog, closeDialog } from './dialogs.js';
@@ -25,7 +25,12 @@ const reviewState = {
   classFilter: '',
   loading: false,
   mode: 'review',
+  // S43: bumped by every openMatchReview, so a superseded preview's poll
+  // cannot write its revision over the current one.
+  generation: 0,
 };
+
+class SupersededReview extends Error {}
 
 function ensureMatchReviewHosts() {
   const dialog = $('metadataDialog');
@@ -70,9 +75,9 @@ function ensureMatchReviewHosts() {
   tabs.querySelectorAll('[data-metadata-tab]').forEach(button => {
     button.onclick = () => setMetadataTab(button.dataset.metadataTab);
   });
-  $('matchReviewBulkExact').onclick = () => bulkAcceptClass('exact_review');
-  $('matchReviewBulkLikely').onclick = () => bulkAcceptClass('likely');
-  $('matchReviewApply').onclick = () => applyMatchReview();
+  $('matchReviewBulkExact').onclick = () => bulkAcceptClass('exact_review').catch(error => notify(error.message));
+  $('matchReviewBulkLikely').onclick = () => bulkAcceptClass('likely').catch(error => notify(error.message));
+  $('matchReviewApply').onclick = () => applyMatchReview().catch(error => notify(error.message));
   $('matchReviewLoadMore').onclick = () => loadMatchItems({append: true});
   const fieldAllow = $('matchReviewFieldAllow');
   fieldAllow.innerHTML = FIELD_ALLOW_OPTIONS.map(name => `<label class="check"><input type="checkbox" data-field-allow="${name}"> ${escapeHtml(name.replace('_', ' '))}</label>`).join('')
@@ -231,9 +236,10 @@ async function refreshPreviewDocument() {
   if (countsBox) countsBox.innerHTML = renderMatchCounts(reviewState.counts);
 }
 
-async function waitForPreviewReady(previewId) {
+async function waitForPreviewReady(previewId, generation) {
   for (let attempt = 0; attempt < 120; attempt += 1) {
     const doc = await api(`/api/v2/metadata/matches/preview?preview_id=${encodeURIComponent(previewId)}`);
+    if (generation !== reviewState.generation) throw new SupersededReview();
     reviewState.revision = doc.revision;
     reviewState.counts = doc.counts || {};
     if (doc.state === 'ready') return doc;
@@ -284,7 +290,16 @@ async function bulkAcceptClass(matchClass) {
     notify(`No ${matchClass.replace('_', ' ')} items to accept`);
     return;
   }
-  await postDecisions(items);
+  // S37: the decisions POST is atomic -- one stale game_id rejects the whole
+  // batch -- and the onclick discarded this promise, so the button just looked
+  // dead. Say that nothing was accepted, and reload so the list is current.
+  try {
+    await postDecisions(items);
+  } catch (error) {
+    notify(`No matches were accepted: ${error.message}`);
+    await loadMatchItems().catch(() => {});
+    return;
+  }
   await refreshPreviewDocument();
   await loadMatchItems();
   notify(`Accepted ${items.length} ${matchClass.replace('_', ' ')} match${items.length === 1 ? '' : 'es'}`);
@@ -336,6 +351,7 @@ async function applyMatchReview() {
 
 async function openMatchReview({preview_id: previewId = '', import_batch_id: importBatchId = null, game_ids: gameIds = null, class_filter: classFilter = ''} = {}) {
   ensureMatchReviewHosts();
+  const generation = ++reviewState.generation;
   reviewState.classFilter = classFilter || '';
   if (!$('metadataDialog').open) openDialog($('metadataDialog'));
   setMetadataTab('review');
@@ -349,13 +365,15 @@ async function openMatchReview({preview_id: previewId = '', import_batch_id: imp
       const queued = await api('/api/v2/metadata/matches/preview', {method: 'POST', body: JSON.stringify(body)});
       previewId = queued.preview_id;
     }
+    if (generation !== reviewState.generation) return;
     reviewState.previewId = previewId;
-    await waitForPreviewReady(previewId);
+    await waitForPreviewReady(previewId, generation);
     const countsBox = $('matchReviewCounts');
     if (countsBox) countsBox.innerHTML = renderMatchCounts(reviewState.counts);
     await loadMatchItems();
     $('metadataStatus').textContent = 'Review proposed matches before applying. Only exact title+platform matches auto-apply.';
   } catch (error) {
+    if (error instanceof SupersededReview) return;
     notify(error.message);
   }
 }
@@ -548,6 +566,9 @@ async function openArtworkChooser({title, candidates, onPick}) {
   }
   const groups = new Map();
   for (const item of candidates || []) {
+    // Provider URLs become `media_urls` the server fetches; same http(s)-only
+    // rule fact() applies to provider links.
+    if (!HTTP_URL_RE.test(String(item.url || ''))) continue;
     const kind = item.kind || item.type || 'other';
     if (!groups.has(kind)) groups.set(kind, []);
     groups.get(kind).push(item);

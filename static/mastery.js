@@ -78,13 +78,25 @@ function render(data) {
   $('masteryOverall').innerHTML = renderOverall(data.overall || {});
   $('masteryBody').innerHTML = html;
 
+  // S52: this dispatched app:show-game with a null id and wrote
+  // `AppState.platformFilter`, which is not an AppState key, so a click did
+  // nothing. A platform row now filters the library to that platform, the same
+  // way the sidebar and the Explorer facets do. Decade rows have no library
+  // filter to land on, so they are not clickable rather than dead.
+  if (useDecades) return;
   $('masteryBody').querySelectorAll('.mastery-segment').forEach(seg => {
+    seg.classList.add('is-clickable');
+    seg.setAttribute('role', 'button');
+    seg.tabIndex = 0;
+    seg.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); seg.click(); } };
     seg.onclick = () => {
-      const name = seg.dataset.name;
-      const state = seg.dataset.state;
-      document.dispatchEvent(new CustomEvent('app:show-game', { detail: { gameId: null } }));
-      // Filter the library by platform (or decade in a real implementation)
-      if (AppState) AppState.platformFilter = name;
+      AppState.activeFilterPreset = '';
+      AppState.activePlaylist = '';
+      AppState.explorerRules = {};
+      AppState.platform = seg.dataset.name;
+      AppState.selectedId = null;
+      dialog?.close();
+      import('./library.js').then(library => library.render());
     };
   });
 }

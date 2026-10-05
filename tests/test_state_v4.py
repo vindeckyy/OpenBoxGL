@@ -366,36 +366,7 @@ class StoreWritePathTests(unittest.TestCase):
 
 
 class JsonHelperTests(unittest.TestCase):
-    def test_orjson_helpers_when_available(self):
-        if state_store._orjson is None:
-            self.skipTest("orjson unavailable")
-        payload = {"b": 2, "a": 1}
-        self.assertIn('"a"', state_store._json_dumps(payload, sort_keys=True))
-        self.assertIsInstance(state_store._json_dumps_bytes(payload, indent=2), bytes)
-        self.assertIsInstance(state_store._json_dumps_bytes(payload, sort_keys=True), bytes)
-        self.assertIn('"a"', state_store._json_dumps(payload, indent=2))
-        text_fp = io.StringIO()
-        state_store._json_dump_file(payload, text_fp, indent=2)
-        self.assertTrue(text_fp.getvalue().startswith("{"))
-        bin_fp = io.BytesIO()
-        bin_fp.mode = "wb"
-        state_store._json_dump_file(payload, bin_fp, indent=2)
-        self.assertTrue(bin_fp.getvalue().startswith(b"{"))
-        self.assertEqual(state_store._json_load(io.StringIO('{"x": 1}')), {"x": 1})
-        self.assertEqual(state_store._json_load(io.BytesIO(b'{"y": 2}')), {"y": 2})
-        self.assertEqual(state_store._json_dumps_bytes(payload, indent=2)[:1], b"{")
-        with tempfile.NamedTemporaryFile("w+b") as handle:
-            state_store._json_dump_file(payload, handle, sort_keys=True)
-            handle.seek(0)
-            self.assertIn(b'"a"', handle.read())
-        binary_reader = mock.Mock()
-        binary_reader.mode = "rb"
-        binary_reader.read = mock.Mock(return_value=b'{"z": 9}')
-        self.assertEqual(state_store._json_load(binary_reader), {"z": 9})
-
-    def test_stdlib_json_helpers_when_orjson_missing(self):
-        if state_store._orjson is not None:
-            self.skipTest("stdlib JSON helpers are inactive when orjson is installed")
+    def test_stdlib_json_helpers(self):
         payload = {"z": 3}
         self.assertEqual(state_store._json_dumps(payload), json.dumps(payload))
         self.assertEqual(
@@ -406,6 +377,42 @@ class JsonHelperTests(unittest.TestCase):
         state_store._json_dump_file(payload, fp, indent=2)
         self.assertEqual(json.load(io.StringIO(fp.getvalue())), payload)
         self.assertEqual(state_store._json_load(io.StringIO('{"w": 4}')), {"w": 4})
+
+    def test_json_helpers_are_stdlib_only(self):
+        """Persistence must not be able to pick a third-party serializer.
+
+        A previous revision swapped the stdlib for ``orjson`` behind
+        ``try: import orjson``. That made the behaviour of the most important
+        write path in the app depend on the host, and the tests that covered it
+        all began with ``if state_store._orjson is None: self.skipTest(...)`` --
+        so in CI, where orjson is never installed, every one of them silently
+        passed without asserting anything.
+
+        These two assertions are the ones that cannot be skipped.
+        """
+        self.assertFalse(
+            hasattr(state_store, "_orjson"),
+            "state_store must not carry an optional third-party serializer; "
+            "scripts/check_dependencies.py enforces the stdlib-only rule",
+        )
+        import ast
+
+        source = Path(state_store.__file__).read_text(encoding="utf-8")
+        imported = set()
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name.split(".", 1)[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                imported.add(node.module.split(".", 1)[0])
+        for module in ("orjson", "ujson", "simplejson", "rapidjson"):
+            self.assertNotIn(
+                module,
+                imported,
+                f"state_store must not import {module}",
+            )
+
+    def test_json_decode_error_is_stdlib(self):
+        self.assertIs(state_store._json_decode_error, json.JSONDecodeError)
 
 
 class NormalizeEdgeCaseTests(unittest.TestCase):
@@ -679,9 +686,7 @@ class StoreInternalsTests(unittest.TestCase):
                 names = [item["name"] for item in store.snapshots()]
             self.assertNotIn("broken.json", names)
 
-    def test_medium_library_compacts_orjson_payload(self):
-        if state_store._orjson is None:
-            self.skipTest("orjson unavailable")
+    def test_medium_library_compacts_large_payload(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonStateStore(Path(directory) / "library.json")
             games = [{"game_id": f"g{i}", "name": f"G{i}", "desc": "y" * 15000} for i in range(100)]
@@ -698,22 +703,19 @@ class StoreInternalsTests(unittest.TestCase):
             leftovers = list(Path(directory).glob(".*.tmp"))
             self.assertEqual(leftovers, [])
 
-    def test_large_library_uses_compact_orjson_write(self):
-        if state_store._orjson is None:
-            self.skipTest("orjson unavailable")
+    def test_large_library_uses_compact_write(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonStateStore(Path(directory) / "library.json")
             games = [{"game_id": f"g{i}", "name": f"G{i}", "path": f"/g{i}"} for i in range(600)]
             store.save({"games": games})
             self.assertEqual(len(store.load()["games"]), 600)
 
-    def test_read_unlocked_uses_stdlib_without_orjson(self):
+    def test_read_unlocked_reads_written_state(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "library.json"
             path.write_text(json.dumps(default_state()), encoding="utf-8")
             store = JsonStateStore(path)
-            with mock.patch.object(state_store, "_orjson", None):
-                loaded = store.load()
+            loaded = store.load()
             self.assertEqual(loaded["schema_version"], STATE_SCHEMA_VERSION)
 
     def test_update_with_result_reuses_warm_cache(self):
@@ -725,12 +727,11 @@ class StoreInternalsTests(unittest.TestCase):
             self.assertEqual(value, "ok")
             self.assertTrue(state["settings"]["warm"])
 
-    def test_stdlib_large_library_write_without_orjson(self):
+    def test_large_library_write_round_trips(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonStateStore(Path(directory) / "library.json")
             games = [{"game_id": f"g{i}", "name": f"G{i}", "path": f"/g{i}"} for i in range(600)]
-            with mock.patch.object(state_store, "_orjson", None):
-                store.save({"games": games})
+            store.save({"games": games})
             self.assertEqual(len(json.loads(store.path.read_text(encoding="utf-8"))["games"]), 600)
 
     def test_snapshot_rotation_ignores_stat_errors(self):
@@ -750,14 +751,14 @@ class StoreInternalsTests(unittest.TestCase):
                 store.update(lambda state: state["settings"].update({"n": 2}))
             self.assertGreaterEqual(len(store.snapshots()), 1)
 
-    def test_stdlib_write_path_when_orjson_disabled(self):
+    def test_write_path_handles_multi_megabyte_payload(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonStateStore(Path(directory) / "library.json")
             payload = default_state()
             payload["games"] = [{"game_id": "g1", "name": "Big", "path": "/p", "description": "x" * 2_000_000}]
-            with mock.patch.object(state_store, "_orjson", None):
-                store.save(payload)
+            store.save(payload)
             self.assertTrue(store.path.is_file())
+            self.assertEqual(len(store.load()["games"]), 1)
 
     def test_snapshot_stat_errors_are_ignored(self):
         with tempfile.TemporaryDirectory() as directory:

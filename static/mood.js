@@ -101,10 +101,22 @@ function extractPalette(src) {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.src = src;
-    const timeout = setTimeout(() => { img.src = ''; reject(new Error('mood image timeout')); }, 3000);
-    img.onerror = () => { clearTimeout(timeout); reject(new Error('mood image error')); };
-    img.onload = () => { clearTimeout(timeout); resolve(processImage(img)); };
-    if (img.decode) img.decode().then(() => { clearTimeout(timeout); resolve(processImage(img)); }).catch(() => {});
+    // S36: the timeout used to be cleared *before* processImage ran, and its
+    // throw ("no usable palette") escaped -- swallowed by decode()'s trailing
+    // catch, or uncaught in onload -- so the promise never settled and the mood
+    // pipeline hung. Settle exactly once, and route processImage's throw to reject.
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (error) { reject(error); return; }
+      try { resolve(processImage(img)); } catch (failure) { reject(failure); }
+    };
+    const timeout = setTimeout(() => { img.src = ''; finish(new Error('mood image timeout')); }, 3000);
+    img.onerror = () => finish(new Error('mood image error'));
+    img.onload = () => finish();
+    if (img.decode) img.decode().then(() => finish(), () => { /* onload/onerror still settle */ });
   });
 }
 

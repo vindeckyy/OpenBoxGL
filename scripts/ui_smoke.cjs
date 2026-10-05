@@ -725,7 +725,7 @@ const failures = [];
     (await import('/static/state.js')).invalidateFilterCache();
     bigboxMod.openBigBox();
     await tick();
-    results.bigboxEmptyExplains = (document.getElementById('toast')?.textContent || '').length > 20;
+    results.bigboxEmptyExplains = (document.getElementById('toasts')?.textContent || '').length > 20;
     results.bigboxEmptyOpensWizard = document.getElementById('setupCenter').open === true
       && document.getElementById('bigBox').hidden === true;
     document.getElementById('setupCenter')?.close();
@@ -761,18 +761,42 @@ const failures = [];
 
   // 6. Dialog focus management test
   const dialogFocusOk = await page.evaluate(async () => {
+    const focusCalls = [];
+    const RealFocus = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function (...args) {
+      focusCalls.push(this.id || this.tagName || '?');
+      return RealFocus.apply(this, args);
+    };
     const addBtn = document.getElementById('addButton');
     addBtn.focus();
     addBtn.click();
     const gameDialog = document.getElementById('gameDialog');
     // opening awaits ensureProfiles() (an API call); a fixed 300ms is too short on a slow loopback
     for (let i = 0; i < 40 && !gameDialog?.open; i++) await new Promise(r => setTimeout(r, 50));
-    if (!gameDialog?.open) return false;
+    if (!gameDialog?.open) return {ok: false, why: 'gameDialog never opened'};
+    const focusedOnOpen = document.activeElement;
+    const openCalls = focusCalls.slice();
     document.getElementById('closeDialog').click();
-    await new Promise(r => setTimeout(r, 300));
-    return document.activeElement === addBtn;
+    await new Promise(r => setTimeout(r, 400));
+    const active = document.activeElement;
+    const nested = [...document.querySelectorAll('dialog[open]')].map(d => d.id);
+    HTMLElement.prototype.focus = RealFocus;
+    return {
+      ok: active === addBtn,
+      why: active === addBtn ? '' : `focus on ${active?.id || active?.tagName || 'nothing'}`,
+      stillOpen: !!gameDialog.open,
+      nested,
+      activeId: active?.id || '',
+      addBtnConnected: addBtn.isConnected,
+      addBtnRendered: addBtn.getClientRects().length > 0,
+      addBtnDisabled: addBtn.disabled,
+      addBtnTabIndex: addBtn.tabIndex,
+      focusedOnOpen: focusedOnOpen.id || focusedOnOpen.tagName,
+      openCalls,
+      closeCalls: focusCalls.slice(openCalls.length),
+    };
   });
-  console.log('dialog focus restore:', {dialogFocusOk});
+  console.log('dialog focus restore:', JSON.stringify(dialogFocusOk));
 
   // 6b. G-D2: click-outside on a nested dialog closes only the topmost dialog
   // (routed through closeDialog) and restores focus to a connected element.
@@ -1127,6 +1151,29 @@ const failures = [];
     library.renderGrid();
     const visibleCount = filteredGames().length;
     const gridNodeCount = document.querySelectorAll('#grid .card, #grid .list-row').length;
+    // G2 (2 of 3): aria-setsize / aria-posinset, measured here because this is
+    // the only point where the 20,000-game fixture is actually in view. A
+    // screen reader announces "N of M"; M must be the whole result set, not the
+    // virtualizer's handful of rendered nodes, and N must run 1..k without gaps
+    // so that "item 4,000" is reachable by keyboard and screen reader.
+    const cards = [...document.querySelectorAll('#grid .card[aria-posinset]')];
+    const setsize = cards.length ? Number(cards[0].getAttribute('aria-setsize')) : 0;
+    const positions = cards.map(card => Number(card.getAttribute('aria-posinset')));
+    const listPosition = {
+      checked: cards.length,
+      setsize,
+      visibleCount,
+      first: positions[0] ?? null,
+      last: positions.at(-1) ?? null,
+      contiguous: positions.every((value, index) => value === index + 1),
+      consistent: cards.every(card => Number(card.getAttribute('aria-setsize')) === setsize),
+      // The whole point: M is the result count, not the rendered slice.
+      coversWholeSet: setsize === visibleCount,
+    };
+    listPosition.ok = Boolean(
+      listPosition.checked && listPosition.contiguous && listPosition.consistent
+      && listPosition.coversWholeSet && setsize > cards.length
+    );
     AppState.appSettings.bigbox_mode = 'coverflow';
     AppState.bigBoxGames = games;
     AppState.bigBoxIndex = 10000;
@@ -1141,7 +1188,7 @@ const failures = [];
     const start = performance.now();
     const filtered = filteredGames();
     const searchMs = performance.now() - start;
-    return {coverflowNodes, delegatedClickOk, gridNodeCount, visibleCount, filtered: filtered.map(game => game.name).slice(0, 3), searchMs, searchIndexStats: AppState.searchIndexStats};
+    return {coverflowNodes, delegatedClickOk, gridNodeCount, visibleCount, listPosition, filtered: filtered.map(game => game.name).slice(0, 3), searchMs, searchIndexStats: AppState.searchIndexStats};
   });
   console.log('perf ui checks:', JSON.stringify(perfChecks));
 
@@ -1192,13 +1239,20 @@ const failures = [];
     AppState.importBatchId = 'batch-a';
     state.resetQuery();
     results.resetClearsImportBatch = AppState.importBatchId === '';
-    const toast = document.getElementById('toast');
+    // The toast is a stack now, not one element that gets overwritten, so each
+    // assertion looks at the newest toast rather than at a single #toast.
+    const newestToast = () => {
+      const layer = document.getElementById('toasts');
+      const all = layer ? [...layer.querySelectorAll('.toast')] : [];
+      return all.at(-1) || null;
+    };
     state.notify('success', 'ok-success');
-    results.notifySuccessLevel = toast.dataset.notifyLevel === 'success';
+    results.notifySuccessLevel = newestToast()?.dataset.notifyLevel === 'success';
     state.notify('Preset deleted');
-    results.notifyCompatInfo = toast.dataset.notifyLevel === 'info' && toast.textContent === 'Preset deleted';
+    const info = newestToast();
+    results.notifyCompatInfo = info?.dataset.notifyLevel === 'info' && info.textContent === 'Preset deleted';
     state.notify('error');
-    results.notifySingleErrorLevel = toast.dataset.notifyLevel === 'error';
+    results.notifySingleErrorLevel = newestToast()?.dataset.notifyLevel === 'error';
     document.getElementById('errorBanner').hidden = true;
     state.notify('error', 'sticky failure', {actionable: true});
     results.stickyErrorVisible = !document.getElementById('errorBanner').hidden;
@@ -1287,13 +1341,22 @@ const failures = [];
     results.shiftF10OpensMenu = menu && !menu.hidden;
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await new Promise(r => setTimeout(r, 200));
-    results.escapeRestoresFocus = document.activeElement === beforeFocus || document.activeElement === card;
+    // F14: opening the context menu now re-renders the grid, so the focused card
+    // is a *new* element by the time Escape closes the menu. Comparing node
+    // identity here would report a focus regression that did not happen -- the
+    // user is still on the same game. Identity of the game, not of the node.
+    const after = document.activeElement;
+    const afterGameId = after?.closest?.('[data-game]')?.dataset.game ?? after?.dataset?.game ?? null;
+    results.escapeRestoresFocus = after === beforeFocus || after === card
+      || (afterGameId !== null && afterGameId === card.dataset.game);
     // The one check in this harness that failed on CI without reproducing: a dialog
     // left open routes Escape to itself, so record what state it actually saw.
     results.escapeRestoresFocusState = {
       openDialogs: [...document.querySelectorAll('dialog[open]')].map(dialog => dialog.id || dialog.tagName),
       menuStillOpen: document.getElementById('contextMenu')?.hidden === false,
       activeElement: document.activeElement?.id || document.activeElement?.className || document.activeElement?.tagName,
+      afterGameId,
+      beforeGameId: beforeFocus?.dataset?.game ?? null,
     };
     const { confirmAction } = await import('/static/dialogs.js');
     const confirmPromise = confirmAction({
@@ -1500,6 +1563,11 @@ const failures = [];
     const dt = new DataTransfer();
     dz.dispatchEvent(new DragEvent('drop', {bubbles: true, dataTransfer: dt}));
     await new Promise(r => setTimeout(r, 500));
+    // F8: the drop handler now ignores a transfer with no files, so record what
+    // the synthetic DragEvent actually carried -- a bare DragEvent with no
+    // dataTransfer would prove nothing either way.
+    results.dropTypes = Array.from(dt.types || []);
+    results.dropHasFiles = results.dropTypes.includes('Files');
     results.pickerOpened = document.getElementById('a11yInputDialog')?.open === true;
     document.getElementById('a11yInputCancel')?.click();
     await new Promise(r => setTimeout(r, 200));
@@ -1612,18 +1680,150 @@ const failures = [];
   console.log('motion dialog exit:', JSON.stringify(motion.dialogExit));
   motion.toast = await page.evaluate(async () => {
     const st = await import('/static/state.js');
-    const toast = document.getElementById('toast');
-    toast.innerHTML = '<span>Moved</span><button type="button" class="trash-undo">Undo</button>';
-    toast.dataset.notifyLevel = 'info';
-    st.revealToast(8000);
+    // B2: the Undo toast and an unrelated message must coexist. The old
+    // implementation had four writers on one #toast element and three of them
+    // assigned its innerHTML, so this assert is the one that catches a live
+    // "moved to trash" Undo being deleted by a trophy notification.
+    const undoId = st.showToast({level: 'info', text: 'Moved', action: 'Undo', ms: 8000});
     st.notify('other message');
-    const kept = !!toast.querySelector('.trash-undo');
-    const topLayer = toast.matches(':popover-open');
+    st.notify('third message');
+    await new Promise(r => setTimeout(r, 150));
+    const layer = document.getElementById('toasts');
+    const toasts = [...layer.querySelectorAll('.toast')];
+    const kept = !!layer.querySelector('#toast-' + undoId + ' .toast-action');
+    const topLayer = layer.matches(':popover-open');
+    // B2: a real stack, not a one-deep pending slot.
+    const stacked = toasts.length >= 3;
+    // B3: hovering must stop the clock for the remaining time, not reset it.
+    const undoToast = document.getElementById('toast-' + undoId);
+    undoToast.dispatchEvent(new MouseEvent('mouseenter', {bubbles: false}));
+    await new Promise(r => setTimeout(r, 300));
+    const survived = !!document.getElementById('toast-' + undoId);
+    undoToast.dispatchEvent(new MouseEvent('mouseleave', {bubbles: false}));
     st.hideToast();
     await new Promise(r => setTimeout(r, 600));
-    return {kept, topLayer, flushed: toast.textContent === 'other message'};
+    return {kept, topLayer, stacked, survived, count: toasts.length};
   });
   console.log('motion toast:', JSON.stringify(motion.toast));
+
+  // B5: a native <dialog> is top layer too, ordered by when it was shown, so a
+  // toast opened first ends up underneath it and ::backdrop covers Undo. The
+  // dialog opener re-shows the toast container; verify that actually happens.
+  motion.toastAboveDialog = await page.evaluate(async () => {
+    const st = await import('/static/state.js');
+    const dlgs = await import('/static/dialogs.js');
+    st.showToast({level: 'info', text: 'Raised', action: 'Undo', ms: 8000});
+    await new Promise(r => setTimeout(r, 80));
+    const layer = document.getElementById('toasts');
+    const openedAt = performance.now();
+    const d = document.createElement('dialog');
+    d.innerHTML = '<p>x</p>';
+    document.body.appendChild(d);
+    d.showModal();
+    await new Promise(r => setTimeout(r, 120));
+    // Both are in the top layer; the toast must be the later of the two.
+    const raised = layer.matches(':popover-open');
+    d.close();
+    d.remove();
+    return {raised, ms: performance.now() - openedAt, hasDialogs: typeof dlgs.closeDialog === 'function'};
+  });
+  console.log('motion toast above dialog:', JSON.stringify(motion.toastAboveDialog));
+
+  // G2 (1 of 3, planned in NEXT_UPDATE_PLAN-1.15 §5 and never written):
+  // cumulative layout shift *after the app has settled*. A `buffered` observer
+  // would replay every shift since page load -- including the deliberate
+  // 20,000-game grid entrance and the virtualizer's own work -- which is the
+  // opposite of what the claim is about. The claim is that steady-state UI
+  // activity (a dialog, a toast, a filter) does not move content.
+  motion.cls = await page.evaluate(async () => {
+    let total = 0;
+    let entries = 0;
+    const sources = [];
+    const observer = new PerformanceObserver(list => {
+      for (const entry of list.getEntries()) {
+        if (entry.hadRecentInput) continue;
+        total += entry.value;
+        entries += 1;
+        for (const source of entry.sources || []) {
+          sources.push(source.node ? (source.node.id || source.node.className || source.node.nodeName) : 'unknown');
+        }
+      }
+    });
+    // Not buffered: start counting from this point, after the page settled.
+    observer.observe({type: 'layout-shift'});
+    const st = await import('/static/state.js');
+    const phases = {};
+    const mark = async name => {
+      const before = total;
+      await new Promise(r => setTimeout(r, 350));
+      phases[name] = total - before;
+    };
+
+    const dlg = document.getElementById('themesDialog');
+    if (dlg) { dlg.showModal(); }
+    await mark('dialog');
+    if (dlg) { dlg.close(); }
+    await mark('dialogClose');
+
+    st.showToast({level: 'success', text: 'Layout shift probe', ms: 1200});
+    await mark('toast');
+
+    const search = document.getElementById('sidebarSearch');
+    search.value = 'zzzz-no-match';
+    search.dispatchEvent(new Event('input', {bubbles: true}));
+    await mark('searchEmpty');
+
+    search.value = '';
+    search.dispatchEvent(new Event('input', {bubbles: true}));
+    await mark('searchRestored');
+    observer.disconnect();
+    return {total, entries, phases, sources: [...new Set(sources)].slice(0, 6)};
+  });
+  console.log('motion cls:', JSON.stringify(motion.cls));
+
+  // G2 (3 of 3): the theme stylesheet must have a real href on first paint, and
+  // switching must cross-fade through the shared class rather than snapping.
+  // Driven through loadTheme() -- the real path -- so the token, the theme name
+  // and the cross-fade are all produced by the code under test, not by the test.
+  motion.themePaint = await page.evaluate(async () => {
+    const link = document.getElementById('themeStylesheet');
+    const initialHref = link ? link.getAttribute('href') : null;
+    // A stylesheet with no href applies nothing, so the app would render
+    // unthemed while every "theme renders" check still passed.
+    const applied = link ? link.sheet !== null : false;
+
+    const settings = await import('/static/settings.js');
+    const state = await import('/static/state.js');
+    const listing = await settings.loadTheme(true);
+    const themes = listing.themes || [];
+    const current = listing.selected;
+    const next = themes.find(name => name !== current) || current;
+    const root = document.documentElement;
+    let switched = false;
+    const observer = new MutationObserver(() => {
+      if (root.classList.contains('theme-switching')) switched = true;
+    });
+    observer.observe(root, {attributes: true, attributeFilter: ['class']});
+    // state.api() attaches the session token; a bare fetch() gets a 403 and the
+    // selection never changes, which is how this first attempt passed vacuously.
+    if (next && next !== current) {
+      await state.api('/api/themes/select', {method: 'POST', body: JSON.stringify({name: next})});
+      await settings.loadTheme(true);
+    }
+    await new Promise(r => setTimeout(r, 800));
+    observer.disconnect();
+    return {
+      hasHref: Boolean(initialHref),
+      initialHref,
+      applied,
+      themeCount: themes.length,
+      changed: Boolean(next) && next !== current,
+      switched,
+      settled: !root.classList.contains('theme-switching'),
+      finalHref: link ? link.getAttribute('href') : null,
+    };
+  });
+  console.log('motion theme paint:', JSON.stringify(motion.themePaint));
   await page.emulateMediaFeatures([{name: 'prefers-reduced-motion', value: 'reduce'}]);
   motion.reduced = await page.evaluate(async () => {
     const dur = getComputedStyle(document.documentElement).getPropertyValue('--dur-slow');
@@ -1635,6 +1835,324 @@ const failures = [];
   });
   await page.emulateMediaFeatures([{name: 'prefers-reduced-motion', value: 'reduce'}]);
   console.log('motion reduced:', JSON.stringify(motion.reduced));
+
+  // F2: a restore is not offerable until the diff loads, and a diff that fails
+  // leaves no way to restore anyway. Driven through the real panel with a
+  // stubbed transport so both arms are exercised against the shipped code --
+  // the Python gate proves the structure, this proves the buttons appear and
+  // disappear as the diff does.
+  motion.restorePreview = await page.evaluate(async () => {    const RealFetch = window.fetch;
+    const calls = {lists: 0, diffs: 0, restores: 0};
+    let failNext = false;
+    const list = {backups: [{
+      name: 'OpenBoxBackup-2024-01-01-00-00-00-000000.zip',
+      path: '/data/backups/OpenBoxBackup-2024-01-01-00-00-00-000000.zip',
+      size: 4096, created: '2024-01-01T00:00:00', items: ['library', 'settings'], invalid: false,
+    }]};
+    const json = (body, status = 200) => new Response(JSON.stringify(body), {status, headers: {'Content-Type': 'application/json'}});
+    const diff = {
+      restore: {
+        will_remove: {total: 2, truncated: false, rows: [
+          {game_id: 'g-new-1', name: 'Added Since Backup'},
+          {game_id: 'g-new-2', name: 'Also New'},
+        ]},
+        will_add: {total: 1, truncated: false, rows: [{game_id: 'g-old', name: 'Deleted Since Backup'}]},
+        will_change: {total: 1, truncated: false, rows: [
+          {game_id: 'g-edit', name: 'Edited Since Backup', fields: {progress: {from: 'Beaten', to: 'Playing'}}},
+        ]},
+      },
+      settings: {restored: true, present: true, would_change: true, differs: true, redacted_secrets: true, keys_changed: ['locale']},
+    };
+    window.fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : (input?.url || '');
+      // api() rewrites /api/* to the frozen v1 surface, so match the rewritten
+      // paths, not the call-site spelling.
+      if (/\/api\/v1\/backups?(\?|$)/.test(url)) { calls.lists += 1; return json(list); }
+      if (url.includes('/backup/diff')) {
+        calls.diffs += 1;
+        return failNext ? json({error: 'archive unreadable'}, 500) : json(diff);
+      }
+      if (url.includes('/backup/restore')) { calls.restores += 1; return RealFetch(input, init); }
+      return RealFetch(input, init);
+    };
+    const settings = await import('/static/settings.js');
+    let openError = null;
+    try { await settings.openBackups(); } catch (error) { openError = String(error && error.message || error); }
+    await new Promise(r => setTimeout(r, 150));
+    const panel = document.getElementById('backupPreview');
+    const settle = () => new Promise(r => setTimeout(r, 150));
+    const snapshot = () => ({
+      listed: document.querySelectorAll('[data-restore-backup]').length,
+      hidden: panel.hidden,
+      confirm: !!panel.querySelector('[data-restore-confirm]'),
+      retry: !!panel.querySelector('[data-restore-retry]'),
+      names: [...panel.querySelectorAll('.timeline-name')].map(el => el.textContent.trim()),
+      fields: [...panel.querySelectorAll('.tm-change')].map(el => el.textContent.replace(/\s+/g, ' ').trim()),
+      text: panel.textContent.replace(/\s+/g, ' ').trim(),
+    });
+    // Nothing is armed before a diff has run.
+    const before = snapshot();
+    document.querySelector('[data-restore-backup]')?.click();
+    await settle();
+    const armed = snapshot();
+    // A diff that fails must leave no confirm button at all.
+    failNext = true;
+    document.querySelector('[data-restore-backup]')?.click();
+    await settle();
+    const failed = snapshot();
+    // And the retry goes back through the same gate, this time against a diff
+    // that works.
+    failNext = false;
+    panel.querySelector('[data-restore-retry]')?.click();
+    await settle();
+    const recovered = snapshot();
+    window.fetch = RealFetch;
+    document.getElementById('backupDialog')?.close();
+    panel.hidden = true;
+    panel.innerHTML = '';
+    return {before, armed, failed, recovered, calls, openError};
+  });
+  console.log('motion restore preview:', JSON.stringify(motion.restorePreview, null, 2));
+
+  // F1: the Launch Readiness panel. The real route is hit once to prove it is
+  // registered and never scans on GET; the panel itself is then driven against
+  // a stubbed report so the groups, paging, the one-fix-per-cause button and
+  // "Show me" are exercised deterministically on any fixture.
+  motion.launchAudit = await page.evaluate(async () => {
+    const RealFetch = window.fetch;
+    const live = await RealFetch('/api/v2/launch/audit', {
+      headers: {'X-OpenBox-Token': (await import('/static/state.js')).token},
+    }).then(r => r.json().then(body => ({status: r.status, scanned: body.scanned}))).catch(error => ({error: String(error)}));
+    const games = (await import('/static/state.js')).AppState.games;
+    const target = games[0];
+    const calls = {scans: 0, pages: 0};
+    const json = body => new Response(JSON.stringify(body), {status: 200, headers: {'Content-Type': 'application/json'}});
+    const report = {
+      scanned: true, computed_at: '2026-01-01T00:00:00+00:00', game_count: 30, stale: false, deep: false, failed: 0,
+      totals: {ready: 4, warning: 6, blocked: 20},
+      groups: [
+        {key: 'FLATPAK_NOT_INSTALLED|flatpak_install|org.libretro.RetroArch', code: 'FLATPAK_NOT_INSTALLED', subject: 'org.libretro.RetroArch',
+         severity: 'error', message: 'Emulator is not installed.', count: 20, fix_action: {kind: 'flatpak_install', payload: {app_id: 'org.libretro.RetroArch'}}},
+        {key: 'SAVE_GAP||', code: 'SAVE_GAP', subject: '', severity: 'warning', message: 'No save paths configured.', count: 6, fix_action: null},
+      ],
+      job: null,
+    };
+    window.fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : (input?.url || '');
+      if (url.includes('/launch/audit/scan')) { calls.scans += 1; return json({state: 'queued', job_id: 'job-1'}); }
+      if (url.includes('/launch/audit')) {
+        const group = new URL(url, location.origin).searchParams.get('group');
+        if (!group) return json(report);
+        calls.pages += 1;
+        const offset = Number(new URL(url, location.origin).searchParams.get('offset') || 0);
+        const members = Array.from({length: 20}, (_, i) => ({game_id: String(target?.game_id || ''), index: 0, name: `Member ${i}`}));
+        return json({...report, members: {key: group, games: members.slice(offset, offset + 25), total: 20, offset, limit: 25}});
+      }
+      return RealFetch(input, init);
+    };
+    const settle = () => new Promise(r => setTimeout(r, 200));
+    const health = await import('/static/health.js');
+    await health.openHealthScore();
+    await settle();
+    const body = document.getElementById('launchAuditBody');
+    const rows = [...body.querySelectorAll('[data-audit-group]')];
+    const heads = rows.map(row => row.querySelector('.health-dim-name').textContent.trim());
+    const installButtons = body.querySelectorAll('[data-audit-install]').length;
+    const totals = body.querySelector('[role="status"]')?.textContent.trim() || '';
+    rows[0]?.querySelector('[data-audit-toggle]')?.click();
+    await settle();
+    const members = rows[0]?.querySelectorAll('[data-audit-game]').length || 0;
+    // "Show me" lands on the game and closes the dialog.
+    rows[0]?.querySelector('[data-audit-game]')?.click();
+    await settle();
+    const dialogClosed = !document.getElementById('healthScoreDialog').open;
+    const selected = (await import('/static/state.js')).AppState.selectedId;
+    document.getElementById('launchAuditRun')?.click();
+    await settle();
+    const scansAfterRun = calls.scans;
+    window.fetch = RealFetch;
+    document.getElementById('healthScoreDialog')?.close();
+    return {live, rows: rows.length, heads, installButtons, totals, members, pages: calls.pages, scansAfterRun,
+            dialogClosed, selectedMatches: target ? selected === target.id : false, hadTarget: Boolean(target)};
+  });
+  console.log('motion launch audit:', JSON.stringify(motion.launchAudit, null, 2));
+
+  // S18 regression, and the reason the restore-preview case above needed a
+  // browser to find it. `inert` was only ever released by closeBigBox(); any
+  // other path that hid #bigBox left the whole page inert. Nothing looks broken
+  // -- buttons render and still take clicks -- but .focus() becomes a no-op, so
+  // every dialog's focus restore silently lands on <body> and keyboard
+  // navigation is dead for the rest of the session.
+  motion.inertReleased = await page.evaluate(async () => {
+    const bigbox = await import('/static/bigbox.js');
+    const state = await import('/static/state.js');
+    const inerted = () => [...document.body.children]
+      .filter(el => el.hasAttribute('inert'))
+      .map(el => el.id || el.tagName);
+    const before = inerted();
+    // A native modal makes the rest of the document inert by the browser's own
+    // rules, so any dialog a previous block left open would confound every
+    // reading below. Close them through the app's own choke point.
+    const dialogs = await import('/static/dialogs.js');
+    for (const d of [...document.querySelectorAll('dialog[open]')]) dialogs.closeDialog(d);
+    await new Promise(r => setTimeout(r, 250));
+    const clean = inerted();
+    // Control measurement: if this probe cannot take focus even before Big Box
+    // opens, the element is wrong for this point in the run and asserting on it
+    // would report a failure that is not about inert.
+    const probe = document.getElementById('addButton');
+    probe.focus();
+    const focusBefore = document.activeElement === probe;
+    // openBigBox() defers to the wizard when the library is empty, and returns
+    // before it ever sets inert -- so seed it or this case proves nothing. It
+    // resets filter/sort/query but NOT the platform or RetroAchievements chips,
+    // which earlier blocks in this run have set.
+    const saved = {games: state.AppState.bigBoxGames, mode: state.AppState.appSettings.bigbox_mode,
+      platform: state.AppState.bigBoxPlatform, ra: state.AppState.bigBoxRaFilter, query: document.getElementById('sidebarSearch').value};
+    state.AppState.bigBoxPlatform = 'all';
+    state.AppState.bigBoxRaFilter = '';
+    document.getElementById('sidebarSearch').value = '';
+    document.getElementById('sidebarSearch').dispatchEvent(new Event('input', {bubbles: true}));
+    state.invalidateFilterCache();
+    state.AppState.appSettings = {...state.AppState.appSettings, bigbox_mode: 'stage'};
+    bigbox.openBigBox();
+    await new Promise(r => setTimeout(r, 300));
+    const opened = !document.getElementById('bigBox').hidden;
+    const whileOpen = inerted();
+    // Hide through a path that does not call closeBigBox().
+    document.getElementById('bigBox').hidden = true;
+    await new Promise(r => setTimeout(r, 300));
+    const afterHide = inerted();
+    probe.focus();
+    const focusWorks = document.activeElement === probe;
+    state.AppState.bigBoxGames = saved.games;
+    state.AppState.appSettings = {...state.AppState.appSettings, bigbox_mode: saved.mode};
+    state.AppState.bigBoxPlatform = saved.platform;
+    state.AppState.bigBoxRaFilter = saved.ra;
+    document.getElementById('sidebarSearch').value = saved.query;
+    state.invalidateFilterCache();
+    return {clean, opened, whileOpen, afterHide, focusBefore, focusWorks,
+      gamesLen: state.filteredGames().length};
+  });
+  // F7/F11/F12: the search box lied in three different ways, and none of them is
+  // visible from the source -- the tokenizer, the matcher and the render have to
+  // agree, so this drives the real functions against a real game.
+  motion.queryGrammar = await page.evaluate(async () => {
+    const util = await import('/static/util.js');
+    const game = {
+      id: 1, game_id: 'g-1', name: 'The Beatles: Rock Band', sort_title: 'beatles rock band',
+      alternate_names: ['Beatles RB'], platform: 'PC', genre: 'Music', developer: 'Harmonix',
+      publisher: 'MTV', series: '', region: 'EU', notes: 'rhythm', source: 'steam',
+      play_mode: 'keyboard', status: 'owned', progress: 'Beaten', rating: 5,
+      favorite: true, installed: true, hidden: false, broken: false, portable: true,
+      controller_support: 'xbox', tags: ['music'],
+    };
+    const t = q => util.parseQueryTokens(q);
+    const m = (q, g) => util.advancedQueryMatches(g || game, q);
+    return {
+      // F7: a lone '-' used to produce an empty value, and every string
+      // contains the empty string, so the negative matched nothing at all.
+      loneMinusTokens: t('-'),
+      loneMinusMatchesEverything: m('-'),
+      // F11: the leading '-' could not bind to a quoted phrase, so
+      // -"the beatles" tokenized as `-the` AND `beatles"` and returned the very
+      // game it was meant to exclude.
+      quotedNegativeTokens: t('-"the beatles"'),
+      quotedNegativeRejectsGame: m('-"the beatles"'),
+      quotedPositiveTokens: t('"rock band"'),
+      quotedPositiveMatchesGame: m('"rock band"'),
+      keyQuotedTokens: t('genre:"music"'),
+      keyQuotedMatchesGame: m('genre:"music"'),
+      // F12: an unknown key fell back to all 16 fields and returned a
+      // plausible-looking result instead of showing the typo.
+      unknownKeyTokens: t('platfrom:PC'),
+      unknownKeyMatchesGame: m('platfrom:PC'),
+      knownKeyMatchesGame: m('platform:PC'),
+      allKeyStillWorks: m('all:harmonix'),
+      plainWordTokens: t('beatles'),
+      plainWordMatchesGame: m('beatles'),
+    };
+  });
+  console.log('motion query grammar:', JSON.stringify(motion.queryGrammar, null, 2));
+
+  // F7: a lone '-' used to be parsed as a *negation* with an empty value, and
+  // every string contains the empty string, so it excluded every game and the
+  // library rendered "0 games" with no explanation. The defect is the negation,
+  // not the absence of results: a lone '-' is now an ordinary search for a
+  // hyphen, so the token is non-negative and matches nothing for an honest
+  // reason.
+  (motion.queryGrammar.loneMinusTokens.some(token => token.negative)) && failures.push("motion.queryGrammar: a lone '-' is still parsed as a negation, so it excludes every game and the library shows 0 results (F7)");
+  (motion.queryGrammar.loneMinusTokens.length !== 1 || motion.queryGrammar.loneMinusTokens[0].value !== '-') && failures.push(`motion.queryGrammar: a lone '-' should be one literal title token, got ${JSON.stringify(motion.queryGrammar.loneMinusTokens)} (F7)`);
+  (motion.queryGrammar.quotedNegativeTokens.length !== 1) && failures.push(`motion.queryGrammar: -\"the beatles\" tokenized into ${motion.queryGrammar.quotedNegativeTokens.length} tokens instead of one (F11)`);
+  (motion.queryGrammar.quotedNegativeRejectsGame) && failures.push("motion.queryGrammar: -\"the beatles\" matches a game named 'The Beatles', so the negation and the phrase are separate tokens (F11)");
+  (!motion.queryGrammar.quotedPositiveMatchesGame) && failures.push("motion.queryGrammar: \"rock band\" no longer matches its own game's alternate name (F11)");
+  (motion.queryGrammar.keyQuotedTokens.length !== 1) && failures.push("motion.queryGrammar: genre:\"music\" did not tokenize as one key/value token");
+  (!motion.queryGrammar.keyQuotedMatchesGame) && failures.push("motion.queryGrammar: genre:\"music\" no longer matches genre 'Music'");
+  (motion.queryGrammar.unknownKeyMatchesGame) && failures.push("motion.queryGrammar: an unrecognised key searched every field, so a typo returns plausible-looking wrong results (F12)");
+  (!motion.queryGrammar.knownKeyMatchesGame) && failures.push("motion.queryGrammar: platform:PC no longer matches, so the F12 fix broke the real keys");
+  (!motion.queryGrammar.allKeyStillWorks) && failures.push("motion.queryGrammar: the explicit all: key stopped working when the implicit fallback was removed (F12)");
+  (motion.queryGrammar.plainWordTokens.length !== 1) && failures.push("motion.queryGrammar: a bare word did not tokenize as one title token");
+  (!motion.queryGrammar.plainWordMatchesGame) && failures.push("motion.queryGrammar: a bare word no longer matches the title");
+
+  // F3: a window resize used to reset the row height, and "row height unknown"
+  // meant "render every row" -- 20,000 list rows in one innerHTML write.
+  motion.listResizeBudget = await page.evaluate(async () => {
+    const state = await import('/static/state.js');
+    const library = await import('/static/library.js');
+    const savedGames = state.AppState.games;
+    const savedView = state.AppState.appSettings.library_view;
+    const savedSearch = document.getElementById('sidebarSearch').value;
+    // The 2-game demo library is long gone by this point in the run, and a
+    // 2-row grid cannot violate a 20,000-row budget.
+    const template = savedGames[0] || {name: 'Game', platform: 'PC', genre: 'Action'};
+    state.AppState.games = Array.from({length: 20000}, (_, i) => ({
+      ...template,
+      id: 100000 + i,
+      game_id: `g-perf-${i}`,
+      name: `Perf Game ${i}`,
+      sort_title: `perf game ${i}`,
+    }));
+    state.AppState._refreshCounter = (state.AppState._refreshCounter || 0) + 1;
+    state.warmSearchIndex();
+    state.AppState.appSettings.library_view = 'list';
+    document.getElementById('sidebarSearch').value = '';
+    document.getElementById('sidebarSearch').dispatchEvent(new Event('input', {bubbles: true}));
+    state.invalidateFilterCache();
+    library.renderGrid();
+    await new Promise(r => setTimeout(r, 600));
+    const total = state.filteredGames().length;
+    const steady = document.querySelectorAll('#grid .list-row').length;
+    window.dispatchEvent(new Event('resize'));
+    await new Promise(r => setTimeout(r, 600));
+    const afterResize = document.querySelectorAll('#grid .list-row').length;
+    // And the zero-results path, which also zeroed the row height.
+    document.getElementById('sidebarSearch').value = 'zzzz-no-such-game-zzzz';
+    document.getElementById('sidebarSearch').dispatchEvent(new Event('input', {bubbles: true}));
+    await new Promise(r => setTimeout(r, 500));
+    document.getElementById('emptyClearFilters')?.click();
+    await new Promise(r => setTimeout(r, 800));
+    const afterClear = document.querySelectorAll('#grid .list-row').length;
+    state.AppState.games = savedGames;
+    state.AppState._refreshCounter = (state.AppState._refreshCounter || 0) + 1;
+    state.AppState.appSettings.library_view = savedView;
+    document.getElementById('sidebarSearch').value = savedSearch;
+    document.getElementById('sidebarSearch').dispatchEvent(new Event('input', {bubbles: true}));
+    state.invalidateFilterCache();
+    return {total, steady, afterResize, afterClear};
+  });
+  console.log('motion list resize budget:', JSON.stringify(motion.listResizeBudget));
+  (motion.listResizeBudget.total < 1000) && failures.push(`motion.listResizeBudget: only ${motion.listResizeBudget.total} games in the fixture, so the budget case is vacuous`);
+  (motion.listResizeBudget.afterResize > 300) && failures.push(`motion.listResizeBudget: a resize rendered ${motion.listResizeBudget.afterResize} list rows; the 20k budget requires a virtual window (F3)`);
+  (motion.listResizeBudget.afterClear > 300) && failures.push(`motion.listResizeBudget: clearing a 0-result search rendered ${motion.listResizeBudget.afterClear} list rows (F3)`);
+  (motion.listResizeBudget.afterResize < 1) && failures.push("motion.listResizeBudget: the virtual window rendered nothing after a resize; the library blanked instead");
+
+  console.log('motion inert released:', JSON.stringify(motion.inertReleased));
+  (!motion.inertReleased.focusBefore) && failures.push("motion.inertReleased: the focus probe never worked, so this case cannot measure anything");
+  (motion.inertReleased.clean.length) && failures.push(`motion.inertReleased: ${motion.inertReleased.clean.join(',')} was already inert before Big Box opened`);
+  (motion.inertReleased.opened && !motion.inertReleased.whileOpen.length) && failures.push("motion.inertReleased: opening Big Box inerted nothing, so Tab still walks into the page behind the overlay");
+  (motion.inertReleased.afterHide.length) && failures.push(`motion.inertReleased: hiding Big Box left ${motion.inertReleased.afterHide.join(',')} inert; the page can never be focused again`);
+  (motion.inertReleased.focusBefore && !motion.inertReleased.focusWorks) && failures.push("motion.inertReleased: focus cannot move to a sidebar control after Big Box hides");
+
   (perfChecks.coverflowNodes > 11) && failures.push("perfChecks.coverflowNodes <= 11");
   (!perfChecks.gridNodeCount) && failures.push("perfChecks.gridNodeCount");
   (perfChecks.gridNodeCount >= perfChecks.visibleCount) && failures.push("perfChecks.gridNodeCount < perfChecks.visibleCount");
@@ -1648,9 +2166,58 @@ const failures = [];
   (motion.gridEntrance.replayed > 0) && failures.push("motion: a search keystroke must not replay the grid entrance");
   (!motion.dialogExit.during) && failures.push("motion.dialogExit.during (exit animation plays)");
   (!motion.dialogExit.after) && failures.push("motion.dialogExit.after (dialog finishes closing)");
-  (!motion.toast.kept) && failures.push("motion.toast: a notify() must not clobber an Undo toast");
-  (!motion.toast.topLayer) && failures.push("motion.toast: toast must live in the top layer");
-  (!motion.toast.flushed) && failures.push("motion.toast: the held message shows after the Undo toast closes");
+  (!motion.toast.kept) && failures.push("motion.toast: a notify() must not clobber a live Undo toast");
+  (!motion.toast.topLayer) && failures.push("motion.toast: the toast container must live in the top layer");
+  (!motion.toast.stacked) && failures.push("motion.toast: three messages must produce three toasts (a real stack, not a one-deep pending slot)");
+  (!motion.toast.survived) && failures.push("motion.toast: hovering an Undo toast must pause its timer (WCAG 2.2.1)");
+  (!motion.toastAboveDialog.raised) && failures.push("motion.toastAboveDialog: opening a dialog must not bury a live Undo toast under ::backdrop");
+  // F2: the preview gate, measured rather than asserted from source.
+  (!motion.restorePreview.armed.listed) && failures.push("motion.restorePreview: no backup was listed, so the case is vacuous");
+  (motion.restorePreview.calls.diffs < 3) && failures.push(`motion.restorePreview: expected 3 diff fetches (success, failure, retry), got ${motion.restorePreview.calls.diffs}`);
+  (motion.restorePreview.before.confirm) && failures.push("motion.restorePreview: the confirm button exists before any diff has run");
+  (!motion.restorePreview.before.hidden) && failures.push("motion.restorePreview: the preview panel is visible before any diff has run");
+  (!motion.restorePreview.armed.confirm) && failures.push("motion.restorePreview: a successful diff did not arm the restore");
+  (motion.restorePreview.armed.retry) && failures.push("motion.restorePreview: a successful diff also offered a retry");
+  (motion.restorePreview.armed.names.length !== 4) && failures.push(`motion.restorePreview: the preview listed ${motion.restorePreview.armed.names.length} games, expected all 4`);
+  (motion.restorePreview.armed.names.includes('Added Since Backup') === false) && failures.push("motion.restorePreview: a game a restore would delete is not listed by name");
+  (motion.restorePreview.armed.names.includes('Deleted Since Backup') === false) && failures.push("motion.restorePreview: a game a restore would bring back is not listed by name");
+  (motion.restorePreview.armed.fields.length !== 1) && failures.push("motion.restorePreview: the per-field from/to detail is missing");
+  (motion.restorePreview.armed.fields[0] && !motion.restorePreview.armed.fields[0].includes('Beaten')) && failures.push("motion.restorePreview: the field detail does not show the value the restore would write");
+  (/save paths/i.test(motion.restorePreview.armed.text) === false) && failures.push("motion.restorePreview: the preview does not warn that a restore moves settings");
+  (motion.restorePreview.failed.confirm) && failures.push("motion.restorePreview: a diff that 500s still armed the restore");
+  (!motion.restorePreview.failed.retry) && failures.push("motion.restorePreview: a failed diff offers no way back");
+  (!motion.restorePreview.failed.text.includes('archive unreadable')) && failures.push("motion.restorePreview: a failed diff swallows the server's reason");
+  (motion.restorePreview.calls.restores !== 0) && failures.push("motion.restorePreview: previewing a restore must never POST one");
+  (!motion.restorePreview.recovered.confirm) && failures.push("motion.restorePreview: retrying a failed diff does not re-arm the restore");
+  // F1. ADR 0064 rule 3: the list must be non-empty or the case proves nothing.
+  (motion.launchAudit.live.status !== 200) && failures.push(`motion.launchAudit: GET /api/v2/launch/audit returned ${JSON.stringify(motion.launchAudit.live)}`);
+  (motion.launchAudit.live.scanned !== false) && failures.push("motion.launchAudit: a GET on a fresh library reported a scan; GET must never scan");
+  (motion.launchAudit.rows !== 2) && failures.push(`motion.launchAudit: expected 2 cause rows, got ${motion.launchAudit.rows}`);
+  (!motion.launchAudit.heads.includes('FLATPAK_NOT_INSTALLED · org.libretro.RetroArch')) && failures.push("motion.launchAudit: a cause row does not name what it is about");
+  (motion.launchAudit.installButtons !== 1) && failures.push(`motion.launchAudit: expected one install fix (one per cause), got ${motion.launchAudit.installButtons}`);
+  (!/Blocked: 20/.test(motion.launchAudit.totals)) && failures.push(`motion.launchAudit: totals line wrong: ${motion.launchAudit.totals}`);
+  (motion.launchAudit.members !== 20) && failures.push(`motion.launchAudit: expanding a cause listed ${motion.launchAudit.members} games, expected 20`);
+  (motion.launchAudit.pages !== 1) && failures.push(`motion.launchAudit: expected one member page request, got ${motion.launchAudit.pages}`);
+  (motion.launchAudit.scansAfterRun !== 1) && failures.push("motion.launchAudit: the run button did not queue exactly one scan");
+  (motion.launchAudit.hadTarget && !motion.launchAudit.selectedMatches) && failures.push("motion.launchAudit: Show me did not select the game");
+  (motion.launchAudit.hadTarget && !motion.launchAudit.dialogClosed) && failures.push("motion.launchAudit: Show me left the dialog open");
+  // G2: the three cases 1.15.0 planned and never wrote.
+  // The 1.15 claim was "CLS = 0"; measured, steady-state interaction is 0.057
+  // on the 20k fixture, all of it from the grid collapsing when a search
+  // returns nothing. Asserting literally 0 would be a false claim in the other
+  // direction, so the gate is the web-vitals "good" threshold and the measured
+  // value is printed, with the toast and dialog phases required to contribute
+  // nothing -- those are the surfaces this release changed.
+  (!(motion.cls.total < 0.1)) && failures.push(`motion.cls: cumulative layout shift must stay under 0.1, got ${motion.cls.total}`);
+  ((motion.cls.phases.dialog || 0) > 0.001) && failures.push(`motion.cls: opening a dialog shifted the page (${motion.cls.phases.dialog})`);
+  ((motion.cls.phases.dialogClose || 0) > 0.001) && failures.push(`motion.cls: closing a dialog shifted the page (${motion.cls.phases.dialogClose})`);
+  ((motion.cls.phases.toast || 0) > 0.001) && failures.push(`motion.cls: showing a toast shifted the page (${motion.cls.phases.toast})`);
+  (!perfChecks.listPosition) && failures.push("perfChecks.listPosition: no positioned cards on the 20000-game fixture");
+  (perfChecks.listPosition && !perfChecks.listPosition.ok) && failures.push("perfChecks.listPosition: aria-setsize/aria-posinset must cover the whole 20000-game result, not the rendered slice");
+  (!motion.themePaint.hasHref) && failures.push("motion.themePaint: #themeStylesheet has no href on first paint");
+  (!motion.themePaint.applied) && failures.push("motion.themePaint: the theme stylesheet did not load");
+  (!motion.themePaint.switched) && failures.push("motion.themePaint: a theme switch must cross-fade through .theme-switching");
+  (!motion.themePaint.settled) && failures.push("motion.themePaint: .theme-switching was never removed");
   (!motion.reduced.tokenZero) && failures.push("motion.reduced.tokenZero");
   (!motion.reduced.closedSync) && failures.push("motion.reduced.closedSync");
   (motion.reduced.animations > 0) && failures.push("motion.reduced.animations (nothing may animate)");
@@ -1733,7 +2300,7 @@ const failures = [];
   (!nestedDialogOk.nestedClosed) && failures.push("nestedDialogOk.nestedClosed");
   (!nestedDialogOk.gameStillOpen) && failures.push("nestedDialogOk.gameStillOpen");
   (!nestedDialogOk.focusRestored) && failures.push("nestedDialogOk.focusRestored");
-  (!dialogFocusOk) && failures.push("dialogFocusOk");
+  (!dialogFocusOk.ok) && failures.push(`dialogFocusOk: ${dialogFocusOk.why}${dialogFocusOk.nested?.length ? ` (still open: ${dialogFocusOk.nested.join(',')})` : ''}`);
   (!readerCleanedOk) && failures.push("readerCleanedOk");
   (!gamepadLoopStopped) && failures.push("gamepadLoopStopped");
   (!gamepadPauseTrap.dismissControl) && failures.push("pause panel carries a dismiss control");
@@ -1816,7 +2383,15 @@ const failures = [];
   (!dropHonesty.libraryUnchanged) && failures.push("dropHonesty.libraryUnchanged");
   (!dropHonesty.noRomBinFolder) && failures.push("dropHonesty.noRomBinFolder");
   (dropHonesty.noImportToast === false) && failures.push("dropHonesty.noImportToast !== false");
-  (!dropEmptyHonesty.pickerOpened) && failures.push("dropEmptyHonesty.pickerOpened");
+  // F8, and a false claim this suite was shipping: `dropEmptyHonesty` asserted
+  // that dropping a transfer with *no files* over #dropZone must open the "enter
+  // the absolute path" prompt. That is the bug, not the contract -- a text drag
+  // released over the drop zone (drag-selecting a game title, say) fires the same
+  // event and used to summon an import prompt out of nowhere. The drop handler
+  // now checks dataTransfer, so the honest expectation is the opposite: no
+  // files, no prompt, no import.
+  (dropEmptyHonesty.pickerOpened) && failures.push("dropEmptyHonesty.pickerOpened: a drop with no files must not open the import prompt (F8)");
+  (dropEmptyHonesty.dropHasFiles) && failures.push("dropEmptyHonesty: the synthetic drop carried files, so the case does not test an empty transfer (F8)");
   (!dropEmptyHonesty.libraryUnchanged) && failures.push("dropEmptyHonesty.libraryUnchanged");
   (!dropEmptyHonesty.noImport) && failures.push("dropEmptyHonesty.noImport");
   const expectedGroups = {
@@ -1839,4 +2414,4 @@ const failures = [];
     process.exit(1);
   }
   console.log('UI SMOKE PASSED');
-})().catch(e => { console.error('SMOKE FAIL', e.message); process.exit(1); });
+})().catch(e => { console.error('SMOKE FAIL', e.message); console.error(e.stack); process.exit(1); });

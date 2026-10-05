@@ -163,9 +163,18 @@ def match_game(game, credentials, cache_directory, fetch=api_get):
     if not console:
         raise ValueError("RetroAchievements did not return a matching system.")
     digest = game_hash(game)
+    # ``console['ID']`` is a field from a remote API response, and it was being
+    # interpolated straight into a cache filename. Line 175 already coerces the
+    # sibling field with int(); do the same here so a non-numeric (or hostile)
+    # value cannot place a file outside the cache directory. The value is also
+    # the request parameter, so one coerced value is used for both.
+    try:
+        console_id = int(console["ID"])
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("RetroAchievements returned an unusable system ID.") from None
     games = cached(
-        Path(cache_directory) / f"system-{console['ID']}.json",
-        lambda: fetch("API_GetGameList.php", {"i":console["ID"], "h":1, "f":1}, credentials),
+        Path(cache_directory) / f"system-{console_id}.json",
+        lambda: fetch("API_GetGameList.php", {"i": console_id, "h": 1, "f": 1}, credentials),
     )
     if not isinstance(games, list):
         games = []

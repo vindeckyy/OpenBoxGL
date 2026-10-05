@@ -1,7 +1,7 @@
 /* constellation.js — library relationship graph (force-directed canvas). */
 import { $, escapeHtml, motionMs } from './util.js';
 import { t } from './i18n.js';
-import { AppState, api, media } from './state.js';
+import { AppState, api, media, notify } from './state.js';
 
     // ponytail: labels resolve at render time (not module load) because the
     // locale dictionary is fetched asynchronously after boot; a frozen map
@@ -173,7 +173,12 @@ import { AppState, api, media } from './state.js';
         resizeCanvas();
         $('constellationLoading').hidden = true;
         startSim();
-      } catch(error) { console.error(error); }
+      } catch(error) {
+        // S35: a failed request used to leave the spinner up forever.
+        $('constellationLoading').hidden = true;
+        $('constellationEmpty').hidden = false;
+        notify(error.message || String(error));
+      }
     }
 
     function resizeCanvas() {
@@ -192,7 +197,7 @@ import { AppState, api, media } from './state.js';
       palette = resolveColors();
       stopSim();
       const gen = simGen;
-      // Reduced motion: converge synchronously and paint once instead of animating the settle.
+      // Reduced motion: converge without painting the settle, and paint once at the end.
       const instant = motionMs('--dur-base') <= 1;
       // ponytail: O(n²) per tick with clamped steps. If libraries grow past
       // the 1000-node cap or layout feels slow, graduate to Barnes-Hut.
@@ -208,8 +213,8 @@ import { AppState, api, media } from './state.js';
       let alpha = 1.0;
       const k = Math.sqrt((canvas.width * canvas.height) / data.nodes.length) * 0.5;
       const repel = k * k;
-      function tick() {
-        if (!alpha || gen !== simGen) return;
+      // One physics step. Returns whether the layout is still settling.
+      function step() {
         // Repulsion
         for (let i = 0; i < data.nodes.length; i++) {
           for (let j = i + 1; j < data.nodes.length; j++) {
@@ -263,9 +268,28 @@ import { AppState, api, media } from './state.js';
           }
         }
         alpha *= 0.985;
-        if (!instant) draw();
-        if (alpha > 0.02) { if (instant) tick(); else simFrame = requestAnimationFrame(tick); }
-        else { alpha = 0; draw(); }
+        return alpha > 0.02;
+      }
+      // S34: the reduced-motion path used to recurse synchronously -- ~259
+      // steps of the O(n²) repulsion in one task, 20.7M pair computations at 400
+      // nodes, which stopSim could not interrupt. So the accessibility path was
+      // the one that froze the page. It now runs the same steps in time-boxed
+      // chunks, one chunk per frame, and still paints only the settled layout.
+      const CHUNK_MS = 12;
+      function tick() {
+        if (!alpha || gen !== simGen) return;
+        if (instant) {
+          const deadline = performance.now() + CHUNK_MS;
+          let settling = true;
+          while (settling && performance.now() < deadline) settling = step();
+          if (settling) { simFrame = requestAnimationFrame(tick); return; }
+        } else if (step()) {
+          draw();
+          simFrame = requestAnimationFrame(tick);
+          return;
+        }
+        alpha = 0;
+        draw();
       }
       tick();
     }
@@ -308,7 +332,8 @@ import { AppState, api, media } from './state.js';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = '10px sans-serif';
-        ctx.fillText(node.name.slice(0, 1).toUpperCase(), p.x, p.y);
+        // A throw here would kill the sim: the next frame is scheduled after draw().
+        ctx.fillText(String(node.name || '?').slice(0, 1).toUpperCase(), p.x, p.y);
       }
 
       ctx.restore();

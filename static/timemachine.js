@@ -86,7 +86,10 @@ function renderEvents(result) {
   body.querySelectorAll('[data-tm-revert]').forEach(button => {
     button.onclick = () => previewRevert(button);
   });
-  $('tmLoadMore')?.addEventListener('click', () => loadEvents(false), { once: true });
+  // S44: no `{once: true}` -- a click swallowed by the loadingEvents guard used
+  // to consume the listener and kill pagination until the dialog reopened.
+  const loadMore = $('tmLoadMore');
+  if (loadMore) loadMore.onclick = () => loadEvents(false);
 }
 
 function renderAsOf(result) {

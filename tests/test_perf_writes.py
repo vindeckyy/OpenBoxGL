@@ -529,40 +529,42 @@ class PerfWriteTests(unittest.TestCase):
             store.save({"games": games})
             self.assertGreater(store.path.stat().st_size, 1024 * 1024)
 
-    def test_orjson_save_load_round_trips_when_available(self):
+    def test_save_load_round_trips_are_host_independent(self):
+        """A save/load round trip must not depend on what is installed.
+
+        This replaced a test that installed a fake ``orjson`` and skipped itself
+        whenever the real one was absent -- which, in CI, was always. The write
+        path used to be able to swap serializers based on the host; now there is
+        exactly one, and this asserts the round trip holds for both the compact
+        (large library) and pretty (small library) shapes unconditionally.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            store = self.make_store(directory)
+            store.save({"games": [{"game_id": "g1", "name": "RoundTrip"}]})
+            self.assertEqual(store.load()["games"][0]["name"], "RoundTrip")
+
+            games = [{"game_id": f"g{i}", "name": f"G{i}"} for i in range(600)]
+            store.save({"games": games})
+            self.assertEqual(len(store.load()["games"]), 600)
+
+    def test_state_store_imports_no_third_party_json_library(self):
+        import ast
+
         import state_store
-        if state_store._orjson is None:
-            self.skipTest("orjson branch is unavailable")
 
-        class FakeOrjson:
-            OPT_SORT_KEYS = 1
-            OPT_INDENT_2 = 2
-            JSONDecodeError = json.JSONDecodeError
-
-            @staticmethod
-            def dumps(payload, option=None):
-                kwargs = {"separators": (",", ":")}
-                if option and option & FakeOrjson.OPT_INDENT_2:
-                    kwargs = {"indent": 2}
-                if option and option & FakeOrjson.OPT_SORT_KEYS:
-                    kwargs["sort_keys"] = True
-                return json.dumps(payload, **kwargs).encode("utf-8")
-
-            @staticmethod
-            def loads(payload):
-                if isinstance(payload, bytes):
-                    payload = payload.decode("utf-8")
-                return json.loads(payload)
-
-        with mock.patch.object(state_store, "_orjson", FakeOrjson):
-            with tempfile.TemporaryDirectory() as directory:
-                store = self.make_store(directory)
-                store.save({"games": [{"game_id": "g1", "name": "OrjsonGame"}]})
-                self.assertEqual(store.load()["games"][0]["name"], "OrjsonGame")
-
-                games = [{"game_id": f"g{i}", "name": f"G{i}"} for i in range(600)]
-                store.save({"games": games})
-                self.assertEqual(len(store.load()["games"]), 600)
+        source = Path(state_store.__file__).read_text(encoding="utf-8")
+        imported = set()
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name.split(".", 1)[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                imported.add(node.module.split(".", 1)[0])
+        for module in ("orjson", "ujson", "simplejson", "rapidjson"):
+            self.assertNotIn(
+                module,
+                imported,
+                f"persistence must not import {module}; scripts/check_dependencies.py enforces this",
+            )
 
 class WriteCoalesceTests(unittest.TestCase):
     """F1: 50ms micro-batch coalesce, single fsync per batch."""

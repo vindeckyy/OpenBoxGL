@@ -688,8 +688,18 @@
     .list-head-col { display:flex; min-width:0; }
     .list-head-col > .list-head-cell { flex:1; }
     .visually-hidden { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
-    .toast { position:fixed; z-index:20; inset:auto; margin:0; overflow:visible; right:var(--space-md); bottom:var(--space-md); max-width:360px; padding:var(--space-sm) var(--space-md); border:1px solid var(--border-card); border-radius:6px; background:var(--surface-card); color:var(--text); box-shadow:0 12px 30px var(--shadow-elevated); opacity:0; transform:translateY(8px); pointer-events:none; transition:opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); line-height:var(--leading-normal); }
+    /* Each toast is absolutely positioned and stacked upward by an explicit
+       `bottom` offset. A flex column would grow the container upward as items
+       are appended, which slides the toasts already on screen -- a real layout
+       shift every time a second message arrives, and the reason the container
+       cannot simply be a flex stack. */
+    .toasts { position:fixed; inset:auto; margin:0; border:0; padding:0; width:max-content; max-width:min(360px, calc(100vw - var(--space-md) * 2)); right:var(--space-md); bottom:var(--space-md); height:0; pointer-events:none; }
+    .toast { position:absolute; right:0; bottom:0; inset:auto; overflow:visible; width:max-content; max-width:100%; padding:var(--space-sm) var(--space-md); border:1px solid var(--border-card); border-radius:6px; background:var(--surface-card); color:var(--text); box-shadow:0 12px 30px var(--shadow-elevated); opacity:0; transform:translateY(8px); pointer-events:none; transition:opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); line-height:var(--leading-normal); }
     .toast.show { opacity:1; transform:none; }
+    .toast.leaving { opacity:0; transform:translateY(8px); }
+    .toast-text { display:block; }
+    .toast-action { pointer-events:auto; margin-left:var(--space-sm); border:1px solid var(--trash-accent); border-radius:var(--radius-cover); padding:var(--space-2xs) var(--space-sm); background:var(--trash-accent); color:var(--trash-accent-ink); font:inherit; font-weight:700; cursor:pointer; }
+    .toast-action:hover { filter:brightness(1.1); }
     .toast[data-notify-level] { border-left-width:3px; }
     .toast[data-notify-level="success"] { border-color:var(--toast-success-border); color:var(--toast-success-fg); }
     .toast[data-notify-level="info"] { border-color:var(--toast-info-border); color:var(--toast-info-fg); }
@@ -697,6 +707,7 @@
     .toast[data-notify-level="error"] { border-color:var(--toast-error-border); color:var(--toast-error-fg); }
     .toast .trash-undo { pointer-events:auto; margin-left:var(--space-sm); border:1px solid var(--trash-accent); border-radius:6px; padding:var(--space-2xs) var(--space-sm); background:var(--trash-accent); color:var(--trash-accent-ink); font:inherit; font-weight:700; cursor:pointer; }
     .toast .trash-undo:hover { filter:brightness(1.1); }
+    .toasts .toast + .toast { margin-top:var(--space-xs); }
     .trash-wrap { display:block; padding:var(--space-sm) 0 var(--space-lg); }
     .trash-head { display:flex; align-items:center; justify-content:space-between; gap:var(--space-sm); margin:0 0 var(--space-sm); }
     .trash-list { display:flex; flex-direction:column; gap:var(--space-sm); }
@@ -742,6 +753,12 @@
     .collection-stat small { color:var(--section-muted); font-size:10px; text-transform:uppercase; letter-spacing:.06em; }
     .collection-stat strong { margin-top:var(--space-3xs); font-size:16px; }
     .playlist-manager-list,.backup-list { display:grid; gap:var(--space-xs); max-height:55vh; overflow:auto; }
+    /* F2: the restore preview. It sits below the list rather than replacing it, so
+       picking a different backup is one click instead of a re-open. */
+    .backup-preview { display:grid; gap:var(--space-sm); max-height:45vh; overflow:auto; }
+    .backup-preview[hidden] { display:none; }
+    .backup-preview .timeline-entry { cursor:default; }
+    .backup-preview .timeline-entry:hover { background:none; }
     .playlist-manager-item,.backup-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:var(--space-sm); align-items:center; padding:var(--space-sm); border:1px solid var(--line); border-radius:7px; background:var(--surface-card); }
     .playlist-manager-item small,.backup-item small { display:block; color:var(--section-muted); margin-top:var(--space-3xs); }
     .playlist-manager-actions { display:flex; flex-wrap:wrap; gap:var(--space-2xs); justify-content:flex-end; }
@@ -822,8 +839,7 @@
     .trophy-progress { height:4px; border-radius:2px; background:var(--trophy-progress-bg); overflow:hidden; }
     .trophy-progress-fill { height:100%; background:var(--trophy-progress-fill); }
     .trophy-empty { padding:var(--space-xl) var(--space-md); color:var(--trophy-meta-fg); text-align:center; line-height:var(--leading-relaxed); }
-    .toast .trophy-view { pointer-events:auto; margin-left:var(--space-sm); border:1px solid var(--trophy-accent); border-radius:6px; padding:var(--space-2xs) var(--space-sm); background:var(--trophy-accent); color:var(--trophy-accent-ink); font:inherit; font-weight:700; cursor:pointer; }
-    .welcome-steps { display:grid; gap:var(--space-xs); }
+    .toast .trophy-view { pointer-events:auto; margin-left:var(--space-sm); border:1px solid var(--trophy-accent); border-radius:6px; padding:var(--space-2xs) var(--space-sm); background:var(--trophy-accent); color:var(--trophy-accent-ink); font:inherit; font-weight:700; cursor:pointer; }    .welcome-steps { display:grid; gap:var(--space-xs); }
     .welcome-steps button { justify-self:start; }
     .reader-toolbar { display:flex; flex-wrap:wrap; gap:var(--space-2xs); padding:0 var(--space-md) var(--space-xs); border-bottom:1px solid var(--line); }
     .discovery-grid { display:grid; gap:var(--space-md); max-height:55vh; overflow:auto; }
@@ -1062,8 +1078,9 @@
     .mastery-label { display:flex; justify-content:space-between; gap:var(--space-xs); font-weight:600; }
     .mastery-count { font-weight:400; color:var(--text-soft); }
     .mastery-bar { display:flex; height:1.25rem; border-radius:var(--radius-pill-large); overflow:hidden; background:var(--surface-field); }
-    .mastery-segment { height:100%; cursor:pointer; }
-    .mastery-segment:hover { filter:brightness(1.1); }
+    .mastery-segment { height:100%; }
+    .mastery-segment.is-clickable { cursor:pointer; }
+    .mastery-segment.is-clickable:hover { filter:brightness(1.1); }
     .mastery-ra { font-size:var(--font-meta); color:var(--text-soft); line-height:var(--leading-normal); }
     .mastery-overall { margin-bottom:var(--space-md); }
 

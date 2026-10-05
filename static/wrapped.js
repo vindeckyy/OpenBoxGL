@@ -1,5 +1,5 @@
 /* wrapped.js — annual gaming report (printable). */
-import { $ } from './util.js';
+import { $, escapeHtml } from './util.js';
 import { t } from './i18n.js';
 import { AppState, api } from './state.js';
 
@@ -25,7 +25,7 @@ async function loadWrapped(year) {
     const data = await api(`/api/v2/insights/wrapped?year=${year}`);
     render(data);
   } catch (e) {
-    body.innerHTML = `<p class="description">${e.message}</p>`;
+    body.innerHTML = `<p class="description">${escapeHtml(e.message)}</p>`;
   }
 }
 
@@ -52,13 +52,13 @@ function render(data) {
       <div class="wrapped-card"><span class="wrapped-stat">${progress.mastered || 0}</span><span data-i18n="wrapped.mastered">${t('wrapped.mastered')}</span></div>
     </div>
     <div class="wrapped-tops">
-      <div><strong data-i18n="wrapped.top_game">${t('wrapped.top_game')}</strong><p>${(top.game || {}).name || '—'}</p></div>
-      <div><strong data-i18n="wrapped.top_platform">${t('wrapped.top_platform')}</strong><p>${(top.platform || {}).platform || '—'}</p></div>
-      <div><strong data-i18n="wrapped.top_genre">${t('wrapped.top_genre')}</strong><p>${(top.genre || {}).genre || '—'}</p></div>
+      <div><strong data-i18n="wrapped.top_game">${t('wrapped.top_game')}</strong><p>${escapeHtml((top.game || {}).name || '—')}</p></div>
+      <div><strong data-i18n="wrapped.top_platform">${t('wrapped.top_platform')}</strong><p>${escapeHtml((top.platform || {}).platform || '—')}</p></div>
+      <div><strong data-i18n="wrapped.top_genre">${t('wrapped.top_genre')}</strong><p>${escapeHtml((top.genre || {}).genre || '—')}</p></div>
     </div>
     <div class="wrapped-first">
-      <div><strong data-i18n="wrapped.first_play">${t('wrapped.first_play')}</strong><p>${(data.first_play || {}).name || '—'}</p></div>
-      <div><strong data-i18n="wrapped.oldest_played">${t('wrapped.oldest_played')}</strong><p>${(data.oldest_played || {}).name || '—'}</p></div>
+      <div><strong data-i18n="wrapped.first_play">${t('wrapped.first_play')}</strong><p>${escapeHtml((data.first_play || {}).name || '—')}</p></div>
+      <div><strong data-i18n="wrapped.oldest_played">${t('wrapped.oldest_played')}</strong><p>${escapeHtml((data.oldest_played || {}).name || '—')}</p></div>
     </div>
     <div class="wrapped-co-play">
       <strong data-i18n="wrapped.co_play_pairs">${t('wrapped.co_play_pairs')}</strong>

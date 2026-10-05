@@ -285,7 +285,7 @@ def broadcast_event(kind, payload):
             LOGGER.exception("SSE subscriber queue failed")
 
 
-def session_event(kind, launch_id, game_name, exit_code=None, seconds=None):
+def session_event(kind, launch_id, game_name, exit_code=None, seconds=None, timed_out=None):
     from pkg.state.registry import PROCESS_LOCK, SESSION_EVENTS
     proc_lock = _ns("PROCESS_LOCK", PROCESS_LOCK)
     sess_events = _ns("SESSION_EVENTS", SESSION_EVENTS)
@@ -304,6 +304,8 @@ def session_event(kind, launch_id, game_name, exit_code=None, seconds=None):
         }
         if exit_code is not None:
             event["exit_code"] = exit_code
+        if timed_out is not None:
+            event["timed_out"] = bool(timed_out)
         if seconds is not None:
             event["seconds"] = seconds
         sess_events.append(event)

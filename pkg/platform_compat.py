@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -31,6 +32,111 @@ IS_MACOS = sys.platform == "darwin"
 WINDOWS_EXECUTABLE_SUFFIXES = frozenset({".exe", ".bat", ".cmd", ".com", ".lnk", ".ps1"})
 
 DEFAULT_LOCK_TIMEOUT = 30.0
+
+# Identifiers that arrive from a request and are then joined into a filesystem
+# path. A preview id is generated server-side, but it is *supplied* by the
+# client on every read, and `base / f"{value}.json"` will happily walk out of
+# `base` when the value contains a separator or "..". The generated form is a
+# uuid4 hex string, so this admits every id the server ever mints and nothing
+# else.
+SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class UnsafeIdentifier(ValueError):
+    """Raised when a request-supplied identifier is not safe to join into a path."""
+
+
+def safe_identifier(value, *, field: str = "identifier") -> str:
+    """Return ``value`` if it is safe to use as a single path component.
+
+    Rejects path separators, ``..``, absolute paths, drive letters, NUL and
+    anything outside a conservative character set. Callers that build a path
+    from a request parameter must pass the value through here first; the
+    defence in depth is :func:`contained_path`.
+    """
+    text = str(value or "").strip()
+    if not text:
+        raise UnsafeIdentifier(f"{field} is required")
+    if not SAFE_IDENTIFIER_RE.fullmatch(text):
+        raise UnsafeIdentifier(f"{field} contains characters that are not allowed in a path component")
+    if text in {".", ".."} or text.startswith("."):
+        raise UnsafeIdentifier(f"{field} must not start with a dot")
+    return text
+
+
+def contained_path(base: Path, *parts: str) -> Path:
+    """Join ``parts`` onto ``base`` and assert the result stays inside it.
+
+    Uses ``resolve()`` on both sides so a symlink or a ``..`` that slipped past
+    :func:`safe_identifier` still cannot escape ``base``.
+    """
+    base_resolved = Path(base).resolve()
+    candidate = base_resolved.joinpath(*parts)
+    resolved = Path(candidate).resolve()
+    if resolved != base_resolved and base_resolved not in resolved.parents:
+        raise UnsafeIdentifier("resolved path escapes its permitted directory")
+    return resolved
+
+
+# Windows refuses these as file names regardless of extension, and silently
+# retargets the write elsewhere when given one.
+WINDOWS_RESERVED_NAMES = frozenset(
+    {"con", "prn", "aux", "nul"}
+    | {f"com{n}" for n in range(1, 10)}
+    | {f"lpt{n}" for n in range(1, 10)}
+)
+MAX_FILENAME_COMPONENT = 200
+
+
+def resolved_data_dir() -> Path:
+    """Return the OpenBox data directory, honouring ``OPENBOX_DATA_DIR``.
+
+    One definition, deliberately. ``openbox.py`` binds this at import time for
+    ``DATA``; the plugin sandbox resolves it at *call* time so that a test (or
+    a user) pointing ``OPENBOX_DATA_DIR`` somewhere new gets a sandbox that
+    actually masks the directory it is protecting. When those two disagreed,
+    the sandbox masked the default location while the state lived elsewhere.
+    """
+    custom = os.environ.get("OPENBOX_DATA_DIR")
+    if custom:
+        return Path(custom).expanduser()
+    return default_data_dir()
+
+
+def safe_filename_component(value, *, field: str = "filename") -> str:
+    """Return ``value`` if it is usable as a single file *name* component.
+
+    Deliberately looser than :func:`safe_identifier`: real ROM names contain
+    spaces, parentheses and ampersands -- ``Game (Disc 1)``, ``Sonic &
+    Knuckles`` -- so an identifier-grade character class would reject the
+    library this is meant to protect. What is rejected is only what can change
+    *where* the write lands: path separators, ``..``, control characters, an
+    absolute or drive-qualified form, and Windows' reserved device names.
+
+    Always follow this with :func:`contained_path` when the name is used to
+    build a destination.
+    """
+    text = str(value if value is not None else "").strip()
+    if not text:
+        raise UnsafeIdentifier(f"{field} is required")
+    if len(text) > MAX_FILENAME_COMPONENT:
+        raise UnsafeIdentifier(f"{field} is longer than {MAX_FILENAME_COMPONENT} characters")
+    if "/" in text or "\\" in text:
+        raise UnsafeIdentifier(f"{field} must not contain a path separator")
+    if text in {".", ".."} or text.startswith(".."):
+        raise UnsafeIdentifier(f"{field} must not be a relative path component")
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in text):
+        raise UnsafeIdentifier(f"{field} must not contain control characters")
+    # Surrounding whitespace is stripped above rather than rejected: an import
+    # that padded a name is a data quirk, and stripping cannot move the write.
+    # Trailing dots are a different matter -- Windows silently drops them, so
+    # "game." and "game" would collide in the same directory.
+    if text != text.strip("."):
+        raise UnsafeIdentifier(f"{field} must not begin or end with a dot")
+    if text.split(".", 1)[0].casefold() in WINDOWS_RESERVED_NAMES:
+        raise UnsafeIdentifier(f"{field} is a reserved device name on Windows")
+    return text
+
 
 
 # ---------------------------------------------------------------------------

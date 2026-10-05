@@ -415,6 +415,7 @@
       <div class="wide extras"><button type="button" class="primary" id="createNamedBackup">Create backup</button><button type="button" class="icon-button" id="refreshBackups">Refresh</button></div>
       <div class="wide description">Backups include selected library data, settings, media, plugins, and themes. Restore creates a safety copy first.</div>
       <div class="wide backup-list" id="backupList"></div>
+      <div class="wide backup-preview" id="backupPreview" hidden></div>
     </div>
     <div class="dialog-actions"><button type="button" class="primary" id="doneBackups">Done</button></div>
   </dialog>
@@ -685,7 +686,7 @@
     <div class="reader-toolbar"><button type="button" class="icon-button" id="readerPrev">Previous page</button><button type="button" class="icon-button" id="readerNext">Next page</button><span class="description" id="readerPageLabel">Page 1</span><button type="button" class="icon-button" data-reader-layout="single">Single page</button><button type="button" class="icon-button" data-reader-layout="spread">Two-page spread</button><button type="button" class="icon-button" data-reader-theme="light">Light</button><button type="button" class="icon-button" data-reader-theme="dark">Dark</button></div>
     <div class="reader-viewport" id="readerViewport"><iframe id="readerFrame" title="Document reader"></iframe></div>
   </dialog>
-  <div class="toast" id="toast" popover="manual"></div>
+  <div class="toasts" id="toasts" popover="manual"></div>
   <div class="visually-hidden" id="toastLive" role="status" aria-live="polite" aria-atomic="true"></div>
   <div class="gamepad-hint" id="gamepadHint" role="status" hidden></div>
   <div class="error-banner" id="errorBanner" role="alert" hidden>

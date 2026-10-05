@@ -4,6 +4,7 @@ from collections import OrderedDict
 import copy
 from dataclasses import dataclass, field
 import gzip
+import hashlib
 import json
 import logging
 import os
@@ -77,6 +78,27 @@ _SANITIZE_MEDIA_PATH_MAX = 50000
 _PLATFORM_CATEGORY_CACHE = {}
 _PLATFORM_CATEGORY_LOCK = threading.Lock()
 _PLATFORM_CATEGORY_MAX = 5000
+
+
+def _platform_category_fingerprint(settings) -> bytes:
+    """A content fingerprint of the settings that decide a platform category.
+
+    The cache used to be keyed on ``(platform, id(settings))``. Settings are
+    persisted **in place**, so ``id()`` never changes for the life of the
+    process, and ``_invalidate_all`` did not clear this dict -- so editing
+    Settings -> platform categories and saving left every game showing its old
+    category until the 5,000-entry clear or an app restart.
+
+    Keying on content makes the cache self-invalidating: it cannot be forgotten
+    the way a clear-list can. The inputs are only ``platform_categories``, which
+    is ``category_for_platform``'s entire dependency, so nothing else can change
+    the answer. Sorted so the digest does not depend on dict insertion order.
+    """
+    raw = settings.get("platform_categories", {}) if isinstance(settings, dict) else {}
+    if not isinstance(raw, dict):
+        raw = {}
+    canonical = repr(sorted((str(key), str(value)) for key, value in raw.items()))
+    return hashlib.blake2b(canonical.encode("utf-8"), digest_size=8).digest()
 
 STATE_VIEW_LOCK = threading.Lock()
 
@@ -389,6 +411,12 @@ class CacheEpoch:
             self.game_projection.clear()
         with _SANITIZE_MEDIA_PATH_LOCK:
             self.sanitize_media_path.clear()
+        # Keyed on settings *content* now, so this is not what makes the cache
+        # correct -- a stale entry is unreachable, not merely present. Clearing
+        # it here as well keeps the dict from accumulating one entry per distinct
+        # platform-category configuration the user has ever saved.
+        with _PLATFORM_CATEGORY_LOCK:
+            _PLATFORM_CATEGORY_CACHE.clear()
         with PLUGIN_LIBRARY_LOCK:
             PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None, "state_signature": None})
         with PUBLIC_STATE_LOCK:
@@ -747,10 +775,9 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         })
 
     platform = str(game.get("platform", ""))
-    settings_id = id(settings)
     max_cat = _ns("_PLATFORM_CATEGORY_MAX", _PLATFORM_CATEGORY_MAX)
     with _PLATFORM_CATEGORY_LOCK:
-        cat_key = (platform, settings_id)
+        cat_key = (platform, _platform_category_fingerprint(settings))
         platform_cat = _PLATFORM_CATEGORY_CACHE.get(cat_key)
         if platform_cat is None:
             platform_cat = category_for_platform(platform, settings)

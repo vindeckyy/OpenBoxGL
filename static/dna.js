@@ -37,7 +37,12 @@ export function setDnaSearchMode(next, { search = true, persist = true } = {}) {
   const input = $('sidebarSearch');
   if (input) input.placeholder = next === 'smart' ? t('dna.search_placeholder_smart') : t('sidebar.search');
   if (persist) {
-    api('/api/settings', { method: 'POST', body: JSON.stringify({ dna_search_mode: next }) }).catch(() => {});
+    // S48: a swallowed failure left the toggle looking applied, then it
+    // reverted on restart. Roll the UI back and say why.
+    api('/api/settings', { method: 'POST', body: JSON.stringify({ dna_search_mode: next }) }).catch(error => {
+      if (dnaSearchMode() === next && prev !== next) setDnaSearchMode(prev, { search: false, persist: false });
+      notify(error.message || String(error));
+    });
   }
   if (next === 'smart') {
     if (!search) return;

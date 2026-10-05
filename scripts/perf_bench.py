@@ -481,7 +481,15 @@ def main():
     except Exception:
         gen_docs_ms = 0.0
     results["gen_api_docs_timing_ms"] = gen_docs_ms
-    results["cold_start_ms"] = 242.0
+    # Cold start is NOT measured by this benchmark. An earlier revision emitted
+    # a hardcoded 242.0 here, which is the worst of both worlds: it read as a
+    # measurement in the JSON artifact and in any run-over-run comparison, while
+    # being incapable of moving. Nothing consumed the key, and PERF.md carries
+    # the figure as an explicitly disclosed carried-over number. Emit an explicit
+    # null plus a boolean so a future consumer cannot mistake an absent
+    # measurement for a regression.
+    results["cold_start_ms"] = None
+    results["cold_start_measured"] = False
 
     out_target = args.json_out or args.out or "build/perf.json"
     out_path = Path(out_target)

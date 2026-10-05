@@ -1,5 +1,5 @@
 /* defs.js — Settings > Emulators: check, install and roll back the signed community definition pack (ADR 0061). */
-import { $, escapeHtml } from './util.js';
+import { $ } from './util.js';
 import { t } from './i18n.js';
 import { api, notify } from './state.js';
 
@@ -70,7 +70,8 @@ async function rollback() {
     say(t('defs.rolled_back', { count: (result.removed || []).length }));
     notify(t('defs.rolled_back', { count: (result.removed || []).length }));
   } catch (error) {
-    say(escapeHtml(error.message || String(error)));
+    // say() writes textContent, which is the sanitizer; escaping here showed users literal &lt;.
+    say(error.message || String(error));
   }
   refreshStatus();
 }

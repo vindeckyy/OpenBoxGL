@@ -94,6 +94,13 @@ jobs:
       - name: Design tokens
         run: python -B scripts/check_tokens.py
 
+      # The AppImage, Flatpak and Windows zip all promise no install step. A
+      # guarded third-party import makes the host -- not the release -- decide
+      # behaviour, and a `try: import X except ImportError` makes that branch
+      # untestable in CI. Runs on both runners: it is a source invariant.
+      - name: Runtime dependencies are stdlib-only
+        run: python -B scripts/check_dependencies.py
+
       # Feature-regression ratchets (ADR 0060). Pure-Python and platform
       # independent, so the Windows job is the proof they behave off Linux too.
       - name: HTTP route surface ratchet

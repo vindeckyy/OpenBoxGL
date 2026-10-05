@@ -1,4 +1,4 @@
-import { escapeHtml, API_V1, badge, defaultBadges, sortGames, advancedQueryMatches, parseQueryTokens, gameInstalled, $, motionMs } from './util.js';
+import { escapeHtml, API_V1, badge, defaultBadges, sortGames, advancedQueryMatches, parseQueryTokens, gameInstalled, $, motionMs, HTTP_URL_RE } from './util.js';
 
 
 
@@ -61,6 +61,13 @@ try {
      * @param {RequestInit} [options]
      * @returns {Promise<any>}
      */
+    // F9: no timeout and no signal pass-through. A server that stops responding
+    // without closing the socket left `await api(...)` pending forever -- the
+    // confirm dialog had already closed, no toast appeared, and the user had no
+    // indication anything was still in flight. The default is generous because
+    // a 20k-library import or a metadata scan is legitimately slow; callers that
+    // can be superseded pass their own `signal` (F5's details pane does).
+    const API_TIMEOUT_MS = 60000;
     async function api(path, options = {}) {
       // The v1 surface is the stable contract; unmapped call sites keep the
       // legacy paths until they are migrated one by one.
@@ -72,11 +79,26 @@ try {
         // from beforeunload while the page is already hidden.
         throw new Error('State changes are paused while the tab is hidden.');
       }
+      const {signal, timeout = API_TIMEOUT_MS, ...rest} = options;
+      const controller = new AbortController();
+      // One signal, either from the caller or from the deadline -- not two racing
+      // controllers, or a caller-initiated abort would leave the timer running.
+      const abort = () => controller.abort(signal?.reason);
+      if (signal) {
+        if (signal.aborted) abort();
+        else signal.addEventListener('abort', abort, {once: true});
+      }
+      const timer = timeout > 0 && Number.isFinite(timeout) ? setTimeout(abort, timeout) : null;
       let response;
       try {
-        response = await fetch(target, { ...options, headers:{'X-OpenBox-Token':token,'Content-Type':'application/json',...(options.headers || {})} });
+        response = await fetch(target, { ...rest, signal: controller.signal, headers:{'X-OpenBox-Token':token,'Content-Type':'application/json',...(rest.headers || {})} });
       } catch (error) {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        if (controller.signal.aborted) throw new Error(`The server did not respond within ${Math.round(timeout / 1000)}s.`);
         throw new Error(error.message || 'Could not reach the OpenBox server.');
+      } finally {
+        if (timer) clearTimeout(timer);
+        if (signal) signal.removeEventListener('abort', abort);
       }
       const text = await response.text();
       let payload = {};
@@ -171,10 +193,57 @@ try {
         return Boolean(result?.ok);
       } catch { return false; }
     }
+    // F2: this is the one place an external URL is *navigated* rather than
+    // rendered, and the only branch that takes the value verbatim. The native
+    // hosts both validate (`uri_scheme_allowed`), but the browser-served
+    // deployment -- `nativeCaps.dialogs === false`, and also any host-detect
+    // failure, which is `.catch(() => {})`-swallowed -- falls through to
+    // `window.open`, and `wikipedia_url` is free text from `index.html:151` with
+    // no `type="url"` and no `pattern`. So `javascript:` reached window.open
+    // unvalidated. One rule, applied at the top, covers all three branches and
+    // keeps this consistent with `fact()` and `gameLinks()` in util.js.
+    // S28: a running session carries two identifiers and every consumer reached
+    // for the wrong one. `game_id` is the game's position in the `games` array;
+    // `item.id` is the library row id. They agree only until the library is
+    // re-sorted, re-imported, or has a row removed -- and then a session card
+    // renders the extras of a *different* game ("Read ⟨wrong manual⟩"), the
+    // "Back up saves" button targets the wrong game, and Big Box attributes the
+    // moment to the wrong title. `stable_game_id` is the identifier that survives
+    // all three, and the one every other consumer already uses.
+    //
+    // The index is still accepted as a last resort, because a session persisted
+    // before stable ids were recorded carries nothing else -- and an approximate
+    // match beats no match when a game is genuinely running.
+    function gameForSession(session) {
+      if (!session) return null;
+      const stable = String(session.stable_game_id || '').trim();
+      if (stable) {
+        const byStable = AppState.games.find(item => String(item.game_id) === stable);
+        if (byStable) return byStable;
+      }
+      const legacy = session.game_id;
+      if (legacy !== undefined && legacy !== null) {
+        const byRowId = AppState.games.find(item => item.id === legacy);
+        if (byRowId) return byRowId;
+        const byIndex = AppState.games[Number(legacy)];
+        if (byIndex) return byIndex;
+      }
+      // Some payloads already use `game_id` for the stable id (session.started
+      // does, and navigation.js relies on it); try that reading last so a legacy
+      // numeric index still wins when it resolves.
+      const asStable = String(legacy || '').trim();
+      if (asStable && !/^\d+$/.test(asStable)) {
+        const byAlternate = AppState.games.find(item => String(item.game_id) === asStable);
+        if (byAlternate) return byAlternate;
+      }
+      return null;
+    }
     async function nativeOpenExternal(target) {
-      if (nativeBridge?.openExternal) { const result = await nativeBridge.openExternal(target); return result?.ok; }
-      if (nativeEnabled('dialogs')) { const result = await api('/api/native/open-external',{method:'POST',body:JSON.stringify({url:target})}); return result?.ok; }
-      window.open(target, '_blank');
+      const url = String(target || '').trim();
+      if (!HTTP_URL_RE.test(url)) return false;
+      if (nativeBridge?.openExternal) { const result = await nativeBridge.openExternal(url); return result?.ok; }
+      if (nativeEnabled('dialogs')) { const result = await api('/api/native/open-external',{method:'POST',body:JSON.stringify({url})}); return result?.ok; }
+      window.open(url, '_blank', 'noopener,noreferrer');
       return true;
     }
     async function nativeWindowAction(action) {
@@ -213,18 +282,7 @@ try {
         text = String(message ?? '');
         opts = options || {};
       }
-      const toast = $('toast');
-      if (toast) {
-        // An action toast (Undo, View) must not be overwritten by an unrelated message: hold the
-        // newest one and show it when the action toast goes away.
-        if (toast.classList.contains('show') && toast.querySelector('button')) {
-          toastState.pending = [level, text, opts];
-        } else {
-          toast.textContent = text;
-          toast.dataset.notifyLevel = level;
-          revealToast(2800);
-        }
-      }
+      showToast({ level, text, ms: opts.ms, action: opts.action, onAction: opts.onAction });
       if (level === 'error' && opts.actionable) {
         const banner = $('errorBanner');
         if (banner) {
@@ -235,33 +293,199 @@ try {
         }
       }
     }
-    // One toast surface (ADR 0063). It lives in the top layer (popover) so it is never dimmed by a modal
-    // backdrop or hidden under Big Box; screen readers hear a separate always-rendered live region.
-    const toastState = { timer: 0, hideTimer: 0, pending: null };
+
+    // ── Toast manager ────────────────────────────────────────────────────────
+    //
+    // 1.15.0 claimed "one queue-safe surface in the top layer". There was no
+    // queue: four writers targeted a single #toast element and three of them
+    // assigned its innerHTML outright. Delete a game, get an Undo button for 8
+    // seconds, let a trophy unlock, and the innerHTML assignment removed the
+    // button -- the deleted game could no longer be undone from the UI. The
+    // one guarded writer held a single `pending` slot, so a third message
+    // silently overwrote the queued second.
+    //
+    // Toasts are now independent entries in a capped stack. Nothing writes
+    // another toast's DOM, so an Undo button survives every other message.
+
+    const TOAST_LIMIT = 3;
+    const TOAST_DEFAULT_MS = 2800;
+    const TOAST_ACTION_MS = 8000;
+    const toastEntries = new Map();   // id -> entry
+    let toastSequence = 0;
+
     function popoverOpen(el) { try { return el.matches(':popover-open'); } catch { return false; } }
-    function revealToast(ms) {
-      const toast = $('toast');
-      if (!toast) return;
-      clearTimeout(toastState.timer);
-      clearTimeout(toastState.hideTimer);
-      if (typeof toast.showPopover === 'function' && !popoverOpen(toast)) { try { toast.showPopover(); } catch {} }
-      void toast.offsetWidth; // let the enter transition start from the hidden state
-      toast.classList.add('show');
+
+    // Exit through one function, so every toast leaves the way it arrived.
+    // 1.15.0 specified this and never wrote it; each writer had rolled its own
+    // class-toggle instead, which is how three of them diverged.
+    function leave(el, done) {
+      el.classList.add('leaving');
+      const ms = motionMs('--dur-out');
+      if (ms <= 1) { done(); return; }
+      let finished = false;
+      const onEnd = event => { if (event.target === el) finish(); };
+      function finish() {
+        if (finished) return;
+        finished = true;
+        el.removeEventListener('animationend', onEnd);
+        done();
+      }
+      el.addEventListener('animationend', onEnd);
+      setTimeout(finish, ms + 60);
+    }
+
+    function armTimer(entry) {
+      clearTimeout(entry.timer);
+      entry.startedAt = Date.now();
+      entry.remaining = entry.ms;
+      entry.timer = setTimeout(() => dismissToast(entry.id), entry.ms);
+    }
+
+    // B3: the pause must be a real pause. Re-arming for the full duration would
+    // still fade the toast out from under a cursor resting on Undo, which is
+    // the WCAG 2.2.1 complaint (timing adjustable) restated as a bug.
+    function pauseTimer(entry) {
+      if (entry.paused) return;
+      entry.paused = true;
+      clearTimeout(entry.timer);
+      entry.remaining = Math.max(0, entry.ms - (Date.now() - entry.startedAt));
+    }
+
+    function resumeTimer(entry) {
+      if (!entry.paused) return;
+      entry.paused = false;
+      // Never re-arm with zero: a toast that was paused at the very end should
+      // still be reachable for a moment.
+      entry.timer = setTimeout(() => dismissToast(entry.id), Math.max(entry.remaining, 1200));
+    }
+
+    // Stack the toasts upward from the container's bottom edge with an explicit
+    // offset per toast. A flex column would grow the container as items are
+    // appended and slide every toast already on screen -- measured at 0.0017 CLS
+    // each time a second message arrived. With the offsets assigned here, a new
+    // toast appears without moving the others.
+    const TOAST_GAP = 8;
+    function restackToasts() {
+      const elements = [...toastEntries.values()].map(entry => entry.el);
+      let offset = 0;
+      for (let index = elements.length - 1; index >= 0; index--) {
+        const el = elements[index];
+        el.style.bottom = `${offset}px`;
+        offset += el.offsetHeight + TOAST_GAP;
+      }
+    }
+
+    function dismissToast(id) {
+      const entry = toastEntries.get(id);
+      if (!entry) return;
+      clearTimeout(entry.timer);
+      toastEntries.delete(id);
+      leave(entry.el, () => {
+        entry.el.remove();
+        if (!toastEntries.size) {
+          const layer = $('toasts');
+          try { if (layer && popoverOpen(layer)) layer.hidePopover(); } catch {}
+        } else {
+          restackToasts();
+        }
+      });
+    }
+
+    function showToast({ level = 'info', text = '', action = null, ms = null, onAction = null }) {
+      const layer = $('toasts');
+      if (!layer) return null;
+      const id = ++toastSequence;
+      const el = document.createElement('div');
+      el.className = 'toast';
+      el.id = `toast-${id}`;
+      el.dataset.notifyLevel = level;
+      // The live region below is the accessible announcement; this is the
+      // visual element, and role=status here would announce it twice.
+      const body = document.createElement('span');
+      body.className = 'toast-text';
+      body.textContent = text;
+      el.appendChild(body);
+      if (action) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'toast-action';
+        button.textContent = action;
+        button.addEventListener('click', () => {
+          dismissToast(id);
+          if (typeof onAction === 'function') onAction();
+        });
+        el.appendChild(button);
+      }
+      // The *container* is the top-layer element, not each toast: popovers are
+      // taken out of normal flow, so per-toast popovers would all anchor to the
+      // same corner instead of stacking.
+      if (typeof layer.showPopover === 'function' && !popoverOpen(layer)) {
+        try { layer.showPopover(); } catch {}
+      }
+      layer.appendChild(el);
+      void el.offsetWidth;   // start the enter transition from the hidden state
+      el.classList.add('show');
+
       const live = $('toastLive');
-      if (live) live.textContent = toast.textContent;
-      toastState.timer = setTimeout(hideToast, ms);
+      if (live) live.textContent = text;
+
+      const entry = {
+        id, el, level, text,
+        ms: ms ?? (action ? TOAST_ACTION_MS : TOAST_DEFAULT_MS),
+        timer: 0, startedAt: 0, remaining: 0, paused: false,
+      };
+      toastEntries.set(id, entry);
+
+      // Hover and focus both pause. Focus matters more -- WCAG 2.2.1 is about
+      // the focused element, and a timer that removes a focused button drops
+      // focus to <body>.
+      el.addEventListener('mouseenter', () => pauseTimer(entry));
+      el.addEventListener('mouseleave', () => resumeTimer(entry));
+      el.addEventListener('focusin', () => pauseTimer(entry));
+      el.addEventListener('focusout', event => {
+        if (el.contains(event.relatedTarget)) return;
+        resumeTimer(entry);
+      });
+
+      armTimer(entry);
+      enforceLimit();
+      // After the new toast is in the DOM, so offsetHeight is real.
+      restackToasts();
+      return id;
+    }
+
+    function enforceLimit() {
+      // Oldest first: the newest message is the one the user just triggered.
+      const ids = [...toastEntries.keys()];
+      for (const id of ids.slice(0, Math.max(0, ids.length - TOAST_LIMIT))) dismissToast(id);
+    }
+
+    // B5: top-layer elements are ordered by when they were shown, so a toast
+    // container opened before a <dialog> sits underneath it -- and every dialog
+    // here is a native one, so ::backdrop covered the Undo button for the rest
+    // of its life. Re-showing moves a popover to the top of the top layer, so
+    // the dialog opener calls this after showing itself.
+    function raiseToasts() {
+      const layer = $('toasts');
+      if (!layer || !toastEntries.size) return;
+      if (typeof layer.showPopover !== 'function' || popoverOpen(layer)) return;
+      try { layer.showPopover(); } catch {}
+    }
+
+    // Compatibility surface for the three migrated writers and for callers
+    // outside static/. hideToast() dismisses the newest toast, which is the
+    // one a writer was talking about.
+    function revealToast(ms) {
+      const ids = [...toastEntries.keys()];
+      const newest = ids.at(-1);
+      if (newest == null) return;
+      const entry = toastEntries.get(newest);
+      if (ms) { entry.ms = ms; armTimer(entry); }
     }
     function hideToast() {
-      const toast = $('toast');
-      if (!toast) return;
-      clearTimeout(toastState.timer);
-      toast.classList.remove('show');
-      const wait = motionMs('--dur-base') + 40;
-      clearTimeout(toastState.hideTimer);
-      toastState.hideTimer = setTimeout(() => { try { if (popoverOpen(toast)) toast.hidePopover(); } catch {} }, wait);
-      const next = toastState.pending;
-      toastState.pending = null;
-      if (next) setTimeout(() => notify(next[0], next[1], next[2]), wait);
+      const ids = [...toastEntries.keys()];
+      const newest = ids.at(-1);
+      if (newest != null) dismissToast(newest);
     }
     let lastBannerDetails = '';
     function showErrorBanner(error) {
@@ -521,4 +745,4 @@ try {
       }
     }
 
-export { nativeCaps, revealToast, hideToast, token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId, isPageHidden, registerLifecycleStream, unregisterLifecycleStream };
+export { nativeCaps, revealToast, hideToast, showToast, dismissToast, raiseToasts, token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, gameForSession, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId, isPageHidden, registerLifecycleStream, unregisterLifecycleStream };

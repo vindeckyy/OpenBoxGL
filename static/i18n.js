@@ -52,7 +52,31 @@ async function loadLocale(locale) {
   document.dispatchEvent(new CustomEvent('localechange', { detail: { locale } }));
 }
 
+// S19: plural selection. `interpolate` substituted `{count}` verbatim, so a game
+// with one Moment read "1 moments" -- on its card and in its aria-label -- in
+// every one of the five locales. A game with one entry in the trash read
+// "Trash emptied (1 entries)".
+//
+// A `count` parameter now prefers `<key>_one` when the count is 1 and
+// `<key>_many` otherwise, falling back to the base key when neither variant
+// exists. That fallback is what makes this safe to add to: every existing key
+// keeps its current behaviour, and only the strings that gain a variant change.
+// The mechanism already existed in the tree -- `household.stats_skipped_one` /
+// `_many` and a hand-rolled branch in `library.js` -- it was just not in the
+// one place every caller goes through.
+//
+// Only the singular is required in practice: a key that has no `_one` variant
+// keeps its existing plural text, so this does not force a translation pass
+// across every counted string in the app.
+function pluralVariant(key, params) {
+  if (!params || typeof params.count !== 'number' || !Number.isFinite(params.count)) return null;
+  return deepGet(_strings, `${key}_${params.count === 1 ? 'one' : 'many'}`)
+    ?? deepGet(_enStrings || _strings, `${key}_${params.count === 1 ? 'one' : 'many'}`);
+}
+
 function t(key, params) {
+  const variant = pluralVariant(key, params);
+  if (variant != null && typeof variant === 'string') return interpolate(variant, params);
   const val = deepGet(_strings, key);
   if (val != null && typeof val === 'string') return interpolate(val, params);
   const enVal = deepGet(_enStrings || _strings, key);

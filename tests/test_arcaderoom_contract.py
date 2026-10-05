@@ -33,7 +33,12 @@ def test_canvas_has_dpr_resize_and_reduced_motion_paths():
     assert "canvas.width = pixelWidth" in text
     assert "canvas.height = pixelHeight" in text
     assert "setTransform(dpr, 0, 0, dpr, 0, 0)" in text
-    assert "prefers-reduced-motion: reduce" in text
+    # S22: the OS motion preference is read once in util.js, so what this module
+    # must contain is the *shared helper*, not its own matchMedia call.
+    assert "prefersReducedMotion" in text and "reducedMotionQuery" in text
+    assert "prefers-reduced-motion" not in text, (
+        "arcaderoom.js must not keep a private reduced-motion query"
+    )
     assert "reducedMotion" in text
     assert "MUSEUM · STATIC" in text
 

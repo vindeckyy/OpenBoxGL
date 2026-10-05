@@ -49,27 +49,29 @@ class RouteRegistryTests(unittest.TestCase):
         # routes; effortless metadata adds /api/v2/metadata/auto-scrape and
         # /api/v2/metadata/scrape-settings; Game DNA adds
         # /api/v2/library/dna/search and /api/v2/library/dna/index/rebuild;
-        # 1.15 adds /api/v2/emulators/defs/update and /api/v2/emulators/defs/rollback).
-        self.assertEqual(len(GET_TABLE), 194)
-        self.assertEqual(len(POST_TABLE), 236)
+        # 1.15 adds /api/v2/emulators/defs/update and /api/v2/emulators/defs/rollback;
+        # 1.16 adds GET /api/v2/launch/audit and POST /api/v2/launch/audit/scan).
+        self.assertEqual(len(GET_TABLE), 195)
+        self.assertEqual(len(POST_TABLE), 237)
         self.assertEqual(len(V1_ALIASED_PREFIXES), 61)
 
     def test_base_routes_count(self):
         base_get = [p for p in GET_TABLE if not p.startswith("/api/v1")]
         base_post = [p for p in POST_TABLE if not p.startswith("/api/v1")]
-        self.assertEqual(len(base_get), 169)
-        self.assertEqual(len(base_post), 193)
-        self.assertEqual(len(base_get) + len(base_post), 362)
+        self.assertEqual(len(base_get), 170)
+        self.assertEqual(len(base_post), 194)
+        self.assertEqual(len(base_get) + len(base_post), 364)
 
     def test_all_routes_registered(self):
         routes = all_routes()
-        # 363 = 362 table paths + the /api/v1/jobs dual-registration.
-        self.assertEqual(len(routes), 363)
+        # 365 = 364 table paths + the /api/v1/jobs dual-registration.
+        # 1.16.0 added GET /api/v2/launch/audit and POST /api/v2/launch/audit/scan (F1).
+        self.assertEqual(len(routes), 365)
 
         get_routes = [r for r in routes if r.method == "GET"]
         post_routes = [r for r in routes if r.method == "POST"]
-        self.assertEqual(len(get_routes), 170)
-        self.assertEqual(len(post_routes), 193)
+        self.assertEqual(len(get_routes), 171)
+        self.assertEqual(len(post_routes), 194)
 
     def test_every_registered_route_matches_live_table(self):
         routes = all_routes()

@@ -1,6 +1,7 @@
 /* household.js — local-first family records, challenges, and shared stats. */
 import { $, escapeHtml } from './util.js';
 import { api, AppState, notify } from './state.js';
+import { closeDialog } from './dialogs.js';
 import { t } from './i18n.js';
 
 let dialog = null;
@@ -37,7 +38,7 @@ function ensureDialog() {
   dialog.querySelectorAll('[data-household-close]').forEach(button => button.onclick = closeHousehold);
   dialog.querySelector('[data-household-refresh]').onclick = () => refreshHousehold();
   dialog.querySelector('[data-household-export]').onclick = exportRecords;
-  dialog.addEventListener('cancel', event => { event.preventDefault(); closeHousehold(); });
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeDialog(dialog); });
   return dialog;
 }
 

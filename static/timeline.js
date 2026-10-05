@@ -1,7 +1,7 @@
 /* timeline.js — session history timeline. */
 import { $, escapeHtml } from './util.js';
 import { t } from './i18n.js';
-import { AppState, api, media } from './state.js';
+import { AppState, api, media, gameForSession } from './state.js';
 
 function renderTimelineTab(container) {
   container.innerHTML = `<p data-i18n="common.loading">${t('common.loading')}</p>`;
@@ -18,9 +18,13 @@ function renderTimelineTab(container) {
       for (const entry of group.entries) {
         const dur = Math.floor((entry.seconds || 0) / 60);
         const rec = entry.recording ? `<span class="timeline-recording" data-i18n="timeline.recording">${t('timeline.recording')}</span>` : '';
+        // S42: media() reads `game.id`; this passed the scalar id, so every
+        // cover requested /api/media?id=undefined.
+        const game = gameForSession({ stable_game_id: entry.game_id });
+        const cover = game ? `background-image:url('${escapeHtml(media(game, 'cover'))}')` : '';
         html += `
           <div class="timeline-entry" data-game-id="${escapeHtml(entry.game_id)}">
-            <div class="timeline-cover" style="background-image:url('${media(entry.game_id, 'cover')}')" role="img"></div>
+            <div class="timeline-cover" style="${cover}" role="img"></div>
             <div class="timeline-meta">
               <div class="timeline-name">${escapeHtml(entry.name)}</div>
               <div class="timeline-duration">${dur}m ${rec}</div>

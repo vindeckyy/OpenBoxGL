@@ -2,7 +2,7 @@
 
 Date: 2026-08-20
 Status: Accepted
-Updated: 2026-09-04 — token baseline ratcheted 343 → 0 on 2026-08-26 (`scripts/check_tokens.py:7`); all 5 themes are token-only `:root` files. Line refs below (`app.css:1-45`, `library.js:155`) are historical.
+Updated: 2026-09-04 — token baseline ratcheted 343 → 0 on 2026-08-26 (`scripts/check_tokens.py:7`); all 6 themes are token-only `:root` files. Line refs below (`app.css:1-45`, `library.js:155`) are historical.
 
 ## Context
 

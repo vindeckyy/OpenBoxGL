@@ -25,5 +25,5 @@ SHA1 is computed using `hashlib` from the stdlib — no new dependencies.
 
 - Launch Doctor catches corrupted or incorrect BIOS files before launch.
 - `BIOS_SHA1_DRIFT` is a warning, not a hard block — users can still launch.
-- 9 new health badge tokens added to `:root` and all 5 themes.
+- 9 new health badge tokens added to `:root` and all 6 themes.
 - Definitions without expected hashes fall back to existence-only checks.

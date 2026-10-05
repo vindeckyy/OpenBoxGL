@@ -54,6 +54,8 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | GET | `/api/v2/jobs/items` | `_api_get_api_v2_jobs_items` |
 | POST | `/api/v2/jobs/resume` | `_api_post_api_v2_jobs_resume` |
 | POST | `/api/v2/jobs/retry` | `_api_post_api_v2_jobs_retry` |
+| GET | `/api/v2/launch/audit` | `_api_get_api_v2_launch_audit` |
+| POST | `/api/v2/launch/audit/scan` | `_api_post_api_v2_launch_audit_scan` |
 | POST | `/api/v2/launch/preflight` | `_api_post_api_v2_launch_preflight` |
 | POST | `/api/v2/launch/preflight/batch` | `_api_post_api_v2_launch_preflight_batch` |
 | GET | `/api/v2/library/constellation` | `_api_get_api_v2_library_constellation` |
@@ -164,7 +166,7 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/steamgrid/test` | `handlers.steamgrid.steamgrid_test` |
 | GET | `/api/v2/story` | `_api_get_api_v2_story` |
 
-_153 routes._
+_155 routes._
 
 ## API v1 (frozen)
 

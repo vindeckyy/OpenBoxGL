@@ -1,6 +1,7 @@
 /* Command palette (T4): deterministic game search plus real application actions. */
 import { $, escapeHtml } from './util.js';
 import { AppState, api, notify } from './state.js';
+import { closeDialog } from './dialogs.js';
 import { launch } from './sessions.js';
 import { t } from './i18n.js';
 import { searchWithFallback } from './library.js';
@@ -104,8 +105,15 @@ async function renderResults() {
   if (!paletteResults) return;
   const request = ++resultsRequest;
   const rows = filteredResults(paletteInput.value);
-  resultRows = rankRecent(rows && typeof rows.then === 'function' ? await rows : rows);
+  const resolved = await rows;
+  // S29: `resultRows` was assigned *before* the staleness check, so a slow
+  // earlier query overwrote the rows while the DOM still showed the newer
+  // query's results. Ctrl+K, type "s", then "sonic", then Enter: the highlighted
+  // row was Sonic and `choose()` ran against the stale "s" list -- launching a
+  // different game than the one highlighted. The guard has to come first;
+  // everything after it may only touch shared state.
   if (request !== resultsRequest || !paletteResults) return;
+  resultRows = rankRecent(resolved);
   selectedIndex = Math.max(0, Math.min(selectedIndex, resultRows.length - 1));
   paletteResults.innerHTML = resultRows.length ? resultRows.map((row, index) => `<button type="button" class="detail-card palette-row${index === selectedIndex ? ' active' : ''}" role="option" aria-selected="${index === selectedIndex}" data-palette-index="${index}">${escapeHtml(row.type === 'action' || row.type === 'plugin-command' ? `> ${row.label}` : row.label)}</button>`).join('') : `<p class="description">${escapeHtml(t('common.no_results'))}</p>`;
   paletteResults.querySelectorAll('[data-palette-index]').forEach(button => {

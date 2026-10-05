@@ -1,5 +1,5 @@
 import { $, escapeHtml, duration } from './util.js';
-import { api, notify, AppState, token, setButtonBusy, registerLifecycleStream, unregisterLifecycleStream } from './state.js';
+import { api, notify, AppState, token, setButtonBusy, gameForSession, registerLifecycleStream, unregisterLifecycleStream } from './state.js';
 import { refresh, launchExtra } from './library.js';
 import { t } from './i18n.js';
 import { renderTimelineTab } from './timeline.js';
@@ -15,10 +15,14 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
       return game?.game_id || String(gameOrId ?? '');
     }
 
+    // Resolves true only when a game process was started; every other path
+    // (cancelled confirm, blocked preflight, error) resolves false. Callers that
+    // close their own surface on launch (the arcade room, S39) depend on this.
     async function launch(gameOrId, trigger = $('playButton')) {
       const game_id = resolveGameId(gameOrId);
-      if (!game_id) return;
+      if (!game_id) return false;
       setButtonBusy(trigger, true);
+      let launched = false;
       try {
         // launch() accepts either a game object or an id; object callers
         // (palette, bigbox, party, picker) already carry launch_confirm.
@@ -32,7 +36,7 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
             consequence: 'Launch now?',
             confirmLabel: 'Launch',
           });
-          if (!ok) return;
+          if (!ok) return false;
         }
         const preflight = await api('/api/v2/launch/preflight', {
           method: 'POST',
@@ -41,7 +45,7 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
         if (preflight.status === 'blocked') {
           const messages = (preflight.checks || []).map(check => check.message).filter(Boolean);
           notify(messages.join(' · ') || 'Launch blocked');
-          return;
+          return false;
         }
         if (preflight.status === 'warning') {
           const { confirmAction } = await import('./dialogs.js');
@@ -51,9 +55,10 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
             message: warnings.join('\n') || 'Some launch checks reported warnings.',
             consequence: 'Continue launching anyway?',
           });
-          if (!ok) return;
+          if (!ok) return false;
         }
         const result = await api('/api/launch', { method: 'POST', body: JSON.stringify({ game_id }) });
+        launched = true;
         showLifecycle('Starting', result.game, 'The game process is running', 1800);
         await refresh();
         // F4a: one-time dismissible "mark as Playing?" suggestion. The
@@ -71,7 +76,8 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
             await refresh();
           }
         }
-      } catch(error) { notify(error.message); }
+        return true;
+      } catch(error) { notify(error.message); return Boolean(launched); }
       finally { setButtonBusy(trigger, false); }
     }
     function showLifecycle(kind, game, message, milliseconds) {
@@ -132,8 +138,12 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
     }
     function scheduleSessionPoll(delay) { setTimeout(pollSessions, delay); }
     async function pollSessions() {
+      // S40: the busy branch and the `finally` each scheduled their own
+      // successor, so a poll that overlapped the one before it forked the chain
+      // and the poll rate doubled every time. One scheduler, called from one
+      // place -- `finally` -- is the whole fix; the busy branch just yields.
       if (sessionPollBusy) {
-        setTimeout(pollSessions, 1000);
+        scheduleSessionPoll(1000);
         return;
       }
       sessionPollBusy = true;
@@ -143,9 +153,17 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
         AppState.runningGames = result.running;
         const stopped = result.events.filter(event => event.kind === 'stopped').at(-1);
         if (stopped) {
-          const exitCode = Number(stopped.exit_code ?? '');
+          // S26: the server now sends a plain int. It used to send the
+          // `WaitResult` namedtuple, which json.dumps turns into `[1,false]`;
+          // `Number([1,false])` is NaN, so `failed` was always false and every
+          // launch that died instantly was reported as "Play time and history
+          // were saved". The legacy array is still accepted here because a
+          // client can be behind its own server after an upgrade.
+          const raw = stopped.exit_code;
+          const exitCode = Array.isArray(raw) ? Number(raw[0]) : Number(raw);
+          const timedOut = stopped.timed_out === true || (Array.isArray(raw) && raw[1] === true);
           const shortSession = Number(stopped.seconds ?? 0) < 5;
-          const failed = Number.isFinite(exitCode) && exitCode !== 0;
+          const failed = Number.isFinite(exitCode) && (exitCode !== 0 || timedOut);
           if (failed && shortSession) {
             showLifecycle('Session failed', stopped.game, `Exited immediately with code ${exitCode}. Check the Launch command and emulator install.`, 5000);
           } else if (failed) {
@@ -165,7 +183,7 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
         sessionPollBusy = false;
         // Poll every second while a session is active, every ten when idle.
         sessionPollIdle = !AppState.runningGames.length;
-        setTimeout(pollSessions, sessionPollIdle ? 10000 : 1000);
+        scheduleSessionPoll(sessionPollIdle ? 10000 : 1000);
       }
     }
     async function openHistory() {
@@ -211,7 +229,16 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
     }
     function renderSessions() {
       $('sessionList').innerHTML = AppState.runningGames.length ? AppState.runningGames.map(session => {
-        const game = AppState.games.find(item => item.id === session.game_id);
+        const game = gameForSession(session);
+        // S28: the "Read <name>" buttons were numbered with the index *within
+        // their own array*, so the click handler could not tell one game's first
+        // document from another game's second. Either it acted on the wrong
+        // item, or -- because it indexes the live `game` object rather than the
+        // snapshot that was rendered -- on an item that no longer exists.
+        //
+        // The kind is carried in the attribute and the name is in the payload,
+        // so the handler never has to re-derive which list an index came from:
+        // it looks the button's own index up in the list its own kind names.
         const extras = game ? `${game.documents.map((item,index) => `<button class="icon-button" data-session-extra="${game.id}:documents:${index}">Read ${escapeHtml(item.name)}</button>`).join('')}${game.applications.map((item,index) => `<button class="icon-button" data-session-extra="${game.id}:applications:${index}">${escapeHtml(item.name)}</button>`).join('')}${game.versions.map((item,index) => `<button class="icon-button" data-session-extra="${game.id}:versions:${index}">Version · ${escapeHtml(item.name)}</button>`).join('')}${game.save_paths.length ? `<button class="icon-button" data-session-backup="${game.id}">Back up saves</button>` : ''}` : '';
         return `<div class="detail-card"><h3>${escapeHtml(session.game)}</h3><p class="description">${session.paused ? 'Paused' : 'Running'} · PID ${session.pid} · started ${escapeHtml(String(session.started || '').replace('T',' '))}</p><div class="extras"><button class="primary" data-session-action="${session.launch_id}:${session.paused ? 'resume' : 'pause'}">${session.paused ? 'Resume' : 'Pause'}</button><button class="icon-button" data-session-action="${session.launch_id}:restart">Restart</button><button class="icon-button" data-session-action="${session.launch_id}:stop">Exit</button><button class="icon-button" data-session-action="${session.launch_id}:kill">Force close</button>${extras}</div></div>`;
       }).join('') : '<p class="description">No games are running.</p>';

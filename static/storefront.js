@@ -67,29 +67,48 @@ import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
         gameyfin_install_dir:$('storefrontGameyfinInstallDir')?.value.trim() || '',
       };
     }
-    async function watchGameyfinInstall(gameyfinId, attempts = 1200) {
-      const job = await api(`/api/gameyfin/install/status?gameyfin_id=${encodeURIComponent(gameyfinId)}`);
-      if (job.state === 'installing') {
-        if (attempts <= 0) throw new Error('Gameyfin install timed out');
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        return watchGameyfinInstall(gameyfinId, attempts - 1);
+    // S53: this polled for up to 30 minutes with no way to stop. One watcher
+    // per Gameyfin id now: starting a new install of the same game aborts the
+    // previous watch, and the signal stops the poll between requests. The
+    // install itself runs server-side and is unaffected by either.
+    const gameyfinWatches = new Map();
+    function sleepUnlessAborted(ms, signal) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, ms);
+        signal?.addEventListener('abort', () => { clearTimeout(timer); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+      });
+    }
+    async function watchGameyfinInstall(gameyfinId, { signal, attempts = 1200 } = {}) {
+      for (let remaining = attempts; ; remaining -= 1) {
+        const job = await api(`/api/gameyfin/install/status?gameyfin_id=${encodeURIComponent(gameyfinId)}`, { signal });
+        if (job.state === 'error') throw new Error(job.error || 'Gameyfin install failed');
+        if (job.state === 'done') return;
+        if (job.state !== 'installing') throw new Error('Gameyfin install did not complete');
+        if (remaining <= 0) throw new Error('Gameyfin install timed out');
+        await sleepUnlessAborted(1500, signal);
       }
-      if (job.state === 'error') throw new Error(job.error || 'Gameyfin install failed');
-      if (job.state !== 'done') throw new Error('Gameyfin install did not complete');
     }
     async function installGameyfin(game) {
+      gameyfinWatches.get(game.gameyfin_id)?.abort();
+      const controller = new AbortController();
+      gameyfinWatches.set(game.gameyfin_id, controller);
       try {
         notify(`Installing ${game.name} from Gameyfin...`);
         await api('/api/gameyfin/install',{method:'POST',body:JSON.stringify({gameyfin_id:game.gameyfin_id,library_id:game.id})});
-        await watchGameyfinInstall(game.gameyfin_id);
+        await watchGameyfinInstall(game.gameyfin_id, { signal: controller.signal });
         await refresh();
         AppState.bigBoxGames = filteredBigBoxGames();
         if (!$('bigBox').hidden) renderBigBox();
         else renderDetails();
         notify(`${game.name} installed`);
-      } catch(error) { notify(error.message); }
+      } catch(error) {
+        if (error?.name !== 'AbortError') notify(error.message);
+      } finally {
+        if (gameyfinWatches.get(game.gameyfin_id) === controller) gameyfinWatches.delete(game.gameyfin_id);
+      }
     }
     async function uninstallGameyfin(game) {
+      gameyfinWatches.get(game.gameyfin_id)?.abort();
       const { confirmAction } = await import('./dialogs.js');
       const ok = await confirmAction({
         title: 'Uninstall Gameyfin game',

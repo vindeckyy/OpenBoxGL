@@ -74,6 +74,7 @@ handlers/setup.py
 handlers/data.py
 handlers/discovery.py
 pkg/parity/parity_launch_doctor.py
+pkg/parity/parity_launch_audit.py
 handlers/wine.py
 handlers/faugus.py
 automation.py

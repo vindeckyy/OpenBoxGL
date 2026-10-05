@@ -519,9 +519,16 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         // Cross-fade a live theme switch (not the first paint); reduced motion zeroes the token so it is skipped.
         if (link.hasAttribute('href') && motionMs('--dur-base') > 1) {
           root.classList.add('theme-switching');
-          const done = () => setTimeout(() => root.classList.remove('theme-switching'), motionMs('--dur-base') + 50);
+          // Two exits: the stylesheet's own `load` event, and a bounded backstop
+          // in case it never fires (a cached or errored response). The backstop
+          // is derived from the same token as the animation it guards, so it
+          // cannot outlive a theme that is cut short by reduced motion. It used
+          // to be a hardcoded 1500, which is exactly what the duration-token
+          // rule bans -- it survived only because the old gate was an `or`.
+          const wait = motionMs('--dur-base') + 50;
+          const done = () => setTimeout(() => root.classList.remove('theme-switching'), wait);
           link.addEventListener('load', done, { once: true });
-          setTimeout(() => root.classList.remove('theme-switching'), 1500);
+          setTimeout(() => root.classList.remove('theme-switching'), wait + 1500);
         }
         link.href = href;
       }
@@ -870,19 +877,132 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       if (!$('playlistsDialog').open) $('playlistsDialog').showModal();
     }
     async function createFilterPlaylist() { await saveFilter(); openPlaylists(); }
+    // ── F2: restore preview ────────────────────────────────────────────────
+    // A restore replaces the library wholesale, so the button that starts one is
+    // *built here, from a successful diff*, and nowhere else. There is no armed
+    // state to inherit and no markup in index.html to fall back to: a failed diff
+    // leaves the user with a retry and nothing else.
+    let backupPreviewPath = '';
+
+    function restoreFieldValue(value) {
+      if (value === null || value === undefined || value === '') return '—';
+      if (Array.isArray(value)) return value.map(item => String(item)).join(', ');
+      if (typeof value === 'object') { try { return JSON.stringify(value); } catch { return String(value); } }
+      return String(value);
+    }
+
+    function restoreSection(label, section, renderFields) {
+        const total = Number(section?.total || 0);
+        if (!total) return '';
+        const rows = Array.isArray(section.rows) ? section.rows : [];
+        const showing = t('backup.preview_showing', { shown: rows.length, total });
+        const header = section.truncated
+            ? `${escapeHtml(label)} · ${total} · ${escapeHtml(showing)}`
+            : `${escapeHtml(label)} · ${total}`;
+        return `<div class="timeline-group"><h3 class="timeline-date">${header}</h3>${rows.map(row => `<article class="timeline-entry"><div class="timeline-meta"><div class="timeline-name">${escapeHtml(row.name || row.game_id || '')}</div>${renderFields ? `<div class="tm-changes">${renderFields(row.fields)}</div>` : ''}</div></article>`).join('')}</div>`;
+    }
+
+    function renderRestoreFields(fields) {
+        return Object.entries(fields || {}).map(([field, values]) => {
+            const from = values && typeof values === 'object' ? values.from : null;
+            const to = values && typeof values === 'object' ? values.to : null;
+            return `<span class="tm-change"><strong>${escapeHtml(field)}</strong>: ${escapeHtml(restoreFieldValue(from))} → ${escapeHtml(restoreFieldValue(to))}</span>`;
+        }).join('');
+    }
+
+    // Everything the user loses to a restore, and the settings line, which is the
+    // one most people do not expect: restoring settings.json moves save paths and
+    // emulator profiles too.
+    function restoreNotes(result) {
+        const restore = result.restore || {};
+        const notes = [
+            restoreSection(t('backup.preview_will_remove'), restore.will_remove, null),
+            restoreSection(t('backup.preview_will_add'), restore.will_add, null),
+            restoreSection(t('backup.preview_will_change'), restore.will_change, renderRestoreFields),
+        ].filter(Boolean);
+        if (!notes.length) notes.push(`<p class="muted">${escapeHtml(t('backup.preview_none'))}</p>`);
+
+        const settings = result.settings || {};
+        if (settings.restored) {
+            const lines = [t('backup.preview_settings')];
+            if (!settings.present) lines.push(t('backup.preview_settings_missing'));
+            if (settings.redacted_secrets) lines.push(t('backup.preview_secrets_kept'));
+            if (settings.would_change) lines.push(t('backup.preview_settings_changed', { count: (settings.keys_changed || []).length || 1 }));
+            notes.push(`<div class="description" role="status">${escapeHtml(lines.join(' '))}</div>`);
+        }
+        return notes.join('');
+    }
+
+    function clearBackupPreview() {
+        backupPreviewPath = '';
+        const panel = $('backupPreview');
+        if (!panel) return;
+        panel.hidden = true;
+        panel.innerHTML = '';
+    }
+
+    // The one function allowed to build the confirm button. It takes a diff, so a
+    // caller with no diff has nothing to pass.
+    function renderRestorePreview(path, result) {
+        const panel = $('backupPreview');
+        if (!panel) return;
+        backupPreviewPath = path;
+        panel.hidden = false;
+        panel.innerHTML = `<h3>${escapeHtml(t('backup.preview_title'))}</h3>${restoreNotes(result)}<div class="dialog-actions"><button type="button" class="icon-button" data-restore-cancel>${escapeHtml(t('backup.preview_cancel'))}</button><button type="button" class="primary" data-restore-confirm>${escapeHtml(t('backup.confirm_restore'))}</button></div>`;
+        panel.querySelector('[data-restore-cancel]').onclick = clearBackupPreview;
+        panel.querySelector('[data-restore-confirm]').onclick = () => commitRestore();
+    }
+
+    function renderRestorePreviewFailed(path, message) {
+        const panel = $('backupPreview');
+        if (!panel) return;
+        backupPreviewPath = '';
+        panel.hidden = false;
+        panel.innerHTML = `<div role="alert">${message ? `<p class="muted">${escapeHtml(message)}</p>` : ''}<p class="muted">${escapeHtml(t('backup.preview_failed'))}</p></div><div class="dialog-actions"><button type="button" class="icon-button" data-restore-cancel>${escapeHtml(t('backup.preview_cancel'))}</button><button type="button" class="icon-button" data-restore-retry="${escapeHtml(path)}">${escapeHtml(t('backup.preview_retry'))}</button></div>`;
+        panel.querySelector('[data-restore-cancel]').onclick = clearBackupPreview;
+        panel.querySelector('[data-restore-retry]').onclick = event => previewBackupRestore(event.currentTarget.dataset.restoreRetry);
+    }
+
+    async function previewBackupRestore(path) {
+        const panel = $('backupPreview');
+        if (!panel) return;
+        backupPreviewPath = '';
+        panel.hidden = false;
+        panel.innerHTML = `<p class="muted" role="status">${escapeHtml(t('backup.preview_loading'))}</p>`;
+        try {
+            const result = await api(`/api/v2/backup/diff?archive=${encodeURIComponent(path)}`);
+            renderRestorePreview(path, result);
+        } catch (error) {
+            renderRestorePreviewFailed(path, error.message || String(error));
+        }
+    }
+
+    // Reached only from the button renderRestorePreview built, so a path here is a
+    // path a diff just succeeded for.
+    async function commitRestore() {
+        if (!backupPreviewPath) return;
+        const path = backupPreviewPath;
+        const ok = await confirmAction({
+            title: t('backup.title'),
+            message: t('backup.preview_title'),
+            consequence: t('backup.preview_consequence'),
+        });
+        if (!ok) return;
+        try {
+            const result = await api('/api/backup/restore',{method:'POST',body:JSON.stringify({path})});
+            clearBackupPreview();
+            await refresh();
+            openBackups();
+            notify(`Restored ${(result.restored || []).join(', ')}`);
+        } catch(error) { notify(error.message); }
+    }
+
     async function openBackups() {
       try {
+        clearBackupPreview();
         const result = await api('/api/backups');
-        $('backupList').innerHTML = result.backups.length ? result.backups.map(item => `<div class="backup-item"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.created || 'Unknown date')} · ${formatBytes(item.size)} · ${(item.items || []).join(', ') || 'Unknown contents'}</small></div><button type="button" class="icon-button" data-restore-backup="${escapeHtml(item.path)}" ${item.invalid ? 'disabled' : ''}>Restore</button></div>`).join('') : '<p class="description">No backups have been created yet.</p>';
-        document.querySelectorAll('[data-restore-backup]').forEach(button => button.onclick = async () => {
-          const ok = await confirmAction({
-            title: 'Restore backup',
-            message: 'Restore this backup?',
-            consequence: 'A safety copy of the current library will be created first.',
-          });
-          if (!ok) return;
-          try { const result = await api('/api/backup/restore',{method:'POST',body:JSON.stringify({path:button.dataset.restoreBackup})}); await refresh(); notify(`Restored ${result.restored.join(', ')}`); } catch(error) { notify(error.message); }
-        });
+        $('backupList').innerHTML = result.backups.length ? result.backups.map(item => `<div class="backup-item"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.created || 'Unknown date')} · ${formatBytes(item.size)} · ${(item.items || []).join(', ') || 'Unknown contents'}</small></div><button type="button" class="icon-button" data-restore-backup="${escapeHtml(item.path)}" ${item.invalid ? 'disabled' : ''}>${escapeHtml(t('backup.preview_changes'))}</button></div>`).join('') : '<p class="description">No backups have been created yet.</p>';
+        document.querySelectorAll('[data-restore-backup]').forEach(button => button.onclick = () => previewBackupRestore(button.dataset.restoreBackup));
         if (!$('backupDialog').open) $('backupDialog').showModal();
       } catch(error) { notify(error.message); }
     }
