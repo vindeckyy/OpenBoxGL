@@ -134,9 +134,11 @@ class UserPlaylistIsNotDestroyedTests(unittest.TestCase):
         rows = self._import()
         playlist_rows = [row for row in rows if row["path"].endswith("Game.m3u")]
         self.assertEqual(len(playlist_rows), 1, rows)
+        # Compare resolved paths: parse_m3u resolves, and a Windows runner's
+        # temp dir is an 8.3 short name (RUNNER~1) until it is resolved.
         self.assertEqual(
-            [str(item) for item in parse_m3u(self.romdir / "Game.m3u")],
-            [str(self.romdir / "Game.iso")],
+            [str(Path(item).resolve()) for item in parse_m3u(self.romdir / "Game.m3u")],
+            [str((self.romdir / "Game.iso").resolve())],
             "the playlist's contents changed",
         )
         self.assertEqual(playlist_rows[0]["platform"], PLATFORM_MAP[".iso"])

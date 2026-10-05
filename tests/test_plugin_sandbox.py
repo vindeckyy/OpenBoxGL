@@ -115,8 +115,12 @@ class SandboxMasksDataDirTests(unittest.TestCase):
         expected = self._expected_mask(data_dir)
         if plugins._needs_data_dir_mask(expected):
             self.skipTest("this host's home is not under a masked prefix, so nothing to dedupe")
-        self.assertNotIn(expected, _masked_paths(command), "already covered by an existing --tmpfs")
-        self.assertIn("/", _masked_paths(command))
+        masked = _masked_paths(command)
+        self.assertNotIn(expected, masked, "already covered by an existing --tmpfs")
+        self.assertTrue(
+            any(expected.startswith(prefix.rstrip("/") + "/") for prefix in masked),
+            f"{expected} is not under any masked prefix: {masked}",
+        )
 
     def test_still_keeps_the_original_five_masks(self):
         command = _build("/srv/openbox-data")
