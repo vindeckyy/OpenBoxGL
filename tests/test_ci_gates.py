@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """CI gate contract tests for workflows and Dependabot."""
 
+import ast
 import contextlib
 import io
 import re
@@ -57,6 +58,42 @@ class CiGatesTests(unittest.TestCase):
                       "the local gate must verify docs/api-v2.md is fresh")
         self.assertIn("python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5", ci)
         self.assertIn("python3 -B scripts/check_changed_coverage.py --fail-under=95", ci)
+
+    def test_dependency_gate_is_wired_and_catches_a_third_party_import(self):
+        """The stdlib-only rule needs all three of: a gate, CI, and a failure.
+
+        A gate that is not wired into CI is a suggestion. This asserts the gate
+        is referenced by both runners' definitions, that the repository
+        currently satisfies it, and -- via the gate's own parser -- that it
+        would reject the exact shape that shipped: an unreviewed optional
+        third-party import.
+        """
+        from scripts import check_dependencies
+
+        ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        self.assertIn(
+            "check_dependencies.py",
+            ci,
+            "CI must run the dependency gate on every platform",
+        )
+        self.assertIn(
+            "check_dependencies.py",
+            (ROOT / "scripts" / "check_tests.py").read_text(encoding="utf-8"),
+            "the local gate must run it too, so a dependency is caught pre-push",
+        )
+
+        # The repository must be clean today.
+        self.assertEqual(0, check_dependencies.main(), "repository has an unreviewed third-party import")
+
+        # And the gate must reject the shape that actually shipped. orjson is
+        # not in the reviewed allowlist, so a guarded import of it is a failure.
+        self.assertNotIn("orjson", check_dependencies.REVIEWED_OPTIONAL)
+        source = "try:\n    import orjson\nexcept ImportError:\n    orjson = None\n"
+        found = check_dependencies._collect(ast.parse(source), source)
+        self.assertEqual([name for name, _, _ in found], ["orjson"])
+        allowed = check_dependencies._local_names([]) | check_dependencies._stdlib()
+        offenders = [name for name, _, _ in found if name not in allowed and name not in check_dependencies.REVIEWED_OPTIONAL]
+        self.assertEqual(offenders, ["orjson"], "a guarded orjson import must be rejected by the gate")
 
     def test_exec_bit_gate_is_wired_and_catches_a_lost_mode(self):
         """The exec bit is undetectable from a Windows checkout, so the gate

@@ -1,7 +1,13 @@
 /* What's New + rotating tips (S8). Keep the release surface local and dismissible. */
 import { $, escapeHtml } from './util.js';
 import { t } from './i18n.js';
+import { closeDialog } from './dialogs.js';
 import { AppState } from './state.js';
+
+// The current release's highlights: whats_new.<name>_title / _body. Update this
+// list with the strings each release; the title shows the live version, so
+// stale cards here are a false claim (ADR 0064).
+const HIGHLIGHTS = ['audit', 'restore', 'security', 'launch', 'import', 'corrections'];
 
 const TIPS = [
   'whats_new.tip_search',
@@ -34,7 +40,7 @@ function ensureDialog() {
   dialog.className = 'whats-new-dialog';
   dialog.setAttribute('aria-modal', 'true');
   document.body.appendChild(dialog);
-  dialog.addEventListener('cancel', event => { event.preventDefault(); dialog.close(); });
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeDialog(dialog); });
   return dialog;
 }
 
@@ -51,7 +57,7 @@ function titleText() {
 function render() {
   ensureDialog();
   const tipKey = TIPS[tipIndex % TIPS.length];
-  dialog.innerHTML = `<div class="dialog-head"><h2>${escapeHtml(titleText())}</h2><button type="button" class="icon-button" data-whats-new-close aria-label="${escapeHtml(t('common.close'))}">×</button></div><div class="whats-new-content"><p class="description">${escapeHtml(t('whats_new.intro'))}</p><div class="whats-new-highlights"><article class="detail-card"><h3>${escapeHtml(t('whats_new.plugins_title'))}</h3><p>${escapeHtml(t('whats_new.plugins_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.metadata_title'))}</h3><p>${escapeHtml(t('whats_new.metadata_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.backlog_title'))}</h3><p>${escapeHtml(t('whats_new.backlog_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.bigbox_title'))}</h3><p>${escapeHtml(t('whats_new.bigbox_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.health_title'))}</h3><p>${escapeHtml(t('whats_new.health_body'))}</p></article><article class="detail-card"><h3>${escapeHtml(t('whats_new.dna_title'))}</h3><p>${escapeHtml(t('whats_new.dna_body'))}</p></article></div><section class="whats-new-tip detail-card"><div class="dialog-head"><h3>${escapeHtml(t('whats_new.tip_label'))}</h3><button type="button" class="icon-button" data-whats-new-next>${escapeHtml(t('whats_new.next_tip'))}</button></div><p>${escapeHtml(t(tipKey))}</p></section></div><div class="dialog-actions"><button type="button" class="primary" data-whats-new-close>${escapeHtml(t('whats_new.dismiss'))}</button></div>`;
+  dialog.innerHTML = `<div class="dialog-head"><h2>${escapeHtml(titleText())}</h2><button type="button" class="icon-button" data-whats-new-close aria-label="${escapeHtml(t('common.close'))}">×</button></div><div class="whats-new-content"><p class="description">${escapeHtml(t('whats_new.intro'))}</p><div class="whats-new-highlights">${HIGHLIGHTS.map(name => `<article class="detail-card"><h3>${escapeHtml(t(`whats_new.${name}_title`))}</h3><p>${escapeHtml(t(`whats_new.${name}_body`))}</p></article>`).join('')}</div><section class="whats-new-tip detail-card"><div class="dialog-head"><h3>${escapeHtml(t('whats_new.tip_label'))}</h3><button type="button" class="icon-button" data-whats-new-next>${escapeHtml(t('whats_new.next_tip'))}</button></div><p>${escapeHtml(t(tipKey))}</p></section></div><div class="dialog-actions"><button type="button" class="primary" data-whats-new-close>${escapeHtml(t('whats_new.dismiss'))}</button></div>`;
   dialog.querySelectorAll('[data-whats-new-close]').forEach(button => { button.onclick = () => dialog.close(); });
   dialog.querySelector('[data-whats-new-next]').onclick = () => {
     tipIndex = (tipIndex + 1) % TIPS.length;

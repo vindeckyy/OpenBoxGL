@@ -39,6 +39,7 @@ ratchets:
 	$(PYTHON) -B scripts/check_frontend_modules.py
 	$(PYTHON) -B scripts/check_reliability_catalog.py
 	$(PYTHON) -B scripts/check_clock_coupling.py
+	$(PYTHON) -B scripts/check_exec_modes.py
 
 
 native-host:

@@ -7,7 +7,7 @@
  * records an undo token in the fix journal.
  */
 import { $, escapeHtml } from './util.js';
-import { AppState, api, notify, token, nativePickFolder, revealToast, hideToast } from './state.js';
+import { AppState, api, notify, token, nativePickFolder, showToast } from './state.js';
 import { t } from './i18n.js';
 import { render } from './library.js';
 import { confirmAction } from './dialogs.js';
@@ -113,6 +113,8 @@ export async function openHealthScore() {
         <p class="description">${escapeHtml(t('health.no_scan'))}</p>
         <div class="dialog-actions"><button type="button" class="primary" id="healthRescan">${escapeHtml(t('health.rescan'))}</button></div>`;
       $('healthRescan').onclick = () => rescanLibrary();
+      $('healthScoreBody').insertAdjacentHTML('beforeend', launchAuditSection());
+      renderLaunchAudit();
       return;
     }
     const dims = snapshot.dimensions || {};
@@ -128,10 +130,12 @@ export async function openHealthScore() {
         <button type="button" class="icon-button" id="healthRescan">${escapeHtml(t('health.rescan'))}</button>
       </div>
       <div class="health-dims">${DIMENSIONS.map(dim => dimensionBar(dim, dims[dim])).join('')}</div>
-      <p class="description"><button type="button" class="link-button" id="healthHowScored">${escapeHtml(t('health.how_scored'))}</button></p>`;
+      <p class="description"><button type="button" class="link-button" id="healthHowScored">${escapeHtml(t('health.how_scored'))}</button></p>
+      ${launchAuditSection()}`;
     $('healthRescan').onclick = () => rescanLibrary();
     $('healthHowScored').onclick = () => notify(t('health.how_scored_detail'));
     bindDialog(snapshot);
+    renderLaunchAudit();
   } catch (error) {
     $('healthScoreBody').innerHTML = `<p class="description">${escapeHtml(error.message)}</p>`;
   }
@@ -170,20 +174,22 @@ export async function rescanLibrary() {
 // ── Fix queue ────────────────────────────────────────────────────────────────
 
 function showHealthUndoToast(message, fixId, undoKind) {
-  const toast = $('toast');
-  if (!toast) { notify(message); return; }
-  toast.dataset.notifyLevel = 'info';
-  toast.innerHTML = `<span class="trash-toast-text">${escapeHtml(message)}</span><button type="button" class="trash-undo" id="healthUndoButton">${escapeHtml(t('trash.undo'))}</button>`;
-  revealToast(8000);
-  $('healthUndoButton').onclick = async () => {
-    hideToast();
-    try {
-      await api('/api/v2/library/health/undo', { method: 'POST', body: JSON.stringify({ fix_id: fixId }) });
-      notify(t('health.undone'));
-      render();
-      openHealthScore();
-    } catch (error) { notify(error.message); }
-  };
+  // The toast manager owns the surface. Writing #toast.innerHTML here is what
+  // destroyed a live Undo button when the SSE job.finished handler raced it.
+  showToast({
+    level: 'info',
+    text: message,
+    action: t('trash.undo'),
+    ms: 8000,
+    onAction: async () => {
+      try {
+        await api('/api/v2/library/health/undo', { method: 'POST', body: JSON.stringify({ fix_id: fixId }) });
+        notify(t('health.undone'));
+        render();
+        openHealthScore();
+      } catch (error) { notify(error.message); }
+    },
+  });
 }
 
 async function fixDimension(dimension) {
@@ -227,6 +233,152 @@ async function fixDimension(dimension) {
     else notify(doneMsg);
     render();
   } catch (error) { notify(error.message); }
+}
+
+// ── F1: Launch Readiness ─────────────────────────────────────────────────────
+// The Launch Doctor run across every game, grouped by root cause, served from
+// the cached report at /api/v2/launch/audit. Reading never scans; the button
+// queues a background job, and this panel polls while it runs.
+
+const AUDIT_POLL_MS = 1500;
+let _auditPoll = 0;
+
+function launchAuditSection() {
+  return `<section class="launch-audit" aria-labelledby="launchAuditTitle">
+    <h3 id="launchAuditTitle">${escapeHtml(t('launch_audit.title'))}</h3>
+    <p class="description">${escapeHtml(t('launch_audit.intro'))}</p>
+    <div id="launchAuditBody"><p class="description">${escapeHtml(t('common.loading'))}</p></div>
+  </section>`;
+}
+
+function auditGroupRow(group, gameCount) {
+  const share = gameCount ? Math.max(1, Math.round((group.count / gameCount) * 100)) : 0;
+  const tone = group.severity === 'error' ? 'health-poor' : group.severity === 'warning' ? 'health-ok' : 'health-great';
+  const key = escapeHtml(group.key);
+  const fix = group.fix_action || {};
+  const app = fix.kind === 'flatpak_install' ? String(fix.payload?.app_id || '') : '';
+  return `<div class="health-dim" data-audit-group="${key}">
+    <button type="button" class="health-dim-head" data-audit-toggle="${key}" aria-expanded="false">
+      <span class="health-dim-name">${escapeHtml(group.subject ? `${group.code} · ${group.subject}` : group.code)}</span>
+      <span class="health-bar"><span class="health-bar-fill ${tone}" style="width:${share}%"></span></span>
+      <span class="health-dim-count">${escapeHtml(t('library.games_count', { count: group.count }))}</span>
+    </button>
+    <div class="health-dim-body" data-audit-body="${key}" hidden>
+      <p class="description">${escapeHtml(group.message || '')}</p>
+      <div class="health-issues" data-audit-members="${key}"></div>
+      <div class="health-dim-actions">
+        <button type="button" class="icon-button" data-audit-more="${key}" hidden>${escapeHtml(t('health.load_more'))}</button>
+        ${app ? `<button type="button" class="primary" data-audit-install="${escapeHtml(app)}">${escapeHtml(t('launch_audit.install', { app }))}</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+async function loadAuditMembers(key, offset) {
+  const result = await api(`/api/v2/launch/audit?group=${encodeURIComponent(key)}&limit=${PAGE_SIZE}&offset=${offset}`);
+  const host = [...document.querySelectorAll('[data-audit-members]')].find(node => node.dataset.auditMembers === key);
+  if (!host) return;
+  const members = result.members || { games: [], total: 0 };
+  if (offset === 0) host.innerHTML = '';
+  host.insertAdjacentHTML('beforeend', members.games.map(member => `<button type="button" class="metadata-result icon-button" data-audit-game="${escapeHtml(member.game_id)}">
+    <div><strong>${escapeHtml(member.name || t('health.unnamed'))}</strong></div>
+  </button>`).join(''));
+  host.querySelectorAll('[data-audit-game]').forEach(button => {
+    // "Show me": select the game, whose details pane runs the Doctor for it.
+    button.onclick = () => {
+      const game = AppState.games.find(item => String(item.game_id) === button.dataset.auditGame);
+      if (!game) { notify(t('launch_audit.game_gone')); return; }
+      AppState.selectedId = game.id;
+      $('healthScoreDialog')?.close();
+      render();
+    };
+  });
+  const more = [...document.querySelectorAll('[data-audit-more]')].find(node => node.dataset.auditMore === key);
+  if (more) {
+    const next = offset + PAGE_SIZE;
+    more.hidden = next >= members.total;
+    more.onclick = () => loadAuditMembers(key, next).catch(error => notify(error.message));
+  }
+}
+
+async function installForGroup(app) {
+  const ok = await confirmAction({
+    title: t('launch_audit.install_title'),
+    message: t('launch_audit.install_message', { app }),
+    confirmLabel: t('launch_audit.install', { app }),
+  });
+  if (!ok) return;
+  try {
+    await api('/api/emulators/install', { method: 'POST', body: JSON.stringify({ app_id: app }) });
+    notify(t('launch_audit.install_started', { app }));
+  } catch (error) { notify(error.message); }
+}
+
+async function runLaunchAudit() {
+  try {
+    await api('/api/v2/launch/audit/scan', { method: 'POST', body: JSON.stringify({ deep: Boolean($('launchAuditDeep')?.checked) }) });
+    notify(t('launch_audit.queued'));
+  } catch (error) { notify(error.message); return; }
+  renderLaunchAudit();
+}
+
+export async function renderLaunchAudit() {
+  const host = $('launchAuditBody');
+  if (!host) return;
+  clearTimeout(_auditPoll);
+  let result;
+  try {
+    result = await api('/api/v2/launch/audit');
+  } catch (error) {
+    host.innerHTML = `<p class="description">${escapeHtml(error.message)}</p>`;
+    return;
+  }
+  if (!$('launchAuditBody')) return;
+  const job = result.job || {};
+  const running = job.state === 'queued' || job.state === 'running';
+  const runLabel = running
+    ? t('launch_audit.running', { current: job.current ?? 0, total: job.total ?? '…' })
+    : t(result.scanned ? 'launch_audit.rerun' : 'launch_audit.run');
+  const controls = `<div class="health-dim-actions">
+    <label class="field setup-checkbox"><input type="checkbox" id="launchAuditDeep"> ${escapeHtml(t('launch_audit.deep'))}</label>
+    <button type="button" class="icon-button" id="launchAuditRun" ${running ? 'disabled aria-busy="true"' : ''}>${escapeHtml(runLabel)}</button>
+  </div>`;
+  if (!result.scanned) {
+    host.innerHTML = `<p class="description">${escapeHtml(t('launch_audit.none'))}</p>${controls}`;
+  } else {
+    const totals = result.totals || {};
+    const notes = [
+      t('launch_audit.last_run', { date: result.computed_at ? new Date(result.computed_at).toLocaleString() : '—', total: result.game_count ?? 0 }),
+      result.stale ? t('launch_audit.stale') : '',
+      result.failed ? t('launch_audit.failed', { failed: result.failed }) : '',
+    ].filter(Boolean);
+    const groups = result.groups || [];
+    host.innerHTML = `
+      <p role="status"><strong>${escapeHtml(t('launch_audit.totals', { ready: totals.ready ?? 0, warning: totals.warning ?? 0, blocked: totals.blocked ?? 0 }))}</strong></p>
+      ${notes.map(note => `<p class="description">${escapeHtml(note)}</p>`).join('')}
+      <div class="health-dims">${groups.length ? groups.map(group => auditGroupRow(group, result.game_count)).join('') : `<p class="description">${escapeHtml(t('launch_audit.all_clear'))}</p>`}</div>
+      ${controls}`;
+    host.querySelectorAll('[data-audit-toggle]').forEach(button => {
+      button.onclick = async () => {
+        const key = button.dataset.auditToggle;
+        const body = [...host.querySelectorAll('[data-audit-body]')].find(node => node.dataset.auditBody === key);
+        const open = body.hidden;
+        body.hidden = !open;
+        button.setAttribute('aria-expanded', String(open));
+        if (open && !body.dataset.loaded) {
+          body.dataset.loaded = '1';
+          try { await loadAuditMembers(key, 0); } catch (error) { notify(error.message); }
+        }
+      };
+    });
+    host.querySelectorAll('[data-audit-install]').forEach(button => {
+      button.onclick = () => installForGroup(button.dataset.auditInstall);
+    });
+  }
+  $('launchAuditRun').onclick = () => runLaunchAudit();
+  if (running) {
+    _auditPoll = setTimeout(() => { if ($('healthScoreDialog')?.open) renderLaunchAudit(); }, AUDIT_POLL_MS);
+  }
 }
 
 // ── H6: scheduled-rescan toast with score delta ──────────────────────────────

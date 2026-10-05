@@ -375,9 +375,14 @@ class JobManager:
         return enriched
 
     def _archive(self, job):
-        if not self._history_limit:
-            return
         with self._lock:
+            # A job is archived exactly when it turns terminal. Drop its
+            # id->name mapping here, under the same lock and before observers
+            # are notified, so nothing that sees the terminal state can still
+            # resolve the id to a name (and cancel_by_id another job with it).
+            self._names_by_id.pop(str(job.get("job_id") or ""), None)
+            if not self._history_limit:
+                return
             self._history.append(dict(job))
             del self._history[: max(0, len(self._history) - self._history_limit)]
 
@@ -416,6 +421,7 @@ class JobManager:
         if not math.isfinite(backoff_seconds) or backoff_seconds < 0:
             raise ValueError("Job backoff must be finite and non-negative.")
         backoff_seconds = min(backoff_seconds, MAX_BACKOFF_SECONDS)
+        superseded = None
         with self._lock:
             current = self._jobs.get(name, {})
             if current.get("state") in {"queued", "running"} and not replace:
@@ -426,6 +432,18 @@ class JobManager:
                 old_event = self._cancel_events.get(current["job_id"])
                 if old_event:
                     old_event.set()
+                if current.get("state") in {"queued", "running"}:
+                    # Close the operation this job owns *here*. The job is
+                    # dropped from _jobs on the next line, so the worker's
+                    # `current.get("job_id") != job_id` check makes _run_job
+                    # return immediately -- before the notification that marks
+                    # the operation terminal. Without this, a superseded job's
+                    # operation row stays queued/running forever, spinner
+                    # included. The health rescan submits with replace=True, so
+                    # a user-initiated library scan could strand one.
+                    superseded = dict(current)
+                    superseded.update({"state": "cancelled", "finished_at": _now()})
+                    self._archive(superseded)
             self._jobs.pop(name, None)
             self._prune_finished_locked()
             if len(self._inflight) >= self._max_jobs:
@@ -461,6 +479,11 @@ class JobManager:
             self._names_by_id[job_id] = name
             self._cancel_events[job_id] = cancel_event
             self._inflight.add(job_id)
+
+        if superseded is not None:
+            # Outside the lock: _notify syncs the operation row and calls the
+            # observer, and neither belongs under the queue lock.
+            self._notify(superseded)
 
         try:
             future = self._executor.submit(self._run_job, name, job_id, worker, max_attempts, backoff_seconds, cancel_event)
@@ -555,6 +578,13 @@ class JobManager:
                 self._inflight.discard(job_id)
                 self._cancel_events.pop(job_id, None)
                 self._futures.pop(job_id, None)
+                # Drop the id->name mapping with the rest of the job's state.
+                # It used to be popped only when the executor submit itself
+                # failed, so a finished job's id kept resolving to its name for
+                # the life of the process: cancel_by_id on a *finished*
+                # operation then cancelled whatever job currently held that
+                # name, and the dict grew by one entry per job forever.
+                self._names_by_id.pop(job_id, None)
 
     def _drop_future(self, future):
         """Forget a finished future so completed jobs cannot accumulate."""

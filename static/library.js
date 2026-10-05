@@ -1,5 +1,5 @@
 import { $, escapeHtml, duration, fact, gameLinks, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds, trigramsOf, expandTrigrams } from './util.js';
-import { revealToast, hideToast, token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
+import { token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, showToast, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
 import { loadTheme, deletePlaylist } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importDroppedFolder } from './imports.js';
 import { openGameDialog, convertShelfEntry, confirmAction, promptInput, openDialog, closeDialog } from './dialogs.js';
@@ -172,6 +172,8 @@ async function refreshSmartQuery(query) {
     AppState.queryParse = null;
     AppState.queryParseText = '';
     AppState.queryMatchIds = null;
+    AppState.queryMatchTotal = null;
+    AppState.queryMatchTruncated = false;
     invalidateFilterCache();
     return;
   }
@@ -183,7 +185,14 @@ async function refreshSmartQuery(query) {
     if (request !== smartQueryRequest) return;
     AppState.queryParse = result;
     AppState.queryParseText = text;
-    AppState.queryMatchIds = new Set((result.matched_game_ids || []).map(String));
+    const ids = (result.matched_game_ids || []).map(String);
+    AppState.queryMatchIds = new Set(ids);
+    // F10: the server caps the identifier payload at 20,000 and returns the true
+    // `match_count` beside it. Nothing read that number, so a query matching
+    // 20,001 games silently dropped one and the grid showed a plausible-looking
+    // result set with no way to tell it was incomplete.
+    AppState.queryMatchTotal = Number.isFinite(Number(result.match_count)) ? Number(result.match_count) : ids.length;
+    AppState.queryMatchTruncated = AppState.queryMatchTotal > ids.length;
   } catch {
     if (request !== smartQueryRequest) return;
     // The local matcher still keeps search usable if the interpretation
@@ -191,6 +200,8 @@ async function refreshSmartQuery(query) {
     AppState.queryParse = null;
     AppState.queryParseText = '';
     AppState.queryMatchIds = null;
+    AppState.queryMatchTotal = null;
+    AppState.queryMatchTruncated = false;
   }
   invalidateFilterCache();
   renderQueryChips();
@@ -545,6 +556,12 @@ function renderQueryChips() {
   } else if (state.query) {
     addChip('search', `Search: ${state.query}`, () => { $('sidebarSearch').value = ''; refreshSmartQuery(''); });
   }
+  // F10: a capped payload is only honest if it says so. This is a status line
+  // rather than a removable chip -- it is not a filter the user applied, and
+  // clicking it would do nothing sensible.
+  if (AppState.queryMatchTruncated) {
+    chips.push(`<span class="description query-hint" role="status">${escapeHtml(t('library.query_truncated', { shown: AppState.queryMatchIds?.size || 0, total: AppState.queryMatchTotal || 0 }))}</span>`);
+  }
   if (state.explorer.progress) addChip('explorer', `Progress: ${state.explorer.progress === '__unset' ? t('backlog.unplayed') : state.explorer.progress}`, () => { AppState.explorerRules = {}; });
   if (state.importBatchId) addChip('import_batch', `Import batch: ${state.importBatchId}`, () => { AppState.importBatchId = ''; invalidateFilterCache(); });
   if (state.smart.has_achievements) addChip('smart_achievements', 'Achievements', () => { delete AppState.smartFilterRules.has_achievements; });
@@ -822,8 +839,15 @@ function markFilterAria() {
       const ratio = img.naturalWidth / img.naturalHeight;
       const prev = AppState.coverRatios[gid];
       AppState.coverRatios[gid] = ratio;
-      _coverRatiosRevision++;
       if (prev !== ratio && coverBucketOf(prev) !== coverBucketOf(ratio)) {
+        // F4: the revision is in the row-geometry cache key, and it used to be
+        // bumped on *every* cover load. On the 20k fixture that is one cache miss
+        // per cover as they scroll in, each re-walking groupedSections() and
+        // rebuilding ~2,500 row objects -- so the debounce below batched the
+        // render but not the geometry, and the comment's claim was half true.
+        // Only a bucket change moves a card between sections, so only a bucket
+        // change invalidates the layout.
+        _coverRatiosRevision++;
         clearTimeout(ratioRegroupTimer);
         ratioRegroupTimer = setTimeout(() => { ratioRegroupTimer = null; renderGrid(); }, 150);
       }
@@ -983,21 +1007,51 @@ function markFilterAria() {
       let rowHeight = 0;
       for (let i = 0; i < Math.min(gridCols, cards.length); i++) rowHeight = Math.max(rowHeight, cards[i].offsetHeight);
       gridRowHeight = rowHeight + rowGap;
+      lastMeasuredRowHeight = gridRowHeight;
     }
+    // F3: `gridWindow` treated "row height unknown" as "render everything", so
+    // any reset of `gridRowHeight` before a render stringified the entire result
+    // set into innerHTML -- 20,000 <button class="list-row"> elements in List
+    // view on every window resize, and again on every "filter to 0 results,
+    // then clear filters". PERF.md treats the 20k budget as blocking, so this was
+    // a gate failure, not just jank.
+    //
+    // The last *measured* height is the right fallback: the reset exists because
+    // a resize may have changed the column count, and an estimate derived from a
+    // real measurement is a far better window than "all of it". It is only ever
+    // a fallback, so a genuine first paint with no measurement yet still renders
+    // in full.
+    let lastMeasuredRowHeight = 0;
     function gridWindow(total) {
       if (!isVirtualEnabled()) return [0, total];
-      if (!gridRowHeight) return [0, total];
+      const rowHeight = gridRowHeight || lastMeasuredRowHeight;
+      if (!rowHeight) return [0, total];
       const pane = gridPane();
       const paneHeight = pane ? pane.clientHeight : 0;
       const rows = Math.ceil(total / Math.max(gridCols, 1));
-      const firstRow = Math.max(0, Math.floor(gridScrollTop / gridRowHeight) - 2);
-      const lastRow = Math.min(rows - 1, Math.ceil((gridScrollTop + paneHeight) / gridRowHeight) + 2);
+      const firstRow = Math.max(0, Math.floor(gridScrollTop / rowHeight) - 2);
+      const lastRow = Math.min(rows - 1, Math.ceil((gridScrollTop + paneHeight) / rowHeight) + 2);
       return [Math.min(total, firstRow * gridCols), Math.min(total, (lastRow + 1) * gridCols)];
     }
     // Entrance animation is for view changes (first paint, platform/playlist/preset/view switch), never for
     // data-driven re-renders (search keystrokes, favourite, bulk toggle, resize, cover-ratio regroup): those
     // would replay the whole grid's fade-in on every keystroke (ADR 0063).
     let lastGridViewKey = null;
+    // Where focus goes when the card that had it is no longer rendered. The grid
+    // container itself is the right answer: it is always present, it is inside
+    // the pane the keyboard handler is bound to, and it is the element a screen
+    // reader should announce as "the list, which changed". A card that is merely
+    // scrolled out of the virtual window is the *other* case and is handled by
+    // scrolling it back in, not by this.
+    function focusGridFallback() {
+      const grid = $('grid');
+      if (!grid) return;
+      if (!grid.hasAttribute('tabindex')) {
+        grid.setAttribute('tabindex', '-1');
+        grid.setAttribute('role', grid.getAttribute('role') || 'list');
+      }
+      grid.focus({ preventScroll: true });
+    }
     function renderGrid({fromScroll} = {}) {
       if (isTrashView()) { renderTrashView({fromScroll}); return; }
       const pane = gridPane();
@@ -1110,6 +1164,11 @@ function markFilterAria() {
         const id = Number(input.dataset.gamePicker);
         input.checked ? selectedIds.add(id) : selectedIds.delete(id);
         input.closest('.card')?.classList.toggle('selected', input.checked || AppState.selectedId === id);
+        // F13: the picker is a sibling of .card-main, so its click never reached
+        // the [data-game] handler and the bulk-mode count kept whatever it said
+        // when the mode was entered. Re-render so the selection count, the
+        // Edit-Selected button and the card classes all agree with selectedIds.
+        renderGrid();
       });
       document.querySelectorAll('[data-moments-card]').forEach(button => button.onclick = event => {
         event.preventDefault();
@@ -1141,9 +1200,18 @@ function markFilterAria() {
       renderArrangeBar(visible);
       markFilterAria();
       if (focusedGameId && (!document.activeElement || document.activeElement === document.body)) {
-        document.querySelector(`[data-game="${focusedGameId}"]`)?.focus({ preventScroll: true });
+        // F6: the optional chain made a card that filtered out of the new window
+        // a silent no-op, so focus fell to <body> and arrow-key navigation and
+        // Enter-to-launch both stopped responding. There is no card to focus, so
+        // hand focus to the control the user is actually driving instead of
+        // dropping it on the document.
+        const card = document.querySelector(`[data-game="${focusedGameId}"]`);
+        if (card) card.focus({ preventScroll: true });
+        else focusGridFallback();
       } else if (focusedPickerId && (!document.activeElement || document.activeElement === document.body)) {
-        document.querySelector(`[data-game-picker="${focusedPickerId}"]`)?.focus({ preventScroll: true });
+        const picker = document.querySelector(`[data-game-picker="${focusedPickerId}"]`);
+        if (picker) picker.focus({ preventScroll: true });
+        else focusGridFallback();
       }
       const measuredBefore = gridRowHeight;
       measureGridLayout();
@@ -1281,16 +1349,38 @@ function markFilterAria() {
       if ($('ludusaviRestore')) $('ludusaviRestore').onclick = () => ludusaviAction(game.id, 'restore');
       if ($('hoardBackup')) $('hoardBackup').onclick = () => hoardAction(game.id, 'backup');
       $('discoverSaves').onclick = () => discoverSaves(game.id);
-      loadRelated(game.id);
-      loadDoctor(game);
+      const detailsController = beginDetailsRequest();
+      loadRelated(game.id, detailsController);
+      loadDoctor(game, detailsController);
     }
-    async function loadDoctor(game) {
+    // F5: every renderDetails() fired a preflight and a related-games request,
+    // and neither had a sequence guard nor an AbortSignal. Holding the down arrow
+    // through 15 games issued 30 requests, and whichever resolved last painted
+    // into whichever pane was on screen -- so game #3's preflight could show
+    // "Ready to launch ✓" on game #15, and a 404 on #5 showed its error in #15's
+    // Related panel. One controller per selected game: the previous selection's
+    // requests are aborted, and a response that still slips through is dropped
+    // by the id check on both the success and the error path.
+    let detailsRequest = null;
+    function beginDetailsRequest() {
+      detailsRequest?.abort();
+      const controller = new AbortController();
+      detailsRequest = controller;
+      return controller;
+    }
+    function isCurrentDetailsRequest(id, controller) {
+      return controller === detailsRequest && !controller.signal.aborted && AppState.selectedId === id;
+    }
+    async function loadDoctor(game, controller) {
       const container = document.getElementById('doctorChecks');
       if (!container || !game?.game_id) { if (container) container.textContent = 'No game selected.'; return; }
+      const id = game.id;
       try {
-        const pre = await api('/api/v2/launch/preflight', {method:'POST', body: JSON.stringify({game_id: game.game_id})});
+        const pre = await api('/api/v2/launch/preflight', {method:'POST', body: JSON.stringify({game_id: game.game_id}), signal: controller?.signal});
+        if (controller && !isCurrentDetailsRequest(id, controller)) return;
         renderDoctorChecks(container, pre, game);
       } catch (error) {
+        if (controller?.signal.aborted || (controller && !isCurrentDetailsRequest(id, controller))) return;
         container.innerHTML = `<span class="description">Doctor unavailable: ${escapeHtml(error.message)}</span>`;
       }
     }
@@ -1361,14 +1451,23 @@ function markFilterAria() {
         notify('Unknown tokens: ' + toks + '. Valid: {path} {name} {platform} etc. See launch_tokens docs.');
       });
     }
-    async function loadRelated(id) {
+    async function loadRelated(id, controller) {
       try {
-        const result = await api(`/api/related/rich?id=${id}`);
-        if (!$('relatedGames') || AppState.selectedId !== id) return;
+        const result = await api(`/api/related/rich?id=${id}`, {signal: controller?.signal});
+        if (!$('relatedGames')) return;
+        if (controller && !isCurrentDetailsRequest(id, controller)) return;
+        if (AppState.selectedId !== id) return;
         const related = (result.items || []).map(item => ({...item, game:AppState.games.find(game => game.id === item.id)})).filter(item => item.game);
         $('relatedGames').innerHTML = related.length ? related.map(item => `<button class="related-game" data-related="${item.game.id}" title="${escapeHtml(item.reasons.join(', '))}">${escapeHtml(item.game.name)}<small>${escapeHtml(item.reasons.join(' · '))}</small></button>`).join('') : '<span class="description">No related games are in this library yet.</span>';
         document.querySelectorAll('[data-related]').forEach(button => button.onclick = () => selectGame(Number(button.dataset.related)));
-      } catch(error) { if ($('relatedGames')) $('relatedGames').textContent = error.message; }
+      } catch(error) {
+        // F5: the catch painted into whatever container existed when it resolved,
+        // so a slow failure on a game the user has already left overwrote the
+        // current pane. Aborted and superseded requests write nothing.
+        if (controller?.signal.aborted) return;
+        if (controller && !isCurrentDetailsRequest(id, controller)) return;
+        if ($('relatedGames')) $('relatedGames').textContent = error.message;
+      }
     }
     function renderSmartCollections() {
       const container = $('smartCollections');
@@ -1421,6 +1520,12 @@ function markFilterAria() {
         try {
           await api('/api/v2/library/progress/set', { method: 'POST', body: JSON.stringify({ id: game.id, progress: progressSelect.value || 'Unplayed' }) });
           game.progress = progressSelect.value;
+          // F1: `filteredGames()` is memoized against AppState._refreshCounter,
+          // and `progress` is a filter field -- View = "Playing" kept reading the
+          // list computed while the game was Unplayed, so the game you just
+          // marked "Playing" never appeared. favorite() already bumps this for
+          // the same kind of in-place mutation.
+          AppState._refreshCounter = (AppState._refreshCounter || 0) + 1;
           renderGrid();
           renderDetails();
           notify(t('backlog.status_saved'));
@@ -1625,17 +1730,17 @@ function markFilterAria() {
       }
       option.textContent = t('trash.view');
     }
-    function hideTrashToast() {
-      hideToast();
-    }
     function showTrashUndoToast(name, trashId) {
-      const toast = $('toast');
-      if (!toast || !trashId) { notify(t('trash.moved', {name})); return; }
-      toast.dataset.notifyLevel = 'info';
-      toast.innerHTML = `<span class="trash-toast-text">${escapeHtml(t('trash.moved', {name}))}</span><button type="button" class="trash-undo" id="trashUndoButton">${escapeHtml(t('trash.undo'))}</button>`;
-      revealToast(TRASH_TOAST_MS);
-      const undo = $('trashUndoButton');
-      if (undo) undo.onclick = () => { hideTrashToast(); restoreTrashEntry(trashId); };
+      if (!trashId) { notify(t('trash.moved', {name})); return; }
+      // The toast manager owns the surface. Writing #toast.innerHTML here is
+      // what destroyed a live Undo button whenever a trophy unlocked.
+      showToast({
+        level: 'info',
+        text: t('trash.moved', {name}),
+        action: t('trash.undo'),
+        ms: TRASH_TOAST_MS,
+        onAction: () => restoreTrashEntry(trashId),
+      });
     }
     async function loadTrashItems() {
       try {
@@ -1861,12 +1966,54 @@ function markFilterAria() {
       renderGrid();
       await api('/api/settings',{method:'POST',body:JSON.stringify({library_view:AppState.appSettings.library_view})}).catch(() => {});
     };
+    // F8: the only drop handlers in the project were on #dropZone, and nothing
+    // prevented the default at document level. Two real consequences: dropping a
+    // file from Explorer anywhere on the grid performed the browser's default
+    // navigation and *lost the session*, and drag-selecting text in the search
+    // box then releasing it over the drop zone opened the "enter the absolute
+    // path" prompt, because the drop handler never checked dataTransfer.
+    //
+    // Guarding at the window is the only place that sees both. The guard is
+    // passive -- it records that a real file drag is in progress and calls
+    // preventDefault so the browser cannot navigate -- and only the #dropZone
+    // handler acts on it, so an ordinary text selection is unaffected.
+    let fileDragDepth = 0;
+    const hasFiles = event => Array.from(event.dataTransfer?.types || []).includes('Files');
+    window.addEventListener('dragenter', event => {
+      if (!hasFiles(event)) return;
+      fileDragDepth += 1;
+      event.preventDefault();
+      document.body.classList.add('file-drag-active');
+    });
+    window.addEventListener('dragover', event => {
+      if (!hasFiles(event)) return;
+      // Without preventDefault the drop event never fires and the browser
+      // navigates to the file instead.
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    });
+    window.addEventListener('dragleave', event => {
+      if (!hasFiles(event)) return;
+      fileDragDepth = Math.max(0, fileDragDepth - 1);
+      if (!fileDragDepth) document.body.classList.remove('file-drag-active');
+    });
+    window.addEventListener('drop', event => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      fileDragDepth = 0;
+      document.body.classList.remove('file-drag-active');
+    });
     if ($('dropZone')) {
       ['dragenter','dragover'].forEach(name => $('dropZone').addEventListener(name, event => { event.preventDefault(); $('dropZone').classList.add('active'); }));
       $('dropZone').addEventListener('dragleave', () => $('dropZone').classList.remove('active'));
       $('dropZone').addEventListener('drop', async event => {
         event.preventDefault();
+        event.stopPropagation();
         $('dropZone').classList.remove('active');
+        // F8: a text drag released over the drop zone also fires `drop`, and it
+        // used to open the "enter the absolute path" prompt. Only a real file
+        // transfer is an import.
+        if (!hasFiles(event)) return;
         const folder = await nativePickFolder('Enter the absolute path of the folder to import.');
         if (folder) importDroppedFolder(folder.trim());
       });
@@ -1909,7 +2056,7 @@ function ensureArtworkDoctorDialog() {
   artworkDoctorDialog.innerHTML = `<div class="dialog-head"><h2>${escapeHtml(t('artwork_doctor.title'))}</h2><button type="button" class="icon-button" data-artwork-close aria-label="${escapeHtml(t('common.cancel'))}">×</button></div><div class="artwork-doctor-body" id="artworkDoctorBody"><p class="description">${escapeHtml(t('artwork_doctor.scanning'))}</p></div><div class="extras artwork-doctor-actions"><button type="button" class="icon-button" id="artworkDoctorRefresh">${escapeHtml(t('artwork_doctor.rescan'))}</button><button type="button" class="primary" id="artworkDoctorFix">${escapeHtml(t('artwork_doctor.fix_all'))}</button><button type="button" class="icon-button" id="artworkDoctorUndo">${escapeHtml(t('artwork_doctor.undo'))}</button></div>`;
   document.body.appendChild(artworkDoctorDialog);
   artworkDoctorDialog.querySelector('[data-artwork-close]').onclick = () => artworkDoctorDialog.close();
-  artworkDoctorDialog.addEventListener('cancel', event => { event.preventDefault(); artworkDoctorDialog.close(); });
+  artworkDoctorDialog.addEventListener('cancel', event => { event.preventDefault(); closeDialog(artworkDoctorDialog); });
   $('artworkDoctorRefresh').onclick = () => renderArtworkDoctor();
   $('artworkDoctorFix').onclick = () => startArtworkFix();
   $('artworkDoctorUndo').onclick = () => undoArtworkBatch();

@@ -58,7 +58,7 @@ EVENT_TYPES = (
 EVENT_DATA_ALLOWLISTS: dict[str, tuple[str, ...]] = {
     "session.started": ("launch_id", "game_id", "name", "platform", "started_at"),
     "session.stopped": (
-        "launch_id", "game_id", "name", "seconds", "exit_code",
+        "launch_id", "game_id", "name", "seconds", "exit_code", "timed_out",
         "started_at", "stopped_at",
     ),
     "queue.advanced": ("from_game_id", "from_entry_id", "to_game_id", "to_entry_id"),

@@ -13,6 +13,7 @@ from pathlib import Path
 from api_errors import BadRequest, GameNotFound
 from pkg.parity.parity_emulator_defs import find_adapter, resolve_launch
 from pkg.parity.parity_import import detect_dependencies
+from pkg.platform_compat import UnsafeIdentifier, contained_path, safe_identifier
 from pkg.state.launch import game_from_payload
 
 PRECEDENCE_NUMBERS = {
@@ -122,14 +123,23 @@ def _parse_identity(payload):
 
 
 def _preview_path(data_dir, preview_id):
-    return Path(data_dir) / "previews" / f"{preview_id}.json"
+    """Resolve a preview id to its file, refusing anything that is not one component.
+
+    The id is request input on every lookup, so it is validated before it is
+    joined. See parity_setup_preview.preview_path for the traversal this closes.
+    """
+    name = safe_identifier(preview_id, field="preview_id")
+    return contained_path(Path(data_dir) / "previews", f"{name}.json")
 
 
 def validate_preview(preview_id, data_dir):
     preview_id = str(preview_id or "").strip()
     if not preview_id:
         raise BadRequest("preview_id is required for candidate identities.", code="PREVIEW_NOT_FOUND")
-    path = _preview_path(data_dir, preview_id)
+    try:
+        path = _preview_path(data_dir, preview_id)
+    except UnsafeIdentifier:
+        raise BadRequest("Preview not found.", code="PREVIEW_NOT_FOUND") from None
     if not path.is_file():
         raise BadRequest("Preview not found.", code="PREVIEW_NOT_FOUND")
     try:
@@ -167,28 +177,47 @@ def _game_from_identity(game_id, candidate, *, state, data_dir):
     return game, None, str(candidate["candidate_id"])
 
 
+#: A hung `flatpak` (a broken installation, a stalled D-Bus) must not hang the
+#: request thread. Without this, a preflight or an audit on an affected host
+#: waits forever. Exceeding it is treated as "not installed" / "not allowed",
+#: which is the safe direction: it can block a launch, never enable one.
+FLATPAK_TIMEOUT_SECONDS = 5
+
+
 def _flatpak_installed(app_id, which, run):
     flatpak = which("flatpak") if which else shutil.which("flatpak")
     if not flatpak or not app_id:
         return False
-    return run(
-        [flatpak, "info", app_id],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    ).returncode == 0
+    try:
+        return run(
+            [flatpak, "info", app_id],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=FLATPAK_TIMEOUT_SECONDS,
+        ).returncode == 0
+    except (subprocess.TimeoutExpired, OSError):
+        # The timeout above only helps if it is caught: uncaught, it turned a
+        # hung flatpak into a 500 from preflight instead of "not installed".
+        return False
 
 
 def _flatpak_fs_allowed(app_id, rom_path, which, run):
     flatpak = which("flatpak") if which else shutil.which("flatpak")
     if not flatpak or not app_id:
         return True
-    result = run(
-        [flatpak, "info", "--show-permissions", app_id],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = run(
+            [flatpak, "info", "--show-permissions", app_id],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=FLATPAK_TIMEOUT_SECONDS,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        # An emulator whose permissions cannot be read is treated as not
+        # granted, so the audit reports the problem instead of hanging.
+        return False
     if result.returncode != 0:
         return True
     permissions = result.stdout
@@ -407,7 +436,14 @@ def build_resolved(game, profiles, *, data_dir="", which=None):
     }
 
 
-def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None):
+def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None, deep=True):
+    """Every launch check for one game, without spawning it.
+
+    ``deep`` covers the checks that open files -- listing an archive and hashing
+    the BIOS. A single preflight always runs them; the Launch Audit turns them
+    off by default because they are the only checks whose cost grows with file
+    size rather than game count.
+    """
     which = which or shutil.which
     run = run or subprocess.run
     checks = []
@@ -426,7 +462,8 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None):
         checks.append(_check("PATH_WRONG_TYPE", "error", "Game path is not a file.", [REMEDIATION_SET_PATH], _fix_reveal(path_value)))
         return checks
 
-    checks.extend(_archive_checks(path_value, game.get("archive_member")))
+    if deep:
+        checks.extend(_archive_checks(path_value, game.get("archive_member")))
 
     platform = str(game.get("platform", "") or "").strip()
     if not platform:
@@ -574,7 +611,7 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None):
                         _fix_reveal(missing_path, "Firmware"),
                     ))
             # SHA1 drift check: BIOS exists but wrong hash (1.7.2)
-            if active_adapter and active_adapter.get("bios_path") and active_adapter.get("bios_sha1"):
+            if deep and active_adapter and active_adapter.get("bios_path") and active_adapter.get("bios_sha1"):
                 from pathlib import Path as _Path
                 import hashlib as _hashlib
                 bios_p = _Path(active_adapter["bios_path"]).expanduser()

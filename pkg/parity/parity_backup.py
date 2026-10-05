@@ -408,74 +408,176 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None, force=F
 # ---------------------------------------------------------------------------
 
 
-def diff_manifests(current_state, archive_path):
-    """Compare the current library state against a backup archive.
+def _library_index(state):
+    """`game_id -> game` plus the settings mapping, from one state document."""
+    games = {}
+    settings = {}
+    if not isinstance(state, dict):
+        return games, settings
+    for game in state.get("games", []):
+        if isinstance(game, dict):
+            gid = str(game.get("game_id") or "").strip()
+            if gid:
+                games[gid] = game
+    raw = state.get("settings")
+    if isinstance(raw, dict):
+        settings = raw
+    return games, settings
+
+
+def _display_name(game, fallback):
+    """The most human label a game record offers, for a diff row."""
+    if isinstance(game, dict):
+        for field in ("name", "title"):
+            value = str(game.get(field) or "").strip()
+            if value:
+                return value
+    return fallback
+
+
+# The fields a restore would overwrite. Kept as a tuple so the diff and the
+# detail rows cannot disagree about what "changed" means.
+DIFF_FIELDS = (
+    "name", "title", "platform", "genre", "rating", "progress",
+    "favorite", "hidden", "play_count", "playtime_seconds",
+)
+# A diff row per game is fine; a diff row per *changed field* on a 20,000-game
+# library is not. The lists are capped and the untruncated counts are reported
+# separately, because a capped list that does not announce itself is worse than
+# no list at all.
+DIFF_PREVIEW_LIMIT = 200
+
+
+def diff_manifests(current_state, archive_path, limit=DIFF_PREVIEW_LIMIT):
+    """Compare the current library state against a backup archive (ADR 0019).
+
+    Two vocabularies come out of this, and conflating them is the trap. The
+    1.7.2 keys are *set* names relative to the current library: ``added`` is
+    what the current library has that the backup lacks -- which is precisely
+    what a restore would **delete**. The ``restore`` block is the same three
+    sets named for what the user is about to lose, and it is the only one the
+    UI reads; the set names stay for the documented 1.7.2 contract.
 
     Returns a dict with:
-      - added: game_ids in current but not in backup
-      - removed: game_ids in backup but not in current
-      - changed: game_ids present in both but with differing content
-      - settings_changed: bool
-      - summary: {added, removed, changed, total}
+      - added / removed / changed: game_id lists, capped at ``limit``
+      - restore: {will_remove, will_add, will_change}, each
+        ``{total, truncated, rows}`` with display names, and per-field
+        ``{from, to}`` detail on the changed rows
+      - settings: whether a restore would move settings at all, whether the
+        archive actually carries them, and whether they differ
+      - truncated: which of the three lists lost rows
+      - summary: {added, removed, changed, total} -- always the true counts
 
     Raises ValueError if the archive is invalid.
     """
-    current_games = {}
-    if isinstance(current_state, dict):
-        for game in current_state.get("games", []):
-            if isinstance(game, dict):
-                gid = str(game.get("game_id") or "").strip()
-                if gid:
-                    current_games[gid] = game
-
-    backup_games = {}
-    backup_settings = {}
+    cap = max(0, int(limit))
+    current_games, current_settings = _library_index(current_state)
     try:
         with zipfile.ZipFile(str(archive_path), "r") as package:
-            _load_backup_manifest(package)  # validate manifest exists
-            if "library.json" in package.namelist():
+            manifest = _load_backup_manifest(package)
+            names = set(package.namelist())
+            backup_games, backup_settings = ({}, {})
+            if "library.json" in names:
                 try:
                     backup_state = json.loads(package.read("library.json"))
-                    if isinstance(backup_state, dict):
-                        for game in backup_state.get("games", []):
-                            if isinstance(game, dict):
-                                gid = str(game.get("game_id") or "").strip()
-                                if gid:
-                                    backup_games[gid] = game
-                        backup_settings = backup_state.get("settings", {})
                 except (UnicodeDecodeError, json.JSONDecodeError):
-                    pass
+                    backup_state = None
+                backup_games, backup_settings = _library_index(backup_state)
     except zipfile.BadZipFile as error:
         raise ValueError("Backup archive is invalid.") from error
 
-    current_ids = set(current_games.keys())
-    backup_ids = set(backup_games.keys())
+    current_ids = set(current_games)
+    backup_ids = set(backup_games)
 
-    added = sorted(current_ids - backup_ids)
-    removed = sorted(backup_ids - current_ids)
+    # Current-only: a restore deletes these.
+    removed_by_restore = sorted(current_ids - backup_ids)
+    # Backup-only: a restore brings these back.
+    added_by_restore = sorted(backup_ids - current_ids)
 
-    changed = []
+    changed_rows = []
     for gid in sorted(current_ids & backup_ids):
-        cur = current_games.get(gid, {})
-        bak = backup_games.get(gid, {})
-        # Compare key fields
-        for field in ("name", "title", "platform", "genre", "rating", "progress", "favorite", "hidden", "play_count", "playtime_seconds"):
-            if cur.get(field) != bak.get(field):
-                changed.append(gid)
-                break
+        cur = current_games.get(gid) or {}
+        bak = backup_games.get(gid) or {}
+        fields = {
+            field: {"from": bak.get(field), "to": cur.get(field)}
+            for field in DIFF_FIELDS
+            if cur.get(field) != bak.get(field)
+        }
+        if fields:
+            changed_rows.append({
+                "game_id": gid,
+                "name": _display_name(cur, gid) or _display_name(bak, gid),
+                "fields": fields,
+            })
 
-    current_settings = current_state.get("settings", {}) if isinstance(current_state, dict) else {}
     settings_changed = bool(current_settings) and bool(backup_settings) and current_settings != backup_settings
+    settings_keys = []
+    if current_settings and backup_settings:
+        settings_keys = sorted(
+            key for key in set(current_settings) | set(backup_settings)
+            if current_settings.get(key) != backup_settings.get(key)
+        )
+    manifest_items = [str(item) for item in (manifest.get("items") or []) if isinstance(item, str)]
+    # `library.json` is a whole-state export, so it carries a settings block even
+    # for a library-only backup. Comparing it is legitimate -- that is what
+    # `differs` means -- but it says nothing about what a *restore* would write,
+    # which is `restored`, and those two must not be conflated. `present` is the
+    # third term: a half-written archive whose manifest lists settings it does
+    # not carry would otherwise warn about a payload that cannot be written.
+    settings_restored = "settings" in manifest_items
+    settings_present = "settings.json" in names
+
+    def section(gids, rows=None):
+        return {
+            "total": len(gids),
+            "truncated": len(gids) > cap,
+            "rows": (rows if rows is not None else [
+                {"game_id": gid, "name": _display_name(current_games.get(gid), gid)}
+                for gid in gids[:cap]
+            ]),
+        }
 
     return {
-        "added": added,
-        "removed": removed,
-        "changed": changed,
+        "added": removed_by_restore[:cap],
+        "removed": added_by_restore[:cap],
+        "changed": [row["game_id"] for row in changed_rows[:cap]],
+        "restore": {
+            "will_remove": section(removed_by_restore),
+            "will_add": section(
+                added_by_restore,
+                [{"game_id": gid, "name": _display_name(backup_games.get(gid), gid)} for gid in added_by_restore[:cap]],
+            ),
+            "will_change": section(
+                [row["game_id"] for row in changed_rows],
+                changed_rows[:cap],
+            ),
+        },
+        "settings": {
+            # `restored` is what restore_backup() would act on; `present` is what
+            # the archive physically holds. They disagree on a truncated write.
+            "restored": settings_restored,
+            "present": settings_present,
+            # The UI's question: would a restore move my settings? Not "does the
+            # archive's settings block differ", which is true for library-only
+            # backups too and would warn about a restore that cannot happen.
+            "would_change": bool(settings_changed and settings_restored and settings_present),
+            "differs": settings_changed,
+            "redacted_secrets": bool(manifest.get("redacted_secrets")),
+            "keys_changed": settings_keys[:cap],
+        },
+        "truncated": {
+            "added": len(removed_by_restore) > cap,
+            "removed": len(added_by_restore) > cap,
+            "changed": len(changed_rows) > cap,
+            "limit": cap,
+        },
+        # Kept flat because ADR 0019 documents it; `settings.changed` is the same
+        # fact and exists so the UI reads one object.
         "settings_changed": settings_changed,
         "summary": {
-            "added": len(added),
-            "removed": len(removed),
-            "changed": len(changed),
+            "added": len(removed_by_restore),
+            "removed": len(added_by_restore),
+            "changed": len(changed_rows),
             "total": len(current_ids),
         },
     }

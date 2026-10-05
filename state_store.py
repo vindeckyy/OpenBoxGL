@@ -4,66 +4,8 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import json as _stdlib_json
-import types
-
-try:
-    import orjson as _orjson
-
-    def _json_dumps(obj, **kwargs):
-        options = 0
-        if kwargs.get("sort_keys"):
-            options |= _orjson.OPT_SORT_KEYS
-        if kwargs.get("indent") == 2:
-            options |= _orjson.OPT_INDENT_2
-        return _orjson.dumps(obj, option=options or None).decode("utf-8")
-
-    def _json_dumps_bytes(obj, **kwargs) -> bytes:
-        options = 0
-        if kwargs.get("sort_keys"):
-            options |= _orjson.OPT_SORT_KEYS
-        if kwargs.get("indent") == 2:
-            options |= _orjson.OPT_INDENT_2
-        return _orjson.dumps(obj, option=options or None)
-
-    def _json_dump_file(obj, fp, **kwargs):
-        options = 0
-        if kwargs.get("sort_keys"):
-            options |= _orjson.OPT_SORT_KEYS
-        if kwargs.get("indent") == 2:
-            options |= _orjson.OPT_INDENT_2
-        data = _orjson.dumps(obj, option=options or None)
-        if "b" in getattr(fp, "mode", ""):
-            fp.write(data)
-        else:
-            fp.write(data.decode("utf-8"))
-
-    def _json_load(fp):
-        if "b" in getattr(fp, "mode", ""):
-            return _orjson.loads(fp.read())
-        content = fp.read()
-        return _orjson.loads(content.encode("utf-8") if isinstance(content, str) else content)
-
-    _json_decode_error = _orjson.JSONDecodeError
-
-except ImportError:
-    _orjson = None
-
-    def _json_dumps(obj, **kwargs):
-        return _stdlib_json.dumps(obj, **kwargs)
-
-    def _json_dumps_bytes(obj, **kwargs) -> bytes:
-        return _stdlib_json.dumps(obj, **kwargs).encode("utf-8")
-
-    def _json_dump_file(obj, fp, **kwargs):
-        _stdlib_json.dump(obj, fp, **kwargs)
-
-    def _json_load(fp):
-        return _stdlib_json.load(fp)
-
-    _json_decode_error = _stdlib_json.JSONDecodeError
-
 import json
+import json as _stdlib_json
 import logging
 import os
 import re
@@ -72,19 +14,54 @@ import shutil
 import tempfile
 import threading
 import time
+import types
+from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable
 
 from backend_io import fsync_directory
 from pkg.platform_compat import lock_handle
+
+# Persistence is stdlib-only, deliberately. An earlier revision swapped in
+# ``orjson`` behind ``try: import orjson except ImportError``, which made the
+# serializer -- and therefore the behaviour of the single most important write
+# path in the app -- depend on whether a third-party package happened to be
+# installed on the host. The two serializers do not agree: ``orjson.dumps``
+# raises ``TypeError`` on a non-str dict key where the stdlib coerces it, and it
+# writes ``NaN`` as ``null`` where the stdlib emits a bare ``NaN``. No CI job
+# installed ``orjson``, so neither branch was ever exercised. ``scripts/
+# check_dependencies.py`` now fails the gate if this ever comes back.
+def _json_dumps(obj, **kwargs):
+    return _stdlib_json.dumps(obj, **kwargs)
+
+
+def _json_dumps_bytes(obj, **kwargs) -> bytes:
+    return _stdlib_json.dumps(obj, **kwargs).encode("utf-8")
+
+
+def _json_dump_file(obj, fp, **kwargs):
+    _stdlib_json.dump(obj, fp, **kwargs)
+
+
+def _json_load(fp):
+    return _stdlib_json.load(fp)
+
+
+_json_decode_error = _stdlib_json.JSONDecodeError
 
 LOGGER = logging.getLogger("openbox.state")
 
 
 STATE_SCHEMA_VERSION = 6
+
+#: Snapshot filenames: <UTC timestamp>-<8-digit sequence>-<random>.json, where
+#: the timestamp is %Y%m%dT%H%M%S%fZ -- 8 digits, T, 12 digits, Z. The
+#: timestamp alone is not enough to order by (two writes can land in one tick)
+#: and ordering by the file's mtime is worse, because snapshots are hard links
+#: to the live file and so share its timestamps.
+_SNAPSHOT_NAME_RE = re.compile(r"^(\d{8}T\d{12}Z)-(\d{8})-[0-9a-f]{8}\.json$")
 COMPACT_JSON_THRESHOLD = 1024 * 1024
 LEGACY_INDEXED_ID = re.compile(r"^game-[0-9a-f]{24}-\d+$")
 QUEUE_CAP = 500
@@ -372,6 +349,27 @@ def normalize_state(raw: Any) -> tuple[dict[str, Any], bool]:
     return state, changed
 
 
+def _state_digest(state: dict[str, Any]) -> bytes:
+    """A stable content digest of a normalized state.
+
+    Used to answer "did this mutation actually change anything?" cheaply. The
+    auto-import driver runs every ten seconds on a default install and very
+    often finds nothing new; before this, each of those ticks serialized the
+    whole library, fsynced it, copied the entire file to the backup, renamed
+    twice, fsynced the directory and rotated a snapshot -- roughly 8,640 full
+    writes a day, each while holding the cross-process lock every other state
+    read has to acquire.
+
+    The serialization is the one cost this adds, and it is far cheaper than the
+    disk work it replaces: normalization already walks every game on this path.
+    ``sort_keys`` keeps the digest independent of dict ordering.
+    """
+    canonical = _stdlib_json.dumps(
+        state, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str
+    )
+    return hashlib.blake2b(canonical.encode("utf-8"), digest_size=16).digest()
+
+
 def _normalize_committed_state(state: dict[str, Any]) -> dict[str, Any]:
     """Validate and repair a state already loaded from the current schema.
 
@@ -478,9 +476,16 @@ class JsonStateStore:
         self.snapshot_limit = max(0, int(snapshot_limit))
         self.snapshot_debounce = max(0.0, float(snapshot_debounce))
         self._last_snapshot_time: float = 0.0
+        # Monotonic counter embedded in snapshot filenames, so "newest" is a
+        # property of the name rather than of the filesystem's mtime.
+        self._snapshot_sequence: int = 0
         self._thread_lock = threading.RLock()
         self._cached_state: dict[str, Any] | None = None
         self._cached_signature: tuple[int, int, int] | None = None
+        # Content digest of the state as last committed to disk. Compared after
+        # a mutation so a mutator that changed nothing costs no fsync, no backup
+        # copy and no snapshot rotation. See update_with_result.
+        self._committed_digest: bytes | None = None
         self._games_by_id: dict[str, dict[str, Any]] = {}
         self._games_by_platform: dict[str, list[dict[str, Any]]] = {}
         # Write coalesce: 50ms micro-batch, single fsync per batch
@@ -547,6 +552,7 @@ class JsonStateStore:
     def _clear_cache(self) -> None:
         self._cached_state = None
         self._cached_signature = None
+        self._committed_digest = None
         self._reindex(None)
 
     @property
@@ -598,9 +604,6 @@ class JsonStateStore:
                 yield
 
     def _read_unlocked(self, path: Path) -> Any:
-        if _orjson is not None:
-            with path.open("rb") as source:
-                return _orjson.loads(source.read())
         with path.open("r", encoding="utf-8") as source:
             return _stdlib_json.load(source)
 
@@ -687,21 +690,14 @@ class JsonStateStore:
         try:
             games = state.get("games")
             games_count = len(games) if isinstance(games, list) else 0
-            if _orjson is not None:
-                if games_count > 500:
-                    raw_bytes = _orjson.dumps(state)
-                else:
-                    pretty = _orjson.dumps(state, option=_orjson.OPT_INDENT_2)
-                    raw_bytes = _orjson.dumps(state) if len(pretty) > COMPACT_JSON_THRESHOLD else pretty
+            if games_count > 500:
+                raw_bytes = _stdlib_json.dumps(state, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
             else:
-                if games_count > 500:
+                pretty = _stdlib_json.dumps(state, indent=2, ensure_ascii=False).encode("utf-8")
+                if len(pretty) > COMPACT_JSON_THRESHOLD:
                     raw_bytes = _stdlib_json.dumps(state, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
                 else:
-                    pretty = _stdlib_json.dumps(state, indent=2, ensure_ascii=False).encode("utf-8")
-                    if len(pretty) > COMPACT_JSON_THRESHOLD:
-                        raw_bytes = _stdlib_json.dumps(state, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-                    else:
-                        raw_bytes = pretty
+                    raw_bytes = pretty
 
             with os.fdopen(fd, "wb") as output:
                 output.write(raw_bytes)
@@ -734,6 +730,11 @@ class JsonStateStore:
                 self._reindex(state)
             else:
                 self._remember(state, adopt=adopt)
+            # The file now holds exactly this state, whatever wrote it -- save,
+            # update, snapshot restore or corrupt-state recovery. Recording it
+            # here rather than at the update call site means the first no-op
+            # after any of those is recognised as a no-op too.
+            self._committed_digest = _state_digest(state)
         finally:
             if temporary.exists():
                 temporary.unlink()
@@ -747,8 +748,16 @@ class JsonStateStore:
             return
         try:
             self.snapshots_dir.mkdir(parents=True, exist_ok=True)
-            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-            target = self.snapshots_dir / f"{stamp}-{secrets.token_hex(4)}.json"
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+            # The sequence number makes the ordering intrinsic to the name
+            # instead of a filesystem property. Snapshots are hard links to the
+            # live file, so two writes landing inside one mtime tick produced
+            # two snapshots the sort could not distinguish -- `snapshots()`
+            # ordered by st_mtime and "newest first" silently became arbitrary,
+            # which made restoring "the snapshot from before the bad write"
+            # restore the wrong one. See snapshots().
+            sequence = self._snapshot_sequence = self._snapshot_sequence + 1
+            target = self.snapshots_dir / f"{stamp}-{sequence:08d}-{secrets.token_hex(4)}.json"
             try:
                 os.link(self.path, target)
             except OSError:
@@ -768,7 +777,15 @@ class JsonStateStore:
             LOGGER.warning("Snapshot rotation failed; the committed state is unaffected.")
 
     def snapshots(self) -> list[dict[str, Any]]:
-        """Return available state snapshots, newest first."""
+        """Return available state snapshots, newest first.
+
+        Ordered by the timestamp and sequence embedded in the filename, not by
+        ``st_mtime``. A snapshot is a hard link to the live state file, so
+        several can share an mtime and "newest" becomes ambiguous -- which is
+        how a restore could land on the wrong recovery point. A name that does
+        not parse (hand-placed, or from a build with the old format) falls back
+        to mtime, so old snapshot directories still list correctly.
+        """
         items = []
         try:
             paths = list(self.snapshots_dir.glob("*.json"))
@@ -777,11 +794,26 @@ class JsonStateStore:
         for path in paths:
             try:
                 st = path.stat()
-                items.append({"name": path.name, "size": st.st_size, "modified": st.st_mtime})
             except OSError:
                 continue
-        items.sort(key=lambda item: item["modified"], reverse=True)
-        return items
+            match = _SNAPSHOT_NAME_RE.match(path.name)
+            order = (match.group(1), match.group(2)) if match else None
+            items.append({
+                "name": path.name,
+                "size": st.st_size,
+                "modified": st.st_mtime,
+                "_order": order,
+            })
+        named = [item for item in items if item["_order"] is not None]
+        unnamed = [item for item in items if item["_order"] is None]
+        named.sort(key=lambda item: item["_order"], reverse=True)
+        unnamed.sort(key=lambda item: item["modified"], reverse=True)
+        # Anything from the old format is older than anything from this one, and
+        # its relative order among its peers is by mtime.
+        ordered = named + unnamed
+        for item in ordered:
+            del item["_order"]
+        return ordered
 
     def restore_snapshot(self, name: str) -> dict[str, Any]:
         """Restore a named snapshot over the primary state file."""
@@ -891,7 +923,22 @@ class JsonStateStore:
                     _detach_new_mutables(normalized, owned_containers)
                 if isinstance(result, (dict, list, tuple, set)):
                     result = copy.deepcopy(result)
-                self._write_unlocked(normalized, adopt=True, reuse_cache=True)
+                digest = _state_digest(normalized)
+                if self._committed_digest == digest and self._cached_state is not None:
+                    # The mutation was a no-op. Skip the write, the backup copy,
+                    # the snapshot rotation and the signature churn -- the last
+                    # of which matters beyond disk I/O, because the
+                    # signature-keyed caches missed on every browser refresh and
+                    # the plugin library hook re-ran per request.
+                    #
+                    # The file on disk is already exactly this state, so the
+                    # in-memory cache stays valid; only the index needs to
+                    # catch up with the normalized containers.
+                    self._cached_state = normalized
+                    self._cached_signature = self._signature()
+                    self._reindex(normalized)
+                else:
+                    self._write_unlocked(normalized, adopt=True, reuse_cache=True)
                 self._coalesce_last_flush = time.monotonic()
                 return normalized, result
             except Exception:

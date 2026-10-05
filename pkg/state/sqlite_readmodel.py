@@ -129,6 +129,9 @@ class SqliteReadModel:
         self._lock = threading.Lock()
         self._conn: sqlite3.Connection | None = None
         self._signature: tuple[int, int, int] | None = None
+        # Bumped every time a rebuild starts, so a slow rebuild can tell that a
+        # newer one overtook it and decline to publish its older signature.
+        self._generation = 0
         self._enabled = _ENABLED
 
     @property
@@ -177,11 +180,23 @@ class SqliteReadModel:
         self._conn = conn
         return conn
 
-    def rebuild(self, state: dict[str, Any]) -> None:
-        """Rebuild the SQLite database from a canonical state dict."""
+    def rebuild(self, state: dict[str, Any], generation: int | None = None) -> None:
+        """Rebuild the SQLite database from a canonical state dict.
+
+        ``generation`` is the rebuild token ``ensure_fresh`` took before calling.
+        If a newer rebuild has started since, this one is superseded and does
+        nothing at all -- not just the signature, the table. Letting it run
+        would be last-writer-wins: a slow rebuild carrying older data would
+        overwrite the newer table that is already there, and the freshness
+        check would then correctly report "up to date" for the *wrong* rows.
+        Direct callers pass nothing and always rebuild, as before.
+        """
         if not self._enabled:
             return
         with self._lock:
+            if generation is not None and generation != self._generation:
+                LOGGER.debug("Skipping superseded read-model rebuild (generation %s)", generation)
+                return
             conn = self._connect()
             conn.execute("DELETE FROM games")
             games = state.get("games", [])
@@ -251,10 +266,18 @@ class SqliteReadModel:
         with self._lock:
             if self._signature == signature:
                 return
+            self._generation += 1
+            mine = self._generation
         # Rebuild outside the check lock to avoid deadlock with rebuild's own lock
-        self.rebuild(state)
+        self.rebuild(state, generation=mine)
         with self._lock:
-            self._signature = signature
+            # Publish the signature only if no newer rebuild started while this
+            # one was running. A-rebuild -> B-rebuild (newer) -> A-resume (older)
+            # otherwise leaves _signature naming the *older* snapshot, so every
+            # later caller passes the check and is served the wrong rows until
+            # something else happens to carry a newer signature.
+            if self._generation == mine:
+                self._signature = signature
 
     def query(
         self,
@@ -269,7 +292,6 @@ class SqliteReadModel:
         """Query games with optional filters. Returns list of game dicts."""
         if not self._enabled:
             return []
-        conn = self._connect()
         clauses = []
         params: list[Any] = []
         if platform:
@@ -290,7 +312,14 @@ class SqliteReadModel:
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         sql = f"SELECT raw_json FROM games{where} ORDER BY library_order, rowid LIMIT ? OFFSET ?"
         params.extend([limit, offset])
-        rows = conn.execute(sql, params).fetchall()
+        # The lock is the model's own, held across rebuild's DELETE + INSERT
+        # transaction. A reader that skips it can observe the post-DELETE,
+        # pre-INSERT state and return a truncated or empty result set -- the
+        # stdlib serializes individual statements, not transaction boundaries,
+        # and the connection is shared with check_same_thread=False.
+        with self._lock:
+            conn = self._connect()
+            rows = conn.execute(sql, params).fetchall()
         return [json.loads(r[0]) for r in rows]
 
     def search(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
@@ -303,7 +332,6 @@ class SqliteReadModel:
         """
         if not self._enabled:
             return []
-        conn = self._connect()
         try:
             limit = max(1, min(int(limit), 200))
         except (TypeError, ValueError):
@@ -311,9 +339,13 @@ class SqliteReadModel:
         needle = str(query or "").casefold()
         if not needle:
             return []
-        rows = conn.execute(
-            "SELECT raw_json FROM games ORDER BY library_order, rowid"
-        ).fetchall()
+        # Under the lock, for the same reason as query(): the row set must be
+        # read as one consistent snapshot, not across a rebuild's transaction.
+        with self._lock:
+            conn = self._connect()
+            rows = conn.execute(
+                "SELECT raw_json FROM games ORDER BY library_order, rowid"
+            ).fetchall()
         results = []
         for raw_json, in rows:
             game = json.loads(raw_json)
@@ -327,20 +359,22 @@ class SqliteReadModel:
         """Compute facets (value, count) for a given field via GROUP BY."""
         if not self._enabled:
             return []
-        conn = self._connect()
         allowed = {"platform", "genre", "developer", "publisher", "series", "region", "progress", "esrb"}
         if field not in allowed:
             return []
         sql = f"SELECT {field}, COUNT(*) as cnt FROM games WHERE {field} != '' GROUP BY {field} ORDER BY cnt DESC LIMIT ?"
-        rows = conn.execute(sql, [limit]).fetchall()
+        with self._lock:
+            conn = self._connect()
+            rows = conn.execute(sql, [limit]).fetchall()
         return [(r[0], r[1]) for r in rows]
 
     def count(self) -> int:
         """Return the total number of games in the read model."""
         if not self._enabled:
             return 0
-        conn = self._connect()
-        return conn.execute("SELECT COUNT(*) FROM games").fetchone()[0]
+        with self._lock:
+            conn = self._connect()
+            return conn.execute("SELECT COUNT(*) FROM games").fetchone()[0]
 
     def close(self) -> None:
         """Close the database connection."""

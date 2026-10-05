@@ -1,5 +1,5 @@
-import { $, escapeHtml, defaultControllerMap, recentActivityValue } from './util.js';
-import { AppState, media, filteredGames, api, notify, nativeFullscreen, nativeFullscreenOn } from './state.js';
+import { $, escapeHtml, defaultControllerMap, recentActivityValue, prefersReducedMotion } from './util.js';
+import { AppState, media, filteredGames, api, notify, gameForSession, nativeFullscreen, nativeFullscreenOn } from './state.js';
 import { refresh } from './library.js';
 import { launch, openSessions } from './sessions.js';
 import { openReader } from './reader.js';
@@ -31,6 +31,59 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       return search && !search.hidden && document.activeElement === search;
     }
 
+    // S18: `#bigBox` is a <section role="dialog" aria-modal="true">, not a native
+    // <dialog>, so it gets no modal behavior at all -- declaring aria-modal
+    // without making the rest of the page inert is a lie the browser cannot
+    // enforce. Tab walked straight into the topbar and the grid behind the
+    // overlay. `inert` is the missing half: it removes the rest of the document
+    // from the focus order, the accessibility tree and hit-testing in one
+    // attribute.
+    //
+    // The keep-out list is explicit rather than "everything but #bigBox", because
+    // the toast container is a top-layer popover that must stay reachable -- an
+    // Undo button that vanishes because Big Box opened is B2's bug returning by
+    // another route. `#gamepadHint` and `#errorBanner` are announced content
+    // and must not be pulled out of the accessibility tree either.
+    const INERT_KEEP_VISIBLE = new Set(['bigBox', 'toasts', 'toastLive', 'gamepadHint', 'errorBanner']);
+    let inertedNodes = [];
+    function setBackgroundInert(inert) {
+      if (!inert) {
+        for (const el of inertedNodes) {
+          el.removeAttribute('inert');
+          if (el.getAttribute('data-inert-by-bigbox') === '1') el.removeAttribute('aria-hidden');
+        }
+        inertedNodes = [];
+        return;
+      }
+      inertedNodes = [];
+      for (const el of document.body.children) {
+        if (el.id && INERT_KEEP_VISIBLE.has(el.id)) continue;
+        if (el.tagName === 'DIALOG') continue;   // a native modal manages its own
+        if (el.contains($('bigBox'))) continue;
+        el.setAttribute('inert', '');
+        el.setAttribute('aria-hidden', 'true');
+        el.setAttribute('data-inert-by-bigbox', '1');
+        inertedNodes.push(el);
+      }
+    }
+
+    // Releasing this is easy to forget, and a forgotten release is much worse than
+    // the problem `inert` was added to solve. Any path that hides #bigBox
+    // without going through closeBigBox() -- the empty-view branch, a deeplink,
+    // the gamepad loop stopping on blur -- leaves the entire page unfocusable:
+    // buttons render, clicks still fire, and `.focus()` is silently a no-op, so
+    // every dialog's focus restore lands on <body> and keyboard navigation dies
+    // for the rest of the session. So the release is *observed* rather than
+    // called, the same way dialogs.js watches `dialog[open]`.
+    function watchBigBoxVisibility() {
+      const bigBox = $('bigBox');
+      if (!bigBox) return;
+      new MutationObserver(() => { if (bigBox.hidden) setBackgroundInert(false); })
+        .observe(bigBox, { attributes: true, attributeFilter: ['hidden'] });
+    }
+    if ($('bigBox')) watchBigBoxVisibility();
+    else document.addEventListener('DOMContentLoaded', watchBigBoxVisibility, { once: true });
+
     function openBigBox() {
       AppState.bigBoxFilter = 'all';
       AppState.bigBoxSort = 'title';
@@ -54,6 +107,7 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       AppState.bigBoxBattery = null;
       if (navigator.getBattery) { navigator.getBattery().then(status => { AppState.bigBoxBattery = status; renderBigBox(); }).catch(() => {}); }
       $('bigBox').hidden = false;
+      setBackgroundInert(true);
       $('bigBox').focus();
       const startup = $('bigBoxStartupVideo');
       if (startup && AppState.appSettings.bigbox_startup_video) {
@@ -75,6 +129,12 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       syncGamepadLoop();
       $('bigBoxMenu').hidden = true;
       $('bigBox').hidden = true;
+      setBackgroundInert(false);
+      // S30: the video snap loops forever after close and library music stays
+      // pinned at 0.1 volume, so every later song in the session played at a
+      // tenth of its intended level. `clearVideoSnap()` was simply never called
+      // on the way out, while four render paths already called it on the way in.
+      clearVideoSnap();
       if ($('bigBoxStartupVideo')) { $('bigBoxStartupVideo').pause(); $('bigBoxStartupVideo').hidden = true; }
       const game = AppState.games.find(item => item.id === AppState.selectedId);
       applyMoodForGame(game).catch(() => {});
@@ -234,8 +294,17 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       return window;
     }
     function moveBigBox(change) {
-      AppState.bigBoxIndex = (AppState.bigBoxIndex + change % AppState.bigBoxGames.length + AppState.bigBoxGames.length) % AppState.bigBoxGames.length;
-      AppState.selectedId = AppState.bigBoxGames[AppState.bigBoxIndex].id;
+      // S32: a filter that matches nothing left the list empty, the modulo went
+      // to NaN, and `bigBoxGames[NaN].id` threw -- every frame, from the gamepad
+      // tick, where the error is swallowed and the stage simply stops advancing.
+      // A zero-length list has no next card, so the only correct answer is to do
+      // nothing and let the already-rendered empty view stand.
+      const count = AppState.bigBoxGames.length;
+      if (!count) return;
+      AppState.bigBoxIndex = (AppState.bigBoxIndex + change % count + count) % count;
+      const game = AppState.bigBoxGames[AppState.bigBoxIndex];
+      if (!game) return;
+      AppState.selectedId = game.id;
       AppState.bigBoxLastInput = performance.now();
       renderBigBox();
       // The stage is rebuilt on every step, so slide the new content in from the direction of travel
@@ -254,7 +323,7 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
     let _videoSnapEl = null;
     let _videoSnapTimer = 0;
     let _videoSnapGameId = null;
-    const _reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    const _reducedMotion = () => prefersReducedMotion();
 
     function clearVideoSnap() {
       if (_videoSnapTimer) { clearTimeout(_videoSnapTimer); _videoSnapTimer = 0; }
@@ -378,13 +447,23 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
     function openBigBoxPause() {
       const session = AppState.runningGames[0];
       if (!session) return openSessions();
-      const game = AppState.games.find(item => item.id === session.game_id);
+      const game = gameForSession(session);
       $('bigBoxPauseTitle').textContent = session.game;
       $('bigBoxPauseMeta').textContent = `${session.paused ? 'Paused' : 'Running'} · started ${String(session.started || '').replace('T',' ')}`;
       $('bigBoxPauseActions').innerHTML = `<button class="primary" data-pause-action="${session.launch_id}:${session.paused ? 'resume' : 'pause'}">${session.paused ? 'Resume' : 'Pause'}</button><button class="icon-button" data-pause-action="${session.launch_id}:stop">Exit game</button>${game ? '<button class="icon-button" id="pauseMoment">Capture moment</button><button class="icon-button" id="pauseClip">Clip it</button>' : ''}${(game?.documents || []).map((item,index) => `<button class="icon-button" data-pause-doc="${game.id}:${index}">Read ${escapeHtml(item.name)}</button>`).join('') || ''}${AppState.raConfigured ? `<button class="icon-button" id="pauseAchievements">Achievements</button>` : ''}`;
       document.querySelectorAll('[data-pause-action]').forEach(button => button.onclick = async () => {
         const [launch_id,action] = button.dataset.pauseAction.split(':');
-        await api('/api/session/control',{method:'POST',body:JSON.stringify({launch_id,action})});
+        // S33: an unguarded `await` in an async onclick. A failed "Exit game"
+        // produced an unhandled rejection and left the overlay open with the
+        // card still claiming "Running" -- the user had no way to tell the
+        // request failed, and the game they were still paying attention to was
+        // still running. `sessions.js:229-233` wraps the identical call.
+        try {
+          await api('/api/session/control',{method:'POST',body:JSON.stringify({launch_id,action})});
+        } catch (error) {
+          notify(error.message);
+          return;
+        }
         $('bigBoxPause').hidden = true;
         openBigBoxPause();
       });

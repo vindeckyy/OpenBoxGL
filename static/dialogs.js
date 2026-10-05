@@ -1,7 +1,8 @@
 import { $, escapeHtml, motionMs } from './util.js';
-import { AppState, api, ensureProfiles, filteredGames, nativePickFile, revealToast, hideToast } from './state.js';
+import { AppState, api, ensureProfiles, filteredGames, nativePickFile, showToast, raiseToasts } from './state.js';
 import { t } from './i18n.js';
 import { closeBigBoxMenu } from './bigbox.js';
+import { renderGrid, renderDetails } from './library.js';
 import { resetReaderFrame } from './reader.js';
 
 let lastDialogTrigger = null;
@@ -26,7 +27,13 @@ const nativeClose = HTMLDialogElement.prototype.close;
 HTMLDialogElement.prototype.showModal = function () {
   wireDialogFocus(this);
   if (this.classList.contains('closing')) { this.classList.remove('closing'); return; } // reopened mid-exit
-  return nativeShowModal.call(this);
+  const result = nativeShowModal.call(this);
+  // B5: a native <dialog> is itself top layer, ordered by when it was shown, so
+  // a toast already on screen ends up underneath it and ::backdrop covers the
+  // Undo button for the rest of its life. Re-showing moves the toast container
+  // to the top.
+  raiseToasts();
+  return result;
 };
 HTMLDialogElement.prototype.close = function (returnValue) {
   if (!this.open || this.classList.contains('closing')) return;
@@ -47,12 +54,34 @@ HTMLDialogElement.prototype.close = function (returnValue) {
   setTimeout(finish, ms + 60);
 };
 
+// Focus the dialog's *primary* control, not the first control in the DOM.
+//
+// `querySelector('button, input, ...')` returns document order, and every dialog
+// in this app leads with the header's "×" close button -- so opening a dialog
+// put the caret on "close this", which is the one action the user did not ask
+// for. Three signals, in order of how explicit they are:
+//   1. [data-dialog-primary]  -- a dialog states its own primary action
+//   2. .primary               -- the existing primary-button class
+//   3. autofocus              -- the native attribute, for hand-written markup
+// and only then, as a last resort, the first control that is not a close button.
+function primaryControl(dialog) {
+  const explicit = dialog.querySelector('[data-dialog-primary]');
+  if (explicit) return explicit;
+  const primary = dialog.querySelector('.primary');
+  if (primary) return primary;
+  const native = dialog.querySelector('[autofocus]');
+  if (native) return native;
+  return dialog.querySelector(
+    'button:not([data-dialog-close]):not(.icon-button), input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  );
+}
+
 function openDialog(dialog, trigger = lastDialogTrigger || document.activeElement) {
   const opener = trigger instanceof HTMLElement ? trigger : null;
   if (opener) dialogTriggers.set(dialog, opener);
   if (!dialog.showModal) { dialog.setAttribute('open', ''); return; }
   dialog.showModal();
-  const first = dialog.querySelector('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  const first = primaryControl(dialog);
   if (first) first.focus();
 }
 function closeDialog(dialog) {
@@ -76,12 +105,43 @@ function closeDialog(dialog) {
   }
 }
 
-document.addEventListener('keydown', event => {
-  if (event.key !== 'Escape') return;
-  const open = [...document.querySelectorAll('dialog[open]')].at(-1);
-  if (!open) return;
-  event.preventDefault();
-  closeDialog(open);
+// B1: the two ways a browser closes a modal <dialog> without calling close().
+//
+// The override above only intercepts the JS-visible close() method. Per the HTML
+// spec, Escape and a click on ::backdrop both go through the *close watcher*,
+// which fires a cancelable `cancel` event and then removes the `open`
+// attribute directly -- the JS-visible method is never involved. So for those
+// two paths the exit animation never played and the focus restore in
+// closeDialog() never ran, dropping focus to <body>. 1.15.0 fixed 8 dialogs by
+// hand and left the other 21, which is what "every dialog now plays an exit"
+// turned out to mean.
+//
+// One delegated listener instead of 21 per-dialog handlers.
+//
+// This listens in the bubble phase, not the capture phase, on purpose: a dialog
+// that guards its own close (the game editor's unsaved-changes prompt, the
+// setup centre's dismissed flag) has already had its turn, and honouring
+// defaultPrevented is what keeps the delegated path from closing behind its
+// back.
+document.addEventListener('cancel', event => {
+  const dialog = event.target;
+  if (!(dialog instanceof HTMLDialogElement) || !dialog.open) return;
+  if (event.defaultPrevented) return; // the dialog decided; leave its verdict alone
+  event.preventDefault();            // abort the browser's own close
+  closeDialog(dialog);               // re-enter the exit animation and focus restore
+});
+
+// A click on ::backdrop retargets to the dialog element itself, and the spec
+// only treats it as a close request when the click landed outside the dialog's
+// border box -- a click on the dialog's own padding must not close it.
+document.addEventListener('click', event => {
+  const dialog = event.target;
+  if (event.target !== dialog || !(dialog instanceof HTMLDialogElement) || !dialog.open) return;
+  const rect = dialog.getBoundingClientRect();
+  const outside = event.clientX < rect.left || event.clientX > rect.right
+    || event.clientY < rect.top || event.clientY > rect.bottom;
+  if (!outside) return;
+  closeDialog(dialog);
 });
 
 let a11yHostsReady = false;
@@ -260,7 +320,16 @@ function closeContextMenu(restoreFocus = false) {
 function openContextMenu(event, id) {
   event.preventDefault();
   AppState.contextGameId = id;
+  // F14: this set selectedId without re-rendering, so the card the user
+  // right-clicked was never highlighted and the details pane still described a
+  // different game. The menu's own actions read contextGameId and were correct,
+  // which is what made it confusing: the screen and the keyboard disagreed about
+  // which game "this" was, and Enter then launched a game that was not on
+  // screen. Same shape as closeBigBoxMenu below -- a live binding, resolved when
+  // the function runs rather than at module evaluation.
   AppState.selectedId = id;
+  renderGrid();
+  renderDetails();
   const menu = $('contextMenu');
   $('contextPlaylist').innerHTML = '<option value="">Add to playlist...</option>' + AppState.playlists.filter(item => item.type === 'manual').map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join('');
   menu.hidden = false;
@@ -633,14 +702,19 @@ async function openTrophyCase() {
 }
 
 function showTrophyToast(awards) {
-  const toast = $('toast');
-  if (!toast || !awards?.length) return;
+  if (!awards?.length) return;
   const name = t(`trophy.rules.${awards[0].id}.name`);
   const text = awards.length > 1 ? t('trophy.unlocked_more', {name, count: awards.length - 1}) : t('trophy.unlocked', {name});
-  toast.innerHTML = `<span class="trophy-toast-text">${escapeHtml(text)}</span><button type="button" class="trophy-view" id="trophyViewCase">${escapeHtml(t('trophy.view_case'))}</button>`;
-  toast.dataset.notifyLevel = 'success';
-  revealToast(4000);
-  $('trophyViewCase').onclick = () => { hideToast(); openTrophyCase(); };
+  // Goes through the toast manager like every other writer. This used to assign
+  // #toast.innerHTML, which is how a trophy unlock silently deleted a live
+  // "moved to trash - Undo" button.
+  showToast({
+    level: 'success',
+    text,
+    action: t('trophy.view_case'),
+    ms: 4000,
+    onAction: () => openTrophyCase(),
+  });
 }
 
 let trophyCheckTimer = 0;

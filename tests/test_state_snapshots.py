@@ -31,6 +31,53 @@ class SnapshotTests(unittest.TestCase):
             store.save({"games": []})
             self.assertEqual(len(store.snapshots()), 1)
 
+    def test_snapshots_are_ordered_by_name_not_by_filesystem_mtime(self):
+        """A snapshot is a hard link to the live file, so mtime is not a sort key.
+
+        Two writes landing inside one filesystem timestamp tick produced two
+        snapshots the ordering could not distinguish, "newest first" became
+        arbitrary, and restoring the snapshot from before a bad write restored
+        the wrong one. This reproduced roughly once in twelve runs. Ordering is
+        now a property of the filename.
+        """
+        import os
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonStateStore(Path(directory) / "library.json", snapshot_limit=5)
+            store.save({"games": [{"name": "one"}]})
+            for name in ("two", "three", "oops"):
+                store.update(lambda state, n=name: state["games"].append({"name": n}))
+
+            # Force every snapshot to report the same mtime: the hard links
+            # already share the live file's inode.
+            fixed = 1_000_000.0
+            for path in store.snapshots_dir.glob("*.json"):
+                os.utime(path, (fixed, fixed))
+
+            listed = store.snapshots()
+            self.assertEqual(len(listed), 4)
+            restored = store.restore_snapshot(listed[1]["name"])
+            self.assertEqual(
+                [game["name"] for game in restored["games"]], ["one", "two", "three"],
+                "with equal mtimes the snapshot order became arbitrary",
+            )
+
+    def test_a_snapshot_name_from_the_old_format_still_lists(self):
+        """Old snapshot directories must not break or lose entries."""
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonStateStore(Path(directory) / "library.json", snapshot_limit=5)
+            store.save({"games": [{"name": "one"}]})
+            store.update(lambda state: state["games"].append({"name": "two"}))
+            legacy = store.snapshots_dir / "20200101T000000Z-abcd1234.json"
+            legacy.write_text('{"games": [{"name": "legacy"}]}', encoding="utf-8")
+
+            listed = store.snapshots()
+            self.assertEqual(len(listed), 3, "a legacy snapshot name was dropped")
+            names = [item["name"] for item in listed]
+            self.assertIn(legacy.name, names)
+            # Named (new-format) snapshots sort ahead of the legacy one.
+            self.assertEqual(names[-1], legacy.name)
+
     def test_unknown_snapshot_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonStateStore(Path(directory) / "library.json", snapshot_limit=2)

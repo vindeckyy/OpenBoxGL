@@ -48,18 +48,31 @@
      * @param {string} query
      * @returns {Array<{negative: boolean, key: string, value: string}>}
      */
+    // A token is `-?` `key:`? then either a quoted run or a bare run. Written as
+    // one alternation rather than a sequence of `[^\s]+` pieces because the
+    // leading `-` belongs to the *phrase*: the old pattern had no way to attach
+    // it to a quoted string, so `-"the beatles"` tokenized as `-the` and
+    // `beatles"` -- which matched a game called "Beatles" by excluding "the".
+    const QUERY_TOKEN_RE = /(-?)(?:([A-Za-z_][A-Za-z0-9_]*):)?(?:"([^"]*)"|(\S+))/g;
     function parseQueryTokens(query) {
       const cached = queryTokenCache.get(query);
       if (cached) return cached;
-      const tokens = String(query || '').match(/(?:[^\s"]+:"[^"]*"|[^\s]+|"[^"]*")+/g) || [];
-      const parsed = tokens.map(token => {
-        const negative = token.startsWith('-');
-        const raw = negative ? token.slice(1) : token;
-        const separator = raw.indexOf(':');
-        const key = separator > 0 ? raw.slice(0, separator).toLowerCase() : 'title';
-        const value = (separator > 0 ? raw.slice(separator + 1) : raw).replace(/^"|"$/g, '').toLowerCase();
-        return { negative, key, value };
-      });
+      const parsed = [];
+      QUERY_TOKEN_RE.lastIndex = 0;
+      let match;
+      while ((match = QUERY_TOKEN_RE.exec(String(query || ''))) !== null) {
+        const [, sign, rawKey, quoted, bare] = match;
+        const value = String(quoted ?? bare ?? '').replace(/^"|"$/g, '').trim().toLowerCase();
+        // F7: a bare `-` produced value `''`, and `anything.includes('')` is
+        // true, so the negative matched nothing and the library rendered
+        // "0 games" with no explanation. An empty value is not a filter.
+        if (!value) continue;
+        parsed.push({
+          negative: sign === '-',
+          key: rawKey ? rawKey.toLowerCase() : 'title',
+          value,
+        });
+      }
       if (queryTokenCache.size > 64) queryTokenCache.clear();
       queryTokenCache.set(query, parsed);
       return parsed;
@@ -87,7 +100,12 @@
           const matched = String(game.import_batch_id || '').toLowerCase() === value;
           return negative ? !matched : matched;
         }
-        const names = fields[key] || fields.all;
+        // F12: `fields[key] || fields.all` meant one typo'd key -- `platfrom:nes`
+        // -- silently searched all 16 fields and returned a plausible-looking
+        // result set. No game has the field the user named, so the token matches
+        // nothing; that is what makes the typo visible instead of misleading.
+        const names = fields[key];
+        if (!names) return false;
         const values = names.flatMap(name => Array.isArray(game[name]) ? game[name] : [game[name]]).filter(item => item !== undefined && item !== null && item !== '');
         if (key === 'installed') values.push(gameInstalled(game) ? 'yes' : 'no');
         if (key === 'favorite' || key === 'fav') values.push(game.favorite ? 'yes' : 'no');
@@ -269,4 +287,27 @@ function motionMs(name) {
   return Number.isFinite(v) ? v : 0;
 }
 
-export { $, escapeHtml, motionMs, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, gameLinks, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches, trigramsOf, expandTrigrams, trigramScore };
+// The single audited read of the OS motion preference. Every module that gates
+// animation on reduced motion calls one of these two, so `test_frontend_contract`
+// can assert the whole surface from one place: before this existed, bigbox.js and
+// arcaderoom.js each hand-rolled their own `matchMedia` call, and a gate written
+// as `"prefers-reduced-motion" in src` was satisfied by any occurrence of the
+// string -- including those private copies, and including a comment.
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
+// The live MediaQueryList, for callers that must react to the setting changing
+// while the app is open. Returns null when matchMedia is unavailable, so callers
+// can fall back rather than throw.
+function reducedMotionQuery() {
+  try {
+    return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia(REDUCED_MOTION_QUERY)
+      : null;
+  } catch { return null; }
+}
+
+function prefersReducedMotion() {
+  return reducedMotionQuery()?.matches ?? false;
+}
+
+export { $, escapeHtml, motionMs, prefersReducedMotion, reducedMotionQuery, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, gameLinks, HTTP_URL_RE, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches, trigramsOf, expandTrigrams, trigramScore };

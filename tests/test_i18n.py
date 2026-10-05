@@ -168,33 +168,107 @@ def test_meta_native_names():
             f"{locale}.json meta.native is {data.get('meta', {}).get('native')}, expected {native}"
 
 
-def test_placeholders_preserved():
-    """Placeholders like {count}, {n} must be present in all locales."""
-    en_data = json.loads((LOCALES_DIR / "en.json").read_text(encoding="utf-8"))
-    placeholder_re = re.compile(r"\{(\w+)\}")
+PLACEHOLDER_RE = re.compile(r"\{(\w+)\}")
 
-    def _collect_placeholders(obj, prefix=""):
-        result = set()
-        if not isinstance(obj, dict):
-            return result
-        for k, v in obj.items():
-            full = f"{prefix}.{k}" if prefix else k
-            if k == "meta":
-                continue
-            if isinstance(v, dict):
-                result |= _collect_placeholders(v, full)
-            elif isinstance(v, str):
-                result |= {(full, ph) for ph in placeholder_re.findall(v)}
+
+def _load_gate():
+    """Import scripts/check_i18n.py so the tests exercise the shipped gate.
+
+    The placeholder-parity rule lives in the gate, not here. A second copy in
+    the test file would be a second implementation that could disagree with the
+    one CI runs, which is the exact failure mode this rule exists to prevent.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "check_i18n_under_test", ROOT / "scripts" / "check_i18n.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _flatten_strings(obj, prefix=""):
+    """key -> string, for every non-`meta` leaf."""
+    result = {}
+    if not isinstance(obj, dict):
         return result
+    for k, v in obj.items():
+        full = f"{prefix}.{k}" if prefix else k
+        if k == "meta":
+            continue
+        if isinstance(v, dict):
+            result.update(_flatten_strings(v, full))
+        elif isinstance(v, str):
+            result[full] = v
+    return result
 
-    en_placeholders = _collect_placeholders(en_data)
+
+def test_placeholders_preserved():
+    """Every locale must carry exactly the placeholders en.json does, per key.
+
+    Key-set parity alone does not cover this: a locale can keep all 1,237 keys
+    while dropping `{count}` from one of them. `i18n.js` substitutes a missing
+    param with an empty string, so the result is "Sessions " with nothing after
+    it and every gate green.
+    """
+    gate = _load_gate()
+    en_strings = _flatten_strings(json.loads((LOCALES_DIR / "en.json").read_text(encoding="utf-8")))
+    assert en_strings, "en.json has no translatable strings"
     for locale in SUPPORTED_LOCALES:
         if locale == "en":
             continue
         data = json.loads((LOCALES_DIR / f"{locale}.json").read_text(encoding="utf-8"))
-        locale_placeholders = _collect_placeholders(data)
-        missing = en_placeholders - locale_placeholders
-        assert not missing, f"{locale}.json missing placeholders: {missing}"
+        drift = gate._placeholder_drift(en_strings, _flatten_strings(data))
+        assert not drift, f"{locale}.json placeholder drift on {len(drift)} key(s): {dict(list(drift.items())[:5])}"
+
+
+def test_placeholder_gate_detects_both_directions():
+    """The gate's drift checker must fail on a drop *and* on an addition.
+
+    A gate that cannot fail is worse than no gate, so this exercises the shipped
+    implementation against the two shapes it exists to catch, plus the
+    reordered string it must *not* flag.
+    """
+    drift = _load_gate()._placeholder_drift
+    reference = {
+        "a.count": "{count} games",
+        "b.name": "{game} by {studio}",
+    }
+    assert drift(reference, {"a.count": "{count} juegos", "b.name": "{game} por {studio}"}) == {}
+    # Same placeholders, different order: a correct translation, not drift.
+    assert drift({"k": "{days} days, {name}"}, {"k": "{name}, {days} Tage"}) == {}
+
+    dropped = drift(reference, {"a.count": "muchos juegos", "b.name": "{game} por {studio}"})
+    assert "a.count" in dropped and dropped["a.count"]["missing"] == ["count"], dropped
+
+    added = drift(reference, {"a.count": "{count} games", "b.name": "{game} por {studio} y {year}"})
+    assert "b.name" in added and added["b.name"]["extra"] == ["year"], added
+
+    assert list(drift(reference, {})) == ["a.count", "b.name"]
+
+
+def test_placeholder_names_are_uniformly_interpolated():
+    """A key with a placeholder must be rendered by code that names it.
+
+    Placeholder parity across locales cannot help a value nothing renders: if no
+    module passes `{count}`, every locale is equally correct and equally wrong.
+    """
+    en_strings = _flatten_strings(json.loads((LOCALES_DIR / "en.json").read_text(encoding="utf-8")))
+    keyed = {key for key, text in en_strings.items() if PLACEHOLDER_RE.search(text)}
+    assert keyed, "expected at least one placeholder-bearing key in en.json"
+
+    bundle = "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted((ROOT / "static").glob("*.js"))
+    )
+    unwired = sorted(
+        key for key in keyed
+        if not (f'"{key}"' in bundle or f"'{key}'" in bundle or f"`{key}`" in bundle)
+    )
+    assert len(unwired) < len(keyed) / 2, (
+        f"{len(unwired)} of {len(keyed)} placeholder keys are referenced by no static/*.js module; "
+        f"placeholder parity cannot help a value nothing renders: {unwired[:8]}"
+    )
 
 
 def test_dialog_and_bigbox_keys_present():
@@ -231,6 +305,8 @@ def run_all_tests():
         test_locales_in_flatpak,
         test_meta_native_names,
         test_placeholders_preserved,
+        test_placeholder_gate_detects_both_directions,
+        test_placeholder_names_are_uniformly_interpolated,
         test_dialog_and_bigbox_keys_present,
     ]
     failures = 0

@@ -134,13 +134,31 @@ function renderStepList() {
 async function waitForJob(jobId, {timeoutMs = 120000} = {}) {
   if (!jobId) return null;
   const deadline = Date.now() + timeoutMs;
+  const sleep = () => new Promise(r => setTimeout(r, 250));
   while (Date.now() < deadline) {
-    const page = await api('/api/v2/jobs?limit=100');
-    const job = (page.jobs || []).find(entry => entry.job_id === jobId);
-    if (job && !['queued', 'running', 'cancelling'].includes(job.state)) return job;
-    await new Promise(r => setTimeout(r, 250));
+    // S45: `?limit=100` then `find` by id, so a job that fell off the newest
+    // hundred rows was reported as "Timed out" after two minutes even when it
+    // had succeeded -- the wizard then reported a failure for work that was
+    // already done, and in S46's case went on to commit an emulator choice the
+    // user never made. The list is cursor-paginated, so walk the whole queue
+    // rather than only its newest page.
+    let cursor = null;
+    do {
+      const result = await api(`/api/v2/jobs?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+      const jobs = result.jobs || [];
+      const job = jobs.find(entry => entry.job_id === jobId);
+      // Found and finished is the only success. Found and still going, or not
+      // found on this page: wait, then walk the whole queue again.
+      if (job && !['queued', 'running', 'cancelling'].includes(job.state)) return job;
+      if (job) break;
+      cursor = result.next_cursor || null;
+    } while (cursor);
+    await sleep();
   }
-  throw new Error(`Timed out waiting for job ${jobId}`);
+  // The whole queue was walked and the id was never in it: the job was pruned
+  // after completing. Saying "timed out" would be the same lie as before, and
+  // claiming success would be worse -- this says what actually happened.
+  throw new Error(`Job ${jobId} is no longer in the job queue (it finished and was pruned).`);
 }
 
 function emulatorChoicePayload() {
@@ -152,14 +170,22 @@ function emulatorChoicePayload() {
   }));
 }
 
+function candidateAction(item) {
+  return state.decisions.get(item.candidate_id)?.action || item.intended_action || 'import';
+}
+
+// S27: a `review` candidate used to be posted as `import`. The server has no
+// `review` decision -- it holds an unresolved ambiguity and refuses to commit
+// until the user picks -- so the coercion imported exactly the games the panel
+// said needed a decision. A candidate still under review sends nothing.
 function decisionPayload(batch = state.previewItems) {
-  return batch.map(item => {
+  return batch.filter(item => candidateAction(item) !== 'review').map(item => {
     const stored = state.decisions.get(item.candidate_id);
     const emulator = state.emulatorChoices.get(item.candidate_id);
-    const action = stored?.action || item.intended_action || 'import';
+    const action = candidateAction(item);
     const body = {
       candidate_id: item.candidate_id,
-      action: action === 'review' ? 'import' : action,
+      action,
     };
     if (action === 'merge' && (stored?.merge_target || item.existing_game_target?.game_id)) {
       body.merge_target = stored?.merge_target || item.existing_game_target?.game_id;
@@ -230,9 +256,13 @@ async function runPreflightBatch(candidates) {
 
 function selectedImportCandidates() {
   return state.previewItems.filter(item => {
-    const action = state.decisions.get(item.candidate_id)?.action || item.intended_action;
+    const action = candidateAction(item);
     return action === 'import' || action === 'merge';
   });
+}
+
+function reviewCandidates() {
+  return state.previewItems.filter(item => candidateAction(item) === 'review');
 }
 
 function renderOverview() {
@@ -485,6 +515,7 @@ function renderConfirm() {
         <p>Preview revision <strong>${doc.revision ?? state.revision}</strong></p>
         <p>Candidates: <strong>${state.previewItems.length}</strong></p>
         <p>Import actions: <strong>${selectedImportCandidates().length}</strong></p>
+        ${reviewCandidates().length ? `<p>Still need a decision (not imported): <strong>${reviewCandidates().length}</strong></p>` : ''}
       </div>
       ${state.stale ? '<button type="button" class="primary setup-revalidate" id="setupRevalidate">Revalidate preview</button>' : '<button type="button" class="icon-button setup-revalidate" id="setupRevalidate">Revalidate preview</button>'}
       ${state.busy ? '<p class="setup-status">Operation in progress…</p>' : ''}
@@ -714,14 +745,31 @@ async function applyEmulatorChoice(candidateId, value) {
       });
     }
   }
-  await postDecisions([{
-    candidate_id: candidateId,
-    action: state.decisions.get(candidateId)?.action || item.intended_action || 'import',
-    emulator_id: state.emulatorChoices.get(candidateId)?.emulator_id ?? null,
-    adapter_id: state.emulatorChoices.get(candidateId)?.adapter_id ?? null,
-    launch_setup: state.emulatorChoices.get(candidateId)?.launch_setup ?? null,
-  }]);
-  await runPreflightBatch(selectedImportCandidates());
+  // S38: both of these were unguarded awaits in a function whose callers
+  // discarded its promise, so a 500 rejected into nothing. `emulatorChoices`
+  // stayed out of sync with what the server had accepted, and the wizard went
+  // on to commit a choice the user had effectively discarded -- or kept showing
+  // a decision that had already been recorded. A failed commit must leave the
+  // local choice visible and tell the user, not vanish.
+  try {
+    await postDecisions([{
+      candidate_id: candidateId,
+      action: state.decisions.get(candidateId)?.action || item.intended_action || 'import',
+      emulator_id: state.emulatorChoices.get(candidateId)?.emulator_id ?? null,
+      adapter_id: state.emulatorChoices.get(candidateId)?.adapter_id ?? null,
+      launch_setup: state.emulatorChoices.get(candidateId)?.launch_setup ?? null,
+    }]);
+  } catch (error) {
+    state.emulatorChoices.delete(candidateId);
+    notify('warning', `Emulator choice was not saved: ${error.message}`);
+    renderPanel();
+    return;
+  }
+  try {
+    await runPreflightBatch(selectedImportCandidates());
+  } catch (error) {
+    notify('warning', `Preflight could not run: ${error.message}`);
+  }
   renderPanel();
 }
 
@@ -734,8 +782,18 @@ async function installFlatpakIfNeeded(candidateId) {
       body: JSON.stringify({app_id: choice.flatpak_app_id}),
     });
     if (result.job_id) await waitForJob(result.job_id);
+    // Only now is `install_flatpak` a claim about the machine rather than an
+    // intention. S46: a failed install warned but left the flag in place, so
+    // `postDecisions` committed `launch_setup:'install_flatpak'` for an emulator
+    // that was never installed and every imported game came out not
+    // launch-ready, with no way for the user to tell why.
+    choice.launch_setup = 'installed';
   } catch (error) {
     notify('warning', `Flatpak install failed: ${error.message}`);
+    // Clear the intent *and* the app id, so a later commit cannot re-assert it
+    // and the candidate falls back to the wizard's other options.
+    state.emulatorChoices.set(candidateId, { ...choice, launch_setup: null, flatpak_app_id: null });
+    renderPanel();
   }
 }
 

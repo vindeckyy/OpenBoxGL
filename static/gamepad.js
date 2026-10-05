@@ -73,3 +73,25 @@ export function syncGamepadLoop() {
   if (loopWanted()) ensureGamepadLoop();
   else stopGamepadLoop();
 }
+
+// S31: `tick()` bails without rescheduling, so any *event* that flips
+// `loopWanted()` to false kills the loop permanently -- nothing in this module
+// ever started it again. Alt-tab was the trigger: a windowed or unfocused
+// browser reports `document.hasFocus() === false` while `document.hidden` stays
+// false and `visibilitychange` does not fire, and a repo-wide search found no
+// `focus`/`blur` listener anywhere in static/. Gamepad input then died until the
+// user reopened Big Box. (osk.js guards the same way but re-syncs on open,
+// which is why only this path stayed dead.)
+//
+// The fix has to cover both conditions that stop the loop, because they are
+// genuinely different: visibility for a backgrounded *tab*, and focus for an
+// unfocused *window* of a visible tab.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => syncGamepadLoop());
+  window.addEventListener('focus', () => syncGamepadLoop());
+  window.addEventListener('blur', () => syncGamepadLoop());
+  // A pad connected while no surface wanted the loop yet still needs a frame to
+  // be noticed, and `gamepadconnected` is the only event that fires for it.
+  window.addEventListener('gamepadconnected', () => syncGamepadLoop());
+  window.addEventListener('gamepaddisconnected', () => syncGamepadLoop());
+}

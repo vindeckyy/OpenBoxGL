@@ -268,11 +268,17 @@ function ensurePanelHeader(force) {
   };
   $('insightsRefresh').onclick = () => loadInsights();
   $('insightsWrapped').onclick = () => openWrapped();
-  panel.addEventListener('click', event => {
-    const link = event.target.closest('[data-insight-game]');
-    if (!link) return;
-    document.dispatchEvent(new CustomEvent('app:show-game', { detail: { gameId: link.dataset.insightGame } }));
-  });
+  // S49: the header is rebuilt on every localechange, but the panel element
+  // is not, so an addEventListener here stacked one more app:show-game
+  // dispatch per language switch. Bind the delegated listener once.
+  if (!panel.dataset.insightLinksBound) {
+    panel.dataset.insightLinksBound = '1';
+    panel.addEventListener('click', event => {
+      const link = event.target.closest('[data-insight-game]');
+      if (!link) return;
+      document.dispatchEvent(new CustomEvent('app:show-game', { detail: { gameId: link.dataset.insightGame } }));
+    });
+  }
 }
 
 function bindInsights() {

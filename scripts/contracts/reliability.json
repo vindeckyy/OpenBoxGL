@@ -50,6 +50,11 @@
     "46:a-ui-fixture-pins-an-absolute-date-against-a-rolling-window",
     "47:a-wall-clock-budget-is-measured-once-cold",
     "48:the-windows-ci-runner-gives-a-suite-a-single-chance",
-    "49:uninstalling-openbox-on-windows"
+    "49:uninstalling-openbox-on-windows",
+    "50:restoring-a-backup-that-is-years-out-of-date",
+    "51:how-many-of-my-games-will-launch-on-a-20-000-game-library",
+    "52:the-audit-and-the-single-game-doctor-disagree-about-a-game",
+    "53:a-game-deleted-while-it-is-running-then-openbox-restarted",
+    "54:importing-a-folder-that-already-holds-a-hand-made-game-m3u-b"
   ]
 }

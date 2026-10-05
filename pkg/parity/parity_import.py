@@ -100,15 +100,29 @@ def _write_m3u_playlist(group, base, m3u_dir):
     Order: the requested directory (or the ROM dir beside the discs) first,
     then the generated playlist dir.  Returns the written ``Path`` or ``None``
     when every target rejects the write — callers then keep the first disc.
+
+    An existing ``.m3u`` is never overwritten, and its presence stops the write
+    entirely rather than falling through to the next directory.  The file may be
+    hand-made, or stale from an earlier import, but either way it is the user's
+    file and destroying it is unrecoverable.  Writing the same name somewhere
+    else is worse than not writing: the scan only reads the ROM folder, so a
+    playlist in the generated directory is never re-read, and the row would
+    point at a file the user never asked for while the original is a second
+    row of the same game.  Returning ``None`` makes the caller keep the group's
+    first disc as the row's path, and the user's playlist is still scanned, so
+    the ROM it references still imports.
     """
     targets = [Path(m3u_dir)] if m3u_dir is not None else [group[0].parent]
     generated = generated_m3u_dir()
     if generated not in targets:
         targets.append(generated)
     for directory in targets:
+        candidate = directory / f"{base}.m3u"
+        if candidate.exists():
+            return None
         try:
             directory.mkdir(parents=True, exist_ok=True)
-            return generate_m3u(group, directory / f"{base}.m3u")
+            return generate_m3u(group, candidate)
         except OSError:
             continue
     return None
@@ -404,7 +418,18 @@ def import_multi_platform(
             base = _disc_base(group[0])
             if write_m3u:
                 m3u = _write_m3u_playlist(group, base, m3u_dir)
-                path = m3u if m3u is not None else group[0]
+                if m3u is not None:
+                    # The exclusion pass cached every sheet it read *before* this
+                    # write. Leaving the stale entry in place makes _sheet_platform
+                    # below resolve the platform from what the file used to point
+                    # at, so a sheet we just generated over an old one reported
+                    # "Disc image" instead of following its own disc images to the
+                    # real platform. Refresh the entry with what was actually
+                    # written -- the same list a re-parse would return.
+                    sheet_targets[m3u] = [Path(item) for item in group]
+                    path = m3u
+                else:
+                    path = group[0]
             else:
                 path = group[0]
             name = base

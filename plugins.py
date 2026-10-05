@@ -19,6 +19,7 @@ from pathlib import Path
 
 from archives import safe_zip_extract
 from backend_io import atomic_write_text
+from pkg.platform_compat import resolved_data_dir
 
 
 HOOKS = {"before_launch", "after_session", "library", "command", "library_source", "events"}
@@ -77,6 +78,26 @@ def _clean_commands(raw, plugin_id):
     return commands
 
 
+#: Top-level directories the sandbox already masks. The data directory is
+#: usually under /home and therefore covered by accident rather than by
+#: design; see _sandboxed_command.
+SANDBOX_MASKED_PREFIXES = ("/home", "/tmp", "/run", "/mnt", "/media")
+
+
+def _needs_data_dir_mask(data_posix: str) -> bool:
+    """True when the data directory is not already hidden by a --tmpfs.
+
+    Kept as a pure function of a POSIX path string so the prefix rule can be
+    tested on any platform. ``Path.resolve()`` on Windows prepends a drive
+    letter, so a test that fed it "/srv/data" would be asserting about a path
+    that cannot exist on the host running the test.
+    """
+    return not any(
+        data_posix == prefix or data_posix.startswith(prefix + "/")
+        for prefix in SANDBOX_MASKED_PREFIXES
+    )
+
+
 def _sandboxed_command(package_root, entry, hook, *, share_net=False):
     """Build a bubblewrap command with no user-home or network access.
 
@@ -98,6 +119,23 @@ def _sandboxed_command(package_root, entry, hook, *, share_net=False):
     ]
     if share_net:
         command.append("--share-net")
+    # Mask the data directory explicitly.
+    #
+    # The five --tmpfs entries below only protect the data directory *by
+    # accident*: it normally lives under $HOME, and /home is masked. But
+    # OPENBOX_DATA_DIR is a documented, supported override, and
+    # default_data_dir() falls back to the process cwd when the home directory
+    # cannot be determined. Either way, a data directory outside those five
+    # paths stays readable through the --ro-bind of the whole filesystem --
+    # library.json, settings.json (which holds provider credentials) and the
+    # plugin state.
+    #
+    # Masking it by resolved path is free, because the plugin contract already
+    # gives a plugin everything it is entitled to on stdin: plugin_runner.py
+    # does json.load(sys.stdin) and plugins.py documents per-plugin settings as
+    # travelling in that payload. No legitimate plugin reads the data directory
+    # from disk, and this makes the documented guarantee true.
+    data_dir = resolved_data_dir().resolve()
     command.extend([
         "--ro-bind", "/", "/",
         "--tmpfs", "/home",
@@ -107,6 +145,12 @@ def _sandboxed_command(package_root, entry, hook, *, share_net=False):
         "--tmpfs", "/media",
         "--proc", "/proc",
         "--dev", "/dev",
+    ])
+    # Only add the mask when the directory is not already covered by one of the
+    # tmpfs entries above; a redundant --tmpfs would needlessly hide it twice.
+    if _needs_data_dir_mask(data_dir.as_posix()):
+        command.extend(["--tmpfs", data_dir.as_posix()])
+    command.extend([
         "--dir", "/opt/openbox",
         "--dir", "/opt/openbox/plugin",
         "--dir", "/opt/openbox/runner",

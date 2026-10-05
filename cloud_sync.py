@@ -162,6 +162,24 @@ def _fill_favorite(game, saved):
         game["favorite"] = saved["favorite"]
 
 
+def apply_synced_stats(game, synced):
+    """Merge an already-merged cloud record into a game's *current* stats.
+
+    The public half of `_merge_game_stats`, for callers that fetched the record
+    outside a state mutator and must apply it inside one.
+
+    The rule is monotonic and therefore idempotent: counters take the larger of
+    the two, `last_played` takes the newer, and progress/rating/favorite are
+    filled only when the local value is missing. Applying it twice changes
+    nothing the second time, and applying it to a game that has been *played*
+    since the record was fetched cannot move that game backwards -- which is the
+    whole reason it exists. A blind `game[key] = record[key]` against a record
+    built from a pre-fetch snapshot does exactly that.
+    """
+    _merge_game_stats(game, synced)
+    return game
+
+
 def _merge_game_stats(game, saved):
     before = {field: game.get(field) for field in STAT_FIELDS}
     game["play_count"] = max(nonnegative_int(game.get("play_count")), nonnegative_int(saved.get("play_count")))

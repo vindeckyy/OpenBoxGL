@@ -14,6 +14,7 @@ from urllib.request import urlopen
 
 from archives import safe_zip_extract
 from backend_io import atomic_copy_stream, atomic_write_text, download_file
+from pkg.platform_compat import contained_path, safe_filename_component
 from state_store import secure_text_write
 
 
@@ -379,9 +380,19 @@ def import_highscores(game, import_dir, home=None):
         files = payload.get("files", []) if isinstance(payload, dict) else []
     else:
         files = [str(path) for path in folder.glob("*") if path.is_file()]
+    # ``source`` is bounded below by relative_to(folder_resolved), but ``rom``
+    # was not bounded at all: it reaches the *destination* filename, so a
+    # crafted rom_name of "../../../.config/openbox-game-launcher/x" made this
+    # a write primitive at an attacker-chosen path rather than a read. The
+    # name comes from library metadata, which a DAT import or a provider can
+    # set. Validate *before* creating the target directory, so a refused
+    # restore does not touch the filesystem at all.
+    rom = safe_filename_component(
+        game.get("rom_name") or Path(game.get("path", "")).stem or "game",
+        field="rom_name",
+    )
     target = mame_highscore_path(home)
     target.mkdir(parents=True, exist_ok=True)
-    rom = str(game.get("rom_name") or Path(game.get("path", "")).stem).strip()
     restored = []
     folder_resolved = folder.resolve()
     for file_path in files:
@@ -396,7 +407,9 @@ def import_highscores(game, import_dir, home=None):
             continue
         if not source.is_file():
             continue
-        destination = target / (source.name if rom in source.name else f"{rom}-{source.name}")
+        destination = contained_path(
+            target, source.name if rom in source.name else f"{rom}-{source.name}"
+        )
         with source.open("rb") as stream:
             atomic_copy_stream(stream, destination, mode=0o600)
         restored.append(str(destination))

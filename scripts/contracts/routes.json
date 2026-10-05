@@ -1163,6 +1163,18 @@
     },
     {
       "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/launch/audit"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/launch/audit/scan"
+    },
+    {
+      "methods": [
         "POST"
       ],
       "path": "/api/v2/launch/preflight"

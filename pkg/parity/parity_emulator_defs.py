@@ -5,6 +5,7 @@ from __future__ import annotations
 import shlex
 import shutil
 import sys
+import threading
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +26,10 @@ _YAML_ERRORS = (yaml.YAMLError,) if yaml is not None else ()
 
 SCHEMA_VERSION = 1
 _REGISTRY_CACHE: dict | None = None
+# Guards the load-and-publish in _registry() and the clear-and-refresh in
+# _reset_registry_cache(). An RLock because the refresh re-enters _registry()
+# through every snapshot builder.
+_REGISTRY_LOCK = threading.RLock()
 
 
 def _repo_root() -> Path:
@@ -458,25 +463,51 @@ def load_registry(defs_dir=None, health=False, which=None, home=None):
 
 
 def _registry():
+    """The memoized adapter registry, built once and published complete.
+
+    Three things this must not do:
+
+    * Publish before it is filled. It used to assign ``_REGISTRY_CACHE`` with
+      only ``adapters`` populated and then fill ``by_adapter_id`` and friends
+      in place, so a second thread entering between the assignment and the
+      index loop found a non-``None`` cache with four empty maps -- and
+      ``find_adapter`` answered "no such adapter" for every game.
+    * Build twice. ``_registry`` was a bare check-then-set on a module global,
+      so two threads could both load every YAML file and one result was thrown
+      away.
+    * Rebuild while a reset is in flight. ``_reset_registry_cache`` sets the
+      global to ``None`` and then refreshes the import-time snapshots, each of
+      which calls straight back into ``_registry``.
+
+    So: build into a local, take the lock for the load-and-index, and assign
+    the finished dict in one statement.
+    """
     global _REGISTRY_CACHE
-    if _REGISTRY_CACHE is None:
-        _REGISTRY_CACHE = {
+    cached = _REGISTRY_CACHE
+    if cached is not None:
+        return cached
+    with _REGISTRY_LOCK:
+        # Another thread may have finished while this one waited.
+        if _REGISTRY_CACHE is not None:
+            return _REGISTRY_CACHE
+        fresh = {
             "adapters": load_adapters(),
             "by_adapter_id": {},
             "by_emulator_id": {},
             "by_platform": {},
             "by_extension": {},
         }
-        for adapter in _REGISTRY_CACHE["adapters"]:
-            _REGISTRY_CACHE["by_adapter_id"][adapter["adapter_id"]] = adapter
-            _REGISTRY_CACHE["by_emulator_id"].setdefault(adapter["emulator_id"], []).append(adapter)
-            _REGISTRY_CACHE["by_platform"].setdefault(adapter["platform"], []).append(adapter)
+        for adapter in fresh["adapters"]:
+            fresh["by_adapter_id"][adapter["adapter_id"]] = adapter
+            fresh["by_emulator_id"].setdefault(adapter["emulator_id"], []).append(adapter)
+            fresh["by_platform"].setdefault(adapter["platform"], []).append(adapter)
             for extension in adapter["extensions"]:
-                _REGISTRY_CACHE["by_extension"].setdefault(extension, []).append(adapter)
+                fresh["by_extension"].setdefault(extension, []).append(adapter)
         for key in ("by_emulator_id", "by_platform", "by_extension"):
-            for value in _REGISTRY_CACHE[key].values():
+            for value in fresh[key].values():
                 value.sort(key=lambda item: (not item["recommended"], item["priority"], item["adapter_id"]))
-    return _REGISTRY_CACHE
+        _REGISTRY_CACHE = fresh
+        return fresh
 
 
 def _replace_in_place(target, fresh) -> None:
@@ -510,10 +541,18 @@ def _reset_registry_cache():
     appeared not to apply until restart. Contents are swapped in place rather
     than rebound, because a rebind would not reach modules already holding the
     old object.
+
+    The whole sequence runs under ``_REGISTRY_LOCK``. ``_refresh_import_snapshots``
+    calls back into ``_registry`` through every snapshot builder, and that takes
+    the same lock -- an ``RLock``, so the re-entry is the point rather than a
+    deadlock. Holding it keeps a concurrent reader from arriving in the window
+    where the cache is ``None`` and rebuilding a registry from a half-updated
+    directory.
     """
-    global _REGISTRY_CACHE
-    _REGISTRY_CACHE = None
-    _refresh_import_snapshots()
+    with _REGISTRY_LOCK:
+        global _REGISTRY_CACHE
+        _REGISTRY_CACHE = None
+        _refresh_import_snapshots()
 
 
 def load_definitions(defs_dir=None):

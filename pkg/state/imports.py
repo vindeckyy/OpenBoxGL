@@ -9,7 +9,7 @@ import logging
 import threading
 from pathlib import Path
 
-from cloud_sync import sync_statistics
+from cloud_sync import apply_synced_stats, sync_statistics
 from importers import import_heroic, import_lutris, import_steam
 from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, load_state, update_state
 from plugins import emit_plugin_event
@@ -289,6 +289,15 @@ def merge_imported_games(imported, identity_fn):
 
 def auto_import_worker(cancel_event=None):
     delay = 10
+    # A tick that imported nothing backs off instead of retrying at the floor.
+    # The scan cost is real -- a Steam import walks the whole library, and each
+    # provider merge runs a transaction -- and on a default install with one
+    # watch folder almost every tick finds nothing. Backing off keeps a
+    # newly-dropped ROM from waiting minutes, while an idle install stops
+    # paying for the tick at all. The state store now also skips the write when
+    # a mutation changes nothing, so an idle tick is cheap; this is about not
+    # doing the scan in the first place.
+    idle_delay = 10
     while not WATCH_STOP.wait(delay):
         if cancel_event and cancel_event.is_set():
             return
@@ -298,38 +307,46 @@ def auto_import_worker(cancel_event=None):
             LOGGER.exception("Automatic import paused because library state could not be read: %s", error)
             delay = min(delay * 2, 300)
             continue
-        delay = 10
         settings = state.get("settings", {})
         folders = settings.get("watch_folders", [])
+        found = 0
         for folder in folders:
             try:
-                import_folder_path(folder)
+                added, _scanned, _recommendations = import_folder_path(folder)
+                found += int(added or 0)
             except (OSError, ValueError) as error:
                 LOGGER.warning("Watched-folder import failed for %s: %s", folder, error)
         storefront = settings.get("storefront_auto_import", {})
+        # merge_imported_games returns (added, found); [0] is the added count.
         if storefront.get("steam"):
             try:
-                merge_imported_games(import_steam(), lambda game: ("steam", str(game.get("steam_app_id", ""))))
+                found += merge_imported_games(
+                    import_steam(), lambda game: ("steam", str(game.get("steam_app_id", "")))
+                )[0]
             except (OSError, ValueError) as error:
                 LOGGER.warning("Steam auto-import failed: %s", error)
         if storefront.get("heroic"):
             try:
-                merge_imported_games(
+                found += merge_imported_games(
                     import_heroic(),
                     lambda game: ("heroic", str(game.get("source", "")), str(game.get("heroic_app_id", ""))),
-                )
+                )[0]
             except (OSError, ValueError) as error:
                 LOGGER.warning("Heroic auto-import failed: %s", error)
         if storefront.get("lutris"):
             try:
-                merge_imported_games(import_lutris(), lambda game: ("lutris", str(game.get("lutris_id", ""))))
+                found += merge_imported_games(
+                    import_lutris(), lambda game: ("lutris", str(game.get("lutris_id", "")))
+                )[0]
             except (OSError, ValueError) as error:
                 LOGGER.warning("Lutris auto-import failed: %s", error)
         if storefront.get("gameyfin"):
             try:
                 catalog, _providers = catalog_gameyfin(settings)
                 imported = catalog_entries_to_games(catalog)
-                merge_imported_games(imported, lambda game: ("gameyfin", str(game.get("gameyfin_id", ""))))
+                found += merge_imported_games(
+                    imported, lambda game: ("gameyfin", str(game.get("gameyfin_id", "")))
+                )[0]
             except (OSError, ValueError, GameyfinError) as error:
                 LOGGER.warning("Gameyfin auto-import failed: %s", error)
         for config in list_scan_configs(state):
@@ -343,9 +360,16 @@ def auto_import_worker(cancel_event=None):
                     folder,
                     emulator_id=str(config.get("emulator_id", "")).strip() or None,
                 )
-                merge_imported_games(imported, lambda game: ("path", str(game.get("path", ""))))
+                found += merge_imported_games(
+                    imported, lambda game: ("path", str(game.get("path", "")))
+                )[0]
             except (OSError, ValueError) as error:
                 LOGGER.warning("Emulator scan auto-update failed for %s: %s", folder, error)
+
+        # Back off only when the whole tick found nothing, and return to the
+        # floor as soon as it does, so a new ROM is still picked up promptly.
+        delay = 10 if found else min(idle_delay * 2, 300)
+        idle_delay = delay
 
 
 def sync_cloud():
@@ -362,9 +386,18 @@ def sync_cloud():
             source = source_by_id.get(str(game.get("game_id")))
             if not source:
                 continue
-            for key in ("play_count", "playtime_seconds", "last_played", "progress", "rating", "favorite"):
-                if key in source:
-                    game[key] = source[key]
+            # Merge against `current`, not against the snapshot taken before the
+            # network read. A file sync over a network folder takes seconds to
+            # minutes; a finish_session increment landing in that window was
+            # overwritten by the stale value here, and the playtime was lost.
+            #
+            # The merge is monotonic -- counters take the max, last_played takes
+            # the newer, progress/rating/favorite fill only when empty -- so it
+            # is safe to re-apply here: `source` already holds
+            # max(snapshot, cloud), and `current` is never below the snapshot, so
+            # the result is max(current, cloud). A session played during the sync
+            # now wins instead of being discarded.
+            apply_synced_stats(game, source)
         current.setdefault("settings", {})["last_cloud_sync"] = result["synced_at"]
 
     update_state(mutate)

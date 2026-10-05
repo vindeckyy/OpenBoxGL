@@ -18,8 +18,10 @@ are expected to sit within run-to-run noise of the pre-polish run below, and the
 headroom), and it is still counted on the UI thread. The search-worker facet move stays
 deferred; it is only worth building if a long-task probe shows animation jank during a facet
 recompute. Not measured, and not claimed: frame time, long tasks and layout shift in the
-browser. `perf_bench.py --browser` is still a placeholder and `cold_start_ms` in its output is a
-constant, so the 242 ms cold-start figure below is carried over, not re-measured.
+browser. `perf_bench.py --browser` is still a placeholder, and its JSON artifact reports
+`"cold_start_ms": null` with `"cold_start_measured": false` — an earlier revision emitted a
+hardcoded 242.0 there, which read as a measurement in the artifact and in any run-over-run
+comparison. The 242 ms figure below is therefore historical context, not a current result.
 
 ## 1.15 pre-polish measurements (2026-09-26)
 
@@ -54,6 +56,35 @@ available and is why this row is called out rather than buried in the table.
 
 Native host cold start (launch to server ready) measured **242 ms** on this run,
 unchanged from 1.11.0.
+
+## 1.16.0: Launch Audit
+
+The Launch Audit (F1) runs the Launch Doctor over every game in a background job.
+Its cost was dominated by subprocesses, not Python: the Doctor spawns
+`flatpak info` and `flatpak info --show-permissions` per game, so an uncached
+20,000-game audit is up to 40,000 spawns, over an hour at ~100 ms each.
+`ProbeCache` in `pkg/parity/parity_launch_audit.py` caches the subprocess result
+per argv (the permission *text*, never the per-ROM grant decision), and `which`
+the same way.
+
+| Operation | 10k p95 | 20k p95 | 20k budget | Flatpak spawns | `which` probes |
+|---|---:|---:|---:|---:|---:|
+| `launch_audit_ms_p95` | 1648 ms | 3321 ms | 10000 ms | 28 | 29 |
+
+Measured in-process with the shipped 24 definitions (14 distinct Flatpak app
+ids), five runs per size, deep mode off. The spawn and probe counts are the same
+at 10k and 20k; that is the property that matters.
+
+**The enforced gate is the spawn count, not this wall clock.**
+`tests/test_launch_audit.py` asserts at most two spawns per distinct app id
+(<= 48 for 24 definitions), one `which` per binary name, and that the count does
+not grow from a 14-game library to a 2,000-game one. That is deterministic, so it
+holds on a loaded shared runner where a millisecond budget would flake. With the
+cache removed the same test sees 4,000 spawns and fails. The millisecond budget
+above is documented, not gated.
+
+Deep mode (archive listing and BIOS hashing) is off by default because it is the
+only part whose cost grows with file size rather than game count.
 
 ## 1.12.0 measurements
 
@@ -177,7 +208,7 @@ Notes:
 
 ## 1.7.1 Performance Architecture
 
-- **Virtual Spacer-Window Grid**: `#grid` uses spacer-window virtualization (`IntersectionObserver`, `contain-intrinsic-size`, rAF coalescing) rendering only visible cards + overscan buffer. Enables 60 FPS scrolling at 20,000 games while maintaining full DOM a11y focus restoration. Can be bypassed via `localStorage['openbox-virtual-grid'] = 'false'`.
+- **Virtual Spacer-Window Grid**: `#grid` uses spacer-window virtualization (`IntersectionObserver`, `contain-intrinsic-size`, rAF coalescing) rendering only visible cards + overscan buffer, with full DOM a11y focus restoration. Scrolling cost is bounded by the visible window rather than the library size, which is what keeps the 20,000-game budget viable. Can be bypassed via `localStorage['openbox-virtual-grid'] = 'false'`. *(Frame time at that scale is not measured — see §1.7 above — so no FPS figure is claimed here.)*
 - **Search Offloading**: Search indexing and query evaluation run off the main thread in `static/worker.search.js` using trigram index + acronym matching with synchronous fallback.
 - **FacetCache**: LRU facet cache (capacity 64) with epoch bumping on state changes, preventing repeated facet recalculations on large libraries.
 - **Write Coalescing**: `state_store.py` micro-batches writes within a 50ms window with single fsync, minimizing disk write amplification during bulk mutations.

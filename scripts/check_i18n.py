@@ -31,6 +31,9 @@ T_CALL_RE = re.compile(r"""\bt\(\s*['"]([a-zA-Z0-9_.]+)['"]""")
 # are passed to t() through a variable, so T_CALL_RE cannot see them.
 KEY_ARRAY_RE = re.compile(r"""^\s*['"]([a-z][a-zA-Z0-9_]*(?:\.[a-z0-9_]+)+)['"]\s*,?\s*$""", re.MULTILINE)
 
+# Interpolation placeholders, e.g. {count}. Compared per key across locales.
+PLACEHOLDER_RE = re.compile(r"\{(\w+)\}")
+
 
 def _flatten_keys(obj, prefix=""):
     """Flatten nested dict keys into dot-separated paths."""
@@ -78,6 +81,48 @@ def _extract_js_keys():
     return keys
 
 
+def _flatten_strings(obj, prefix=""):
+    """Flatten nested dicts into key -> string for every non-`meta` leaf."""
+    result = {}
+    if not isinstance(obj, dict):
+        return result
+    for k, v in obj.items():
+        full = f"{prefix}.{k}" if prefix else k
+        if k == "meta":
+            continue
+        if isinstance(v, dict):
+            result.update(_flatten_strings(v, full))
+        elif isinstance(v, str):
+            result[full] = v
+    return result
+
+
+def _placeholder_drift(reference, translation):
+    """Keys whose `{placeholder}` *set* differs from en.json.
+
+    Set equality, not order: `picker.reason.long_time` is "{days} days, {name}"
+    in English and "{name}, {days} Tage" in German, which is a correct
+    translation. What must match is which placeholders exist, in both
+    directions, per key:
+
+    - dropped -- "{count} games" -> "muchos juegos" renders "Sessions " with
+      nothing after it, because i18n.js substitutes a missing param with
+      ``String(params[key] ?? '')``;
+    - added -- a placeholder the caller never passes leaves a literal "{n}" on
+      screen.
+
+    The tree is clean today purely by discipline, which is exactly why it needs
+    a gate.
+    """
+    drift = {}
+    for key, text in reference.items():
+        mine = set(PLACEHOLDER_RE.findall(text))
+        theirs = set(PLACEHOLDER_RE.findall(translation.get(key, "")))
+        if mine != theirs:
+            drift[key] = {"missing": sorted(mine - theirs), "extra": sorted(theirs - mine)}
+    return drift
+
+
 def _load_locale(path):
     """Load a locale JSON file."""
     try:
@@ -101,6 +146,7 @@ def main():
         print("FAIL: locales/en.json is invalid JSON", file=sys.stderr)
         return 1
     en_keys = _flatten_keys(en_data)
+    en_strings = _flatten_strings(en_data)
 
     if not en_keys:
         print("FAIL: locales/en.json has no translatable keys", file=sys.stderr)
@@ -148,6 +194,16 @@ def main():
             errors.append(f"{lf.name}: missing {len(missing)} keys: {sorted(missing)[:10]}{'...' if len(missing) > 10 else ''}")
         if extra:
             errors.append(f"{lf.name}: {len(extra)} extra keys not in en.json: {sorted(extra)[:10]}{'...' if len(extra) > 10 else ''}")
+
+        # Check: every {placeholder} in en.json survives translation, and no
+        # translation invents one. Key parity alone does not cover this.
+        drift = _placeholder_drift(en_strings, _flatten_strings(data))
+        if drift:
+            sample = {k: v for k, v in list(drift.items())[:5]}
+            errors.append(
+                f"{lf.name}: {len(drift)} key(s) with placeholder drift vs en.json: {sample}"
+                f"{'...' if len(drift) > 5 else ''}"
+            )
 
     # Print report
     print("i18n key coverage report:")

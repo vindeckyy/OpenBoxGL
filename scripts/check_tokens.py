@@ -19,7 +19,10 @@ BASELINES = {
     "raw hex": 0,
     "raw duration": 0,
     "raw easing": 0,
-    "raw z-index": 25,
+    # z-index fell to 24 when the toast surface became a popover container: the
+    # per-toast `z-index:20` was the only one a top-layer element never needed.
+    # Ratcheted in the same commit that earned it (ADR 0060).
+    "raw z-index": 24,
     "raw border-radius": 68,
     "raw box-shadow": 28,
     "raw showModal": 35,

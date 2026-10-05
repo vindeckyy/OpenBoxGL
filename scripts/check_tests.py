@@ -145,6 +145,18 @@ def main() -> int:
     if runtime_modules.returncode != 0:
         failures.append("runtime_modules")
 
+    # Stage 2.3b: runtime code must be stdlib-only (plus a reviewed allowlist).
+    # A guarded third-party import made the state store serialize differently
+    # depending on the host, and the tests covering it all skipped themselves in
+    # CI, so nothing caught it. This is a boolean invariant, not a ratchet.
+    dependencies = run([sys.executable, "-B", str(ROOT / "scripts" / "check_dependencies.py")])
+    if dependencies.stdout.strip():
+        print(dependencies.stdout.strip())
+    if dependencies.stderr.strip():
+        print(dependencies.stderr.strip())
+    if dependencies.returncode != 0:
+        failures.append("dependencies")
+
     # Stage 2.4: v1 route surface must match the frozen contract. The v1
     # surface is the native host's only contract; drift fails the gate.
     v1_contract = run([sys.executable, "-B", str(ROOT / "scripts" / "check_v1_contract.py")])

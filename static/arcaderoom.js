@@ -6,7 +6,7 @@
  * app utilities.  Later surfaces can use the exported controller or the
  * document events without knowing anything about the canvas implementation.
  */
-import { $, escapeHtml, duration, defaultControllerMap } from './util.js';
+import { $, escapeHtml, duration, defaultControllerMap, prefersReducedMotion, reducedMotionQuery } from './util.js';
 import { AppState, media } from './state.js';
 import { registerGamepadSurface } from './gamepad.js';
 
@@ -19,6 +19,9 @@ const MUSEUM_STEP_MS = 5200;
 const DEFAULT_IDLE_MS = 90 * 1000;
 const MIN_IDLE_MS = 1000;
 const MAX_IDLE_MS = 24 * 60 * 60 * 1000;
+// Museum PIN prompt backoff after a failed or dismissed prompt (S54): 2 min, 4, 8 ... capped at 30.
+const MUSEUM_PIN_BACKOFF_MS = 60 * 1000;
+const MUSEUM_PIN_BACKOFF_MAX_MS = 30 * 60 * 1000;
 const SWIPE_DISTANCE = 42;
 const SHOW_GAME_EVENT = 'app:show-game';
 const LAUNCH_EVENT = 'app:launch-game';
@@ -91,14 +94,6 @@ function preferredState(options = {}) {
   return AppState;
 }
 
-function prefersReducedMotion() {
-  try {
-    return Boolean(hasWindow() && typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  } catch {
-    return false;
-  }
-}
 
 function cssToken(name, fallback) {
   try {
@@ -750,12 +745,11 @@ class ArcadeRoom {
     if (hasWindow()) {
       window.addEventListener('resize', this._onResize);
       window.addEventListener('orientationchange', this._onResize);
-      if (typeof window.matchMedia === 'function') {
-        try {
-          this.mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-          this.mediaQuery.addEventListener?.('change', this._onMotionChange);
-          this.mediaQuery.addListener?.(this._onMotionChange);
-        } catch { this.mediaQuery = null; }
+      const mq = reducedMotionQuery();
+      if (mq) {
+        this.mediaQuery = mq;
+        mq.addEventListener?.('change', this._onMotionChange);
+        mq.addListener?.(this._onMotionChange);
       }
     }
     if (typeof ResizeObserver === 'function') {
@@ -1016,14 +1010,20 @@ class ArcadeRoom {
     const callback = this.options.onLaunch ||
       (hasWindow() && (window.openBoxLaunch || window.OpenBox?.launch));
     try {
+      let launched;
       if (typeof callback === 'function') {
-        await callback(game, detail);
+        launched = await callback(game, detail);
       } else if (this.options.fallbackLaunch !== false) {
         // The import keeps the room free of a static sessions/library cycle,
         // while still using the app's real preflight and launch path.
         const sessions = await import('./sessions.js');
-        if (typeof sessions.launch === 'function') await sessions.launch(game.id ?? game.game_id);
+        if (typeof sessions.launch === 'function') launched = await sessions.launch(game.id ?? game.game_id);
       }
+      // S39: sessions.launch resolves on every failure path too, so closing
+      // unconditionally meant cancelling a launch_confirm dialog dropped the
+      // user out of the room with nothing launched. An explicit `false` keeps
+      // the room open; a host callback that returns nothing still closes it.
+      if (launched === false) return false;
       this.close();
       return true;
     } catch (error) {
@@ -1072,16 +1072,28 @@ class ArcadeRoom {
     if (!this.opened || !this.zones.some(zone => zone.games.length)) return false;
     if (this.options.museumKioskEnabled && !this.museumUnlocked) {
       if (this.museumKioskPending) return false;
+      // S54: every idle period re-prompted for the PIN, forever. After a
+      // failed or dismissed prompt, wait twice as long before asking again.
+      if (clock() < (this.museumPinRetryAt || 0)) {
+        this.scheduleMuseumMode();
+        return false;
+      }
       const verify = this.options.verifyMuseumPin;
       if (typeof verify !== 'function') return false;
       this.museumKioskPending = true;
-      Promise.resolve(verify()).then(ok => {
+      const failed = () => {
         this.museumKioskPending = false;
-        if (ok) {
-          this.museumUnlocked = true;
-          this.enterMuseumMode();
-        }
-      }).catch(() => { this.museumKioskPending = false; });
+        this.museumPinBackoff = Math.min((this.museumPinBackoff || MUSEUM_PIN_BACKOFF_MS) * 2, MUSEUM_PIN_BACKOFF_MAX_MS);
+        this.museumPinRetryAt = clock() + this.museumPinBackoff;
+      };
+      Promise.resolve(verify()).then(ok => {
+        if (!ok) { failed(); return; }
+        this.museumKioskPending = false;
+        this.museumPinBackoff = 0;
+        this.museumPinRetryAt = 0;
+        this.museumUnlocked = true;
+        this.enterMuseumMode();
+      }).catch(failed);
       return false;
     }
     this.clearIdleTimer();
