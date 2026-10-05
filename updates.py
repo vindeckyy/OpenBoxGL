@@ -27,7 +27,7 @@ from pkg.platform_compat import IS_WINDOWS, start_menu_programs_dir, windows_ins
 
 logger = logging.getLogger("openbox")
 
-VERSION = "1.15.0"
+VERSION = "1.16.0"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
 TRUSTED_RELEASE_PREFIX = "https://github.com/vindeckyy/OpenBoxGL/releases/download/"
 
@@ -567,6 +567,15 @@ if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
 
         A running ``.exe`` cannot be replaced in place, so the swap happens
         after the app exits: the old tree is kept as ``<target>.previous``.
+
+        The swap is a transaction. Moving the old tree aside and moving the new
+        one in are two steps, and the second can fail for reasons entirely
+        outside this process -- Defender holding a file, the disk filling up --
+        after the first has already succeeded. Without a restore, a failure
+        there left no ``$target`` at all: the only copy of the installation was
+        named ``.previous``, and ``_install_update_windows`` had already
+        returned ``{"installed": ...}`` to the user. Rolling back inside the
+        applier is the only place the old tree is still reachable.
         """
         previous = Path(f"{target}.previous")
         return "\r\n".join([
@@ -581,9 +590,18 @@ if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
             "    if ((Get-Date) -gt $deadline) { exit 1 }",
             "    Start-Sleep -Milliseconds 250",
             "}",
-            "if (Test-Path -LiteralPath $previous) { Remove-Item -LiteralPath $previous -Recurse -Force }",
-            "if (Test-Path -LiteralPath $target) { Move-Item -LiteralPath $target -Destination $previous }",
-            "Move-Item -LiteralPath $staged -Destination $target",
+            "try {",
+            "    if (Test-Path -LiteralPath $previous) { Remove-Item -LiteralPath $previous -Recurse -Force }",
+            "    if (Test-Path -LiteralPath $target) { Move-Item -LiteralPath $target -Destination $previous }",
+            "    Move-Item -LiteralPath $staged -Destination $target",
+            "}",
+            "catch {",
+            "    if ((-not (Test-Path -LiteralPath $target)) -and (Test-Path -LiteralPath $previous)) {",
+            "        Move-Item -LiteralPath $previous -Destination $target",
+            "    }",
+            "    Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue",
+            "    exit 1",
+            "}",
             "Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue",
         ])
 
@@ -598,6 +616,13 @@ if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
             raise ValueError("The update URLs are not trusted OpenBox release assets.")
         expected = resolve_update_checksum(update, opener=opener)
         verify_release_signature(update, expected, opener=opener)
+
+        # A previous attempt that never reached its applier (the app was killed,
+        # the machine rebooted) leaves its scratch tree and the extracted
+        # payload behind next to the install. Sweep those first: a few hundred
+        # MB per attempt, in the directory the install lives in.
+        for stale_dir in target.parent.glob(f".{target.name}.next-*"):
+            shutil.rmtree(stale_dir, ignore_errors=True)
 
         scratch = Path(tempfile.mkdtemp(prefix=f".{target.name}.next-", dir=target.parent))
         try:

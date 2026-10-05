@@ -40,6 +40,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.16.0" date="2026-10-05">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.16.0</url>
+      <description>
+        <p>Make it true: a Launch Readiness check that runs the Launch Doctor over the whole library and groups the problems by cause, a restore preview that shows what a backup would change before it can be restored, path-traversal and plugin-sandbox fixes, playtime that can no longer be credited to the wrong game, a failed launch that now says it failed, and corrections to four 1.15.0 claims that had shipped as documentation rather than behaviour.</p>
+      </description>
+    </release>
     <release version="1.15.0" date="2026-09-29">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.15.0</url>
       <description>
