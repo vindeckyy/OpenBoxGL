@@ -190,6 +190,20 @@ jobs:
           if ($alive) { Stop-Process -Id $host_proc.Id -Force -ErrorAction SilentlyContinue }
           else { throw "native_host exited within 25s (exit code $($host_proc.ExitCode))" }
 
+      - name: Collect the Windows host's own data and logs
+        if: always()
+        shell: pwsh
+        run: |
+          # The host keeps its logs in the user's app data folders, not in OPENBOX_DATA_DIR.
+          $dest = Join-Path $env:RUNNER_TEMP 'host-data'
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          foreach ($root in @($env:LOCALAPPDATA, $env:APPDATA)) {
+            if ($root -and (Test-Path (Join-Path $root 'OpenBox'))) {
+              Copy-Item -Recurse -Force -Path (Join-Path $root 'OpenBox') -Destination (Join-Path $dest (Split-Path $root -Leaf))
+            }
+          }
+          Get-ChildItem -Recurse -File $dest | ForEach-Object { "{0} {1} bytes" -f $_.FullName, $_.Length }
+
       - name: Upload the screenshot and logs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # actions/upload-artifact@v7.0.1
@@ -201,5 +215,6 @@ jobs:
             ${{ runner.temp }}\windows-window.png
             ${{ runner.temp }}\web.out
             ${{ runner.temp }}\web.err
+            ${{ runner.temp }}\host-data\**
             ${{ runner.temp }}\data-web\openbox-launch.log
             ${{ runner.temp }}\data-native\openbox-launch.log
