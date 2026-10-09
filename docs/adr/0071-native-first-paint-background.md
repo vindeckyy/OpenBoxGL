@@ -36,6 +36,8 @@ paint. ADR 0063 listed this as a known limit.
   Windows SDK, which is not in that package; a stand-in with the SDK's definition was used. The committed
   version compiles the same way. Linking needs MSVC's `uuid.lib`, which is not available here, and nothing has
   been run on Windows. The Windows CI job (MSVC, `scripts/build_native_host_windows.ps1`) is the real check.
+  **Update (1.16.1 release):** that CI job now links the host with MSVC and runs the Windows test suite, and both pass.
+  Nothing has been run by hand on a Windows desktop.
 
 ## Consequences
 

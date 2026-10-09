@@ -82,6 +82,6 @@ longer supported.
   not checked on a real install.
 - **Some labels are still English.** Notifications are fully translated. Some dialog and button labels are not yet,
   and the notices the launch check and cloud sync send are English too.
-- **Windows.** The Windows native host compiles on this release's machine against the WebView2 headers, but it has not
-  been linked or run here. The Windows background and bridge-id changes are built and tested by the Windows CI job.
+- **Windows.** The Windows CI job builds the native host with MSVC against the WebView2 SDK and runs the Windows test
+  suite; both pass on this release. Nobody has run the Windows app by hand on a Windows desktop yet.
 - **The first signed definition pack** is published by the release workflow once the release key is in place.
