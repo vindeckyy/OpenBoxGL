@@ -52,6 +52,10 @@ added: `GET /api/v2/launch/audit/status`, `POST /api/v2/launch/grant`, `POST /ap
 - **Flatpak probes could hang a request (B4).** The status, open, setup and install probes give up after 5 s and
   count the emulator as not installed. The two Windows `taskkill` calls are bounded too. A gate keeps new
   unbounded subprocess calls out of the runtime. `tests/test_subprocess_timeouts.py`.
+- **Per-game RetroArch core on Windows.** A game's chosen core now applies on Windows. Its file name replaces the
+  core in the definition's `{EmulatorDir}\cores\` path, as a `.dll`, and resume states record the chosen core there
+  too. Before, the choice was ignored on Windows. `tests/test_emulators.py` (`CoreChoiceTests`),
+  `tests/test_parity_resume.py`.
 - **"Played recently" missed offset-stamped dates (B5).** A last-played value written with `Z` or an offset
   was ignored by the query engine, so `played recently` never matched it. All date rules now compare in local
   time through one parser. Bulk edit rejects a last-played value it cannot read, instead of storing it and
@@ -158,9 +162,9 @@ added: `GET /api/v2/launch/audit/status`, `POST /api/v2/launch/grant`, `POST /ap
   English. Server notices (the Launch check change, cloud sync) are English too; translating them is a separate change.
 - The search does not move the facet count to a worker. A profile of broad searches at 20,000 games found no facet
   time among the top functions; the long tasks come from Play Insights and rendering (docs/development/PERF.md).
-- The Linux native host builds here against WebKitGTK 2.52 and its 13 tests pass. The Windows host compiles to an
-  object file here against the real WebView2 headers, but it is not linked and has not run: linking needs MSVC's
-  libraries. The Windows CI job is the real build and the Windows test suite has not been run here (ADR 0071).
+- The Linux native host builds here against WebKitGTK 2.52 and its 13 tests pass. The Windows CI job builds the Windows
+  native host with MSVC against the WebView2 SDK and runs the Windows test suite; both pass on this release. Nobody has
+  run the Windows app by hand on a Windows desktop yet (ADR 0071).
 - The release runner change (ADR 0065) takes effect only after a tagged CI dry run. The first signed
   definition pack needs a tagged CI run with the release key (ADR 0061 addendum).
 - The integrated `perf_bench.py --browser` step measured an empty directory (the 20,000-game write-path folder)
