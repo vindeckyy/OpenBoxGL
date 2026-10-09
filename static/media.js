@@ -1,6 +1,7 @@
 import { $, fact, escapeHtml } from './util.js';
-import { api, notify, AppState } from './state.js';
+import { api, notify, AppState, gameIdOf } from './state.js';
 import { refresh } from './library.js';
+import { t } from './i18n.js';
 
 
 
@@ -61,10 +62,10 @@ import { refresh } from './library.js';
         await refresh();
         if (token !== bulkMediaWatch) return;
         await openMediaManager();
-        notify('Bulk media download finished');
+        notify(t('notify.media.bulk_finished'));
       } catch(error) { notify(error.message); }
     }
-    async function captureScreenshot(id) { try { const result = await api('/api/screenshot',{method:'POST',body:JSON.stringify({id})}); await refresh(); notify(`Screenshot saved to ${result.path}`); } catch(error) { notify(error.message); } }
-    async function downloadBezel(platform) { if (!platform) return notify('Select a game with a platform first'); try { const result = await api('/api/bezels/download',{method:'POST',body:JSON.stringify({platform})}); notify(`Bezels downloaded to ${result.path}`); } catch(error) { notify(error.message); } }
+    async function captureScreenshot(id) { try { const result = await api('/api/screenshot',{method:'POST',body:JSON.stringify({id,game_id:gameIdOf(id)})}); await refresh(); notify(t('notify.media.screenshot_saved', {path: result.path})); } catch(error) { notify(error.message); } }
+    async function downloadBezel(platform) { if (!platform) return notify(t('notify.media.select_platform_game')); try { const result = await api('/api/bezels/download',{method:'POST',body:JSON.stringify({platform})}); notify(t('notify.media.bezels_downloaded', {path: result.path})); } catch(error) { notify(error.message); } }
 
 export { openMediaManager, renderBulkMediaStatus, watchBulkMedia, captureScreenshot, downloadBezel };

@@ -23,7 +23,7 @@ from pkg.parity.parity_duplicates import apply_merge, find_duplicates, merge_pla
 from pkg.parity.parity_repair import apply_repair, plan_repair, scan_candidates as scan_repair_candidates, scan_missing_paths
 from pkg.parity.parity_repair import resolve_folder as resolve_repair_folder
 from play_queue import advance as advance_queue, enqueue as enqueue_queue, remove as remove_queue, reorder as reorder_queue, resolve_queue
-from state_store import _stable_game_id, prune_trash
+from state_store import TRASH_CAP, _stable_game_id, prune_trash
 from webapp_state import FIELDS, MEDIA_PATH_FIELDS, _public_state_cached, approved_media_path, bump_media_epoch, clear_file_probe_cache, consolidate_existing_games, game_from_payload, game_from_query, load_state_view, public_state, public_state_bytes, public_state_etag, public_settings, transact_state
 
 
@@ -214,8 +214,31 @@ def _save_game_mutate(state, payload, game):
 # the trash view's Restore can put it back. v1 /api/game/delete stays a hard
 # delete (frozen contract). Bounds (TRASH_CAP, TRASH_MAX_AGE_DAYS) are enforced
 # on every write via state_store.prune_trash and again at load time.
-def _trash_entry_for(state, game):
-    """Build the trash entry preserving the full record and memberships."""
+def _repair_scope(group_key):
+    """Game ids of one launch-check group, so a repair can be limited to that cause.
+
+    None means the whole library. The group must come from the cached report; a
+    group the report no longer has is refused, so the wizard never silently widens.
+    """
+    key = str(group_key or "").strip()
+    if not key:
+        return None
+    import openbox
+    from pkg.parity import parity_launch_audit as audit
+
+    report = audit.load_audit(str(openbox.DATA.parent))
+    group = next((item for item in (report or {}).get("groups", []) if item.get("key") == key), None)
+    if group is None:
+        raise BadRequest("That launch check group is gone. Check again, then retry.")
+    return {str(member.get("game_id") or "") for member in group.get("games", [])} - {""}
+
+
+def _trash_entry_for(state, game, index=None):
+    """Build the trash entry preserving the full record and memberships.
+
+    Bulk callers pass ``index`` from one precomputed position map; without it, the
+    position is found by an identity scan of the library.
+    """
     game_id = str(game.get("game_id") or "")
     member_keys = {game_id, str(game.get("id") or "")} - {""}
     playlists = [
@@ -226,7 +249,8 @@ def _trash_entry_for(state, game):
         and any(str(member) in member_keys for member in playlist["members"])
     ]
     # Identity scan: equal-content games must not alias the original position.
-    index = next((i for i, item in enumerate(state["games"]) if item is game), len(state["games"]))
+    if index is None:
+        index = next((i for i, item in enumerate(state["games"]) if item is game), len(state["games"]))
     return {
         "trash_id": f"trash-{secrets.token_hex(6)}",
         "trashed_at": datetime.now().isoformat(timespec="seconds"),
@@ -657,15 +681,38 @@ class LibraryHandlers:
         })
 
     def delete_steam_games(self, payload):
+        """Move imported Steam games to the Trash so each one can be restored.
+
+        Each entry keeps the full record, its original position and its manual-playlist
+        memberships, the same shape the per-game trash uses. The Trash holds TRASH_CAP entries
+        and evicts the oldest when full, so only as many games move as it has room for; the
+        rest stay in the library and the response says how many.
+        """
         def mutate(state):
             games = state["games"]
-            removed_ids = [str(game.get("game_id", "")) for game in games
-                           if str(game.get("source", "")).casefold() == "steam"]
-            state["games"] = [game for game in games if str(game.get("source", "")).casefold() != "steam"]
-            return len(games) - len(state["games"]), removed_ids
-        _, (removed, removed_ids) = transact_state(mutate)
+            steam = [game for game in games
+                     if isinstance(game, dict) and str(game.get("source", "")).casefold() == "steam"]
+            trash = state.setdefault("trash", [])
+            room = max(0, TRASH_CAP - len(prune_trash(trash)))
+            moving = steam[:room]
+            if not moving:
+                return 0, len(steam), []
+            positions = {id(game): position for position, game in enumerate(games)}
+            entries = [_trash_entry_for(state, game, index=positions[id(game)]) for game in moving]
+            gone = {id(game) for game in moving}
+            state["games"] = [game for game in games if id(game) not in gone]
+            member_keys = {str(key) for game in moving
+                           for key in (game.get("game_id"), game.get("id")) if key not in (None, "")}
+            for playlist in state.get("playlists", []):
+                if playlist.get("type") != "manual" or not isinstance(playlist.get("members"), list):
+                    continue
+                playlist["members"] = [member for member in playlist["members"] if str(member) not in member_keys]
+            trash.extend(entries)
+            state["trash"] = prune_trash(trash)
+            return len(moving), len(steam) - len(moving), [str(game.get("game_id") or "") for game in moving]
+        _, (removed, left, removed_ids) = transact_state(mutate)
         _dna_note_removed([game_id for game_id in removed_ids if game_id])
-        self.send_json(200, {"removed": removed})
+        self.send_json(200, {"removed": removed, "left": left})
 
     @staticmethod
     def clean_extras(items, command):
@@ -754,14 +801,15 @@ class LibraryHandlers:
         """List missing game/media paths without mutating anything."""
         qs = parse_qs(parsed.query or "")
         include_media = (qs.get("media", ["1"])[0] or "1").strip().lower() not in {"0", "false", "no"}
-        self.send_json(200, scan_missing_paths(load_state_view(), include_media=include_media))
+        scope = _repair_scope(qs.get("audit_group", [""])[0])
+        self.send_json(200, scan_missing_paths(load_state_view(), include_media=include_media, game_ids=scope))
 
     @route("POST", "/api/v2/library/repair/preview")
     def _api_post_api_v2_library_repair_preview(self, payload):
         """Dry-run: match missing basenames against a user-picked folder."""
         include_media, fields, folder = self._repair_request(payload)
         candidates = scan_repair_candidates(folder)
-        scan = scan_missing_paths(load_state_view(), include_media=include_media)
+        scan = scan_missing_paths(load_state_view(), include_media=include_media, game_ids=_repair_scope(payload.get("audit_group")))
         plan = plan_repair(scan["items"], candidates, fields=fields)
         plan["folder"] = str(folder)
         plan["scanned"] = scan["count"]
@@ -776,9 +824,10 @@ class LibraryHandlers:
         if selection is not None and not isinstance(selection, list):
             raise BadRequest("selection must be a list of [id, field] pairs or ids.")
         candidates = scan_repair_candidates(folder)
+        scope = _repair_scope(payload.get("audit_group"))
 
         def mutate(state):
-            scan = scan_missing_paths(state, include_media=include_media)
+            scan = scan_missing_paths(state, include_media=include_media, game_ids=scope)
             plan = plan_repair(scan["items"], candidates, fields=fields)
             return apply_repair(state, plan["matches"], selection=selection)
 

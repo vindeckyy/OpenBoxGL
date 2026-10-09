@@ -1091,15 +1091,15 @@ UNTRUSTED_PROPERTY_RE = re.compile(
 URL_ATTR_RE = re.compile(r"""(?<![\w:.-])(?:href|src|action|xlink:href)\s*=\s*["']\$\{""")
 # Helpers that already validate or neutralise their argument. `gameLinks` and
 # `fact` (util.js) gate URLs on HTTP_URL_RE before emitting an href; `media`
-# builds a same-origin /api/media path from a numeric id; `String`/`Number`
-# coerce to a non-markup type.
+# builds a same-origin /api/media path from a numeric id; `Number` coerces to a
+# number. `String()` does NOT neutralise markup, so it is not listed: a
+# `${String(game.name)}` inside innerHTML is an unescaped sink.
 SAFE_HELPERS = (
     "escapeHtml",
     "encodeURIComponent",
     "gameLinks",
     "fact(",
     "media(",
-    "String(",
     "Number(",
     "JSON.stringify",
 )
@@ -1707,26 +1707,25 @@ def test_f05_state_native_fallbacks_no_prompt():
         assert body, f"missing function {name}"
         assert "prompt(" not in body, f"{name} still calls prompt()"
 
-def test_sessions_sse_reconnect_closes_previous():
-    # Regression: connectSessionEvents() used a per-call const EventSource and
-    # leaked the previous stream on every reconnect. The source must live at
-    # module level and be closed before a new one is created.
-    text = SESSIONS_JS.read_text(encoding="utf-8")
-    assert re.search(r"^    let sessionEventSource = null;", text, re.MULTILINE), (
-        "sessions.js must keep the EventSource in a module-level variable"
-    )
-    body = _function_body(text, "connectSessionEvents")
-    assert body, "missing function connectSessionEvents"
-    close_at = body.find("sessionEventSource.close()")
-    new_at = body.find("new EventSource")
-    assert close_at != -1, "connectSessionEvents must close the previous EventSource"
-    assert new_at != -1, "connectSessionEvents must create an EventSource"
-    assert close_at < new_at, "previous EventSource must be closed before creating a new one"
-    assert "registerLifecycleStream(source)" in body, (
-        "session EventSource must be registered for pagehide teardown"
-    )
-    assert re.search(r"from '\./state\.js'", text), "sessions.js must import from state.js"
-    assert "registerLifecycleStream" in text and "unregisterLifecycleStream" in text
+def test_one_event_stream_per_tab_owned_by_events_js():
+    # A tab used to open up to three EventSources (health, activity, sessions); the
+    # server caps subscribers, so a busy tab got 503 and lost updates. The stream is
+    # now one module: the only EventSource construction in the frontend is in
+    # events.js, and each consumer subscribes to it.
+    constructions = []
+    for path in sorted((ROOT / "static").glob("*.js")):
+        for _match in re.finditer(r"new EventSource\(", path.read_text(encoding="utf-8")):
+            constructions.append(path.name)
+    assert constructions == ["events.js"], f"EventSource must be constructed only in events.js, found {constructions}"
+    events = (ROOT / "static" / "events.js").read_text(encoding="utf-8")
+    assert "registerLifecycleStream(next)" in events, "the shared stream must be registered for pagehide teardown"
+    assert "unregisterLifecycleStream(dying)" in events, "a dropped stream must be unregistered"
+    assert "nextRetryDelay(retryDelay, RETRY_MAX_MS)" in events, "a dropped stream must retry with backoff"
+    for name in ("sessions.js", "activity.js", "health.js"):
+        text = (ROOT / "static" / name).read_text(encoding="utf-8")
+        assert re.search(r"from '\./events\.js'", text), f"{name} must subscribe through events.js"
+        assert "new EventSource" not in text, f"{name} must not open its own stream"
+
 
 def test_state_pagehide_suppresses_hidden_tab_saves():
     # A hidden tab holds stale AppState: pagehide/visibilitychange must arm a

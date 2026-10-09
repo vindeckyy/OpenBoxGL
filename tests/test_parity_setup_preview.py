@@ -897,6 +897,11 @@ class ParitySetupPreviewTests(unittest.TestCase):
         final = json.loads(state_path.read_text(encoding="utf-8"))
         self.assertEqual(len(final["games"]), 2)
         self.assertTrue(any(path.suffix == ".m3u" for path in generated_m3u_dir().iterdir()))
+        # Regression: the imported multi-disc row must point at the promoted
+        # playlist, not the staging copy that is deleted after commit.
+        added = next(game for game in final["games"] if game.get("name") == "Game")
+        self.assertNotIn(".staging", added["path"])
+        self.assertTrue(Path(added["path"]).is_file(), added["path"])
 
     def test_load_preview_not_found_and_invalid_cursor(self):
         with self.assertRaises(PreviewNotFound):
@@ -1087,6 +1092,67 @@ class ParitySetupPreviewTests(unittest.TestCase):
         bad.write_text("{not json", encoding="utf-8")
         with self.assertRaises(PreviewNotFound):
             load_preview("bad")
+
+
+
+class AmbiguousDiscChooserTests(unittest.TestCase):
+    """A .bin, .cue or .iso that several systems share waits for the user's platform pick."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self._prev = os.environ.get("OPENBOX_DATA_DIR")
+        os.environ["OPENBOX_DATA_DIR"] = self._tmp.name
+
+    def tearDown(self):
+        if self._prev is None:
+            os.environ.pop("OPENBOX_DATA_DIR", None)
+        else:
+            os.environ["OPENBOX_DATA_DIR"] = self._prev
+        self._tmp.cleanup()
+
+    def _item(self, path="/roms/crash.bin", platform="Sega Genesis"):
+        game = {"name": "Crash", "platform": platform, "path": path}
+        items = classify_candidates([game], state={"games": [], "settings": {}})
+        return items[0]
+
+    def test_a_shared_disc_extension_is_never_guessed(self):
+        item = self._item()
+        self.assertEqual(item["group"], "ambiguities")
+        self.assertEqual(item["intended_action"], "review")
+        self.assertEqual(item["detected_platform"], "")
+        self.assertIn("PlayStation", item["platform_options"])
+        self.assertIn("Sega Genesis", item["platform_options"])
+
+    def test_a_platform_a_source_named_is_kept_not_re_asked(self):
+        item = self._item(platform="Sega CD")
+        self.assertEqual(item["platform_options"], [])
+        self.assertEqual(item["detected_platform"], "Sega CD")
+
+    def test_an_unambiguous_extension_keeps_its_platform(self):
+        item = self._item(path="/roms/game.sfc", platform="SNES")
+        self.assertEqual(item["platform_options"], [])
+        self.assertEqual(item["detected_platform"], "SNES")
+
+    def test_importing_before_a_platform_is_chosen_is_refused(self):
+        preview = create_preview_record(sources=[{"type": "files", "id": "f1", "paths": ["/x"]}], options={})
+        preview["items"] = [self._item()]
+        save_preview(preview)
+        with self.assertRaises(BadRequest):
+            apply_decisions(preview["preview_id"], [{"candidate_id": preview["items"][0]["candidate_id"], "action": "import"}])
+
+    def test_a_chosen_platform_must_be_one_of_the_options_then_it_resolves_the_file(self):
+        preview = create_preview_record(sources=[{"type": "files", "id": "f1", "paths": ["/x"]}], options={})
+        preview["items"] = [self._item()]
+        save_preview(preview)
+        candidate = preview["items"][0]["candidate_id"]
+        with self.assertRaises(BadRequest):
+            apply_decisions(preview["preview_id"], [{"candidate_id": candidate, "action": "import", "platform": "SNES"}])
+        apply_decisions(preview["preview_id"], [{"candidate_id": candidate, "action": "import", "platform": "PlayStation"}])
+        row = list_preview_items(preview["preview_id"], limit=10)["items"][0]
+        self.assertIn("PlayStation", row["platform_options"])  # the Setup Center draws its picker from this
+        self.assertEqual(row["detected_platform"], "PlayStation")
+        self.assertEqual(row["group"], "additions")
+        self.assertFalse(any(w.get("code") == "AMBIGUOUS_PLATFORM" for w in row["warnings"]))
 
 
 if __name__ == "__main__":

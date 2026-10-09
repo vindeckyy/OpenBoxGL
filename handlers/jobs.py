@@ -104,11 +104,18 @@ class JobsHandlers:
         if not job_id:
             raise BadRequest("job_id is required.")
         service = get_operation_service()
+        original = service.get(job_id)
+        if original is None:
+            # Same 404 contract as cancel/resume; service.retry would
+            # otherwise surface an unknown id as a 409 state conflict.
+            raise NotFound("Job not found.")
         try:
             if payload.get("input") is not None:
-                original = service.get(job_id)
-                if original is None:
-                    raise NotFound("Job not found.")
+                if not original.get("can_retry"):
+                    # The custom-input path must honor the same retry policy
+                    # as service.retry; otherwise a running (or non-retryable)
+                    # job could be duplicated.
+                    raise JobStateConflictError(f"Operation {job_id} cannot be retried.")
                 retry = service.create(
                     operation_type=original["type"],
                     title=original["title"],

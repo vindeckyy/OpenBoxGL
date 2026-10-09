@@ -482,6 +482,7 @@ def clean_settings(merged):
             "bigbox_start_at_launch": bool(merged.get("bigbox_start_at_launch", False)),
             "show_playlist_actions": bool(merged.get("show_playlist_actions", True)),
             "show_insights": bool(merged.get("show_insights", True)),
+            "show_launch_badges": bool(merged.get("show_launch_badges", True)),
             "hidden_sidebar_sections": [str(item) for item in hidden_sidebar_sections][:20],
             "storefront_auto_import": clean_storefront,
             "obs_auto_attach": obs_auto_attach,

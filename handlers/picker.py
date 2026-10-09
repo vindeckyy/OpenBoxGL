@@ -1,6 +1,8 @@
 """PickerHandlers — "What should I play?" suggestions."""
 from __future__ import annotations
 
+import math
+
 from openbox import load_state_readonly
 from pkg.parity.parity_picker import pick_games
 from routes.registry import route
@@ -66,8 +68,10 @@ class PickerHandlers:
                 dna_boost = float(raw_dna_boost)
             except (TypeError, ValueError) as error:
                 raise BadRequest("dna_boost must be a number") from error
-            if dna_boost < 0:
-                raise BadRequest("dna_boost must be >= 0")
+            # Reject inf/nan: an infinite boost serialized the pick scores as
+            # bare ``Infinity`` tokens, which are not valid JSON for clients.
+            if not math.isfinite(dna_boost) or dna_boost < 0:
+                raise BadRequest("dna_boost must be a finite number >= 0")
 
         state = load_state_readonly()
         # Pass raw game dicts to pick_games (it does safe .get() with

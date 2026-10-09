@@ -521,6 +521,7 @@ def _public_settings_uncached(state):
         "bigbox_mode": settings.get("bigbox_mode", "stage"),
         "bigbox_start_at_launch": settings.get("bigbox_start_at_launch", False),
         "show_insights": settings.get("show_insights", True),
+        "show_launch_badges": settings.get("show_launch_badges", True),
         "show_playlist_actions": settings.get("show_playlist_actions", True),
         "sidebar_sections": settings.get("sidebar_sections", ["search", "view", "platforms", "playlists", "filters"]),
         "hidden_sidebar_sections": settings.get("hidden_sidebar_sections", []),

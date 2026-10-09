@@ -4,7 +4,7 @@
   color-scheme: dark;
   --activity-cancelled-fg: var(--nav-muted);
   --activity-count-bg: var(--danger);
-  --activity-count-fg: var(--white);
+  --activity-count-fg: var(--on-danger);
   --activity-done-bg: var(--surface-field);
   --activity-done-border: var(--border-card);
   --activity-done-fg: var(--gold);
@@ -53,7 +53,7 @@
   --dna-panel-border: var(--border-card);
   --dna-panel-shadow: #00000059;
   --dna-toggle-active-bg: var(--active);
-  --dna-toggle-active-fg: var(--white);
+  --dna-toggle-active-fg: var(--on-active);
   --radius-cover: 5px;
   --radius-hairline: 2px;
   --radius-panel: 12px;

@@ -345,6 +345,29 @@ def test_windows_launchers():
         # Write-Warning lands on stdout when PowerShell's streams are redirected.
         assert "falling back" in result.stdout + result.stderr
 
+        # The native host is started with Start-Process, which joins arguments
+        # verbatim, so the launcher quotes them itself. A quoted value ending
+        # in a backslash used to escape its own closing quote and swallow the
+        # next argument. A python stand-in host records exactly what it got.
+        recorded = Path(directory) / "host argv.txt"
+        host_script = Path(directory) / "host.py"
+        host_script.write_text(
+            "import pathlib, sys\n"
+            "pathlib.Path(sys.argv[1]).write_text('\\n'.join(sys.argv[2:]), encoding='utf-8')\n",
+            encoding="utf-8",
+        )
+        os.environ["OPENBOX_NATIVE_HOST"] = sys.executable
+        try:
+            result = _run_launcher(
+                ROOT / "openbox-native.ps1",
+                [str(host_script), str(recorded), "C:\\My Games\\", "--width", "1024"],
+                share,
+            )
+        finally:
+            os.environ.pop("OPENBOX_NATIVE_HOST", None)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert recorded.read_text(encoding="utf-8").split("\n") == ["C:\\My Games\\", "--width", "1024"]
+
         # A launcher that cannot find web_app.py must fail loudly rather than
         # start something arbitrary. Its own directory is a candidate, so this
         # needs a copy outside the repo with every candidate pointed elsewhere.

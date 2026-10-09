@@ -28,7 +28,9 @@ BASELINES = {
     "raw showModal": 35,
 }
 BASELINE = BASELINES["raw hex"]
-HEX_RE = re.compile(r"#(?:[0-9a-fA-F]{3}){1,2}\b")
+# 3, 4, 6 and 8 digits: #rgba and #rrggbbaa are colours too, and the old
+# {3}{1,2} form could not match them, so an alpha hex passed the gate.
+HEX_RE = re.compile(r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b")
 ROOT_BLOCK_RE = re.compile(r":root\s*\{[^}]*\}", re.DOTALL)
 MOTION_DECL_RE = re.compile(r"(?:transition|animation)(?:-[a-z-]+)?\s*:[^;{}]*")
 DURATION_RE = re.compile(r"(?<![\w.-])\d*\.?\d+m?s\b")

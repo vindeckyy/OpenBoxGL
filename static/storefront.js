@@ -2,6 +2,7 @@ import { $, escapeHtml } from './util.js';
 import { api, notify, AppState } from './state.js';
 import { refresh, render, renderDetails } from './library.js';
 import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
+import { t } from './i18n.js';
 
 
 
@@ -50,7 +51,7 @@ import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
     }
     async function saveStorefrontSettings() {
       AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectStorefrontSettings())});
-      notify('Storefront settings saved');
+      notify(t('notify.storefront.settings_saved'));
     }
     function collectStorefrontSettings() {
       return {
@@ -93,7 +94,7 @@ import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
       const controller = new AbortController();
       gameyfinWatches.set(game.gameyfin_id, controller);
       try {
-        notify(`Installing ${game.name} from Gameyfin...`);
+        notify(t('notify.storefront.installing', {name: game.name}));
         await api('/api/gameyfin/install',{method:'POST',body:JSON.stringify({gameyfin_id:game.gameyfin_id,library_id:game.id})});
         await watchGameyfinInstall(game.gameyfin_id, { signal: controller.signal });
         await refresh();
@@ -128,13 +129,13 @@ import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
     async function ludusaviAction(id, action) {
       try {
         const result = await api('/api/save-tools/ludusavi',{method:'POST',body:JSON.stringify({id,action})});
-        notify(`Ludusavi ${action} ${result.ok ? 'finished' : 'reported issues'}`);
+        notify((result.ok ? t('notify.storefront.ludusavi_finished', {action}) : t('notify.storefront.ludusavi_issues', {action})));
       } catch(error) { notify(error.message); }
     }
     async function hoardAction(id, action) {
       try {
         await api('/api/save-tools/hoard',{method:'POST',body:JSON.stringify({id,action})});
-        notify(`Hoard ${action} finished`);
+        notify(t('notify.storefront.hoard_finished', {action}));
       } catch(error) { notify(error.message); }
     }
 

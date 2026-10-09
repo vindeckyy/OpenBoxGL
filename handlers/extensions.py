@@ -1,6 +1,7 @@
 """ExtensionsHandlers capability handlers. Plugins, themes, playlists, filter presets, and webhooks."""
 
 import email.utils
+import re
 import secrets
 import shutil
 import tempfile
@@ -8,6 +9,7 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 from automation import DEFAULT_ATTEMPTS, DEFAULT_TIMEOUT, EVENT_TYPES, MAX_WEBHOOKS, test_ping, validate_webhook
+from backend_io import atomic_write_text
 from openbox import DATA, load_state
 from pkg.platform_compat import open_path
 from plugins import (
@@ -28,8 +30,36 @@ from plugins import (
 )
 from plugin_catalog import download_plugin_package, fetch_plugin_catalog
 from routes.registry import route
+
 from stock_themes import ensure_stock_themes
 from webapp_state import PLUGIN_EPOCH, ROOT, game_from_payload, load_state_view, public_webhook_configs, transact_state, webhook_configs
+
+# The native windows paint their background before the page loads. The app writes the active
+# theme's page background here; both hosts read it at launch (native_host.c, native_host_win.c).
+NATIVE_BACKGROUND_FILE = "native-background"
+DEFAULT_NATIVE_BACKGROUND = "#11100e"
+_THEME_BACKGROUND = re.compile(r"--bg\s*:\s*(#[0-9a-fA-F]{6})\b")
+_STOCK_THEMES = Path(__file__).resolve().parent.parent / "themes"
+
+
+def write_native_background(theme_name="") -> str:
+    """Record the page background of the named theme (the built-in default when it has none)."""
+    color = DEFAULT_NATIVE_BACKGROUND
+    name = Path(str(theme_name or "")).stem
+    if name:
+        for folder in (DATA.parent / "themes", _STOCK_THEMES):
+            path = folder / f"{name}.css"
+            if not path.is_file():
+                continue
+            try:
+                match = _THEME_BACKGROUND.search(path.read_text(encoding="utf-8", errors="replace"))
+            except OSError:
+                match = None
+            if match:
+                color = match.group(1).lower()
+            break
+    atomic_write_text(DATA.parent / NATIVE_BACKGROUND_FILE, color + "\n", mode=0o644)
+    return color
 
 
 class ExtensionsHandlers:
@@ -318,6 +348,8 @@ class ExtensionsHandlers:
             else:
                 settings["theme"] = name
         transact_state(mutate)
+        if not platform:
+            write_native_background(name)
         self.send_json(200, {"selected":name, "platform":platform})
 
     def import_theme(self, payload):

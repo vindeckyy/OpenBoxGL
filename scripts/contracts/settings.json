@@ -88,6 +88,7 @@
     "screensaver_seconds",
     "session_recap_enabled",
     "show_insights",
+    "show_launch_badges",
     "show_playlist_actions",
     "shutdown_commands",
     "sidebar_sections",

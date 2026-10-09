@@ -229,8 +229,44 @@ def test_auto_backup_tick_records_stamp():
     assert committed["settings"]["last_auto_backup"].startswith("20")
 
 
+def _malformed_library_archive(folder, library_text):
+    import json
+    import zipfile
+
+    archive = Path(folder) / "OpenBoxBackup-malformed.zip"
+    with zipfile.ZipFile(archive, "w") as package:
+        package.writestr("manifest.json", json.dumps({"items": ["library"]}))
+        package.writestr("library.json", library_text)
+    return archive
+
+
+def test_diff_malformed_backup_games_does_not_crash():
+    """Regression: a backup whose games field is null raised TypeError (HTTP 500)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = _malformed_library_archive(tmp, '{"games": null}')
+        result = diff_manifests(_make_state(2), archive)
+        assert result["summary"]["removed"] == 0
+        assert result["summary"]["added"] == 2
+
+
+def test_restore_non_object_library_is_value_error():
+    """Regression: a backup whose library.json is not an object raised TypeError."""
+    from pkg.parity.parity_backup import restore_backup
+
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = _malformed_library_archive(tmp, "5")
+        try:
+            restore_backup(archive, Path(tmp) / "data", force=True)
+        except ValueError as error:
+            assert "invalid" in str(error)
+        else:
+            raise AssertionError("restore accepted a non-object library.json")
+
+
 def run_all_tests():
     tests = [
+        test_diff_malformed_backup_games_does_not_crash,
+        test_restore_non_object_library_is_value_error,
         test_diff_no_changes,
         test_diff_added_games,
         test_diff_removed_games,

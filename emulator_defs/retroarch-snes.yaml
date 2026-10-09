@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 adapter_id: retroarch-snes
 emulator_id: org.libretro.RetroArch
 label: RetroArch
@@ -9,9 +9,10 @@ extensions:
 native_exe: retroarch
 native_exe_windows: retroarch.exe
 flatpak_app_id: org.libretro.RetroArch
+retroarch_core: snes9x_libretro.so
 startup_args:
   - -L
-  - /usr/lib/libretro/snes9x_libretro.so
+  - "{retroarch_core}"
   - "{path}"
 # RetroArch ships its cores next to the executable on Windows;
 # the Linux libretro directory does not exist there.

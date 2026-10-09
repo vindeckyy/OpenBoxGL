@@ -331,6 +331,29 @@ def validate_plugin_settings(schema, values):
     return cleaned
 
 
+def _package_files(root):
+    return sorted(
+        (path for path in root.rglob("*") if path.is_file() and not path.is_symlink()),
+        key=lambda path: path.relative_to(root).as_posix(),
+    )
+
+
+def _legacy_plugin_checksum(directory, plugin_id):
+    """The digest grants recorded before the framing change used: raw contents, no file framing.
+
+    Only to tell a user that an old grant must be approved again. It never grants trust,
+    because it matches a package whose bytes were moved between files.
+    """
+    root = Path(directory) / str(plugin_id)
+    digest = hashlib.sha256()
+    for path in _package_files(root):
+        digest.update(path.relative_to(root).as_posix().encode("utf-8") + b"\0")
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(65536), b""):
+                digest.update(chunk)
+    return digest.hexdigest()
+
+
 def plugin_checksum(directory, plugin_id):
     """sha256 over the installed package (relative paths + contents).
 
@@ -339,15 +362,17 @@ def plugin_checksum(directory, plugin_id):
     """
     root = Path(directory) / str(plugin_id)
     digest = hashlib.sha256()
-    files = sorted(
-        (path for path in root.rglob("*") if path.is_file() and not path.is_symlink()),
-        key=lambda path: path.relative_to(root).as_posix(),
-    )
-    for path in files:
-        digest.update(path.relative_to(root).as_posix().encode("utf-8") + b"\0")
+    for path in _package_files(root):
+        # Frame each file as path NUL + sha256(content). Hashing raw content
+        # back to back left the content/next-path boundary ambiguous, so a
+        # package could move bytes between a file's tail and the next file
+        # name (e.g. into plugin.py) and keep the trusted checksum.
+        file_digest = hashlib.sha256()
         with open(path, "rb") as handle:
             for chunk in iter(lambda: handle.read(65536), b""):
-                digest.update(chunk)
+                file_digest.update(chunk)
+        digest.update(path.relative_to(root).as_posix().encode("utf-8") + b"\0")
+        digest.update(file_digest.digest())
     return digest.hexdigest()
 
 
@@ -357,15 +382,23 @@ def plugin_trust_status(directory, plugin_id):
     try:
         checksum = plugin_checksum(root, plugin_id)
     except OSError:
-        return {"trusted": False, "checksum": "", "checksum_matches": False, "granted_at": ""}
+        return {"trusted": False, "checksum": "", "checksum_matches": False, "granted_at": "", "retrust": False}
     record = load_plugin_state(root).get("trust", {}).get(str(plugin_id))
     record = record if isinstance(record, dict) else {}
     checksum_matches = record.get("checksum") == checksum
+    # A grant from before the framing change is asked for again, never inherited.
+    retrust = False
+    if record.get("trusted") and not checksum_matches:
+        try:
+            retrust = record.get("checksum") == _legacy_plugin_checksum(root, plugin_id)
+        except OSError:
+            retrust = False
     return {
         "trusted": bool(record.get("trusted") and checksum_matches),
         "checksum": checksum,
         "checksum_matches": bool(checksum_matches),
         "granted_at": str(record.get("granted_at") or ""),
+        "retrust": bool(retrust),
     }
 
 
@@ -648,6 +681,7 @@ def list_plugins(directory):
             "sandbox": sandbox,
             "checksum": trust["checksum"],
             "trusted": trust["trusted"],
+            "retrust": trust["retrust"],
             "granted_permissions": plugin_permission_grants(root, manifest["id"]),
         })
     return plugins

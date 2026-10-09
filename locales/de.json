@@ -1,8 +1,7 @@
 {
   "meta": {
     "name": "German",
-    "native": "Deutsch",
-    "rtl": false
+    "native": "Deutsch"
   },
   "common": {
     "save": "Speichern",
@@ -203,7 +202,27 @@
     "no_match_title": "Keine Spiele passen zu dieser Ansicht",
     "no_match_hint": "Ändere die aktiven Filter oder suche erneut in der Bibliothek.",
     "clear_filters": "Filter zurücksetzen",
-    "query_truncated": "{shown} von {total} Treffern angezeigt. Grenze die Suche ein, um den Rest zu sehen."
+    "query_truncated": "{shown} von {total} Treffern angezeigt. Grenze die Suche ein, um den Rest zu sehen.",
+    "grant": {
+      "title": "Diesem Emulator Zugriff auf den Ordner geben?",
+      "consequence": "Der Emulator kann Dateien in diesem Ordner lesen. Rückgängig machen entfernt den Zugriff.",
+      "confirm": "Zugriff erteilen",
+      "button": "Zugriff auf diesen Ordner erteilen",
+      "copy": "Befehl kopieren",
+      "granted": "Zugriff auf {folder} gewährt. Der Emulator kann dort nur lesend auf Spiele zugreifen.",
+      "revoke": "Zugriff entfernen",
+      "revoke_title": "Zugriff auf den Ordner entfernen?",
+      "revoke_consequence": "Der Emulator verliert den Zugriff auf diesen Ordner. Spieldateien bleiben unverändert."
+    },
+    "core": {
+      "title": "RetroArch-Kern wählen",
+      "loading": "Installierte Kerne werden gesucht…",
+      "intro": "{core} ist nicht installiert. Wähle für dieses Spiel einen installierten Kern.",
+      "none": "In den üblichen Ordnern wurden keine RetroArch-Kerne gefunden.",
+      "default": "Standardkern verwenden",
+      "location_system": "Systemordner",
+      "location_flatpak": "Flatpak-App"
+    }
   },
   "dialog": {
     "add_game": "Spiel hinzufügen",
@@ -342,7 +361,8 @@
     "browse_installed": "Installiert",
     "browse_back": "Zurück zu Plugins",
     "browse_empty": "Noch keine Community-Plugins gelistet.",
-    "cmd_done": "Plugin-Befehl abgeschlossen"
+    "cmd_done": "Plugin-Befehl abgeschlossen",
+    "trust_retrust": "Erneut bestätigen: Dieses Plugin wurde vor dem Update bestätigt."
   },
   "metadata": {
     "title": "LaunchBox Spiele-Datenbank",
@@ -741,7 +761,9 @@
     "title": "Bibliothek-Einrichtungscenter",
     "close": "Bibliothek-Einrichtungscenter schließen",
     "description": "Hier wird die geführte Bibliothekseinrichtung geladen.",
-    "workflow": "Einrichtungs-Workflow"
+    "workflow": "Einrichtungs-Workflow",
+    "platform_label": "Plattform",
+    "platform_choose": "Plattform wählen"
   },
   "feature": {
     "title": "OpenBox",
@@ -914,7 +936,11 @@
     "about_data_dir": "Datenordner",
     "about_host": "Fenster",
     "about_host_native": "Natives Fenster (WebView)",
-    "about_host_browser": "Browser-Tab. Das native Fenster läuft nicht, das ist eine unterstützte Nutzungsart."
+    "about_host_browser": "Browser-Tab. Das native Fenster läuft nicht, das ist eine unterstützte Nutzungsart.",
+    "steam_trash_title": "Steam-Spiele in den Papierkorb verschieben",
+    "steam_trash_message": "Alle importierten Steam-Spiele in den Papierkorb verschieben?",
+    "steam_trash_consequence": "Du kannst sie im Papierkorb wiederherstellen. Spieldateien und Medien bleiben auf der Festplatte.",
+    "show_launch_badges": "Startbereitschafts-Abzeichen im Raster anzeigen"
   },
   "picker": {
     "title": "Was soll ich spielen?",
@@ -1341,7 +1367,8 @@
     "skipped": "{count} Pfade haben sich seit dem Scan geändert und wurden übersprungen",
     "skipped_one": "{count} Pfad hat sich seit dem Scan geändert und wurde übersprungen",
     "kind_game": "Spieldatei",
-    "kind_media": "Medium"
+    "kind_media": "Medium",
+    "scoped": "Es werden nur die Spiele dieser Startprüfungsgruppe angezeigt."
   },
   "duplicates": {
     "title": "Doppelte Spiele",
@@ -1452,6 +1479,175 @@
     "install_message": "{app} mit Flatpak installieren? Jedes Spiel in dieser Gruppe wartet darauf.",
     "install_started": "{app} wird installiert. Prüfe erneut, wenn es fertig ist.",
     "queued": "Startprüfung eingereiht.",
-    "game_gone": "Dieses Spiel ist nicht mehr in der Bibliothek."
+    "game_gone": "Dieses Spiel ist nicht mehr in der Bibliothek.",
+    "install_group": "{app} für {count} Spiele installieren",
+    "install_group_one": "{app} für {count} Spiel installieren",
+    "grant_group": "Zugriff für {count} Spiele gewähren",
+    "grant_group_one": "Zugriff für {count} Spiel gewähren",
+    "badge_blocked": "Startet nicht",
+    "badge_warning": "Braucht Aufmerksamkeit",
+    "find_moved": "Verschobene Dateien für {count} Spiele suchen",
+    "find_moved_one": "Verschobene Dateien für {count} Spiel suchen"
+  },
+  "notify": {
+    "activity": {
+      "cancel_requested": "Abbruch angefordert",
+      "retry_queued": "Wiederholung eingereiht",
+      "resume_queued": "Fortsetzung eingereiht"
+    },
+    "clips": {
+      "reel_queued": "Clip-Reel in Aktivität eingereiht",
+      "id_required": "Eine Clip-ID ist erforderlich.",
+      "not_in_library": "Dieser Clip ist nicht mehr in der lokalen Bibliothek."
+    },
+    "state": {
+      "error_copied": "Fehlerdetails kopiert",
+      "copy_failed": "Kopieren nicht möglich: Zwischenablage nicht verfügbar"
+    },
+    "bigbox": {
+      "no_matches": "Keine Spiele entsprechen diesen Big-Box-Filtern"
+    },
+    "imports": {
+      "auto_failed": "Automatischer Import fehlgeschlagen für: {sources}"
+    },
+    "sessions": {
+      "backup_created": "Erstellt: {name}",
+      "save_restored": "Spielstand wiederhergestellt",
+      "save_location_added": "Speicherort hinzugefügt"
+    },
+    "media": {
+      "bulk_finished": "Massen-Medien-Download abgeschlossen",
+      "screenshot_saved": "Screenshot gespeichert in {path}",
+      "select_platform_game": "Wähle zuerst ein Spiel mit Plattform",
+      "bezels_downloaded": "Rahmen heruntergeladen nach {path}"
+    },
+    "storefront": {
+      "settings_saved": "Storefront-Einstellungen gespeichert",
+      "installing": "{name} wird aus Gameyfin installiert...",
+      "ludusavi_finished": "Ludusavi {action} abgeschlossen",
+      "ludusavi_issues": "Ludusavi {action} meldete Probleme",
+      "hoard_finished": "Hoard {action} abgeschlossen"
+    },
+    "app": {
+      "museum_pin_rejected": "Die Museums-PIN wurde nicht akzeptiert.",
+      "no_media_packs": "Keine mitgelieferten Medienpakete verfügbar",
+      "pack_applied": "{name} angewendet",
+      "gameyfin_ok": "Gameyfin-Verbindung in Ordnung",
+      "opened": "Geöffnet: {path}",
+      "emulator_configs_updated": "{count} Emulator-Konfigurationsdateien aktualisiert",
+      "emulator_configs_updated_one": "{count} Emulator-Konfigurationsdatei aktualisiert",
+      "duplicates_removed": "{count} doppelte Dateien entfernt",
+      "duplicates_removed_one": "{count} doppelte Datei entfernt",
+      "save_scan_queued": "Suche nach Speicherpfaden eingereiht – Fortschritt und Ergebnisse im Aktivitätscenter",
+      "stats_reset": "Spielstatistiken für {name} zurückgesetzt",
+      "enter_rom_folder": "Gib zuerst einen ROM-Ordnerpfad ein.",
+      "added_of_scanned": "{added} von {found} erkannten Spielen hinzugefügt"
+    },
+    "setup": {
+      "emulator_choice_failed": "Emulatorauswahl wurde nicht gespeichert: {message}",
+      "preflight_failed": "Vorabprüfung konnte nicht ausgeführt werden: {message}",
+      "flatpak_failed": "Flatpak-Installation fehlgeschlagen: {message}",
+      "metadata_sync_failed": "Metadaten-Synchronisierung fehlgeschlagen: {message}",
+      "autoscrape_save_failed": "Einstellung für automatisches Scraping konnte nicht gespeichert werden: {message}",
+      "autoscrape_failed": "Automatisches Metadaten-Scraping fehlgeschlagen: {message}",
+      "final_summary_failed": "Abschlusszusammenfassung fehlgeschlagen: {message}",
+      "welcome_save_failed": "welcome_completed konnte nicht gespeichert werden: {message}"
+    },
+    "library": {
+      "preset_updated": "Filtervorlage aktualisiert",
+      "collection_saved": "Sammlung „{name}“ gespeichert",
+      "preset_deleted": "Vorlage gelöscht",
+      "selection_mode": "Auswahlmodus aktiviert. Verwende die Massenbearbeitung, um Änderungen anzuwenden.",
+      "shelf_ready": "Regaleintrag ist startbereit",
+      "high_scores_exported": "{count} Highscore-Dateien exportiert",
+      "high_scores_exported_one": "{count} Highscore-Datei exportiert",
+      "steam_trailer_downloaded": "Steam-Trailer heruntergeladen",
+      "gog_media_downloaded": "GOG-Medien heruntergeladen",
+      "installing": "{app} wird installiert",
+      "bios_path": "BIOS-Pfad: {path}",
+      "no_path_to_reveal": "Kein Pfad zum Anzeigen",
+      "game_not_found": "Spiel nicht gefunden",
+      "platform_set": "Plattform auf {platform} gesetzt",
+      "open_profiles": "Öffne die Emulatorprofile, um eine Auswahl zu treffen",
+      "command_copied": "Befehl kopiert. Führe ihn in einem Terminal aus und prüfe dieses Spiel danach erneut.",
+      "unknown_tokens": "Unbekannte Platzhalter: {tokens}. Gültig: {path} {name} {platform} usw. Siehe die Dokumentation zu launch_tokens.",
+      "collection_deleted": "Sammlung gelöscht",
+      "platform_docs_saved": "Plattform-Dokumente gespeichert",
+      "progress_set": "Fortschritt auf {progress} gesetzt",
+      "not_set": "Nicht festgelegt",
+      "opened": "Geöffnet",
+      "access_granted": "Zugriff erteilt. Die Prüfung wurde erneut ausgeführt.",
+      "access_removed": "Ordnerzugriff entfernt",
+      "core_set": "Dieses Spiel verwendet jetzt {core}.",
+      "core_default": "Dieses Spiel verwendet wieder den Standardkern."
+    },
+    "metadata": {
+      "decision_saved": "Entscheidung gespeichert",
+      "none_to_accept": "Keine {kind}-Einträge zum Akzeptieren",
+      "no_matches_accepted": "Keine Treffer wurden akzeptiert: {message}",
+      "accepted": "{count} {kind}-Treffer akzeptiert",
+      "accepted_one": "{count} {kind}-Treffer akzeptiert",
+      "select_field": "Wähle mindestens ein Feld oder einen Medientyp zum Ersetzen aus",
+      "apply_started": "Anwenden der Metadaten gestartet",
+      "steam_downloading": "Steam-Metadaten und Grafiken werden heruntergeladen",
+      "steam_updated": "Steam-Metadaten aktualisiert",
+      "screenscraper_applied": "ScreenScraper-Metadaten angewendet",
+      "open_game_first": "Öffne zuerst ein Spiel und gleiche es dann per Hash ab.",
+      "no_rom_to_hash": "Dieses Spiel hat keine ROM-Datei zum Hashen.",
+      "screenscraper_hash_queued": "ScreenScraper-Hash-Abgleich eingereiht – Fortschritt im Aktivitätscenter",
+      "igdb_applied": "IGDB-Metadaten angewendet",
+      "downloading_selected": "Ausgewählte Metadaten und Medien werden heruntergeladen",
+      "review_updated": "Trefferprüfung aktualisiert",
+      "auto_match_finished": "Automatischer Abgleich fertig: {count} Spiele zugeordnet",
+      "auto_match_finished_one": "Automatischer Abgleich fertig: {count} Spiel zugeordnet",
+      "database_ready": "Metadatenbank bereit"
+    },
+    "settings": {
+      "bios_expected": "BIOS erwartet unter {path}",
+      "installing_all": "Alle verfügbaren Emulatoren werden installiert",
+      "updating_installed": "Installierte Emulatoren werden aktualisiert",
+      "updating_emulator": "Emulator wird aktualisiert",
+      "emulator_launched": "Emulator gestartet",
+      "installing_emulator": "{name} wird installiert",
+      "emulators_installed": "{count} Emulatoren installiert",
+      "emulators_installed_one": "{count} Emulator installiert",
+      "plugin_removed": "Plugin entfernt",
+      "filter_preset_saved": "Filtervorlage gespeichert",
+      "playlist_saved": "Playlist gespeichert",
+      "manual_playlist_saved": "Manuelle Playlist gespeichert",
+      "filter_playlist_rules": "Filter-Playlists verwalten ihre Mitglieder über ihre Regeln.",
+      "restored": "Wiederhergestellt: {items}",
+      "backup_saved": "Sicherung gespeichert in {name}",
+      "playlist_deleted": "Playlist gelöscht",
+      "select_then_edit": "Wähle Spiele aus und dann „Ausgewählte bearbeiten“",
+      "gamescope_limit": "Es sind höchstens 16 benutzerdefinierte gamescope-Profile erlaubt.",
+      "screenscraper_ok": "ScreenScraper-Zugangsdaten funktionieren",
+      "enter_export_name": "Gib den Namen der Plattform oder Playlist zum Exportieren ein.",
+      "games_exported": "{count} Spiele exportiert",
+      "games_exported_one": "{count} Spiel exportiert",
+      "saved": "Einstellungen gespeichert",
+      "museum_pin_cleared": "Museums-PIN gelöscht",
+      "diagnostic_copied": "Diagnoseübersicht kopiert. Prüfe sie vor dem Teilen.",
+      "shortcut_installed": "Desktop-Verknüpfung installiert unter {path}",
+      "theme_applied": "Design angewendet",
+      "connected": "Verbunden als {name}",
+      "theme_imported": "Design importiert",
+      "queue_advanced": "Warteschlange weitergeschaltet",
+      "select_game_first": "Wähle zuerst ein Spiel aus.",
+      "selected_not_found": "Das ausgewählte Spiel wurde nicht gefunden.",
+      "added_to_queue": "Spiel zur Warteschlange hinzugefügt",
+      "tags_saved": "Tags gespeichert",
+      "webhook_saved": "Webhook gespeichert",
+      "steam_trashed_one": "{count} importiertes Steam-Spiel in den Papierkorb verschoben",
+      "steam_trashed": "{count} importierte Steam-Spiele in den Papierkorb verschoben",
+      "steam_none": "Keine importierten Steam-Spiele zum Entfernen",
+      "steam_trash_overflow": "{count} importierte Steam-Spiele bleiben in deiner Bibliothek, weil der Papierkorb voll ist. Leere den Papierkorb, um sie zu verschieben.",
+      "steam_trash_overflow_one": "{count} importiertes Steam-Spiel bleibt in deiner Bibliothek, weil der Papierkorb voll ist. Leere den Papierkorb, um es zu verschieben."
+    },
+    "launch_audit": {
+      "grant_group_done": "Zugriff für {count} Spiele gewährt. Sie wurden erneut geprüft.",
+      "grant_group_done_one": "Zugriff für {count} Spiel gewährt. Es wurde erneut geprüft.",
+      "grant_recheck_needed": "Zugriff gewährt. Erneut prüfen, um diese Liste zu aktualisieren."
+    }
   }
 }

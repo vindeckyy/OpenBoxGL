@@ -104,6 +104,16 @@ class DirectoryTests(unittest.TestCase):
         else:
             self.assertEqual(roots, [])
 
+    def test_steam_install_roots_survive_a_missing_home(self):
+        """Steam discovery used to call Path.home() directly and raise
+        RuntimeError in a service environment with no home, crashing the
+        importer and save scans instead of reporting no Steam roots."""
+        with mock.patch.object(pc.Path, "home", side_effect=RuntimeError("no home")):
+            roots = pc.steam_install_roots()
+        self.assertIsInstance(roots, list)
+        if not pc.IS_WINDOWS:
+            self.assertEqual(roots, [])
+
     def test_windows_install_dir_matches_the_installer_layout(self):
         install_dir = pc.windows_install_dir()
         if not pc.IS_WINDOWS:
@@ -403,8 +413,20 @@ class ProcessProbeTests(unittest.TestCase):
         """
         child = _spawn_child("import time; time.sleep(30)")
         try:
+            # Popen can return while the child is still inside execve (the
+            # vfork path wakes the parent once the old mm is released): comm
+            # is already the new image, but /proc/<pid>/cmdline reads empty
+            # until the kernel has laid out the new argv. Wait for exec to
+            # finish rather than sampling that window.
+            command_line = ""
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                command_line = pc.process_command_line(child.pid)
+                if command_line:
+                    break
+                time.sleep(0.01)
             self.assertIn("python", pc.process_name(child.pid).casefold())
-            self.assertIn("python", pc.process_command_line(child.pid).casefold())
+            self.assertIn("python", command_line.casefold())
         finally:
             child.kill()
             child.wait(timeout=10)
@@ -721,6 +743,29 @@ class SteamDiscoveryTests(unittest.TestCase):
                 pc.Path, "glob", side_effect=OSError("denied")
             ):
                 self.assertEqual(pc.epic_manifest_paths(), [])
+
+
+class TimestampParseTests(unittest.TestCase):
+    def test_parse_timestamp_returns_naive_local_time_for_every_form(self):
+        from datetime import datetime, timezone
+
+        from pkg.platform_compat import parse_timestamp
+
+        naive = parse_timestamp("2026-08-18T21:30:00")
+        self.assertIsNone(naive.tzinfo)
+        self.assertEqual(naive, datetime(2026, 8, 18, 21, 30))
+        self.assertEqual(parse_timestamp("2026-08-18 21:30:00"), datetime(2026, 8, 18, 21, 30))
+        self.assertEqual(parse_timestamp("2026-08-18"), datetime(2026, 8, 18))
+        for stamp in ("2026-08-18T21:30:00Z", "2026-08-18T21:30:00+00:00", "2026-08-18T21:30:00z"):
+            parsed = parse_timestamp(stamp)
+            self.assertIsNone(parsed.tzinfo, stamp)
+            # The same instant, expressed in the local zone, must compare equal.
+            instant = datetime(2026, 8, 18, 21, 30, tzinfo=timezone.utc).astimezone().replace(tzinfo=None)
+            self.assertEqual(parsed, instant, stamp)
+        self.assertIsNone(parse_timestamp(""))
+        self.assertIsNone(parse_timestamp(None))
+        self.assertIsNone(parse_timestamp("yesterday"))
+        self.assertIsNone(parse_timestamp("2026-13-40"))
 
 
 if __name__ == "__main__":

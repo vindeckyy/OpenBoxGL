@@ -114,6 +114,28 @@ class DefinitionValidationTests(unittest.TestCase):
         self.assertEqual({"emulator_id", "startup_args"}, keys)
 
 
+class SchemaGateTests(unittest.TestCase):
+    """A pack written for a newer schema is refused, not half-read (ADR 0061, schema 2)."""
+
+    def definition(self, schema):
+        lines = [f"{key}: x" for key in upd.REQUIRED_KEYS if key != "schema_version"]
+        return "\n".join(lines + [f"schema_version: {schema}"])
+
+    def test_the_schemas_this_build_reads_install(self):
+        for schema in (1, 2):
+            with self.subTest(schema=schema):
+                upd.validate_definition("ok.yaml", self.definition(schema))
+
+    def test_a_newer_schema_is_refused_with_the_version_it_needs(self):
+        with self.assertRaises(upd.DefinitionError) as ctx:
+            upd.validate_definition("future.yaml", self.definition(upd.SUPPORTED_SCHEMA_VERSION + 1))
+        self.assertIn("needs a newer OpenBox", str(ctx.exception))
+
+    def test_a_definition_without_a_schema_line_reads_as_schema_one(self):
+        text = "\n".join(f"{key}: x" for key in upd.REQUIRED_KEYS if key != "schema_version")
+        self.assertEqual(upd.definition_schema(text), 1)
+
+
 class ReadPackTests(unittest.TestCase):
     def test_reads_definitions(self):
         defs = upd.read_pack(make_tar({"a.yaml": VALID_DEF, "b.yaml": VALID_DEF}))

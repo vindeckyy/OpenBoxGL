@@ -547,6 +547,10 @@ class JsonStateStore:
         else:
             self._cached_state = copy.deepcopy(state)
         self._cached_signature = self._signature()
+        # The cache may now hold a file some other writer produced; the digest
+        # of our own last commit no longer describes it. _write_unlocked sets
+        # the digest again after remembering what it wrote.
+        self._committed_digest = None
         self._reindex(self._cached_state)
 
     def _clear_cache(self) -> None:
@@ -718,6 +722,12 @@ class JsonStateStore:
                     backup_tmp.unlink(missing_ok=True)
 
             os.replace(temporary, self.path)
+            # Every full write starts from the in-memory state, which already
+            # carries any coalesced mutation, so a pending coalesced snapshot is
+            # now older than the file. Flushing it later would roll this write
+            # back.
+            with self._coalesce_lock:
+                self._coalesce_pending_state = None
             os.chmod(self.path, 0o600)
             fsync_directory(self.path.parent)
             self._rotate_snapshots()
@@ -764,15 +774,14 @@ class JsonStateStore:
                 shutil.copy2(self.path, target)
             os.chmod(target, 0o600)
             self._last_snapshot_time = now
-            existing = []
-            for path in self.snapshots_dir.glob("*.json"):
-                try:
-                    existing.append((path.stat().st_mtime, path))
-                except OSError:
-                    continue
-            existing.sort(key=lambda item: item[0])
-            for _, stale in existing[: max(0, len(existing) - self.snapshot_limit)]:
-                stale.unlink(missing_ok=True)
+            # Prune oldest-first in the same order snapshots() lists them. This
+            # used to sort by st_mtime, which ties for snapshots written inside
+            # one timestamp tick (they are hard links to successive live files,
+            # and the copy2 fallback preserves mtime), so rotation could delete
+            # the newest recovery point and keep an older one.
+            stale_names = [item["name"] for item in self.snapshots()[self.snapshot_limit:]]
+            for name in stale_names:
+                (self.snapshots_dir / name).unlink(missing_ok=True)
         except OSError:
             LOGGER.warning("Snapshot rotation failed; the committed state is unaffected.")
 
@@ -842,13 +851,16 @@ class JsonStateStore:
 
     def _flush_coalesced(self) -> None:
         """Flush the pending coalesced state with a single fsync."""
-        with self._coalesce_lock:
-            state = self._coalesce_pending_state
-            self._coalesce_pending_state = None
-            self._coalesce_timer = None
-            self._coalesce_last_flush = time.monotonic()
-        if state is not None:
-            with self._thread_lock, self._file_lock(True):
+        # Take the pending state under the store locks, not before them. Taken
+        # first, a full update_with_result() could commit between the pop and
+        # this write, and the older coalesced snapshot then overwrote it.
+        with self._thread_lock, self._file_lock(True):
+            with self._coalesce_lock:
+                state = self._coalesce_pending_state
+                self._coalesce_pending_state = None
+                self._coalesce_timer = None
+                self._coalesce_last_flush = time.monotonic()
+            if state is not None:
                 self._write_unlocked(state, adopt=True)
 
     def flush_coalesced(self) -> None:
@@ -863,37 +875,38 @@ class JsonStateStore:
 
     def coalesced_update(self, mutator: Callable[[dict[str, Any]], Any]) -> Any:
         """Apply mutation via 50ms micro-batch coalesce; single fsync per batch."""
+        result, _normalized = self._coalesced_apply(mutator)
+        return result
+
+    def _coalesced_apply(self, mutator: Callable[[dict[str, Any]], Any]) -> tuple[Any, dict[str, Any]]:
         with self._thread_lock:
             self._ensure_loaded()
-            # mutator works on the cached state directly (like update_with_result)
-            result = mutator(self._cached_state)
-            normalized, _ = normalize_state(self._cached_state)
+            try:
+                # mutator works on the cached state directly (like update_with_result)
+                result = mutator(self._cached_state)
+                normalized, _ = normalize_state(self._cached_state)
+            except Exception:
+                # The mutator may have half-applied its change to the cache.
+                self._clear_cache()
+                raise
             # keep in-memory state updated immediately for read-your-writes
             self._remember(normalized, adopt=True)
             pending = copy.deepcopy(normalized)
-        with self._coalesce_lock:
-            self._coalesce_pending_state = pending
-            if self._coalesce_timer is None or not self._coalesce_timer.is_alive():
-                # schedule flush after window
-                self._coalesce_timer = threading.Timer(self._coalesce_window, self._flush_coalesced)
-                self._coalesce_timer.daemon = True
-                self._coalesce_timer.start()
-        return result
+            # Publish the pending state while still holding the store lock, so
+            # a full commit cannot land between this mutation and its
+            # publication and then be overwritten by it at flush time.
+            with self._coalesce_lock:
+                self._coalesce_pending_state = pending
+                if self._coalesce_timer is None or not self._coalesce_timer.is_alive():
+                    # schedule flush after window
+                    self._coalesce_timer = threading.Timer(self._coalesce_window, self._flush_coalesced)
+                    self._coalesce_timer.daemon = True
+                    self._coalesce_timer.start()
+        return result, normalized
 
     def coalesced_update_with_result(self, mutator: Callable[[dict[str, Any]], Any]) -> tuple[dict[str, Any], Any]:
         """Coalesced variant that returns state snapshot and mutator result."""
-        with self._thread_lock:
-            self._ensure_loaded()
-            result = mutator(self._cached_state)
-            normalized, _ = normalize_state(self._cached_state)
-            self._remember(normalized, adopt=True)
-            pending = copy.deepcopy(normalized)
-        with self._coalesce_lock:
-            self._coalesce_pending_state = pending
-            if self._coalesce_timer is None or not self._coalesce_timer.is_alive():
-                self._coalesce_timer = threading.Timer(self._coalesce_window, self._flush_coalesced)
-                self._coalesce_timer.daemon = True
-                self._coalesce_timer.start()
+        result, normalized = self._coalesced_apply(mutator)
         return copy.deepcopy(normalized), result
 
     def update_with_result(
@@ -911,7 +924,8 @@ class JsonStateStore:
         """
         with self._thread_lock, self._file_lock(True):
             signature = self._signature()
-            if self._cached_state is not None and signature == self._cached_signature:
+            from_cache = self._cached_state is not None and signature == self._cached_signature
+            if from_cache:
                 state = self._cached_state
             else:
                 state, _ = self._load_unlocked()
@@ -924,7 +938,12 @@ class JsonStateStore:
                 if isinstance(result, (dict, list, tuple, set)):
                     result = copy.deepcopy(result)
                 digest = _state_digest(normalized)
-                if self._committed_digest == digest and self._cached_state is not None:
+                # Only trust the digest while the file is still the one this
+                # store last committed. When another process (or an external
+                # edit) changed it, the digest describes an older file: a
+                # mutation that happens to recreate our last commit must still
+                # be written over theirs, or it is silently lost.
+                if from_cache and self._committed_digest == digest:
                     # The mutation was a no-op. Skip the write, the backup copy,
                     # the snapshot rotation and the signature churn -- the last
                     # of which matters beyond disk I/O, because the

@@ -95,6 +95,8 @@ def _repo_root() -> Path:
 
 ROOT = _repo_root()
 BUNDLED_DEFS = ROOT / "emulator_defs"
+# The newest definition schema this build reads; packs declaring more are refused (ADR 0061).
+SUPPORTED_SCHEMA_VERSION = 2
 RELEASE_KEY = ROOT / "openbox-release.pub"
 STATE_FILE = "emulator_defs_update.json"
 
@@ -535,10 +537,27 @@ def definition_keys(text: str) -> set:
     return keys
 
 
+def definition_schema(text: str) -> int:
+    """The schema_version a definition declares; 1 when it declares none."""
+    for raw in text.splitlines():
+        line = _strip_comment(raw)
+        if line.startswith("schema_version:"):
+            try:
+                return int(line.split(":", 1)[1].strip())
+            except ValueError:
+                return 0
+    return 1
+
+
 def validate_definition(name: str, text: str) -> None:
-    """Reject an incomplete definition before it can be installed."""
+    """Reject an incomplete definition, or one written for a newer schema, before it can be installed."""
     if len(text.encode("utf-8")) > MAX_DEFINITION_BYTES:
         raise DefinitionError(f"{name} is larger than {MAX_DEFINITION_BYTES} bytes.")
     missing = [key for key in REQUIRED_KEYS if key not in definition_keys(text)]
     if missing:
         raise DefinitionError(f"{name} is missing required key(s): {', '.join(missing)}")
+    declared = definition_schema(text)
+    if declared > SUPPORTED_SCHEMA_VERSION:
+        raise DefinitionError(
+            f"{name} needs a newer OpenBox (schema {declared}); this version reads up to schema {SUPPORTED_SCHEMA_VERSION}."
+        )

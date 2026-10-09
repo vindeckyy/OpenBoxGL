@@ -356,7 +356,9 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
     def authorized(self):
         query_token = parse_qs(urlparse(self.path).query).get("token", [""])[0]
         provided = self.headers.get("X-OpenBox-Token", "") or query_token
-        ok = secrets.compare_digest(provided, TOKEN)
+        # Compare bytes: compare_digest raises TypeError on non-ASCII str,
+        # which escaped as a 400 and skipped the auth-failure rate limiter.
+        ok = secrets.compare_digest(provided.encode("utf-8", "replace"), TOKEN.encode("utf-8"))
         if ok:
             self._clear_auth_failures()
             return True
@@ -495,6 +497,11 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
             icon = ROOT / "openbox.svg"
             if icon.is_file():
                 self.send_bytes(200, icon.read_bytes(), "image/svg+xml")
+                return
+        # Without this the handler wrote no response and the client hung
+        # until REQUEST_TIMEOUT.
+        raise RouteNotFound("Not found")
+
     @route("GET", "/api/events")
     def _api_get_api_events(self, parsed):
         subscriber_queue = queue_module.Queue(maxsize=SSE_QUEUE_SIZE)
@@ -657,8 +664,23 @@ def bigbox_launch_url(url):
     return url
 
 
+def _queue_scheduled_scans():
+    """Queue the library-health rescan and the Launch Audit that rides on its schedule.
+
+    The Launch Audit uses the same health_rescan setting, so the grid's readiness
+    badges are refreshed by the same daily or weekly run, with no setting of its own.
+    """
+    from handlers.launch import AUDIT_JOB_NAME, run_launch_audit
+    from handlers.library_health import SCAN_JOB_NAME, run_health_scan
+    JOB_MANAGER.submit(SCAN_JOB_NAME, run_health_scan, replace=True)
+    # Never replace a check the user started: a deep audit must not be cancelled by the schedule.
+    audit_state = (JOB_MANAGER.snapshots().get(AUDIT_JOB_NAME) or {}).get("state")
+    if audit_state not in ("queued", "running"):
+        JOB_MANAGER.submit(AUDIT_JOB_NAME, lambda ctx: run_launch_audit(ctx, deep=False), replace=True)
+
+
 def _health_rescan_tick():
-    """Queue the scheduled library-health rescan when due (Flagship 8, H6). Best-effort."""
+    """Queue the scheduled library-health rescan (and Launch Audit) when due (Flagship 8, H6). Best-effort."""
     try:
         from pkg.parity.parity_library_health import rescan_due
         if RUNNING:
@@ -666,9 +688,8 @@ def _health_rescan_tick():
         settings = load_state().get("settings", {})
         if not rescan_due(settings):
             return
-        from handlers.library_health import SCAN_JOB_NAME, run_health_scan
-        JOB_MANAGER.submit(SCAN_JOB_NAME, run_health_scan, replace=True)
-        LOGGER.info("Scheduled library health rescan queued")
+        _queue_scheduled_scans()
+        LOGGER.info("Scheduled library health rescan and launch audit queued")
     except Exception:
         LOGGER.exception("Scheduled health rescan failed")
 
@@ -709,6 +730,12 @@ def main():
         profiles = state.setdefault("profiles", {})
         profiles.update(merge_profiles_from_definitions(profiles))
     update_state(bootstrap_state)
+    # The native windows paint the page background before it loads: record the saved theme's.
+    try:
+        from handlers.extensions import write_native_background
+        write_native_background(load_state().get("settings", {}).get("theme", ""))
+    except Exception:  # best effort: without the file the hosts keep their built-in colour
+        LOGGER.warning("Could not record the native window background", exc_info=True)
     # Reconcile persisted active_sessions from previous run (Days 0-14, Task 3).
     # Must run once before watchers/jobs start, inside a transaction so .bak/snapshots stay consistent.
     try:
@@ -740,8 +767,7 @@ def main():
     try:
         from pkg.parity.parity_library_health import normalize_rescan_setting
         if normalize_rescan_setting(load_state().get("settings", {}).get("health_rescan")) == "on_startup" and not RUNNING:
-            from handlers.library_health import SCAN_JOB_NAME, run_health_scan
-            JOB_MANAGER.submit(SCAN_JOB_NAME, run_health_scan, replace=True)
+            _queue_scheduled_scans()
     except Exception:
         LOGGER.exception("On-startup health rescan failed")
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)

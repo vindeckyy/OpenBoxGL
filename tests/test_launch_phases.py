@@ -328,6 +328,26 @@ class TestLaunchModuleCoverage(unittest.TestCase):
         with self.assertRaises(IndexError):
             game_from_payload(state, {"id": "nope"})
 
+    def test_stale_stable_id_never_falls_back_to_the_array_index(self):
+        # The Edit dialog sends its index and stable id. If the game was removed
+        # in another window, the index names a different game; the save must be
+        # refused, not applied to that neighbour.
+        from pkg.state.launch import game_from_payload
+
+        state = {
+            "games": [
+                {"game_id": "g-bravo", "name": "Bravo", "path": "/roms/bravo.nes"},
+                {"game_id": "g-charlie", "name": "Charlie", "path": "/roms/charlie.nes"},
+            ]
+        }
+        with self.assertRaises(IndexError):
+            game_from_payload(state, {"game_id": "g-zulu", "id": 0})
+        with self.assertRaises(IndexError):
+            game_from_payload(state, {"game_id": "g-zulu", "id": 1})
+        # Legacy callers that send only the numeric id keep working.
+        self.assertEqual(game_from_payload(state, {"id": 1})["name"], "Charlie")
+        self.assertEqual(game_from_payload(state, {"game_id": "g-bravo", "id": 1})["name"], "Bravo")
+
     @patch("webapp_state.threading.Thread")
     def test_reattach_session_paths(self, mock_thread):
         from pkg.state.launch import reattach_session

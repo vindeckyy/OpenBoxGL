@@ -543,6 +543,13 @@ class LaunchDoctorCoverageTests(unittest.TestCase):
                         },
                     }, data_dir=str(self.data_dir), which=which, run=denied)
         self.assertIn("FLATPAK_FS_DENIED", [item["code"] for item in result["checks"]])
+        denied_check = next(item for item in result["checks"] if item["code"] == "FLATPAK_FS_DENIED")
+        # The emulator is installed, so the fix is a grant command, never an install.
+        self.assertEqual(denied_check["fix_action"]["kind"], "flatpak_grant")
+        self.assertEqual(denied_check["remediations"][0]["id"], "grant_flatpak_path")
+        command = denied_check["fix_action"]["payload"]["command"]
+        self.assertTrue(command.startswith("flatpak override --user --filesystem="), command)
+        self.assertTrue(command.endswith(":ro org.libretro.RetroArch"), command)
 
         payload = preflight_batch({
             "items": [{"game_id": "game-0123456789abcdef01234567-9", "candidate": None}],
@@ -886,6 +893,33 @@ class TestFixActionCoverage(unittest.TestCase):
             fix = _fix(kind, "label", {"x": 1})
             self.assertEqual(fix["kind"], kind)
 
+
+class FlatpakCoreMissingTests(unittest.TestCase):
+    def test_a_flatpak_core_is_looked_up_in_the_sandbox_cores_directory(self):
+        from pkg.parity import parity_launch_doctor as doctor
+        from pkg.parity.parity_emulator_defs import find_adapter
+
+        adapter = find_adapter("retroarch-snes")
+        with tempfile.TemporaryDirectory() as home:
+            with mock.patch("pkg.parity.parity_emulator_defs.Path.home", return_value=Path(home)):
+                # Missing: the Doctor names the core.
+                self.assertEqual(doctor._retroarch_core_missing(adapter, flatpak=True),
+                                 "/usr/lib/libretro/snes9x_libretro.so")
+                cores = Path(home) / ".var/app/org.libretro.RetroArch/config/retroarch/cores"
+                cores.mkdir(parents=True)
+                (cores / "snes9x_libretro.so").write_bytes(b"core")
+                # Present in the sandbox's directory: nothing is missing.
+                self.assertIsNone(doctor._retroarch_core_missing(adapter, flatpak=True))
+
+    def test_a_native_core_is_still_checked_at_the_system_path(self):
+        from pkg.parity import parity_launch_doctor as doctor
+        from pkg.parity.parity_emulator_defs import find_adapter
+
+        adapter = find_adapter("retroarch-snes")
+        # The native check reads the system path: missing exactly when that file is absent here.
+        system_core = Path("/usr/lib/libretro/snes9x_libretro.so")
+        missing = doctor._retroarch_core_missing(adapter, flatpak=False)
+        self.assertEqual(missing is None, system_core.is_file())
 
 if __name__ == "__main__":
     unittest.main()

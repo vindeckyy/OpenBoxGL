@@ -315,7 +315,8 @@ def run_keyboard_launcher(data_dir):
         "/search\tSearch library",
         "/refresh\tRefresh library imports",
     ]
-    root = Path(__file__).resolve().parent
+    # Runtime root (repo checkout or AppImage usr/share/openbox), not pkg/parity.
+    root = Path(__file__).resolve().parents[2]
     scripts = (root / "scripts" / "openbox-launcher.sh", root / "openbox-launcher.sh")
     script = next((candidate for candidate in scripts if candidate.is_file()), None)
     if script:

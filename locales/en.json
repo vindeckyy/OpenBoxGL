@@ -1,8 +1,7 @@
 {
   "meta": {
     "name": "English",
-    "native": "English",
-    "rtl": false
+    "native": "English"
   },
   "common": {
     "save": "Save",
@@ -203,7 +202,27 @@
     "no_match_title": "No games match this view",
     "no_match_hint": "Change the active filters or search the library again.",
     "clear_filters": "Clear filters",
-    "query_truncated": "Showing {shown} of {total} matches. Narrow the search to see the rest."
+    "query_truncated": "Showing {shown} of {total} matches. Narrow the search to see the rest.",
+    "grant": {
+      "title": "Give this emulator access to the folder?",
+      "consequence": "The emulator will be able to read files in this folder. Undo removes the access.",
+      "confirm": "Grant access",
+      "button": "Grant access to this folder",
+      "copy": "Copy command",
+      "granted": "Access granted to {folder}. The emulator can read games there, read-only.",
+      "revoke": "Remove access",
+      "revoke_title": "Remove folder access?",
+      "revoke_consequence": "The emulator loses access to this folder. Game files are not changed."
+    },
+    "core": {
+      "title": "Choose a RetroArch core",
+      "loading": "Looking for installed cores…",
+      "intro": "{core} is not installed. Pick an installed core for this game to use instead.",
+      "none": "No RetroArch cores were found in the usual folders.",
+      "default": "Use the default core",
+      "location_system": "system folder",
+      "location_flatpak": "Flatpak app"
+    }
   },
   "dialog": {
     "add_game": "Add game",
@@ -342,7 +361,8 @@
     "browse_installed": "Installed",
     "browse_back": "Back to plugins",
     "browse_empty": "No community plugins are listed yet.",
-    "cmd_done": "Plugin command finished"
+    "cmd_done": "Plugin command finished",
+    "trust_retrust": "Approve again: this plugin was approved before the update."
   },
   "metadata": {
     "title": "LaunchBox Games Database",
@@ -741,7 +761,9 @@
     "title": "Library Setup Center",
     "close": "Close Library Setup Center",
     "description": "Guided library setup loads here.",
-    "workflow": "Setup workflow"
+    "workflow": "Setup workflow",
+    "platform_label": "Platform",
+    "platform_choose": "Choose a platform"
   },
   "feature": {
     "title": "OpenBox",
@@ -914,7 +936,11 @@
     "about_data_dir": "Data folder",
     "about_host": "Window",
     "about_host_native": "Native window (WebView)",
-    "about_host_browser": "Browser tab. The native window is not running, which is a supported way to use OpenBox."
+    "about_host_browser": "Browser tab. The native window is not running, which is a supported way to use OpenBox.",
+    "steam_trash_title": "Move Steam games to the Trash",
+    "steam_trash_message": "Move every imported Steam game to the Trash?",
+    "steam_trash_consequence": "You can restore them from the Trash. Game files and media stay on disk.",
+    "show_launch_badges": "Show launch readiness badges on the grid"
   },
   "picker": {
     "title": "What should I play?",
@@ -1341,7 +1367,8 @@
     "skipped": "{count} paths changed since the scan and were skipped",
     "skipped_one": "{count} path changed since the scan and was skipped",
     "kind_game": "Game file",
-    "kind_media": "Media"
+    "kind_media": "Media",
+    "scoped": "Only the games in this launch check group are listed."
   },
   "duplicates": {
     "title": "Duplicate games",
@@ -1452,6 +1479,175 @@
     "install_message": "Install {app} with Flatpak? Every game in this group is waiting on it.",
     "install_started": "Installing {app}. Check again when it finishes.",
     "queued": "Launch check queued.",
-    "game_gone": "That game is no longer in the library."
+    "game_gone": "That game is no longer in the library.",
+    "install_group": "Install {app} for {count} games",
+    "install_group_one": "Install {app} for {count} game",
+    "grant_group": "Grant access for {count} games",
+    "grant_group_one": "Grant access for {count} game",
+    "badge_blocked": "Won't launch",
+    "badge_warning": "Needs attention",
+    "find_moved": "Find moved files for {count} games",
+    "find_moved_one": "Find moved files for {count} game"
+  },
+  "notify": {
+    "activity": {
+      "cancel_requested": "Cancellation requested",
+      "retry_queued": "Retry queued",
+      "resume_queued": "Resume queued"
+    },
+    "clips": {
+      "reel_queued": "Reel queued in Activity",
+      "id_required": "A clip id is required.",
+      "not_in_library": "That clip is no longer in the local library."
+    },
+    "state": {
+      "error_copied": "Error details copied",
+      "copy_failed": "Could not copy: clipboard unavailable"
+    },
+    "bigbox": {
+      "no_matches": "No games match those Big Box filters"
+    },
+    "imports": {
+      "auto_failed": "Automatic import failed for: {sources}"
+    },
+    "sessions": {
+      "backup_created": "Created {name}",
+      "save_restored": "Save restored",
+      "save_location_added": "Save location added"
+    },
+    "media": {
+      "bulk_finished": "Bulk media download finished",
+      "screenshot_saved": "Screenshot saved to {path}",
+      "select_platform_game": "Select a game with a platform first",
+      "bezels_downloaded": "Bezels downloaded to {path}"
+    },
+    "storefront": {
+      "settings_saved": "Storefront settings saved",
+      "installing": "Installing {name} from Gameyfin...",
+      "ludusavi_finished": "Ludusavi {action} finished",
+      "ludusavi_issues": "Ludusavi {action} reported issues",
+      "hoard_finished": "Hoard {action} finished"
+    },
+    "app": {
+      "museum_pin_rejected": "That Museum PIN was not accepted.",
+      "no_media_packs": "No bundled media packs are available",
+      "pack_applied": "Applied {name}",
+      "gameyfin_ok": "Gameyfin connection ok",
+      "opened": "Opened {path}",
+      "emulator_configs_updated": "Updated {count} emulator config files",
+      "emulator_configs_updated_one": "Updated {count} emulator config file",
+      "duplicates_removed": "Removed {count} duplicate files",
+      "duplicates_removed_one": "Removed {count} duplicate file",
+      "save_scan_queued": "Save path scan queued — progress and results are in Activity Center",
+      "stats_reset": "Reset play statistics for {name}",
+      "enter_rom_folder": "Enter a ROM folder path first.",
+      "added_of_scanned": "Added {added} of {found} scanned games"
+    },
+    "setup": {
+      "emulator_choice_failed": "Emulator choice was not saved: {message}",
+      "preflight_failed": "Preflight could not run: {message}",
+      "flatpak_failed": "Flatpak install failed: {message}",
+      "metadata_sync_failed": "Metadata sync failed: {message}",
+      "autoscrape_save_failed": "Could not save auto-scrape preference: {message}",
+      "autoscrape_failed": "Automatic metadata scrape failed: {message}",
+      "final_summary_failed": "Final summary failed: {message}",
+      "welcome_save_failed": "Could not save welcome_completed: {message}"
+    },
+    "library": {
+      "preset_updated": "Filter preset updated",
+      "collection_saved": "Collection \"{name}\" saved",
+      "preset_deleted": "Preset deleted",
+      "selection_mode": "Selection mode enabled. Use Bulk Edit to apply changes.",
+      "shelf_ready": "Shelf entry is ready to launch",
+      "high_scores_exported": "Exported {count} high score files",
+      "high_scores_exported_one": "Exported {count} high score file",
+      "steam_trailer_downloaded": "Steam trailer downloaded",
+      "gog_media_downloaded": "GOG media downloaded",
+      "installing": "Installing {app}",
+      "bios_path": "BIOS path: {path}",
+      "no_path_to_reveal": "No path to reveal",
+      "game_not_found": "Game not found",
+      "platform_set": "Platform set to {platform}",
+      "open_profiles": "Open Emulator profiles to choose",
+      "command_copied": "Command copied. Run it in a terminal, then check this game again.",
+      "unknown_tokens": "Unknown tokens: {tokens}. Valid: {path} {name} {platform} etc. See launch_tokens docs.",
+      "collection_deleted": "Collection deleted",
+      "platform_docs_saved": "Platform documents saved",
+      "progress_set": "Progress set to {progress}",
+      "not_set": "Not set",
+      "opened": "Opened",
+      "access_granted": "Access granted. The check has been run again.",
+      "access_removed": "Folder access removed",
+      "core_set": "This game now uses {core}.",
+      "core_default": "This game uses the default core again."
+    },
+    "metadata": {
+      "decision_saved": "Decision saved",
+      "none_to_accept": "No {kind} items to accept",
+      "no_matches_accepted": "No matches were accepted: {message}",
+      "accepted": "Accepted {count} {kind} matches",
+      "accepted_one": "Accepted {count} {kind} match",
+      "select_field": "Select at least one field or media type to replace",
+      "apply_started": "Metadata apply started",
+      "steam_downloading": "Downloading Steam metadata and artwork",
+      "steam_updated": "Steam metadata updated",
+      "screenscraper_applied": "ScreenScraper metadata applied",
+      "open_game_first": "Open a game first, then hash-match it.",
+      "no_rom_to_hash": "This game has no ROM file to hash.",
+      "screenscraper_hash_queued": "ScreenScraper hash-match queued — progress in the Activity Center",
+      "igdb_applied": "IGDB metadata applied",
+      "downloading_selected": "Downloading selected metadata and media",
+      "review_updated": "Match review updated",
+      "auto_match_finished": "Auto-match finished: {count} games matched",
+      "auto_match_finished_one": "Auto-match finished: {count} game matched",
+      "database_ready": "Metadata database ready"
+    },
+    "settings": {
+      "bios_expected": "BIOS expected at {path}",
+      "installing_all": "Installing all available emulators",
+      "updating_installed": "Updating installed emulators",
+      "updating_emulator": "Updating emulator",
+      "emulator_launched": "Emulator launched",
+      "installing_emulator": "Installing {name}",
+      "emulators_installed": "Installed {count} emulators",
+      "emulators_installed_one": "Installed {count} emulator",
+      "plugin_removed": "Plugin removed",
+      "filter_preset_saved": "Filter preset saved",
+      "playlist_saved": "Playlist saved",
+      "manual_playlist_saved": "Manual playlist saved",
+      "filter_playlist_rules": "Filter playlists manage membership from their rules.",
+      "restored": "Restored {items}",
+      "backup_saved": "Backup saved to {name}",
+      "playlist_deleted": "Playlist deleted",
+      "select_then_edit": "Select games, then choose Edit Selected",
+      "gamescope_limit": "At most 16 custom gamescope presets are allowed.",
+      "screenscraper_ok": "ScreenScraper credentials work",
+      "enter_export_name": "Enter the platform or playlist name to export.",
+      "games_exported": "Exported {count} games",
+      "games_exported_one": "Exported {count} game",
+      "saved": "Settings saved",
+      "museum_pin_cleared": "Museum PIN cleared",
+      "diagnostic_copied": "Diagnostic summary copied. Review it before sharing.",
+      "shortcut_installed": "Desktop shortcut installed at {path}",
+      "theme_applied": "Theme applied",
+      "connected": "Connected {name}",
+      "theme_imported": "Theme imported",
+      "queue_advanced": "Queue advanced",
+      "select_game_first": "Select a game first.",
+      "selected_not_found": "Selected game not found.",
+      "added_to_queue": "Game added to queue",
+      "tags_saved": "Tags saved",
+      "webhook_saved": "Webhook saved",
+      "steam_trashed_one": "Moved {count} imported Steam game to the Trash",
+      "steam_trashed": "Moved {count} imported Steam games to the Trash",
+      "steam_none": "No imported Steam games to remove",
+      "steam_trash_overflow": "{count} imported Steam games stay in your library because the Trash is full. Empty the Trash to move them.",
+      "steam_trash_overflow_one": "{count} imported Steam game stays in your library because the Trash is full. Empty the Trash to move it."
+    },
+    "launch_audit": {
+      "grant_group_done": "Access granted for {count} games. Those games were checked again.",
+      "grant_group_done_one": "Access granted for {count} game. That game was checked again.",
+      "grant_recheck_needed": "Access granted. Check again to refresh this list."
+    }
   }
 }

@@ -1926,8 +1926,15 @@ js_single_quote_escape(const char *value)
          cursor && *cursor != '\0'; cursor++) {
         if (*cursor == '\'' || *cursor == '\\') {
             sb_append_c(&escaped, '\\');
+            sb_append_c(&escaped, (char)*cursor);
+        } else if (*cursor < 0x20) {
+            /* A raw line break is a syntax error in a single-quoted literal. */
+            char hex[8];
+            snprintf(hex, sizeof hex, "\\x%02x", *cursor);
+            sb_append_str(&escaped, hex);
+        } else {
+            sb_append_c(&escaped, (char)*cursor);
         }
-        sb_append_c(&escaped, (char)*cursor);
     }
     return sb_take(&escaped);
 }
@@ -2217,8 +2224,22 @@ handle_dialog(const char *id, const char *kind, const char *title)
                     char *escaped = json_escape_string(narrow);
                     StrBuf buffer;
                     sb_init(&buffer);
-                    sb_appendf(&buffer, "{\"path\":\"%s\",\"cancelled\":false}",
-                               escaped ? escaped : "");
+                    /*
+                     * ';' and '/' become \u escapes so a legal path such as
+                     * C:\Games;Old never trips resolve_bridge's payload
+                     * guard, which would leave the page's promise hanging.
+                     */
+                    sb_append_str(&buffer, "{\"path\":\"");
+                    for (const char *cursor = escaped ? escaped : ""; *cursor; cursor++) {
+                        if (*cursor == ';') {
+                            sb_append_str(&buffer, "\\u003b");
+                        } else if (*cursor == '/') {
+                            sb_append_str(&buffer, "\\u002f");
+                        } else {
+                            sb_append_c(&buffer, *cursor);
+                        }
+                    }
+                    sb_append_str(&buffer, "\",\"cancelled\":false}");
                     free(escaped);
                     free(narrow);
                     result_json = sb_take(&buffer);
@@ -2295,6 +2316,45 @@ typedef struct {
     ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl *lpVtbl;
     LONG reference;
 } EnvironmentHandler;
+
+/* web_app.py writes the active theme's page background as "#rrggbb" to native-background
+ * (handlers/extensions.py). The first paint uses it, so a light theme does not flash the
+ * built-in dark colour. A missing or malformed file keeps the colour the caller set. */
+static void
+apply_saved_background(COREWEBVIEW2_COLOR *color)
+{
+    wchar_t *path;
+    size_t length;
+    FILE *handle;
+    char text[16];
+    unsigned int r = 0, g = 0, b = 0;
+    size_t read_count;
+
+    if (!g_data_dir_wide) {
+        return;
+    }
+    length = wcslen(g_data_dir_wide) + wcslen(L"\\native-background") + 1;
+    path = (wchar_t *)malloc(length * sizeof(wchar_t));
+    if (!path) {
+        return;
+    }
+    wcscpy(path, g_data_dir_wide);
+    wcscat(path, L"\\native-background");
+    handle = _wfopen(path, L"rb");
+    free(path);
+    if (!handle) {
+        return;
+    }
+    read_count = fread(text, 1, sizeof(text) - 1, handle);
+    fclose(handle);
+    text[read_count] = '\0';
+    if (sscanf(text, "#%2x%2x%2x", &r, &g, &b) == 3) {
+        color->A = 255;
+        color->R = (BYTE)r;
+        color->G = (BYTE)g;
+        color->B = (BYTE)b;
+    }
+}
 
 static HRESULT STDMETHODCALLTYPE
 environment_handler_query(ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler *self,
@@ -2406,6 +2466,7 @@ controller_handler_invoke(ICoreWebView2CreateCoreWebView2ControllerCompletedHand
     if (SUCCEEDED(ICoreWebView2Controller_QueryInterface(
             g_controller, &IID_ICoreWebView2Controller2, (void **)&controller2)) && controller2) {
         COREWEBVIEW2_COLOR background = { 255, 17, 16, 14 }; /* #11100e, A R G B */
+        apply_saved_background(&background);
         ICoreWebView2Controller2_put_DefaultBackgroundColor(controller2, background);
         ICoreWebView2Controller2_Release(controller2);
     }
@@ -3293,6 +3354,13 @@ wWinMain(HINSTANCE instance, HINSTANCE previous, LPWSTR command_line, int show_c
         native_request_clear(&startup_request);
         return 1;
     }
+
+    /*
+     * Hand the validated --play/--uri/openbox: request to on_webview_ready,
+     * which dispatches g_pending_request once WebView2 exists. Without this
+     * the first instance's own deeplink was parsed and then dropped.
+     */
+    native_request_copy(&g_pending_request, &startup_request);
 
     load_geometry();
     load_tray_flags();

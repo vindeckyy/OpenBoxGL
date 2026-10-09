@@ -161,6 +161,42 @@ def _p95(times):
         return sample[idx]
 
 
+def benchmark_browser(data_dir, runs=3):
+    """First render, long tasks and search layout shift in headless Chrome (opt-in: --browser).
+
+    Reports available=False with the reason when no browser can start, so a
+    machine without Chrome says "not measured" instead of failing the bench.
+    """
+    process, origin, token = _start_server(data_dir)
+    try:
+        env = dict(os.environ, ORIGIN=origin, TOKEN=token, RUNS=str(runs))
+        proc = subprocess.run(
+            ["node", str(ROOT / "scripts" / "perf_browser.cjs")],
+            cwd=ROOT, env=env, capture_output=True, text=True, timeout=3600, check=False,
+        )
+        lines = [line for line in proc.stdout.splitlines() if line.startswith("{")]
+        if not lines:
+            return {"available": False, "reason": (proc.stderr or "no output from perf_browser.cjs")[:300]}
+        data = json.loads(lines[-1])
+        if not data.get("available"):
+            return data
+        samples = data["samples"]
+        return {
+            "available": True,
+            "runs": len(samples),
+            "first_render": _stats_ms([sample["firstRenderMs"] / 1000 for sample in samples]),
+            "long_tasks_median": _median([sample["longTasks"] for sample in samples]),
+            "long_task_ms_median": _median([sample["longTaskMs"] for sample in samples]),
+            "search_cls_max": round(max(sample["searchCls"] for sample in samples), 4),
+        }
+    finally:
+        process.terminate()
+        try:
+            process.wait(10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+
+
 def _stats_ms(times):
     return {
         "median_ms": round(_median(times) * 1000, 1),
@@ -421,6 +457,23 @@ def _check_size_gates(results, size_key: str, gates: dict, label: str) -> list[s
     return failures
 
 
+# Browser layout stability: a search that empties the grid must not shift the page
+# past the web-vitals "good" CLS threshold (0.1). Enforced only when --browser ran.
+BROWSER_CLS_GATE = 0.1
+
+
+def _check_browser_gates(results):
+    failures: list[str] = []
+    for size_key, entry in results.items():
+        browser = entry.get("browser") if isinstance(entry, dict) else None
+        if not browser or not browser.get("available"):
+            continue
+        cls = browser.get("search_cls_max")
+        if cls is not None and cls > BROWSER_CLS_GATE:
+            failures.append(f"browser search layout shift {cls} exceeds {BROWSER_CLS_GATE} at {size_key} games")
+    return failures
+
+
 def _check_gates(results):
     """Enforce non-regression gates for 10k and 20k library sizes when present."""
     failures: list[str] = []
@@ -428,6 +481,7 @@ def _check_gates(results):
         failures.extend(_check_size_gates(results, "10000", _effective_gates(GATES_10K), "10,000 games"))
     if "20000" in results:
         failures.extend(_check_size_gates(results, "20000", _effective_gates(GATES_20K), "20,000 games"))
+    failures.extend(_check_browser_gates(results))
     return failures
 
 
@@ -444,12 +498,14 @@ def main():
     args = parser.parse_args()
     base = Path(args.base_dir)
     results = {}
+    generated_sizes = []
     for size in [int(item) for item in args.sizes.split(",") if item.strip()]:
         data_dir = base / str(size)
         print(f"generating {size} games in {data_dir} ...", flush=True)
         generate(size, data_dir)
         print(f"benchmarking {size} games ({args.runs} runs per op) ...", flush=True)
         results[str(size)] = benchmark(data_dir, runs=args.runs)
+        generated_sizes.append(size)
 
     # Write-path benchmark: measure favorite mutation at 10k and 20k.
     for wsize in (10000, 20000):
@@ -465,12 +521,16 @@ def main():
         else:
             print(f"  write-path benchmark at {wsize} failed: {wp.get('error', 'unknown')}")
 
-    # Optional browser first-render timing (best-effort, not required for CI).
+    # Browser timings (opt-in). Measured on the largest library this run generated for
+    # the read benchmark. The write-path sizes live in write-<size> directories and are
+    # not candidates: picking them here pointed the browser at an empty folder.
     if args.browser:
-        for _size_key, entry in results.items():
-            # Placeholder: if a headless browser were available, measure navigation to /?token=...
-            # Kept as a no-op so CI without Chrome still passes; a real Puppeteer run can fill this.
-            entry.setdefault("browser_first_render", {"median_ms": None, "p95_ms": None, "note": "browser timing not measured in this run"})
+        browser_size = max(generated_sizes, default=None)
+        if browser_size is not None:
+            size_key = str(browser_size)
+            print(f"browser timings at {size_key} games ...", flush=True)
+            results[size_key]["browser"] = benchmark_browser(base / size_key, runs=min(args.runs, 3))
+            print(f"  browser: {json.dumps(results[size_key]['browser'])}")
 
     # Timing for scripts/gen_api_docs.py
     try:

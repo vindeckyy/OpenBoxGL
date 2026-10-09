@@ -1,5 +1,6 @@
 /* Record That — the UI bridge used by recap, pause, and deeplink surfaces. */
 import { api, AppState, notify } from './state.js';
+import { t } from './i18n.js';
 
 function gameId(value) {
   if (value && typeof value === 'object') return String(value.game_id || value.id || '');
@@ -26,21 +27,21 @@ async function createReel(gameOrId) {
   const id = gameId(game);
   if (!id) throw new Error('A game is required to create a reel.');
   const result = await api('/api/v2/reels/create', { method: 'POST', body: JSON.stringify({ game_id: id }) });
-  notify('Reel queued in Activity');
+  notify(t('notify.clips.reel_queued'));
   return result;
 }
 
 function openClip(clipId) {
   const id = String(clipId || '').trim();
   if (!id) {
-    notify('A clip id is required.');
+    notify(t('notify.clips.id_required'));
     return false;
   }
   const game = AppState.games.find(item =>
     Array.isArray(item.clips) && item.clips.some(clip => String(clip?.clip_id || '') === id)
   );
   if (!game) {
-    notify('That clip is no longer in the local library.');
+    notify(t('notify.clips.not_in_library'));
     return false;
   }
   document.dispatchEvent(new CustomEvent('app:show-game', {

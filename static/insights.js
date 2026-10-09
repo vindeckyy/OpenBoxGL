@@ -4,6 +4,7 @@
    the panel first scrolls into view; reloads on app:state-refreshed while visible.
    Table fallback for a11y.
 */
+import { formatHours } from './pure.js';
 import { $, escapeHtml } from './util.js';
 import { api, AppState, notify } from './state.js';
 import { t } from './i18n.js';
@@ -25,14 +26,6 @@ function storedCollapsed() {
     return localStorage.getItem(COLLAPSE_KEY) === '1';
   } catch { /* storage unavailable */ }
   return false;
-}
-
-function formatHours(seconds) {
-  if (!seconds) return '0h';
-  const hours = seconds / 3600;
-  if (hours < 1) return `${Math.round(seconds / 60)}m`;
-  if (hours < 10) return `${hours.toFixed(1)}h`;
-  return `${Math.round(hours)}h`;
 }
 
 function storedRange() {
@@ -172,7 +165,9 @@ function bindRadioControls(body) {
 
 function renderStreak(streak, momentum) {
   const delta = momentum.delta_seconds;
-  const deltaLabel = delta === 0 ? t('insights.momentum_same') : (delta > 0 ? `+${formatHours(delta)} ${t('insights.momentum_vs_prev')}` : `${formatHours(delta)} ${t('insights.momentum_vs_prev')}`);
+  // formatHours() expects a magnitude: a negative input fell into its
+  // "under an hour" branch, so a 5h drop rendered as "-300m".
+  const deltaLabel = delta === 0 ? t('insights.momentum_same') : (delta > 0 ? `+${formatHours(delta)} ${t('insights.momentum_vs_prev')}` : `-${formatHours(-delta)} ${t('insights.momentum_vs_prev')}`);
   const flame = streak.current >= 3 ? ' 🔥' : '';
   return `
     <div class="insight-section">

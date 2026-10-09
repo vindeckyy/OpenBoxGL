@@ -4,6 +4,7 @@
    dialogs and library rendering as dynamic/event-driven dependencies so the
    existing navigation modules remain the first writers for their hotkeys.
 */
+import { progressScore } from './pure.js';
 import { $, escapeHtml } from './util.js';
 import { AppState, api, media, notify, token } from './state.js';
 import { t } from './i18n.js';
@@ -28,7 +29,7 @@ function resolveGame(gameOrId) {
 function snapshot(game) {
   return {
     play_count: Number(game?.play_count || 0),
-    progress: Number(game?.progress || 0),
+    progress: progressScore(game?.progress),
     playtime_seconds: Number(game?.playtime_seconds || 0),
     ra_achievements_earned: Number(game?.ra_achievements_earned || game?.achievements_earned || 0),
   };
@@ -438,6 +439,11 @@ document.addEventListener('app:state-refreshed', () => {
   const enabled = Boolean(AppState.appSettings.moments_autocapture);
   for (const game of AppState.games) {
     const gameId = stableGameId(game);
+    // A game absent from the previous refresh was just added (import, scan,
+    // sync), not just played: diffing it against an empty snapshot fired
+    // first_boot/milestone and a screen capture for every imported game that
+    // already had plays.
+    if (!previousSnapshots.has(gameId)) continue;
     const trigger = autoMomentTrigger(previousSnapshots.get(gameId), game);
     if (!enabled || !trigger || autoCaptureInFlight.has(gameId)) continue;
     autoCaptureInFlight.add(gameId);

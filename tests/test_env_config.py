@@ -60,6 +60,21 @@ class EnvConfigTests(unittest.TestCase):
         self.assertEqual(_parse_env_line('KEY="a b" # note'), ("KEY", "a b"))
         self.assertEqual(_parse_env_line('KEY="a # b"'), ("KEY", "a # b"))
 
+    def test_parse_env_line_keeps_quote_characters_inside_values(self):
+        from env_config import _parse_env_line
+        # A quote character that belongs to the secret must survive parsing.
+        self.assertEqual(_parse_env_line('PASSWORD="abc\'"'), ("PASSWORD", "abc'"))
+        self.assertEqual(_parse_env_line("PASSWORD='say \"hi\"'"), ("PASSWORD", 'say "hi"'))
+        self.assertEqual(_parse_env_line("PASSWORD=abc'"), ("PASSWORD", "abc'"))
+        self.assertEqual(_parse_env_line("PASSWORD=it's #note"), ("PASSWORD", "it's"))
+        self.assertEqual(_parse_env_line("KEY=''"), ("KEY", ""))
+
+    def test_parse_env_line_accepts_export_prefix(self):
+        from env_config import _parse_env_line
+        self.assertEqual(_parse_env_line("export GITHUB_TOKEN=abc"), ("GITHUB_TOKEN", "abc"))
+        self.assertEqual(_parse_env_line('export  RA_API_KEY="k e y"'), ("RA_API_KEY", "k e y"))
+        self.assertEqual(_parse_env_line("exported_KEY=x"), ("exported_KEY", "x"))
+
     def test_load_dotenv_rejects_unknown_environment_keys(self):
         previous = os.environ.pop("LD_PRELOAD", None)
         try:

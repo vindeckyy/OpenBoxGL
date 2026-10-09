@@ -1,3 +1,4 @@
+import { subscribe } from './events.js';
 /* Library health score UI (Flagship 8: H4 desktop dialog, H6 rescan toast).
  *
  * The score is measured by pkg/parity/parity_library_health.py and served
@@ -7,9 +8,9 @@
  * records an undo token in the fix journal.
  */
 import { $, escapeHtml } from './util.js';
-import { AppState, api, notify, token, nativePickFolder, showToast } from './state.js';
+import { AppState, api, notify, nativePickFolder, showToast } from './state.js';
 import { t } from './i18n.js';
-import { render } from './library.js';
+import { render, openRepairWizard } from './library.js';
 import { confirmAction } from './dialogs.js';
 
 const DIMENSIONS = ['file_integrity', 'duplicates', 'artwork', 'metadata', 'launch_readiness'];
@@ -257,6 +258,11 @@ function auditGroupRow(group, gameCount) {
   const key = escapeHtml(group.key);
   const fix = group.fix_action || {};
   const app = fix.kind === 'flatpak_install' ? String(fix.payload?.app_id || '') : '';
+  const count = Number(group.count) || 0;
+  // A group shares one cause, so one grant or one install covers every game in it.
+  const grant = fix.kind === 'flatpak_grant' ? fix.payload || {} : null;
+  // A missing game file is fixed by relinking; the wizard is limited to this group's games.
+  const relink = group.code === 'PATH_MISSING';
   return `<div class="health-dim" data-audit-group="${key}">
     <button type="button" class="health-dim-head" data-audit-toggle="${key}" aria-expanded="false">
       <span class="health-dim-name">${escapeHtml(group.subject ? `${group.code} · ${group.subject}` : group.code)}</span>
@@ -268,7 +274,9 @@ function auditGroupRow(group, gameCount) {
       <div class="health-issues" data-audit-members="${key}"></div>
       <div class="health-dim-actions">
         <button type="button" class="icon-button" data-audit-more="${key}" hidden>${escapeHtml(t('health.load_more'))}</button>
-        ${app ? `<button type="button" class="primary" data-audit-install="${escapeHtml(app)}">${escapeHtml(t('launch_audit.install', { app }))}</button>` : ''}
+        ${app ? `<button type="button" class="primary" data-audit-install="${escapeHtml(app)}">${escapeHtml(t('launch_audit.install_group', { app, count }))}</button>` : ''}
+        ${relink ? `<button type="button" class="primary" data-audit-relink="${key}">${escapeHtml(t('launch_audit.find_moved', { count }))}</button>` : ''}
+        ${grant?.app_id && grant?.path ? `<button type="button" class="primary" data-audit-grant-app="${escapeHtml(grant.app_id)}" data-audit-grant-folder="${escapeHtml(grant.path)}" data-audit-grant-count="${count}" data-audit-grant-key="${key}">${escapeHtml(t('launch_audit.grant_group', { count }))}</button>` : ''}
       </div>
     </div>
   </div>`;
@@ -314,6 +322,28 @@ async function installForGroup(app) {
   } catch (error) { notify(error.message); }
 }
 
+async function grantForGroup(app, folder, count, key) {
+  const ok = await confirmAction({
+    title: t('library.grant.title'),
+    message: folder,
+    consequence: t('library.grant.consequence'),
+    confirmLabel: t('library.grant.confirm'),
+  });
+  if (!ok) return;
+  try {
+    await api('/api/v2/launch/grant', { method: 'POST', body: JSON.stringify({ app_id: app, folder }) });
+  } catch (error) { notify(error.message); return; }
+  try {
+    // Only this group's games are checked again; the grant covers all of them.
+    await api('/api/v2/launch/audit/refresh', { method: 'POST', body: JSON.stringify({ group: key }) });
+    notify(t('notify.launch_audit.grant_group_done', { count }));
+  } catch (error) {
+    // The grant is in place; only this list is out of date until a check runs.
+    notify(t('notify.launch_audit.grant_recheck_needed'));
+  }
+  renderLaunchAudit();
+}
+
 async function runLaunchAudit() {
   try {
     await api('/api/v2/launch/audit/scan', { method: 'POST', body: JSON.stringify({ deep: Boolean($('launchAuditDeep')?.checked) }) });
@@ -334,6 +364,8 @@ export async function renderLaunchAudit() {
     return;
   }
   if (!$('launchAuditBody')) return;
+  // The grid's readiness badges read the same report; let them refetch.
+  document.dispatchEvent(new Event('app:launch-audit-loaded'));
   const job = result.job || {};
   const running = job.state === 'queued' || job.state === 'running';
   const runLabel = running
@@ -371,6 +403,15 @@ export async function renderLaunchAudit() {
         }
       };
     });
+    host.querySelectorAll('[data-audit-relink]').forEach(button => {
+      button.onclick = () => {
+        $('healthScoreDialog')?.close();
+        openRepairWizard({ auditGroup: button.dataset.auditRelink });
+      };
+    });
+    host.querySelectorAll('[data-audit-grant-app]').forEach(button => {
+      button.onclick = () => grantForGroup(button.dataset.auditGrantApp, button.dataset.auditGrantFolder, Number(button.dataset.auditGrantCount) || 0, button.dataset.auditGrantKey);
+    });
     host.querySelectorAll('[data-audit-install]').forEach(button => {
       button.onclick = () => installForGroup(button.dataset.auditInstall);
     });
@@ -383,29 +424,23 @@ export async function renderLaunchAudit() {
 
 // ── H6: scheduled-rescan toast with score delta ──────────────────────────────
 
+// The rescan toast listens on the tab's shared event stream (events.js), which
+// retries a dropped connection with backoff.
 export function initHealthSse() {
   if (_sseStarted) return;
   _sseStarted = true;
-  const connect = () => {
-    let source = null;
+  subscribe('job.finished', async event => {
+    let payload;
+    try { payload = JSON.parse(event.data); } catch { return; }
+    if (payload?.name !== 'library-health-scan') return;
     try {
-      source = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
-    } catch { return; }
-    source.addEventListener('job.finished', async event => {
-      let payload;
-      try { payload = JSON.parse(event.data); } catch { return; }
-      if (payload?.name !== 'library-health-scan') return;
-      try {
-        const before = _lastScore;
-        const snapshot = await fetchHealthSnapshot();
-        if (typeof before === 'number' && before !== snapshot.score) {
-          notify(t('health.rescan_done', { before, after: snapshot.score }));
-        } else {
-          notify(t('health.rescan_done_same', { score: snapshot.score }));
-        }
-      } catch { /* toast is best-effort */ }
-    });
-    source.onerror = () => { try { source.close(); } catch { /* noop */ } };
-  };
-  connect();
+      const before = _lastScore;
+      const snapshot = await fetchHealthSnapshot();
+      if (typeof before === 'number' && before !== snapshot.score) {
+        notify(t('health.rescan_done', { before, after: snapshot.score }));
+      } else {
+        notify(t('health.rescan_done_same', { score: snapshot.score }));
+      }
+    } catch { /* toast is best-effort */ }
+  });
 }

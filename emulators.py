@@ -5,7 +5,7 @@ import shutil
 import subprocess
 
 from pkg.parity.parity_emulator_defs import EMULATORS, PLATFORM_EMULATORS
-from pkg.platform_compat import join_command, launch_kwargs
+from pkg.platform_compat import flatpak_app_installed, join_command, launch_kwargs
 from parity_import import recommend_emulators
 
 
@@ -21,10 +21,8 @@ def emulator_status(run=subprocess.run, which=shutil.which):
     result = []
     for app_id, emulator in EMULATORS.items():
         native = which(emulator["native"])
-        flatpak_installed = bool(flatpak) and run(
-            [flatpak, "info", app_id],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        ).returncode == 0
+        # Native wins the mode below, so the Flatpak probe only runs without one.
+        flatpak_installed = bool(flatpak) and not native and flatpak_app_installed(app_id, run=run, flatpak=flatpak)
         mode = "native" if native else "flatpak" if flatpak_installed else ""
         prefix = [native] if native else [flatpak, "run", app_id] if flatpak_installed else []
         result.append({
@@ -53,11 +51,7 @@ def launch_emulator(app_id, which=shutil.which):
     if native:
         subprocess.Popen([native], **launch_kwargs())
         return {"mode": "native", "command": native}
-    if flatpak and subprocess.run(
-        [flatpak, "info", app_id],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        check=False,
-    ).returncode == 0:
+    if flatpak and flatpak_app_installed(app_id, flatpak=flatpak):
         subprocess.Popen([flatpak, "run", app_id], **launch_kwargs())
         return {"mode": "flatpak", "command": f"flatpak run {app_id}"}
     raise FileNotFoundError(f"{emulator['name']} is not installed.")

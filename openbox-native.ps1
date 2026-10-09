@@ -47,9 +47,18 @@ function ConvertTo-ArgumentList {
     param([string[]] $Values)
     # Start-Process joins its -ArgumentList with spaces and never quotes what it
     # is given, so values carrying spaces or quotes must be quoted here. POSIX
-    # gets this for free from "$@".
+    # gets this for free from "$@". Backslashes are only special before a
+    # quote, so a run of them at the end of a quoted value must be doubled too,
+    # or the closing quote is read as escaped ("C:\My Games\" swallows the
+    # next argument). An empty value is kept as "" rather than dropped.
     $quoted = foreach ($value in $Values) {
-        if ($value -match '[\s"]') { '"' + ($value -replace '(\\*)"', '$1$1\"') + '"' } else { $value }
+        if ($value -eq '') {
+            '""'
+        } elseif ($value -match '[\s"]') {
+            '"' + (($value -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1') + '"'
+        } else {
+            $value
+        }
     }
     return ($quoted -join ' ')
 }

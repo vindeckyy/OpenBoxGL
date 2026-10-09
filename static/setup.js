@@ -4,6 +4,7 @@ import { promptChoice, promptInput } from './dialogs.js';
 import { openMatchReview } from './metadata.js';
 import { openActivity } from './activity.js';
 import { refresh } from './library.js';
+import { t } from './i18n.js';
 
 const SUMMARY_KEYS = [
   'library_count', 'source_coverage', 'metadata_match_percent', 'media_gaps',
@@ -190,6 +191,7 @@ function decisionPayload(batch = state.previewItems) {
     if (action === 'merge' && (stored?.merge_target || item.existing_game_target?.game_id)) {
       body.merge_target = stored?.merge_target || item.existing_game_target?.game_id;
     }
+    if (stored?.platform) body.platform = stored.platform;
     if (emulator) {
       body.emulator_id = emulator.emulator_id ?? null;
       body.adapter_id = emulator.adapter_id ?? null;
@@ -385,17 +387,28 @@ function renderDecisions() {
   const rows = state.previewItems.map(item => {
     const current = state.decisions.get(item.candidate_id)?.action || item.intended_action || 'import';
     const options = ['import', 'merge', 'skip', 'exclude'];
+    const choosing = (item.platform_options || []).length > 0 && !item.detected_platform && !state.decisions.get(item.candidate_id)?.platform;
+    const picked = state.decisions.get(item.candidate_id)?.platform || item.detected_platform || '';
+    // A disc file several systems share waits for its platform; no action is offered until then.
+    const platformField = (item.platform_options || []).length ? `
+        <label class="field">${escapeHtml(t('setup.platform_label'))}
+          <select class="setup-decision-platform" data-candidate-id="${escapeHtml(item.candidate_id)}">
+            <option value="">${escapeHtml(t('setup.platform_choose'))}</option>
+            ${item.platform_options.map(opt => `<option value="${escapeHtml(opt)}"${opt === picked ? ' selected' : ''}>${escapeHtml(opt)}</option>`).join('')}
+          </select>
+        </label>` : '';
     return `
       <div class="setup-decision-row" data-candidate-id="${escapeHtml(item.candidate_id)}">
         <div class="setup-decision-head">
           <strong>${escapeHtml(item.detected_title || '')}</strong>
           <span>${escapeHtml(item.detected_platform || '')}</span>
         </div>
-        <label class="field">Action
+        ${platformField}
+        ${choosing ? '' : `<label class="field">Action
           <select class="setup-decision-action" data-candidate-id="${escapeHtml(item.candidate_id)}">
             ${options.map(opt => `<option value="${opt}"${opt === current ? ' selected' : ''}>${opt}</option>`).join('')}
           </select>
-        </label>
+        </label>`}
         ${(item.merge_diff || []).length ? `<div class="setup-merge-diff compact">${(item.merge_diff || []).map(row => `<div class="setup-merge-field"><span>${escapeHtml(row.field)}</span><span>${escapeHtml(String(row.current ?? ''))}</span><span>→</span><span>${escapeHtml(String(row.proposed ?? ''))}</span></div>`).join('')}</div>` : ''}
       </div>
     `;
@@ -601,6 +614,19 @@ function bindPanelEvents() {
       state.decisions.set(id, {...existing, action: select.value});
     };
   });
+  document.querySelectorAll('.setup-decision-platform').forEach(select => {
+    select.onchange = () => {
+      const id = select.dataset.candidateId;
+      if (!select.value) {
+        // Back to waiting for a platform: nothing is decided until one is picked.
+        const {action, platform, ...rest} = state.decisions.get(id) || {};
+        state.decisions.set(id, rest);
+      } else {
+        state.decisions.set(id, {...(state.decisions.get(id) || {}), platform: select.value, action: 'import'});
+      }
+      renderPanel();
+    };
+  });
   const runPreflight = $('setupRunPreflight');
   if (runPreflight) runPreflight.onclick = () => runReadinessStep({manual: true});
   document.querySelectorAll('.setup-emulator-choice').forEach(select => {
@@ -761,14 +787,14 @@ async function applyEmulatorChoice(candidateId, value) {
     }]);
   } catch (error) {
     state.emulatorChoices.delete(candidateId);
-    notify('warning', `Emulator choice was not saved: ${error.message}`);
+    notify('warning', t('notify.setup.emulator_choice_failed', {message: error.message}));
     renderPanel();
     return;
   }
   try {
     await runPreflightBatch(selectedImportCandidates());
   } catch (error) {
-    notify('warning', `Preflight could not run: ${error.message}`);
+    notify('warning', t('notify.setup.preflight_failed', {message: error.message}));
   }
   renderPanel();
 }
@@ -789,7 +815,7 @@ async function installFlatpakIfNeeded(candidateId) {
     // launch-ready, with no way for the user to tell why.
     choice.launch_setup = 'installed';
   } catch (error) {
-    notify('warning', `Flatpak install failed: ${error.message}`);
+    notify('warning', t('notify.setup.flatpak_failed', {message: error.message}));
     // Clear the intent *and* the app id, so a later commit cannot re-assert it
     // and the candidate falls back to the wizard's other options.
     state.emulatorChoices.set(candidateId, { ...choice, launch_setup: null, flatpak_app_id: null });
@@ -920,7 +946,7 @@ async function runFinishPipeline() {
       const sync = await api('/api/metadata/sync', {method: 'POST', body: '{}'});
       if (sync.job_id) await waitForJob(sync.job_id);
     } catch (error) {
-      notify('warning', `Metadata sync failed: ${error.message}`);
+      notify('warning', t('notify.setup.metadata_sync_failed', {message: error.message}));
     }
   }
   if (state.importBatchId) {
@@ -937,7 +963,7 @@ async function runFinishPipeline() {
         }),
       });
     } catch (error) {
-      notify('warning', `Could not save auto-scrape preference: ${error.message}`);
+      notify('warning', t('notify.setup.autoscrape_save_failed', {message: error.message}));
     }
   }
   // One auto-scrape call queues exactly the match + media jobs; review
@@ -965,7 +991,7 @@ async function runFinishPipeline() {
         }
       }
     } catch (error) {
-      notify('warning', `Automatic metadata scrape failed: ${error.message}`);
+      notify('warning', t('notify.setup.autoscrape_failed', {message: error.message}));
     }
   }
   try {
@@ -987,7 +1013,7 @@ async function runFinishPipeline() {
       finishCounts.failed = batch.totals?.blocked ?? 0;
     }
   } catch (error) {
-    notify('warning', `Final summary failed: ${error.message}`);
+    notify('warning', t('notify.setup.final_summary_failed', {message: error.message}));
   }
   state.finishCounts = finishCounts;
   try {
@@ -996,7 +1022,7 @@ async function runFinishPipeline() {
       body: JSON.stringify({...AppState.appSettings, welcome_completed: true}),
     });
   } catch (error) {
-    notify('warning', `Could not save welcome_completed: ${error.message}`);
+    notify('warning', t('notify.setup.welcome_save_failed', {message: error.message}));
   }
   state.step = 8;
 }

@@ -5,10 +5,29 @@ import { AppState, api } from './state.js';
 
 let dialog;
 
+const YEAR_CHOICES = 10;
+
 function openWrapped(year = new Date().getFullYear()) {
   if (!dialog) initDom();
+  syncYearSelect(year);
   dialog.showModal();
   loadWrapped(year);
+}
+
+// index.html ships #wrappedYear empty and nothing filled it, so the year
+// picker had no options and only the current year could ever be shown.
+function syncYearSelect(year) {
+  const select = $('wrappedYear');
+  if (!select) return;
+  const current = new Date().getFullYear();
+  const years = new Set(Array.from({ length: YEAR_CHOICES }, (_, i) => current - i));
+  if (Number.isInteger(year)) years.add(year);
+  const wanted = [...years].sort((a, b) => b - a).map(String);
+  const have = [...select.options].map(option => option.value);
+  if (wanted.join() !== have.join()) {
+    select.replaceChildren(...wanted.map(value => new Option(value, value)));
+  }
+  select.value = String(year);
 }
 
 function initDom() {

@@ -1,5 +1,6 @@
+import { subscribe } from './events.js';
 import { $, escapeHtml, duration, fact, gameLinks, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds, trigramsOf, expandTrigrams } from './util.js';
-import { token, AppState, selectedIds, media, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, showToast, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
+import { token, AppState, gameIdOf, selectedIds, media, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, showToast, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
 import { loadTheme, deletePlaylist } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importDroppedFolder } from './imports.js';
 import { openGameDialog, convertShelfEntry, confirmAction, promptInput, openDialog, closeDialog } from './dialogs.js';
@@ -16,6 +17,8 @@ import { openSetupCenter } from './setup.js';
 import { initDnaSearch, dnaMoreLikeThis, dnaSearchMode } from './dna.js';
 
 const DETAILS_WIDTH_KEY = 'openbox-details-width';
+// Folder grants made in this session, by game id. They let the Launch Doctor offer Remove access.
+const grantedAccess = new Map();
 
 // Story reuses the History → Timeline markup (timeline-group/entry/meta) so
 // the per-game narrative needs no new styles or design tokens.
@@ -531,7 +534,7 @@ async function updateActivePreset() {
   try {
     await api('/api/filter-presets', {method: 'POST', body: JSON.stringify({name, rules, bigbox_quick: preset?.bigbox_quick || false})});
     await refresh();
-    notify('Filter preset updated');
+    notify(t('notify.library.preset_updated'));
   } catch (error) { notify(error.message); }
 }
 function renderQueryChips() {
@@ -585,7 +588,7 @@ function renderQueryChips() {
     try {
       await api('/api/v2/collections', {method: 'POST', body: JSON.stringify({name, query: $('sidebarSearch').value.trim()})});
       await refresh();
-      notify(`Collection "${name}" saved`);
+      notify(t('notify.library.collection_saved', {name}));
     } catch (error) { notify(error.message); }
   };
   container.querySelectorAll('[data-chip-remove]').forEach(button => {
@@ -787,7 +790,7 @@ function markFilterAria() {
           await api('/api/filter-presets/delete',{method:'POST',body:JSON.stringify({name:button.dataset.deletePreset})});
           if (AppState.activeFilterPreset === button.dataset.deletePreset) AppState.activeFilterPreset = '';
           await refresh();
-          notify('Preset deleted');
+          notify(t('notify.library.preset_deleted'));
         } catch(error) { notify(error.message); }
       });
       const quick = $('bigBoxQuickPreset');
@@ -1154,7 +1157,7 @@ function markFilterAria() {
             selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id);
           }
           AppState.selectedId = id;
-          if (!AppState.bulkMode) { AppState.bulkMode = true; notify('Selection mode enabled. Use Bulk Edit to apply changes.'); }
+          if (!AppState.bulkMode) { AppState.bulkMode = true; notify(t('notify.library.selection_mode')); }
           renderGrid();
         } else {
           selectGame(id);
@@ -1307,7 +1310,7 @@ function markFilterAria() {
               await refresh();
               AppState.selectedId = game.id;
               renderDetails();
-              notify('Shelf entry is ready to launch');
+              notify(t('notify.library.shelf_ready'));
             }
           } catch(error) { notify(error.message); }
           return;
@@ -1325,7 +1328,7 @@ function markFilterAria() {
       if ($('captureScreenshot')) $('captureScreenshot').onclick = () => captureScreenshot(game.id);
       if ($('downloadBezel')) $('downloadBezel').onclick = () => downloadBezel(game.platform);
       if ($('uninstallGameyfin')) $('uninstallGameyfin').onclick = () => uninstallGameyfin(game);
-      if ($('exportHighscores')) $('exportHighscores').onclick = async () => { try { const result = await api('/api/highscores/export',{method:'POST',body:JSON.stringify({id:game.id})}); notify(`Exported ${result.files.length} high score file${result.files.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
+      if ($('exportHighscores')) $('exportHighscores').onclick = async () => { try { const result = await api('/api/highscores/export',{method:'POST',body:JSON.stringify({id:game.id})}); notify(t('notify.library.high_scores_exported', {count: result.files.length})); } catch(error) { notify(error.message); } };
       if ($('showInFolderButton')) $('showInFolderButton').onclick = () => nativeReveal(game.path);
       $('removeGameButton').onclick = () => removeGame(game.id,game.name);
       document.querySelectorAll('[data-extra]').forEach(button => button.onclick = () => {
@@ -1338,8 +1341,8 @@ function markFilterAria() {
       document.querySelectorAll('[data-manual-tile]').forEach(button => button.onclick = () => openManualReader(game));
       document.querySelectorAll('[data-document]').forEach(button => button.onclick = () => openReader(game, Number(button.dataset.document)));
       if ($('loadAchievements')) $('loadAchievements').onclick = () => loadAchievements(game.id);
-      if ($('downloadTrailer')) $('downloadTrailer').onclick = async () => { try { await api('/api/metadata/trailer',{method:'POST',body:JSON.stringify({id:game.id})}); await refresh(); renderDetails(); notify('Steam trailer downloaded'); } catch(error) { notify(error.message); } };
-      if ($('downloadGogMedia')) $('downloadGogMedia').onclick = async () => { try { await api('/api/metadata/gog',{method:'POST',body:JSON.stringify({id:game.id})}); await refresh(); renderDetails(); notify('GOG media downloaded'); } catch(error) { notify(error.message); } };
+      if ($('downloadTrailer')) $('downloadTrailer').onclick = async () => { try { await api('/api/metadata/trailer',{method:'POST',body:JSON.stringify({id:game.id,game_id:game.game_id})}); await refresh(); renderDetails(); notify(t('notify.library.steam_trailer_downloaded')); } catch(error) { notify(error.message); } };
+      if ($('downloadGogMedia')) $('downloadGogMedia').onclick = async () => { try { await api('/api/metadata/gog',{method:'POST',body:JSON.stringify({id:game.id,game_id:game.game_id})}); await refresh(); renderDetails(); notify(t('notify.library.gog_media_downloaded')); } catch(error) { notify(error.message); } };
       if ($('openBrowser')) $('openBrowser').onclick = () => { const url = game.wikipedia_url || `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(game.name)}`; nativeOpenExternal(url); };
       if ($('backupSaves')) {
         $('backupSaves').onclick = () => backupSaves(game.id);
@@ -1384,10 +1387,16 @@ function markFilterAria() {
         container.innerHTML = `<span class="description">Doctor unavailable: ${escapeHtml(error.message)}</span>`;
       }
     }
+    // The Remove access row for a folder grant made in this session.
+    function grantRowHtml(game) {
+      const granted = grantedAccess.get(String(game.game_id));
+      if (!granted) return '';
+      return `<div class="doctor-row" style="border-left:3px solid var(--focus);padding:var(--space-sm);margin:var(--space-sm) 0;background:var(--surface-card)"><div>${escapeHtml(t('library.grant.granted', {folder: granted.folder}))}</div><div style="margin-top:var(--space-xs)"><button type="button" class="icon-button" data-fix="revoke-access" data-app="${escapeHtml(granted.app_id)}" data-folder="${escapeHtml(granted.folder)}" style="border:1px solid var(--focus);color:var(--focus)">${escapeHtml(t('library.grant.revoke'))}</button></div></div>`;
+    }
     function renderDoctorChecks(container, preflight, game) {
       const checks = preflight.checks || [];
       if (!checks.length) {
-        container.innerHTML = '<span class="description" style="color:var(--brand)">Ready to launch ✓</span>';
+        container.innerHTML = '<span class="description" style="color:var(--brand)">Ready to launch ✓</span>' + grantRowHtml(game);
         return;
       }
       container.innerHTML = checks.map(check => {
@@ -1411,6 +1420,12 @@ function markFilterAria() {
           } else {
             fixBtn = `<button type="button" class="icon-button" data-fix="pick" style="border:1px solid var(--brand);color:var(--brand)">Choose emulator</button>`;
           }
+        } else if (kind === 'flatpak_grant') {
+          // The emulator is installed but its sandbox cannot read this folder. The
+          // exact command is shown; granting runs it only after the user confirms.
+          fixBtn = `<code class="description" style="display:block;overflow-wrap:anywhere">${escapeHtml(payload.command || '')}</code>`
+            + `<button type="button" class="primary" data-fix="grant-access" data-app="${escapeHtml(payload.app_id || '')}" data-folder="${escapeHtml(payload.path || '')}" data-command="${escapeHtml(payload.command || '')}">${escapeHtml(t('library.grant.button'))}</button>`
+            + `<button type="button" class="icon-button" data-fix="copy-command" data-command="${escapeHtml(payload.command || '')}" style="border:1px solid var(--focus);color:var(--focus)">${escapeHtml(t('library.grant.copy'))}</button>`;
         } else if (kind === 'explain_token') {
           const inv = (payload.invalid_tokens || []).join(', ');
           fixBtn = `<button type="button" class="icon-button" data-fix="explain" data-tokens="${escapeHtml(inv)}" style="border:1px solid var(--focus);color:var(--focus)">Explain token</button>`;
@@ -1419,36 +1434,81 @@ function markFilterAria() {
         }
         const severityColor = check.severity === 'error' ? 'var(--danger)' : 'var(--gold)';
         return `<div class="doctor-row" style="border-left:3px solid ${severityColor};padding:var(--space-sm);margin:var(--space-sm) 0;background:var(--surface-card)"><div><strong>${escapeHtml(check.code)}</strong>: ${escapeHtml(check.message)}</div><div style="margin-top:var(--space-xs)">${fixBtn}</div></div>`;
-      }).join('');
+      }).join('') + grantRowHtml(game);
       // Bind fix actions
       container.querySelectorAll('[data-fix="flatpak"]').forEach(btn => btn.onclick = async () => {
         const app = btn.dataset.app;
         if (!app) return;
-        try { await api('/api/emulators/install', {method:'POST', body: JSON.stringify({app_id: app})}); notify('Installing ' + app); } catch (e) { notify(e.message); }
+        try { await api('/api/emulators/install', {method:'POST', body: JSON.stringify({app_id: app})}); notify(t('notify.library.installing', {app})); } catch (e) { notify(e.message); }
       });
       container.querySelectorAll('[data-fix="reveal"]').forEach(btn => btn.onclick = () => {
         const p = btn.dataset.path;
-        if (p) { try { nativeReveal(p); } catch (e) { notify('BIOS path: ' + p); } }
-        else notify('No path to reveal');
+        if (p) { try { nativeReveal(p); } catch (e) { notify(t('notify.library.bios_path', {path: p})); } }
+        else notify(t('notify.library.no_path_to_reveal'));
       });
       container.querySelectorAll('[data-pick-platform]').forEach(btn => btn.onclick = async () => {
         const platform = btn.dataset.pickPlatform;
         const gid = btn.dataset.gameId;
         try {
           const g = AppState.games.find(x => String(x.game_id) === String(gid));
-          if (!g) return notify('Game not found');
-          await api('/api/game', {method:'POST', body: JSON.stringify({id: g.id, game: {...g, platform}})} );
+          if (!g) return notify(t('notify.library.game_not_found'));
+          await api('/api/game', {method:'POST', body: JSON.stringify({id: g.id, game_id: g.game_id, game: {...g, platform}})} );
           await refresh();
-          notify('Platform set to ' + platform);
+          notify(t('notify.library.platform_set', {platform}));
         } catch (e) { notify(e.message); }
       });
-      container.querySelectorAll('[data-fix="pick-core"], [data-fix="pick"]').forEach(btn => btn.onclick = () => {
+      container.querySelectorAll('[data-fix="pick"]').forEach(btn => btn.onclick = () => {
         // Open profiles/emulator catalog for picking
-        try { document.getElementById('profilesDialog')?.showModal(); } catch (e) { notify('Open Emulator profiles to choose'); }
+        try { document.getElementById('profilesDialog')?.showModal(); } catch (e) { notify(t('notify.library.open_profiles')); }
+      });
+      container.querySelectorAll('[data-fix="pick-core"]').forEach(btn => btn.onclick = () => {
+        openCorePicker(game, btn.dataset.core || '', fresh => loadDoctor(fresh, beginDetailsRequest()));
+      });
+      container.querySelectorAll('[data-fix="grant-access"]').forEach(btn => btn.onclick = async () => {
+        const confirmed = await confirmAction({
+          title: t('library.grant.title'),
+          message: btn.dataset.command,
+          consequence: t('library.grant.consequence'),
+          confirmLabel: t('library.grant.confirm'),
+        });
+        if (!confirmed) return;
+        try {
+          await api('/api/v2/launch/grant', {method: 'POST', body: JSON.stringify({app_id: btn.dataset.app, folder: btn.dataset.folder})});
+          grantedAccess.set(String(game.game_id), {app_id: btn.dataset.app, folder: btn.dataset.folder});
+          notify(t('notify.library.access_granted'));
+          loadDoctor(game, beginDetailsRequest());
+        } catch (error) {
+          notify(error.message);
+        }
+      });
+      container.querySelectorAll('[data-fix="revoke-access"]').forEach(btn => btn.onclick = async () => {
+        const confirmed = await confirmAction({
+          title: t('library.grant.revoke_title'),
+          message: btn.dataset.folder,
+          consequence: t('library.grant.revoke_consequence'),
+        });
+        if (!confirmed) return;
+        try {
+          await api('/api/v2/launch/grant/undo', {method: 'POST', body: JSON.stringify({app_id: btn.dataset.app, folder: btn.dataset.folder})});
+          grantedAccess.delete(String(game.game_id));
+          notify(t('notify.library.access_removed'));
+          loadDoctor(game, beginDetailsRequest());
+        } catch (error) {
+          notify(error.message);
+        }
+      });
+      container.querySelectorAll('[data-fix="copy-command"]').forEach(btn => btn.onclick = async () => {
+        const command = btn.dataset.command || '';
+        try {
+          await navigator.clipboard.writeText(command);
+          notify(t('notify.library.command_copied'));
+        } catch {
+          notify(command);
+        }
       });
       container.querySelectorAll('[data-fix="explain"]').forEach(btn => btn.onclick = () => {
         const toks = btn.dataset.tokens || '';
-        notify('Unknown tokens: ' + toks + '. Valid: {path} {name} {platform} etc. See launch_tokens docs.');
+        notify(t('notify.library.unknown_tokens', {tokens: toks, path: '{path}', name: '{name}', platform: '{platform}'}));
       });
     }
     async function loadRelated(id, controller) {
@@ -1498,7 +1558,7 @@ function markFilterAria() {
         try {
           await api('/api/v2/collections/delete', {method: 'POST', body: JSON.stringify({name: button.dataset.deleteCollection})});
           await refresh();
-          notify('Collection deleted');
+          notify(t('notify.library.collection_deleted'));
         } catch (error) { notify(error.message); }
       });
     }
@@ -1667,7 +1727,7 @@ function markFilterAria() {
           await api('/api/platform/documents',{method:'POST',body:JSON.stringify({platform:platformName,documents:rows})});
           AppState.appSettings.platform_documents = {...(AppState.appSettings.platform_documents || {}), [platformName]: rows};
           renderPlatformDetails(platformName);
-          notify('Platform documents saved');
+          notify(t('notify.library.platform_docs_saved'));
         } catch(error) { notify(error.message); }
       };
       document.querySelectorAll('[data-platform-doc]').forEach(button => button.onclick = () => {
@@ -1676,11 +1736,11 @@ function markFilterAria() {
         openReader({id:'platform', documents:[doc], name:platformName}, 0, `/api/platform/document?platform=${encodeURIComponent(platformName)}&index=${button.dataset.platformDoc}&token=${encodeURIComponent(token)}`);
       });
     }
-    async function favorite(id) { try { const result = await api('/api/favorite',{method:'POST',body:JSON.stringify({id})}); const game = AppState.games.find(item => item.id === id); if (game) { game.favorite = result.favorite; AppState._refreshCounter = (AppState._refreshCounter || 0) + 1; } renderGrid(); renderDetails(); } catch(error) { notify(error.message); } }
+    async function favorite(id) { try { const result = await api('/api/favorite',{method:'POST',body:JSON.stringify({id,game_id:gameIdOf(id)})}); const game = AppState.games.find(item => item.id === id); if (game) { game.favorite = result.favorite; AppState._refreshCounter = (AppState._refreshCounter || 0) + 1; } renderGrid(); renderDetails(); } catch(error) { notify(error.message); } }
     async function updateGameStatus(id, progress) {
       const game = AppState.games.find(item => item.id === id);
       if (!game) return;
-      try { await api('/api/game',{method:'POST',body:JSON.stringify({id,game:{...game,progress}})}); await refresh(); notify(`Progress set to ${progress || 'Not set'}`); } catch(error) { notify(error.message); }
+      try { await api('/api/game',{method:'POST',body:JSON.stringify({id,game_id:game.game_id,game:{...game,progress}})}); await refresh(); notify(t('notify.library.progress_set', {progress: progress || t('notify.library.not_set')})); } catch(error) { notify(error.message); }
     }
     async function removeGame(id,name) {
       const ok = await confirmAction({
@@ -1704,13 +1764,13 @@ function markFilterAria() {
       });
       try {
         // v2 delete is a soft delete into the trash bin; the toast offers Undo.
-        const result = await api('/api/v2/library/trash',{method:'POST',body:JSON.stringify({id,delete_media:alsoDeleteMedia})});
+        const result = await api('/api/v2/library/trash',{method:'POST',body:JSON.stringify({id,game_id:gameIdOf(id),delete_media:alsoDeleteMedia})});
         AppState.selectedId = null;
         await refresh();
         showTrashUndoToast(result.name || name, result.trash_id);
       } catch(error) { notify(error.message); }
     }
-    async function launchExtra(id,kind,index) { try { await api('/api/extra/launch',{method:'POST',body:JSON.stringify({id,kind,index})}); notify('Opened'); } catch(error) { notify(error.message); } }
+    async function launchExtra(id,kind,index) { try { await api('/api/extra/launch',{method:'POST',body:JSON.stringify({id,game_id:gameIdOf(id),kind,index})}); notify(t('notify.library.opened')); } catch(error) { notify(error.message); } }
     // ── Trash bin (S3): toast undo + trash view ──────────────────────────────
     // The View select gains a Trash option at runtime (index.html is owned by
     // other lanes); selecting it renders the bounded bin served by
@@ -1866,7 +1926,7 @@ function markFilterAria() {
       persistListSort();
     }
     function persistListSort() {
-      api('/api/settings',{method:'POST',body:JSON.stringify({list_sort:AppState.appSettings.list_sort || 'title',list_sort_dir:AppState.appSettings.list_sort_dir || ''})}).catch(() => {});
+      api('/api/settings',{method:'POST',body:JSON.stringify({list_sort:AppState.appSettings.list_sort || 'title',list_sort_dir:AppState.appSettings.list_sort_dir || ''})}).catch(error => notify(error.message || 'Could not save the sort order.'));
     }
     function applyStoredSort() {
       if (listSortApplied) return;
@@ -1933,10 +1993,20 @@ function markFilterAria() {
       if (img.tagName === 'IMG' && img.dataset.gid) img.closest('.cover')?.classList.add('cover-failed');
     }, true);
     $('grouping').onchange = async () => {
+      const previous = AppState.appSettings.cover_grouping;
       AppState.appSettings.cover_grouping = $('grouping').value;
       if ($('groupingSetting')) $('groupingSetting').value = $('grouping').value;
       renderGrid();
-      await api('/api/settings',{method:'POST',body:JSON.stringify({cover_grouping:AppState.appSettings.cover_grouping})}).catch(() => {});
+      try {
+        await api('/api/settings',{method:'POST',body:JSON.stringify({cover_grouping:AppState.appSettings.cover_grouping})});
+      } catch (error) {
+        // Roll back: a failed save used to look applied until the next launch.
+        AppState.appSettings.cover_grouping = previous;
+        $('grouping').value = previous ?? '';
+        if ($('groupingSetting')) $('groupingSetting').value = previous ?? '';
+        renderGrid();
+        notify(error.message || 'Could not save the cover grouping.');
+      }
     };
     if ($('esrbFilter')) $('esrbFilter').onchange = () => { leaveActivePreset(); renderGrid(); };
     const libraryPaneElement = document.querySelector('main.library');
@@ -1960,11 +2030,20 @@ function markFilterAria() {
       window.addEventListener('resize', () => { gridRowHeight = 0; applyDetailsLayout(); renderGrid(); });
     }
     $('viewToggleButton').onclick = async () => {
-      AppState.appSettings.library_view = (AppState.appSettings.library_view || 'grid') === 'list' ? 'grid' : 'list';
+      const previous = AppState.appSettings.library_view || 'grid';
+      AppState.appSettings.library_view = previous === 'list' ? 'grid' : 'list';
       if ($('libraryViewSetting')) $('libraryViewSetting').value = AppState.appSettings.library_view;
       applyLocaleStrings();
       renderGrid();
-      await api('/api/settings',{method:'POST',body:JSON.stringify({library_view:AppState.appSettings.library_view})}).catch(() => {});
+      try {
+        await api('/api/settings',{method:'POST',body:JSON.stringify({library_view:AppState.appSettings.library_view})});
+      } catch (error) {
+        AppState.appSettings.library_view = previous;
+        if ($('libraryViewSetting')) $('libraryViewSetting').value = previous;
+        applyLocaleStrings();
+        renderGrid();
+        notify(error.message || 'Could not save the library view.');
+      }
     };
     // F8: the only drop handlers in the project were on #dropZone, and nothing
     // prevented the default at document level. Two real consequences: dropping a
@@ -2155,6 +2234,32 @@ function openArtworkDoctor() {
   renderArtworkDoctor();
 }
 
+// Readiness badges come from the cached Launch Audit. The map is refetched when an
+// audit finishes and when the library's size changes, because the server withholds
+// the statuses of a report that no longer describes the library. A failed fetch
+// shows no badges rather than stale ones.
+let launchReadinessCount = -1;
+async function refreshLaunchReadiness() {
+  try {
+    const result = await api('/api/v2/launch/audit/status');
+    AppState.launchReadiness = result.statuses || {};
+  } catch {
+    AppState.launchReadiness = {};
+  }
+  renderGrid();
+}
+document.addEventListener('app:launch-audit-loaded', refreshLaunchReadiness);
+// A background audit (the scheduled run) finishes without the panel open; the grid still needs the new report.
+subscribe('job.finished', event => {
+  let payload;
+  try { payload = JSON.parse(event.data); } catch { return; }
+  if (payload?.name === 'launch-audit') refreshLaunchReadiness();
+});
+document.addEventListener('app:state-refreshed', () => {
+  if (AppState.games.length === launchReadinessCount) return;
+  launchReadinessCount = AppState.games.length;
+  refreshLaunchReadiness();
+});
 document.addEventListener('app:palette-artwork-doctor', () => openArtworkDoctor());
 
 // ── Missing-file repair wizard ─────────────────────────────────────────
@@ -2167,12 +2272,69 @@ let repairMatches = [];
 let repairAmbiguous = [];
 let repairUnmatched = [];
 let repairFolder = '';
+// Set when the wizard opens from one Launch Check group; the scan is then limited to its games.
+let repairScopeGroup = '';
 const repairSelected = new Set();
 
 function repairPairKey(item) { return `${item.id}:${item.field}`; }
 
 function repairKindLabel(kind) {
   return kind === 'media' ? t('repair.kind_media') : t('repair.kind_game');
+}
+
+let coreDialog = null;
+
+function ensureCoreDialog() {
+  if (coreDialog) return coreDialog;
+  coreDialog = document.createElement('dialog');
+  coreDialog.id = 'coreDialog';
+  coreDialog.className = 'detail-dialog core-dialog';
+  coreDialog.setAttribute('aria-modal', 'true');
+  coreDialog.innerHTML = `<div class="dialog-head"><h2>${escapeHtml(t('library.core.title'))}</h2><button type="button" class="icon-button" data-core-close aria-label="${escapeHtml(t('common.close'))}">×</button></div><div class="core-body" id="coreBody"></div>`;
+  document.body.appendChild(coreDialog);
+  coreDialog.querySelector('[data-core-close]').onclick = () => closeDialog(coreDialog);
+  coreDialog.addEventListener('cancel', event => { event.preventDefault(); closeDialog(coreDialog); });
+  return coreDialog;
+}
+
+// Lists the RetroArch cores installed here and sets the one this game launches with.
+// The Doctor passes onSet, which re-runs its own checks against the fresh game record.
+async function openCorePicker(game, missing, onSet) {
+  const dialog = ensureCoreDialog();
+  const body = $('coreBody');
+  if (!dialog.open) openDialog(dialog);
+  body.innerHTML = `<p class="description">${escapeHtml(t('library.core.loading'))}</p>`;
+  let cores;
+  try {
+    cores = (await api('/api/v2/launch/cores')).cores || [];
+  } catch (error) {
+    body.innerHTML = `<p class="description">${escapeHtml(error.message)}</p>`;
+    return;
+  }
+  const intro = `<p class="description">${escapeHtml(t('library.core.intro', { core: missing || game.name || '' }))}</p>`;
+  const rows = cores.map(core => {
+    const where = core.location === 'flatpak' ? t('library.core.location_flatpak') : t('library.core.location_system');
+    return `<button type="button" class="metadata-result icon-button" data-core-pick="${escapeHtml(core.name)}"><strong>${escapeHtml(core.name)}</strong> <span class="description">${escapeHtml(where)}</span></button>`;
+  }).join('');
+  body.innerHTML = intro
+    + `<div class="repair-list">${rows || `<p class="description">${escapeHtml(t('library.core.none'))}</p>`}</div>`
+    + `<div class="extras"><button type="button" class="icon-button" data-core-default>${escapeHtml(t('library.core.default'))}</button></div>`;
+  body.querySelectorAll('[data-core-pick]').forEach(button => button.onclick = () => setGameCore(game, button.dataset.corePick, dialog, onSet));
+  body.querySelector('[data-core-default]').onclick = () => setGameCore(game, '', dialog, onSet);
+}
+
+async function setGameCore(game, core, dialog, onSet) {
+  try {
+    await api('/api/v2/launch/core', {method: 'POST', body: JSON.stringify({game_id: game.game_id, core})});
+  } catch (error) {
+    notify(error.message);
+    return;
+  }
+  closeDialog(dialog);
+  await refresh();
+  const fresh = AppState.games.find(item => String(item.game_id) === String(game.game_id)) || game;
+  notify(core ? t('notify.library.core_set', { core }) : t('notify.library.core_default'));
+  if (onSet) onSet(fresh);
 }
 
 function ensureRepairDialog() {
@@ -2202,6 +2364,7 @@ function renderRepairBody() {
   const body = $('repairBody');
   if (!body) return;
   const parts = [];
+  if (repairScopeGroup) parts.push(`<p class="description">${escapeHtml(t('repair.scoped'))}</p>`);
   if (!repairScanItems.length) {
     parts.push(`<p class="description">${escapeHtml(t('repair.empty'))}</p>`);
   } else {
@@ -2230,7 +2393,8 @@ function renderRepairBody() {
 
 async function scanRepair() {
   try {
-    const result = await api('/api/v2/library/repair');
+    const query = repairScopeGroup ? `?audit_group=${encodeURIComponent(repairScopeGroup)}` : '';
+    const result = await api(`/api/v2/library/repair${query}`);
     repairScanItems = result.items || [];
   } catch (error) {
     repairScanItems = [];
@@ -2251,7 +2415,7 @@ async function pickRepairFolder() {
   const button = $('repairFind');
   setButtonBusy(button, true);
   try {
-    const plan = await api('/api/v2/library/repair/preview', {method: 'POST', body: JSON.stringify({folder, include_media: true})});
+    const plan = await api('/api/v2/library/repair/preview', {method: 'POST', body: JSON.stringify({folder, include_media: true, audit_group: repairScopeGroup})});
     repairFolder = plan.folder || folder;
     repairMatches = plan.matches || [];
     repairAmbiguous = plan.ambiguous || [];
@@ -2277,7 +2441,7 @@ async function applyRepairPlan() {
   try {
     // Dry-run first: the transaction re-validates, and skipped rows are reported
     // instead of silently overwriting edits made since the preview.
-    const result = await api('/api/v2/library/repair/apply', {method: 'POST', body: JSON.stringify({folder: repairFolder, include_media: true, selection})});
+    const result = await api('/api/v2/library/repair/apply', {method: 'POST', body: JSON.stringify({folder: repairFolder, include_media: true, selection, audit_group: repairScopeGroup})});
     if (result.updated) notify('success', t('repair.applied', {count: result.updated}));
     else notify('info', t('repair.nothing_applied'));
     if (result.skipped?.length) notify('warning', t('repair.skipped', {count: result.skipped.length}));
@@ -2290,7 +2454,8 @@ async function applyRepairPlan() {
   }
 }
 
-export function openRepairWizard() {
+export function openRepairWizard(options = {}) {
+  repairScopeGroup = String(options.auditGroup || '');
   ensureRepairDialog();
   if (!repairDialog.open) openDialog(repairDialog);
   $('repairBody').innerHTML = `<p class="description">${escapeHtml(t('repair.scanning'))}</p>`;

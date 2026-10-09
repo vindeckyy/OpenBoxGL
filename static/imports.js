@@ -1,3 +1,4 @@
+import { importedCount } from './pure.js';
 import './setup.js';
 import { $, escapeHtml } from './util.js';
 import { api, notify, nativePickFolder, nativePickFile, AppState } from './state.js';
@@ -37,7 +38,7 @@ async function pickEmulatorForPlatform(platform, items) {
           ? await api('/api/import/wizard',{method:'POST',body:JSON.stringify({folder,chosen_emulators:chosen})})
           : preview;
         await refresh();
-        notify(`${result.added} games imported${result.installed?.length ? ` · installed ${result.installed.length} emulator(s)` : ''}`);
+        notify(`${importedCount(preview, result)} games imported${result.installed?.length ? ` · installed ${result.installed.length} emulator(s)` : ''}`);
       } catch(error) { notify(error.message); }
     }
     async function importSteam() {
@@ -103,16 +104,21 @@ async function pickEmulatorForPlatform(platform, items) {
           ? await api('/api/import/wizard',{method:'POST',body:JSON.stringify({folder,chosen_emulators:chosen})})
           : preview;
         await refresh();
-        notify(`${result.added} games imported${result.installed?.length ? ` · installed ${result.installed.length} emulator(s)` : ''}`);
+        notify(`${importedCount(preview, result)} games imported${result.installed?.length ? ` · installed ${result.installed.length} emulator(s)` : ''}`);
       } catch(error) { notify(error.message); }
     }
     async function runStartupStorefrontImports() {
+      // Each source is attempted even if an earlier one fails. Failures used to
+      // vanish; now they are named once, at the end.
       const settings = AppState.appSettings.storefront_auto_import || {};
-      if (settings.steam) await api('/api/import/steam',{method:'POST',body:'{}'}).catch(() => {});
-      if (settings.heroic) await api('/api/import/heroic',{method:'POST',body:'{}'}).catch(() => {});
-      if (settings.epic) await api('/api/import/epic',{method:'POST',body:'{}'}).catch(() => {});
-      if (settings.lutris) await api('/api/import/lutris',{method:'POST',body:'{}'}).catch(() => {});
-      if (settings.gameyfin) await api('/api/storefront/import',{method:'POST',body:JSON.stringify({source:'gameyfin'})}).catch(() => {});
+      const failed = [];
+      const attempt = (label, request) => request.catch(() => { failed.push(label); });
+      if (settings.steam) await attempt('Steam', api('/api/import/steam',{method:'POST',body:'{}'}));
+      if (settings.heroic) await attempt('Heroic', api('/api/import/heroic',{method:'POST',body:'{}'}));
+      if (settings.epic) await attempt('Epic', api('/api/import/epic',{method:'POST',body:'{}'}));
+      if (settings.lutris) await attempt('Lutris', api('/api/import/lutris',{method:'POST',body:'{}'}));
+      if (settings.gameyfin) await attempt('Gameyfin', api('/api/storefront/import',{method:'POST',body:JSON.stringify({source:'gameyfin'})}));
+      if (failed.length) notify(t('notify.imports.auto_failed', {sources: failed.join(', ')}));
     }
 
 let launchBoxPreview = null;

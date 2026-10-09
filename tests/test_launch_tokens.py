@@ -21,8 +21,21 @@ class TestPlaceholders(unittest.TestCase):
             "{app_id}", "{heroic_app_id}", "{lutris_id}",
             "{rom_name}", "{DataDir}", "{EmulatorDir}",
             "{state_path}", "{state_dir}", "{state_config}", "{state_name}",
+            "{retroarch_core}",
         }
         self.assertEqual(set(PLACEHOLDERS.keys()), expected)
+
+
+class TestNoReexpansion(unittest.TestCase):
+    """Substituted values are never scanned for tokens again."""
+
+    def test_value_containing_token_is_literal(self):
+        game = {"path": "/roms/{name}.iso", "name": "{path} Deluxe"}
+        self.assertEqual(apply_tokens("{path}|{name}", game), "/roms/{name}.iso|{path} Deluxe")
+        self.assertEqual(
+            build_launch_args("emu {path} --title {name}", game),
+            ["emu", "/roms/{name}.iso", "--title", "{path} Deluxe"],
+        )
 
 
 class TestApplyTokens(unittest.TestCase):

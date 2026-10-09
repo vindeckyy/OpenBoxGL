@@ -3,6 +3,8 @@
 import re
 from datetime import datetime
 
+from pkg.platform_compat import parse_timestamp
+
 PROGRESS = {"", "Unplayed", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned"}
 # Coordinator decision (ADR-0051): do NOT create a parallel completion_status
 # field. "" stays the stored "unset" value; UI and queries display it as
@@ -263,7 +265,12 @@ def _clean_bulk_fields(changes):
             except (ValueError, TypeError):
                 raise ValueError(f"{field} must be a valid integer.") from None
         elif field == "last_played":
-            clean[field] = str(value).strip()
+            text = str(value).strip()
+            # Every date rule (played:, idle, picker recency) skips a value it
+            # cannot parse, so a typo like "yesterday" would hide the game silently.
+            if text and parse_timestamp(text) is None:
+                raise ValueError("last_played must be a date or date and time.")
+            clean[field] = text
         elif field == "progress":
             value = canon_progress(value)
             if value not in PROGRESS:
@@ -355,7 +362,13 @@ def apply_progress_automation(game, settings, now=None):
     if idle_days and game.get("last_played"):
         try:
             last = datetime.fromisoformat(str(game["last_played"]))
-            if (now - last).days >= idle_days and game.get("progress") == "Playing":
+            current = now
+            if (last.tzinfo is None) != (current.tzinfo is None):
+                # Compare an offset-carrying timestamp (bulk edit, import) in
+                # local wall-clock time instead of raising TypeError.
+                last = last.astimezone().replace(tzinfo=None)
+                current = current.astimezone().replace(tzinfo=None)
+            if (current - last).days >= idle_days and game.get("progress") == "Playing":
                 game["progress"] = "Paused"
         except ValueError:
             pass

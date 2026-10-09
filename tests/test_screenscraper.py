@@ -185,6 +185,16 @@ class NormalizeTest(unittest.TestCase):
         self.assertIn("cover", kinds)
         self.assertIn("screenshots", kinds)
 
+    def test_normalize_jeu_string_id(self):
+        # api2 JSON carries ids as digit strings; they must survive so two
+        # agreeing hash lookups reach the dual (auto-apply) tier.
+        first = ss._normalize_jeu({"response": {"jeu": {"id": "3"}}})
+        second = ss._normalize_jeu({"response": {"jeu": {"id": " 3 "}}})
+        self.assertEqual(first["id"], 3)
+        self.assertEqual(ss.hash_tier(first, second), ss.HASH_TIER_DUAL)
+        self.assertIsNone(ss._normalize_jeu({"response": {"jeu": {"id": "abc"}}})["id"])
+        self.assertIsNone(ss._normalize_jeu({"response": {"jeu": {"id": True}}})["id"])
+
 
 class CacheTest(unittest.TestCase):
     def test_roundtrip_and_expiry(self):

@@ -200,6 +200,8 @@ CONTRAST_PAIRS = [
     ("on-active", "active", 4.5, "text on the active colour"),
     ("on-active", "accent", 4.5, "text on the accent colour"),
     ("on-danger", "danger", 4.5, "text on danger"),
+    ("activity-count-fg", "activity-count-bg", 4.5, "activity count badge"),
+    ("dna-toggle-active-fg", "dna-toggle-active-bg", 4.5, "active DNA search mode"),
     ("toast-success-fg", "surface-card", 4.5, "success toast"),
     ("toast-info-fg", "surface-card", 4.5, "info toast"),
     ("toast-warning-fg", "surface-card", 4.5, "warning toast"),
@@ -222,6 +224,14 @@ class ContrastMatrixTests(unittest.TestCase):
                 self.assertIsNotNone(b, f"{path.name}: --{bg} must resolve to a colour")
                 self.assertGreaterEqual(_contrast_ratio(a, b), minimum,
                                         f"{path.name}: {label} (--{fg} on --{bg}) is {_contrast_ratio(a, b):.2f}:1")
+
+    def test_error_banner_text_uses_on_danger(self):
+        """The error banner paints --danger; its text must be --on-danger, since stock
+        themes pick a bright --danger where --text drops to about 2.5:1."""
+        css = APP_CSS.read_text(encoding="utf-8")
+        body = next(body for selector, body in _css_blocks(css) if selector.endswith(".error-banner"))
+        self.assertIn("background:var(--danger)", body)
+        self.assertIn("color:var(--on-danger)", body)
 
 
 def _css_blocks(css):

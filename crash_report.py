@@ -15,8 +15,10 @@ from pathlib import Path
 
 from openbox_logging import read_diagnostic_log
 
-_HOME_PATH_RE = re.compile(r"/home/[^/]+")
-_WINDOWS_HOME_PATH_RE = re.compile(r"[A-Za-z]:\\Users\\[^\\]+", re.IGNORECASE)
+_HOME_PATH_RE = re.compile(r"/(?:home|Users)/[^/\s'\"]+")
+# Windows profiles appear as C:\Users\x, C:/Users/x, and repr/JSON-escaped
+# C:\\Users\\x in log text; all three must hide the user name.
+_WINDOWS_HOME_PATH_RE = re.compile(r"[A-Za-z]:(?:\\\\|\\|/)Users(?:\\\\|\\|/)[^\\/\s'\"]+", re.IGNORECASE)
 _REQUEST_ID_RE = re.compile(r"\[([0-9a-f]{8})\]")
 
 
@@ -24,8 +26,10 @@ def tokenize_home_paths(value):
     """Replace home directories and /home/<user> or C:\\Users\\<user> segments with ~."""
     home = os.path.expanduser("~")
     if isinstance(value, str):
-        if home:
-            value = value.replace(home, "~")
+        # Skip a root or unresolved home ("/" would turn every slash into ~),
+        # and only match whole path segments so /home/al never eats /home/alice.
+        if home and home.rstrip("/\\") and home != "~":
+            value = re.sub(re.escape(home) + r"(?![\w.-])", "~", value)
         value = _HOME_PATH_RE.sub("~", value)
         return _WINDOWS_HOME_PATH_RE.sub("~", value)
     if isinstance(value, dict):

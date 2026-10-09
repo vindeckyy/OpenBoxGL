@@ -71,11 +71,13 @@ function ensureToggle() {
   toggle.className = 'dna-mode-toggle';
   toggle.id = 'dnaModeToggle';
   toggle.setAttribute('role', 'group');
-  toggle.setAttribute('aria-label', t('dna.mode_label'));
-  toggle.title = t('dna.privacy_note');
+  // The labels are data-i18n attributes, not text: this runs before the locale loads, and the
+  // app's translation pass fills them in when it does.
+  toggle.setAttribute('data-i18n-aria-label', 'dna.mode_label');
+  toggle.setAttribute('data-i18n-title', 'dna.privacy_note');
   toggle.innerHTML =
-    `<button type="button" class="dna-mode" data-dna-mode="title" aria-pressed="true">${escapeHtml(t('dna.mode_title'))}</button>` +
-    `<button type="button" class="dna-mode" data-dna-mode="smart" aria-pressed="false">${escapeHtml(t('dna.mode_smart'))}</button>`;
+    `<button type="button" class="dna-mode" data-dna-mode="title" data-i18n="dna.mode_title" aria-pressed="true">${escapeHtml(t('dna.mode_title'))}</button>` +
+    `<button type="button" class="dna-mode" data-dna-mode="smart" data-i18n="dna.mode_smart" aria-pressed="false">${escapeHtml(t('dna.mode_smart'))}</button>`;
   toggle.addEventListener('click', event => {
     const btn = event.target.closest('[data-dna-mode]');
     if (btn) setDnaSearchMode(btn.dataset.dnaMode);

@@ -277,10 +277,13 @@ def list_events(
             days = float(days)
         except ValueError:
             raise SyncValidationError("days must be a positive number") from None
-    if days is not None and float(days) <= 0:
+    # ``not > 0`` also rejects NaN; inf would overflow timedelta below.
+    if days is not None and (not float(days) > 0 or float(days) == float("inf")):
         raise SyncValidationError("days must be a positive number")
     offset = max(0, int(offset or 0))
-    limit = EVENT_PAGE_DEFAULT if limit is None else min(EVENT_PAGE_MAX, int(limit))
+    # A negative limit made ``matched[offset:offset + limit]`` an open-ended
+    # slice that returned nearly the whole journal past EVENT_PAGE_MAX.
+    limit = EVENT_PAGE_DEFAULT if limit is None else max(0, min(EVENT_PAGE_MAX, int(limit)))
     cutoff = None
     if days is not None:
         cutoff = (now if isinstance(now, datetime) else _utc_now()) - timedelta(days=float(days))

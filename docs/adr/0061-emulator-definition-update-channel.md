@@ -50,3 +50,21 @@ never contained an `index.json`, so the first real check would have 404ed.
   bundled set. If that ever matters, put the pack version inside the signed archive and
   refuse a lower one.
 - Publishing depends on a maintainer holding the key; the code cannot do it.
+
+## Addendum (1.16.1): schema 2, the core key, and the signed pack release
+
+- **Schema 2.** A RetroArch definition names its core once, in `retroarch_core: <file>`, and puts
+  `{retroarch_core}` where the core's path goes in `startup_args`. The builder puts the system path
+  (`/usr/lib/libretro/`) there, and the Flatpak mapping applies to it as before. Schema 1 definitions
+  keep working. The 23 RetroArch definitions are on schema 2.
+- **Refusal.** A pack whose `schema_version` is above `SUPPORTED_SCHEMA_VERSION` (2) is refused at
+  validation with a message that names the version it needs. It is not half-read.
+- **Per-game core.** A game can launch with an installed core instead of the definition's default. The
+  choice is stored on the game as `retroarch_core` (`POST /api/v2/launch/core`) and only a plain
+  `*_libretro.so` name is accepted.
+- **Pack release.** `release.yml` builds `community-defs.tar.gz`, signs it with the release key, verifies
+  it against the committed public key, and uploads it with its signature and `index.json` to the
+  `emulator-defs` release, which is where the channel reads (`PACK_BASE`). The step refuses to run
+  without `OPENBOX_SIGNING_KEY`, as the other artifacts do. Verified locally with a throwaway key:
+  `verify_release` and the channel's `download_and_verify` both accept the signed pack. The first real
+  pack needs a tagged CI run with the maintainer's key.

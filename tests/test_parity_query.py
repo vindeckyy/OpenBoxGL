@@ -15,7 +15,7 @@ import re
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -691,6 +691,31 @@ class ParseRouteTest(unittest.TestCase):
         handler = _handler()
         with self.assertRaises(BadRequest):
             handler._api_post_api_v2_library_query_parse({"query": "x " * 4000})
+
+
+class OffsetTimestampTest(unittest.TestCase):
+    """A timestamp with Z or an offset must be compared in local time, not dropped.
+
+    Before this, ``played recently`` matched a game played two days ago only when
+    its ``last_played`` was naive local time (what the app writes) and silently
+    missed the same moment written with ``Z``.
+    """
+
+    def _matches(self, text, stamp):
+        game = {"name": "G", "last_played": stamp, "play_count": 3, "progress": "Playing"}
+        return parity_query.game_matches_query(game, parity_query.parse_query(text))
+
+    def test_played_recently_matches_naive_and_offset_stamps_alike(self):
+        two_days_ago = datetime.now() - timedelta(days=2)
+        naive = two_days_ago.isoformat(timespec="seconds")
+        zulu = two_days_ago.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        self.assertTrue(self._matches("played recently", naive))
+        self.assertTrue(self._matches("played recently", zulu))
+        self.assertTrue(self._matches("played recently", naive.replace("T", " ")))
+
+    def test_an_unparseable_stamp_is_skipped_rather_than_raising(self):
+        self.assertFalse(self._matches("played recently", "yesterday"))
+        self.assertFalse(self._matches("played recently", ""))
 
 
 if __name__ == "__main__":

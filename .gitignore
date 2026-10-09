@@ -66,3 +66,6 @@ local/
 /ui.log
 /w.log
 
+
+# Per-user Claude Code settings (written by the harness, not by the project)
+.claude/settings.local.json

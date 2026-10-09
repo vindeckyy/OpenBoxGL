@@ -66,7 +66,7 @@ class ParityApiTests(unittest.TestCase):
                 Handler.import_storefront_catalog(handler, handler.body())
         handler.send_json.assert_called_with(200, {"added": 0, "found": 0, "imported": 0})
 
-    def test_delete_steam_games_keeps_other_library_entries(self):
+    def test_delete_steam_games_moves_them_to_trash_and_restore_brings_them_back(self):
         from openbox import load_state, save_state
         from web_app import Handler
 
@@ -78,9 +78,69 @@ class ParityApiTests(unittest.TestCase):
             ],
             "profiles": {}, "history": [], "settings": {}, "playlists": [],
         })
+        # The state layer assigns each game's stable id on save, and playlists reference those ids.
+        games = load_state()["games"]
+        ids = {game["name"]: game["game_id"] for game in games}
+        save_state({
+            "games": games, "profiles": {}, "history": [], "settings": {},
+            "playlists": [{"name": "Faves", "type": "manual", "members": [ids["Steam import"], ids["ROM"]]}],
+        })
         Handler.delete_steam_games(self.handler, {})
-        self.assertEqual(self.handler.send_json.call_args[0], (200, {"removed": 1}))
-        self.assertEqual([game["name"] for game in load_state()["games"]], ["Manual Steam shortcut", "ROM"])
+        self.assertEqual(self.handler.send_json.call_args[0], (200, {"removed": 1, "left": 0}))
+        state = load_state()
+        self.assertEqual([game["name"] for game in state["games"]], ["Manual Steam shortcut", "ROM"])
+        self.assertEqual([entry["name"] for entry in state["trash"]], ["Steam import"])
+        self.assertEqual(state["playlists"][0]["members"], [ids["ROM"]])
+
+        Handler._api_post_api_v2_library_trash_restore(self.handler, {"trash_id": state["trash"][0]["trash_id"]})
+        restored = load_state()
+        self.assertIn("Steam import", [game["name"] for game in restored["games"]])
+        self.assertIn(ids["Steam import"], restored["playlists"][0]["members"])
+        self.assertEqual(restored["trash"], [])
+
+    def test_a_large_steam_removal_moves_only_what_the_trash_has_room_for(self):
+        from openbox import load_state, save_state
+        from state_store import TRASH_CAP
+        from web_app import Handler
+
+        total = TRASH_CAP + 5
+        save_state({
+            "games": [{"game_id": f"steam-{n}", "name": f"Steam {n}", "source": "Steam"} for n in range(total)],
+            "profiles": {}, "history": [], "settings": {}, "playlists": [],
+        })
+        Handler.delete_steam_games(self.handler, {})
+        self.assertEqual(self.handler.send_json.call_args[0], (200, {"removed": TRASH_CAP, "left": 5}))
+        self.assertEqual(len(load_state()["trash"]), TRASH_CAP)
+        self.assertEqual(len(load_state()["games"]), 5)
+
+    def test_a_steam_removal_never_evicts_what_the_user_already_trashed(self):
+        from datetime import datetime
+        from openbox import load_state, save_state
+        from state_store import TRASH_CAP
+        from web_app import Handler
+
+        now = datetime.now().isoformat(timespec="seconds")
+        earlier = [{"trash_id": f"old-{n}", "trashed_at": now, "index": 0, "game_id": f"old-{n}", "name": f"Old {n}",
+                    "platform": "", "game": {"game_id": f"old-{n}", "name": f"Old {n}"}, "playlists": []}
+                   for n in range(TRASH_CAP - 3)]
+        save_state({
+            "games": [{"game_id": f"steam-{n}", "name": f"Steam {n}", "source": "Steam"} for n in range(10)],
+            "profiles": {}, "history": [], "settings": {}, "playlists": [], "trash": earlier,
+        })
+        Handler.delete_steam_games(self.handler, {})
+        self.assertEqual(self.handler.send_json.call_args[0], (200, {"removed": 3, "left": 7}))
+        trash_ids = [entry["trash_id"] for entry in load_state()["trash"]]
+        self.assertEqual(trash_ids[:TRASH_CAP - 3], [entry["trash_id"] for entry in earlier])
+
+    def test_steam_removal_with_nothing_to_remove_touches_no_trash(self):
+        from openbox import load_state, save_state
+        from web_app import Handler
+
+        save_state({"games": [{"game_id": "rom-1", "name": "ROM", "source": "Folder"}],
+                    "profiles": {}, "history": [], "settings": {}, "playlists": []})
+        Handler.delete_steam_games(self.handler, {})
+        self.assertEqual(self.handler.send_json.call_args[0], (200, {"removed": 0, "left": 0}))
+        self.assertEqual(load_state()["trash"], [])
 
     def test_remove_import_exclusion_reports_actual_removal(self):
         from web_app import Handler

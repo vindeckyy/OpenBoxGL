@@ -332,19 +332,24 @@ def _load_save_manifest(package):
 
 def _match_save_roots(manifest, configured):
     saved_roots = manifest.get("roots", []) if isinstance(manifest, dict) else []
-    if not isinstance(saved_roots, list) or len(saved_roots) != len(configured):
+    # backup_saves records only the configured roots that existed at backup
+    # time, so the manifest is matched by path as a subset of the configured
+    # roots, in manifest order (archive member indices follow that order).
+    if not isinstance(saved_roots, list) or not saved_roots or len(saved_roots) > len(configured):
         raise ValueError("Save backup roots do not match this game.")
     roots = []
-    for index, item in enumerate(saved_roots):
+    seen = set()
+    for item in saved_roots:
         if not isinstance(item, dict):
             raise ValueError("Save backup roots do not match this game.")
-        saved_path = str(item.get("path", ""))
-        if Path(saved_path).expanduser() != configured[index]:
+        saved_path = Path(str(item.get("path", ""))).expanduser()
+        if saved_path not in configured or saved_path in seen:
             raise ValueError("Save backup roots do not match this game.")
+        seen.add(saved_path)
         # The manifest records the root's type at backup time.  A missing root
         # is restored as that recorded type; a live type swap is still unsafe.
         expected_file = bool(item.get("file"))
-        current = configured[index]
+        current = saved_path
         if current.exists() and current.is_file() != expected_file:
             raise ValueError("Save backup root type does not match this game.")
         _reject_symlink_components(current)

@@ -7,6 +7,7 @@ and ``pkg.parity.parity_emulator_defs.build_launch_command``.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path, PurePosixPath
 
 from pkg.platform_compat import split_command
@@ -72,6 +73,8 @@ def _build_context(game, *, path=None, data_dir="", emulator_dir="", state_path=
 # PLACEHOLDERS maps each ``{token}`` to a function that extracts its value
 # from a context dict built by :func:`_build_context`.
 PLACEHOLDERS = {
+    # Expanded from the definition's retroarch_core before this table runs; see parity_emulator_defs.
+    "{retroarch_core}": lambda ctx: ctx.get("retroarch_core", ""),
     "{path}": lambda ctx: ctx["path"],
     "{Path}": lambda ctx: ctx["path"],
     "{ImagePath}": lambda ctx: ctx["path"],
@@ -96,6 +99,19 @@ PLACEHOLDERS = {
     "{state_config}": lambda ctx: ctx["state_config"],
     "{state_name}": lambda ctx: ctx["state_name"],
 }
+
+
+_TOKEN_RE = re.compile("|".join(re.escape(token) for token in PLACEHOLDERS))
+
+
+def _substitute(text, ctx):
+    """Replace every known token in one pass.
+
+    A sequential ``str.replace`` per token re-expanded tokens that appeared
+    inside an already substituted value (a ROM named ``{name}.iso`` or a game
+    titled ``{path}``), so the argument no longer matched the real file.
+    """
+    return _TOKEN_RE.sub(lambda match: PLACEHOLDERS[match.group(0)](ctx), text)
 
 
 def apply_tokens(template, game, *, path=None, data_dir="", emulator_dir="", state_path="", state_dir="", state_config="", state_name=""):
@@ -127,10 +143,7 @@ def apply_tokens(template, game, *, path=None, data_dir="", emulator_dir="", sta
     ctx = _build_context(game, path=path, data_dir=data_dir, emulator_dir=emulator_dir,
                          state_path=state_path, state_dir=state_dir, state_config=state_config,
                          state_name=state_name)
-    result = template
-    for token, extractor in PLACEHOLDERS.items():
-        result = result.replace(token, extractor(ctx))
-    return result
+    return _substitute(template, ctx)
 
 
 def build_launch_args(template, game, *, path=None, data_dir="", emulator_dir="", state_path="", state_dir="", state_config="", state_name=""):
@@ -150,18 +163,11 @@ def build_launch_args(template, game, *, path=None, data_dir="", emulator_dir=""
     ctx = _build_context(game, path=path, data_dir=data_dir, emulator_dir=emulator_dir,
                          state_path=state_path, state_dir=state_dir, state_config=state_config,
                          state_name=state_name)
-    result = []
-    for part in parts:
-        for token, extractor in PLACEHOLDERS.items():
-            part = part.replace(token, extractor(ctx))
-        result.append(part)
-    return result
+    return [_substitute(part, ctx) for part in parts]
 
 
 def extract_tokens(template):
     """Return set of ``{token}`` strings found in *template*."""
-    import re
-
     if not template:
         return set()
     return set(re.findall(r"\{[A-Za-z0-9_]+\}", str(template)))

@@ -11,6 +11,7 @@ from pathlib import Path
 from backend_io import atomic_copy_stream, fsync_directory
 from state_store import default_state
 from pkg.parity.parity_redact import redact_settings, redact_state_for_export, merge_preserved_credentials
+from pkg.platform_compat import parse_timestamp
 
 
 BACKUP_ITEMS = {
@@ -258,7 +259,7 @@ def _check_restore_age(manifest, root, restore_items, force, package):
                 current_time = datetime.fromisoformat(
                     datetime.fromtimestamp(current.stat().st_mtime).isoformat(timespec="seconds")
                 )
-                backup_time = datetime.fromisoformat(created)
+                backup_time = parse_timestamp(created)
             except (TypeError, ValueError):
                 current_time = backup_time = None
             if current_time is not None and backup_time is not None and backup_time < current_time:
@@ -284,9 +285,12 @@ def _restore_library(package, root, restore_items):
             )
     restored_state = default_state()
     try:
-        restored_state.update(json.loads(package.read("library.json")))
+        archived_state = json.loads(package.read("library.json"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError("Backup library is invalid.") from error
+    if not isinstance(archived_state, dict):
+        raise ValueError("Backup library is invalid.")
+    restored_state.update(archived_state)
     if not isinstance(restored_state.get("games"), list):
         raise ValueError("Backup library is invalid.")
     return restored_state, library_file
@@ -414,7 +418,8 @@ def _library_index(state):
     settings = {}
     if not isinstance(state, dict):
         return games, settings
-    for game in state.get("games", []):
+    rows = state.get("games")
+    for game in rows if isinstance(rows, list) else []:
         if isinstance(game, dict):
             gid = str(game.get("game_id") or "").strip()
             if gid:

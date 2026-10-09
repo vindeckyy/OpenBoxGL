@@ -187,6 +187,12 @@ function ensureA11yDialogHosts() {
   document.querySelectorAll('#a11yInputDialog,#a11yChoiceDialog,#a11yConfirmDialog').forEach(wireDialogFocus);
 }
 
+// Each prompt owns its own 'close' listener and removes it when it settles.
+// close() can fire its 'close' event as a queued task (always when reduced
+// motion makes the exit instant), so a prompt opened straight after another
+// one settles -- one promptChoice per platform in the import wizard -- used to
+// receive the previous prompt's stale event and cancel itself at once. A close
+// event that arrives while the dialog is open again is not this prompt's.
 function settleDialog(dialog, resolve, value) {
   if (dialog.dataset.a11ySettled) return;
   dialog.dataset.a11ySettled = '1';
@@ -208,11 +214,12 @@ function promptInput({ title = 'OpenBox', message = '', label = 'Value', default
   $('a11yInputLabel').textContent = label;
   field.value = defaultValue;
   return new Promise(resolve => {
-    const finish = value => settleDialog(dialog, resolve, value);
+    const finish = value => { dialog.removeEventListener('close', onClose); settleDialog(dialog, resolve, value); };
+    const onClose = () => { if (!dialog.open) finish(null); };
     $('a11yInputForm').onsubmit = event => { event.preventDefault(); finish(field.value); };
     $('a11yInputCancel').onclick = () => finish(null);
     $('a11yInputClose').onclick = () => finish(null);
-    dialog.addEventListener('close', () => finish(null), {once:true});
+    dialog.addEventListener('close', onClose);
     openDialog(dialog);
     field.focus();
     field.select();
@@ -237,11 +244,12 @@ function promptChoice({ title = 'OpenBox', message = '', label = 'Choice', choic
   }).join('');
   if (defaultValue) select.value = String(defaultValue);
   return new Promise(resolve => {
-    const finish = value => settleDialog(dialog, resolve, value);
+    const finish = value => { dialog.removeEventListener('close', onClose); settleDialog(dialog, resolve, value); };
+    const onClose = () => { if (!dialog.open) finish(null); };
     $('a11yChoiceForm').onsubmit = event => { event.preventDefault(); finish(select.value); };
     $('a11yChoiceCancel').onclick = () => finish(null);
     $('a11yChoiceClose').onclick = () => finish(null);
-    dialog.addEventListener('close', () => finish(null), {once:true});
+    dialog.addEventListener('close', onClose);
     openDialog(dialog);
     select.focus();
   });
@@ -276,11 +284,12 @@ function confirmAction({
   okBtn.textContent = confirmLabel;
   okBtn.className = 'primary';
   return new Promise(resolve => {
-    const finish = value => settleDialog(dialog, resolve, value);
+    const finish = value => { dialog.removeEventListener('close', onClose); settleDialog(dialog, resolve, value); };
+    const onClose = () => { if (!dialog.open) finish(false); };
     okBtn.onclick = () => finish(true);
     $('a11yConfirmCancel').onclick = () => finish(false);
     $('a11yConfirmClose').onclick = () => finish(false);
-    dialog.addEventListener('close', () => finish(false), {once:true});
+    dialog.addEventListener('close', onClose);
     openDialog(dialog);
     okBtn.focus();
   });
@@ -535,6 +544,9 @@ document.querySelectorAll('dialog').forEach(wireDialogFocus);
 async function openGameDialog(game = null, options = {}) {
   await ensureProfiles();
   AppState.editingId = game ? game.id : null;
+  // The stable id travels with the index so a save can refuse a game that
+  // moved or vanished since the dialog opened (see game_from_payload).
+  AppState.editingGameId = game ? String(game.game_id || '') : '';
   const shelf = options.shelf ?? Boolean(game?.manual_entry);
   $('dialogTitle').textContent = game ? (shelf ? 'Edit shelf entry' : 'Edit game') : (shelf ? 'Add shelf entry' : 'Add game');
   [...$('gameForm').elements].forEach(element => {

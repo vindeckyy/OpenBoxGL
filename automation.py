@@ -134,7 +134,8 @@ def _attempt_delay(attempt_index: int, retry_after_value: str | None = None) -> 
         except (TypeError, ValueError):
             retry_after = 0.0
         if retry_after > 0:
-            delay = min(delay, max(0.0, min(retry_after, _MAX_RETRY_AFTER)))
+            # Retry-After is a floor ("wait at least"), clamped to 30s.
+            delay = max(delay, min(retry_after, _MAX_RETRY_AFTER))
     return max(0.0, delay)
 
 

@@ -85,21 +85,34 @@ class PartyHandlers:
         queue, _players, index = _queue_from_settings(settings if isinstance(settings, dict) else {})
         if not queue:
             raise BadRequest("party queue is empty — build one first")
-        index = (index + 1) % len(queue)
-        game_id = queue[index]
 
-        games = state.get("games", []) if isinstance(state, dict) else []
-        name = game_id
-        for game in games:
-            if not isinstance(game, dict):
-                continue
-            if str(game.get("game_id") or "") == game_id or str(game.get("id") or "") == game_id:
-                name = str(game.get("name") or game_id)
-                break
-
+        # Advance from the *live* index inside the transaction: computing it
+        # from the pre-read snapshot let two concurrent "next" presses both
+        # land on the same game (lost update) and let a queue rebuilt in
+        # between be indexed with the stale queue's position.
         def mutate(live):
-            live.setdefault("settings", {})["party_index"] = index
+            live_settings = live.setdefault("settings", {})
+            live_queue, _live_players, live_index = _queue_from_settings(
+                live_settings if isinstance(live_settings, dict) else {}
+            )
+            if not live_queue:
+                return None
+            live_index = (live_index + 1) % len(live_queue)
+            live_settings["party_index"] = live_index
+            game_id = live_queue[live_index]
+            name = game_id
+            games = live.get("games", [])
+            for game in games if isinstance(games, list) else []:
+                if not isinstance(game, dict):
+                    continue
+                if str(game.get("game_id") or "") == game_id or str(game.get("id") or "") == game_id:
+                    name = str(game.get("name") or game_id)
+                    break
+            return game_id, name, live_index
 
-        transact_state(mutate)
+        outcome = transact_state(mutate)[1]
+        if outcome is None:
+            raise BadRequest("party queue is empty — build one first")
+        game_id, name, index = outcome
         self.send_json(200, {"game_id": game_id, "name": name, "index": index})
         return

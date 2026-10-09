@@ -335,7 +335,11 @@
     .activity-button { display:inline-flex; align-items:center; gap:var(--space-2xs); }
     .activity-count { min-width:1.125rem; padding:var(--space-2xs) var(--space-xs); border-radius:999px; background:var(--activity-count-bg); color:var(--activity-count-fg); font-size:var(--font-micro); font-weight:800; line-height:1.2; }
     .activity-label { color:var(--activity-label-fg); }
-    .query-chips { display:flex; flex-wrap:wrap; gap:var(--space-2xs); flex:1 1 auto; min-width:0; }
+    /* One line that scrolls sideways: the row keeps the same height whether it holds no chips or
+       several, so a search cannot push the panels below it (the layout shift the browser measures). */
+    .query-chips { display:flex; flex-wrap:nowrap; align-items:center; gap:var(--space-2xs); flex:1 1 100%; min-width:0; min-height:2rem; max-height:2rem; overflow-x:auto; overflow-y:hidden; }
+    .query-chips > * { flex:0 0 auto; white-space:nowrap; }
+    .query-chips > .platform { width:auto; }
     .setup-center-dialog { width:var(--setup-center-width); max-height:90vh; }
     .setup-center-body { padding:var(--space-md); background:var(--setup-center-body-bg); max-height:calc(90vh - 4rem); overflow:auto; }
     .settings-shell { display:grid; grid-template-columns:var(--settings-nav-width) 1fr; gap:0; min-height:0; }
@@ -676,7 +680,7 @@
     .duplicate-group button { margin-top:var(--space-xs); }
     .dialog-nav { display:flex; gap:var(--space-xs); margin-right:auto; }
     .primary { border:0; border-radius:4px; padding:var(--space-xs) var(--space-md); background:var(--action); color:var(--action-ink); font-weight:800; }
-    .error-banner { position:fixed; left:50%; bottom:64px; transform:translateX(-50%); display:flex; align-items:center; gap:var(--space-xs); max-width:min(640px,calc(100vw - 32px)); background:var(--danger); color:var(--text); border:1px solid var(--border-control); border-radius:6px; padding:var(--space-sm) var(--space-md); box-shadow:0 10px 30px var(--shadow-dialog); z-index:400; font-size:13px; line-height:var(--leading-normal); }
+    .error-banner { position:fixed; left:50%; bottom:64px; transform:translateX(-50%); display:flex; align-items:center; gap:var(--space-xs); max-width:min(640px,calc(100vw - 32px)); background:var(--danger); color:var(--on-danger); border:1px solid var(--border-control); border-radius:6px; padding:var(--space-sm) var(--space-md); box-shadow:0 10px 30px var(--shadow-dialog); z-index:400; font-size:13px; line-height:var(--leading-normal); }
     .error-banner[hidden] { display:none; }
     .error-banner span { flex:1; }
     html.theme-switching *,html.theme-switching *::before,html.theme-switching *::after { transition:background-color var(--dur-base) var(--ease-out),color var(--dur-base) var(--ease-out),border-color var(--dur-base) var(--ease-out),fill var(--dur-base) var(--ease-out) !important; }
@@ -729,6 +733,12 @@
     .gamescope-preset-row > * { min-width:0; }
     .gamescope-preset-row .preset-flag { display:inline-flex; align-items:center; gap:var(--space-2xs); font-size:var(--font-label); color:var(--card-muted); }
     .emulator-health { display:grid; gap:var(--space-2xs); }
+    .emulator-health-row { border:1px solid var(--border-card); padding:var(--space-sm); margin:var(--space-xs) 0; display:flex; justify-content:space-between; align-items:center; }
+    .emulator-health-badges { display:flex; gap:var(--gap-tight); font-size:0.85rem; }
+    .emulator-health-ok { color:var(--brand); }
+    .emulator-health-missing { color:var(--danger); }
+    .emulator-health-hint { color:var(--muted); }
+    .emulator-health-fix { border:1px solid var(--focus); color:var(--focus); }
     .setup-install-chip { padding:var(--space-2xs) var(--space-xs); border:1px solid var(--focus); border-radius:999px; background:var(--surface-hover); color:var(--focus); font-size:var(--font-label); cursor:pointer; }
     .setup-install-chip:hover { background:var(--nav-hover); }
     .context-menu { position:fixed; z-index:60; width:min(280px,calc(100vw - 20px)); padding:var(--space-xs); border:1px solid var(--border-card); border-radius:7px; background:var(--panel); box-shadow:0 18px 50px var(--shadow-dialog); }
@@ -1134,8 +1144,9 @@
     .health-dim-actions { display:flex; gap:var(--space-sm); justify-content:flex-end; }
     .link-button { background:none; border:0; padding:0; color:var(--action); cursor:pointer; text-decoration:underline; font-size:inherit; }
     /* Game DNA smart search (Flagship 9) — token-only styling */
-    .dna-search-wrap { position:relative; display:flex; align-items:center; gap:var(--space-2xs); flex:1 1 auto; min-width:0; }
-    .dna-search-wrap #sidebarSearch { flex:1 1 auto; min-width:0; }
+    /* The Title/Smart toggle wraps under the search box in a narrow sidebar instead of squeezing it to a sliver. */
+    .dna-search-wrap { position:relative; display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2xs); flex:1 1 auto; min-width:0; }
+    .dna-search-wrap #sidebarSearch { flex:1 1 8rem; min-width:8rem; }
     .dna-mode-toggle { display:inline-flex; border:1px solid var(--border-control); border-radius:var(--radius-hairline); overflow:hidden; flex:none; }
     .dna-mode { border:0; background:var(--surface-card); color:var(--icon-text); font-size:var(--font-label); padding:var(--space-3xs) var(--space-xs); cursor:pointer; }
     .dna-mode + .dna-mode { border-left:1px solid var(--border-control); }

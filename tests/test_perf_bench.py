@@ -80,6 +80,26 @@ class PerfBenchTests(unittest.TestCase):
         self.assertNotIn("/api/import/preview", paths)
         self.assertNotIn("/api/import/apply", paths)
 
+    def test_browser_timings_measure_a_library_this_run_generated(self):
+        """--browser must point at the library the read benchmark built, not a write-path size."""
+        import tempfile
+
+        seen = {}
+
+        def fake_browser(data_dir, runs=3):
+            seen["dir"] = Path(data_dir)
+            return {"available": False, "reason": "stub"}
+
+        with tempfile.TemporaryDirectory() as base, \
+                mock.patch.object(pb, "generate", lambda size, data_dir: None), \
+                mock.patch.object(pb, "benchmark", lambda data_dir, runs=1: {"runs": runs}), \
+                mock.patch.object(pb, "benchmark_write_path", lambda data_dir, runs=1: {"runs": 0, "error": "stub"}), \
+                mock.patch.object(pb, "benchmark_browser", fake_browser), \
+                mock.patch.object(sys, "argv", ["perf_bench.py", "--base-dir", base, "--sizes", "1000", "--runs", "1",
+                                                "--browser", "--no-gate", "--out", str(Path(base) / "out.json")]):
+            pb.main()
+        self.assertEqual(seen["dir"], Path(base) / "1000")
+
     def test_safe_request_failure_returns_error_object(self):
         with mock.patch.object(pb, "_request", side_effect=RuntimeError("connection refused")):
             stats, last_bytes, payload = pb._safe_request("http://127.0.0.1:9999", "tok", "/api/test", runs=2)

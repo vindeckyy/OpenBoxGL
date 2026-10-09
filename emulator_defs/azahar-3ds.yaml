@@ -1,0 +1,22 @@
+schema_version: 1
+adapter_id: azahar-3ds
+emulator_id: org.azahar_emu.Azahar
+label: Azahar
+platform: Nintendo 3DS
+extensions:
+  - 3ds
+  - 3dsx
+  - cia
+  - cci
+  - cxi
+native_exe: azahar
+native_exe_windows: azahar.exe
+flatpak_app_id: org.azahar_emu.Azahar
+startup_args:
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - azahar
+state:
+  kind: none

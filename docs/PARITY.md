@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.16.0**, the "Make it true" release described in the CHANGELOG (Launch Readiness, Restore Preview, security and data-integrity fixes, and corrections to four 1.15.0 claims); 1.15.0 was the "Finish the surface" release.
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.16.1**, a fix release on the "Make it true" line of **v1.16.0**; the "Make it true" release described in the CHANGELOG (Launch Readiness, Restore Preview, security and data-integrity fixes, and corrections to four 1.15.0 claims); 1.15.0 was the "Finish the surface" release.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -156,6 +156,16 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Motion and reduced-motion contract | done | Every duration and easing is a motion token and one block zeroes them so reduced motion cannot regress by omission; dialogs play an exit, the toast is a single top-layer queue, and a live theme switch cross-fades (1.15.0, ADR 0063) |
 | Settings > About | done | Reports version, platform, data folder, and whether OpenBox is in its native window or a browser tab, from the capabilities response (which gained `version`, `platform`, and `data_dir`) (1.15.0) |
 | Launch Readiness | done | `POST /api/v2/launch/audit/scan` runs the Launch Doctor over every game in a cancellable job; `GET /api/v2/launch/audit` serves ready/warning/blocked totals, one row per root cause, and paginated member lists. Same check codes as the single-game Doctor; `flatpak` probes cached per app id (1.16.0) |
+| Readiness badges on the grid | done | After a Launch Audit, games it found blocked or needing attention show a badge; the badges are withheld when the audit no longer matches the library (1.16.1, `GET /api/v2/launch/audit/status`). The scheduled health rescan also refreshes the audit |
+| RetroArch under Flatpak | done | Cores load from the sandbox's cores directory, which the Doctor checks; a native launch keeps the system path (1.16.1, ADR 0067) |
+| Flatpak folder access | done | The Launch Doctor offers Grant access when a Flatpak emulator cannot read a game's folder: read-only, after confirmation, with Remove access to undo it for the session (1.16.1, `POST /api/v2/launch/grant` and `/grant/undo`, ADR 0069) |
+| Launch readiness group fixes and scoped relink | done | One Grant access or Install button covers a group that shares the fix; Find moved files opens the repair wizard limited to a missing-file group's games (1.16.1, ADR 0072) |
+| Per-game RetroArch core | done | Choose core lists the installed cores and sets the core one game launches with; Use the default core restores the definition's (1.16.1, ADR 0072, ADR 0061 addendum) |
+| Disc image platform choice | done | A .bin, .cue or .iso file several systems share waits for a platform choice in the import wizard and is not guessed (1.16.1, ADR 0072) |
+| Launch check change notice | done | A change in the blocked or warning totals adds one notice to the feed (1.16.1, ADR 0072) |
+| Native window first paint | done | Both native hosts paint the active theme's background before the page loads (Windows compiled in CI, not on the release machine; 1.16.1, ADR 0071) |
+| Signed definition pack release | partial | The release workflow builds, signs and verifies the emulator-definition pack for each tag; the first signed pack needs a tagged CI run with the release key (1.16.1, ADR 0061 addendum) |
+| System coverage: Genesis, Master System, Game Gear, Sega CD, PC Engine, Neo Geo Pocket, Atari 2600/7800/Lynx/Jaguar, WonderSwan, Virtual Boy, C64, MSX, Amiga, Dreamcast, 3DS, MS-DOS | done | Definitions for each (RetroArch cores by buildbot name; Flycast, Azahar and DOSBox Staging by Flathub id). Installing them still needs the emulator (1.16.1) |
 | Restore Preview | done | Selecting a backup shows what the restore would remove, bring back, and overwrite (per-field), with true totals and a settings line; the restore button exists only after a successful diff (1.16.0) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.

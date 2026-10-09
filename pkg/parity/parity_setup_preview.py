@@ -6,7 +6,6 @@ import base64
 import hashlib
 import json
 import shutil
-import subprocess
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,7 +22,8 @@ from api_errors import (
 )
 from backend_io import atomic_write_bytes, atomic_write_text
 from openbox import EXTENSIONS, PLATFORM_BY_EXTENSION, load_state
-from pkg.parity.parity_emulator_defs import _registry, detect_adapter_prefix, find_adapter
+from pkg.platform_compat import flatpak_app_installed
+from pkg.parity.parity_emulator_defs import _registry, detect_adapter_prefix, find_adapter, platform_options_for_extension
 from pkg.parity.parity_identity import cross_source_identity, normalize_path_identity, source_identities
 from pkg.parity.parity_import import generated_m3u_dir, import_multi_platform
 from pkg.parity.parity_import_policy import exclusion_set, filter_imported
@@ -158,16 +158,7 @@ def _flatpak_installed(app_id: str, which=None) -> bool:
     flatpak = which("flatpak")
     if not flatpak or not app_id:
         return False
-    try:
-        completed = subprocess.run(
-            [flatpak, "info", app_id],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-        return completed.returncode == 0
-    except OSError:
-        return False
+    return flatpak_app_installed(app_id, flatpak=flatpak)
 
 
 def _adapter_installed(adapter: dict | None, which=None) -> bool:
@@ -452,6 +443,7 @@ def _public_item(item: dict) -> dict:
         "existing_game_target": item.get("existing_game_target"),
         "warnings": list(item.get("warnings") or []),
         "emulator_choices": list(item.get("emulator_choices") or []),
+        "platform_options": list(item.get("platform_options") or []),
         "selected_emulator_id": item.get("selected_emulator_id"),
         "selected_adapter_id": item.get("selected_adapter_id"),
         "launch_setup": item.get("launch_setup"),
@@ -644,6 +636,10 @@ def scan_sources(sources: list[dict], options: dict | None = None) -> tuple[list
     return scanned, fingerprints
 
 
+# Platforms the scanner assigns from a file's extension alone, so they are guesses.
+_GUESSED_DISC_PLATFORMS = {"Disc image", "Imported"}
+
+
 def classify_candidates(raw_games: list[dict], *, state: dict | None = None) -> list[dict]:
     state = state or load_state()
     filtered = filter_imported(raw_games, state)
@@ -660,6 +656,13 @@ def classify_candidates(raw_games: list[dict], *, state: dict | None = None) -> 
         identity = _identity_for_game(game)
         candidate_id = _candidate_id(source.get("type", ""), str(source.get("id") or ""), identity, game.get("path"))
         platform = game.get("platform")
+        # A disc extension several systems share is never guessed: the user picks the platform.
+        # Only a guessed or missing platform is replaced; one a source named is kept.
+        options = platform_options_for_extension(Path(str(game.get("path") or "")).suffix)
+        if options and (not platform or platform in _GUESSED_DISC_PLATFORMS or platform in options):
+            platform = ""
+        else:
+            options = []
         choices = emulator_choices_for_platform(platform)
         warnings = []
         group = "additions"
@@ -698,7 +701,8 @@ def classify_candidates(raw_games: list[dict], *, state: dict | None = None) -> 
         elif not platform:
             group = "ambiguities"
             intended_action = "review"
-            warnings.append({"code": "AMBIGUOUS_PLATFORM", "message": "Platform could not be determined."})
+            message = "This file type belongs to several systems. Choose one." if options else "Platform could not be determined."
+            warnings.append({"code": "AMBIGUOUS_PLATFORM", "message": message})
         elif not choices and not str(game.get("launch") or "").strip():
             group = "unsupported"
             intended_action = "review"
@@ -710,6 +714,7 @@ def classify_candidates(raw_games: list[dict], *, state: dict | None = None) -> 
                 "source": source,
                 "detected_title": str(game.get("name") or ""),
                 "detected_platform": platform,
+                "platform_options": options,
                 "intended_action": intended_action,
                 "existing_game_target": existing_target,
                 "warnings": warnings,
@@ -836,6 +841,16 @@ def apply_decisions(preview_id: str, decisions: list[dict], *, data_dir: Path | 
         action = str(decision.get("action") or "").strip()
         if action not in {"import", "merge", "skip", "exclude"}:
             raise BadRequest("Invalid decision action.")
+        chosen = str(decision.get("platform") or "").strip()
+        if chosen:
+            if chosen not in (item.get("platform_options") or []):
+                raise BadRequest("That platform is not one of the options for this file.")
+            item["detected_platform"] = chosen
+            item["emulator_choices"] = emulator_choices_for_platform(chosen)
+            item["group"] = "additions"
+            item["warnings"] = [w for w in item.get("warnings") or [] if w.get("code") != "AMBIGUOUS_PLATFORM"]
+        if action == "import" and item.get("platform_options") and not item.get("detected_platform"):
+            raise BadRequest("Choose a platform for this file before importing it.")
         item["intended_action"] = action
         if action == "merge":
             merge_target = str(decision.get("merge_target") or "").strip()
@@ -961,7 +976,10 @@ def commit_preview(
                     # game keeps its first disc as the launch path.
                     game["path"] = str(game.get("path") or discs[0])
                 else:
-                    game["path"] = str(m3u)
+                    # The staged playlist is promoted into generated_dir and
+                    # the staging dir removed after the transaction, so the
+                    # row must point at the promoted file, not the staged one.
+                    game["path"] = str(generated_dir / m3u.name)
             game["import_batch_id"] = import_batch_id
             game["added_at"] = timestamp
             target = None

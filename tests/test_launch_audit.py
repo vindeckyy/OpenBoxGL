@@ -92,6 +92,236 @@ class LaunchAuditTestCase(unittest.TestCase):
         return games
 
 
+class SameFixTests(unittest.TestCase):
+    def test_a_group_keeps_its_fix_only_when_kind_and_payload_match(self):
+        fix = {"kind": "flatpak_grant", "payload": {"app_id": "a", "path": "/x"}}
+        self.assertFalse(audit._same_fix(None, fix))
+        self.assertTrue(audit._same_fix(fix, dict(fix)))
+        self.assertFalse(audit._same_fix(fix, {**fix, "payload": {"app_id": "a", "path": "/y"}}))
+
+
+class GroupKeyTests(unittest.TestCase):
+    def test_games_in_two_folders_are_two_groups_each_with_its_own_grant(self):
+        def check(path):
+            return {"code": "FLATPAK_FS_DENIED", "severity": "error", "message": "", "fix_action": {
+                "kind": "flatpak_grant", "payload": {"app_id": "org.libretro.RetroArch", "path": path, "command": f"override {path}"}}}
+
+        groups: dict = {}
+        audit._record_checks(groups, {"game_id": "1", "index": 0, "name": "A"}, [check("/roms/snes")])
+        audit._record_checks(groups, {"game_id": "2", "index": 1, "name": "B"}, [check("/roms/nes")])
+        self.assertEqual(len(groups), 2)
+        self.assertTrue(all(group["fix_action"] for group in groups.values()))
+
+
+class TotalsChangeNoticeTests(unittest.TestCase):
+    """The notice for a changed audit. Counts, not wall clock, so it holds on any runner."""
+
+    @staticmethod
+    def report(blocked, warning):
+        return {"totals": {"ready": 5, "warning": warning, "blocked": blocked}, "computed_at": "2026-10-09T09:00:00+00:00"}
+
+    def test_the_first_audit_says_nothing(self):
+        self.assertIsNone(audit.totals_change_notice(None, self.report(1, 0)))
+
+    def test_unchanged_totals_say_nothing(self):
+        self.assertIsNone(audit.totals_change_notice(self.report(1, 2), self.report(1, 2)))
+
+    def test_a_new_blocked_game_is_a_warning_that_states_both_counts(self):
+        notice = audit.totals_change_notice(self.report(0, 2), self.report(1, 2))
+        self.assertEqual(notice["level"], "warning")
+        self.assertIn("Won't launch: 1 (was 0)", notice["body"])
+        self.assertEqual(notice["dedupe_key"], "launch-audit:2026-10-09T09:00:00+00:00")
+
+    def test_a_fixed_game_is_informational(self):
+        notice = audit.totals_change_notice(self.report(3, 0), self.report(2, 0))
+        self.assertEqual(notice["level"], "info")
+
+    def test_the_notice_reaches_the_feed_once_per_result(self):
+        from handlers import launch as launch_handler
+
+        state = {}
+
+        def apply(mutate):
+            mutate(state)
+
+        notice = audit.totals_change_notice(self.report(0, 0), self.report(1, 0))
+        with mock.patch("webapp_state.transact_state", side_effect=apply):
+            launch_handler._record_audit_notice(notice)
+            launch_handler._record_audit_notice(notice)
+        feed = state["notifications"]
+        self.assertEqual(len(feed), 1)
+        self.assertEqual(feed[0]["kind"], "launch_audit")
+        self.assertTrue(feed[0]["title"].startswith("Launch check changed: 1 won't launch"), feed[0]["title"])
+
+
+class GroupFixPayloadTests(unittest.TestCase):
+    """A group's one fix needs the folder a grant names; other per-game keys stay out of the cause."""
+
+    def test_a_grant_keeps_its_folder_so_the_group_button_can_act(self):
+        cause = audit._cause_payload({"kind": "flatpak_grant", "payload": {"app_id": "org.libretro.RetroArch", "path": "/home/u/Games", "command": "flatpak override"}})
+        self.assertEqual(cause["path"], "/home/u/Games")
+        self.assertEqual(cause["app_id"], "org.libretro.RetroArch")
+
+    def test_other_causes_still_drop_the_per_game_path(self):
+        cause = audit._cause_payload({"kind": "pick_core", "payload": {"core": "snes9x_libretro.so", "path": "/roms/g.sfc", "name": "G"}})
+        self.assertEqual(cause, {"core": "snes9x_libretro.so"})
+
+
+class RefreshReportTests(LaunchAuditTestCase):
+    """A per-game refresh gives the same answer as a full audit of the changed library."""
+
+    @staticmethod
+    def membership(report):
+        return [(g["key"], sorted(m["game_id"] for m in g["games"]), (g["fix_action"] or {}).get("kind")) for g in report["groups"]]
+
+    def checks(self, games):
+        # Emulators found and granted, so the library has a mix of ready, warning and blocked games.
+        return dict(which=lambda name: f"/usr/bin/{name}", run=CountingRun())
+
+    def test_refreshing_only_the_changed_games_matches_a_full_audit(self):
+        games = self.library(60)
+        before = audit.audit_library(games, {}, str(self.data_dir), **self.checks(games))
+        changed = [dict(game) for game in games]
+        for index in (0, 5, 11):
+            changed[index]["path"] = str(self.data_dir / f"gone-{index}.bin")
+        full = audit.audit_library(changed, {}, str(self.data_dir), **self.checks(changed))
+        refreshed = audit.refresh_report(before, changed, {}, str(self.data_dir),
+                                         game_ids=["game-0", "game-5", "game-11"], **self.checks(changed))
+        self.assertEqual(refreshed["totals"], full["totals"])
+        self.assertEqual(self.membership(refreshed), self.membership(full))
+
+    def test_refreshing_every_game_matches_a_full_audit(self):
+        games = self.library(40)
+        before = audit.audit_library(games, {}, str(self.data_dir), **self.checks(games))
+        changed = [dict(game) for game in games]
+        for index in range(0, 40, 3):
+            changed[index]["path"] = str(self.data_dir / f"missing-{index}.bin")
+        full = audit.audit_library(changed, {}, str(self.data_dir), **self.checks(changed))
+        refreshed = audit.refresh_report(before, changed, {}, str(self.data_dir),
+                                         game_ids=[g["game_id"] for g in changed], **self.checks(changed))
+        self.assertEqual(refreshed["totals"], full["totals"])
+        self.assertEqual(self.membership(refreshed), self.membership(full))
+
+    def test_a_game_that_changes_status_moves_the_totals_and_its_groups(self):
+        games = self.library(12)
+        before = audit.audit_library(games, {}, str(self.data_dir), **self.checks(games))
+        broken = [dict(game) for game in games]
+        broken[2]["path"] = str(self.data_dir / "gone.bin")
+        broke = audit.refresh_report(before, broken, {}, str(self.data_dir), game_ids=["game-2"], **self.checks(broken))
+        full = audit.audit_library(broken, {}, str(self.data_dir), **self.checks(broken))
+        self.assertEqual(broke["totals"], full["totals"])
+        self.assertEqual(broke["totals"]["blocked"], before["totals"]["blocked"] + 1)
+        blocked = {m["game_id"] for g in broke["groups"] if g["severity"] == "error" for m in g["games"]}
+        self.assertIn("game-2", blocked)
+        healed = audit.refresh_report(broke, games, {}, str(self.data_dir), game_ids=["game-2"], **self.checks(games))
+        self.assertEqual(healed["totals"], before["totals"])
+        self.assertEqual(self.membership(healed), self.membership(before))
+
+    def test_ids_the_library_does_not_have_are_ignored(self):
+        games = self.library(6)
+        before = audit.audit_library(games, {}, str(self.data_dir), **self.checks(games))
+        refreshed = audit.refresh_report(before, games, {}, str(self.data_dir),
+                                         game_ids=["no-such-game"], **self.checks(games))
+        self.assertEqual(refreshed["totals"], before["totals"])
+        self.assertEqual(self.membership(refreshed), self.membership(before))
+
+
+class RefreshRouteTests(LaunchAuditTestCase):
+    """POST /api/v2/launch/audit/refresh checks one group's games and refuses a stale report."""
+
+    def setUp(self):
+        super().setUp()
+        from handlers.launch import LaunchHandlers
+
+        class Handler(LaunchHandlers):
+            def __init__(self):
+                self.responses = []
+
+            def send_json(self, status, payload, **kwargs):
+                self.responses.append((status, payload))
+
+        self.Handler = Handler
+        self.state = {"games": self.library(12), "profiles": {}}
+        self.patches = [
+            mock.patch("handlers.launch.load_state", side_effect=lambda: json.loads(json.dumps(self.state))),
+            mock.patch("handlers.launch.openbox.DATA", self.data_dir / "library.json"),
+        ]
+        for patch in self.patches:
+            patch.start()
+        report = audit.audit_library(self.state["games"], {}, str(self.data_dir), which=lambda name: f"/usr/bin/{name}", run=CountingRun())
+        audit.store_audit(str(self.data_dir), report)
+        self.report = report
+
+    def tearDown(self):
+        for patch in self.patches:
+            patch.stop()
+        super().tearDown()
+
+    def test_refresh_checks_the_group_and_answers_with_the_totals(self):
+        key = self.report["groups"][0]["key"]
+        handler = self.Handler()
+        with mock.patch("pkg.parity.parity_launch_audit.refresh_report", wraps=audit.refresh_report) as refresh:
+            handler._api_post_api_v2_launch_audit_refresh({"group": key})
+        status, payload = handler.responses[-1]
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["totals"], audit.load_audit(str(self.data_dir))["totals"])
+        ids = refresh.call_args.kwargs["game_ids"]
+        self.assertEqual(sorted(ids), sorted(m["game_id"] for m in self.report["groups"][0]["games"]))
+
+    def test_an_unknown_group_is_refused_not_widened(self):
+        from api_errors import BadRequest
+
+        with self.assertRaises(BadRequest):
+            self.Handler()._api_post_api_v2_launch_audit_refresh({"group": "GONE|x|y"})
+
+    def test_a_changed_library_is_refused_until_it_is_checked_again(self):
+        from api_errors import BadRequest
+
+        self.state["games"] = self.state["games"] + [{"game_id": "new", "name": "New", "path": str(self.roms[0])}]
+        with self.assertRaises(BadRequest):
+            self.Handler()._api_post_api_v2_launch_audit_refresh({"group": self.report["groups"][0]["key"]})
+
+    def test_two_refreshes_at_once_never_interleave_their_merge_and_write(self):
+        import threading
+        import time
+
+        events = []
+
+        def slow_refresh(report, games, profiles, data_dir, *, game_ids, **_kwargs):
+            events.append("refresh")
+            time.sleep(0.05)  # long enough that an unlocked second refresh would start inside this one
+            return dict(report)
+
+        def record_store(data_dir, report):
+            events.append("store")
+
+        key = self.report["groups"][0]["key"]
+        errors = []
+
+        def call():
+            try:
+                self.Handler()._api_post_api_v2_launch_audit_refresh({"group": key})
+            except Exception as error:  # surfaced below; a thread must not swallow it
+                errors.append(error)
+
+        with mock.patch("pkg.parity.parity_launch_audit.refresh_report", side_effect=slow_refresh), \
+             mock.patch("pkg.parity.parity_launch_audit.store_audit", side_effect=record_store):
+            threads = [threading.Thread(target=call) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        self.assertEqual(errors, [])
+        self.assertEqual(events, ["refresh", "store", "refresh", "store"])
+
+    def test_a_missing_group_key_is_a_bad_request(self):
+        from api_errors import BadRequest
+
+        with self.assertRaises(BadRequest):
+            self.Handler()._api_post_api_v2_launch_audit_refresh({})
+
+
 class ProbeMemoizationTests(LaunchAuditTestCase):
     def test_two_thousand_games_spawn_at_most_two_flatpaks_per_app_id(self):
         run = CountingRun()
@@ -268,6 +498,33 @@ class AuditRouteTests(LaunchAuditTestCase):
         self.state["games"].append({"game_id": "new", "name": "New", "path": ""})
         _, payload = self.get()
         self.assertTrue(payload["stale"])
+
+    def status(self):
+        handler = self.Handler()
+        handler._api_get_api_v2_launch_audit_status(urlparse("/api/v2/launch/audit/status"))
+        return handler.responses[-1]
+
+    def test_status_is_empty_before_any_audit_and_never_scans(self):
+        self.assertEqual(self.status(), (200, {"statuses": {}}))
+        self.assertFalse(audit.audit_path(self.data_dir).exists())
+
+    def test_status_flags_only_games_the_report_names_and_blocked_wins(self):
+        self.run_job()
+        status, payload = self.status()
+        self.assertEqual(status, 200)
+        statuses = payload["statuses"]
+        self.assertTrue(statuses, "the fixture library has problems the audit reports")
+        self.assertTrue(set(statuses.values()) <= {"blocked", "warning"})
+        # A game in a blocking group must read blocked even if it is also in a warning group.
+        report = audit.load_audit(str(self.data_dir))
+        blocked_ids = {m["game_id"] for g in report["groups"] if g["severity"] == "error" for m in g["games"]}
+        for game_id in blocked_ids:
+            self.assertEqual(statuses[game_id], "blocked", game_id)
+
+    def test_status_is_withheld_when_the_library_changed_since_the_audit(self):
+        self.run_job()
+        self.state["games"].append({"game_id": "late-add", "name": "Late", "path": "/roms/late.nes", "platform": "NES"})
+        self.assertEqual(self.status(), (200, {"statuses": {}}))
 
     def test_a_bad_page_parameter_is_a_400(self):
         from api_errors import BadRequest

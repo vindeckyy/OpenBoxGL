@@ -28,6 +28,7 @@ import re
 from datetime import datetime
 
 from pkg.parity.parity_filter_presets import game_matches_rules, rules_to_chips
+from pkg.platform_compat import parse_timestamp
 
 # ── Tunable thresholds (named constants, surfaced in chips + grammar doc) ────
 SHORT_GAME_HOURS = 5.0        # "short" / "quick" -> time-to-beat ceiling
@@ -1186,10 +1187,9 @@ def _ttb(game):
 
 
 def _dt(value):
-    try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except (TypeError, ValueError):
-        return None
+    # Naive local time, so comparisons with ``now`` never raise and a Z or
+    # offset-stamped game still falls in its "played recently" window.
+    return parse_timestamp(value)
 
 
 def _was_played(game):
