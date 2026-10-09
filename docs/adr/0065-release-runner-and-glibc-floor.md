@@ -38,9 +38,9 @@ Adoption requires, before a tag is cut:
 - The release keeps the Ubuntu 22.04 compatibility promise without depending on a
   retiring runner image.
 - Maintenance cost: one container image pin to refresh when 22.04 support ends.
-- The dry run passed, so the AppImage jobs build on `ubuntu-24.04` inside the 22.04 container.
-  The attestation and publish jobs still run on `ubuntu-22.04`. Moving them is a separate change,
-  and it is the next retirement deadline.
+- The AppImage jobs build on `ubuntu-24.04` inside the 22.04 container. The attestation and publish
+  jobs moved to `ubuntu-24.04` after the dry run. They run only for tags, so the first tag run is
+  what verifies them.
 
 ## Evidence (1.16.1, 2026-10-08)
 
@@ -67,8 +67,10 @@ change would fix that as well; it has not been measured.
 2. **Done.** `ldd --version` reports 2.35 in both containers. The highest `GLIBC_` symbol in each
    AppImage is `GLIBC_2.35`, on x86_64 and on aarch64. Both were measured.
 3. **Done for `flatpak-validate`.** CI on `9793a95` (run 37935024963) passed every job, including
-   `flatpak-validate`. **Not done:** the AppImage smoke test. The dry run builds the AppImage but
-   does not run it on a desktop.
+   `flatpak-validate`. **Smoke test, on this host and not in the 22.04 container:** the dry run's
+   x86_64 AppImage, checksum verified, was extracted and started with `--web --no-browser`. Its
+   server answered `GET /` with 200 and a 111 KB page, and the launch log stayed empty. The
+   desktop window was not tested.
 
 The dry run's attestation and publish jobs were skipped, because they run only for tag pushes.
 Nothing was published.
