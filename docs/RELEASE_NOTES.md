@@ -20,7 +20,7 @@ For a group of games with missing files, **Find moved files** opens the repair w
 
 ## Choose a RetroArch core for one game
 
-When a game's RetroArch core is missing, **Choose core** lists the cores installed on this machine. The game launches with the one you pick, and **Use the default core** restores the definition's core. On Windows, the core you pick is now applied when the game launches. The core picker itself lists nothing there yet (see Known limits).
+When a game's RetroArch core is missing, **Choose core** lists the cores installed on this machine. The game launches with the one you pick, and **Use the default core** restores the definition's core. On Windows, the core you pick is now applied when the game launches. The core picker itself lists nothing there yet.
 
 ## Undo a Steam removal
 
