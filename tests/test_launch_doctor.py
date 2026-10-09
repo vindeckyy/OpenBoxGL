@@ -894,6 +894,7 @@ class TestFixActionCoverage(unittest.TestCase):
             self.assertEqual(fix["kind"], kind)
 
 
+@unittest.skipIf(sys.platform == "win32", "Flatpak and the /usr/lib/libretro system path are Linux-only")
 class FlatpakCoreMissingTests(unittest.TestCase):
     def test_a_flatpak_core_is_looked_up_in_the_sandbox_cores_directory(self):
         from pkg.parity import parity_launch_doctor as doctor
