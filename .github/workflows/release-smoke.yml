@@ -42,7 +42,7 @@ jobs:
       - name: Install runtime tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb imagemagick xauth libwebkit2gtk-4.1-0 libgtk-3-0
+          sudo apt-get install -y --no-install-recommends xvfb imagemagick xauth xdotool libwebkit2gtk-4.1-0 libgtk-3-0
           python3 -m pip install --disable-pip-version-check cryptography==50.0.0
 
       - name: Download and verify the published AppImage
@@ -92,6 +92,10 @@ jobs:
           pid=$!
           sleep 25
           import -window root "$RUNNER_TEMP/linux-window-$SMOKE_ARCH.png"
+          # Click "Continue" on the Library Setup Center (position from the first screenshot) and check the next step.
+          xdotool mousemove 1020 611 click 1 || true
+          sleep 4
+          import -window root "$RUNNER_TEMP/linux-window-step2-$SMOKE_ARCH.png"
           if kill -0 "$pid" 2>/dev/null; then echo "native launcher still running after 25s"; else echo "native launcher exited early"; fi
           pkill -P "$pid" 2>/dev/null || true
           kill "$pid" 2>/dev/null || true
@@ -185,6 +189,19 @@ jobs:
           $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
           $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
           $bitmap.Save("$env:RUNNER_TEMP\windows-window.png", [System.Drawing.Imaging.ImageFormat]::Png)
+          # Click "Continue" on the Library Setup Center (position from the first screenshot), then capture the next step.
+          Add-Type -Namespace Native -Name Mouse -MemberDefinition @'
+          [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
+          [DllImport("user32.dll")] public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, System.IntPtr dwExtraInfo);
+          '@
+          [Native.Mouse]::SetCursorPos(891, 618) | Out-Null
+          [Native.Mouse]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero)
+          [Native.Mouse]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)
+          Start-Sleep -Seconds 4
+          $bitmap2 = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+          $graphics2 = [System.Drawing.Graphics]::FromImage($bitmap2)
+          $graphics2.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+          $bitmap2.Save("$env:RUNNER_TEMP\windows-window-step2.png", [System.Drawing.Imaging.ImageFormat]::Png)
           $alive = -not $host_proc.HasExited
           "native_host still running after 25s: $alive"
           if ($alive) { Stop-Process -Id $host_proc.Id -Force -ErrorAction SilentlyContinue }
@@ -215,6 +232,7 @@ jobs:
           retention-days: 7
           path: |
             ${{ runner.temp }}\windows-window.png
+            ${{ runner.temp }}\windows-window-step2.png
             ${{ runner.temp }}\web.out
             ${{ runner.temp }}\web.err
             ${{ runner.temp }}\host.out
