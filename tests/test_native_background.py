@@ -85,6 +85,8 @@ class NativeHostFirstPaintTests(unittest.TestCase):
             exe = Path(build) / name
             command = ["gcc", "-Wall", "-Wextra", "-Werror", str(src), "-o", str(exe)]
             if name == "linux_helper":
+                if not shutil.which("pkg-config"):
+                    self.skipTest("pkg-config is not available")
                 if subprocess.run(["pkg-config", "--exists", "glib-2.0"], check=False).returncode:
                     self.skipTest("GLib development files are not installed")
                 flags = subprocess.run(["pkg-config", "--cflags", "--libs", "glib-2.0"], capture_output=True, text=True, check=True).stdout
