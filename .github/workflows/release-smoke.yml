@@ -177,7 +177,7 @@ jobs:
           # The launcher sets these before it starts the host (openbox-native.ps1); the host needs them.
           $env:OPENBOX_WEB_APP = (Resolve-Path 'smoke\extracted\OpenBox\web_app.py').Path
           $env:OPENBOX_PYTHON = (Get-Command python).Source
-          $host_proc = Start-Process -FilePath "$PWD\smoke\extracted\OpenBox\native_host.exe" -PassThru
+          $host_proc = Start-Process -FilePath "$PWD\smoke\extracted\OpenBox\native_host.exe" -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP\host.out" -RedirectStandardError "$env:RUNNER_TEMP\host.err"
           Start-Sleep -Seconds 25
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
@@ -217,6 +217,8 @@ jobs:
             ${{ runner.temp }}\windows-window.png
             ${{ runner.temp }}\web.out
             ${{ runner.temp }}\web.err
+            ${{ runner.temp }}\host.out
+            ${{ runner.temp }}\host.err
             ${{ runner.temp }}\host-data\**
-            ${{ runner.temp }}\data-web\openbox-launch.log
-            ${{ runner.temp }}\data-native\openbox-launch.log
+            ${{ runner.temp }}\data-web\**
+            ${{ runner.temp }}\data-native\**
