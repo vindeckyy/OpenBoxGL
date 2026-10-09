@@ -101,10 +101,10 @@ def _run_once(path: Path, env: dict) -> dict:
         "status": "pass" if proc.returncode == 0 else "fail",
         "returncode": proc.returncode,
         "seconds": round(time.monotonic() - start, 1),
-        # Long enough for a full unittest traceback: the Windows job prints
-        # this inline, and a 12-line tail cut the frames that named the
-        # failing assertion.
-        "stderr_tail": "\n".join(proc.stderr.strip().splitlines()[-40:]),
+        # Long enough to hold every failure in one file, not just the last few:
+        # the Windows job prints this inline, and a 40-line tail hid most of the
+        # 29 failures in test_emulators.py.
+        "stderr_tail": "\n".join(proc.stderr.strip().splitlines()[-600:]),
         "stdout_tail": "\n".join(proc.stdout.strip().splitlines()[-12:]),
     }
 

@@ -941,6 +941,7 @@ class SystemCoverageDefinitionTests(unittest.TestCase):
                 self.assertIn(f"/usr/lib/libretro/{core}_libretro.so", startup)
 
 
+@unittest.skipIf(sys.platform == "win32", "the Flatpak sandbox and the system core folder are Linux-only")
 class FlatpakRetroArchCoreTests(unittest.TestCase):
     """RetroArch's Flatpak cannot load /usr/lib/libretro: its cores live in the user's app config.
 
@@ -1033,6 +1034,7 @@ class CoreChoiceTests(unittest.TestCase):
         )
         self.assertEqual(argv, ["/usr/bin/retroarch", "-L", "/usr/lib/libretro/bsnes_libretro.so", "/roms/g.sfc"])
 
+    @unittest.skipIf(sys.platform == "win32", "the Flatpak sandbox is Linux-only")
     def test_the_argv_maps_the_chosen_core_into_the_flatpak_sandbox(self):
         argv = self.defs.build_adapter_argv(
             self.adapter, {"name": "G", "retroarch_core": "bsnes_libretro.so"}, "/roms/g.sfc",
@@ -1041,6 +1043,7 @@ class CoreChoiceTests(unittest.TestCase):
         self.assertEqual(argv[3], "-L")
         self.assertTrue(argv[4].endswith("/retroarch/cores/bsnes_libretro.so"), argv)
 
+    @unittest.skipIf(sys.platform == "win32", "the system and Flatpak core folders are Linux paths")
     def test_installed_cores_are_listed_once_with_where_they_are(self):
         with tempfile.TemporaryDirectory() as system, tempfile.TemporaryDirectory() as flatpak:
             Path(system, "snes9x_libretro.so").touch()
@@ -1055,6 +1058,7 @@ class CoreChoiceTests(unittest.TestCase):
             {"name": "snes9x_libretro.so", "location": "system"},
         ])
 
+    @unittest.skipIf(sys.platform == "win32", "the table holds the Linux system core path")
     def test_the_emulator_table_and_platform_lookup_carry_the_core_not_the_token(self):
         from pkg.parity import parity_emulator_defs as defs_module
 
