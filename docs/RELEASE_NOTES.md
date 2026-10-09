@@ -58,10 +58,3 @@ From this release, the definition pack is signed with the release key and publis
 - **Windows per-game core.** A game's chosen RetroArch core was ignored on Windows and the default core always ran. It now applies there.
 
 The [changelog](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md) lists the main areas, not every change.
-
-## Known limits
-
-- **Windows.** The Windows CI job builds the native host with MSVC against the WebView2 SDK and runs the Windows test suite, and both pass on this release. Nobody has run the Windows app by hand on a Windows desktop yet.
-- **Core picker on Windows.** It lists cores from the Linux locations only, so on Windows it shows none for now. The per-game core still applies when the game launches.
-- **RetroArch in Flatpak.** Checked on one machine with the Flathub build and the SNES core. Other cores and other Flatpak builds are not checked on a real install.
-- **Some labels are still English.** Notifications are translated. Some dialog and button labels are not yet, and the notices the launch check and cloud sync send are English too.
