@@ -174,6 +174,9 @@ jobs:
           OPENBOX_DATA_DIR: ${{ runner.temp }}\data-native
         run: |
           New-Item -ItemType Directory -Force -Path $env:OPENBOX_DATA_DIR | Out-Null
+          # The launcher sets these before it starts the host (openbox-native.ps1); the host needs them.
+          $env:OPENBOX_WEB_APP = (Resolve-Path 'smoke\extracted\OpenBox\web_app.py').Path
+          $env:OPENBOX_PYTHON = (Get-Command python).Source
           $host_proc = Start-Process -FilePath "$PWD\smoke\extracted\OpenBox\native_host.exe" -PassThru
           Start-Sleep -Seconds 25
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
@@ -182,8 +185,10 @@ jobs:
           $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
           $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
           $bitmap.Save("$env:RUNNER_TEMP\windows-window.png", [System.Drawing.Imaging.ImageFormat]::Png)
-          "native_host still running after 25s: $(-not $host_proc.HasExited)"
-          Stop-Process -Id $host_proc.Id -Force -ErrorAction SilentlyContinue
+          $alive = -not $host_proc.HasExited
+          "native_host still running after 25s: $alive"
+          if ($alive) { Stop-Process -Id $host_proc.Id -Force -ErrorAction SilentlyContinue }
+          else { throw "native_host exited within 25s (exit code $($host_proc.ExitCode))" }
 
       - name: Upload the screenshot and logs
         if: always()
