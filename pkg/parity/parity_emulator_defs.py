@@ -774,8 +774,9 @@ def flatpak_core_path(core, prefix, home=None):
 def apply_core_override(adapter, game):
     """The adapter with its RetroArch core replaced by the one this game chose, if it chose one.
 
-    A definition that uses the core token takes the choice directly. A literal system
-    ``-L`` is replaced in place. Other arguments and other emulators come back unchanged.
+    A definition that uses the core token takes the choice directly. A literal ``-L`` pointing
+    at the system folder, or at a Windows ``cores\\<core>.dll``, is replaced in place. Other
+    arguments and other emulators come back unchanged.
     """
     choice = str((game or {}).get(RETROARCH_CORE_CHOICE_KEY) or "").strip()
     if not valid_core_name(choice):
@@ -785,9 +786,17 @@ def apply_core_override(adapter, game):
         return {**adapter, "retroarch_core": choice}
     replaced = False
     for index in range(len(startup) - 1):
-        if str(startup[index]) == "-L" and str(startup[index + 1]).startswith(RETROARCH_SYSTEM_CORE_DIR):
+        if str(startup[index]) != "-L":
+            continue
+        path = str(startup[index + 1])
+        if path.startswith(RETROARCH_SYSTEM_CORE_DIR):
             startup[index + 1] = RETROARCH_SYSTEM_CORE_DIR + choice
-            replaced = True
+        elif path.endswith(".dll") and "\\cores\\" in path:
+            # Windows builds keep the same core names with a .dll suffix, beside the executable.
+            startup[index + 1] = path.rsplit("\\", 1)[0] + "\\" + Path(choice).stem + ".dll"
+        else:
+            continue
+        replaced = True
     return {**adapter, "startup_args": startup} if replaced else adapter
 
 
