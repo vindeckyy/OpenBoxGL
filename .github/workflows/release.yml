@@ -67,6 +67,10 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     container: ubuntu:22.04
+    # The container's /bin/sh is dash; the steps below use bash features.
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 35
     permissions:
       contents: read
