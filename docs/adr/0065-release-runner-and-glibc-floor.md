@@ -1,7 +1,7 @@
 # ADR 0065: Release runner image and the glibc floor
 
 **Date:** 2026-10-08
-**Status:** Proposed (1.16.1). The container build is verified locally (see Evidence); the change to `release.yml` waits for a CI dry run on a tag, because GitHub's runner cannot be exercised here.
+**Status:** Accepted (1.16.1). The container build was verified locally, then by a manual dry run of `release.yml` on the `adr-0065-dry-run` branch (run 37933597074) and by CI on the commit that carries the change (`9793a95`, run 37935024963). See "What the dry run showed".
 
 ## Context
 
@@ -38,8 +38,9 @@ Adoption requires, before a tag is cut:
 - The release keeps the Ubuntu 22.04 compatibility promise without depending on a
   retiring runner image.
 - Maintenance cost: one container image pin to refresh when 22.04 support ends.
-- Until the dry run passes, the release stays on `ubuntu-22.04`. The retirement date
-  is the deadline to finish the dry run, not a reason to switch unverified.
+- The dry run passed, so the AppImage jobs build on `ubuntu-24.04` inside the 22.04 container.
+  The attestation and publish jobs still run on `ubuntu-22.04`. Moving them is a separate change,
+  and it is the next retirement deadline.
 
 ## Evidence (1.16.1, 2026-10-08)
 
@@ -56,10 +57,18 @@ build, and the GitHub container job itself. The release comment says aarch64 alr
 `ubuntu-24.04-arm`, so today that artefact's floor is probably the 24.04 glibc. This ADR's
 change would fix that as well; it has not been measured.
 
-## What the CI dry run must show
+## What the dry run showed
 
-1. `release.yml` builds the x86_64 and aarch64 AppImages in `ubuntu:22.04` containers on a
-   24.04 runner. The steps that call `sudo` need a root-safe form inside the container.
-2. The AppImage job's `ldd`-style check above passes for both arches; the aarch64 number is
-   measured, not assumed.
-3. `flatpak-validate` and the AppImage smoke pass on the same commit.
+1. **Done.** `release.yml` builds the x86_64 and aarch64 AppImages in `ubuntu:22.04` containers on
+   24.04 runners (run 37933597074, after the fixes in `3de0dad` and `9793a95`). The container build
+   runs no `sudo` step, and the test suite stays on a host job. The first two dry runs failed and
+   are recorded in the git history: git refused the checkout inside the container, and the container's
+   `/bin/sh` is dash.
+2. **Done.** `ldd --version` reports 2.35 in both containers. The highest `GLIBC_` symbol in each
+   AppImage is `GLIBC_2.35`, on x86_64 and on aarch64. Both were measured.
+3. **Done for `flatpak-validate`.** CI on `9793a95` (run 37935024963) passed every job, including
+   `flatpak-validate`. **Not done:** the AppImage smoke test. The dry run builds the AppImage but
+   does not run it on a desktop.
+
+The dry run's attestation and publish jobs were skipped, because they run only for tag pushes.
+Nothing was published.

@@ -165,8 +165,9 @@ added: `GET /api/v2/launch/audit/status`, `POST /api/v2/launch/grant`, `POST /ap
 - The Linux native host builds here against WebKitGTK 2.52 and its 13 tests pass. The Windows CI job builds the Windows
   native host with MSVC against the WebView2 SDK and runs the Windows test suite; both pass on this release. Nobody has
   run the Windows app by hand on a Windows desktop yet (ADR 0071).
-- The release runner change (ADR 0065) takes effect only after a tagged CI dry run. The first signed
-  definition pack needs a tagged CI run with the release key (ADR 0061 addendum).
+- The Linux AppImages build in an ubuntu:22.04 container on a 24.04 runner, so the glibc floor stays at 2.35 (ADR 0065).
+  A manual dry run built both arches, and their highest `GLIBC_` symbol is 2.35. The attestation and publish jobs still
+  run on ubuntu-22.04. The first signed definition pack needs a tagged CI run with the release key (ADR 0061 addendum).
 - The integrated `perf_bench.py --browser` step measured an empty directory (the 20,000-game write-path folder)
   and failed with `Waiting for selector .cover`. It now measures the largest library the run generated for the
   read benchmark. `tests/test_perf_bench.py`.
