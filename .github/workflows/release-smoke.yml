@@ -1,0 +1,200 @@
+name: Release smoke
+
+# Manual only. Downloads a published release's assets, verifies them against the
+# release key, and runs them on each platform: the web server, then the native
+# window on a virtual display (Linux) or the desktop session (Windows). Screenshots
+# are uploaded as artifacts. Nothing here publishes anything.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to smoke-test
+        required: true
+        default: v1.16.1
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb imagemagick xauth libwebkit2gtk-4.1-0 libgtk-3-0
+          python3 -m pip install --disable-pip-version-check cryptography==50.0.0
+
+      - name: Download and verify the published AppImage
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p smoke && cd smoke
+          name="OpenBox-${{ matrix.arch }}.AppImage"
+          gh release download "${{ inputs.tag }}" -R "$GITHUB_REPOSITORY" -p "$name" -p "$name.sha256" -p "$name.sig"
+          sha256sum --check --strict "$name.sha256"
+          python3 -B ../scripts/verify_release.py --key ../openbox-release.pub "$name" "$name.sig"
+          chmod +x "$name"
+          ./"$name" --appimage-extract >/dev/null
+          test -x squashfs-root/AppRun
+
+      - name: Serve the web app headless
+        env:
+          OPENBOX_DATA_DIR: ${{ runner.temp }}/data-web
+        run: |
+          set -euo pipefail
+          mkdir -p "$OPENBOX_DATA_DIR"
+          smoke/squashfs-root/AppRun --web --no-browser > "$RUNNER_TEMP/web.out" 2> "$RUNNER_TEMP/web.err" &
+          pid=$!
+          url=""
+          for i in $(seq 1 90); do
+            url="$(grep -m1 -oE 'http://127\.0\.0\.1:[0-9]+/' "$RUNNER_TEMP/web.out" || true)"
+            [ -n "$url" ] && break
+            sleep 1
+          done
+          test -n "$url"
+          code="$(curl -s -o "$RUNNER_TEMP/index.html" -w '%{http_code}' "$url")"
+          echo "GET / -> $code, $(wc -c < "$RUNNER_TEMP/index.html") bytes"
+          test "$code" = 200
+          kill "$pid" || true
+
+      - name: Open the native window on a virtual display
+        env:
+          SMOKE_ARCH: ${{ matrix.arch }}
+          OPENBOX_DATA_DIR: ${{ runner.temp }}/data-native
+        run: |
+          set -euo pipefail
+          mkdir -p "$OPENBOX_DATA_DIR"
+          cat > "$RUNNER_TEMP/window.sh" <<'EOS'
+          #!/bin/bash
+          set -u
+          "$GITHUB_WORKSPACE/smoke/squashfs-root/AppRun" > "$RUNNER_TEMP/native.out" 2> "$RUNNER_TEMP/native.err" &
+          pid=$!
+          sleep 25
+          import -window root "$RUNNER_TEMP/linux-window-$SMOKE_ARCH.png"
+          if kill -0 "$pid" 2>/dev/null; then echo "native launcher still running after 25s"; else echo "native launcher exited early"; fi
+          pkill -P "$pid" 2>/dev/null || true
+          kill "$pid" 2>/dev/null || true
+          EOS
+          xvfb-run -a -s "-screen 0 1280x800x24" bash "$RUNNER_TEMP/window.sh"
+          test -s "$RUNNER_TEMP/linux-window-$SMOKE_ARCH.png"
+
+      - name: Upload the screenshot and logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # actions/upload-artifact@v7.0.1
+        with:
+          name: smoke-linux-${{ matrix.arch }}
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}/linux-window-*.png
+            ${{ runner.temp }}/web.out
+            ${{ runner.temp }}/web.err
+            ${{ runner.temp }}/native.out
+            ${{ runner.temp }}/native.err
+            ${{ runner.temp }}/data-web/openbox-launch.log
+            ${{ runner.temp }}/data-native/openbox-launch.log
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Download and verify the published Windows zip
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force -Path smoke | Out-Null
+          Set-Location smoke
+          $name = 'OpenBox-x86_64-windows.zip'
+          gh release download "${{ inputs.tag }}" -R $env:GITHUB_REPOSITORY -p $name -p "$name.sha256" -p "$name.sig"
+          $expected = (Get-Content "$name.sha256" -Raw).Split(' ')[0].Trim().ToLower()
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $name).Hash.ToLower()
+          if ($actual -ne $expected) { throw "sha256 mismatch: $actual vs $expected" }
+          python -m pip install --disable-pip-version-check cryptography==50.0.0
+          python -B ..\scripts\verify_release.py --key ..\openbox-release.pub $name "$name.sig"
+          Expand-Archive -LiteralPath $name -DestinationPath extracted
+          if (-not (Test-Path 'extracted\OpenBox\native_host.exe')) { throw 'native_host.exe missing from the zip' }
+
+      - name: Serve the web app headless
+        shell: pwsh
+        env:
+          OPENBOX_DATA_DIR: ${{ runner.temp }}\data-web
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:OPENBOX_DATA_DIR | Out-Null
+          $web = Start-Process -FilePath python -ArgumentList '-B','smoke\extracted\OpenBox\web_app.py','--no-browser' -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP\web.out" -RedirectStandardError "$env:RUNNER_TEMP\web.err"
+          $url = $null
+          for ($i = 0; $i -lt 90 -and -not $url; $i++) {
+            Start-Sleep -Seconds 1
+            if (Test-Path "$env:RUNNER_TEMP\web.out") {
+              $m = Select-String -Path "$env:RUNNER_TEMP\web.out" -Pattern 'http://127\.0\.0\.1:\d+/' | Select-Object -First 1
+              if ($m) { $url = $m.Matches[0].Value }
+            }
+          }
+          if (-not $url) { throw 'the web server printed no URL' }
+          $code = (Invoke-WebRequest -UseBasicParsing -Uri $url).StatusCode
+          "GET / -> $code"
+          Stop-Process -Id $web.Id -Force -ErrorAction SilentlyContinue
+          if ($code -ne 200) { throw "unexpected status $code" }
+
+      - name: Open the native window and capture the desktop
+        shell: pwsh
+        env:
+          OPENBOX_DATA_DIR: ${{ runner.temp }}\data-native
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:OPENBOX_DATA_DIR | Out-Null
+          $host_proc = Start-Process -FilePath "$PWD\smoke\extracted\OpenBox\native_host.exe" -PassThru
+          Start-Sleep -Seconds 25
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+          $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+          $bitmap.Save("$env:RUNNER_TEMP\windows-window.png", [System.Drawing.Imaging.ImageFormat]::Png)
+          "native_host still running after 25s: $(-not $host_proc.HasExited)"
+          Stop-Process -Id $host_proc.Id -Force -ErrorAction SilentlyContinue
+
+      - name: Upload the screenshot and logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # actions/upload-artifact@v7.0.1
+        with:
+          name: smoke-windows
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}\windows-window.png
+            ${{ runner.temp }}\web.out
+            ${{ runner.temp }}\web.err
+            ${{ runner.temp }}\data-web\openbox-launch.log
+            ${{ runner.temp }}\data-native\openbox-launch.log
