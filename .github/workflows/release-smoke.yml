@@ -194,13 +194,15 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          # The host keeps its logs in the user's app data folders, not in OPENBOX_DATA_DIR.
+          # The native host keeps its data in %LOCALAPPDATA%\openbox-game-launcher (DEFAULT_DATA_DIR_NAME),
+          # not in OPENBOX_DATA_DIR.
           $dest = Join-Path $env:RUNNER_TEMP 'host-data'
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          foreach ($root in @($env:LOCALAPPDATA, $env:APPDATA)) {
-            if ($root -and (Test-Path (Join-Path $root 'OpenBox'))) {
-              Copy-Item -Recurse -Force -Path (Join-Path $root 'OpenBox') -Destination (Join-Path $dest (Split-Path $root -Leaf))
-            }
+          $source = Join-Path $env:LOCALAPPDATA 'openbox-game-launcher'
+          if (Test-Path $source) {
+            Copy-Item -Recurse -Force -Path $source -Destination (Join-Path $dest 'openbox-game-launcher')
+          } else {
+            "no host data folder at $source"
           }
           Get-ChildItem -Recurse -File $dest | ForEach-Object { "{0} {1} bytes" -f $_.FullName, $_.Length }
 
