@@ -114,8 +114,14 @@ import { AppState, api, media, notify } from './state.js';
         }
         const p = pointOnCanvas(e.clientX, e.clientY);
         const n = nodeAt(p.x, p.y);
+        // The tooltip is painted by draw() at lastMouse; a plain hover used to
+        // update neither, so once the layout settled no tooltip ever appeared,
+        // and while it ran the tooltip sat at the last mousedown point.
+        const hoverChanged = n !== hovered;
         hovered = n;
+        lastMouse = { x: e.clientX, y: e.clientY };
         canvas.style.cursor = n ? 'pointer' : 'default';
+        if (hoverChanged || n) draw();
       });
       window.addEventListener('mouseup', () => { dragging = null; canvas.style.cursor = 'default'; });
       canvas.onwheel = e => {

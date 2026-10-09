@@ -590,7 +590,9 @@ def main():
     test_plugin_api_v1()
     test_plugin_routes()
     test_plugin_trust_flow()
+    test_plugin_checksum_frames_file_boundaries()
     test_plugin_trust_gates_unsandboxed_execution()
+    test_a_grant_from_before_the_framing_change_asks_again()
     test_plugin_share_net_argv()
     test_plugin_permissions()
     test_plugin_settings_validation()
@@ -643,6 +645,38 @@ def test_plugin_trust_flow():
         status = _plugins.plugin_trust_status(root, "trust.plugin")
         assert status["trusted"] is False
     print("  plugin trust flow: ok")
+
+
+def test_a_grant_from_before_the_framing_change_asks_again():
+    """An old grant is shown as needing approval again, and a fresh grant is trusted."""
+    import plugins as _plugins
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        _make_plugin(root, "legacy.plugin", "def before_launch(p):\n    return p\n")
+        legacy = _plugins._legacy_plugin_checksum(root, "legacy.plugin")
+        _plugins.save_plugin_state(root, {"trust": {"legacy.plugin": {"trusted": True, "checksum": legacy, "granted_at": "2026-01-01T00:00:00Z"}}})
+        status = _plugins.plugin_trust_status(root, "legacy.plugin")
+        assert status["trusted"] is False and status["retrust"] is True
+        _plugins.set_plugin_trust(root, "legacy.plugin", True)
+        status = _plugins.plugin_trust_status(root, "legacy.plugin")
+        assert status["trusted"] is True and status["retrust"] is False
+    print("  legacy trust asks again: ok")
+
+
+def test_plugin_checksum_frames_file_boundaries():
+    """Moving bytes between a file tail and the next file name must change the checksum."""
+    import plugins as _plugins
+    with TemporaryDirectory() as directory:
+        first = Path(directory, "a", "p")
+        first.mkdir(parents=True)
+        (first / "plugin.py").write_text("x = 1\n", encoding="utf-8")
+        (first / "zz = __import__('os');q.txt").write_text("data", encoding="utf-8")
+        second = Path(directory, "b", "p")
+        second.mkdir(parents=True)
+        (second / "plugin.py").write_text("x = 1\nzz = __import__('os');", encoding="utf-8")
+        (second / "q.txt").write_text("data", encoding="utf-8")
+        assert _plugins.plugin_checksum(Path(directory, "a"), "p") != _plugins.plugin_checksum(Path(directory, "b"), "p")
+    print("  plugin checksum boundary framing: ok")
 
 
 def test_plugin_trust_gates_unsandboxed_execution():

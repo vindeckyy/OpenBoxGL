@@ -118,7 +118,16 @@ class HealthHandlers:
         if not archive_name:
             self.send_json(400, {"error": "archive parameter required"})
             return
-        archive = approved_backup_file(archive_name)
+        # approved_backup_file raises (never returns falsy) on a missing or
+        # unapproved path; map those to 404/400 instead of letting a missing
+        # archive surface as a generic 400 with the resolved absolute path.
+        try:
+            archive = approved_backup_file(archive_name)
+        except FileNotFoundError:
+            archive = None
+        except ValueError:
+            self.send_json(400, {"error": "backup archive is not an approved OpenBox backup"})
+            return
         if not archive:
             self.send_json(404, {"error": "backup archive not found"})
             return

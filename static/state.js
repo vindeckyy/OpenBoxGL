@@ -1,4 +1,6 @@
+import { stableIdFor } from './pure.js';
 import { escapeHtml, API_V1, badge, defaultBadges, sortGames, advancedQueryMatches, parseQueryTokens, gameInstalled, $, motionMs, HTTP_URL_RE } from './util.js';
+const tr = key => (window.OpenBoxI18n?.t ? window.OpenBoxI18n.t(key) : key);
 
 
 
@@ -26,6 +28,9 @@ try {
     const badgeVisibility = () => new Set(AppState.appSettings.badge_visibility || defaultBadges);
     const playlistFor = name => AppState.playlists.find(item => item.name === name);
     const playlistMembers = playlist => new Set((playlist?.members || []).map(String));
+    // The stable id for a row's array index. Sent alongside the index so the server can
+    // refuse a stale request instead of applying it to whichever game shifted into place.
+    const gameIdOf = index => stableIdFor(AppState.games, index);
     const gameInPlaylist = (game, playlist) => {
       if (!playlist) return false;
       if (playlist.type !== 'manual') return true;
@@ -53,6 +58,9 @@ try {
         visible.has('broken') && badge('Broken', game.broken, 'danger'),
         visible.has('portable') && badge('Portable', game.portable),
         visible.has('controller') && badge(game.controller_support, Boolean(game.controller_support)),
+        // Launch readiness from the cached audit; absent when the audit is missing or stale, or the setting is off.
+        AppState.appSettings?.show_launch_badges !== false && AppState.launchReadiness?.[game.game_id] === 'blocked' && badge(tr('launch_audit.badge_blocked'), true, 'danger'),
+        AppState.appSettings?.show_launch_badges !== false && AppState.launchReadiness?.[game.game_id] === 'warning' && badge(tr('launch_audit.badge_warning'), true),
       ].filter(Boolean).join('');
     }
     /**
@@ -508,9 +516,9 @@ try {
     function copyDiagnostics() {
       try {
         navigator.clipboard.writeText(lastBannerDetails || 'No error details captured.');
-        notify('Error details copied');
+        notify(tr('notify.state.error_copied'));
       } catch (error) {
-        notify('Could not copy: clipboard unavailable');
+        notify(tr('notify.state.copy_failed'));
       }
     }
     $('errorBannerDismiss').onclick = () => { $('errorBanner').hidden = true; };
@@ -745,4 +753,4 @@ try {
       }
     }
 
-export { nativeCaps, revealToast, hideToast, showToast, dismissToast, raiseToasts, token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, gameForSession, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId, isPageHidden, registerLifecycleStream, unregisterLifecycleStream };
+export { gameIdOf, nativeCaps, revealToast, hideToast, showToast, dismissToast, raiseToasts, token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, gameForSession, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId, isPageHidden, registerLifecycleStream, unregisterLifecycleStream };

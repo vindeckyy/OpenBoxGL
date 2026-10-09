@@ -75,3 +75,29 @@ are nested inside `STATE_LOCK` but never inside `PROCESS_LOCK`.
   demonstrate it does not hold another; review checklist updated.
 - **Readability**: inline `///< lock ordering:` comments at every
   acquisition site document the constraint at the point of use.
+
+## Addendum (1.16.1): the coalesced-write lock
+
+`state_store.py` adds a fourth lock to the in-process order, `_coalesce_lock`, which
+guards the pending coalesced snapshot and its flush timer. The order inside a store is:
+
+```
+_thread_lock  ->  _file_lock  ->  _coalesce_lock
+```
+
+Two rules follow from it:
+
+- A full write (`_write_unlocked`) clears the pending coalesced snapshot, because the
+  in-memory state it was written from already carries that mutation. Flushing the
+  pending snapshot after a full write would roll the newer commit back.
+- A coalesced mutation publishes its pending snapshot while still holding
+  `_thread_lock`, so a full commit cannot land between the mutation and its
+  publication.
+
+Trade-off: when another process changed `library.json`, a full write reloads the file
+from disk, and a coalesced mutation that had not yet flushed is dropped rather than
+written over the other process's change. Before 1.16.1 the opposite happened and that
+change was lost. The drop is intended; it is recorded here so a later reader does not
+restore the old behaviour.
+
+Covered by `tests/test_perf_writes.py` (`CoalesceCommitOrderingTests`).

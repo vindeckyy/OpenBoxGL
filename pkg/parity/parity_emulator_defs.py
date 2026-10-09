@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import re
 import shlex
 import shutil
 import sys
@@ -24,7 +26,7 @@ except ImportError:
 # the bundled definition is the always-valid fallback.
 _YAML_ERRORS = (yaml.YAMLError,) if yaml is not None else ()
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 _REGISTRY_CACHE: dict | None = None
 # Guards the load-and-publish in _registry() and the clear-and-refresh in
 # _reset_registry_cache(). An RLock because the refresh re-enters _registry()
@@ -173,6 +175,35 @@ def _normalize_state(raw_state, adapter_id):
     return {"kind": kind, "template": template, "capture": capture, "glob": glob}
 
 
+RETROARCH_CORE_CHOICE_KEY = "retroarch_core"
+# A definition names its core once, in ``retroarch_core``, and puts this token where the
+# core's path goes. The builder fills in the path for the install mode (system or Flatpak).
+RETROARCH_CORE_TOKEN = "{retroarch_core}"
+_CORE_FILE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.+-]*_libretro\.so")
+
+
+def valid_core_name(name) -> bool:
+    """A RetroArch core file name such as snes9x_libretro.so: no folder part, nothing to traverse."""
+    return bool(_CORE_FILE.fullmatch(str(name or "")))
+
+
+def _core_choice(value) -> str:
+    text = str(value or "").strip()
+    return text if valid_core_name(text) else ""
+
+
+RETROARCH_SYSTEM_CORE_DIR = "/usr/lib/libretro/"
+RETROARCH_FLATPAK_APP_ID = "org.libretro.RetroArch"
+
+def resolved_startup_args(adapter) -> list:
+    """The startup arguments with the definition's core path in place of {retroarch_core}."""
+    startup = list(adapter.get("startup_args") or [])
+    core = _core_choice(adapter.get("retroarch_core"))
+    if core and RETROARCH_CORE_TOKEN in startup:
+        startup = [RETROARCH_SYSTEM_CORE_DIR + core if str(arg) == RETROARCH_CORE_TOKEN else arg for arg in startup]
+    return startup
+
+
 def _normalize_adapter(raw):
     if not isinstance(raw, dict):
         raise ValueError("Adapter definition must be a mapping.")
@@ -203,6 +234,8 @@ def _normalize_adapter(raw):
         raise
     except Exception:
         pass
+    if RETROARCH_CORE_TOKEN in startup_args and not _core_choice(raw.get("retroarch_core")):
+        raise ValueError(f"Adapter {adapter_id} uses {RETROARCH_CORE_TOKEN} without a valid retroarch_core.")
     # Optional BIOS / firmware / core metadata for health checks
     bios_path = raw.get("bios_path") or raw.get("bios") or None
     bios_sha1 = raw.get("bios_sha1") or None
@@ -231,6 +264,7 @@ def _normalize_adapter(raw):
         "priority": _as_int(raw.get("priority"), default=100),
         "executable_patterns": [str(item) for item in (raw.get("executable_patterns") or [])],
         "schema_version": _as_int(raw.get("schema_version"), default=SCHEMA_VERSION),
+        "retroarch_core": _core_choice(raw.get("retroarch_core")),
         "bios_path": str(bios_path).strip() if bios_path else None,
         "bios_sha1": str(bios_sha1).strip().lower() if bios_sha1 else None,
         "firmware_path": str(firmware_path).strip() if firmware_path else None,
@@ -438,7 +472,8 @@ def load_registry(defs_dir=None, health=False, which=None, home=None):
             "extensions": list(item["extensions"]),
             "native_exe": item["native_exe"],
             "flatpak_app_id": item["flatpak_app_id"],
-            "startup_args": list(item["startup_args"]),
+            # Resolved, so a consumer sees the core path the launch uses, never the token.
+            "startup_args": resolved_startup_args(item),
             "recommended": item["recommended"],
             "priority": item["priority"],
             "state": dict(item["state"]),
@@ -567,8 +602,8 @@ def load_definitions(defs_dir=None):
             "name": adapter["label"],
             "extensions": list(adapter["extensions"]),
             "platforms": [adapter["platform"]],
-            "startup": join_command(adapter["startup_args"]),
-            "startup_args": list(adapter["startup_args"]),
+            "startup": join_command(resolved_startup_args(adapter)),
+            "startup_args": resolved_startup_args(adapter),
             "executable_patterns": list(adapter["executable_patterns"]),
             "flatpak": adapter["flatpak_app_id"] or "",
             "native": adapter["native_exe"] or "",
@@ -591,7 +626,7 @@ def build_emulators_dict(adapters=None):
         })
         if not entry["native"] and adapter["native_exe"]:
             entry["native"] = adapter["native_exe"]
-        entry["profiles"][adapter["platform"]] = join_command(adapter["startup_args"])
+        entry["profiles"][adapter["platform"]] = join_command(resolved_startup_args(adapter))
     return emulators
 
 
@@ -713,17 +748,76 @@ def detect_adapter_for_platform(platform, which=None):
     return None
 
 
+# RetroArch's Flatpak has no cores of its own and cannot see the host's
+# /usr/lib/libretro (verified: "Frontend is built for dynamic libretro cores,
+# but path is not set"). Its cores live in the user's app config directory,
+# which the sandbox sees at the same path.
+
+
+def retroarch_flatpak_core_dir(home=None) -> str:
+    base = Path(home) if home else Path.home()
+    return str(base / ".var" / "app" / RETROARCH_FLATPAK_APP_ID / "config" / "retroarch" / "cores")
+
+
+def flatpak_core_path(core, prefix, home=None):
+    """Return the core path a Flatpak RetroArch launch must use.
+
+    Only a host system-core path under a Flatpak prefix is rewritten; a native
+    launch and any other value pass through unchanged.
+    """
+    text = str(core)
+    if prefix and prefix[0] == "flatpak" and text.startswith(RETROARCH_SYSTEM_CORE_DIR):
+        return str(Path(retroarch_flatpak_core_dir(home)) / Path(text).name)
+    return text
+
+
+def apply_core_override(adapter, game):
+    """The adapter with its RetroArch core replaced by the one this game chose, if it chose one.
+
+    A definition that uses the core token takes the choice directly. A literal system
+    ``-L`` is replaced in place. Other arguments and other emulators come back unchanged.
+    """
+    choice = str((game or {}).get(RETROARCH_CORE_CHOICE_KEY) or "").strip()
+    if not valid_core_name(choice):
+        return adapter
+    startup = list(adapter.get("startup_args") or [])
+    if RETROARCH_CORE_TOKEN in startup:
+        return {**adapter, "retroarch_core": choice}
+    replaced = False
+    for index in range(len(startup) - 1):
+        if str(startup[index]) == "-L" and str(startup[index + 1]).startswith(RETROARCH_SYSTEM_CORE_DIR):
+            startup[index + 1] = RETROARCH_SYSTEM_CORE_DIR + choice
+            replaced = True
+    return {**adapter, "startup_args": startup} if replaced else adapter
+
+
+def installed_retroarch_cores(home=None) -> list[dict]:
+    """RetroArch cores present in the system folder or the Flatpak app's cores folder."""
+    found: dict[str, str] = {}
+    for location, folder in (("system", RETROARCH_SYSTEM_CORE_DIR), ("flatpak", retroarch_flatpak_core_dir(home))):
+        try:
+            names = [entry.name for entry in os.scandir(folder) if valid_core_name(entry.name)]
+        except OSError:
+            continue
+        for name in names:
+            found.setdefault(name, location)
+    return [{"name": name, "location": found[name]} for name in sorted(found)]
+
+
 def build_adapter_argv(adapter, game, rom_path, prefix=None, data_dir="", which=None):
+    adapter = apply_core_override(adapter, game)
     which = which or shutil.which
     prefix = prefix or detect_adapter_prefix(adapter, which=which)
     if not prefix:
         raise FileNotFoundError(f"No emulator found for {adapter.get('label', adapter.get('adapter_id'))}.")
     args = list(prefix)
     emu_dir = path_parent(prefix[0]) if prefix else ""
-    for value in adapter.get("startup_args", []):
-        args.append(
-            apply_tokens(str(value), game, path=str(rom_path), emulator_dir=emu_dir, data_dir=data_dir)
-        )
+    startup = resolved_startup_args(adapter)
+    for index, value in enumerate(startup):
+        text = apply_tokens(str(value), game, path=str(rom_path), emulator_dir=emu_dir, data_dir=data_dir)
+        if index and str(startup[index - 1]) == "-L":
+            text = flatpak_core_path(text, prefix)
+        args.append(text)
     return args
 
 
@@ -735,6 +829,7 @@ def build_launch_command(definition, rom_path, prefix=None):
         "adapter_id": definition.get("id", ""),
         "label": definition.get("name", definition.get("id", "")),
         "startup_args": definition.get("startup_args") or _compile_startup_args(definition),
+        "retroarch_core": definition.get("retroarch_core", ""),
     }
     return build_adapter_argv(adapter, definition, rom_path, prefix=prefix)
 
@@ -750,6 +845,22 @@ def candidates_for_extension(extension, definitions=None):
     return list(_registry()["by_extension"].get(extension, []))
 
 
+# Disc and image extensions several systems share. Guessing one imported a PlayStation
+# image as a Sega CD game, so these ask the user instead (ADR 0061 addendum).
+AMBIGUOUS_DISC_EXTENSIONS = (".bin", ".cue", ".iso")
+
+
+def platform_options_for_extension(extension, adapters=None) -> list:
+    """The systems that share an ambiguous disc extension, sorted; empty for any other extension."""
+    dotted = "." + str(extension or "").lower().lstrip(".")
+    if dotted not in AMBIGUOUS_DISC_EXTENSIONS:
+        return []
+    adapters = adapters or _registry()["adapters"]
+    bare = dotted.lstrip(".")
+    platforms = sorted({str(a["platform"]) for a in adapters if bare in a["extensions"] and a.get("platform")})
+    return platforms if len(platforms) > 1 else []
+
+
 def platform_for_extension(extension, definitions=None):
     matches = candidates_for_extension(extension, definitions=definitions)
     if not matches:
@@ -763,8 +874,8 @@ def platform_for_extension(extension, definitions=None):
         "name": first["label"],
         "extensions": list(first["extensions"]),
         "platforms": [first["platform"]],
-        "startup": join_command(first["startup_args"]),
-        "startup_args": list(first["startup_args"]),
+        "startup": join_command(resolved_startup_args(first)),
+        "startup_args": resolved_startup_args(first),
         "executable_patterns": list(first["executable_patterns"]),
         "flatpak": first["flatpak_app_id"] or "",
         "native": first["native_exe"] or "",

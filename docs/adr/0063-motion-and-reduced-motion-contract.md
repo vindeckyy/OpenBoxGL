@@ -58,3 +58,7 @@ and invisible under Big Box.
   degrade to the previous layout, and the supported Flatpak and Windows hosts ship them.
 - Known limit: the native hosts paint `#11100e` before the page loads, so a light theme can
   flash dark for a few milliseconds. Fixing that needs a native-host rebuild and is out of scope.
+
+## Addendum (1.16.1): the native first paint
+
+The native windows no longer paint `#11100e` before the page loads when the active theme has another background. The app records the theme's background for them (ADR 0071).

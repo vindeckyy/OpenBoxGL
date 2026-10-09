@@ -54,7 +54,32 @@ def test():
         finally:
             os.chdir(previous_cwd)
         assert rel_file.read_text(encoding="utf-8") == "rel"
+    test_restore_with_root_missing_at_backup_time()
     print("save self-test: ok")
+
+
+def test_restore_with_root_missing_at_backup_time():
+    # A configured root that did not exist at backup time is left out of the
+    # manifest; the backup must still restore the roots it did capture.
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        present = root / "present"
+        present.mkdir()
+        (present / "slot.sav").write_text("before", encoding="utf-8")
+        missing = root / "missing"
+        game = {"name": "Two Roots", "path": "/games/two", "save_paths": [str(missing), str(present)]}
+        archive = backup_saves(game, root / "backups")
+        (present / "slot.sav").write_text("after", encoding="utf-8")
+        restore_saves(game, root / "backups", archive.name)
+        assert (present / "slot.sav").read_text(encoding="utf-8") == "before"
+        assert not missing.exists()
+        other = {"name": "Two Roots", "path": "/games/two", "save_paths": [str(missing)]}
+        try:
+            restore_saves(other, root / "backups", archive.name)
+        except (ValueError, FileNotFoundError):
+            pass
+        else:
+            raise AssertionError("a backup for another root set must not restore")
 
 
 if __name__ == "__main__":

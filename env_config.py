@@ -52,22 +52,24 @@ def _parse_env_line(line):
         return None
     key, value = line.split("=", 1)
     key = key.strip()
-    # A '#' preceded by whitespace is a comment; inside an unquoted value it is preserved.
+    # Accept shell-style ``export KEY=value`` lines.
+    if key.startswith("export") and key[6:7].isspace():
+        key = key[6:].strip()
     value = value.strip()
-    quote = ""
-    comment_at = -1
-    for index, char in enumerate(value):
-        if char in ("'", '"'):
-            if quote == "":
-                quote = char
-            elif quote == char:
-                quote = ""
-        elif char == "#" and not quote and index > 0 and value[index - 1].isspace():
-            comment_at = index
-            break
-    if comment_at != -1:
-        value = value[:comment_at].rstrip()
-    value = value.strip().strip('"').strip("'")
+    closing = value.find(value[0], 1) if value[:1] in ("'", '"') else -1
+    if closing != -1:
+        # A quoted value is taken verbatim up to its matching closing quote;
+        # anything after it (such as a trailing comment) is ignored.
+        value = value[1:closing]
+    else:
+        if value[:1] in ("'", '"'):
+            value = value[1:]
+        # A '#' preceded by whitespace is a comment; inside an unquoted value it is preserved.
+        for index, char in enumerate(value):
+            if char == "#" and index > 0 and value[index - 1].isspace():
+                value = value[:index]
+                break
+        value = value.strip()
     if not key or not key.replace("_", "a").isalnum() or key[0].isdigit() or "\x00" in value:
         return None
     return key, value

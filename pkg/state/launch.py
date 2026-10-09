@@ -342,13 +342,22 @@ def resolve_library_game(state, identity, fallback_index=None):
 
 
 def game_from_payload(state, payload):
-    """Resolve additive stable IDs first, then retain the numeric frontend ID."""
+    """Resolve additive stable IDs first, then retain the numeric frontend ID.
+
+    A stable ID that matches nothing is an error, never a reason to fall back to
+    ``id``: a client holding a stale game (deleted, trashed or synced away in
+    another window) sends an index that now names a different game, and an edit
+    would overwrite that game. A request that sends only ``id`` keeps its legacy
+    meaning.
+    """
     if not isinstance(payload, dict):
         raise ValueError("Request payload must be an object.")
     games = state.get("games", [])
     game = resolve_library_game(state, payload)
     if game is not None:
         return game
+    if str(payload.get("game_id") or payload.get("stable_game_id") or "").strip():
+        raise IndexError("Game not found")
     raw_id = payload.get("id")
     if raw_id is None:
         raise IndexError("Game not found")

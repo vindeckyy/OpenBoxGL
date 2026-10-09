@@ -23,6 +23,7 @@ import signal
 import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 IS_WINDOWS = os.name == "nt"
@@ -172,6 +173,57 @@ def home_dir() -> Path | None:
         return Path.home()
     except (RuntimeError, OSError):
         return None
+
+
+# taskkill finishes in well under a second; a hung one must not block termination.
+TASKKILL_TIMEOUT_SECONDS = 10
+
+def parse_timestamp(value):
+    """Parse an ISO-8601 timestamp into naive local time, or return None.
+
+    The app writes naive local time. Values from imports, bulk edits and other
+    devices may carry ``Z`` or an offset; those are converted to local time, so
+    every comparison with ``datetime.now()`` is between two naive values and
+    cannot raise. An empty or unparseable value is None, not an error.
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith(("Z", "z")):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone().replace(tzinfo=None)
+    return parsed
+
+
+# A wedged Flatpak or D-Bus session must not block a status or launch request.
+FLATPAK_PROBE_TIMEOUT_SECONDS = 5
+
+
+def flatpak_app_installed(app_id, *, run=None, flatpak="flatpak") -> bool:
+    """Return True when ``flatpak info <app_id>`` exits 0 within the probe timeout.
+
+    A probe that times out, or cannot start, counts as "not installed". The
+    ``run`` argument exists so callers and tests can substitute the runner.
+    """
+    run = run or subprocess.run
+    try:
+        result = run(
+            [flatpak, "info", app_id],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=FLATPAK_PROBE_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return getattr(result, "returncode", 1) == 0
 
 
 def env_file_roots() -> list[Path]:
@@ -976,8 +1028,9 @@ def steam_install_roots() -> list[Path]:
             base = os.environ.get(base_var)
             if base:
                 roots.append(Path(base) / "Steam")
-        home = Path.home()
-        roots.extend([home / "Steam", home / ".steam" / "steam"])
+        home = home_dir()
+        if home is not None:
+            roots.extend([home / "Steam", home / ".steam" / "steam"])
         seen: set[str] = set()
         unique: list[Path] = []
         for root in roots:
@@ -988,7 +1041,9 @@ def steam_install_roots() -> list[Path]:
             unique.append(root)
         return unique
     else:  # pragma: no cover if IS_WINDOWS
-        home = Path.home()
+        home = home_dir()
+        if home is None:
+            return []
         candidates = [
             home / ".local" / "share" / "Steam",
             home / ".steam" / "steam",
@@ -1109,6 +1164,7 @@ if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
                 ["taskkill", "/PID", str(int(pid)), "/T"],
                 capture_output=True,
                 check=False,
+                timeout=TASKKILL_TIMEOUT_SECONDS,
                 **launch_kwargs(no_window=True),
             )
         except Exception:  # noqa: BLE001 - termination must never raise from probing
@@ -1130,6 +1186,7 @@ if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
                 ["taskkill", "/PID", str(int(pid)), "/T", "/F"],
                 capture_output=True,
                 check=False,
+                timeout=TASKKILL_TIMEOUT_SECONDS,
                 **launch_kwargs(no_window=True),
             )
         except Exception:  # noqa: BLE001 - termination must never raise from probing

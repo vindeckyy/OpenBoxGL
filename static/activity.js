@@ -1,5 +1,7 @@
 import { $, escapeHtml } from './util.js';
-import { api, notify, token } from './state.js';
+import { api, notify } from './state.js';
+import { subscribe, onOpen } from './events.js';
+import { t } from './i18n.js';
 
 const JOB_SSE_EVENTS = ['job.queued', 'job.progress', 'job.cancelling', 'job.finished', 'job.interrupted'];
 const ACTIVE_STATES = new Set(['queued', 'running', 'cancelling']);
@@ -13,8 +15,6 @@ const jobsById = new Map();
 const itemPages = new Map();
 /** @type {Set<string>} */
 const expandedJobs = new Set();
-let sseSource = null;
-let sseReconnectTimer = null;
 let initialized = false;
 
 function blankOperation(jobId) {
@@ -356,31 +356,14 @@ function onJobSse(event) {
   }
 }
 
+// Job events come from the tab's shared stream (events.js); a reconnect
+// refreshes the snapshot so nothing finished while the stream was down is missed.
+let activityEventsSubscribed = false;
 function connectActivitySse() {
-  if (sseReconnectTimer) {
-    clearTimeout(sseReconnectTimer);
-    sseReconnectTimer = null;
-  }
-  if (sseSource) {
-    try { sseSource.close(); } catch { /* already closed */ }
-    sseSource = null;
-  }
-  try {
-    sseSource = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
-    for (const kind of JOB_SSE_EVENTS) sseSource.addEventListener(kind, onJobSse);
-    sseSource.onerror = () => {
-      if (sseSource) {
-        try { sseSource.close(); } catch { /* noop */ }
-        sseSource = null;
-      }
-      sseReconnectTimer = setTimeout(() => {
-        connectActivitySse();
-        refreshJobsSnapshot().catch(() => {});
-      }, 3000);
-    };
-  } catch {
-    sseReconnectTimer = setTimeout(() => connectActivitySse(), 5000);
-  }
+  if (activityEventsSubscribed) return;
+  activityEventsSubscribed = true;
+  subscribe(JOB_SSE_EVENTS, onJobSse);
+  onOpen(() => { refreshJobsSnapshot().catch(() => {}); });
 }
 
 async function refreshJobsSnapshot() {
@@ -393,7 +376,7 @@ async function cancelJob(jobId, button) {
   if (button?.disabled) return;
   try {
     await api('/api/v2/jobs/cancel', {method: 'POST', body: JSON.stringify({job_id: jobId})});
-    notify('Cancellation requested');
+    notify(t('notify.activity.cancel_requested'));
     await refreshJobsSnapshot();
   } catch (error) {
     notify(error.message || 'Could not cancel job');
@@ -403,7 +386,7 @@ async function cancelJob(jobId, button) {
 async function retryJob(jobId) {
   try {
     await api('/api/v2/jobs/retry', {method: 'POST', body: JSON.stringify({job_id: jobId})});
-    notify('Retry queued');
+    notify(t('notify.activity.retry_queued'));
     await refreshJobsSnapshot();
   } catch (error) {
     notify(error.message || 'Could not retry job');
@@ -413,7 +396,7 @@ async function retryJob(jobId) {
 async function resumeJob(jobId) {
   try {
     await api('/api/v2/jobs/resume', {method: 'POST', body: JSON.stringify({job_id: jobId})});
-    notify('Resume queued');
+    notify(t('notify.activity.resume_queued'));
     await refreshJobsSnapshot();
   } catch (error) {
     notify(error.message || 'Could not resume job');

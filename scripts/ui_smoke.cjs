@@ -2221,6 +2221,56 @@ const failures = [];
   (!motion.reduced.tokenZero) && failures.push("motion.reduced.tokenZero");
   (!motion.reduced.closedSync) && failures.push("motion.reduced.closedSync");
   (motion.reduced.animations > 0) && failures.push("motion.reduced.animations (nothing may animate)");
+  // 16. 1.16.1 regressions. A stale window's save names a game that no longer
+  // exists: the server must refuse it and leave the library exactly as it was.
+  // (The browser sends game_id with every game save; tests/test_game_addressing_ratchet.py
+  // keeps the frontend honest about that.)
+  const staleSave = await (async () => {
+    const fs = require('fs');
+    const os = require('os');
+    const path = require('path');
+    const headers = {'X-OpenBox-Token': process.env.TOKEN};
+    const libraryOf = async () => (await (await fetch(`http://127.0.0.1:${process.env.PORT}/api/library`, {headers})).json()).games || [];
+    const save = body => fetch(`http://127.0.0.1:${process.env.PORT}/api/game`, {
+      method: 'POST',
+      headers: {...headers, 'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    // A real file, not a symlinked path: the seeded /bin/true is refused for its symlink, which would
+    // make a refusal say nothing about the stale id.
+    const romPath = path.join(os.tmpdir(), `obx-stale-${process.pid}.bin`);
+    fs.writeFileSync(romPath, 'stale-smoke-fixture');
+    const summary = games => JSON.stringify(games.map(g => [g.game_id, g.name, g.path]));
+    const target = (await libraryOf())[0];
+    // Control: the same save, addressed by the correct stable id, is accepted.
+    const control = await save({id: target.id, game_id: target.game_id, game: {...target, path: romPath}});
+    const snapshot = summary(await libraryOf());
+    // The stale window: the id it holds no longer names a game.
+    const stale = await save({
+      id: target.id,
+      game_id: 'g-removed-in-another-window',
+      game: {...target, path: romPath, name: 'Overwritten by a stale window'},
+    });
+    const unchanged = summary(await libraryOf()) === snapshot;
+    fs.rmSync(romPath, {force: true});
+    return {controlStatus: control.status, status: stale.status, unchanged};
+  })();
+  (staleSave.controlStatus !== 200) && failures.push(`the control save must be accepted (200), got ${staleSave.controlStatus}`);
+  (staleSave.status !== 400) && failures.push(`a stale save must be refused with 400, got ${staleSave.status}`);
+  (!staleSave.unchanged) && failures.push('a stale save overwrote a game in the library');
+  // Retry failed is disabled until a download has actually failed games.
+  const retryButton = await page.evaluate(async () => {
+    const trigger = document.getElementById('mediaButton');
+    if (!trigger) return {present: false};
+    trigger.click();
+    await new Promise(r => setTimeout(r, 600));
+    const button = document.getElementById('retryBulkMedia');
+    const result = {present: Boolean(button), disabled: button ? button.disabled : null};
+    document.getElementById('doneMediaManager')?.click();
+    return result;
+  });
+  (!retryButton.present) && failures.push('the media manager has no Retry failed button');
+  (retryButton.present && retryButton.disabled !== true) && failures.push('Retry failed must start disabled when no download has failed');
   console.log('JS errors:', errors.length ? errors.join('\n') : 'none');
   await browser.close();
   (errors.length) && failures.push("no page or console errors");

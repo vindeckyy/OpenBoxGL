@@ -88,6 +88,10 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       AppState.bigBoxFilter = 'all';
       AppState.bigBoxSort = 'title';
       AppState.bigBoxHybridQuery = '';
+      // The hybrid platform tab is reset with the other filters: a platform
+      // remembered from an earlier open could match nothing now, and an empty
+      // list sends openBigBox to the setup wizard instead of Big Box.
+      AppState.bigBoxPlatform = 'all';
       AppState.bigBoxSearchMode = false;
       if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').value = '';
       AppState.games.forEach(item => { delete item._dnaWhy; });
@@ -167,9 +171,9 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       AppState.bigBoxIndex = 0;
       renderBigBox();
     }
-    function filteredBigBoxGames() {
+    function filteredBigBoxGames({ ignorePlatform = false } = {}) {
       let result = filteredGames().filter(game => !game.hide_in_bigbox);
-      if (AppState.bigBoxPlatform !== 'all') result = result.filter(game => game.platform === AppState.bigBoxPlatform);
+      if (!ignorePlatform && AppState.bigBoxPlatform !== 'all') result = result.filter(game => game.platform === AppState.bigBoxPlatform);
       if (AppState.bigBoxHybridQuery) {
         const query = AppState.bigBoxHybridQuery.toLowerCase();
         result = result.filter(game => [game.name,game.sort_title,game.genre,game.developer].join(' ').toLowerCase().includes(query));
@@ -279,7 +283,7 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
         }
       }
       AppState.bigBoxGames = filteredBigBoxGames();
-      if (!AppState.bigBoxGames.length) { notify('No games match those Big Box filters'); return; }
+      if (!AppState.bigBoxGames.length) { notify(t('notify.bigbox.no_matches')); return; }
       AppState.bigBoxIndex = Math.max(0,AppState.bigBoxGames.findIndex(game => game.id === currentId));
       closeBigBoxMenu();
       renderBigBox();
@@ -365,7 +369,14 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
     function renderBigBox() {
       const game = AppState.bigBoxGames[AppState.bigBoxIndex];
       applyMoodForGame(game).catch(() => {});
-      if (!game) return;
+      if (!game) {
+        // An empty list (a search or smart search with no matches) used to
+        // leave the previous game on stage with its Play button still bound
+        // to that game, so clicking Play launched a game that was not a match.
+        clearVideoSnap();
+        if ($('bigBoxStage')) $('bigBoxStage').innerHTML = '';
+        return;
+      }
       const hint = AppState.appSettings.controller_prompt_hint || 'A Play · B Back · M Menu';
       if ($('bigBoxStatus')) {
         const status = AppState.bigBoxBattery;
@@ -379,8 +390,20 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
         : (AppState.appSettings.dynamic_play_button === false ? '▶ PLAY' : (game.versions || []).length ? '▶ PLAY DEFAULT' : (game.applications || []).length ? '▶ PLAY GAME' : '▶ PLAY');
       if (mode === 'hybrid') {
         clearVideoSnap();
-        const platforms = [...new Set(AppState.bigBoxGames.map(item => item.platform || 'Unspecified'))].sort();
-        if (AppState.bigBoxPlatform === 'all' && platforms.length) AppState.bigBoxPlatform = platforms[0];
+        // The tab row lists every platform, not just the ones left after the
+        // platform filter -- built from bigBoxGames it collapsed to the one
+        // selected tab after the first click, with no way to switch back.
+        const platforms = [...new Set(filteredBigBoxGames({ ignorePlatform: true }).map(item => item.platform || 'Unspecified'))].sort();
+        if (AppState.bigBoxPlatform === 'all' && platforms.length) {
+          // Narrow the list to the chosen tab too; navigating an unfiltered
+          // list off this platform snapped straight back to its first game.
+          AppState.bigBoxPlatform = platforms.includes(game.platform || 'Unspecified') ? (game.platform || 'Unspecified') : platforms[0];
+          if (!(dnaSearchMode() === 'smart' && AppState.bigBoxHybridQuery)) {
+            AppState.bigBoxGames = filteredBigBoxGames();
+            AppState.bigBoxIndex = Math.max(0, AppState.bigBoxGames.findIndex(item => item.id === game.id));
+            return renderBigBox();
+          }
+        }
         const platformGames = AppState.bigBoxGames.filter(item => (item.platform || 'Unspecified') === AppState.bigBoxPlatform);
         if (platformGames.length && !platformGames.some(item => item.id === game.id)) {
           AppState.bigBoxIndex = AppState.bigBoxGames.findIndex(item => item.id === platformGames[0].id);
@@ -507,7 +530,7 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       const game = AppState.bigBoxGames[AppState.bigBoxIndex];
       if (game) {
         try {
-          await api('/api/favorite',{method:'POST',body:JSON.stringify({id:game.id})});
+          await api('/api/favorite',{method:'POST',body:JSON.stringify({id:game.id,game_id:game.game_id})});
           await refresh();
           AppState.bigBoxGames = filteredBigBoxGames();
           if (!AppState.bigBoxGames.length) { closeBigBox(); notify(t('bigbox.empty_view_now_empty')); return; }

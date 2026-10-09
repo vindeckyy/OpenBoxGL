@@ -96,11 +96,13 @@ def scan_missing_paths(
     include_media: bool = True,
     limit: int = MAX_SCAN_ITEMS,
     is_file=None,
+    game_ids=None,
 ) -> dict[str, Any]:
     """Return bounded missing-path rows for games and (optionally) media.
 
     ``is_file`` is injectable so tests and callers can avoid repeated stat
-    calls on the same path across request cycles.
+    calls on the same path across request cycles. ``game_ids`` limits the scan
+    to those games (the Launch Check's "Find moved files"); None means all.
     """
     checker = is_file or _is_file
     items: list[dict[str, Any]] = []
@@ -112,6 +114,8 @@ def scan_missing_paths(
         if not isinstance(game, dict):
             continue
         game_id = str(game.get("game_id") or "")
+        if game_ids is not None and game_id not in game_ids:
+            continue
         name = str(game.get("name") or "")
         platform = str(game.get("platform") or "")
         fields = REPAIR_FIELDS if include_media else ("path",)

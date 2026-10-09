@@ -405,6 +405,17 @@ class ListEventsTests(unittest.TestCase):
         self.assertEqual(len(rest["events"]), 1)
         self.assertFalse(rest["has_more"])
 
+    def test_negative_limit_and_non_finite_days_are_bounded(self):
+        # Regression: limit=-1 sliced matched[0:-1] (nearly the whole journal)
+        # and days=inf overflowed timedelta into an unhandled OverflowError.
+        state = self._journal()
+        page = tm.list_events(state, limit=-1)
+        self.assertEqual(page["events"], [])
+        self.assertEqual(page["limit"], 0)
+        for bad in ("inf", "nan", float("inf")):
+            with self.assertRaises(SyncValidationError):
+                tm.list_events(state, days=bad)
+
     def test_list_events_empty_and_flag_when_journal_off(self):
         result = tm.list_events({"games": [], "settings": {"library_journal_enabled": False}})
         self.assertEqual(result["events"], [])

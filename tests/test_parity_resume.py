@@ -69,14 +69,16 @@ class StateSchemaTests(unittest.TestCase):
 
     def test_every_def_carries_a_state_block(self):
         adapters = defs.load_adapters()
-        self.assertEqual(len(adapters), 24)
+        # 24 definitions at 1.16.0; 1.16.1 added 15 RetroArch systems and 3 standalone definitions.
+        self.assertEqual(len(adapters), 42)
         for adapter in adapters:
             self.assertIn(adapter["state"]["kind"], parity_resume.STATE_KINDS, adapter["adapter_id"])
 
     def test_m0a_matrix_kinds(self):
         by_id = {a["adapter_id"]: a for a in defs.load_adapters()}
         retroarch_ids = [aid for aid in by_id if aid.startswith("retroarch-")]
-        self.assertEqual(len(retroarch_ids), 8)
+        # 8 RetroArch definitions at 1.16.0, plus the 15 system cores added in 1.16.1.
+        self.assertEqual(len(retroarch_ids), 23)
         for aid in retroarch_ids:
             self.assertEqual(by_id[aid]["state"]["kind"], "retroarch")
         self.assertEqual(by_id["mame-arcade"]["state"]["kind"], "adapter-cli")
@@ -86,6 +88,20 @@ class StateSchemaTests(unittest.TestCase):
             self.assertEqual(by_id[aid]["state"]["kind"], "adapter-cli", aid)
         for aid in ("melonds-nds", "cemu-wiiu", "eden-switch", "vita3k-vita", "xemu-xbox", "xenia-xbox360"):
             self.assertEqual(by_id[aid]["state"]["kind"], "none", aid)
+
+    def test_a_per_game_core_is_part_of_the_launch_fingerprint(self):
+        from pkg.parity.parity_emulator_defs import resolved_startup_args
+
+        which = lambda name: "/usr/bin/retroarch" if name == "retroarch" else None  # noqa: E731
+        game = {"name": "X", "platform": "SNES", "path": "/roms/x.sfc", "emulator_adapter_id": "retroarch-snes"}
+        default, precedence = parity_resume.adapter_for_launch(game, {}, which=which)
+        chosen, _ = parity_resume.adapter_for_launch({**game, "retroarch_core": "bsnes_libretro.so"}, {}, which=which)
+        self.assertEqual(precedence, "game_adapter")
+        self.assertIn("bsnes_libretro.so", " ".join(resolved_startup_args(chosen)))
+        self.assertNotEqual(
+            parity_resume.emulator_fingerprint(default, which=which),
+            parity_resume.emulator_fingerprint(chosen, which=which),
+        )
 
     def test_full_capture_defs_have_templates_and_capture(self):
         by_id = {a["adapter_id"]: a for a in defs.load_adapters()}
@@ -838,6 +854,43 @@ class DeeplinkTests(unittest.TestCase):
         self.assertIn("deeplink=resume", parity_deeplinks.build_launch_url("http://h/", "resume", id="g1"))
         self.assertIn("deeplink=moment", parity_deeplinks.build_launch_url("http://h/", "moment", id="g1"))
         self.assertIn("deeplink=clip", parity_deeplinks.build_launch_url("http://h/", "clip", id="g1"))
+
+
+class WriteStateTextTests(unittest.TestCase):
+    def test_write_error_does_not_close_descriptor_twice(self):
+        # Regression: a failed write closed the fd via the file object and then
+        # os.close()d the same number again, which can hit another thread's file.
+        import os as _os
+
+        # The fake file closes its descriptor the way a real file object does.
+        # It must use the real close: patch.object below replaces os.close
+        # globally, and a close made by the fake would be counted as the code
+        # under test closing the descriptor.
+        real_os_close = _os.close
+
+        class FailingFile:
+            def __init__(self, fd):
+                self.fd = fd
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                real_os_close(self.fd)
+                return False
+
+            def write(self, _text):
+                raise OSError("disk full")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "state.json"
+            real_close = _os.close
+            closed = []
+            with patch.object(parity_resume.os, "fdopen", side_effect=lambda fd, *a, **k: FailingFile(fd)), \
+                    patch.object(parity_resume.os, "close", side_effect=lambda fd: (closed.append(fd), real_close(fd))):
+                with self.assertRaises(OSError):
+                    parity_resume._write_state_text(target, "{}")
+            self.assertEqual(closed, [])
 
 
 if __name__ == "__main__":

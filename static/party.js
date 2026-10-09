@@ -78,6 +78,8 @@ function partyKeydown(event) {
     return;
   }
   const tag = (document.activeElement?.tagName || '').toUpperCase();
+  // A focused button keeps its own Enter click (Close, Rebuild, Next, -/+);
+  // only Enter elsewhere in the overlay triggers the primary action.
   if (event.key === 'Enter' && tag !== 'BUTTON') {
     event.preventDefault();
     primaryAction();
@@ -100,9 +102,6 @@ function partyKeydown(event) {
       minutes = next;
       renderSetup();
     }
-  } else if (event.key === 'Enter') {
-    event.preventDefault();
-    primaryAction();
   } else if (event.key.toLowerCase() === 'n' && !isSetupView()) {
     event.preventDefault();
     nextRound();

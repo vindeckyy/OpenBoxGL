@@ -361,6 +361,7 @@
       <label class="check"><input type="checkbox" id="bulkManual"> Manuals</label>
       <label class="check"><input type="checkbox" id="bulkOverwrite"> Replace existing media</label>
       <button type="button" class="primary" id="startBulkMedia">Download for matched games</button>
+      <button type="button" class="icon-button" id="retryBulkMedia" disabled>Retry failed</button>
       <button type="button" class="icon-button" id="cleanupMedia">Find duplicate media</button>
       <button type="button" class="icon-button" id="applyCleanupMedia" hidden>Delete duplicate media</button>
       <div class="wide description" id="bulkMediaStatus"></div>
@@ -591,6 +592,7 @@
         <label class="check settings-field settings-panel" data-settings-panel="bigbox" data-setting="big box start launch boot startup"><input type="checkbox" id="bigBoxStartAtLaunch"> <span data-i18n="settings.bigbox_start_at_launch">Start in Big Box mode</span></label>
         <label class="check settings-field settings-panel" data-settings-panel="bigbox" data-setting="dynamic play button launch"><input type="checkbox" id="dynamicPlayButton" checked> <span data-i18n="settings.dynamic_play_button">Use dynamic Play button labels</span></label>
         <label class="check settings-field settings-panel" data-settings-panel="appearance library" data-setting="insights play dashboard heatmap show"><input type="checkbox" id="showInsights" checked> Show Play Insights in the library</label>
+        <label class="check settings-field settings-panel" data-settings-panel="appearance library" data-setting="launch readiness badges won't launch needs attention grid"><input type="checkbox" id="showLaunchBadges" checked> <span data-i18n="settings.show_launch_badges">Show launch readiness badges on the grid</span></label>
         <label class="check settings-field settings-panel" data-settings-panel="appearance" data-setting="mood match cover adaptive theming color"><input type="checkbox" id="moodMatchEnabled"> <span data-i18n="settings.mood_match">Adaptive cover theming</span></label>
         <label class="check settings-field settings-panel" data-settings-panel="appearance bigbox" data-setting="mood match big box adaptive theming color"><input type="checkbox" id="moodMatchBigbox"> <span data-i18n="settings.mood_match_bigbox">Adaptive theming in Big Box</span></label>
         <fieldset class="field wide settings-field settings-panel" data-settings-panel="library" data-setting="hidden sidebar sections filters platforms playlists"><legend data-i18n="settings.hidden_sidebar">Hidden sidebar sections</legend>
@@ -730,7 +732,7 @@
   </section>
 
   <dialog id="pickerDialog" aria-modal="true" aria-labelledby="pickerDialogTitle">
-    <form id="pickerForm" onsubmit="return false;">
+    <form id="pickerForm">
       <div class="dialog-head"><h2 id="pickerDialogTitle" data-i18n="picker.title">What should I play?</h2><button type="button" id="closePicker" aria-label="Close picker dialog">×</button></div>
       <div class="form-grid picker-grid">
         <label class="field"><span data-i18n="picker.time">Time I have</span><select id="pickerTime"><option value="0" data-i18n="picker.time_any">Any</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">1 h</option><option value="90">1.5 h</option><option value="120">2 h</option></select></label>
@@ -752,7 +754,7 @@
   </dialog>
 
   <dialog id="wrappedDialog" aria-modal="true" aria-labelledby="wrappedDialogTitle" class="wide-dialog">
-    <form onsubmit="return false;">
+    <form>
       <div class="dialog-head wrapped-head">
         <h2 id="wrappedDialogTitle" data-i18n="wrapped.title">Your Year in Games</h2>
         <div class="wrapped-actions">
@@ -766,7 +768,7 @@
   </dialog>
 
   <dialog id="masteryDialog" aria-modal="true" aria-labelledby="masteryDialogTitle">
-    <form onsubmit="return false;">
+    <form>
       <div class="dialog-head"><h2 id="masteryDialogTitle" data-i18n="mastery.title">Mastery</h2><button type="button" id="closeMastery" aria-label="Close mastery dialog">×</button></div>
       <div class="mastery-wrap">
         <label class="field inline"><span data-i18n="mastery.decade">Decade</span><select id="masteryDecadeFilter"><option value="" data-i18n="mastery.all">All</option><option value="pre-1980" data-i18n="mastery.pre_1980">pre-1980</option><option value="1980s">1980s</option><option value="1990s">1990s</option><option value="2000s">2000s</option><option value="2010s">2010s</option><option value="2020s">2020s</option></select></label>
@@ -777,7 +779,7 @@
   </dialog>
 
   <dialog id="constellationDialog" aria-modal="true" aria-labelledby="constellationDialogTitle">
-    <form onsubmit="return false;">
+    <form>
       <div class="dialog-head"><h2 id="constellationDialogTitle" data-i18n="constellation.title">Constellation</h2><button type="button" id="closeConstellation" aria-label="Close constellation dialog">×</button></div>
       <div class="constellation-wrap">
         <div class="constellation-controls">

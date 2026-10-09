@@ -87,8 +87,14 @@ def _utcnow_iso() -> str:
 
 
 def _cause_payload(fix_action) -> dict:
-    payload = dict((fix_action or {}).get("payload") or {})
+    fix = fix_action or {}
+    payload = dict(fix.get("payload") or {})
+    # A folder grant is one permission shared by every game in that folder, so its path
+    # is part of the cause: games in two folders get two groups, and a group's one button knows its folder.
+    keep_path = fix.get("kind") == "flatpak_grant"
     for key in _PER_GAME_KEYS:
+        if key == "path" and keep_path:
+            continue
         payload.pop(key, None)
     return payload
 
@@ -104,7 +110,11 @@ def _subject(check) -> str:
 
 def _group_key(check) -> str:
     fix = check.get("fix_action") or {}
-    return f"{check.get('code', '')}|{fix.get('kind', '')}|{_subject(check)}"
+    key = f"{check.get('code', '')}|{fix.get('kind', '')}|{_subject(check)}"
+    # A folder grant is per folder: games in two folders are two causes, each with its own grant button.
+    if fix.get("kind") == "flatpak_grant" and (fix.get("payload") or {}).get("path"):
+        key += f"|{fix['payload']['path']}"
+    return key
 
 
 def audit_library(games, profiles, data_dir, *, which=None, run=None, deep=False,
@@ -137,31 +147,48 @@ def audit_library(games, profiles, data_dir, *, which=None, run=None, deep=False
                 failed["sample"].append(member)
             continue
         totals[_derive_status(checks)] += 1
-        seen = set()
-        for check in checks:
-            key = _group_key(check)
-            if key in seen:
-                continue
-            seen.add(key)
-            cause = _cause_payload(check.get("fix_action"))
-            group = groups.get(key)
-            if group is None:
-                fix = check.get("fix_action")
-                groups[key] = group = {
-                    "key": key,
-                    "code": check.get("code", ""),
-                    "subject": _subject(check),
-                    "severity": check.get("severity", "info"),
-                    "message": check.get("message", ""),
-                    "fix_action": {**fix, "payload": cause} if fix else None,
-                    "_cause": cause,
-                    "games": [],
-                }
-            elif group["fix_action"] is not None and cause != group["_cause"]:
-                group["fix_action"] = None
-            group["games"].append(member)
+        _record_checks(groups, member, checks)
     if progress is not None:
         progress(phase="audit", current=total, total=total)
+    return {
+        "computed_at": _utcnow_iso(),
+        "game_count": total,
+        "deep": bool(deep),
+        "totals": totals,
+        "groups": _ordered_groups(groups),
+        "failed": failed,
+        "probes": {"flatpak_spawns": probes.spawns, "which_misses": probes.which_misses},
+    }
+
+
+def _record_checks(groups: dict, member: dict, checks) -> None:
+    """Add one game's checks to the group map. The full audit and a refresh share this rule."""
+    seen = set()
+    for check in checks:
+        key = _group_key(check)
+        if key in seen:
+            continue
+        seen.add(key)
+        cause = _cause_payload(check.get("fix_action"))
+        group = groups.get(key)
+        if group is None:
+            fix = check.get("fix_action")
+            groups[key] = group = {
+                "key": key,
+                "code": check.get("code", ""),
+                "subject": _subject(check),
+                "severity": check.get("severity", "info"),
+                "message": check.get("message", ""),
+                "fix_action": {**fix, "payload": cause} if fix else None,
+                "_cause": cause,
+                "games": [],
+            }
+        elif group["fix_action"] is not None and cause != group["_cause"]:
+            group["fix_action"] = None
+        group["games"].append(member)
+
+
+def _ordered_groups(groups: dict) -> list:
     ordered = sorted(
         groups.values(),
         key=lambda item: (_SEVERITY_RANK.get(item["severity"], 3), -len(item["games"]), item["key"]),
@@ -169,13 +196,89 @@ def audit_library(games, profiles, data_dir, *, which=None, run=None, deep=False
     for group in ordered:
         group.pop("_cause", None)
         group["count"] = len(group["games"])
+    return ordered
+
+
+_STATUS_RANK = {"blocked": 0, "warning": 1, "ready": 2}
+
+
+def _statuses_from_report(report) -> dict:
+    """Each game's status as the report records it. A game in no group is ready."""
+    statuses: dict[str, str] = {}
+    for group in report.get("groups", []):
+        status = _STATUS_FOR_SEVERITY.get(group.get("severity"), "ready")
+        for member in group.get("games", []):
+            game_id = str(member.get("game_id") or "")
+            if game_id and _STATUS_RANK[status] < _STATUS_RANK[statuses.get(game_id, "ready")]:
+                statuses[game_id] = status
+    return statuses
+
+
+def _same_fix(old, new) -> bool:
+    if old is None or new is None:
+        return False
+    return old.get("kind") == new.get("kind") and old.get("payload") == new.get("payload")
+
+
+def refresh_report(report, games, profiles, data_dir, *, game_ids, which=None, run=None) -> dict:
+    """Re-check only ``game_ids`` and merge the results into a report of this library.
+
+    The caller must have checked that the report describes the library as it is now (same
+    game count); otherwise the totals would be wrong. Each re-checked game's old groups are
+    replaced by its new checks, groups left empty are dropped, and the totals move by the
+    game's old and new status. A game whose check raises keeps its old result. Refreshing
+    every game gives the same groups and totals as a full audit (tests pin this).
+    """
+    positions: dict[str, int] = {}
+    for index, game in enumerate(games):
+        if isinstance(game, dict) and str(game.get("game_id") or ""):
+            positions.setdefault(str(game["game_id"]), index)
+    wanted = [item for item in dict.fromkeys(str(value) for value in game_ids) if item in positions]
+    old_status = _statuses_from_report(report)
+    deep = bool(report.get("deep"))
+    probes = ProbeCache(which, run)
+    fresh: dict[str, dict] = {}
+    new_status: dict[str, str] = {}
+    refreshed: set[str] = set()
+    for game_id in wanted:
+        index = positions[game_id]
+        game = games[index]
+        member = {"game_id": game_id, "index": index, "name": str(game.get("name") or "")}
+        try:
+            checks = run_preflight_checks(game, profiles, data_dir, which=probes.which, run=probes.run, deep=deep)
+        except Exception:  # keep the game's previous result rather than guessing a new one
+            LOGGER.exception("Launch audit refresh failed for game %s", game_id)
+            continue
+        refreshed.add(game_id)
+        new_status[game_id] = _derive_status(checks)
+        _record_checks(fresh, member, checks)
+
+    totals = dict(report.get("totals") or {"ready": 0, "warning": 0, "blocked": 0})
+    for game_id in refreshed:
+        totals[old_status.get(game_id, "ready")] -= 1
+        totals[new_status[game_id]] += 1
+
+    merged: dict[str, dict] = {}
+    for group in report.get("groups", []):
+        members = [m for m in group.get("games", []) if str(m.get("game_id") or "") not in refreshed]
+        if members:
+            merged[group["key"]] = {**group, "games": members}
+    for key, group in fresh.items():
+        current = merged.get(key)
+        if current is None:
+            merged[key] = group
+            continue
+        if not _same_fix(current.get("fix_action"), group.get("fix_action")):
+            current["fix_action"] = None
+        current["games"] = current["games"] + group["games"]
+
     return {
         "computed_at": _utcnow_iso(),
-        "game_count": total,
-        "deep": bool(deep),
+        "game_count": int(report.get("game_count", 0)),
+        "deep": deep,
         "totals": totals,
-        "groups": ordered,
-        "failed": failed,
+        "groups": _ordered_groups(merged),
+        "failed": dict(report.get("failed") or {"count": 0, "sample": []}),
         "probes": {"flatpak_spawns": probes.spawns, "which_misses": probes.which_misses},
     }
 
@@ -188,6 +291,32 @@ def store_audit(data_dir, report) -> None:
     path = audit_path(data_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(path, json.dumps(report, ensure_ascii=False, separators=(",", ":")))
+
+
+def totals_change_notice(previous, current) -> dict | None:
+    """The notification for a change in blocked or warning totals, or None.
+
+    The first audit has nothing to compare with and says nothing. The key carries the
+    totals, so the feed keeps one notice per distinct result.
+    """
+    if not isinstance(previous, dict) or not isinstance(current, dict):
+        return None
+    before = previous.get("totals") or {}
+    after = current.get("totals") or {}
+    before_blocked, before_warning = int(before.get("blocked", 0)), int(before.get("warning", 0))
+    blocked, warning = int(after.get("blocked", 0)), int(after.get("warning", 0))
+    if (before_blocked, before_warning) == (blocked, warning):
+        return None
+    return {
+        "level": "warning" if blocked > before_blocked else "info",
+        "title": f"Launch check changed: {blocked} won't launch, {warning} need attention",
+        "body": (
+            f"Won't launch: {blocked} (was {before_blocked}). "
+            f"Needs attention: {warning} (was {before_warning})."
+        ),
+        # One key per check, so a return to an earlier result is a new notice, not a suppressed one.
+        "dedupe_key": f"launch-audit:{current.get('computed_at', '')}",
+    }
 
 
 def load_audit(data_dir) -> dict | None:
@@ -216,6 +345,31 @@ def public_summary(report, *, game_count) -> dict:
             for group in report.get("groups", [])
         ],
     }
+
+
+_STATUS_FOR_SEVERITY = {"error": "blocked", "warning": "warning"}
+
+
+def readiness_statuses(report, *, game_count) -> dict:
+    """Map each game_id the cached audit flags to ``blocked`` or ``warning``.
+
+    A game missing from the map is ready. The map is empty when there is no
+    report or the library has changed since the audit (the same ``stale`` rule
+    ``public_summary`` uses), so a grid badge is never drawn from old data.
+    Derived from the groups the report lists, so a badge and the audit agree.
+    """
+    if not report or int(report.get("game_count", 0)) != int(game_count):
+        return {}
+    statuses: dict[str, str] = {}
+    for group in report.get("groups", []):
+        status = _STATUS_FOR_SEVERITY.get(group.get("severity"))
+        if status is None:
+            continue
+        for member in group.get("games", []):
+            game_id = str(member.get("game_id") or "")
+            if game_id and statuses.get(game_id) != "blocked":
+                statuses[game_id] = status
+    return statuses
 
 
 def group_members(report, key, *, offset, limit) -> dict:

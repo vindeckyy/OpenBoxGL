@@ -31,7 +31,9 @@ def run_ludusavi(action, game_name="", path="", force=True, which=shutil.which, 
     if path:
         command.extend(["--path", str(Path(path).expanduser())])
     if game_name and action in {"backup", "restore", "find"}:
-        command.append(str(game_name))
+        # "--" ends option parsing so a game title such as "--path=/x" or
+        # "-h" is passed as the positional name, never read as a flag.
+        command.extend(["--", str(game_name)])
     result = run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
     stdout = (result.stdout or "").strip()
     payload = {}

@@ -17,11 +17,47 @@ are expected to sit within run-to-run noise of the pre-polish run below, and the
 `facet` is still the binding constraint: 1219 ms against a 2000 ms budget at 20k (1.6x
 headroom), and it is still counted on the UI thread. The search-worker facet move stays
 deferred; it is only worth building if a long-task probe shows animation jank during a facet
-recompute. Not measured, and not claimed: frame time, long tasks and layout shift in the
-browser. `perf_bench.py --browser` is still a placeholder, and its JSON artifact reports
-`"cold_start_ms": null` with `"cold_start_measured": false` — an earlier revision emitted a
-hardcoded 242.0 there, which read as a measurement in the artifact and in any run-over-run
-comparison. The 242 ms figure below is therefore historical context, not a current result.
+recompute. Frame time is still not measured. Browser timings (first render, long tasks and the search
+shift) are in the 1.16.1 section below. The JSON artifact keeps `"cold_start_ms": null` with
+`"cold_start_measured": false`: an earlier revision emitted a hardcoded 242.0 there, which read
+as a measurement in the artifact and in any run-over-run comparison. The 242 ms figure below is
+therefore historical context, not a current result.
+
+## 1.16.1 browser and layout measurements (2026-10-08)
+
+Headless Chrome 155 (chrome-headless-shell) on one Linux machine, through `scripts/perf_browser.cjs`. The
+search measure types a query that matches nothing, 800 ms after the first cover appears, and records the layout
+shift from that search. Reproduce with `PUPPETEER_EXECUTABLE_PATH=<chrome> python3 -B scripts/perf_bench.py
+--sizes 10000 --browser --runs 3 --no-gate` (puppeteer under `scripts/node_modules`). `perf_bench.py --browser`
+measures the largest library the run generated for the read benchmark.
+
+Search layout shift, per run (the first run is cold):
+
+| Library | Filter chip row | Runs |
+|---|---|---|
+| 1,000 games | `flex: 1 1 auto` (1.16.0) | 0.0994, 0.0994, 0.0994, 0.0994 |
+| 1,000 games | one line, fixed height (1.16.1, ADR 0070) | 0, 0, 0, 0 |
+| 10,000 games | `flex: 1 1 auto` (1.16.0) | 0.0994, 0, 0, 0 |
+| 10,000 games | one line, fixed height (1.16.1, ADR 0070) | 0, 0, 0, 0 |
+
+The shift came from the chip row, not from the grid emptying. Three chips wrapped to a 192 px row and pushed the
+drop zone and Play Insights down by 145 px; the grid itself did not move. With the row one line tall, the drop zone
+stays at 342 px and Play Insights at 423 px while the search adds chips. The earlier attribution to the chips' flex
+basis was a partial reading and is superseded. The cold 10,000-game run shifted for the same reason, while the
+panels were still settling.
+
+First render and long tasks at 10,000 games (cold run, then warm runs): first render 16.3 s cold, then 0.7 to
+2.2 s; 3 to 4 long tasks per load, about 490 to 640 ms, unchanged by this release.
+
+Search typing at 20,000 games, CPU profile (`Profiler` domain, 200 µs sampling), queries `a`, `e`, `o`: the
+top self-time functions were `loadInsights` (Play Insights re-rendering on refresh, about 55 ms in the `a` query),
+the rendering "(program)" bucket (about 120 to 530 ms), and idle. Facet counting did not appear among the top
+functions for any query. The worker move for facets was therefore not built: its condition in the plan was a long
+task during a facet recompute, and the profile does not show one. The next candidate, if long tasks during search
+become a problem, is Play Insights' refresh, not facets.
+
+Gate: `search_cls_max < 0.1` (`BROWSER_CLS_GATE`). The filter-chip fix brings the measured value to 0 on every run,
+so the gate now has room.
 
 ## 1.15 pre-polish measurements (2026-09-26)
 

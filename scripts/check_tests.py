@@ -74,6 +74,21 @@ def _runtime_modules_at(ref: str) -> set[str]:
     }
 
 
+def _root_untracked_entries() -> set[str]:
+    """Names of untracked, non-ignored entries at the repo root.
+
+    A test that writes into the working directory leaves an entry here; the
+    gate compares the set before and after the suite so only new leaks count.
+    """
+    listing = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard", "--directory"],
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
+    )
+    # --directory collapses a wholly untracked directory to "name/"; a path
+    # with a separator in its middle lives below the root and is not a leak here.
+    return {line for line in listing.stdout.splitlines() if line.strip() and "/" not in line.rstrip("/")}
+
+
 def _check_new_module_coverage(coverage_bin: Path, failures: list[str]) -> None:
     base = _git_diff_base()
     current = {
@@ -281,6 +296,7 @@ def main() -> int:
             data_file.unlink()
 
         test_files = sorted([*ROOT.glob("test_*.py"), *ROOT.glob("tests/test_*.py")])
+        stray_before = _root_untracked_entries()
 
         # Serial on purpose: the gamescope/deck tests spawn real nested X
         # sessions and collide when run in parallel workers.
@@ -333,6 +349,11 @@ def main() -> int:
         print(f"{passed_tests} test files passed, {len(failed_tests)} failed")
         if failed_tests:
             failures.append("tests")
+        stray = sorted(_root_untracked_entries() - stray_before)
+        if stray:
+            # A test that writes into the repo root is a leak; name it so it is fixed, not ignored.
+            print(f"tests left untracked entries in the repo root: {', '.join(stray)}")
+            failures.append("stray files")
         gate_data_dir = env.get("OPENBOX_DATA_DIR", "")
         if gate_data_dir and "openbox-gate-data." in gate_data_dir:
             shutil.rmtree(gate_data_dir, ignore_errors=True)

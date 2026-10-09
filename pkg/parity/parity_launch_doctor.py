@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import zipfile
@@ -11,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from api_errors import BadRequest, GameNotFound
-from pkg.parity.parity_emulator_defs import find_adapter, resolve_launch
+from pkg.parity.parity_emulator_defs import apply_core_override, find_adapter, flatpak_core_path, resolve_launch, resolved_startup_args
 from pkg.parity.parity_import import detect_dependencies
 from pkg.platform_compat import UnsafeIdentifier, contained_path, safe_identifier
 from pkg.state.launch import game_from_payload
@@ -31,6 +32,7 @@ REMEDIATION_INSTALL_NATIVE = {"id": "install_native", "label": "Install native e
 REMEDIATION_KEEP_CUSTOM = {"id": "keep_custom", "label": "Keep custom launch command"}
 REMEDIATION_SET_PATH = {"id": "set_path", "label": "Set game path"}
 REMEDIATION_IMPORT_INCOMPLETE = {"id": "import_incomplete", "label": "Finish import setup"}
+REMEDIATION_GRANT_FLATPAK_PATH = {"id": "grant_flatpak_path", "label": "Grant Flatpak access to this folder"}
 
 
 def _fix(kind, label, payload):
@@ -262,13 +264,17 @@ def _resolve_core_path(core, emulator_path):
     return None
 
 
-def _retroarch_core_missing(adapter, emulator_path=""):
-    startup_args = adapter.get("startup_args") or []
+def _retroarch_core_missing(adapter, emulator_path="", flatpak=False):
+    startup_args = resolved_startup_args(adapter)
     for index, arg in enumerate(startup_args):
         if arg != "-L" or index + 1 >= len(startup_args):
             continue
         core = startup_args[index + 1]
-        resolved = _resolve_core_path(core, emulator_path)
+        if flatpak:
+            # The sandbox loads cores from the user's app config directory.
+            resolved = flatpak_core_path(core, ["flatpak"])
+        else:
+            resolved = _resolve_core_path(core, emulator_path)
         if resolved is None:
             continue
         if not Path(resolved).is_file():
@@ -565,15 +571,21 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None, deep
         if install_mode == "flatpak":
             app_id = active_adapter.get("flatpak_app_id")
             if app_id and not _flatpak_fs_allowed(app_id, path_value, which, run):
+                # The emulator is installed; its sandbox lacks a filesystem grant.
+                # Reinstalling cannot fix that, so the fix is the grant command.
+                grant_dir = str(Path(path_value).parent)
+                command = f"flatpak override --user --filesystem={shlex.quote(grant_dir)}:ro {shlex.quote(app_id)}"
                 checks.append(_check(
                     "FLATPAK_FS_DENIED",
                     "error",
                     "Flatpak emulator cannot access the game path.",
-                    [REMEDIATION_INSTALL_FLATPAK],
-                    _fix_flatpak(app_id),
+                    [REMEDIATION_GRANT_FLATPAK_PATH],
+                    _fix("flatpak_grant", REMEDIATION_GRANT_FLATPAK_PATH["label"], {
+                        "app_id": app_id, "path": grant_dir, "command": command,
+                    }),
                 ))
 
-        missing_core = _retroarch_core_missing(active_adapter, emulator_path)
+        missing_core = _retroarch_core_missing(apply_core_override(active_adapter, game), emulator_path, flatpak=install_mode == "flatpak")
         if missing_core:
             checks.append(_check(
                 "RETROARCH_CORE_MISSING",

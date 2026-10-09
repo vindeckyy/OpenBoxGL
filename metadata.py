@@ -921,8 +921,10 @@ def _apply_metadata_fields(game, record, database_id, overwrite):
         "publisher": "publisher", "genre": "genre", "description": "overview", "series": "series",
     }
     for target, source in fields.items():
-        if record[source] and (overwrite or not game.get(target)):
-            game[target] = record[source]
+        # LBDB ReleaseDate is a full ISO timestamp; ``year`` stores only the year.
+        value = _year_from_record(record) if target == "year" else record[source]
+        if value and (overwrite or not game.get(target)):
+            game[target] = value
     from parity_premium import apply_esrb_from_record
     if overwrite or not game.get("esrb"):
         apply_esrb_from_record(game, record)

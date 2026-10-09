@@ -1,5 +1,6 @@
 import { $, escapeHtml, duration } from './util.js';
-import { api, notify, AppState, token, setButtonBusy, gameForSession, registerLifecycleStream, unregisterLifecycleStream } from './state.js';
+import { api, notify, AppState, setButtonBusy, gameForSession, gameIdOf } from './state.js';
+import { subscribe, onOpen } from './events.js';
 import { refresh, launchExtra } from './library.js';
 import { t } from './i18n.js';
 import { renderTimelineTab } from './timeline.js';
@@ -90,62 +91,48 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
     }
     let sessionPollBusy = false;
     let sessionPollIdle = false;
-    // Module-level (not a per-call const): reconnecting must close the
-    // previous EventSource first, or every reconnect leaks a stream.
-    let sessionEventSource = null;
+    // The session stream is subscriptions on the tab's shared event stream
+    // (events.js): it owns the EventSource, backoff, close-on-hide and reopen.
+    // This module decides what each event means.
+    let sessionStreamSubscribed = false;
+    let sessionRefreshTimer = null;
     function connectSessionEvents() {
-      if (sessionEventSource) {
-        try { sessionEventSource.close(); } catch { /* already closed */ }
-        unregisterLifecycleStream(sessionEventSource);
-        sessionEventSource = null;
-      }
-      try {
-        const source = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
-        sessionEventSource = source;
-        registerLifecycleStream(source);
-        let _sseRefreshTimer = null;
-        // Events arrive as named SSE frames (event: <kind>), so each kind needs
-        // its own listener — onmessage only covers unnamed messages.
-        const handleSessionEvent = () => pollSessions();
-        const handleStateChanged = () => {
-          if (_sseRefreshTimer) clearTimeout(_sseRefreshTimer);
-          _sseRefreshTimer = setTimeout(() => { _sseRefreshTimer = null; refresh().catch(() => {}); }, 500);
-        };
-        ['session.started', 'session.stopped', 'session.state', 'job.finished'].forEach(kind => source.addEventListener(kind, handleSessionEvent));
-        source.addEventListener('state.changed', handleStateChanged);
-        source.addEventListener('session.recap', event => {
-          let payload;
-          try { payload = JSON.parse(event.data); } catch { return; }
-          showSessionRecap(payload).catch(() => {});
-        });
-        source.onmessage = event => {
-          let data;
-          try { data = JSON.parse(event.data); } catch { return; }
-          const kind = data?.kind || data?.type;
-          if (kind === 'session.started' || kind === 'session.stopped' || kind === 'session.state' || kind === 'job.finished') {
-            pollSessions();
-          } else if (kind === 'state.changed') {
-            handleStateChanged();
-          }
-        };
-        source.onerror = () => {
-          unregisterLifecycleStream(source);
-          source.close();
-          if (sessionEventSource === source) sessionEventSource = null;
-          /* fall back to polling */
-        };
-      } catch { /* EventSource unsupported; polling stays */ }
+      if (sessionStreamSubscribed) return;
+      sessionStreamSubscribed = true;
+      subscribe(['session.started', 'session.stopped', 'session.state', 'job.finished'], () => pollSessions());
+      subscribe('state.changed', () => {
+        if (sessionRefreshTimer) clearTimeout(sessionRefreshTimer);
+        sessionRefreshTimer = setTimeout(() => { sessionRefreshTimer = null; refresh().catch(() => {}); }, 500);
+      });
+      subscribe('session.recap', event => {
+        let payload;
+        try { payload = JSON.parse(event.data); } catch { return; }
+        showSessionRecap(payload).catch(() => {});
+      });
+      // Anything missed while the stream was closed is caught up with one poll.
+      onOpen(() => pollSessions());
     }
-    function scheduleSessionPoll(delay) { setTimeout(pollSessions, delay); }
+    // One pending timer at most. SSE events also call pollSessions() directly;
+    // without clearing the pending timer each such call started a second
+    // self-rescheduling chain, so the poll rate grew with every session event.
+    let sessionPollTimer = 0;
+    let sessionPollAgain = false;
+    function scheduleSessionPoll(delay) {
+      clearTimeout(sessionPollTimer);
+      sessionPollTimer = setTimeout(pollSessions, delay);
+    }
     async function pollSessions() {
       // S40: the busy branch and the `finally` each scheduled their own
       // successor, so a poll that overlapped the one before it forked the chain
       // and the poll rate doubled every time. One scheduler, called from one
-      // place -- `finally` -- is the whole fix; the busy branch just yields.
+      // place -- `finally` -- is the whole fix; the busy branch only asks the
+      // running poll to go again as soon as it finishes.
       if (sessionPollBusy) {
-        scheduleSessionPoll(1000);
+        sessionPollAgain = true;
         return;
       }
+      clearTimeout(sessionPollTimer);
+      sessionPollTimer = 0;
       sessionPollBusy = true;
       try {
         const result = await api(`/api/running?after=${AppState.lastSessionEvent}`);
@@ -183,7 +170,9 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
         sessionPollBusy = false;
         // Poll every second while a session is active, every ten when idle.
         sessionPollIdle = !AppState.runningGames.length;
-        scheduleSessionPoll(sessionPollIdle ? 10000 : 1000);
+        const again = sessionPollAgain;
+        sessionPollAgain = false;
+        scheduleSessionPoll(again ? 0 : (sessionPollIdle ? 10000 : 1000));
       }
     }
     async function openHistory() {
@@ -273,7 +262,7 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
         document.querySelectorAll('[data-backup]').forEach(button => button.onclick = () => restoreSaves(id,button.dataset.backup));
       } catch(error) { notify(error.message); }
     }
-    async function backupSaves(id) { try { const result = await api('/api/saves/backup',{method:'POST',body:JSON.stringify({id})}); notify(`Created ${result.backup}`); loadBackups(id); } catch(error) { notify(error.message); } }
+    async function backupSaves(id) { try { const result = await api('/api/saves/backup',{method:'POST',body:JSON.stringify({id,game_id:gameIdOf(id)})}); notify(t('notify.sessions.backup_created', {name: result.backup})); loadBackups(id); } catch(error) { notify(error.message); } }
     async function restoreSaves(id,backup) {
       const { confirmAction } = await import('./dialogs.js');
       const ok = await confirmAction({
@@ -282,14 +271,14 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
         consequence: 'Current saves will be backed up first.',
       });
       if (!ok) return;
-      try { await api('/api/saves/restore',{method:'POST',body:JSON.stringify({id,backup})}); notify('Save restored'); loadBackups(id); } catch(error) { notify(error.message); }
+      try { await api('/api/saves/restore',{method:'POST',body:JSON.stringify({id,game_id:gameIdOf(id),backup})}); notify(t('notify.sessions.save_restored')); loadBackups(id); } catch(error) { notify(error.message); }
     }
     async function discoverSaves(id) {
       try {
         const result = await api(`/api/saves/discover?id=${id}`);
         $('saveDiscovery').innerHTML = result.candidates.length ? result.candidates.map(item => `<button class="icon-button" data-save-path="${escapeHtml(item.path)}">${item.shared ? 'Add shared location' : 'Add'} · ${escapeHtml(item.label)}<br><small>${escapeHtml(item.path)}</small></button>`).join('') : 'No new save locations were detected.';
         document.querySelectorAll('[data-save-path]').forEach(button => button.onclick = async () => {
-          try { await api('/api/saves/add',{method:'POST',body:JSON.stringify({id,path:button.dataset.savePath})}); await refresh(); notify('Save location added'); } catch(error) { notify(error.message); }
+          try { await api('/api/saves/add',{method:'POST',body:JSON.stringify({id,game_id:gameIdOf(id),path:button.dataset.savePath})}); await refresh(); notify(t('notify.sessions.save_location_added')); } catch(error) { notify(error.message); }
         });
       } catch(error) { notify(error.message); }
     }

@@ -386,6 +386,39 @@ jobs:
           cp scripts/install.sh install.sh
           cp scripts/install.ps1 install.ps1
 
+      - name: Build, sign, and verify the emulator definition pack
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENBOX_SIGNING_KEY: ${{ secrets.OPENBOX_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${OPENBOX_SIGNING_KEY:-}" || {
+            echo "OPENBOX_SIGNING_KEY is required; the definition pack must be signed" >&2
+            exit 1
+          }
+          umask 077
+          key_file="$(mktemp)"
+          pack_dir="$(mktemp -d)"
+          trap 'rm -f -- "$key_file"; rm -rf -- "$pack_dir"' EXIT
+          printf '%s' "$OPENBOX_SIGNING_KEY" > "$key_file"
+          unset OPENBOX_SIGNING_KEY
+          version="${GITHUB_REF_NAME#v}"
+          python3 scripts/build_defs_pack.py --version "$version" \
+            --notes "Emulator definitions for OpenBox $version" --out "$pack_dir"
+          python3 scripts/sign_release.py --key "$key_file" \
+            --out "$pack_dir/community-defs.tar.gz.sig" "$pack_dir/community-defs.tar.gz"
+          python3 scripts/verify_release.py --key openbox-release.pub \
+            "$pack_dir/community-defs.tar.gz" "$pack_dir/community-defs.tar.gz.sig"
+          # The update channel reads the rolling emulator-defs release (PACK_BASE), not the version release.
+          gh release view emulator-defs >/dev/null 2>&1 || gh release create emulator-defs \
+            --title "Emulator definitions" \
+            --notes "Signed emulator definitions. OpenBox checks this release for updates." \
+            --latest=false
+          gh release upload emulator-defs \
+            "$pack_dir/community-defs.tar.gz" \
+            "$pack_dir/community-defs.tar.gz.sig" \
+            "$pack_dir/index.json" --clobber
+
       - name: Compute release name
         id: relname
         run: echo "name=OpenBox ${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"

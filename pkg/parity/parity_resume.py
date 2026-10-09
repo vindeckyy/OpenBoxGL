@@ -42,6 +42,8 @@ if str(_ROOT) not in sys.path:
 
 from pkg.parity.launch_tokens import apply_tokens  # noqa: E402
 from pkg.parity.parity_emulator_defs import (  # noqa: E402
+    apply_core_override,
+    resolved_startup_args,
     STATE_KINDS,
     detect_adapter_for_platform,
     detect_adapter_prefix,
@@ -134,14 +136,15 @@ def adapter_for_launch(game, profiles=None, *, which=None):
     if str(game.get("launch", "") or "").strip():
         return None, "game_launch"
     adapter = find_adapter(game.get("emulator_adapter_id", ""), game.get("emulator_id", ""))
+    # The game's own core choice is part of the launch, so it is part of the fingerprint too.
     if adapter and detect_adapter_prefix(adapter, which=which):
-        return adapter, "game_adapter"
+        return apply_core_override(adapter, game), "game_adapter"
     platform = str(game.get("platform", "") or "")
     if str(profiles.get(platform, "") or "").strip():
         return None, "platform_profile"
     detected = detect_adapter_for_platform(platform, which=which)
     if detected:
-        return detected, "registry_adapter"
+        return apply_core_override(detected, game), "registry_adapter"
     return None, "direct_exe"
 
 
@@ -166,7 +169,7 @@ def emulator_fingerprint(adapter, *, which=None):
         return "uninstalled"
     core = str((adapter or {}).get("core_path") or "").strip()
     if not core:
-        startup_args = (adapter or {}).get("startup_args") or []
+        startup_args = resolved_startup_args(adapter or {})
         try:
             index = list(startup_args).index("-L")
             candidate = str(startup_args[index + 1] or "")
@@ -401,16 +404,16 @@ def _write_state_text(path, text):
     flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags, 0o600)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
-            output.write(text)
-            output.flush()
-            os.fsync(output.fileno())
-    except OSError:
-        try:
-            os.close(descriptor)
-        except OSError:
-            pass
+        output = os.fdopen(descriptor, "w", encoding="utf-8")
+    except BaseException:
+        os.close(descriptor)
         raise
+    # Once fdopen owns the descriptor the ``with`` closes it; closing the raw
+    # number again on a write error could close another thread's new file.
+    with output:
+        output.write(text)
+        output.flush()
+        os.fsync(output.fileno())
 
 
 def _archive_file(path, state_dir):

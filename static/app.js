@@ -67,7 +67,7 @@ async function verifyMuseumPin() {
       method: 'POST',
       body: JSON.stringify({pin}),
     });
-    if (!result.ok) notify('That Museum PIN was not accepted.');
+    if (!result.ok) notify(t('notify.app.museum_pin_rejected'));
     return Boolean(result.ok);
   } catch (error) {
     notify(error.message);
@@ -165,7 +165,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const endpoint = shelf && AppState.editingId !== null
           ? '/api/v2/library/manual-entry/update'
           : shelf ? '/api/v2/library/manual-entry' : '/api/game';
-        await api(endpoint,{method:'POST',body:JSON.stringify({id:AppState.editingId,game})});
+        await api(endpoint,{method:'POST',body:JSON.stringify({id:AppState.editingId,...(AppState.editingGameId ? {game_id:AppState.editingGameId} : {}),game})});
         $('gameDialog').close();
         await refresh();
         notify(shelf ? 'Shelf entry saved' : 'Library saved');
@@ -203,7 +203,7 @@ window.addEventListener('DOMContentLoaded', () => {
       try {
         const catalog = await api('/api/premium/media-packs');
         const packs = catalog.packs || [];
-        if (!packs.length) return notify('No bundled media packs are available');
+        if (!packs.length) return notify(t('notify.app.no_media_packs'));
         const pick = await promptChoice({
           title: 'Choose media pack',
           message: 'Select a bundled media pack to apply.',
@@ -220,7 +220,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const result = await api('/api/premium/media-packs/apply',{method:'POST',body:JSON.stringify({id:pack.id})});
         AppState.appSettings = result.settings || AppState.appSettings;
         $('mediaPackStatus').textContent = (AppState.appSettings.media_packs || []).filter(item => item.active).map(item => item.name).join(', ');
-        notify(`Applied ${pack.name}`);
+        notify(t('notify.app.pack_applied', {name: pack.name}));
       } catch(error) { notify(error.message); }
     };
     $('libraryButton').onclick = () => { resetQuery(); AppState.selectedId = null; render(); loadTheme(); };
@@ -249,14 +249,14 @@ window.addEventListener('DOMContentLoaded', () => {
           gameyfin_password:$('storefrontGameyfinPassword').value,
         })});
         $('storefrontGameyfinStatus').textContent = `Connected · ${result.games} games · ${result.providers.length} download provider${result.providers.length === 1 ? '' : 's'}`;
-        notify('Gameyfin connection ok');
+        notify(t('notify.app.gameyfin_ok'));
       } catch(error) { $('storefrontGameyfinStatus').textContent = error.message; notify(error.message); }
     };
     $('importScummvmStore').onclick = async () => { try { const result = await api('/api/import/scummvm',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} ScummVM games imported`); } catch(error) { notify(error.message); } };
     $('importRpcs3Store').onclick = async () => { try { const result = await api('/api/import/rpcs3',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} RPCS3 games imported`); } catch(error) { notify(error.message); } };
     $('importVita3kStore').onclick = async () => { try { const result = await api('/api/import/vita3k',{method:'POST',body:'{}'}); await refresh(); notify(`${result.added} Vita3K games imported`); } catch(error) { notify(error.message); } };
-    $('openThemeFolder').onclick = async () => { try { const result = await api('/api/themes/open-folder',{method:'POST',body:'{}'}); notify(`Opened ${result.path}`); } catch(error) { notify(error.message); } };
-    $('injectRa').onclick = async () => { try { const result = await api('/api/ra/inject',{method:'POST',body:'{}'}); notify(`Updated ${result.updated.length} emulator config file${result.updated.length === 1 ? '' : 's'}`); } catch(error) { notify(error.message); } };
+    $('openThemeFolder').onclick = async () => { try { const result = await api('/api/themes/open-folder',{method:'POST',body:'{}'}); notify(t('notify.app.opened', {path: result.path})); } catch(error) { notify(error.message); } };
+    $('injectRa').onclick = async () => { try { const result = await api('/api/ra/inject',{method:'POST',body:'{}'}); notify(t('notify.app.emulator_configs_updated', {count: result.updated.length})); } catch(error) { notify(error.message); } };
     $('cleanupMedia').onclick = async () => { try { const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({platform:AppState.platform,apply:false})}); AppState.duplicateMediaGroups = result.groups; $('applyCleanupMedia').hidden = !AppState.duplicateMediaGroups; notify(`${AppState.duplicateMediaGroups} duplicate media group${AppState.duplicateMediaGroups === 1 ? '' : 's'} found`); } catch(error) { notify(error.message); } };
     $('applyCleanupMedia').onclick = async () => {
       if (!await confirmAction({
@@ -271,10 +271,10 @@ window.addEventListener('DOMContentLoaded', () => {
       try {
         const result = await api('/api/media/cleanup',{method:'POST',body:JSON.stringify({platform:AppState.platform,apply:true})});
         $('applyCleanupMedia').hidden = true;
-        notify(`Removed ${result.paths.length} duplicate file${result.paths.length === 1 ? '' : 's'}`);
+        notify(t('notify.app.duplicates_removed', {count: result.paths.length}));
       } catch(error) { notify(error.message); }
     };
-    $('scanAllSaves').onclick = async () => { try { await api('/api/saves/scan/apply',{method:'POST',body:'{}'}); notify('info', 'Save path scan queued — progress and results are in Activity Center'); } catch(error) { notify(error.message); } };
+    $('scanAllSaves').onclick = async () => { try { await api('/api/saves/scan/apply',{method:'POST',body:'{}'}); notify('info', t('notify.app.save_scan_queued')); } catch(error) { notify(error.message); } };
     $('bigBoxPause').onclick = event => { if (event.target === $('bigBoxPause')) $('bigBoxPause').hidden = true; };
     $('loadStorefrontCatalog').onclick = loadStorefrontCatalog;
     $('importStorefrontInstalled').onclick = () => importStorefrontCatalog(false);
@@ -348,7 +348,7 @@ window.addEventListener('DOMContentLoaded', () => {
       try {
         await api('/api/games/bulk-wizard', {method:'POST',body:JSON.stringify({ids:[id],changes:{reset_stats:true}})});
         await refresh();
-        notify(`Reset play statistics for ${game.name}`);
+        notify(t('notify.app.stats_reset', {name: game.name}));
       } catch(error) { notify(error.message); }
     };
     $('contextRemove').onclick = () => { const game = AppState.games.find(item => item.id === AppState.contextGameId); closeContextMenu(); if (game) removeGame(game.id, game.name); };
@@ -358,11 +358,11 @@ window.addEventListener('DOMContentLoaded', () => {
     });
     if ($('scanEmulatorFolder')) $('scanEmulatorFolder').onclick = async () => {
       const folder = $('emulatorScanFolder').value.trim();
-      if (!folder) return notify('Enter a ROM folder path first.');
+      if (!folder) return notify(t('notify.app.enter_rom_folder'));
       try {
         const result = await api('/api/emulators/scan',{method:'POST',body:JSON.stringify({folder})});
         await refresh();
-        notify(`Added ${result.added} of ${result.found} scanned games`);
+        notify(t('notify.app.added_of_scanned', {added: result.added, found: result.found}));
       } catch(error) { notify(error.message); }
     };
     $('fullscreenButton').onclick = () => nativeFullscreen().catch(() => {});

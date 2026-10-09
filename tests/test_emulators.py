@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import os
 import re
 import string
@@ -860,7 +861,9 @@ class WindowsDefinitionTests(unittest.TestCase):
     @unittest.skipIf(os.name == "nt", "POSIX defs keep the libretro directory layout")
     def test_posix_retroarch_uses_the_libretro_directory(self):
         adapter = find_adapter("retroarch-snes")
-        self.assertIn("/usr/lib/libretro/snes9x_libretro.so", adapter["startup_args"])
+        from pkg.parity.parity_emulator_defs import resolved_startup_args
+
+        self.assertIn("/usr/lib/libretro/snes9x_libretro.so", resolved_startup_args(adapter))
 
     @unittest.skipUnless(os.name == "nt", "Windows defs keep cores beside the executable")
     def test_windows_retroarch_uses_cores_beside_the_executable(self):
@@ -882,6 +885,238 @@ class WindowsDefinitionTests(unittest.TestCase):
         prefix = detect_adapter_prefix(adapter, which=which)
         self.assertEqual(prefix, ["C:\\emulators\\retroarch.exe"])
         self.assertEqual(probed[0], "retroarch.exe")
+
+
+class SystemCoverageDefinitionTests(unittest.TestCase):
+    """The 1.16.1 definitions for systems the bundle did not cover.
+
+    Core file names are the official libretro buildbot names (checked against the
+    nightly listing); Flathub ids were checked with `flatpak remote-info`.
+    """
+
+    RETROARCH_IDS = (
+        "retroarch-genesis", "retroarch-sms", "retroarch-gamegear", "retroarch-segacd", "retroarch-pce",
+        "retroarch-ngp", "retroarch-atari2600", "retroarch-atari7800", "retroarch-lynx", "retroarch-jaguar",
+        "retroarch-wonderswan", "retroarch-virtualboy", "retroarch-c64", "retroarch-msx", "retroarch-amiga",
+    )
+    STANDALONE = {
+        "flycast-dreamcast": "org.flycast.Flycast",
+        "azahar-3ds": "org.azahar_emu.Azahar",
+        "dosbox-staging-dos": "io.github.dosbox-staging",
+    }
+
+    def test_every_new_definition_loads_and_builds_a_launch_command(self):
+        from pkg.parity.parity_emulator_defs import build_adapter_argv, find_adapter
+
+        for adapter_id in self.RETROARCH_IDS + tuple(self.STANDALONE):
+            with self.subTest(adapter=adapter_id):
+                adapter = find_adapter(adapter_id)
+                self.assertIsNotNone(adapter, adapter_id)
+                prefix = (["flatpak", "run", adapter["flatpak_app_id"]] if adapter.get("flatpak_app_id")
+                          else ["/usr/bin/emulator"])
+                argv = build_adapter_argv(adapter, {"name": "G"}, "/roms/game.bin", prefix=prefix)
+                self.assertEqual(argv[-1], "/roms/game.bin")
+
+    def test_standalone_definitions_use_the_verified_flathub_ids(self):
+        from pkg.parity.parity_emulator_defs import find_adapter
+
+        for adapter_id, flatpak_id in self.STANDALONE.items():
+            with self.subTest(adapter=adapter_id):
+                self.assertEqual(find_adapter(adapter_id)["flatpak_app_id"], flatpak_id)
+
+    def test_retroarch_cores_use_the_buildbot_names(self):
+        from pkg.parity.parity_emulator_defs import find_adapter, resolved_startup_args
+
+        expected = {
+            "retroarch-genesis": "genesis_plus_gx", "retroarch-sms": "genesis_plus_gx",
+            "retroarch-pce": "mednafen_pce_fast", "retroarch-ngp": "mednafen_ngp", "retroarch-atari2600": "stella",
+            "retroarch-atari7800": "prosystem", "retroarch-lynx": "handy", "retroarch-jaguar": "virtualjaguar",
+            "retroarch-wonderswan": "mednafen_wswan", "retroarch-virtualboy": "mednafen_vb",
+            "retroarch-c64": "vice_x64sc", "retroarch-msx": "fmsx", "retroarch-amiga": "puae",
+        }
+        for adapter_id, core in expected.items():
+            with self.subTest(adapter=adapter_id):
+                startup = resolved_startup_args(find_adapter(adapter_id))
+                self.assertIn(f"/usr/lib/libretro/{core}_libretro.so", startup)
+
+
+class FlatpakRetroArchCoreTests(unittest.TestCase):
+    """RetroArch's Flatpak cannot load /usr/lib/libretro: its cores live in the user's app config.
+
+    Verified in the sandbox: a core in ~/.var/app/org.libretro.RetroArch/config/retroarch/cores
+    loads, and /usr/lib/libretro/<core> is refused ("path is not set"). Native launches keep
+    the system path.
+    """
+
+    def setUp(self):
+        from pkg.parity.parity_emulator_defs import find_adapter
+
+        self.adapter = find_adapter("retroarch-snes")
+        self.assertIsNotNone(self.adapter)
+
+    def test_flatpak_launch_uses_the_sandboxs_user_cores_directory(self):
+        from pkg.parity.parity_emulator_defs import build_adapter_argv
+
+        argv = build_adapter_argv(
+            self.adapter, {"name": "G"}, "/roms/g.sfc",
+            prefix=["flatpak", "run", "org.libretro.RetroArch"],
+        )
+        core_index = argv.index("-L") + 1
+        self.assertTrue(argv[core_index].endswith("/.var/app/org.libretro.RetroArch/config/retroarch/cores/snes9x_libretro.so"), argv)
+        self.assertNotIn("/usr/lib/libretro/", " ".join(argv))
+        self.assertEqual(argv[-1], "/roms/g.sfc")
+
+    def test_native_launch_keeps_the_system_core_path(self):
+        from pkg.parity.parity_emulator_defs import build_adapter_argv
+
+        argv = build_adapter_argv(self.adapter, {"name": "G"}, "/roms/g.sfc", prefix=["/usr/bin/retroarch"])
+        self.assertIn("/usr/lib/libretro/snes9x_libretro.so", argv)
+
+    def test_only_a_system_core_under_a_flatpak_prefix_is_rewritten(self):
+        from pkg.parity.parity_emulator_defs import flatpak_core_path
+
+        self.assertEqual(flatpak_core_path("/usr/lib/libretro/x_libretro.so", ["/usr/bin/retroarch"]),
+                         "/usr/lib/libretro/x_libretro.so")
+        self.assertEqual(flatpak_core_path("/opt/cores/y_libretro.so", ["flatpak", "run", "org.libretro.RetroArch"]),
+                         "/opt/cores/y_libretro.so")
+        self.assertTrue(flatpak_core_path("/usr/lib/libretro/z_libretro.so", ["flatpak", "run", "x"], home="/home/u")
+                        .startswith("/home/u/.var/app/org.libretro.RetroArch/config/retroarch/cores/"))
+
+class CoreChoiceTests(unittest.TestCase):
+    """A game can launch with an installed RetroArch core instead of the definition's default."""
+
+    def setUp(self):
+        from pkg.parity import parity_emulator_defs as defs
+
+        self.defs = defs
+        self.adapter = {"adapter_id": "retroarch-snes", "startup_args": ["-L", "/usr/lib/libretro/snes9x_libretro.so", "{path}"]}
+
+    def test_only_a_plain_core_file_name_is_accepted(self):
+        self.assertTrue(self.defs.valid_core_name("bsnes_libretro.so"))
+        for bad in ("", "../x_libretro.so", "a/b_libretro.so", "snes9x.so", "x_libretro.so; rm"):
+            with self.subTest(bad=bad):
+                self.assertFalse(self.defs.valid_core_name(bad))
+
+    def test_the_choice_replaces_the_system_core_and_nothing_else(self):
+        chosen = self.defs.apply_core_override(self.adapter, {"retroarch_core": "bsnes_libretro.so"})
+        self.assertEqual(chosen["startup_args"], ["-L", "/usr/lib/libretro/bsnes_libretro.so", "{path}"])
+        self.assertIs(self.defs.apply_core_override(self.adapter, {}), self.adapter)
+        self.assertIs(self.defs.apply_core_override(self.adapter, {"retroarch_core": "../evil_libretro.so"}), self.adapter)
+        other = {"adapter_id": "dolphin", "startup_args": ["--batch", "{path}"]}
+        self.assertIs(self.defs.apply_core_override(other, {"retroarch_core": "bsnes_libretro.so"}), other)
+
+    def test_every_retroarch_definition_names_its_core_once_and_resolves_to_it(self):
+        from pkg.parity import parity_emulator_defs as defs_module
+
+        migrated = [a for a in defs_module.load_adapters() if a.get("retroarch_core")]
+        self.assertEqual(len(migrated), 23)
+        for adapter in migrated:
+            with self.subTest(adapter=adapter["adapter_id"]):
+                self.assertEqual(adapter["startup_args"].count("{retroarch_core}"), 1)
+                self.assertEqual(
+                    defs_module.resolved_startup_args(adapter)[:2],
+                    ["-L", "/usr/lib/libretro/" + adapter["retroarch_core"]],
+                )
+
+    def test_the_argv_uses_the_chosen_core_on_a_native_install(self):
+        argv = self.defs.build_adapter_argv(
+            self.adapter, {"name": "G", "retroarch_core": "bsnes_libretro.so"}, "/roms/g.sfc", prefix=["/usr/bin/retroarch"],
+        )
+        self.assertEqual(argv, ["/usr/bin/retroarch", "-L", "/usr/lib/libretro/bsnes_libretro.so", "/roms/g.sfc"])
+
+    def test_the_argv_maps_the_chosen_core_into_the_flatpak_sandbox(self):
+        argv = self.defs.build_adapter_argv(
+            self.adapter, {"name": "G", "retroarch_core": "bsnes_libretro.so"}, "/roms/g.sfc",
+            prefix=["flatpak", "run", "org.libretro.RetroArch"],
+        )
+        self.assertEqual(argv[3], "-L")
+        self.assertTrue(argv[4].endswith("/retroarch/cores/bsnes_libretro.so"), argv)
+
+    def test_installed_cores_are_listed_once_with_where_they_are(self):
+        with tempfile.TemporaryDirectory() as system, tempfile.TemporaryDirectory() as flatpak:
+            Path(system, "snes9x_libretro.so").touch()
+            Path(system, "readme.txt").touch()
+            Path(flatpak, "snes9x_libretro.so").touch()
+            Path(flatpak, "bsnes_libretro.so").touch()
+            with mock.patch.object(self.defs, "RETROARCH_SYSTEM_CORE_DIR", system + "/"), \
+                    mock.patch.object(self.defs, "retroarch_flatpak_core_dir", return_value=flatpak):
+                cores = self.defs.installed_retroarch_cores()
+        self.assertEqual(cores, [
+            {"name": "bsnes_libretro.so", "location": "flatpak"},
+            {"name": "snes9x_libretro.so", "location": "system"},
+        ])
+
+    def test_the_emulator_table_and_platform_lookup_carry_the_core_not_the_token(self):
+        from pkg.parity import parity_emulator_defs as defs_module
+
+        self.assertNotIn("{retroarch_core}", json.dumps(defs_module.EMULATORS))
+        self.assertIn("/usr/lib/libretro/snes9x_libretro.so", json.dumps(defs_module.EMULATORS))
+        _platform, info = defs_module.platform_for_extension("sfc")
+        self.assertNotIn("{retroarch_core}", info["startup_args"])
+
+    def test_the_cores_route_lists_what_is_installed(self):
+        from handlers.launch import LaunchHandlers
+
+        class Handler(LaunchHandlers):
+            def __init__(self):
+                self.responses = []
+
+            def send_json(self, status, payload, **kwargs):
+                self.responses.append((status, payload))
+
+        listed = [{"name": "snes9x_libretro.so", "location": "system"}]
+        with mock.patch("pkg.parity.parity_emulator_defs.installed_retroarch_cores", return_value=listed):
+            handler = Handler()
+            handler._api_get_api_v2_launch_cores(None)
+        self.assertEqual(handler.responses, [(200, {"cores": listed})])
+
+    def test_a_core_choice_needs_a_game_and_a_request_body_must_be_an_object(self):
+        from api_errors import BadRequest
+        from handlers.launch import LaunchHandlers
+
+        handler = LaunchHandlers()
+        with self.assertRaises(BadRequest):
+            handler._api_post_api_v2_launch_core({"core": "bsnes_libretro.so"})
+        with self.assertRaises(BadRequest):
+            handler.launch_preflight("not an object")
+        with self.assertRaises(BadRequest):
+            handler.launch_preflight_batch("not an object")
+
+    def test_a_token_without_a_valid_core_is_refused_when_the_definition_loads(self):
+        from pkg.parity import parity_emulator_defs as defs_module
+
+        raw = defs_module._parse_yaml((Path(__file__).resolve().parent.parent / "emulator_defs" / "retroarch-snes.yaml").read_text(encoding="utf-8"))
+        raw.pop("retroarch_core", None)
+        with self.assertRaises(ValueError):
+            defs_module._normalize_adapter(raw)
+
+    def test_the_route_refuses_a_bad_name_and_stores_and_clears_a_good_one(self):
+        from api_errors import BadRequest
+        from handlers.launch import LaunchHandlers
+
+        class Handler(LaunchHandlers):
+            def __init__(self):
+                self.responses = []
+
+            def send_json(self, status, payload, **kwargs):
+                self.responses.append((status, payload))
+
+        state = {"games": [{"game_id": "g1", "name": "Chrono", "path": "/roms/c.sfc", "platform": "SNES"}], "profiles": {}}
+
+        def apply(mutate):
+            return None, mutate(state)
+
+        handler = Handler()
+        with mock.patch("webapp_state.transact_state", side_effect=apply):
+            with self.assertRaises(BadRequest):
+                handler._api_post_api_v2_launch_core({"game_id": "g1", "core": "../evil_libretro.so"})
+            self.assertNotIn("retroarch_core", state["games"][0])
+            handler._api_post_api_v2_launch_core({"game_id": "g1", "core": "bsnes_libretro.so"})
+            self.assertEqual(state["games"][0]["retroarch_core"], "bsnes_libretro.so")
+            handler._api_post_api_v2_launch_core({"game_id": "g1", "core": ""})
+            self.assertNotIn("retroarch_core", state["games"][0])
+        self.assertEqual(handler.responses[-1][0], 200)
+        self.assertEqual(handler.responses[-1][1]["name"], "Chrono")
 
 
 if __name__ == "__main__":

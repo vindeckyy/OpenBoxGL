@@ -40,6 +40,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.16.1" date="2026-10-08">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.16.1</url>
+      <description>
+        <p>Finish the promise: launch readiness everywhere, with group fixes, a repair scoped to one cause, a per-game RetroArch core, and a notice when the check changes; eighteen more systems out of the box, with disc images that several systems share asking which system they belong to; and a library that stays live and steady, with one live connection per window, a search that no longer moves the panels below it, and a native window that starts in your theme's colour. It also carries the 1.16.1 fixes: safer edits, probes that cannot hang, and dates with a time zone.</p>
+      </description>
+    </release>
     <release version="1.16.0" date="2026-10-05">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.16.0</url>
       <description>

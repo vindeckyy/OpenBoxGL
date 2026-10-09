@@ -12,6 +12,28 @@ from pathlib import Path
     os.name == "nt",
     "native_host.c is WebKitGTK/GTK3; Windows uses the WebView2 host instead",
 )
+def _decode_single_quoted_js(literal):
+    """Decode the body of a single-quoted JS string; fail on an unescaped quote or break."""
+    out = []
+    index = 0
+    while index < len(literal):
+        char = literal[index]
+        if char == "\\":
+            nxt = literal[index + 1]
+            if nxt == "x":
+                out.append(chr(int(literal[index + 2:index + 4], 16)))
+                index += 4
+                continue
+            out.append(nxt)
+            index += 2
+            continue
+        if char in ("'", "\n", "\r"):
+            raise AssertionError(f"unescaped {char!r} in JS literal {literal!r}")
+        out.append(char)
+        index += 1
+    return "".join(out)
+
+
 class TestNativeHost(unittest.TestCase):
     def _compile_argument_harness(self, directory):
         """Compile the native argument/dispatch helpers without opening GTK."""
@@ -367,6 +389,133 @@ int main(int argc, char **argv) {
         self.assertEqual(captured[0][0], '/api/launch')
         self.assertEqual(captured[0][1], 'token-1234567890')
         self.assertEqual(captured[0][2], b'{"game_id":"game/id"}')
+
+    def test_dialog_result_json_keeps_utf8_and_passes_bridge_guard(self):
+        """Picked paths with accents or ';' reach the page intact."""
+        result = subprocess.run(
+            ['pkg-config', '--exists', 'webkit2gtk-4.1'],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            self.skipTest('webkit2gtk-4.1 dev headers not available')
+        root_dir = Path(__file__).resolve().parent.parent
+        paths = [
+            '/home/u/Téléchargements/roms',
+            '/home/u/Games;Old/x*/y "q" \\ end',
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            harness = Path(directory) / 'native_dialog_harness.c'
+            harness.write_text(
+                r'''
+#define main native_host_program_main
+#include "@@NATIVE_SOURCE@@"
+#undef main
+
+int main(int argc, char **argv) {
+    for (int index = 1; index < argc; index++) {
+        char *json = dialog_result_json(argv[index]);
+        printf("%s\n", json);
+        g_free(json);
+    }
+    return 0;
+}
+'''.replace("@@NATIVE_SOURCE@@", str(root_dir / "native_host.c")),
+                encoding='utf-8',
+            )
+            flags = subprocess.check_output(
+                ['pkg-config', '--cflags', '--libs', 'webkit2gtk-4.1', 'gtk+-3.0'],
+                text=True,
+            ).split()
+            binary = Path(directory) / 'native_dialog_harness'
+            compiled = subprocess.run(
+                ['gcc', '-o', str(binary), str(harness)] + flags,
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            output = subprocess.check_output([str(binary)] + paths, text=True)
+        import json as _json
+        lines = output.splitlines()
+        self.assertEqual(len(lines), len(paths))
+        for line, expected in zip(lines, paths, strict=True):
+            # resolve_bridge drops payloads containing these; a legal
+            # filename must never trigger that (the promise would hang).
+            for marker in (';', '//', '*/'):
+                self.assertNotIn(marker, line)
+            self.assertEqual(
+                _json.loads(line), {'path': expected, 'cancelled': False}
+            )
+
+    def test_bridge_id_escape_survives_quotes_backslashes_and_line_breaks(self):
+        """A page id is spliced into a single-quoted JS literal; it must decode back to itself."""
+        result = subprocess.run(
+            ['pkg-config', '--exists', 'webkit2gtk-4.1'],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            self.skipTest('webkit2gtk-4.1 dev headers not available')
+        root_dir = Path(__file__).resolve().parent.parent
+        ids = ["plain-id", "it's", "back\\slash", "line\nbreak", "tab\tend", "'); alert(1); ('"]
+        with tempfile.TemporaryDirectory() as directory:
+            harness = Path(directory) / 'native_escape_harness.c'
+            harness.write_text(
+                r'''
+#define main native_host_program_main
+#include "@@NATIVE_SOURCE@@"
+#undef main
+
+int main(int argc, char **argv) {
+    for (int index = 1; index < argc; index++) {
+        char *escaped = js_single_quote_escape(argv[index]);
+        printf("%s\n", escaped);
+        g_free(escaped);
+    }
+    return 0;
+}
+'''.replace("@@NATIVE_SOURCE@@", str(root_dir / "native_host.c")),
+                encoding='utf-8',
+            )
+            flags = subprocess.check_output(
+                ['pkg-config', '--cflags', '--libs', 'webkit2gtk-4.1', 'gtk+-3.0'],
+                text=True,
+            ).split()
+            binary = Path(directory) / 'native_escape_harness'
+            compiled = subprocess.run(
+                ['gcc', '-o', str(binary), str(harness)] + flags,
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            output = subprocess.check_output([str(binary)] + ids, text=True)
+        literals = output.splitlines()
+        self.assertEqual(len(literals), len(ids))
+        for literal, want in zip(literals, ids, strict=True):
+            # The literal must be one token: every quote is escaped, no raw break.
+            self.assertEqual(_decode_single_quoted_js(literal), want, literal)
+
+    def test_signal_shutdown_covers_sigterm(self):
+        """SIGTERM/SIGHUP must stop the server, which has its own pgid."""
+        source = (Path(__file__).resolve().parent.parent / 'native_host.c').read_text(
+            encoding='utf-8'
+        )
+        self.assertIn('g_unix_signal_add(SIGTERM, on_signal, NULL)', source)
+        self.assertIn('g_unix_signal_add(SIGHUP, on_signal, NULL)', source)
+        self.assertNotIn('g_strescape(filename', source)
+
+    def test_windows_host_dispatches_startup_request(self):
+        """The first Windows instance must not drop its own --play/--uri."""
+        source = (Path(__file__).resolve().parent.parent / 'native_host_win.c').read_text(
+            encoding='utf-8'
+        )
+        main_body = source[source.index('wWinMain('):]
+        self.assertIn('native_request_copy(&g_pending_request, &startup_request)', main_body)
+        self.assertLess(
+            main_body.index('boot_server()'),
+            main_body.index('native_request_copy(&g_pending_request, &startup_request)'),
+        )
+        dialog = source[source.index('handle_dialog(const char *id'):
+                        source.index('apply_fullscreen(int enable)')]
+        self.assertIn('\\\\u003b', dialog)
 
     def test_native_launcher_forwards_argv_verbatim(self):
         """The shell boundary preserves argv without evaluating its values."""

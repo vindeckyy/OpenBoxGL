@@ -1652,6 +1652,25 @@ class _ApiRaises:
         return issubclass(exc_type, self.exc)
 
 
+def test_apply_metadata_year_takes_the_year_from_an_iso_release_date():
+    # LaunchBox ReleaseDate is a full ISO timestamp. The year field must hold the
+    # year alone; storing the whole timestamp broke year filters and sorting.
+    from metadata import _apply_metadata_fields
+
+    def record(release_date):
+        return {
+            "name": "Old Game", "platform": "NES", "release_date": release_date, "developer": "",
+            "publisher": "", "genre": "", "overview": "", "series": "",
+        }
+
+    game = {"name": "Old Game"}
+    _apply_metadata_fields(game, record("1991-08-23T00:00:00"), 7, overwrite=True)
+    assert game["year"] == "1991", game
+    kept = {"name": "Kept", "year": "1985"}
+    _apply_metadata_fields(kept, record("1991-08-23T00:00:00"), 7, overwrite=False)
+    assert kept["year"] == "1985", kept
+
+
 def run_match_preview_unittests():
     loader = unittest.defaultTestLoader
     suite = unittest.TestSuite()
@@ -1675,5 +1694,6 @@ if __name__ == "__main__":
     test_sync_database_success()
     test_metadata_policy_helpers()
     test_metadata_decision_and_apply_edges()
+    test_apply_metadata_year_takes_the_year_from_an_iso_release_date()
     run_match_preview_unittests()
 

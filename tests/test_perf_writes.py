@@ -635,5 +635,105 @@ class WriteCoalesceTests(unittest.TestCase):
             self.assertEqual(len(store.load()["games"]), 2)
 
 
+class CoalesceCommitOrderingTests(unittest.TestCase):
+    """The sweep's ordering rules between coalesced snapshots and full commits.
+
+    The coalesce timer is set far beyond the test so the background flush
+    cannot race the assertions: every flush in these tests is explicit.
+    """
+
+    BASE = {"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []}
+
+    def _store(self, directory):
+        from state_store import JsonStateStore
+        store = JsonStateStore(Path(directory) / "library.json", snapshot_debounce=0)
+        store.save(json.loads(json.dumps(self.BASE)))
+        store._coalesce_window = 60.0
+        return store
+
+    def test_full_commit_discards_an_older_coalesced_snapshot(self):
+        # A coalesced snapshot taken before a full commit is older than the
+        # file. Flushing it later rolled the committed game back.
+        with tempfile.TemporaryDirectory() as directory:
+            store = self._store(directory)
+            store.coalesced_update(lambda s: s["games"].append({"game_id": "g1", "name": "A"}))
+            store.update(lambda s: s["games"].append({"game_id": "g2", "name": "B"}))
+            store.flush_coalesced()
+            ids = [game["game_id"] for game in store.load()["games"]]
+            self.assertEqual(ids, ["g1", "g2"], "flushing a stale coalesced snapshot must not drop g2")
+
+    def test_pending_coalesced_state_is_cleared_by_a_full_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = self._store(directory)
+            store.coalesced_update(lambda s: s["games"].append({"game_id": "g1", "name": "A"}))
+            store.update(lambda s: s["games"].append({"game_id": "g2", "name": "B"}))
+            self.assertIsNone(store._coalesce_pending_state)
+
+    def test_a_raising_coalesced_mutator_leaves_no_half_applied_cache(self):
+        # The mutator writes to the cache before it raises. The cache must be
+        # discarded, or the half-applied game is visible until the next reload.
+        with tempfile.TemporaryDirectory() as directory:
+            store = self._store(directory)
+
+            def half_then_fail(state):
+                state["games"].append({"game_id": "ghost", "name": "Ghost"})
+                raise ValueError("boom")
+
+            with self.assertRaises(ValueError):
+                store.coalesced_update(half_then_fail)
+            self.assertEqual(store.load()["games"], [], "a failed coalesced mutation must not persist in memory")
+            store.flush_coalesced()
+            self.assertEqual(store.load()["games"], [])
+
+    def test_unchanged_digest_still_writes_after_another_process_changed_the_file(self):
+        # store commits {g1}; another writer empties the file; store then
+        # produces {g1} again. The digest of its own last commit matches, but the
+        # file is no longer its commit, so the write must still happen.
+        from state_store import JsonStateStore
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "library.json"
+            store = JsonStateStore(path, snapshot_debounce=0)
+            store.save(json.loads(json.dumps(self.BASE)))
+            store.update(lambda s: s["games"].append({"game_id": "g1", "name": "A"}))
+            other = JsonStateStore(path, snapshot_debounce=0)
+            other.update(lambda s: s["games"].clear())
+            store.update(lambda s: s["games"].append({"game_id": "g1", "name": "A"}))
+            fresh = JsonStateStore(path, snapshot_debounce=0)
+            self.assertEqual([g["game_id"] for g in fresh.load()["games"]], ["g1"],
+                             "a mutation equal to our last commit must not be skipped when the file changed")
+
+
+class SnapshotRotationTieTests(unittest.TestCase):
+    def test_rotation_keeps_the_newest_snapshot_even_with_the_oldest_mtime(self):
+        # Snapshots are hard links that can share an mtime. The newest one is
+        # given the oldest mtime here, so an mtime-ordered prune deletes it.
+        from state_store import JsonStateStore
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonStateStore(Path(directory) / "library.json", snapshot_limit=2, snapshot_debounce=0)
+            store.save({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
+            # save() rotates too; clear that snapshot so only the names below exist.
+            for stale in store.snapshots_dir.glob("*.json"):
+                stale.unlink()
+            store.snapshots_dir.mkdir(parents=True, exist_ok=True)
+            older = [
+                "20240101T000000000000Z-00000001-aaaaaaaa.json",
+                "20250102T000000000000Z-00000002-bbbbbbbb.json",
+            ]
+            # Dated before today, so the snapshot this rotation takes sorts newest.
+            newest = "20260103T000000000000Z-00000003-cccccccc.json"
+            for name in older:
+                (store.snapshots_dir / name).write_text("{}", encoding="utf-8")
+                os.utime(store.snapshots_dir / name, (2_000_000, 2_000_000))
+            (store.snapshots_dir / newest).write_text("{}", encoding="utf-8")
+            os.utime(store.snapshots_dir / newest, (1_000_000, 1_000_000))
+            store._rotate_snapshots(force=True)
+            kept = {path.name for path in store.snapshots_dir.glob("*.json")}
+            self.assertEqual(len(kept), 2)
+            self.assertIn(newest, kept, "the newest snapshot by name must survive rotation")
+            fresh = (kept - {newest}).pop()
+            self.assertGreater(fresh, newest, "the snapshot taken by this rotation is the newest and must be kept")
+            self.assertEqual(store.snapshots()[0]["name"], fresh, "snapshots() lists the newest kept snapshot first")
+
+
 if __name__ == "__main__":
     unittest.main()

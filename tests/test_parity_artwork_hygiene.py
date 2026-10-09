@@ -273,6 +273,30 @@ class ArtworkHygieneCoverageTests(unittest.TestCase):
         self.assertTrue(record["created"])
         self.assertEqual(record["backup"], "")
 
+    def test_undo_batch_id_cannot_escape_journal_directory(self):
+        # Regression: batch_id comes from the undo request body and was joined
+        # into the journal path unchecked, so "../x" read (and replayed) a
+        # manifest outside the artwork-hygiene directory.
+        import json
+
+        cache = self.root / "cache"
+        (cache / "artwork-hygiene").mkdir(parents=True)
+        escaped = cache / "evil.json"
+        escaped.write_text(json.dumps({"batch_id": "../evil", "records": []}), encoding="utf-8")
+        for bad in ("../evil", "a/b", "", ".hidden", "x\\y"):
+            with self.assertRaises(ValueError):
+                load_undo_manifest(cache, bad)
+            with self.assertRaises(ValueError):
+                undo_batch(cache, bad)
+        with self.assertRaises(ValueError):
+            snapshot_for_replacement(cache, "../out", "g1", "cover", "")
+        with self.assertRaises(ValueError):
+            write_undo_manifest(cache, "../out", [])
+        self.assertFalse((cache / "out.json").exists())
+        # The server-generated uuid4 hex form still round-trips.
+        write_undo_manifest(cache, "0123abcd" * 4, [])
+        self.assertEqual(load_undo_manifest(cache, "0123abcd" * 4)["records"], [])
+
     def test_load_undo_manifest_rejects_bad_payloads(self):
         from pkg.parity.parity_artwork_hygiene import UNDO_DIRECTORY
 

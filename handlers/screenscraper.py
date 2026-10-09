@@ -152,7 +152,8 @@ class ScreenScraperHandlers:
                             system_id=system_ids.get(stable_id),
                             cache_dir=_cache_dir(),
                         )
-                    except ValueError as error:
+                    except (OSError, ValueError) as error:
+                        # An unreadable ROM fails this game only, not the batch.
                         entry["hash_error"] = str(error)
                 if tier == HASH_TIER_DUAL:
                     # Hash tier wins outright; never falls through to title.
@@ -164,8 +165,12 @@ class ScreenScraperHandlers:
                         "match_name": metadata.get("name", ""),
                     })
                     if apply_confident and auto_apply_allowed(tier):
-                        _apply_hash_match(stable_id, metadata)
-                        entry["applied"] = True
+                        try:
+                            _apply_hash_match(stable_id, metadata)
+                            entry["applied"] = True
+                        except IndexError:
+                            # Game removed while the batch ran; keep the rest.
+                            entry["applied"] = False
                 else:
                     # No confident hash evidence: fall through to title
                     # matching. Title matches are always review-only.

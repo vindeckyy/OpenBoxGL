@@ -6,6 +6,170 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.16.1] - 2026-10-08
+
+A release that finishes launch readiness and includes the fixes from the 1.16.1 cycle. It finishes launch readiness, adds launch definitions
+for 18 more systems, and keeps the library live and responsive. No route is removed or changed. Five routes are
+added: `GET /api/v2/launch/audit/status`, `POST /api/v2/launch/grant`, `POST /api/v2/launch/grant/undo`,
+`GET /api/v2/launch/cores` and `POST /api/v2/launch/core`.
+
+### Headlines
+- **Launch readiness everywhere.** Games that will not launch are marked on the grid. Groups of games that share one
+  fix get one button for the group, a missing-file group relinks from one place, and a game can choose its RetroArch
+  core. The check says when its results change.
+- **Every system out of the box.** Launch definitions for 18 more systems, each RetroArch definition names its core
+  once, and the definition pack is signed and released with each tag. Disc images that several systems share ask which
+  system they belong to.
+- **Always live and fast.** One live connection per tab, a search no longer moves the panels below it, and the browser
+  benchmark measures first render, long tasks and layout shift.
+
+### Security and data safety
+- **A stale window could edit a different game (B1).** When the library changed after an edit
+  dialog opened (a delete, trash or sync in another window), the save fell back to the game's
+  position and could overwrite a neighbouring game. A request that names a stable game id which no
+  longer exists is now refused. Edit, favorite, trash, screenshot, metadata, RetroAchievements,
+  save and extra-launch requests send the stable id as well as the position.
+  `tests/test_launch_phases.py`, `tests/test_game_addressing_ratchet.py`.
+- **Removing imported Steam games can be undone.** Remove Steam games used to delete them outright. It now
+  moves each one to the Trash with its position and manual-playlist memberships, so Restore brings it back.
+  The Trash keeps 200 entries, and a removal moves only as many games as it has room for, so entries you already
+  trashed are never evicted. The rest stay in your library and the notice says how many. `tests/test_parity_api.py`.
+- **Plugins trusted before this release need one re-approval.** The trust check now covers file boundaries, which the
+  old checksum did not. Accepting the old checksum would let a package with the same bytes moved between files pass
+  as trusted, so the old record is not honoured. Approve each affected plugin again under Plugins in Settings.
+- **Coalesced writes could roll back a newer commit (sweep).** A snapshot queued before a full
+  commit was flushed after it. The full commit now discards it; a mutation that raises no longer
+  leaves its half-applied change in memory; and a file changed by another process is no longer
+  treated as the last commit. `tests/test_perf_writes.py` (`CoalesceCommitOrderingTests`).
+- **Snapshot rotation could delete the newest recovery point (sweep).** Rotation now prunes in the
+  same order the snapshots are listed, not by modification time, which ties. `tests/test_perf_writes.py`.
+- **Unescaped bridge ids (Linux host).** The page's id is written as one escaped JavaScript literal, so
+  an id with an apostrophe, backslash or line break no longer breaks the call and leaves the page's
+  promise pending. The Windows host received the same line-break escape; that change was checked by
+  reading only, as the Windows toolchain is not available to this release.
+
+### Fixed
+- **Flatpak probes could hang a request (B4).** The status, open, setup and install probes give up after 5 s and
+  count the emulator as not installed. The two Windows `taskkill` calls are bounded too. A gate keeps new
+  unbounded subprocess calls out of the runtime. `tests/test_subprocess_timeouts.py`.
+- **"Played recently" missed offset-stamped dates (B5).** A last-played value written with `Z` or an offset
+  was ignored by the query engine, so `played recently` never matched it. All date rules now compare in local
+  time through one parser. Bulk edit rejects a last-played value it cannot read, instead of storing it and
+  silently hiding the game from every date rule. A restore whose backup carries an offset no longer fails
+  with an internal error. `tests/test_parity_query.py`, `tests/test_platform_compat.py`, `tests/test_catalog.py`.
+- **A Flatpak emulator without folder access was told to reinstall (B6).** The fix for `FLATPAK_FS_DENIED`
+  was a reinstall, which cannot grant access. The Launch Doctor now offers **Grant access**. After you
+  confirm, it runs `flatpak override --user --filesystem=<folder>:ro <app>`, and **Remove access** reverses
+  it until OpenBox restarts. The grant is read-only, and the home folder itself cannot be granted. The exact
+  command is still shown with a Copy button. `tests/test_parity_flatpak_grant.py`, `tests/test_launch_doctor.py`.
+- **Each tab could open three live connections (ADR 0068).** The server accepts 16 at a time, so a busy tab
+  could be refused and lose updates. Each tab now holds one connection that every live feature shares, and a
+  gate fails a second one. `tests/test_frontend_contract.py`.
+- **A search no longer moves the panels below it.** Typing a search added filter chips to a row that grew with them,
+  and the row pushed the drop zone and Play Insights down. The chip row is now its own line under the library title,
+  and its items keep their natural width; long rows scroll sideways (ADR 0070). The sidebar's Game DNA
+  Title and Smart toggle wraps under the search box instead of squeezing it, and its labels are translated. The browser measure reads 0 on every run at 1,000 and 10,000 games; it was 0.099 on the cold run.
+  `scripts/perf_browser.cjs`; docs/development/PERF.md.
+- **Live session updates stopped after the window was hidden (B3).** The session event stream stayed closed
+  for the rest of the session, so the UI fell back to polling. It reopens when the page is shown again and
+  catches up with one poll. The scheduled-rescan stream retries with backoff instead of closing for good.
+- **"Retry failed" had no button (B7).** The media manager's retry, which re-runs only the failed games, is
+  now a button. It is enabled only when a download has failed games.
+- **A failed setting save looked applied (B8).** The cover grouping and list/grid view roll back on a failed
+  save and say why; a failed list sort is reported. Startup storefront imports name the sources that failed,
+  instead of failing silently.
+- **Emulator Health showed buttons that did nothing (B9).** The BIOS button reveals the folder where the host
+  can; the missing core and firmware are stated rather than offered as dead buttons.
+- **Preflight endpoints validated nothing (B10).** Two blocks that claimed to validate launch tokens were
+  no-ops and are removed. Both endpoints reject a body that is not a JSON object.
+- **Sweep fixes.** Across the Python core and handlers: a timestamp check that raised on naive and aware
+  values, a Retry-After that could shorten a wait, a `.env` parser that dropped quotes in secrets, a Steam
+  root lookup with no home directory, plugin checksums that could be made to match, save-root matching,
+  an undo batch id that could escape its folder, and a web server that left a missing icon request hanging.
+  Across the frontend: Big Box platform tabs and empty results, the constellation tooltip, import wizard
+  prompts that could cancel themselves, a duplicate session poll timer, the moments capture for newly added
+  games, insights' negative momentum, and Party Mode's Enter key on buttons. Across the native hosts: dialog
+  paths with `;` or accents, SIGTERM and SIGHUP shutdown, and a launch request on the first Windows
+  instance. This list covers the main areas, not every change.
+
+### Added
+- **Launch readiness on the grid (H1, part).** After a Launch Audit, a game it found blocked shows a
+  "Won't launch" badge and one it found with warnings shows "Needs attention". The badges come from the
+  cached audit and disappear when the library has changed since the audit ran, so a stale report is never
+  shown. Route: `GET /api/v2/launch/audit/status`. `tests/test_launch_audit.py`.
+- **The Launch Audit runs on the library health schedule.** The audit behind the badges runs with the
+  scheduled library check (daily or weekly), so the badges follow the library without a setting of their own.
+  `tests/test_gapfill_rest.py`.
+- **Launch definitions for 18 more systems.** RetroArch cores for Genesis, Master System, Game Gear, Sega CD,
+  PC Engine, Neo Geo Pocket, Atari 2600, 7800, Lynx and Jaguar, WonderSwan, Virtual Boy, C64, MSX and Amiga,
+  and standalone definitions for Dreamcast (Flycast), 3DS (Azahar) and MS-DOS (DOSBox Staging). Core names
+  follow the libretro buildbot and Flathub ids were checked with `flatpak remote-info`. The RetroArch core
+  path is verified on one machine only (ADR 0067). `tests/test_emulators.py` (SystemCoverageDefinitionTests).
+
+- **Group fixes and a scoped relink.** A group of games that share one Flatpak grant or one emulator install has one
+  button for all of them. After a grant, only that group's games are checked again, and the merged result equals a full
+  audit (`POST /api/v2/launch/audit/refresh`). A missing-file group has a "Find moved files" button that opens the repair
+  wizard limited to its games. ADR 0072; `tests/test_launch_audit.py` (RefreshReportTests), `tests/test_parity_repair.py`.
+- **Choose the RetroArch core for one game.** The Launch Doctor's "Choose core" lists the installed cores. The game
+  launches with the one you pick, and "Use the default core" restores the definition's. ADR 0072 and the ADR 0061
+  addendum; `tests/test_emulators.py` (CoreChoiceTests).
+- **The Launch check says when it changes.** When the blocked or warning totals change, one notice reaches the
+  notification feed. `tests/test_launch_audit.py` (TotalsChangeNoticeTests).
+- **Turn the launch badges off.** Settings > Appearance has a switch for the grid's "Won't launch" and "Needs attention"
+  badges. `tests/test_settings_schema.py`.
+- **Disc images ask which system they belong to.** `.bin`, `.cue` and `.iso` files that several systems share wait for
+  a platform choice in the import wizard instead of being guessed. A file cannot import until it has one. ADR 0072;
+  `tests/test_parity_setup_preview.py` (AmbiguousDiscChooserTests).
+- **Definitions use schema 2.** RetroArch definitions name their core once. A definition pack written for a newer
+  schema is refused, with the version it needs. ADR 0061 addendum; `tests/test_parity_emulator_defs_update.py`
+  (SchemaGateTests).
+- **The native window starts in the theme's colour.** Both native hosts paint the active theme's background before the
+  page loads, instead of the dark default. ADR 0071; `tests/test_native_background.py`.
+- **The definition pack is released with each tag.** The release workflow builds, signs and verifies
+  `community-defs.tar.gz` and uploads it to the `emulator-defs` release, with its signature and index. The first
+  signed pack needs a tagged CI run with the release key.
+- **Emulator Health styling uses named classes.** Its inline styles now use classes built from the design tokens, so
+  the look is unchanged. The Media Manager had no inline styles to move.
+
+### Corrections to 1.16.0
+- **"Both flatpak probes have a timeout" (S6)** covered the two Launch Doctor probes. Four other
+  `flatpak info` calls and the Windows `taskkill` calls had no timeout. All are bounded now (B4).
+- **"A failed launch says it failed" (S26)** is true of the event that is sent. The stream that carries
+  it closed when the window was hidden, and nothing reopened it, so a session that ended while the window
+  was hidden was not shown until a reload. The stream reopens on return (B3).
+
+### Documentation and gates
+- New ratchets, each with a measured allowance: unbounded subprocess calls (`tests/test_subprocess_timeouts.py`);
+  game requests that send only a position, and bare `datetime.fromisoformat` calls
+  (`tests/test_game_addressing_ratchet.py`); literal English `notify()` calls (`tests/test_notify_literals.py`).
+  ADR 0066 records them.
+- The full gate now fails when a test run leaves a new untracked entry in the repository root
+  (`scripts/check_tests.py`).
+- ADR 0065 proposes the release runner change (keep the Ubuntu 22.04 glibc floor on a supported runner). It
+  is not yet in effect.
+- ADR 0007 gained an addendum for the coalesced-write lock.
+- `docs/reliability.md` rows 55-67 (the fixes folded into 1.17.0). Rows 60 and 61 are manual checks, with their procedures written there.
+
+### Known limits in 1.16.1
+- RetroArch under Flatpak: checked on one machine with the Flathub build (RetroArch 1.22.2) and the SNES core,
+  where a core in the sandbox's config folder loads (ADR 0067). Other cores and other Flatpak builds are not
+  checked on a real install.
+- Notification text is fully translated, and the gate holds it at zero. Some dialog and button labels are still
+  English. Server notices (the Launch check change, cloud sync) are English too; translating them is a separate change.
+- The search does not move the facet count to a worker. A profile of broad searches at 20,000 games found no facet
+  time among the top functions; the long tasks come from Play Insights and rendering (docs/development/PERF.md).
+- The Linux native host builds here against WebKitGTK 2.52 and its 13 tests pass. The Windows host compiles to an
+  object file here against the real WebView2 headers, but it is not linked and has not run: linking needs MSVC's
+  libraries. The Windows CI job is the real build and the Windows test suite has not been run here (ADR 0071).
+- The release runner change (ADR 0065) takes effect only after a tagged CI dry run. The first signed
+  definition pack needs a tagged CI run with the release key (ADR 0061 addendum).
+- The integrated `perf_bench.py --browser` step measured an empty directory (the 20,000-game write-path folder)
+  and failed with `Waiting for selector .cover`. It now measures the largest library the run generated for the
+  read benchmark. `tests/test_perf_bench.py`.
+- The integrated `perf_bench.py --browser` step measured an empty directory (the 20,000-game write-path folder)
+  and failed with `Waiting for selector .cover`. It now measures the largest library the run generated for the
+  read benchmark. `tests/test_perf_bench.py`.
+
 ## [1.16.0] - 2026-10-05
 
 ### Security

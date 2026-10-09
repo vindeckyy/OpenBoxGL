@@ -1,5 +1,5 @@
 import { $, escapeHtml, formatBytes, defaultBadges, defaultControllerMap, fact, motionMs } from './util.js';
-import { AppState, api, notify, token, nativeCaps, selectedIds, playlistFor, applySidebarVisibility, nativePickFile, nativePickFolder } from './state.js';
+import { AppState, api, notify, token, nativeCaps, selectedIds, playlistFor, applySidebarVisibility, nativePickFile, nativePickFolder, nativeReveal } from './state.js';
 import { refresh, render, renderGrid, openRepairWizard, openDuplicatesDialog } from './library.js';
 import { applyLibraryMusic } from './bigbox.js';
 import { confirmAction, promptInput, closeDialog } from './dialogs.js';
@@ -190,6 +190,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         show_playlist_actions:$('showPlaylistActions').checked,
         dynamic_play_button:$('dynamicPlayButton').checked,
         show_insights:$('showInsights').checked,
+        show_launch_badges:$('showLaunchBadges').checked,
         mood_match_enabled:$('moodMatchEnabled').checked,
         mood_match_bigbox:$('moodMatchBigbox').checked,
         hidden_sidebar_sections:[...document.querySelectorAll('[data-hide-section]:checked')].map(input => input.dataset.hideSection),
@@ -322,6 +323,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         $('showPlaylistActions').checked = AppState.appSettings.show_playlist_actions !== false;
         $('dynamicPlayButton').checked = AppState.appSettings.dynamic_play_button !== false;
         $('showInsights').checked = AppState.appSettings.show_insights !== false;
+        $('showLaunchBadges').checked = AppState.appSettings.show_launch_badges !== false;
         if ($('moodMatchEnabled')) $('moodMatchEnabled').checked = Boolean(AppState.appSettings.mood_match_enabled);
         if ($('moodMatchBigbox')) $('moodMatchBigbox').checked = Boolean(AppState.appSettings.mood_match_bigbox);
         { const hiddenSections = new Set(AppState.appSettings.hidden_sidebar_sections || []);
@@ -412,23 +414,29 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       }
       if (!adapters.length) { container.innerHTML = ''; return; }
       const rows = adapters.slice(0, 8).map(a => {
-        const bios = a.bios_ok ? '<span style="color:var(--brand)">BIOS ✓</span>' : '<span style="color:var(--danger)">BIOS ✗</span>';
-        const firm = a.firmware_ok ? '<span style="color:var(--brand)">FW ✓</span>' : '<span style="color:var(--danger)">FW ✗</span>';
-        const core = a.core_ok ? '<span style="color:var(--brand)">Core ✓</span>' : '<span style="color:var(--danger)">Core ✗</span>';
-        // fix-action buttons inline with tokens --focus/--brand
+        const mark = (ok, label) => `<span class="${ok ? 'emulator-health-ok' : 'emulator-health-missing'}">${label} ${ok ? '✓' : '✗'}</span>`;
+        const bios = mark(a.bios_ok, 'BIOS');
+        const firm = mark(a.firmware_ok, 'FW');
+        const core = mark(a.core_ok, 'Core');
         let fixBtn = '';
+        // Only actions that work get a button. A missing core or firmware file
+        // is stated; the Launch Readiness list names the file and the fix.
         if (!a.bios_ok && a.bios_path) {
-          fixBtn = `<button type="button" class="icon-button" data-bios-path="${escapeHtml(a.bios_path)}" style="border:1px solid var(--focus);color:var(--focus)">Show BIOS folder</button>`;
+          fixBtn = `<button type="button" class="icon-button emulator-health-fix" data-bios-path="${escapeHtml(a.bios_path)}">Show BIOS folder</button>`;
         } else if (!a.core_ok && a.core_path) {
-          fixBtn = `<button type="button" class="icon-button" data-core-path="${escapeHtml(a.core_path)}" style="border:1px solid var(--brand);color:var(--brand)">Choose core</button>`;
+          fixBtn = `<span class="description">Core missing: ${escapeHtml(a.core_path)}</span>`;
         } else if (!a.firmware_ok) {
-          fixBtn = `<button type="button" class="icon-button" style="border:1px solid var(--focus);color:var(--focus)">Firmware help</button>`;
+          fixBtn = `<span class="description">Firmware files are missing.</span>`;
         }
-        return `<div class="emulator-health-row" style="border:1px solid var(--border-card);padding:var(--space-sm);margin:var(--space-xs) 0;display:flex;justify-content:space-between;align-items:center"><div><strong>${escapeHtml(a.label)}</strong> <small>${escapeHtml(a.platform)}</small><div class="health-badges" style="display:flex;gap:var(--gap-tight);font-size:0.85rem">${bios} ${firm} ${core}</div></div><div>${fixBtn}</div></div>`;
+        return `<div class="emulator-health-row"><div><strong>${escapeHtml(a.label)}</strong> <small>${escapeHtml(a.platform)}</small><div class="health-badges emulator-health-badges">${bios} ${firm} ${core}</div></div><div>${fixBtn}</div></div>`;
       }).join('');
-      container.innerHTML = `<div class="section-title">Emulator Health <small style="color:var(--muted)">BIOS SHA1 / firmware / core drift</small></div>${rows}`;
-      container.querySelectorAll('[data-bios-path]').forEach(btn => btn.onclick = () => { const p = btn.dataset.biosPath; if (p) { try { notify('BIOS expected at ' + p); } catch (e) {} } });
-      container.querySelectorAll('[data-core-path]').forEach(btn => btn.onclick = () => { const p = btn.dataset.corePath; notify('Core missing: ' + p + ' — pick alternative core'); });
+      container.innerHTML = `<div class="section-title">Emulator Health <small class="emulator-health-hint">BIOS SHA1 / firmware / core drift</small></div>${rows}`;
+      container.querySelectorAll('[data-bios-path]').forEach(btn => btn.onclick = async () => {
+        const p = btn.dataset.biosPath;
+        if (!p) return;
+        // Reveal the folder where the host can; otherwise say where the file belongs.
+        if (!(await nativeReveal(p))) notify(t('notify.settings.bios_expected', {path: p}));
+      });
     }
     function renderEmulators(emulators) {
       initDefs();
@@ -442,22 +450,22 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       $('installAllEmulators').onclick = async () => {
         try {
           await api('/api/emulators/install-all',{method:'POST',body:'{}'});
-          notify('Installing all available emulators');
+          notify(t('notify.settings.installing_all'));
           watchInstallAll();
         } catch(error) { notify(error.message); }
       };
       $('updateAllEmulators').onclick = async () => {
         try {
           await api('/api/emulators/update-all',{method:'POST',body:'{}'});
-          notify('Updating installed emulators');
+          notify(t('notify.settings.updating_installed'));
           watchInstallAll();
         } catch(error) { notify(error.message); }
       };
       document.querySelectorAll('[data-update-emulator]').forEach(button => button.onclick = async () => {
-        try { await api('/api/emulators/update',{method:'POST',body:JSON.stringify({app_id:button.dataset.updateEmulator})}); notify('Updating emulator'); watchEmulator(button.dataset.updateEmulator); } catch(error) { notify(error.message); }
+        try { await api('/api/emulators/update',{method:'POST',body:JSON.stringify({app_id:button.dataset.updateEmulator})}); notify(t('notify.settings.updating_emulator')); watchEmulator(button.dataset.updateEmulator); } catch(error) { notify(error.message); }
       });
       document.querySelectorAll('[data-open-emulator]').forEach(button => button.onclick = async () => {
-        try { await api('/api/emulators/open',{method:'POST',body:JSON.stringify({app_id:button.dataset.openEmulator})}); notify('Emulator launched'); } catch(error) { notify(error.message); }
+        try { await api('/api/emulators/open',{method:'POST',body:JSON.stringify({app_id:button.dataset.openEmulator})}); notify(t('notify.settings.emulator_launched')); } catch(error) { notify(error.message); }
       });
       document.querySelectorAll('[data-emulator]').forEach(button => button.onclick = async () => {
         const emulator = emulators.find(item => item.app_id === button.dataset.emulator);
@@ -470,7 +478,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         }
         try {
           await api('/api/emulators/install',{method:'POST',body:JSON.stringify({app_id:emulator.app_id})});
-          notify(`Installing ${emulator.name}`);
+          notify(t('notify.settings.installing_emulator', {name: emulator.name}));
           watchEmulator(emulator.app_id);
         } catch(error) { notify(error.message); }
       });
@@ -496,7 +504,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         if (result.install_all?.state === 'done') {
           const profiles = await api('/api/profiles');
           $('profilesText').value = Object.entries(profiles.profiles).sort().map(([platform,command]) => `${platform} = ${command}`).join('\n');
-          notify(`Installed ${result.install_all.installed?.length || 0} emulator${result.install_all.installed?.length === 1 ? '' : 's'}`);
+          notify(t('notify.settings.emulators_installed', {count: result.install_all.installed?.length || 0}));
         } else if (result.install_all?.state === 'error') notify(result.install_all.error || 'Install all failed');
       } catch(error) { notify(error.message); }
     }
@@ -580,7 +588,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         const trustUi = plugin.valid && sandboxUnavailable
           ? (plugin.trusted
             ? `<span class="badge">${escapeHtml(t('plugins.trust_trusted'))}</span> <button type="button" class="icon-button" data-revoke-trust="${escapeHtml(plugin.id)}">${escapeHtml(t('plugins.trust_revoke'))}</button>`
-            : `<button type="button" class="icon-button" data-trust-plugin="${escapeHtml(plugin.id)}" data-trust-name="${escapeHtml(plugin.name)}" data-trust-version="${escapeHtml(plugin.version)}" data-trust-checksum="${escapeHtml(plugin.checksum || '')}">${escapeHtml(t('plugins.trust_run'))}</button>`)
+            : `${plugin.retrust ? `<small>${escapeHtml(t('plugins.trust_retrust'))}</small> ` : ''}<button type="button" class="icon-button" data-trust-plugin="${escapeHtml(plugin.id)}" data-trust-name="${escapeHtml(plugin.name)}" data-trust-version="${escapeHtml(plugin.version)}" data-trust-checksum="${escapeHtml(plugin.checksum || '')}">${escapeHtml(t('plugins.trust_run'))}</button>`)
           : '';
         const settingsUi = plugin.valid && plugin.settings && Object.keys(plugin.settings.properties || {}).length
           ? ` <button type="button" class="icon-button" data-plugin-settings="${escapeHtml(plugin.id)}">${escapeHtml(t('plugins.settings_title'))}</button>`
@@ -605,7 +613,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
           consequence: 'A recoverable copy will be retained.',
         });
         if (!ok) return;
-        try { await api('/api/plugins/remove',{method:'POST',body:JSON.stringify({id:button.dataset.removePlugin})}); await openPlugins(); notify('Plugin removed'); } catch(error) { notify(error.message); }
+        try { await api('/api/plugins/remove',{method:'POST',body:JSON.stringify({id:button.dataset.removePlugin})}); await openPlugins(); notify(t('notify.settings.plugin_removed')); } catch(error) { notify(error.message); }
       });
       document.querySelectorAll('[data-trust-plugin]').forEach(button => button.onclick = () => promptPluginTrust(button));
       document.querySelectorAll('[data-revoke-trust]').forEach(button => button.onclick = async () => {
@@ -808,7 +816,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         AppState.activeFilterPreset = name.trim();
         AppState.activePlaylist = '';
         await refresh();
-        notify('Filter preset saved');
+        notify(t('notify.settings.filter_preset_saved'));
       } catch(error) { notify(error.message); }
     }
     async function saveFilter() {
@@ -819,7 +827,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         await api('/api/playlists',{method:'POST',body:JSON.stringify({name:name.trim(),type:'filter',rules})});
         AppState.activePlaylist = name.trim();
         await refresh();
-        notify('Playlist saved');
+        notify(t('notify.settings.playlist_saved'));
       } catch(error) { notify(error.message); }
     }
     async function saveManualPlaylist(name, members, parent = '', notes = '') {
@@ -828,7 +836,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       try {
         await api('/api/playlists',{method:'POST',body:JSON.stringify({name:cleanName,type:'manual',rules:{},members,parent,notes})});
         await refresh();
-        notify('Manual playlist saved');
+        notify(t('notify.settings.manual_playlist_saved'));
         return true;
       } catch(error) { notify(error.message); return false; }
     }
@@ -841,7 +849,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
     async function addGamesToPlaylist(name, ids) {
       const playlist = playlistFor(name);
       if (!playlist) return;
-      if (playlist.type !== 'manual') return notify('Filter playlists manage membership from their rules.');
+      if (playlist.type !== 'manual') return notify(t('notify.settings.filter_playlist_rules'));
       const members = [...new Set([...(playlist.members || []), ...ids.map(id => AppState.games.find(game => game.id === id)?.game_id || id)])];
       await saveManualPlaylist(name, members, playlist.parent, playlist.notes);
     }
@@ -993,7 +1001,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
             clearBackupPreview();
             await refresh();
             openBackups();
-            notify(`Restored ${(result.restored || []).join(', ')}`);
+            notify(t('notify.settings.restored', {items: (result.restored || []).join(', ')}));
         } catch(error) { notify(error.message); }
     }
 
@@ -1007,7 +1015,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       } catch(error) { notify(error.message); }
     }
     async function createNamedBackup() {
-      try { const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7})}); notify(`Backup saved to ${result.name}`); openBackups(); } catch(error) { notify(error.message); }
+      try { const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7})}); notify(t('notify.settings.backup_saved', {name: result.name})); openBackups(); } catch(error) { notify(error.message); }
     }
     async function deletePlaylist(name) {
       const ok = await confirmAction({
@@ -1019,13 +1027,13 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         await api('/api/playlists/delete',{method:'POST',body:JSON.stringify({name})});
         if (AppState.activePlaylist === name) AppState.activePlaylist = '';
         await refresh();
-        notify('Playlist deleted');
+        notify(t('notify.settings.playlist_deleted'));
       } catch(error) { notify(error.message); }
     }
     async function backup() {
       try {
         const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7})});
-        notify(`Backup saved to ${result.name}`);
+        notify(t('notify.settings.backup_saved', {name: result.name}));
       } catch(error) { notify(error.message); }
     }
     function bulkAction() {
@@ -1033,7 +1041,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         AppState.bulkMode = true;
         selectedIds.clear();
         renderGrid();
-        notify('Select games, then choose Edit Selected');
+        notify(t('notify.settings.select_then_edit'));
       } else if (selectedIds.size) {
         $('bulkForm').reset();
         $('bulkCount').textContent = `${selectedIds.size} game${selectedIds.size === 1 ? '' : 's'} selected. Only supplied values will change.`;
@@ -1046,7 +1054,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
     if ($('addGamescopePreset')) $('addGamescopePreset').onclick = () => {
       const container = $('gamescopeCustomPresets');
       if (!container) return;
-      if (container.querySelectorAll('[data-preset-row]').length >= 16) return notify('At most 16 custom gamescope presets are allowed.');
+      if (container.querySelectorAll('[data-preset-row]').length >= 16) return notify(t('notify.settings.gamescope_limit'));
       container.insertAdjacentHTML('beforeend', gamescopePresetRow({}, container.querySelectorAll('[data-preset-row]').length));
       container.querySelector(`[data-preset-row="${container.querySelectorAll('[data-preset-row]').length - 1}"] .preset-delete`).onclick = event => event.target.closest('[data-preset-row]').remove();
     };
@@ -1057,7 +1065,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         const result = await api('/api/v2/screenscraper/test',{method:'POST',body:'{}'});
         const quota = result.user?.quota || result.user?.requeststoday || '';
         if (status) status.textContent = `Connected${quota ? ` · quota ${quota}` : ''}`;
-        notify('ScreenScraper credentials work');
+        notify(t('notify.settings.screenscraper_ok'));
       } catch(error) {
         if (status) status.textContent = error.message;
         notify(error.message);
@@ -1091,7 +1099,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       const status = $('exportStatus');
       const scope = $('exportScope').value;
       const scopeName = $('exportScopeName').value.trim();
-      if ((scope === 'platform' || scope === 'playlist') && !scopeName) return notify('Enter the platform or playlist name to export.');
+      if ((scope === 'platform' || scope === 'playlist') && !scopeName) return notify(t('notify.settings.enter_export_name'));
       if ($('exportLibrary').disabled) return;
       $('exportLibrary').disabled = true;
       if (status) status.textContent = 'Exporting…';
@@ -1104,7 +1112,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         })});
         const result = await waitForExportJob(queued.job_id);
         if (status) status.textContent = `Exported ${result.count} games to ${result.file}`;
-        notify(`Exported ${result.count} game${result.count === 1 ? '' : 's'}`);
+        notify(t('notify.settings.games_exported', {count: result.count}));
         const link = document.createElement('a');
         link.href = `/api/v2/library/export/download?file=${encodeURIComponent(result.file)}&token=${encodeURIComponent(token)}`;
         link.download = result.file;
@@ -1258,7 +1266,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         }
         $('settingsDialog').close();
         stopControllerBench();
-        notify('Settings saved');
+        notify(t('notify.settings.saved'));
         applyLibraryMusic();
         applySidebarVisibility();
         renderGrid();
@@ -1269,7 +1277,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         const kiosk = await api('/api/v2/arcade/kiosk/pin', {method:'POST', body:JSON.stringify({clear:true, enabled:Boolean($('museumKioskEnabled')?.checked)})});
         AppState.appSettings.museum_kiosk_pin_set = kiosk.pin_set;
         if ($('museumKioskPin')) $('museumKioskPin').value = '';
-        notify('Museum PIN cleared');
+        notify(t('notify.settings.museum_pin_cleared'));
       } catch(error) { notify(error.message); }
     };
     $('settingsDialog').addEventListener('close', stopControllerBench);
@@ -1305,16 +1313,18 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
     };
     $('removeSteamGames').onclick = async () => {
       const ok = await confirmAction({
-        title: 'Remove Steam games',
-        message: 'Remove every imported Steam game from OpenBox?',
-        consequence: 'Game files and media will stay on disk.',
+        title: t('settings.steam_trash_title'),
+        message: t('settings.steam_trash_message'),
+        consequence: t('settings.steam_trash_consequence'),
       });
       if (!ok) return;
       try {
         const result = await api('/api/games/delete-steam',{method:'POST',body:'{}'});
         AppState.selectedId = null;
         await refresh();
-        notify(`${result.removed} imported Steam game${result.removed === 1 ? '' : 's'} removed from library`);
+        if (!result.removed && !result.left) notify(t('notify.settings.steam_none'));
+        else if (result.left) notify(t('notify.settings.steam_trash_overflow', {count: result.left}));
+        else notify(t('notify.settings.steam_trashed', {count: result.removed}));
       } catch(error) { notify(error.message); }
     };
     $('copyDiagnosticLog').onclick = async () => {
@@ -1333,7 +1343,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         copy.select();
         document.execCommand('copy');
         copy.remove();
-        notify('Diagnostic summary copied. Review it before sharing.');
+        notify(t('notify.settings.diagnostic_copied'));
       } catch(error) { notify(error.message); }
     };
     $('syncCloud').onclick = async () => {
@@ -1374,7 +1384,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
     $('installDesktop').onclick = async () => {
       try {
         const result = await api('/api/desktop/install',{method:'POST',body:'{}'});
-        notify(`Desktop shortcut installed at ${result.desktop}`);
+        notify(t('notify.settings.shortcut_installed', {path: result.desktop}));
       } catch(error) { notify(error.message); }
     };
     $('profilesForm').onsubmit = async event => {
@@ -1393,7 +1403,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
     };
     $('themesForm').onsubmit = async event => {
       event.preventDefault();
-      try { await api('/api/themes/select',{method:'POST',body:JSON.stringify({name:$('themeSelect').value,platform:$('themeScope').value})}); $('themesDialog').close(); await loadTheme(true); notify('Theme applied'); } catch(error) { notify(error.message); }
+      try { await api('/api/themes/select',{method:'POST',body:JSON.stringify({name:$('themeSelect').value,platform:$('themeScope').value})}); $('themesDialog').close(); await loadTheme(true); notify(t('notify.settings.theme_applied')); } catch(error) { notify(error.message); }
     };
     $('achievementsForm').onsubmit = async event => {
       event.preventDefault();
@@ -1401,7 +1411,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         const result = await api('/api/ra/settings',{method:'POST',body:JSON.stringify({username:$('raUsername').value,api_key:$('raApiKey').value})});
         $('achievementsDialog').close();
         await refresh();
-        notify(`Connected ${result.username}`);
+        notify(t('notify.settings.connected', {name: result.username}));
       } catch(error) { notify(error.message); }
     };
     $('browsePluginCatalog').onclick = () => { $('pluginTabBrowse').click(); };
@@ -1418,7 +1428,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
     $('importTheme').onclick = async () => {
       const path = await nativePickFile('Enter the absolute path of a CSS theme file.');
       if (!path) return;
-      try { await api('/api/themes/import',{method:'POST',body:JSON.stringify({path})}); await openThemes(); notify('Theme imported'); } catch(error) { notify(error.message); }
+      try { await api('/api/themes/import',{method:'POST',body:JSON.stringify({path})}); await openThemes(); notify(t('notify.settings.theme_imported')); } catch(error) { notify(error.message); }
     };
     $('dedupeButton').onclick = async () => {
       // The merge dialog supersedes the old blind dedupe: it previews the
@@ -1435,14 +1445,14 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         if (mode === 'queue') {
           const result = await api('/api/queue');
           content.innerHTML = `<div class="extras"><button class="primary" type="button" id="queueAdvance">Play next</button><button class="icon-button" type="button" id="queueAdd">Add selected game</button></div><div class="emulator-list">${(result.queue || []).map(item => `<div class="detail-card"><strong>${escapeHtml(item.name)}</strong><p class="description">${escapeHtml(item.platform || '')}${item.note ? ` · ${escapeHtml(item.note)}` : ''}</p><button type="button" class="icon-button" data-queue-remove="${escapeHtml(item.game_id)}">Remove</button></div>`).join('') || '<p class="description">Queue is empty.</p>'}</div>`;
-          $('queueAdvance').onclick = async () => { try { await api('/api/queue',{method:'POST',body:JSON.stringify({action:'advance'})}); notify('Queue advanced'); openFeature('queue'); } catch (error) { notify(error.message); } };
-          $('queueAdd').onclick = async () => { if (AppState.selectedId === null) return notify('Select a game first.'); const game = AppState.games.find(item => item.id === AppState.selectedId); if (!game) return notify('Selected game not found.'); try { await api('/api/queue',{method:'POST',body:JSON.stringify({action:'enqueue',game_ids:[game.game_id]})}); notify('Game added to queue'); openFeature('queue'); } catch (error) { notify(error.message); } };
+          $('queueAdvance').onclick = async () => { try { await api('/api/queue',{method:'POST',body:JSON.stringify({action:'advance'})}); notify(t('notify.settings.queue_advanced')); openFeature('queue'); } catch (error) { notify(error.message); } };
+          $('queueAdd').onclick = async () => { if (AppState.selectedId === null) return notify(t('notify.settings.select_game_first')); const game = AppState.games.find(item => item.id === AppState.selectedId); if (!game) return notify(t('notify.settings.selected_not_found')); try { await api('/api/queue',{method:'POST',body:JSON.stringify({action:'enqueue',game_ids:[game.game_id]})}); notify(t('notify.settings.added_to_queue')); openFeature('queue'); } catch (error) { notify(error.message); } };
           document.querySelectorAll('[data-queue-remove]').forEach(button => button.onclick = async () => { await api('/api/queue',{method:'POST',body:JSON.stringify({action:'remove',game_ids:[button.dataset.queueRemove]})}); openFeature('queue'); });
         } else if (mode === 'tags') {
           const result = await api('/api/tags');
           content.innerHTML = `<p class="description">Select a game, then add or replace its tags.</p><div class="platforms">${(result.tags || []).map(item => `<button type="button" class="platform" data-tag-filter="${escapeHtml(item.tag)}">${escapeHtml(item.tag)} (${item.count})</button>`).join('') || '<span class="description">No tags yet.</span>'}</div><div class="extras"><input id="featureTagInput" placeholder="comma-separated tags"><button type="button" class="primary" id="saveFeatureTags">Save tags on selected game</button></div>`;
           document.querySelectorAll('[data-tag-filter]').forEach(button => button.onclick = () => { $('sidebarSearch').value = `tag:${button.dataset.tagFilter}`; $('featureDialog').close(); render(); });
-          $('saveFeatureTags').onclick = async () => { if (AppState.selectedId === null) return notify('Select a game first.'); const game = AppState.games.find(item => item.id === AppState.selectedId); if (!game) return notify('Selected game not found.'); const tags = $('featureTagInput').value.split(',').map(value => value.trim()).filter(Boolean); try { await api('/api/tags',{method:'POST',body:JSON.stringify({ids:[game.game_id],tags})}); await refresh(); openFeature('tags'); notify('Tags saved'); } catch (error) { notify(error.message); } };
+          $('saveFeatureTags').onclick = async () => { if (AppState.selectedId === null) return notify(t('notify.settings.select_game_first')); const game = AppState.games.find(item => item.id === AppState.selectedId); if (!game) return notify(t('notify.settings.selected_not_found')); const tags = $('featureTagInput').value.split(',').map(value => value.trim()).filter(Boolean); try { await api('/api/tags',{method:'POST',body:JSON.stringify({ids:[game.game_id],tags})}); await refresh(); openFeature('tags'); notify(t('notify.settings.tags_saved')); } catch (error) { notify(error.message); } };
         } else if (mode === 'notifications') {
           const result = await api('/api/notifications');
           content.innerHTML = `<div class="extras"><button type="button" class="primary" id="readNotifications">Mark all read</button><button type="button" class="icon-button" id="clearNotifications">Clear</button></div>${(result.notifications || []).map(item => `<div class="detail-card"><strong>${escapeHtml(item.title)}</strong><p class="description">${escapeHtml(item.body)}<br>${escapeHtml(item.created_at)}</p></div>`).join('') || '<p class="description">No notifications.</p>'}`;
@@ -1452,7 +1462,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
           const result = await api('/api/webhooks');
           const current = (result.webhooks || [])[0] || {};
           content.innerHTML = `<label class="field wide"><span>Webhook URL</span><input id="webhookUrl" value="${escapeHtml(current.url || '')}" placeholder="https://example.com/webhook"></label><label class="field"><span>Secret</span><input id="webhookSecret" type="password" value="${escapeHtml(current.secret || '')}" placeholder="Optional signature secret"></label><label class="field wide"><span>Events (comma separated)</span><input id="webhookEvents" value="${escapeHtml((current.events || ['session.started','session.stopped']).join(', '))}" placeholder="session.started, session.stopped"></label><div class="extras"><button type="button" class="primary" id="saveWebhook">Save webhook</button><button type="button" class="icon-button" id="testWebhook">Test webhook</button></div>`;
-          $('saveWebhook').onclick = async () => { try { await api('/api/webhooks',{method:'POST',body:JSON.stringify({webhooks:[{...current,url:$('webhookUrl').value.trim(),secret:$('webhookSecret').value,events:$('webhookEvents').value.split(',').map(value => value.trim()).filter(Boolean),enabled:true}]})}); notify('Webhook saved'); openFeature('webhooks'); } catch (error) { notify(error.message); } };
+          $('saveWebhook').onclick = async () => { try { await api('/api/webhooks',{method:'POST',body:JSON.stringify({webhooks:[{...current,url:$('webhookUrl').value.trim(),secret:$('webhookSecret').value,events:$('webhookEvents').value.split(',').map(value => value.trim()).filter(Boolean),enabled:true}]})}); notify(t('notify.settings.webhook_saved')); openFeature('webhooks'); } catch (error) { notify(error.message); } };
           $('testWebhook').onclick = async () => { try { const testResult = await api('/api/webhooks/test',{method:'POST',body:JSON.stringify({url:$('webhookUrl').value.trim(),secret:$('webhookSecret').value,events:['session.started']})}); notify(testResult.ok ? 'Webhook test succeeded' : testResult.error); } catch (error) { notify(error.message); } };
         }
         if (!$('featureDialog').open) $('featureDialog').showModal();

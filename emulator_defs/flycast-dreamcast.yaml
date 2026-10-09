@@ -1,0 +1,21 @@
+schema_version: 1
+adapter_id: flycast-dreamcast
+emulator_id: org.flycast.Flycast
+label: Flycast
+platform: Sega Dreamcast
+extensions:
+  - gdi
+  - cdi
+  - chd
+  - cue
+native_exe: flycast
+native_exe_windows: flycast.exe
+flatpak_app_id: org.flycast.Flycast
+startup_args:
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - flycast
+state:
+  kind: none

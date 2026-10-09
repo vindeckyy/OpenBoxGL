@@ -431,6 +431,21 @@ class DeeplinkTests(unittest.TestCase):
         self.assertEqual(code, 0)
         call_script.assert_called_once()
 
+    def test_run_keyboard_launcher_finds_shipped_script(self):
+        # Regression: the helper resolved scripts/ relative to pkg/parity, so
+        # the shipped scripts/openbox-launcher.sh was never found.
+        import parity_deeplinks
+        from parity_deeplinks import run_keyboard_launcher
+
+        repo_root = Path(parity_deeplinks.__file__).resolve().parents[2]
+        expected = repo_root / "scripts" / "openbox-launcher.sh"
+        self.assertTrue(expected.is_file())
+        with mock.patch("shutil.which", return_value="/usr/bin/rofi"), \
+             mock.patch("subprocess.call", return_value=0) as call_script:
+            code = run_keyboard_launcher("/tmp")
+        self.assertEqual(code, 0)
+        self.assertEqual(call_script.call_args[0][0], [str(expected), "rofi"])
+
     def test_run_keyboard_launcher_subprocess_errors(self):
         from parity_deeplinks import run_keyboard_launcher
         import subprocess
@@ -616,9 +631,12 @@ class EmulatorDefinitionTests(unittest.TestCase):
         registry = load_registry()
         nes = next(item for item in registry["adapters"] if item["adapter_id"] == "retroarch-nes")
         snes = next(item for item in registry["adapters"] if item["adapter_id"] == "retroarch-snes")
-        self.assertNotEqual(nes["startup_args"], snes["startup_args"])
-        self.assertIn("fceumm", " ".join(nes["startup_args"]))
-        self.assertIn("snes9x", " ".join(snes["startup_args"]))
+        from pkg.parity.parity_emulator_defs import resolved_startup_args
+
+        nes_args, snes_args = resolved_startup_args(nes), resolved_startup_args(snes)
+        self.assertNotEqual(nes_args, snes_args)
+        self.assertIn("fceumm", " ".join(nes_args))
+        self.assertIn("snes9x", " ".join(snes_args))
 
     def test_iso_returns_multiple_candidates(self):
         candidates = candidates_for_extension("iso")

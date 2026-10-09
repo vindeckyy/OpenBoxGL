@@ -1,0 +1,33 @@
+schema_version: 2
+adapter_id: retroarch-virtualboy
+emulator_id: org.libretro.RetroArch
+label: RetroArch
+platform: Virtual Boy
+extensions:
+  - vb
+  - vboy
+native_exe: retroarch
+native_exe_windows: retroarch.exe
+flatpak_app_id: org.libretro.RetroArch
+retroarch_core: mednafen_vb_libretro.so
+startup_args:
+  - -L
+  - "{retroarch_core}"
+  - "{path}"
+# RetroArch ships its cores next to the executable on Windows;
+# the Linux libretro directory does not exist there. The Flatpak build
+# loads cores from the user's app config directory instead (see
+# pkg/parity/parity_emulator_defs.py::flatpak_core_path).
+startup_args_windows:
+  - -L
+  - '{EmulatorDir}\cores\mednafen_vb_libretro.dll'
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - retroarch
+state:
+  kind: retroarch
+  template: "-s {state_path} --appendconfig {state_config}"
+  capture: "--appendconfig {state_config}"
+  glob: "*.state*"

@@ -39,7 +39,7 @@ class PartyHandlerTest(unittest.TestCase):
         party_module.load_state = lambda: store["state"]
 
         def fake_transact(mutator):
-            mutator(store["state"])
+            return store["state"], mutator(store["state"])
 
         party_module.transact_state = fake_transact
         self.addCleanup(self._restore)
@@ -152,6 +152,26 @@ class PartyHandlerTest(unittest.TestCase):
         h = self.handler()
         h._api_post_api_v2_party_next({})
         self.assertEqual(h.responses[0][1], {"game_id": "g-zzz", "name": "g-zzz", "index": 0})
+
+    def test_next_advances_from_live_index_not_stale_read(self):
+        # Regression: two concurrent "next" presses both read party_index=0
+        # and both wrote 1, losing an advance. The index must come from the
+        # live state inside the transaction.
+        import copy
+
+        self.store["state"]["settings"] = {
+            "party_queue": ["g-1", "g-2", "g-3"],
+            "party_players": 2,
+            "party_index": 0,
+        }
+        stale = copy.deepcopy(self.store["state"])
+        # Another request already advanced the live queue to index 1.
+        self.store["state"]["settings"]["party_index"] = 1
+        party_module.load_state = lambda: stale
+        h = self.handler()
+        h._api_post_api_v2_party_next({})
+        self.assertEqual(h.responses[0][1], {"game_id": "g-3", "name": "Solo Quest", "index": 2})
+        self.assertEqual(self.store["state"]["settings"]["party_index"], 2)
 
 
 if __name__ == "__main__":

@@ -127,6 +127,22 @@ class CrashReportTests(unittest.TestCase):
             payload = json.loads(build_report(directory, include_log=False))
             self.assertEqual(payload["system"]["library_bytes"], 0)
 
+    def test_tokenize_home_paths_covers_escaped_windows_and_macos_paths(self):
+        cases = {
+            "C:\\Users\\bob\\rom.iso": "bob",
+            "'C:\\\\Users\\\\carol\\\\rom.iso'": "carol",
+            "WindowsPath('C:/Users/dave/rom.iso')": "dave",
+            "/Users/erin/Library/rom.iso": "erin",
+        }
+        for raw, name in cases.items():
+            self.assertNotIn(name, tokenize_home_paths(raw), msg=raw)
+
+    def test_tokenize_home_paths_keeps_segment_boundaries(self):
+        with mock.patch("crash_report.os.path.expanduser", return_value="/home/al"):
+            self.assertEqual(tokenize_home_paths("/home/al/x and /home/alice/y"), "~/x and ~/y")
+        with mock.patch("crash_report.os.path.expanduser", return_value="/"):
+            self.assertEqual(tokenize_home_paths("/usr/lib/x"), "/usr/lib/x")
+
     def test_system_facts_shape(self):
         facts = system_facts()
         for key in ("python", "platform", "machine", "version"):

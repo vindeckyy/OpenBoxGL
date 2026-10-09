@@ -1,5 +1,5 @@
 import { $, escapeHtml, fact, HTTP_URL_RE } from './util.js';
-import { api, notify, AppState, token } from './state.js';
+import { api, notify, AppState, token, gameIdOf } from './state.js';
 import { refresh, renderDetails } from './library.js';
 import { confirmAction, promptChoice, openDialog, closeDialog } from './dialogs.js';
 import { t } from './i18n.js';
@@ -208,7 +208,7 @@ function bindMatchRowActions() {
         }
         await refreshPreviewDocument();
         await loadMatchItems();
-        notify('Decision saved');
+        notify(t('notify.metadata.decision_saved'));
       } catch (error) {
         notify(error.message);
       }
@@ -287,7 +287,7 @@ async function bulkAcceptClass(matchClass) {
     database_id: item.proposed?.database_id || null,
   })).filter(entry => entry.database_id);
   if (!items.length) {
-    notify(`No ${matchClass.replace('_', ' ')} items to accept`);
+    notify(t('notify.metadata.none_to_accept', {kind: matchClass.replace('_', ' ')}));
     return;
   }
   // S37: the decisions POST is atomic -- one stale game_id rejects the whole
@@ -296,13 +296,13 @@ async function bulkAcceptClass(matchClass) {
   try {
     await postDecisions(items);
   } catch (error) {
-    notify(`No matches were accepted: ${error.message}`);
+    notify(t('notify.metadata.no_matches_accepted', {message: error.message}));
     await loadMatchItems().catch(() => {});
     return;
   }
   await refreshPreviewDocument();
   await loadMatchItems();
-  notify(`Accepted ${items.length} ${matchClass.replace('_', ' ')} match${items.length === 1 ? '' : 'es'}`);
+  notify(t('notify.metadata.accepted', {count: items.length, kind: matchClass.replace('_', ' ')}));
 }
 
 function collectApplyOptions() {
@@ -330,7 +330,7 @@ async function applyMatchReview() {
     });
     if (!ok) return;
     if (!options.field_allow_list?.length && !options.media_allow_list?.length) {
-      notify('Select at least one field or media type to replace');
+      notify(t('notify.metadata.select_field'));
       return;
     }
   }
@@ -345,7 +345,7 @@ async function applyMatchReview() {
       replace_existing: options.replace_existing,
     }),
   });
-  notify('Metadata apply started');
+  notify(t('notify.metadata.apply_started'));
   await refresh();
 }
 
@@ -378,7 +378,7 @@ async function openMatchReview({preview_id: previewId = '', import_batch_id: imp
   }
 }
 
-async function steamMetadata(id) { try { notify('Downloading Steam metadata and artwork'); await api('/api/metadata/steam',{method:'POST',body:JSON.stringify({id})}); await refresh(); notify('Steam metadata updated'); } catch(error) { notify(error.message); } }
+async function steamMetadata(id) { try { notify(t('notify.metadata.steam_downloading')); await api('/api/metadata/steam',{method:'POST',body:JSON.stringify({id,game_id:gameIdOf(id)})}); await refresh(); notify(t('notify.metadata.steam_updated')); } catch(error) { notify(error.message); } }
 async function openMetadata(game) {
   ensureMatchReviewHosts();
   AppState.metadataGameId = game.id;
@@ -495,20 +495,20 @@ $('searchScreenscraper').onclick = async () => {
         await api('/api/v2/screenscraper/apply',{method:'POST',body:JSON.stringify({id:AppState.games.find(item => item.id === AppState.metadataGameId)?.game_id,scraper_id:Number(button.dataset.applySs),media:['cover','screenshots','fanart','clear_logo']})});
         closeDialog($('metadataDialog'));
         await refresh();
-        notify('ScreenScraper metadata applied');
+        notify(t('notify.metadata.screenscraper_applied'));
       } catch(error) { notify(error.message); }
     });
   } catch(error) { notify(error.message); }
 };
 $('hashMatchScreenscraper').onclick = async () => {
   const game = AppState.games.find(item => item.id === AppState.metadataGameId);
-  if (!game) return notify('Open a game first, then hash-match it.');
-  if (!game.path) return notify('This game has no ROM file to hash.');
+  if (!game) return notify(t('notify.metadata.open_game_first'));
+  if (!game.path) return notify(t('notify.metadata.no_rom_to_hash'));
   try {
     // The apply route hashes the ROM and matches by hash server-side.
     await api('/api/v2/screenscraper/apply',{method:'POST',body:JSON.stringify({id:game.game_id,rom_path:game.path,fields:['description','year','genre','developer','publisher'],media:['cover','screenshots','clear_logo']})});
     closeDialog($('metadataDialog'));
-    notify('ScreenScraper hash-match queued — progress in the Activity Center');
+    notify(t('notify.metadata.screenscraper_hash_queued'));
   } catch(error) { notify(error.message); }
 };
 if ($('searchSteamgrid')) $('searchSteamgrid').onclick = async () => {
@@ -530,10 +530,10 @@ $('searchIgdb').onclick = async () => {
     $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platforms || '')}${item.year ? ` · ${escapeHtml(item.year)}` : ''}</small><p class="description">${escapeHtml(item.summary || '')}</p></div><button type="button" class="primary" data-apply-igdb="${Number(item.id) || ''}">Use</button></div>`).join('') : '<p class="description">No IGDB matches found.</p>';
     document.querySelectorAll('[data-apply-igdb]').forEach(button => button.onclick = async () => {
       try {
-        await api('/api/metadata/igdb/apply',{method:'POST',body:JSON.stringify({id:AppState.metadataGameId,igdb_id:Number(button.dataset.applyIgdb)})});
+        await api('/api/metadata/igdb/apply',{method:'POST',body:JSON.stringify({id:AppState.metadataGameId,game_id:gameIdOf(AppState.metadataGameId),igdb_id:Number(button.dataset.applyIgdb)})});
         closeDialog($('metadataDialog'));
         await refresh();
-        notify('IGDB metadata applied');
+        notify(t('notify.metadata.igdb_applied'));
       } catch(error) { notify(error.message); }
     });
   } catch(error) { notify(error.message); }
@@ -545,8 +545,8 @@ function checkedMediaKinds() {
 async function applyMetadata(databaseId) {
   const media = checkedMediaKinds();
   try {
-    notify('Downloading selected metadata and media');
-    const result = await api('/api/metadata/apply',{method:'POST',body:JSON.stringify({id:AppState.metadataGameId,database_id:databaseId,media,overwrite:$('metadataOverwrite').checked})});
+    notify(t('notify.metadata.downloading_selected'));
+    const result = await api('/api/metadata/apply',{method:'POST',body:JSON.stringify({id:AppState.metadataGameId,game_id:gameIdOf(AppState.metadataGameId),database_id:databaseId,media,overwrite:$('metadataOverwrite').checked})});
     closeDialog($('metadataDialog'));
     await refresh();
     notify((result.notes || []).length ? result.notes.join(' · ') : 'Metadata applied');
@@ -600,7 +600,7 @@ async function applyExactLaunchBoxArt(databaseId, kind, url) {
   if (!media.includes(kind)) media.push(kind);
   notify(t('metadata.artwork_applying'));
   await api('/api/metadata/apply', {method:'POST', body:JSON.stringify({
-    id: AppState.metadataGameId, database_id: Number(databaseId),
+    id: AppState.metadataGameId, game_id: gameIdOf(AppState.metadataGameId), database_id: Number(databaseId),
     media, media_urls: {[kind]: url}, overwrite: $('metadataOverwrite').checked,
   })});
   await refresh();
@@ -668,7 +668,7 @@ async function watchMatchMetadata() {
       await refreshPreviewDocument();
       await loadMatchItems();
       $('autoMatchMetadata').disabled = false;
-      notify('Match review updated');
+      notify(t('notify.metadata.review_updated'));
       return;
     }
     const status = await api('/api/metadata/status');
@@ -680,7 +680,7 @@ async function watchMatchMetadata() {
     $('autoMatchMetadata').disabled = false;
     await refresh();
     renderMetadataStatus(status);
-    notify(`Auto-match finished: ${job.matched || 0} games matched`);
+    notify(t('notify.metadata.auto_match_finished', {count: job.matched || 0}));
   } catch(error) { notify(error.message); $('autoMatchMetadata').disabled = false; }
 }
 async function watchMetadata() {
@@ -688,13 +688,13 @@ async function watchMetadata() {
     const status = await api('/api/metadata/status');
     renderMetadataStatus(status);
     if (status?.job?.state === 'downloading') return setTimeout(watchMetadata, 1500);
-    if (status.ready) { notify('Metadata database ready'); searchMetadata(); }
+    if (status.ready) { notify(t('notify.metadata.database_ready')); searchMetadata(); }
   } catch(error) { notify(error.message); }
 }
 async function loadAchievements(id) {
   try {
     $('achievementContent').innerHTML = '<p class="description">Matching ROM and loading progress...</p>';
-    const result = await api('/api/ra/game',{method:'POST',body:JSON.stringify({id})});
+    const result = await api('/api/ra/game',{method:'POST',body:JSON.stringify({id,game_id:gameIdOf(id)})});
     await refresh();
     if ($('achievementContent')) {
       $('achievementContent').innerHTML = `<p class="description">${result.earned} of ${result.total} earned · ${escapeHtml(result.completion)}${result.earned_hardcore ? ` · ${result.earned_hardcore} hardcore` : ''}${result.beaten ? ` · beaten ${result.beaten}` : ''}${result.mastered ? ` · mastered ${result.mastered}` : ''}${result.motivation ? ` · ${escapeHtml(result.motivation)}` : ''}</p>${(result.achievements || []).map(item => `<div class="achievement"><img src="/api/ra/badge?name=${encodeURIComponent(item.badge)}&locked=${item.earned ? 0 : 1}&token=${encodeURIComponent(token)}" alt="" loading="lazy" decoding="async"><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.description)}</small></div><span>${item.points} pts${item.hardcore ? ' ★' : ''}</span></div>`).join('')}`;

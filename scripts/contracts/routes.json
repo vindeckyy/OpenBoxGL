@@ -1171,7 +1171,43 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v2/launch/audit/refresh"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v2/launch/audit/scan"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/launch/audit/status"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/launch/core"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/launch/cores"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/launch/grant"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/launch/grant/undo"
     },
     {
       "methods": [

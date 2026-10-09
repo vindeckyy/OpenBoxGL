@@ -1,8 +1,7 @@
 {
   "meta": {
     "name": "French",
-    "native": "Français",
-    "rtl": false
+    "native": "Français"
   },
   "common": {
     "save": "Enregistrer",
@@ -203,7 +202,27 @@
     "no_match_title": "Aucun jeu ne correspond à cette vue",
     "no_match_hint": "Modifiez les filtres actifs ou relancez la recherche dans la bibliothèque.",
     "clear_filters": "Effacer les filtres",
-    "query_truncated": "{shown} correspondances affichées sur {total}. Affinez la recherche pour voir le reste."
+    "query_truncated": "{shown} correspondances affichées sur {total}. Affinez la recherche pour voir le reste.",
+    "grant": {
+      "title": "Donner accès à ce dossier à l’émulateur ?",
+      "consequence": "L’émulateur pourra lire les fichiers de ce dossier. L’annulation supprime l’accès.",
+      "confirm": "Accorder l’accès",
+      "button": "Accorder l’accès à ce dossier",
+      "copy": "Copier la commande",
+      "granted": "Accès accordé à {folder}. L'émulateur peut lire les jeux de ce dossier, en lecture seule.",
+      "revoke": "Retirer l'accès",
+      "revoke_title": "Retirer l'accès au dossier ?",
+      "revoke_consequence": "L'émulateur perd l'accès à ce dossier. Les fichiers de jeu ne sont pas modifiés."
+    },
+    "core": {
+      "title": "Choisir un cœur RetroArch",
+      "loading": "Recherche des cœurs installés…",
+      "intro": "{core} n'est pas installé. Choisissez un cœur installé pour ce jeu.",
+      "none": "Aucun cœur RetroArch trouvé dans les dossiers habituels.",
+      "default": "Utiliser le cœur par défaut",
+      "location_system": "dossier système",
+      "location_flatpak": "application Flatpak"
+    }
   },
   "dialog": {
     "add_game": "Ajouter un jeu",
@@ -342,7 +361,8 @@
     "browse_installed": "Installé",
     "browse_back": "Retour aux plugins",
     "browse_empty": "Aucun plugin communautaire pour le moment.",
-    "cmd_done": "Commande du plugin terminée"
+    "cmd_done": "Commande du plugin terminée",
+    "trust_retrust": "À approuver à nouveau : ce plugin a été approuvé avant la mise à jour."
   },
   "metadata": {
     "title": "Base de données de jeux LaunchBox",
@@ -741,7 +761,9 @@
     "title": "Centre de configuration de la bibliothèque",
     "close": "Fermer le centre de configuration de la bibliothèque",
     "description": "La configuration guidée de la bibliothèque se charge ici.",
-    "workflow": "Flux de configuration"
+    "workflow": "Flux de configuration",
+    "platform_label": "Plateforme",
+    "platform_choose": "Choisir une plateforme"
   },
   "feature": {
     "title": "OpenBox",
@@ -914,7 +936,11 @@
     "about_data_dir": "Dossier de données",
     "about_host": "Fenêtre",
     "about_host_native": "Fenêtre native (WebView)",
-    "about_host_browser": "Onglet du navigateur. La fenêtre native n'est pas lancée, ce qui est un mode d'utilisation pris en charge."
+    "about_host_browser": "Onglet du navigateur. La fenêtre native n'est pas lancée, ce qui est un mode d'utilisation pris en charge.",
+    "steam_trash_title": "Déplacer les jeux Steam vers la corbeille",
+    "steam_trash_message": "Déplacer tous les jeux Steam importés vers la corbeille ?",
+    "steam_trash_consequence": "Vous pouvez les restaurer depuis la corbeille. Les fichiers de jeu et les médias restent sur le disque.",
+    "show_launch_badges": "Afficher les badges de préparation au lancement dans la grille"
   },
   "picker": {
     "title": "À quoi devrais-je jouer ?",
@@ -1341,7 +1367,8 @@
     "skipped": "{count} chemins ont changé depuis l’analyse et ont été ignorés",
     "skipped_one": "{count} chemin a changé depuis l’analyse et a été ignoré",
     "kind_game": "Fichier de jeu",
-    "kind_media": "Média"
+    "kind_media": "Média",
+    "scoped": "Seuls les jeux de ce groupe de vérification de lancement sont affichés."
   },
   "duplicates": {
     "title": "Jeux en double",
@@ -1452,6 +1479,175 @@
     "install_message": "Installer {app} avec Flatpak ? Tous les jeux de ce groupe en dépendent.",
     "install_started": "Installation de {app}. Relancez la vérification une fois terminée.",
     "queued": "Vérification de lancement en file d'attente.",
-    "game_gone": "Ce jeu n'est plus dans la bibliothèque."
+    "game_gone": "Ce jeu n'est plus dans la bibliothèque.",
+    "install_group": "Installer {app} pour {count} jeux",
+    "install_group_one": "Installer {app} pour {count} jeu",
+    "grant_group": "Donner l'accès pour {count} jeux",
+    "grant_group_one": "Donner l'accès pour {count} jeu",
+    "badge_blocked": "Ne se lancera pas",
+    "badge_warning": "Demande une attention",
+    "find_moved": "Chercher les fichiers déplacés de {count} jeux",
+    "find_moved_one": "Chercher les fichiers déplacés de {count} jeu"
+  },
+  "notify": {
+    "activity": {
+      "cancel_requested": "Annulation demandée",
+      "retry_queued": "Nouvelle tentative en file d’attente",
+      "resume_queued": "Reprise en file d’attente"
+    },
+    "clips": {
+      "reel_queued": "Montage mis en file dans l’activité",
+      "id_required": "Un identifiant de clip est requis.",
+      "not_in_library": "Ce clip n’est plus dans la bibliothèque locale."
+    },
+    "state": {
+      "error_copied": "Détails de l’erreur copiés",
+      "copy_failed": "Copie impossible : presse-papiers indisponible"
+    },
+    "bigbox": {
+      "no_matches": "Aucun jeu ne correspond à ces filtres de Big Box"
+    },
+    "imports": {
+      "auto_failed": "Échec de l’importation automatique pour : {sources}"
+    },
+    "sessions": {
+      "backup_created": "Créé : {name}",
+      "save_restored": "Sauvegarde restaurée",
+      "save_location_added": "Emplacement de sauvegarde ajouté"
+    },
+    "media": {
+      "bulk_finished": "Téléchargement groupé des médias terminé",
+      "screenshot_saved": "Capture enregistrée dans {path}",
+      "select_platform_game": "Sélectionnez d’abord un jeu avec une plateforme",
+      "bezels_downloaded": "Cadres téléchargés dans {path}"
+    },
+    "storefront": {
+      "settings_saved": "Paramètres des boutiques enregistrés",
+      "installing": "Installation de {name} depuis Gameyfin...",
+      "ludusavi_finished": "Ludusavi {action} terminé",
+      "ludusavi_issues": "Ludusavi {action} a signalé des problèmes",
+      "hoard_finished": "Hoard {action} terminé"
+    },
+    "app": {
+      "museum_pin_rejected": "Le code PIN du musée n’a pas été accepté.",
+      "no_media_packs": "Aucun pack média fourni n’est disponible",
+      "pack_applied": "{name} appliqué",
+      "gameyfin_ok": "Connexion à Gameyfin réussie",
+      "opened": "Ouvert : {path}",
+      "emulator_configs_updated": "{count} fichiers de configuration d’émulateur mis à jour",
+      "emulator_configs_updated_one": "{count} fichier de configuration d’émulateur mis à jour",
+      "duplicates_removed": "{count} fichiers en double supprimés",
+      "duplicates_removed_one": "{count} fichier en double supprimé",
+      "save_scan_queued": "Analyse des chemins de sauvegarde en file : progression et résultats dans le centre d’activité",
+      "stats_reset": "Statistiques de jeu réinitialisées pour {name}",
+      "enter_rom_folder": "Saisissez d’abord un chemin de dossier de ROM.",
+      "added_of_scanned": "{added} jeux sur {found} analysés ajoutés"
+    },
+    "setup": {
+      "emulator_choice_failed": "Choix de l’émulateur non enregistré : {message}",
+      "preflight_failed": "La vérification préalable n’a pas pu s’exécuter : {message}",
+      "flatpak_failed": "Échec de l’installation Flatpak : {message}",
+      "metadata_sync_failed": "Échec de la synchronisation des métadonnées : {message}",
+      "autoscrape_save_failed": "Impossible d’enregistrer la préférence de scraping automatique : {message}",
+      "autoscrape_failed": "Échec du scraping automatique des métadonnées : {message}",
+      "final_summary_failed": "Échec du résumé final : {message}",
+      "welcome_save_failed": "Impossible d’enregistrer welcome_completed : {message}"
+    },
+    "library": {
+      "preset_updated": "Préréglage de filtre mis à jour",
+      "collection_saved": "Collection « {name} » enregistrée",
+      "preset_deleted": "Préréglage supprimé",
+      "selection_mode": "Mode de sélection activé. Utilisez la modification en lot pour appliquer les changements.",
+      "shelf_ready": "L’entrée de l’étagère est prête à être lancée",
+      "high_scores_exported": "{count} fichiers de scores exportés",
+      "high_scores_exported_one": "{count} fichier de scores exporté",
+      "steam_trailer_downloaded": "Bande-annonce Steam téléchargée",
+      "gog_media_downloaded": "Médias GOG téléchargés",
+      "installing": "Installation de {app}",
+      "bios_path": "Chemin du BIOS : {path}",
+      "no_path_to_reveal": "Aucun chemin à afficher",
+      "game_not_found": "Jeu introuvable",
+      "platform_set": "Plateforme définie sur {platform}",
+      "open_profiles": "Ouvrez les profils d’émulateur pour choisir",
+      "command_copied": "Commande copiée. Exécutez-la dans un terminal, puis vérifiez à nouveau ce jeu.",
+      "unknown_tokens": "Jetons inconnus : {tokens}. Valides : {path} {name} {platform} etc. Voir la documentation de launch_tokens.",
+      "collection_deleted": "Collection supprimée",
+      "platform_docs_saved": "Documents de la plateforme enregistrés",
+      "progress_set": "Progression définie sur {progress}",
+      "not_set": "Non défini",
+      "opened": "Ouvert",
+      "access_granted": "Accès accordé. La vérification a été relancée.",
+      "access_removed": "Accès au dossier retiré",
+      "core_set": "Ce jeu utilise maintenant {core}.",
+      "core_default": "Ce jeu utilise de nouveau le cœur par défaut."
+    },
+    "metadata": {
+      "decision_saved": "Décision enregistrée",
+      "none_to_accept": "Aucun élément « {kind} » à accepter",
+      "no_matches_accepted": "Aucune correspondance n’a été acceptée : {message}",
+      "accepted": "{count} correspondances « {kind} » acceptées",
+      "accepted_one": "{count} correspondance « {kind} » acceptée",
+      "select_field": "Sélectionnez au moins un champ ou un type de média à remplacer",
+      "apply_started": "Application des métadonnées lancée",
+      "steam_downloading": "Téléchargement des métadonnées et illustrations Steam",
+      "steam_updated": "Métadonnées Steam mises à jour",
+      "screenscraper_applied": "Métadonnées ScreenScraper appliquées",
+      "open_game_first": "Ouvrez d’abord un jeu, puis faites une correspondance par hachage.",
+      "no_rom_to_hash": "Ce jeu n’a pas de fichier ROM à hacher.",
+      "screenscraper_hash_queued": "Correspondance par hachage ScreenScraper en file : progression dans le centre d’activité",
+      "igdb_applied": "Métadonnées IGDB appliquées",
+      "downloading_selected": "Téléchargement des métadonnées et médias sélectionnés",
+      "review_updated": "Révision des correspondances mise à jour",
+      "auto_match_finished": "Correspondance automatique terminée : {count} jeux trouvés",
+      "auto_match_finished_one": "Correspondance automatique terminée : {count} jeu trouvé",
+      "database_ready": "Base de métadonnées prête"
+    },
+    "settings": {
+      "bios_expected": "BIOS attendu dans {path}",
+      "installing_all": "Installation de tous les émulateurs disponibles",
+      "updating_installed": "Mise à jour des émulateurs installés",
+      "updating_emulator": "Mise à jour de l’émulateur",
+      "emulator_launched": "Émulateur lancé",
+      "installing_emulator": "Installation de {name}",
+      "emulators_installed": "{count} émulateurs installés",
+      "emulators_installed_one": "{count} émulateur installé",
+      "plugin_removed": "Extension supprimée",
+      "filter_preset_saved": "Préréglage de filtre enregistré",
+      "playlist_saved": "Playlist enregistrée",
+      "manual_playlist_saved": "Playlist manuelle enregistrée",
+      "filter_playlist_rules": "Les playlists filtrées gèrent leurs membres selon leurs règles.",
+      "restored": "Restauré : {items}",
+      "backup_saved": "Sauvegarde enregistrée dans {name}",
+      "playlist_deleted": "Playlist supprimée",
+      "select_then_edit": "Sélectionnez des jeux, puis choisissez « Modifier la sélection »",
+      "gamescope_limit": "Pas plus de 16 préréglages gamescope personnalisés sont autorisés.",
+      "screenscraper_ok": "Les identifiants ScreenScraper fonctionnent",
+      "enter_export_name": "Saisissez le nom de la plateforme ou de la playlist à exporter.",
+      "games_exported": "{count} jeux exportés",
+      "games_exported_one": "{count} jeu exporté",
+      "saved": "Paramètres enregistrés",
+      "museum_pin_cleared": "Code PIN du musée effacé",
+      "diagnostic_copied": "Résumé de diagnostic copié. Vérifiez-le avant de le partager.",
+      "shortcut_installed": "Raccourci du bureau installé dans {path}",
+      "theme_applied": "Thème appliqué",
+      "connected": "Connecté en tant que {name}",
+      "theme_imported": "Thème importé",
+      "queue_advanced": "File avancée",
+      "select_game_first": "Sélectionnez d’abord un jeu.",
+      "selected_not_found": "Le jeu sélectionné est introuvable.",
+      "added_to_queue": "Jeu ajouté à la file",
+      "tags_saved": "Étiquettes enregistrées",
+      "webhook_saved": "Webhook enregistré",
+      "steam_trashed_one": "{count} jeu Steam importé déplacé vers la corbeille",
+      "steam_trashed": "{count} jeux Steam importés déplacés vers la corbeille",
+      "steam_none": "Aucun jeu Steam importé à retirer",
+      "steam_trash_overflow": "{count} jeux Steam importés restent dans votre bibliothèque car la corbeille est pleine. Videz la corbeille pour les déplacer.",
+      "steam_trash_overflow_one": "{count} jeu Steam importé reste dans votre bibliothèque car la corbeille est pleine. Videz la corbeille pour le déplacer."
+    },
+    "launch_audit": {
+      "grant_group_done": "Accès accordé pour {count} jeux. Ils ont été vérifiés à nouveau.",
+      "grant_group_done_one": "Accès accordé pour {count} jeu. Il a été vérifié à nouveau.",
+      "grant_recheck_needed": "Accès accordé. Relancez la vérification pour actualiser cette liste."
+    }
   }
 }

@@ -243,5 +243,39 @@ class RepairRouteTests(unittest.TestCase):
             _handler()._api_post_api_v2_library_repair_apply({"folder": str(self.folder), "selection": "nope"})
 
 
+class RepairScopeTests(unittest.TestCase):
+    """"Find moved files" from one Launch Check group: only that group's games are scanned."""
+
+    def test_the_scan_is_limited_to_the_given_games(self):
+        from pkg.parity.parity_repair import scan_missing_paths
+
+        state = {"games": [
+            {"game_id": "g1", "name": "One", "path": "/nope/one.iso"},
+            {"game_id": "g2", "name": "Two", "path": "/nope/two.iso"},
+        ]}
+        everything = scan_missing_paths(state, include_media=False, is_file=lambda path: False)
+        scoped = scan_missing_paths(state, include_media=False, is_file=lambda path: False, game_ids={"g2"})
+        self.assertEqual([item["game_id"] for item in everything["items"]], ["g1", "g2"])
+        self.assertEqual([item["game_id"] for item in scoped["items"]], ["g2"])
+
+    def test_a_group_resolves_to_its_members_and_a_missing_group_is_refused(self):
+        from unittest import mock
+
+        from api_errors import BadRequest
+        from handlers.library import _repair_scope
+        from pkg.parity import parity_launch_audit as audit
+
+        with tempfile.TemporaryDirectory() as tmp:
+            report = {"groups": [{"key": "PATH_MISSING|none|", "games": [
+                {"game_id": "g1"}, {"game_id": "g2"}, {"game_id": ""},
+            ]}]}
+            audit.store_audit(tmp, report)
+            with mock.patch("openbox.DATA", Path(tmp) / "library.json"):
+                self.assertIsNone(_repair_scope(""))
+                self.assertEqual(_repair_scope("PATH_MISSING|none|"), {"g1", "g2"})
+                with self.assertRaises(BadRequest):
+                    _repair_scope("GONE|none|")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

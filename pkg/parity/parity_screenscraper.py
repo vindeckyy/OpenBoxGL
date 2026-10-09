@@ -391,8 +391,12 @@ def _normalize_jeu(payload):
     title_screen = [entry for entry in media_entries if entry["type"] == "ss"]
     media_entries.extend({**entry, "kind": "screenshots"} for entry in title_screen)
     scraper_id = jeu.get("id")
+    # api2 JSON is converted from XML, so ids arrive as digit strings ("3");
+    # dropping them to None made every hash match tier "none".
+    if isinstance(scraper_id, str) and scraper_id.strip().isdigit():
+        scraper_id = int(scraper_id.strip())
     return {
-        "id": scraper_id if isinstance(scraper_id, int) else None,
+        "id": scraper_id if isinstance(scraper_id, int) and not isinstance(scraper_id, bool) else None,
         "name": _text(jeu.get("nom")),
         "description": _text(jeu.get("synopsis")),
         "year": _text(jeu.get("year")),

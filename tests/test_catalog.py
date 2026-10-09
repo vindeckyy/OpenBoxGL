@@ -81,6 +81,42 @@ def _f4_backlog_checks():
     print("catalog f4 backlog checks: ok")
 
 
+def _progress_automation_offset_timestamp_check():
+    # A last_played value carrying a UTC offset (bulk edit or import) must not
+    # crash session-end bookkeeping with naive/aware TypeError.
+    from datetime import datetime
+    from catalog import apply_progress_automation
+    settings = {"progress_automation_enabled": True, "progress_automation_idle_days": 3}
+    game = {"last_played": "2024-01-01T00:00:00+00:00", "progress": "Playing"}
+    apply_progress_automation(game, settings, now=datetime(2024, 2, 1))
+    assert game["progress"] == "Paused"
+    game = {"last_played": "2024-01-01T00:00:00+00:00", "progress": "Playing"}
+    apply_progress_automation(game, settings, now=datetime(2024, 1, 2).astimezone())
+    assert game["progress"] == "Playing"
+    print("catalog offset timestamp check: ok")
+
+
+def _bulk_last_played_must_be_a_date():
+    # A typo used to be stored as-is, and every date rule then skipped the game.
+    games = [{"game_id": "g1", "name": "A", "last_played": ""}]
+    bulk_update(games, ["g1"], {"last_played": "2026-08-18"})
+    assert games[0]["last_played"] == "2026-08-18"
+    bulk_update(games, ["g1"], {"last_played": "2026-08-18T21:30:00Z"})
+    assert games[0]["last_played"] == "2026-08-18T21:30:00Z"
+    bulk_update(games, ["g1"], {"last_played": ""})
+    assert games[0]["last_played"] == ""
+    try:
+        bulk_update(games, ["g1"], {"last_played": "yesterday"})
+    except ValueError as error:
+        assert "last_played" in str(error)
+    else:
+        raise AssertionError("an unparseable last_played must be rejected")
+    assert games[0]["last_played"] == "", "a rejected value must not be stored"
+    print("catalog last_played validation: ok")
+
+
 if __name__ == "__main__":
     main()
     _f4_backlog_checks()
+    _progress_automation_offset_timestamp_check()
+    _bulk_last_played_must_be_a_date()

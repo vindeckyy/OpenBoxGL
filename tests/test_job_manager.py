@@ -1226,6 +1226,25 @@ class JobsAdapterTests(unittest.TestCase):
         status, _payload = self.request("POST", "/api/v2/jobs/cancel", {"job_id": "missing"})
         self.assertEqual(status, 404)
 
+    def test_v2_retry_unknown_job_without_input(self):
+        # Regression: the plain retry path reported an unknown id as 409.
+        status, _payload = self.request("POST", "/api/v2/jobs/retry", {"job_id": "missing"})
+        self.assertEqual(status, 404)
+
+    def test_v2_retry_with_input_refuses_running_job(self):
+        # Regression: supplying "input" bypassed the can_retry policy and
+        # duplicated a still-running job.
+        service = get_operation_service()
+        created = service.create(operation_type="setup.scan", title="Scan")
+        service.mark_running(created["job_id"])
+        before = len(service.list_jobs(limit=100)["jobs"])
+        status, payload = self.request(
+            "POST", "/api/v2/jobs/retry", {"job_id": created["job_id"], "input": {"x": 1}},
+        )
+        self.assertEqual(status, 409)
+        self.assertEqual(payload["code"], "JOB_STATE_CONFLICT")
+        self.assertEqual(len(service.list_jobs(limit=100)["jobs"]), before)
+
     def test_restore_library_backup_wraps_operation(self):
         from openbox import DATA
 

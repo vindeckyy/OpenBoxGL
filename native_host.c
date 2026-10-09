@@ -604,6 +604,36 @@ json_escape_string(const char *value)
     return g_string_free(escaped, FALSE);
 }
 
+/*
+ * Build the dialog bridge result. The path is JSON-escaped (UTF-8 kept
+ * verbatim, unlike g_strescape's octal escapes, which JS decodes byte by byte
+ * into mojibake) and ';' and '/' become \u escapes so a legal filename such
+ * as "a;b" never trips resolve_bridge's payload guard and
+ * leaves the page's promise unresolved (a name ending in '*' followed by
+ * the next path separator would otherwise look like a comment terminator).
+ */
+static char *
+dialog_result_json(const char *filename)
+{
+    if (!filename || !g_utf8_validate(filename, -1, NULL)) {
+        return g_strdup("{\"path\":null,\"cancelled\":false}");
+    }
+    char *escaped = json_escape_string(filename);
+    GString *safe = g_string_new("{\"path\":\"");
+    for (const char *cursor = escaped; *cursor != '\0'; cursor++) {
+        if (*cursor == ';') {
+            g_string_append(safe, "\\u003b");
+        } else if (*cursor == '/') {
+            g_string_append(safe, "\\u002f");
+        } else {
+            g_string_append_c(safe, *cursor);
+        }
+    }
+    g_string_append(safe, "\",\"cancelled\":false}");
+    g_free(escaped);
+    return g_string_free(safe, FALSE);
+}
+
 static gboolean
 write_all_fd(int fd, const char *data, gsize length)
 {
@@ -1182,6 +1212,30 @@ evaluate(WebKitWebView *view, const char *script)
     webkit_web_view_evaluate_javascript(view, script, -1, NULL, NULL, NULL, NULL, NULL);
 }
 
+/*
+ * Escape a page-supplied id for a single-quoted JS string literal. g_strescape
+ * leaves an apostrophe alone, so an id containing one ended the literal early
+ * and the page's promise never resolved. Line breaks are escaped too, since a
+ * raw one is a syntax error inside a single-quoted literal.
+ */
+static char *
+js_single_quote_escape(const char *value)
+{
+    GString *escaped = g_string_new(NULL);
+    for (const unsigned char *cursor = (const unsigned char *)(value ? value : "");
+         *cursor != '\0'; cursor++) {
+        if (*cursor == '\'' || *cursor == '\\') {
+            g_string_append_c(escaped, '\\');
+            g_string_append_c(escaped, (char)*cursor);
+        } else if (*cursor < 0x20) {
+            g_string_append_printf(escaped, "\\x%02x", *cursor);
+        } else {
+            g_string_append_c(escaped, (char)*cursor);
+        }
+    }
+    return g_string_free(escaped, FALSE);
+}
+
 static void
 resolve_bridge(WebKitWebView *view, const char *id, const char *result_json)
 {
@@ -1198,7 +1252,7 @@ resolve_bridge(WebKitWebView *view, const char *id, const char *result_json)
         return;
     }
     /* result_json is valid JS verbatim; only id needs escaping. */
-    char *escaped_id = g_strescape(id, NULL);
+    char *escaped_id = js_single_quote_escape(id);
     char *script = g_strdup_printf(
         "window.__openboxResolve && window.__openboxResolve('%s', %s);",
         escaped_id, result_json);
@@ -1222,6 +1276,7 @@ handle_dialog(WebKitWebView *view, const char *id, JSCValue *args)
         }
         g_free(kind_str);
     }
+    g_clear_object(&kind);
 
     GtkFileChooserNative *dialog = gtk_file_chooser_native_new(
         "OpenBox", GTK_WINDOW(main_window), action, "Select", "Cancel");
@@ -1235,16 +1290,8 @@ handle_dialog(WebKitWebView *view, const char *id, JSCValue *args)
     char *result_json = NULL;
     if (result == GTK_RESPONSE_ACCEPT) {
         char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-        if (filename) {
-            char *escaped = g_strescape(filename, NULL);
-            char *quoted = g_strdup_printf("\"%s\"", escaped);
-            result_json = g_strdup_printf("{\"path\":%s,\"cancelled\":false}", quoted);
-            g_free(quoted);
-            g_free(escaped);
-            g_free(filename);
-        } else {
-            result_json = g_strdup("{\"path\":null,\"cancelled\":false}");
-        }
+        result_json = dialog_result_json(filename);
+        g_free(filename);
     } else {
         result_json = g_strdup("{\"path\":null,\"cancelled\":true}");
     }
@@ -1284,6 +1331,7 @@ handle_open_external(WebKitWebView *view, const char *id, JSCValue *args)
 {
     JSCValue *target = jsc_value_object_get_property(args, "target");
     char *target_str = target ? jsc_value_to_string(target) : NULL;
+    g_clear_object(&target);
     gboolean ok = FALSE;
     if (target_str) {
         if (!uri_scheme_allowed(target_str)) {
@@ -1318,6 +1366,7 @@ handle_reveal(WebKitWebView *view, const char *id, JSCValue *args)
 {
     JSCValue *path = jsc_value_object_get_property(args, "path");
     char *path_str = path ? jsc_value_to_string(path) : NULL;
+    g_clear_object(&path);
     const char *home = g_get_home_dir();
     gboolean ok = FALSE;
     if (path_str) {
@@ -1357,6 +1406,16 @@ handle_window(WebKitWebView *view, const char *id, JSCValue *args)
 {
     JSCValue *action = jsc_value_object_get_property(args, "action");
     char *action_str = action ? jsc_value_to_string(action) : NULL;
+    g_clear_object(&action);
+    if (action_str && strcmp(action_str, "close") == 0) {
+        /* Resolve first: destroying the window finalizes this web view. */
+        resolve_bridge(view, id, "{\"ok\":true}");
+        g_free(action_str);
+        if (main_window) {
+            gtk_widget_destroy(main_window);
+        }
+        return;
+    }
     if (action_str) {
         if (strcmp(action_str, "minimize") == 0) {
             gtk_window_iconify(GTK_WINDOW(main_window));
@@ -1370,8 +1429,6 @@ handle_window(WebKitWebView *view, const char *id, JSCValue *args)
             gtk_window_fullscreen(GTK_WINDOW(main_window));
         } else if (strcmp(action_str, "unset-fullscreen") == 0) {
             gtk_window_unfullscreen(GTK_WINDOW(main_window));
-        } else if (strcmp(action_str, "close") == 0) {
-            gtk_widget_destroy(main_window);
         }
     }
     resolve_bridge(view, id, "{\"ok\":true}");
@@ -1469,6 +1526,8 @@ message_received(WebKitUserContentManager *mgr,
     JSCValue *args_val = jsc_value_object_get_property(value, "args");
     char *id = jsc_value_to_string(id_val);
     char *method = jsc_value_to_string(method_val);
+    g_clear_object(&id_val);
+    g_clear_object(&method_val);
 
     if (!is_expected_origin(view)) {
         /* Security: only the exact booted app origin may drive the bridge. */
@@ -1478,6 +1537,7 @@ message_received(WebKitUserContentManager *mgr,
         }
         g_free(id);
         g_free(method);
+        g_clear_object(&args_val);
         return;
     }
 
@@ -1494,6 +1554,7 @@ message_received(WebKitUserContentManager *mgr,
             resolve_bridge(view, id, "{\"ok\":false}");
         }
     }
+    g_clear_object(&args_val);
     g_free(id);
     g_free(method);
 }
@@ -1678,19 +1739,54 @@ on_close_request(GtkWidget *widget, gpointer user_data)
     save_geometry();
     stop_server();
     release_single_instance();
+    /* The window is being destroyed; nothing may touch it afterwards. */
+    main_window = NULL;
+    main_view = NULL;
     gtk_main_quit();
 }
 static gboolean
 on_signal(gpointer user_data)
 {
     (void)user_data;
+    /* SIGINT/SIGTERM/SIGHUP may all be pending in one main-loop pass; the
+     * window must be destroyed exactly once. */
+    static gboolean shutting_down = FALSE;
+    if (shutting_down) {
+        return G_SOURCE_REMOVE;
+    }
+    shutting_down = TRUE;
     save_geometry();
     stop_server();
     release_single_instance();
-    gtk_widget_destroy(main_window);
+    if (main_window) {
+        gtk_widget_destroy(main_window);
+    }
     return G_SOURCE_REMOVE;
 }
 
+
+/* web_app.py writes the active theme's page background as "#rrggbb" to native-background
+ * (handlers/extensions.py). The first paint uses it, so a light theme does not flash the
+ * built-in dark colour. A missing or malformed file keeps the colour the caller set. */
+static void
+apply_saved_background(GdkRGBA *bg)
+{
+    if (!data_dir) {
+        return;
+    }
+    char *path = g_build_filename(data_dir, "native-background", NULL);
+    char *contents = NULL;
+    unsigned int r = 0, g = 0, b = 0;
+    if (g_file_get_contents(path, &contents, NULL, NULL) && contents
+        && sscanf(contents, "#%2x%2x%2x", &r, &g, &b) == 3) {
+        bg->red = r / 255.0;
+        bg->green = g / 255.0;
+        bg->blue = b / 255.0;
+        bg->alpha = 1.0;
+    }
+    g_free(contents);
+    g_free(path);
+}
 
 int
 main(int argc, char **argv)
@@ -1804,6 +1900,7 @@ main(int argc, char **argv)
     webkit_settings_set_enable_accelerated_2d_canvas(settings, TRUE);
     G_GNUC_END_IGNORE_DEPRECATIONS
     GdkRGBA bg = {0.067, 0.063, 0.055, 1.0};
+    apply_saved_background(&bg);
     webkit_web_view_set_background_color(view, &bg);
     g_signal_connect(mgr, "script-message-received::openbox",
                      G_CALLBACK(message_received), view);
@@ -1825,7 +1922,11 @@ main(int argc, char **argv)
     g_signal_connect(main_window, "delete-event", G_CALLBACK(on_window_delete), NULL);
     g_signal_connect(main_window, "destroy", G_CALLBACK(on_close_request), NULL);
     setup_tray();
+    /* The server runs in its own process group, so a SIGTERM/SIGHUP that
+     * kills only this host (logout, `kill`, a supervisor) would orphan it. */
     g_unix_signal_add(SIGINT, on_signal, NULL);
+    g_unix_signal_add(SIGTERM, on_signal, NULL);
+    g_unix_signal_add(SIGHUP, on_signal, NULL);
     gtk_widget_show_all(main_window);
     gtk_main();
     native_request_clear(&startup_request);

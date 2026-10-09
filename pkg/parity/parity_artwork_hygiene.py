@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import struct
 from datetime import datetime, timezone
@@ -298,13 +299,29 @@ def undo_root(cache_dir):
     return Path(cache_dir) / UNDO_DIRECTORY
 
 
+_BATCH_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
+
+
+def _batch_id(batch_id):
+    """Return ``batch_id`` as a single safe path component, else ValueError.
+
+    The undo endpoint receives the id from the request body, and it names both
+    the journal file and the backup directory, so ``../`` must never reach a
+    path join.
+    """
+    text = str(batch_id)
+    if not _BATCH_ID_RE.fullmatch(text):
+        raise ValueError("The artwork undo batch id is invalid.")
+    return text
+
+
 def snapshot_for_replacement(cache_dir, batch_id, game_id, field, current_path, backup=True):
     """Copy the current file into the undo journal before it is replaced.
 
     Returns a journal record. ``created`` marks a file that did not exist, so
     undo removes it instead of restoring bytes.
     """
-    root = undo_root(cache_dir) / str(batch_id)
+    root = undo_root(cache_dir) / _batch_id(batch_id)
     root.mkdir(parents=True, exist_ok=True)
     current = Path(current_path) if current_path else None
     record = {
@@ -325,6 +342,7 @@ def snapshot_for_replacement(cache_dir, batch_id, game_id, field, current_path, 
 
 
 def write_undo_manifest(cache_dir, batch_id, records, *, provider=PROVIDER_ATTRIBUTION):
+    batch_id = _batch_id(batch_id)
     root = undo_root(cache_dir)
     root.mkdir(parents=True, exist_ok=True)
     manifest = {
@@ -339,6 +357,7 @@ def write_undo_manifest(cache_dir, batch_id, records, *, provider=PROVIDER_ATTRI
 
 
 def load_undo_manifest(cache_dir, batch_id):
+    batch_id = _batch_id(batch_id)
     path = undo_root(cache_dir) / f"{batch_id}.json"
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))

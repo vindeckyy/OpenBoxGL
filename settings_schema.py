@@ -121,6 +121,7 @@ KNOWN_SETTINGS = {
     "dynamic_play_button",
     "gamescope_guest",
     "show_insights",
+    "show_launch_badges",
     "mood_match_enabled",
     "mood_match_bigbox",
     "party_queue",

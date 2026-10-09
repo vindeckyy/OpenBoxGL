@@ -188,6 +188,35 @@ class ApiSweep(unittest.TestCase):
         self.assertEqual(payload["games"][0]["name"], "Fixture")
         self.assert_alive()
 
+    def test_non_ascii_token_is_unauthorized(self):
+        # compare_digest raises TypeError on non-ASCII str; that escaped as a
+        # 400 BAD_REQUEST and never counted toward the auth rate limiter.
+        for path, headers in (
+            ("/api/library", {"X-OpenBox-Token": "tést"}),
+            ("/api/library?token=%C3%A9", {}),
+        ):
+            with self.web_app._AUTH_FAILURES_LOCK:
+                self.web_app._AUTH_FAILURES.clear()
+            status, payload, _ = self.raw_request(path, headers=headers)
+            self.assertEqual(status, 403, path)
+            self.assertEqual(payload.get("error"), "Unauthorized")
+            with self.web_app._AUTH_FAILURES_LOCK:
+                self.assertEqual(sum(len(v) for v in self.web_app._AUTH_FAILURES.values()), 1, path)
+        status, _, _ = self.raw_request("/api/settings", headers={"X-OpenBox-Token": "é"}, body={}, method="POST")
+        self.assertEqual(status, 403)
+        with self.web_app._AUTH_FAILURES_LOCK:
+            self.web_app._AUTH_FAILURES.clear()
+        self.assert_alive()
+
+    def test_missing_favicon_answers_404(self):
+        # A missing openbox.svg used to leave the client waiting with no response.
+        with tempfile.TemporaryDirectory() as empty_root, mock.patch.object(self.web_app, "ROOT", Path(empty_root)):
+            for path in ("/favicon.ico", "/favicon.svg"):
+                status, payload, _ = self.raw_request(path)
+                self.assertEqual(status, 404, path)
+                self.assertEqual(payload.get("code"), "ROUTE_NOT_FOUND")
+        self.assert_alive()
+
     def test_v1_live_routes(self):
         status, payload = self.request("/api/v1/library")
         self.assertEqual(status, 200)
@@ -379,6 +408,8 @@ GROUPS = {
     "post_auth": "test_post_auth",
     "host_filter": "test_host_filter",
     "rate_limit": "test_auth_rate_limiting",
+    "non_ascii_token": "test_non_ascii_token_is_unauthorized",
+    "favicon_missing": "test_missing_favicon_answers_404",
     "v1_live": "test_v1_live_routes",
     "validation": "test_validation",
     "exceptions": "test_exceptions",

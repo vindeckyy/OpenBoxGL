@@ -1879,6 +1879,17 @@ class WebAppRescanTests(unittest.TestCase):
              mock.patch.object(web_app, "load_state", return_value={"settings": {}}):
             self.assertIsNone(web_app._health_rescan_tick())
 
+    def test_tick_leaves_a_launch_audit_the_user_started_alone(self):
+        jobs = mock.Mock()
+        jobs.snapshots.return_value = {"launch-audit": {"state": "running"}}
+        with mock.patch.object(web_app, "RUNNING", {}), \
+             mock.patch("pkg.parity.parity_library_health.rescan_due", return_value=True), \
+             mock.patch.object(web_app, "load_state", return_value={"settings": {}}), \
+             mock.patch.object(web_app, "JOB_MANAGER", jobs):
+            web_app._health_rescan_tick()
+        names = [call.args[0] for call in jobs.submit.call_args_list]
+        self.assertEqual(names, ["library-health-scan"])
+
     def test_tick_queues_rescan(self):
         with mock.patch.object(web_app, "RUNNING", {}), \
              mock.patch(
@@ -1887,9 +1898,11 @@ class WebAppRescanTests(unittest.TestCase):
              mock.patch.object(web_app, "load_state", return_value={"settings": {}}), \
              mock.patch.object(web_app, "JOB_MANAGER") as jobs:
             web_app._health_rescan_tick()
-        jobs.submit.assert_called_once()
-        _, kwargs = jobs.submit.call_args
-        self.assertTrue(kwargs.get("replace"))
+        # The health rescan and the Launch Audit share the schedule: both are queued, replacing any run in progress.
+        names = [call.args[0] for call in jobs.submit.call_args_list]
+        self.assertEqual(names, ["library-health-scan", "launch-audit"])
+        for call in jobs.submit.call_args_list:
+            self.assertTrue(call.kwargs.get("replace"))
 
     def test_tick_exception_swallowed(self):
         with mock.patch.object(web_app, "load_state", side_effect=RuntimeError("boom")):

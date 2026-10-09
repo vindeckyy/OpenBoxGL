@@ -171,6 +171,19 @@ class PickerHandlerTest(unittest.TestCase):
         finally:
             picker_module.load_state_readonly = original_load
 
+    def test_picker_rejects_non_finite_dna_boost(self):
+        # Regression: dna_boost="inf" passed validation and produced
+        # Infinity scores that serialize as invalid JSON.
+        original_load = picker_module.load_state_readonly
+        try:
+            picker_module.load_state_readonly = sample_state
+            for raw in ("inf", "nan", "-inf"):
+                h = self.handler()
+                with self.assertRaises(BadRequest):
+                    h._api_post_api_v2_library_pick({"seed_query": "racing", "dna_boost": raw})
+        finally:
+            picker_module.load_state_readonly = original_load
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
