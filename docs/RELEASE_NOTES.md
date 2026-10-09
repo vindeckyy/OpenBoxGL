@@ -1,20 +1,16 @@
 # OpenBox release notes
 
-OpenBox 1.16.1 answers the question "why won't this game start?" for your whole library, adds launch definitions for 18 more systems, and keeps the library live while it changes. It also carries the fixes from the 1.16.1 work: safer edits, probes that cannot hang, and dates with a time zone. Upgrade from any 1.16.x release. The fixes are not backported to older versions, and 1.15.x is no longer supported. The full list is in [CHANGELOG.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md), and the code changes are in [v1.16.0...v1.16.1](https://github.com/vindeckyy/OpenBoxGL/compare/v1.16.0...v1.16.1).
+OpenBox 1.16.1 shows launch problems on the library grid, adds launch definitions for 18 more systems, and keeps the library live while it changes. It also includes fixes for safer edits, probes that cannot hang, and dates with a time zone. Upgrade from any 1.16.x release. The full list is in [CHANGELOG.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md), and the code changes are in [v1.16.0...v1.16.1](https://github.com/vindeckyy/OpenBoxGL/compare/v1.16.0...v1.16.1).
 
-## Know which games won't launch, before you press Play
+## See the launch check on the grid
 
 Launch readiness now shows on the grid. A game the last launch check found blocked is marked **Won't launch**, and one with warnings is marked **Needs attention**. The marks come from the last check and disappear once your library has changed, so an old report never labels a game. Turn them off in Settings > Appearance if you don't want them.
 
 The check keeps itself current. It runs with your scheduled library check, and when its results change, a notice reaches the notification feed.
 
-## Fix a whole group of games with one click
+## Fix a group of games in one place
 
-When many games share one problem, the group gets one button instead of one button per game:
-
-- **Grant access** gives a Flatpak emulator read-only access to one game folder, after you confirm. **Remove access** takes that back until you restart OpenBox.
-- **Install** installs a missing emulator once for every game that was waiting on it.
-- After a grant, only that group's games are checked again.
+**Grant access** gives a Flatpak emulator read-only access to one game folder, after you confirm. **Remove access** takes that back until you restart OpenBox. After a grant, only that group's games are checked again.
 
 For a group of games with missing files, **Find moved files** opens the repair wizard limited to those games.
 
@@ -32,7 +28,7 @@ Launch definitions now cover Sega Genesis and Mega Drive, Master System, Game Ge
 
 ## Disc images ask which system they belong to
 
-A `.bin`, `.cue` or `.iso` file that several systems share waits in the import wizard for you to choose its platform. OpenBox no longer guesses, so a PlayStation image is not imported as a Sega CD game.
+A `.bin`, `.cue` or `.iso` file that several systems share waits in the import wizard for you to choose its platform, so a PlayStation image is not imported as a Sega CD game.
 
 ## Definitions are signed
 
