@@ -40,7 +40,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from pkg.parity.launch_tokens import apply_tokens  # noqa: E402
+from pkg.parity.launch_tokens import apply_tokens, path_parent  # noqa: E402
 from pkg.parity.parity_emulator_defs import (  # noqa: E402
     apply_core_override,
     resolved_startup_args,
@@ -172,8 +172,8 @@ def emulator_fingerprint(adapter, *, which=None):
         startup_args = resolved_startup_args(adapter or {})
         try:
             index = list(startup_args).index("-L")
-            candidate = str(startup_args[index + 1] or "")
-            if candidate.startswith("/"):
+            candidate = str(startup_args[index + 1] or "").replace("{EmulatorDir}", path_parent(prefix[0]))
+            if os.path.isabs(candidate):
                 core = candidate
         except (ValueError, IndexError, TypeError):
             core = ""
