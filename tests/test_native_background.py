@@ -96,6 +96,7 @@ class NativeHostFirstPaintTests(unittest.TestCase):
             run = subprocess.run([str(exe), data], capture_output=True, text=True, check=True)
             return run.stdout.split()
 
+    @unittest.skipIf(sys.platform == "win32", "the Linux host needs GLib from pkg-config")
     def test_linux_host_paints_the_saved_background_and_keeps_the_default_otherwise(self):
         prelude = (
             "#include <glib.h>\n#include <stdio.h>\n"
