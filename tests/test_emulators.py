@@ -924,6 +924,7 @@ class SystemCoverageDefinitionTests(unittest.TestCase):
             with self.subTest(adapter=adapter_id):
                 self.assertEqual(find_adapter(adapter_id)["flatpak_app_id"], flatpak_id)
 
+    @unittest.skipIf(sys.platform == "win32", "the system core path is /usr/lib/libretro; Windows uses cores\\ beside the emulator")
     def test_retroarch_cores_use_the_buildbot_names(self):
         from pkg.parity.parity_emulator_defs import find_adapter, resolved_startup_args
 
@@ -1004,6 +1005,12 @@ class CoreChoiceTests(unittest.TestCase):
         self.assertIs(self.defs.apply_core_override(self.adapter, {"retroarch_core": "../evil_libretro.so"}), self.adapter)
         other = {"adapter_id": "dolphin", "startup_args": ["--batch", "{path}"]}
         self.assertIs(self.defs.apply_core_override(other, {"retroarch_core": "bsnes_libretro.so"}), other)
+
+    def test_the_choice_replaces_a_windows_core_beside_the_executable_as_a_dll(self):
+        windows = {"adapter_id": "retroarch-snes", "startup_args": ["-L", "{EmulatorDir}\\cores\\snes9x_libretro.dll", "{path}"]}
+        chosen = self.defs.apply_core_override(windows, {"retroarch_core": "bsnes_libretro.so"})
+        self.assertEqual(chosen["startup_args"], ["-L", "{EmulatorDir}\\cores\\bsnes_libretro.dll", "{path}"])
+        self.assertEqual(windows["startup_args"][1], "{EmulatorDir}\\cores\\snes9x_libretro.dll")
 
     def test_every_retroarch_definition_names_its_core_once_and_resolves_to_it(self):
         from pkg.parity import parity_emulator_defs as defs_module
