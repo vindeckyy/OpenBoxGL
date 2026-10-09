@@ -176,7 +176,7 @@ jobs:
         include:
           - arch: x86_64
           - arch: aarch64
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       actions: read
@@ -298,7 +298,7 @@ jobs:
   attest-windows:
     if: startsWith(github.ref, 'refs/tags/')
     needs: build-windows
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       actions: read
@@ -327,7 +327,7 @@ jobs:
   publish:
     if: startsWith(github.ref, 'refs/tags/')
     needs: [build, attest, build-windows, attest-windows]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     # AppImage, Windows and Flatpak publish jobs share one GitHub Release. Keep
     # the uploads serialized while allowing their build matrices to run in
