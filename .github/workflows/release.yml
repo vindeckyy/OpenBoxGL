@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - "v*"
+  # A manual run builds and checks the release on a branch. Every publish step is
+  # gated on a tag, so nothing is published (ADR 0065 dry run).
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,26 +21,35 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # x86_64 stays on Ubuntu 22.04 to match the v1.7-built artifact line.
-          # aarch64 uses ubuntu-24.04-arm: ubuntu-22.04-arm deprecates 2026-09-17
-          # (ADR 0024). Each AppImage bundles its host interpreter, so the
-          # artifact arch follows the runner arch.
+          # x86_64 builds in an ubuntu:22.04 container on a supported 24.04 runner,
+          # so the AppImage keeps the glibc 2.35 floor (ADR 0065). aarch64 uses
+          # ubuntu-24.04-arm: ubuntu-22.04-arm deprecates 2026-09-17 (ADR 0024).
+          # Each AppImage bundles its host interpreter, so the artifact arch
+          # follows the runner arch.
           - arch: x86_64
-            runner: ubuntu-22.04
+            runner: ubuntu-24.04
           - arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    container: ubuntu:22.04
     timeout-minutes: 35
     permissions:
       contents: read
 
     steps:
+      # The container ships neither git, which checkout needs, nor sudo.
+      - name: Install container tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] || {
             echo "invalid release tag: $GITHUB_REF_NAME" >&2
@@ -51,8 +63,10 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential \
+            pkg-config \
             python3 \
             libwebkit2gtk-4.1-dev \
             libgtk-3-dev \
@@ -74,6 +88,27 @@ jobs:
           OPENBOX_APPDIR: ${{ runner.temp }}/OpenBox.AppDir
           OPENBOX_ARCH: ${{ matrix.arch }}
         run: ./build_appimage.sh "$PWD/OpenBox-${{ matrix.arch }}.AppImage"
+
+      # The AppImage must not need a glibc newer than the 2.35 floor (ADR 0065).
+      # Extract it and read the GLIBC_ symbol versions of every ELF file in it.
+      - name: Check the glibc floor
+        run: |
+          set -euo pipefail
+          ldd --version | head -1
+          rm -rf squashfs-root
+          "./OpenBox-${{ matrix.arch }}.AppImage" --appimage-extract >/dev/null
+          highest=""
+          while IFS= read -r file; do
+            if file -b "$file" | grep -q '^ELF'; then
+              versions="$(objdump -T "$file" 2>/dev/null | grep -oE 'GLIBC_[0-9.]+' || true)"
+              if [ -n "$versions" ]; then
+                highest="$(printf '%s\n%s\n' "$highest" "$versions" | sort -uV | tail -1)"
+              fi
+            fi
+          done < <(find squashfs-root -type f)
+          echo "highest GLIBC symbol version in the AppImage: $highest"
+          test -n "$highest"
+          test "$(printf '%s\n%s\n' "$highest" GLIBC_2.35 | sort -V | tail -1)" = GLIBC_2.35
 
       - name: Write SHA-256 checksum
         run: sha256sum "OpenBox-${{ matrix.arch }}.AppImage" | tee "OpenBox-${{ matrix.arch }}.AppImage.sha256"
@@ -110,6 +145,7 @@ jobs:
             OpenBox-*-sbom.json
 
   attest:
+    if: startsWith(github.ref, 'refs/tags/')
     needs: build
     strategy:
       fail-fast: false
@@ -155,6 +191,7 @@ jobs:
           python-version: "3.12"
 
       - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
@@ -236,6 +273,7 @@ jobs:
             OpenBox-x86_64-windows-native-host.exe.sha256
 
   attest-windows:
+    if: startsWith(github.ref, 'refs/tags/')
     needs: build-windows
     runs-on: ubuntu-22.04
     timeout-minutes: 10
@@ -264,6 +302,7 @@ jobs:
           subject-path: OpenBox-x86_64-windows-native-host.exe
 
   publish:
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [build, attest, build-windows, attest-windows]
     runs-on: ubuntu-22.04
     timeout-minutes: 15
