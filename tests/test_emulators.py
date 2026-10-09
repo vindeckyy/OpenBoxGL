@@ -1015,6 +1015,7 @@ class CoreChoiceTests(unittest.TestCase):
         self.assertEqual(chosen["startup_args"], ["-L", "{EmulatorDir}\\cores\\bsnes_libretro.dll", "{path}"])
         self.assertEqual(windows["startup_args"][1], "{EmulatorDir}\\cores\\snes9x_libretro.dll")
 
+    @unittest.skipIf(sys.platform == "win32", "Windows definitions list their cores in startup_args_windows")
     def test_every_retroarch_definition_names_its_core_once_and_resolves_to_it(self):
         from pkg.parity import parity_emulator_defs as defs_module
 
@@ -1100,6 +1101,7 @@ class CoreChoiceTests(unittest.TestCase):
 
         raw = defs_module._parse_yaml((Path(__file__).resolve().parent.parent / "emulator_defs" / "retroarch-snes.yaml").read_text(encoding="utf-8"))
         raw.pop("retroarch_core", None)
+        raw.pop("startup_args_windows", None)  # Windows would load those instead of the token
         with self.assertRaises(ValueError):
             defs_module._normalize_adapter(raw)
 
