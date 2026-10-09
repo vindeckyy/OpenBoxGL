@@ -1005,6 +1005,8 @@ class CoreChoiceTests(unittest.TestCase):
         self.assertIs(self.defs.apply_core_override(self.adapter, {"retroarch_core": "../evil_libretro.so"}), self.adapter)
         other = {"adapter_id": "dolphin", "startup_args": ["--batch", "{path}"]}
         self.assertIs(self.defs.apply_core_override(other, {"retroarch_core": "bsnes_libretro.so"}), other)
+        elsewhere = {"adapter_id": "retroarch-snes", "startup_args": ["-L", "/opt/cores/snes9x_libretro.so", "{path}"]}
+        self.assertIs(self.defs.apply_core_override(elsewhere, {"retroarch_core": "bsnes_libretro.so"}), elsewhere)
 
     def test_the_choice_replaces_a_windows_core_beside_the_executable_as_a_dll(self):
         windows = {"adapter_id": "retroarch-snes", "startup_args": ["-L", "{EmulatorDir}\\cores\\snes9x_libretro.dll", "{path}"]}
