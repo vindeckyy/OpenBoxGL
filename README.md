@@ -17,7 +17,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.16.1"><img src="https://img.shields.io/badge/Release-v1.16.1-0052CC?style=for-the-badge" alt="Release v1.16.0"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.16.1"><img src="https://img.shields.io/badge/Release-v1.16.1-0052CC?style=for-the-badge" alt="Release v1.16.1"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/vindeckyy/OpenBoxGL/ci.yml?style=for-the-badge&label=CI" alt="CI"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-lightgrey?style=for-the-badge" alt="Linux and Windows"></a>
   <br>
@@ -118,6 +118,20 @@ The full capability matrix with acceptance checks lives in [PARITY.md](docs/PARI
 
 ## Features
 
+### Ready to Launch (1.16.1)
+
+**Launch readiness everywhere.** Games that will not launch are marked on the
+grid, groups of games that share one fix get one button, a missing-file group
+relinks from one place, and each game can pick its own RetroArch core — the
+check says when its results change. **Every system out of the box**: launch
+definitions for 18 more systems, each RetroArch definition naming its core
+once, shipped as a signed definition pack with every tag; shared disc images
+ask which system they belong to. **Live and fast**: one live connection per tab
+keeps busy tabs from losing updates, and a search no longer pushes the panels
+below it. The release also stops a stale window overwriting a neighboring
+game, makes Steam removals undoable, and adds Grant access for Flatpak
+emulators without folder access.
+
 ### Make It True (1.16.0)
 
 **Launch Readiness** runs the Launch Doctor over the whole library in a
@@ -144,8 +158,9 @@ when the page truncates — and every game **Story** card gains a PNG export
 rendered client-side, with no new endpoint. **Settings > About** reports the
 version, platform, data folder, and whether OpenBox is in its native window or
 a browser tab. A sixth stock **High Contrast** theme redeclares every token
-against a maximum-contrast palette, one **reduced-motion switch** zeroes every
-duration and easing at once, and **Windows install and removal are symmetric**:
+against a maximum-contrast palette, one **reduced-motion switch** whose gate is an
+AND over a reviewed allow-list, with `motionMs()` the only motion read (corrected
+in 1.16.0), and **Windows install and removal are symmetric**:
 `scripts/uninstall.ps1` removes exactly what `install.ps1` creates.
 
 ### Library Intelligence (1.14.0)
