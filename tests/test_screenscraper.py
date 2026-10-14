@@ -9,8 +9,10 @@ import os
 import sys
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
 from unittest import mock
+from urllib.parse import parse_qs, urlsplit
 
 
 def _no_env_load():
@@ -56,7 +58,8 @@ class HashRomTest(unittest.TestCase):
         self.assertEqual(hashes["size"], 19)
 
     def test_rom_type(self):
-        self.assertEqual(ss.rom_type_for("game.zip"), "zip")
+        # Archives are single ROM files to the API; only disc images are "iso".
+        self.assertEqual(ss.rom_type_for("game.zip"), "rom")
         self.assertEqual(ss.rom_type_for("disc.iso"), "iso")
         self.assertEqual(ss.rom_type_for("cart.sfc"), "rom")
 
@@ -216,9 +219,15 @@ class CacheTest(unittest.TestCase):
             self.assertEqual(ss.cache_size(tmp), 2)
 
 
+CREDENTIAL_ENV = {
+    "SCREENSCRAPER_USER": "user1", "SCREENSCRAPER_PASSWORD": "pass1",
+    "SCREENSCRAPER_DEV_ID": "dev1", "SCREENSCRAPER_DEV_PASSWORD": "devpw1",
+}
+DEV_REFUSAL = "Erreur de login : Vérifier vos identifiants développeur !"
+
+
 class RequestTest(unittest.TestCase):
-    def _fake_response(self, payload):
-        body = json.dumps(payload).encode()
+    def _raw_response(self, body):
         response = mock.Mock()
         response.headers = {}
         chunks = [body, b""]
@@ -227,41 +236,97 @@ class RequestTest(unittest.TestCase):
         response.__exit__ = mock.Mock(return_value=False)
         return response
 
+    def _fake_response(self, payload):
+        return self._raw_response(json.dumps(payload).encode())
+
     def test_ss_request_success_and_params(self):
         payload = {"response": {"jeux": []}}
-        env = {
-            "SCREENSCRAPER_USER": "user1", "SCREENSCRAPER_PASSWORD": "pass1",
-            "SCREENSCRAPER_DEV_ID": "dev1", "SCREENSCRAPER_DEV_PASSWORD": "devpw1",
-        }
-        with mock.patch.dict(os.environ, env, clear=True), \
+        with mock.patch.dict(os.environ, CREDENTIAL_ENV, clear=True), \
              mock.patch.object(ss, "urlopen", return_value=self._fake_response(payload)) as opener:
-            result = ss.ss_request("jeuRecherche.php", {"recherche": "zelda"})
+            result = ss.ss_request("jeuRecherche.php", {"recherche": "zelda", "systemeid": ""})
         self.assertEqual(result, payload)
         url = opener.call_args[0][0].full_url
         self.assertIn("jeuRecherche.php", url)
-        self.assertIn("user=user1", url)
-        self.assertIn("devid=dev1", url)
-        self.assertIn("output=json", url)
+        query = parse_qs(urlsplit(url).query)
+        # The parameter names are the ones the ScreenScraper API docs define.
+        self.assertEqual(query["ssid"], ["user1"])
+        self.assertEqual(query["sspassword"], ["pass1"])
+        self.assertEqual(query["devid"], ["dev1"])
+        self.assertEqual(query["devpassword"], ["devpw1"])
+        self.assertEqual(query["softname"], [f"OpenBox-{VERSION}"])
+        self.assertEqual(query["output"], ["json"])
+        self.assertEqual(query["recherche"], ["zelda"])
+        self.assertNotIn("user", query)
+        self.assertNotIn("systemeid", url)
         self.assertEqual(opener.call_args[0][0].get_header("User-agent"), f"OpenBox/{VERSION}")
 
     def test_ss_request_non_retryable_error_raises(self):
         from urllib.error import HTTPError
 
-        with mock.patch.dict(os.environ, {"SCREENSCRAPER_USER": "u", "SCREENSCRAPER_PASSWORD": "p"}, clear=True), \
-             mock.patch.object(ss, "urlopen", side_effect=HTTPError("u", 403, "no", None, io.BytesIO(b""))), \
+        refusal = HTTPError("u", 403, "no", None, io.BytesIO(b""))
+        with mock.patch.dict(os.environ, CREDENTIAL_ENV, clear=True), \
+             mock.patch.object(ss, "urlopen", side_effect=refusal) as opener, \
              mock.patch.object(ss.time, "sleep"):
             with self.assertRaises(ValueError):
                 ss.ss_request("jeuInfos.php", {"gameid": 1})
+        self.assertEqual(opener.call_count, 1)
 
     def test_ss_request_retries_then_succeeds(self):
         from urllib.error import HTTPError
 
         payload = {"response": {"jeu": {"id": 5}}}
         responses = [HTTPError("u", 503, "busy", None, io.BytesIO(b"")), self._fake_response(payload)]
-        with mock.patch.dict(os.environ, {"SCREENSCRAPER_USER": "u", "SCREENSCRAPER_PASSWORD": "p"}, clear=True), \
+        with mock.patch.dict(os.environ, CREDENTIAL_ENV, clear=True), \
              mock.patch.object(ss, "urlopen", side_effect=responses), \
              mock.patch.object(ss.time, "sleep"):
             self.assertEqual(ss.ss_request("jeuInfos.php", {"gameid": 5}), payload)
+
+    def test_ss_request_http_error_carries_server_reason(self):
+        from urllib.error import HTTPError
+
+        refusal = HTTPError("u", 403, "Forbidden", None, io.BytesIO(DEV_REFUSAL.encode()))
+        with mock.patch.dict(os.environ, CREDENTIAL_ENV, clear=True), \
+             mock.patch.object(ss, "urlopen", side_effect=refusal), \
+             mock.patch.object(ss.time, "sleep"):
+            with self.assertRaises(ValueError) as caught:
+                ss.ss_request("jeuInfos.php", {"gameid": 1})
+        self.assertEqual(
+            str(caught.exception),
+            f"ScreenScraper request failed: HTTP Error 403: Forbidden ({DEV_REFUSAL})",
+        )
+
+    def test_ss_request_http_error_survives_unreadable_body(self):
+        from urllib.error import HTTPError
+
+        class UnreadableBody(io.BytesIO):
+            def read(self, *args):
+                raise OSError("connection reset")
+
+        refusal = HTTPError("u", 403, "Forbidden", None, UnreadableBody(b""))
+        with mock.patch.dict(os.environ, CREDENTIAL_ENV, clear=True), \
+             mock.patch.object(ss, "urlopen", side_effect=refusal), \
+             mock.patch.object(ss.time, "sleep"):
+            with self.assertRaises(ValueError) as caught:
+                ss.ss_request("jeuInfos.php", {"gameid": 1})
+        self.assertEqual(str(caught.exception), "ScreenScraper request failed: HTTP Error 403: Forbidden")
+
+    def test_ss_request_plain_text_refusal_is_not_retried(self):
+        # ScreenScraper sends refusals as plain text with a 200 status; retrying cannot help.
+        with mock.patch.dict(os.environ, CREDENTIAL_ENV, clear=True), \
+             mock.patch.object(ss, "urlopen", return_value=self._raw_response(DEV_REFUSAL.encode())) as opener, \
+             mock.patch.object(ss.time, "sleep"):
+            with self.assertRaises(ValueError) as caught:
+                ss.ss_request("jeuRecherche.php", {"recherche": "zelda"})
+        self.assertEqual(str(caught.exception), f"ScreenScraper request failed: {DEV_REFUSAL}")
+        self.assertEqual(opener.call_count, 1)
+
+    def test_ss_request_empty_body_is_an_error(self):
+        with mock.patch.dict(os.environ, CREDENTIAL_ENV, clear=True), \
+             mock.patch.object(ss, "urlopen", return_value=self._raw_response(b"  ")), \
+             mock.patch.object(ss.time, "sleep"):
+            with self.assertRaises(ValueError) as caught:
+                ss.ss_request("jeuInfos.php", {"gameid": 1})
+        self.assertIn("empty response", str(caught.exception))
 
     def test_game_info_by_id_and_cache(self):
         payload = {"response": {"jeu": {"id": 9, "nom": {"text": "Cached Game"}}}}
@@ -280,8 +345,15 @@ class RequestTest(unittest.TestCase):
             with mock.patch.object(ss, "ss_request", return_value={"response": {"jeu": {"id": 3}}}) as request:
                 metadata = ss.game_info(rom_path=rom, system_id=4)
         params = request.call_args[0][1]
-        self.assertIn("rommd5", params)
+        payload = b"payload"
         self.assertEqual(params["romtype"], "rom")
+        self.assertEqual(params["romnom"], "g.sfc")
+        self.assertEqual(params["romtaille"], len(payload))
+        self.assertEqual(params["md5"], hashlib.md5(payload).hexdigest().upper())
+        self.assertEqual(params["sha1"], hashlib.sha1(payload).hexdigest().upper())
+        self.assertEqual(params["crc"], f"{zlib.crc32(payload):08X}")
+        self.assertNotIn("rommd5", params)
+        self.assertEqual(params["systemeid"], 4)
         self.assertEqual(metadata["id"], 3)
 
     def test_game_info_rejects_missing_args_and_empty(self):
@@ -296,7 +368,7 @@ class RequestTest(unittest.TestCase):
              mock.patch.object(ss, "ss_request", return_value={"response": {"ssuser": {}}}) as request:
             ss.user_info(cache_dir=tmp)
             ss.user_info(cache_dir=tmp)
-        request.assert_called_once()
+        request.assert_called_once_with("ssuserInfos.php", {})
 
     def test_apply_to_game_fields(self):
         game = {"name": "Old"}
@@ -373,11 +445,25 @@ class RequestTest(unittest.TestCase):
                 ss.credentials()
 
     def test_is_configured(self):
-        env = {"SCREENSCRAPER_USER": "u", "SCREENSCRAPER_PASSWORD": "p"}
-        with mock.patch.dict(os.environ, env, clear=True):
+        with mock.patch.dict(os.environ, CREDENTIAL_ENV, clear=True), _no_env_load():
             self.assertTrue(ss.is_configured())
-        with mock.patch.dict(os.environ, {}, clear=True):
+        with mock.patch.dict(os.environ, {}, clear=True), _no_env_load():
             self.assertFalse(ss.is_configured())
+
+    def test_developer_pair_is_required(self):
+        env = {"SCREENSCRAPER_USER": "u", "SCREENSCRAPER_PASSWORD": "p"}
+        with mock.patch.dict(os.environ, env, clear=True), _no_env_load():
+            with self.assertRaises(ValueError) as caught:
+                ss.credentials()
+            self.assertIn("SCREENSCRAPER_DEV_ID", str(caught.exception))
+            self.assertFalse(ss.is_configured())
+
+    def test_rom_type_is_one_of_the_documented_values(self):
+        self.assertEqual(ss.rom_type_for("Game.zip"), "rom")
+        self.assertEqual(ss.rom_type_for("Game.7z"), "rom")
+        self.assertEqual(ss.rom_type_for("Game.chd"), "rom")
+        self.assertEqual(ss.rom_type_for("Disc.ISO"), "iso")
+        self.assertEqual(ss.rom_type_for("Disc.gcm"), "iso")
 
 
 SCREENSCRAPER_HANDLER_PAYLOAD = {"response": {"ssuser": {"quota": {"requeststoday": 5}}}}

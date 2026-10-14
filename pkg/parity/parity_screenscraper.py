@@ -26,6 +26,8 @@ from env_config import ensure_env_loaded, env_value
 from updates import VERSION
 
 SS_ENDPOINT = "https://www.screenscraper.fr/api2"
+# Name of the calling software; the API docs list softname on every request.
+SS_SOFTNAME = f"OpenBox-{VERSION}"
 SS_CACHE_TTL = 30 * 24 * 3600
 _MIN_REQUEST_INTERVAL = 1.0
 _HASH_SIZE_LIMIT = 512 * 1024 * 1024
@@ -80,15 +82,17 @@ MEDIA_TYPE_MAP = {
     "video": "video_snap", "manual": "manual",
 }
 
-_ROM_TYPE_BY_SUFFIX = {
-    ".zip": "zip", ".7z": "zip", ".rar": "zip",
-    ".iso": "iso", ".chd": "chd", ".gcm": "iso", ".wbfs": "wbfs", ".rvz": "rvz",
-    ".xci": "xci", ".nsp": "nsp", ".wad": "wad", ".cia": "cia", ".3ds": "3ds",
-}
+# jeuInfos.php romtype is "rom" (one ROM file, archives included), "iso" (one disc
+# image) or "dossier" (a folder). Any other format is sent as "rom".
+_ISO_SUFFIXES = frozenset({".iso", ".gcm"})
 
 
 def credentials():
-    """Return (user, password, dev_id, dev_password) from ~/.env."""
+    """Return (user, password, dev_id, dev_password) from ~/.env.
+
+    The developer pair is required, not optional: the API docs list devid and
+    devpassword as mandatory, and lookups without them are refused.
+    """
     ensure_env_loaded()
     user = env_value("SCREENSCRAPER_USER", "OPENBOX_SCREENSCRAPER_USER")
     password = env_value("SCREENSCRAPER_PASSWORD", "OPENBOX_SCREENSCRAPER_PASSWORD")
@@ -96,6 +100,11 @@ def credentials():
         raise ValueError("Set SCREENSCRAPER_USER and SCREENSCRAPER_PASSWORD in ~/.env to use ScreenScraper.")
     dev_id = env_value("SCREENSCRAPER_DEV_ID", "OPENBOX_SCREENSCRAPER_DEV_ID")
     dev_password = env_value("SCREENSCRAPER_DEV_PASSWORD", "OPENBOX_SCREENSCRAPER_DEV_PASSWORD")
+    if not dev_id or not dev_password:
+        raise ValueError(
+            "Set SCREENSCRAPER_DEV_ID and SCREENSCRAPER_DEV_PASSWORD in ~/.env. "
+            "ScreenScraper requires a developer ID and password for its API."
+        )
     return user, password, dev_id, dev_password
 
 
@@ -123,16 +132,28 @@ def _throttle():
         _LAST_REQUEST[0] = time.monotonic()
 
 
+def _with_server_text(error):
+    """Add the plain-text reason ScreenScraper sends with an HTTP error, if any."""
+    try:
+        reason = error.read(200).decode("utf-8", "replace").strip()
+    except Exception:  # no readable body; the HTTP status stands alone
+        reason = ""
+    return f"{error} ({reason})" if reason else error
+
+
 def ss_request(endpoint, params, *, timeout=30):
     """GET an api2 endpoint as JSON with credentials, throttling, and retries."""
     user, password, dev_id, dev_password = credentials()
-    query = dict(params)
-    query["output"] = "json"
-    query["user"] = user
-    query["sspassword"] = password
-    if dev_id and dev_password:
-        query["devid"] = dev_id
-        query["devpassword"] = dev_password
+    # Empty optional values are dropped rather than sent as blank parameters.
+    query = {key: value for key, value in params.items() if value not in (None, "")}
+    query.update({
+        "devid": dev_id,
+        "devpassword": dev_password,
+        "softname": SS_SOFTNAME,
+        "ssid": user,
+        "sspassword": password,
+        "output": "json",
+    })
     url = f"{SS_ENDPOINT}/{endpoint}?{urlencode(query)}"
     last_error = None
     for attempt in range(_MAX_RETRIES):
@@ -140,13 +161,21 @@ def ss_request(endpoint, params, *, timeout=30):
         try:
             request = Request(url, headers={"User-Agent": f"OpenBox/{VERSION}"})
             with urlopen(request, timeout=timeout) as response:
-                return json.loads(read_limited(response, 8 * 1024 * 1024).decode())
+                body = read_limited(response, 8 * 1024 * 1024).decode("utf-8", "replace")
         except Exception as error:  # urllib raises HTTPError/URLError subclasses
-            last_error = error
             status = getattr(error, "code", 0)
+            last_error = _with_server_text(error) if status else error
             if status and status not in (429, 500, 502, 503, 504):
                 break
             time.sleep(1.5 * (attempt + 1))
+            continue
+        try:
+            return json.loads(body)
+        except ValueError:
+            # Refusals such as "Erreur de login" arrive as plain text even with a 200.
+            # They are final, so they are reported without retrying.
+            detail = body.strip()[:200] or "empty response"
+            raise ValueError(f"ScreenScraper request failed: {detail}") from None
     raise ValueError(f"ScreenScraper request failed: {last_error}")
 
 
@@ -187,13 +216,14 @@ def cache_size(cache_dir):
 # ── API operations ─────────────────────────────────────────────────────────
 
 def user_info(cache_dir=None):
-    """Credential + quota check via userInfos.php."""
-    params = {"ssid": "userinfos"}
+    """Credential + quota check via ssuserInfos.php."""
+    # The cache key only; the call itself sends nothing beyond the login.
+    params = {"endpoint": "ssuserInfos.php"}
     if cache_dir is not None:
         cached = cache_get(cache_dir, params)
         if cached is not None:
             return cached
-    payload = ss_request("userInfos.php", {"ssid": "userinfos"})
+    payload = ss_request("ssuserInfos.php", {})
     if cache_dir is not None:
         cache_put(cache_dir, params, payload)
     return payload
@@ -246,8 +276,23 @@ def hash_rom(path):
 
 
 def rom_type_for(path):
-    suffix = Path(path).suffix.casefold()
-    return _ROM_TYPE_BY_SUFFIX.get(suffix, "rom")
+    return "iso" if Path(path).suffix.casefold() in _ISO_SUFFIXES else "rom"
+
+
+def _rom_params(rom_path, hashes, hash_kinds=("md5", "sha1", "crc")):
+    """Identify a ROM to jeuInfos.php by type, bare file name, size, and hashes.
+
+    The API names the hashes md5, sha1 and crc, takes them with the size
+    (romtaille), and refuses a file name that includes a directory.
+    """
+    params = {
+        "romtype": rom_type_for(rom_path),
+        "romnom": Path(rom_path).name,
+        "romtaille": hashes["size"],
+    }
+    for kind in hash_kinds:
+        params[kind] = hashes[kind].upper()
+    return params
 
 
 def game_info(game_id=None, *, rom_path=None, system_id=None, cache_dir=None):
@@ -261,14 +306,7 @@ def game_info(game_id=None, *, rom_path=None, system_id=None, cache_dir=None):
     if game_id is not None:
         params["gameid"] = int(game_id)
     elif rom_path:
-        hashes = hash_rom(rom_path)
-        rom_type = rom_type_for(rom_path)
-        params.update({
-            "romtype": rom_type,
-            "rommd5": hashes["md5"],
-            "romsha1": hashes["sha1"],
-            "romcrc": hashes["crc"],
-        })
+        params.update(_rom_params(rom_path, hash_rom(rom_path)))
     else:
         raise ValueError("game_info needs a game id or a ROM path.")
     if system_id:
@@ -317,10 +355,7 @@ def hash_lookup(rom_path, hashes, *, hash_kind, system_id=None, cache_dir=None):
     """
     if hash_kind not in ("md5", "crc"):
         raise ValueError("hash_kind must be 'md5' or 'crc'.")
-    params = {
-        "romtype": rom_type_for(rom_path),
-        "rommd5" if hash_kind == "md5" else "romcrc": hashes[hash_kind],
-    }
+    params = _rom_params(rom_path, hashes, hash_kinds=(hash_kind,))
     if system_id:
         params["systemeid"] = int(system_id)
     if cache_dir is not None:
