@@ -1132,25 +1132,30 @@ class HashLookupTests(unittest.TestCase):
 
     def test_md5_lookup_posts_and_normalizes(self):
         with mock.patch.object(ss, "ss_request", return_value=self._payload()) as req:
-            result = ss.hash_lookup("/tmp/game.sfc", {"md5": "m" * 32, "crc": "c" * 8}, hash_kind="md5")
+            result = ss.hash_lookup("/tmp/game.sfc", {"md5": "m" * 32, "crc": "c" * 8, "size": 1024}, hash_kind="md5")
         self.assertEqual(result["id"], 42)
         self.assertEqual(result["name"], "Test Game")
         endpoint, params = req.call_args[0]
         self.assertEqual(endpoint, "jeuInfos.php")
-        self.assertEqual(params["rommd5"], "m" * 32)
-        self.assertNotIn("romcrc", params)
+        self.assertEqual(params["md5"], "M" * 32)
+        self.assertEqual(params["romnom"], "game.sfc")
+        self.assertEqual(params["romtaille"], 1024)
+        self.assertNotIn("crc", params)
+        self.assertNotIn("rommd5", params)
         self.assertNotIn("systemeid", params)
 
     def test_crc_lookup_with_system_id(self):
         with mock.patch.object(ss, "ss_request", return_value=self._payload(7)) as req:
             ss.hash_lookup(
                 "/tmp/game.zip",
-                {"md5": "m", "crc": "deadbeef"},
+                {"md5": "m", "crc": "deadbeef", "size": 2048},
                 hash_kind="crc",
                 system_id="4",
             )
         _endpoint, params = req.call_args[0]
-        self.assertEqual(params["romcrc"], "deadbeef")
+        self.assertEqual(params["crc"], "DEADBEEF")
+        self.assertEqual(params["romtype"], "rom")
+        self.assertNotIn("md5", params)
         self.assertEqual(params["systemeid"], 4)
 
     def test_cache_hit_skips_request(self):
@@ -1160,7 +1165,7 @@ class HashLookupTests(unittest.TestCase):
         ):
             result = ss.hash_lookup(
                 "/tmp/game.sfc",
-                {"md5": "m", "crc": "c"},
+                {"md5": "m", "crc": "c", "size": 1},
                 hash_kind="md5",
                 cache_dir="/tmp/cache",
             )
@@ -1176,7 +1181,7 @@ class HashLookupTests(unittest.TestCase):
         ):
             result = ss.hash_lookup(
                 "/tmp/game.sfc",
-                {"md5": "m", "crc": "c"},
+                {"md5": "m", "crc": "c", "size": 1},
                 hash_kind="md5",
                 cache_dir="/tmp/cache",
             )
@@ -1186,7 +1191,7 @@ class HashLookupTests(unittest.TestCase):
     def test_empty_jeu_raises(self):
         with mock.patch.object(ss, "ss_request", return_value={"response": {}}):
             with self.assertRaises(ValueError):
-                ss.hash_lookup("/tmp/game.sfc", {"md5": "m", "crc": "c"}, hash_kind="crc")
+                ss.hash_lookup("/tmp/game.sfc", {"md5": "m", "crc": "c", "size": 1}, hash_kind="crc")
 
 
 if __name__ == "__main__":
