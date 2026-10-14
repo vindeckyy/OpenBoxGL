@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **ScreenScraper lookups failed with HTTP 400 (#52).** Requests used parameter names the API does not read: the login
+  went out as `user=`, the ROM hashes as `rommd5`/`romsha1`/`romcrc`, and archives as `romtype=zip`, a value the API does
+  not document. Requests now send `ssid`/`sspassword` and `softname`, the hashes as `md5`/`sha1`/`crc` with `romtaille`,
+  and `romtype` as `rom` or `iso`. The Test button called `userInfos.php`, which does not exist; it now calls
+  `ssuserInfos.php`. Errors carry the server's own reason, and refusals the server sends as plain text are no longer
+  retried. A ScreenScraper developer ID and password are now required (`SCREENSCRAPER_DEV_ID` and
+  `SCREENSCRAPER_DEV_PASSWORD`), because the API refuses lookups without them; they were documented as optional.
+  `tests/test_screenscraper.py`, `tests/test_gapfill_f2.py`.
+
 ## [1.16.1] - 2026-10-08
 
 A release that finishes launch readiness and includes the fixes from the 1.16.1 cycle. It finishes launch readiness, adds launch definitions
