@@ -117,7 +117,7 @@ jobs:
       - name: Check the glibc floor
         run: |
           set -euo pipefail
-          ldd --version | head -1
+          ldd --version | sed -n '1p'
           rm -rf squashfs-root
           "./OpenBox-${{ matrix.arch }}.AppImage" --appimage-extract >/dev/null
           highest=""
