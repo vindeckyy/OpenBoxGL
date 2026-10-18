@@ -550,6 +550,9 @@ class ImportExclusionTests(unittest.TestCase):
         kept = filter_imported(imported, state)
         self.assertEqual([game["name"] for game in kept], ["Portal"])
         self.assertEqual(exclusion_key(imported[0]), ("steam", "570"))
+        self.assertEqual(exclusion_key({"gog_id": "123"}), ("gog", "123"))
+        self.assertEqual(exclusion_key({"ea_id": "456"}), ("ea", "456"))
+        self.assertEqual(exclusion_key({"ubisoft_id": "789"}), ("ubisoft", "789"))
 
 
 class IgdbTests(unittest.TestCase):

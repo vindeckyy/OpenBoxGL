@@ -94,6 +94,12 @@ def source_identities(game: dict) -> list[str]:
         identities.append(f"gameyfin:{game['gameyfin_id']}")
     if game.get("faugus_id"):
         identities.append(f"faugus:{game['faugus_id']}")
+    if game.get("gog_id"):
+        identities.append(f"gog:{game['gog_id']}")
+    if game.get("ea_id"):
+        identities.append(f"ea:{game['ea_id']}")
+    if game.get("ubisoft_id"):
+        identities.append(f"ubisoft:{game['ubisoft_id']}")
     if game.get("rom_name"):
         source = str(game.get("source") or "arcade").strip()
         identities.append(f"{source}:{normalize_rom_name(game['rom_name'])}")
@@ -118,6 +124,12 @@ def source_family(game: dict) -> str:
         return "gameyfin"
     if game.get("faugus_id"):
         return "faugus"
+    if game.get("gog_id"):
+        return "gog"
+    if game.get("ea_id"):
+        return "ea"
+    if game.get("ubisoft_id"):
+        return "ubisoft"
     return str(game.get("source") or game.get("collection") or "").strip().casefold()
 
 
@@ -161,7 +173,16 @@ def normalize_identity(game: dict) -> str | None:
 
     if game.get("faugus_id"):
         return f"faugus:{game['faugus_id']}"
-        
+
+    if game.get("gog_id"):
+        return f"gog:{game['gog_id']}"
+
+    if game.get("ea_id"):
+        return f"ea:{game['ea_id']}"
+
+    if game.get("ubisoft_id"):
+        return f"ubisoft:{game['ubisoft_id']}"
+
     rom_name = game.get("rom_name")
     if rom_name:
         source = str(game.get("source") or "arcade").strip()
@@ -183,6 +204,7 @@ def cross_source_identity(game: dict) -> str | None:
     platform = str(game.get("platform") or "").strip().casefold()
     has_store_id = any(game.get(field) for field in (
         "steam_app_id", "heroic_app_id", "lutris_id", "gameyfin_id", "faugus_id",
+        "gog_id", "ea_id", "ubisoft_id",
     ))
     if (source not in PC_STORE_SOURCES and not has_store_id) or platform not in PC_PLATFORMS:
         return None

@@ -17,7 +17,8 @@ TOOL_GROUPS = {
     ],
     "sources": [
         "storefrontButton", "emulatorsButton", "steamButton", "heroicButton",
-        "lutrisButton", "arcadeButton", "arcadeRoomButton", "householdButton", "discoveryButton",
+        "lutrisButton", "gogButton", "eaButton", "ubisoftButton",
+        "arcadeButton", "arcadeRoomButton", "householdButton", "discoveryButton",
     ],
     "personalize": ["themesButton", "pluginsButton", "settingsButton", "whatsNewButton", "fullscreenButton"],
     "automation": ["webhooksButton", "notificationsButton"],

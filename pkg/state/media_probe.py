@@ -39,6 +39,7 @@ FIELDS = {
     "alternate_names", "max_players", "wikipedia_url", "video_url", "hide_in_bigbox", "esrb",
     "broken", "portable", "controller_support", "disc_count",
     "gameyfin_id", "gameyfin_provider", "store_catalog", "store_installed", "owned",
+    "gog_id", "ea_id", "ubisoft_id",
     "tracking_mode", "tracking_delay", "tracking_frequency", "tracking_process_name", "igdb_id",
     "gamescope_preset", "screenscraper_id",
 }

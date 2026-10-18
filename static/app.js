@@ -1,8 +1,8 @@
 import { $, escapeHtml } from './util.js';
-import { token, AppState, api, notify, nativeFullscreen, detectNative, filteredGames, nativePickFile, selectedIds, resetQuery, resolveDeeplinkGameId } from './state.js';
+import { token, AppState, api, notify, nativeCaps, nativeFullscreen, detectNative, filteredGames, nativePickFile, selectedIds, resetQuery, resolveDeeplinkGameId } from './state.js';
 import { refresh, render, renderGrid, favorite, updateGameStatus, removeGame } from './library.js';
 import { openSettings, openProfiles, openThemes, openAchievements, openPlugins, health, openBackups, openFeature, bulkAction, saveFilter, savePreset, openPlaylists, createManualPlaylist, createFilterPlaylist, createNamedBackup, filterSettings, gracefulShutdown, loadTheme, addGamesToPlaylist } from './settings.js';
-import { importFolder, importSteam, importHeroic, importEpic, importLutris, importArcade, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport } from './imports.js';
+import { importFolder, importSteam, importHeroic, importEpic, importLutris, importGog, importEa, importUbisoft, importArcade, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport } from './imports.js';
 import { watchMetadata } from './metadata.js';
 import { openMediaManager } from './media.js';
 import { setReaderPage, resetReaderFrame } from './reader.js';
@@ -145,6 +145,17 @@ window.addEventListener('DOMContentLoaded', () => {
       const game = Object.fromEntries(new FormData(event.currentTarget));
       const shelf = event.currentTarget.elements.entry_type?.value === 'shelf';
       delete game.entry_type;
+      if (game.price_paid !== '') {
+        const cents = Math.round(Number(game.price_paid) * 100);
+        const currency = String(game.price_currency || AppState.appSettings.currency || 'USD').trim().toUpperCase();
+        if (!Number.isFinite(cents) || cents < 0) { notify(t('price.invalid')); return; }
+        if (!/^[A-Z]{3}$/.test(currency)) { notify(t('price.currency_invalid')); return; }
+        game.price_paid_cents = cents;
+        game.price_currency = currency;
+      } else {
+        delete game.price_currency;
+      }
+      delete game.price_paid;
       game.extract_archive = event.currentTarget.elements.extract_archive.checked;
       game.launch_confirm = event.currentTarget.elements.launch_confirm.checked;
       game.hidden = event.currentTarget.elements.hidden.checked;
@@ -181,6 +192,18 @@ window.addEventListener('DOMContentLoaded', () => {
       if (values.user_rating !== '') changes.user_rating = Number(values.user_rating);
       for (const field of ['favorite','hidden']) if (values[field]) changes[field] = values[field] === 'true';
       if (values.esrb) changes.esrb = values.esrb;
+      if (values.price_clear) {
+        changes.price_paid_cents = null;
+      } else if (values.price_paid !== '') {
+        const cents = Math.round(Number(values.price_paid) * 100);
+        const currency = String(values.price_currency || AppState.appSettings.currency || 'USD').trim().toUpperCase();
+        if (!Number.isFinite(cents) || cents < 0 || !/^[A-Z]{3}$/.test(currency)) {
+          notify(t('price.invalid'));
+          return;
+        }
+        changes.price_paid_cents = cents;
+        changes.price_currency = currency;
+      }
       if (values.reset_stats) changes.reset_stats = true;
       try {
         const result = await api('/api/games/bulk-wizard',{method:'POST',body:JSON.stringify({ids:[...selectedIds],changes})});
@@ -233,6 +256,9 @@ window.addEventListener('DOMContentLoaded', () => {
     $('importHeroicStore').onclick = () => { $('storefrontDialog').close(); importHeroic(); };
     $('importEpicStore').onclick = () => { $('storefrontDialog').close(); importEpic(); };
     $('importLutrisStore').onclick = () => { $('storefrontDialog').close(); importLutris(); };
+    $('importGogStore').onclick = () => { $('storefrontDialog').close(); importGog(); };
+    $('importEaStore').onclick = () => { $('storefrontDialog').close(); importEa(); };
+    $('importUbisoftStore').onclick = () => { $('storefrontDialog').close(); importUbisoft(); };
     if ($('importGameyfinStore')) $('importGameyfinStore').onclick = async () => {
       try {
         await saveStorefrontSettings();
@@ -279,7 +305,7 @@ window.addEventListener('DOMContentLoaded', () => {
     $('loadStorefrontCatalog').onclick = loadStorefrontCatalog;
     $('importStorefrontInstalled').onclick = () => importStorefrontCatalog(false);
     $('importStorefrontUninstalled').onclick = () => importStorefrontCatalog(true);
-    $('addButton').onclick = () => openGameDialog(); $('addShelfButton').onclick = () => openGameDialog(null, {shelf:true}); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => $('metadataDialog').showModal(); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('arcadeButton').onclick = importArcade; $('arcadeRoomButton').onclick = () => openArcadeRoom({state:AppState, games:() => AppState.games, museumKioskEnabled:Boolean(AppState.appSettings.museum_kiosk_enabled && AppState.appSettings.museum_kiosk_pin_set), verifyMuseumPin, onShowGame:game => { AppState.selectedId = game.id; render(); }, onLaunch:game => launch(game)}); $('householdButton').onclick = openHousehold; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('timeMachineButton').onclick = openTimeMachine; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('constellationButton').onclick = openConstellation; $('masteryButton').onclick = openMastery; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
+    $('addButton').onclick = () => openGameDialog(); $('addShelfButton').onclick = () => openGameDialog(null, {shelf:true}); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => $('metadataDialog').showModal(); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('gogButton').onclick = importGog; $('eaButton').onclick = importEa; $('ubisoftButton').onclick = importUbisoft; $('arcadeButton').onclick = importArcade; $('arcadeRoomButton').onclick = () => openArcadeRoom({state:AppState, games:() => AppState.games, museumKioskEnabled:Boolean(AppState.appSettings.museum_kiosk_enabled && AppState.appSettings.museum_kiosk_pin_set), verifyMuseumPin, onShowGame:game => { AppState.selectedId = game.id; render(); }, onLaunch:game => launch(game)}); $('householdButton').onclick = openHousehold; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('timeMachineButton').onclick = openTimeMachine; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('constellationButton').onclick = openConstellation; $('masteryButton').onclick = openMastery; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
     $('doneTimeMachine').onclick = () => $('timeMachineDialog').close();
     // ── Accessible Tools menu ──────────────────────────────────────────
     const toolsWrap = $('toolsWrap');
@@ -462,6 +488,11 @@ window.addEventListener('DOMContentLoaded', () => {
       if (typeof action === 'function') action(params);
     }
 
+    function applyWindowsOnly() {
+      const windows = nativeCaps.platform === 'win32';
+      document.querySelectorAll('[data-windows-only]').forEach(element => { element.hidden = !windows; });
+    }
+
     const deeplink = new URLSearchParams(location.search);
     if (deeplink.get('deeplink') === 'search') $('sidebarSearch').value = deeplink.get('q') || '';
     // Restore the view context from the URL hash before the first render.
@@ -476,6 +507,7 @@ window.addEventListener('DOMContentLoaded', () => {
     $('webhooksButton').onclick = () => openFeature('webhooks');
     $('closeFeature').onclick = $('doneFeature').onclick = () => $('featureDialog').close();
       await detectNative().catch(() => {});
+      applyWindowsOnly();
       connectSessionEvents();
       pollSessions();
       await runStartupStorefrontImports().catch(() => {});

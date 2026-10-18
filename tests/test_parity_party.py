@@ -2,6 +2,7 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -10,9 +11,13 @@ from pkg.parity.parity_party import (  # noqa: E402
     COUCH_PLATFORMS,
     PARTY_QUEUE_LIMIT,
     build_party_queue,
+    delete_deck,
     eligible_party_games,
     empty_queue_reason,
+    list_decks,
+    normalize_decks,
     queue_exclusion_breakdown,
+    save_deck,
 )
 
 
@@ -149,6 +154,92 @@ class QueueExclusionBreakdownTest(unittest.TestCase):
         breakdown = {"total": 5, "hidden": 0, "unusable_path": 4,
                      "too_few_players": 1, "no_controller_or_platform": 0, "over_budget": 0}
         self.assertIn("missing game files", empty_queue_reason(breakdown))
+
+
+class SeededDrawTest(unittest.TestCase):
+    def test_same_seed_is_order_independent(self):
+        games = [game(i) for i in range(8)]
+        self.assertEqual(
+            build_party_queue(games, seed=1234),
+            build_party_queue(list(reversed(games)), seed=1234),
+        )
+
+    def test_different_seed_changes_tiebreak(self):
+        games = [game(i) for i in range(8)]
+        self.assertNotEqual(
+            build_party_queue(games, seed=1),
+            build_party_queue(games, seed=2),
+        )
+
+    def test_no_seed_keeps_working(self):
+        self.assertEqual(len(build_party_queue([game(1), game(2)])), 2)
+
+
+class DeckTest(unittest.TestCase):
+    def test_save_list_upsert_and_delete(self):
+        state = {"party_decks": []}
+        deck = save_deck(state, name="Co-op", query="platform:SNES", players=4, minutes=30)
+        self.assertEqual(deck["players"], 4)
+        self.assertEqual(len(list_decks(state)), 1)
+        save_deck(state, name="Co-op", query="platform:NES", players=2, minutes=0)
+        self.assertEqual(list_decks(state), [{"name": "Co-op", "query": "platform:NES", "players": 2, "minutes": 0}])
+        self.assertTrue(delete_deck(state, "Co-op"))
+        self.assertFalse(delete_deck(state, "Co-op"))
+        self.assertEqual(list_decks(state), [])
+
+    def test_bounds_and_invalid_query(self):
+        state = {"party_decks": []}
+        with self.assertRaises(ValueError):
+            save_deck(state, name="", players=2, minutes=0)
+        with self.assertRaises(ValueError):
+            save_deck(state, name="Bad", players=9, minutes=0)
+        with self.assertRaises(ValueError):
+            save_deck(state, name="Bad", players=2, minutes=1441)
+        with self.assertRaises(ValueError):
+            save_deck(state, name="x" * 61, players=2, minutes=0)
+        with self.assertRaises(ValueError):
+            save_deck(state, name="Long", query="x" * 501, players=2, minutes=0)
+        with self.assertRaises(ValueError):
+            save_deck(state, name="Bad", query={"x": 1}, players=2, minutes=0)
+        with self.assertRaises(ValueError):
+            save_deck(state, name="Bad", query="", players="four", minutes=0)
+        with self.assertRaises(ValueError):
+            save_deck(state, name="Bad", query="", players=2, minutes="long")
+
+    def test_deck_count_and_parse_failure(self):
+        state = {"party_decks": [
+            {"name": f"Deck {index}", "query": "", "players": 2, "minutes": 0}
+            for index in range(20)
+        ]}
+        with self.assertRaises(ValueError):
+            save_deck(state, name="Twenty-first", players=2, minutes=0)
+        with mock.patch("pkg.parity.parity_query.parse_query", side_effect=ValueError("bad")):
+            with self.assertRaises(ValueError):
+                save_deck(state, name="New", query="x", players=2, minutes=0)
+
+    def test_non_list_state_is_reset_or_refused(self):
+        state = {"party_decks": "bad"}
+        save_deck(state, name="Good", players=2, minutes=0)
+        self.assertEqual(state["party_decks"][0]["name"], "Good")
+        self.assertFalse(delete_deck({"party_decks": "bad"}, "Good"))
+
+    def test_normalize_caps_at_twenty(self):
+        state = {"party_decks": [
+            {"name": f"Deck {index}", "query": "", "players": 2, "minutes": 0}
+            for index in range(25)
+        ]}
+        self.assertTrue(normalize_decks(state))
+        self.assertEqual(len(state["party_decks"]), 20)
+
+    def test_normalize_repairs_garbage_and_caps(self):
+        state = {"party_decks": [
+            {"name": "Good", "query": "", "players": 2, "minutes": 0},
+            "junk",
+            {"name": "", "players": 2},
+            {"name": "Good", "players": 2},
+        ]}
+        self.assertTrue(normalize_decks(state))
+        self.assertEqual(list_decks(state), [{"name": "Good", "query": "", "players": 2, "minutes": 0}])
 
 
 if __name__ == "__main__":

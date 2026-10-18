@@ -140,3 +140,21 @@ Added after the 1.16.0 section so existing row numbers stay stable. Every `Teste
 | 84 | A search adds filter chips and pushes the panels below | The chip row stays one line, so the drop zone and Play Insights do not move; the search layout shift is 0 on warm runs and under 0.1 on the cold run | Manual (procedure: PUPPETEER_EXECUTABLE_PATH=<chrome> python3 -B scripts/perf_bench.py --sizes 10000 --browser --runs 3 --no-gate; the browser block's search_cls_max must be under 0.1, and the raw runs must read 0 after the first.) |
 | 85 | The emulator-definition pack is published for the update channel | Each tag builds, signs and verifies community-defs.tar.gz and uploads it with its signature and index.json to the emulator-defs release | Manual (procedure: after a tagged CI run with the release key, confirm the emulator-defs release lists community-defs.tar.gz, community-defs.tar.gz.sig and index.json, then run python3 -B scripts/verify_release.py --key openbox-release.pub community-defs.tar.gz community-defs.tar.gz.sig on the downloaded files.) |
 | 86 | A group's fix is applied to many games and the launch check must stay correct | Only the group's games are checked again; the merged report equals a full audit of the library, and a stale report is refused | Tested (tests/test_launch_audit.py) |
+
+## 1.17.0
+
+Added after the 1.16.1 section so existing row numbers stay stable. Every `Tested` row names a test that exists (ADR 0064, rule 1); `Manual` rows carry the procedure.
+
+| # | Scenario | Expected behavior | Status |
+|---|---|---|---|
+| 87 | GOG registry entry has no usable `.info` file | The registry `exe` is used when it stays inside the install dir; otherwise the game is skipped with an error naming the folder, not a crash | Tested (tests/test_parity_storefront_windows.py) |
+| 88 | A GOG `.info` play task points outside its install dir | The escaping executable is refused; the game is not imported with a launch command that could run another file | Tested (tests/test_parity_storefront_windows.py) |
+| 89 | An EA app game is installed in a custom directory | Discovery reads the install root and the game's `__Installer/installerdata.xml`; valid content ids build the launch URI, malformed manifests are skipped | Tested (tests/test_parity_storefront_windows.py) |
+| 90 | A Ubisoft Connect install key has no usable `InstallDir` | The entry is skipped and an error names the install id; no half-made game record is added | Tested (tests/test_parity_storefront_windows.py) |
+| 91 | A native storefront game is imported twice | Provider id matches the existing record, so the second import adds nothing | Tested (tests/test_windows_storefront_http.py) |
+| 92 | The EA app or Ubisoft Connect URI handler is missing or broken | The game record remains; launch fails with the session error naming the game and its launcher. Reinstall the launcher to restore launch. | Manual (procedure: uninstall the EA app or Ubisoft Connect, launch one of its imported games, confirm the session error names the game; reinstall the launcher and confirm the same game launches.) |
+| 93 | A deck name, filter, player count, minute budget, or deck count is out of bounds | The save is refused with a 400; stored decks are repaired on load and capped at 20 | Tested (tests/test_parity_party.py, tests/test_handlers_party.py) |
+| 94 | The same deck seed is used on two devices with the same library | Both draws produce the same order; a changed library changes the draw | Tested (tests/test_parity_party.py) |
+| 95 | A price is negative, not an integer, or cleared | Bad values are refused; clearing removes both the amount and its currency on the single-game and bulk paths | Tested (tests/test_catalog.py, tests/test_gapfill_rest.py) |
+| 96 | Cost per hour for an unpriced game or under a minute played | No rate is shown or ranked; totals still count the priced game | Tested (tests/test_insights.py) |
+| 97 | A non-English locale receives a cloud-sync, launch-check, definition, or webhook notice | The title and body come from the locale files; a missing key falls back to the stored English text | Tested (tests/test_notifications.py) |

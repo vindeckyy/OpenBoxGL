@@ -90,6 +90,7 @@ def default_state() -> dict[str, Any]:
         "ui_state": {},
         "active_sessions": [],
         "trash": [],
+        "party_decks": [],
     }
 
 
@@ -101,10 +102,19 @@ def _identity_payload(game: dict[str, Any]) -> dict[str, str]:
             "lutris_id", "gameyfin_id", "launchbox_db_id",
         )
     }
+    # Native-storefront ids are appended only when present: including an empty
+    # key would change the stable id of every existing game.
+    for key in ("gog_id", "ea_id", "ubisoft_id"):
+        value = str(game.get(key) or "").strip()
+        if value:
+            identity[key] = value
     if identity["path"]:
         identity["path"] = os.path.normcase(os.path.normpath(os.path.expanduser(identity["path"])))
     if not identity["path"] and not any(
-        identity[key] for key in ("steam_app_id", "heroic_app_id", "lutris_id", "gameyfin_id", "launchbox_db_id")
+        identity.get(key) for key in (
+            "steam_app_id", "heroic_app_id", "lutris_id", "gameyfin_id",
+            "launchbox_db_id", "gog_id", "ea_id", "ubisoft_id",
+        )
     ):
         identity["name"] = str(game.get("name") or "").strip()
     return identity
@@ -242,6 +252,10 @@ def _normalize_feature_fields(state: dict[str, Any]) -> bool:
         if len(valid_sessions) != len(sessions):
             state["active_sessions"] = valid_sessions
             changed = True
+    from pkg.parity.parity_party import normalize_decks
+
+    if normalize_decks(state):
+        changed = True
     for game in state.get("games", []):
         if isinstance(game, dict) and "tags" in game and not isinstance(game.get("tags"), list):
             game["tags"] = []
@@ -541,6 +555,7 @@ class JsonStateStore:
                     "notifications": list(state.get("notifications", [])),
                     "ui_state": dict(state.get("ui_state", {})),
                     "active_sessions": list(state.get("active_sessions", [])),
+                    "party_decks": list(state.get("party_decks", [])),
                 }
             else:
                 self._cached_state = copy.deepcopy(state)

@@ -558,6 +558,8 @@ async function openGameDialog(game = null, options = {}) {
     else if (element.name === 'save_paths') element.value = (game?.save_paths || []).join('\n');
     else if (element.name === 'screenshots') element.value = (game?.screenshots || []).join('\n');
     else if (element.name === 'alternate_names') element.value = Array.isArray(game?.alternate_names) ? game.alternate_names.join('; ') : (game?.alternate_names || '');
+    else if (element.name === 'price_paid') element.value = Number.isInteger(game?.price_paid_cents) ? (game.price_paid_cents / 100).toFixed(2) : '';
+    else if (element.name === 'price_currency') element.value = game?.price_currency || AppState.appSettings.currency || 'USD';
     else if (element.name === 'launch_env') element.value = Object.entries(game?.launch_env || {}).map(([key, value]) => `${key}=${value}`).join('\n');
     else element.value = game?.[element.name] || '';
   });

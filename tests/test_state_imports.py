@@ -41,6 +41,15 @@ class TestStateImports(unittest.TestCase):
         self.assertEqual(result[0], "path")
         self.assertIn("rom.bin", result[1])
 
+    def test_game_identity_native_storefronts(self):
+        from pkg.state.imports import _launcher_label, game_identity
+        self.assertEqual(game_identity({"gog_id": "123"}), ("gog", "123"))
+        self.assertEqual(game_identity({"ea_id": "456"}), ("ea", "456"))
+        self.assertEqual(game_identity({"ubisoft_id": "789"}), ("ubisoft", "789"))
+        self.assertEqual(_launcher_label({"gog_id": "123"}), "GOG")
+        self.assertEqual(_launcher_label({"ea_id": "456"}), "EA app")
+        self.assertEqual(_launcher_label({"ubisoft_id": "789"}), "Ubisoft Connect")
+
     def test_consolidate_existing_games_exported(self):
         from pkg.state.imports import consolidate_existing_games
         self.assertTrue(callable(consolidate_existing_games))

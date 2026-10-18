@@ -69,6 +69,17 @@ async function pickEmulatorForPlatform(platform, items) {
         notify(`${result.added} Lutris games imported · ${result.found} installed`);
       } catch(error) { notify(error.message); }
     }
+    async function importWindowsStore(path, source) {
+      try {
+        const result = await api(path,{method:'POST',body:'{}'});
+        await refresh();
+        notify(t('notify.imports.store_result', {source, added: result.added, found: result.found}));
+        if (result.errors?.length) notify(t('notify.imports.store_errors', {count: result.errors.length}));
+      } catch(error) { notify(error.message); }
+    }
+    async function importGog() { return importWindowsStore('/api/v2/import/gog', 'GOG'); }
+    async function importEa() { return importWindowsStore('/api/v2/import/ea', 'EA app'); }
+    async function importUbisoft() { return importWindowsStore('/api/v2/import/ubisoft', 'Ubisoft Connect'); }
     async function importArcade() {
       const folder = await nativePickFolder('Absolute path of the arcade ROM folder');
       if (!folder) return;
@@ -392,4 +403,4 @@ function bindEsdeImport() {
   $('esdeXmlPath')?.addEventListener('input', invalidateEsdePreview);
 }
 
-export { importFolder, importSteam, importHeroic, importEpic, importLutris, importArcade, importDroppedFolder, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport };
+export { importFolder, importSteam, importHeroic, importEpic, importLutris, importGog, importEa, importUbisoft, importArcade, importDroppedFolder, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport };

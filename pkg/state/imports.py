@@ -36,6 +36,12 @@ def game_identity(game):
         return "heroic", str(game.get("source", "")), str(game["heroic_app_id"])
     if game.get("lutris_id"):
         return "lutris", str(game["lutris_id"])
+    if game.get("gog_id"):
+        return "gog", str(game["gog_id"])
+    if game.get("ea_id"):
+        return "ea", str(game["ea_id"])
+    if game.get("ubisoft_id"):
+        return "ubisoft", str(game["ubisoft_id"])
     if game.get("rom_name"):
         return "arcade", str(game.get("source", "")), str(game["rom_name"])
     return "path", str(Path(game.get("path", "")).expanduser())
@@ -53,6 +59,12 @@ def _launcher_label(game):
         return "Gameyfin"
     if game.get("faugus_id"):
         return "Faugus"
+    if game.get("gog_id"):
+        return "GOG"
+    if game.get("ea_id"):
+        return "EA app"
+    if game.get("ubisoft_id"):
+        return "Ubisoft Connect"
     return str(game.get("source") or "Imported").strip() or "Imported"
 
 
@@ -96,7 +108,7 @@ def _merge_source_fields(target, source):
         target["heroic_source"] = str(source.get("source"))
     for field in (
         "steam_app_id", "heroic_app_id", "lutris_id", "gameyfin_id", "gameyfin_provider",
-        "faugus_id", "install_dir",
+        "faugus_id", "gog_id", "ea_id", "ubisoft_id", "install_dir",
     ):
         if source.get(field) and not target.get(field):
             target[field] = source[field]

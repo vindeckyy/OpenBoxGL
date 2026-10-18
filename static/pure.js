@@ -32,6 +32,19 @@ export function formatHours(seconds) {
   return `${Math.round(hours)}h`;
 }
 
+// Currency formatting for price-paid surfaces. Invalid codes fall back to the
+// code and a fixed two-decimal amount instead of throwing in render.
+export function formatMoney(cents, currency, locale) {
+  const amount = Number(cents);
+  if (!Number.isFinite(amount)) return '';
+  const code = String(currency || '').toUpperCase();
+  try {
+    return new Intl.NumberFormat(locale || undefined, { style: 'currency', currency: code }).format(amount / 100);
+  } catch {
+    return `${code} ${(amount / 100).toFixed(2)}`.trim();
+  }
+}
+
 // Exponential backoff for a dropped event stream, capped at max.
 export function nextRetryDelay(current, max) {
   return Math.min(current * 2, max);

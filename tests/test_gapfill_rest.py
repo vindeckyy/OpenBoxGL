@@ -1439,6 +1439,27 @@ class LibraryDnaHookTests(unittest.TestCase):
         game = library_mod._clean_game_fields({"name": "Doom", "user_rating": 4})
         self.assertEqual(game["user_rating"], 4)
 
+    def test_clean_game_fields_price_pair(self):
+        game = library_mod._clean_game_fields({
+            "name": "Doom", "price_paid_cents": 1999, "price_currency": "usd",
+        })
+        self.assertEqual(game["price_paid_cents"], 1999)
+        self.assertEqual(game["price_currency"], "USD")
+        with self.assertRaises(ValueError):
+            library_mod._clean_game_fields({"name": "Doom", "price_paid_cents": 1999})
+        with self.assertRaises(ValueError):
+            library_mod._clean_game_fields({"name": "Doom", "price_currency": "USD"})
+
+    def test_clearing_price_removes_both_fields(self):
+        state = {"games": [{
+            "game_id": "g1", "name": "Doom", "path": "/games/doom.exe",
+            "price_paid_cents": 1999, "price_currency": "USD",
+        }]}
+        game = library_mod._clean_game_fields({"name": "Doom", "price_paid_cents": ""})
+        library_mod._save_game_mutate(state, {"game_id": "g1"}, game)
+        self.assertNotIn("price_paid_cents", state["games"][0])
+        self.assertNotIn("price_currency", state["games"][0])
+
 
 # ── handlers/library.py (HTTP) ───────────────────────────────────────────────
 
