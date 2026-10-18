@@ -551,6 +551,7 @@ def _public_settings_uncached(state):
         "library_view": settings.get("library_view", "grid"),
         "cover_grouping": settings.get("cover_grouping", "shape"),
         "locale": settings.get("locale", "en"),
+        "currency": settings.get("currency", "USD"),
         "available_locales": AVAILABLE_LOCALES,
         "strings": strings_for(settings.get("locale", "en")),
         "attract_mode_seconds": settings.get("attract_mode_seconds", settings.get("screensaver_seconds", 90)),
@@ -629,6 +630,8 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         game.get("last_played"), game.get("play_count"), game.get("playtime_seconds"),
         game.get("progress"), game.get("rating"), repr(game.get("notes")),
         game.get("user_rating"), game.get("manual_playtime_seconds"),
+        game.get("price_paid_cents"), game.get("price_currency"),
+        game.get("gog_id"), game.get("ea_id"), game.get("ubisoft_id"),
         repr(game.get("manual_sessions")),
         game.get("name"), game.get("path"), game.get("cover"), game.get("background"),
         game.get("platform"), index in save_indices,
@@ -691,6 +694,9 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
     lutris_id = game.get("lutris_id", "")
     gameyfin_id = game.get("gameyfin_id", "")
     store_catalog = bool(game.get("store_catalog"))
+    raw_price = game.get("price_paid_cents")
+    price_paid_cents = raw_price if isinstance(raw_price, int) and not isinstance(raw_price, bool) and raw_price >= 0 else None
+    price_currency = str(game.get("price_currency") or "").strip().upper() if price_paid_cents is not None else ""
 
     alt = game.get("alternate_names", [])
     if not isinstance(alt, list):
@@ -822,6 +828,9 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "source": game.get("source", ""),
         "steam_app_id": steam_id,
         "lutris_id": lutris_id,
+        "gog_id": game.get("gog_id", ""),
+        "ea_id": game.get("ea_id", ""),
+        "ubisoft_id": game.get("ubisoft_id", ""),
         "install_dir": game.get("install_dir", ""),
         "import_batch_id": game.get("import_batch_id", ""),
         "heroic_app_id": heroic_id,
@@ -847,6 +856,8 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "rating": game.get("rating", ""),
         "notes": note_entries,
         "user_rating": user_rating,
+        "price_paid_cents": price_paid_cents,
+        "price_currency": price_currency,
         "manual_playtime_seconds": manual_seconds,
         "manual_sessions": manual_sessions,
         "total_playtime_seconds": max(0, observed_seconds) + manual_seconds,

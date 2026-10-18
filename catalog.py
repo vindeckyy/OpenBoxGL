@@ -12,6 +12,8 @@ PROGRESS = {"", "Unplayed", "Playing", "Paused", "Beaten", "Completed", "Mastere
 MEDIA_FIELDS = ("cover", "background", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "cart_front", "cart_back", "disc", "advertisement", "manual", "video", "music")
 MAX_TAGS = 50
 MAX_TAG_LENGTH = 64
+MAX_PRICE_CENTS = 1_000_000_000
+_CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 _WORD_RE = re.compile(r"\w+")
 
 
@@ -41,6 +43,25 @@ def clean_user_rating(value):
     if not 0 <= rating <= 5:
         raise ValueError("User rating must be an integer from 0 to 5.")
     return rating
+
+
+def clean_price_cents(value):
+    """Price paid in integer cents; None clears it. Booleans and floats are refused."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("Price paid must be a whole number of cents.")
+    if not 0 <= value <= MAX_PRICE_CENTS:
+        raise ValueError("Price paid is out of range.")
+    return value
+
+
+def clean_currency(value):
+    """ISO-4217-shaped three-letter currency code, uppercase."""
+    text = str(value or "").strip().upper()
+    if not _CURRENCY_RE.fullmatch(text):
+        raise ValueError("Currency must be a three-letter code such as USD.")
+    return text
 
 
 def normalize_notes(value):
@@ -225,7 +246,7 @@ def related_game_ids(games, selected, limit=8):
 _BULK_ALLOWED = {
     "platform", "genre", "progress", "rating", "user_rating", "favorite", "hidden", "esrb",
     "custom_fields", "tags", "tags_add", "tags_remove", "reset_stats",
-    "play_count", "playtime_seconds", "last_played",
+    "play_count", "playtime_seconds", "last_played", "price_paid_cents", "price_currency",
 }
 
 
@@ -281,6 +302,10 @@ def _clean_bulk_fields(changes):
             if not 0 <= rating <= 5:
                 raise ValueError("Rating must be between 0 and 5.")
             clean[field] = rating
+        elif field == "price_paid_cents":
+            clean[field] = clean_price_cents(value)
+        elif field == "price_currency":
+            clean[field] = clean_currency(value)
         elif field == "user_rating":
             clean[field] = clean_user_rating(value)
         elif field == "esrb":
@@ -295,6 +320,13 @@ def _clean_bulk_fields(changes):
             clean[field] = normalize_tags(value)
         else:
             clean[field] = str(value).strip()
+    if "price_paid_cents" in clean:
+        if clean["price_paid_cents"] is None:
+            clean.pop("price_currency", None)
+        elif "price_currency" not in clean:
+            raise ValueError("Currency is required when a price is set.")
+    elif "price_currency" in clean:
+        raise ValueError("Currency cannot be set without a price.")
     return clean
 
 
@@ -320,6 +352,11 @@ def _resolve_bulk_indexes(games, ids):
 
 def _apply_bulk_patch(game, patch):
     """Apply one cleaned patch dict to a game: custom_fields merge, tag changes, reset_stats, then the remaining fields."""
+    if patch.get("price_paid_cents", "") is None:
+        patch.pop("price_paid_cents", None)
+        patch.pop("price_currency", None)
+        game.pop("price_paid_cents", None)
+        game.pop("price_currency", None)
     if patch.pop("reset_stats", False):
         game["play_count"] = 0
         game["playtime_seconds"] = 0

@@ -681,6 +681,9 @@ def classify_candidates(raw_games: list[dict], *, state: dict | None = None) -> 
                 ("heroic", str(game.get("source") or ""), str(game.get("heroic_app_id") or "")),
                 ("lutris", str(game.get("lutris_id") or "")),
                 ("gameyfin", str(game.get("gameyfin_id") or "")),
+                ("gog", str(game.get("gog_id") or "")),
+                ("ea", str(game.get("ea_id") or "")),
+                ("ubisoft", str(game.get("ubisoft_id") or "")),
             )
         ):
             group = "exclusions"

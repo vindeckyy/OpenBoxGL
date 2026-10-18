@@ -32,6 +32,130 @@ COUCH_PLATFORMS = frozenset({
 })
 
 PARTY_QUEUE_LIMIT = 50
+MAX_DECKS = 20
+MAX_DECK_NAME = 60
+MAX_DECK_QUERY = 500
+MAX_DECK_MINUTES = 1440
+
+
+def _stable_id(game: dict[str, Any]) -> str:
+    return str(game.get("game_id") or game.get("id") or "")
+
+
+def _clean_deck_name(name) -> str:
+    text = str(name or "").strip()
+    if not text:
+        raise ValueError("Deck name is required.")
+    if len(text) > MAX_DECK_NAME:
+        raise ValueError(f"Deck name must be at most {MAX_DECK_NAME} characters.")
+    return text
+
+
+def _clean_deck_query(query) -> str:
+    if query is not None and not isinstance(query, str):
+        raise ValueError("Deck filter must be text.")
+    text = " ".join(str(query or "").split())
+    if len(text) > MAX_DECK_QUERY:
+        raise ValueError(f"Deck filter must be at most {MAX_DECK_QUERY} characters.")
+    return text
+
+
+def _clean_deck_players(players) -> int:
+    try:
+        value = int(players)
+    except (TypeError, ValueError) as error:
+        raise ValueError("Deck players must be an integer.") from error
+    if not 2 <= value <= 8:
+        raise ValueError("Deck players must be between 2 and 8.")
+    return value
+
+
+def _clean_deck_minutes(minutes) -> int:
+    try:
+        value = int(minutes or 0)
+    except (TypeError, ValueError) as error:
+        raise ValueError("Deck minutes must be an integer.") from error
+    if not 0 <= value <= MAX_DECK_MINUTES:
+        raise ValueError(f"Deck minutes must be between 0 and {MAX_DECK_MINUTES}.")
+    return value
+
+
+def normalize_decks(state) -> bool:
+    """Repair state["party_decks"] in place; returns True when it changed."""
+    items = state.get("party_decks")
+    if not isinstance(items, list):
+        state["party_decks"] = []
+        return True
+    clean = []
+    seen = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        try:
+            name = _clean_deck_name(item.get("name"))
+            query = _clean_deck_query(item.get("query"))
+            players = _clean_deck_players(item.get("players", 2))
+            minutes = _clean_deck_minutes(item.get("minutes", 0))
+        except ValueError:
+            continue
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        clean.append({"name": name, "query": query, "players": players, "minutes": minutes})
+        if len(clean) >= MAX_DECKS:
+            break
+    if clean != items:
+        state["party_decks"] = clean
+        return True
+    return False
+
+
+def list_decks(state) -> list[dict[str, Any]]:
+    items = state.get("party_decks", []) if isinstance(state, dict) else []
+    return [dict(item) for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+
+
+def save_deck(state, *, name, query="", players=2, minutes=0) -> dict[str, Any]:
+    from pkg.parity.parity_query import parse_query
+
+    name = _clean_deck_name(name)
+    query = _clean_deck_query(query)
+    if query:
+        try:
+            parse_query(query)
+        except (ValueError, TypeError) as error:
+            raise ValueError(f"Deck filter is invalid: {error}") from error
+    entry = {
+        "name": name,
+        "query": query,
+        "players": _clean_deck_players(players),
+        "minutes": _clean_deck_minutes(minutes),
+    }
+    items = state.setdefault("party_decks", [])
+    if not isinstance(items, list):
+        items = []
+        state["party_decks"] = items
+    for index, item in enumerate(items):
+        if isinstance(item, dict) and str(item.get("name") or "").strip().casefold() == name.casefold():
+            items[index] = entry
+            return dict(entry)
+    if len(items) >= MAX_DECKS:
+        raise ValueError(f"At most {MAX_DECKS} decks can be saved.")
+    items.append(entry)
+    return dict(entry)
+
+
+def delete_deck(state, name) -> bool:
+    name = str(name or "").strip()
+    items = state.get("party_decks", [])
+    if not isinstance(items, list):
+        return False
+    kept = [item for item in items if not isinstance(item, dict) or str(item.get("name") or "") != name]
+    if len(kept) == len(items):
+        return False
+    state["party_decks"] = kept
+    return True
 
 
 def _max_players(game: dict[str, Any]) -> int:
@@ -154,12 +278,15 @@ def build_party_queue(
     players: int = 2,
     minutes: int = 0,
     limit: int = PARTY_QUEUE_LIMIT,
+    seed: int | None = None,
 ) -> list[str]:
     """Build a party queue of game ids, best first.
 
     Filters to couch-eligible games, excludes titles whose typical session
     runs longer than 3x the session budget (same factor as the picker), sorts
-    rating desc with a random tiebreak, and caps at `limit`.
+    rating desc with a random tiebreak, and caps at `limit`. With `seed`, the
+    candidate order is normalized by stable id first, so the same library and
+    seed produce the same draw on another device.
     """
     try:
         players = int(players)
@@ -192,6 +319,10 @@ def build_party_queue(
         except (TypeError, ValueError):
             return 0.0
 
-    scored = [(-rating_of(game), random.random(), str(game.get("game_id") or game.get("id") or "")) for game in candidates]
+    rng = random.Random(seed) if seed is not None else random
+    scored = [
+        (-rating_of(game), rng.random(), _stable_id(game))
+        for game in (sorted(candidates, key=_stable_id) if seed is not None else candidates)
+    ]
     scored.sort(key=lambda item: (item[0], item[1]))
     return [game_id for _, _, game_id in scored[:limit] if game_id]

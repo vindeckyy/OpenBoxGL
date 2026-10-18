@@ -6,6 +6,41 @@ import uuid
 
 CAP = 200
 _DEDUPE_SECONDS = 600
+MAX_PARAMS = 10
+MAX_PARAM_TEXT = 200
+
+# Every translated server notice: key -> required placeholder names. The
+# English title/body stays on the item as a fallback for old clients and
+# webhook consumers.
+SERVER_NOTICE_KEYS = {
+    "notify.server.cloud_sync_ok_title": (),
+    "notify.server.cloud_sync_ok_body": ("count",),
+    "notify.server.cloud_sync_ok_body_one": ("count",),
+    "notify.server.cloud_sync_failed_title": (),
+    "notify.server.cloud_sync_failed_body": ("detail",),
+    "notify.server.launch_audit_title": ("blocked", "warning"),
+    "notify.server.launch_audit_body": ("blocked", "warning", "before_blocked", "before_warning"),
+    "notify.server.defs_rejected_title": (),
+    "notify.server.defs_rejected_body": ("detail",),
+    "notify.server.webhook_failed_title": (),
+    "notify.server.webhook_failed_body": ("event_id", "detail"),
+}
+
+
+def _clean_params(params):
+    if not isinstance(params, dict):
+        return {}
+    clean = {}
+    for key, value in list(params.items())[:MAX_PARAMS]:
+        if not isinstance(key, str) or not key:
+            continue
+        if isinstance(value, bool) or isinstance(value, (int, float)):
+            clean[key] = value
+        elif isinstance(value, str):
+            clean[key] = value[:MAX_PARAM_TEXT]
+        else:
+            clean[key] = str(value)[:MAX_PARAM_TEXT]
+    return clean
 
 
 def _now() -> str:
@@ -19,7 +54,10 @@ def _parse(value: str) -> float:
         return 0.0
 
 
-def add_notification(state, *, kind, level, title, body, source="", correlation_id="", dedupe_key="", now=None):
+def add_notification(
+    state, *, kind, level, title, body, source="", correlation_id="", dedupe_key="",
+    title_key="", body_key="", params=None, now=None,
+):
     items = state.setdefault("notifications", [])
     if not isinstance(items, list):
         items = []
@@ -40,6 +78,13 @@ def add_notification(state, *, kind, level, title, body, source="", correlation_
     for key, value in (("source", source), ("correlation_id", correlation_id), ("dedupe_key", dedupe_key)):
         if value:
             item[key] = str(value)[:200]
+    if title_key:
+        item["title_key"] = str(title_key)[:120]
+    if body_key:
+        item["body_key"] = str(body_key)[:120]
+    clean_params = _clean_params(params)
+    if clean_params:
+        item["params"] = clean_params
     state["notifications"] = [item, *items][:CAP]
     return item
 
@@ -69,7 +114,7 @@ def clear(state, ids=None):
 CLOUD_SYNC_KIND = "cloud_sync"
 
 
-def record_cloud_sync_outcome(state, *, success, body, now=None):
+def record_cloud_sync_outcome(state, *, success, body, now=None, params=None):
     """Keep only the latest cloud-sync success or failure notification."""
     items = state.setdefault("notifications", [])
     if not isinstance(items, list):
@@ -87,5 +132,14 @@ def record_cloud_sync_outcome(state, *, success, body, now=None):
         body=body,
         source="cloud_sync",
         dedupe_key="cloud_sync:last",
+        title_key=(
+            "notify.server.cloud_sync_ok_title" if success
+            else "notify.server.cloud_sync_failed_title"
+        ),
+        body_key=(
+            "notify.server.cloud_sync_ok_body" if success
+            else "notify.server.cloud_sync_failed_body"
+        ),
+        params=params or {"detail": body},
         now=now,
     )

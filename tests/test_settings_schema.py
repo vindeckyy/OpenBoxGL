@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from handlers.settings import (  # noqa: E402
     _clean_controller_map,
     _clean_controller_prompt_hint,
+    _clean_currency,
     _clean_gamescope_presets,
     _clean_party,
     _clean_screensaver_seconds,
@@ -74,6 +75,12 @@ class SettingsSchemaTests(unittest.TestCase):
         self.assertEqual(set(clean_settings({})), set(clean_settings({})) & KNOWN_SETTINGS)
         self.assertLessEqual(set(clean_settings({})), KNOWN_SETTINGS)
 
+    def test_currency_defaults_and_validates(self):
+        self.assertEqual(_clean_currency({}), "USD")
+        self.assertEqual(_clean_currency({"currency": "eur"}), "EUR")
+        with self.assertRaises(ValueError):
+            _clean_currency({"currency": "EU"})
+
     def test_registry_contains_every_key_the_save_path_writes(self):
         # The save handler normalizes and writes these keys; the whitelist
         # must cover them or a fresh settings save would drop them.
@@ -84,6 +91,7 @@ class SettingsSchemaTests(unittest.TestCase):
             "progress_automation_play_minutes", "progress_automation_idle_days",
             "welcome_completed", "image_group", "auto_import_media_types",
             "media_download_limit", "region_priority", "video_priority", "library_music",
+            "currency",
             "video_bgm_mix", "bigbox_mode", "show_playlist_actions", "hidden_sidebar_sections",
             "storefront_auto_import", "obs_auto_attach", "obs_recording_path",
             "dynamic_play_button", "custom_field_defs", "platform_categories", "list_columns",

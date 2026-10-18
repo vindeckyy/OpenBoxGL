@@ -35,10 +35,13 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/household/share` | `handlers.household.household_share` |
 | POST | `/api/v2/household/sync/publish` | `handlers.household.household_sync_publish` |
 | POST | `/api/v2/household/sync/pull` | `handlers.household.household_sync_pull` |
+| POST | `/api/v2/import/ea` | `_api_post_api_v2_import_ea` |
 | POST | `/api/v2/import/esde/apply` | `_api_post_api_v2_import_esde_apply` |
 | POST | `/api/v2/import/esde/preview` | `_api_post_api_v2_import_esde_preview` |
+| POST | `/api/v2/import/gog` | `_api_post_api_v2_import_gog` |
 | POST | `/api/v2/import/launchbox/apply` | `_api_post_api_v2_import_launchbox_apply` |
 | POST | `/api/v2/import/launchbox/preview` | `_api_post_api_v2_import_launchbox_preview` |
+| POST | `/api/v2/import/ubisoft` | `_api_post_api_v2_import_ubisoft` |
 | GET | `/api/v2/insights/heatmap` | `_api_get_api_v2_insights_heatmap` |
 | GET | `/api/v2/insights/mastery` | `_api_get_api_v2_insights_mastery` |
 | GET | `/api/v2/insights/radar` | `_api_get_api_v2_insights_radar` |
@@ -126,6 +129,9 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/moments/delete` | `handlers.moments.moments_delete` |
 | POST | `/api/v2/moments/resume` | `handlers.moments.moments_resume` |
 | POST | `/api/v2/moments/update` | `handlers.moments.moments_update` |
+| GET | `/api/v2/party/decks` | `_api_get_api_v2_party_decks` |
+| POST | `/api/v2/party/decks` | `_api_post_api_v2_party_decks` |
+| POST | `/api/v2/party/decks/delete` | `_api_post_api_v2_party_decks_delete` |
 | POST | `/api/v2/party/next` | `_api_post_api_v2_party_next` |
 | GET | `/api/v2/party/queue` | `_api_get_api_v2_party_queue` |
 | POST | `/api/v2/party/queue` | `_api_post_api_v2_party_queue` |
@@ -172,7 +178,7 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/steamgrid/test` | `handlers.steamgrid.steamgrid_test` |
 | GET | `/api/v2/story` | `_api_get_api_v2_story` |
 
-_161 routes._
+_167 routes._
 
 ## API v1 (frozen)
 

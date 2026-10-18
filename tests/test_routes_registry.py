@@ -53,28 +53,30 @@ class RouteRegistryTests(unittest.TestCase):
         # 1.16 adds GET /api/v2/launch/audit and POST /api/v2/launch/audit/scan;
         # 1.16.x added GET /api/v2/launch/audit/status and the grant routes; 1.16.1 adds
         # GET /api/v2/launch/cores and POST /api/v2/launch/core; 1.16.1 also adds POST /api/v2/launch/audit/refresh).
-        self.assertEqual(len(GET_TABLE), 197)
-        self.assertEqual(len(POST_TABLE), 241)
+        # 1.17 adds GET/POST /api/v2/party/decks, POST /api/v2/party/decks/delete,
+        # and the three native storefront imports.
+        self.assertEqual(len(GET_TABLE), 198)
+        self.assertEqual(len(POST_TABLE), 246)
         self.assertEqual(len(V1_ALIASED_PREFIXES), 61)
 
     def test_base_routes_count(self):
         base_get = [p for p in GET_TABLE if not p.startswith("/api/v1")]
         base_post = [p for p in POST_TABLE if not p.startswith("/api/v1")]
-        self.assertEqual(len(base_get), 172)
-        self.assertEqual(len(base_post), 198)
-        self.assertEqual(len(base_get) + len(base_post), 370)
+        self.assertEqual(len(base_get), 173)
+        self.assertEqual(len(base_post), 203)
+        self.assertEqual(len(base_get) + len(base_post), 376)
 
     def test_all_routes_registered(self):
         routes = all_routes()
-        # 371 = 370 table paths + the /api/v1/jobs dual-registration (1.16.1 adds the core picker's GET and POST, and the per-group refresh).
+        # 377 = 376 table paths + the /api/v1/jobs dual-registration (1.16.1 adds the core picker's GET and POST, and the per-group refresh).
         # 1.16.0 added GET /api/v2/launch/audit and POST /api/v2/launch/audit/scan (F1);
-        # 1.16.x added GET /api/v2/launch/audit/status (readiness badges).
-        self.assertEqual(len(routes), 371)
+        # 1.16.x added GET /api/v2/launch/audit/status (readiness badges); 1.17 adds the deck and native-import routes.
+        self.assertEqual(len(routes), 377)
 
         get_routes = [r for r in routes if r.method == "GET"]
         post_routes = [r for r in routes if r.method == "POST"]
-        self.assertEqual(len(get_routes), 173)
-        self.assertEqual(len(post_routes), 198)
+        self.assertEqual(len(get_routes), 174)
+        self.assertEqual(len(post_routes), 203)
 
     def test_every_registered_route_matches_live_table(self):
         routes = all_routes()

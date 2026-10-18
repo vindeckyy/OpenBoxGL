@@ -55,12 +55,19 @@ def webhook_configs(state=None):
     return [config for config in configs[:MAX_WEBHOOKS] if isinstance(config, dict)]
 
 
-def emit_notification(*, kind="system", level="info", title="OpenBox", body="", source="", correlation_id="", dedupe_key=""):
+def emit_notification(
+    *, kind="system", level="info", title="OpenBox", body="", source="",
+    correlation_id="", dedupe_key="", title_key="", body_key="", params=None,
+):
     from pkg.state.cache import transact_state
     transact = _ns("transact_state", transact_state)
 
     def mutate(state):
-        return add_notification(state, kind=kind, level=level, title=title, body=body, source=source, correlation_id=correlation_id, dedupe_key=dedupe_key)
+        return add_notification(
+            state, kind=kind, level=level, title=title, body=body, source=source,
+            correlation_id=correlation_id, dedupe_key=dedupe_key,
+            title_key=title_key, body_key=body_key, params=params,
+        )
     try:
         transact(mutate)
     except Exception:
@@ -124,6 +131,9 @@ def _emit_webhook_failure(event_id, error):
             body=error,
             correlation_id=event_id,
             dedupe_key=f"webhook:{event_id}",
+            title_key="notify.server.webhook_failed_title",
+            body_key="notify.server.webhook_failed_body",
+            params={"event_id": event_id, "detail": error},
         )
     except Exception:
         LOGGER.exception("Failed to record webhook delivery failure notification")

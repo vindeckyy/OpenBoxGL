@@ -4,7 +4,7 @@
    the panel first scrolls into view; reloads on app:state-refreshed while visible.
    Table fallback for a11y.
 */
-import { formatHours } from './pure.js';
+import { formatHours, formatMoney } from './pure.js';
 import { $, escapeHtml } from './util.js';
 import { api, AppState, notify } from './state.js';
 import { t } from './i18n.js';
@@ -62,6 +62,21 @@ function renderTotals(totals) {
       <div class="insight-card"><div class="insight-card-value">${totals.total_sessions}</div><div class="insight-card-label">${escapeHtml(t('insights.sessions'))}</div></div>
     </div>
   `;
+}
+
+function renderSpend(spend) {
+  const currencies = Array.isArray(spend?.currencies) ? spend.currencies : [];
+  if (!currencies.length) {
+    return `<div class="insight-section"><h3 class="insight-title">${escapeHtml(t('insights.spend_title'))}</h3><p class="muted">${escapeHtml(t('insights.spend_empty'))}</p></div>`;
+  }
+  const rows = currencies.map(item => {
+    const rate = item.cost_per_hour_cents === null || item.cost_per_hour_cents === undefined
+      ? '—' : formatMoney(item.cost_per_hour_cents, item.currency);
+    return `<li class="insight-rank-row"><span class="insight-rank-label">${escapeHtml(formatMoney(item.total_cents, item.currency))} · ${escapeHtml(t('insights.spend_games', {count: item.games}))}</span><span class="insight-rank-count">${escapeHtml(formatHours(item.seconds))} · ${escapeHtml(rate)}</span></li>`;
+  }).join('');
+  const best = (Array.isArray(spend?.best_value) ? spend.best_value : []).map(item =>
+    `<li class="insight-rank-row"><span class="insight-rank-label">${escapeHtml(item.name || '')}</span><span class="insight-rank-count">${escapeHtml(formatMoney(item.cost_per_hour_cents, item.currency))}</span></li>`).join('');
+  return `<div class="insight-section"><h3 class="insight-title">${escapeHtml(t('insights.spend_title'))}</h3><ol class="insight-rank">${rows}</ol>${best ? `<h4 class="insight-title">${escapeHtml(t('insights.spend_best'))}</h4><ol class="insight-rank">${best}</ol>` : ''}</div>`;
 }
 
 function renderTopList(title, items, keyName) {
@@ -201,10 +216,11 @@ async function loadInsights() {
       api('/api/v2/insights/radio').catch(() => null),
       api('/api/v2/insights/radar').catch(() => null),
     ]);
-    const { heatmap, totals, top_platforms, top_genres, top_games, streak, momentum } = data;
+    const { heatmap, totals, top_platforms, top_genres, top_games, streak, momentum, spend } = data;
     body.innerHTML = `
       <div class="insights">
         ${renderTotals(totals)}
+        ${renderSpend(spend)}
         ${renderRadio(radioRes && radioRes.playlist)}
         ${renderStreak(streak, momentum)}
         <div class="insight-section">

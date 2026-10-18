@@ -32,6 +32,7 @@ EXPORT_GAME_FIELDS = (
     "favorite", "hidden", "broken", "portable", "installed", "added_at",
     "source", "steam_app_id", "heroic_app_id", "lutris_id", "gameyfin_id",
     "igdb_id", "ra_game_id", "launchbox_db_id", "install_dir",
+    "gog_id", "ea_id", "ubisoft_id", "price_paid_cents", "price_currency",
     "disc_count", "rom_name", "clone_of", "set_type",
 )
 EXPORT_MEDIA_FIELDS = (

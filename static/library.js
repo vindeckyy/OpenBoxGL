@@ -1,4 +1,5 @@
 import { subscribe } from './events.js';
+import { formatMoney } from './pure.js';
 import { $, escapeHtml, duration, fact, gameLinks, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds, trigramsOf, expandTrigrams } from './util.js';
 import { token, AppState, gameIdOf, selectedIds, media, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, showToast, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
 import { loadTheme, deletePlaylist } from './settings.js';
@@ -1244,6 +1245,10 @@ function markFilterAria() {
       const savePaths = game.save_paths || [];
       const heroStyle = game.has_background ? `style="background-image:url('${media(game,'background')}')"` : '';
       const shelfEntry = Boolean(game.manual_entry);
+      const priceCents = Number.isInteger(game.price_paid_cents) ? game.price_paid_cents : null;
+      const priceCurrency = game.price_currency || AppState.appSettings.currency || 'USD';
+      const playedHours = Number(game.total_playtime_seconds || game.playtime_seconds || 0) / 3600;
+      const costPerHour = priceCents > 0 && playedHours >= (1 / 60) ? Math.round(priceCents / playedHours) : null;
       $('details').innerHTML = `<div class="hero motion-enter" ${heroStyle}><div class="hero-copy"><div class="hero-kicker">${escapeHtml(game.platform || 'Unspecified platform')}</div><h2>${escapeHtml(game.name)}</h2></div></div>
         <div class="detail-body">
           <div class="detail-tabs" role="tablist" aria-label="${escapeHtml(t('moments.detail_tabs'))}"><button type="button" class="detail-tab active" id="detailsOverviewTab" role="tab" aria-selected="true" aria-controls="detailsOverview">${escapeHtml(t('moments.overview'))}</button><button type="button" class="detail-tab" id="momentsTab" role="tab" aria-selected="false" aria-controls="detailsMoments">${escapeHtml(t('moments.tab'))}${game.moments_count ? ` <span class="tab-count">${escapeHtml(String(game.moments_count))}</span>` : ''}</button><button type="button" class="detail-tab" id="storyTab" role="tab" aria-selected="false" aria-controls="detailsStory">Story</button></div>
@@ -1262,6 +1267,8 @@ function markFilterAria() {
             ${fact(t('backlog.my_rating'), game.user_rating ? `${game.user_rating} / 5` : '')}
             ${fact(t('backlog.manual_time'), duration(game.manual_playtime_seconds || 0))}
             ${fact(t('backlog.total_time'), duration(game.total_playtime_seconds || game.playtime_seconds || 0))}
+            ${priceCents != null ? fact(t('price.paid'), formatMoney(priceCents, priceCurrency)) : ''}
+            ${costPerHour != null ? fact(t('price.cost_per_hour'), formatMoney(costPerHour, priceCurrency)) : ''}
           </div>
           <div class="backlog-controls">
             <label class="field"><span>${escapeHtml(t('backlog.status'))}</span><select id="backlogProgress">

@@ -17,6 +17,7 @@ from pkg.parity.parity_insights import (  # noqa: E402
     compute_top_genres,
     compute_top_games,
     compute_momentum,
+    compute_spend,
     compute_totals,
     summarize,
 )
@@ -406,6 +407,39 @@ class InsightsHandlerTest(unittest.TestCase):
             self.assertEqual(payload["overall"]["ra_tracked"], 0)
         finally:
             handlers.insights.DATA = prev_ra_data
+
+
+class SpendTest(unittest.TestCase):
+    def test_totals_by_currency_and_cost_per_hour(self):
+        games = [
+            {"game_id": "a", "name": "A", "price_paid_cents": 1999, "price_currency": "USD", "playtime_seconds": 7200},
+            {"game_id": "b", "name": "B", "price_paid_cents": 500, "price_currency": "EUR", "playtime_seconds": 3600},
+            {"game_id": "c", "name": "C", "price_paid_cents": 1000, "price_currency": "USD", "playtime_seconds": 10},
+            {"game_id": "d", "name": "D", "price_paid_cents": 0, "price_currency": "USD"},
+            {"game_id": "e", "name": "E", "price_paid_cents": -1, "price_currency": "USD"},
+        ]
+        spend = compute_spend(games)
+        by_currency = {item["currency"]: item for item in spend["currencies"]}
+        self.assertEqual(by_currency["USD"]["total_cents"], 2999)
+        self.assertEqual(by_currency["USD"]["games"], 3)
+        self.assertEqual(by_currency["USD"]["cost_per_hour_cents"], 1497)
+        self.assertEqual(by_currency["EUR"]["cost_per_hour_cents"], 500)
+        self.assertEqual(spend["best_value"][0]["game_id"], "b")
+        self.assertEqual(spend["worst_value"][0]["game_id"], "a")
+        self.assertNotIn("c", [item["game_id"] for item in spend["best_value"]])
+
+    def test_summary_carries_spend(self):
+        payload = summarize({"games": [{"game_id": "a", "name": "A", "price_paid_cents": 100, "price_currency": "USD"}], "history": []})
+        self.assertIn("spend", payload)
+        self.assertEqual(payload["spend"]["currencies"][0]["total_cents"], 100)
+
+    def test_invalid_currency_and_garbage_games(self):
+        spend = compute_spend([
+            None,
+            {"game_id": "a", "name": "A", "price_paid_cents": 100, "price_currency": "EURO"},
+        ])
+        self.assertEqual(spend["currencies"][0]["currency"], "USD")
+        self.assertEqual(spend["currencies"][0]["total_cents"], 100)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,12 @@ def exclusion_key(game):
         return ("lutris", str(game["lutris_id"]))
     if game.get("gameyfin_id"):
         return ("gameyfin", str(game["gameyfin_id"]))
+    if game.get("gog_id"):
+        return ("gog", str(game["gog_id"]))
+    if game.get("ea_id"):
+        return ("ea", str(game["ea_id"]))
+    if game.get("ubisoft_id"):
+        return ("ubisoft", str(game["ubisoft_id"]))
     return None
 
 

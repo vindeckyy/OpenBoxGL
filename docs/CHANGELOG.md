@@ -4,7 +4,34 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.17.0] - 2026-10-18
+
+A release that brings the other Windows launchers into the library, remembers Game Night decks, records what each game
+cost, and translates server notices. No v1 route is removed or changed. Six routes are added:
+`GET`/`POST /api/v2/party/decks`, `POST /api/v2/party/decks/delete`, and
+`POST /api/v2/import/{gog,ea,ubisoft}`.
+
+### Added
+- **Native Windows storefront imports.** GOG Galaxy, EA app, and Ubisoft Connect games installed on Windows are found
+  from the registry and the launchers' own manifests, then merged by a stable provider id. GOG launch tasks are kept
+  inside the install dir and run their executable directly; EA and Ubisoft launch through their registered
+  `origin2://` and `uplay://` handlers. Every id is digit-validated, every path is checked, and a malformed entry is
+  skipped with an error rather than crashing the import. `pkg/parity/parity_storefront_windows.py`,
+  `tests/test_parity_storefront_windows.py`, `tests/test_windows_storefront_http.py`.
+- **Game Night decks.** A deck stores players, a minute budget, and a filter query; saving is bounded to 20 decks.
+  Building a queue returns an 8-character seed, and the same seed and library reproduce the same draw on another
+  device. The deck dialog can save, load, and delete decks. `pkg/parity/parity_party.py`,
+  `tests/test_parity_party.py`, `tests/test_handlers_party.py`.
+- **What the library cost.** A game can record a price paid and its currency. Play Insights shows totals grouped by
+  currency plus cost per hour for games with at least a minute played, and the detail pane shows the price and rate.
+  Bulk edit can set or clear a price. No exchange-rate source is involved and no conversion is performed.
+  `catalog.py`, `pkg/parity/parity_insights.py`, `tests/test_catalog.py`, `tests/test_insights.py`,
+  `tests/js/pure.test.mjs`.
+- **Translated server notices.** Cloud sync, launch-check changes, rejected definition packs, and webhook failures now
+  carry `title_key`/`body_key` plus parameters, and the notification center translates them in all five locales. Older
+  stored notifications keep their English text and still render. `notifications.py`, `pkg/state/sse.py`,
+  `tests/test_notifications.py`.
+- **A currency setting.** Settings > Library selects the default currency for new prices. `tests/test_settings_schema.py`.
 
 ### Fixed
 - **ScreenScraper lookups failed with HTTP 400 (#52).** Requests used parameter names the API does not read: the login
@@ -15,6 +42,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   retried. A ScreenScraper developer ID and password are now required (`SCREENSCRAPER_DEV_ID` and
   `SCREENSCRAPER_DEV_PASSWORD`), because the API refuses lookups without them; they were documented as optional.
   `tests/test_screenscraper.py`, `tests/test_gapfill_f2.py`.
+
+### Documentation and gates
+- ADRs 0073-0076: Windows native storefront imports, Game Night decks, price paid/cost per hour, and translated
+  server notices.
+- `docs/reliability.md` rows 87-97, each naming a real test or a written manual procedure.
+- The route, settings, and reliability contracts are regenerated; `v1_contracts.json` is unchanged.
+- The 1.16.1 entry's “folded into 1.17.0” note is corrected to “shipped in 1.16.1”, and its duplicated
+  `perf_bench.py --browser` known-limit bullet is removed.
+
+### Known limits in 1.17.0
+- Xbox PC package scanning and owned-but-uninstalled GOG/EA/Ubisoft catalogs are not imported. Native storefront
+  imports are manual; there is no startup auto-import for them.
+- Provider ids, price paid, and decks stay local. They do not cross the library-sync protocol, and Time Machine does
+  not journal price changes; adding them would make a mixed-version peer reject the whole event.
+- Cost totals are grouped by currency and are not converted. A rate is shown only for a priced game with at least
+  one minute of playtime.
+- GOG games launch their executable directly, so Galaxy overlay and cloud-save features are not started. EA and
+  Ubisoft games launch through their launcher URI; uninstalling the launcher breaks those launches until it returns.
+- Notification titles and bodies are translated. Other server responses and some dialog labels remain English.
+- Windows ARM64 and macOS remain out of scope. The Flatpak RetroArch check still covers one Flathub build and one
+  core, as recorded in the 1.16.1 limits.
+
 
 ## [1.16.1] - 2026-10-08
 
@@ -162,7 +211,7 @@ added: `GET /api/v2/launch/audit/status`, `POST /api/v2/launch/grant`, `POST /ap
 - ADR 0065 proposes the release runner change (keep the Ubuntu 22.04 glibc floor on a supported runner). It
   is not yet in effect.
 - ADR 0007 gained an addendum for the coalesced-write lock.
-- `docs/reliability.md` rows 55-67 (the fixes folded into 1.17.0). Rows 60 and 61 are manual checks, with their procedures written there.
+- `docs/reliability.md` rows 55-67 were added in 1.16.1. Rows 60 and 61 are manual checks, with their procedures written there.
 
 ### Known limits in 1.16.1
 - RetroArch under Flatpak: checked on one machine with the Flathub build (RetroArch 1.22.2) and the SNES core,
@@ -179,9 +228,6 @@ added: `GET /api/v2/launch/audit/status`, `POST /api/v2/launch/grant`, `POST /ap
   A manual dry run built both arches, and their highest `GLIBC_` symbol is 2.35. The attestation and publish jobs run on
   ubuntu-24.04, and the first tag run verifies them. The first signed definition pack needs a tagged CI run with the
   release key (ADR 0061 addendum).
-- The integrated `perf_bench.py --browser` step measured an empty directory (the 20,000-game write-path folder)
-  and failed with `Waiting for selector .cover`. It now measures the largest library the run generated for the
-  read benchmark. `tests/test_perf_bench.py`.
 - The integrated `perf_bench.py --browser` step measured an empty directory (the 20,000-game write-path folder)
   and failed with `Waiting for selector .cover`. It now measures the largest library the run generated for the
   read benchmark. `tests/test_perf_bench.py`.

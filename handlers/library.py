@@ -9,7 +9,7 @@ import secrets
 from urllib.parse import parse_qs
 
 from api_errors import BadRequest, GameNotFound
-from catalog import PROGRESS, bulk_update, canon_progress, clean_user_rating, game_media_paths, normalize_manual_sessions, normalize_notes, related_game_ids, tag_counts
+from catalog import PROGRESS, bulk_update, canon_progress, clean_currency, clean_price_cents, clean_user_rating, game_media_paths, normalize_manual_sessions, normalize_notes, related_game_ids, tag_counts
 from handlers._shared import clean_extras as _clean_extras_shared
 from notifications import clear as clear_notifications, mark_read as mark_notifications_read, unread_count
 from openbox import load_state, load_state_readonly, local_only_mutation
@@ -110,6 +110,14 @@ def _clean_game_fields(source):
     # F4b: personal star rating, distinct from the metadata ``rating`` float.
     if "user_rating" in source:
         game["user_rating"] = clean_user_rating(source.get("user_rating"))
+    # Price and currency move together; an empty price clears both on save.
+    if "price_paid_cents" in source:
+        price = clean_price_cents(source.get("price_paid_cents"))
+        if price is not None:
+            game["price_paid_cents"] = price
+            game["price_currency"] = clean_currency(source.get("price_currency"))
+    elif "price_currency" in source:
+        raise ValueError("Currency cannot be set without a price.")
     return game
 
 
@@ -205,6 +213,9 @@ def _save_game_mutate(state, payload, game):
     else:
         existing = game_from_payload(state, payload)
         game["game_id"] = existing.get("game_id", game.get("game_id", ""))
+        if "price_paid_cents" not in game:
+            existing.pop("price_paid_cents", None)
+            existing.pop("price_currency", None)
         existing.update(game)
 
 
