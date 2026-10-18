@@ -71,6 +71,7 @@ KNOWN_SETTINGS = {
     "attract_mode_seconds",
     "screensaver_seconds",
     "locale",
+    "currency",
     # commands
     "startup_commands",
     "shutdown_commands",

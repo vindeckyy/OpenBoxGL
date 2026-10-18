@@ -745,6 +745,29 @@ class SteamDiscoveryTests(unittest.TestCase):
                 self.assertEqual(pc.epic_manifest_paths(), [])
 
 
+class WindowsRegistryTreeTests(unittest.TestCase):
+    def test_unknown_root_is_safe(self):
+        self.assertEqual(pc.windows_registry_tree("NOPE", "Software"), {})
+
+    @unittest.skipUnless(pc.IS_WINDOWS, "Windows registry is a Windows-only source")
+    def test_reads_subkey_values(self):
+        import winreg
+
+        path = f"Software\\OpenBoxTests\\{os.getpid()}-{time.time_ns()}"
+        try:
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, path) as root:
+                with winreg.CreateKey(root, "Demo") as child:
+                    winreg.SetValueEx(child, "InstallDir", 0, winreg.REG_SZ, r"C:\Games\Demo")
+            tree = pc.windows_registry_tree("HKCU", path)
+            self.assertEqual(tree["Demo"]["InstallDir"], r"C:\Games\Demo")
+        finally:
+            try:
+                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, path + "\\Demo")
+                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, path)
+            except OSError:
+                pass
+
+
 class TimestampParseTests(unittest.TestCase):
     def test_parse_timestamp_returns_naive_local_time_for_every_form(self):
         from datetime import datetime, timezone

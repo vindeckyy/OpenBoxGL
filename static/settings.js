@@ -12,6 +12,16 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
 
     let settingsCategory = 'library';
 
+    // Server notices carry a translation key plus the English text as fallback.
+    function localizedNotification(item) {
+      const pick = (key, fallback) => {
+        if (!key) return fallback;
+        const text = t(key, item.params || {});
+        return text && text !== key ? text : fallback;
+      };
+      return { title: pick(item.title_key, item.title), body: pick(item.body_key, item.body) };
+    }
+
     // ── Custom gamescope presets editor (1.8.0) ────────────────────────────
     function gamescopePresetRow(preset, index) {
       return `<div class="gamescope-preset-row" data-preset-row="${index}">
@@ -216,6 +226,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         controller_map:Object.fromEntries([...document.querySelectorAll('[data-controller]')].map(input => [input.dataset.controller,Number(input.value)])),
         welcome_completed:AppState.appSettings.welcome_completed,
         locale:$('localeSetting').value,
+        currency:($('currencySetting')?.value || 'USD').trim().toUpperCase(),
         library_view:$('libraryViewSetting').value,
         cover_grouping:$('groupingSetting').value,
         custom_field_defs:($('customFieldDefs').value || '').split('\n').map(line => line.trim()).filter(Boolean).map(line => { const [name,...rest] = line.split('|'); return {name:(name || '').trim(), options:rest.join('|').split(',').map(value => value.trim()).filter(Boolean)}; }).filter(item => item.name),
@@ -336,6 +347,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         if ($('museumKioskEnabled')) $('museumKioskEnabled').checked = AppState.appSettings.museum_kiosk_enabled === true;
         if ($('museumKioskPin')) $('museumKioskPin').value = '';
         $('localeSetting').value = AppState.appSettings.locale || 'en';
+        if ($('currencySetting')) $('currencySetting').value = AppState.appSettings.currency || 'USD';
         $('libraryViewSetting').value = AppState.appSettings.library_view || 'grid';
         if ($('groupingSetting')) $('groupingSetting').value = AppState.appSettings.cover_grouping || 'shape';
         $('customFieldDefs').value = (AppState.appSettings.custom_field_defs || []).map(item => `${item.name}|${(item.options || []).join(',')}`).join('\n');
@@ -1455,7 +1467,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
           $('saveFeatureTags').onclick = async () => { if (AppState.selectedId === null) return notify(t('notify.settings.select_game_first')); const game = AppState.games.find(item => item.id === AppState.selectedId); if (!game) return notify(t('notify.settings.selected_not_found')); const tags = $('featureTagInput').value.split(',').map(value => value.trim()).filter(Boolean); try { await api('/api/tags',{method:'POST',body:JSON.stringify({ids:[game.game_id],tags})}); await refresh(); openFeature('tags'); notify(t('notify.settings.tags_saved')); } catch (error) { notify(error.message); } };
         } else if (mode === 'notifications') {
           const result = await api('/api/notifications');
-          content.innerHTML = `<div class="extras"><button type="button" class="primary" id="readNotifications">Mark all read</button><button type="button" class="icon-button" id="clearNotifications">Clear</button></div>${(result.notifications || []).map(item => `<div class="detail-card"><strong>${escapeHtml(item.title)}</strong><p class="description">${escapeHtml(item.body)}<br>${escapeHtml(item.created_at)}</p></div>`).join('') || '<p class="description">No notifications.</p>'}`;
+          content.innerHTML = `<div class="extras"><button type="button" class="primary" id="readNotifications">Mark all read</button><button type="button" class="icon-button" id="clearNotifications">Clear</button></div>${(result.notifications || []).map(item => { const notice = localizedNotification(item); return `<div class="detail-card"><strong>${escapeHtml(notice.title)}</strong><p class="description">${escapeHtml(notice.body)}<br>${escapeHtml(item.created_at)}</p></div>`; }).join('') || '<p class="description">No notifications.</p>'}`;
           $('readNotifications').onclick = async () => { await api('/api/notifications',{method:'POST',body:JSON.stringify({action:'read'})}); openFeature('notifications'); };
           $('clearNotifications').onclick = async () => { await api('/api/notifications',{method:'POST',body:JSON.stringify({action:'clear'})}); openFeature('notifications'); };
         } else {

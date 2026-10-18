@@ -250,6 +250,56 @@ def compute_momentum(
     }
 
 
+def compute_spend(games: list[dict[str, Any]]) -> dict[str, Any]:
+    """Price-paid totals grouped by currency, plus cost-per-hour rankings.
+
+    No conversion: a game keeps the currency it was priced in. A rate exists
+    only when the game cost money and has at least one minute of playtime.
+    """
+    totals: dict[str, dict[str, Any]] = {}
+    ranked: list[dict[str, Any]] = []
+    for game in games if isinstance(games, list) else []:
+        if not isinstance(game, dict):
+            continue
+        cents = game.get("price_paid_cents")
+        if isinstance(cents, bool) or not isinstance(cents, int) or cents < 0:
+            continue
+        currency = str(game.get("price_currency") or "").strip().upper()
+        if len(currency) != 3 or not currency.isalpha():
+            currency = "USD"
+        seconds = max(0, total_playtime_seconds(game))
+        bucket = totals.setdefault(currency, {
+            "currency": currency, "total_cents": 0, "games": 0, "seconds": 0,
+        })
+        bucket["total_cents"] += cents
+        bucket["games"] += 1
+        bucket["seconds"] += seconds
+        rate = round(cents / (seconds / 3600)) if cents > 0 and seconds >= 60 else None
+        if rate is not None:
+            ranked.append({
+                "game_id": str(game.get("game_id") or ""),
+                "name": str(game.get("name") or ""),
+                "currency": currency,
+                "cost_per_hour_cents": rate,
+            })
+    currencies = []
+    for bucket in totals.values():
+        normalized = dict(bucket)
+        seconds = bucket["seconds"]
+        normalized["cost_per_hour_cents"] = (
+            round(bucket["total_cents"] / (seconds / 3600))
+            if bucket["total_cents"] > 0 and seconds >= 60 else None
+        )
+        currencies.append(normalized)
+    currencies.sort(key=lambda item: item["currency"])
+    ranked.sort(key=lambda item: (item["cost_per_hour_cents"], item["name"].casefold()))
+    return {
+        "currencies": currencies,
+        "best_value": ranked[:5],
+        "worst_value": list(reversed(ranked[-5:])),
+    }
+
+
 def summarize(
     state: dict[str, Any],
     end_date: datetime.date | None = None,
@@ -281,6 +331,7 @@ def summarize(
         "top_games": top_games,
         "momentum": momentum,
         "last_30_days": last_30_days,
+        "spend": compute_spend(games),
     }
 
 

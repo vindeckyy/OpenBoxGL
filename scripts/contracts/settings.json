@@ -22,6 +22,7 @@
     "controller_prompt_hint",
     "controller_prompt_pack",
     "cover_grouping",
+    "currency",
     "custom_field_defs",
     "dynamic_play_button",
     "emulator_scan_configs",

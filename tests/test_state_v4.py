@@ -312,6 +312,20 @@ class DefaultStateTests(unittest.TestCase):
         self.assertEqual(state["schema_version"], STATE_SCHEMA_VERSION)
         self.assertEqual(state["queue"], [])
         self.assertEqual(state["notifications"], [])
+        self.assertEqual(state["party_decks"], [])
+
+    def test_party_decks_are_repaired_and_capped(self):
+        state = {"games": [], "party_decks": [
+            {"name": "Good", "query": "", "players": 2, "minutes": 0},
+            "junk",
+            {"name": "", "players": 2},
+            {"name": "Good", "players": 3},
+        ]}
+        normalized, changed = normalize_state({**default_state(), **state})
+        self.assertTrue(changed)
+        self.assertEqual(normalized["party_decks"], [
+            {"name": "Good", "query": "", "players": 2, "minutes": 0},
+        ])
 
     def test_store_save_normalizes_to_schema_4(self):
         with tempfile.TemporaryDirectory() as directory:

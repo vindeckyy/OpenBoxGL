@@ -40,6 +40,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.17.0" date="2026-10-18">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.17.0</url>
+      <description>
+        <p>Every launcher: installed GOG, EA app, and Ubisoft Connect games import natively on Windows, Game Night decks save a named setup and replay a seeded draw, price paid and cost per hour record what the library cost, and server notices for cloud sync, launch checks, definition updates, and webhooks are translated in all five locales. ScreenScraper lookups are fixed.</p>
+      </description>
+    </release>
     <release version="1.16.1" date="2026-10-08">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.16.1</url>
       <description>

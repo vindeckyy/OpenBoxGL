@@ -2,7 +2,14 @@
 // fixed. Run with: node --test tests/js/   (CI runs this in the gate job).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { progressScore, importedCount, formatHours, nextRetryDelay, stableIdFor } from '../../static/pure.js';
+import { progressScore, importedCount, formatHours, formatMoney, nextRetryDelay, stableIdFor } from '../../static/pure.js';
+
+test('formatMoney formats cents and falls back for an invalid currency', () => {
+  assert.equal(formatMoney(1999, 'USD', 'en-US'), '$19.99');
+  assert.equal(formatMoney(0, 'USD', 'en-US'), '$0.00');
+  assert.equal(formatMoney(100, 'ZZZZ', 'en-US'), 'ZZZZ 1.00');
+  assert.equal(formatMoney(Number.NaN, 'USD', 'en-US'), '');
+});
 
 test('progressScore reads labels and numbers, never NaN', () => {
   assert.equal(progressScore('Beaten'), 1);

@@ -314,6 +314,14 @@ def totals_change_notice(previous, current) -> dict | None:
             f"Won't launch: {blocked} (was {before_blocked}). "
             f"Needs attention: {warning} (was {before_warning})."
         ),
+        "title_key": "notify.server.launch_audit_title",
+        "body_key": "notify.server.launch_audit_body",
+        "params": {
+            "blocked": blocked,
+            "warning": warning,
+            "before_blocked": before_blocked,
+            "before_warning": before_warning,
+        },
         # One key per check, so a return to an earlier result is a new notice, not a suppressed one.
         "dedupe_key": f"launch-audit:{current.get('computed_at', '')}",
     }

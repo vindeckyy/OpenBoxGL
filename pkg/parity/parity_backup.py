@@ -445,6 +445,7 @@ def _display_name(game, fallback):
 DIFF_FIELDS = (
     "name", "title", "platform", "genre", "rating", "progress",
     "favorite", "hidden", "play_count", "playtime_seconds",
+    "price_paid_cents", "price_currency",
 )
 # A diff row per game is fine; a diff row per *changed field* on a 20,000-game
 # library is not. The lists are capped and the untruncated counts are reported

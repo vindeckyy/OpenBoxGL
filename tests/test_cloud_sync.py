@@ -1,6 +1,9 @@
 import json
+import sys
 import tempfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from cloud_sync import CloudRemoteInvalid, game_key, legacy_game_key, sync_statistics
 from catalog import PROGRESS as CATALOG_PROGRESS

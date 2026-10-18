@@ -1051,6 +1051,12 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v2/import/ea"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v2/import/esde/apply"
     },
     {
@@ -1063,6 +1069,12 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v2/import/gog"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v2/import/launchbox/apply"
     },
     {
@@ -1070,6 +1082,12 @@
         "POST"
       ],
       "path": "/api/v2/import/launchbox/preview"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/import/ubisoft"
     },
     {
       "methods": [
@@ -1572,6 +1590,19 @@
         "POST"
       ],
       "path": "/api/v2/moments/update"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/party/decks"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/party/decks/delete"
     },
     {
       "methods": [
