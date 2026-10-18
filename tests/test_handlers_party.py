@@ -5,12 +5,13 @@ import io
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 from urllib.parse import urlparse
-
-from api_errors import BadRequest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+from api_errors import BadRequest, NotFound  # noqa: E402
 
 import web_app  # noqa: E402
 import handlers.party as party_module  # noqa: E402
@@ -106,6 +107,71 @@ class PartyHandlerTest(unittest.TestCase):
         h = self.handler()
         with self.assertRaises(BadRequest):
             h._api_post_api_v2_party_queue([1, 2])
+
+    def test_query_filters_the_candidate_pool(self):
+        status, payload = self.build({"players": 2, "query": "platform:SNES"})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["queue"], ["g-1"])
+        self.assertEqual(payload["matched"], 2)
+        self.assertEqual(payload["query"], "platform:SNES")
+
+    def test_seed_is_echoed_and_reproducible(self):
+        _status, first = self.build({"players": 2, "seed": "00000001"})
+        _status, second = self.build({"players": 2, "seed": "00000001"})
+        self.assertEqual(first["seed"], "00000001")
+        self.assertEqual(first["queue"], second["queue"])
+        _status, generated = self.build({"players": 2})
+        self.assertRegex(generated["seed"], r"^[0-9a-f]{8}$")
+
+    def test_bad_seed_is_rejected(self):
+        for seed in ("xyz", "ABCDEF12", "123"):
+            with self.assertRaises(BadRequest):
+                self.build({"players": 2, "seed": seed})
+
+    def test_deck_routes_save_list_delete(self):
+        h = self.handler()
+        h._api_post_api_v2_party_decks({
+            "name": "Co-op", "query": "platform:SNES", "players": 4, "minutes": 30,
+        })
+        status, payload = h.responses[-1]
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["deck"]["name"], "Co-op")
+        self.assertEqual(self.store["state"]["party_decks"][0]["players"], 4)
+
+        h2 = self.handler()
+        h2._api_get_api_v2_party_decks(urlparse("/api/v2/party/decks"))
+        self.assertEqual(h2.responses[-1][1]["decks"][0]["query"], "platform:SNES")
+
+        h3 = self.handler()
+        h3._api_post_api_v2_party_decks_delete({"name": "Co-op"})
+        self.assertEqual(h3.responses[-1][0], 200)
+        self.assertEqual(self.store["state"]["party_decks"], [])
+
+        h4 = self.handler()
+        with self.assertRaises(NotFound):
+            h4._api_post_api_v2_party_decks_delete({"name": "Co-op"})
+
+    def test_query_validation_errors(self):
+        for bad in (123, [], "x" * 501):
+            with self.assertRaises(BadRequest):
+                self.build({"players": 2, "query": bad})
+        with mock.patch.object(party_module, "parse_query", side_effect=ValueError("bad query")):
+            with self.assertRaises(BadRequest):
+                self.build({"players": 2, "query": "x"})
+
+    def test_deck_validation_errors(self):
+        h = self.handler()
+        with self.assertRaises(BadRequest):
+            h._api_post_api_v2_party_decks([])
+        with self.assertRaises(BadRequest):
+            h._api_post_api_v2_party_decks({"name": "Bad", "players": 9})
+        with self.assertRaises(BadRequest):
+            h._api_post_api_v2_party_decks({"name": "Bad", "query": {"x": 1}})
+        h2 = self.handler()
+        with self.assertRaises(BadRequest):
+            h2._api_post_api_v2_party_decks_delete([])
+        with self.assertRaises(BadRequest):
+            h2._api_post_api_v2_party_decks_delete({"name": ""})
 
     def test_get_queue_round_trip(self):
         self.build({"players": 2})

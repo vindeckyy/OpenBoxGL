@@ -71,6 +71,9 @@ def _api_post_api_v2_emulators_defs_update(handler, parsed):
                 "A downloaded emulator definition pack failed signature verification "
                 f"and was discarded. Nothing was changed. Details: {exc}"
             ),
+            title_key="notify.server.defs_rejected_title",
+            body_key="notify.server.defs_rejected_body",
+            params={"detail": str(exc)},
         )
         handler.send_json(400, {"error": "signature_verification_failed", "detail": str(exc)})
         return

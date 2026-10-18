@@ -16,6 +16,11 @@ from parity_import import import_rpcs3_hdd, import_scummvm, import_vita3k
 from parity_import_policy import add_exclusion, list_exclusions, remove_exclusion
 from parity_premium import import_loose_arcade, import_xbox360_folder
 from parity_storefront import catalog_entries_to_games, storefront_catalog
+from pkg.parity.parity_storefront_windows import (
+    import_ea as import_ea_windows,
+    import_gog as import_gog_windows,
+    import_ubisoft as import_ubisoft_windows,
+)
 from webapp_state import (
     broadcast_event,
     clear_file_probe_cache,
@@ -93,6 +98,24 @@ class ImportsHandlers:
     @route("POST", "/api/import/epic")
     def _api_post_api_import_epic(self, payload):
         self.import_epic_games()
+
+    @route("POST", "/api/v2/import/gog")
+    def _api_post_api_v2_import_gog(self, payload):
+        if not isinstance(payload, dict):
+            raise BadRequest("body must be an object")
+        self.import_gog_games()
+
+    @route("POST", "/api/v2/import/ea")
+    def _api_post_api_v2_import_ea(self, payload):
+        if not isinstance(payload, dict):
+            raise BadRequest("body must be an object")
+        self.import_ea_games()
+
+    @route("POST", "/api/v2/import/ubisoft")
+    def _api_post_api_v2_import_ubisoft(self, payload):
+        if not isinstance(payload, dict):
+            raise BadRequest("body must be an object")
+        self.import_ubisoft_games()
 
     @route("POST", "/api/import/arcade")
     def _api_post_api_import_arcade(self, payload):
@@ -343,6 +366,24 @@ class ImportsHandlers:
             lambda game: ("epic", str(game.get("heroic_app_id", ""))),
         )
         _send_import_result(self, added, found)
+
+    def _import_windows_store(self, discover, source, id_field):
+        errors = []
+        imported = discover(errors=errors)
+        added, found = merge_imported_games(
+            imported,
+            lambda game: (source, str(game.get(id_field, ""))),
+        )
+        _send_import_result(self, added, found, errors=errors)
+
+    def import_gog_games(self):
+        self._import_windows_store(import_gog_windows, "gog", "gog_id")
+
+    def import_ea_games(self):
+        self._import_windows_store(import_ea_windows, "ea", "ea_id")
+
+    def import_ubisoft_games(self):
+        self._import_windows_store(import_ubisoft_windows, "ubisoft", "ubisoft_id")
 
     def import_lutris_games(self):
         imported = import_lutris()

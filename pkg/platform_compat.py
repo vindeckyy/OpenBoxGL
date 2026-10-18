@@ -1066,6 +1066,41 @@ def epic_manifest_paths() -> list[Path]:
         return []
 
 
+def windows_registry_tree(root: str, path: str) -> dict[str, dict[str, str]]:  # pragma: no cover - Windows-only branch exercised on windows CI
+    """Return subkey -> string values under a Windows registry path.
+
+    `root` is "HKCU" or "HKLM". Both registry views are tried. Off Windows,
+    or when the key cannot be read, returns {}. Values are expanded and
+    stringified; this helper never writes.
+    """
+    if not IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
+        return {}
+    import winreg
+
+    hive = {"HKCU": winreg.HKEY_CURRENT_USER, "HKLM": winreg.HKEY_LOCAL_MACHINE}.get(str(root).upper())
+    if hive is None:
+        return {}
+    for view in (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY):
+        try:
+            with winreg.OpenKey(hive, path, 0, winreg.KEY_READ | view) as key:
+                tree: dict[str, dict[str, str]] = {}
+                for index in range(winreg.QueryInfoKey(key)[0]):
+                    try:
+                        name = winreg.EnumKey(key, index)
+                        with winreg.OpenKey(key, name) as child:
+                            values = {}
+                            for value_index in range(winreg.QueryInfoKey(child)[1]):
+                                value_name, value_data, _kind = winreg.EnumValue(child, value_index)
+                                values[str(value_name)] = os.path.expandvars(str(value_data))
+                            tree[str(name)] = values
+                    except OSError:
+                        continue
+                return tree
+        except OSError:
+            continue
+    return {}
+
+
 # ---------------------------------------------------------------------------
 # Windows implementation details
 # ---------------------------------------------------------------------------

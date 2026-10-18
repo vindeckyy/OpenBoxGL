@@ -4,7 +4,7 @@ import copy
 import json
 from pathlib import Path
 
-from catalog import PROGRESS
+from catalog import PROGRESS, clean_currency
 from openbox import discover_profiles, load_state, update_state_with_result
 from parity_backup import AUTO_BACKUP_KEEP
 from parity_integrations import inject_retroachievements
@@ -263,6 +263,10 @@ def _clean_library_music(merged):
     return library_music
 
 
+def _clean_currency(merged):
+    return clean_currency(merged.get("currency", "USD"))
+
+
 def _clean_bigbox(merged):
     bigbox_mode = str(merged.get("bigbox_mode", "stage"))
     if bigbox_mode not in {"stage", "hybrid", "coverflow"}:
@@ -432,6 +436,7 @@ def clean_settings(merged):
     state_retention = _clean_state_retention(merged)
     region_priority, video_priority = _clean_priority_lists(merged)
     library_music = _clean_library_music(merged)
+    currency = _clean_currency(merged)
     bigbox_mode = _clean_bigbox(merged)
     clean_storefront = _clean_storefront(merged)
     obs_auto_attach, obs_recording_path = _clean_obs(merged)
@@ -532,6 +537,7 @@ def clean_settings(merged):
             "party_queue": party_queue,
             "party_players": party_players,
             "party_index": party_index,
+            "currency": currency,
             "household_stats_sharing": bool(merged.get("household_stats_sharing", False)),
             "museum_kiosk_enabled": bool(merged.get("museum_kiosk_enabled", False)),
             "museum_kiosk_pin_hash": str(merged.get("museum_kiosk_pin_hash", ""))[:512],

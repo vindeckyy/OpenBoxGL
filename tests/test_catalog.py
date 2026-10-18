@@ -1,5 +1,10 @@
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from catalog import bulk_update, related_game_ids
-from catalog import (canon_progress, clean_user_rating, display_progress,
+from catalog import (canon_progress, clean_currency, clean_price_cents, clean_user_rating, display_progress,
                      normalize_manual_sessions, normalize_notes,
                      progress_suggest_due, total_playtime_seconds)
 
@@ -115,8 +120,49 @@ def _bulk_last_played_must_be_a_date():
     print("catalog last_played validation: ok")
 
 
+def _price_paid_checks():
+    assert clean_price_cents(0) == 0 and clean_price_cents(1999) == 1999
+    assert clean_price_cents(None) is None and clean_price_cents("") is None
+    for bad in (-1, 1.5, True, "many", 1_000_000_001):
+        try:
+            clean_price_cents(bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"invalid price accepted: {bad!r}")
+    assert clean_currency("usd") == "USD"
+    for bad in ("", "US", "USDD", "12A"):
+        try:
+            clean_currency(bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"invalid currency accepted: {bad!r}")
+
+    games = [{"game_id": "g1", "name": "A"}]
+    bulk_update(games, ["g1"], {"price_paid_cents": 1999, "price_currency": "usd"})
+    assert games[0]["price_paid_cents"] == 1999 and games[0]["price_currency"] == "USD"
+    bulk_update(games, ["g1"], {"price_paid_cents": None})
+    assert "price_paid_cents" not in games[0] and "price_currency" not in games[0]
+    try:
+        bulk_update(games, ["g1"], {"price_paid_cents": 500})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a price without a currency must be rejected")
+    assert "price_paid_cents" not in games[0]
+    try:
+        bulk_update(games, ["g1"], {"price_currency": "USD"})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a currency without a price must be rejected")
+    print("catalog price checks: ok")
+
+
 if __name__ == "__main__":
     main()
     _f4_backlog_checks()
     _progress_automation_offset_timestamp_check()
     _bulk_last_played_must_be_a_date()
+    _price_paid_checks()

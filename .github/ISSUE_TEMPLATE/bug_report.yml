@@ -14,7 +14,7 @@ body:
     attributes:
       label: OpenBox version
       description: Release tag, AppImage version, or git commit hash
-      placeholder: v1.16.1
+      placeholder: v1.17.0
     validations:
       required: true
 

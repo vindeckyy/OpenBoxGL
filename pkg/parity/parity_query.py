@@ -1208,7 +1208,8 @@ def _is_installed(game):
 
 def _is_owned(game):
     flag = game.get("owned") or game.get("store_catalog") or game.get("steam_app_id") \
-        or game.get("heroic_app_id") or game.get("lutris_id") or game.get("gameyfin_id")
+        or game.get("heroic_app_id") or game.get("lutris_id") or game.get("gameyfin_id") \
+        or game.get("gog_id") or game.get("ea_id") or game.get("ubisoft_id")
     return bool(flag) and not _is_installed(game)
 
 

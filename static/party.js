@@ -9,6 +9,11 @@ const SESSION_LENGTHS = [0, 15, 30, 45, 60, 90, 120];
 
 let players = 2;
 let minutes = 0;
+let query = '';
+let decks = [];
+let selectedDeck = '';
+let deckNameDraft = '';
+let lastSeed = '';
 let queue = [];
 let queueIndex = 0;
 let queueGames = [];
@@ -40,6 +45,10 @@ function openParty() {
   if ($('bigBoxMenu')) $('bigBoxMenu').hidden = true;
   players = clampPlayers(AppState.appSettings.party_players || 2);
   minutes = 0;
+  query = '';
+  selectedDeck = '';
+  deckNameDraft = '';
+  lastSeed = '';
   queue = [];
   queueIndex = 0;
   queueGames = [];
@@ -47,6 +56,9 @@ function openParty() {
   spinning = false;
   $('partyOverlay').hidden = false;
   renderSetup();
+  loadDecks().then(() => {
+    if (isSetupView() && $('partyOverlay') && !$('partyOverlay').hidden) renderSetup();
+  });
   if (!keyHandler) {
     keyHandler = event => partyKeydown(event);
     // Capture phase: the overlay swallows keys so Big Box navigation
@@ -150,17 +162,65 @@ function primaryAction() {
   launchWinner();
 }
 
+async function loadDecks() {
+  try {
+    const result = await api('/api/v2/party/decks');
+    decks = Array.isArray(result.decks) ? result.decks : [];
+  } catch { decks = []; }
+}
+
+async function saveDeck() {
+  const name = $('partyDeckName')?.value.trim() || '';
+  if (!name) { notify(t('party.deck_name_required')); return; }
+  try {
+    const result = await api('/api/v2/party/decks', {
+      method: 'POST',
+      body: JSON.stringify({ name, query, players, minutes }),
+    });
+    selectedDeck = result.deck?.name || name;
+    deckNameDraft = selectedDeck;
+    await loadDecks();
+    renderSetup();
+    notify(t('party.deck_saved', { name: selectedDeck }));
+  } catch (error) { notify(error.message); }
+}
+
+async function deleteDeck() {
+  if (!selectedDeck) return;
+  try {
+    await api('/api/v2/party/decks/delete', {
+      method: 'POST',
+      body: JSON.stringify({ name: selectedDeck }),
+    });
+    notify(t('party.deck_deleted', { name: selectedDeck }));
+    selectedDeck = '';
+    deckNameDraft = '';
+    await loadDecks();
+    renderSetup();
+  } catch (error) { notify(error.message); }
+}
+
 function setupHtml() {
   const lengthOptions = SESSION_LENGTHS.map(m =>
     `<option value="${m}"${m === minutes ? ' selected' : ''}>${m === 0 ? escapeHtml(t('party.minutes_any')) : `${m} min`}</option>`).join('');
+  const deckOptions = ['<option value="">' + escapeHtml(t('party.deck_custom')) + '</option>']
+    .concat(decks.map(deck => `<option value="${escapeHtml(deck.name)}"${deck.name === selectedDeck ? ' selected' : ''}>${escapeHtml(deck.name)}</option>`))
+    .join('');
   return `<div class="party-panel" role="dialog" aria-label="${escapeHtml(t('party.title'))}">
     <div class="dialog-head"><h2>${escapeHtml(t('party.title'))}</h2><button type="button" id="closeParty" aria-label="${escapeHtml(t('party.close'))}">×</button></div>
     <p class="description">${escapeHtml(t('party.hint'))}</p>
     <div class="party-setup">
+      <label class="field"><span>${escapeHtml(t('party.deck'))}</span><select id="partyDeck">${deckOptions}</select></label>
       <label class="field"><span>${escapeHtml(t('party.players'))}</span>
         <span class="party-stepper"><button type="button" id="partyFewer" aria-label="−">−</button><strong id="partyPlayers">${players}</strong><button type="button" id="partyMore" aria-label="+">+</button></span>
       </label>
       <label class="field"><span>${escapeHtml(t('party.minutes'))}</span><select id="partyMinutes">${lengthOptions}</select></label>
+      <label class="field wide"><span>${escapeHtml(t('party.filter'))}</span><input id="partyQuery" value="${escapeHtml(query)}" placeholder="${escapeHtml(t('party.filter_hint'))}"></label>
+    </div>
+    <div class="extras party-deck-actions">
+      <input id="partyDeckName" value="${escapeHtml(deckNameDraft)}" placeholder="${escapeHtml(t('party.deck_name'))}" aria-label="${escapeHtml(t('party.deck_name'))}">
+      <button type="button" class="icon-button" id="partySaveDeck">${escapeHtml(t('party.deck_save'))}</button>
+      <button type="button" class="icon-button" id="partyDeleteDeck"${selectedDeck ? '' : ' hidden'}>${escapeHtml(t('party.deck_delete'))}</button>
     </div>
     <div class="dialog-actions">
       <button type="button" class="icon-button" id="closeParty2">${escapeHtml(t('party.close'))}</button>
@@ -187,6 +247,7 @@ function wheelHtml() {
           <button type="button" class="icon-button" id="partyNext">${escapeHtml(t('party.next_round'))}</button>
           <button type="button" class="primary" id="partyPrimary">${escapeHtml(t('party.spin'))}</button>
         </div>
+        <div class="extras"><span id="partySeed" class="description"></span><button type="button" class="icon-button" id="partyCopySeed" hidden>${escapeHtml(t('party.copy_seed'))}</button></div>
         <div id="partyStatus" class="description" role="status"></div>
       </div>
     </div>
@@ -197,9 +258,32 @@ function renderSetup() {
   $('partyOverlay').innerHTML = setupHtml();
   $('closeParty').onclick = closeParty;
   $('closeParty2').onclick = closeParty;
-  $('partyFewer').onclick = () => { players = clampPlayers(players - 1); renderSetup(); $('partyBuild')?.focus(); };
-  $('partyMore').onclick = () => { players = clampPlayers(players + 1); renderSetup(); $('partyBuild')?.focus(); };
-  $('partyMinutes').onchange = event => { minutes = Number(event.target.value) || 0; };
+  $('partyDeck').onchange = event => {
+    const name = event.target.value;
+    selectedDeck = name;
+    const deck = decks.find(item => item.name === name);
+    if (deck) {
+      players = clampPlayers(deck.players);
+      minutes = Number(deck.minutes) || 0;
+      query = String(deck.query || '');
+      deckNameDraft = deck.name;
+    } else {
+      query = '';
+      deckNameDraft = '';
+    }
+    renderSetup();
+  };
+  $('partyQuery').oninput = event => {
+    query = event.target.value;
+    selectedDeck = '';
+    if ($('partyDeck')) $('partyDeck').value = '';
+  };
+  $('partyDeckName').oninput = event => { deckNameDraft = event.target.value; };
+  $('partyFewer').onclick = () => { selectedDeck = ''; players = clampPlayers(players - 1); renderSetup(); $('partyBuild')?.focus(); };
+  $('partyMore').onclick = () => { selectedDeck = ''; players = clampPlayers(players + 1); renderSetup(); $('partyBuild')?.focus(); };
+  $('partyMinutes').onchange = event => { selectedDeck = ''; minutes = Number(event.target.value) || 0; };
+  $('partySaveDeck').onclick = () => saveDeck();
+  $('partyDeleteDeck').onclick = () => deleteDeck();
   $('partyBuild').onclick = () => buildQueue();
 }
 
@@ -211,13 +295,14 @@ async function buildQueue() {
   try {
     const result = await api('/api/v2/party/queue', {
       method: 'POST',
-      body: JSON.stringify({ players, minutes }),
+      body: JSON.stringify({ players, minutes, query }),
     });
     queue = Array.isArray(result.queue) ? result.queue.map(String) : [];
+    lastSeed = String(result.seed || '');
     queueIndex = 0;
     spun = false;
     if (!queue.length) {
-      if (status) status.textContent = result.empty_reason || t('party.empty');
+      if (status) status.textContent = result.matched === 0 ? t('party.no_matches') : (result.empty_reason || t('party.empty'));
       return;
     }
     resolveQueueGames();
@@ -249,6 +334,15 @@ function renderWheel() {
   $('partyRebuild').onclick = () => { queue = []; renderSetup(); };
   $('partyNext').onclick = () => nextRound();
   $('partyPrimary').onclick = () => primaryAction();
+  const seedElement = $('partySeed');
+  const copySeed = $('partyCopySeed');
+  if (seedElement) seedElement.textContent = lastSeed ? t('party.seed', { seed: lastSeed }) : '';
+  if (copySeed) {
+    copySeed.hidden = !lastSeed;
+    copySeed.onclick = () => {
+      navigator.clipboard?.writeText(lastSeed).then(() => notify(t('party.seed_copied'))).catch(() => {});
+    };
+  }
   const wheel = $('partyWheel');
   wheel.style.background = wheelGradient();
   const n = queueGames.length;

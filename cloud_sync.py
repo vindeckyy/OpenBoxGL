@@ -240,14 +240,19 @@ def sync_statistics(state, folder, now=None):
                 }
                 atomic_write_text(target, json.dumps(payload, indent=2), mode=0o600)
     except CloudSyncError as error:
-        record_cloud_sync_outcome(state, success=False, body=error.message, now=timestamp)
+        record_cloud_sync_outcome(
+            state, success=False, body=error.message, now=timestamp,
+            params={"detail": error.message},
+        )
         raise
     state.setdefault("settings", {})["last_cloud_sync"] = timestamp
+    game_count = len(state.get("games", []))
     record_cloud_sync_outcome(
         state,
         success=True,
-        body=f"Synced {len(state.get('games', []))} game(s).",
+        body=f"Synced {game_count} game(s).",
         now=timestamp,
+        params={"count": game_count},
     )
     return {"path": str(target), "games": len(payload["games"]), "merged": changed, "synced_at": timestamp}
 

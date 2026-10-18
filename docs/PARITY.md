@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.16.1**, a fix release on the "Make it true" line of **v1.16.0**; the "Make it true" release described in the CHANGELOG (Launch Readiness, Restore Preview, security and data-integrity fixes, and corrections to four 1.15.0 claims); 1.15.0 was the "Finish the surface" release.
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.17.0**, the "Every Launcher" release: native Windows GOG/EA/Ubisoft imports, Game Night decks, price paid and cost per hour, translated server notices, and the ScreenScraper fix. The previous line was **v1.16.0** / **v1.16.1** ("Make it true" and its fix release), and 1.15.0 was "Finish the surface".
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -22,7 +22,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | SteamGridDB artwork provider | done | Optional `STEAMGRIDDB_API_KEY` provider searches, previews, applies, and bulk-matches cover, background, clear-logo, icon, and banner artwork with a local cache (1.11.0) |
 | Steam launching | done | Imported App ID launches through Steam or its URI |
 | Epic, GOG, and Amazon imports through Heroic | done | Installed manifests import and launch through Heroic |
-| EA, Ubisoft, and Xbox imports | partial | Lutris/Heroic catalog import provides EA, Ubisoft, and Xbox/Game Pass tagging; native Xbox PC package scanning remains unavailable on Linux |
+| EA, Ubisoft, and Xbox imports | partial | Windows imports installed GOG, EA app, and Ubisoft Connect games natively; on Linux, Lutris/Heroic catalog import provides EA, Ubisoft, and Xbox/Game Pass tagging. Native Xbox PC package scanning remains unavailable on Linux (1.17.0) |
 | MAME and FinalBurn full-set imports | done | DAT/XML metadata classifies and imports merged, split, and non-merged sets |
 | LaunchBox Games Database matching | done | Official daily database sync, local matching, and selected metadata/media downloads work |
 | Full LaunchBox media catalog | done | Box backs, spines, 3D boxes, clear logos, fanart, banners, title screens, carts, discs, and advertisement flyers download from the database alongside covers, backgrounds, and screenshots; manuals are user-supplied paths because the LaunchBox metadata feed ships no manual images |
@@ -167,6 +167,10 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Signed definition pack release | partial | The release workflow builds, signs and verifies the emulator-definition pack for each tag; the first signed pack needs a tagged CI run with the release key (1.16.1, ADR 0061 addendum) |
 | System coverage: Genesis, Master System, Game Gear, Sega CD, PC Engine, Neo Geo Pocket, Atari 2600/7800/Lynx/Jaguar, WonderSwan, Virtual Boy, C64, MSX, Amiga, Dreamcast, 3DS, MS-DOS | done | Definitions for each (RetroArch cores by buildbot name; Flycast, Azahar and DOSBox Staging by Flathub id). Installing them still needs the emulator (1.16.1) |
 | Restore Preview | done | Selecting a backup shows what the restore would remove, bring back, and overwrite (per-field), with true totals and a settings line; the restore button exists only after a successful diff (1.16.0) |
+| Native Windows storefront imports | done | GOG Galaxy, EA app, and Ubisoft Connect games installed on Windows are discovered read-only from the registry and launcher manifests, merged by a stable provider id, and launched directly or through the launcher's URI (1.17.0, ADR 0073) |
+| Game Night decks | done | A named deck stores players, minutes, and a filter query; building returns an 8-character seed, and the same seed and library reproduce the same draw (1.17.0, ADR 0074) |
+| Price paid and cost per hour | done | A game records price paid and currency; Play Insights shows totals per currency and cost per hour for played, priced games; no conversion is performed (1.17.0, ADR 0075) |
+| Translated server notices | done | Cloud sync, launch-check, definition, and webhook notices carry translation keys and parameters and render in all five locales, with the stored English text as fallback (1.17.0, ADR 0076) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 
@@ -187,6 +191,7 @@ build has a deliberate, documented narrower surface.
 | Library data location | done | `%LOCALAPPDATA%\openbox-game-launcher`; `OPENBOX_DATA_DIR` overrides everything and stored relative references keep POSIX separators so a library moves between platforms (1.13.0) |
 | Reliability catalog | done | Windows-specific failure modes are catalogued in `docs/reliability.md` with the same Tested/Manual discipline as the shared rows (1.15, ADR 0062) |
 | Windows uninstall | done | `scripts/uninstall.ps1` removes exactly what `install.ps1` creates — the install tree and its `share\openbox.previous` rollback copy, the user PATH entry, the Start Menu shortcut, and the `openbox://` registration — and never touches the library or settings in the data folder; `-WhatIf` previews it (1.15.0, ADR 0062) |
+| Native storefront imports | done | GOG Galaxy, EA app, and Ubisoft Connect games installed on Windows import from the registry and launcher manifests, with provider ids for re-import matching (1.17.0, ADR 0073) |
 | AppImage / Flatpak packaging | not applicable | Linux-only channels; the Windows artifact is the signed portable zip (ADR 0013) |
 | gamescope / Steam Game Mode presets | not applicable | Linux-only; the gamescope preset setting persists but has no effect on Windows |
 | XDG desktop entry | not applicable | Replaced by the Start Menu shortcut and `HKCU` protocol registration |
