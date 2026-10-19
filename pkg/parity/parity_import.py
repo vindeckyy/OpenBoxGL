@@ -34,6 +34,7 @@ PLATFORM_BY_EXTENSION_EXTRA = {
 }
 
 from pkg.parity.parity_emulator_defs import PLATFORM_EMULATORS as _PLATFORM_EMULATORS  # noqa: E402
+from pkg.parity.parity_emulator_defs import _parse_yaml  # noqa: E402
 
 PLATFORM_EMULATORS = _PLATFORM_EMULATORS
 
@@ -556,32 +557,170 @@ def _read_sfo_title(param_sfo: Path):
     return param_sfo.parent.name
 
 
-def import_rpcs3_hdd(home=None):
+RPCS3_CONFIG_DIRS = (
+    Path(".config") / "rpcs3",
+    Path(".var") / "app" / "net.rpcs3.RPCS3" / "config" / "rpcs3",
+)
+RPCS3_GAME_PATH_KEYS = ("path", "Path", "game", "Game")
+_RPCS3_ABSOLUTE_RE = re.compile(r"^(?:/|~|[A-Za-z]:[\\/])")
+
+
+def _rpcs3_looks_like_path(text):
+    return isinstance(text, str) and bool(_RPCS3_ABSOLUTE_RE.match(text.strip()))
+
+
+def _rpcs3_path_value(value):
+    if isinstance(value, dict):
+        for key in RPCS3_GAME_PATH_KEYS:
+            candidate = value.get(key)
+            if _rpcs3_looks_like_path(candidate):
+                return candidate.strip()
+        return ""
+    if _rpcs3_looks_like_path(value):
+        return value.strip()
+    return ""
+
+
+def _rpcs3_yaml_payload(path, errors):
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        errors.append(f"{path}: {error}")
+        return None
+    try:
+        return _parse_yaml(text)
+    except Exception as error:  # malformed YAML must skip the file, never abort the scan
+        errors.append(f"{path}: {error}")
+        return None
+
+
+def _rpcs3_yaml_paths(path, payload):
+    """Return the game paths an RPCS3 ``games.yml`` or ``config.yml`` declares.
+
+    ``games.yml`` maps a game path to its metadata (or, in older layouts,
+    carries a ``path`` value), while ``config.yml`` keeps a ``games:`` list or
+    mapping. Anything that does not look path-shaped is ignored rather than
+    imported as a bogus entry.
+    """
+    paths = []
+    if path.name.casefold() == "games.yml":
+        if isinstance(payload, dict):
+            for key, value in payload.items():
+                if _rpcs3_looks_like_path(key):
+                    paths.append(key.strip())
+                candidate = _rpcs3_path_value(value)
+                if candidate:
+                    paths.append(candidate)
+        elif isinstance(payload, list):
+            paths.extend(candidate for candidate in map(_rpcs3_path_value, payload) if candidate)
+        return paths
+    games = payload.get("games") if isinstance(payload, dict) else None
+    if isinstance(games, dict):
+        for key, value in games.items():
+            candidate = _rpcs3_path_value(value)
+            if candidate:
+                paths.append(candidate)
+            elif _rpcs3_looks_like_path(key):
+                paths.append(key.strip())
+    elif isinstance(games, list):
+        paths.extend(candidate for candidate in map(_rpcs3_path_value, games) if candidate)
+    return paths
+
+
+def _rpcs3_game(path, errors):
+    """Return ``(real_path, game)`` for one external entry, or ``None``."""
+    text = os.path.expandvars(os.path.expanduser(str(path)))
+    expanded = Path(text)
+    try:
+        expanded.stat()
+    except OSError as error:
+        errors.append(f"{expanded}: {error}")
+        return None
+    if expanded.is_dir():
+        sfo = expanded / "PARAM.SFO"
+        try:
+            has_sfo = sfo.is_file()
+        except OSError as error:
+            errors.append(f"{sfo}: {error}")
+            return None
+        if not has_sfo:
+            errors.append(f"{expanded}: no PARAM.SFO found")
+            return None
+        name = _read_sfo_title(sfo)
+    elif expanded.is_file() and expanded.suffix.casefold() == ".iso":
+        name = expanded.stem
+    else:
+        errors.append(f"{expanded}: not a PlayStation 3 game folder or ISO")
+        return None
+    try:
+        real = os.path.realpath(expanded)
+    except OSError as error:
+        errors.append(f"{expanded}: {error}")
+        return None
+    return real, {
+        "name": name,
+        "platform": "PlayStation 3",
+        "genre": "",
+        "path": str(expanded),
+        "launch": f"rpcs3 {expanded}",
+        "source": "rpcs3",
+        "added_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+def import_rpcs3_hdd(home=None, errors=None):
+    """Import installed games, external folders, and ISOs from RPCS3.
+
+    The ``dev_hdd0/game`` scan stays the primary source. RPCS3 also records
+    games installed outside the virtual HDD (and ISOs) in ``games.yml`` or the
+    ``games:`` list of ``config.yml``, so both are read for the native and
+    Flatpak config directories. An inaccessible entry is reported and skipped;
+    one bad path never aborts the scan.
+    """
     home = Path(home or Path.home())
+    errors = errors if errors is not None else []
+    candidates = []
     roots = [
         home / ".config/rpcs3/dev_hdd0/game",
         home / ".var/app/net.rpcs3.RPCS3/config/rpcs3/dev_hdd0/game",
     ]
-    games = []
     for root in roots:
         if not root.is_dir():
             continue
-        for folder in sorted(root.iterdir()):
+        try:
+            entries = sorted(root.iterdir())
+        except OSError as error:
+            errors.append(f"{root}: {error}")
+            continue
+        for folder in entries:
             sfo = folder / "PARAM.SFO"
-            if not folder.is_dir() or not sfo.is_file():
+            try:
+                if folder.is_dir() and sfo.is_file():
+                    candidates.append(folder)
+            except OSError as error:
+                errors.append(f"{folder}: {error}")
+
+    for config_dir in RPCS3_CONFIG_DIRS:
+        for name in ("games.yml", "config.yml"):
+            path = home / config_dir / name
+            if not path.is_file():
                 continue
-            title = _read_sfo_title(sfo)
-            games.append({
-                "name": title,
-                "platform": "PlayStation 3",
-                "genre": "",
-                "path": str(folder),
-                "launch": f"rpcs3 {folder}",
-                "source": "rpcs3",
-                "added_at": datetime.now().isoformat(timespec="seconds"),
-            })
-        if games:
-            break
+            payload = _rpcs3_yaml_payload(path, errors)
+            if payload is None:
+                continue
+            candidates.extend(_rpcs3_yaml_paths(path, payload))
+
+    games = []
+    seen = set()
+    for candidate in candidates:
+        item = _rpcs3_game(candidate, errors)
+        if item is None:
+            continue
+        real, game = item
+        if real in seen:
+            continue
+        seen.add(real)
+        games.append(game)
     return games
 
 

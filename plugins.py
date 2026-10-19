@@ -16,13 +16,41 @@ import tempfile
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from archives import safe_zip_extract
 from backend_io import atomic_write_text
 from pkg.platform_compat import resolved_data_dir
 
 
-HOOKS = {"before_launch", "after_session", "library", "command", "library_source", "events"}
+# Capability declarations are additive on top of the frozen v1 hook set
+# (ADR 0077). Each capability name maps to the hook a plugin must declare;
+# the host refuses a capability whose hook is missing.
+CAPABILITY_HOOKS = {
+    "storefront": "storefront",
+    "metadata": "metadata",
+    "media": "media",
+    "stats": "stats",
+    "emulator_settings": "emulator",
+    "discovery": "discovery",
+}
+CAPABILITY_HOOK_NAMES = frozenset(CAPABILITY_HOOKS.values())
+# Hooks that receive the data bag, capability settings, and credentials.
+PRIVILEGED_HOOK_NAMES = frozenset(CAPABILITY_HOOK_NAMES)
+HOOKS = (
+    {"before_launch", "after_session", "library", "command", "library_source", "events"}
+    | set(PRIVILEGED_HOOK_NAMES)
+)
+# Per-hook wall-clock budgets. Legacy hooks keep the historical 5 s.
+HOOK_TIMEOUTS = {
+    "storefront": 30,
+    "metadata": 15,
+    "media": 15,
+    "stats": 15,
+    "emulator": 10,
+    "discovery": 10,
+    "default": 5,
+}
 # Declared-permission whitelist for 1.14.0. A plugin that wants anything else
 # is refused at manifest read time; grants never exceed declarations.
 PERMISSIONS = frozenset({"network"})
@@ -34,7 +62,42 @@ LOGGER = logging.getLogger("openbox.plugins")
 MAX_PLUGIN_PAYLOAD = 2 * 1024 * 1024
 MAX_COMMANDS = 32
 MAX_LIBRARY_ENTRIES = 500
+MAX_PLUGIN_DATA = 1024 * 1024
+MAX_PLUGIN_DATA_KEY = 128
+MAX_PLUGIN_DATA_DEPTH = 4
+MAX_CREDENTIAL_KEYS = 128
+MAX_CREDENTIAL_VALUE = 4096
+MAX_CAPABILITY_NAME = 80
+MAX_CAPABILITY_PLATFORM = 40
+MAX_CAPABILITY_MEDIA_KINDS = 20
+MAX_EMULATOR_CAPABILITIES = 8
+MAX_MESSAGE_KEYS = 64
+MAX_MESSAGE_TEXT = 500
+MESSAGE_LOCALES = ("en", "es", "de", "fr", "pt")
+NOTIFICATION_LEVELS = frozenset({"info", "success", "warning", "error"})
+CAPABILITY_ID = PLUGIN_ID
+EMULATOR_CAPABILITY_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+MESSAGE_KEY = re.compile(r"^[a-z0-9._-]{1,64}$")
 UNSANDBOXED_PLUGINS_ENV = "OPENBOX_ALLOW_UNSANDBOXED_PLUGINS"
+
+
+def _capability_media_kinds():
+    """Media kinds a metadata/media capability may declare.
+
+    Imported lazily: plugins.py is imported very early by web_app, and the
+    media field tables pull in state modules that must not import plugins.
+    """
+    try:
+        from pkg.state.media_probe import MEDIA_PATH_FIELDS, MEDIA_TYPES_ALL
+        return frozenset(MEDIA_PATH_FIELDS) | frozenset(MEDIA_TYPES_ALL) | {"screenshots"}
+    except Exception:  # an unavailable media module must not block manifests
+        return frozenset({
+            "cover", "background", "screenshots", "clear_logo", "fanart",
+            "banner", "icon", "box_back", "box_spine", "box_3d",
+            "title_screen", "cart_front", "cart_back", "disc", "advertisement",
+            "manual", "video", "music", "video_snap", "video_theme",
+            "video_trailer",
+        })
 
 
 def sandbox_status():
@@ -269,6 +332,154 @@ def _clean_settings_schema(raw):
     return {"type": "object", "properties": properties, "required": list(required)}
 
 
+def _clean_messages(raw):
+    """Validate the optional localized notification table."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict) or len(raw) > MAX_MESSAGE_KEYS:
+        raise ValueError(f"Plugin messages must be an object with at most {MAX_MESSAGE_KEYS} keys.")
+    messages = {}
+    for key, translations in raw.items():
+        if not isinstance(key, str) or not MESSAGE_KEY.fullmatch(key):
+            raise ValueError(f"Plugin message key {key!r} is invalid.")
+        if not isinstance(translations, dict):
+            raise ValueError(f"Plugin message {key!r} must map locales to text.")
+        clean = {}
+        for locale, text in translations.items():
+            if locale not in MESSAGE_LOCALES:
+                # Forward compatible: a future locale is dropped, not fatal.
+                continue
+            if not isinstance(text, str):
+                raise ValueError(f"Plugin message {key!r} has a non-text {locale!r} translation.")
+            clean[locale] = text[:MAX_MESSAGE_TEXT]
+        messages[key] = clean
+    return messages
+
+
+def _clean_optional_text(raw, label, maximum):
+    if raw in (None, ""):
+        return ""
+    if not isinstance(raw, str):
+        raise ValueError(f"Plugin {label} must be text.")
+    return raw.strip()[:maximum]
+
+
+def _clean_homepage(raw):
+    if raw in (None, ""):
+        return ""
+    if not isinstance(raw, str):
+        raise ValueError("Plugin homepage must be a URL.")
+    value = raw.strip()
+    parts = urlsplit(value)
+    if len(value) > 300 or parts.scheme != "https" or not parts.netloc:
+        raise ValueError("Plugin homepage must be an HTTPS URL of at most 300 characters.")
+    return value
+
+
+def _clean_capability_identity(name, value):
+    if not isinstance(value, dict):
+        raise ValueError(f"Plugin capability {name} must be an object.")
+    capability_id = value.get("id")
+    capability_name = value.get("name")
+    if not isinstance(capability_id, str) or not CAPABILITY_ID.fullmatch(capability_id):
+        raise ValueError(f"Plugin capability {name} needs a valid id.")
+    if not isinstance(capability_name, str) or not capability_name.strip():
+        raise ValueError(f"Plugin capability {name} needs a name.")
+    return capability_id, capability_name.strip()[:MAX_CAPABILITY_NAME]
+
+
+def _clean_media_kinds(raw, name):
+    if raw is None:
+        return ["cover", "background"]
+    if not isinstance(raw, list) or len(raw) > MAX_CAPABILITY_MEDIA_KINDS:
+        raise ValueError(f"Plugin capability {name} media_kinds must be a bounded list.")
+    allowed = _capability_media_kinds()
+    kinds = []
+    for kind in raw:
+        if not isinstance(kind, str) or kind not in allowed:
+            raise ValueError(f"Plugin capability {name} declares an unknown media kind.")
+        if kind not in kinds:
+            kinds.append(kind)
+    return kinds
+
+
+def _clean_emulator_capabilities(raw):
+    if not isinstance(raw, list) or len(raw) > MAX_EMULATOR_CAPABILITIES:
+        raise ValueError("Plugin emulator_settings must be a list of at most 8 emulators.")
+    emulators = []
+    seen = set()
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise ValueError("Plugin emulator_settings entries must be objects.")
+        emulator_id = entry.get("emulator_id")
+        if not isinstance(emulator_id, str) or not EMULATOR_CAPABILITY_ID.fullmatch(emulator_id):
+            raise ValueError("Plugin emulator_settings needs a valid emulator_id.")
+        if emulator_id in seen:
+            raise ValueError("Plugin emulator_settings ids must be unique.")
+        seen.add(emulator_id)
+        label = entry.get("label")
+        if label in (None, ""):
+            label = emulator_id
+        if not isinstance(label, str):
+            raise ValueError("Plugin emulator_settings label must be text.")
+        schema = _clean_settings_schema(entry.get("schema"))
+        if schema is None:
+            raise ValueError("Plugin emulator_settings requires a settings schema.")
+        scopes_raw = entry.get("scopes", ["global", "platform"])
+        if not isinstance(scopes_raw, list) or not set(scopes_raw) <= {"global", "platform"}:
+            raise ValueError("Plugin emulator_settings scopes must be global and/or platform.")
+        scopes = [scope for scope in ("global", "platform") if scope in scopes_raw]
+        if not scopes:
+            raise ValueError("Plugin emulator_settings needs at least one scope.")
+        emulators.append({
+            "emulator_id": emulator_id,
+            "label": label.strip()[:MAX_CAPABILITY_NAME],
+            "schema": schema,
+            "scopes": scopes,
+        })
+    return emulators
+
+
+def _clean_capabilities(raw, plugin_id, hooks=None):
+    """Validate the additive capability declarations.
+
+    A capability is only accepted when the plugin also declares its hook, so
+    a capability can never widen what the host is willing to invoke. When
+    ``hooks`` is omitted every capability hook is treated as declared (used
+    by callers that validate shape only).
+    """
+    if raw in (None, {}):
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("Plugin capabilities must be an object.")
+    hooks = set(CAPABILITY_HOOK_NAMES if hooks is None else hooks)
+    capabilities = {}
+    seen_ids = set()
+    for name, hook in CAPABILITY_HOOKS.items():
+        if name not in raw:
+            continue
+        if hook not in hooks:
+            raise ValueError(f"Plugin capability {name} requires the {hook} hook.")
+        value = raw[name]
+        if name == "emulator_settings":
+            capabilities[name] = _clean_emulator_capabilities(value)
+            continue
+        capability_id, capability_name = _clean_capability_identity(name, value)
+        if capability_id in seen_ids:
+            raise ValueError(f"Plugin capability id {capability_id!r} is duplicated in {plugin_id}.")
+        seen_ids.add(capability_id)
+        capability = {"id": capability_id, "name": capability_name}
+        if name in ("storefront", "metadata"):
+            platform = value.get("platform", "")
+            if platform not in (None, "") and not isinstance(platform, str):
+                raise ValueError(f"Plugin {name} platform must be text.")
+            capability["platform"] = str(platform or "").strip()[:MAX_CAPABILITY_PLATFORM]
+        elif name == "media":
+            capability["media_kinds"] = _clean_media_kinds(value.get("media_kinds"), name)
+        capabilities[name] = capability
+    return capabilities
+
+
 def _check_setting_value(name, field, value):
     """Type/range-check one setting value; return the cleaned value."""
     field_type = field.get("type", "string")
@@ -486,11 +697,366 @@ def set_plugin_settings(directory, plugin_id, values):
     return cleaned
 
 
+def _secret_setting_names(manifest):
+    schema = manifest.get("settings") or {}
+    properties = schema.get("properties") if isinstance(schema, dict) else {}
+    if not isinstance(properties, dict):
+        return set()
+    return {
+        str(name) for name, field in properties.items()
+        if isinstance(field, dict) and field.get("format") == "password"
+    }
+
+
+def plugin_settings_values_public(directory, manifest):
+    """Stored settings minus password-format values (safe for hook payloads)."""
+    values = plugin_settings_values(directory, manifest)
+    secrets = _secret_setting_names(manifest)
+    return {name: value for name, value in values.items() if name not in secrets}
+
+
+def get_plugin_settings_public(directory, plugin_id):
+    """Schema plus redacted values for Settings > Plugins.
+
+    Password fields are never returned; ``secret_set`` tells the form whether
+    a value already exists without disclosing it.
+    """
+    root = Path(directory)
+    manifest = read_manifest(root / str(plugin_id))
+    secrets = _secret_setting_names(manifest)
+    values = plugin_settings_values(directory, manifest)
+    return {
+        "schema": manifest.get("settings") or {"type": "object", "properties": {}},
+        "values": {name: value for name, value in values.items() if name not in secrets},
+        "secret_set": {name: bool(values.get(name)) for name in sorted(secrets)},
+    }
+
+
+def _plugin_store_path(directory, folder, plugin_id):
+    plugin_id = str(plugin_id)
+    if not PLUGIN_ID.fullmatch(plugin_id):
+        raise ValueError("Plugin id is invalid.")
+    return Path(directory) / folder / f"{plugin_id}.json"
+
+
+def _read_json_store(path, maximum):
+    try:
+        if path.stat().st_size > maximum:
+            return {}
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _write_json_store(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.parent.chmod(0o700)
+    except OSError:
+        pass
+    atomic_write_text(path, json.dumps(data, indent=2, sort_keys=True) + "\n", mode=0o600)
+
+
+def _json_depth(value):
+    """Depth of a JSON value; raises ValueError for non-JSON data."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        if isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
+            raise ValueError("Plugin data must be finite JSON.")
+        return 0
+    if isinstance(value, list):
+        return 1 + max((_json_depth(item) for item in value), default=0)
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str) or not key or len(key) > MAX_PLUGIN_DATA_KEY:
+                raise ValueError("Plugin data keys must be short strings.")
+            _json_depth(item)
+        return 1 + max((_json_depth(item) for item in value.values()), default=0)
+    raise ValueError("Plugin data must be JSON serializable.")
+
+
+def plugin_data_values(directory, plugin_id):
+    """The plugin's bounded data bag (``{}`` when absent or malformed)."""
+    try:
+        path = _plugin_store_path(directory, "data", plugin_id)
+    except ValueError:
+        return {}
+    data = _read_json_store(path, MAX_PLUGIN_DATA)
+    try:
+        if data and _json_depth(data) > MAX_PLUGIN_DATA_DEPTH:
+            return {}
+    except ValueError:
+        return {}
+    return data
+
+
+def set_plugin_data(directory, plugin_id, patch):
+    """Shallow-merge a validated patch into the plugin data bag.
+
+    The whole merged bag must stay under 1 MiB and four levels deep; a patch
+    that breaks either bound raises ``ValueError`` and writes nothing.
+    """
+    if not isinstance(patch, dict):
+        raise ValueError("Plugin data must be an object.")
+    cleaned = {}
+    for key, value in patch.items():
+        if not isinstance(key, str) or not key or len(key) > MAX_PLUGIN_DATA_KEY:
+            raise ValueError("Plugin data keys must be short strings.")
+        _json_depth(value)
+        cleaned[key] = value
+    merged = {**plugin_data_values(directory, plugin_id), **cleaned}
+    if _json_depth(merged) > MAX_PLUGIN_DATA_DEPTH:
+        raise ValueError("Plugin data is nested too deeply.")
+    encoded = json.dumps(merged, sort_keys=True)
+    if len(encoded.encode("utf-8")) > MAX_PLUGIN_DATA:
+        raise ValueError("Plugin data exceeds the 1 MiB limit.")
+    _write_json_store(_plugin_store_path(directory, "data", plugin_id), merged)
+    return merged
+
+
+def plugin_credentials_values(directory, plugin_id):
+    """Credential values for a capability hook (plain object, 0600 file)."""
+    try:
+        path = _plugin_store_path(directory, "credentials", plugin_id)
+    except ValueError:
+        return {}
+    raw = _read_json_store(path, MAX_PLUGIN_DATA)
+    values = {}
+    for key, value in raw.items():
+        if not isinstance(key, str) or not key or len(key) > MAX_PLUGIN_DATA_KEY:
+            continue
+        if isinstance(value, str) and len(value) <= MAX_CREDENTIAL_VALUE:
+            values[key] = value
+    return values
+
+
+def set_plugin_credentials(directory, plugin_id, values, *, clear=None):
+    """Merge credential values; an empty string or a clear entry deletes.
+
+    Returns the stored key names (never the values).
+    """
+    if values is None:
+        values = {}
+    if not isinstance(values, dict):
+        raise ValueError("Plugin credentials must be an object.")
+    if clear is None:
+        clear = []
+    if not isinstance(clear, list) or any(not isinstance(item, str) for item in clear):
+        raise ValueError("Plugin credential clear list must be a list of names.")
+    existing = plugin_credentials_values(directory, plugin_id)
+    for key, value in values.items():
+        if not isinstance(key, str) or not key or len(key) > MAX_PLUGIN_DATA_KEY:
+            raise ValueError("Plugin credential names must be short strings.")
+        if value in ("", None):
+            existing.pop(key, None)
+            continue
+        if not isinstance(value, str) or len(value) > MAX_CREDENTIAL_VALUE:
+            raise ValueError("Plugin credential values must be strings of at most 4096 characters.")
+        existing[key] = value
+    for key in clear:
+        existing.pop(key, None)
+    if len(existing) > MAX_CREDENTIAL_KEYS:
+        raise ValueError("Plugins may store at most 128 credentials.")
+    path = _plugin_store_path(directory, "credentials", plugin_id)
+    if existing:
+        _write_json_store(path, existing)
+    else:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+    return sorted(existing)
+
+
+def plugin_credentials_summary(directory, plugin_id):
+    """Key names and presence flags for the UI; values are never returned."""
+    values = plugin_credentials_values(directory, plugin_id)
+    return {"keys": sorted(values), "set": {key: True for key in sorted(values)}}
+
+
+def _resolve_hook_timeout(hook, timeout):
+    if timeout is not None:
+        return timeout
+    return HOOK_TIMEOUTS.get(hook, HOOK_TIMEOUTS["default"])
+
+
+def _hook_payload(root, manifest, hook, payload):
+    """Inject host data/credentials/settings into a hook payload."""
+    if not isinstance(payload, dict):
+        return payload
+    body = dict(payload)
+    body["plugin_data"] = plugin_data_values(root, manifest["id"])
+    capability = hook in PRIVILEGED_HOOK_NAMES
+    if manifest.get("settings"):
+        values = plugin_settings_values_public(root, manifest) if capability else plugin_settings_values(root, manifest)
+        if not capability:
+            # Password-format settings are credentials; legacy hooks never see them.
+            secrets = _secret_setting_names(manifest)
+            values = {key: value for key, value in values.items() if key not in secrets}
+        body["settings"] = values
+    if capability:
+        body["credentials"] = plugin_credentials_values(root, manifest["id"])
+    return body
+
+
+def resolve_plugin_notification(manifest, notification, *, locale="en"):
+    """Resolve a hook notification to ``{level, message}``.
+
+    Keys are looked up in the manifest message table for the active locale,
+    then English, then the key itself. Formatting failures fall back to the
+    raw template rather than dropping the notification.
+    """
+    if isinstance(notification, str):
+        notification = {"message": notification}
+    if not isinstance(notification, dict):
+        raise ValueError("Plugin notification must be an object.")
+    level = notification.get("level", "info")
+    if level not in NOTIFICATION_LEVELS:
+        level = "info"
+    key = notification.get("key")
+    params = notification.get("params")
+    if not isinstance(params, dict):
+        params = {}
+    message = ""
+    if key not in (None, ""):
+        messages = manifest.get("messages") or {}
+        translations = messages.get(str(key)) if isinstance(messages, dict) else None
+        if isinstance(translations, dict):
+            template = translations.get(locale) or translations.get("en")
+        else:
+            template = None
+        if template is None:
+            template = str(key)[:MAX_MESSAGE_TEXT]
+        safe_params = {
+            str(name)[:64]: str(value)[:200]
+            for name, value in list(params.items())[:32]
+        }
+        try:
+            message = template.format(**safe_params)
+        except (KeyError, ValueError, IndexError):
+            message = template
+    if not message:
+        raw_message = notification.get("message")
+        message = raw_message if isinstance(raw_message, str) else ""
+    return {"level": level, "message": str(message)[:2000]}
+
+
+def _active_locale():
+    try:
+        from openbox import load_state_readonly
+        state = load_state_readonly()
+        locale = state.get("settings", {}).get("locale") if isinstance(state, dict) else None
+        return str(locale or "en")[:5] or "en"
+    except Exception:  # state is optional for notification localization
+        return "en"
+
+
+def _persist_plugin_notification(plugin_id, event, resolved):
+    """Store one plugin notification through the shared notification store."""
+    from notifications import add_notification
+    from openbox import update_state
+
+    def mutate(state):
+        add_notification(
+            state,
+            kind="plugin",
+            level=resolved["level"],
+            title=resolved["message"][:200],
+            body=resolved["message"],
+            source=plugin_id,
+            dedupe_key=f"plugin:{plugin_id}:{event}",
+        )
+
+    update_state(mutate)
+
+
+def _service_state():
+    try:
+        from openbox import load_state_readonly
+        state = load_state_readonly()
+        if not isinstance(state, dict):
+            return {}
+        # Host services must see the same hidden/plugin-filtered games the UI
+        # sees, not raw persisted rows. A capability hook can run while the
+        # public payload itself is being built (discovery), so never recurse.
+        try:
+            from pkg.state.cache import BUILDING_PUBLIC_STATE, _filter_plugin_storefront_games
+            if BUILDING_PUBLIC_STATE.get():
+                from openbox import DATA
+                public_games = _filter_plugin_storefront_games(state.get("games", []), Path(DATA).parent)
+            else:
+                from webapp_state import public_state
+                public_games = public_state().get("games")
+        except Exception:
+            public_games = None
+        if isinstance(public_games, list):
+            state = dict(state)
+            state["games"] = public_games
+        return state
+    except Exception:
+        LOGGER.warning("Plugin service request could not read library state", exc_info=True)
+        return {}
+
+
+def _execute_service_requests(requests):
+    """Run at most eight allowlisted read-only host services."""
+    from pkg.parity.parity_plugin_services import handle_service
+
+    if not isinstance(requests, list) or len(requests) > 8:
+        raise ValueError("service_requests must be a list of at most 8 requests.")
+    state = _service_state()
+    results = {}
+    for request in requests:
+        if not isinstance(request, dict):
+            raise ValueError("Every service request must be an object.")
+        request_id = request.get("id")
+        action = request.get("action")
+        params = request.get("params", {})
+        if not isinstance(request_id, str) or not request_id or len(request_id) > 64:
+            raise ValueError("Service requests need a short id.")
+        if request_id in results:
+            raise ValueError("Service request ids must be unique.")
+        if not isinstance(action, str) or not action:
+            raise ValueError("Service requests need an action.")
+        if not isinstance(params, dict):
+            raise ValueError("Service request params must be an object.")
+        try:
+            results[request_id] = handle_service(action, params, state)
+        except Exception as error:
+            # A failing optional service is reported for that request; the
+            # hook still gets its single second invocation.
+            LOGGER.warning("Plugin service %s failed: %s", action, error)
+            results[request_id] = {"error": str(error)[:500] or "Service failed."}
+    return results
+
+
+def _finalize_hook_result(root, manifest, candidate):
+    """Merge plugin data and strip forbidden result channels."""
+    if "credentials" in candidate:
+        candidate.pop("credentials", None)
+        LOGGER.warning(
+            "Plugin %s returned credentials; hooks cannot write the credential store",
+            manifest["id"],
+        )
+    if "data" in candidate:
+        data = candidate.get("data")
+        if isinstance(data, dict):
+            try:
+                set_plugin_data(root, manifest["id"], data)
+            except (ValueError, OSError) as error:
+                LOGGER.warning("Plugin %s data was rejected: %s", manifest["id"], error)
+        else:
+            LOGGER.warning("Plugin %s returned non-object data; ignored", manifest["id"])
+    return candidate
+
+
 def emit_plugin_event(directory, event, payload=None):
     """Best-effort fan-out of a lifecycle event to ``events``-hook plugins.
 
     Never raises: a failing event path must not break the operation that
-    emitted it (imports, session bookkeeping, shutdown).
+    emitted it (imports, session bookkeeping, shutdown). Notifications
+    returned by event hooks are resolved through the manifest message table
+    and stored in the shared notification center.
     """
     if os.environ.get("OPENBOX_SAFE_MODE"):
         return
@@ -498,7 +1064,39 @@ def emit_plugin_event(directory, event, payload=None):
         body = {"event": event}
         if isinstance(payload, dict):
             body.update(payload)
-        run_plugins(Path(directory), "events", body)
+        results = run_plugin_hooks(Path(directory), "events", body)
+        if not results:
+            return
+        root = Path(directory)
+        locale = _active_locale()
+        manifests = {}
+        for plugin_id, candidate, error in results:
+            if error:
+                LOGGER.warning("Plugin %s failed for event %s: %s", plugin_id, event, error)
+                continue
+            if not isinstance(candidate, dict):
+                continue
+            notification = candidate.get("notification")
+            if not isinstance(notification, dict):
+                continue
+            manifest = manifests.get(plugin_id)
+            if manifest is None:
+                try:
+                    manifest = read_manifest(root / plugin_id)
+                except ValueError:
+                    continue
+                manifests[plugin_id] = manifest
+            try:
+                resolved = resolve_plugin_notification(manifest, notification, locale=locale)
+            except ValueError as resolution_error:
+                LOGGER.warning("Plugin %s notification ignored: %s", plugin_id, resolution_error)
+                continue
+            if not resolved["message"]:
+                continue
+            try:
+                _persist_plugin_notification(plugin_id, event, resolved)
+            except Exception as store_error:
+                LOGGER.warning("Plugin %s notification could not be stored: %s", plugin_id, store_error)
     except Exception:
         LOGGER.exception("Plugin lifecycle event %s failed", event)
 
@@ -628,6 +1226,8 @@ def read_manifest(path):
     commands = _clean_commands(manifest.get("commands"), plugin_id)
     permissions = _clean_permissions(manifest.get("permissions"))
     settings = _clean_settings_schema(manifest.get("settings"))
+    messages = _clean_messages(manifest.get("messages"))
+    capabilities = _clean_capabilities(manifest.get("capabilities"), plugin_id, hooks)
     return {
         **manifest,
         "id": plugin_id,
@@ -637,6 +1237,11 @@ def read_manifest(path):
         "commands": commands,
         "permissions": permissions,
         "settings": settings,
+        "capabilities": capabilities,
+        "messages": messages,
+        "description": _clean_optional_text(manifest.get("description"), "description", 500),
+        "author": _clean_optional_text(manifest.get("author"), "author", 80),
+        "homepage": _clean_homepage(manifest.get("homepage")),
     }
 
 
@@ -697,12 +1302,15 @@ def plugin_commands(directory, *, include_disabled=False):
     return commands
 
 
-def run_plugin_hook(directory, plugin_id, hook, payload):
+def run_plugin_hook(directory, plugin_id, hook, payload, *, timeout=None):
     """Run one plugin hook and return ``(result, error)``.
 
     ``error`` is a human-readable reason when the plugin was skipped (invalid
     plugin id, unsandboxed host, oversized payload, missing runner). The result
     is the parsed dict output or None.
+
+    ``timeout`` defaults to ``HOOK_TIMEOUTS`` for the hook (5 s for legacy
+    hooks, longer for capability hooks).
     """
     root = Path(directory)
     try:
@@ -711,16 +1319,48 @@ def run_plugin_hook(directory, plugin_id, hook, payload):
         return None, str(error)
     if hook not in manifest["hooks"]:
         return None, f"Plugin does not declare the {hook} hook."
-    return _run_manifest_hook(root, manifest, hook, payload)
+    return _run_manifest_hook(root, manifest, hook, payload, timeout=timeout)
 
 
-def _run_manifest_hook(root, manifest, hook, payload):
+def _run_manifest_hook(root, manifest, hook, payload, *, timeout=None):
+    """Invoke a hook, then run at most one service round-trip.
+
+    Capability hooks may return ``service_requests``; the host executes them
+    and re-invokes the same hook once with ``service_results``. Data and
+    notifications from the first result are never merged.
+    """
+    candidate, error = _invoke_hook(root, manifest, hook, payload, timeout=timeout)
+    if error or not isinstance(candidate, dict):
+        return candidate, error
+    if "service_requests" in candidate:
+        if hook not in PRIVILEGED_HOOK_NAMES:
+            return None, "service_requests are only available to capability hooks."
+        try:
+            results = _execute_service_requests(candidate.get("service_requests"))
+        except ValueError as service_error:
+            return None, str(service_error)
+        forwarded = dict(payload) if isinstance(payload, dict) else {}
+        forwarded["service_results"] = results
+        candidate, error = _invoke_hook(root, manifest, hook, forwarded, timeout=timeout)
+        if error or not isinstance(candidate, dict):
+            return candidate, error
+        if "service_requests" in candidate:
+            candidate.pop("service_requests", None)
+            LOGGER.warning(
+                "Plugin %s requested services more than once; the second round was ignored",
+                manifest["id"],
+            )
+    return _finalize_hook_result(root, manifest, candidate), ""
+
+
+def _invoke_hook(root, manifest, hook, payload, *, timeout=None):
     package_root = root / manifest["id"]
     entry = package_root / manifest["entry"]
     # Per-plugin settings travel in the stdin JSON payload — the sanctioned
-    # channel that sidesteps the environment scrubbing (F1c).
-    if manifest.get("settings"):
-        payload = {**(payload if isinstance(payload, dict) else {}), "settings": plugin_settings_values(root, manifest)}
+    # channel that sidesteps the environment scrubbing (F1c). Capability
+    # hooks additionally receive the plugin data bag and credentials.
+    payload = _hook_payload(root, manifest, hook, payload)
+    injected_data = payload.get("plugin_data") if isinstance(payload, dict) else None
     encoded = json.dumps(payload)
     if len(encoded.encode("utf-8")) > MAX_PLUGIN_PAYLOAD:
         return None, "Payload is too large for plugin execution."
@@ -735,7 +1375,7 @@ def _run_manifest_hook(root, manifest, hook, payload):
             completed = subprocess.run(
                 command,
                 input=encoded.encode("utf-8"), stdout=stdout_file, stderr=stderr_file,
-                timeout=5, env=plugin_env, start_new_session=True,
+                timeout=_resolve_hook_timeout(hook, timeout), env=plugin_env, start_new_session=True,
                 check=False,
             )
             stdout_file.seek(0)
@@ -758,6 +1398,15 @@ def _run_manifest_hook(root, manifest, hook, payload):
         return None, "Plugin returned invalid JSON."
     if not isinstance(candidate, dict):
         return None, "Plugin output must be a JSON object."
+    # Legacy plugins often echo their input payload. The host-added data bag
+    # is new; drop it when it comes back unchanged so v1 result shapes stay
+    # exactly what they were (capability hooks keep it).
+    if (
+        hook not in PRIVILEGED_HOOK_NAMES
+        and "plugin_data" in candidate
+        and candidate.get("plugin_data") == injected_data
+    ):
+        candidate.pop("plugin_data", None)
     return candidate, ""
 
 
@@ -856,7 +1505,37 @@ def remove_plugin(directory, plugin_id):
         if isinstance(records, dict):
             records.pop(manifest["id"], None)
     save_plugin_state(root, state)
+    for folder in ("data", "credentials"):
+        try:
+            _plugin_store_path(root, folder, manifest["id"]).unlink()
+        except FileNotFoundError:
+            pass
+        except (OSError, ValueError) as error:
+            LOGGER.warning("Plugin %s %s store could not be removed: %s", manifest["id"], folder, error)
+    try:
+        (root.parent / "plugin-stats" / f"{manifest['id']}.json").unlink()
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        LOGGER.warning("Plugin %s stats cache could not be removed: %s", manifest["id"], error)
     return manifest["id"]
+
+
+def run_plugin_hooks(directory, hook, payload, *, timeout=None):
+    """Run one hook across enabled plugins, keeping per-plugin attribution.
+
+    Returns ``[(plugin_id, candidate, error), ...]`` in manifest order. Unlike
+    :func:`run_plugins` the results are not chained; callers decide what to
+    merge.
+    """
+    root = Path(directory)
+    results = []
+    for manifest in list_plugins(root):
+        if not manifest.get("valid") or not manifest["enabled"] or hook not in manifest["hooks"]:
+            continue
+        candidate, error = _run_manifest_hook(root, manifest, hook, payload, timeout=timeout)
+        results.append((manifest["id"], candidate, error))
+    return results
 
 
 def run_plugins(directory, hook, payload):

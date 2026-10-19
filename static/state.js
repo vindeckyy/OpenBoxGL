@@ -1,4 +1,4 @@
-import { stableIdFor } from './pure.js';
+import { stableIdFor, sourceFilterMatches } from './pure.js';
 import { escapeHtml, API_V1, badge, defaultBadges, sortGames, advancedQueryMatches, parseQueryTokens, gameInstalled, $, motionMs, HTTP_URL_RE } from './util.js';
 const tr = key => (window.OpenBoxI18n?.t ? window.OpenBoxI18n.t(key) : key);
 
@@ -19,12 +19,14 @@ try {
      * @type {Record<string, any>}
      */
     const AppState = {
-      games: [], playlists: [], filterPresets: [], explorerField: 'genre', explorerRules: {}, activeFilterPreset: '', bigBoxGames: [], runningGames: [], raConfigured: false, selectedId: null, platform: 'all', activePlaylist: '', editingId: null, metadataGameId: null, bigBoxIndex: 0, gamepadState: {}, lastSessionEvent: 0, bulkMode: false, bigBoxLastInput: performance.now(), screenSaverGame: null, contextGameId: null, availableProfiles: {},
-      appSettings: {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',cover_grouping:'shape',locale:'en'}, bigBoxFilter: 'all', bigBoxSort: 'title', bigBoxRaFilter: 'all', bigBoxPlatform: 'all', platformCategory: 'all', pendingUpdate: null, duplicateMediaGroups: 0, libraryBgm: null, readerPage: 1, readerUrl: '', bigBoxHybridQuery: '', mediaEpoch: 0, coverRatios: {}, importBatchId: '', queryParse: null, queryParseText: '', queryMatchIds: null,
+      games: [], playlists: [], filterPresets: [], explorerField: 'genre', explorerRules: {}, activeFilterPreset: '', bigBoxGames: [], runningGames: [], raConfigured: false, startupErrors: [], selectedId: null, platform: 'all', activePlaylist: '', editingId: null, metadataGameId: null, bigBoxIndex: 0, gamepadState: {}, lastSessionEvent: 0, bulkMode: false, bigBoxLastInput: performance.now(), bigBoxLastMove: 0, backPressedAt: 0, screenSaverGame: null, contextGameId: null, availableProfiles: {}, filterExclusions: {}, smartFilterRules: {},
+      appSettings: {watch_folders:[],screensaver_seconds:90,controller_map:{},library_view:'grid',cover_grouping:'shape',locale:'en'}, bigBoxFilter: 'all', bigBoxSort: 'title', bigBoxRaFilter: 'all', bigBoxPlatform: 'all', platformCategory: 'all', pendingUpdate: null, duplicateMediaGroups: 0, libraryBgm: null, readerPage: 1, readerUrl: '', bigBoxHybridQuery: '', mediaEpoch: 0, coverRatios: {}, importBatchId: '', queryParse: null, queryParseText: '', queryMatchIds: null, unreadNotifications: 0, sourceLabels: {}, auditIssues: [],
     };
 
     const selectedIds = new Set();
-    const media = (game, kind, index = '') => `/api/media?id=${game.id}&kind=${kind}${index === '' ? '' : `&index=${index}`}&v=${AppState.mediaEpoch}&token=${encodeURIComponent(token)}`;
+    const coverPlaceholder = () => ({ src: '/assets/placeholder-cover.svg', alt: '' });
+    const coverSource = game => game?.has_cover ? media(game, 'cover') : coverPlaceholder().src;
+    const media = (game, kind, index = '') => kind === 'cover' && !game.has_cover ? '' : `/api/media?id=${game.id}&kind=${kind}${index === '' ? '' : `&index=${index}`}&v=${AppState.mediaEpoch}&token=${encodeURIComponent(token)}`;
     const badgeVisibility = () => new Set(AppState.appSettings.badge_visibility || defaultBadges);
     const playlistFor = name => AppState.playlists.find(item => item.name === name);
     const playlistMembers = playlist => new Set((playlist?.members || []).map(String));
@@ -32,16 +34,48 @@ try {
     // refuse a stale request instead of applying it to whichever game shifted into place.
     const gameIdOf = index => stableIdFor(AppState.games, index);
     const gameInPlaylist = (game, playlist) => {
-      if (!playlist) return false;
-      if (playlist.type !== 'manual') return true;
-      return playlistMembers(playlist).has(String(game.game_id)) || playlistMembers(playlist).has(String(game.id));
+      if (!playlist || !game) return false;
+      if (playlist.type === 'manual') {
+        return playlistMembers(playlist).has(String(game.game_id)) || playlistMembers(playlist).has(String(game.id));
+      }
+      const rules = playlist.rules && typeof playlist.rules === 'object' ? playlist.rules : {};
+      const completed = ['Beaten', 'Completed', 'Mastered'].includes(game.progress);
+      const installed = gameInstalled(game);
+      const view = rules.view || 'all';
+      const ownedUninstalled = Boolean(game.owned || game.store_catalog || game.gameyfin_id) && !installed;
+      const viewMatch = (view === 'all' && !game.hidden)
+        || (view === 'favorites' && game.favorite && !game.hidden)
+        || (view === 'recent' && game.last_played && !game.hidden)
+        || (view === 'never' && !game.play_count && !game.hidden)
+        || (view === 'playing' && ['Playing', 'Paused'].includes(game.progress) && !game.hidden)
+        || (view === 'completed' && completed && !game.hidden)
+        || (view === 'unplayed' && !game.progress && !game.hidden)
+        || (view === 'installed' && installed && !game.hidden)
+        || (view === 'owned' && ownedUninstalled && !game.hidden)
+        || (view === 'saves' && game.has_saves && !game.hidden)
+        || (view === 'shelf' && game.manual_entry && !game.hidden);
+      const fields = ['platform', 'platform_category', 'esrb', 'progress', 'installed',
+        'favorite', 'hidden', 'has_saves', 'has_achievements', 'has_missing_media',
+        'has_highscores', 'vertical', 'requires_chd', 'source', 'achievements_source',
+        'genre', 'developer', 'publisher', 'region', 'query'];
+      return viewMatch
+        && fields.every(field => !(field in rules) || _filterRuleMatches(game, field, rules[field]))
+        && !gameExcluded(game, rules.exclude);
     };
+    const CONTROLLER_LABELS = {gamepad:'Gamepad', arcade_stick:'Arcade stick', racing_wheel:'Racing wheel', light_gun:'Light gun', paddle:'Paddle', trackball:'Trackball', spinner:'Spinner', keyboard:'Keyboard', mouse:'Mouse', vr:'VR'};
+    function controllerLabel(id) {
+      const configured = (AppState.appSettings.controller_types || []).find(item => item.id === id);
+      return configured?.name || CONTROLLER_LABELS[id] || String(id || '').replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+    }
+    function renderControllerBadges(value) {
+      return String(value || '').split(',').map(item => item.trim()).filter(Boolean).map(id => badge(controllerLabel(id), true, 'controller'));
+    }
     function renderBadges(game) {
       const visible = badgeVisibility();
       return [
         game.manual_entry && badge('Shelf entry', true, 'shelf'),
         visible.has('favorite') && badge('Favorite', game.favorite, 'favorite'),
-        visible.has('installed') && badge(gameInstalled(game) ? 'Installed' : 'Owned', true),
+        visible.has('installed') && badge(game.store_installed === false && (game.steam_app_id || game.store_catalog) ? 'Missing' : gameInstalled(game) ? 'Installed' : 'Owned', game.store_installed !== false, game.store_installed === false ? 'danger' : undefined),
         visible.has('missing_media') && badge('Missing media', game.has_missing_media, 'danger'),
         visible.has('saves') && badge('Saves', game.has_saves),
         visible.has('documents') && badge('Docs', game.has_documents),
@@ -57,7 +91,7 @@ try {
         visible.has('manual') && badge('Manual time', Number(game.manual_playtime_seconds) > 0, 'manual-time'),
         visible.has('broken') && badge('Broken', game.broken, 'danger'),
         visible.has('portable') && badge('Portable', game.portable),
-        visible.has('controller') && badge(game.controller_support, Boolean(game.controller_support)),
+        visible.has('controller') && renderControllerBadges(game.controller_support).join(''),
         // Launch readiness from the cached audit; absent when the audit is missing or stale, or the setting is off.
         AppState.appSettings?.show_launch_badges !== false && AppState.launchReadiness?.[game.game_id] === 'blocked' && badge(tr('launch_audit.badge_blocked'), true, 'danger'),
         AppState.appSettings?.show_launch_badges !== false && AppState.launchReadiness?.[game.game_id] === 'warning' && badge(tr('launch_audit.badge_warning'), true),
@@ -118,6 +152,7 @@ try {
         error.code = payload.code;
         error.requestId = payload.request_id;
         error.detail = payload.detail;
+        if (payload.preview) error.preview = payload.preview;
         throw error;
       }
       return payload;
@@ -168,25 +203,25 @@ try {
       const { confirmAction } = await import('./dialogs.js');
       return await confirmAction({ message, target: message });
     }
-    async function nativePickFolder(message) {
+    async function nativePickFolder(message, {startPath = ''} = {}) {
       if (nativeBridge?.dialog) {
         try {
-          const result = await nativeBridge.dialog('folder', {title:message});
+          const result = await nativeBridge.dialog('folder', {title:message, start_path:startPath || undefined});
           return result?.path || null;
         } catch { return null; }
       }
       const { promptInput } = await import('./dialogs.js');
-      return await promptInput({ message, label: 'Folder path', defaultValue: '' });
+      return await promptInput({ message, label: 'Folder path', defaultValue: startPath || '' });
     }
-    async function nativePickFile(message) {
+    async function nativePickFile(message, {startPath = ''} = {}) {
       if (nativeBridge?.dialog) {
         try {
-          const result = await nativeBridge.dialog('file', {title:message});
+          const result = await nativeBridge.dialog('file', {title:message, start_path:startPath || undefined});
           return result?.path || null;
         } catch { return null; }
       }
       const { promptInput } = await import('./dialogs.js');
-      return await promptInput({ message, label: 'File path', defaultValue: '' });
+      return await promptInput({ message, label: 'File path', defaultValue: startPath || '' });
     }
     async function nativeReveal(path) {
       if (!path) return false;
@@ -558,6 +593,22 @@ try {
       document.querySelectorAll('[data-sidebar-section]').forEach(element => {
         element.hidden = hidden.has(element.dataset.sidebarSection);
       });
+      applySidebarOrder();
+    }
+    function applySidebarOrder() {
+      const container = document.querySelector('.sidebar');
+      if (!container) return;
+      const allowed = ['search', 'view', 'filters', 'platforms', 'playlists', 'explorer'];
+      const order = (AppState.appSettings.sidebar_sections || []).filter(section => allowed.includes(section));
+      if (!order.length) return;
+      const groups = new Map();
+      container.querySelectorAll('[data-sidebar-section]').forEach(element => {
+        const key = element.dataset.sidebarSection;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(element);
+      });
+      order.forEach(section => (groups.get(section) || []).forEach(element => container.append(element)));
+      [...groups.keys()].filter(section => !order.includes(section)).forEach(section => groups.get(section).forEach(element => container.append(element)));
     }
     const SEARCH_INDEX_MAX_TERM = 32;
     // LRU cache for parsed query tokens — caps at 64 entries to bound memory.
@@ -649,6 +700,10 @@ try {
       AppState.activePlaylist = '';
       AppState.activeFilterPreset = '';
       AppState.explorerRules = {};
+      AppState.filterExclusions = {};
+      AppState.smartFilterRules = {};
+      if ($('sourceFilter')) $('sourceFilter').value = '';
+      if ($('sourceExclude')) $('sourceExclude').checked = false;
       AppState.importBatchId = '';
       AppState.queryParse = null;
       AppState.queryParseText = '';
@@ -663,6 +718,65 @@ try {
       if (Number.isInteger(index) && index >= 0 && index < AppState.games.length) return AppState.games[index]?.id ?? null;
       return null;
     }
+    function _textRuleMatches(actual, rule) {
+      const haystack = String(actual || '').toLowerCase();
+      if (Array.isArray(rule)) return rule.some(value => haystack.includes(String(value).toLowerCase()));
+      if (rule && typeof rule === 'object' && Array.isArray(rule.values)) {
+        const matched = rule.values.some(value => haystack.includes(String(value).toLowerCase()));
+        return rule.op === 'not_contains_any' ? !matched : matched;
+      }
+      return haystack.includes(String(rule || '').toLowerCase());
+    }
+    function _hasAnyAchievements(game) {
+      if (game.has_achievements) return true;
+      const sources = game.achievement_sources;
+      return Boolean(sources && typeof sources === 'object' && Object.values(sources).some(entry => entry && (Number(entry.total) > 0 || Number(entry.earned) > 0)));
+    }
+    function _sourceRuleMatches(game, rule) {
+      const values = Array.isArray(rule) ? rule : [rule];
+      const actual = String(game.source || '').toLowerCase();
+      return Boolean(actual) && values.some(value => String(value).toLowerCase() === actual);
+    }
+    function _achievementSourceRuleMatches(game, rule) {
+      const values = Array.isArray(rule) ? rule : [rule];
+      const sources = game.achievement_sources;
+      if (!sources || typeof sources !== 'object') return false;
+      return values.some(source => {
+        const entry = sources[source];
+        return Boolean(entry && (Number(entry.total) > 0 || Number(entry.earned) > 0));
+      });
+    }
+    function _filterRuleMatches(game, field, value) {
+      const installed = gameInstalled(game);
+      switch (field) {
+        case 'platform': return String(game.platform || '').toLowerCase() === String(value).toLowerCase();
+        case 'platform_category': return platformCategoryFor(game).toLowerCase() === String(value).toLowerCase();
+        case 'esrb': return String(game.esrb || '').toLowerCase() === String(value).toLowerCase();
+        case 'progress': return String(value).toLowerCase() === 'unplayed' ? !game.progress || game.progress === 'Unplayed' : game.progress === value;
+        case 'installed': return value === 'installed' ? installed : value === 'uninstalled' ? !installed : true;
+        case 'favorite': return Boolean(game.favorite) === Boolean(value);
+        case 'hidden': return Boolean(game.hidden) === Boolean(value);
+        case 'has_saves': return Boolean(game.has_saves || (Array.isArray(game.save_paths) && game.save_paths.length)) === Boolean(value);
+        case 'has_achievements': return _hasAnyAchievements(game) === Boolean(value);
+        case 'has_missing_media': return Boolean(game.has_missing_media) === Boolean(value);
+        case 'has_highscores': return Boolean(game.has_highscores) === Boolean(value);
+        case 'vertical': return Boolean(game.vertical) === Boolean(value);
+        case 'requires_chd': return Boolean(game.requires_chd) === Boolean(value);
+        case 'source': return _sourceRuleMatches(game, value);
+        case 'achievements_source': return _achievementSourceRuleMatches(game, value);
+        case 'query': return advancedQueryMatches(game, String(value || ''));
+        case 'genre': case 'developer': case 'publisher': case 'region':
+          return _textRuleMatches(game[field], value);
+        default: return false;
+      }
+    }
+    function gameExcluded(game, exclusions) {
+      if (!game || !exclusions || typeof exclusions !== 'object') return false;
+      return Object.entries(exclusions).some(([field, raw]) => {
+        const values = Array.isArray(raw) ? raw : [raw];
+        return values.some(value => _filterRuleMatches(game, field, value));
+      });
+    }
     let _filteredCache = { key: null, result: [] };
     /**
      * Compute the filtered and sorted list of games for the active view.
@@ -674,10 +788,16 @@ try {
       const sort = $('sort')?.value || 'name';
       const sortDir = AppState.appSettings.list_sort_dir || '';
       const esrb = $('esrbFilter')?.value || '';
-      const key = `${_filterVersion}\0${AppState._refreshCounter || 0}\0${query}\0${view}\0${sort}\0${sortDir}\0${esrb}\0${AppState.platform}\0${AppState.platformCategory}\0${AppState.activePlaylist}\0${AppState.activeFilterPreset}\0${AppState.importBatchId}\0${JSON.stringify(AppState.explorerRules)}`;
+      const liveSource = $('sourceFilter')?.value || '';
+      const key = `${_filterVersion}\0${AppState._refreshCounter || 0}\0${query}\0${view}\0${sort}\0${sortDir}\0${esrb}\0${AppState.platform}\0${AppState.platformCategory}\0${AppState.activePlaylist}\0${AppState.activeFilterPreset}\0${AppState.importBatchId}\0${JSON.stringify(AppState.explorerRules)}\0${JSON.stringify(AppState.smartFilterRules || {})}\0${JSON.stringify(AppState.filterExclusions || {})}\0${liveSource}`;
       if (_filteredCache.key === key) return _filteredCache.result;
       const preset = AppState.filterPresets.find(item => item.name === AppState.activeFilterPreset);
       const presetRules = preset?.rules || {};
+      const smartRules = AppState.smartFilterRules || {};
+      // Smart filters are live state; an active preset wins a duplicate field.
+      const combinedRules = { ...smartRules, ...presetRules };
+      const presetExclude = presetRules.exclude || {};
+      const liveExclude = AppState.filterExclusions || {};
       const activePlaylistData = playlistFor(AppState.activePlaylist);
       const parsedQueryText = String(AppState.queryParseText || '').toLowerCase().trim();
       const smartQueryActive = !presetRules.query && parsedQueryText === query && AppState.queryMatchIds instanceof Set;
@@ -688,7 +808,7 @@ try {
         const installed = gameInstalled(game);
         const ownedUninstalled = Boolean(game.owned || game.store_catalog || game.gameyfin_id) && !installed;
         const effectiveView = presetRules.view || view;
-        const viewMatch = (effectiveView === 'all' && !game.hidden) || (effectiveView === 'favorites' && game.favorite && !game.hidden) || (effectiveView === 'recent' && game.last_played && !game.hidden) || (effectiveView === 'never' && !game.play_count && !game.hidden) || (effectiveView === 'playing' && ['Playing','Paused'].includes(game.progress) && !game.hidden) || (effectiveView === 'completed' && completed && !game.hidden) || (effectiveView === 'unplayed' && !game.progress && !game.hidden) || (effectiveView === 'installed' && installed && !game.hidden) || (effectiveView === 'owned' && ownedUninstalled && !game.hidden) || (effectiveView === 'saves' && game.has_saves && !game.hidden) || (effectiveView === 'shelf' && game.manual_entry && !game.hidden) || (effectiveView === 'hidden' && game.hidden) || (effectiveView === 'missing' && !game.path_exists && !game.manual_entry && !game.hidden);
+        const viewMatch = (effectiveView === 'all' && !game.hidden) || (effectiveView === 'favorites' && game.favorite && !game.hidden) || (effectiveView === 'recent' && game.last_played && !game.hidden) || (effectiveView === 'never' && !game.play_count && !game.hidden) || (effectiveView === 'playing' && ['Playing','Paused'].includes(game.progress) && !game.hidden) || (effectiveView === 'completed' && completed && !game.hidden) || (effectiveView === 'unplayed' && !game.progress && !game.hidden) || (effectiveView === 'installed' && installed && !game.hidden) || (effectiveView === 'owned' && ownedUninstalled && !game.hidden) || (effectiveView === 'saves' && game.has_saves && !game.hidden) || (effectiveView === 'shelf' && game.manual_entry && !game.hidden) || (effectiveView === 'hidden' && game.hidden);
         const effectivePlatform = presetRules.platform || AppState.platform;
         const platformMatch = effectivePlatform === 'all' || game.platform === effectivePlatform;
         const category = presetRules.platform_category || AppState.platformCategory;
@@ -702,19 +822,17 @@ try {
             ? AppState.queryMatchIds.has(String(game.game_id || game.id || ''))
             : advancedQueryMatches(game, effectiveQuery);
         const batchMatch = !AppState.importBatchId || String(game.import_batch_id) === AppState.importBatchId;
-        const progressMatch = !presetRules.progress || game.progress === presetRules.progress;
-        const favoriteMatch = presetRules.favorite === undefined || Boolean(game.favorite) === Boolean(presetRules.favorite);
-        const genreMatch = !presetRules.genre || String(game.genre || '').toLowerCase().includes(String(presetRules.genre).toLowerCase());
-        const developerMatch = !presetRules.developer || String(game.developer || '').toLowerCase().includes(String(presetRules.developer).toLowerCase());
-        const publisherMatch = !presetRules.publisher || String(game.publisher || '').toLowerCase().includes(String(presetRules.publisher).toLowerCase());
+        const progressMatch = !('progress' in combinedRules) || _filterRuleMatches(game, 'progress', combinedRules.progress);
+        const favoriteMatch = !('favorite' in combinedRules) || _filterRuleMatches(game, 'favorite', combinedRules.favorite);
+        const installedMatch = !('installed' in combinedRules) || _filterRuleMatches(game, 'installed', combinedRules.installed);
+        const hiddenMatch = !('hidden' in combinedRules) || _filterRuleMatches(game, 'hidden', combinedRules.hidden);
+        const fieldMatch = ['genre', 'developer', 'publisher', 'region', 'source', 'achievements_source', 'has_saves', 'has_achievements', 'has_missing_media', 'has_highscores', 'vertical', 'requires_chd']
+          .every(field => !(field in combinedRules) || _filterRuleMatches(game, field, combinedRules[field]));
         const explorerProgressMatch = AppState.explorerRules.progress === '__unset' ? !game.progress : !AppState.explorerRules.progress || game.progress === AppState.explorerRules.progress;
-        const installedRule = presetRules.installed;
-        const installedMatch = installedRule !== 'installed' && installedRule !== 'uninstalled'
-          || installedRule === 'installed' && installed
-          || installedRule === 'uninstalled' && !installed;
-        const hiddenMatch = presetRules.hidden === undefined || Boolean(game.hidden) === Boolean(presetRules.hidden);
+        const sourceLiveMatch = sourceFilterMatches(game.source, liveSource, liveExclude.source);
         const playlistMatch = !activePlaylistData || gameInPlaylist(game, activePlaylistData);
-        return viewMatch && platformMatch && categoryMatch && esrbMatch && queryMatch && batchMatch && progressMatch && explorerProgressMatch && favoriteMatch && genreMatch && developerMatch && publisherMatch && installedMatch && hiddenMatch && playlistMatch;
+        const exclusionMatch = !gameExcluded(game, presetExclude) && !gameExcluded(game, liveExclude);
+        return viewMatch && platformMatch && categoryMatch && esrbMatch && queryMatch && batchMatch && progressMatch && explorerProgressMatch && favoriteMatch && installedMatch && hiddenMatch && fieldMatch && sourceLiveMatch && exclusionMatch && playlistMatch;
       });
       const sorted = sortGames(visible, sort, sortDir);
       _filteredCache = { key, result: sorted };
@@ -753,4 +871,4 @@ try {
       }
     }
 
-export { gameIdOf, nativeCaps, revealToast, hideToast, showToast, dismissToast, raiseToasts, token, AppState, selectedIds, media, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, gameForSession, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId, isPageHidden, registerLifecycleStream, unregisterLifecycleStream };
+export { gameIdOf, nativeCaps, revealToast, hideToast, showToast, dismissToast, raiseToasts, token, AppState, selectedIds, media, coverPlaceholder, coverSource, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, gameForSession, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId, isPageHidden, gameExcluded, registerLifecycleStream, unregisterLifecycleStream };

@@ -130,6 +130,9 @@
     "import_ea": "Importar EA app",
     "import_ubisoft": "Importar Ubisoft Connect",
     "import_arcade": "Importar Arcade",
+    "import_pico8": "Importar PICO-8",
+    "import_msu1": "Importar MSU-1",
+    "import_whdload": "Importar WHDLoad",
     "arcade_room": "Sala arcade",
     "household": "Familia",
     "discovery": "Descubrimiento",
@@ -389,7 +392,9 @@
     "browse_back": "Volver a complementos",
     "browse_empty": "Aún no hay complementos comunitarios.",
     "cmd_done": "Comando del complemento finalizado",
-    "trust_retrust": "Vuelve a aprobarlo: este plugin se aprobó antes de la actualización."
+    "trust_retrust": "Vuelve a aprobarlo: este plugin se aprobó antes de la actualización.",
+    "repair": "Reparar",
+    "repair_done": "{name} reparado"
   },
   "metadata": {
     "title": "Base de datos de juegos de LaunchBox",
@@ -930,7 +935,7 @@
     "group_by_shape": "Agrupar por forma de carátula",
     "custom_fields": "Campos personalizados, uno por línea: Nombre|Opción1,Opción2",
     "bigbox_startup_video": "Ruta del vídeo de inicio de Big Box",
-    "bigbox_shutdown_apps": "Aplicaciones a ejecutar al cambiar a Big Box, un comando por línea",
+    "bigbox_shutdown_apps": "Aplicaciones a ejecutar al salir de Big Box, un comando por línea",
     "bigbox_start_at_launch": "Iniciar en modo Big Box",
     "attract_delay": "Retardo del modo atractivo en segundos",
     "tray_enabled": "Activar integración con la bandeja del sistema",
@@ -1543,6 +1548,15 @@
     "find_moved_one": "Buscar archivos movidos de {count} juego"
   },
   "notify": {
+    "netplay": {
+      "copied": "Dirección de netplay copiada"
+    },
+    "emulators": {
+      "settings_saved": "Ajustes del emulador guardados"
+    },
+    "steam": {
+      "account_saved": "Cuenta de Steam guardada"
+    },
     "activity": {
       "cancel_requested": "Cancelación solicitada",
       "retry_queued": "Reintento en cola",
@@ -1610,7 +1624,25 @@
       "save_scan_queued": "Análisis de rutas de partidas en cola: el progreso y los resultados están en el Centro de actividad",
       "stats_reset": "Estadísticas de juego restablecidas para {name}",
       "enter_rom_folder": "Introduce primero una ruta de carpeta de ROM.",
-      "added_of_scanned": "Se añadieron {added} de {found} juegos analizados"
+      "added_of_scanned": "Se añadieron {added} de {found} juegos analizados",
+      "bulk_no_matches": "Ninguno de los juegos seleccionados contiene ese texto.",
+      "steam_install_queued": "Instalación de Steam en cola.",
+      "steam_verify_queued": "Verificación de Steam en cola.",
+      "platform_renamed": "Se renombró {old} → {new} ({games} juegos, {media} archivos multimedia).",
+      "platform_name_mismatch": "El nombre de la plataforma no coincide.",
+      "platform_deleted": "Se eliminó {platform}; {games} juegos se movieron a la papelera.",
+      "platform_emulator_saved": "Ajustes de emulador guardados para {platform}.",
+      "cover_model_saved": "Modelo de carátula guardado.",
+      "platform_video_saved": "Vídeo de plataforma guardado.",
+      "library_fullscreen_unavailable": "La pantalla completa no está disponible en esta ventana; el visor permanece abierto.",
+      "bigbox_fullscreen_unavailable": "La pantalla completa no está disponible.",
+      "video_audio_click": "El audio del vídeo necesita un clic; reproduciendo en silencio.",
+      "reader_no_path": "Este documento no tiene una ruta local.",
+      "reader_no_bridge": "No hay puente al visor del sistema.",
+      "reader_no_viewer": "No hay visor del sistema disponible.",
+      "token_saved": "Token de {provider} guardado.",
+      "token_enter": "Introduce primero un token.",
+      "token_removed": "Token eliminado."
     },
     "setup": {
       "emulator_choice_failed": "No se guardó la elección de emulador: {message}",
@@ -1648,7 +1680,8 @@
       "access_granted": "Acceso concedido. La comprobación se ha vuelto a ejecutar.",
       "access_removed": "Acceso a la carpeta quitado",
       "core_set": "Este juego ahora usa {core}.",
-      "core_default": "Este juego vuelve a usar el núcleo predeterminado."
+      "core_default": "Este juego vuelve a usar el núcleo predeterminado.",
+      "resume_slot_saved": "Ranura de estado guardada"
     },
     "metadata": {
       "decision_saved": "Decisión guardada",
@@ -1661,6 +1694,7 @@
       "steam_downloading": "Descargando metadatos y arte de Steam",
       "steam_updated": "Metadatos de Steam actualizados",
       "screenscraper_applied": "Metadatos de ScreenScraper aplicados",
+      "candidate_applied": "Metadatos aplicados",
       "open_game_first": "Abre primero un juego y luego haz la coincidencia por hash.",
       "no_rom_to_hash": "Este juego no tiene archivo de ROM para calcular el hash.",
       "screenscraper_hash_queued": "Coincidencia por hash de ScreenScraper en cola: progreso en el Centro de actividad",
@@ -1718,5 +1752,14 @@
       "grant_group_done_one": "Acceso concedido a {count} juego. Se volvió a comprobar.",
       "grant_recheck_needed": "Acceso concedido. Vuelve a comprobar para actualizar esta lista."
     }
+  },
+  "media": {
+    "label": "Medio",
+    "page": "{n} de {count}",
+    "integer_scale": "Escala entera",
+    "fullscreen": "Pantalla completa",
+    "exit_fullscreen": "Salir de pantalla completa",
+    "unavailable": "Imagen no disponible",
+    "page_one": "{n} de {count}"
   }
 }

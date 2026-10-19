@@ -39,7 +39,7 @@ class RouteRegistryTests(unittest.TestCase):
         # /api/v2/library/dna/status; 1.15 adds
         # /api/v2/emulators/defs/status, /api/v2/emulators/defs/update, and
         # /api/v2/library/time-machine/compare).
-        # 191 base POST + 43 v1 aliases = 234 total (v2 feature CRUD rows are
+        # 192 base POST + 43 v1 aliases = 235 total (v2 feature CRUD rows are
         # additive to the existing query/trash/memories/resume surface;
         # 1.12 adds collections save + delete; the Windows port adds
         # /api/import/epic; hygiene fix/undo, repair preview/apply, and
@@ -54,29 +54,32 @@ class RouteRegistryTests(unittest.TestCase):
         # 1.16.x added GET /api/v2/launch/audit/status and the grant routes; 1.16.1 adds
         # GET /api/v2/launch/cores and POST /api/v2/launch/core; 1.16.1 also adds POST /api/v2/launch/audit/refresh).
         # 1.17 adds GET/POST /api/v2/party/decks, POST /api/v2/party/decks/delete,
-        # and the three native storefront imports.
-        self.assertEqual(len(GET_TABLE), 198)
-        self.assertEqual(len(POST_TABLE), 246)
+        # the three native storefront imports, and GET /api/native/battery; the
+        # resume-slot route adds POST /api/v2/resume/slot. 1.18 adds the static
+        # details/emulators modules, the placeholder asset, achievement refresh,
+        # plugin repair, and GET /api/bigbox/startup-video.
+        self.assertEqual(len(GET_TABLE), 218)
+        self.assertEqual(len(POST_TABLE), 278)
         self.assertEqual(len(V1_ALIASED_PREFIXES), 61)
 
     def test_base_routes_count(self):
         base_get = [p for p in GET_TABLE if not p.startswith("/api/v1")]
         base_post = [p for p in POST_TABLE if not p.startswith("/api/v1")]
-        self.assertEqual(len(base_get), 173)
-        self.assertEqual(len(base_post), 203)
-        self.assertEqual(len(base_get) + len(base_post), 376)
+        self.assertEqual(len(base_get), 193)
+        self.assertEqual(len(base_post), 235)
+        self.assertEqual(len(base_get) + len(base_post), 428)
 
     def test_all_routes_registered(self):
         routes = all_routes()
-        # 377 = 376 table paths + the /api/v1/jobs dual-registration (1.16.1 adds the core picker's GET and POST, and the per-group refresh).
-        # 1.16.0 added GET /api/v2/launch/audit and POST /api/v2/launch/audit/scan (F1);
-        # 1.16.x added GET /api/v2/launch/audit/status (readiness badges); 1.17 adds the deck and native-import routes.
-        self.assertEqual(len(routes), 377)
+        # One more than the base table: /api/v1/jobs is registry-only and has
+        # no non-v1 table row, so base GET 193 + POST 235 = 428 while the
+        # registry (which includes the dual-registered jobs route) has 429.
+        self.assertEqual(len(routes), 429)
 
         get_routes = [r for r in routes if r.method == "GET"]
         post_routes = [r for r in routes if r.method == "POST"]
-        self.assertEqual(len(get_routes), 174)
-        self.assertEqual(len(post_routes), 203)
+        self.assertEqual(len(get_routes), 194)
+        self.assertEqual(len(post_routes), 235)
 
     def test_every_registered_route_matches_live_table(self):
         routes = all_routes()

@@ -550,10 +550,52 @@ def _reserve_launch(stable_game_id, launch_id, *, game_name="", profile=""):
         }
 
 
+def _apply_plugin_emulator_launch(args, game):
+    """Apply plugin-declared emulator settings to the launch command.
+
+    Built-in emulator settings were already applied by ``_start_launch_command``.
+    Plugin sections are additive: their args are inserted before the ROM token
+    and their env values are merged into the launch environment. Failures log a
+    warning and never block a launch.
+    """
+    command_text = " ".join(str(part) for part in args).casefold()
+    emulator_id = ""
+    if "mame" in command_text:
+        emulator_id = "mame"
+    elif "retroarch" in command_text or any(
+        str(part).lower().endswith((".so", ".dll")) for part in args
+    ):
+        emulator_id = "retroarch"
+    if not emulator_id:
+        return list(args), {}
+    try:
+        from pkg.parity.parity_emulator_settings import apply_plugin_settings
+
+        warnings = []
+        updated, env = apply_plugin_settings(
+            emulator_id,
+            str(game.get("platform") or ""),
+            args,
+            load_state(),
+            str(DATA.parent),
+            warnings,
+        )
+        for warning in warnings:
+            LOGGER.warning("Plugin emulator settings: %s", warning)
+        return updated, env
+    except (OSError, ValueError) as error:
+        LOGGER.warning("Plugin emulator settings were not applied: %s", error)
+        return list(args), {}
+
+
 def _start_launch_command(game, profiles):
     """Build the launch argv and cwd, rejecting games that cannot run."""
     bld_launch = _ns("build_launch", build_launch)
-    args, cwd = bld_launch(game, profiles)
+    try:
+        state = load_state()
+    except (OSError, ValueError):
+        state = None
+    args, cwd = bld_launch(game, profiles, state=state)
     game_command = split_command(str(game.get("launch", "")) or "")
     profile_command = split_command(str(profiles.get(game.get("platform", ""), "")) or "")
     has_adapter = bool(str(game.get("emulator_adapter_id", "") or game.get("emulator_id", "")).strip())
@@ -625,8 +667,14 @@ def _make_start_mutator(stable_game_id, index, started, process, entry, missing,
         )
         current["last_played"] = started.isoformat(timespec="seconds")
         current["play_count"] = current.get("play_count", 0) + 1
-        if not current.get("progress") and state.get("settings", {}).get("progress_on_first_play", "Playing"):
-            current["progress"] = state.get("settings", {}).get("progress_on_first_play", "Playing")
+        first_play = state.get("settings", {}).get("progress_on_first_play", "Playing")
+        allowed_progress = state.get("settings", {}).get("progress_values")
+        if (
+            not current.get("progress")
+            and first_play
+            and (not isinstance(allowed_progress, list) or first_play in allowed_progress)
+        ):
+            current["progress"] = first_play
         # F4a: one-time dismissible "Playing?" auto-suggest. Fires only when
         # the progress automation above would not have set a status, the
         # kill-switch setting is on, and this game was never prompted before.
@@ -731,6 +779,16 @@ def start_game(index=None, stable_game_id="", resume=False, allow_stale=False):
     game, index = res_start(state, index, stable_game_id)
     stable_game_id = str(game.get("game_id") or stable_game_id)
     profiles = dict(state.get("profiles") or {})
+    platform_settings = (state.get("settings") or {}).get("emulator_platform_settings", {})
+    platform_override = platform_settings.get(str(game.get("platform", ""))) if isinstance(platform_settings, dict) else None
+    extra_platform_args = []
+    if isinstance(platform_override, dict):
+        game = dict(game)
+        if platform_override.get("adapter_id") and not (game.get("emulator_adapter_id") or game.get("emulator_id")):
+            game["emulator_adapter_id"] = platform_override["adapter_id"]
+        if platform_override.get("retroarch_core") and not game.get("retroarch_core"):
+            game["retroarch_core"] = platform_override["retroarch_core"]
+        extra_platform_args = split_command(str(platform_override.get("extra_args", "") or ""))
     selected_profile = str(game.get("launch_profile", "")).strip()
     if selected_profile and selected_profile in profiles:
         profiles = {game.get("platform", ""): profiles[selected_profile]}
@@ -749,6 +807,9 @@ def start_game(index=None, stable_game_id="", resume=False, allow_stale=False):
         # Resolve and validate only after the reservation is held. This makes
         # rapid retries deterministic even when launch setup is slow.
         args, cwd = start_cmd(game, profiles)
+        args, plugin_emulator_env = _apply_plugin_emulator_launch(args, game)
+        if extra_platform_args:
+            args = [*args, *extra_platform_args]
         # Quick Resume (T1): arm state capture on clean starts and inject the
         # stored state file on resume, through the same atomic reservation.
         args = inj_resume(
@@ -766,6 +827,7 @@ def start_game(index=None, stable_game_id="", resume=False, allow_stale=False):
         # Apply MangoHud env if enabled in settings (1.7.2).
         launch_env = _apply_mangohud_from_state(state)
         launch_env = _apply_launch_env(launch_env, game)
+        launch_env.update(plugin_emulator_env)
         process = subprocess.Popen(args, cwd=cwd, env=launch_env, **launch_kwargs())
         started = datetime.now()
         replay_info = _toggle_obs_replay(state.get("settings", {}))
@@ -932,7 +994,7 @@ def finish_session(launch_id, game_index, started, process, lease):
         if running_snapshot.get("replay_buffer_armed"):
             _release_obs_replay(settings, owned=bool(running_snapshot.get("replay_buffer_owned")))
         if game_snapshot:
-            if settings.get("backup_on_close") and game_snapshot.get("save_paths"):
+            if settings.get("save_management_enabled", True) and settings.get("backup_on_close") and game_snapshot.get("save_paths"):
                 try:
                     bk_saves(game_snapshot, data_parent / "save-backups", label="on-close")
                     enf_limit(game_snapshot, data_parent / "save-backups", settings.get("save_backup_limit", 10))
@@ -993,6 +1055,12 @@ def finish_session(launch_id, game_index, started, process, lease):
             session_result.update({"game_name": game_name_local, "session": session_local})
         upd_st(mutate)
         session_committed = True
+        try:
+            from pkg.parity.parity_tray_recent import write_recent_games
+
+            write_recent_games(data_parent, load_fn())
+        except (OSError, ValueError, TypeError, AttributeError):
+            LOGGER.exception("Could not publish recent games for the tray")
         game_name = session_result["game_name"]
         session = session_result["session"]
         # Lifecycle event (F1e): playtime milestone when a session crosses an

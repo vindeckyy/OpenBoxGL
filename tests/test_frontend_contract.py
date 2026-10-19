@@ -18,9 +18,10 @@ TOOL_GROUPS = {
     "sources": [
         "storefrontButton", "emulatorsButton", "steamButton", "heroicButton",
         "lutrisButton", "gogButton", "eaButton", "ubisoftButton",
-        "arcadeButton", "arcadeRoomButton", "householdButton", "discoveryButton",
+        "arcadeButton", "pico8Button", "msu1Button", "whdloadButton",
+        "arcadeRoomButton", "householdButton", "discoveryButton", "netplayButton",
     ],
-    "personalize": ["themesButton", "pluginsButton", "settingsButton", "whatsNewButton", "fullscreenButton"],
+    "personalize": ["themesButton", "pluginsButton", "settingsButton", "whatsNewButton", "fullscreenButton", "reportIssueButton"],
     "automation": ["webhooksButton", "notificationsButton"],
 }
 
@@ -1101,6 +1102,7 @@ SAFE_HELPERS = (
     "gameLinks",
     "fact(",
     "media(",
+    "coverSource(",
     "Number(",
     "JSON.stringify",
 )
@@ -1234,6 +1236,16 @@ def test_unescaped_untrusted_data_never_reaches_an_html_sink():
     )
 
 
+def test_library_audit_renders_source_columns_and_filter():
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert 'id="auditSourceFilter"' in html
+    assert 'id="auditSourceTools"' in html
+    source = (ROOT / "static" / "settings.js").read_text(encoding="utf-8")
+    assert "<th>Source</th>" in source
+    assert "source_label" in source
+    assert "data-audit-source" in source
+
+
 def test_url_attributes_are_validated_at_every_html_sink():
     """An href/src built from data must be escaped or scheme-validated."""
     static = ROOT / "static"
@@ -1347,7 +1359,7 @@ def test_deeplink_dispatch_uses_explicit_allowlist():
     )
     assert actions, "deeplink actions must use an explicit Map"
     action_names = set(re.findall(r"^\s*\['([^']+)',", actions.group(1), re.MULTILINE))
-    assert action_names == {"bigbox", "settings", "showgame", "recap", "moment", "clip"}
+    assert action_names == {"bigbox", "settings", "showgame", "launch", "recap", "moment", "clip"}
 
     dispatch = _function_body(app, "dispatchDeeplink")
     assert "DEEPLINK_ACTIONS.get(params.get('deeplink'))" in dispatch
@@ -1872,6 +1884,40 @@ def test_dna_search_surface():
                     "building", "cancel_build", "degraded_note", "search_failed",
                     "privacy_note", "more_like_this"):
             assert section.get(key), f"locales/{locale}.json missing dna.{key}"
+
+
+def test_p2_library_keyboard_map_and_one_action_dispatch():
+    nav = NAVIGATION_JS.read_text(encoding="utf-8")
+    assert "keyAction(AppState.appSettings" in nav and "matchesKey(event" in nav, \
+        "library navigation must read keyboard_map through keyAction/matchesKey"
+    assert "firstEdge(edged, ACTION_ORDER)" in nav, \
+        "library gamepad input must resolve one action per press"
+    assert "event.key === 'f'" not in nav and "event.key === 'Escape'" not in nav, \
+        "favorite/back must be remapped rather than hardcoded"
+
+def test_p2_bigbox_keyboard_resolves_one_action_before_directions():
+    app = APP_JS.read_text(encoding="utf-8")
+    assert "].find(([name]) => name === 'back' ? isBackKey(event) : matchesKey(event, keyAction(name)))" in app, \
+        "Big Box must resolve the mapped action before handling arrows"
+    start = app.index("$('bigBox').onkeydown")
+    block = app[start:app.index("document.addEventListener('keyup'", start)]
+    arrows = block.index("event.key === 'ArrowLeft'")
+    action = block.index("].find(([name])")
+    assert action < arrows, "directional navigation must only run when no action matched"
+
+def test_p2_native_dialogs_forward_start_path_to_hosts():
+    win = (ROOT / "native_host_win.c").read_text(encoding="utf-8")
+    linux = (ROOT / "native_host.c").read_text(encoding="utf-8")
+    assert "IFileDialog_SetFolder" in win and "start_path" in win, \
+        "Windows host must open the chooser at the requested folder"
+    assert "gtk_file_chooser_set_current_folder" in linux and '"start_path"' in linux, \
+        "GTK host must open the chooser at the requested folder"
+
+def test_p2_bigbox_hidden_checkboxes_on_detail_panes():
+    library = LIBRARY_JS.read_text(encoding="utf-8")
+    assert "bigBoxHiddenControl" in library and "bindBigBoxHiddenControls" in library
+    assert library.count("bigBoxHiddenControl(") >= 3, \
+        "platform, category, and playlist detail panes need the visibility checkbox"
 
 
 if __name__ == "__main__":

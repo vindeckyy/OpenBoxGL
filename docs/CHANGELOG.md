@@ -4,6 +4,119 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Big Box input parity.** Pointer drag, mouse wheel, trackball, and spinner input navigate Big Box with configurable
+  sensitivity and wheel speed; holding Back opens the menu, and a battery indicator reads the Linux sysfs battery
+  through the new `GET /api/native/battery` route. The game editor's path pickers open at the current file's folder or
+  the first game on the same platform, and Big Box can hide platforms, categories, and playlists.
+  `static/pointer_nav.js`, `static/battery.js`, `handlers/native.py`, `tests/test_native_handlers.py`.
+- **Keyboard and controller remapping.** Settings > Controller records keyboard shortcuts for play, back, menu, pause,
+  paging, search, settings, and the reader; controller buttons can be cleared, and duplicate assignments are swapped
+  only after confirmation. `static/settings.js`, `handlers/settings.py`, `tests/test_settings_schema.py`.
+- **Filter exclusions and richer rules.** Filters cycle include → exclude → clear for platforms, categories, source,
+  and smart collections; presets and playlists accept source, achievement-source, region, text operators, and
+  exclusions. Exclusions survive a refresh through the hash route. `pkg/parity/parity_filter_presets.py`,
+  `static/state.js`, `static/library.js`, `static/router.js`, `tests/test_parity_features.py`.
+- **Configurable progress values.** Progress automation and the game editor only offer the labels enabled in Settings;
+  ineligible labels are rejected at the API boundary. `catalog.py`, `handlers/library.py`, `tests/test_catalog.py`.
+- **Sidebar ordering.** Settings can reorder the sidebar and hide the Explorer section.
+- **Discovery achievements list.** The Discovery Center gains a "Games with achievements" shelf that also recognizes
+  per-provider achievement totals. `pkg/parity/parity_discovery.py`, `static/storefront.js`.
+- **Platform administration.** A platform view can rename a platform across games, launch profiles, filter playlists, platform settings, and platform media, or delete one by typing its name; deletion moves games to Trash. `pkg/parity/parity_platform_admin.py`, `handlers/data.py`, `static/library.js`.
+- **Steam missing and repair states.** Imported Steam games now record whether their install folder still exists. Missing games show a red Missing badge and an Install handoff; installed games offer Verify files through `steam://validate/<id>`. `importers.py`, `pkg/parity/parity_storefront.py`, `pkg/state/cache.py`.
+- **Per-provider integration tokens.** Optional IGDB, ScreenScraper, SteamGridDB, Gameyfin, and RetroAchievements tokens are stored outside the public settings projection and shown only masked. `pkg/parity/parity_integration_tokens.py`.
+- **Save manifests and selective restore.** Backups record each file's size, mode, mtime, and SHA-256. A version-history dialog lists every older backup with add/overwrite/unchanged counts; the restore dialog lists archive contents, supports a dry run, and restores only checked files after a safety backup. `saves.py`, `static/sessions.js`.
+- **Bulk find and replace.** Bulk Edit can preview and apply a literal replacement in one metadata field across the selected games. `pkg/parity/parity_bulk_edit.py`, `static/app.js`.
+- **Controller types and per-platform emulator overrides.** Settings define controller types shown as chips in the game editor and as one badge per type on library cards; a platform can override its emulator adapter, RetroArch core, and extra launch arguments. `settings_schema.py`, `handlers/settings.py`, `pkg/state/launch.py`, `static/state.js`.
+- **Tray recent games.** OpenBox writes a private recent-game list at boot; the Linux and Windows tray menus launch the eight most recent games directly. `pkg/parity/parity_tray_recent.py`, `native_host.c`, `native_host_win.c`.
+- **Launch deeplink.** `?deeplink=launch&id=<id>` starts a game, used by the tray menu.
+- **Media automation.** Automatic imports queue poster, square, video, music, and manual downloads with global and
+  per-platform limits; the durable queue survives restarts and supports pause, resume, cancel, retry, and per-item
+  errors. Folder and storefront imports enqueue their matched LaunchBox or metadata-provider games, so the queue is
+  fed by real imports rather than only bulk actions. EmuMovies joins LaunchBox, SteamGridDB, IGDB, ScreenScraper, and
+  plugin media providers, now covering covers, box backs/spines/3D boxes, screenshots, title screens, marquees,
+  cart fronts and backs, discs, clear logos, theme and snap videos, manuals, and music. The queue response includes
+  `items`, `queue`, and per-state `counts`, and existing files are preserved unless overwrite is requested.
+  `pkg/parity/parity_media.py`, `pkg/parity/parity_emumovies.py`, `handlers/media.py`,
+  `tests/test_parity_media_queue.py`.
+- **Plugin platform expansion.** Manifests declare storefront, metadata, media, stats, emulator-settings, and discovery
+  capabilities; capability hooks get a bounded data bag, settings, and credential store and may request read-only
+  library, achievement, profile, activity, leaderboard, catalog, metadata, and media services. Plugin storefronts use
+  the shared catalog/import UI, plugin stats merge monotonically into library projections, plugin discovery lists
+  join the Discovery Center, and plugin notifications resolve localized messages. Disabling or removing a plugin
+  deletes its imported games and stops its cached stats from merging; removal also clears its settings, trust,
+  permissions, data, credentials, and stats cache. Metadata results persist their provider so bulk media can
+  prioritize it, and the catalog browser shows each entry's author and homepage. Capability hooks opt into the
+  one-round host-service contract; there is no standalone `services` hook. Backups exclude the capability credential
+  store and blank password-format plugin settings. `plugins.py`, `pkg/parity/parity_plugin_*.py`, `handlers/extensions.py`,
+  `docs/plugin-api.md`, `tests/test_plugin_*.py`.
+- **Metadata provider priority and local verification.** Metadata and media searches can mix built-in and plugin
+  providers in a configured order, candidates carry their source, and bulk downloads can prioritize plugin results.
+  LaunchBox media downloads verify HTTP status, content type, and payload before writing; local database imports keep
+  retry/progress reporting. Partial-word metadata search prefers exact matches and filters by platform.
+  `pkg/parity/parity_metadata_providers.py`, `metadata.py`, `tests/test_metadata_providers.py`.
+- **Emulator management.** Manage Emulators gains an Edit Emulator dialog with a managed flag, per-platform overrides,
+  and install/version status; MAME and RetroArch settings cover display, fullscreen, effects, run-ahead, rewind, and
+  upscaling and render into launch arguments or `--appendconfig`. Update-all probes installed versions and honours a
+  per-emulator opt-out. MAME imports can filter by player count, skip CHD-dependent sets, and generate vertical
+  playlists. `pkg/parity/parity_emulator_settings.py`, `handlers/emulators.py`, `emulators.py`, `arcade.py`.
+- **Storefront scanning and imports.** Startup scans report per-source progress, skip sources with no library games,
+  stop after the 30-second budget, and preserve partial state. Per-source auto-import stores the target platform and
+  can include owned-but-uninstalled games; imports can restrict to new games only. PICO-8, MSU-1, and WHDLoad join
+  the source list, and RPCS3 imports external folders and ISOs from `games.yml`. `pkg/parity/parity_storefront.py`,
+  `pkg/parity/parity_legacy_import.py`, `pkg/state/imports.py`.
+- **Big Box presentation.** Reader controls are remappable and persist theme/spread; image cells and Ctrl+I open the
+  fullscreen lightbox with labels and integer scaling; 3D cassette and jewel-case models render box art; Big Box
+  videos gain controls and audio mix, startup video plays once, themes may add background music and a sound pack, and
+  the details window remembers its position and size. `static/reader.js`, `static/library.js`, `static/model3d.js`,
+  `static/bigbox.js`, `static/sfx.js`, `native_host.c`.
+- **3D model controls.** Cassette models offer straight or angled backs and clear or solid cases, the rotation lock can
+  be free, horizontal, or vertical, and each can be overridden per platform; the selected CoverFlow card now uses the
+  same 3D model instead of a flat image. `static/model3d.js`, `static/library.js`, `static/bigbox.js`,
+  `handlers/settings.py`, `tests/test_parity_platform_admin.py`.
+- **Achievements, high scores, and netplay.** Steam achievements and playtime import through the Steam Web API with
+  monotonic playtime/last-played merges; achievement tabs show provider totals and source filters, and manual
+  overrides persist. MAME high scores parse hi2txt's JSON or pipe-delimited score table, import/export, and render in
+  a searchable table.
+  Automatic matching also reads WiiWare WADs with the rcheevos TMD/content layout. RetroArch's public HTTPS netplay lobby is available from Tools > Netplay lobby and the Big Box menu.
+  `pkg/parity/parity_steam_achievements.py`, `pkg/parity/parity_highscores.py`, `pkg/parity/parity_netplay.py`.
+- **Resume slots, disc hashing, and plugin settings.** A game can store a RetroArch save-state slot from its Save
+  management card, and automatic RetroAchievements matching expands to M3U playlists, PlayStation CHD, and
+  GameCube/Wii RVZ through `chdman` or `dolphin-tool`. Notifications fetch their unread count on boot (without opening
+  the center), and enabled plugin settings render under Settings > Plugins with the shared schema form; palette
+  commands refresh per open and never run for a disabled plugin. `handlers/resume.py`, `retroachievements.py`,
+  `static/plugin_form.js`, `static/palette.js`, `tests/test_resume_http.py`, `tests/test_retroachievements.py`.
+- **Plugin repair and achievement refresh.** Installed plugins can be reinstalled from their catalog entry from the
+  Plugins browser without losing settings, stats, or trust, and achievement tabs refresh Steam and plugin sources
+  independently of RetroAchievements. The launch audit also appends a compact rolling history to
+  `cache/launch_audit.jsonl` for trend checks. `handlers/extensions.py`, `handlers/metadata.py`,
+  `pkg/parity/parity_launch_audit.py`, `tests/test_parity_admin_http.py`, `tests/test_launch_audit.py`.
+- **Audit source filtering and bulk media moves.** Library Audit now shows a Source column, per-source counts, and a
+  source filter; plugin sources use their display names. Bulk platform edits can move selected games' media with the
+  field update committed even when a move fails, reporting `media_errors` for retry. `static/settings.js`,
+  `handlers/library.py`, `pkg/parity/parity_platform_admin.py`.
+- **Big Box pause high scores.** The running-game panel now shows, exports, and imports MAME high scores for arcade
+  entries, using the same endpoints as the library details pane. `static/bigbox.js`, `index.html`.
+- **Settings, lifecycle, and media caches.** Options search scans every category and focuses the field; a font-family
+  picker, custom-field dropdown options, platform-document ordering, report-issue link, save-management toggle,
+  startup error surface, and Big Box shutdown-on-exit complete the settings surface. A shared
+  placeholder cover replaces repeated missing-art text, and the media cache cleanup route removes stale generated
+  files. `static/settings.js`, `handlers/settings.py`, `assets/placeholder-cover.svg`.
+
+### Fixed
+- Manage Emulators shows the probed emulator version string and an explicit update-checks-off note instead of
+  rendering nothing for an installed emulator. `handlers/emulators.py`, `static/settings.js`.
+- Saving settings no longer rejects an older sidebar order that still contains section ids from an earlier build.
+- Gameyfin auto-import now honors `auto_import_excluded_platforms` and its include-owned-but-uninstalled option, like the other storefronts.
+- Legacy boolean `storefront_auto_import` entries are migrated to the per-source options shape on the next settings save,
+  so enabled stores keep importing after the upgrade.
+
+### Changed
+- `storefront_auto_import` values are now `{enabled, platform, include_uninstalled}` objects; readers accept the old
+  boolean shape until it is migrated.
+
 ## [1.17.0] - 2026-10-18
 
 A release that brings the other Windows launchers into the library, remembers Game Night decks, records what each game

@@ -12,14 +12,19 @@ import { visibleGameIds, focusGameIndex, gridMetrics, favorite, selectGame } fro
 import { openContextMenu } from './dialogs.js';
 import { captureMomentInteractive } from './moments.js';
 import { registerGamepadSurface, syncGamepadLoop } from './gamepad.js';
+import { firstEdge, keyAction, matchesKey } from './pure.js';
 
 const HINT_DISMISS_AFTER_MS = 6000;
+// One press is one action. Order decides when a user maps two actions to the
+// same key; duplicate validation normally prevents that.
+const ACTION_ORDER = ['play', 'favorite', 'random', 'pageLeft', 'pageRight', 'pause', 'menu', 'back'];
+const KEY_ACTION_ORDER = ['play', 'favorite', 'random', 'page_left', 'page_right', 'pause', 'menu', 'back'];
 
 // One source of truth for keyboard help.  The palette consumes this table for
 // its ``?`` view, so shortcuts shown to users cannot drift from navigation.
 export const SHORTCUTS = Object.freeze([
   { key: 'Ctrl/Cmd+K', labelKey: 'shortcuts.command_palette' },
-  { key: 'M', labelKey: 'shortcuts.capture_moment' },
+  { key: 'Shift+M', labelKey: 'shortcuts.capture_moment' },
   { key: 'F', labelKey: 'shortcuts.favorite_focused' },
   { key: 'Esc', labelKey: 'shortcuts.close_selection' },
 ]);
@@ -60,9 +65,24 @@ function move(delta, { absolute = false } = {}) {
   focusGameIndex(target);
 }
 
+function focusedContextMenu() {
+  const id = focusedGameId();
+  const card = id !== null && id !== undefined ? document.querySelector(`[data-game="${id}"]`) : null;
+  if (!card) return;
+  const rect = card.getBoundingClientRect();
+  openContextMenu({ preventDefault: () => {}, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, target: card }, id);
+}
+
+function matchedKeyAction(event) {
+  return KEY_ACTION_ORDER.find(action => matchesKey(event, keyAction(AppState.appSettings, action))) || null;
+}
+
 function handleKey(event) {
   if (event.ctrlKey || event.metaKey || event.altKey) return;
-  if (event.key === 'm' || event.key === 'M') {
+  const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest('input,select,textarea,[contenteditable="true"]')) return;
+  if (target?.closest('button:not([data-game]),[role="button"]:not([data-game])')) return;
+  if (event.key === 'M' && event.shiftKey) {
     if ($('bigBox') && !$('bigBox').hidden) return;
     const active = document.activeElement;
     if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA' || active?.tagName === 'SELECT' || active?.isContentEditable || document.querySelector('dialog[open]')) return;
@@ -75,13 +95,37 @@ function handleKey(event) {
   }
   if (navigationBlocked()) return;
   const { cols, page } = gridMetrics();
+  const mapped = matchedKeyAction(event);
+  if (mapped) {
+    event.preventDefault();
+    const id = focusedGameId();
+    if (mapped === 'play') {
+      const card = id !== null && id !== undefined ? document.querySelector(`[data-game="${id}"]`) : null;
+      if (card) card.click();
+      else move(0, { absolute: true });
+    } else if (mapped === 'favorite') {
+      if (id !== null && id !== undefined) favorite(id);
+    } else if (mapped === 'random') {
+      move(Math.floor(Math.random() * visibleGameIds().length), { absolute: true });
+    } else if (mapped === 'page_left') {
+      move(-Math.max(page, 1));
+    } else if (mapped === 'page_right') {
+      move(Math.max(page, 1));
+    } else if (mapped === 'menu') {
+      focusedContextMenu();
+    } else if (mapped === 'back') {
+      selectGame(null);
+      document.activeElement?.blur?.();
+    }
+    // Pause has no library-level target; it is consumed so a remapped key
+    // never falls through to directional navigation.
+    return;
+  }
   const actions = {
     ArrowRight: () => move(1),
     ArrowLeft: () => move(-1),
     ArrowDown: () => move(Math.max(cols, 1)),
     ArrowUp: () => move(-Math.max(cols, 1)),
-    PageDown: () => move(Math.max(page, 1)),
-    PageUp: () => move(-Math.max(page, 1)),
     Home: () => move(0, { absolute: true }),
     End: () => move(visibleGameIds().length - 1, { absolute: true }),
   };
@@ -89,20 +133,6 @@ function handleKey(event) {
   if (action) {
     event.preventDefault();
     action();
-    return;
-  }
-  if (event.key === 'f' || event.key === 'F') {
-    const id = focusedGameId();
-    if (id !== null && id !== undefined) {
-      event.preventDefault();
-      favorite(id);
-    }
-    return;
-  }
-  if (event.key === 'Escape' && !event.defaultPrevented) {
-    event.preventDefault();
-    selectGame(null);
-    document.activeElement?.blur?.();
   }
 }
 
@@ -123,6 +153,7 @@ function gamepadActions(pad) {
     random: pressed('random'),
     pageLeft: pressed('page_left'),
     pageRight: pressed('page_right'),
+    pause: pressed('pause'),
     menu: pressed('menu'),
   };
 }
@@ -140,27 +171,31 @@ function pollNavigationGamepads() {
   const edge = action => current[action] && !gamepadPrev[action];
   const ids = visibleGameIds();
   const { cols, page } = gridMetrics();
-  if (edge('left')) move(-1);
-  if (edge('right')) move(1);
-  if (edge('up')) move(-Math.max(cols, 1));
-  if (edge('down')) move(Math.max(cols, 1));
-  if (edge('pageLeft')) move(-Math.max(page, 1));
-  if (edge('pageRight')) move(Math.max(page, 1));
-  if (edge('play') && ids.length) move(currentGameIndex() < 0 ? 0 : currentGameIndex(), { absolute: true });
-  if (edge('back')) selectGame(null);
-  if (edge('favorite')) {
+  const edged = Object.fromEntries(Object.keys(current).map(action => [action, edge(action)]));
+  const action = firstEdge(edged, ACTION_ORDER);
+  if (!action) {
+    if (edge('left')) move(-1);
+    else if (edge('right')) move(1);
+    else if (edge('up')) move(-Math.max(cols, 1));
+    else if (edge('down')) move(Math.max(cols, 1));
+  } else if (action === 'play') {
+    if (ids.length) move(currentGameIndex() < 0 ? 0 : currentGameIndex(), { absolute: true });
+  } else if (action === 'back') {
+    selectGame(null);
+  } else if (action === 'favorite') {
     const id = focusedGameId();
     if (id !== null && id !== undefined) favorite(id);
+  } else if (action === 'random') {
+    if (ids.length) move(Math.floor(Math.random() * ids.length), { absolute: true });
+  } else if (action === 'pageLeft') {
+    move(-Math.max(page, 1));
+  } else if (action === 'pageRight') {
+    move(Math.max(page, 1));
+  } else if (action === 'menu') {
+    focusedContextMenu();
   }
-  if (edge('random') && ids.length) move(Math.floor(Math.random() * ids.length), { absolute: true });
-  if (edge('menu')) {
-    const id = focusedGameId();
-    const card = id !== null && id !== undefined ? document.querySelector(`[data-game="${id}"]`) : null;
-    if (card) {
-      const rect = card.getBoundingClientRect();
-      openContextMenu({ preventDefault: () => {}, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, target: card }, id);
-    }
-  }
+  // Pause is a Big Box action; in the desktop library it is consumed so a
+  // remapped button cannot also move the selection.
   gamepadPrev = current;
 }
 

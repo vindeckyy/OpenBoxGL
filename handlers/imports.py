@@ -11,9 +11,11 @@ from arcade import import_arcade
 from emulators import install_emulator
 from routes.registry import route
 from importers import import_epic, import_heroic, import_lutris, import_steam
-from openbox import load_state
+from openbox import DATA, load_state
 from parity_import import import_rpcs3_hdd, import_scummvm, import_vita3k
 from parity_import_policy import add_exclusion, list_exclusions, remove_exclusion
+from pkg.parity.parity_legacy_import import import_msu1, import_pico8, import_whdload
+from pkg.parity.parity_plugin_storefront import list_storefront_plugins, plugin_storefront_catalog, plugin_storefront_import
 from parity_premium import import_loose_arcade, import_xbox360_folder
 from parity_storefront import catalog_entries_to_games, storefront_catalog
 from pkg.parity.parity_storefront_windows import (
@@ -22,12 +24,18 @@ from pkg.parity.parity_storefront_windows import (
     import_ubisoft as import_ubisoft_windows,
 )
 from webapp_state import (
+    JOB_MANAGER,
     broadcast_event,
     clear_file_probe_cache,
     import_folder_path,
     load_state_view,
     merge_imported_games,
     transact_state,
+)
+from pkg.state.imports import (
+    read_storefront_status,
+    storefront_scan_worker,
+    storefront_source_ids,
 )
 
 LOGGER = logging.getLogger("openbox")
@@ -50,6 +58,82 @@ def _send_import_result(handler, added, found, **extra):
 
 
 class ImportsHandlers:
+    @route("GET", "/api/v2/storefronts")
+    def _api_get_api_v2_storefronts(self, parsed):
+        """Built-in and plugin storefronts with redacted plugin settings."""
+        builtins = [
+            {"id": source, "name": source.title(), "kind": "builtin", "installed": True}
+            for source in ("steam", "heroic", "lutris", "gameyfin", "gog", "ea", "ubisoft")
+        ]
+        plugins = [
+            {**item, "kind": "plugin", "installed": None}
+            for item in list_storefront_plugins(DATA.parent / "plugins")
+        ]
+        self.send_json(200, {"storefronts": builtins + plugins})
+        return
+
+    @route("POST", "/api/v2/storefronts/plugin/catalog")
+    def _api_post_api_v2_storefronts_plugin_catalog(self, payload):
+        plugin_id = str(payload.get("plugin_id") or "").strip()
+        entries = plugin_storefront_catalog(
+            plugin_id,
+            installed_only=bool(payload.get("installed_only")),
+            uninstalled_only=bool(payload.get("uninstalled_only")),
+            plugins_dir=DATA.parent / "plugins",
+        )
+        self.send_json(200, {"plugin_id": plugin_id, "entries": entries[:2000]})
+        return
+
+    @route("POST", "/api/v2/storefronts/plugin/import")
+    def _api_post_api_v2_storefronts_plugin_import(self, payload):
+        plugin_id = str(payload.get("plugin_id") or "").strip()
+        imported = plugin_storefront_import(
+            plugin_id,
+            installed_only=bool(payload.get("installed_only")),
+            uninstalled_only=bool(payload.get("uninstalled_only")),
+            plugins_dir=DATA.parent / "plugins",
+        )
+        def identity(game):
+            return ("plugin", plugin_id, str(game.get("game_id", "")))
+
+        added, found = merge_imported_games(imported, identity)
+        _send_import_result(self, added, found, imported=len(imported), plugin_id=plugin_id)
+        return
+
+    @route("GET", "/api/v2/storefront/status")
+    def _api_get_api_v2_storefront_status(self, parsed):
+        self.send_json(200, read_storefront_status())
+        return
+
+    @route("POST", "/api/v2/storefront/scan")
+    def _api_post_api_v2_storefront_scan(self, payload):
+        known = storefront_source_ids(DATA.parent / "plugins")
+        raw_sources = payload.get("sources")
+        if raw_sources is None:
+            sources = list(known)
+        elif isinstance(raw_sources, list) and len(raw_sources) <= 20:
+            sources = []
+            for value in raw_sources:
+                source = str(value or "").strip().casefold()
+                if source not in known:
+                    raise BadRequest(f"Unknown storefront source: {source or '(blank)'}")
+                if source not in sources:
+                    sources.append(source)
+        else:
+            raise BadRequest("sources must be a list of storefront ids.")
+        include_uninstalled = bool(payload.get("include_uninstalled", True))
+        if not sources:
+            raise BadRequest("At least one storefront source is required.")
+
+        def worker(cancel_event):
+            return storefront_scan_worker(
+                cancel_event, sources=sources, include_uninstalled=include_uninstalled
+            )
+
+        job = JOB_MANAGER.submit("storefront-scan", worker, replace=True)
+        self.send_json(202, {"job_id": job["job_id"], "sources": sources})
+        return
+
     @route("GET", "/api/storefront/catalog")
     def _api_get_api_storefront_catalog(self, parsed):
         source = parse_qs(parsed.query).get("source", [""])[0]
@@ -132,6 +216,18 @@ class ImportsHandlers:
     @route("POST", "/api/import/vita3k")
     def _api_post_api_import_vita3k(self, payload):
         self.import_vita3k_games()
+
+    @route("POST", "/api/v2/import/pico8")
+    def _api_post_api_v2_import_pico8(self, payload):
+        self.import_legacy_games(payload, import_pico8, "PICO-8")
+
+    @route("POST", "/api/v2/import/msu1")
+    def _api_post_api_v2_import_msu1(self, payload):
+        self.import_legacy_games(payload, import_msu1, "MSU-1")
+
+    @route("POST", "/api/v2/import/whdload")
+    def _api_post_api_v2_import_whdload(self, payload):
+        self.import_legacy_games(payload, import_whdload, "WHDLoad")
 
     @route("POST", "/api/storefront/import")
     def _api_post_api_storefront_import(self, payload):
@@ -311,14 +407,28 @@ class ImportsHandlers:
             raise BadRequest("chosen_emulators must be an object.")
         added, found, recommendations = import_folder_path(folder, chosen_emulators=chosen)
         installs = []
+        profiles = {}
+        managed = set()
+        canonical_ids = {"org.mamedev.MAME": "mame", "org.libretro.RetroArch": "retroarch"}
         for app_id in chosen.values():
             if not app_id:
                 continue
             try:
-                install_emulator(str(app_id))
+                installed_profiles = install_emulator(str(app_id)) or {}
+                profiles.update(installed_profiles)
+                canonical = canonical_ids.get(str(app_id))
+                if canonical:
+                    managed.add(canonical)
                 installs.append(str(app_id))
             except (OSError, ValueError, RuntimeError) as e:
                 LOGGER.warning("install_emulator %s: %s", app_id, e)
+        if profiles or managed:
+            def mutate(state):
+                for platform, command in profiles.items():
+                    state["profiles"].setdefault(platform, command)
+                for emulator_id in managed:
+                    state.setdefault("emulator_settings", {}).setdefault(emulator_id, {})["managed"] = True
+            transact_state(mutate)
         _send_import_result(self, added, found, recommendations=recommendations, installed=installs)
 
     def import_xbox360(self, payload):
@@ -391,12 +501,19 @@ class ImportsHandlers:
         _send_import_result(self, added, found)
     def import_arcade_games(self, payload):
         folder = _required_folder_path(payload)
+        skip_inputs = payload.get("skip_inputs") or []
+        if not isinstance(skip_inputs, list) or len(skip_inputs) > 20:
+            raise BadRequest("skip_inputs must be a list of input types.")
         imported = import_arcade(
             folder,
             str(payload.get("dat", "")),
             str(payload.get("command", "")),
             str(payload.get("source", "MAME")),
+            players=str(payload.get("players", "any")),
+            skip_chd=bool(payload.get("skip_chd")),
+            skip_inputs=skip_inputs,
         )
+        make_playlists = bool(payload.get("make_playlists"))
         def mutate(state):
             existing = {
                 (game.get("source"), str(game.get("rom_name")))
@@ -407,11 +524,20 @@ class ImportsHandlers:
             for game in new_games:
                 game["added_at"] = timestamp
             state["games"].extend(new_games)
+            if make_playlists:
+                playlists = state.setdefault("playlists", [])
+                names = {str(item.get("name")) for item in playlists if isinstance(item, dict)}
+                for name, rules in (
+                    ("Vertical", {"vertical": True}),
+                    ("Requires CHD", {"requires_chd": True}),
+                ):
+                    if name not in names:
+                        playlists.append({"name": name, "type": "filter", "rules": rules})
             return len(new_games)
         _, added = transact_state(mutate)
         clear_file_probe_cache()
         counts = {kind: sum(game["set_type"] == kind for game in imported) for kind in ("parent", "merged", "split", "non-merged")}
-        self.send_json(200, {"added": added, "found": len(imported), "sets": counts})
+        self.send_json(200, {"added": added, "found": len(imported), "sets": counts, "playlists": ["Vertical", "Requires CHD"] if make_playlists else []})
 
     def add_import_exclusion(self, payload):
         source = str(payload.get("source", "")).strip()
@@ -458,6 +584,17 @@ class ImportsHandlers:
         )
         _send_import_result(self, added, found)
 
+    def import_legacy_games(self, payload, importer, label):
+        folder = _required_folder_path(payload)
+        errors = []
+        imported = importer(folder, errors)
+        added, found = self._merge_imported_games(
+            imported,
+            lambda game: (label.casefold(), str(game.get("path", ""))),
+        )
+        self.send_json(200, {"added": added, "found": found, "errors": errors[:100]})
+        return
+
     def import_storefront_catalog(self, payload):
         source = str(payload.get("source", "")).strip()
         if not source:
@@ -484,5 +621,12 @@ class ImportsHandlers:
         else:
             def identity(game):
                 return ("gameyfin", str(game.get("gameyfin_id", "")))
+        if payload.get("only_new"):
+            existing = {
+                identity(game)
+                for game in load_state().get("games", [])
+                if isinstance(game, dict)
+            }
+            imported = [game for game in imported if identity(game) not in existing]
         added, found = merge_imported_games(imported, identity)
         _send_import_result(self, added, found, imported=len(imported))

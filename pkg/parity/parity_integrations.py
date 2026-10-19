@@ -9,7 +9,6 @@ import shutil
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
-from urllib.parse import urlencode
 from urllib.request import urlopen
 
 from archives import safe_zip_extract
@@ -29,7 +28,7 @@ PLATFORM_BEZEL_REPO = {
 }
 
 
-def inject_retroachievements(credentials, home=None):
+def inject_retroachievements(credentials, home=None, *, hardcore=False):
     home = Path(home or Path.home())
     username = str(credentials.get("username") or "").strip()
     api_key = str(credentials.get("api_key") or "").strip()
@@ -71,6 +70,7 @@ def inject_retroachievements(credentials, home=None):
                 "cheevos_username": f'"{username}"',
                 "cheevos_password": f'"{api_key}"',
                 "cheevos_token": f'"{api_key}"',
+                "cheevos_hardcore_enabled": "true" if hardcore else "false",
             }, separator=" = ")
         except OSError as error:
             skipped.append(f"{cfg}: {error}")
@@ -164,34 +164,11 @@ def save_emumovies_credentials(data_dir, username, password):
     return {"configured": True}
 
 
-def download_emumovies_media(game, credentials, media_root, media_type="box"):
-    username = str((credentials or {}).get("username") or "").strip()
-    password = str((credentials or {}).get("password") or "").strip()
-    if not username or not password:
-        raise ValueError("Configure EmuMovies credentials in Settings first.")
-    # EmuMovies requires a licensed account; attempt their search endpoint shape.
-    platform = str(game.get("platform") or "Arcade")
-    name = str(game.get("name") or "")
-    query = urlencode({"system": platform, "search": name})
-    url = f"https://api.emumovies.com/v1/media/{media_type}?{query}"
-    import base64
-    token = base64.b64encode(f"{username}:{password}".encode()).decode()
-    root = Path(media_root) / "emumovies" / re.sub(r"[^a-z0-9]+", "-", name.casefold()).strip("-")
-    root.mkdir(parents=True, exist_ok=True)
-    destination = root / f"{media_type}.jpg"
-    try:
-        download_file(
-            url,
-            destination,
-            expected_types=("image/",),
-            max_bytes=32 * 1024 * 1024,
-            timeout=30,
-            opener=urlopen,
-            headers={"Authorization": f"Basic {token}"},
-        )
-    except Exception as error:  # noqa: BLE001 - surface remote/API failures cleanly
-        raise ValueError(f"EmuMovies request failed: {error}") from error
-    return str(destination)
+def download_emumovies_media(game, credentials, media_root, media_type="box", **kwargs):
+    """Compatibility entry point for the single EmuMovies provider."""
+    from pkg.parity.parity_emumovies import download_emumovies_media as provider
+
+    return provider(game, credentials, media_root, media_type, **kwargs)
 
 
 def capture_screenshot(dest_path, window_hint=""):

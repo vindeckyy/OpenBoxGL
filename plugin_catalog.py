@@ -52,7 +52,15 @@ def _validate_entry(entry):
             raise ValueError(f"Catalog entry {plugin_id} is missing a valid sha256 checksum.")
     elif not entry.get("local_only"):
         raise ValueError(f"Catalog entry {plugin_id} has no download URL.")
-    return dict(entry, id=plugin_id, url=url)
+    author = str(entry.get("author") or "").strip()
+    if author and len(author) > 80:
+        raise ValueError(f"Catalog entry {plugin_id} has an author longer than 80 characters.")
+    homepage = str(entry.get("homepage") or "").strip()
+    if homepage:
+        _validate_download_url(homepage, plugin_id)
+        if len(homepage) > 300:
+            raise ValueError(f"Catalog entry {plugin_id} has a homepage URL longer than 300 characters.")
+    return dict(entry, id=plugin_id, url=url, author=author, homepage=homepage)
 
 
 def _validate_catalog(payload):

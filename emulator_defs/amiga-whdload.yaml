@@ -1,0 +1,20 @@
+schema_version: 1
+adapter_id: amiga-whdload
+emulator_id: net.fsuae.FS-UAE
+label: FS-UAE
+platform: Amiga
+extensions:
+  - lha
+  - slave
+  - hdf
+native_exe: fs-uae
+native_exe_windows: fs-uae.exe
+flatpak_app_id: net.fsuae.FS-UAE
+startup_args:
+  - "{path}"
+recommended: true
+priority: 20
+executable_patterns:
+  - fs-uae
+state:
+  kind: none

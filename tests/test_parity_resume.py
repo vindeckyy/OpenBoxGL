@@ -69,8 +69,9 @@ class StateSchemaTests(unittest.TestCase):
 
     def test_every_def_carries_a_state_block(self):
         adapters = defs.load_adapters()
-        # 24 definitions at 1.16.0; 1.16.1 added 15 RetroArch systems and 3 standalone definitions.
-        self.assertEqual(len(adapters), 42)
+        # 24 definitions at 1.16.0; 1.16.1 added 15 RetroArch systems and 3 standalone definitions;
+        # 1.18 adds PICO-8 and Amiga WHDLoad.
+        self.assertEqual(len(adapters), 44)
         for adapter in adapters:
             self.assertIn(adapter["state"]["kind"], parity_resume.STATE_KINDS, adapter["adapter_id"])
 
@@ -892,6 +893,112 @@ class WriteStateTextTests(unittest.TestCase):
                 with self.assertRaises(OSError):
                     parity_resume._write_state_text(target, "{}")
             self.assertEqual(closed, [])
+
+
+class ResumeSlotTests(unittest.TestCase):
+    """Per-game resume slots (P7.3) keep the default behavior untouched."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.data_parent = Path(self.tmp.name)
+        self.adapter = {
+            "adapter_id": "t1-slot",
+            "emulator_id": "fake.slot",
+            "label": "Slot Emulator",
+            "platform": "Arcade",
+            "extensions": ["zip"],
+            "native_exe": FAKE_EMULATOR,
+            "flatpak_app_id": "",
+            "startup_args": ["{path}"],
+            "executable_patterns": [],
+            "state": {
+                "kind": "adapter-cli",
+                "template": ["-state_directory", "{state_dir}", "-state", "{state_name}"],
+                "capture": ["-state_directory", "{state_dir}", "-state", "{state_name}"],
+                "glob": ["**/*.sta"],
+            },
+        }
+        registry = defs._registry()
+        registry["by_adapter_id"]["t1-slot"] = self.adapter
+        self.addCleanup(registry["by_adapter_id"].pop, "t1-slot", None)
+
+    def _game(self, **extra):
+        return _game(emulator_adapter_id="t1-slot", **extra)
+
+    def _sdir(self, game):
+        return parity_resume.state_dir_for(game, self.data_parent)
+
+    def test_validate_resume_slot(self):
+        self.assertEqual(parity_resume.validate_resume_slot(""), "")
+        self.assertEqual(parity_resume.validate_resume_slot(None), "")
+        self.assertEqual(parity_resume.validate_resume_slot("a"), "a")
+        self.assertEqual(parity_resume.validate_resume_slot("A-b_9"), "A-b_9")
+        self.assertEqual(parity_resume.validate_resume_slot("x" * 32), "x" * 32)
+        for invalid in ("x" * 33, "bad slot", "..", "a/b", "é", "a.b"):
+            with self.assertRaises(ValueError):
+                parity_resume.validate_resume_slot(invalid)
+
+    def test_slot_helpers_default_to_capture_slot(self):
+        self.assertEqual(parity_resume.resume_slot_for({}), parity_resume.CAPTURE_SLOT)
+        self.assertEqual(parity_resume.resume_slot_for({"resume_slot": ""}), parity_resume.CAPTURE_SLOT)
+        self.assertEqual(parity_resume.resume_slot_for({"resume_slot": "myslot"}), "myslot")
+        self.assertEqual(parity_resume.resume_state_name_for({}), parity_resume.RESUME_SLOT)
+        self.assertEqual(parity_resume.resume_state_name_for({"resume_slot": "myslot"}), "myslot")
+        with self.assertRaises(ValueError):
+            parity_resume.resume_slot_for({"resume_slot": "../escape"})
+
+    def test_capture_uses_custom_slot(self):
+        game = self._game(resume_slot="myslot")
+        args = parity_resume.inject_resume_args(
+            game, ["/bin/true", "/rom.zip"],
+            profiles={}, settings={}, resume=False, data_parent=self.data_parent,
+        )
+        self.assertEqual(args[:2], ["/bin/true", "/rom.zip"])
+        self.assertEqual(args[-1], "myslot")
+        default = parity_resume.inject_resume_args(
+            self._game(), ["/bin/true", "/rom.zip"],
+            profiles={}, settings={}, resume=False, data_parent=self.data_parent,
+        )
+        self.assertEqual(default[-1], parity_resume.CAPTURE_SLOT)
+
+    def test_resume_loads_custom_slot(self):
+        game = self._game(resume_slot="myslot")
+        sdir = self._sdir(game)
+        state_file = _write(sdir / "myslot.sta", b"slot-state")
+        meta = {
+            "adapter_id": "t1-slot",
+            "emulator_version": parity_resume.emulator_fingerprint(self.adapter),
+            "kind": "adapter-cli",
+            "file": "myslot.sta",
+        }
+        (sdir / parity_resume.STATE_META).write_text(json.dumps(meta), encoding="utf-8")
+        args = parity_resume.inject_resume_args(
+            game, ["/bin/true", "/rom.zip"],
+            profiles={}, settings={}, resume=True, data_parent=self.data_parent,
+        )
+        self.assertTrue(state_file.is_file())
+        self.assertEqual(args[args.index("-state") + 1], "myslot")
+        self.assertNotIn(parity_resume.RESUME_SLOT, args)
+
+    def test_collect_keeps_custom_slot_name(self):
+        game = self._game(resume_slot="myslot")
+        sdir = self._sdir(game)
+        _write(sdir / "pacman" / "myslot.sta", b"slot-state")
+        meta = parity_resume.collect_resume_state(
+            game, {}, profiles={}, data_parent=self.data_parent,
+        )
+        self.assertEqual(meta["file"], "pacman/myslot.sta")
+        self.assertTrue((sdir / "pacman" / "myslot.sta").is_file())
+        self.assertFalse((sdir / "pacman" / f"{parity_resume.RESUME_SLOT}.sta").exists())
+
+    def test_invalid_slot_rejected_before_launch(self):
+        game = self._game(resume_slot="bad slot")
+        with self.assertRaises(ValueError):
+            parity_resume.inject_resume_args(
+                game, ["/bin/true", "/rom.zip"],
+                profiles={}, settings={}, resume=False, data_parent=self.data_parent,
+            )
 
 
 if __name__ == "__main__":

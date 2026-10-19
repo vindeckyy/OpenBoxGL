@@ -104,22 +104,19 @@ class IntegrationTests(unittest.TestCase):
             self.assertTrue(restored)
             self.assertTrue((hi / "pacman.hi").is_file())
 
-    def test_emumovies_query_is_url_encoded(self):
-        from urllib.parse import parse_qs, urlsplit
+    def test_emumovies_compatibility_delegates_to_provider(self):
         game = {"name": "Rock & Roll Racing: Deluxe", "platform": "SNES"}
-        captured = {}
-        def fake_download_file(url, destination, **kwargs):
-            captured["url"] = url
-            Path(destination).write_bytes(b"img")
-            return str(destination)
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            with mock.patch("parity_integrations.download_file", side_effect=fake_download_file):
-                download_emumovies_media(game, {"username": "u", "password": "p"}, root)
-        query = parse_qs(urlsplit(captured["url"]).query)
-        self.assertEqual(query["search"][0], "Rock & Roll Racing: Deluxe")
-        self.assertEqual(query["system"][0], "SNES")
-        self.assertNotIn(" ", captured["url"])
+            with mock.patch(
+                "pkg.parity.parity_emumovies.download_emumovies_media",
+                return_value=str(root / "cover.jpg"),
+            ) as provider:
+                result = download_emumovies_media(game, {"username": "u", "password": "p"}, root, "snap")
+        self.assertEqual(result, str(root / "cover.jpg"))
+        provider.assert_called_once_with(
+            game, {"username": "u", "password": "p"}, root, "snap",
+        )
 
     def test_download_bezel_preserves_existing_on_bad_archive(self):
         with TemporaryDirectory() as directory:

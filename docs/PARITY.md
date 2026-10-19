@@ -27,14 +27,16 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | LaunchBox Games Database matching | done | Official daily database sync, local matching, and selected metadata/media downloads work |
 | Full LaunchBox media catalog | done | Box backs, spines, 3D boxes, clear logos, fanart, banners, title screens, carts, discs, and advertisement flyers download from the database alongside covers, backgrounds, and screenshots; manuals are user-supplied paths because the LaunchBox metadata feed ships no manual images |
 | Media manager and image groups | done | Grid image groups, extended artwork groups, audits, bulk downloads, duplicate cleanup, region priority, and download limits work |
+| Media automation queue | done | Auto-import enqueues poster, square, screenshot, video, music, and manual downloads into a durable queue with pause/resume/cancel/retry, per-item errors, global and per-group limits, provider priority, and LaunchBox media content validation (1.18) |
 | Emulator profiles and per-game commands | done | Commands launch without a shell |
 | Emulator installation and automatic configuration | done | Install, Update All, open emulator, recommend-on-import, and dependency checks work |
+| Emulator settings and versions | done | Manage Emulators displays installed versions and update availability, supports an opt-out, and edits managed/global/per-platform settings; MAME and RetroArch settings render launch arguments and `--appendconfig` (1.18) |
 | Archive extraction before launch | done | ZIP uses safe built-in extraction; 7z/RAR use installed 7z |
 | Startup and shutdown screens | done | Screens follow the launched process from start through its actual exit |
 | Play counts, time, and session history | done | Sessions persist with duration and exit status |
 | Additional apps, versions, and documents | done | Extras launch from each game's detail pane |
-| Manuals and reader | done | Reader toolbar with page navigation, spread layout, and light/dark themes for PDFs and documents |
-| Save management | done | Discover, scan, retention limits, versioned backups, backup-on-close, and restore work |
+| Manuals and reader | done | Reader toolbar supports page navigation, spread layout, light/dark themes, persisted appearance, remappable keys/controller buttons, and a system-viewer fallback |
+| Save management | done | Discover, scan, retention limits, versioned backups, backup-on-close, hashed manifests, previewed selective restore, and an enable/disable toggle work |
 | RetroAchievements | done | Optional account integration provides matching, progress, badges, Big Box filters, pause access, and emulator injection; it is separate from OpenBox launcher trophies |
 | OpenBox launcher trophies | done | Deterministic local trophy rules evaluate library and history, persist award dates, and render the trophy case (1.11.0) |
 | Video, music, and screenshot playback | done | Multi-category videos, library BGM, video/BGM mix, capture, and gallery work |
@@ -44,7 +46,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Gamescope presets | done | 8 deck/display profiles (Steam Deck, HD, 1080p, 1440p, 4K, integer, stretch, borderless) selectable from Settings → Controller (1.7.2) |
 | MangoHud performance overlay | done | Optional on-screen performance overlay via `MANGOHUD=1` env on launch; toggle in Settings → Controller (1.7.2) |
 | Themes and per-platform themes | done | Six stock CSS themes ship with the Web UI (five styled themes plus a WCAG-AAA High Contrast theme that proves the token contract); import, persist, apply live, and open-folder access work |
-| Plugin manager and extension API | done | Local packages install and run hooks; curated community catalog is bundled |
+| Plugin manager and extension API | done | Local packages install and run hooks with checksum-bound trust, sandboxing, per-plugin settings, capability manifests, data/credential stores, storefront/metadata/media/stats/emulator/discovery providers, localized notifications, and bounded host services; curated community catalog is bundled (1.18) |
 | Backups and restore | done | The web UI lists archives, shows manifests, restores selected archives, and creates a pre-restore safety copy. Backup diff API (`GET /api/v2/backup/diff`) compares current library against archives (1.7.2) |
 | Library audit and missing-file checks | done | Files, provider-aware duplicates, media, extras, saves, and emulator configuration are audited |
 | Linux packaging and updates | done | AppImage build, Flatpak manifest, Makefile install/uninstall, desktop entry, and verified update mechanism |
@@ -65,14 +67,17 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Ctrl+, settings shortcut | done | Opens Settings from the keyboard |
 | Platform documents | done | Platform detail pane and document storage API work per platform |
 | Sidebar filter section management | done | Hidden sidebar sections apply live from Settings |
-| CoverFlow / 3D box models | done | CoverFlow layout with CSS jewel-case depth styling |
+| CoverFlow / 3D box models | done | CoverFlow layout plus CSS 3D box, jewel, long-jewel, double-jewel, and cassette models with rotation lock, per-platform cassette back/case style, and per-game/per-platform selection; the selected CoverFlow card renders the model |
 | Game Discovery Center | done | Curated local discovery lists launch from the Discovery menu |
-| EmuMovies / Bezel Project | done | Bezel downloads and EmuMovies credential/download hooks work with licensed accounts |
-| Storefront Manager / uninstalled auto-import | done | Unified storefront dialog, catalog browse, uninstalled import, and startup auto-import work |
+| EmuMovies / Bezel Project | done | Bezel downloads and EmuMovies credential/download work with licensed accounts; EmuMovies is also a queue provider for covers, box backs/spines/3D boxes, screenshots, title screens, marquees, cart fronts/backs, discs, clear logos, theme and snap videos, manuals, and music |
+| Storefront Manager / uninstalled auto-import | done | Unified storefront dialog, catalog browse, uninstalled import, per-source platform/only-new options, and startup auto-import with per-source progress and a 30-second budget work; plugin storefronts share the same flow |
 | Gameyfin self-hosted library | done | Catalog import, background install with status polling, install/uninstall on demand, desktop + Big Box owned/installed filters |
 | Ludusavi / Hoard save tools | done | Optional CLI hooks from game detail when binaries are on PATH |
-| ScummVM / RPCS3 / Vita3K library import | done | Dedicated import endpoints scan common emulator libraries |
-| MAME community high scores | done | Local high-score discovery plus export/import bundles for sharing |
+| ScummVM / RPCS3 / Vita3K library import | done | Dedicated import endpoints scan common emulator libraries; RPCS3 also reads external folders and ISOs from `games.yml` and `config.yml` |
+| PICO-8, MSU-1, and WHDLoad imports | done | Dedicated source buttons and definitions import PICO-8 carts, MSU-1 patches, and Amiga WHDLoad folders (1.18) |
+| MAME community high scores | done | Local high-score discovery parses MAME tables, renders a searchable table, and exports/imports sharing bundles |
+| Steam achievements and playtime | done | Optional Steam Web API credentials import per-app achievements and playtime; provider tabs merge plugin/built-in achievement sources, and playtime/last-played merges never lower local values (1.18) |
+| RetroArch netplay browser | done | Tools > Netplay lobby and the Big Box menu list RetroArch's public lobby through a cached backend proxy; no account is required (1.18) |
 | OBS recording attach | done | Latest OBS recording auto-attaches on session close; manual attach remains available |
 | Local-first library synchronization | done | Mounted-folder statistics sync remains available; opt-in causal catalog sync adds validated events, conflict review, tombstones, and recovery while unsafe legacy routes fail closed before mutation. No vendor cloud account is involved (ADRs 0038–0039) |
 | Custom fields and bulk metadata wizard | done | Define custom fields in Settings, edit per game, and bulk update selected games |
@@ -82,12 +87,12 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Platform categories | done | Sidebar category navigation groups platforms by family |
 | ROM version ranking on import | done | Duplicate ROM groups rank USA/world releases and skip betas on import |
 | Steam trailer and GOG media download | done | Detail pane downloads Steam trailers and Heroic GOG artwork automatically |
-| RetroAchievements 7z scanning and rich profile | done | ZIP and 7z ROM hashing plus beaten/mastered stats in achievement pane |
+| RetroAchievements 7z scanning and rich profile | done | ZIP and 7z ROM hashing, M3U/CHD/RVZ/WiiWare WAD matching, plus beaten/mastered stats in the achievement pane |
 | Big Box hybrid scoped search | done | Hybrid mode exposes platform-scoped search while browsing |
 | Attract mode and startup video | done | Separate attract delay, optional Big Box startup video, and screensaver launch |
 | Bundled media packs (free) | done | Platform logos, controller prompts, and badge packs apply without a subscription |
 | Localization | done | Locale catalogs and translated `data-i18n`/`t()` surfaces cover English, Spanish, German, French, and Portuguese; some operational/browser fallback labels remain English |
-| Big Box shutdown apps on mode switch | done | Configurable commands run when entering Big Box (not when leaving) |
+| Big Box shutdown apps on mode switch | done | Configurable commands run when leaving Big Box or shutting down, not when entering |
 | Xbox 360 and loose arcade import | done | default.xex folder scan and Hypseus/Singe loose file import |
 | Vita3K title resolution | done | Title IDs resolve to readable game names on import |
 | Advanced search syntax | done | Field terms such as `platform:PC`, quoted values, status terms, and negative terms filter the live grid |
@@ -171,6 +176,20 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Game Night decks | done | A named deck stores players, minutes, and a filter query; building returns an 8-character seed, and the same seed and library reproduce the same draw (1.17.0, ADR 0074) |
 | Price paid and cost per hour | done | A game records price paid and currency; Play Insights shows totals per currency and cost per hour for played, priced games; no conversion is performed (1.17.0, ADR 0075) |
 | Translated server notices | done | Cloud sync, launch-check, definition, and webhook notices carry translation keys and parameters and render in all five locales, with the stored English text as fallback (1.17.0, ADR 0076) |
+| Big Box pointer, wheel, trackball, and spinner navigation | done | Pointer drag, wheel ticks, and Shift+wheel page turns move the Big Box selection with configurable spinner sensitivity and wheel speed; a drag suppresses the synthetic click that would launch a game, and Back-hold opens the menu |
+| Big Box battery and display filters | done | The battery indicator reads the Linux sysfs battery through `GET /api/native/battery` and falls back to the browser battery API; platforms, categories, and playlists can be hidden from Big Box |
+| Remappable keyboard and controller input | done | Settings > Controller records keyboard shortcuts, clears controller buttons, warns when a D-pad button is reused, and asks before swapping a duplicate assignment; the same mappings drive the desktop and Big Box |
+| Filter exclusions and richer smart rules | done | Platform, category, source, and smart filters cycle include → exclude → clear; presets and playlists accept source, achievement-source, region, `contains_any`/`not_contains_any`, and exclusion rules; exclusions survive refresh in the hash route |
+| Configurable progress whitelist | done | Progress automation and the game editor use the enabled labels from Settings; the API rejects labels outside the whitelist |
+| Sidebar section ordering | done | Settings can reorder search, view, filters, platforms, playlists, and Explorer, and hide Explorer like the other sections; legacy section ids are preserved on save |
+| Discovery achievements shelf | done | The Discovery Center lists games with RetroAchievements or provider achievement totals, sorted by completion percentage then title |
+| Platform rename and delete | done | Renaming migrates games, profiles, playlists, settings, and opt-in platform media; deleting requires the platform name and moves games to Trash (1.18 unreleased) |
+| Storefront missing and repair | done | Steam imports record install-folder presence, show Missing instead of a play button, and hand Install/Verify to Steam (1.18 unreleased) |
+| Per-provider integration tokens | done | Five optional providers store tokens locally; the settings API returns only masked values (1.18 unreleased) |
+| Save manifests and selective restore | done | Backups carry file hashes and metadata; a version-history dialog previews every older backup, restore previews contents, supports dry run, and restores selected files (1.18 unreleased) |
+| Bulk find and replace | done | Literal preview-and-apply over one metadata field for selected games (1.18 unreleased) |
+| Controller types and per-platform emulator overrides | done | Controller types are user-defined; platforms can override adapter, RetroArch core, and extra arguments (1.18 unreleased) |
+| Tray recent games | done | Linux and Windows tray menus launch one of the eight most recent games (1.18 unreleased) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 
@@ -213,3 +232,11 @@ These LaunchBox features have no practical Linux equivalent and are documented r
 | Bundled proprietary media packs | Replaced by free bundled media packs in OpenBox |
 | LaunchBox Premium account cloud library | Replaced by OpenBox's own mounted-folder sync plus local backups (no LaunchBox account involved; "cloud sync" rows above mean your folder, not their service) |
 | LaunchBox online theme storefront | Replaced by local CSS theme import and open-folder workflow |
+| Unbroken account sign-in, vendor cloud stats, online MAME leaderboards, media-store likes | No vendor account. Local library sync, local high-score tables, and the household leaderboard are the equivalents |
+| XAML marquee screens, wall-view templates, theme option files, theme demos | OpenBox themes are CSS token overrides. Theme music and navigation sounds cover the sidecar-audio part; marquee and wall templates have no matching surface |
+| Android export, 32-bit builds, Windows .NET runtime changes | No Android target. x86_64/aarch64 Linux and x86_64 Windows are the supported channels |
+| Paid trial, Beta Spotlight, saved-theme trial behavior | No paywall or beta channel. What's New covers release notes |
+| Keyboard automation that injects keystrokes into emulators | Windows input injection. Use launch arguments, environment variables, and emulator configuration instead |
+| Scraping Steam media for non-Steam Windows games | Requires a Steam app id. SteamGridDB covers artwork for non-Steam games |
+| Automatic MAME version downloads | Flathub and the AppImage are the supported channels; a custom emulator profile can point at any local MAME build |
+| RetroArch online lobby as a hosted service | OpenBox only browses RetroArch's public lobby and copies a room address; it does not host or launch rooms |

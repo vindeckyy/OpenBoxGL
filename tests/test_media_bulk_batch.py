@@ -91,7 +91,7 @@ class BulkMediaBatchTests(unittest.TestCase):
         self.assertEqual(media_module.MEDIA_JOB["updated"], 200)
         self.assertEqual(media_module.MEDIA_JOB["total"], 200)
         self.assertTrue(all(game.get("cover") for game in self.games))
-        handler.send_json.assert_called_once_with(202, {"state": "running"})
+        handler.send_json.assert_called_once_with(202, {"state": "running", "queued": 0})
 
 
 if __name__ == "__main__":

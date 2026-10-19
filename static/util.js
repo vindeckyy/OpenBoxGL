@@ -134,7 +134,7 @@
      * @returns {string}
      */
     function badge(label, value, kind = '') { return value ? `<span class="badge ${kind}" title="${escapeHtml(label)}">${escapeHtml(label)}</span>` : ''; }
-    const artworkKinds = [['clear_logo','Clear logo','has_clear_logo'],['fanart','Fanart','has_fanart'],['banner','Banner','has_banner'],['icon','Icon','has_icon'],['box_back','Box back','has_box_back'],['box_spine','Box spine','has_box_spine'],['box_3d','3D box','has_box_3d'],['title_screen','Title screen','has_title_screen'],['cart_front','Cart front','has_cart_front'],['cart_back','Cart back','has_cart_back'],['disc','Disc','has_disc'],['advertisement','Advertisement / flyer','has_advertisement'],['manual','Manual','has_manual']];
+    const artworkKinds = [['clear_logo','Clear logo','has_clear_logo'],['fanart','Fanart','has_fanart'],['banner','Banner','has_banner'],['icon','Icon','has_icon'],['poster','Poster','has_poster'],['square','Square art','has_square'],['box_back','Box back','has_box_back'],['box_spine','Box spine','has_box_spine'],['box_3d','3D box','has_box_3d'],['title_screen','Title screen','has_title_screen'],['cart_front','Cart front','has_cart_front'],['cart_back','Cart back','has_cart_back'],['disc','Disc','has_disc'],['advertisement','Advertisement / flyer','has_advertisement'],['manual','Manual','has_manual']];
     const API_V1 = {
       library: '/api/v1/library', settings: '/api/v1/settings', health: '/api/v1/health',
       health_dedupe: '/api/v1/health/dedupe', launch: '/api/v1/launch',
@@ -310,4 +310,17 @@ function prefersReducedMotion() {
   return reducedMotionQuery()?.matches ?? false;
 }
 
-export { $, escapeHtml, motionMs, prefersReducedMotion, reducedMotionQuery, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, gameLinks, HTTP_URL_RE, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches, trigramsOf, expandTrigrams, trigramScore };
+    const FONT_STACKS = {
+      system: ['system-ui, sans-serif', 'system-ui, sans-serif'],
+      serif: ['Georgia, "Times New Roman", serif', 'Georgia, "Times New Roman", serif'],
+      mono: ['ui-monospace, "DejaVu Sans Mono", monospace', 'ui-monospace, "DejaVu Sans Mono", monospace'],
+      humanist: ['"Cantarell", "Noto Sans", sans-serif', '"Cantarell", "Noto Sans", sans-serif'],
+    };
+    function applyFontFamily(settings) {
+      if (typeof document === 'undefined') return;
+      const [body, heading] = FONT_STACKS[settings?.font_family] || FONT_STACKS.system;
+      document.documentElement.style.setProperty('--font-body-family', body);
+      document.documentElement.style.setProperty('--font-heading-family', heading);
+    }
+
+export { $, escapeHtml, motionMs, prefersReducedMotion, reducedMotionQuery, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, gameLinks, HTTP_URL_RE, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches, trigramsOf, expandTrigrams, trigramScore, applyFontFamily };

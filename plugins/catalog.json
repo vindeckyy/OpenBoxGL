@@ -11,7 +11,9 @@
     "name": "Library Stats Hook",
     "sha256": "",
     "url": "",
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "author": "OpenBox",
+    "homepage": "https://github.com/vindeckyy/OpenBoxGL"
   },
   {
     "api_version": 1,
@@ -31,6 +33,8 @@
     "name": "Hello Palette",
     "sha256": "",
     "url": "",
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "author": "OpenBox",
+    "homepage": "https://github.com/vindeckyy/OpenBoxGL"
   }
 ]

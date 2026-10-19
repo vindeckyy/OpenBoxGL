@@ -22,10 +22,36 @@ def parse_catalog(source):
                 child.text.strip() for child in element
                 if child.tag.rsplit("}", 1)[-1] == "description" and child.text
             ), name)
+            display = next((
+                child for child in element
+                if child.tag.rsplit("}", 1)[-1] == "display"
+            ), None)
+            input_node = next((
+                child for child in element
+                if child.tag.rsplit("}", 1)[-1] == "input"
+            ), None)
+            controls = {
+                key: (input_node.get(key, "") if input_node is not None else "")
+                for key in ("trackball", "lightgun", "paddle", "spinner", "keyboard", "mouse")
+            }
+            players = element.get("players", "")
+            if not players and input_node is not None:
+                players = input_node.get("players", "")
             catalog[name.casefold()] = {
                 "name": name,
                 "description": description,
                 "cloneof": element.get("cloneof", "").strip(),
+                "players": str(players or "").strip(),
+                "vertical": bool(
+                    display is not None and (
+                        str(display.get("rotate", "0")).strip() not in {"", "0"}
+                        or str(display.get("orientation", "")).strip().casefold() == "vertical"
+                    )
+                ),
+                "requires_chd": any(
+                    child.tag.rsplit("}", 1)[-1] == "disk" for child in element
+                ),
+                "controls": controls,
                 "merged_roms": {
                     child.get("name", "")
                     for child in element
@@ -71,11 +97,28 @@ def zip_members(path):
         return set()
 
 
-def import_arcade(folder, dat_path="", command="", source="MAME", catalog=None):
+def import_arcade(
+    folder,
+    dat_path="",
+    command="",
+    source="MAME",
+    catalog=None,
+    players="any",
+    skip_chd=False,
+    skip_inputs=(),
+):
     root = Path(folder).expanduser()
     if not root.is_dir():
         raise FileNotFoundError("The arcade ROM folder does not exist.")
     source = "FinalBurn Neo" if source == "FinalBurn Neo" else "MAME"
+    players = str(players or "any").strip().lower()
+    if players not in {"any", "2", "4"}:
+        raise ValueError("Player filter must be any, 2, or 4.")
+    skip_inputs = {str(value).strip().lower() for value in (skip_inputs or []) if str(value).strip()}
+    allowed_inputs = {"trackball", "lightgun", "paddle", "spinner", "keyboard", "mouse"}
+    unknown_inputs = skip_inputs - allowed_inputs
+    if unknown_inputs:
+        raise ValueError(f"Unknown input filter: {sorted(unknown_inputs)[0]}")
     archives = {}
     try:
         with os.scandir(root) as it:
@@ -106,6 +149,18 @@ def import_arcade(folder, dat_path="", command="", source="MAME", catalog=None):
         archive = own or parent
         if not archive:
             continue
+        if players != "any":
+            try:
+                supported = int(record.get("players", "0") or 0)
+            except (TypeError, ValueError):
+                supported = 0
+            if supported < int(players):
+                continue
+        if skip_chd and record.get("requires_chd"):
+            continue
+        controls = record.get("controls") or {}
+        if skip_inputs and any(controls.get(name) for name in skip_inputs):
+            continue
         if record["cloneof"] and not own:
             set_type = "merged"
         elif record["cloneof"] and record["merged_roms"] - zip_members(own):
@@ -124,6 +179,9 @@ def import_arcade(folder, dat_path="", command="", source="MAME", catalog=None):
             "rom_name": record["name"],
             "clone_of": record["cloneof"],
             "set_type": set_type,
+            "players": record.get("players", ""),
+            "vertical": bool(record.get("vertical")),
+            "requires_chd": bool(record.get("requires_chd")),
         })
     return games
 

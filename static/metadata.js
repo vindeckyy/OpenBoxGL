@@ -384,6 +384,8 @@ async function openMetadata(game) {
   AppState.metadataGameId = game.id;
   $('metadataQuery').value = game.name;
   $('metadataResults').innerHTML = '';
+  metadataCandidateView = null;
+  if ($('metadataProviderFilters')) $('metadataProviderFilters').innerHTML = '';
   if (!$('metadataDialog').open) openDialog($('metadataDialog'));
   setMetadataTab('search');
   refreshSteamgridProvider();
@@ -461,10 +463,79 @@ function renderMetadataStatus(status = {}) {
   }
 }
 
+let metadataCandidateView = null;
+
+function candidateSourceKey(candidate) {
+  return candidate?.plugin_id ? `plugin:${candidate.plugin_id}` : String(candidate?.source || candidate?.provider || '');
+}
+
+function candidateSourceLabel(candidate) {
+  const source = String(candidate?.source_name || candidate?.source || candidate?.provider || candidate?.plugin_id || 'Provider');
+  const names = { launchbox: 'LaunchBox', screenscraper: 'ScreenScraper', igdb: 'IGDB', steamgriddb: 'SteamGridDB' };
+  return names[source] || source;
+}
+
+function renderMetadataCandidateRows() {
+  const box = $('metadataResults');
+  const view = metadataCandidateView;
+  if (!box || !view) return;
+  box.querySelectorAll('[data-provider="candidate"]').forEach(node => node.remove());
+  const rows = view.candidates
+    .map((candidate, index) => ({ candidate, index }))
+    .filter(({ candidate }) => view.enabled.has(candidateSourceKey(candidate)));
+  if (!rows.length) {
+    if (view.candidates.length) box.insertAdjacentHTML('beforeend', '<p class="description" data-provider="candidate">No provider candidates are enabled.</p>');
+    return;
+  }
+  box.insertAdjacentHTML('beforeend', rows.map(({ candidate, index }) => {
+    const label = candidateSourceLabel(candidate);
+    const facts = [candidate.platform, candidate.year].filter(Boolean).map(escapeHtml).join(' · ');
+    return `<div class="metadata-result" data-provider="candidate"><div><strong>${escapeHtml(candidate.name || '')}</strong><small>${escapeHtml(label)}${facts ? ` · ${facts}` : ''}</small></div><div class="extras"><button type="button" class="primary" data-apply-candidate="${index}">Use</button></div></div>`;
+  }).join(''));
+  box.querySelectorAll('[data-apply-candidate]').forEach(button => button.onclick = async () => {
+    const candidate = view.candidates[Number(button.dataset.applyCandidate)];
+    const game = AppState.games.find(item => item.id === AppState.metadataGameId);
+    if (!candidate || !game) return;
+    try {
+      await api('/api/v2/metadata/candidates/apply', { method: 'POST', body: JSON.stringify({
+        game_id: game.game_id,
+        candidate,
+        overwrite: Boolean($('metadataOverwrite')?.checked),
+      }) });
+      closeDialog($('metadataDialog'));
+      await refresh();
+      notify(t('notify.metadata.candidate_applied'));
+    } catch (error) { notify(error.message); }
+  });
+}
+
+function renderMetadataProviderFilters() {
+  const box = $('metadataProviderFilters');
+  const view = metadataCandidateView;
+  if (!box) return;
+  if (!view || !view.candidates.length) {
+    box.innerHTML = '';
+    return;
+  }
+  const sources = [...new Map(view.candidates.map(candidate => [candidateSourceKey(candidate), candidateSourceLabel(candidate)])).entries()];
+  box.innerHTML = sources.map(([key, label]) => `<label class="check"><input type="checkbox" data-metadata-provider="${escapeHtml(key)}" ${view.enabled.has(key) ? 'checked' : ''}> ${escapeHtml(label)}</label>`).join('');
+  box.querySelectorAll('[data-metadata-provider]').forEach(input => input.onchange = () => {
+    if (input.checked) view.enabled.add(input.dataset.metadataProvider);
+    else view.enabled.delete(input.dataset.metadataProvider);
+    renderMetadataCandidateRows();
+  });
+}
+
 async function searchMetadata() {
   try {
     const result = await api(`/api/metadata/search?id=${AppState.metadataGameId}&q=${encodeURIComponent($('metadataQuery').value)}`);
     $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platform)}${item.release_date ? ` · ${escapeHtml(item.release_date)}` : ''}${item.developer ? ` · ${escapeHtml(item.developer)}` : ''}</small></div><div class="extras"><button type="button" class="icon-button" data-choose-lb="${Number(item.database_id) || ''}">${escapeHtml(t('metadata.choose_thumbnails'))}</button><button type="button" class="primary" data-apply-metadata="${Number(item.database_id) || ''}">Use</button></div></div>`).join('') : '<p class="description">No matching games found.</p>';
+    metadataCandidateView = {
+      candidates: Array.isArray(result.candidates) ? result.candidates : [],
+      enabled: new Set((result.candidates || []).map(candidateSourceKey)),
+    };
+    renderMetadataProviderFilters();
+    renderMetadataCandidateRows();
     document.querySelectorAll('[data-apply-metadata]').forEach(button => button.onclick = () => applyMetadata(button.dataset.applyMetadata));
     document.querySelectorAll('[data-choose-lb]').forEach(button => button.onclick = () => chooseLaunchBoxArt(button.dataset.chooseLb));
   } catch(error) { notify(error.message); }
@@ -488,6 +559,8 @@ $('searchScreenscraper').onclick = async () => {
   const game = AppState.games.find(item => item.id === AppState.metadataGameId);
   try {
     const result = await api(`/api/v2/screenscraper/search?q=${encodeURIComponent($('metadataQuery').value)}&platform=${encodeURIComponent(game?.platform || '')}`);
+    metadataCandidateView = null;
+    $('metadataProviderFilters').innerHTML = '';
     $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.system_name || '')}${item.year ? ` · ${escapeHtml(item.year)}` : ''}</small></div><div class="extras"><button type="button" class="icon-button" data-choose-ss="${Number(item.id) || ''}">${escapeHtml(t('metadata.choose_thumbnails'))}</button><button type="button" class="primary" data-apply-ss="${Number(item.id) || ''}">Use</button></div></div>`).join('') : '<p class="description">No ScreenScraper matches found.</p>';
     document.querySelectorAll('[data-choose-ss]').forEach(button => button.onclick = () => chooseScreenscraperArt(button.dataset.chooseSs));
     document.querySelectorAll('[data-apply-ss]').forEach(button => button.onclick = async () => {
@@ -514,6 +587,9 @@ $('hashMatchScreenscraper').onclick = async () => {
 if ($('searchSteamgrid')) $('searchSteamgrid').onclick = async () => {
   try {
     const result = await api(`/api/v2/steamgrid/search?q=${encodeURIComponent($('metadataQuery').value)}`);
+    metadataCandidateView = null;
+    $('metadataProviderFilters').innerHTML = '';
+    $('metadataResults').innerHTML = '';
     mergeSteamgridResults(result.results || []);
   } catch(error) { notify(error.message); }
 };
@@ -527,6 +603,8 @@ $('searchIgdb').onclick = async () => {
   const game = AppState.games.find(item => item.id === AppState.metadataGameId);
   try {
     const result = await api(`/api/metadata/igdb/search?q=${encodeURIComponent($('metadataQuery').value)}&platform=${encodeURIComponent(game?.platform || '')}`);
+    metadataCandidateView = null;
+    $('metadataProviderFilters').innerHTML = '';
     $('metadataResults').innerHTML = result.results.length ? result.results.map(item => `<div class="metadata-result"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platforms || '')}${item.year ? ` · ${escapeHtml(item.year)}` : ''}</small><p class="description">${escapeHtml(item.summary || '')}</p></div><button type="button" class="primary" data-apply-igdb="${Number(item.id) || ''}">Use</button></div>`).join('') : '<p class="description">No IGDB matches found.</p>';
     document.querySelectorAll('[data-apply-igdb]').forEach(button => button.onclick = async () => {
       try {
@@ -691,14 +769,84 @@ async function watchMetadata() {
     if (status.ready) { notify(t('notify.metadata.database_ready')); searchMetadata(); }
   } catch(error) { notify(error.message); }
 }
+function _achievementItems(source) {
+  if (!source || !Array.isArray(source.items)) return '';
+  return source.items.slice(0, 500).map(item => {
+    const title = item.title || item.id || 'Achievement';
+    const icon = item.icon_url || (item.badge ? `/api/ra/badge?name=${encodeURIComponent(item.badge)}&locked=${item.earned ? 0 : 1}&token=${encodeURIComponent(token)}` : '');
+    return `<div class="achievement">${icon ? `<img src="${escapeHtml(icon)}" alt="" loading="lazy" decoding="async">` : ''}<div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(item.description || '')}</small></div><span>${item.points ? `${Number(item.points)} pts` : ''}${item.earned ? ' · earned' : ''}</span></div>`;
+  }).join('');
+}
+
+function renderAchievementTabs(container, game, { raResult = null } = {}) {
+  if (!container) return;
+  const sources = { ...(game?.achievement_sources || {}) };
+  if (raResult && Number(raResult.total) > 0) {
+    sources.retroachievements = {
+      id: 'retroachievements',
+      name: 'RetroAchievements',
+      earned: Number(raResult.earned) || 0,
+      total: Number(raResult.total) || 0,
+      progress_pct: Number(raResult.earned || 0) * 100 / Math.max(1, Number(raResult.total) || 1),
+      mastered: Boolean(raResult.mastered),
+      items: (raResult.achievements || []).map(item => ({ ...item, icon_url: '' })),
+    };
+  }
+  const keys = Object.keys(sources).filter(key => Number(sources[key]?.total) > 0);
+  if (!keys.length) {
+    container.innerHTML = '<p class="description">No achievement source has data yet. Match a ROM or refresh Steam/plugin stats.</p>';
+    return;
+  }
+  const active = keys.includes(container.dataset.achievementActive) ? container.dataset.achievementActive : keys[0];
+  container.dataset.achievementActive = active;
+  const source = sources[active];
+  const tabs = keys.map(key => `<button type="button" class="icon-button${key === active ? ' primary' : ''}" data-achievement-tab="${escapeHtml(key)}">${escapeHtml(sources[key].name || key)} · ${sources[key].earned}/${sources[key].total}</button>`).join('');
+  const corrected = source.manual ? ' · Corrected manually' : '';
+  container.innerHTML = `<div class="extras">${tabs}</div><p class="description">${source.earned} of ${source.total} earned · ${Number(source.progress_pct || 0).toFixed(1)}%${source.mastered ? ' · mastered' : ''}${corrected}</p><div class="form-grid"><label class="field"><span>Earned</span><input type="number" min="0" max="10000" id="achievementOverrideEarned" value="${Number(source.earned) || 0}"></label><label class="field"><span>Total</span><input type="number" min="0" max="10000" id="achievementOverrideTotal" value="${Number(source.total) || 0}"></label></div><div class="extras">${active === 'retroachievements' ? '' : '<button type="button" class="icon-button" id="refreshAchievementSource">Refresh</button>'}<button type="button" class="icon-button" id="saveAchievementOverride">Correct manually</button>${source.manual ? '<button type="button" class="icon-button" id="clearAchievementOverride">Clear correction</button>' : ''}</div><div class="achievement-list">${_achievementItems(source)}</div>`;
+  const refreshButton = container.querySelector('#refreshAchievementSource');
+  if (refreshButton) refreshButton.onclick = async () => {
+    try {
+      await api('/api/v2/achievements/refresh', { method: 'POST', body: JSON.stringify({ game_id: game.game_id, source: active }) });
+      await refresh();
+      const updated = AppState.games.find(item => String(item.game_id) === String(game.game_id)) || game;
+      renderAchievementTabs(container, updated, { raResult });
+    } catch (error) { notify(error.message); }
+  };
+  container.querySelectorAll('[data-achievement-tab]').forEach(button => {
+    button.onclick = () => {
+      container.dataset.achievementActive = button.dataset.achievementTab;
+      renderAchievementTabs(container, game, { raResult });
+    };
+  });
+  container.querySelector('#saveAchievementOverride').onclick = async () => {
+    try {
+      await api('/api/v2/achievements/override', { method: 'POST', body: JSON.stringify({
+        game_id: game.game_id,
+        source: active,
+        earned: Number(container.querySelector('#achievementOverrideEarned').value),
+        total: Number(container.querySelector('#achievementOverrideTotal').value),
+      }) });
+      await refresh();
+      renderDetails();
+    } catch (error) { notify(error.message); }
+  };
+  const clear = container.querySelector('#clearAchievementOverride');
+  if (clear) clear.onclick = async () => {
+    try {
+      await api('/api/v2/achievements/override', { method: 'POST', body: JSON.stringify({ game_id: game.game_id, source: active, clear: true }) });
+      await refresh();
+      renderDetails();
+    } catch (error) { notify(error.message); }
+  };
+}
+
 async function loadAchievements(id) {
   try {
     $('achievementContent').innerHTML = '<p class="description">Matching ROM and loading progress...</p>';
     const result = await api('/api/ra/game',{method:'POST',body:JSON.stringify({id,game_id:gameIdOf(id)})});
     await refresh();
-    if ($('achievementContent')) {
-      $('achievementContent').innerHTML = `<p class="description">${result.earned} of ${result.total} earned · ${escapeHtml(result.completion)}${result.earned_hardcore ? ` · ${result.earned_hardcore} hardcore` : ''}${result.beaten ? ` · beaten ${result.beaten}` : ''}${result.mastered ? ` · mastered ${result.mastered}` : ''}${result.motivation ? ` · ${escapeHtml(result.motivation)}` : ''}</p>${(result.achievements || []).map(item => `<div class="achievement"><img src="/api/ra/badge?name=${encodeURIComponent(item.badge)}&locked=${item.earned ? 0 : 1}&token=${encodeURIComponent(token)}" alt="" loading="lazy" decoding="async"><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.description)}</small></div><span>${item.points} pts${item.hardcore ? ' ★' : ''}</span></div>`).join('')}`;
-    }
+    const game = AppState.games.find(item => String(item.game_id) === String(gameIdOf(id)));
+    if ($('achievementContent')) renderAchievementTabs($('achievementContent'), game, { raResult: result });
   } catch(error) { notify(error.message); renderDetails(); }
 }
 
@@ -707,4 +855,4 @@ queueMicrotask(() => {
   if ($('metadataButton')) $('metadataButton').onclick = () => openMatchReview();
 });
 
-export { steamMetadata, openMetadata, openMatchReview, renderMetadataStatus, searchMetadata, applyMetadata, watchMatchMetadata, watchMetadata, loadAchievements };
+export { steamMetadata, openMetadata, openMatchReview, renderMetadataStatus, searchMetadata, applyMetadata, watchMatchMetadata, watchMetadata, loadAchievements, renderAchievementTabs };

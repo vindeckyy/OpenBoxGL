@@ -1,15 +1,17 @@
-import { $, escapeHtml } from './util.js';
-import { token, AppState, api, notify, nativeCaps, nativeFullscreen, detectNative, filteredGames, nativePickFile, selectedIds, resetQuery, resolveDeeplinkGameId } from './state.js';
-import { refresh, render, renderGrid, favorite, updateGameStatus, removeGame } from './library.js';
+import { $, escapeHtml, applyFontFamily } from './util.js';
+import { matchesKey } from './pure.js';
+import { token, AppState, api, notify, showErrorBanner, nativeCaps, nativeFullscreen, nativeOpenExternal, detectNative, filteredGames, nativePickFile, selectedIds, resetQuery, resolveDeeplinkGameId } from './state.js';
+import { refresh, render, renderGrid, favorite, updateGameStatus, removeGame, focusSelectedGame } from './library.js';
+import { setupDetailsPopup } from './details.js';
 import { openSettings, openProfiles, openThemes, openAchievements, openPlugins, health, openBackups, openFeature, bulkAction, saveFilter, savePreset, openPlaylists, createManualPlaylist, createFilterPlaylist, createNamedBackup, filterSettings, gracefulShutdown, loadTheme, addGamesToPlaylist } from './settings.js';
-import { importFolder, importSteam, importHeroic, importEpic, importLutris, importGog, importEa, importUbisoft, importArcade, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport } from './imports.js';
+import { importFolder, importSteam, importHeroic, importEpic, importLutris, importGog, importEa, importUbisoft, importArcade, importPico8, importMsu1, importWhdload, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport } from './imports.js';
 import { watchMetadata } from './metadata.js';
 import { openMediaManager } from './media.js';
-import { setReaderPage, resetReaderFrame } from './reader.js';
+import { resetReaderFrame } from './reader.js';
 import { openSessions, openHistory, launch, connectSessionEvents, pollSessions } from './sessions.js';
 import { openSessionRecap } from './recap.js';
-import { openDiscovery, openStorefronts, saveStorefrontSettings, importStorefrontCatalog, loadStorefrontCatalog } from './storefront.js';
-import { openBigBox, closeBigBox, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, stopScreenSaver, favoriteBigBox, openBigBoxPause, closeBigBoxPause, filteredBigBoxGames, applyLibraryMusic, activateCurrentGame, bigBoxTypingActive } from './bigbox.js';
+import { openDiscovery, openStorefronts, saveStorefrontSettings, importStorefrontCatalog, loadStorefrontCatalog, scanStorefronts } from './storefront.js';
+import { openBigBox, closeBigBox, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, stopScreenSaver, favoriteBigBox, openBigBoxPause, closeBigBoxPause, filteredBigBoxGames, applyLibraryMusic, activateCurrentGame, bigBoxTypingActive, startBigBoxBack, releaseBigBoxBack } from './bigbox.js';
 import { openPicker } from './picker.js';
 import { openConstellation } from './constellation.js';
 import { openMastery } from './mastery.js';
@@ -29,11 +31,27 @@ import { dnaMoreLikeThis } from './dna.js';
 import { openSetupCenter } from './setup.js';
 import { init as i18nInit, setLocale, getSupportedLocales, t } from './i18n.js';
 import './activity.js';
+import './netplay.js';
 
 // Expose the app state and game filter to the page global scope for the
 // ui-smoke harness (page.evaluate) and other page-level consumers.
 window.AppState = AppState;
 window.filteredGames = filteredGames;
+
+const KEYBOARD_DEFAULTS = {
+  play: 'Enter', back: 'Escape', favorite: 'f', random: 'r',
+  page_left: 'PageUp', page_right: 'PageDown', pause: 'p', menu: 'm',
+  search: '/', settings: 'Ctrl+,', reader_prev: 'ArrowLeft', reader_next: 'ArrowRight',
+};
+function keyAction(action) {
+  return { ...KEYBOARD_DEFAULTS, ...(AppState.appSettings.keyboard_map || {}) }[action];
+}
+function isBackKey(event) {
+  if (matchesKey(event, keyAction('back'))) return true;
+  // Backspace used to be a second default back key. Keep it, but only while
+  // Back is still the default: a remapped Back key must not inherit it.
+  return keyAction('back') === 'Escape' && event.key === 'Backspace' && !event.ctrlKey && !event.altKey && !event.metaKey;
+}
 
 // Initialize i18n after the page has settled so it doesn't hold network
 // connections during initial load (which would block networkidle2 in tests).
@@ -205,8 +223,20 @@ window.addEventListener('DOMContentLoaded', () => {
         changes.price_currency = currency;
       }
       if (values.reset_stats) changes.reset_stats = true;
+      const findText = String(values.find_text || '');
+      if (findText) {
+        const ids = [...selectedIds];
+        try {
+          const preview = await api('/api/v2/bulk/find-replace', { method: 'POST', body: JSON.stringify({ ids, field: values.find_field, find: findText, replace: values.replace_text || '', dry_run: true }) });
+          if (!preview.matched) { notify(t('notify.app.bulk_no_matches')); return; }
+          const sample = preview.games.slice(0, 5).map(game => `${game.before} → ${game.after}`).join('\n');
+          const ok = await confirmAction({ title: `Replace in ${preview.matched} game${preview.matched === 1 ? '' : 's'}`, message: `${sample}${preview.truncated ? `\n…and ${preview.truncated} more` : ''}`, consequence: 'Only the selected field changes.', confirmLabel: 'Replace' });
+          if (!ok) return;
+          await api('/api/v2/bulk/find-replace', { method: 'POST', body: JSON.stringify({ ids, field: values.find_field, find: findText, replace: values.replace_text || '', dry_run: false }) });
+        } catch (error) { notify(error.message); return; }
+      }
       try {
-        const result = await api('/api/games/bulk-wizard',{method:'POST',body:JSON.stringify({ids:[...selectedIds],changes})});
+        const result = await api('/api/games/bulk-wizard',{method:'POST',body:JSON.stringify({ids:[...selectedIds],changes,migrate_media:Boolean(values.migrate_media) && Boolean(changes.platform)})});
         $('bulkDialog').close();
         selectedIds.clear();
         AppState.bulkMode = false;
@@ -247,10 +277,18 @@ window.addEventListener('DOMContentLoaded', () => {
       } catch(error) { notify(error.message); }
     };
     $('libraryButton').onclick = () => { resetQuery(); AppState.selectedId = null; render(); loadTheme(); };
+    $('reportIssueButton').onclick = async () => {
+      const target = 'https://github.com/vindeckyy/OpenBoxGL/issues/new/choose';
+      try {
+        if (await nativeOpenExternal(target)) return;
+      } catch { /* fall through to the browser */ }
+      window.open(target, '_blank', 'noopener,noreferrer');
+    };
     $('discoveryButton').onclick = openDiscovery;
     $('storefrontButton').onclick = openStorefronts;
     $('closeDiscovery').onclick = $('doneDiscovery').onclick = () => $('discoveryDialog').close();
     $('closeStorefront').onclick = () => $('storefrontDialog').close();
+    $('scanStorefronts').onclick = scanStorefronts;
     $('saveStorefront').onclick = saveStorefrontSettings;
     $('importSteamStore').onclick = () => { $('storefrontDialog').close(); importSteam(); };
     $('importHeroicStore').onclick = () => { $('storefrontDialog').close(); importHeroic(); };
@@ -305,7 +343,7 @@ window.addEventListener('DOMContentLoaded', () => {
     $('loadStorefrontCatalog').onclick = loadStorefrontCatalog;
     $('importStorefrontInstalled').onclick = () => importStorefrontCatalog(false);
     $('importStorefrontUninstalled').onclick = () => importStorefrontCatalog(true);
-    $('addButton').onclick = () => openGameDialog(); $('addShelfButton').onclick = () => openGameDialog(null, {shelf:true}); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => $('metadataDialog').showModal(); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('gogButton').onclick = importGog; $('eaButton').onclick = importEa; $('ubisoftButton').onclick = importUbisoft; $('arcadeButton').onclick = importArcade; $('arcadeRoomButton').onclick = () => openArcadeRoom({state:AppState, games:() => AppState.games, museumKioskEnabled:Boolean(AppState.appSettings.museum_kiosk_enabled && AppState.appSettings.museum_kiosk_pin_set), verifyMuseumPin, onShowGame:game => { AppState.selectedId = game.id; render(); }, onLaunch:game => launch(game)}); $('householdButton').onclick = openHousehold; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('timeMachineButton').onclick = openTimeMachine; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('constellationButton').onclick = openConstellation; $('masteryButton').onclick = openMastery; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
+    $('addButton').onclick = () => openGameDialog(); $('addShelfButton').onclick = () => openGameDialog(null, {shelf:true}); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => $('metadataDialog').showModal(); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('gogButton').onclick = importGog; $('eaButton').onclick = importEa; $('ubisoftButton').onclick = importUbisoft; $('arcadeButton').onclick = importArcade; $('pico8Button').onclick = importPico8; $('msu1Button').onclick = importMsu1; $('whdloadButton').onclick = importWhdload; $('arcadeRoomButton').onclick = () => openArcadeRoom({state:AppState, games:() => AppState.games, museumKioskEnabled:Boolean(AppState.appSettings.museum_kiosk_enabled && AppState.appSettings.museum_kiosk_pin_set), verifyMuseumPin, onShowGame:game => { AppState.selectedId = game.id; render(); }, onLaunch:game => launch(game)}); $('householdButton').onclick = openHousehold; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('timeMachineButton').onclick = openTimeMachine; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('constellationButton').onclick = openConstellation; $('masteryButton').onclick = openMastery; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
     $('doneTimeMachine').onclick = () => $('timeMachineDialog').close();
     // ── Accessible Tools menu ──────────────────────────────────────────
     const toolsWrap = $('toolsWrap');
@@ -405,8 +443,15 @@ window.addEventListener('DOMContentLoaded', () => {
     $('settingsSearch').oninput = filterSettings;
     $('forceShutdown').onclick = () => gracefulShutdown(true);
     window.addEventListener('beforeunload', event => { if (AppState.runningGames.length) { event.preventDefault(); gracefulShutdown(); } });
+    function typingTarget(target) {
+      return target instanceof Element && Boolean(target.closest('input,textarea,select,[contenteditable="true"]'));
+    }
     document.addEventListener('keydown', event => {
-      if ((event.ctrlKey || event.metaKey) && event.key === ',') { event.preventDefault(); openSettings(); }
+      if (matchesKey(event, keyAction('search')) && !typingTarget(event.target) && !document.querySelector('dialog[open]')) {
+        const search = $('sidebarSearch');
+        if (search) { event.preventDefault(); search.focus(); search.select(); }
+      }
+      if (matchesKey(event, keyAction('settings')) || (event.metaKey && event.key === ',')) { event.preventDefault(); openSettings(); }
       if ((event.ctrlKey || event.metaKey) && event.altKey && (event.key.toLowerCase() === 'q' || event.key.toLowerCase() === 'r')) {
         event.preventDefault();
         const visible = filteredGames();
@@ -433,38 +478,73 @@ window.addEventListener('DOMContentLoaded', () => {
     $('closeReader').onclick = () => { $('readerDialog').close(); resetReaderFrame(); };
     $('bigBox').onkeydown = event => {
       if (bigBoxTypingActive()) {
-        if (event.key === 'Escape') $('bigBoxHybridSearch').blur();
+        if (matchesKey(event, keyAction('back'))) $('bigBoxHybridSearch').blur();
         return;
       }
       if (!$('screenSaver').hidden) {
         const game = AppState.screenSaverGame;
         stopScreenSaver();
-        if (event.key === 'Enter' && game) activateCurrentGame(game);
+        if (matchesKey(event, keyAction('play')) && game) activateCurrentGame(game);
         event.preventDefault();
         return;
       }
       if (!$('bigBoxMenu').hidden) {
-        if (event.key === 'Escape' || event.key === 'Backspace') closeBigBoxMenu();
-        if (event.key === 'Enter') applyBigBoxMenu();
+        if (isBackKey(event)) closeBigBoxMenu();
+        if (matchesKey(event, keyAction('play'))) applyBigBoxMenu();
         return;
       }
       AppState.bigBoxLastInput = performance.now();
+      const snap = document.querySelector('.bigbox-video-snap');
+      const inForm = event.target instanceof Element && event.target.closest('input,button,select,textarea');
+      if (snap && !inForm) {
+        if (event.key === 'f' && !event.ctrlKey && !event.altKey && !event.metaKey) {
+          event.preventDefault();
+          snap.requestFullscreen?.().catch(() => notify(t('notify.app.bigbox_fullscreen_unavailable')));
+          return;
+        }
+        if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+          event.preventDefault();
+          snap.volume = Math.min(1, Math.max(0, Number(snap.volume || 0) + (event.key === 'ArrowUp' ? 0.05 : -0.05)));
+          return;
+        }
+      }
+      const action = [
+        ['pause', () => { if (AppState.runningGames.length) openBigBoxPause(); }],
+        ['menu', () => openBigBoxMenu()],
+        ['back', () => {
+          if (event.repeat) return;
+          if (!$('bigBoxPause').hidden) closeBigBoxPause();
+          else startBigBoxBack();
+        }],
+        ['play', () => {
+          const target = AppState.bigBoxGames[AppState.bigBoxIndex];
+          if (target) activateCurrentGame(target);
+        }],
+        ['favorite', () => favoriteBigBox()],
+        ['random', () => {
+          AppState.bigBoxIndex = Math.floor(Math.random() * AppState.bigBoxGames.length);
+          renderBigBox();
+        }],
+        ['page_left', () => moveBigBox(-10)],
+        ['page_right', () => moveBigBox(10)],
+      ].find(([name]) => name === 'back' ? isBackKey(event) : matchesKey(event, keyAction(name)));
+      if (action) {
+        event.preventDefault();
+        action[1]();
+        return;
+      }
+      if (event.key === ' ' && snap && !(event.target instanceof Element && event.target.closest('input,button,select,textarea'))) {
+        event.preventDefault();
+        if (snap.paused) snap.play().catch(() => {}); else snap.pause();
+        return;
+      }
       if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') moveBigBox(-1);
-      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') moveBigBox(1);
-      if (event.key === 'Enter') {
-        const target = AppState.bigBoxGames[AppState.bigBoxIndex];
-        if (target) activateCurrentGame(target);
-      }
-      if (event.key.toLowerCase() === 'p' && AppState.runningGames.length) openBigBoxPause();
-      if (event.key.toLowerCase() === 'm') openBigBoxMenu();
-      if (event.key.toLowerCase() === 'r') { AppState.bigBoxIndex = Math.floor(Math.random() * AppState.bigBoxGames.length); renderBigBox(); }
-      if (event.key.toLowerCase() === 'f') favoriteBigBox();
-      if (event.key === 'Escape' || event.key === 'Backspace') {
-        // The pause overlay dismisses alone; only a bare Big Box exits the mode.
-        if (!$('bigBoxPause').hidden) closeBigBoxPause();
-        else closeBigBox();
-      }
+      else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') moveBigBox(1);
     };
+    document.addEventListener('keyup', event => {
+      if (!$('bigBox') || $('bigBox').hidden) return;
+      if (isBackKey(event)) releaseBigBoxBack();
+    });
 
     // ?deeplink= dispatch map (S2 owns the shape). 'search' stays above — it
     // seeds the input before the
@@ -478,6 +558,10 @@ window.addEventListener('DOMContentLoaded', () => {
           AppState.selectedId = resolved;
           render();
         }
+      }],
+      ['launch', params => {
+        const resolved = resolveDeeplinkGameId(params.get('id'));
+        if (resolved !== null) launch(resolved, null);
       }],
       ['recap', () => openSessionRecap()],
       ['moment', params => openMoment(params.get('id'))],
@@ -494,13 +578,43 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     const deeplink = new URLSearchParams(location.search);
+    const detailTarget = setupDetailsPopup();
     if (deeplink.get('deeplink') === 'search') $('sidebarSearch').value = deeplink.get('q') || '';
     // Restore the view context from the URL hash before the first render.
     applyHash();
     window.addEventListener('hashchange', () => { if (applyHash()) render(); });
     initNavigation();
-    Promise.all([refresh(),loadTheme()]).then(async () => {
+    async function primeNotifications() {
+      try {
+        const result = await api('/api/notifications');
+        const unread = Number(result.unread) || 0;
+        AppState.unreadNotifications = unread;
+        const button = $('notificationsButton');
+        if (button) {
+          button.dataset.unread = String(unread);
+          button.setAttribute('aria-label', unread ? `${button.textContent.trim()} (${unread})` : button.textContent.trim());
+        }
+      } catch { /* the center reports its own errors when opened */ }
+    }
+    Promise.all([refresh(),loadTheme(),primeNotifications()]).then(async () => {
+      applyFontFamily();
+      if (AppState.startupErrors.length) {
+        $('startupErrorText').textContent = AppState.startupErrors.join(' ');
+        $('startupErrorBanner').hidden = false;
+        $('startupErrorDismiss').onclick = () => { $('startupErrorBanner').hidden = true; };
+      }
+      if (detailTarget) {
+        const game = AppState.games.find(item => String(item.game_id) === detailTarget || String(item.id) === detailTarget);
+        if (game) {
+          AppState.selectedId = game.id;
+          render();
+        } else {
+          $('details').innerHTML = '<div class="detail-empty">This game is no longer in the library.<div class="extras"><button type="button" class="icon-button" id="detailsPopupClose">Close</button></div></div>';
+          $('detailsPopupClose').onclick = () => window.close();
+        }
+      }
       initMood();
+      focusSelectedGame();
     $('queueButton').onclick = () => openFeature('queue');
     $('tagsButton').onclick = () => openFeature('tags');
     $('notificationsButton').onclick = () => openFeature('notifications');
@@ -513,4 +627,4 @@ window.addEventListener('DOMContentLoaded', () => {
       await runStartupStorefrontImports().catch(() => {});
       if (deeplink.get('deeplink') !== 'bigbox' && (AppState.appSettings.gamescope_guest || AppState.appSettings.bigbox_start_at_launch)) openBigBox();
       dispatchDeeplink(deeplink);
-    }).catch(error => notify(error.message));
+    }).catch(error => { showErrorBanner(error); if (detailTarget) $('details').innerHTML = `<div class="detail-empty">${escapeHtml(error.message || 'The library could not be loaded.')}</div>`; });

@@ -1365,7 +1365,8 @@ class JobsAdapterTests(unittest.TestCase):
         self.assertEqual(status, 200)
         status, _payload = self.request("POST", "/api/saves/add", {"id": 0, "path": str(DATA.parent / "saves")})
         self.assertEqual(status, 200)
-        with mock.patch("handlers.data.restore_saves", return_value=Path("backup.zip")):
+        with mock.patch("handlers.data.restore_saves", return_value=Path("backup.zip")), \
+             mock.patch("handlers.data.preview_restore", return_value={"conflict": False, "counts": {}}):
             status, payload = self.request("POST", "/api/saves/restore", {"id": 0, "backup": "backup.zip"})
             self.assertEqual(status, 202)
             self.assertIn("job_id", payload)

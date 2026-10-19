@@ -57,8 +57,12 @@ def heroic_library_records(base):
 
 def catalog_steam(home=None):
     home = home or Path.home()
-    installed = {game["steam_app_id"]: game for game in import_steam(home)}
-    owned = steam_owned_app_ids(home) or set(installed)
+    discovered = {game["steam_app_id"]: game for game in import_steam(home)}
+    installed = {
+        app_id: game for app_id, game in discovered.items()
+        if game.get("store_installed")
+    }
+    owned = steam_owned_app_ids(home) or set(discovered)
     try:
         executable, _launch = steam_command()
     except FileNotFoundError:
@@ -67,16 +71,18 @@ def catalog_steam(home=None):
     catalog = []
     for app_id in sorted(owned, key=lambda value: int(value)):
         game = installed.get(app_id)
+        record = discovered.get(app_id)
         catalog.append({
             "id": app_id,
-            "name": game["name"] if game else f"Steam App {app_id}",
+            "name": record["name"] if record else f"Steam App {app_id}",
             "source": "Steam",
-            "installed": app_id in installed,
-            "install_uri": f"steam://store/{app_id}",
+            "installed": game is not None,
+            "install_uri": f"steam://store/{app_id}" if game else f"steam://install/{app_id}",
+            "repair_uri": f"steam://validate/{app_id}",
             "path": game["path"] if game else opener,
             "launch": game["launch"] if game else f"xdg-open steam://store/{app_id}",
             "steam_app_id": app_id,
-            "install_dir": game.get("install_dir", "") if game else "",
+            "install_dir": record.get("install_dir", "") if record else "",
         })
     return catalog
 
@@ -233,6 +239,8 @@ def catalog_entries_to_games(entries, *, uninstalled_only=False, installed_only=
             "store_installed": installed,
             "owned": True,
             "description": entry.get("description", ""),
+            "install_uri": entry.get("install_uri", ""),
+            "repair_uri": entry.get("repair_uri", ""),
         }
         if entry.get("steam_app_id"):
             game["steam_app_id"] = entry["steam_app_id"]

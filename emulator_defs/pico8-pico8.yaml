@@ -1,0 +1,20 @@
+schema_version: 1
+adapter_id: pico8-pico8
+emulator_id: pico8
+label: PICO-8
+platform: PICO-8
+extensions:
+  - p8
+  - png
+native_exe: pico8
+native_exe_windows: pico8.exe
+flatpak_app_id: ""
+startup_args:
+  - "-run"
+  - "{path}"
+recommended: true
+priority: 10
+executable_patterns:
+  - pico8
+state:
+  kind: none

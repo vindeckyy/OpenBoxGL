@@ -258,21 +258,87 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
       try {
         const result = await api(`/api/saves?id=${id}`);
         if (!$('saveBackups')) return;
-        $('saveBackups').innerHTML = result.backups.slice(0,8).map(backup => `<button class="icon-button" data-backup="${escapeHtml(backup.name)}">${escapeHtml(backup.name)}</button>`).join('');
+        $('saveBackups').innerHTML = result.backups.slice(0,8).map(backup => `<button class="icon-button" data-backup="${escapeHtml(backup.name)}">${escapeHtml(backup.label && backup.label !== 'manual' ? `${backup.label} · ` : '')}${escapeHtml(backup.name)}</button>`).join('');
         document.querySelectorAll('[data-backup]').forEach(button => button.onclick = () => restoreSaves(id,button.dataset.backup));
       } catch(error) { notify(error.message); }
     }
     async function backupSaves(id) { try { const result = await api('/api/saves/backup',{method:'POST',body:JSON.stringify({id,game_id:gameIdOf(id)})}); notify(t('notify.sessions.backup_created', {name: result.backup})); loadBackups(id); } catch(error) { notify(error.message); } }
     async function restoreSaves(id,backup) {
-      const { confirmAction } = await import('./dialogs.js');
-      const ok = await confirmAction({
-        title: 'Restore saves',
-        message: `Restore ${backup}?`,
-        consequence: 'Current saves will be backed up first.',
-      });
-      if (!ok) return;
-      try { await api('/api/saves/restore',{method:'POST',body:JSON.stringify({id,game_id:gameIdOf(id),backup})}); notify(t('notify.sessions.save_restored')); loadBackups(id); } catch(error) { notify(error.message); }
+      const { confirmAction, openDialog, closeDialog } = await import('./dialogs.js');
+      let manifest;
+      try { manifest = await api(`/api/saves/manifest?id=${id}&backup=${encodeURIComponent(backup)}`); }
+      catch(error) { notify(error.message); return; }
+      const dialog = document.createElement('dialog');
+      dialog.className = 'dialog';
+      dialog.innerHTML = `<div class="dialog-head"><h2>Restore ${escapeHtml(backup)}</h2><button type="button" class="icon-button" data-close>×</button></div><p class="description">${manifest.files.length} file${manifest.files.length === 1 ? '' : 's'} in this backup. Uncheck files you want to keep as-is.</p><div class="extras"><button type="button" class="icon-button" data-all>Select all</button><button type="button" class="icon-button" data-none>Select none</button></div><div id="saveManifestFiles">${manifest.files.map((file,index) => `<label class="check"><input type="checkbox" data-save-file="${index}" checked> ${escapeHtml(file.path)}</label>`).join('')}</div><p class="description" id="saveManifestStatus"></p><div class="description" id="saveRestoreConflicts"></div><div class="dialog-actions"><button type="button" class="icon-button" data-dry>Dry run</button><button type="button" class="primary" data-restore>Restore selected</button></div>`;
+      document.body.appendChild(dialog);
+      const selected = () => [...dialog.querySelectorAll('[data-save-file]:checked')].map(input => manifest.files[Number(input.dataset.saveFile)].archive);
+      const finish = () => { closeDialog(dialog); dialog.remove(); };
+      dialog.querySelector('[data-close]').onclick = finish;
+      dialog.querySelector('[data-all]').onclick = () => dialog.querySelectorAll('[data-save-file]').forEach(input => { input.checked = true; });
+      dialog.querySelector('[data-none]').onclick = () => dialog.querySelectorAll('[data-save-file]').forEach(input => { input.checked = false; });
+      const previewRestore = chosen => api('/api/saves/restore/preview', { method: 'POST', body: JSON.stringify({ id, game_id: gameIdOf(id), backup, selected: chosen }) });
+      const conflictMarkup = preview => {
+        const overwrites = Array.isArray(preview.overwrite) ? preview.overwrite : [];
+        const total = Number(preview.counts?.overwrite || overwrites.length || 0);
+        if (!total) { dialog.querySelector('#saveRestoreConflicts').innerHTML = ''; return; }
+        const paths = overwrites.map(item => item.path || item.archive || '').filter(Boolean);
+        const shown = paths.slice(0, 10).map(path => `<li><code>${escapeHtml(path)}</code></li>`).join('');
+        dialog.querySelector('#saveRestoreConflicts').innerHTML = `<strong>${total} local file${total === 1 ? '' : 's'} will be overwritten:</strong>${shown ? `<ul>${shown}</ul>` : ''}${total > paths.length ? `<small>${total - paths.length} more not shown.</small>` : ''}`;
+      };
+      dialog.querySelector('[data-dry]').onclick = async () => {
+        const chosen = selected();
+        if (!chosen.length) { dialog.querySelector('#saveManifestStatus').textContent = 'Select at least one file.'; return; }
+        try {
+          const result = await previewRestore(chosen);
+          dialog.querySelector('#saveManifestStatus').textContent = `Dry run: ${result.counts.add} new, ${result.counts.overwrite} overwritten, ${result.counts.missing} missing from the archive.`;
+          conflictMarkup(result);
+        } catch(error) { dialog.querySelector('#saveManifestStatus').textContent = error.message; }
+      };
+      dialog.querySelector('[data-restore]').onclick = async () => {
+        const chosen = selected();
+        if (!chosen.length) { dialog.querySelector('#saveManifestStatus').textContent = 'Select at least one file.'; return; }
+        let preview;
+        try { preview = await previewRestore(chosen); }
+        catch(error) { dialog.querySelector('#saveManifestStatus').textContent = error.message; return; }
+        conflictMarkup(preview);
+        const conflicts = Number(preview.counts?.overwrite || 0);
+        const names = (Array.isArray(preview.overwrite) ? preview.overwrite : []).map(item => item.path).filter(Boolean).slice(0, 3);
+        const detail = names.length ? ` Differing: ${names.join(', ')}${conflicts > names.length ? `, and ${conflicts - names.length} more` : ''}.` : '';
+        const ok = await confirmAction({ title: 'Restore saves', message: `${chosen.length} file(s) will be restored from ${backup}.${conflicts ? ` ${conflicts} local file(s) will be overwritten.` : ''}${detail}`, consequence: 'Current saves will be backed up first.', confirmLabel: conflicts ? 'Restore anyway' : 'Restore' });
+        if (!ok) return;
+        try { await api('/api/saves/restore',{method:'POST',body:JSON.stringify({id,game_id:gameIdOf(id),backup,selected:chosen,confirm_conflict:Boolean(conflicts)})}); notify(t('notify.sessions.save_restored')); finish(); loadBackups(id); } catch(error) { notify(error.message); }
+      };
+      openDialog(dialog);
     }
+    async function openSaveHistory(id) {
+      let backups;
+      try { backups = (await api(`/api/saves?id=${encodeURIComponent(id)}`)).backups || []; }
+      catch(error) { notify(error.message); return; }
+      const { openDialog, closeDialog } = await import('./dialogs.js');
+      const dialog = document.createElement('dialog');
+      dialog.className = 'dialog';
+      dialog.innerHTML = `<div class="dialog-head"><h2>Save version history</h2><button type="button" class="icon-button" data-close>×</button></div><p class="description">${backups.length} backup${backups.length === 1 ? '' : 's'} for this game, newest first.</p><div class="history-list" id="saveVersionList">${backups.length ? backups.map(backup => `<button type="button" class="icon-button" data-version="${escapeHtml(backup.name)}"><strong>${escapeHtml(backup.label || backup.name)}</strong> · ${escapeHtml(new Date(backup.mtime * 1000).toLocaleString())} · ${Math.max(1, Math.round(Number(backup.size || 0) / 1024))} KB</button>`).join('') : '<p class="description">No backups yet.</p>'}</div><div id="saveVersionPreview" class="description">Select a backup to preview its files.</div><div class="dialog-actions"><button type="button" class="icon-button" data-close>Close</button></div>`;
+      document.body.appendChild(dialog);
+      const finish = () => { closeDialog(dialog); dialog.remove(); };
+      dialog.querySelectorAll('[data-close]').forEach(button => button.onclick = finish);
+      dialog.querySelectorAll('[data-version]').forEach(button => button.onclick = async () => {
+        const backup = button.dataset.version;
+        dialog.querySelectorAll('[data-version]').forEach(item => item.classList.toggle('active', item === button));
+        const preview = dialog.querySelector('#saveVersionPreview');
+        try {
+          const result = await api('/api/saves/restore/preview', { method: 'POST', body: JSON.stringify({ id, game_id: gameIdOf(id), backup }) });
+          const counts = result.counts || {};
+          const overwrites = Array.isArray(result.overwrite) ? result.overwrite : [];
+          const conflictPaths = overwrites.map(item => item.path || item.archive || '').filter(Boolean);
+          const conflictList = conflictPaths.length ? `<ul>${conflictPaths.slice(0, 10).map(path => `<li><code>${escapeHtml(path)}</code></li>`).join('')}</ul>${Number(counts.overwrite || 0) > conflictPaths.length ? `<small>${Number(counts.overwrite) - conflictPaths.length} more not shown.</small>` : ''}` : '';
+          preview.innerHTML = `<p><strong>${escapeHtml(backup)}</strong></p><p>${Number(counts.add || 0)} new · ${Number(counts.overwrite || 0)} overwritten · ${Number(counts.unchanged || 0)} unchanged${counts.missing ? ` · ${Number(counts.missing)} missing from archive` : ''}</p>${conflictList}<button type="button" class="icon-button" id="restoreVersion">${Number(counts.overwrite || 0) ? 'Restore anyway' : 'Restore this version'}</button>`;
+          preview.querySelector('#restoreVersion').onclick = () => { finish(); restoreSaves(id, backup); };
+        } catch(error) { preview.textContent = error.message; }
+      });
+      openDialog(dialog);
+    }
+
     async function discoverSaves(id) {
       try {
         const result = await api(`/api/saves/discover?id=${id}`);
@@ -283,4 +349,4 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
       } catch(error) { notify(error.message); }
     }
 
-export { launch, showLifecycle, connectSessionEvents, pollSessions, openHistory, openSessions, renderSessions, loadBackups, backupSaves, restoreSaves, discoverSaves };
+export { launch, showLifecycle, connectSessionEvents, pollSessions, openHistory, openSessions, renderSessions, loadBackups, backupSaves, restoreSaves, openSaveHistory, discoverSaves };

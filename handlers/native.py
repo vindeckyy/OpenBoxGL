@@ -10,8 +10,34 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
+
 from api_errors import BadRequest
 from routes.registry import route
+
+
+def _battery_from(root=None):
+    """Read the first battery under sysfs. Returns no path in the response."""
+    root = Path(root) if root is not None else Path("/sys/class/power_supply")
+    try:
+        candidates = sorted(root.glob("BAT*"))
+    except OSError:
+        return {"present": False, "percent": 0, "charging": False}
+    for candidate in candidates:
+        try:
+            percent = int((candidate / "capacity").read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            continue
+        try:
+            state = (candidate / "status").read_text(encoding="utf-8").strip().casefold()
+        except OSError:
+            state = ""
+        return {
+            "present": True,
+            "percent": max(0, min(100, percent)),
+            "charging": state in {"charging", "full"},
+        }
+    return {"present": False, "percent": 0, "charging": False}
 
 
 def _handle_unauthorized(handler):
@@ -60,6 +86,18 @@ def capabilities(handler, parsed):
     })
 
 
+@route("GET", "/api/native/battery")
+def battery(handler, parsed):
+    """Report battery presence, percentage, and charging state."""
+    if not handler.authorized():
+        _handle_unauthorized(handler)
+        return
+    if sys.platform == "linux":
+        handler.send_json(200, _battery_from())
+    else:
+        handler.send_json(200, {"present": False, "percent": 0, "charging": False})
+
+
 @route("POST", "/api/native/dialog")
 def dialog(handler, payload):
     """Folder/file/save picker. No host -> cancelled, page falls back."""
@@ -69,6 +107,9 @@ def dialog(handler, payload):
     kind = str(payload.get("kind") or "folder")
     if kind not in ("folder", "file", "save"):
         raise BadRequest("Native dialog kind must be folder, file, or save.")
+    start_path = str(payload.get("start_path") or "").strip()
+    if start_path and not os.path.isabs(start_path):
+        raise BadRequest("Native dialog start_path must be absolute.")
     handler.send_json(200, {"path": None, "cancelled": True})
 
 

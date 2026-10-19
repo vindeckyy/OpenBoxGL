@@ -22,7 +22,7 @@ import pkg.parity  # noqa: F401  # register flat-import finder before parity_* i
 from api_errors import ApiError, BadRequest, RangeParseError, RouteNotFound
 from env_config import bootstrap_env
 from openbox_logging import configure_logging
-from openbox import DATA, load_state, purge_demo_games, update_state
+from openbox import DATA, STATE_STORE, load_state, purge_demo_games, update_state
 from plugins import emit_plugin_event
 from parity_backup import AUTO_BACKUP_ITEMS, AUTO_BACKUP_KEEP, auto_backup_due, create_backup, restore_backup
 from parity_deeplinks import handle_cli
@@ -40,6 +40,7 @@ from webapp_state import (
     PROCESS_LOCK,
     ROOT,
     RUNNING,
+    STARTUP_ERRORS,
     TOKEN,
     WATCH_STOP,
     approved_backup_file,
@@ -55,6 +56,7 @@ from webapp_state import (
     register_event_subscriber,
     unregister_event_subscriber,
 )
+from pkg.state.imports import start_media_queue_worker
 from handlers.data import DataHandlers
 from handlers.discovery import DiscoveryHandlers
 from handlers.emulators import EmulatorsHandlers
@@ -455,6 +457,8 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         "/static/whatsnew.js",
         "/static/worker.search.js",
         "/static/i18n.js",
+        "/static/details.js",
+        "/static/emulators.js",
         "/static/app.css",
         "/static/logo.png",
     ], public=True)
@@ -464,7 +468,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         # no-cache: the mtime+size ETag still answers 304 for unchanged files,
         # but clients revalidate instead of running stale modules for a year.
         name = Path(parsed.path).name
-        if not (name.endswith(".js") or name in {"app.css", "logo.png"}):
+        if not (name.endswith((".js", ".svg")) or name in {"app.css", "logo.png"}):
             raise RouteNotFound("Not found")
         if name == "logo.png":
             asset = ROOT / "assets" / "openbox-logo.png"
@@ -475,8 +479,21 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         asset = ROOT / "static" / name
         if not asset.is_file():
             raise RouteNotFound("Not found")
-        content_type = "text/javascript; charset=utf-8" if name.endswith(".js") else "text/css; charset=utf-8"
+        if name.endswith(".js"):
+            content_type = "text/javascript; charset=utf-8"
+        elif name.endswith(".svg"):
+            content_type = "image/svg+xml"
+        else:
+            content_type = "text/css; charset=utf-8"
         self.send_file(200, asset, content_type, cache_control="no-cache")
+        return
+
+    @route("GET", "/assets/placeholder-cover.svg", public=True)
+    def _api_get_placeholder_cover(self, parsed):
+        asset = ROOT / "assets" / "placeholder-cover.svg"
+        if not asset.is_file():
+            raise RouteNotFound("Not found")
+        self.send_file(200, asset, "image/svg+xml", cache_control="public, max-age=31536000, immutable")
         return
 
     @route("GET", ["/locales/en.json", "/locales/es.json", "/locales/de.json", "/locales/fr.json", "/locales/pt.json"], public=True)
@@ -725,11 +742,27 @@ def main():
     if cli_code is not None:
         raise SystemExit(cli_code)
     ensure_stock_themes(DATA.parent / "themes", ROOT)
+    for relative in ("plugins/data", "plugins/credentials", "plugin-stats", "emulator-configs", "cache/steam"):
+        runtime_dir = DATA.parent / relative
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            runtime_dir.chmod(0o700)
+        except OSError:
+            pass
     def bootstrap_state(state):
         purge_demo_games(state)
         profiles = state.setdefault("profiles", {})
         profiles.update(merge_profiles_from_definitions(profiles))
-    update_state(bootstrap_state)
+    try:
+        update_state(bootstrap_state)
+    except StateCorruptError as error:
+        STARTUP_ERRORS.append(f"Library data could not be read: {error}")
+        try:
+            STATE_STORE.recover()
+            update_state(bootstrap_state)
+            STARTUP_ERRORS.append("Library data was restored from the last-known-good backup.")
+        except (OSError, StateCorruptError) as recovery_error:
+            STARTUP_ERRORS.append(f"Automatic recovery failed: {recovery_error}")
     # The native windows paint the page background before it loads: record the saved theme's.
     try:
         from handlers.extensions import write_native_background
@@ -761,6 +794,7 @@ def main():
         LOGGER.exception("Session reconciliation failed; continuing with empty active_sessions")
     WATCH_STOP.clear()
     JOB_MANAGER.submit("auto-import", auto_import_worker)
+    start_media_queue_worker()
     threading.Thread(target=_auto_backup_worker, name="auto-backup", daemon=True).start()
     threading.Thread(target=_health_rescan_worker, name="health-rescan", daemon=True).start()
     # "On startup" rescan: run once at boot unless a game session is active.
@@ -782,6 +816,11 @@ def main():
         DATA.parent / "native-host-flags",
         f"{int(bool(_settings.get('tray_enabled')))} {int(bool(_settings.get('minimize_to_tray')))}\n",
     )
+    try:
+        from pkg.parity.parity_tray_recent import write_recent_games
+        write_recent_games(DATA.parent, load_state())
+    except (OSError, ValueError):
+        LOGGER.exception("Could not publish recent games for the tray")
     url = f"http://127.0.0.1:{port}/?token={TOKEN}"
     # Log without the token; the token-bearing URL is only printed to the
     # native host via the token file and to a browser when explicitly opened.

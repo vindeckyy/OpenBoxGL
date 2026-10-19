@@ -100,6 +100,17 @@ class ParityFeatureTests(unittest.TestCase):
         lists = discovery_lists(games, limit=2)
         self.assertEqual(lists["short_sessions"], [1, 0])
 
+    def test_discovery_achievements_sorts_by_progress_then_name(self):
+        games = [
+            {"name": "Zeta", "ra_game_id": 1, "ra_progress_pct": 10, "has_achievements": True},
+            {"name": "Alpha", "ra_game_id": 2, "ra_progress_pct": 70, "has_achievements": True},
+            {"name": "Beta", "achievement_sources": {"steam": {"total": 5, "earned": 0}}},
+            {"name": "Linked only", "ra_game_id": 3},
+            {"name": "None"},
+        ]
+        lists = discovery_lists(games, limit=3)
+        self.assertEqual(lists["achievements"], [1, 0, 2])
+
     def test_auto_update_scan_configs_executed(self):
         import webapp_state
         from openbox import save_state
@@ -155,9 +166,12 @@ class ParityFeatureTests(unittest.TestCase):
         self.assertEqual(rules, {"has_saves": True, "has_achievements": True})
 
         games = [
-            {"name": "Game A", "save_paths": ["/tmp/save.srm"], "ra_game_id": 1234, "cover": "/tmp/a.png", "background": "/tmp/bg.png"},
+            {"name": "Game A", "save_paths": ["/tmp/save.srm"], "ra_game_id": 1234,
+             "achievement_sources": {"retroachievements": {"total": 10, "earned": 1}},
+             "cover": "/tmp/a.png", "background": "/tmp/bg.png"},
             {"name": "Game B", "save_paths": [], "ra_game_id": None, "cover": "", "background": ""},
             {"name": "Game C", "save_paths": ["/tmp/c.srm"], "ra_game_id": None, "has_missing_media": True},
+            {"name": "Game D", "ra_game_id": 99, "cover": "/tmp/d.png", "background": "/tmp/d.png"},
         ]
         matched = filter_games(games, {"has_saves": True})
         self.assertEqual([g["name"] for g in matched], ["Game A", "Game C"])
@@ -167,6 +181,59 @@ class ParityFeatureTests(unittest.TestCase):
 
         matched_missing_media = filter_games(games, {"has_missing_media": True})
         self.assertEqual([g["name"] for g in matched_missing_media], ["Game B", "Game C"])
+
+    def test_filter_presets_exclusions_and_list_operators(self):
+        from parity_filter_presets import filter_games, game_matches_exclusions, normalize_rules
+
+        rules = normalize_rules({
+            "source": ["Steam", "gog", "Steam"],
+            "achievements_source": ["retroachievements"],
+            "genre": {"op": "not_contains_any", "values": ["Sports", "Racing"]},
+            "exclude": {
+                "platform": ["Genesis"],
+                "favorite": True,
+                "query": "beta",
+                "unknown": "ignored",
+            },
+        })
+        self.assertEqual(rules["source"], ["Steam", "gog"])
+        self.assertEqual(rules["achievements_source"], ["retroachievements"])
+        self.assertEqual(rules["genre"], {"op": "not_contains_any", "values": ["Sports", "Racing"]})
+        self.assertEqual(rules["exclude"], {"platform": ["Genesis"], "favorite": True, "query": "beta"})
+        self.assertEqual(normalize_rules({"exclude": {"platform": "SNES"}}), {"exclude": {"platform": "SNES"}})
+        with self.assertRaises(ValueError):
+            normalize_rules({"genre": {"op": "equals", "values": ["RPG"]}})
+        with self.assertRaises(ValueError):
+            normalize_rules({"exclude": {"platform": [str(i) for i in range(21)]}})
+
+        games = [
+            {"name": "Alpha", "platform": "SNES", "source": "Steam", "genre": "Action RPG", "achievement_sources": {"retroachievements": {"total": 10, "earned": 2}}},
+            {"name": "Beta", "platform": "Genesis", "source": "GOG", "genre": "Sports", "favorite": True, "vertical": True, "requires_chd": True},
+            {"name": "Gamma", "platform": "SNES", "source": "Steam", "genre": "Racing"},
+        ]
+        self.assertTrue(game_matches_exclusions(games[1], {"platform": "Genesis"}))
+        self.assertTrue(game_matches_exclusions(games[1], {"favorite": True}))
+        self.assertTrue(game_matches_exclusions(games[1], {"query": "beta"}))
+        self.assertTrue(game_matches_exclusions(games[1], {"vertical": True}))
+        self.assertFalse(game_matches_exclusions(games[1], {"vertical": False}))
+        self.assertTrue(game_matches_exclusions(games[1], {"requires_chd": True}))
+        self.assertFalse(game_matches_exclusions(games[0], {"platform": "Genesis"}))
+        self.assertEqual(
+            [g["name"] for g in filter_games(games, {"source": ["steam"], "has_achievements": True})],
+            ["Alpha"],
+        )
+        self.assertEqual(
+            [g["name"] for g in filter_games(games, {"exclude": {"platform": "SNES"}})],
+            ["Beta"],
+        )
+        self.assertEqual(
+            [g["name"] for g in filter_games(games, {"genre": {"op": "contains_any", "values": ["RPG", "Racing"]}})],
+            ["Alpha", "Gamma"],
+        )
+        self.assertEqual(
+            [g["name"] for g in filter_games(games, {"genre": {"op": "not_contains_any", "values": ["RPG", "Racing"]}})],
+            ["Beta"],
+        )
 
     def test_bulk_update_reset_stats(self):
         from catalog import bulk_update

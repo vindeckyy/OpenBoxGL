@@ -10,6 +10,7 @@ from urllib.parse import parse_qs
 
 from api_errors import BadRequest, GameNotFound
 from catalog import PROGRESS, bulk_update, canon_progress, clean_currency, clean_price_cents, clean_user_rating, game_media_paths, normalize_manual_sessions, normalize_notes, related_game_ids, tag_counts
+from pkg.parity.parity_platform_admin import migrate_game_media
 from handlers._shared import clean_extras as _clean_extras_shared
 from notifications import clear as clear_notifications, mark_read as mark_notifications_read, unread_count
 from openbox import load_state, load_state_readonly, local_only_mutation
@@ -85,8 +86,57 @@ def _dna_refresh_ids(game_ids):
         pass
 
 
-def _clean_game_fields(source):
+def _bulk_update_with_media(state, ids, changes, migrate_media, media_root=None):
+    """Apply a bulk patch, then optionally move selected games' platform media.
+
+    The metadata update is authoritative: a failed media move is reported for a
+    later retry and never rolls the field change back.
+    """
+    old_platforms = {
+        index: str(game.get("platform") or "")
+        for index, game in enumerate(state.get("games", []))
+        if isinstance(game, dict)
+    }
+    changed = bulk_update(state["games"], ids, changes)
+    new_platform = str(changes.get("platform") or "").strip()
+    moved = 0
+    errors = []
+    if migrate_media and new_platform:
+        groups = {}
+        for index, game in enumerate(state["games"]):
+            old = old_platforms.get(index, "")
+            if old and old != new_platform and str(game.get("platform") or "") == new_platform:
+                groups.setdefault(old, []).append(game)
+        for old, group in groups.items():
+            try:
+                result = migrate_game_media(group, old, new_platform, media_root=media_root)
+            except (OSError, ValueError) as error:
+                errors.append({"platform": old, "error": str(error)})
+            else:
+                moved += int(result.get("media_moved", 0))
+    return changed, moved, errors
+
+
+def _allowed_progress(state=None):
+    settings = (state or load_state_readonly()).get("settings", {})
+    values = settings.get("progress_values") if isinstance(settings, dict) else None
+    return set(values) if isinstance(values, list) else PROGRESS
+
+
+def _clean_game_fields(source, allowed_progress=None):
     game = {key: str(source[key]).strip() for key in FIELDS if key in source}
+    if isinstance(source.get("save_sources"), dict):
+        cleaned_sources = {}
+        for path, metadata in list(source["save_sources"].items())[:1000]:
+            path = str(path).strip()[:4000]
+            if not path or not isinstance(metadata, dict):
+                continue
+            cleaned_sources[path] = {
+                key: str(metadata.get(key) or "")[:200]
+                for key in ("emulator_id", "core", "slot")
+            }
+        if cleaned_sources:
+            game["save_sources"] = cleaned_sources
     game["extract_archive"] = bool(source.get("extract_archive"))
     game["hidden"] = bool(source.get("hidden"))
     for field in ("broken", "portable", "launch_confirm"):
@@ -99,6 +149,8 @@ def _clean_game_fields(source):
     progress = canon_progress(game.get("progress", ""))
     if progress not in PROGRESS:
         raise ValueError("Unknown progress value.")
+    if progress and allowed_progress is not None and progress not in allowed_progress:
+        raise ValueError("Progress value is not allowed by the current progress whitelist.")
     # "Unplayed" is the UI label for unset; it is always stored as "".
     game["progress"] = progress
     try:
@@ -363,6 +415,8 @@ class LibraryHandlers:
                 "settings": payload.get("settings", {}),
                 "media_epoch": payload.get("media_epoch", 0),
                 "ra_configured": payload.get("ra_configured", False),
+                "startup_errors": payload.get("startup_errors", []),
+                "source_labels": payload.get("source_labels", {}),
             }
             self.send_json(200, response_payload)
             return
@@ -442,7 +496,11 @@ class LibraryHandlers:
 
     @route("GET", "/api/discovery")
     def _api_get_api_discovery(self, parsed):
-        self.send_json(200, discovery_lists(load_state_view()["games"]))
+        games = public_state()["games"]
+        payload = discovery_lists(games)
+        from pkg.parity.parity_plugin_discovery import merge_plugin_discovery
+
+        self.send_json(200, merge_plugin_discovery(payload, games))
         return
 
     @route("GET", "/api/related/rich")
@@ -605,7 +663,7 @@ class LibraryHandlers:
 
     def save_game(self, payload):
         source = payload.get("game", {})
-        game = _clean_game_fields(source)
+        game = _clean_game_fields(source, _allowed_progress())
         _apply_game_extras(
             game,
             self.clean_extras(source.get("applications", []), command=True),
@@ -648,11 +706,17 @@ class LibraryHandlers:
         self.send_json(200, {"ok": True})
 
     def bulk_edit(self, payload):
+        changes = payload.get("changes") if isinstance(payload.get("changes"), dict) else {}
+        if "progress" in changes:
+            progress = canon_progress(changes.get("progress", ""))
+            if progress and progress not in _allowed_progress():
+                raise BadRequest("Progress value is not allowed by the current progress whitelist.")
+        migrate_media = payload.get("migrate_media") is True
         def mutate(state):
-            return bulk_update(state["games"], payload.get("ids"), payload.get("changes"))
-        _, changed = transact_state(mutate)
+            return _bulk_update_with_media(state, payload.get("ids"), payload.get("changes"), migrate_media)
+        _, (changed, moved, errors) = transact_state(mutate)
         _dna_refresh_ids(payload.get("ids"))
-        self.send_json(200, {"updated": changed})
+        self.send_json(200, {"updated": changed, "media_moved": moved, "media_errors": errors})
 
     def delete_game(self, payload):
         delete_media = bool(payload.get("delete_media"))
@@ -752,11 +816,17 @@ class LibraryHandlers:
 
     def bulk_wizard(self, payload):
         changes = bulk_wizard_changes(payload.get("changes", {}))
+        migrate_media = payload.get("migrate_media") is True
         def mutate(state):
-            return bulk_update(state["games"], payload.get("ids"), changes)
-        _, changed = transact_state(mutate)
+            return _bulk_update_with_media(state, payload.get("ids"), changes, migrate_media)
+        _, (changed, moved, errors) = transact_state(mutate)
         _dna_refresh_ids(payload.get("ids"))
-        self.send_json(200, {"updated": changed, "fields": list(changes.keys())})
+        self.send_json(200, {
+            "updated": changed,
+            "fields": list(changes.keys()),
+            "media_moved": moved,
+            "media_errors": errors,
+        })
 
     def save_filter_preset(self, payload):
         name = str(payload.get("name", "")).strip()
@@ -795,6 +865,8 @@ class LibraryHandlers:
                     "game": issue["name"],
                     "type": issue["legacy"]["type"],
                     "detail": issue["legacy"]["detail"],
+                    "source": issue.get("source", "Local"),
+                    "source_label": issue.get("source_label") or issue.get("source", "Local"),
                 }
                 for issue in legacy
             ],
@@ -898,7 +970,7 @@ class LibraryHandlers:
         differently in the UI.
         """
         source = payload.get("game", {})
-        game = _clean_game_fields(source)
+        game = _clean_game_fields(source, _allowed_progress())
         if not game.get("name"):
             raise BadRequest("Name is required.")
         game["manual_entry"] = True
@@ -942,7 +1014,7 @@ class LibraryHandlers:
     def _api_post_api_v2_library_manual_entry_update(self, payload):
         """Update a shelf entry while retaining its stable identity and pathless type."""
         source = payload.get("game", {})
-        game = _clean_game_fields(source)
+        game = _clean_game_fields(source, _allowed_progress())
         if not game.get("name"):
             raise BadRequest("Name is required.")
         _clean_game_lists(game, source)
@@ -1124,6 +1196,8 @@ class LibraryHandlers:
         progress = canon_progress(payload.get("progress", ""))
         if progress not in PROGRESS:
             raise BadRequest("Unknown progress value.")
+        if progress and progress not in _allowed_progress():
+            raise BadRequest("Progress value is not allowed by the current progress whitelist.")
 
         def mutate(state):
             game = game_from_payload(state, payload)

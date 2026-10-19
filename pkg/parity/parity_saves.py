@@ -23,7 +23,14 @@ def extra_save_candidates(game, home=None):
             home / ".var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/Wii/title",
         ):
             if root.exists():
-                candidates.append({"path": str(root), "label": "Dolphin Wii/WiiWare", "shared": True})
+                candidates.append({
+                    "path": str(root),
+                    "label": "Dolphin Wii/WiiWare",
+                    "shared": True,
+                    "emulator_id": "dolphin",
+                    "core": "",
+                    "slot": "",
+                })
     if platform in {"Sega Saturn", "Saturn"}:
         for root in (
             home / ".config/retroarch/saves",
@@ -31,7 +38,14 @@ def extra_save_candidates(game, home=None):
             home / ".mednafen",
         ):
             if root.exists():
-                candidates.append({"path": str(root), "label": "Saturn / Mednafen saves", "shared": True})
+                candidates.append({
+                    "path": str(root),
+                    "label": "Saturn / Mednafen saves",
+                    "shared": True,
+                    "emulator_id": "mednafen" if Path(root).name == ".mednafen" else "retroarch",
+                    "core": "",
+                    "slot": "",
+                })
     return candidates
 
 
@@ -50,19 +64,46 @@ def enforce_backup_limit(game, root, max_backups):
     return removed
 
 
+def _source_metadata(item):
+    return {
+        key: str(item.get(key) or "")
+        for key in ("emulator_id", "core", "slot")
+    }
+
+
 def scan_all_saves(games, home=None):
+    """Discover existing save paths and record their per-path provenance.
+
+    ``game["save_sources"]`` maps each existing discovered path to the
+    emulator (and, when known, core/slot) that owns it.  The returned mapping
+    keeps the historical ``{game_index: [path, ...]}`` shape so callers that
+    only write ``save_paths`` keep working.
+    """
     home = Path(home or Path.home())
     found = {}
     for index, game in enumerate(games):
         paths = []
+        sources = {}
         for item in discover_save_paths(game, home=home):
-            paths.append(item["path"])
+            path = str(item.get("path") or "")
+            if not path:
+                continue
+            if path not in paths:
+                paths.append(path)
+            sources[path] = _source_metadata(item)
         for item in extra_save_candidates(game, home=home):
-            if item["path"] not in paths:
-                paths.append(item["path"])
+            path = str(item.get("path") or "")
+            if not path:
+                continue
+            if path not in paths:
+                paths.append(path)
+            sources[path] = _source_metadata(item)
         existing = [path for path in paths if Path(path).exists()]
         if existing:
             found[index] = existing
+            game["save_sources"] = {
+                path: sources[path] for path in existing if path in sources
+            }
     return found
 
 

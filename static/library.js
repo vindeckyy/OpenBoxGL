@@ -1,14 +1,16 @@
 import { subscribe } from './events.js';
-import { formatMoney } from './pure.js';
+import { formatMoney, cycleFilterState, integerScale } from './pure.js';
+import { renderCoverModel, bindCoverModel } from './model3d.js';
+import { openDetailsPopup } from './details.js';
 import { $, escapeHtml, duration, fact, gameLinks, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds, trigramsOf, expandTrigrams } from './util.js';
-import { token, AppState, gameIdOf, selectedIds, media, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, showToast, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
+import { token, AppState, gameIdOf, selectedIds, media, coverSource, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, showToast, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
 import { loadTheme, deletePlaylist } from './settings.js';
 import { importFolder, importSteam, importHeroic, importLutris, importDroppedFolder } from './imports.js';
 import { openGameDialog, convertShelfEntry, confirmAction, promptInput, openDialog, closeDialog } from './dialogs.js';
 import { syncHash } from './router.js';
-import { openMetadata, steamMetadata, loadAchievements } from './metadata.js';
+import { openMetadata, steamMetadata, loadAchievements, renderAchievementTabs } from './metadata.js';
 import { captureScreenshot, downloadBezel } from './media.js';
-import { launch, backupSaves, discoverSaves, loadBackups } from './sessions.js';
+import { launch, backupSaves, discoverSaves, loadBackups, openSaveHistory } from './sessions.js';
 import { installGameyfin, uninstallGameyfin, ludusaviAction, hoardAction } from './storefront.js';
 import { openReader } from './reader.js';
 import { applyMoodForGame, clearMood } from './mood.js';
@@ -351,12 +353,7 @@ function ensureSmartFilterRules() {
   return AppState.smartFilterRules;
 }
 function visibleGames() {
-  const rules = AppState.smartFilterRules || {};
-  let games = filteredGames();
-  if (rules.has_achievements) games = games.filter(game => game.has_achievements);
-  if (rules.has_missing_media) games = games.filter(game => game.has_missing_media);
-  if (rules.has_highscores) games = games.filter(game => game.has_highscores);
-  return games;
+  return filteredGames();
 }
 function openManualReader(game) {
   if (!game?.has_manual) return;
@@ -379,7 +376,110 @@ function effectiveQueryState() {
     explorer: {...AppState.explorerRules},
     importBatchId: AppState.importBatchId,
     smart: {...(AppState.smartFilterRules || {})},
+    exclude: {...(AppState.filterExclusions || {})},
+    presetExclude: {...(presetRules.exclude || {})},
   };
+}
+function setFilterExclusions(field, values) {
+  if (values && values.length) AppState.filterExclusions[field] = values;
+  else delete AppState.filterExclusions[field];
+  invalidateFilterCache();
+}
+function cycleSingleFilter(field, value) {
+  const stateKey = field === 'platform' ? 'platform' : 'platformCategory';
+  const current = AppState[stateKey] || 'all';
+  const result = cycleFilterState(field, value, {
+    include: current !== 'all' && current === value ? [value] : [],
+    exclude: [...(AppState.filterExclusions[field] || [])],
+  });
+  AppState[stateKey] = result.include[0] || 'all';
+  setFilterExclusions(field, result.exclude);
+}
+function smartFilterValue(key) {
+  return AppState.smartFilterRules?.[key];
+}
+function cycleSmartFilter(key, value) {
+  const exclusions = [...(AppState.filterExclusions[key] || [])];
+  if (smartFilterValue(key) === value) {
+    delete AppState.smartFilterRules[key];
+    if (!exclusions.includes(value)) exclusions.push(value);
+  } else if (exclusions.includes(value)) {
+    exclusions.splice(exclusions.indexOf(value), 1);
+  } else {
+    AppState.smartFilterRules[key] = value;
+  }
+  AppState.filterExclusions ||= {};
+  setFilterExclusions(key, exclusions);
+}
+function smartFilterExcluded(key, value) {
+  return (AppState.filterExclusions[key] || []).includes(value);
+}
+function filterValueLabel(value) {
+  if (value === true) return 'Yes';
+  if (value === false) return 'No';
+  if (value && typeof value === 'object') {
+    return Array.isArray(value.values) ? `${value.op}: ${value.values.join(', ')}` : JSON.stringify(value);
+  }
+  return String(value);
+}
+function renderSourceFilter() {
+  const select = $('sourceFilter');
+  if (!select) return;
+  const sources = [...new Set(AppState.games.map(game => game.source).filter(Boolean))].sort();
+  const current = select.value;
+  select.innerHTML = `<option value="">Any source</option>${sources.map(source => `<option value="${escapeHtml(source)}">${escapeHtml(source)}</option>`).join('')}`;
+  select.value = sources.includes(current) ? current : '';
+  const checkbox = $('sourceExclude');
+  if (checkbox) {
+    checkbox.disabled = !select.value;
+    checkbox.checked = Boolean(select.value && (AppState.filterExclusions.source || []).includes(select.value));
+  }
+}
+function bindSourceFilter() {
+  const select = $('sourceFilter');
+  const checkbox = $('sourceExclude');
+  if (!select || select.dataset.bound) return;
+  select.dataset.bound = '1';
+  const sync = () => {
+    leaveActivePreset();
+    const values = [...(AppState.filterExclusions.source || [])].filter(value => value !== (select.dataset.previousSource || ''));
+    if (select.value && checkbox?.checked) values.push(select.value);
+    setFilterExclusions('source', values);
+    select.dataset.previousSource = select.value;
+    render();
+    loadTheme();
+  };
+  select.onchange = sync;
+  if (checkbox) checkbox.onchange = sync;
+}
+function renderFilterButtonTooltip() {
+  const button = $('filterDrawerButton');
+  if (!button) return;
+  const state = effectiveQueryState();
+  const included = [];
+  const excluded = [];
+  if (state.preset) included.push(`Preset: ${state.preset}`);
+  if (state.playlist) included.push(`Playlist: ${state.playlist}`);
+  if (state.platform !== 'all') included.push(`Platform: ${state.platform}`);
+  if (state.platformCategory !== 'all') included.push(`Category: ${state.platformCategory}`);
+  if (state.view !== 'all') included.push(`View: ${$('view')?.selectedOptions[0]?.text || state.view}`);
+  if (state.esrb) included.push(`ESRB: ${state.esrb}`);
+  if (state.query) included.push(`Search: ${state.query}`);
+  const selectedSource = $('sourceFilter')?.value || '';
+  const excludedSourceNames = new Set((Array.isArray(state.exclude.source) ? state.exclude.source : [state.exclude.source]).filter(Boolean).map(value => String(value).toLowerCase()));
+  if (selectedSource && !excludedSourceNames.has(selectedSource.toLowerCase())) included.push(`Source: ${selectedSource}`);
+  Object.entries(state.smart).forEach(([field, value]) => included.push(`${field}: ${filterValueLabel(value)}`));
+  Object.entries(state.exclude).forEach(([field, values]) => {
+    (Array.isArray(values) ? values : [values]).forEach(value => excluded.push(`${field}: ${filterValueLabel(value)}`));
+  });
+  Object.entries(state.presetExclude).forEach(([field, values]) => {
+    (Array.isArray(values) ? values : [values]).forEach(value => excluded.push(`${field}: ${filterValueLabel(value)}`));
+  });
+  const text = included.length || excluded.length
+    ? `Active: ${included.join(', ') || 'none'}; Excluded: ${excluded.join(', ') || 'none'}`
+    : 'No active filters';
+  button.title = text;
+  button.setAttribute('aria-label', text);
 }
 function applyDetailsLayout() {
   const workspace = document.querySelector('.workspace');
@@ -475,55 +575,103 @@ function bindFilterDrawer() {
   const openBtn = $('filterDrawerButton');
   if (!drawer || !body || body.dataset.bound) return;
   body.dataset.bound = '1';
-  body.innerHTML = `<div class="platforms smart-filter-grid">${[
-    ['favorite', 'Favorites'],
-    ['installed', 'Installed'],
-    ['progress', 'In progress'],
-    ['save', 'Has saves'],
-    ['achievement', 'Achievements'],
-    ['missing-media', 'Missing media'],
-    ['high-score', 'High scores'],
-  ].map(([key, label]) => `<button type="button" class="platform" data-smart-filter="${key}">${escapeHtml(label)}</button>`).join('')}</div>
+  const smartButtons = [
+    ['favorite', 'Favorites', true],
+    ['installed', 'Installed', 'installed'],
+    ['progress', 'In progress', 'Playing'],
+    ['has_saves', 'Has saves', true],
+    ['has_achievements', 'Achievements', true],
+    ['has_missing_media', 'Missing media', true],
+    ['has_highscores', 'High scores', true],
+  ];
+  const smartLabel = (key, value) => {
+    if (smartFilterValue(key) === value) return 'active is-included';
+    if (smartFilterExcluded(key, value)) return 'is-excluded';
+    return '';
+  };
+  const paintSmartButtons = () => {
+    body.querySelectorAll('[data-smart-filter]').forEach(button => {
+      const value = button.dataset.smartValue === 'true' ? true : button.dataset.smartValue;
+      button.className = `platform ${smartLabel(button.dataset.smartFilter, value)}`.trim();
+      button.setAttribute('aria-pressed', button.classList.contains('is-excluded') ? 'mixed' : button.classList.contains('is-included') ? 'true' : 'false');
+    });
+  };
+  const achievementSources = new Map([['retroachievements', 'RetroAchievements'], ['steam', 'Steam']]);
+  for (const game of AppState.games || []) {
+    for (const [key, source] of Object.entries(game.achievement_sources || {})) {
+      achievementSources.set(key, source?.name || key);
+    }
+  }
+  body.innerHTML = `<div class="platforms smart-filter-grid">${smartButtons.map(([key, label, value]) => `<button type="button" class="platform" data-smart-filter="${key}" data-smart-value="${value === true ? 'true' : escapeHtml(value)}">${escapeHtml(label)}</button>`).join('')}</div>
+    <div class="smart-filter-text-rule">
+      <label class="field"><span>Achievements source</span><select id="smartAchievementSource"><option value="">Any source</option>${[...achievementSources].map(([key, label]) => `<option value="${escapeHtml(key)}">${escapeHtml(label)}</option>`).join('')}</select></label>
+      <label class="check"><input type="checkbox" id="smartAchievementSourceExclude"> Exclude this source</label>
+      <button type="button" class="icon-button" id="applyAchievementSource">Apply source</button>
+    </div>
+    <div class="smart-filter-text-rule">
+      <label class="field"><span>Text field rule</span><select id="smartFilterTextField"><option value="genre">Genre</option><option value="developer">Developer</option><option value="publisher">Publisher</option><option value="region">Region</option></select></label>
+      <label class="field"><span>Comparison</span><select id="smartFilterTextOp"><option value="contains_any">contains any</option><option value="not_contains_any">does not contain any</option></select></label>
+      <label class="field"><span>Values, comma separated</span><input id="smartFilterTextValues" type="search" placeholder="Action, RPG"></label>
+    </div>
     <label class="field"><span>Developer contains</span><input id="smartFilterDeveloper" type="search" placeholder="Developer"></label>
     <label class="field"><span>Publisher contains</span><input id="smartFilterPublisher" type="search" placeholder="Publisher"></label>
     <div class="extras"><button type="button" class="primary" id="applySmartFilters">Apply smart filters</button></div>
-    <details class="advanced-search-help"><summary>Advanced search help</summary><p class="description">Use typed tokens in search: <code>developer:"Name"</code>, <code>publisher:"Name"</code>, <code>favorite:yes</code>, <code>installed:yes</code>, <code>progress:Playing</code>, <code>import_batch_id:"id"</code>. Prefix with <code>-</code> to exclude.</p></details>`;
+    <details class="advanced-search-help"><summary>Advanced search help</summary><p class="description">Use typed tokens in search: <code>developer:"Name"</code>, <code>publisher:"Name"</code>, <code>favorite:yes</code>, <code>installed:yes</code>, <code>progress:Playing</code>, <code>import_batch_id:"id"</code>. Prefix with <code>-</code> to exclude. Click a filter once to include it, again to exclude it, and again to clear it.</p></details>`;
+  paintSmartButtons();
+  const sourceRule = AppState.smartFilterRules?.achievements_source;
+  const currentSource = Array.isArray(sourceRule) ? sourceRule[0] : sourceRule;
+  if (currentSource && achievementSources.has(currentSource)) {
+    $('smartAchievementSource').value = currentSource;
+    $('smartAchievementSourceExclude').checked = (AppState.filterExclusions?.achievements_source || []).includes(currentSource);
+  }
+  $('applyAchievementSource').onclick = () => {
+    const source = $('smartAchievementSource').value;
+    leaveActivePreset();
+    delete AppState.smartFilterRules.achievements_source;
+    const exclusions = [...(AppState.filterExclusions?.achievements_source || [])];
+    const index = exclusions.indexOf(source);
+    if (!source) {
+      setFilterExclusions('achievements_source', []);
+    } else if ($('smartAchievementSourceExclude').checked) {
+      if (index < 0) exclusions.push(source);
+      setFilterExclusions('achievements_source', exclusions);
+    } else {
+      if (index >= 0) exclusions.splice(index, 1);
+      setFilterExclusions('achievements_source', exclusions);
+      AppState.smartFilterRules.achievements_source = source;
+    }
+    invalidateFilterCache();
+    render();
+  };
   body.querySelectorAll('[data-smart-filter]').forEach(button => {
-    const key = button.dataset.smartFilter;
-    const actions = {
-      favorite: () => { $('view').value = 'favorites'; },
-      installed: () => { $('view').value = 'installed'; },
-      progress: () => { $('view').value = 'playing'; },
-      save: () => { $('view').value = 'saves'; },
-      achievement: () => { ensureSmartFilterRules().has_achievements = true; },
-      'missing-media': () => { ensureSmartFilterRules().has_missing_media = true; },
-      'high-score': () => { ensureSmartFilterRules().has_highscores = true; },
-    };
     button.onclick = () => {
       leaveActivePreset();
-      actions[key]?.();
+      const value = button.dataset.smartValue === 'true' ? true : button.dataset.smartValue;
+      cycleSmartFilter(button.dataset.smartFilter, value);
+      paintSmartButtons();
       render();
-      drawer.close();
     };
   });
   $('applySmartFilters').onclick = () => {
     leaveActivePreset();
     const dev = $('smartFilterDeveloper')?.value.trim();
     const pub = $('smartFilterPublisher')?.value.trim();
+    const field = $('smartFilterTextField')?.value;
+    const op = $('smartFilterTextOp')?.value;
+    const values = ($('smartFilterTextValues')?.value || '').split(',').map(value => value.trim()).filter(Boolean);
+    if (values.length && field) AppState.smartFilterRules[field] = {op, values};
     const parts = [];
     if (dev) parts.push(`developer:"${dev.replace(/"/g, '')}"`);
     if (pub) parts.push(`publisher:"${pub.replace(/"/g, '')}"`);
     if (parts.length) $('sidebarSearch').value = parts.join(' ');
+    invalidateFilterCache();
     drawer.close();
     render();
   };
   if (openBtn) openBtn.onclick = () => drawer.showModal();
   if ($('closeFilterDrawer')) $('closeFilterDrawer').onclick = () => drawer.close();
 }
-async function updateActivePreset() {
-  const name = AppState.activeFilterPreset;
-  if (!name) return;
-  const preset = AppState.filterPresets.find(item => item.name === name);
+function liveFilterRules() {
   const rules = {
     platform: AppState.platform,
     platform_category: AppState.platformCategory,
@@ -531,7 +679,19 @@ async function updateActivePreset() {
     query: $('sidebarSearch').value.trim(),
     esrb: $('esrbFilter')?.value || '',
     progress: AppState.explorerRules.progress || ($('view').value === 'playing' ? 'Playing' : ''),
+    ...AppState.smartFilterRules,
   };
+  const source = $('sourceFilter')?.value || '';
+  const excludedSources = new Set((AppState.filterExclusions?.source || []).map(value => String(value).toLowerCase()));
+  if (source && !excludedSources.has(source.toLowerCase())) rules.source = source;
+  if (Object.keys(AppState.filterExclusions || {}).length) rules.exclude = {...AppState.filterExclusions};
+  return rules;
+}
+async function updateActivePreset() {
+  const name = AppState.activeFilterPreset;
+  if (!name) return;
+  const preset = AppState.filterPresets.find(item => item.name === name);
+  const rules = liveFilterRules();
   try {
     await api('/api/filter-presets', {method: 'POST', body: JSON.stringify({name, rules, bigbox_quick: preset?.bigbox_quick || false})});
     await refresh();
@@ -543,7 +703,7 @@ function renderQueryChips() {
   if (!container) return;
   const state = effectiveQueryState();
   const chips = [];
-  const addChip = (key, label, remove) => chips.push(`<button type="button" class="platform query-chip" data-chip-remove="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(label)}">${escapeHtml(label)} ×</button>`);
+  const addChip = (key, label, remove, excludeField = '') => chips.push(`<button type="button" class="platform query-chip" data-chip-remove="${escapeHtml(key)}"${excludeField ? ` data-exclude-field="${escapeHtml(excludeField)}"` : ''} aria-label="Remove ${escapeHtml(label)}">${escapeHtml(label)} ×</button>`);
   if (state.preset) addChip('preset', `Preset: ${state.preset}`, () => { AppState.activeFilterPreset = ''; });
   if (state.playlist) addChip('playlist', `Playlist: ${state.playlist}`, () => { AppState.activePlaylist = ''; });
   if (state.platform !== 'all') addChip('platform', `Platform: ${state.platform}`, () => { AppState.platform = 'all'; });
@@ -571,6 +731,20 @@ function renderQueryChips() {
   if (state.smart.has_achievements) addChip('smart_achievements', 'Achievements', () => { delete AppState.smartFilterRules.has_achievements; });
   if (state.smart.has_missing_media) addChip('smart_missing_media', 'Missing media', () => { delete AppState.smartFilterRules.has_missing_media; });
   if (state.smart.has_highscores) addChip('smart_highscores', 'High scores', () => { delete AppState.smartFilterRules.has_highscores; });
+  Object.entries(state.smart).forEach(([field, value]) => {
+    if (['has_achievements', 'has_missing_media', 'has_highscores'].includes(field)) return;
+    addChip(`smart:${field}`, `${field}: ${filterValueLabel(value)}`, () => { delete AppState.smartFilterRules[field]; });
+  });
+  Object.entries(state.exclude).forEach(([field, raw]) => {
+    (Array.isArray(raw) ? raw : [raw]).forEach((value, index) => {
+      addChip(`exclude:${field}:${index}`, `Not ${field}: ${filterValueLabel(value)}`, null, field);
+    });
+  });
+  Object.entries(state.presetExclude).forEach(([field, raw]) => {
+    (Array.isArray(raw) ? raw : [raw]).forEach((value, index) => {
+      addChip(`preset-exclude:${field}:${index}`, `Preset not ${field}: ${filterValueLabel(value)}`, null, field);
+    });
+  });
   const hasFilters = chips.length > 0;
   const actions = [];
   if (state.preset) actions.push('<button type="button" class="platform query-chip" id="updateActivePreset">Update preset</button>');
@@ -593,9 +767,27 @@ function renderQueryChips() {
     } catch (error) { notify(error.message); }
   };
   container.querySelectorAll('[data-chip-remove]').forEach(button => {
-    button.onclick = () => {
-      leaveActivePreset();
+    button.onclick = async () => {
       const key = button.dataset.chipRemove;
+      if (key.startsWith('preset-exclude:')) {
+        const preset = AppState.filterPresets.find(item => item.name === AppState.activeFilterPreset);
+        const [, field, index] = key.split(':');
+        if (!preset) return;
+        const rules = JSON.parse(JSON.stringify(preset.rules || {}));
+        const rawValues = rules.exclude?.[field];
+        const values = Array.isArray(rawValues) ? [...rawValues] : rawValues === undefined ? [] : [rawValues];
+        values.splice(Number(index), 1);
+        if (values.length) rules.exclude[field] = values;
+        else delete rules.exclude[field];
+        if (!Object.keys(rules.exclude || {}).length) delete rules.exclude;
+        try {
+          await api('/api/filter-presets', { method: 'POST', body: JSON.stringify({ name: preset.name, rules, bigbox_quick: preset.bigbox_quick || false }) });
+          await refresh();
+          render();
+        } catch (error) { notify(error.message); }
+        return;
+      }
+      leaveActivePreset();
       if (key === 'preset') AppState.activeFilterPreset = '';
       else if (key === 'playlist') AppState.activePlaylist = '';
       else if (key === 'platform') AppState.platform = 'all';
@@ -608,6 +800,14 @@ function renderQueryChips() {
       else if (key === 'smart_achievements') delete AppState.smartFilterRules.has_achievements;
       else if (key === 'smart_missing_media') delete AppState.smartFilterRules.has_missing_media;
       else if (key === 'smart_highscores') delete AppState.smartFilterRules.has_highscores;
+      else if (key.startsWith('smart:')) delete AppState.smartFilterRules[key.slice(6)];
+      else if (key.startsWith('exclude:')) {
+        const [, field, index] = key.split(':');
+        const rawValues = AppState.filterExclusions[field];
+        const values = Array.isArray(rawValues) ? [...rawValues] : rawValues === undefined ? [] : [rawValues];
+        values.splice(Number(index), 1);
+        setFilterExclusions(field, values);
+      }
       render();
     };
   });
@@ -644,6 +844,8 @@ function markFilterAria() {
       AppState.filterPresets = state.filter_presets || state.settings?.filter_presets || AppState.appSettings.filter_presets || [];
       AppState.smartCollections = state.smart_collections || [];
       AppState.raConfigured = state.ra_configured;
+      AppState.startupErrors = Array.isArray(state.startup_errors) ? state.startup_errors : [];
+      AppState.sourceLabels = state.source_labels && typeof state.source_labels === 'object' ? state.source_labels : {};
       AppState.appSettings = state.settings || AppState.appSettings;
       AppState.mediaEpoch = state.media_epoch || 0;
       AppState._refreshCounter = (AppState._refreshCounter || 0) + 1;
@@ -657,7 +859,11 @@ function markFilterAria() {
       applyStoredSort();
       dispatchStateRefreshed();
       if ($('insightsPanel')) $('insightsPanel').hidden = !AppState.games.length;
-      if (!AppState.appSettings.welcome_completed && !AppState.games.length && !AppState.setupDismissed) openSetupCenter();
+      // Let the boot turn paint the startup-error banner before a modal
+      // setup dialog takes the top layer.
+      if (!AppState.appSettings.welcome_completed && !AppState.games.length && !AppState.setupDismissed) {
+        setTimeout(() => openSetupCenter(), 0);
+      }
       setTimeout(() => { try { warmSearchIndex(); } catch(error) { AppState.searchIndexError = error.message; } }, 0);
       const fingerprint = `${AppState.games.length}:${AppState.games[0]?.id || ''}:${AppState.games.at(-1)?.id || ''}`;
       if (lastFacetsFingerprint !== fingerprint) {
@@ -732,15 +938,49 @@ function markFilterAria() {
       });
       const items = [['all',`All (${AppState.games.length})`], ...[...counts].sort((a,b) => a[0].localeCompare(b[0])).map(([name,count]) => [name,`${name} (${count})`])];
       if (!$('platformCategories')) return;
-      $('platformCategories').innerHTML = items.map(([value,label]) => `<button class="platform ${AppState.platformCategory === value ? 'active' : ''}" data-platform-category="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join('');
-      document.querySelectorAll('[data-platform-category]').forEach(button => button.onclick = () => { leaveActivePreset(); AppState.activePlaylist = ''; AppState.platformCategory = button.dataset.platformCategory; AppState.selectedId = null; render(); loadTheme(); });
+      const excluded = new Set(AppState.filterExclusions.platform_category || []);
+      $('platformCategories').innerHTML = items.map(([value,label]) => {
+        const active = AppState.platformCategory === value;
+        const isExcluded = excluded.has(value);
+        return `<button class="platform ${active ? 'active is-included' : ''} ${isExcluded ? 'is-excluded' : ''}" data-platform-category="${escapeHtml(value)}" aria-pressed="${isExcluded ? 'mixed' : active ? 'true' : 'false'}">${escapeHtml(label)}</button>`;
+      }).join('');
+      document.querySelectorAll('[data-platform-category]').forEach(button => button.onclick = () => {
+        leaveActivePreset();
+        AppState.activePlaylist = '';
+        AppState.selectedId = null;
+        const value = button.dataset.platformCategory;
+        if (value === 'all') {
+          AppState.platformCategory = 'all';
+          setFilterExclusions('platform_category', []);
+        } else {
+          cycleSingleFilter('platform_category', value);
+        }
+        render(); loadTheme();
+      });
     }
     function renderPlatforms() {
       const counts = new Map();
       AppState.games.forEach(game => counts.set(game.platform || 'Unspecified', (counts.get(game.platform || 'Unspecified') || 0) + 1));
       const items = [['all',`All (${AppState.games.length})`], ...[...counts].sort((a,b) => a[0].localeCompare(b[0])).map(([name,count]) => [name,`${name} (${count})`])];
-      $('platforms').innerHTML = items.map(([value,label]) => `<button class="platform ${AppState.platform === value ? 'active' : ''}" data-platform="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join('');
-      $('platforms').querySelectorAll('[data-platform]').forEach(button => button.onclick = () => { leaveActivePreset(); AppState.activePlaylist = ''; AppState.platform = button.dataset.platform; AppState.selectedId = null; render(); loadTheme(); });
+      const excluded = new Set(AppState.filterExclusions.platform || []);
+      $('platforms').innerHTML = items.map(([value,label]) => {
+        const active = AppState.platform === value;
+        const isExcluded = excluded.has(value);
+        return `<button class="platform ${active ? 'active is-included' : ''} ${isExcluded ? 'is-excluded' : ''}" data-platform="${escapeHtml(value)}" aria-pressed="${isExcluded ? 'mixed' : active ? 'true' : 'false'}">${escapeHtml(label)}</button>`;
+      }).join('');
+      $('platforms').querySelectorAll('[data-platform]').forEach(button => button.onclick = () => {
+        leaveActivePreset();
+        AppState.activePlaylist = '';
+        AppState.selectedId = null;
+        const value = button.dataset.platform;
+        if (value === 'all') {
+          AppState.platform = 'all';
+          setFilterExclusions('platform', []);
+        } else {
+          cycleSingleFilter('platform', value);
+        }
+        render(); loadTheme();
+      });
     }
     function renderPlaylists() {
       $('playlists').innerHTML = AppState.playlists.length ? AppState.playlists.map(item => `<div class="playlist-row"><button class="platform ${AppState.activePlaylist === item.name ? 'active' : ''}" data-playlist="${escapeHtml(item.name)}">${escapeHtml(item.name)} <small>${item.type === 'manual' ? `(${(item.members || []).length})` : '↻'}</small></button><button class="playlist-delete" data-delete-playlist="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '<span class="description">Create a playlist to pin one here.</span>';
@@ -818,13 +1058,15 @@ function markFilterAria() {
         if (available) return `<div class="cover manual-tile" data-manual-tile="${game.id}" role="button" tabindex="0" aria-label="Open manual for ${escapeHtml(game.name)}"><div class="cover-title">Manual</div></div>`;
         return `<div class="cover-title">${escapeHtml(game.name)}</div>`;
       }
-      if (available) {
+      if (available || imageGroup === 'cover') {
         const index = imageGroup === 'screenshot' ? game.available_screenshots[0] : '';
         // Reserve the box before the image arrives (known ratio, else the portrait default) so the card
         // does not collapse to zero height and jump when the cover loads; the shimmer is then actually visible.
         const ratio = Number(AppState.coverRatios[game.id]);
-        const reserve = ratio > 0.2 && ratio < 5 ? ratio.toFixed(3) : '0.72';
-        return `<img class="cover-skeleton" style="aspect-ratio:${reserve}" src="${media(game,imageGroup,index)}" alt="" loading="lazy" decoding="async" data-gid="${game.id}">`;
+        const reserve = !available && imageGroup === 'cover' ? '0.75' : ratio > 0.2 && ratio < 5 ? ratio.toFixed(3) : '0.72';
+        const fallback = available ? '' : ' cover-placeholder';
+        const source = imageGroup === 'cover' ? coverSource(game) : media(game,imageGroup,index);
+        return `<img class="cover-skeleton${fallback}" style="aspect-ratio:${reserve}" src="${source}" alt="" loading="lazy" decoding="async" data-gid="${game.id}">`;
       }
       return `<div class="cover-title">${escapeHtml(game.name)}</div>`;
     }
@@ -981,6 +1223,21 @@ function markFilterAria() {
       renderGrid({ fromScroll: true });
       document.querySelector(`[data-game="${id}"]`)?.focus();
       return id;
+    }
+    function focusSelectedGame() {
+      if ($('bigBox') && !$('bigBox').hidden) return false;
+      if (document.querySelector('dialog[open]')) return false;
+      const active = document.activeElement;
+      if (active && active !== document.body && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) return false;
+      const ids = visibleGameIds();
+      if (!ids.length) return false;
+      const id = ids.includes(AppState.selectedId) ? AppState.selectedId : ids[0];
+      const card = document.querySelector(`[data-game="${id}"]`);
+      if (card) {
+        card.focus({ preventScroll: true });
+        return true;
+      }
+      return focusGameIndex(ids.indexOf(id)) !== null;
     }
     function measureGridLayout() {
       const grid = $('grid');
@@ -1253,9 +1510,11 @@ function markFilterAria() {
         <div class="detail-body">
           <div class="detail-tabs" role="tablist" aria-label="${escapeHtml(t('moments.detail_tabs'))}"><button type="button" class="detail-tab active" id="detailsOverviewTab" role="tab" aria-selected="true" aria-controls="detailsOverview">${escapeHtml(t('moments.overview'))}</button><button type="button" class="detail-tab" id="momentsTab" role="tab" aria-selected="false" aria-controls="detailsMoments">${escapeHtml(t('moments.tab'))}${game.moments_count ? ` <span class="tab-count">${escapeHtml(String(game.moments_count))}</span>` : ''}</button><button type="button" class="detail-tab" id="storyTab" role="tab" aria-selected="false" aria-controls="detailsStory">Story</button></div>
           <section class="detail-tab-panel" id="detailsOverview" role="tabpanel" aria-labelledby="detailsOverviewTab">
+          <div class="detail-model">${renderCoverModel(game)}</div>
           <div class="rating"><strong>${game.favorite ? '★ Favorite' : game.rating ? `${game.rating} ★` : 'Library'}</strong><span>${escapeHtml(game.progress || game.genre || '')}</span><span class="badge-row">${renderBadges(game)}</span></div>
-          <button class="play" id="playButton" ${shelfEntry ? '' : game.path_exists && game.store_installed !== false ? '' : game.gameyfin_id && !game.store_installed ? '' : 'disabled'}>${shelfEntry ? 'SET UP LAUNCH' : game.gameyfin_id && !game.store_installed ? '⬇ INSTALL' : '▶ PLAY'}</button>
-          <div class="detail-actions"><span id="resumeActionSlot" class="resume-action-slot"></span><button class="icon-button" id="momentsButton">${escapeHtml(t('moments.tab'))}</button><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">${shelfEntry ? 'Edit shelf entry' : 'Edit metadata'}</button>${shelfEntry ? '<button class="icon-button" id="convertShelfButton">Set up launch</button>' : ''}<button class="icon-button" id="databaseMetadataButton">Find metadata</button><button class="icon-button" id="dnaMoreLikeThis">${escapeHtml(t('dna.more_like_this'))}</button>${game.steam_app_id ? '<button class="icon-button" id="steamMetadataButton">Use Steam data</button>' : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="uninstallGameyfin">Uninstall Gameyfin copy</button>' : ''}${game.path ? '<button class="icon-button" id="showInFolderButton">Show in folder</button>' : ''}<button class="icon-button" id="removeGameButton">Remove game</button></div>
+          <button class="play" id="playButton" ${shelfEntry ? '' : game.steam_installable ? '' : game.path_exists && game.store_installed !== false ? '' : game.gameyfin_id && !game.store_installed ? '' : 'disabled'}>${shelfEntry ? 'SET UP LAUNCH' : game.steam_installable ? '⬇ INSTALL' : game.gameyfin_id && !game.store_installed ? '⬇ INSTALL' : '▶ PLAY'}</button>
+          <div class="extras">${game.steam_repairable ? '<button class="icon-button" id="steamRepair">Verify Steam files</button>' : ''}</div>
+          <div class="detail-actions"><span id="resumeActionSlot" class="resume-action-slot"></span><button class="icon-button" id="momentsButton">${escapeHtml(t('moments.tab'))}</button><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">${shelfEntry ? 'Edit shelf entry' : 'Edit metadata'}</button>${shelfEntry ? '<button class="icon-button" id="convertShelfButton">Set up launch</button>' : ''}<button class="icon-button" id="popoutDetailsButton">Pop out</button><button class="icon-button" id="databaseMetadataButton">Find metadata</button><button class="icon-button" id="dnaMoreLikeThis">${escapeHtml(t('dna.more_like_this'))}</button>${game.steam_app_id ? '<button class="icon-button" id="steamMetadataButton">Use Steam data</button>' : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="uninstallGameyfin">Uninstall Gameyfin copy</button>' : ''}${game.path ? '<button class="icon-button" id="showInFolderButton">Show in folder</button>' : ''}<button class="icon-button" id="removeGameButton">Remove game</button></div>
           <div class="detail-card"><h3>Information</h3><div class="facts">
             ${fact('Release date',game.year)}${fact('Developer',game.developer)}${fact('Publisher',game.publisher)}${fact('ESRB',game.esrb)}${fact('Source',game.source)}${fact('Category',platformCategoryFor(game))}${Object.entries(game.custom_fields || {}).map(([key,value]) => fact(key,value)).join('')}${fact('Max players',game.max_players)}${fact('Controller support',game.controller_support)}${fact('Disc count',game.disc_count)}${fact('Play time',duration(game.playtime_seconds))}${fact('Time to beat',game.time_to_beat_hours != null && game.time_to_beat_hours !== '' ? `${game.time_to_beat_hours} h` : '')}
             ${fact('Launches',game.play_count)}${fact('Last played',game.last_played ? game.last_played.replace('T',' ') : '')}${fact('Progress',game.progress)}${fact('Rating',game.rating ? `${game.rating} / 5` : '')}${fact('Region',game.region)}${fact('Play mode',game.play_mode)}${fact('Wikipedia',game.wikipedia_url)}${fact('Video URL',game.video_url)}${(() => { const links = gameLinks(game); return links ? `<div class="fact"><small>Links</small><span>${links}</span></div>` : ''; })()}
@@ -1286,11 +1545,14 @@ function markFilterAria() {
           ${screenshots.length ? `<div class="detail-card"><h3>Screenshots</h3><div class="screenshot-grid">${screenshots.map(index => `<button data-screenshot="${index}" aria-label="Open screenshot ${index + 1}"><img src="${media(game,'screenshot',index)}" alt="" loading="lazy" decoding="async"></button>`).join('')}</div></div>` : ''}
           ${renderArtwork(game)}
           <div class="detail-card"><h3>Related Games</h3><div class="related-grid" id="relatedGames"><span class="description">Finding matches...</span></div></div>
-          ${AppState.raConfigured ? `<div class="detail-card"><h3>RetroAchievements</h3><div id="achievementContent"><p class="description">${game.ra_game_id ? `Matched to game ${escapeHtml(game.ra_game_id)}.` : 'Match this ROM to load achievements.'}</p><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}<button class="icon-button" id="openBrowser">Open Wikipedia</button></div><button class="icon-button" id="loadAchievements">Load achievements</button><div id="achievementStats"></div></div></div>` : ''}
-          <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${savePaths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${AppState.appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}${game.platform === 'Arcade' || game.rom_name ? '<button class="icon-button" id="exportHighscores">Export high scores</button>' : ''}</div><div class="description" id="saveDiscovery">${savePaths.length ? `${savePaths.length} configured location${savePaths.length === 1 ? '' : 's'}` : 'No save location configured.'}${AppState.appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
+          <div class="detail-card"><h3>Achievements</h3><div id="achievementContent"></div><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}${AppState.raConfigured || game.ra_game_id ? '<button class="icon-button" id="loadAchievements">Match ROM / load RetroAchievements</button>' : ''}</div></div>
+          ${game.platform === 'Arcade' || game.rom_name ? `<div class="detail-card"><h3>High scores</h3><div class="extras"><button class="icon-button" id="loadHighscores">Show table</button><button class="icon-button" id="exportHighscores">Export high scores</button><button class="icon-button" id="importHighscores">Import high scores</button></div><div class="description" id="highscoreTable">Parse MAME .hi files with hi2txt.</div></div>` : ''}
+          <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${savePaths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="saveHistory">Version history</button><button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${AppState.appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}</div><label class="field"><span>State slot</span><input id="resumeSlot" maxlength="32" pattern="[A-Za-z0-9_-]{1,32}" placeholder="Default slot" value="${escapeHtml(game.resume_slot || '')}"></label><div class="description" id="saveDiscovery">${savePaths.length ? `${savePaths.length} configured location${savePaths.length === 1 ? '' : 's'}` : 'No save location configured.'}${AppState.appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
           <div class="detail-card doctor-card" id="doctorCard" style="border:1px solid var(--border-card)"><h3>Launch Doctor</h3><div id="doctorChecks" class="description">Checking launch readiness…</div></div>
           </section><section class="detail-tab-panel" id="detailsMoments" role="tabpanel" aria-labelledby="momentsTab" hidden><div id="momentsPanel"></div></section><section class="detail-tab-panel" id="detailsStory" role="tabpanel" aria-labelledby="storyTab" hidden><div id="storyPanel"></div></section>
         </div>`;
+      bindCoverModel($('details'));
+      if (AppState.appSettings.save_management_enabled === false) $('discoverSaves')?.closest('.detail-card')?.remove();
       const overviewTab = $('detailsOverviewTab');
       const momentsTab = $('momentsTab');
       const storyTab = $('storyTab');
@@ -1309,6 +1571,7 @@ function markFilterAria() {
       momentsTab?.addEventListener('click', () => selectDetailTab('moments'));
       storyTab?.addEventListener('click', () => selectDetailTab('story'));
       $('momentsButton')?.addEventListener('click', () => selectDetailTab('moments'));
+      if ($('popoutDetailsButton')) $('popoutDetailsButton').onclick = () => openDetailsPopup(game.game_id || game.id);
       mountResumeAffordance(game, $('resumeActionSlot'));
       $('playButton').onclick = async () => {
         if (shelfEntry) {
@@ -1322,8 +1585,15 @@ function markFilterAria() {
           } catch(error) { notify(error.message); }
           return;
         }
-        if (game.gameyfin_id && !game.store_installed) installGameyfin(game);
+        if (game.steam_installable) {
+          try { await api('/api/game/store-action', { method: 'POST', body: JSON.stringify({ id: game.id, game_id: game.game_id, action: 'install' }) }); notify(t('notify.app.steam_install_queued')); }
+          catch (error) { notify(error.message); }
+        } else if (game.gameyfin_id && !game.store_installed) installGameyfin(game);
         else launch(game.id, $('playButton'));
+      };
+      if ($('steamRepair')) $('steamRepair').onclick = async () => {
+        try { await api('/api/game/store-action', { method: 'POST', body: JSON.stringify({ id: game.id, game_id: game.game_id, action: 'repair' }) }); notify(t('notify.app.steam_verify_queued')); }
+        catch (error) { notify(error.message); }
       };
       $('favoriteButton').onclick = () => favorite(game.id);
       $('editButton').onclick = () => openGameDialog(game);
@@ -1336,17 +1606,20 @@ function markFilterAria() {
       if ($('downloadBezel')) $('downloadBezel').onclick = () => downloadBezel(game.platform);
       if ($('uninstallGameyfin')) $('uninstallGameyfin').onclick = () => uninstallGameyfin(game);
       if ($('exportHighscores')) $('exportHighscores').onclick = async () => { try { const result = await api('/api/highscores/export',{method:'POST',body:JSON.stringify({id:game.id})}); notify(t('notify.library.high_scores_exported', {count: result.files.length})); } catch(error) { notify(error.message); } };
+      if ($('loadHighscores')) $('loadHighscores').onclick = async () => { try { const result = await api(`/api/v2/highscores/table?id=${game.id}`); $('highscoreTable').innerHTML = result.parsed ? `<input type="search" id="highscoreSearch" placeholder="Search scores" aria-label="Search scores"><table><thead><tr><th>Rank</th><th>Score</th><th>Name</th></tr></thead><tbody>${result.scores.map(row => `<tr><td>${escapeHtml(String(row.rank ?? ''))}</td><td>${escapeHtml(String(row.score ?? ''))}</td><td>${escapeHtml(row.name || '')}</td></tr>`).join('')}</tbody></table>` : escapeHtml(result.message || 'Not parsed (install hi2txt).'); if ($('highscoreSearch')) $('highscoreSearch').oninput = () => { const query = $('highscoreSearch').value.trim().toLowerCase(); document.querySelectorAll('#highscoreTable tbody tr').forEach(row => { row.hidden = Boolean(query) && !row.textContent.toLowerCase().includes(query); }); }; } catch(error) { notify(error.message); } };
+      if ($('importHighscores')) $('importHighscores').onclick = async () => { const path = await nativePickFile('Choose a MAME high score file'); if (!path) return; try { const result = await api('/api/highscores/import',{method:'POST',body:JSON.stringify({id:game.id,path})}); notify(`${result.restored.length} high score file(s) imported`); } catch(error) { notify(error.message); } };
       if ($('showInFolderButton')) $('showInFolderButton').onclick = () => nativeReveal(game.path);
       $('removeGameButton').onclick = () => removeGame(game.id,game.name);
       document.querySelectorAll('[data-extra]').forEach(button => button.onclick = () => {
         const [kind,index] = button.dataset.extra.split(':');
         launchExtra(game.id,kind,Number(index));
       });
-      document.querySelectorAll('[data-screenshot]').forEach(button => button.onclick = () => openLightbox(game, 'screenshot', Number(button.dataset.screenshot)));
-      document.querySelectorAll('[data-artwork]').forEach(button => button.onclick = () => openLightbox(game, button.dataset.artwork, 0));
+      document.querySelectorAll('[data-screenshot]').forEach(button => button.onclick = () => openLightbox(game, 'screenshot', Number(button.dataset.screenshot), { fullscreen: true }));
+      document.querySelectorAll('[data-artwork]').forEach(button => button.onclick = () => openLightbox(game, button.dataset.artwork, 0, { fullscreen: true }));
       document.querySelectorAll('[data-manual]').forEach(button => button.onclick = () => openManualReader(game));
       document.querySelectorAll('[data-manual-tile]').forEach(button => button.onclick = () => openManualReader(game));
       document.querySelectorAll('[data-document]').forEach(button => button.onclick = () => openReader(game, Number(button.dataset.document)));
+      if ($('achievementContent')) renderAchievementTabs($('achievementContent'), game);
       if ($('loadAchievements')) $('loadAchievements').onclick = () => loadAchievements(game.id);
       if ($('downloadTrailer')) $('downloadTrailer').onclick = async () => { try { await api('/api/metadata/trailer',{method:'POST',body:JSON.stringify({id:game.id,game_id:game.game_id})}); await refresh(); renderDetails(); notify(t('notify.library.steam_trailer_downloaded')); } catch(error) { notify(error.message); } };
       if ($('downloadGogMedia')) $('downloadGogMedia').onclick = async () => { try { await api('/api/metadata/gog',{method:'POST',body:JSON.stringify({id:game.id,game_id:game.game_id})}); await refresh(); renderDetails(); notify(t('notify.library.gog_media_downloaded')); } catch(error) { notify(error.message); } };
@@ -1355,10 +1628,22 @@ function markFilterAria() {
         $('backupSaves').onclick = () => backupSaves(game.id);
         loadBackups(game.id);
       }
+      if ($('saveHistory')) $('saveHistory').onclick = () => openSaveHistory(game.id);
       if ($('ludusaviBackup')) $('ludusaviBackup').onclick = () => ludusaviAction(game.id, 'backup');
       if ($('ludusaviRestore')) $('ludusaviRestore').onclick = () => ludusaviAction(game.id, 'restore');
       if ($('hoardBackup')) $('hoardBackup').onclick = () => hoardAction(game.id, 'backup');
-      $('discoverSaves').onclick = () => discoverSaves(game.id);
+      if ($('discoverSaves')) $('discoverSaves').onclick = () => discoverSaves(game.id);
+      if ($('resumeSlot')) $('resumeSlot').onchange = async event => {
+        try {
+          const result = await api('/api/v2/resume/slot', { method: 'POST', body: JSON.stringify({ id: game.id, game_id: game.game_id, slot: event.target.value.trim() }) });
+          game.resume_slot = result.slot || '';
+          event.target.value = game.resume_slot;
+          notify(t('notify.library.resume_slot_saved'));
+        } catch (error) {
+          event.target.value = game.resume_slot || '';
+          notify(error.message);
+        }
+      };
       const detailsController = beginDetailsRequest();
       loadRelated(game.id, detailsController);
       loadDoctor(game, detailsController);
@@ -1569,7 +1854,7 @@ function markFilterAria() {
         } catch (error) { notify(error.message); }
       });
     }
-    function render() { renderQueryChips(); renderPlatformCategories(); renderPlatforms(); renderPlaylists(); renderFilterPresets(); renderSmartCollections(); renderGrid(); renderDetails(); markFilterAria(); applyDetailsLayout(); applySidebarVisibility(); syncHash(); $('status').textContent = `${AppState.games.length} games · local library`; }
+    function render() { renderQueryChips(); renderPlatformCategories(); renderPlatforms(); renderSourceFilter(); bindSourceFilter(); renderPlaylists(); renderFilterPresets(); renderSmartCollections(); renderGrid(); renderDetails(); markFilterAria(); renderFilterButtonTooltip(); applyDetailsLayout(); applySidebarVisibility(); syncHash(); $('status').textContent = `${AppState.games.length} games · local library`; }
     function collectionStats(items) {
       const completed = items.filter(game => ['Beaten','Completed','Mastered'].includes(game.progress)).length;
       const playtime = items.reduce((total, game) => total + Number(game.total_playtime_seconds || game.playtime_seconds || 0), 0);
@@ -1696,13 +1981,37 @@ function markFilterAria() {
     }
 
     // ── End backlog management ─────────────────────────────────────────
+    const BIGBOX_HIDDEN_KEYS = { Platform: 'platforms', Category: 'categories', Playlist: 'playlists' };
+    function bigBoxHiddenControl(kind, name) {
+      const key = BIGBOX_HIDDEN_KEYS[kind] || 'platforms';
+      const hidden = (AppState.appSettings[`bigbox_hidden_${key}`] || []).includes(name);
+      return `<div class="detail-card"><h3>Big Box</h3><label class="check"><input type="checkbox" data-bigbox-hidden="${key}" data-bigbox-hidden-name="${escapeHtml(name)}" ${hidden ? 'checked' : ''}> Hide this ${kind.toLowerCase()} from Big Box</label></div>`;
+    }
+    function bindBigBoxHiddenControls() {
+      document.querySelectorAll('[data-bigbox-hidden]').forEach(input => {
+        input.onchange = async () => {
+          const key = `bigbox_hidden_${input.dataset.bigboxHidden}`;
+          const list = new Set(AppState.appSettings[key] || []);
+          if (input.checked) list.add(input.dataset.bigboxHiddenName);
+          else list.delete(input.dataset.bigboxHiddenName);
+          try {
+            AppState.appSettings = await api('/api/settings', { method: 'POST', body: JSON.stringify({ [key]: [...list] }) });
+            notify(t('notify.settings.saved'));
+          } catch (error) {
+            input.checked = !input.checked;
+            notify(error.message);
+          }
+        };
+      });
+    }
     function renderCollectionDetails(title, items, kind) {
       const lastPlayed = [...items].filter(game => game.last_played).sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)))[0];
       const mostPlayed = [...items].sort((a,b) => Number(b.play_count || 0) - Number(a.play_count || 0))[0];
       const random = items[Math.floor(Math.random() * items.length)];
-      $('details').innerHTML = `<div class="platform-panel"><div class="hero-kicker">${escapeHtml(kind)}</div><h2>${escapeHtml(title)}</h2><p class="description">${items.length} game${items.length === 1 ? '' : 's'} in this view.</p>${collectionStats(items)}<div class="detail-card"><h3>Quick actions</h3><div class="extras">${random ? `<button class="primary" id="playRandomCollection">Play random</button>` : ''}${lastPlayed ? `<button class="icon-button" data-collection-game="${lastPlayed.id}">Last played · ${escapeHtml(lastPlayed.name)}</button>` : ''}${mostPlayed ? `<button class="icon-button" data-collection-game="${mostPlayed.id}">Most played · ${escapeHtml(mostPlayed.name)}</button>` : ''}</div></div><div class="detail-card"><h3>Featured games</h3><div class="related-grid">${items.slice(0,8).map(game => `<button class="related-game" data-collection-game="${game.id}" title="${escapeHtml(game.name)}">${escapeHtml(game.name)}</button>`).join('') || '<span class="description">No games found.</span>'}</div></div></div>`;
+      $('details').innerHTML = `<div class="platform-panel"><div class="hero-kicker">${escapeHtml(kind)}</div><h2>${escapeHtml(title)}</h2><p class="description">${items.length} game${items.length === 1 ? '' : 's'} in this view.</p>${collectionStats(items)}${bigBoxHiddenControl(kind, title)}<div class="detail-card"><h3>Quick actions</h3><div class="extras">${random ? `<button class="primary" id="playRandomCollection">Play random</button>` : ''}${lastPlayed ? `<button class="icon-button" data-collection-game="${lastPlayed.id}">Last played · ${escapeHtml(lastPlayed.name)}</button>` : ''}${mostPlayed ? `<button class="icon-button" data-collection-game="${mostPlayed.id}">Most played · ${escapeHtml(mostPlayed.name)}</button>` : ''}</div></div><div class="detail-card"><h3>Featured games</h3><div class="related-grid">${items.slice(0,8).map(game => `<button class="related-game" data-collection-game="${game.id}" title="${escapeHtml(game.name)}">${escapeHtml(game.name)}</button>`).join('') || '<span class="description">No games found.</span>'}</div></div></div>`;
       if (random) $('playRandomCollection').onclick = () => launch(random.id);
       document.querySelectorAll('[data-collection-game]').forEach(button => button.onclick = () => selectGame(Number(button.dataset.collectionGame)));
+      bindBigBoxHiddenControls();
     }
     async function renderPlatformDetails(platformName) {
       const count = AppState.games.filter(game => (game.platform || 'Unspecified') === platformName).length;
@@ -1714,7 +2023,97 @@ function markFilterAria() {
       } catch(error) {
         documents = AppState.appSettings.platform_documents?.[platformName] || [];
       }
-      $('details').innerHTML = `<div class="platform-panel"><div class="hero-kicker">Platform</div><h2>${escapeHtml(platformName)}</h2><p class="description">${count} game${count === 1 ? '' : 's'} in this platform view.</p>${collectionStats(items)}<div class="detail-card"><h3>Platform documents</h3>${documents.length ? `<div class="extras">${documents.map((item,index) => `<button class="icon-button" data-platform-doc="${index}">${escapeHtml(item.name)}</button>`).join('')}</div>` : '<p class="description">No platform documents configured yet.</p>'}<div class="extras"><button class="icon-button" id="editPlatformDocuments">Edit platform documents</button></div></div><div class="detail-card"><h3>Platform shortcuts</h3><div class="extras"><button class="primary" id="platformRandom">Play random</button>${items.filter(game => game.last_played).sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)))[0] ? `<button class="icon-button" id="platformLast">Last played</button>` : ''}${items.sort((a,b) => Number(b.play_count || 0) - Number(a.play_count || 0))[0] ? `<button class="icon-button" id="platformMost">Most played</button>` : ''}</div></div></div>`;
+      const platformVideo = AppState.appSettings.platform_videos?.[platformName]
+        ? `<div class="detail-card"><h3>Platform video</h3><video class="platform-video" controls preload="metadata" src="/api/platform/video?platform=${encodeURIComponent(platformName)}&token=${encodeURIComponent(token)}"></video></div>`
+        : '';
+      $('details').innerHTML = `<div class="platform-panel"><div class="hero-kicker">Platform</div><h2>${escapeHtml(platformName)}</h2><p class="description">${count} game${count === 1 ? '' : 's'} in this platform view.</p>${collectionStats(items)}${bigBoxHiddenControl('Platform', platformName)}<div class="detail-card"><h3>Platform</h3><div class="extras"><button type="button" class="icon-button" id="platformRename">Rename platform</button><button type="button" class="icon-button" id="platformDelete">Delete platform</button></div></div><div class="detail-card"><h3>Emulator settings for this platform</h3><label class="field"><span>Adapter id, blank uses detection</span><input id="platformEmulatorAdapter" value="${escapeHtml(AppState.appSettings.emulator_platform_settings?.[platformName]?.adapter_id || '')}"></label><label class="field"><span>RetroArch core</span><input id="platformEmulatorCore" placeholder="snes9x_libretro.so" value="${escapeHtml(AppState.appSettings.emulator_platform_settings?.[platformName]?.retroarch_core || '')}"></label><label class="field"><span>Extra arguments</span><input id="platformEmulatorArgs" value="${escapeHtml(AppState.appSettings.emulator_platform_settings?.[platformName]?.extra_args || '')}"></label><div class="extras"><button type="button" class="icon-button" id="platformEmulatorSave">Save emulator settings</button></div></div><div class="detail-card"><h3>Presentation</h3><label class="field"><span>Cover model</span><select id="platformCoverModel"><option value="">Use global setting</option><option value="box">Box</option><option value="jewel">Jewel case</option><option value="long_jewel">Long jewel case</option><option value="double_jewel">Double jewel case</option><option value="cassette">Cassette</option><option value="none">Flat cover</option></select></label><label class="field"><span>Cassette back</span><select id="platformModelBack"><option value="">Use global setting</option><option value="straight">Straight</option><option value="angled">Angled</option></select></label><label class="field"><span>Cassette case</span><select id="platformModelCase"><option value="">Use global setting</option><option value="clear">Clear</option><option value="solid">Solid</option></select></label><label class="field"><span>3D rotation lock</span><select id="platformModelRotation"><option value="">Use global setting</option><option value="free">Free rotation</option><option value="horizontal">Lock horizontal</option><option value="vertical">Lock vertical</option></select></label><div class="platform-model-preview" id="platformModelPreview"></div><div class="extras"><button type="button" class="icon-button" id="platformVideoPick">Choose platform video</button><button type="button" class="icon-button" id="platformVideoClear">Clear platform video</button></div><p class="description" id="platformVideoStatus">${AppState.appSettings.platform_videos?.[platformName] ? 'A platform video is configured.' : 'No platform video configured.'}</p></div>${platformVideo}<div class="detail-card"><h3>Platform documents</h3>${documents.length ? `<div class="extras">${documents.map((item,index) => `<span class="extras"><button class="icon-button" data-platform-doc="${index}">${escapeHtml(item.name)}</button><button class="icon-button" data-platform-doc-up="${index}" aria-label="Move ${escapeHtml(item.name)} up">↑</button><button class="icon-button" data-platform-doc-down="${index}" aria-label="Move ${escapeHtml(item.name)} down">↓</button></span>`).join('')}</div>` : '<p class="description">No platform documents configured yet.</p>'}<div class="extras"><button class="icon-button" id="editPlatformDocuments">Edit platform documents</button></div></div><div class="detail-card"><h3>Platform shortcuts</h3><div class="extras"><button class="primary" id="platformRandom">Play random</button>${items.filter(game => game.last_played).sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)))[0] ? `<button class="icon-button" id="platformLast">Last played</button>` : ''}${items.sort((a,b) => Number(b.play_count || 0) - Number(a.play_count || 0))[0] ? `<button class="icon-button" id="platformMost">Most played</button>` : ''}</div></div></div>`;
+      if ($('platformRename')) $('platformRename').onclick = async () => {
+        const newName = await promptInput({ title: `Rename ${platformName}`, message: 'Games, profiles, playlists, and platform settings move to the new name.', label: 'New platform name', defaultValue: platformName });
+        if (!newName || newName === platformName) return;
+        const migrate = await confirmAction({ title: 'Move media files', target: newName, consequence: 'Media files under this platform folder move with the platform.', retained: 'Files outside the platform media folder are not touched.', recovery: 'Rename back to restore the folder path.', confirmLabel: 'Move media' });
+        try {
+          const result = await api('/api/v2/platform/rename', { method: 'POST', body: JSON.stringify({ old: platformName, new: newName, migrate_media: migrate }) });
+          AppState.platform = newName;
+          await refresh();
+          notify(t('notify.app.platform_renamed', {old: platformName, new: newName, games: result.games, media: result.media_moved}));
+        } catch (error) { notify(error.message); }
+      };
+      if ($('platformDelete')) $('platformDelete').onclick = async () => {
+        const typed = await promptInput({ title: `Delete ${platformName}`, message: `This moves ${count} game${count === 1 ? '' : 's'} to Trash. Type the platform name to confirm.`, label: 'Platform name', defaultValue: '' });
+        if (typed !== platformName) { if (typed !== null) notify(t('notify.app.platform_name_mismatch')); return; }
+        const removeMedia = await confirmAction({ title: 'Delete associated media', target: platformName, consequence: 'Files under the platform media folder will be deleted.', retained: 'ROMs, saves, and media outside that folder remain.', recovery: 'Media must be re-downloaded.', destructive: true, confirmLabel: 'Delete media', focusTarget: 'cancel' });
+        try {
+          const result = await api('/api/v2/platform/delete', { method: 'POST', body: JSON.stringify({ name: platformName, delete_media: removeMedia, confirm: platformName }) });
+          AppState.platform = 'all';
+          await refresh();
+          notify(t('notify.app.platform_deleted', {platform: platformName, games: result.games}));
+        } catch (error) { notify(error.message); }
+      };
+      if ($('platformEmulatorSave')) $('platformEmulatorSave').onclick = async () => {
+        const settings = { ...(AppState.appSettings.emulator_platform_settings || {}) };
+        settings[platformName] = {
+          adapter_id: $('platformEmulatorAdapter').value.trim(),
+          retroarch_core: $('platformEmulatorCore').value.trim(),
+          extra_args: $('platformEmulatorArgs').value.trim(),
+        };
+        try {
+          AppState.appSettings = await api('/api/settings', { method: 'POST', body: JSON.stringify({ emulator_platform_settings: settings }) });
+          notify(t('notify.app.platform_emulator_saved', {platform: platformName}));
+        } catch (error) { notify(error.message); }
+      };
+      const modelControls = [
+        ['platformCoverModel', 'cover_model_by_platform'],
+        ['platformModelBack', 'model_back_by_platform'],
+        ['platformModelCase', 'model_case_by_platform'],
+        ['platformModelRotation', 'model_rotation_lock_by_platform'],
+      ];
+      const previewBase = items.find(item => item.has_cover) || items[0] || { name: platformName, platform: platformName, has_cover: false };
+      const renderPlatformPreview = () => {
+        const host = $('platformModelPreview');
+        if (!host) return;
+        host.innerHTML = renderCoverModel({ ...previewBase, cover_model: $('platformCoverModel')?.value || '' }, {
+          back: $('platformModelBack')?.value || undefined,
+          caseStyle: $('platformModelCase')?.value || undefined,
+          rotationLock: $('platformModelRotation')?.value || undefined,
+          tools: false,
+        });
+        bindCoverModel(host);
+      };
+      modelControls.forEach(([id, key]) => {
+        const select = $(id);
+        if (!select) return;
+        select.value = AppState.appSettings[key]?.[platformName] || '';
+        select.onchange = async event => {
+          try {
+            const map = { ...(AppState.appSettings[key] || {}) };
+            if (event.target.value) map[platformName] = event.target.value;
+            else delete map[platformName];
+            AppState.appSettings = await api('/api/settings', { method: 'POST', body: JSON.stringify({ [key]: map }) });
+            renderPlatformPreview();
+            notify(t('notify.app.cover_model_saved'));
+          } catch (error) { notify(error.message); }
+        };
+      });
+      renderPlatformPreview();
+      if ($('platformVideoPick')) $('platformVideoPick').onclick = async () => {
+        const path = await nativePickFile(`Choose a video for ${platformName}`);
+        if (!path) return;
+        try {
+          const result = await api('/api/platform/videos', { method: 'POST', body: JSON.stringify({ platform: platformName, path }) });
+          AppState.appSettings.platform_videos = { ...(AppState.appSettings.platform_videos || {}), [platformName]: result.path };
+          if ($('platformVideoStatus')) $('platformVideoStatus').textContent = 'A platform video is configured.';
+          notify(t('notify.app.platform_video_saved'));
+        } catch (error) { notify(error.message); }
+      };
+      if ($('platformVideoClear')) $('platformVideoClear').onclick = async () => {
+        try {
+          await api('/api/platform/videos', { method: 'POST', body: JSON.stringify({ platform: platformName, clear: true }) });
+          const map = { ...(AppState.appSettings.platform_videos || {}) };
+          delete map[platformName];
+          AppState.appSettings.platform_videos = map;
+          if ($('platformVideoStatus')) $('platformVideoStatus').textContent = 'No platform video configured.';
+        } catch (error) { notify(error.message); }
+      };
       if (items.length) $('platformRandom').onclick = () => launch(items[Math.floor(Math.random() * items.length)].id);
       const last = items.filter(game => game.last_played).sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)))[0];
       const most = [...items].sort((a,b) => Number(b.play_count || 0) - Number(a.play_count || 0))[0];
@@ -1737,11 +2136,26 @@ function markFilterAria() {
           notify(t('notify.library.platform_docs_saved'));
         } catch(error) { notify(error.message); }
       };
+      const movePlatformDocument = async (index, delta) => {
+        const target = index + delta;
+        if (target < 0 || target >= documents.length) return;
+        const rows = [...documents];
+        const [item] = rows.splice(index, 1);
+        rows.splice(target, 0, item);
+        try {
+          await api('/api/platform/documents',{method:'POST',body:JSON.stringify({platform:platformName,documents:rows,reorder:true})});
+          AppState.appSettings.platform_documents = {...(AppState.appSettings.platform_documents || {}), [platformName]: rows};
+          await renderPlatformDetails(platformName);
+        } catch(error) { notify(error.message); }
+      };
       document.querySelectorAll('[data-platform-doc]').forEach(button => button.onclick = () => {
         const doc = documents[Number(button.dataset.platformDoc)];
         if (!doc) return;
         openReader({id:'platform', documents:[doc], name:platformName}, 0, `/api/platform/document?platform=${encodeURIComponent(platformName)}&index=${button.dataset.platformDoc}&token=${encodeURIComponent(token)}`);
       });
+      document.querySelectorAll('[data-platform-doc-up]').forEach(button => button.onclick = () => movePlatformDocument(Number(button.dataset.platformDocUp), -1));
+      document.querySelectorAll('[data-platform-doc-down]').forEach(button => button.onclick = () => movePlatformDocument(Number(button.dataset.platformDocDown), 1));
+      bindBigBoxHiddenControls();
     }
     async function favorite(id) { try { const result = await api('/api/favorite',{method:'POST',body:JSON.stringify({id,game_id:gameIdOf(id)})}); const game = AppState.games.find(item => item.id === id); if (game) { game.favorite = result.favorite; AppState._refreshCounter = (AppState._refreshCounter || 0) + 1; } renderGrid(); renderDetails(); } catch(error) { notify(error.message); } }
     async function updateGameStatus(id, progress) {
@@ -1949,12 +2363,65 @@ function markFilterAria() {
       if (kind === 'screenshot') return (game.available_screenshots || []).map(index => media(game, 'screenshot', index));
       return [media(game, kind)];
     }
-    function openLightbox(game, kind, index) {
+    let mediaZoom = 1;
+    let mediaInteger = false;
+    let mediaFullscreenNoticeShown = false;
+    const MEDIA_LABELS = { screenshot: 'Screenshot', cover: 'Box front', background: 'Background', clear_logo: 'Clear logo', fanart: 'Fanart', banner: 'Banner', icon: 'Icon', box_back: 'Box back', box_spine: 'Box spine', box_3d: '3D box', title_screen: 'Title screen', cart_front: 'Cart front', cart_back: 'Cart back', disc: 'Disc', advertisement: 'Advertisement', manual: 'Manual', poster: 'Poster', square: 'Square art' };
+    function openLightbox(game, kind, index, { fullscreen = false } = {}) {
       const sources = lightboxSources(game, kind);
       if (!sources.length) return;
       lightbox = { kind, sources, index: Math.max(0, Math.min(index, sources.length - 1)) };
+      $('mediaDialog').setAttribute('aria-label', t('media.label'));
+      mediaZoom = 1;
+      mediaInteger = false;
       renderLightbox();
       $('mediaDialog').showModal();
+      if (fullscreen) toggleMediaFullscreen(true);
+    }
+    function applyMediaScale() {
+      const dialog = $('mediaDialog');
+      const image = dialog?.querySelector('#fullScreenshot');
+      if (!image) return;
+      const stage = dialog.querySelector('.media-stage');
+      if (mediaInteger && image.naturalWidth) {
+        const scale = integerScale(image.naturalWidth, image.naturalHeight, stage?.clientWidth || 0, stage?.clientHeight || 0);
+        image.style.imageRendering = 'pixelated';
+        image.style.transform = `scale(${scale})`;
+        image.classList.remove('lightbox-zoom');
+        $('mediaIntegerScale')?.setAttribute('aria-pressed', 'true');
+        if ($('mediaIntegerScale')) $('mediaIntegerScale').textContent = `${scale}×`;
+      } else {
+        image.style.imageRendering = '';
+        image.style.transform = mediaZoom === 1 ? '' : `scale(${mediaZoom})`;
+        $('mediaIntegerScale')?.setAttribute('aria-pressed', 'false');
+        if ($('mediaIntegerScale')) $('mediaIntegerScale').textContent = t('media.integer_scale');
+      }
+    }
+    async function toggleMediaFullscreen(force) {
+      const dialog = $('mediaDialog');
+      if (!dialog) return;
+      const want = force ?? (!dialog.classList.contains('is-maximized') && document.fullscreenElement !== dialog);
+      try {
+        if (want && document.fullscreenElement !== dialog) await dialog.requestFullscreen();
+        else if (!want && document.fullscreenElement === dialog) await document.exitFullscreen();
+      } catch {
+        if (want) dialog.classList.add('is-maximized');
+        if (!mediaFullscreenNoticeShown) {
+          mediaFullscreenNoticeShown = true;
+          notify(t('notify.app.library_fullscreen_unavailable'));
+        }
+      }
+      if (!want) dialog.classList.remove('is-maximized');
+      updateMediaFullscreenButton();
+    }
+    function updateMediaFullscreenButton() {
+      const dialog = $('mediaDialog');
+      const active = document.fullscreenElement === dialog || dialog?.classList.contains('is-maximized');
+      const button = $('mediaFullscreen');
+      if (button) {
+        button.setAttribute('aria-pressed', String(active));
+        button.textContent = active ? t('media.exit_fullscreen') : t('media.fullscreen');
+      }
     }
     function renderLightbox() {
       const dialog = $('mediaDialog');
@@ -1966,9 +2433,19 @@ function markFilterAria() {
       image.alt = lightbox.kind === 'screenshot' ? 'Game screenshot' : 'Game artwork';
       image.decoding = 'async';
       image.src = lightbox.sources[lightbox.index];
+      image.onload = () => {
+        const label = MEDIA_LABELS[lightbox.kind] || lightbox.kind;
+        const meta = $('mediaDialogMeta');
+        if (meta) meta.textContent = `${label} · ${t('media.page', {n: lightbox.index + 1, count: lightbox.sources.length})} · ${image.naturalWidth}×${image.naturalHeight}`;
+        applyMediaScale();
+      };
+      image.onerror = () => { const meta = $('mediaDialogMeta'); if (meta) meta.textContent = t('media.unavailable'); };
       dialog.querySelector('.media-stage')?.append(image);
       const counter = dialog.querySelector('#mediaCounter');
       if (counter) counter.textContent = lightbox.sources.length > 1 ? `${lightbox.index + 1} / ${lightbox.sources.length}` : '';
+      const meta = $('mediaDialogMeta');
+      if (meta) meta.textContent = `${MEDIA_LABELS[lightbox.kind] || lightbox.kind} · ${t('media.page', {n: lightbox.index + 1, count: lightbox.sources.length})}`;
+      applyMediaScale();
     }
     function lightboxStep(delta) {
       if (!lightbox || lightbox.sources.length < 2) return;
@@ -1978,11 +2455,23 @@ function markFilterAria() {
     $('mediaDialog').addEventListener('keydown', event => {
       if (event.key === 'ArrowLeft') { event.preventDefault(); lightboxStep(-1); }
       else if (event.key === 'ArrowRight') { event.preventDefault(); lightboxStep(1); }
+      else if (event.key === 'Escape' && document.fullscreenElement === $('mediaDialog')) { event.preventDefault(); toggleMediaFullscreen(false); }
+      else if (event.key === '+' || event.key === '=') { event.preventDefault(); mediaZoom = Math.min(8, mediaZoom + 0.25); applyMediaScale(); }
+      else if (event.key === '-') { event.preventDefault(); mediaZoom = Math.max(0.5, mediaZoom - 0.25); applyMediaScale(); }
+      else if (event.key === '0') { event.preventDefault(); mediaZoom = 1; mediaInteger = false; applyMediaScale(); }
+      else if (event.key === 'f' || (event.ctrlKey && (event.key === 'i' || event.key === 'I'))) { event.preventDefault(); toggleMediaFullscreen(); }
+      else if (event.key === 'i' || event.key === 'I') { event.preventDefault(); mediaInteger = !mediaInteger; mediaZoom = 1; applyMediaScale(); }
     });
     $('mediaPrev').onclick = () => lightboxStep(-1);
     $('mediaNext').onclick = () => lightboxStep(1);
+    $('mediaFullscreen').onclick = () => toggleMediaFullscreen();
+    $('mediaIntegerScale').onclick = () => { mediaInteger = !mediaInteger; mediaZoom = 1; applyMediaScale(); };
+    document.addEventListener('fullscreenchange', updateMediaFullscreenButton);
     $('mediaDialog').addEventListener('click', event => {
-      if (event.target.tagName === 'IMG') event.target.classList.toggle('lightbox-zoom');
+      if (event.target.tagName === 'IMG' && !mediaInteger) {
+        event.target.classList.toggle('lightbox-zoom');
+        mediaZoom = event.target.classList.contains('lightbox-zoom') ? 1.75 : 1;
+      }
     });
     // load events do not bubble, so ratio tracking uses a capture-phase
     // listener on #grid that survives innerHTML rebuilds without re-attaching.
@@ -2556,4 +3045,4 @@ export function openDuplicatesDialog() {
 document.addEventListener('app:open-repair-wizard', () => openRepairWizard());
 document.addEventListener('app:open-duplicates', () => openDuplicatesDialog());
 
-export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated, isVirtualEnabled, getSearchWorker, workerSearch, searchWithFallback, verifyWorkerParity, ensureVirtualObserver, visibleGameIds, focusGameIndex, gridMetrics, isTrashView, renderTrashView, showTrashUndoToast, restoreTrashEntry, exportStoryPng };
+export { refresh, render, renderGrid, renderDetails, renderPlaylists, renderFilterPresets, renderPlatformCategories, renderPlatforms, renderQueryChips, selectGame, favorite, updateGameStatus, removeGame, launchExtra, loadRelated, isVirtualEnabled, getSearchWorker, workerSearch, searchWithFallback, verifyWorkerParity, ensureVirtualObserver, visibleGameIds, focusGameIndex, focusSelectedGame, gridMetrics, isTrashView, renderTrashView, showTrashUndoToast, restoreTrashEntry, exportStoryPng };

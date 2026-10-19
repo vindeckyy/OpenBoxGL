@@ -19,6 +19,7 @@ from parity_gameyfin import (
     GameyfinError,
     catalog_gameyfin,
     game_from_gameyfin,
+    gameyfin_settings,
     install_gameyfin_game,
     normalize_base_url,
     uninstall_gameyfin_game,
@@ -200,6 +201,11 @@ class GameyfinTests(unittest.TestCase):
     def test_storefront_rejects_unknown(self):
         with self.assertRaises(ValueError):
             storefront_catalog("nope")
+
+    def test_auto_import_reads_boolean_and_object_configs(self):
+        self.assertFalse(gameyfin_settings({"storefront_auto_import": {"gameyfin": False}})["auto_import"])
+        self.assertTrue(gameyfin_settings({"storefront_auto_import": {"gameyfin": {"enabled": True}}})["auto_import"])
+        self.assertFalse(gameyfin_settings({"storefront_auto_import": {"gameyfin": {"enabled": False, "platform": "PC"}}})["auto_import"])
 
 
 class SaveToolTests(unittest.TestCase):

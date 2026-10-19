@@ -1,7 +1,7 @@
 /* timeline.js — session history timeline. */
 import { $, escapeHtml } from './util.js';
 import { t } from './i18n.js';
-import { AppState, api, media, gameForSession } from './state.js';
+import { AppState, api, gameForSession, coverSource } from './state.js';
 
 function renderTimelineTab(container) {
   container.innerHTML = `<p data-i18n="common.loading">${t('common.loading')}</p>`;
@@ -21,7 +21,7 @@ function renderTimelineTab(container) {
         // S42: media() reads `game.id`; this passed the scalar id, so every
         // cover requested /api/media?id=undefined.
         const game = gameForSession({ stable_game_id: entry.game_id });
-        const cover = game ? `background-image:url('${escapeHtml(media(game, 'cover'))}')` : '';
+        const cover = game ? `background-image:url('${escapeHtml(coverSource(game))}')` : '';
         html += `
           <div class="timeline-entry" data-game-id="${escapeHtml(entry.game_id)}">
             <div class="timeline-cover" style="${cover}" role="img"></div>

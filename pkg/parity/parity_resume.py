@@ -58,10 +58,33 @@ RA_CONFIG_NAME = "openbox-session.cfg"
 RESUME_BASENAME = "resume"
 RESUME_SLOT = "openbox-resume"
 CAPTURE_SLOT = "openbox-session"
+RESUME_SLOT_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 ARCHIVE_DIRNAME = "archive"
 MOMENTS_DIRNAME = "moments"
 ARCHIVE_LIMIT = 20
 _STATE_SUFFIXES = (".state.auto", ".state")
+
+
+def validate_resume_slot(value):
+    """Validate a stored ``resume_slot``; ``""`` means the default slot."""
+    if value is None:
+        return ""
+    slot = str(value)
+    if slot == "":
+        return ""
+    if not RESUME_SLOT_PATTERN.fullmatch(slot):
+        raise ValueError("Resume slot must be 1-32 letters, digits, '-' or '_'.")
+    return slot
+
+
+def resume_slot_for(game):
+    """Slot name used when capturing: ``game['resume_slot']`` or the default."""
+    return validate_resume_slot((game or {}).get("resume_slot")) or CAPTURE_SLOT
+
+
+def resume_state_name_for(game):
+    """Slot name passed to the emulator when resuming a captured state."""
+    return validate_resume_slot((game or {}).get("resume_slot")) or RESUME_SLOT
 
 
 def resume_root(data_parent):
@@ -329,13 +352,13 @@ def inject_resume_args(game, args, *, profiles=None, settings=None, resume=False
         config = _write_ra_session_config(sdir) if _needs_config(state["template"]) else ""
         return args + _render_state_args(
             game, state["template"], sdir,
-            state_path=target, state_name=RESUME_SLOT, state_config=config,
+            state_path=target, state_name=resume_state_name_for(game), state_config=config,
         )
     try:
         config = _write_ra_session_config(sdir) if _needs_config(state["capture"]) else ""
         return args + _render_state_args(
             game, state["capture"], sdir,
-            state_name=CAPTURE_SLOT, state_config=config,
+            state_name=resume_slot_for(game), state_config=config,
         )
     except OSError:
         LOGGER.warning("Could not arm resume-state capture for %s", game.get("name", "game"))
@@ -442,11 +465,11 @@ def _relative_posix(path, state_dir):
     return path.relative_to(state_dir).as_posix()
 
 
-def _canonicalize(picked, state_dir, state):
+def _canonicalize(picked, state_dir, state, game=None):
     """Move the newest capture to the canonical resume name, or leave in place."""
     template = " ".join(state["template"])
     if "{state_name}" in template:
-        canonical_name = f"{RESUME_SLOT}{_state_suffix(picked)}"
+        canonical_name = f"{resume_state_name_for(game)}{_state_suffix(picked)}"
     elif "{state_path}" in template:
         canonical_name = f"{RESUME_BASENAME}{_state_suffix(picked)}"
     else:
@@ -572,7 +595,7 @@ def collect_resume_state(
         picked = max(candidates, key=lambda p: p.stat().st_mtime_ns)
     except OSError:
         return None
-    canonical_rel = _canonicalize(picked, sdir, state)
+    canonical_rel = _canonicalize(picked, sdir, state, game)
     canonical = sdir / canonical_rel
     try:
         captured_at = datetime.fromtimestamp(canonical.stat().st_mtime).isoformat(timespec="seconds")

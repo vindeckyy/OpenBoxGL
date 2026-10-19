@@ -85,9 +85,12 @@ def update_emulator(app_id, run=subprocess.run, which=shutil.which):
     return {"updated": EMULATORS[app_id]["name"]}
 
 
-def update_all_emulators(run=subprocess.run, which=shutil.which):
+def update_all_emulators(run=subprocess.run, which=shutil.which, skip=()):
     updated, errors = [], []
+    skipped = {str(item) for item in skip or []}
     for app_id in EMULATORS:
+        if app_id in skipped:
+            continue
         status = next(item for item in emulator_status(run=run, which=which) if item["app_id"] == app_id)
         if not status["installed"] or status["mode"] != "flatpak":
             continue

@@ -98,6 +98,13 @@
     "94:the-same-deck-seed-is-used-on-two-devices-with-the-same-libr",
     "95:a-price-is-negative-not-an-integer-or-cleared",
     "96:cost-per-hour-for-an-unpriced-game-or-under-a-minute-played",
-    "97:a-non-english-locale-receives-a-cloud-sync-launch-check-defi"
+    "97:a-non-english-locale-receives-a-cloud-sync-launch-check-defi",
+    "98:a-plugin-declares-a-capability-without-its-required-hook-or-",
+    "99:a-storefront-plugin-is-disabled-or-removed-while-its-importe",
+    "100:a-metadata-plugin-returns-fields-and-media-urls",
+    "101:a-stats-plugin-is-disabled-after-writing-a-cache",
+    "102:a-plugin-emulator-section-is-asked-for-a-scope-it-did-not-de",
+    "103:a-startup-video-setting-points-at-a-missing-file-or-outside-",
+    "104:a-backup-contains-plugin-credentials-or-password-format-plug"
   ]
 }

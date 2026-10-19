@@ -130,6 +130,9 @@
     "import_ea": "Import EA app",
     "import_ubisoft": "Import Ubisoft Connect",
     "import_arcade": "Import Arcade",
+    "import_pico8": "Import PICO-8",
+    "import_msu1": "Import MSU-1",
+    "import_whdload": "Import WHDLoad",
     "arcade_room": "Arcade Room",
     "household": "Household",
     "discovery": "Discovery",
@@ -389,7 +392,9 @@
     "browse_back": "Back to plugins",
     "browse_empty": "No community plugins are listed yet.",
     "cmd_done": "Plugin command finished",
-    "trust_retrust": "Approve again: this plugin was approved before the update."
+    "trust_retrust": "Approve again: this plugin was approved before the update.",
+    "repair": "Repair",
+    "repair_done": "{name} repaired"
   },
   "metadata": {
     "title": "LaunchBox Games Database",
@@ -930,7 +935,7 @@
     "group_by_shape": "Group by cover shape",
     "custom_fields": "Custom fields, one per line: Name|Option1,Option2",
     "bigbox_startup_video": "Big Box startup video path",
-    "bigbox_shutdown_apps": "Applications to run when switching into Big Box, one command per line",
+    "bigbox_shutdown_apps": "Applications to run when leaving Big Box, one command per line",
     "bigbox_start_at_launch": "Start in Big Box mode",
     "attract_delay": "Attract mode delay in seconds",
     "tray_enabled": "Enable desktop tray integration",
@@ -1543,6 +1548,15 @@
     "find_moved_one": "Find moved files for {count} game"
   },
   "notify": {
+    "netplay": {
+      "copied": "Netplay address copied"
+    },
+    "emulators": {
+      "settings_saved": "Plugin emulator settings saved"
+    },
+    "steam": {
+      "account_saved": "Steam account saved"
+    },
     "activity": {
       "cancel_requested": "Cancellation requested",
       "retry_queued": "Retry queued",
@@ -1610,7 +1624,25 @@
       "save_scan_queued": "Save path scan queued — progress and results are in Activity Center",
       "stats_reset": "Reset play statistics for {name}",
       "enter_rom_folder": "Enter a ROM folder path first.",
-      "added_of_scanned": "Added {added} of {found} scanned games"
+      "added_of_scanned": "Added {added} of {found} scanned games",
+      "bulk_no_matches": "No selected games contain that text.",
+      "steam_install_queued": "Steam install queued.",
+      "steam_verify_queued": "Steam verification queued.",
+      "platform_renamed": "Renamed {old} → {new} ({games} games, {media} media files).",
+      "platform_name_mismatch": "Platform name did not match.",
+      "platform_deleted": "Deleted {platform}; {games} games moved to Trash.",
+      "platform_emulator_saved": "Emulator settings saved for {platform}.",
+      "cover_model_saved": "Cover model saved.",
+      "platform_video_saved": "Platform video saved.",
+      "library_fullscreen_unavailable": "Fullscreen is unavailable in this window; the viewer stays open.",
+      "bigbox_fullscreen_unavailable": "Fullscreen is unavailable.",
+      "video_audio_click": "Video audio needs a click; playing muted.",
+      "reader_no_path": "This document has no local path.",
+      "reader_no_bridge": "No system viewer bridge is available.",
+      "reader_no_viewer": "No system viewer available.",
+      "token_saved": "{provider} token saved.",
+      "token_enter": "Enter a token first.",
+      "token_removed": "Token removed."
     },
     "setup": {
       "emulator_choice_failed": "Emulator choice was not saved: {message}",
@@ -1648,7 +1680,8 @@
       "access_granted": "Access granted. The check has been run again.",
       "access_removed": "Folder access removed",
       "core_set": "This game now uses {core}.",
-      "core_default": "This game uses the default core again."
+      "core_default": "This game uses the default core again.",
+      "resume_slot_saved": "Resume state slot saved"
     },
     "metadata": {
       "decision_saved": "Decision saved",
@@ -1661,6 +1694,7 @@
       "steam_downloading": "Downloading Steam metadata and artwork",
       "steam_updated": "Steam metadata updated",
       "screenscraper_applied": "ScreenScraper metadata applied",
+      "candidate_applied": "Metadata applied",
       "open_game_first": "Open a game first, then hash-match it.",
       "no_rom_to_hash": "This game has no ROM file to hash.",
       "screenscraper_hash_queued": "ScreenScraper hash-match queued — progress in the Activity Center",
@@ -1718,5 +1752,14 @@
       "grant_group_done_one": "Access granted for {count} game. That game was checked again.",
       "grant_recheck_needed": "Access granted. Check again to refresh this list."
     }
+  },
+  "media": {
+    "label": "Media",
+    "page": "{n} of {count}",
+    "integer_scale": "Integer scale",
+    "fullscreen": "Fullscreen",
+    "exit_fullscreen": "Exit fullscreen",
+    "unavailable": "Image unavailable",
+    "page_one": "{n} of {count}"
   }
 }

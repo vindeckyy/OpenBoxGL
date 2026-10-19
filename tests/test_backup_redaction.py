@@ -117,6 +117,56 @@ class TestBackupRedaction(unittest.TestCase):
         merged = merge_preserved_credentials({"theme": "dark"}, None)
         self.assertEqual(merged["theme"], "dark")
         
+    def test_plugin_credentials_are_not_backed_up_and_password_settings_are_blank(self):
+        import plugins
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            package = root / "plugins" / "vendor.store"
+            package.mkdir(parents=True)
+            (package / "plugin.json").write_text(json.dumps({
+                "id": "vendor.store",
+                "name": "Vendor Store",
+                "version": "1.0.0",
+                "hooks": ["storefront"],
+                "settings": {
+                    "type": "object",
+                    "properties": {
+                        "region": {"type": "string", "default": "us"},
+                        "api_key": {"type": "string", "format": "password"},
+                    },
+                },
+            }), encoding="utf-8")
+            (package / "plugin.py").write_text("def storefront(payload):\n    return {}\n", encoding="utf-8")
+            plugins.set_plugin_settings(root / "plugins", "vendor.store", {
+                "region": "eu", "api_key": "backup-secret",
+            })
+            plugins.set_plugin_credentials(root / "plugins", "vendor.store", {"token": "credential-secret"})
+            plugins.set_plugin_data(root / "plugins", "vendor.store", {"counter": 7})
+
+            archive = create_backup(temp_dir, {"games": [], "settings": {}}, items=["plugins"])
+            with zipfile.ZipFile(archive) as package_file:
+                names = package_file.namelist()
+                self.assertFalse(any("credentials/" in name for name in names), names)
+                self.assertIn("plugins/data/vendor.store.json", names)
+                self.assertEqual(json.loads(package_file.read("plugins/data/vendor.store.json")), {"counter": 7})
+                state = json.loads(package_file.read("plugins/plugins-state.json"))
+                self.assertEqual(state["settings"]["vendor.store"]["region"], "eu")
+                self.assertEqual(state["settings"]["vendor.store"]["api_key"], "")
+                self.assertNotIn("credential-secret", package_file.read("plugins/plugins-state.json").decode())
+                self.assertNotIn("backup-secret", package_file.read("plugins/plugins-state.json").decode())
+
+            # Restoring over the same install keeps its current credentials and
+            # password value instead of blanking them from the redacted archive.
+            plugins.set_plugin_settings(root / "plugins", "vendor.store", {
+                "region": "eu", "api_key": "local-secret",
+            })
+            plugins.set_plugin_credentials(root / "plugins", "vendor.store", {"token": "local-token"})
+            restore_backup(archive, temp_dir, force=True)
+            restored = json.loads((root / "plugins" / "plugins-state.json").read_text(encoding="utf-8"))
+            self.assertEqual(restored["settings"]["vendor.store"]["api_key"], "local-secret")
+            self.assertEqual(plugins.plugin_credentials_values(root / "plugins", "vendor.store"), {"token": "local-token"})
+
     def test_integration_create_and_restore(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

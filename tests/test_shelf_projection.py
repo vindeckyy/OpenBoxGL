@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 import pkg.parity  # noqa: F401,E402
 from pkg.parity.parity_export import build_export_games  # noqa: E402
 from pkg.parity.parity_launch_doctor import run_preflight_checks  # noqa: E402
-from pkg.state.cache import _project_game  # noqa: E402
+from pkg.state.cache import _filter_plugin_storefront_games, _project_game  # noqa: E402
 
 
 def test_projection_marks_shelf_without_calling_it_broken():
@@ -24,6 +24,23 @@ def test_projection_marks_shelf_without_calling_it_broken():
     assert result["entry_type"] == "shelf"
     assert result["playable"] is False
     assert result["path_exists"] is False
+
+
+def test_disabled_storefront_plugin_games_are_hidden():
+    from unittest import mock
+
+    games = [
+        {"game_id": "plugin:store.one:1", "name": "One", "plugin_source": "store.one"},
+        {"game_id": "plugin:store.two:2", "name": "Two", "plugin_source": "store.two"},
+        {"game_id": "local", "name": "Local"},
+    ]
+    manifests = [
+        {"id": "store.one", "valid": True, "enabled": True},
+        {"id": "store.two", "valid": True, "enabled": False},
+    ]
+    with mock.patch("plugins.list_plugins", return_value=manifests):
+        visible = _filter_plugin_storefront_games(games, Path(tempfile.mkdtemp()))
+    assert [game["name"] for game in visible] == ["One", "Local"]
 
 
 def test_export_and_doctor_preserve_shelf_semantics():
@@ -37,5 +54,6 @@ def test_export_and_doctor_preserve_shelf_semantics():
 
 if __name__ == "__main__":
     test_projection_marks_shelf_without_calling_it_broken()
+    test_disabled_storefront_plugin_games_are_hidden()
     test_export_and_doctor_preserve_shelf_semantics()
     print("shelf projection tests: ok")

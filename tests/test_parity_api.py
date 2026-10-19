@@ -247,9 +247,9 @@ class ParityApiTests(unittest.TestCase):
         handler.send_json = mock.Mock()
         Handler.save_settings(handler, {"watch_folders": []})
         settings = load_state()["settings"]
-        self.assertTrue(settings["storefront_auto_import"]["steam"])
-        self.assertTrue(settings["storefront_auto_import"]["lutris"])
-        self.assertFalse(settings["storefront_auto_import"]["gameyfin"])
+        self.assertTrue(settings["storefront_auto_import"]["steam"]["enabled"])
+        self.assertTrue(settings["storefront_auto_import"]["lutris"]["enabled"])
+        self.assertFalse(settings["storefront_auto_import"]["gameyfin"]["enabled"])
 
     def test_settings_save_preserves_unrelated_fields_on_partial_post(self):
         from openbox import load_state, save_state
@@ -277,8 +277,8 @@ class ParityApiTests(unittest.TestCase):
         settings = load_state()["settings"]
         self.assertEqual(settings["watch_folders"], [str(watch_dir)])
         self.assertEqual(settings["screensaver_seconds"], 120)
-        self.assertTrue(settings["storefront_auto_import"]["heroic"])
-        self.assertFalse(settings["storefront_auto_import"]["steam"])
+        self.assertTrue(settings["storefront_auto_import"]["heroic"]["enabled"])
+        self.assertFalse(settings["storefront_auto_import"]["steam"]["enabled"])
 
     def test_storefront_catalog_route_returns_json_error(self):
         from web_app import Handler
@@ -510,6 +510,32 @@ class ParityApiTests(unittest.TestCase):
         self.assertEqual(playlist["parent"], "Favorites")
         self.assertEqual(playlist["notes"], "Play in this order")
 
+    def test_filter_playlist_accepts_exclusions_and_capabilities(self):
+        from openbox import load_state, save_state
+        from web_app import Handler
+
+        save_state({"schema_version": 6, "games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
+        handler = object.__new__(Handler)
+        handler.send_json = mock.Mock()
+        Handler.save_playlist(handler, {
+            "name": "No SNES sports",
+            "type": "filter",
+            "rules": {
+                "source": ["Steam"],
+                "has_saves": True,
+                "genre": {"op": "not_contains_any", "values": ["Sports"]},
+                "exclude": {"platform": ["SNES"], "favorite": False},
+                "unknown_rule": "dropped",
+            },
+        })
+        rules = load_state()["playlists"][0]["rules"]
+        self.assertEqual(rules["source"], ["Steam"])
+        self.assertIs(rules["has_saves"], True)
+        self.assertEqual(rules["exclude"], {"platform": ["SNES"], "favorite": False})
+        self.assertNotIn("unknown_rule", rules)
+        with self.assertRaises(ValueError):
+            Handler.save_playlist(handler, {"name": "Bad", "type": "filter", "rules": {"exclude": {"platform": [str(i) for i in range(21)]}}})
+
     def test_manual_playlist_storefront_and_custom_ids(self):
         from openbox import load_state, save_state
         from web_app import Handler
@@ -656,6 +682,7 @@ class ParityApiTests(unittest.TestCase):
     def test_local_plugin_catalog_file(self):
         catalog = load_local_catalog()
         self.assertTrue(any(item.get("id") == "openbox.library-stats" for item in catalog))
+        self.assertTrue(all(item.get("author") and item.get("homepage") for item in catalog))
 
     def test_state_view_flags_manual_media(self):
         from openbox import save_state
@@ -687,6 +714,33 @@ class ParityApiTests(unittest.TestCase):
         status, path = handler.send_file.call_args[0]
         self.assertEqual(status, 200)
         self.assertEqual(str(path), str(manual))
+
+    def test_state_view_flags_poster_and_square_media(self):
+        from openbox import save_state
+        from pkg.state.cache import bump_media_epoch
+        from web_app import DATA
+        from webapp_state import public_state
+
+        media_root = Path(DATA.parent) / "media"
+        poster = media_root / "poster.jpg"
+        square = media_root / "square.png"
+        poster.parent.mkdir(parents=True, exist_ok=True)
+        poster.write_bytes(b"poster")
+        square.write_bytes(b"square")
+        save_state({
+            "games": [{
+                "name": "Artwork Game", "platform": "NES", "path": "",
+                "poster": str(poster), "square": str(square),
+            }],
+            "profiles": {},
+            "history": [],
+            "settings": {},
+            "playlists": [],
+        })
+        bump_media_epoch()
+        game = public_state()["games"][0]
+        self.assertTrue(game["has_poster"])
+        self.assertTrue(game["has_square"])
 
     def test_apply_metadata_rejects_manual_without_game_path(self):
         from web_app import Handler

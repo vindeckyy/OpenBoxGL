@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import webapp_state
 from api_errors import MediaNotFound
+from pkg.state.media_probe import MEDIA_PATH_FIELDS, MEDIA_TYPES_ALL
 from handlers.data import DataHandlers
 from handlers.library import LibraryHandlers
 from handlers.media import MediaHandlers
@@ -33,6 +34,13 @@ class MediaPathTests(unittest.TestCase):
         self.data_patch.stop()
         self.tempdir.cleanup()
         webapp_state.bump_media_epoch()
+
+    def test_expanded_media_types_are_accepted(self):
+        expected = {"poster", "square", "video", "video_snap", "video_theme", "video_trailer", "music"}
+        self.assertTrue(expected <= MEDIA_TYPES_ALL)
+        self.assertTrue(expected <= MEDIA_PATH_FIELDS)
+        # Existing kinds remain valid; the expansion is additive.
+        self.assertTrue({"cover", "screenshots", "manual"} <= MEDIA_TYPES_ALL)
 
     def test_media_and_documents_stay_under_managed_root(self):
         media = self.data_path.parent / "media" / "cover.png"
@@ -62,6 +70,53 @@ class MediaPathTests(unittest.TestCase):
         link.symlink_to("/etc/hosts")
         with self.assertRaises(ValueError):
             webapp_state.approved_media_path(link)
+
+    def test_generated_cache_cleanup_is_bounded_to_cache(self):
+        from pkg.parity.parity_media import cleanup_generated_cache
+
+        root = self.data_path.parent
+        cache = root / "cache" / "media"
+        cache.mkdir(parents=True)
+        old = cache / "old.jpg"
+        recent = cache / "recent.jpg"
+        user_media = root / "media" / "old.jpg"
+        user_media.parent.mkdir()
+        old.write_bytes(b"old")
+        recent.write_bytes(b"new")
+        user_media.write_bytes(b"user")
+        import time
+        now = time.time()
+        os.utime(old, (now - 40 * 86400, now - 40 * 86400))
+        os.utime(user_media, (now - 40 * 86400, now - 40 * 86400))
+        result = cleanup_generated_cache(root, days=30, now=now)
+        self.assertEqual(result["deleted"], 1)
+        self.assertFalse(old.exists())
+        self.assertTrue(recent.exists())
+        self.assertTrue(user_media.exists())
+
+    def test_cleanup_route_only_deletes_cache_when_applying(self):
+        from handlers import media as media_module
+        root = self.data_path.parent
+        cache = root / "cache" / "media"
+        cache.mkdir(parents=True)
+        old = cache / "old.jpg"
+        old.write_bytes(b"old")
+        import time
+        stale = time.time() - 40 * 86400
+        os.utime(old, (stale, stale))
+        handler = object.__new__(MediaHandlers)
+        responses = []
+        handler.send_json = lambda status, payload: responses.append((status, payload))
+        with mock.patch.object(media_module, "DATA", self.data_path), \
+             mock.patch.object(media_module, "load_state", return_value={"games": []}), \
+             mock.patch.object(media_module, "find_duplicate_media", return_value=[]), \
+             mock.patch.object(media_module, "cleanup_duplicates", return_value=[]):
+            handler.cleanup_media({"apply": False})
+            self.assertTrue(old.exists())
+            self.assertIsNone(responses[-1][1]["cache"])
+            handler.cleanup_media({"apply": True})
+        self.assertFalse(old.exists())
+        self.assertEqual(responses[-1][1]["cache"]["deleted"], 1)
 
     def test_save_game_rejects_unapproved_media(self):
         handler = object.__new__(LibraryHandlers)
@@ -218,6 +273,43 @@ class MediaPathTests(unittest.TestCase):
         self.assertEqual(state["games"][0]["cover"], "/media/g1.png")
         self.assertEqual(state["games"][1]["cover"], "/media/g2.png")
         self.assertEqual(state["games"][2]["cover"], "/media/g3.png")
+
+    def test_bulk_media_queues_plugin_provider_without_database(self):
+        state = {
+            "games": [{
+                "game_id": "g1", "name": "Plugin Game",
+                "metadata_provider": "plugin:vendor.meta",
+            }],
+            "settings": {"plugin_metadata_priority": True},
+        }
+        handler = object.__new__(MediaHandlers)
+        handler.send_json = mock.Mock()
+        queued = []
+        with mock.patch("handlers.media.load_state", return_value=state), \
+             mock.patch("handlers.media.METADATA_DATABASE") as mock_db, \
+             mock.patch("pkg.parity.parity_metadata_providers.provider_priority",
+                        return_value=["launchbox", "plugin:vendor.meta"]), \
+             mock.patch("handlers.media.enqueue_media_job",
+                        side_effect=lambda path, item: queued.append(item)), \
+             mock.patch("handlers.media.start_media_queue_worker") as mock_start, \
+             mock.patch("handlers.media.JOB_MANAGER") as mock_jm:
+            mock_db.is_file.return_value = False
+            mock_jm.submit.side_effect = lambda _name, _worker: None
+            handler.bulk_media({"media": ["cover"]})
+        self.assertEqual(queued[0]["source"], "plugin:vendor.meta")
+        mock_start.assert_called_once()
+        handler.send_json.assert_called_with(202, {"state": "running", "queued": 1})
+
+    def test_bulk_media_still_requires_a_database_without_providers(self):
+        state = {"games": [{"game_id": "g1", "name": "Plain Game"}], "settings": {}}
+        handler = object.__new__(MediaHandlers)
+        handler.send_json = mock.Mock()
+        with mock.patch("handlers.media.load_state", return_value=state), \
+             mock.patch("handlers.media.METADATA_DATABASE") as mock_db, \
+             mock.patch("pkg.parity.parity_metadata_providers.provider_priority", return_value=[]):
+            mock_db.is_file.return_value = False
+            with self.assertRaisesRegex(ValueError, "metadata database"):
+                handler.bulk_media({"media": ["cover"]})
 
     def test_bulk_media_retry_failed_skips_completed(self):
         state = {

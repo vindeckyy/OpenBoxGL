@@ -264,6 +264,7 @@ function confirmAction({
   recovery = '',
   confirmLabel = 'Confirm',
   destructive = false,
+  focusTarget = 'confirm',
 } = {}) {
   ensureA11yDialogHosts();
   const dialog = $('a11yConfirmDialog');
@@ -291,7 +292,7 @@ function confirmAction({
     $('a11yConfirmClose').onclick = () => finish(false);
     dialog.addEventListener('close', onClose);
     openDialog(dialog);
-    okBtn.focus();
+    (focusTarget === 'cancel' ? $('a11yConfirmCancel') : okBtn).focus();
   });
 }
 
@@ -469,6 +470,18 @@ async function bindGameEditorBrowse() {
   const { nativePickFile, nativePickFolder } = await import('./state.js');
   const dialog = $('gameDialog');
   if (!dialog) return;
+  const parentPath = value => {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    const slash = Math.max(text.lastIndexOf('/'), text.lastIndexOf('\\'));
+    return slash > 0 ? text.slice(0, slash) : '';
+  };
+  const startPathFor = field => {
+    if (field?.value?.trim()) return parentPath(field.value);
+    const platform = dialog.querySelector('[name="platform"]')?.value.trim();
+    const game = AppState.games.find(item => item.path && (!platform || item.platform === platform));
+    return game ? parentPath(game.path) : '';
+  };
   dialog.querySelectorAll('button.path-browse').forEach(button => {
     button.addEventListener('click', async () => {
       const fieldName = button.dataset.browseFor;
@@ -476,7 +489,8 @@ async function bindGameEditorBrowse() {
       const field = dialog.querySelector(`[name="${fieldName}"]`);
       if (!field) return;
       const title = `Choose ${fieldName.replace(/_/g, ' ')}`;
-      const path = kind === 'folder' ? await nativePickFolder(title) : await nativePickFile(title);
+      const options = { startPath: startPathFor(field) };
+      const path = kind === 'folder' ? await nativePickFolder(title, options) : await nativePickFile(title, options);
       if (!path) return;
       if (kind === 'multi') {
         const current = field.value.trim();
@@ -548,6 +562,14 @@ async function openGameDialog(game = null, options = {}) {
   // moved or vanished since the dialog opened (see game_from_payload).
   AppState.editingGameId = game ? String(game.game_id || '') : '';
   const shelf = options.shelf ?? Boolean(game?.manual_entry);
+  const progressSelect = $('gameForm').elements.progress;
+  if (progressSelect) {
+    const allowed = AppState.appSettings.progress_values || ['Unplayed','Playing','Paused','Beaten','Completed','Mastered','Abandoned'];
+    const current = game?.progress || '';
+    progressSelect.innerHTML = '<option value="">Not set</option>' + allowed.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('');
+    if (current && !allowed.includes(current)) progressSelect.innerHTML += `<option value="${escapeHtml(current)}" selected>${escapeHtml(current)} (not allowed)</option>`;
+    progressSelect.value = current;
+  }
   $('dialogTitle').textContent = game ? (shelf ? 'Edit shelf entry' : 'Edit game') : (shelf ? 'Add shelf entry' : 'Add game');
   [...$('gameForm').elements].forEach(element => {
     if (!element.name) return;
@@ -577,10 +599,26 @@ async function openGameDialog(game = null, options = {}) {
   container.innerHTML = defs.length ? defs.map(def => {
     const value = game?.custom_fields?.[def.name] || '';
     if (def.options?.length) {
-      return `<label class="field"><span>${escapeHtml(def.name)}</span><select data-custom-field="${escapeHtml(def.name)}">${['', ...def.options].map(option => `<option value="${escapeHtml(option)}" ${option === value ? 'selected' : ''}>${escapeHtml(option || 'Not set')}</option>`).join('')}</select></label>`;
+      const options = value && !def.options.includes(value) ? [...def.options, value] : def.options;
+      return `<label class="field"><span>${escapeHtml(def.name)}</span><select data-custom-field="${escapeHtml(def.name)}">${['', ...options].map(option => `<option value="${escapeHtml(option)}" ${option === value ? 'selected' : ''}>${escapeHtml(option || 'Not set')}</option>`).join('')}</select></label>`;
     }
     return `<label class="field"><span>${escapeHtml(def.name)}</span><input data-custom-field="${escapeHtml(def.name)}" value="${escapeHtml(value)}"></label>`;
   }).join('') : '';
+  const controllerChoices = $('controllerTypeChoices');
+  if (controllerChoices) {
+    const input = $('gameForm').elements.controller_support;
+    const selected = new Set(String(input?.value || '').split(',').map(value => value.trim().toLowerCase()).filter(Boolean));
+    const types = AppState.appSettings.controller_types?.length ? AppState.appSettings.controller_types : [{ id: 'gamepad', name: 'Gamepad' }, { id: 'keyboard', name: 'Keyboard' }, { id: 'mouse', name: 'Mouse' }];
+    const known = new Set(types.map(type => type.name.toLowerCase()));
+    const legacy = [...selected].filter(value => !known.has(value));
+    controllerChoices.innerHTML = types.map(type => `<label class="check"><input type="checkbox" data-controller-type="${escapeHtml(type.name)}" ${selected.has(type.name.toLowerCase()) ? 'checked' : ''}> ${escapeHtml(type.name)}</label>`).join('')
+      + legacy.map(value => `<label class="check"><input type="checkbox" data-controller-type="${escapeHtml(value)}" checked> ${escapeHtml(value)} <small>(existing value)</small></label>`).join('');
+    controllerChoices.querySelectorAll('[data-controller-type]').forEach(box => {
+      box.onchange = () => {
+        if (input) input.value = [...controllerChoices.querySelectorAll('[data-controller-type]:checked')].map(item => item.dataset.controllerType).join(', ');
+      };
+    });
+  }
   const profileSelect = $('gameForm').elements.launch_profile;
   const platformName = $('gameForm').elements.platform.value.trim();
   if (profileSelect) {

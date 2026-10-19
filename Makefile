@@ -13,8 +13,8 @@ PYTHON_SOURCES = $(shell sed '/^[[:space:]]*#/d;/^[[:space:]]*$$/d' runtime_modu
 PYTHON ?= python3
 
 
-DATA_FILES = index.html openbox.svg openbox.metainfo.xml LICENSE assets/openbox-logo.png
-STATIC_FILES = $(wildcard static/*.js) $(wildcard static/*.css)
+DATA_FILES = index.html openbox.svg openbox.metainfo.xml LICENSE assets/openbox-logo.png assets/placeholder-cover.svg assets/mame/scanlines.png assets/shaders/scanlines.slangp
+STATIC_FILES = $(wildcard static/*.js) $(wildcard static/*.css) $(wildcard static/*.svg)
 LOCALE_FILES = $(wildcard locales/*.json)
 NATIVE_HOST = native_host
 

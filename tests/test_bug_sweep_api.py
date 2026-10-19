@@ -342,6 +342,29 @@ class ApiSweep(unittest.TestCase):
         self.assertTrue(payload.get("ok"))
         self.assertFalse(payload.get("entering"))
 
+    def test_bigbox_shutdown_commands_run_only_on_real_exit(self):
+        import handlers.sessions as sessions
+
+        self.save_state({
+            "games": [],
+            "settings": {"bigbox_shutdown_commands": ["/bin/true"]},
+            "playlists": [],
+        })
+        with mock.patch.object(sessions.subprocess, "Popen") as popen:
+            status, payload = self.request("/api/bigbox/mode", {"entering": False})
+            self.assertEqual(status, 200)
+            self.assertEqual(payload.get("commands"), 0)
+            popen.assert_not_called()
+
+            status, payload = self.request("/api/bigbox/mode", {"entering": True})
+            self.assertEqual(status, 200)
+            popen.assert_not_called()
+
+            status, payload = self.request("/api/bigbox/mode", {"entering": False})
+            self.assertEqual(status, 200)
+            self.assertEqual(payload.get("commands"), 1)
+            popen.assert_called_once_with(["/bin/true"], **sessions.launch_kwargs())
+
     def test_related_rich_by_game_id(self):
         status, library = self.request("/api/library")
         self.assertEqual(status, 200)
@@ -417,6 +440,7 @@ GROUPS = {
     "concurrent_settings": "test_concurrent_partial_settings_saves",
     "lifecycle": "test_lifecycle",
     "bigbox": "test_bigbox_mode_switch",
+    "bigbox_shutdown": "test_bigbox_shutdown_commands_run_only_on_real_exit",
     "related": "test_related_rich_by_game_id",
     "preservation": "test_settings_preservation",
     "emulator_val": "test_emulator_validation",

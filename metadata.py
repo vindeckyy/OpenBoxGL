@@ -2,12 +2,15 @@
 
 import base64
 import concurrent.futures
+import hashlib
 import json
+import os
 import re
 import shutil
 import sqlite3
 import tempfile
 import threading
+import time
 import uuid
 import zipfile
 from datetime import datetime, timedelta, timezone
@@ -210,26 +213,156 @@ def build_database(metadata_zip, destination):
     temporary.replace(destination)
 
 
-def sync_database(destination, opener=urlopen):
+# Optional pinned digest for the published archive. Left empty in source so a
+# release can pin the hash without changing the download path; when empty the
+# first successful sync records the observed digest in ``METADATA_SHA_FILE``
+# (trust on first use) and later syncs must match it.
+DATABASE_SHA256 = ""
+METADATA_SHA_FILE = "metadata-db.sha256"
+_MAX_SYNC_ATTEMPTS = 3
+_SYNC_BACKOFF = (2, 8)
+
+
+class _HashingResponse:
+    """Response proxy that hashes every byte read by ``download_file``.
+
+    ``backend_io.download_file`` stays the only downloader; this wrapper gives
+    the caller the streamed SHA-256 and download progress without buffering the
+    archive and without a second HTTP client.
+    """
+
+    def __init__(self, response, on_read=None):
+        self._response = response
+        self._on_read = on_read
+        self.digest = hashlib.sha256()
+        self.received = 0
+        self.headers = getattr(response, "headers", None)
+        self.status = getattr(response, "status", 200)
+        self.total = 0
+        length = getattr(self.headers, "get", None)
+        if callable(length):
+            try:
+                self.total = max(0, int(length("Content-Length", "0") or 0))
+            except (TypeError, ValueError):
+                self.total = 0
+
+    def read(self, size=-1):
+        chunk = self._response.read(size)
+        if chunk:
+            self.digest.update(chunk)
+            self.received += len(chunk)
+            if self._on_read is not None:
+                self._on_read(self.received, self.total)
+        return chunk
+
+    def close(self):
+        close = getattr(self._response, "close", None)
+        if callable(close):
+            close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
+        return False
+
+    def __getattr__(self, name):
+        return getattr(self._response, name)
+
+
+def _notify_progress(progress, phase, current, total):
+    if progress is None:
+        return
+    try:
+        progress({"phase": phase, "bytes": int(current or 0), "total": int(total or 0)})
+    except Exception:  # noqa: BLE001 - progress reporting must never break a sync
+        pass
+
+
+def _metadata_sha_path(destination: Path) -> Path:
+    override = os.environ.get("OPENBOX_DATA_DIR")
+    if override:
+        return Path(override) / "cache" / METADATA_SHA_FILE
+    destination = Path(destination)
+    # The running app installs the database under <data>/metadata; keep the
+    # digest in <data>/cache. Ad-hoc and test destinations get an isolated file
+    # next to the database so a self-test never writes into the user's data.
+    if destination.parent.name == "metadata":
+        return destination.parent.parent / "cache" / METADATA_SHA_FILE
+    return destination.parent / METADATA_SHA_FILE
+
+
+def _expected_metadata_sha(checksum_file: Path) -> str:
+    pinned = str(DATABASE_SHA256 or "").strip().casefold()
+    if pinned:
+        return pinned
+    try:
+        return Path(checksum_file).read_text(encoding="utf-8").strip().casefold()
+    except OSError:
+        return ""
+
+
+def sync_database(destination, opener=urlopen, progress=None, *, sleep=None, checksum_path=None):
+    """Download, verify, and atomically build the LaunchBox metadata database.
+
+    ``DATABASE_SHA256`` (or a previously recorded digest) gates the build. A
+    mismatch deletes the temporary archive and retries the whole download up to
+    two more times with 2 s/8 s backoff before raising. When no digest is known
+    the first verified download records it (trust on first use).
+    """
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(dir=destination.parent, suffix=".zip", delete=False) as temporary:
-        archive = Path(temporary.name)
-    try:
+    checksum_file = Path(checksum_path) if checksum_path else _metadata_sha_path(destination)
+    expected = _expected_metadata_sha(checksum_file)
+    sleep = sleep or time.sleep
+    last_checksum = ""
+    for attempt in range(_MAX_SYNC_ATTEMPTS):
+        with tempfile.NamedTemporaryFile(dir=destination.parent, suffix=".zip", delete=False) as temporary:
+            archive = Path(temporary.name)
+        holder = {}
+
+        def on_read(received, total):
+            _notify_progress(progress, "download", received, total)
+
+        def streaming_opener(request, timeout=120, holder=holder):
+            response = opener(request, timeout=timeout)
+            wrapped = _HashingResponse(response, on_read)
+            holder["response"] = wrapped
+            return wrapped
+
         try:
-            download_file(
-                DATABASE_URL,
-                archive,
-                max_bytes=2 * 1024 * 1024 * 1024,
-                timeout=120,
-                opener=opener,
-            )
-        except (URLError, TimeoutError) as error:
-            reason = getattr(error, "reason", error)
-            raise ValueError(f"Could not reach the metadata database ({reason}). Check the connection and try again.") from error
-        build_database(archive, destination)
-    finally:
-        archive.unlink(missing_ok=True)
+            try:
+                download_file(
+                    DATABASE_URL,
+                    archive,
+                    max_bytes=2 * 1024 * 1024 * 1024,
+                    timeout=120,
+                    opener=streaming_opener,
+                )
+            except (URLError, TimeoutError) as error:
+                reason = getattr(error, "reason", error)
+                raise ValueError(f"Could not reach the metadata database ({reason}). Check the connection and try again.") from error
+            response = holder.get("response")
+            digest = response.digest.hexdigest() if response is not None else ""
+            size = archive.stat().st_size
+            _notify_progress(progress, "verify", size, size)
+            if expected and digest != expected:
+                last_checksum = digest
+                if attempt < _MAX_SYNC_ATTEMPTS - 1:
+                    sleep(_SYNC_BACKOFF[min(attempt, len(_SYNC_BACKOFF) - 1)])
+                    continue
+                raise ValueError("Metadata database checksum mismatch")
+            if not expected:
+                atomic_write_text(checksum_file, digest + "\n", mode=0o600)
+            _notify_progress(progress, "build", 0, size)
+            build_database(archive, destination)
+            return
+        finally:
+            archive.unlink(missing_ok=True)
+    # The loop always returns or raises; this defends against a future edit
+    # that lowers the attempt count without adjusting the final mismatch path.
+    raise ValueError(f"Metadata database checksum mismatch ({last_checksum or 'unknown'})")
 
 
 def search_games(database_path, title, platform="", limit=20):

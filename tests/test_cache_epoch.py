@@ -375,6 +375,18 @@ class CacheEpochTests(unittest.TestCase):
         result = _public_settings_uncached({"settings": {"platform_documents": "bad"}})
         self.assertEqual(result["platform_documents"], {})
 
+    def test_public_settings_uncached_projects_theme_audio_and_hardcore(self):
+        from pkg.state.cache import _public_settings_uncached
+
+        result = _public_settings_uncached({"settings": {
+            "theme": "Midnight Circuit",
+            "bigbox_sounds_enabled": False,
+            "ra_hardcore": True,
+        }})
+        self.assertEqual(result["theme"], "Midnight Circuit")
+        self.assertFalse(result["bigbox_sounds_enabled"])
+        self.assertTrue(result["ra_hardcore"])
+
     def test_project_game_projection_cache_hit(self):
         from pkg.state.cache import _project_game
 

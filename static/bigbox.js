@@ -1,10 +1,14 @@
 import { $, escapeHtml, defaultControllerMap, recentActivityValue, prefersReducedMotion } from './util.js';
-import { AppState, media, filteredGames, api, notify, gameForSession, nativeFullscreen, nativeFullscreenOn } from './state.js';
+import { firstEdge, wheelStepAllowed, screenSaverStats } from './pure.js';
+import { AppState, media, coverSource, filteredGames, api, token, notify, gameForSession, nativeFullscreen, nativeFullscreenOn, nativePickFile, platformCategoryFor } from './state.js';
+import { createPointerNavigator } from './pointer_nav.js';
+import { readBattery, batteryLabel } from './battery.js';
+import { configureThemeSounds, startThemeMusic, stopThemeMusic, playThemeSound } from './sfx.js';
 import { refresh } from './library.js';
 import { launch, openSessions } from './sessions.js';
 import { openReader } from './reader.js';
-import { loadAchievements } from './metadata.js';
-import { openAchievements } from './settings.js';
+import { loadAchievements, renderAchievementTabs } from './metadata.js';
+import { openDialog } from './dialogs.js';
 import { installGameyfin, uninstallGameyfin } from './storefront.js';
 import { applyMoodForGame, clearMood } from './mood.js';
 import { openParty, partyOverlayOpen, partyGamepad } from './party.js';
@@ -14,11 +18,44 @@ import { openSetupCenter } from './setup.js';
 import { t } from './i18n.js';
 import { registerGamepadSurface, ensureGamepadLoop, stopGamepadLoop, syncGamepadLoop } from './gamepad.js';
 import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBoxSmartSearch, dnaMoreLikeThisBigBox } from './dna.js';
+import { renderCoverModel, bindCoverModel, coverModelFor } from './model3d.js';
 
 
+
+const ACTION_ORDER = ['pause', 'menu', 'back', 'play', 'favorite', 'random', 'pageLeft', 'pageRight'];
+let pointerNavigator = null;
+let pointerNavigatorConfig = '';
+
+function backHoldSeconds() {
+  const value = Number(AppState.appSettings.bigbox_back_hold_seconds);
+  return Number.isFinite(value) ? Math.min(2, Math.max(0, value)) : 0.8;
+}
+function startBigBoxBack() {
+  playThemeSound('back');
+  if (backHoldSeconds() <= 0) {
+    closeBigBox();
+    return;
+  }
+  AppState.backPressedAt = performance.now();
+}
+function releaseBigBoxBack() {
+  if (!AppState.backPressedAt) return;
+  const held = (performance.now() - AppState.backPressedAt) / 1000;
+  AppState.backPressedAt = 0;
+  if (held >= backHoldSeconds()) openBigBoxMenu();
+  else closeBigBox();
+}
 
     async function activateCurrentGame(game, trigger) {
       if (!game) return;
+      playThemeSound('select');
+      if (game.steam_installable) {
+        try {
+          await api('/api/game/store-action', { method: 'POST', body: JSON.stringify({ id: game.id, game_id: game.game_id, action: 'install' }) });
+          notify(t('notify.app.steam_install_queued'));
+        } catch (error) { notify(error.message); }
+        return;
+      }
       if (game.gameyfin_id && !game.store_installed) {
         await installGameyfin(game);
         return;
@@ -84,6 +121,35 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
     if ($('bigBox')) watchBigBoxVisibility();
     else document.addEventListener('DOMContentLoaded', watchBigBoxVisibility, { once: true });
 
+    function syncPointerNavigator() {
+      const enabled = AppState.appSettings.pointer_nav_enabled !== false;
+      const config = JSON.stringify({
+        enabled,
+        sensitivity: AppState.appSettings.spinner_sensitivity ?? 6,
+        wheel: AppState.appSettings.mouse_wheel_nav !== false,
+      });
+      if (config === pointerNavigatorConfig) return;
+      pointerNavigatorConfig = config;
+      pointerNavigator?.destroy();
+      pointerNavigator = null;
+      if (!enabled || !$('bigBox')) return;
+      pointerNavigator = createPointerNavigator({
+        surface: $('bigBox'),
+        sensitivity: AppState.appSettings.spinner_sensitivity ?? 6,
+        wheelEnabled: AppState.appSettings.mouse_wheel_nav !== false,
+        dragEnabled: true,
+        onStep: (delta, source) => moveBigBox(delta, { wheel: source === 'wheel' }),
+        onPage: delta => moveBigBox(delta * 10),
+        onActivate: () => {
+          const game = AppState.bigBoxGames[AppState.bigBoxIndex];
+          if (game && $('bigBox') && !$('bigBox').hidden) activateCurrentGame(game);
+        },
+        onActivity: () => {
+          AppState.bigBoxLastInput = performance.now();
+          if (!$('screenSaver').hidden) stopScreenSaver();
+        },
+      });
+    }
     function openBigBox() {
       AppState.bigBoxFilter = 'all';
       AppState.bigBoxSort = 'title';
@@ -107,15 +173,21 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       AppState.bigBoxIndex = Math.max(0,AppState.bigBoxGames.findIndex(game => game.id === AppState.selectedId));
       AppState.bigBoxLastInput = performance.now();
       AppState.gamepadState = {};
+      syncPointerNavigator();
       // Query battery once per BigBox open rather than per render frame.
       AppState.bigBoxBattery = null;
-      if (navigator.getBattery) { navigator.getBattery().then(status => { AppState.bigBoxBattery = status; renderBigBox(); }).catch(() => {}); }
+      readBattery().then(status => { AppState.bigBoxBattery = status; renderBigBox(); }).catch(() => {});
       $('bigBox').hidden = false;
       setBackgroundInert(true);
+      configureThemeSounds(AppState.appSettings.theme, { enabled: AppState.appSettings.bigbox_sounds_enabled !== false })
+        .then(() => startThemeMusic())
+        .catch(() => {});
       $('bigBox').focus();
       const startup = $('bigBoxStartupVideo');
       if (startup && AppState.appSettings.bigbox_startup_video) {
-        startup.src = AppState.appSettings.bigbox_startup_video;
+        startup.src = `/api/bigbox/startup-video?token=${encodeURIComponent(token)}`;
+        startup.classList.remove('startup-video-done');
+        startup.loop = AppState.appSettings.bigbox_startup_video_loop === true;
         startup.hidden = false;
         startup.play().catch(() => {});
       } else if (startup) {
@@ -128,11 +200,11 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       nativeFullscreen().catch(() => {});
       ensureGamepadLoop();
     }
-    function closeBigBox() {
+    async function closeBigBox() {
       stopScreenSaver();
+      stopThemeMusic();
       syncGamepadLoop();
       $('bigBoxMenu').hidden = true;
-      $('bigBox').hidden = true;
       setBackgroundInert(false);
       // S30: the video snap loops forever after close and library music stays
       // pinned at 0.1 volume, so every later song in the session played at a
@@ -140,9 +212,21 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       // on the way out, while four render paths already called it on the way in.
       clearVideoSnap();
       if ($('bigBoxStartupVideo')) { $('bigBoxStartupVideo').pause(); $('bigBoxStartupVideo').hidden = true; }
+      if ($('bigBoxBackdrop')) { $('bigBoxBackdrop').pause(); $('bigBoxBackdrop').hidden = true; $('bigBoxBackdrop').removeAttribute('src'); }
       const game = AppState.games.find(item => item.id === AppState.selectedId);
       applyMoodForGame(game).catch(() => {});
-      api('/api/bigbox/mode',{method:'POST',body:JSON.stringify({entering:false})}).catch(() => {});
+      // Shutdown applications are started by the server on the leaving edge.
+      // Await that request (bounded to 3 s) so the window does not disappear
+      // before the command launch has been accepted.
+      try {
+        await Promise.race([
+          api('/api/bigbox/mode',{method:'POST',body:JSON.stringify({entering:false})}),
+          new Promise(resolve => setTimeout(resolve, 3000)),
+        ]);
+      } catch (error) {
+        notify(error.message);
+      }
+      $('bigBox').hidden = true;
       if (document.fullscreenElement || nativeFullscreenOn) nativeFullscreen().catch(() => {});
     }
     function applyBigBoxDnaResults(payload) {
@@ -172,7 +256,11 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       renderBigBox();
     }
     function filteredBigBoxGames({ ignorePlatform = false } = {}) {
-      let result = filteredGames().filter(game => !game.hide_in_bigbox);
+      const hiddenPlaylists = new Set(AppState.appSettings.bigbox_hidden_playlists || []);
+      if (AppState.activePlaylist && hiddenPlaylists.has(AppState.activePlaylist)) AppState.activePlaylist = '';
+      const hiddenPlatforms = new Set(AppState.appSettings.bigbox_hidden_platforms || []);
+      const hiddenCategories = new Set(AppState.appSettings.bigbox_hidden_categories || []);
+      let result = filteredGames().filter(game => !game.hide_in_bigbox && !hiddenPlatforms.has(game.platform || 'Unspecified') && !hiddenCategories.has(platformCategoryFor(game)));
       if (!ignorePlatform && AppState.bigBoxPlatform !== 'all') result = result.filter(game => game.platform === AppState.bigBoxPlatform);
       if (AppState.bigBoxHybridQuery) {
         const query = AppState.bigBoxHybridQuery.toLowerCase();
@@ -297,7 +385,9 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       }
       return window;
     }
-    function moveBigBox(change) {
+    function moveBigBox(change, { wheel = false } = {}) {
+      if (wheel && !wheelStepAllowed(performance.now(), AppState.bigBoxLastMove || 0, AppState.appSettings.bigbox_wheel_speed)) return;
+      AppState.bigBoxLastMove = performance.now();
       // S32: a filter that matches nothing left the list empty, the modulo went
       // to NaN, and `bigBoxGames[NaN].id` threw -- every frame, from the gamepad
       // tick, where the error is swallowed and the stage simply stops advancing.
@@ -310,6 +400,7 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       if (!game) return;
       AppState.selectedId = game.id;
       AppState.bigBoxLastInput = performance.now();
+      playThemeSound('move');
       renderBigBox();
       // The stage is rebuilt on every step, so slide the new content in from the direction of travel
       // (ADR 0063). Durations are tokens, so reduced motion makes this instant.
@@ -325,13 +416,75 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
     // ponytail: single reused <video> element, 600ms debounce, ducks BGM,
     // respects prefers-reduced-motion, falls back to static cover.
     let _videoSnapEl = null;
+    let _videoSnapControls = null;
     let _videoSnapTimer = 0;
     let _videoSnapGameId = null;
     const _reducedMotion = () => prefersReducedMotion();
 
+    function videoVolume() {
+      const value = Number(AppState.appSettings.bigbox_video_volume);
+      return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.8;
+    }
+
+    function mountVideoControls(video) {
+      if (AppState.appSettings.bigbox_video_controls === false) return null;
+      const cover = video.closest('.bigbox-cover');
+      if (!cover) return null;
+      const bar = document.createElement('div');
+      bar.className = 'bigbox-video-controls';
+      bar.setAttribute('role', 'group');
+      bar.setAttribute('aria-label', 'Video controls');
+      bar.innerHTML = '<button type="button" data-video-toggle aria-label="Pause video">Pause</button><input type="range" min="0" max="1000" value="0" aria-label="Seek video"><button type="button" data-video-mute aria-label="Mute video">Mute</button><button type="button" data-video-fullscreen aria-label="Full screen video">Full screen</button>';
+      cover.appendChild(bar);
+      const toggle = bar.querySelector('[data-video-toggle]');
+      const seek = bar.querySelector('input[type="range"]');
+      const mute = bar.querySelector('[data-video-mute]');
+      const full = bar.querySelector('[data-video-fullscreen]');
+      let hideTimer = 0;
+      const show = () => {
+        bar.classList.add('is-active');
+        if (hideTimer) clearTimeout(hideTimer);
+        scheduleHide();
+      };
+      const scheduleHide = () => {
+        if (hideTimer) clearTimeout(hideTimer);
+        hideTimer = setTimeout(() => { bar.classList.remove('is-active'); hideTimer = 0; }, 2000);
+      };
+      cover.addEventListener('pointerenter', show);
+      cover.addEventListener('pointermove', show);
+      cover.addEventListener('pointerleave', scheduleHide);
+      bar.addEventListener('focusin', show);
+      bar.addEventListener('focusout', event => {
+        if (!bar.contains(event.relatedTarget)) scheduleHide();
+      });
+      const sync = () => {
+        toggle.textContent = video.paused ? 'Play' : 'Pause';
+        toggle.setAttribute('aria-label', video.paused ? 'Play video' : 'Pause video');
+        mute.textContent = video.muted ? 'Unmute' : 'Mute';
+        mute.setAttribute('aria-label', video.muted ? 'Unmute video' : 'Mute video');
+        if (seek && Number.isFinite(video.duration) && video.duration > 0) {
+          seek.value = String(Math.round(video.currentTime / video.duration * 1000));
+        }
+      };
+      toggle.onclick = event => { event.stopPropagation(); if (video.paused) video.play().catch(() => {}); else video.pause(); sync(); };
+      mute.onclick = event => { event.stopPropagation(); video.muted = !video.muted; sync(); };
+      seek.oninput = event => {
+        event.stopPropagation();
+        if (Number.isFinite(video.duration) && video.duration > 0) video.currentTime = Number(seek.value) / 1000 * video.duration;
+      };
+      full.onclick = event => { event.stopPropagation(); video.requestFullscreen?.().catch(() => notify(t('notify.app.bigbox_fullscreen_unavailable'))); };
+      video.addEventListener('play', sync);
+      video.addEventListener('pause', sync);
+      video.addEventListener('timeupdate', sync);
+      sync();
+      return bar;
+    }
+
     function clearVideoSnap() {
       if (_videoSnapTimer) { clearTimeout(_videoSnapTimer); _videoSnapTimer = 0; }
       if (_videoSnapEl) { _videoSnapEl.pause(); _videoSnapEl.removeAttribute('src'); _videoSnapEl.load(); _videoSnapEl = null; }
+      _videoSnapControls?.remove();
+      _videoSnapControls = null;
       _videoSnapGameId = null;
       if (AppState.libraryBgm && AppState.libraryBgm.volume < 0.4) {
         AppState.libraryBgm.volume = AppState.appSettings.video_bgm_mix ? 0.35 : 0.6;
@@ -347,28 +500,61 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       const videoUrl = media(game, 'video');
       _videoSnapTimer = setTimeout(() => {
         _videoSnapTimer = 0;
-        if (_videoSnapGameId === game.id && _videoSnapEl) return; // already playing
-        clearVideoSnap();
-        const el = document.createElement('video');
-        el.muted = true;
-        el.loop = true;
-        el.playsInline = true;
-        el.className = 'bigbox-video-snap';
-        el.src = videoUrl;
         const coverEl = document.querySelector('.bigbox-cover');
         if (!coverEl) return;
+        if (_videoSnapGameId === game.id && _videoSnapEl) {
+          if (!_videoSnapEl.isConnected) {
+            coverEl.appendChild(_videoSnapEl);
+            _videoSnapControls = mountVideoControls(_videoSnapEl);
+          }
+          return;
+        }
+        clearVideoSnap();
+        const el = document.createElement('video');
+        el.muted = !AppState.appSettings.video_bgm_mix;
+        el.loop = true;
+        el.playsInline = true;
+        el.volume = videoVolume();
+        el.className = 'bigbox-video-snap';
+        el.src = videoUrl;
         coverEl.appendChild(el);
-        el.play().catch(() => {});
         _videoSnapEl = el;
         _videoSnapGameId = game.id;
+        _videoSnapControls = mountVideoControls(el);
+        const start = () => el.play().catch(() => {
+          // Autoplay policy: retry muted once, then leave the static cover.
+          el.muted = true;
+          el.play().catch(() => {});
+          if (!AppState.appSettings.video_bgm_mix) return;
+          notify(t('notify.app.video_audio_click'));
+        });
+        start();
         // Duck BGM while video plays
-        if (AppState.libraryBgm) AppState.libraryBgm.volume = 0.1;
+        if (AppState.libraryBgm && AppState.appSettings.video_bgm_mix) AppState.libraryBgm.volume = 0.1;
       }, 600);
+    }
+
+    function syncBigBoxBackdrop(game) {
+      const backdrop = $('bigBoxBackdrop');
+      if (!backdrop) return;
+      const platformPath = AppState.appSettings.platform_videos?.[game?.platform || ''];
+      const enabled = AppState.appSettings.bigbox_video_backdrop === true;
+      const source = enabled ? (platformPath ? `/api/platform/video?platform=${encodeURIComponent(game.platform)}&token=${encodeURIComponent(token)}` : (game?.has_video ? media(game, 'video') : '')) : '';
+      if (!source) {
+        backdrop.hidden = true;
+        backdrop.pause();
+        backdrop.removeAttribute('src');
+        return;
+      }
+      if (backdrop.getAttribute('src') !== source) backdrop.src = source;
+      backdrop.hidden = false;
+      backdrop.play().catch(() => {});
     }
     // --- end video snap ---
     function renderBigBox() {
       const game = AppState.bigBoxGames[AppState.bigBoxIndex];
       applyMoodForGame(game).catch(() => {});
+      syncBigBoxBackdrop(game);
       if (!game) {
         // An empty list (a search or smart search with no matches) used to
         // leave the previous game on stage with its Play button still bound
@@ -378,16 +564,27 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
         return;
       }
       const hint = AppState.appSettings.controller_prompt_hint || 'A Play · B Back · M Menu';
+      const battery = $('bigBoxBattery');
+      if (battery) {
+        const label = AppState.appSettings.battery_indicator === false ? '' : batteryLabel(AppState.bigBoxBattery);
+        battery.hidden = !label;
+        battery.textContent = label;
+        battery.setAttribute('aria-label', label ? `Battery ${label}` : '');
+      }
       if ($('bigBoxStatus')) {
-        const status = AppState.bigBoxBattery;
-        $('bigBoxStatus').innerHTML = status ? `<strong>${Math.round(status.level * 100)}%</strong> battery · ${escapeHtml(hint)}` : escapeHtml(hint);
+        $('bigBoxStatus').textContent = hint;
       }
       const mode = AppState.appSettings.bigbox_mode || 'stage';
       if ($('bigBoxHybridSearch')) $('bigBoxHybridSearch').hidden = mode !== 'hybrid';
       if ($('bigBoxDnaToggle')) { $('bigBoxDnaToggle').hidden = mode !== 'hybrid'; setDnaSearchMode(dnaSearchMode(), { search: false }); }
-      const playLabel = game.gameyfin_id && !game.store_installed
+      const playLabel = game.steam_installable
         ? '⬇ INSTALL'
-        : (AppState.appSettings.dynamic_play_button === false ? '▶ PLAY' : (game.versions || []).length ? '▶ PLAY DEFAULT' : (game.applications || []).length ? '▶ PLAY GAME' : '▶ PLAY');
+        : game.gameyfin_id && !game.store_installed
+          ? '⬇ INSTALL'
+          : (AppState.appSettings.dynamic_play_button === false ? '▶ PLAY' : (game.versions || []).length ? '▶ PLAY DEFAULT' : (game.applications || []).length ? '▶ PLAY GAME' : '▶ PLAY');
+      const steamRepairBtn = game.steam_repairable
+        ? '<button class="icon-button" id="bigBoxSteamRepair" style="margin-left:var(--space-sm)">Verify Steam files</button>'
+        : '';
       if (mode === 'hybrid') {
         clearVideoSnap();
         // The tab row lists every platform, not just the ones left after the
@@ -410,10 +607,10 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
           return renderBigBox();
         }
         $('bigBoxStage').className = 'bigbox-stage bigbox-hybrid';
-        const canAct = (game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed);
+        const canAct = (game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed) || game.steam_installable;
         const ownedLabel = game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : '';
         const uninstallBtn = game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:var(--space-sm)">Uninstall</button>' : '';
-        $('bigBoxStage').innerHTML = `<div class="bigbox-platforms">${platforms.map(name => `<button class="bigbox-platform ${AppState.bigBoxPlatform === name ? 'active' : ''}" data-bigbox-platform="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p>${game._dnaWhy && game._dnaWhy.length ? `<p class="bigbox-dna-why">${game._dnaWhy.map(chip => `<span class="dna-chip">${escapeHtml(chip)}</span>`).join('')}</p>` : ''}<button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}<button class="icon-button" id="bigBoxDnaSimilar" style="margin-left:var(--space-sm)">${escapeHtml(t('dna.more_like_this'))}</button></div>`;
+        $('bigBoxStage').innerHTML = `<div class="bigbox-platforms">${platforms.map(name => `<button class="bigbox-platform ${AppState.bigBoxPlatform === name ? 'active' : ''}" data-bigbox-platform="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p>${game._dnaWhy && game._dnaWhy.length ? `<p class="bigbox-dna-why">${game._dnaWhy.map(chip => `<span class="dna-chip">${escapeHtml(chip)}</span>`).join('')}</p>` : ''}<button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${steamRepairBtn}${uninstallBtn}<button class="icon-button" id="bigBoxDnaSimilar" style="margin-left:var(--space-sm)">${escapeHtml(t('dna.more_like_this'))}</button></div>`;
         document.querySelectorAll('[data-bigbox-platform]').forEach(button => button.onclick = () => {
           AppState.bigBoxPlatform = button.dataset.bigboxPlatform;
           // In smart mode with a query, re-run smart search (platform goes
@@ -429,11 +626,11 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       } else if (mode === 'coverflow') {
         clearVideoSnap();
         $('bigBoxStage').className = 'bigbox-stage';
-        const canAct = (game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed);
+        const canAct = (game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed) || game.steam_installable;
         const ownedLabel = game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : '';
         const uninstallBtn = game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:var(--space-sm)">Uninstall</button>' : '';
         const cards = coverflowWindow(AppState.bigBoxGames, AppState.bigBoxIndex);
-        $('bigBoxStage').innerHTML = `<div class="coverflow-strip" data-coverflow-strip>${cards.map(({item,index,offset = 0}) => `<button class="coverflow-card jewel-case ${index === AppState.bigBoxIndex ? 'active' : ''}" data-coverflow="${index}" style="--coverflow-offset:${offset}" aria-label="Open ${escapeHtml(item.name)}">${item.has_cover ? `<img src="${media(item,'cover')}" alt="" loading="lazy" decoding="async">` : `<div class="cover-title">${escapeHtml(item.name)}</div>`}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${uninstallBtn}</div>`;
+        $('bigBoxStage').innerHTML = `<div class="coverflow-strip" data-coverflow-strip>${cards.map(({item,index,offset = 0}) => `<button class="coverflow-card ${index === AppState.bigBoxIndex ? 'active' : 'jewel-case'}" data-coverflow="${index}" style="--coverflow-offset:${offset}" aria-label="Open ${escapeHtml(item.name)}">${index === AppState.bigBoxIndex ? renderCoverModel(item, { tools: false }) : `<img${item.has_cover ? '' : ' class="cover-placeholder"'} src="${coverSource(item)}" alt="" loading="lazy" decoding="async">`}</button>`).join('')}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${ownedLabel}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${canAct ? '' : 'disabled'}>${playLabel}</button>${steamRepairBtn}${uninstallBtn}</div>`;
         document.querySelector('[data-coverflow-strip]')?.addEventListener('click', event => {
           const button = event.target.closest('[data-coverflow]');
           if (!button) return;
@@ -441,13 +638,22 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
           AppState.selectedId = AppState.bigBoxGames[AppState.bigBoxIndex].id;
           renderBigBox();
         });
+        bindCoverModel($('bigBoxStage'));
       } else {
         $('bigBoxStage').className = 'bigbox-stage';
-        $('bigBoxStage').innerHTML = `<div class="bigbox-cover${game.has_cover ? '' : ' no-image'}">${game.has_cover ? `<img src="${media(game,'cover')}" alt="">` : escapeHtml(game.name)}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : ''}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${(game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed) ? '' : 'disabled'}>${playLabel}</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:var(--space-sm)">Uninstall</button>' : ''}</div>`;
+        const model = coverModelFor(game) !== 'none' ? renderCoverModel(game) : '';
+        $('bigBoxStage').innerHTML = `<div class="bigbox-cover${game.has_cover ? '' : ' no-image'}">${model || `<img${game.has_cover ? '' : ' class="cover-placeholder"'} src="${coverSource(game)}" alt="">`}</div><div class="bigbox-copy"><div class="hero-kicker">${escapeHtml(game.platform || '')}${game.gameyfin_id ? ` · ${game.store_installed ? 'Installed' : 'Owned'}` : ''}</div><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || [game.genre,game.developer].filter(Boolean).join(' · '))}</p><button class="bigbox-play" id="bigBoxPlay" ${(game.path_exists && game.store_installed !== false) || (game.gameyfin_id && !game.store_installed) || game.steam_installable ? '' : 'disabled'}>${playLabel}</button>${steamRepairBtn}${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="bigBoxUninstall" style="margin-left:var(--space-sm)">Uninstall</button>' : ''}</div>`;
+        bindCoverModel($('bigBoxStage'));
         scheduleVideoSnap(game);
       }
       $('bigBoxPlay').onclick = () => activateCurrentGame(game);
       if ($('bigBoxDnaSimilar')) $('bigBoxDnaSimilar').onclick = () => dnaMoreLikeThisBigBox(game.name);
+      if ($('bigBoxSteamRepair')) $('bigBoxSteamRepair').onclick = async () => {
+        try {
+          await api('/api/game/store-action', { method: 'POST', body: JSON.stringify({ id: game.id, game_id: game.game_id, action: 'repair' }) });
+          notify(t('notify.app.steam_verify_queued'));
+        } catch (error) { notify(error.message); }
+      };
       if ($('bigBoxUninstall')) $('bigBoxUninstall').onclick = () => uninstallGameyfin(game);
       applyLibraryMusic();
     }
@@ -473,7 +679,10 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       const game = gameForSession(session);
       $('bigBoxPauseTitle').textContent = session.game;
       $('bigBoxPauseMeta').textContent = `${session.paused ? 'Paused' : 'Running'} · started ${String(session.started || '').replace('T',' ')}`;
-      $('bigBoxPauseActions').innerHTML = `<button class="primary" data-pause-action="${session.launch_id}:${session.paused ? 'resume' : 'pause'}">${session.paused ? 'Resume' : 'Pause'}</button><button class="icon-button" data-pause-action="${session.launch_id}:stop">Exit game</button>${game ? '<button class="icon-button" id="pauseMoment">Capture moment</button><button class="icon-button" id="pauseClip">Clip it</button>' : ''}${(game?.documents || []).map((item,index) => `<button class="icon-button" data-pause-doc="${game.id}:${index}">Read ${escapeHtml(item.name)}</button>`).join('') || ''}${AppState.raConfigured ? `<button class="icon-button" id="pauseAchievements">Achievements</button>` : ''}`;
+      const achievementSources = Object.keys(game?.achievement_sources || {}).length;
+      const highscoreGame = Boolean(game && (game.platform === 'Arcade' || game.rom_name));
+      $('bigBoxPauseActions').innerHTML = `<button class="primary" data-pause-action="${session.launch_id}:${session.paused ? 'resume' : 'pause'}">${session.paused ? 'Resume' : 'Pause'}</button><button class="icon-button" data-pause-action="${session.launch_id}:stop">Exit game</button>${game ? '<button class="icon-button" id="pauseMoment">Capture moment</button><button class="icon-button" id="pauseClip">Clip it</button>' : ''}${(game?.documents || []).map((item,index) => `<button class="icon-button" data-pause-doc="${game.id}:${index}">Read ${escapeHtml(item.name)}</button>`).join('') || ''}${AppState.raConfigured || achievementSources ? `<button class="icon-button" id="pauseAchievements">Achievements</button>` : ''}${highscoreGame ? '<button class="icon-button" id="pauseHighscores">High scores</button><button class="icon-button" id="pauseExportHighscores">Export high scores</button><button class="icon-button" id="pauseImportHighscores">Import high scores</button>' : ''}`;
+      $('bigBoxPauseHighscores').textContent = '';
       document.querySelectorAll('[data-pause-action]').forEach(button => button.onclick = async () => {
         const [launch_id,action] = button.dataset.pauseAction.split(':');
         // S33: an unguarded `await` in an async onclick. A failed "Exit game"
@@ -497,7 +706,46 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       });
       if ($('pauseMoment')) $('pauseMoment').onclick = () => captureMomentInteractive(game, { trigger: 'pause', launchId: session.launch_id });
       if ($('pauseClip')) $('pauseClip').onclick = async () => { try { await captureClip({ game, launchId: session.launch_id }); } catch (error) { notify(error.message); } };
-      if ($('pauseAchievements')) $('pauseAchievements').onclick = () => { $('bigBoxPause').hidden = true; openAchievements(); };
+      if ($('pauseAchievements')) $('pauseAchievements').onclick = () => {
+        $('bigBoxPause').hidden = true;
+        const dialog = $('bigBoxAchievementsDialog');
+        renderAchievementTabs($('bigBoxAchievementsContent'), game || {});
+        const close = $('closeBigBoxAchievements');
+        if (close) close.onclick = () => dialog.close();
+        if (!dialog.open) openDialog(dialog);
+      };
+      if ($('pauseHighscores')) $('pauseHighscores').onclick = async () => {
+        const target = $('bigBoxPauseHighscores');
+        try {
+          const result = await api(`/api/v2/highscores/table?id=${game.id}`);
+          target.innerHTML = result.parsed
+            ? `<input type="search" id="bigBoxHighscoreSearch" placeholder="Search scores" aria-label="Search scores"><table><thead><tr><th>Rank</th><th>Score</th><th>Name</th></tr></thead><tbody>${result.scores.map(row => `<tr><td>${escapeHtml(String(row.rank ?? ''))}</td><td>${escapeHtml(String(row.score ?? ''))}</td><td>${escapeHtml(row.name || '')}</td></tr>`).join('')}</tbody></table>`
+            : escapeHtml(result.message || 'Not parsed (install hi2txt).');
+          const search = $('bigBoxHighscoreSearch');
+          if (search) search.oninput = () => {
+            const query = search.value.trim().toLowerCase();
+            target.querySelectorAll('tbody tr').forEach(row => {
+              row.hidden = Boolean(query) && !row.textContent.toLowerCase().includes(query);
+            });
+          };
+        } catch (error) {
+          target.textContent = error.message;
+        }
+      };
+      if ($('pauseExportHighscores')) $('pauseExportHighscores').onclick = async () => {
+        try {
+          const result = await api('/api/highscores/export',{method:'POST',body:JSON.stringify({id:game.id})});
+          notify(t('notify.library.high_scores_exported', {count: result.files.length}));
+        } catch (error) { notify(error.message); }
+      };
+      if ($('pauseImportHighscores')) $('pauseImportHighscores').onclick = async () => {
+        const path = await nativePickFile('Choose a MAME high score file');
+        if (!path) return;
+        try {
+          const result = await api('/api/highscores/import',{method:'POST',body:JSON.stringify({id:game.id,path})});
+          notify(`${result.restored.length} high score file(s) imported`);
+        } catch (error) { notify(error.message); }
+      };
       $('bigBoxPause').hidden = false;
       // Give the gamepad something to activate: A clicks the focused button.
       $('bigBoxPauseActions').querySelector('button')?.focus();
@@ -510,12 +758,17 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       if (game.has_video) {
         $('screenSaverVideo').src = media(game, 'video');
       } else if (game.has_cover) {
-        $('screenSaverVideo').src = media(game, 'cover');
+        $('screenSaverVideo').src = coverSource(game);
       } else {
         $('screenSaverVideo').removeAttribute('src');
       }
       $('screenSaverTitle').textContent = game.name;
       $('screenSaverPlatform').textContent = game.platform || 'Game';
+      if ($('screenSaverStats')) {
+        const stats = screenSaverStats(game);
+        $('screenSaverStats').textContent = stats;
+        $('screenSaverStats').hidden = !stats;
+      }
       $('screenSaver').hidden = false;
     }
     function stopScreenSaver() {
@@ -567,14 +820,18 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       if (!pad) return;
       const current = bigBoxPadState(pad);
       const edge = action => current[action] && !AppState.gamepadState[action];
+      const edged = Object.fromEntries(Object.keys(current).map(action => [action, edge(action)]));
       const buttons = [...$('bigBoxPauseActions').querySelectorAll('button')].filter(button => !button.disabled);
-      if (edge('up') || edge('left')) focusPauseButton(buttons, -1);
-      if (edge('down') || edge('right')) focusPauseButton(buttons, 1);
-      if (edge('play')) {
+      const action = firstEdge(edged, ['play', 'back']);
+      if (!action) {
+        if (edge('up') || edge('left')) focusPauseButton(buttons, -1);
+        if (edge('down') || edge('right')) focusPauseButton(buttons, 1);
+      } else if (action === 'play') {
         const focused = document.activeElement?.closest?.('#bigBoxPause button');
         (focused || buttons[0])?.click();
+      } else if (action === 'back') {
+        closeBigBoxPause();
       }
-      if (edge('back')) closeBigBoxPause();
       if (Object.keys(current).some(edge)) AppState.bigBoxLastInput = performance.now();
       AppState.gamepadState = current;
     }
@@ -587,7 +844,8 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       if (pad) {
         const current = bigBoxPadState(pad);
         const edge = action => current[action] && !AppState.gamepadState[action];
-        if (bigBoxTypingActive()) {
+        if (AppState.gamepadState.back && !current.back) releaseBigBoxBack();
+        if (bigBoxTypingActive() || document.querySelector('dialog[open]')) {
           AppState.gamepadState = current;
           return;
         }
@@ -621,19 +879,30 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
           if (edge('play')) applyBigBoxMenu();
           if (edge('back') || edge('menu')) closeBigBoxMenu();
         } else {
-          if (edge('left') || edge('up')) moveBigBox(-1);
-          if (edge('right') || edge('down')) moveBigBox(1);
-          if (edge('play')) {
+          const edged = Object.fromEntries(Object.keys(current).map(action => [action, edge(action)]));
+          const action = firstEdge(edged, ACTION_ORDER);
+          if (!action) {
+            if (edge('left') || edge('up')) moveBigBox(-1);
+            if (edge('right') || edge('down')) moveBigBox(1);
+          } else if (action === 'play') {
             const target = AppState.bigBoxGames[AppState.bigBoxIndex];
             if (target) activateCurrentGame(target);
+          } else if (action === 'back') {
+            startBigBoxBack();
+          } else if (action === 'favorite') {
+            favoriteBigBox();
+          } else if (action === 'random') {
+            AppState.bigBoxIndex = Math.floor(Math.random() * AppState.bigBoxGames.length);
+            renderBigBox();
+          } else if (action === 'pageLeft') {
+            moveBigBox(-10);
+          } else if (action === 'pageRight') {
+            moveBigBox(10);
+          } else if (action === 'pause') {
+            if (AppState.runningGames.length) openBigBoxPause();
+          } else if (action === 'menu') {
+            openBigBoxMenu();
           }
-          if (edge('back')) closeBigBox();
-          if (edge('favorite')) favoriteBigBox();
-          if (edge('random')) { AppState.bigBoxIndex = Math.floor(Math.random() * AppState.bigBoxGames.length); renderBigBox(); }
-          if (edge('pageLeft')) moveBigBox(-10);
-          if (edge('pageRight')) moveBigBox(10);
-          if (edge('pause') && AppState.runningGames.length) openBigBoxPause();
-          if (edge('menu')) openBigBoxMenu();
         }
         if (Object.keys(current).some(edge)) AppState.bigBoxLastInput = performance.now();
         AppState.gamepadState = current;
@@ -651,9 +920,22 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
     registerGamepadSurface({ priority: 30, isActive: () => !$('bigBox')?.hidden, tick: pollBigBoxGamepads, wantsLoop: () => !$('bigBox')?.hidden });
 
     if (typeof document !== 'undefined') {
+      window.addEventListener('openbox:theme-changed', event => {
+        if (!$('bigBox') || $('bigBox').hidden) return;
+        configureThemeSounds(event.detail?.theme || AppState.appSettings.theme, {
+          enabled: AppState.appSettings.bigbox_sounds_enabled !== false,
+        }).then(() => startThemeMusic()).catch(() => {});
+      });
+      window.addEventListener('pagehide', () => { pointerNavigator?.destroy(); pointerNavigator = null; });
       // (visibilitychange/gamepad lifecycle is owned by the unified loop in gamepad.js)
       $('bigBoxHybridSearch')?.addEventListener('focus', () => { AppState.bigBoxSearchMode = true; });
       $('partyMenuButton')?.addEventListener('click', () => { closeBigBoxMenu(); openParty(); });      $('bigBoxHybridSearch')?.addEventListener('blur', () => { AppState.bigBoxSearchMode = false; });
+      $('bigBoxStartupVideo')?.addEventListener('ended', () => {
+        const video = $('bigBoxStartupVideo');
+        if (!video) return;
+        video.classList.add('startup-video-done');
+        setTimeout(() => { if (video.classList.contains('startup-video-done')) video.hidden = true; }, 300);
+      });
       $('bigBoxHybridSearch')?.addEventListener('input', event => {
         AppState.bigBoxHybridQuery = event.target.value.trim();
         if (dnaSearchMode() === 'smart' && AppState.bigBoxHybridQuery) {
@@ -679,4 +961,4 @@ import { dnaSearchMode, setDnaSearchMode, scheduleBigBoxSmartSearch, cancelBigBo
       });
     }
 
-export { openBigBox, closeBigBox, filteredBigBoxGames, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, applyLibraryMusic, openBigBoxPause, closeBigBoxPause, bigBoxPauseOpen, startScreenSaver, stopScreenSaver, favoriteBigBox, activateCurrentGame, bigBoxTypingActive };
+export { openBigBox, closeBigBox, filteredBigBoxGames, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, applyLibraryMusic, openBigBoxPause, closeBigBoxPause, bigBoxPauseOpen, startScreenSaver, stopScreenSaver, favoriteBigBox, activateCurrentGame, bigBoxTypingActive, startBigBoxBack, releaseBigBoxBack, syncPointerNavigator };

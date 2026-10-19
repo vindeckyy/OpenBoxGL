@@ -253,7 +253,7 @@ def discover_profiles(which=shutil.which):
     return profiles
 
 
-def build_launch(game, profiles):
+def build_launch(game, profiles, state=None):
     path = game.get("path", "")
     if not path:
         raise ValueError(f"{game.get('name', 'This game')} has no launch path.")
@@ -266,7 +266,11 @@ def build_launch(game, profiles):
     )
     launch_game = dict(game)
     launch_game["path"] = launch_path
-    resolved = resolve_launch(launch_game, profiles, which=shutil.which, data_dir=str(DATA.parent))
+    resolved = resolve_launch(
+        launch_game, profiles, which=shutil.which, data_dir=str(DATA.parent), state=state
+    )
+    for warning in resolved.get("warnings") or []:
+        logging.getLogger("openbox").warning("Emulator settings: %s", warning)
     return resolved["args"], resolved["cwd"]
 
 

@@ -45,6 +45,7 @@ from pkg.parity.parity_steamgrid import (
     is_configured as steamgrid_configured,
     search_games as search_steamgrid_games,
 )
+from pkg.parity.parity_metadata_providers import APPLY_FIELDS, apply_candidate, search_all
 from parity_premium import download_bytes
 from pkg.state.operations import get_operation_service
 from routes.registry import route
@@ -104,7 +105,11 @@ class MetadataHandlers:
             game = game_from_query(load_state_view(), query)
             title = query.get("q", [game.get("name", "")])[0]
             results = search_games(METADATA_DATABASE, title, game.get("platform", ""))
-            self.send_json(200, {"results":results})
+            try:
+                candidates = search_all(load_state_view(), {**game, "name": title}, limit=20)
+            except Exception:  # noqa: BLE001 - optional providers never block local search
+                candidates = []
+            self.send_json(200, {"results":results, "candidates":candidates})
         except (KeyError, IndexError, ValueError, sqlite3.Error) as error:
             raise BadRequest(str(error)) from None
         return
@@ -139,6 +144,127 @@ class MetadataHandlers:
     @route("POST", "/api/metadata/igdb/apply")
     def _api_post_api_metadata_igdb_apply(self, payload):
         self.apply_igdb_metadata(payload)
+
+    @route("POST", "/api/v2/metadata/candidates/apply")
+    def _api_post_api_v2_metadata_candidates_apply(self, payload):
+        if not isinstance(payload, dict):
+            raise BadRequest("body must be an object")
+        candidate = payload.get("candidate")
+        if not isinstance(candidate, dict):
+            raise BadRequest("candidate must be an object")
+        overwrite = bool(payload.get("overwrite"))
+        game_id = payload.get("game_id")
+        state = load_state()
+        target = copy.deepcopy(game_from_payload(state, {"game_id": game_id}))
+        plugin_id = str(candidate.get("plugin_id") or "").strip()
+        if plugin_id:
+            from pkg.parity.parity_plugin_providers import plugin_metadata_apply
+
+            updated = plugin_metadata_apply(plugin_id, target, candidate.get("id"), overwrite=overwrite)
+        else:
+            updated = apply_candidate(target, candidate, overwrite=overwrite)
+        def mutate(state):
+            game = game_from_payload(state, {"game_id": target.get("game_id")})
+            for key in APPLY_FIELDS:
+                if key in updated and updated.get(key) not in (None, "", []):
+                    if overwrite or game.get(key) in (None, "", []):
+                        game[key] = updated[key]
+            provider = str(updated.get("metadata_provider") or "").strip()
+            if provider and (overwrite or not game.get("metadata_provider")):
+                game["metadata_provider"] = provider
+        transact_state(mutate)
+        self.send_json(200, {"ok": True, "game_id": target.get("game_id")})
+        return
+
+    @route("POST", "/api/v2/achievements/refresh")
+    def _api_post_api_v2_achievements_refresh(self, payload):
+        if not isinstance(payload, dict):
+            raise BadRequest("body must be an object")
+        game_id = str(payload.get("game_id") or "").strip()
+        source = str(payload.get("source") or "").strip()
+        if not game_id or not source:
+            raise BadRequest("game_id and source are required.")
+        if source == "retroachievements":
+            raise BadRequest("Use the RetroAchievements route to match a ROM.")
+        state = load_state()
+        game = game_from_payload(state, {"game_id": game_id})
+        if source == "steam":
+            app_id = str(game.get("steam_app_id") or "").strip()
+            if not app_id:
+                raise BadRequest("This game has no Steam app id.")
+            from pkg.parity.parity_steam_achievements import get_achievements, load_steam_credentials
+            credentials = load_steam_credentials(DATA.parent)
+            if not credentials.get("api_key") or not credentials.get("steam_id"):
+                raise BadRequest("Configure the Steam API key and Steam ID first.")
+            get_achievements(
+                app_id,
+                credentials["steam_id"],
+                data_dir=DATA.parent,
+                use_cache=False,
+                api_key=credentials["api_key"],
+            )
+        elif source.startswith("plugin:"):
+            parts = source.split(":", 2)
+            if len(parts) != 3 or not parts[1] or not parts[2]:
+                raise BadRequest("Plugin achievement sources must be plugin:<id>:<source>.")
+            from pkg.parity.parity_plugin_stats import refresh_plugin_stats
+            refresh_plugin_stats(parts[1], state)
+        else:
+            raise BadRequest("Unknown achievement source.")
+        from pkg.state.cache import invalidate_state_cache
+        invalidate_state_cache()
+        self.send_json(200, {"ok": True, "game_id": game_id, "source": source})
+        return
+
+    @route("POST", "/api/v2/achievements/override")
+    def _api_post_api_v2_achievements_override(self, payload):
+        if not isinstance(payload, dict):
+            raise BadRequest("body must be an object")
+        game_id = str(payload.get("game_id") or "").strip()
+        source = str(payload.get("source") or "").strip()
+        if not game_id:
+            raise BadRequest("game_id is required.")
+        if source not in {"retroachievements", "steam", "gog"} and not source.startswith("plugin:"):
+            raise BadRequest("Unknown achievement source.")
+        clear = bool(payload.get("clear"))
+        if clear:
+            def clear_mutate(state):
+                overrides = state.setdefault("achievement_overrides", {})
+                per_game = overrides.get(game_id) if isinstance(overrides, dict) else None
+                if isinstance(per_game, dict):
+                    per_game.pop(source, None)
+                    if not per_game:
+                        overrides.pop(game_id, None)
+                return {"cleared": True}
+
+            transact_state(clear_mutate)
+            self.send_json(200, {"ok": True, "cleared": True})
+            return
+        try:
+            earned = int(payload.get("earned", 0))
+            total = int(payload.get("total", 0))
+        except (TypeError, ValueError):
+            raise BadRequest("earned and total must be whole numbers.") from None
+        if earned < 0 or total < 0 or earned > total or total > 10000:
+            raise BadRequest("Achievement totals must satisfy 0 <= earned <= total <= 10000.")
+
+        def mutate(state):
+            game_from_payload(state, {"game_id": game_id})
+            overrides = state.setdefault("achievement_overrides", {})
+            if not isinstance(overrides, dict):
+                overrides = state["achievement_overrides"] = {}
+            per_game = overrides.setdefault(game_id, {})
+            per_game[source] = {
+                "earned": earned,
+                "total": total,
+                "mastered": bool(payload.get("mastered", total > 0 and earned >= total)),
+                "manual": True,
+            }
+            return {"source": source, **per_game[source]}
+
+        _, result = transact_state(mutate)
+        self.send_json(200, result)
+        return
 
     @route("POST", "/api/v2/metadata/matches/preview")
     def _api_post_api_v2_metadata_matches_preview(self, payload):
@@ -341,10 +467,18 @@ class MetadataHandlers:
             METADATA_JOB.clear()
             METADATA_JOB.update({"state":"downloading"})
 
+        def progress(event):
+            with PROCESS_LOCK:
+                METADATA_JOB.update({
+                    "phase": event.get("phase", ""),
+                    "bytes": int(event.get("bytes") or 0),
+                    "total": int(event.get("total") or 0),
+                })
+
         def worker():
             try:
-                sync_database(METADATA_DATABASE)
-                job = {"state":"done"}
+                sync_database(METADATA_DATABASE, progress=progress)
+                job = {"state":"done", "phase":"done"}
             except (OSError, ValueError, zipfile.BadZipFile, sqlite3.Error) as error:
                 job = {"state":"error", "error":str(error)}
             with PROCESS_LOCK:

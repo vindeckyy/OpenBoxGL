@@ -121,6 +121,7 @@ def import_steam(home=None, errors=None):
                             if not app_id or not name or app_id in seen:
                                 continue
                             seen.add(app_id)
+                            install_dir = library / "steamapps/common" / values.get("installdir", "")
                             games.append({
                                 "name": name,
                                 "platform": "PC",
@@ -129,7 +130,9 @@ def import_steam(home=None, errors=None):
                                 "path": executable,
                                 "launch": command,
                                 "steam_app_id": app_id,
-                                "install_dir": str(library / "steamapps/common" / values.get("installdir", "")),
+                                "install_dir": str(install_dir),
+                                "store_installed": install_dir.is_dir(),
+                                "store_catalog": False,
                             })
             except OSError as error:
                 if errors is not None:
