@@ -35,7 +35,7 @@ malformed packages are shown in the Plugins manager instead of being hidden.
 | `version` | yes | Free-form; shown verbatim |
 | `api_version` | no | Integer, default `1`; newer versions are refused and surfaced with an error |
 | `entry` | no | Python file inside the package, default `plugin.py` |
-| `hooks` | no | Defaults to `[]`; subset of `before_launch`, `after_session`, `library`, `command`, `library_source`, `events` |
+| `hooks` | no | Defaults to `[]`; the base hooks (`before_launch`, `after_session`, `library`, `command`, `library_source`, `events`) plus the capability hook required by a declared capability (`storefront`, `metadata`, `media`, `stats`, `emulator`, `discovery`) |
 | `commands` | no | Up to 32 `{id, label, description?}` entries (used by `command`) |
 
 ## Hooks
@@ -78,7 +78,8 @@ message: "..."}`.
 - Remote catalog: bundled `plugins/catalog.json` entries with a `url` must be
   HTTPS and carry a `sha256`; the archive is checksummed before extraction.
   Entries marked `local_only` are documentation-only and must be installed
-  from a local package.
+  from a local package. Optional `author` (80 chars) and `homepage` (HTTPS)
+  fields are shown in the catalog browser.
 - Enabling/disabling: `POST /api/plugins/toggle` with `{id, enabled}`.
   Removing keeps a recoverable copy under `<data>/plugins/.removed/`.
 
@@ -93,7 +94,10 @@ A manifest may declare `"permissions": ["network"]` (the only permission in
 network unless the user grants it at install/enable time (Android-style
 prompt in the Plugins manager). Granting `network` adds `--share-net` to
 the sandbox argv; without the grant the plugin keeps the no-network
-sandbox. Grants are stored per plugin and cleared on removal.
+sandbox. Storefront, metadata, media, and stats capabilities refuse to call
+their hook without a declared and granted network permission. Grants are
+stored per plugin; removing the plugin clears grants, settings, data, and
+credentials.
 
 ### Settings
 
@@ -180,6 +184,76 @@ def events(payload):
 - `GET /api/v2/plugins/catalog` — catalog entries enriched with
   `installed`, `installed_version`, `update_available`; `sandbox` is a
   top-level field of the response.
+
+### Capability plugins (1.18)
+
+A manifest may declare `capabilities` alongside the hook that implements each
+one. Declaring a capability without its hook is a manifest error.
+
+```json
+"hooks": ["metadata", "storefront"],
+"capabilities": {
+  "metadata": {"id": "vendor.metadata", "name": "Vendor metadata", "platform": "Nintendo Switch"},
+  "storefront": {"id": "vendor.store", "name": "Vendor store"}
+}
+```
+
+| Capability | Required hook | Extra fields |
+|---|---|---|
+| `storefront` | `storefront` | — |
+| `metadata` | `metadata` | optional `platform` |
+| `media` | `media` | optional `media_kinds` |
+| `stats` | `stats` | — |
+| `emulator_settings` | `emulator` | list of `{emulator_id, label, schema, scopes}` |
+| `discovery` | `discovery` | — |
+
+Capability hooks receive the usual payload plus:
+
+- `plugin_data` — the plugin's bounded data bag (1 MiB, depth 4).
+- `settings` — non-secret settings values.
+- `credentials` — values from the capability credential store (never
+  password-format settings).
+
+Capability hooks may return `data`
+(shallow-merged into the data bag), `service_requests` (up to 8, one round
+only), and the usual `notification`. The eight read-only services are
+`library.query`, `achievements`, `profile`, `activity`, `leaderboards`,
+`catalog.search`, `metadata.search`, and `media.search`. Credentials cannot be
+written from a hook result. Backups exclude the capability credential store
+and blank password-format setting values.
+
+Capability hook timeout budgets: `storefront` 30 s, `metadata`/`media`/`stats`
+15 s, `emulator`/`discovery` 10 s. Legacy hooks keep 5 s.
+
+### Localized messages and notifications
+
+A manifest may include a bounded `messages` table:
+
+```json
+"messages": {
+  "sync_done": {"en": "{count} games synced", "de": "{count} Spiele synchronisiert"}
+}
+```
+
+A hook notification may reference it as
+`{"level": "success", "key": "sync_done", "params": {"count": 12}}`. The host
+resolves the active locale, then English, then the raw key. `level` is one of
+`info`, `success`, `warning`, `error`. Each manifest template is capped at 500
+characters; the resolved notification is capped at 2,000.
+
+### Storage routes
+
+- `GET /api/v2/plugins/settings?id=<id>` returns the schema, non-secret values,
+  `secret_set`, and a credential key summary.
+- `POST /api/v2/plugins/settings` `{id, values, clear_secrets?}` saves settings.
+  A blank password field keeps the stored secret; list the field in
+  `clear_secrets` to remove it.
+- `POST /api/v2/plugins/credentials` `{id, values, clear}` writes capability
+  credentials. Responses contain key names and presence flags, never values.
+
+Credentials and the data bag live under `<data>/plugins/credentials/` and
+`<data>/plugins/data/` with `0600` permissions. A malformed file reads as
+empty; it never prevents a plugin from loading.
 
 ## Compatibility checklist for authors
 

@@ -18,13 +18,23 @@ class StorefrontTests(unittest.TestCase):
             steamapps = home / ".local/share/Steam/steamapps"
             steamapps.mkdir(parents=True)
             (steamapps / "appmanifest_42.acf").write_text('"AppState"\n{\n"appid" "42"\n"name" "Real Game"\n"installdir" "RealGame"\n}', encoding="utf-8")
+            (steamapps / "common" / "RealGame").mkdir(parents=True)
             userdata = home / ".local/share/Steam/userdata/1/config"
             userdata.mkdir(parents=True)
             (userdata / "localconfig.vdf").write_text('"Apps"\n{\n"42"\n{\n}\n"99"\n{\n}\n}', encoding="utf-8")
             catalog = catalog_steam(home)
             by_id = {item["id"]: item for item in catalog}
             self.assertTrue(by_id["42"]["installed"])
+            self.assertEqual(by_id["42"]["install_uri"], "steam://store/42")
             self.assertFalse(by_id["99"]["installed"])
+            self.assertEqual(by_id["99"]["install_uri"], "steam://install/99")
+            # A manifest whose install directory vanished is Missing, not
+            # Installed, even though Steam still lists the app as owned.
+            (steamapps / "common" / "RealGame").rmdir()
+            catalog = {item["id"]: item for item in catalog_steam(home)}
+            self.assertFalse(catalog["42"]["installed"])
+            self.assertEqual(catalog["42"]["install_uri"], "steam://install/42")
+            self.assertEqual(catalog["42"]["name"], "Real Game")
 
     def test_catalog_entries_to_games_uninstalled_only(self):
         entries = [

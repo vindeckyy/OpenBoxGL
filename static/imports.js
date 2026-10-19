@@ -96,10 +96,50 @@ async function pickEmulatorForPlatform(platform, items) {
         message: 'Leave blank for the detected emulator. You can use {rom_name} and {path}.',
         defaultValue: '',
       })) ?? '';
+      const players = await promptChoice({
+        title: 'Player filter',
+        message: 'Only import games supporting at least this many players.',
+        choices: [{value: 'any', label: 'Any'}, {value: '2', label: '2+ players'}, {value: '4', label: '4+ players'}],
+        defaultValue: 'any',
+      });
+      if (!players) return;
+      const skipChd = await promptChoice({
+        title: 'CHD filter',
+        message: 'Skip games that need a CHD disc image?',
+        choices: [{value: 'no', label: 'Include CHD games'}, {value: 'yes', label: 'Skip CHD games'}],
+        defaultValue: 'no',
+      });
+      if (!skipChd) return;
+      const skipInputsText = (await promptInput({
+        title: 'Input filter',
+        message: 'Skip games that need these controls. Comma-separated: trackball, lightgun, paddle, spinner, keyboard, mouse.',
+        defaultValue: '',
+      })) ?? '';
+      const makePlaylists = await promptChoice({
+        title: 'Generated playlists',
+        message: 'Create Vertical and Requires CHD filter playlists from the imported metadata?',
+        choices: [{value: 'no', label: 'No'}, {value: 'yes', label: 'Yes'}],
+        defaultValue: 'yes',
+      });
+      if (!makePlaylists) return;
       try {
-        const result = await api('/api/import/arcade',{method:'POST',body:JSON.stringify({folder,source,dat,command})});
+        const skipInputs = skipInputsText.split(',').map(item => item.trim()).filter(Boolean);
+        const result = await api('/api/import/arcade',{method:'POST',body:JSON.stringify({folder,source,dat,command,players,skip_chd: skipChd === 'yes',skip_inputs:skipInputs,make_playlists: makePlaylists === 'yes'})});
         await refresh();
         notify(`${result.added} arcade games imported · ${result.found} matched`);
+      } catch(error) { notify(error.message); }
+    }
+    async function importPico8() { return importLegacyFolder('/api/v2/import/pico8', 'PICO-8', 'PICO-8 carts folder'); }
+    async function importMsu1() { return importLegacyFolder('/api/v2/import/msu1', 'MSU-1', 'SNES ROM folder containing .msu packs'); }
+    async function importWhdload() { return importLegacyFolder('/api/v2/import/whdload', 'WHDLoad', 'Amiga WHDLoad folder'); }
+    async function importLegacyFolder(path, label, prompt) {
+      const folder = await nativePickFolder(prompt);
+      if (!folder) return;
+      try {
+        const result = await api(path, {method: 'POST', body: JSON.stringify({folder})});
+        await refresh();
+        notify(`${result.added} ${label} games imported · ${result.found} found`);
+        if (result.errors?.length) notify(`${label}: ${result.errors.length} folder entries skipped`);
       } catch(error) { notify(error.message); }
     }
     async function importDroppedFolder(folder) {
@@ -122,13 +162,14 @@ async function pickEmulatorForPlatform(platform, items) {
       // Each source is attempted even if an earlier one fails. Failures used to
       // vanish; now they are named once, at the end.
       const settings = AppState.appSettings.storefront_auto_import || {};
+      const enabled = value => typeof value === 'boolean' ? value : Boolean(value?.enabled);
       const failed = [];
       const attempt = (label, request) => request.catch(() => { failed.push(label); });
-      if (settings.steam) await attempt('Steam', api('/api/import/steam',{method:'POST',body:'{}'}));
-      if (settings.heroic) await attempt('Heroic', api('/api/import/heroic',{method:'POST',body:'{}'}));
-      if (settings.epic) await attempt('Epic', api('/api/import/epic',{method:'POST',body:'{}'}));
-      if (settings.lutris) await attempt('Lutris', api('/api/import/lutris',{method:'POST',body:'{}'}));
-      if (settings.gameyfin) await attempt('Gameyfin', api('/api/storefront/import',{method:'POST',body:JSON.stringify({source:'gameyfin'})}));
+      if (enabled(settings.steam)) await attempt('Steam', api('/api/import/steam',{method:'POST',body:'{}'}));
+      if (enabled(settings.heroic)) await attempt('Heroic', api('/api/import/heroic',{method:'POST',body:'{}'}));
+      if (enabled(settings.epic)) await attempt('Epic', api('/api/import/epic',{method:'POST',body:'{}'}));
+      if (enabled(settings.lutris)) await attempt('Lutris', api('/api/import/lutris',{method:'POST',body:'{}'}));
+      if (enabled(settings.gameyfin)) await attempt('Gameyfin', api('/api/storefront/import',{method:'POST',body:JSON.stringify({source:'gameyfin'})}));
       if (failed.length) notify(t('notify.imports.auto_failed', {sources: failed.join(', ')}));
     }
 
@@ -403,4 +444,4 @@ function bindEsdeImport() {
   $('esdeXmlPath')?.addEventListener('input', invalidateEsdePreview);
 }
 
-export { importFolder, importSteam, importHeroic, importEpic, importLutris, importGog, importEa, importUbisoft, importArcade, importDroppedFolder, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport };
+export { importFolder, importSteam, importHeroic, importEpic, importLutris, importGog, importEa, importUbisoft, importArcade, importPico8, importMsu1, importWhdload, importDroppedFolder, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport };

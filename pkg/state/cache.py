@@ -1,6 +1,7 @@
 """Cache structures and cached projection builders for OpenBox library state."""
 
 from collections import OrderedDict
+import contextvars
 import copy
 from dataclasses import dataclass, field
 import gzip
@@ -24,6 +25,7 @@ from parity_filter_presets import list_presets
 from parity_gamescope import is_gamescope_guest, list_gamescope_presets, is_mangohud_available
 from parity_import_policy import list_exclusions
 from parity_integrations import load_emumovies_credentials
+from parity_integration_tokens import public_tokens
 from parity_media import REGION_PRIORITY_DEFAULT, active_video, media_types_from_settings
 from parity_premium import LIST_COLUMNS_DEFAULT, category_for_platform, custom_field_defs, list_media_packs, platform_categories, strings_for
 from parity_saves import games_with_saves
@@ -41,6 +43,9 @@ SQLITE_READ_MODEL = SqliteReadModel(DATA.parent / "sqlite_readmodel.db")
 GZIP_THRESHOLD = 1024
 LOGGER = logging.getLogger("openbox")
 STATE_LOCK = threading.Lock()
+# Set while a public-state payload is being built. Plugin hooks that request
+# library services must not recursively call public_state() from inside it.
+BUILDING_PUBLIC_STATE = contextvars.ContextVar("openbox_building_public_state", default=False)
 
 FILE_PROBE_LOCK = threading.Lock()
 FILE_PROBE_TTL = 120.0
@@ -456,6 +461,11 @@ def bump_media_epoch():
     CACHE_EPOCH._invalidate_all(bump_media=True)
 
 
+def invalidate_state_cache():
+    """Drop public-state and projection caches after an out-of-band file change."""
+    CACHE_EPOCH._invalidate_all()
+
+
 def public_settings(state=None):
     load_fn = _ns("load_state", load_state)
     state = state or load_fn()
@@ -485,6 +495,35 @@ def _public_settings_uncached(state):
         "watch_folders": settings.get("watch_folders", []),
         "screensaver_seconds": settings.get("screensaver_seconds", 90),
         "controller_map": settings.get("controller_map", {}),
+        "controller_types": settings.get("controller_types", []),
+        "integration_tokens": public_tokens(settings.get("integration_tokens", {})),
+        "emulator_platform_settings": settings.get("emulator_platform_settings", {}),
+        "keyboard_map": settings.get("keyboard_map", {}),
+        "pointer_nav_enabled": settings.get("pointer_nav_enabled", True),
+        "mouse_wheel_nav": settings.get("mouse_wheel_nav", True),
+        "spinner_sensitivity": settings.get("spinner_sensitivity", 6),
+        "bigbox_wheel_speed": settings.get("bigbox_wheel_speed", 1.0),
+        "bigbox_back_hold_seconds": settings.get("bigbox_back_hold_seconds", 0.8),
+        "battery_indicator": settings.get("battery_indicator", True),
+        "bigbox_hidden_platforms": settings.get("bigbox_hidden_platforms", []),
+        "bigbox_hidden_categories": settings.get("bigbox_hidden_categories", []),
+        "bigbox_hidden_playlists": settings.get("bigbox_hidden_playlists", []),
+        "theme": settings.get("theme", ""),
+        "reader_theme": settings.get("reader_theme", "light"),
+        "reader_spread": settings.get("reader_spread", "single"),
+        "cover_model": settings.get("cover_model", "box"),
+        "cover_model_by_platform": settings.get("cover_model_by_platform", {}),
+        "model_rotation_lock": settings.get("model_rotation_lock", "free"),
+        "model_back_by_platform": settings.get("model_back_by_platform", {}),
+        "model_case_by_platform": settings.get("model_case_by_platform", {}),
+        "model_rotation_lock_by_platform": settings.get("model_rotation_lock_by_platform", {}),
+        "bigbox_video_controls": settings.get("bigbox_video_controls", True),
+        "bigbox_video_volume": settings.get("bigbox_video_volume", 0.8),
+        "bigbox_video_backdrop": settings.get("bigbox_video_backdrop", False),
+        "bigbox_sounds_enabled": bool(settings.get("bigbox_sounds_enabled", True)),
+        "bigbox_startup_video_loop": settings.get("bigbox_startup_video_loop", False),
+        "ra_hardcore": bool(settings.get("ra_hardcore", False)),
+        "platform_videos": settings.get("platform_videos", {}),
         "badge_visibility": settings.get("badge_visibility", ["favorite", "installed", "saves", "documents", "progress", "storefront", "achievements", "rating"]),
         "image_group": settings.get("image_group", "cover"),
         "image_group_by_platform": settings.get("image_group_by_platform", {}),
@@ -501,6 +540,7 @@ def _public_settings_uncached(state):
         "state_retention": settings.get("state_retention", 1),
         "backup_on_close": settings.get("backup_on_close", False),
         "save_backup_limit": settings.get("save_backup_limit", 10),
+        "save_management_enabled": bool(settings.get("save_management_enabled", True)),
         "backup_auto_enabled": settings.get("backup_auto_enabled", False),
         "backup_auto_keep": settings.get("backup_auto_keep", AUTO_BACKUP_KEEP),
         "last_auto_backup": settings.get("last_auto_backup", ""),
@@ -510,6 +550,9 @@ def _public_settings_uncached(state):
         "welcome_completed": settings.get("welcome_completed", False),
         "auto_import_media_types": sorted(media_types_from_settings(settings)),
         "media_download_limit": settings.get("media_download_limit", 0),
+        "media_download_limit_per_group": settings.get("media_download_limit_per_group", 0),
+        "metadata_provider_priority": settings.get("metadata_provider_priority", []),
+        "plugin_metadata_priority": bool(settings.get("plugin_metadata_priority", False)),
         "memories_import_enabled": settings.get("memories_import_enabled", False),
         "memories_import_roots": settings.get("memories_import_roots", []),
         "steamgrid_enabled": settings.get("steamgrid_enabled", True),
@@ -523,9 +566,12 @@ def _public_settings_uncached(state):
         "show_insights": settings.get("show_insights", True),
         "show_launch_badges": settings.get("show_launch_badges", True),
         "show_playlist_actions": settings.get("show_playlist_actions", True),
-        "sidebar_sections": settings.get("sidebar_sections", ["search", "view", "platforms", "playlists", "filters"]),
+        "sidebar_sections": settings.get("sidebar_sections", ["search", "view", "filters", "platforms", "playlists", "explorer"]),
+        "progress_values": settings.get("progress_values", ["Unplayed", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned"]),
         "hidden_sidebar_sections": settings.get("hidden_sidebar_sections", []),
-        "storefront_auto_import": settings.get("storefront_auto_import", {"steam": False, "heroic": False, "lutris": False, "gameyfin": False}),
+        "storefront_auto_import": settings.get("storefront_auto_import", {"steam": {"enabled": False, "platform": "", "include_uninstalled": False}, "heroic": {"enabled": False, "platform": "", "include_uninstalled": False}, "lutris": {"enabled": False, "platform": "", "include_uninstalled": False}, "gameyfin": {"enabled": False, "platform": "", "include_uninstalled": False}}),
+        "auto_import_excluded_platforms": settings.get("auto_import_excluded_platforms", []),
+        "emulator_update_checks": settings.get("emulator_update_checks", []),
         "obs_auto_attach": settings.get("obs_auto_attach", True),
         "obs_recording_path": settings.get("obs_recording_path", ""),
         "obs_replay_enabled": bool(settings.get("obs_replay_enabled", False)),
@@ -551,6 +597,7 @@ def _public_settings_uncached(state):
         "library_view": settings.get("library_view", "grid"),
         "cover_grouping": settings.get("cover_grouping", "shape"),
         "locale": settings.get("locale", "en"),
+        "font_family": settings.get("font_family", "system"),
         "currency": settings.get("currency", "USD"),
         "available_locales": AVAILABLE_LOCALES,
         "strings": strings_for(settings.get("locale", "en")),
@@ -610,7 +657,98 @@ def _ra_cache_record(game_id, data_parent):
     return value if isinstance(value, dict) else {}
 
 
-def _project_game(game, index, media_set, save_indices, video_priority, settings, media_epoch):
+def _achievement_source(name, earned, total, items=None, mastered=False):
+    try:
+        earned = max(0, int(earned))
+        total = max(0, int(total))
+    except (TypeError, ValueError):
+        return None
+    if total <= 0:
+        return None
+    earned = min(earned, total)
+    source = {
+        "name": str(name or ""),
+        "earned": earned,
+        "total": total,
+        "progress_pct": round(earned * 100.0 / total, 1),
+        "mastered": bool(mastered) or earned >= total,
+        "items": items if isinstance(items, list) else [],
+    }
+    return source
+
+
+def _achievement_sources(game, ra_cache, data_parent, plugin_entry, overrides):
+    """Merge RA, cached Steam, plugin caches, and manual corrections."""
+    sources = {}
+    if game.get("ra_game_id"):
+        ra_source = _achievement_source(
+            "RetroAchievements",
+            ra_cache.get("earned", game.get("ra_achievements_earned", 0)),
+            ra_cache.get("total", game.get("ra_achievements_total", 0)),
+            ra_cache.get("achievements") or ra_cache.get("items"),
+            ra_cache.get("mastered", game.get("ra_mastered", False)),
+        )
+        if ra_source is not None:
+            ra_source["id"] = "retroachievements"
+            sources["retroachievements"] = ra_source
+    steam_app_id = str(game.get("steam_app_id") or "").strip()
+    if steam_app_id:
+        try:
+            from pkg.parity.parity_steam_achievements import load_cache
+
+            cached = load_cache(data_parent, steam_app_id, ttl=float("inf")) or {}
+        except (ImportError, OSError, ValueError):
+            cached = {}
+        achievement = cached.get("achievement") if isinstance(cached, dict) else None
+        if isinstance(achievement, dict):
+            steam_source = _achievement_source(
+                achievement.get("name") or "Steam",
+                achievement.get("earned", 0),
+                achievement.get("total", 0),
+                achievement.get("items"),
+            )
+            if steam_source is not None:
+                steam_source["id"] = "steam"
+                sources["steam"] = steam_source
+    if isinstance(plugin_entry, dict):
+        for key, value in (plugin_entry.get("sources") or {}).items():
+            if not isinstance(value, dict):
+                continue
+            plugin_source = _achievement_source(
+                value.get("name", key), value.get("earned", 0), value.get("total", 0), value.get("items")
+            )
+            if plugin_source is not None:
+                plugin_source["id"] = str(key)
+                sources[str(key)] = plugin_source
+    raw_overrides = overrides.get(str(game.get("game_id") or "")) if isinstance(overrides, dict) else {}
+    if isinstance(raw_overrides, dict):
+        for key, value in raw_overrides.items():
+            if not isinstance(value, dict):
+                continue
+            source = sources.get(key) or {
+                "name": key, "earned": 0, "total": 0, "progress_pct": 0.0,
+                "mastered": False, "items": [], "id": key,
+            }
+            earned = value.get("earned", source.get("earned", 0))
+            total = value.get("total", source.get("total", 0))
+            try:
+                total_value = int(total or 0)
+            except (TypeError, ValueError):
+                total_value = 0
+            if total_value <= 0:
+                sources.pop(key, None)
+                continue
+            corrected = _achievement_source(
+                source.get("name", key), earned, total, source.get("items"), value.get("mastered", False)
+            )
+            if corrected is not None:
+                corrected.update({"id": key, "manual": True})
+                sources[key] = corrected
+    return sources
+
+
+def _project_game(game, index, media_set, save_indices, video_priority, settings, media_epoch,
+                  plugin_stats=None, achievement_overrides=None):
     from pkg.state.media_probe import probe_path, sanitize_document_records, sanitize_media_path
 
     san_med = _ns("sanitize_media_path", sanitize_media_path)
@@ -618,8 +756,13 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
     san_doc = _ns("sanitize_document_records", sanitize_document_records)
     med_cnt = _ns("_media_set_contains", _media_set_contains)
     game_id = game.get("game_id", "")
+    data_parent = _ns("DATA", DATA).parent
     ra_game_id = game.get("ra_game_id", "")
-    ra_cache = _ra_cache_record(game_id, _ns("DATA", DATA).parent) if ra_game_id else {}
+    ra_cache = _ra_cache_record(game_id, data_parent) if ra_game_id else {}
+    plugin_entry = (plugin_stats or {}).get(str(game_id), {}) if isinstance(plugin_stats, dict) else {}
+    achievement_sources = _achievement_sources(
+        game, ra_cache, data_parent, plugin_entry, achievement_overrides or {}
+    )
     ra_cache_key = tuple(str(ra_cache.get(key, "")) for key in (
         "earned", "earned_hardcore", "total", "progress_pct", "mastered",
     ))
@@ -629,6 +772,7 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         game.get("favorite"), game.get("hidden"), game.get("hide_in_bigbox"),
         game.get("last_played"), game.get("play_count"), game.get("playtime_seconds"),
         game.get("progress"), game.get("rating"), repr(game.get("notes")),
+        game.get("resume_slot"),
         game.get("user_rating"), game.get("manual_playtime_seconds"),
         game.get("price_paid_cents"), game.get("price_currency"),
         game.get("gog_id"), game.get("ea_id"), game.get("ubisoft_id"),
@@ -640,6 +784,7 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         game.get("gamescope_preset"),
         tuple(sorted((game.get("launch_env") or {}).items())) if isinstance(game.get("launch_env"), dict) else (),
         game_id, ra_game_id, ra_cache_key,
+        repr(achievement_sources), repr(plugin_entry),
         game.get("ra_achievements_earned"), game.get("ra_achievements_earned_hardcore"),
         game.get("ra_achievements_total"), game.get("ra_progress_pct"), game.get("ra_mastered"),
         len(game.get("memories") or []),
@@ -666,6 +811,8 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
     disc = san_med(game.get("disc", ""))
     ad = san_med(game.get("advertisement", ""))
     man = san_med(game.get("manual", ""))
+    poster = san_med(game.get("poster", ""))
+    square = san_med(game.get("square", ""))
     mus = san_med(game.get("music", ""))
 
     has_cov = med_cnt(media_set, cov)
@@ -677,7 +824,12 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
     raw_path = game.get("path", "")
     shelf_entry = bool(game.get("manual_entry"))
     path_exists = prb_pth(str(raw_path), file_only=False) if raw_path else False
-    store_installed = bool(game["store_installed"]) if "store_installed" in game else path_exists
+    if "store_installed" in game:
+        store_installed = bool(game["store_installed"])
+    elif str(game.get("steam_app_id") or "") and str(game.get("install_dir") or ""):
+        store_installed = path_exists and prb_pth(str(game["install_dir"]), file_only=False)
+    else:
+        store_installed = path_exists
 
     def ra_int(key, fallback=0):
         try:
@@ -694,6 +846,8 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
     lutris_id = game.get("lutris_id", "")
     gameyfin_id = game.get("gameyfin_id", "")
     store_catalog = bool(game.get("store_catalog"))
+    store_backed = bool(store_catalog or game.get("steam_app_id") or game.get("heroic_app_id") or game.get("gameyfin_id"))
+    playable = bool((store_installed if store_backed else (path_exists or store_installed))) and not shelf_entry
     raw_price = game.get("price_paid_cents")
     price_paid_cents = raw_price if isinstance(raw_price, int) and not isinstance(raw_price, bool) and raw_price >= 0 else None
     price_currency = str(game.get("price_currency") or "").strip().upper() if price_paid_cents is not None else ""
@@ -729,6 +883,14 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         observed_seconds = int(game.get("playtime_seconds") or 0)
     except (TypeError, ValueError):
         observed_seconds = 0
+    plugin_seconds = plugin_entry.get("playtime_seconds", 0) if isinstance(plugin_entry, dict) else 0
+    if not isinstance(plugin_seconds, int) or isinstance(plugin_seconds, bool) or plugin_seconds < 0:
+        plugin_seconds = 0
+    display_playtime = max(0, observed_seconds, plugin_seconds)
+    last_played = str(game.get("last_played") or "")
+    plugin_last_played = str(plugin_entry.get("last_played") or "") if isinstance(plugin_entry, dict) else ""
+    if plugin_last_played and plugin_last_played > last_played:
+        last_played = plugin_last_played
 
     documents = san_doc(game.get("documents", []))
     raw_screenshots = game.get("screenshots", [])
@@ -805,7 +967,9 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "path": raw_path,
         "manual_entry": shelf_entry,
         "entry_type": "shelf" if shelf_entry else "playable",
-        "playable": bool(path_exists or store_installed) and not shelf_entry,
+        "playable": playable,
+        "steam_installable": bool(steam_id) and not store_installed,
+        "steam_repairable": bool(steam_id) and store_installed,
         "launch": game.get("launch", ""),
         "launch_profile": game.get("launch_profile", ""),
         "gamescope_preset": game.get("gamescope_preset", ""),
@@ -826,6 +990,7 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "advertisement": ad,
         "manual": man,
         "source": game.get("source", ""),
+        "cover_model": game.get("cover_model", ""),
         "steam_app_id": steam_id,
         "lutris_id": lutris_id,
         "gog_id": game.get("gog_id", ""),
@@ -860,7 +1025,7 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "price_currency": price_currency,
         "manual_playtime_seconds": manual_seconds,
         "manual_sessions": manual_sessions,
-        "total_playtime_seconds": max(0, observed_seconds) + manual_seconds,
+        "total_playtime_seconds": display_playtime + manual_seconds,
         "region": game.get("region", ""),
         "play_mode": game.get("play_mode", ""),
         "sort_title": game.get("sort_title", ""),
@@ -889,9 +1054,9 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "game_id": game_id,
         "favorite": bool(game.get("favorite")),
         "hidden": bool(game.get("hidden")),
-        "last_played": game.get("last_played", ""),
+        "last_played": last_played,
         "play_count": game.get("play_count", 0),
-        "playtime_seconds": game.get("playtime_seconds", 0),
+        "playtime_seconds": display_playtime,
         "time_to_beat_hours": game.get("time_to_beat_hours"),
         "path_exists": path_exists,
         "has_cover": has_cov,
@@ -908,6 +1073,8 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "has_cart_back": med_cnt(media_set, cback),
         "has_disc": med_cnt(media_set, disc),
         "has_advertisement": med_cnt(media_set, ad),
+        "has_poster": med_cnt(media_set, poster),
+        "has_square": med_cnt(media_set, square),
         "has_manual": med_cnt(media_set, man),
         "has_video": bool(vpath_clean),
         "active_video_field": vfield,
@@ -915,7 +1082,8 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "has_saves": index in save_indices or bool(game.get("save_paths")),
         "has_documents": bool(documents),
         "has_versions": bool(game.get("versions")),
-        "has_achievements": bool(game.get("ra_game_id")),
+        "has_achievements": bool(achievement_sources),
+        "achievement_sources": achievement_sources,
         "has_highscores": bool(game.get("rom_name")) and platform.casefold() in {"arcade", "mame", "finalburn neo"},
         "has_missing_media": not has_cov,
         "extract_archive": bool(game.get("extract_archive")),
@@ -933,6 +1101,7 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
         "clips": clips,
         "has_clips": bool(clips),
         "custom_fields": custom,
+        "resume_slot": str(game.get("resume_slot") or ""),
         "platform_category": platform_cat,
         "tags": tags,
         "installable": bool(gameyfin_id) and not store_installed,
@@ -944,6 +1113,66 @@ def _project_game(game, index, media_set, save_indices, video_priority, settings
             _GAME_PROJECTION_CACHE.clear()
         _GAME_PROJECTION_CACHE[ckey] = proj
     return proj
+
+
+def _discovery_with_plugins(games, data_parent):
+    """Built-in discovery lists plus enabled plugin-defined lists."""
+    payload = discovery_lists(games)
+    names = {}
+    try:
+        from plugins import list_plugins
+        from pkg.parity.parity_plugin_discovery import fetch_plugin_discovery
+
+        for manifest in list_plugins(Path(data_parent) / "plugins"):
+            if not manifest.get("valid") or not manifest.get("enabled"):
+                continue
+            capabilities = manifest.get("capabilities") or {}
+            if not isinstance(capabilities.get("discovery"), dict):
+                continue
+            extra = fetch_plugin_discovery(manifest["id"], games, plugins_dir=Path(data_parent) / "plugins")
+            payload.update(extra.get("lists") or {})
+            names.update(extra.get("names") or {})
+    except (ImportError, OSError, ValueError):
+        pass
+    if names:
+        payload["discovery_names"] = names
+    return payload
+
+
+def _source_labels(games):
+    """Map raw source ids to their display names for badges and audit views."""
+    labels = {"Local": "Local"}
+    for game in games:
+        if not isinstance(game, dict):
+            continue
+        source = str(game.get("source") or "").strip()
+        if not source:
+            continue
+        labels[source] = str(game.get("plugin_source_name") or source)
+    return labels
+
+
+def _filter_plugin_storefront_games(games, data_parent):
+    """Hide games imported by a storefront plugin that is no longer enabled."""
+    tagged = [game for game in games if isinstance(game, dict) and game.get("plugin_source")]
+    if not tagged:
+        return games
+    from plugins import list_plugins
+
+    root = Path(data_parent) / "plugins"
+    try:
+        enabled = {
+            str(manifest.get("id"))
+            for manifest in list_plugins(root)
+            if manifest.get("valid") and manifest.get("enabled")
+        }
+    except (OSError, ValueError):
+        return games
+    return [
+        game for game in games
+        if not (isinstance(game, dict) and game.get("plugin_source")
+                and str(game.get("plugin_source")) not in enabled)
+    ]
 
 
 def _build_public_state():
@@ -958,15 +1187,25 @@ def _build_public_state():
     with state_lock:
         state = load_ro()
         state_signature = openbox.STATE_STORE.signature()
+    raw_games = _filter_plugin_storefront_games(state["games"], data_parent)
     save_indices = set(games_with_saves(state["games"]))
     media_set = build_known()
     video_priority = state.get("settings", {}).get("video_priority")
     settings = state.get("settings", {})
     media_epoch = MEDIA_EPOCH["value"]
-    raw_games = state["games"]
+    try:
+        from pkg.parity.parity_plugin_stats import load_plugin_stats
+
+        plugin_stats = load_plugin_stats(data_parent)
+    except (ImportError, OSError, ValueError):
+        plugin_stats = {}
+    achievement_overrides = state.get("achievement_overrides") or {}
 
     games = [
-        proj_game(game, index, media_set, save_indices, video_priority, settings, media_epoch)
+        proj_game(
+            game, index, media_set, save_indices, video_priority, settings, media_epoch,
+            plugin_stats, achievement_overrides,
+        )
         for index, game in enumerate(raw_games)
     ]
     decorated = games
@@ -1025,9 +1264,12 @@ def _build_public_state():
         "filter_presets": list_presets(state),
         "smart_collections": list_collections(state),
         "ra_configured": bool(load_ra_credentials(data_parent)),
+        "ra_hardcore": bool(settings.get("ra_hardcore", False)),
         "settings": pub_settings(state),
-        "discovery": discovery_lists(state["games"]),
+        "discovery": _discovery_with_plugins(raw_games, data_parent),
         "media_epoch": media_epoch,
+        "startup_errors": list(_ns("STARTUP_ERRORS", []))[:20],
+        "source_labels": _source_labels(raw_games),
     }
 
 
@@ -1037,7 +1279,11 @@ def _public_state_cached():
         signature = _public_state_signature()
         if PUBLIC_STATE_CACHE["raw"] is not None and PUBLIC_STATE_CACHE["signature"] == signature:
             return PUBLIC_STATE_CACHE
-    payload = build_pub()
+    token = BUILDING_PUBLIC_STATE.set(True)
+    try:
+        payload = build_pub()
+    finally:
+        BUILDING_PUBLIC_STATE.reset(token)
     raw = json.dumps(payload).encode()
     raw_gzip = gzip.compress(raw) if len(raw) >= GZIP_THRESHOLD else raw
     games_by_id = {}

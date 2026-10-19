@@ -63,6 +63,12 @@ ROM_SUFFIXES = {".rom", ".nes", ".sfc", ".smc", ".gba", ".gb", ".gbc", ".iso"}
 
 # Screenshot-ish list fields that count as a group rather than per file.
 _GROUP_MEDIA_FIELDS = {"screenshots"}
+# Supplemental shapes are optional artwork; their absence must not lower the
+# health score. The base art set below is what a complete game is measured on.
+_OPTIONAL_MEDIA_FIELDS = {
+    "poster", "square", "video", "video_snap", "video_theme", "video_trailer",
+    "music", "video_recording",
+}
 
 _HEALTH_CACHE_KEY = "health_cache"
 _FIX_JOURNAL_KEY = "health_fixes"
@@ -125,7 +131,10 @@ def _media_types():
         from pkg.state.media_probe import MEDIA_TYPES_ALL
     except ImportError:
         MEDIA_TYPES_ALL = {"cover"}
-    return [field for field in MEDIA_TYPES_ALL if field != "cover"]
+    return [
+        field for field in MEDIA_TYPES_ALL
+        if field != "cover" and field not in _OPTIONAL_MEDIA_FIELDS
+    ]
 
 
 def _issue(dimension, code, index, game, *, points, detail="", reason="", legacy=None):
@@ -135,6 +144,8 @@ def _issue(dimension, code, index, game, *, points, detail="", reason="", legacy
         "index": index,
         "game_id": _game_key(game, index),
         "name": str(game.get("name", "")),
+        "source": str(game.get("source") or "Local"),
+        "source_label": str(game.get("plugin_source_name") or game.get("source") or "Local"),
         "detail": str(detail),
         "points": int(points),
         "reason": reason or code.replace("_", " "),
@@ -324,6 +335,7 @@ def _rescore(deductions: list[dict[str, Any]], game_count: int) -> dict[str, Any
 def score_library(games, state, *, probe: Callable | None = None) -> dict[str, Any]:
     """Full recompute: detect everything, then score. Returns a ScoreSnapshot."""
     games = list(games or [])
+    detected = detect_issues(games, state, probe=probe)
     deductions = [
         {
             "dimension": issue["dimension"],
@@ -335,14 +347,30 @@ def score_library(games, state, *, probe: Callable | None = None) -> dict[str, A
             "detail": issue["detail"],
             "index": issue["index"],
             "name": issue["name"],
+            "source": issue.get("source", "Local"),
+            "source_label": issue.get("source_label") or issue.get("source", "Local"),
         }
-        for issue in detect_issues(games, state, probe=probe)
+        for issue in detected
     ]
     snapshot = _rescore(deductions, len(games))
+    sources = sorted({str(game.get("source") or "Local") for game in games if isinstance(game, dict)})
+    source_counts = {}
+    for source in sources:
+        source_counts[source] = {"games": 0, "issues": 0, "points": 0}
+    for game in games:
+        if isinstance(game, dict):
+            source_counts.setdefault(str(game.get("source") or "Local"), {"games": 0, "issues": 0, "points": 0})["games"] += 1
+    for issue in detected:
+        source = str(issue.get("source") or "Local")
+        source_counts.setdefault(source, {"games": 0, "issues": 0, "points": 0})
+        source_counts[source]["issues"] += 1
+        source_counts[source]["points"] += int(issue.get("points", 0) or 0)
     snapshot.update({
         "computed_at": _utcnow_iso(),
         "dirty": False,
         "full": True,
+        "sources": sources,
+        "source_counts": source_counts,
     })
     return snapshot
 
@@ -410,14 +438,28 @@ def merge_incremental(snapshot, games, state, dirty_ids, *, probe: Callable | No
             "detail": issue["detail"],
             "index": issue["index"],
             "name": issue["name"],
+            "source": issue.get("source", "Local"),
+            "source_label": issue.get("source_label") or issue.get("source", "Local"),
         }
         for issue in fresh
     ]
     snapshot_out = _rescore(deductions, len(games))
+    sources = sorted({str(game.get("source") or "Local") for game in games if isinstance(game, dict)})
+    source_counts = {source: {"games": 0, "issues": 0, "points": 0} for source in sources}
+    for game in games:
+        if isinstance(game, dict):
+            source_counts.setdefault(str(game.get("source") or "Local"), {"games": 0, "issues": 0, "points": 0})["games"] += 1
+    for deduction in deductions:
+        source = str(deduction.get("source") or "Local")
+        source_counts.setdefault(source, {"games": 0, "issues": 0, "points": 0})
+        source_counts[source]["issues"] += 1
+        source_counts[source]["points"] += int(deduction.get("points", 0) or 0)
     snapshot_out.update({
         "computed_at": _utcnow_iso(),
         "dirty": False,
         "full": bool((snapshot or {}).get("full", True)),
+        "sources": sources,
+        "source_counts": source_counts,
     })
     return snapshot_out
 

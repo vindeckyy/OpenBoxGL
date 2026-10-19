@@ -1,13 +1,26 @@
 #!/usr/bin/env python3
 import os
+import json
 import stat
 import sys
+import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from saves import backup_saves, discover_save_paths, list_backups, restore_saves  # noqa: E402
+from saves import (  # noqa: E402
+    backup_metadata,
+    backup_saves,
+    discover_save_paths,
+    file_sha256,
+    inspect_save_backup,
+    list_backup_metadata,
+    list_backups,
+    preview_restore,
+    restore_saves,
+    save_source_for,
+)
 
 
 def test():
@@ -22,8 +35,17 @@ def test():
         if os.name != "nt":
             assert stat.S_IMODE(archive.stat().st_mode) == 0o600
             assert stat.S_IMODE(archive.parent.stat().st_mode) == 0o700
+        with zipfile.ZipFile(archive) as package:
+            manifest = json.loads(package.read("manifest.json"))
+        assert manifest["entries"][0]["sha256"]
+        assert manifest["entries"][0]["relative"] == "slot1.sav"
+        inspected = inspect_save_backup(game, root / "backups", archive.name)
+        assert inspected["files"][0]["archive"].startswith("roots/0/")
         file.write_text("after", encoding="utf-8")
-        restore_saves(game, root / "backups", archive.name)
+        dry = restore_saves(game, root / "backups", archive.name, dry_run=True)
+        assert dry["dry_run"] and file.read_text(encoding="utf-8") == "after"
+        only = inspected["files"][0]["archive"]
+        restore_saves(game, root / "backups", archive.name, selected=[only])
         assert file.read_text(encoding="utf-8") == "before"
         assert len(list_backups(game, root / "backups")) == 2
         single = root / "single.sav"
@@ -55,6 +77,10 @@ def test():
             os.chdir(previous_cwd)
         assert rel_file.read_text(encoding="utf-8") == "rel"
     test_restore_with_root_missing_at_backup_time()
+    test_restore_preview_add_overwrite_and_missing()
+    test_restore_preview_bucket_cap()
+    test_backup_metadata_round_trip()
+    test_shared_memory_card_isolation()
     print("save self-test: ok")
 
 
@@ -80,6 +106,159 @@ def test_restore_with_root_missing_at_backup_time():
             pass
         else:
             raise AssertionError("a backup for another root set must not restore")
+
+
+def test_restore_preview_add_overwrite_and_missing():
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        saves = root / "saves"
+        saves.mkdir()
+        changed = saves / "slot1.sav"
+        changed.write_text("before", encoding="utf-8")
+        same = saves / "slot2.sav"
+        same.write_text("same", encoding="utf-8")
+        game = {"name": "Preview", "path": "/games/preview", "save_paths": [str(saves)]}
+        archive = backup_saves(game, root / "backups")
+        preview = preview_restore(game, root / "backups", archive.name)
+        assert preview["add"] == [] and preview["overwrite"] == []
+        assert preview["conflict"] is False
+        assert preview["unchanged"] == 2
+        assert preview["remove"] == []
+        assert preview["truncated"]["overwrite"] is False
+
+        changed.write_text("after", encoding="utf-8")
+        same.unlink()
+        preview = preview_restore(game, root / "backups", archive.name)
+        assert preview["conflict"] is True
+        overwrite = preview["overwrite"]
+        assert len(overwrite) == 1
+        assert overwrite[0]["path"].endswith("slot1.sav")
+        assert len(overwrite[0]["backup_sha"]) == 64
+        assert overwrite[0]["disk_sha"] == file_sha256(changed)
+        assert overwrite[0]["backup_sha"] != overwrite[0]["disk_sha"]
+        added = preview["add"]
+        assert len(added) == 1 and added[0]["path"].endswith("slot2.sav")
+        assert len(added[0]["sha256"]) == 64
+        assert preview["counts"] == {
+            "add": 1, "overwrite": 1, "remove": 0, "missing": 0, "unchanged": 0,
+        }
+
+        # A manifest entry whose archive member vanished is reported as missing
+        # instead of silently shrinking the restore set.
+        rewritten = root / "rewritten.zip"
+        with zipfile.ZipFile(root / "backups" / archive.parent.name / archive.name) as source:
+            with zipfile.ZipFile(rewritten, "w") as target:
+                for info in source.infolist():
+                    if info.filename.endswith("slot2.sav"):
+                        continue
+                    target.writestr(info, source.read(info.filename))
+        rewritten.replace(root / "backups" / archive.parent.name / archive.name)
+        preview = preview_restore(game, root / "backups", archive.name)
+        assert preview["counts"]["missing"] == 1
+        assert preview["missing"][0]["archive"].endswith("slot2.sav")
+        assert preview["missing"][0]["path"].endswith("slot2.sav")
+
+        # Restore still only touches the selected members.
+        inspected = inspect_save_backup(game, root / "backups", archive.name)
+        only = inspected["files"][0]["archive"]
+        restore_saves(game, root / "backups", archive.name, selected=[only])
+        assert changed.read_text(encoding="utf-8") == "before"
+
+
+def test_restore_preview_bucket_cap():
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        saves = root / "saves"
+        saves.mkdir()
+        for index in range(205):
+            (saves / f"slot{index:03d}.sav").write_text(f"value-{index}", encoding="utf-8")
+        game = {"name": "Cap", "path": "/games/cap", "save_paths": [str(saves)]}
+        archive = backup_saves(game, root / "backups")
+        for path in saves.glob("*.sav"):
+            path.unlink()
+        preview = preview_restore(game, root / "backups", archive.name)
+        assert preview["counts"]["add"] == 205
+        assert len(preview["add"]) == 200
+        assert preview["truncated"]["add"] is True
+        assert preview["truncated"]["overwrite"] is False
+
+
+def test_backup_metadata_round_trip():
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        saves = root / "saves"
+        saves.mkdir()
+        (saves / "slot1.sav").write_text("data", encoding="utf-8")
+        source_path = str(saves / "slot1.sav")
+        game = {
+            "name": "Metadata",
+            "path": "/games/metadata",
+            "emulator_adapter_id": "retroarch-snes",
+            "save_paths": [source_path],
+            "save_sources": {source_path: {"emulator_id": "retroarch", "core": "snes9x", "slot": "2"}},
+        }
+        archive = backup_saves(game, root / "backups", "pre-update")
+        metadata = backup_metadata(game, root / "backups", archive.name)
+        assert metadata["name"] == archive.name
+        assert metadata["label"] == "pre-update"
+        assert metadata["emulator_id"] == "retroarch-snes"
+        assert metadata["core"] == "snes9x"
+        assert metadata["slot"] == "2"
+        assert metadata["size"] > 0 and metadata["mtime"] > 0
+        listed = list_backup_metadata(game, root / "backups")
+        assert [entry["name"] for entry in listed] == [archive.name]
+        assert save_source_for(game, source_path) == {
+            "emulator_id": "retroarch", "core": "snes9x", "slot": "2",
+        }
+        assert save_source_for(game, str(saves / "missing.sav")) == {
+            "emulator_id": "", "core": "", "slot": "",
+        }
+        # An equivalent path spelling resolves to the recorded source.
+        odd = f"{saves}/./slot1.sav"
+        assert save_source_for(game, odd)["core"] == "snes9x"
+        # Restore's safety backup records the scanned source, not just the
+        # adapter id from the game record.
+        (saves / "slot1.sav").write_text("changed", encoding="utf-8")
+        restore_saves(game, root / "backups", archive.name)
+        safety = next(item for item in list_backup_metadata(game, root / "backups") if item["label"] == "before-restore")
+        assert safety["emulator_id"] == "retroarch"
+        assert safety["core"] == "snes9x"
+        assert safety["slot"] == "2"
+
+
+def test_shared_memory_card_isolation():
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        memcards = root / "PCSX2" / "memcards"
+        memcards.mkdir(parents=True)
+        card_a = memcards / "game-a.ps2"
+        card_b = memcards / "game-b.ps2"
+        card_a.write_text("a-before", encoding="utf-8")
+        card_b.write_text("b-original", encoding="utf-8")
+        game_a = {
+            "name": "Game A",
+            "path": "/roms/a.iso",
+            "platform": "PlayStation 2",
+            "save_paths": [str(card_a)],
+            "save_sources": {str(card_a): {"emulator_id": "pcsx2", "core": "", "slot": ""}},
+        }
+        game_b = {
+            "name": "Game B",
+            "path": "/roms/b.iso",
+            "platform": "PlayStation 2",
+            "save_paths": [str(card_b)],
+            "save_sources": {str(card_b): {"emulator_id": "pcsx2", "core": "", "slot": ""}},
+        }
+        archive = backup_saves(game_a, root / "backups")
+        card_a.write_text("a-after", encoding="utf-8")
+        preview = preview_restore(game_a, root / "backups", archive.name)
+        overwritten = [entry["path"] for entry in preview["overwrite"]]
+        assert len(overwritten) == 1 and overwritten[0].endswith("game-a.ps2")
+        assert all(not path.endswith("game-b.ps2") for path in overwritten)
+        restore_saves(game_a, root / "backups", archive.name)
+        assert card_a.read_text(encoding="utf-8") == "a-before"
+        assert card_b.read_text(encoding="utf-8") == "b-original"
+        assert save_source_for(game_b, str(card_b))["emulator_id"] == "pcsx2"
 
 
 if __name__ == "__main__":

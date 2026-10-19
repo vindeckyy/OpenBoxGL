@@ -37,6 +37,7 @@ OPERATION_TYPE_BY_NAME = {
     "steamgrid-match": "steamgrid.match",
     "steamgrid-apply": "steamgrid.apply",
     "auto-import": "storefront.auto_import",
+    "storefront-scan": "storefront.scan",
     "cloud-sync": "cloud.sync",
     "updater-install": "updater.install",
     "saves-scan": "saves.scan",
@@ -106,6 +107,8 @@ def operation_title_for_name(name: str) -> str:
         return "Save backup"
     if name == "saves-restore":
         return "Save restore"
+    if name == "storefront-scan":
+        return "Storefront scan"
     if name.startswith("saves-backup:"):
         return "Save backup"
     if name.startswith("saves-restore:"):
@@ -286,6 +289,9 @@ class JobManager:
                     result[key] = int(job[key])
                 except (TypeError, ValueError):
                     pass
+        if isinstance(job.get("sources"), list):
+            result = result or {}
+            result["sources"] = job["sources"]
         error = None
         if op_state == "error":
             raw = job.get("error")

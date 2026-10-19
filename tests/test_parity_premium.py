@@ -67,6 +67,20 @@ class PremiumFeatureTests(unittest.TestCase):
             games = import_xbox360_folder(root.parent)
             self.assertEqual(games[0]["name"], "Halo 3")
 
+    def test_xbox360_games_on_demand_folder(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            god = (
+                Path(temporary) / "Halo 3" / "Content" / "0000000000000000"
+                / "4D5307E6" / "000D0000" / "00000001"
+            )
+            god.mkdir(parents=True)
+            (god / "default.xex").write_bytes(b"xex")
+            games = import_xbox360_folder(Path(temporary), "xenia --launch {path}")
+            self.assertEqual(len(games), 1)
+            self.assertEqual(games[0]["platform"], "Xbox 360")
+            self.assertEqual(games[0]["source"], "Xbox 360")
+            self.assertEqual(games[0]["launch"], "xenia --launch {path}")
+
     def test_enhanced_ra_profile(self):
         progress = enhanced_ra_profile({"earned": 3, "total": 10, "earned_hardcore": 1}, {"username": "test", "api_key": "key"})
         self.assertIn("commitment_label", progress)

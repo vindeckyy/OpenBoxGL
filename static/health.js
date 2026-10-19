@@ -53,12 +53,15 @@ function dimensionBar(dimension, info) {
 
 function issueRow(issue) {
   return `<button type="button" class="metadata-result icon-button" data-health-game="${issue.index ?? ''}" data-health-gid="${escapeHtml(issue.game_id || '')}">
-    <div><strong>${escapeHtml(issue.name || t('health.unnamed'))}</strong><small>${escapeHtml(issue.reason)} · ${escapeHtml(issue.detail || '')}</small></div>
+    <div><strong>${escapeHtml(issue.name || t('health.unnamed'))}</strong><small>${escapeHtml(issue.source || 'Local')} · ${escapeHtml(issue.reason)} · ${escapeHtml(issue.detail || '')}</small></div>
   </button>`;
 }
 
 async function loadIssuePage(dimension, offset) {
-  const result = await api(`/api/v2/library/health/issues?dimension=${encodeURIComponent(dimension)}&limit=${PAGE_SIZE}&offset=${offset}`);
+  const source = $('healthSourceFilter')?.value || '';
+  const query = new URLSearchParams({ dimension, limit: String(PAGE_SIZE), offset: String(offset) });
+  if (source) query.set('source', source);
+  const result = await api(`/api/v2/library/health/issues?${query.toString()}`);
   const host = document.querySelector(`[data-health-issues="${dimension}"]`);
   if (!host) return;
   if (offset === 0) host.innerHTML = '';
@@ -98,6 +101,14 @@ function bindDialog(snapshot) {
   dialog.querySelectorAll('[data-health-fix]').forEach(button => {
     button.onclick = () => fixDimension(button.dataset.healthFix);
   });
+  $('healthSourceFilter')?.addEventListener('change', () => {
+    dialog.querySelectorAll('[data-health-body]').forEach(async body => {
+      if (body.hidden) return;
+      const dimension = body.dataset.healthBody;
+      body.dataset.loaded = '1';
+      try { await loadIssuePage(dimension, 0); } catch (error) { notify(error.message); }
+    });
+  });
 }
 
 export async function openHealthScore() {
@@ -131,6 +142,7 @@ export async function openHealthScore() {
         <button type="button" class="icon-button" id="healthRescan">${escapeHtml(t('health.rescan'))}</button>
       </div>
       <div class="health-dims">${DIMENSIONS.map(dim => dimensionBar(dim, dims[dim])).join('')}</div>
+      <div class="extras health-source-filter"><label class="field"><span>Source</span><select id="healthSourceFilter"><option value="">All sources</option>${(snapshot.sources || []).map(source => `<option>${escapeHtml(source)}</option>`).join('')}</select></label>${Object.entries(snapshot.source_counts || {}).map(([source, counts]) => `<span class="badge">${escapeHtml(source)} ${counts.issues}</span>`).join('')}</div>
       <p class="description"><button type="button" class="link-button" id="healthHowScored">${escapeHtml(t('health.how_scored'))}</button></p>
       ${launchAuditSection()}`;
     $('healthRescan').onclick = () => rescanLibrary();

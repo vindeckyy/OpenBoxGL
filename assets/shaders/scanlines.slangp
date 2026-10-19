@@ -1,0 +1,10 @@
+# OpenBox bundled scanline preset.
+# The preset is intentionally minimal so the file stays valid, readable, and
+# dependency-free. RetroArch loads the referenced shader pass when the setting
+# is enabled in Edit Emulator.
+shaders = 1
+shader0 = scanlines.slang
+filter_linear0 = false
+wrap_mode0 = clamp_to_border
+scale_type0 = source
+scale0 = 1.0

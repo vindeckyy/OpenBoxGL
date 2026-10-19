@@ -262,7 +262,7 @@ class PluginValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with mock.patch.dict(os.environ, {"OPENBOX_SAFE_MODE": "1"}):
                 plugins.emit_plugin_event(tmp, "library_snapshot")
-            with mock.patch.object(plugins, "run_plugins", side_effect=RuntimeError("boom")):
+            with mock.patch.object(plugins, "run_plugin_hooks", side_effect=RuntimeError("boom")):
                 plugins.emit_plugin_event(tmp, "library_snapshot", {"games": []})
 
     def test_snapshot_library_edge_cases(self):
@@ -278,13 +278,13 @@ class PluginValidationTests(unittest.TestCase):
         ]
         after = plugins.snapshot_library({"games": changed})
         with tempfile.TemporaryDirectory() as tmp:
-            with mock.patch.object(plugins, "run_plugins") as run:
+            with mock.patch.object(plugins, "run_plugin_hooks") as run:
                 plugins.emit_library_diff(tmp, before, after)
         self.assertTrue(run.called)
 
     def test_emit_library_diff_no_baseline(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with mock.patch.object(plugins, "run_plugins") as run:
+            with mock.patch.object(plugins, "run_plugin_hooks") as run:
                 plugins.emit_library_diff(tmp, None, {"g1": ()})
         run.assert_not_called()
 
@@ -1438,6 +1438,20 @@ class LibraryDnaHookTests(unittest.TestCase):
     def test_clean_game_fields_user_rating(self):
         game = library_mod._clean_game_fields({"name": "Doom", "user_rating": 4})
         self.assertEqual(game["user_rating"], 4)
+
+    def test_clean_game_fields_keeps_bounded_save_sources(self):
+        game = library_mod._clean_game_fields({
+            "name": "Doom",
+            "save_sources": {
+                "/saves/doom.sav": {"emulator_id": "retroarch", "core": "snes9x", "slot": "1"},
+                "": {"emulator_id": "ignored"},
+                "/saves/bad": "not-a-dict",
+            },
+        })
+        self.assertEqual(
+            game["save_sources"],
+            {"/saves/doom.sav": {"emulator_id": "retroarch", "core": "snes9x", "slot": "1"}},
+        )
 
     def test_clean_game_fields_price_pair(self):
         game = library_mod._clean_game_fields({

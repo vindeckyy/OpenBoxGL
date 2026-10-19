@@ -8,7 +8,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from backend_io import atomic_copy_stream, fsync_directory
+from backend_io import atomic_copy_stream, atomic_write_text, fsync_directory
 from state_store import default_state
 from pkg.parity.parity_redact import redact_settings, redact_state_for_export, merge_preserved_credentials
 from pkg.platform_compat import parse_timestamp
@@ -146,6 +146,78 @@ def _write_private_archive(archive, populate):
         temporary.unlink(missing_ok=True)
 
 
+def _plugin_secret_names(manifest):
+    """Password-format setting names declared by one plugin manifest."""
+    settings = manifest.get("settings") if isinstance(manifest, dict) else {}
+    properties = settings.get("properties") if isinstance(settings, dict) else {}
+    if not isinstance(properties, dict):
+        return set()
+    return {
+        str(name) for name, field in properties.items()
+        if isinstance(field, dict) and field.get("format") == "password"
+    }
+
+
+def _plugin_secrets(plugins_root, plugin_id):
+    """Password-format setting names for an installed plugin.
+
+    A package that cannot be read contributes no names: there is no schema to
+    identify which values are secret, so the state is copied unchanged rather
+    than guessing.
+    """
+    try:
+        from plugins import read_manifest
+
+        manifest = read_manifest(Path(plugins_root) / str(plugin_id))
+    except (OSError, ValueError):
+        return set()
+    return _plugin_secret_names(manifest)
+
+
+def redact_plugin_state(payload, plugins_root):
+    """Copy a plugin-state document with password settings blanked.
+
+    Used only for backups. The key is preserved with an empty value so a
+    required setting still validates on restore; local values are merged back
+    in :func:`merge_preserved_plugin_settings` when a backup is restored.
+    """
+    if not isinstance(payload, dict):
+        return {}
+    state = json.loads(json.dumps(payload))
+    settings = state.get("settings")
+    if not isinstance(settings, dict):
+        return state
+    for plugin_id, values in settings.items():
+        if not isinstance(values, dict):
+            continue
+        for name in _plugin_secrets(plugins_root, plugin_id):
+            if name in values:
+                values[name] = ""
+    return state
+
+
+def merge_preserved_plugin_settings(restored, existing, plugins_root):
+    """Preserve local password settings that a redacted backup omitted."""
+    if not isinstance(restored, dict):
+        restored = {}
+    if not isinstance(existing, dict):
+        existing = {}
+    restored_settings = restored.get("settings")
+    existing_settings = existing.get("settings")
+    if not isinstance(restored_settings, dict) or not isinstance(existing_settings, dict):
+        return restored
+    for plugin_id, values in restored_settings.items():
+        if not isinstance(values, dict):
+            continue
+        current = existing_settings.get(plugin_id)
+        if not isinstance(current, dict):
+            continue
+        for name in _plugin_secrets(plugins_root, plugin_id):
+            if not values.get(name) and current.get(name):
+                values[name] = current[name]
+    return restored
+
+
 def create_backup(data_dir, state, items, keep=0, running_map=None):
     if running_map is not None and games_running(running_map):
         raise ValueError("Close running games before creating a backup.")
@@ -175,14 +247,30 @@ def create_backup(data_dir, state, items, keep=0, running_map=None):
             if folder.is_symlink():
                 raise ValueError(f"Backup source is a symlink: {folder}")
             for path in folder.rglob("*"):
+                relative = path.relative_to(folder)
+                if key == "plugins" and relative.parts and relative.parts[0] == "credentials":
+                    # Capability credentials never enter a backup. They are
+                    # local-only by design, like the device keychain.
+                    continue
                 if path.is_symlink():
                     raise ValueError(f"Backup source contains a symlink: {path}")
-                if path.is_file():
-                    _write_archive_file(
-                        package,
-                        path,
-                        f"{BACKUP_ITEMS[key]}/{path.relative_to(folder).as_posix()}",
+                if not path.is_file():
+                    continue
+                if key == "plugins" and relative.as_posix() == "plugins-state.json":
+                    try:
+                        plugin_state = json.loads(path.read_text(encoding="utf-8"))
+                    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                        plugin_state = {}
+                    package.writestr(
+                        f"{BACKUP_ITEMS[key]}/{relative.as_posix()}",
+                        json.dumps(redact_plugin_state(plugin_state, folder), indent=2),
                     )
+                    continue
+                _write_archive_file(
+                    package,
+                    path,
+                    f"{BACKUP_ITEMS[key]}/{relative.as_posix()}",
+                )
 
     _write_private_archive(archive, populate)
     if keep and keep > 0:
@@ -301,7 +389,7 @@ def _restore_settings_from_package(package, root):
         atomic_copy_stream(source, root / "settings.json", mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
 
 
-def _restore_media_tree(package, root, restore_items):
+def _restore_media_tree(package, root, restore_items, redacted_secrets=False):
     for key in ("media", "plugins", "themes", "extension_data"):
         if key not in restore_items:
             continue
@@ -334,6 +422,28 @@ def _restore_media_tree(package, root, restore_items):
                 if parent != target_root and parent.exists()
             ):
                 raise ValueError("Backup destination contains a symlink.")
+            if key == "plugins" and relative == "plugins-state.json":
+                try:
+                    payload = json.loads(package.read(member))
+                except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                    raise ValueError("Backup plugin state is invalid.") from error
+                if not isinstance(payload, dict):
+                    raise ValueError("Backup plugin state is invalid.")
+                if redacted_secrets:
+                    existing = {}
+                    existing_file = raw_root / "plugins-state.json"
+                    if existing_file.is_file():
+                        try:
+                            existing = json.loads(existing_file.read_text(encoding="utf-8"))
+                        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                            existing = {}
+                    payload = merge_preserved_plugin_settings(payload, existing, raw_root)
+                atomic_write_text(
+                    target,
+                    json.dumps(payload, indent=2) + "\n",
+                    mode=0o600,
+                )
+                continue
             with package.open(member) as source:
                 atomic_copy_stream(source, target, mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
 
@@ -401,7 +511,7 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None, force=F
                     atomic_copy_stream(io.BytesIO(data), root / "settings.json", mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
                 else:
                     _restore_settings_from_package(package, root)
-            _restore_media_tree(package, root, restore_items)
+            _restore_media_tree(package, root, restore_items, bool(manifest.get("redacted_secrets")))
     except zipfile.BadZipFile as error:
         raise ValueError("Backup archive is invalid.") from error
     return restore_items

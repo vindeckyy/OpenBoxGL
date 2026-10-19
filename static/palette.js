@@ -166,6 +166,9 @@ function choose(index) {
 
 function openPalette() {
   ensurePalette();
+  // Plugin installs/enables can change commands while the app is open; each
+  // open re-reads the list (and its epoch) instead of pinning a boot snapshot.
+  pluginCommandCache = null;
   previousFocus = document.activeElement;
   paletteInput.value = '';
   selectedIndex = 0;

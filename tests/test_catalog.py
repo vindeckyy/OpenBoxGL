@@ -101,6 +101,29 @@ def _progress_automation_offset_timestamp_check():
     print("catalog offset timestamp check: ok")
 
 
+def _progress_automation_respects_whitelist():
+    from datetime import datetime
+    from catalog import apply_progress_automation
+
+    settings = {
+        "progress_automation_enabled": True,
+        "progress_automation_play_minutes": 10,
+        "progress_automation_idle_days": 3,
+        "progress_values": ["Playing"],
+    }
+    game = {"playtime_seconds": 11 * 60, "progress": "", "last_played": "2024-01-01T00:00:00+00:00"}
+    apply_progress_automation(game, settings, now=datetime(2024, 2, 1))
+    assert game["progress"] == "Playing"
+    settings["progress_values"] = ["Paused"]
+    game = {"playtime_seconds": 11 * 60, "progress": "", "last_played": "2024-01-01T00:00:00+00:00"}
+    apply_progress_automation(game, settings, now=datetime(2024, 2, 1))
+    assert game["progress"] == "", "Playing is not allowed, so playtime must not set it"
+    game = {"progress": "Playing", "last_played": "2024-01-01T00:00:00+00:00"}
+    apply_progress_automation(game, settings, now=datetime(2024, 2, 1))
+    assert game["progress"] == "Paused", "Paused is allowed, so idle automation may set it"
+    print("catalog progress whitelist check: ok")
+
+
 def _bulk_last_played_must_be_a_date():
     # A typo used to be stored as-is, and every date rule then skipped the game.
     games = [{"game_id": "g1", "name": "A", "last_played": ""}]
@@ -164,5 +187,6 @@ if __name__ == "__main__":
     main()
     _f4_backlog_checks()
     _progress_automation_offset_timestamp_check()
+    _progress_automation_respects_whitelist()
     _bulk_last_played_must_be_a_date()
     _price_paid_checks()

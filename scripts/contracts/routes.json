@@ -52,6 +52,12 @@
     },
     {
       "methods": [
+        "GET"
+      ],
+      "path": "/api/bigbox/startup-video"
+    },
+    {
+      "methods": [
         "POST"
       ],
       "path": "/api/cloud/sync"
@@ -225,6 +231,12 @@
         "POST"
       ],
       "path": "/api/game/delete"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/game/store-action"
     },
     {
       "methods": [
@@ -471,6 +483,12 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/media/cache/cleanup"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/media/cleanup"
     },
     {
@@ -484,6 +502,30 @@
         "GET"
       ],
       "path": "/api/media/queue"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/media/queue/cancel"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/media/queue/pause"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/media/queue/resume"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/media/queue/retry"
     },
     {
       "methods": [
@@ -544,6 +586,12 @@
         "POST"
       ],
       "path": "/api/metadata/trailer"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/native/battery"
     },
     {
       "methods": [
@@ -613,6 +661,19 @@
         "POST"
       ],
       "path": "/api/platform/documents"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/platform/video"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/platform/videos"
     },
     {
       "methods": [
@@ -787,9 +848,21 @@
     },
     {
       "methods": [
+        "GET"
+      ],
+      "path": "/api/saves/manifest"
+    },
+    {
+      "methods": [
         "POST"
       ],
       "path": "/api/saves/restore"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/saves/restore/preview"
     },
     {
       "methods": [
@@ -863,6 +936,18 @@
       "methods": [
         "GET"
       ],
+      "path": "/api/theme-asset"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/theme-sounds"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
       "path": "/api/theme.css"
     },
     {
@@ -911,6 +996,18 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v2/achievements/override"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/achievements/refresh"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v2/arcade/kiosk/pin"
     },
     {
@@ -930,6 +1027,12 @@
         "GET"
       ],
       "path": "/api/v2/backup/diff"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/bulk/find-replace"
     },
     {
       "methods": [
@@ -980,6 +1083,19 @@
         "GET"
       ],
       "path": "/api/v2/emulators/registry"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/emulators/settings"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/highscores/table"
     },
     {
       "methods": [
@@ -1087,7 +1203,25 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v2/import/msu1"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/import/pico8"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v2/import/ubisoft"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/import/whdload"
     },
     {
       "methods": [
@@ -1148,6 +1282,38 @@
         "GET"
       ],
       "path": "/api/v2/insights/wrapped"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/integration-tokens"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/integration-tokens/remove"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/integrations/steam"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/integrations/steam/refresh"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/integrations/steam/test"
     },
     {
       "methods": [
@@ -1532,6 +1698,12 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v2/metadata/candidates/apply"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v2/metadata/matches/apply"
     },
     {
@@ -1593,6 +1765,12 @@
     },
     {
       "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/netplay/lobby"
+    },
+    {
+      "methods": [
         "GET",
         "POST"
       ],
@@ -1619,6 +1797,30 @@
     },
     {
       "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/platform/delete"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/platform/rename"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/plugin-stats"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/plugin-stats/refresh"
+    },
+    {
+      "methods": [
         "GET"
       ],
       "path": "/api/v2/plugins/catalog"
@@ -1637,9 +1839,29 @@
     },
     {
       "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/plugins/credentials"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/plugins/data"
+    },
+    {
+      "methods": [
         "POST"
       ],
       "path": "/api/v2/plugins/permissions"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/plugins/repair"
     },
     {
       "methods": [
@@ -1678,6 +1900,12 @@
         "POST"
       ],
       "path": "/api/v2/resume/discard"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/resume/slot"
     },
     {
       "methods": [
@@ -1768,6 +1996,12 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v2/steam/action"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v2/steambridge/apply"
     },
     {
@@ -1847,6 +2081,36 @@
         "POST"
       ],
       "path": "/api/v2/steamgrid/test"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/storefront/scan"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/storefront/status"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/storefronts"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/storefronts/plugin/catalog"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/storefronts/plugin/import"
     },
     {
       "methods": [

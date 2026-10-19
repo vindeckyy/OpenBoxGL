@@ -20,7 +20,7 @@ if str(_ROOT) not in sys.path:
 import pkg.parity  # noqa: F401,E402  # installs the flat parity_* import finder
 from api_errors import BadRequest, Conflict, NotFound  # noqa: E402
 import openbox  # noqa: E402
-from parity_resume import discard_resume_state, resume_status as _resume_status  # noqa: E402
+from parity_resume import discard_resume_state, resume_status as _resume_status, validate_resume_slot  # noqa: E402
 from pkg.state.launch import game_from_payload, game_from_query, start_game  # noqa: E402
 from routes.registry import route  # noqa: E402
 
@@ -99,6 +99,38 @@ def resume_launch(handler, payload):
         "resumed_from_state": True,
         "launch_id": entry.get("launch_id", ""),
         "state_file": status["state"]["file"],
+    })
+
+
+@route("POST", "/api/v2/resume/slot", spec="handlers.resume.resume_slot")
+def resume_slot(handler, payload):
+    """Store the per-game save-state slot used by Quick Resume."""
+    if not handler.authorized():
+        handler.handle_unauthorized()
+        return
+    body = payload if isinstance(payload, dict) else {}
+    try:
+        slot = validate_resume_slot(body.get("slot"))
+    except ValueError as exc:
+        raise BadRequest(str(exc), code="RESUME_SLOT_INVALID") from exc
+    state = openbox.load_state()
+    game = _game_or_400(state, body)
+
+    def mutate(current):
+        target = _game_or_400(current, body)
+        if slot:
+            target["resume_slot"] = slot
+        else:
+            target.pop("resume_slot", None)
+
+    openbox.update_state(mutate)
+    from pkg.state.cache import invalidate_state_cache
+
+    invalidate_state_cache()
+    handler.send_json(200, {
+        "ok": True,
+        "game_id": str(game.get("game_id") or ""),
+        "slot": slot,
     })
 
 

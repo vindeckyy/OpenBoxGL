@@ -257,6 +257,15 @@ class RefreshRouteTests(LaunchAuditTestCase):
             patch.stop()
         super().tearDown()
 
+    def test_store_appends_one_compact_history_line(self):
+        history = audit.audit_history_path(str(self.data_dir))
+        lines = history.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(lines), 1)
+        entry = json.loads(lines[0])
+        self.assertEqual(entry["computed_at"], self.report["computed_at"])
+        self.assertEqual(entry["totals"], self.report["totals"])
+        self.assertNotIn("groups", entry)
+
     def test_refresh_checks_the_group_and_answers_with_the_totals(self):
         key = self.report["groups"][0]["key"]
         handler = self.Handler()

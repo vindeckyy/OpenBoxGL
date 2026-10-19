@@ -90,12 +90,12 @@ class SnapshotTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonStateStore(Path(directory) / "library.json")
             store.save(default_state())
-            store.update(lambda state: state["settings"].update({"saved": True}))
+            store.update(lambda state: state["settings"].update({"theme": "Midnight Circuit"}))
             store.path.write_text("{broken", encoding="utf-8")
             with self.assertRaises(StateCorruptError):
                 store.load()
             recovered = store.recover()
-            self.assertTrue(recovered["settings"]["saved"])
+            self.assertEqual(recovered["settings"]["theme"], "Midnight Circuit")
 
     def test_corrupt_primary_raises_without_clobbering_backup(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -35,6 +35,8 @@ def _public_snapshot(snapshot: dict) -> dict:
         "dirty": bool(snapshot.get("dirty", True)),
         "full": bool(snapshot.get("full", True)),
         "scanned": snapshot.get("score") is not None,
+        "sources": snapshot.get("sources", []),
+        "source_counts": snapshot.get("source_counts", {}),
     }
 
 
@@ -135,6 +137,9 @@ def health_issues(handler, parsed):
     except (TypeError, ValueError):
         raise BadRequest("offset must be an integer.") from None
     deductions, scanned = _deductions()
+    source = (query.get("source", [""])[0] or "").strip()
+    if source:
+        deductions = [item for item in deductions if str(item.get("source") or "Local") == source]
     if dimension:
         deductions = [item for item in deductions if item.get("dimension") == dimension]
     total = len(deductions)
@@ -151,6 +156,8 @@ def health_issues(handler, parsed):
                 "reason": item.get("reason", ""),
                 "detail": item.get("detail", ""),
                 "points": item.get("points", 0),
+                "source": item.get("source", "Local"),
+                "source_label": item.get("source_label") or item.get("source", "Local"),
             }
             for item in page
         ],

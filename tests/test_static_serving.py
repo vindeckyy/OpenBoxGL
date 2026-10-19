@@ -82,6 +82,13 @@ class StaticServingTests(unittest.TestCase):
         status, _ = self.get("/static/logo.png", {"If-None-Match": etag})
         self.assertEqual(status, 304)
 
+    def test_placeholder_cover_is_served(self):
+        status, headers = self.get("/assets/placeholder-cover.svg")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers.get("Content-Type"), "image/svg+xml")
+        self.assertIn("immutable", headers.get("Cache-Control", ""))
+        self.assertIn("max-age=31536000", headers.get("Cache-Control", ""))
+
     def test_unknown_static_rejected(self):
         status, _ = self.get("/static/notes.txt")
         self.assertEqual(status, 404)

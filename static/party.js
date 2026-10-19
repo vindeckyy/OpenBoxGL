@@ -1,7 +1,7 @@
 /* party.js — Game Night Big Box party mode: setup, wheel, up-next, launch. */
 import { $, escapeHtml, motionMs } from './util.js';
 import { t } from './i18n.js';
-import { AppState, api, media, notify } from './state.js';
+import { AppState, api, media, notify, coverSource } from './state.js';
 import { launch } from './sessions.js';
 
 const WHEEL_COLORS = ['var(--brand)', 'var(--accent)', 'var(--active)', 'var(--focus)'];
@@ -371,7 +371,7 @@ function renderHub() {
 
 function coverThumb(game) {
   if (game.has_cover) {
-    return `<img src="${escapeHtml(media(game, 'cover'))}" alt="" loading="lazy" decoding="async">`;
+    return `<img src="${escapeHtml(coverSource(game))}" alt="" loading="lazy" decoding="async">`;
   }
   return `<span class="cover-title">${escapeHtml((game.name || '?').slice(0, 1))}</span>`;
 }

@@ -3,7 +3,10 @@
 import hashlib
 import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from time import time
 from urllib.error import HTTPError
 from urllib.parse import urlencode
@@ -32,10 +35,20 @@ SYSTEM_NAMES = {
     "atari lynx": ("Atari Lynx",),
     "pc engine": ("PC Engine",),
     "turbografx-16": ("PC Engine",),
+    "playstation": ("PlayStation",),
+    "sony playstation": ("PlayStation",),
+    "ps1": ("PlayStation",),
+    "gamecube": ("GameCube",),
+    "nintendo gamecube": ("GameCube",),
+    "wii": ("Wii",),
+    "nintendo wii": ("Wii",),
+    "wiiware": ("Wii",),
+    "nintendo wiiware": ("Wii",),
 }
 RAW_MD5 = {
     "game boy", "game boy color", "game boy advance", "sega genesis",
     "mega drive", "master system", "game gear", "atari 2600",
+    "playstation", "sony playstation", "ps1",
 }
 
 
@@ -101,16 +114,171 @@ def rom_data(path):
     return data
 
 
+def _m3u_disc(path):
+    """The first existing disc referenced by a playlist, resolved beside it."""
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as error:
+        raise FileNotFoundError(f"Could not read playlist: {path}") from error
+    for line in lines:
+        candidate = line.strip()
+        if not candidate or candidate.startswith("#"):
+            continue
+        if len(candidate) >= 2 and candidate[0] == candidate[-1] and candidate[0] in {'"', "'"}:
+            candidate = candidate[1:-1]
+        disc = Path(candidate)
+        if not disc.is_absolute():
+            disc = path.parent / disc
+        if disc.is_file():
+            return disc
+    raise ValueError("The M3U playlist does not reference an existing disc image.")
+
+
+def _run_hash_tool(argv):
+    if shutil.which(argv[0]) is None:
+        raise ValueError(f"{argv[0]} is required to hash this game's format.")
+    try:
+        completed = subprocess.run(
+            argv, capture_output=True, text=True, timeout=120, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ValueError(f"{argv[0]} could not hash this game.") from error
+    if completed.returncode:
+        detail = (completed.stderr or completed.stdout).strip().splitlines()
+        raise ValueError(detail[0] if detail else f"{argv[0]} could not hash this game.")
+    return completed.stdout
+
+
+def _chd_data(path):
+    """Extract a CHD's first data track and return its bytes.
+
+    RetroAchievements hashes the disc image data, not the CHD container. The
+    playlist-style extraction keeps multi-track discs deterministic: the first
+    FILE entry is the track RA expects.
+    """
+    with TemporaryDirectory(prefix="openbox-chd-") as directory:
+        cue = Path(directory) / "disc.cue"
+        _run_hash_tool(["chdman", "extractcd", "-i", str(path), "-o", str(cue)])
+        first = None
+        try:
+            for line in cue.read_text(encoding="utf-8", errors="replace").splitlines():
+                match = re.match(r'\s*FILE\s+"([^"]+)"', line, re.IGNORECASE)
+                if match:
+                    first = Path(directory) / match.group(1)
+                    break
+        except OSError as error:
+            raise ValueError("chdman produced no usable cue sheet.") from error
+        data_files = sorted(
+            item for item in Path(directory).iterdir()
+            if item.suffix.casefold() in {".bin", ".iso", ".img"}
+        )
+        inside_temp = bool(first) and first.resolve().parent == Path(directory).resolve()
+        chosen = first if first and inside_temp and first.is_file() else (data_files[0] if data_files else None)
+        if not chosen:
+            raise ValueError("chdman produced no data track.")
+        if chosen.stat().st_size > MAX_ROM_BYTES:
+            raise ValueError("ROM file is too large for hashing.")
+        return chosen.read_bytes()
+
+
+def _dolphin_hash(path):
+    """Return Dolphin's SHA-1 for an RVZ disc image."""
+    output = _run_hash_tool(["dolphin-tool", "hash", "-a", "sha1", str(path)])
+    match = re.search(r"\b([0-9a-fA-F]{40})\b", output)
+    if not match:
+        raise ValueError("dolphin-tool did not return a usable SHA-1 hash.")
+    return match.group(1).casefold()
+
+
+def _wad_hash(path):
+    """Return the MD5 RetroAchievements uses for a WiiWare WAD.
+
+    A WAD is not hashed as a flat file: the TMD table and each encrypted
+    content are hashed separately, with the WAD's 0x40-byte alignment padding
+    skipped. This mirrors rcheevos' rc_hash_wiiware so a WAD matches the same
+    game as Dolphin does.
+    """
+    try:
+        file_size = path.stat().st_size
+    except OSError as error:
+        raise FileNotFoundError(f"Could not stat WAD file: {path}") from error
+    try:
+        with path.open("rb") as handle:
+            header = handle.read(0x40)
+            if len(header) != 0x40 or header[4:8] != b"Is\x00\x00":
+                raise ValueError("The file is not a WiiWare WAD.")
+            cert_size = (int.from_bytes(header[8:12], "big") + 0x3F) & ~0x3F
+            ticket_size = (int.from_bytes(header[16:20], "big") + 0x3F) & ~0x3F
+            tmd_size = (int.from_bytes(header[20:24], "big") + 0x3F) & ~0x3F
+            if tmd_size < 0x1E6:
+                raise ValueError("The WAD title metadata is too short.")
+            tmd_start = 0x40 + cert_size + ticket_size
+            if tmd_start + tmd_size > file_size:
+                raise ValueError("The WAD title metadata runs past the end of the file.")
+            handle.seek(tmd_start)
+            tmd = handle.read(tmd_size)
+            if len(tmd) != tmd_size:
+                raise ValueError("The WAD title metadata is truncated.")
+            digest = hashlib.md5(tmd)
+            content_count = int.from_bytes(tmd[0x1DE:0x1E0], "big")
+            if content_count > 4096:
+                raise ValueError("The WAD declares too many contents.")
+            content_addr = tmd_start + tmd_size
+            for index in range(content_count):
+                entry = 0x1E4 + 8 + index * 0x24
+                if entry + 8 > len(tmd):
+                    raise ValueError("The WAD content table is truncated.")
+                size_field = tmd[entry:entry + 8]
+                if size_field[:4] == b"\x00\x00\x00\x00":
+                    content_size = int.from_bytes(size_field[4:8], "big")
+                    content_size = (content_size + 0x0F) & ~0x0F
+                else:
+                    content_size = MAX_ROM_BYTES
+                hashed_size = min(content_size, MAX_ROM_BYTES)
+                if content_addr + hashed_size > file_size:
+                    raise ValueError("A WAD content runs past the end of the file.")
+                handle.seek(content_addr)
+                remaining = hashed_size
+                while remaining:
+                    chunk = handle.read(min(remaining, 1024 * 1024))
+                    if not chunk:
+                        raise ValueError("A WAD content is truncated.")
+                    digest.update(chunk)
+                    remaining -= len(chunk)
+                content_addr = (content_addr + content_size + 0x3F) & ~0x3F
+            return digest.hexdigest()
+    except OSError as error:
+        raise ValueError(f"Could not read WAD file: {error}") from error
+
+
 def game_hash(game):
     path = Path(game.get("path", ""))
-    if not path.is_file():
-        raise FileNotFoundError("The game path must be a local ROM file for automatic achievement matching.")
     platform = str(game.get("platform", "")).casefold()
     if platform == "arcade":
+        if not path.is_file():
+            raise FileNotFoundError("The game path must be a local ROM file for automatic achievement matching.")
         return hashlib.md5(path.stem.encode()).hexdigest()
     if platform not in SYSTEM_NAMES:
         raise ValueError("Automatic matching is unavailable for this platform. Enter a RetroAchievements Game ID in Edit metadata.")
-    data = rom_data(path)
+    if path.suffix.casefold() == ".m3u":
+        path = _m3u_disc(path)
+    if not path.is_file():
+        raise FileNotFoundError("The game path must be a local ROM file for automatic achievement matching.")
+    suffix = path.suffix.casefold()
+    if suffix == ".rvz":
+        if platform not in {"gamecube", "nintendo gamecube", "wii", "nintendo wii"}:
+            raise ValueError("RVZ hashing is available for GameCube and Wii games only.")
+        return _dolphin_hash(path)
+    if suffix == ".wad":
+        if platform not in {"wii", "nintendo wii", "wiiware", "nintendo wiiware"}:
+            raise ValueError("WAD hashing is available for Wii and WiiWare games only.")
+        return _wad_hash(path)
+    if suffix == ".chd":
+        if platform not in {"playstation", "sony playstation", "ps1"}:
+            raise ValueError("CHD hashing is available for PlayStation games only.")
+        data = _chd_data(path)
+    else:
+        data = rom_data(path)
     if platform in {"nes", "nintendo entertainment system"} and data.startswith(b"NES\x1a"):
         data = data[16:]
     elif platform in {"snes", "super nintendo entertainment system"} and len(data) % 8192 == 512:
@@ -193,12 +361,24 @@ def game_progress(game_id, credentials, fetch=api_get):
     achievements = data.get("Achievements", {})
     if isinstance(achievements, dict):
         achievements = list(achievements.values())
+    earned = int(data.get("NumAwardedToUser", 0))
+    earned_hardcore = int(data.get("NumAwardedToUserHardcore", 0))
+    total = int(data.get("NumAchievements", len(achievements)))
+    beaten = data.get("Beaten")
+    if beaten in (None, ""):
+        beaten = data.get("NumAwardedToUserBeaten")
+    try:
+        beaten_count = int(beaten or 0)
+    except (TypeError, ValueError):
+        beaten_count = 0
     return {
         "title": data.get("Title", ""),
-        "earned": int(data.get("NumAwardedToUser", 0)),
-        "earned_hardcore": int(data.get("NumAwardedToUserHardcore", 0)),
-        "total": int(data.get("NumAchievements", len(achievements))),
+        "earned": earned,
+        "earned_hardcore": earned_hardcore,
+        "total": total,
         "completion": data.get("UserCompletion", "0%"),
+        "beaten": beaten_count,
+        "mastered": bool(earned_hardcore >= total > 0),
         "achievements": [{
             "title": item.get("Title", ""),
             "description": item.get("Description", ""),

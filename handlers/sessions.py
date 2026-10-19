@@ -11,6 +11,8 @@ from pkg.platform_compat import IS_WINDOWS, launch_kwargs, open_path, split_comm
 from routes.registry import route
 from webapp_state import EVENT_SEQUENCE, PROCESS_LOCK, RUNNING, SESSION_EVENTS, STATE_LOCK, bump_media_epoch, control_game_session, game_from_payload, load_state_view, start_game
 
+_BIGBOX_ENTERED = False
+
 
 class SessionHandlers:
     @route("GET", "/api/running")
@@ -127,18 +129,24 @@ class SessionHandlers:
         return self.send_json(200, {"stopped": len(stopped), "forced": force})
 
     def bigbox_mode_switch(self, payload):
-        if not payload.get("entering"):
-            return self.send_json(200, {"ok": True, "entering": False})
+        global _BIGBOX_ENTERED
         key = "bigbox_shutdown_commands"
-        for command in load_state().get("settings", {}).get(key, []):
-            try:
-                args = split_command(str(command))
-                args[0] = str(Path(args[0]).expanduser())
-                subprocess.Popen(args, **launch_kwargs())
-            except (OSError, ValueError, IndexError):
-                import logging
-                logging.getLogger(__name__).debug('bigbox_mode_switch command failed', exc_info=True)
-        self.send_json(200, {"ok": True, "entering": True})
+        if payload.get("entering"):
+            _BIGBOX_ENTERED = True
+            return self.send_json(200, {"ok": True, "entering": True})
+        commands = 0
+        if _BIGBOX_ENTERED:
+            _BIGBOX_ENTERED = False
+            for command in load_state().get("settings", {}).get(key, []):
+                try:
+                    args = split_command(str(command))
+                    args[0] = str(Path(args[0]).expanduser())
+                    subprocess.Popen(args, **launch_kwargs())
+                    commands += 1
+                except (OSError, ValueError, IndexError):
+                    import logging
+                    logging.getLogger(__name__).debug('bigbox_mode_switch command failed', exc_info=True)
+        self.send_json(200, {"ok": True, "entering": False, "commands": commands})
 
     @route("GET", "/api/v2/history/timeline")
     def _api_get_api_v2_history_timeline(self, parsed):

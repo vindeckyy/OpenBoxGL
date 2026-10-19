@@ -11,8 +11,16 @@ from api_errors import BadgeNotFound, MediaNotFound, RangeParseError
 from metadata import apply_game_metadata
 from openbox import load_state
 from routes.registry import route
-from parity_integrations import attach_recording, capture_screenshot, download_bezel, download_emumovies_media, load_emumovies_credentials, obs_recording_status, save_emumovies_credentials
-from parity_media import active_video, cleanup_duplicates, find_duplicate_media, load_media_queue
+from parity_integrations import attach_recording, capture_screenshot, download_bezel, load_emumovies_credentials, obs_recording_status, save_emumovies_credentials
+from parity_media import active_video, cleanup_duplicates, cleanup_generated_cache, enqueue_media_job, find_duplicate_media, media_queue_snapshot, retry_media_queue_item
+from parity_emumovies import download_emumovies_media
+from pkg.state.imports import (
+    cancel_media_queue_worker,
+    media_queue_worker_state,
+    pause_media_queue_worker,
+    resume_media_queue_worker,
+    start_media_queue_worker,
+)
 from parity_memories import IMPORT_JOB_NAME, MEMORIES_FIELD, UNASSIGNED_FIELD, apply_import_plan, collect_imports, configured_roots, memories_import_enabled
 from parity_premium import apply_media_pack, download_gog_media, download_steam_trailer, list_media_packs, platform_categories, strings_for
 from webapp_state import DATA, JOB_MANAGER, MEDIA_JOB, MEDIA_TYPES_ALL, METADATA_DATABASE, PROCESS_LOCK, approved_media_path, bump_media_epoch, download_image, game_from_payload, game_from_query, load_state_view, public_settings, transact_state
@@ -51,6 +59,10 @@ EMUMOVIES_TYPE_FIELDS = {
     "background": "background",
     "icon": "icon",
     "manual": "manual",
+    "music": "music",
+    "video": "video_snap",
+    "video_snap": "video_snap",
+    "snapvideo": "video_snap",
     "advertisement": "advertisement",
 }
 
@@ -146,7 +158,7 @@ class MediaHandlers:
                 if not isinstance(clips, list):
                     raise ValueError
                 media = Path(clips[index].get("path", ""))
-            elif kind in {"cover", "background", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "cart_front", "cart_back", "disc", "advertisement", "manual", "video", "music", "video_snap", "video_theme", "video_trailer", "video_recording"}:
+            elif kind in {"cover", "background", "clear_logo", "fanart", "banner", "icon", "poster", "square", "box_back", "box_spine", "box_3d", "title_screen", "cart_front", "cart_back", "disc", "advertisement", "manual", "video", "music", "video_snap", "video_theme", "video_trailer", "video_recording"}:
                 if kind == "video":
                     _, video_path = active_video(game)
                     media = Path(video_path or game.get("video", ""))
@@ -196,7 +208,56 @@ class MediaHandlers:
 
     @route("GET", "/api/media/queue")
     def _api_get_api_media_queue(self, parsed):
-        self.send_json(200, {"queue": load_media_queue(DATA.parent / "media-queue.json")})
+        worker = media_queue_worker_state()
+        snapshot = media_queue_snapshot(
+            DATA.parent / "media-queue.json",
+            running=worker["running"],
+            paused=worker["paused"],
+            completed=worker["completed"],
+        )
+        snapshot["failed"] = max(snapshot["failed"], worker["failed"])
+        snapshot["cancelled"] = worker["cancelled"]
+        snapshot["counts"]["failed"] = snapshot["failed"]
+        snapshot["counts"]["cancelled"] = snapshot["cancelled"]
+        self.send_json(200, snapshot)
+        return
+
+    @route("POST", "/api/media/queue/pause")
+    def _api_post_api_media_queue_pause(self, payload):
+        self.send_json(200, pause_media_queue_worker())
+        return
+
+    @route("POST", "/api/media/queue/resume")
+    def _api_post_api_media_queue_resume(self, payload):
+        self.send_json(200, resume_media_queue_worker())
+        return
+
+    @route("POST", "/api/media/queue/cancel")
+    def _api_post_api_media_queue_cancel(self, payload):
+        self.send_json(200, cancel_media_queue_worker())
+        return
+
+    @route("POST", "/api/media/queue/retry")
+    def _api_post_api_media_queue_retry(self, payload):
+        item_id = str((payload or {}).get("id") or "").strip()
+        if not item_id:
+            raise ValueError("A queue item id is required.")
+        changed = retry_media_queue_item(DATA.parent / "media-queue.json", item_id)
+        if not changed:
+            raise ValueError("Queue item not found.")
+        if not media_queue_worker_state()["running"]:
+            start_media_queue_worker()
+        self.send_json(200, {"ok": True, "id": item_id})
+        return
+
+    @route("POST", "/api/media/cache/cleanup")
+    def _api_post_api_media_cache_cleanup(self, payload):
+        days = (payload or {}).get("days", 30)
+        try:
+            days = max(1, min(3650, int(days)))
+        except (TypeError, ValueError):
+            raise ValueError("days must be a whole number.") from None
+        self.send_json(200, cleanup_generated_cache(DATA.parent, days=days))
         return
 
     @route("GET", "/api/obs/status")
@@ -264,14 +325,54 @@ class MediaHandlers:
         media_types = payload.get("media", [])
         if not isinstance(media_types, list) or not media_types or not set(media_types) <= MEDIA_TYPES_ALL:
             raise ValueError("Select at least one valid media type.")
-        if not METADATA_DATABASE.is_file():
-            raise ValueError("Download the metadata database first.")
+        database_available = METADATA_DATABASE.is_file()
         platform = str(payload.get("platform", "all"))
         overwrite = bool(payload.get("overwrite"))
         retry_failed = bool(payload.get("retry_failed"))
         explicit_game_ids = payload.get("game_ids")
         if explicit_game_ids is not None and not isinstance(explicit_game_ids, list):
             raise ValueError("game_ids must be an array.")
+        state_for_queue = load_state()
+        settings = state_for_queue.get("settings", {}) if isinstance(state_for_queue, dict) else {}
+        wanted_ids = {str(item) for item in explicit_game_ids} if explicit_game_ids else None
+        queued = 0
+        plugin_priority = bool((settings or {}).get("plugin_metadata_priority"))
+        try:
+            from pkg.parity.parity_metadata_providers import provider_priority
+
+            priority = provider_priority(state_for_queue)
+        except (ImportError, ValueError):
+            priority = []
+        for game in state_for_queue.get("games", []):
+            if game.get("launchbox_db_id") or retry_failed:
+                continue
+            if platform != "all" and game.get("platform") != platform:
+                continue
+            if wanted_ids is not None and str(game.get("game_id")) not in wanted_ids:
+                continue
+            source = str(game.get("metadata_provider") or "").strip()
+            if source.startswith("plugin:"):
+                if source not in priority:
+                    source = ""
+            elif source not in {"screenscraper", "igdb", "steamgriddb"}:
+                source = ""
+            if not source and plugin_priority:
+                source = next((key for key in priority if key.startswith("plugin:")), "")
+            if not source:
+                source = "steamgriddb" if game.get("steamgrid_id") or game.get("steamgriddb_id") else ""
+            if not source:
+                continue
+            enqueue_media_job(DATA.parent / "media-queue.json", {
+                "game_id": game.get("game_id"),
+                "source": source,
+                "media": media_types,
+                "overwrite": overwrite,
+            })
+            queued += 1
+        if not queued and not database_available:
+            raise ValueError("Download the metadata database first.")
+        if queued:
+            start_media_queue_worker()
         with PROCESS_LOCK:
             if MEDIA_JOB.get("state") == "running":
                 self.send_json(200, MEDIA_JOB)
@@ -299,7 +400,7 @@ class MediaHandlers:
             targets = [
                 (str(game.get("game_id")), str(game.get("launchbox_db_id")))
                 for game in state["games"]
-                if game.get("launchbox_db_id") and (platform == "all" or game.get("platform") == platform)
+                if database_available and game.get("launchbox_db_id") and (platform == "all" or game.get("platform") == platform)
             ]
             if retry_failed:
                 wanted = set(str(game_id) for game_id in failed_ids)
@@ -397,7 +498,7 @@ class MediaHandlers:
                 MEDIA_JOB.update({"state": final_state, "errors": errors[-20:]})
 
         JOB_MANAGER.submit("media-bulk", worker)
-        self.send_json(202, {"state": "running"})
+        self.send_json(202, {"state": "running", "queued": queued})
 
     def apply_media_pack_route(self, payload):
         pack_id = str(payload.get("id", "")).strip()
@@ -478,9 +579,16 @@ class MediaHandlers:
         groups = find_duplicate_media(games, allowed_roots=[DATA.parent])
         apply = bool(payload.get("apply"))
         deleted = cleanup_duplicates(groups, dry_run=not apply, allowed_roots=[DATA.parent])
+        cache = None
+        if apply or "cache_days" in payload:
+            try:
+                cache_days = max(1, min(3650, int(payload.get("cache_days", 30))))
+            except (TypeError, ValueError):
+                raise ValueError("cache_days must be a whole number.") from None
+            cache = cleanup_generated_cache(DATA.parent, days=cache_days)
         if apply and deleted:
             bump_media_epoch()
-        self.send_json(200, {"groups": len(groups), "paths": deleted, "applied": apply, "platform": platform or "all"})
+        self.send_json(200, {"groups": len(groups), "paths": deleted, "applied": apply, "platform": platform or "all", "cache": cache})
 
     def take_screenshot(self, payload):
         state = load_state()

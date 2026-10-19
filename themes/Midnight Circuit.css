@@ -1,6 +1,8 @@
 /* OpenBox Stock Theme v4: Midnight Circuit */
 
 :root {
+  --font-body-family: system-ui, sans-serif;
+  --font-heading-family: system-ui, sans-serif;
   color-scheme: dark;
   --activity-cancelled-fg: var(--nav-muted);
   --activity-count-bg: var(--danger);
@@ -58,6 +60,16 @@
   --radius-hairline: 2px;
   --radius-panel: 12px;
   --radius-pill-large: 28px;
+  --model-angle: 0deg;
+  --model-angle-x: 0deg;
+  --model-depth: 28px;
+  --model-plastic: var(--surface-hover);
+  --model-cover: var(--surface-card);
+  --model-spine: var(--surface-sheet);
+  --z-content: 1;
+  --z-popover: 2;
+  --z-chrome: 3;
+  --z-overlay: 5;
   --settings-nav-active-bg: var(--surface-hover);
   --settings-nav-bg: var(--surface-card);
   --settings-nav-width: 11rem;

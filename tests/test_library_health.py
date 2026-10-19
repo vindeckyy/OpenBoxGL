@@ -63,6 +63,20 @@ def make_probe(existing):
     return probe
 
 
+class SourceLabelTests(unittest.TestCase):
+    def test_plugin_source_labels_use_the_display_name(self):
+        from pkg.state.cache import _source_labels
+
+        labels = _source_labels([
+            {"source": "plugin:vendor", "plugin_source_name": "Vendor"},
+            {"source": "Steam"},
+            {"source": ""},
+        ])
+        self.assertEqual(labels["plugin:vendor"], "Vendor")
+        self.assertEqual(labels["Steam"], "Steam")
+        self.assertEqual(labels["Local"], "Local")
+
+
 class EngineContractTests(unittest.TestCase):
     def test_weights_sum_to_100(self):
         self.assertEqual(sum(engine.DIMENSION_WEIGHTS.values()), 100)
@@ -95,6 +109,13 @@ class EngineContractTests(unittest.TestCase):
             self.assertIn("dimension", deduction)
             self.assertGreater(deduction["points"], 0)
             self.assertTrue(deduction["reason"])
+
+    def test_deductions_carry_the_plugin_source_label(self):
+        game = healthy_game("g1", path="/games/gone.exe", source="plugin:vendor", plugin_source_name="Vendor")
+        snapshot = engine.score_library([game], {"profiles": {}}, probe=make_probe(set()))
+        deduction = next(item for item in snapshot["deductions"] if item["code"] == "missing_game")
+        self.assertEqual(deduction["source"], "plugin:vendor")
+        self.assertEqual(deduction["source_label"], "Vendor")
 
     def test_missing_file_deduction_math(self):
         games = [healthy_game("g1", path="/games/gone.exe")]

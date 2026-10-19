@@ -66,6 +66,7 @@
 #define TRAY_ICON_ID 1
 #define IDM_TRAY_SHOW 40001
 #define IDM_TRAY_QUIT 40002
+#define IDM_TRAY_RECENT_BASE 40100
 
 typedef enum {
     NATIVE_REQUEST_NONE = 0,
@@ -121,6 +122,8 @@ static int g_window_maximized;
 static int g_tray_enabled;
 static int g_minimize_to_tray;
 static int g_tray_added;
+#define RECENT_GAME_LIMIT 8
+static char *g_recent_ids[RECENT_GAME_LIMIT];
 static int g_webview_ready;
 static int g_closing;
 static int g_pending_focus;
@@ -488,6 +491,7 @@ typedef struct {
     char *title;
     char *target;
     char *path;
+    char *start_path;
     char *action;
 } BridgeMessage;
 
@@ -500,6 +504,7 @@ bridge_message_clear(BridgeMessage *message)
     free(message->title);
     free(message->target);
     free(message->path);
+    free(message->start_path);
     free(message->action);
     memset(message, 0, sizeof(*message));
 }
@@ -524,6 +529,9 @@ bridge_message_slot(BridgeMessage *message, const char *key, size_t length)
     }
     if (length == 4 && memcmp(key, "path", 4) == 0) {
         return &message->path;
+    }
+    if (length == 10 && memcmp(key, "start_path", 10) == 0) {
+        return &message->start_path;
     }
     if (length == 6 && memcmp(key, "action", 6) == 0) {
         return &message->action;
@@ -2017,6 +2025,24 @@ webview_at_expected_origin(void)
 /* ------------------------------------------------------------------ */
 
 static int
+local_file_uri_allowed(const char *uri)
+{
+    wchar_t *wide = utf8_to_wide(uri);
+    if (!wide) {
+        return 0;
+    }
+    wchar_t path[32768];
+    DWORD length = (DWORD)(sizeof(path) / sizeof(path[0]));
+    int ok = 0;
+    if (SUCCEEDED(PathCreateFromUrlW(wide, path, &length, 0))) {
+        DWORD attributes = GetFileAttributesW(path);
+        ok = attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+    }
+    free(wide);
+    return ok;
+}
+
+static int
 uri_scheme_allowed(const char *uri)
 {
     if (!uri) {
@@ -2036,7 +2062,8 @@ uri_scheme_allowed(const char *uri)
     int http = scheme_length == 4 && _strnicmp(uri, "http", 4) == 0;
     int https = scheme_length == 5 && _strnicmp(uri, "https", 5) == 0;
     if (!http && !https) {
-        return 0;
+        int file = scheme_length == 4 && _strnicmp(uri, "file", 4) == 0;
+        return file && local_file_uri_allowed(uri);
     }
     const char *authority = separator + 3;
     const char *end = authority;
@@ -2181,7 +2208,7 @@ handle_reveal(const char *id, const char *path)
 }
 
 static void
-handle_dialog(const char *id, const char *kind, const char *title)
+handle_dialog(const char *id, const char *kind, const char *title, const char *start_path)
 {
     IFileDialog *dialog = NULL;
     HRESULT result = CoCreateInstance(&CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER,
@@ -2209,6 +2236,19 @@ handle_dialog(const char *id, const char *kind, const char *title)
         if (wide_title) {
             IFileDialog_SetTitle(dialog, wide_title);
             free(wide_title);
+        }
+    }
+
+    if (start_path && start_path[0]) {
+        wchar_t *wide_start = utf8_to_wide(start_path);
+        if (wide_start) {
+            IShellItem *folder = NULL;
+            if (SUCCEEDED(SHCreateItemFromParsingName(wide_start, NULL, &IID_IShellItem,
+                                                      (void **)&folder)) && folder) {
+                IFileDialog_SetFolder(dialog, folder);
+                IShellItem_Release(folder);
+            }
+            free(wide_start);
         }
     }
 
@@ -2675,7 +2715,7 @@ message_handler_invoke(ICoreWebView2WebMessageReceivedEventHandler *self,
 
     if (message.id && message.method) {
         if (strcmp(message.method, "dialog") == 0) {
-            handle_dialog(message.id, message.kind, message.title);
+            handle_dialog(message.id, message.kind, message.title, message.start_path);
         } else if (strcmp(message.method, "openExternal") == 0) {
             handle_open_external(message.id, message.target);
         } else if (strcmp(message.method, "reveal") == 0) {
@@ -2987,6 +3027,71 @@ dispatch_native_request(const NativeRequest *request)
 }
 
 static void
+clear_recent_games(void)
+{
+    for (int index = 0; index < RECENT_GAME_LIMIT; index++) {
+        free(g_recent_ids[index]);
+        g_recent_ids[index] = NULL;
+    }
+}
+
+static void
+append_recent_games(HMENU menu)
+{
+    clear_recent_games();
+    wchar_t *path = path_join(g_data_dir_wide, L"native-host-recent");
+    if (!path) {
+        return;
+    }
+    char *contents = read_secure_trimmed_file(path);
+    free(path);
+    if (!contents) {
+        return;
+    }
+    HMENU recent = CreatePopupMenu();
+    if (!recent) {
+        free(contents);
+        return;
+    }
+    int count = 0;
+    char *cursor = contents;
+    while (*cursor && count < RECENT_GAME_LIMIT) {
+        char *end = strchr(cursor, '\n');
+        if (end) {
+            *end = '\0';
+        }
+        char *tab = strchr(cursor, '\t');
+        if (tab) {
+            *tab = '\0';
+            char *id = tab + 1;
+            char *carriage = strchr(id, '\r');
+            if (carriage) {
+                *carriage = '\0';
+            }
+            if (*id) {
+                g_recent_ids[count] = dup_str(id);
+                wchar_t *label = utf8_to_wide(cursor);
+                if (label && g_recent_ids[count]) {
+                    AppendMenuW(recent, MF_STRING, IDM_TRAY_RECENT_BASE + count, label);
+                    count++;
+                }
+                free(label);
+            }
+        }
+        if (!end) {
+            break;
+        }
+        cursor = end + 1;
+    }
+    if (count) {
+        AppendMenuW(menu, MF_POPUP, (UINT_PTR)recent, L"Recent games");
+    } else {
+        DestroyMenu(recent);
+    }
+    free(contents);
+}
+
+static void
 show_tray_menu(void)
 {
     HMENU menu = CreatePopupMenu();
@@ -2994,6 +3099,7 @@ show_tray_menu(void)
         return;
     }
     AppendMenuW(menu, MF_STRING, IDM_TRAY_SHOW, L"Show OpenBox");
+    append_recent_games(menu);
     AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
     AppendMenuW(menu, MF_STRING, IDM_TRAY_QUIT, L"Quit");
     POINT cursor;
@@ -3125,6 +3231,18 @@ window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
         if (LOWORD(wparam) == IDM_TRAY_QUIT) {
             ShowWindow(window, SW_SHOW);
             quit_host();
+            return 0;
+        }
+        if (LOWORD(wparam) >= IDM_TRAY_RECENT_BASE &&
+            LOWORD(wparam) < IDM_TRAY_RECENT_BASE + RECENT_GAME_LIMIT) {
+            int index = LOWORD(wparam) - IDM_TRAY_RECENT_BASE;
+            if (g_recent_ids[index]) {
+                NativeRequest request = { NATIVE_REQUEST_NONE, NULL };
+                if (native_request_set_value(&request, NATIVE_REQUEST_LAUNCH, g_recent_ids[index], 0)) {
+                    dispatch_native_request(&request);
+                }
+                native_request_clear(&request);
+            }
             return 0;
         }
         return 0;
@@ -3469,6 +3587,7 @@ wWinMain(HINSTANCE instance, HINSTANCE previous, LPWSTR command_line, int show_c
     free(g_origin);
     free(g_origin_wide);
     free(g_token);
+    clear_recent_games();
     free(g_web_app_path);
     free(g_python_path);
     native_request_clear(&g_pending_request);

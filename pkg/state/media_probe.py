@@ -41,7 +41,7 @@ FIELDS = {
     "gameyfin_id", "gameyfin_provider", "store_catalog", "store_installed", "owned",
     "gog_id", "ea_id", "ubisoft_id",
     "tracking_mode", "tracking_delay", "tracking_frequency", "tracking_process_name", "igdb_id",
-    "gamescope_preset", "screenscraper_id",
+    "gamescope_preset", "screenscraper_id", "cover_model",
 }
 
 # Media fields that can be populated from the LaunchBox Games Database. Kept as
@@ -50,6 +50,7 @@ MEDIA_TYPES_ALL = {
     "cover", "background", "screenshots", "clear_logo", "fanart", "banner", "icon",
     "box_back", "box_spine", "box_3d", "title_screen",
     "cart_front", "cart_back", "disc", "advertisement", "manual",
+    "poster", "square", "video", "video_snap", "video_theme", "video_trailer", "music",
 }
 MEDIA_ROOTS_ENV = "OPENBOX_MEDIA_ROOTS"
 MEDIA_PATH_FIELDS = {
@@ -57,7 +58,14 @@ MEDIA_PATH_FIELDS = {
     "box_back", "box_spine", "box_3d", "title_screen", "cart_front",
     "cart_back", "disc", "advertisement", "manual", "video", "music",
     "video_snap", "video_theme", "video_trailer", "video_recording",
+    "poster", "square",
 }
+# Additional image shapes exposed by the media providers. ``poster`` is a tall
+# box-art aspect and ``square`` an icon-like aspect; a provider without a
+# native type falls back to the closest existing field rather than inventing a
+# download.
+VIDEO_MEDIA_TYPES = {"video", "video_snap", "video_theme", "video_trailer"}
+MUSIC_MEDIA_TYPES = {"music"}
 
 
 def _ns(name, default):

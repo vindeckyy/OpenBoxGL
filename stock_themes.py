@@ -60,5 +60,8 @@ def ensure_stock_themes(destination, root=None):
         if target.exists() and _stock_version(target) >= _stock_version(source):
             continue
         shutil.copy2(source, target)
+        sidecar = source.with_suffix(".json")
+        if sidecar.is_file():
+            shutil.copy2(sidecar, target.with_suffix(".json"))
         installed.append(target.stem)
     return installed

@@ -117,6 +117,26 @@ class TestStateImports(unittest.TestCase):
             auto_import_worker()
         folder_import.assert_called_once_with("/tmp/watch")
 
+    def test_auto_import_worker_imports_windows_storefronts(self):
+        from pkg.state.imports import auto_import_worker
+
+        state = {
+            "settings": {
+                "storefront_auto_import": {
+                    "gog": {"enabled": True},
+                    "ea": {"enabled": True},
+                    "ubisoft": {"enabled": True},
+                },
+                "emulator_scan_configs": [],
+            },
+        }
+        with mock.patch("pkg.state.imports.load_state", return_value=state),              mock.patch("pkg.state.imports.IS_WINDOWS", True),              mock.patch("pkg.parity.parity_storefront_windows.import_gog", return_value=[]) as gog,              mock.patch("pkg.parity.parity_storefront_windows.import_ea", return_value=[]) as ea,              mock.patch("pkg.parity.parity_storefront_windows.import_ubisoft", return_value=[]) as ubisoft,              mock.patch("pkg.state.imports.WATCH_STOP") as watch_stop:
+            watch_stop.wait.side_effect = [False, True]
+            auto_import_worker()
+        gog.assert_called_once()
+        ea.assert_called_once()
+        ubisoft.assert_called_once()
+
     def test_auto_import_worker_counts_through_the_real_merge(self):
         """The worker read merge_imported_games(...)["added"] on a (added, found)
         tuple, a TypeError no except clause caught, so the first storefront tick
@@ -141,6 +161,70 @@ class TestStateImports(unittest.TestCase):
             auto_import_worker()
         self.assertEqual([game["name"] for game in library["games"]], ["Portal"])
         logger.warning.assert_not_called()
+
+    def test_auto_import_worker_imports_plugin_storefronts(self):
+        from pkg.state.imports import auto_import_worker
+
+        library = {"games": [], "settings": {}}
+        state = {
+            "settings": {
+                "storefront_auto_import": {
+                    "plugin:vendor.store": {"enabled": True, "platform": "PC", "include_uninstalled": True},
+                },
+                "emulator_scan_configs": [],
+            },
+        }
+
+        def update_state(mutator):
+            mutator(library)
+            return library
+
+        plugin_game = {
+            "game_id": "plugin:vendor.store:one",
+            "name": "One",
+            "path": "/games/one",
+            "launch": "/games/one",
+            "source": "Vendor Store",
+            "plugin_source": "vendor.store",
+        }
+        with mock.patch("pkg.state.imports.load_state", return_value=state), \
+             mock.patch("pkg.state.imports.update_state", side_effect=update_state), \
+             mock.patch(
+                 "pkg.parity.parity_plugin_storefront.plugin_storefront_import",
+                 return_value=[plugin_game],
+             ) as plugin_import, \
+             mock.patch("pkg.state.imports.WATCH_STOP") as watch_stop:
+            watch_stop.wait.side_effect = [False, True]
+            auto_import_worker()
+        plugin_import.assert_called_once_with("vendor.store")
+        self.assertEqual([game["game_id"] for game in library["games"]], ["plugin:vendor.store:one"])
+        self.assertEqual(library["games"][0]["platform"], "PC")
+
+    def test_auto_import_worker_filters_gameyfin_catalog(self):
+        from pkg.state.imports import auto_import_worker
+
+        state = {
+            "settings": {
+                "storefront_auto_import": {
+                    "gameyfin": {"enabled": True, "include_uninstalled": False},
+                },
+                "auto_import_excluded_platforms": ["SNES"],
+                "emulator_scan_configs": [],
+            },
+        }
+        catalog = [
+            {"id": "1", "name": "Installed PC", "installed": True, "platform": "PC", "path": "/p1", "launch": ""},
+            {"id": "2", "name": "Uninstalled PC", "installed": False, "platform": "PC", "path": "/p2", "launch": ""},
+            {"id": "3", "name": "Installed SNES", "installed": True, "platform": "SNES", "path": "/p3", "launch": ""},
+        ]
+        with mock.patch("pkg.state.imports.load_state", return_value=state), \
+             mock.patch("pkg.state.imports.catalog_gameyfin", return_value=(catalog, [])), \
+             mock.patch("pkg.state.imports.merge_imported_games", return_value=(0, 0)) as merge, \
+             mock.patch("pkg.state.imports.WATCH_STOP") as watch_stop:
+            watch_stop.wait.side_effect = [False, True]
+            auto_import_worker()
+        imported = merge.call_args.args[0]
+        self.assertEqual([game["name"] for game in imported], ["Installed PC"])
 
     def test_auto_import_worker_handles_load_failure(self):
         from pkg.state.imports import auto_import_worker

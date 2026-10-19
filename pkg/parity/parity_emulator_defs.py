@@ -893,7 +893,28 @@ def platform_for_extension(extension, definitions=None):
     }
 
 
-def resolve_launch(game, profiles, *, which=None, data_dir=""):
+def _launch_emulator_id(game, args, emulator_id=""):
+    """Resolve the settings schema key for a launch command.
+
+    Explicit ids win; otherwise the adapter id, then the first executable on
+    the command line. Unknown emulators simply have no managed settings.
+    """
+    from pkg.parity.parity_emulator_settings import canonical_emulator_id
+
+    for candidate in (emulator_id, game.get("emulator_id"), game.get("emulator_adapter_id")):
+        try:
+            return canonical_emulator_id(candidate)
+        except ValueError:
+            continue
+    executable = Path(str(args[0] if args else "")).name.casefold()
+    if executable == "mame" or executable.startswith("mame"):
+        return "mame"
+    if "retroarch" in executable:
+        return "retroarch"
+    return ""
+
+
+def resolve_launch(game, profiles, *, which=None, data_dir="", state=None, emulator_id=""):
     which = which or shutil.which
     path = str(game.get("path", "") or "")
     if not path:
@@ -951,10 +972,23 @@ def resolve_launch(game, profiles, *, which=None, data_dir=""):
             args = [launch_path]
         precedence = "direct_exe"
 
+    warnings = []
+    if state is not None:
+        try:
+            from pkg.parity.parity_emulator_settings import apply_to_command, is_managed
+
+            canonical = _launch_emulator_id(game, args, emulator_id)
+            if canonical and is_managed(state, canonical):
+                args, _env, meta = apply_to_command(canonical, platform, args, state, data_dir)
+                warnings.extend(str(item) for item in meta.get("warnings") or [])
+        except (OSError, ValueError) as error:
+            warnings.append(f"Emulator settings were not applied: {error}")
+
     return {
         "args": args,
         "cwd": str(Path(launch_path).parent),
         "precedence": precedence,
+        "warnings": warnings,
     }
 
 

@@ -10,12 +10,22 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from handlers.settings import (  # noqa: E402
+    _clean_bool,
+    _clean_bounded_int,
+    _clean_bigbox_hidden_lists,
     _clean_controller_map,
     _clean_controller_prompt_hint,
+    _clean_cover_models,
     _clean_currency,
+    _clean_dict,
+    _clean_enum,
     _clean_gamescope_presets,
+    _clean_keyboard_map,
     _clean_party,
+    _clean_progress_values,
     _clean_screensaver_seconds,
+    _clean_sidebar_sections,
+    _clean_str_list,
     _clean_tracking,
     _clean_watch_folders,
     clean_settings,
@@ -81,6 +91,86 @@ class SettingsSchemaTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _clean_currency({"currency": "EU"})
 
+    def test_bool_normalizer_rejects_numeric_and_string_input(self):
+        self.assertFalse(_clean_bool({}, "flag", False))
+        self.assertTrue(_clean_bool({"flag": True}, "flag", False))
+        for malformed in (1, 0, "true", [], {}):
+            with self.assertRaises(ValueError):
+                _clean_bool({"flag": malformed}, "flag", False)
+
+    def test_enum_normalizer_rejects_unknown_and_non_string(self):
+        self.assertEqual(_clean_enum({}, "mode", {"a", "b"}, "a"), "a")
+        self.assertEqual(_clean_enum({"mode": "b"}, "mode", {"a", "b"}, "a"), "b")
+        for malformed in ("c", 1, True, []):
+            with self.assertRaises(ValueError):
+                _clean_enum({"mode": malformed}, "mode", {"a", "b"}, "a")
+
+    def test_bounded_int_rejects_bool_and_out_of_range(self):
+        self.assertEqual(_clean_bounded_int({}, "n", 4, 1, 10, "bad"), 4)
+        self.assertEqual(_clean_bounded_int({"n": "6"}, "n", 4, 1, 10, "bad"), 6)
+        for malformed in (True, 0, 11, "x", []):
+            with self.assertRaises(ValueError):
+                _clean_bounded_int({"n": malformed}, "n", 4, 1, 10, "bad")
+
+    def test_str_list_caps_dedupes_and_rejects_containers(self):
+        self.assertEqual(_clean_str_list({}, "items", 3, 5), [])
+        self.assertEqual(
+            _clean_str_list({"items": [" a ", "a", "b", ""]}, "items", 4, 5),
+            ["a", "b"],
+        )
+        self.assertEqual(_clean_str_list({"items": ["abcdef"]}, "items", 3, 4), ["abcd"])
+        for malformed in ("a", [1], ["a", "b", "c", "d"]):
+            with self.assertRaises(ValueError):
+                _clean_str_list({"items": malformed}, "items", 3, 5)
+
+    def test_dict_normalizer_copies_and_enforces_limit(self):
+        source = {"a": [1]}
+        clean = _clean_dict({"map": source}, "map", 2)
+        clean["a"].append(2)
+        self.assertEqual(source, {"a": [1]})
+        for malformed in ([], "x", {"a": 1, "b": 2, "c": 3}):
+            with self.assertRaises(ValueError):
+                _clean_dict({"map": malformed}, "map", 2)
+
+    def test_sidebar_sections_are_unique_and_preserved(self):
+        self.assertEqual(_clean_sidebar_sections({}), ["search", "view", "filters", "platforms", "playlists", "explorer"])
+        self.assertEqual(_clean_sidebar_sections({"sidebar_sections": ["filters", "search"]}), ["filters", "search"])
+        # Legacy ids stay in the stored order so an upgrade does not erase them.
+        self.assertEqual(_clean_sidebar_sections({"sidebar_sections": ["favorites", "recent"]}), ["favorites", "recent"])
+        self.assertEqual(_clean_sidebar_sections({"sidebar_sections": ["search", "search"]}), ["search"])
+        for malformed in ("search", list(range(21)), [1]):
+            with self.assertRaises(ValueError):
+                _clean_sidebar_sections({"sidebar_sections": malformed})
+
+    def test_progress_values_are_known_and_ordered(self):
+        self.assertEqual(_clean_progress_values({}), ["Unplayed", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned"])
+        self.assertEqual(_clean_progress_values({"progress_values": ["Playing", "Beaten"]}), ["Playing", "Beaten"])
+        for malformed in ("Playing", ["Nope"], [""], [1]):
+            with self.assertRaises(ValueError):
+                _clean_progress_values({"progress_values": malformed})
+
+    def test_cover_model_style_maps_are_validated(self):
+        defaults = _clean_cover_models({})
+        self.assertEqual(defaults, ("box", {}, "free", {}, {}, {}))
+        cleaned = _clean_cover_models({
+            "cover_model_by_platform": {"SNES": "cassette"},
+            "model_back_by_platform": {"SNES": "straight"},
+            "model_case_by_platform": {"SNES": "solid"},
+            "model_rotation_lock_by_platform": {"SNES": "vertical"},
+        })
+        self.assertEqual(cleaned, (
+            "box", {"SNES": "cassette"}, "free",
+            {"SNES": "straight"}, {"SNES": "solid"}, {"SNES": "vertical"},
+        ))
+        for key, value in (
+            ("cover_model_by_platform", "disc"),
+            ("model_back_by_platform", "curved"),
+            ("model_case_by_platform", "opaque"),
+            ("model_rotation_lock_by_platform", "locked"),
+        ):
+            with self.assertRaises(ValueError):
+                _clean_cover_models({key: {"SNES": value}})
+
     def test_registry_contains_every_key_the_save_path_writes(self):
         # The save handler normalizes and writes these keys; the whitelist
         # must cover them or a fresh settings save would drop them.
@@ -114,6 +204,21 @@ class SettingsSchemaTests(unittest.TestCase):
         emitted = set(clean_settings({}))
         for key in sorted(_form_collected_keys()):
             self.assertIn(key, emitted, f"form-collected key never written: {key}")
+
+    def test_native_storefront_auto_import_keys_are_saved(self):
+        settings = clean_settings({
+            "storefront_auto_import": {
+                "gog": {"enabled": True},
+                "ea": True,
+                "ubisoft": {"enabled": True, "platform": "PC"},
+                "bogus": {"enabled": True},
+            },
+        })
+        stores = settings["storefront_auto_import"]
+        self.assertTrue(stores["gog"]["enabled"])
+        self.assertTrue(stores["ea"]["enabled"])
+        self.assertEqual(stores["ubisoft"]["platform"], "PC")
+        self.assertNotIn("bogus", stores)
 
     def test_clean_settings_round_trips_backup_auto_and_insights(self):
         clean = clean_settings({
@@ -269,7 +374,57 @@ class SettingsSchemaTests(unittest.TestCase):
             with self.assertRaises(ValueError) as ctx:
                 _clean_controller_map({"controller_map": bad_map})
             self.assertIn("Controller button mappings must use buttons 0 through 31", str(ctx.exception))
+        with self.assertRaises(ValueError) as ctx:
+            _clean_controller_map({"controller_map": {"play": 4, "favorite": 4}})
+        self.assertIn("Button 4 is assigned to both play and favorite", str(ctx.exception))
 
+
+    def test_clean_keyboard_map(self):
+        self.assertEqual(
+            _clean_keyboard_map({"keyboard_map": {"play": "Enter", "back": "Escape"}}),
+            {"play": "Enter", "back": "Escape"},
+        )
+        self.assertEqual(
+            _clean_keyboard_map({"keyboard_map": {"play": "", "unknown": "x"}}),
+            {},
+        )
+        with self.assertRaises(ValueError):
+            _clean_keyboard_map({"keyboard_map": ["Enter"]})
+        with self.assertRaises(ValueError):
+            _clean_keyboard_map({"keyboard_map": {"play": "NotAKey"}})
+        with self.assertRaises(ValueError):
+            _clean_keyboard_map({"keyboard_map": {"play": "Enter", "back": "enter"}})
+        # Physical names are part of the accepted grammar and matchable in
+        # the client through matchesKey's aliases.
+        self.assertEqual(
+            _clean_keyboard_map({"keyboard_map": {"play": "KeyA", "random": "Digit0"}}),
+            {"play": "KeyA", "random": "Digit0"},
+        )
+
+    def test_input_ranges_and_clamping(self):
+        clean = clean_settings({"spinner_sensitivity": 0, "bigbox_wheel_speed": 1.5,
+                                "bigbox_back_hold_seconds": 0})
+        self.assertEqual(clean["spinner_sensitivity"], 1)
+        self.assertEqual(clean["bigbox_wheel_speed"], 1.5)
+        self.assertEqual(clean["bigbox_back_hold_seconds"], 0)
+        self.assertEqual(clean_settings({"spinner_sensitivity": 99})["spinner_sensitivity"], 20)
+        for bad in ({"bigbox_wheel_speed": 0.24}, {"bigbox_wheel_speed": 3.1},
+                    {"bigbox_back_hold_seconds": -0.1}, {"bigbox_back_hold_seconds": 2.1}):
+            with self.assertRaises(ValueError):
+                clean_settings(bad)
+
+    def test_clean_bigbox_hidden_lists(self):
+        platforms, categories, playlists = _clean_bigbox_hidden_lists({
+            "bigbox_hidden_platforms": [" Arcade ", "Arcade", "DOS"],
+            "bigbox_hidden_categories": ["Fighting"],
+            "bigbox_hidden_playlists": ["Co-op"],
+        })
+        self.assertEqual(platforms, ["Arcade", "DOS"])
+        self.assertEqual(categories, ["Fighting"])
+        self.assertEqual(playlists, ["Co-op"])
+        self.assertEqual(_clean_bigbox_hidden_lists({}), ([], [], []))
+        with self.assertRaises(ValueError):
+            _clean_bigbox_hidden_lists({"bigbox_hidden_platforms": "Arcade"})
 
     def test_hidden_sidebar_sections_shape_and_drop(self):
         # Row 14: the free-text setting became a checkbox group. The schema

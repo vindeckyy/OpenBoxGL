@@ -158,3 +158,17 @@ Added after the 1.16.1 section so existing row numbers stay stable. Every `Teste
 | 95 | A price is negative, not an integer, or cleared | Bad values are refused; clearing removes both the amount and its currency on the single-game and bulk paths | Tested (tests/test_catalog.py, tests/test_gapfill_rest.py) |
 | 96 | Cost per hour for an unpriced game or under a minute played | No rate is shown or ranked; totals still count the priced game | Tested (tests/test_insights.py) |
 | 97 | A non-English locale receives a cloud-sync, launch-check, definition, or webhook notice | The title and body come from the locale files; a missing key falls back to the stored English text | Tested (tests/test_notifications.py) |
+
+## 1.18.0
+
+Added after the 1.17.0 section so existing row numbers stay stable.
+
+| # | Scenario | Expected behavior | Status |
+|---|---|---|---|
+| 98 | A plugin declares a capability without its required hook, or an unknown hook | Manifest validation refuses the package and the Plugins manager shows why; valid capability manifests still load | Tested (tests/test_plugin_capabilities.py) |
+| 99 | A storefront plugin is disabled or removed while its imported games exist | The plugin's persisted games are deleted from state, the next library projection omits them, and `game_removed` fires | Tested (tests/test_parity_admin_http.py) |
+| 100 | A metadata plugin returns fields and media URLs | Applying the candidate records `metadata_provider` and queues each validated URL without re-querying the plugin | Tested (tests/test_plugin_providers.py) |
+| 101 | A stats plugin is disabled after writing a cache | Its cached playtime and achievements stop merging into the library immediately; malformed caches are ignored | Tested (tests/test_plugin_stats.py) |
+| 102 | A plugin emulator section is asked for a scope it did not declare | The save is refused with a 400; declared platform scopes still save | Tested (tests/test_parity_admin_http.py) |
+| 103 | A startup video setting points at a missing file or outside the data media folder | The route refuses it with a 404 and Big Box starts without a video | Tested (tests/test_parity_admin_http.py) |
+| 104 | A backup contains plugin credentials or password-format plugin settings | The credential store is excluded and password settings are blanked; plugin data bags are preserved | Tested (tests/test_backup_redaction.py) |

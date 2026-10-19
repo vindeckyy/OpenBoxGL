@@ -9,7 +9,7 @@ PROGRESS = {"", "Unplayed", "Playing", "Paused", "Beaten", "Completed", "Mastere
 # Coordinator decision (ADR-0051): do NOT create a parallel completion_status
 # field. "" stays the stored "unset" value; UI and queries display it as
 # "Unplayed". "Abandoned" covers the plan's "Dropped" wording.
-MEDIA_FIELDS = ("cover", "background", "clear_logo", "fanart", "banner", "icon", "box_back", "box_spine", "box_3d", "title_screen", "cart_front", "cart_back", "disc", "advertisement", "manual", "video", "music")
+MEDIA_FIELDS = ("cover", "background", "clear_logo", "fanart", "banner", "icon", "poster", "square", "box_back", "box_spine", "box_3d", "title_screen", "cart_front", "cart_back", "disc", "advertisement", "manual", "video", "music")
 MAX_TAGS = 50
 MAX_TAG_LENGTH = 64
 MAX_PRICE_CENTS = 1_000_000_000
@@ -390,13 +390,15 @@ def apply_progress_automation(game, settings, now=None):
     """Apply LaunchBox-style progress automation after a session ends."""
     if not settings.get("progress_automation_enabled"):
         return
+    allowed = settings.get("progress_values")
+    allowed = set(allowed) if isinstance(allowed, list) else PROGRESS
     now = now or datetime.now()
     play_minutes = int(settings.get("progress_automation_play_minutes", 0) or 0)
     idle_days = int(settings.get("progress_automation_idle_days", 0) or 0)
-    if play_minutes and game.get("playtime_seconds", 0) >= play_minutes * 60:
+    if play_minutes and "Playing" in allowed and game.get("playtime_seconds", 0) >= play_minutes * 60:
         if not game.get("progress") or game["progress"] == "Paused":
             game["progress"] = "Playing"
-    if idle_days and game.get("last_played"):
+    if idle_days and "Paused" in allowed and game.get("last_played"):
         try:
             last = datetime.fromisoformat(str(game["last_played"]))
             current = now

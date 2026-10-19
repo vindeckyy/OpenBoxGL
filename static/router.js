@@ -8,7 +8,7 @@
 import { $ } from './util.js';
 import { AppState, invalidateFilterCache } from './state.js';
 
-const ROUTE_KEYS = ['platform', 'category', 'playlist', 'preset', 'q', 'game', 'sort'];
+const ROUTE_KEYS = ['platform', 'category', 'playlist', 'preset', 'q', 'x', 'game', 'sort'];
 
 function encodeSegment(value) {
   return encodeURIComponent(String(value)).replace(/[!'()*]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
@@ -33,6 +33,8 @@ function currentHash() {
   push('playlist', AppState.activePlaylist);
   push('preset', AppState.activeFilterPreset);
   push('q', $('sidebarSearch')?.value?.trim());
+  const exclusions = AppState.filterExclusions || {};
+  if (Object.keys(exclusions).length) push('x', JSON.stringify(exclusions));
   push('game', AppState.selectedId);
   push('sort', $('sort')?.value && $('sort').value !== 'title' ? $('sort').value : '');
   return `#/${parts.join('/')}`;
@@ -63,6 +65,24 @@ export function applyHash() {
   pair('q', value => {
     const search = $('sidebarSearch');
     if (search && search.value.trim() !== value) { changed = true; search.value = value; invalidateFilterCache(); }
+  });
+  pair('x', value => {
+    let parsed;
+    try { parsed = JSON.parse(value); } catch { return; }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+    const clean = {};
+    Object.entries(parsed).slice(0, 20).forEach(([field, raw]) => {
+      const values = (Array.isArray(raw) ? raw : [raw])
+        .slice(0, 20)
+        .filter(item => ['string', 'boolean', 'number'].includes(typeof item))
+        .map(item => typeof item === 'string' ? item.slice(0, 80) : item);
+      if (values.length) clean[field.slice(0, 40)] = values;
+    });
+    if (JSON.stringify(clean) !== JSON.stringify(AppState.filterExclusions || {})) {
+      changed = true;
+      AppState.filterExclusions = clean;
+      invalidateFilterCache();
+    }
   });
   pair('game', value => {
     const id = Number(value);

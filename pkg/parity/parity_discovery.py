@@ -68,6 +68,19 @@ def _discovery_lists_uncached(games, limit=12):
         key=lambda item: str(item[1].get("last_played") or ""),
         reverse=True,
     )
+    def has_any_achievements(game):
+        if game.get("has_achievements"):
+            return True
+        sources = game.get("achievement_sources")
+        return isinstance(sources, dict) and any(
+            isinstance(entry, dict) and (int(entry.get("total") or 0) > 0 or int(entry.get("earned") or 0) > 0)
+            for entry in sources.values()
+        )
+
+    achievements = sorted(
+        [(i, g) for i, g in visible if has_any_achievements(g)],
+        key=lambda item: (-_number(item[1].get("ra_progress_pct")), str(item[1].get("name", "")).casefold()),
+    )
     random_pool = list(visible)
     random.shuffle(random_pool)
     return {
@@ -76,9 +89,17 @@ def _discovery_lists_uncached(games, limit=12):
         "short_sessions": take(short_sessions),
         "highly_rated": take(highly_rated),
         "continue_playing": take(continue_playing),
+        "achievements": take(achievements),
         "random_picks": take(random_pool),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
     }
+
+
+def _number(value):
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def item_rating(game):

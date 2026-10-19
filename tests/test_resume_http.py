@@ -193,6 +193,27 @@ class ResumeHttpTests(unittest.TestCase):
         self.assertFalse(payload["stale"])
         self.assertEqual(payload["state"]["file"], "resume.state")
 
+    def test_resume_slot_validates_and_persists(self):
+        status, payload = self.request("POST", "/api/v2/resume/slot", {"game_id": self.game_id, "slot": "bad slot!"})
+        self.assertEqual(status, 400, payload)
+        self.assertIn("slot", payload.get("error", "").casefold())
+
+        status, payload = self.request("POST", "/api/v2/resume/slot", {"game_id": self.game_id, "slot": "hardcore_2"})
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(payload["slot"], "hardcore_2")
+        stored = self.openbox.load_state()["games"][0]
+        self.assertEqual(stored["resume_slot"], "hardcore_2")
+        status, state = self.request("GET", "/api/library")
+        self.assertEqual(status, 200)
+        projected = next(game for game in state["games"] if game["game_id"] == self.game_id)
+        self.assertEqual(projected["resume_slot"], "hardcore_2")
+
+        status, payload = self.request("POST", "/api/v2/resume/slot", {"game_id": self.game_id, "slot": ""})
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(payload["slot"], "")
+        stored = self.openbox.load_state()["games"][0]
+        self.assertNotIn("resume_slot", stored)
+
     def test_status_unknown_game_400(self):
         status, payload = self.request("GET", "/api/v2/resume/status?game_id=nope")
         self.assertEqual(status, 400)

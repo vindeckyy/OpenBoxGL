@@ -37,6 +37,8 @@ from pkg.parity.parity_launch_doctor import _derive_status, run_preflight_checks
 LOGGER = logging.getLogger(__name__)
 
 AUDIT_FILE_NAME = "launch_audit.json"
+AUDIT_HISTORY_NAME = "launch_audit.jsonl"
+AUDIT_HISTORY_MAX_BYTES = 5 * 1024 * 1024
 PROGRESS_EVERY = 50
 #: Members recorded per failed-entry sample; the count is always exact.
 ERROR_SAMPLE = 20
@@ -287,10 +289,34 @@ def audit_path(data_dir) -> Path:
     return Path(data_dir) / "cache" / AUDIT_FILE_NAME
 
 
+def audit_history_path(data_dir) -> Path:
+    return Path(data_dir) / "cache" / AUDIT_HISTORY_NAME
+
+
+def append_audit_history(data_dir, report) -> None:
+    """Append one compact audit summary to the rolling JSONL history."""
+    path = audit_history_path(data_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if path.stat().st_size >= AUDIT_HISTORY_MAX_BYTES:
+            path.replace(path.with_suffix(".jsonl.1"))
+    except OSError:
+        pass
+    entry = {
+        "computed_at": report.get("computed_at"),
+        "game_count": report.get("game_count"),
+        "totals": report.get("totals") or {},
+        "probes": report.get("probes") or {},
+    }
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(entry, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
 def store_audit(data_dir, report) -> None:
     path = audit_path(data_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(path, json.dumps(report, ensure_ascii=False, separators=(",", ":")))
+    append_audit_history(data_dir, report)
 
 
 def totals_change_notice(previous, current) -> dict | None:
@@ -390,7 +416,10 @@ def group_members(report, key, *, offset, limit) -> dict:
 
 __all__ = [
     "AUDIT_FILE_NAME",
+    "AUDIT_HISTORY_NAME",
     "ProbeCache",
+    "append_audit_history",
+    "audit_history_path",
     "audit_library",
     "audit_path",
     "group_members",

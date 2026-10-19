@@ -1,16 +1,192 @@
-import { $, escapeHtml, formatBytes, defaultBadges, defaultControllerMap, fact, motionMs } from './util.js';
+import { $, escapeHtml, formatBytes, defaultBadges, defaultControllerMap, fact, motionMs, applyFontFamily } from './util.js';
 import { AppState, api, notify, token, nativeCaps, selectedIds, playlistFor, applySidebarVisibility, nativePickFile, nativePickFolder, nativeReveal } from './state.js';
 import { refresh, render, renderGrid, openRepairWizard, openDuplicatesDialog } from './library.js';
-import { applyLibraryMusic } from './bigbox.js';
-import { confirmAction, promptInput, closeDialog } from './dialogs.js';
+import { applyLibraryMusic, syncPointerNavigator } from './bigbox.js';
+import { confirmAction, promptInput, closeDialog, openDialog } from './dialogs.js';
 import { openSetupCenter } from './setup.js';
 import { t } from './i18n.js';
+import { emulatorFieldLabel, readEmulatorSettingsValues } from './emulators.js';
 import { initDefs } from './defs.js';
 import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.js';
+import { pluginSettingsFields, collectPluginSettings, renderPluginSettings } from './plugin_form.js';
 
 
 
     let settingsCategory = 'library';
+
+    const SIDEBAR_SECTION_LABELS = {
+      search: () => t('sidebar.search'),
+      view: () => t('sidebar.view'),
+      filters: () => t('sidebar.filters'),
+      platforms: () => t('sidebar.platforms'),
+      playlists: () => t('sidebar.playlists'),
+      explorer: () => t('sidebar.explorer'),
+    };
+    function currentSidebarOrder() {
+      const valid = Object.keys(SIDEBAR_SECTION_LABELS);
+      const saved = (AppState.appSettings.sidebar_sections || []).filter(section => valid.includes(section));
+      const listed = [...document.querySelectorAll('[data-sidebar-order]')].map(row => row.dataset.sidebarOrder);
+      const source = listed.length ? listed : saved;
+      return [...new Set([...source, ...valid])];
+    }
+    function renderSidebarOrder(order = currentSidebarOrder()) {
+      const container = $('sidebarOrderList');
+      if (!container) return;
+      container.innerHTML = order.map((section, index) => `<div class="playlist-row" data-sidebar-order="${section}"><span>${escapeHtml(SIDEBAR_SECTION_LABELS[section]())}</span><button type="button" class="icon-button" data-sidebar-move="${section}" data-direction="-1" ${index === 0 ? 'disabled' : ''} aria-label="Move ${escapeHtml(SIDEBAR_SECTION_LABELS[section]())} up">↑</button><button type="button" class="icon-button" data-sidebar-move="${section}" data-direction="1" ${index === order.length - 1 ? 'disabled' : ''} aria-label="Move ${escapeHtml(SIDEBAR_SECTION_LABELS[section]())} down">↓</button></div>`).join('');
+      container.querySelectorAll('[data-sidebar-move]').forEach(button => {
+        button.onclick = () => {
+          const orderNow = currentSidebarOrder();
+          const index = orderNow.indexOf(button.dataset.sidebarMove);
+          const target = index + Number(button.dataset.direction);
+          if (index < 0 || target < 0 || target >= orderNow.length) return;
+          [orderNow[index], orderNow[target]] = [orderNow[target], orderNow[index]];
+          renderSidebarOrder(orderNow);
+        };
+      });
+    }
+
+    const KEYBOARD_DEFAULTS = {
+      play: 'Enter', back: 'Escape', favorite: 'f', random: 'r',
+      page_left: 'PageUp', page_right: 'PageDown', pause: 'p', menu: 'm',
+      search: '/', settings: 'Ctrl+,', reader_prev: 'ArrowLeft', reader_next: 'ArrowRight',
+    };
+    const KEYBOARD_LABELS = {
+      play: 'Play / activate', back: 'Back', favorite: 'Favorite', random: 'Random game',
+      page_left: 'Previous page', page_right: 'Next page', pause: 'Pause menu', menu: 'Filter and sort menu',
+      search: 'Search', settings: 'Open settings', reader_prev: 'Reader previous page', reader_next: 'Reader next page',
+    };
+    // Mirrors handlers/settings.py::KEY_SPEC_RE. A captured spec that the
+    // server would reject must fail here first, with the offending input
+    // focused, instead of surfacing as a generic save error.
+    const KEY_SPEC_RE = /^(?:(?:Ctrl|Alt|Shift)\+)*(?:Key[A-Z]|Digit[0-9]|F(?:[1-9]|1[0-2])|Arrow(?:Left|Right|Up|Down)|Page(?:Up|Down)|Home|End|Enter|Escape|Space|Tab|Backspace|[A-Za-z0-9,./;'\[\]\\=-])$/;
+    const DIRECTION_ACTIONS = new Set(['page_left', 'page_right']);
+    let keyboardCaptureAction = '';
+    function renderKeyboardMap() {
+      const container = $('keyboardMapInputs');
+      if (!container) return;
+      const mapping = { ...KEYBOARD_DEFAULTS, ...(AppState.appSettings.keyboard_map || {}) };
+      container.innerHTML = Object.entries(KEYBOARD_LABELS).map(([action, label]) => `<div class="field"><span>${escapeHtml(label)}</span><span class="path-input-row"><input data-keyboard-action="${action}" value="${escapeHtml(mapping[action] || '')}" maxlength="40"><button type="button" class="icon-button" data-keyboard-capture="${action}">Press a key</button></span></div>`).join('');
+      container.querySelectorAll('[data-keyboard-capture]').forEach(button => {
+        button.onclick = () => {
+          keyboardCaptureAction = button.dataset.keyboardCapture;
+          button.textContent = 'Press a key…';
+          button.focus();
+          showMappingError('keyboardMapError', '');
+        };
+      });
+    }
+    function keySpecFromEvent(event) {
+      const parts = [];
+      if (event.ctrlKey) parts.push('Ctrl');
+      if (event.altKey) parts.push('Alt');
+      if (event.shiftKey) parts.push('Shift');
+      let key = event.key === ' ' ? 'Space' : event.key;
+      if (key === '+') return '';
+      parts.push(key);
+      return parts.join('+');
+    }
+    document.addEventListener('keydown', event => {
+      if (!keyboardCaptureAction) return;
+      if (['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const input = document.querySelector(`[data-keyboard-action="${keyboardCaptureAction}"]`);
+      const action = keyboardCaptureAction;
+      keyboardCaptureAction = '';
+      document.querySelectorAll('[data-keyboard-capture]').forEach(button => { button.textContent = 'Press a key'; });
+      const spec = keySpecFromEvent(event);
+      if (!spec || !KEY_SPEC_RE.test(spec)) {
+        showMappingError('keyboardMapError', `${event.key} cannot be captured for ${KEYBOARD_LABELS[action] || action}.`);
+        input?.focus();
+        return;
+      }
+      if (input) input.value = spec;
+      if (validateKeyboardMap()) input?.focus();
+    }, true);
+    function keyboardMappingInputs() {
+      return [...document.querySelectorAll('[data-keyboard-action]')];
+    }
+    function controllerMappingInputs() {
+      return [...document.querySelectorAll('[data-controller]')];
+    }
+    function showMappingError(id, message) {
+      const target = $(id);
+      if (!target) return;
+      target.hidden = !message;
+      target.textContent = message || '';
+    }
+    async function validateControllerMap({ prompt = true } = {}) {
+      const inputs = controllerMappingInputs();
+      if (!inputs.length) return true;
+      const seen = new Map();
+      for (const input of inputs) {
+        const value = String(input.value ?? '').trim();
+        if (!value) { input.dataset.previous = value; continue; }
+        const other = seen.get(value);
+        if (!other) { seen.set(value, input); continue; }
+        if (!prompt) {
+          showMappingError('controllerMapError', `Button ${value} is assigned to both ${other.dataset.controller} and ${input.dataset.controller}.`);
+          input.focus();
+          return false;
+        }
+        const swap = await confirmAction({ title: 'Swap controller buttons', message: `Button ${value} is already assigned to ${other.dataset.controller}. Swap assignments?` });
+        if (swap) {
+          const duplicate = input.value;
+          input.value = other.dataset.previous || '';
+          other.value = duplicate;
+          showMappingError('controllerMapError', '');
+          return validateControllerMap({ prompt: false });
+        }
+        input.value = input.dataset.previous || '';
+        showMappingError('controllerMapError', '');
+        return validateControllerMap({ prompt: false });
+      }
+      for (const input of inputs) {
+        if (!String(input.value ?? '').trim()) continue;
+        const value = Number(input.value);
+        if (!Number.isInteger(value) || value < 0 || value > 31) {
+          showMappingError('controllerMapError', `Button for ${input.dataset.controller} must be 0 through 31.`);
+          input.focus();
+          return false;
+        }
+        if ([12, 13, 14, 15].includes(value) && !DIRECTION_ACTIONS.has(input.dataset.controller)) {
+          if (!prompt) {
+            showMappingError('controllerMapError', `Button ${value} is the D-pad on most controllers.`);
+            return false;
+          }
+          const keep = await confirmAction({ title: 'Keep D-pad button?', message: `Button ${value} is the D-pad on most controllers. Keep it for ${input.dataset.controller}?` });
+          if (!keep) {
+            input.value = input.dataset.previous || '';
+            showMappingError('controllerMapError', '');
+            return validateControllerMap({ prompt: false });
+          }
+        }
+        input.dataset.previous = input.value;
+      }
+      showMappingError('controllerMapError', '');
+      return true;
+    }
+    function validateKeyboardMap() {
+      const seen = new Map();
+      for (const input of keyboardMappingInputs()) {
+        const value = String(input.value || '').trim();
+        if (!value) continue;
+        if (!KEY_SPEC_RE.test(value)) {
+          showMappingError('keyboardMapError', `${value} is not a supported shortcut for ${KEYBOARD_LABELS[input.dataset.keyboardAction] || input.dataset.keyboardAction}.`);
+          input.focus();
+          return false;
+        }
+        const key = value.toLowerCase();
+        if (seen.has(key)) {
+          showMappingError('keyboardMapError', `${value} is assigned to both ${seen.get(key)} and ${input.dataset.keyboardAction}.`);
+          input.focus();
+          return false;
+        }
+        seen.set(key, input.dataset.keyboardAction);
+      }
+      showMappingError('keyboardMapError', '');
+      return true;
+    }
 
     // Server notices carry a translation key plus the English text as fallback.
     function localizedNotification(item) {
@@ -113,6 +289,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
 
     function applySettingsVisibility() {
       const query = $('settingsSearch').value.toLowerCase().trim();
+      let matches = 0;
       document.querySelectorAll('.settings-field').forEach(field => {
         if (field.hasAttribute('data-settings-exempt') || field.contains($('settingsSearch'))) {
           field.hidden = false;
@@ -123,8 +300,29 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         const inCategory = panels.includes(settingsCategory);
         const haystack = `${field.dataset.setting || ''} ${field.textContent || ''}`.toLowerCase();
         const matchesSearch = !query || haystack.includes(query);
-        field.hidden = !inCategory || !matchesSearch;
+        if (query) {
+          field.hidden = !matchesSearch;
+          if (matchesSearch) matches += 1;
+        } else {
+          field.hidden = !inCategory;
+        }
       });
+      const count = $('settingsSearchCount');
+      if (count) {
+        count.hidden = !query;
+        count.textContent = query ? `${matches} setting${matches === 1 ? '' : 's'}` : '';
+      }
+      let empty = document.querySelector('#settingsSearchEmpty');
+      if (query && !matches) {
+        if (!empty) {
+          empty = document.createElement('p');
+          empty.id = 'settingsSearchEmpty';
+          empty.className = 'description';
+          empty.dataset.settingsExempt = 'search';
+          empty.textContent = 'No settings match this search.';
+          $('settingsSearch').after(empty);
+        }
+      } else if (empty) empty.remove();
     }
 
     function showSettingsCategory(category) {
@@ -185,12 +383,17 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         quick_resume_enabled:$('quickResumeEnabled')?.checked ?? true,
         moments_autocapture:$('momentsAutocapture')?.checked ?? true,
         state_retention:Number($('stateRetention')?.value)||1,
+        ra_hardcore:$('raHardcore').checked,
         backup_on_close:$('backupOnClose').checked,
         backup_auto_enabled:$('backupAutoEnabled').checked,
         backup_auto_keep:Math.max(1, Number($('backupAutoKeep').value) || 4),
         health_rescan:$('healthRescanCadence')?.value || 'weekly',
+        save_management_enabled:$('saveManagementEnabled')?.checked !== false,
         save_backup_limit:Number($('saveBackupLimit').value),
         media_download_limit:Number($('mediaDownloadLimit').value),
+        media_download_limit_per_group:Number($('mediaDownloadLimitPerGroup').value),
+        metadata_provider_priority:$('metadataProviderPriority').value.split(/[\n,]/).map(value => value.trim()).filter(Boolean),
+        plugin_metadata_priority:$('pluginMetadataPriority').checked,
         auto_import_media_types:$('autoImportMediaTypes').value.split(',').map(value => value.trim()).filter(Boolean),
         region_priority:$('regionPriority').value.split(',').map(value => value.trim()).filter(Boolean),
         library_music:$('libraryMusic').value.trim(),
@@ -204,6 +407,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         mood_match_enabled:$('moodMatchEnabled').checked,
         mood_match_bigbox:$('moodMatchBigbox').checked,
         hidden_sidebar_sections:[...document.querySelectorAll('[data-hide-section]:checked')].map(input => input.dataset.hideSection),
+        sidebar_sections:currentSidebarOrder(),
         obs_auto_attach:$('obsAutoAttach').checked,
         obs_recording_path:$('obsRecordingPath').value.trim(),
         obs_replay_enabled:$('obsReplayEnabled')?.checked || false,
@@ -214,6 +418,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         progress_automation_enabled:$('progressAutomationEnabled').checked,
         progress_automation_play_minutes:Number($('progressAutomationMinutes').value),
         progress_automation_idle_days:Number($('progressAutomationIdleDays').value),
+        progress_values:($('progressValues')?.value || '').split(',').map(value => value.trim()).filter(Boolean),
         progress_on_first_play:$('progressOnFirstPlay').value,
         backlog_progress_suggest:$('backlogProgressSuggest').checked,
         tracking_mode:$('trackingMode').value,
@@ -223,14 +428,35 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         auto_close_store_clients:$('autoCloseStoreClients').checked,
         image_group:$('defaultImageGroup').value,
         badge_visibility:[...document.querySelectorAll('[data-badge-setting]:checked')].map(input => input.dataset.badgeSetting),
-        controller_map:Object.fromEntries([...document.querySelectorAll('[data-controller]')].map(input => [input.dataset.controller,Number(input.value)])),
+        controller_map:Object.fromEntries([...document.querySelectorAll('[data-controller]')].map(input => [input.dataset.controller, input.value.trim() ? Number(input.value) : null]).filter(([, value]) => value !== null)),
+        controller_types:($('controllerTypesSetting')?.value || '').split('\n').map(line => line.split('|').map(value => value.trim())).filter(parts => parts[0] && parts[1]).map(([id,name,kind]) => ({ id, name, kind: kind || id })),
+        keyboard_map:Object.fromEntries(keyboardMappingInputs().map(input => [input.dataset.keyboardAction, input.value.trim()]).filter(([, value]) => value)),
+        pointer_nav_enabled:$('pointerNavEnabled')?.value === 'on',
+        mouse_wheel_nav:$('mouseWheelNav')?.value === 'on',
+        spinner_sensitivity:Number($('spinnerSensitivity')?.value) || 6,
+        bigbox_wheel_speed:Number($('bigBoxWheelSpeed')?.value) || 1,
+        bigbox_back_hold_seconds:Number($('bigBoxBackHold')?.value) || 0,
+        battery_indicator:$('batteryIndicator')?.checked !== false,
+        bigbox_hidden_platforms:($('bigBoxHiddenPlatforms')?.value || '').split(',').map(value => value.trim()).filter(Boolean),
+        bigbox_hidden_categories:($('bigBoxHiddenCategories')?.value || '').split(',').map(value => value.trim()).filter(Boolean),
+        bigbox_hidden_playlists:($('bigBoxHiddenPlaylists')?.value || '').split(',').map(value => value.trim()).filter(Boolean),
         welcome_completed:AppState.appSettings.welcome_completed,
         locale:$('localeSetting').value,
+        font_family:$('fontFamilySetting')?.value || 'system',
         currency:($('currencySetting')?.value || 'USD').trim().toUpperCase(),
         library_view:$('libraryViewSetting').value,
         cover_grouping:$('groupingSetting').value,
         custom_field_defs:($('customFieldDefs').value || '').split('\n').map(line => line.trim()).filter(Boolean).map(line => { const [name,...rest] = line.split('|'); return {name:(name || '').trim(), options:rest.join('|').split(',').map(value => value.trim()).filter(Boolean)}; }).filter(item => item.name),
         bigbox_startup_video:$('bigboxStartupVideo').value.trim(),
+        bigbox_startup_video_loop:$('bigboxStartupVideoLoop')?.checked || false,
+        bigbox_sounds_enabled:$('bigboxSoundsEnabled')?.checked !== false,
+        bigbox_video_controls:$('bigboxVideoControls')?.checked !== false,
+        bigbox_video_volume:(() => { const value = Number($('bigboxVideoVolume')?.value); return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.8; })(),
+        bigbox_video_backdrop:$('bigboxVideoBackdrop')?.checked || false,
+        reader_theme:$('readerTheme')?.value || 'light',
+        reader_spread:$('readerSpread')?.value || 'single',
+        cover_model:$('coverModelSetting')?.value || 'box',
+        model_rotation_lock:$('modelRotationLock')?.value || 'free',
         bigbox_shutdown_commands:$('bigboxShutdownCommands').value.split('\n').map(value => value.trim()).filter(Boolean),
         attract_mode_seconds:Number($('attractModeSeconds').value || $('screensaverSeconds').value || 90),
         tray_enabled:$('trayEnabled').checked,
@@ -249,6 +475,40 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         statusEl.textContent = t('settings.memories_status', {imported: status.memories || 0, unassigned: status.unassigned || 0});
       } catch (error) { statusEl.textContent = ''; }
     }
+    async function refreshIntegrationTokens() {
+      const container = $('integrationTokenRows');
+      if (!container) return;
+      let tokens = {};
+      try { tokens = (await api('/api/v2/integration-tokens')).tokens || {}; } catch (error) { tokens = {}; }
+      const providers = ['igdb', 'screenscraper', 'steamgriddb', 'gameyfin', 'retroachievements'];
+      container.innerHTML = providers.map(provider => `<div class="extras"><label class="field"><span>${provider}</span><input type="password" data-integration-token="${provider}" placeholder="${tokens[provider] ? `Saved ${escapeHtml(tokens[provider])}` : 'Not configured'}"></label><button type="button" class="icon-button" data-save-token="${provider}">Save</button>${tokens[provider] ? `<button type="button" class="icon-button" data-remove-token="${provider}">Remove</button>` : ''}</div>`).join('');
+      container.querySelectorAll('[data-save-token]').forEach(button => {
+        button.onclick = async () => {
+          const provider = button.dataset.saveToken;
+          const input = container.querySelector(`[data-integration-token="${provider}"]`);
+          if (!input.value.trim()) { notify(t('notify.app.token_enter')); return; }
+          try { await api('/api/v2/integration-tokens', { method: 'POST', body: JSON.stringify({ provider, token: input.value.trim() }) }); input.value = ''; await refreshIntegrationTokens(); notify(t('notify.app.token_saved', {provider})); }
+          catch (error) { notify(error.message); }
+        };
+      });
+      container.querySelectorAll('[data-remove-token]').forEach(button => {
+        button.onclick = async () => {
+          try { await api('/api/v2/integration-tokens/remove', { method: 'POST', body: JSON.stringify({ provider: button.dataset.removeToken }) }); await refreshIntegrationTokens(); notify(t('notify.app.token_removed')); }
+          catch (error) { notify(error.message); }
+        };
+      });
+    }
+
+    async function refreshSteamStatus() {
+      const status = $('steamStatus');
+      if (!status) return;
+      try {
+        const result = await api('/api/v2/integrations/steam');
+        status.textContent = result.configured ? `Configured · Steam ID ${result.steam_id}` : 'Not configured';
+        if ($('steamId') && result.steam_id) $('steamId').value = result.steam_id;
+      } catch (error) { status.textContent = error.message; }
+    }
+
     async function saveEmumoviesSettings() {
       const username = $('emumoviesUsername').value.trim();
       const password = $('emumoviesPassword').value;
@@ -273,6 +533,41 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       set('aboutDataDir', nativeCaps.data_dir || '');
       set('aboutHost', nativeCaps.webview ? t('settings.about_host_native') : t('settings.about_host_browser'));
     }
+    async function renderSettingsPlugins() {
+      const container = $('settingsPluginForms');
+      if (!container) return;
+      container.innerHTML = '<p class="description">Loading plugin settings…</p>';
+      try {
+        const result = await api('/api/plugins');
+        const plugins = (result.plugins || []).filter(plugin => plugin.valid && plugin.enabled && plugin.settings && Object.keys(plugin.settings.properties || {}).length);
+        if (!plugins.length) {
+          container.innerHTML = '<p class="description">No enabled plugins declare settings. Install or enable one in the Plugins dialog.</p>';
+          return;
+        }
+        const sections = await Promise.all(plugins.map(async plugin => ({
+          plugin,
+          data: await api(`/api/v2/plugins/settings?id=${encodeURIComponent(plugin.id)}`),
+        })));
+        container.innerHTML = sections.map(({ plugin }, index) => `<fieldset class="field wide" data-plugin-settings-section="${escapeHtml(plugin.id)}"><legend>${escapeHtml(plugin.name)} · ${escapeHtml(plugin.version || '')}</legend><div data-plugin-settings-host="${index}"></div></fieldset>`).join('');
+        sections.forEach(({ plugin, data }, index) => {
+          const host = container.querySelector(`[data-plugin-settings-host="${index}"]`);
+          renderPluginSettings(host, data.schema, data.values || {}, {
+            pluginName: plugin.name,
+            idPrefix: plugin.id,
+            saveLabel: t('plugins.settings_save'),
+            onSave: async (values, form) => {
+              try {
+                const clear_secrets = [...form.querySelectorAll('[data-plugin-clear-secret]:checked')].map(input => input.dataset.pluginClearSecret);
+                await api('/api/v2/plugins/settings', { method: 'POST', body: JSON.stringify({ id: plugin.id, values, clear_secrets }) });
+                notify(t('plugins.settings_saved'));
+              } catch (error) { notify(error.message); }
+            },
+          });
+        });
+      } catch (error) {
+        container.innerHTML = `<p class="description">${escapeHtml(error.message)}</p>`;
+      }
+    }
     async function openSettings() {
       try {
         AppState.appSettings = await api('/api/settings');
@@ -280,6 +575,8 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         $('watchFolders').value = AppState.appSettings.watch_folders.join('\n');
         if ($('memoriesImportEnabled')) $('memoriesImportEnabled').checked = Boolean(AppState.appSettings.memories_import_enabled);
         if ($('memoriesImportRoots')) $('memoriesImportRoots').value = (AppState.appSettings.memories_import_roots || []).join('\n');
+        refreshIntegrationTokens();
+        refreshSteamStatus();
         refreshMemoriesStatus();
         if ($('steamgridEnabled')) $('steamgridEnabled').checked = AppState.appSettings.steamgrid_enabled !== false;
         if ($('steamgridStatus')) $('steamgridStatus').textContent = AppState.appSettings.steamgrid_key_configured ? t('settings.steamgrid_key_present') : t('settings.steamgrid_key_missing');
@@ -304,6 +601,8 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         if ($('quickResumeEnabled')) $('quickResumeEnabled').checked = AppState.appSettings.quick_resume_enabled !== false;
         if ($('momentsAutocapture')) $('momentsAutocapture').checked = AppState.appSettings.moments_autocapture !== false;
         if ($('stateRetention')) $('stateRetention').value = AppState.appSettings.state_retention ?? 1;
+        $('raHardcore').checked = Boolean(AppState.appSettings.ra_hardcore);
+        $('saveManagementEnabled').checked = AppState.appSettings.save_management_enabled !== false;
         $('backupOnClose').checked = Boolean(AppState.appSettings.backup_on_close);
         $('backupAutoEnabled').checked = Boolean(AppState.appSettings.backup_auto_enabled);
         $('backupAutoKeep').value = AppState.appSettings.backup_auto_keep ?? 4;
@@ -325,6 +624,9 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         if ($('autoCloseStoreClients')) $('autoCloseStoreClients').checked = Boolean(AppState.appSettings.auto_close_store_clients);
         $('saveBackupLimit').value = AppState.appSettings.save_backup_limit ?? 10;
         $('mediaDownloadLimit').value = AppState.appSettings.media_download_limit ?? 0;
+        $('mediaDownloadLimitPerGroup').value = AppState.appSettings.media_download_limit_per_group ?? 0;
+        $('metadataProviderPriority').value = (AppState.appSettings.metadata_provider_priority || []).join(', ');
+        $('pluginMetadataPriority').checked = Boolean(AppState.appSettings.plugin_metadata_priority);
         $('autoImportMediaTypes').value = (AppState.appSettings.auto_import_media_types || ['cover','background','screenshots']).join(', ');
         $('regionPriority').value = (AppState.appSettings.region_priority || ['North America','World','Europe','Japan']).join(', ');
         $('libraryMusic').value = AppState.appSettings.library_music || '';
@@ -339,6 +641,40 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         if ($('moodMatchBigbox')) $('moodMatchBigbox').checked = Boolean(AppState.appSettings.mood_match_bigbox);
         { const hiddenSections = new Set(AppState.appSettings.hidden_sidebar_sections || []);
           document.querySelectorAll('[data-hide-section]').forEach(input => { input.checked = hiddenSections.has(input.dataset.hideSection); }); }
+        renderSidebarOrder();
+        renderKeyboardMap();
+        controllerMappingInputs().forEach(input => {
+          input.dataset.previous = input.value;
+          input.onchange = async () => {
+            if (await validateControllerMap()) input.dataset.previous = input.value;
+          };
+        });
+        keyboardMappingInputs().forEach(input => {
+          input.onkeydown = event => {
+            if (event.key === 'Tab') return;
+            event.preventDefault();
+            if (['Control', 'Alt', 'Shift'].includes(event.key)) return;
+            if (event.key === '+') return; // '+' separates modifiers in the stored spec.
+            const parts = [];
+            if (event.ctrlKey) parts.push('Ctrl');
+            if (event.altKey) parts.push('Alt');
+            if (event.shiftKey) parts.push('Shift');
+            const key = event.key === ' ' ? 'Space' : event.key;
+            parts.push(key);
+            input.value = parts.join('+');
+            validateKeyboardMap();
+          };
+          input.oninput = () => validateKeyboardMap();
+        });
+        if ($('pointerNavEnabled')) $('pointerNavEnabled').value = AppState.appSettings.pointer_nav_enabled === false ? 'off' : 'on';
+        if ($('mouseWheelNav')) $('mouseWheelNav').value = AppState.appSettings.mouse_wheel_nav === false ? 'off' : 'on';
+        if ($('spinnerSensitivity')) $('spinnerSensitivity').value = AppState.appSettings.spinner_sensitivity ?? 6;
+        if ($('bigBoxWheelSpeed')) $('bigBoxWheelSpeed').value = AppState.appSettings.bigbox_wheel_speed ?? 1;
+        if ($('bigBoxBackHold')) $('bigBoxBackHold').value = AppState.appSettings.bigbox_back_hold_seconds ?? 0.8;
+        if ($('batteryIndicator')) $('batteryIndicator').checked = AppState.appSettings.battery_indicator !== false;
+        if ($('bigBoxHiddenPlatforms')) $('bigBoxHiddenPlatforms').value = (AppState.appSettings.bigbox_hidden_platforms || []).join(', ');
+        if ($('bigBoxHiddenCategories')) $('bigBoxHiddenCategories').value = (AppState.appSettings.bigbox_hidden_categories || []).join(', ');
+        if ($('bigBoxHiddenPlaylists')) $('bigBoxHiddenPlaylists').value = (AppState.appSettings.bigbox_hidden_playlists || []).join(', ');
         $('obsAutoAttach').checked = AppState.appSettings.obs_auto_attach !== false;
         $('obsRecordingPath').value = AppState.appSettings.obs_recording_path || '';
         if ($('obsReplayEnabled')) $('obsReplayEnabled').checked = AppState.appSettings.obs_replay_enabled === true;
@@ -347,11 +683,26 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         if ($('museumKioskEnabled')) $('museumKioskEnabled').checked = AppState.appSettings.museum_kiosk_enabled === true;
         if ($('museumKioskPin')) $('museumKioskPin').value = '';
         $('localeSetting').value = AppState.appSettings.locale || 'en';
+        if ($('fontFamilySetting')) $('fontFamilySetting').value = AppState.appSettings.font_family || 'system';
+        if ($('fontFamilySetting')) $('fontFamilySetting').onchange = event => {
+          const settings = { ...AppState.appSettings, font_family: event.target.value };
+          AppState.appSettings = settings;
+          applyFontFamily(settings);
+        };
         if ($('currencySetting')) $('currencySetting').value = AppState.appSettings.currency || 'USD';
         $('libraryViewSetting').value = AppState.appSettings.library_view || 'grid';
         if ($('groupingSetting')) $('groupingSetting').value = AppState.appSettings.cover_grouping || 'shape';
         $('customFieldDefs').value = (AppState.appSettings.custom_field_defs || []).map(item => `${item.name}|${(item.options || []).join(',')}`).join('\n');
         $('bigboxStartupVideo').value = AppState.appSettings.bigbox_startup_video || '';
+        if ($('bigboxStartupVideoLoop')) $('bigboxStartupVideoLoop').checked = Boolean(AppState.appSettings.bigbox_startup_video_loop);
+        if ($('bigboxSoundsEnabled')) $('bigboxSoundsEnabled').checked = AppState.appSettings.bigbox_sounds_enabled !== false;
+        if ($('bigboxVideoControls')) $('bigboxVideoControls').checked = AppState.appSettings.bigbox_video_controls !== false;
+        if ($('bigboxVideoVolume')) $('bigboxVideoVolume').value = AppState.appSettings.bigbox_video_volume ?? 0.8;
+        if ($('bigboxVideoBackdrop')) $('bigboxVideoBackdrop').checked = AppState.appSettings.bigbox_video_backdrop === true;
+        if ($('readerTheme')) $('readerTheme').value = AppState.appSettings.reader_theme || 'light';
+        if ($('readerSpread')) $('readerSpread').value = AppState.appSettings.reader_spread || 'single';
+        if ($('coverModelSetting')) $('coverModelSetting').value = AppState.appSettings.cover_model || 'box';
+        if ($('modelRotationLock')) $('modelRotationLock').value = AppState.appSettings.model_rotation_lock || 'free';
         $('bigboxShutdownCommands').value = (AppState.appSettings.bigbox_shutdown_commands || []).join('\n');
         $('attractModeSeconds').value = AppState.appSettings.attract_mode_seconds ?? AppState.appSettings.screensaver_seconds ?? 90;
         $('trayEnabled').checked = Boolean(AppState.appSettings.tray_enabled);
@@ -370,6 +721,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         $('mediaPackStatus').textContent = (AppState.appSettings.media_packs || []).filter(item => item.active).map(item => item.name).join(', ');
         $('viewToggleButton').textContent = (AppState.appSettings.library_view || 'grid') === 'list' ? 'Grid view' : 'List view';
         $('settingsSearch').value = '';
+        await renderSettingsPlugins();
         showSettingsCategory('library');
         bindSettingsBrowse();
         document.querySelectorAll('.settings-nav-item').forEach(button => {
@@ -378,10 +730,13 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         filterSettings();
         const mapping = {...defaultControllerMap,...AppState.appSettings.controller_map};
         document.querySelectorAll('[data-controller]').forEach(input => input.value = mapping[input.dataset.controller]);
+        if ($('controllerTypesSetting')) $('controllerTypesSetting').value = (AppState.appSettings.controller_types || []).map(item => `${item.id}|${item.name}|${item.kind || item.id}`).join('\n');
+        controllerMappingInputs().forEach(input => { input.dataset.previous = input.value; });
         $('updateStatus').textContent = `OpenBox ${AppState.appSettings.version}${AppState.appSettings.appimage ? ' · AppImage' : ' · source checkout'}`;
         $('installUpdate').hidden = true;
         $('installDesktop').disabled = !AppState.appSettings.appimage;
         if (!$('settingsDialog').open) $('settingsDialog').showModal();
+        requestAnimationFrame(() => $('settingsSearch')?.focus());
       } catch(error) { notify(error.message); }
     }
     async function openProfiles() {
@@ -450,14 +805,149 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         if (!(await nativeReveal(p))) notify(t('notify.settings.bios_expected', {path: p}));
       });
     }
+    const EMULATOR_SETTINGS_IDS = {'org.mamedev.MAME': 'mame', 'org.libretro.RetroArch': 'retroarch'};
+    let emulatorSettingsDraft = null;
+    function renderEmulatorSettings() {
+      if (!emulatorSettingsDraft) return;
+      const { entry, platform } = emulatorSettingsDraft;
+      const schema = entry.schema || { fields: {} };
+      const overrides = emulatorSettingsDraft.platforms[platform] || {};
+      const values = platform === 'global' ? emulatorSettingsDraft.global : { ...emulatorSettingsDraft.global, ...overrides };
+      const platformNames = [...new Set([
+        ...Object.keys(schema.platforms || {}),
+        ...Object.keys(emulatorSettingsDraft.platforms),
+        ...(AppState.games || []).map(game => game.platform).filter(Boolean),
+        ...Object.keys(AppState.appSettings?.platform_categories || {}),
+      ])].sort((a, b) => a.localeCompare(b));
+      const fields = Object.entries(schema.fields || {}).map(([key, field]) => {
+        const value = values[key] ?? field.default;
+        if (field.type === 'boolean') {
+          return `<label class="check"><input type="checkbox" data-emulator-field="${escapeHtml(key)}" ${value ? 'checked' : ''}> ${escapeHtml(emulatorFieldLabel(key))}</label>`;
+        }
+        if (field.type === 'enum') {
+          const options = (field.values || []).map(option => `<option value="${escapeHtml(option)}" ${String(option) === String(value) ? 'selected' : ''}>${escapeHtml(option)}</option>`).join('');
+          return `<label class="field"><span>${escapeHtml(emulatorFieldLabel(key))}</span><select data-emulator-field="${escapeHtml(key)}">${options}</select></label>`;
+        }
+        return `<label class="field"><span>${escapeHtml(emulatorFieldLabel(key))}</span><input type="number" min="${field.minimum ?? 0}" max="${field.maximum ?? 999}" step="1" value="${escapeHtml(String(value))}" data-emulator-field="${escapeHtml(key)}"></label>`;
+      }).join('');
+      const pluginSections = (emulatorSettingsDraft.plugins || []).filter(section => section.emulator_id === entry.emulator_id);
+      const pluginFields = pluginSections.map(section => {
+        const properties = section.schema?.properties || {};
+        const values = platform === 'global' ? (section.global || {}) : { ...(section.global || {}), ...((section.platforms || {})[platform] || {}) };
+        const fields = Object.entries(properties).map(([key, field]) => {
+          const value = values[key] ?? field.default ?? '';
+          const label = escapeHtml(field.title || key);
+          if (field.type === 'boolean') return `<label class="check"><input type="checkbox" data-plugin-emulator-field="${escapeHtml(key)}" ${value ? 'checked' : ''}> ${label}</label>`;
+          if (field.type === 'enum') return `<label class="field"><span>${label}</span><select data-plugin-emulator-field="${escapeHtml(key)}">${(field.enum || []).map(option => `<option value="${escapeHtml(String(option))}" ${String(option) === String(value) ? 'selected' : ''}>${escapeHtml(String(option))}</option>`).join('')}</select></label>`;
+          return `<label class="field"><span>${label}</span><input type="${field.format === 'password' ? 'password' : field.type === 'string' ? 'text' : 'number'}" value="${escapeHtml(String(value))}" data-plugin-emulator-field="${escapeHtml(key)}"></label>`;
+        }).join('');
+        return `<fieldset class="wide" data-plugin-emulator-section="${escapeHtml(section.plugin_id)}:${escapeHtml(section.emulator_id)}"><legend>${escapeHtml(section.plugin_name)} · ${escapeHtml(section.label)}</legend><label class="check"><input type="checkbox" data-plugin-emulator-managed ${section.managed ? 'checked' : ''}> Let this plugin manage ${escapeHtml(section.label)} settings</label><div class="form-grid">${fields || '<p class="description">No plugin settings.</p>'}</div><button type="button" class="icon-button" data-save-plugin-emulator>Save plugin settings</button></fieldset>`;
+      }).join('');
+      $('emulatorSettingsBody').innerHTML = `
+        <label class="check wide"><input type="checkbox" id="emulatorManaged" ${entry.managed ? 'checked' : ''}> Let OpenBox manage this emulator's launch settings</label>
+        <label class="check wide"><input type="checkbox" id="emulatorSkipUpdates" ${entry.skip_update_check ? 'checked' : ''}> Skip update checks for this emulator</label>
+        <label class="field wide"><span>Apply to</span><select id="emulatorSettingsPlatform"><option value="global" ${platform === 'global' ? 'selected' : ''}>Global defaults</option>${platformNames.map(name => `<option value="${escapeHtml(name)}" ${platform === name ? 'selected' : ''}>${escapeHtml(name)} override</option>`).join('')}</select></label>
+        <div class="wide form-grid">${fields || '<p class="description">This emulator has no managed settings.</p>'}</div>
+        ${platform !== 'global' ? `<div class="wide"><button type="button" class="icon-button" id="resetEmulatorPlatform">Reset ${escapeHtml(platform)} override</button></div>` : ''}
+        ${entry.emulator_id === 'mame' ? '<p class="description wide">OpenBox installs MAME from Flathub; other builds are used when you point a profile at them.</p>' : ''}
+        ${entry.version?.version ? `<p class="description wide">Detected version: ${escapeHtml(entry.version.version)}</p>` : ''}
+        ${pluginFields}
+      `;
+      $('emulatorSettingsPlatform').onchange = event => {
+        emulatorSettingsDraft.managed = $('emulatorManaged').checked;
+        emulatorSettingsDraft.skipUpdateCheck = $('emulatorSkipUpdates').checked;
+        const current = emulatorSettingsDraft.platform;
+        const currentValues = readEmulatorSettingsValues();
+        if (current === 'global') emulatorSettingsDraft.global = currentValues;
+        else emulatorSettingsDraft.platforms[current] = currentValues;
+        emulatorSettingsDraft.platform = event.target.value;
+        renderEmulatorSettings();
+      };
+      document.querySelectorAll('[data-save-plugin-emulator]').forEach(button => button.onclick = async () => {
+        const fieldset = button.closest('[data-plugin-emulator-section]');
+        const [pluginId, emulatorId] = fieldset.dataset.pluginEmulatorSection.split(':');
+        const values = {};
+        fieldset.querySelectorAll('[data-plugin-emulator-field]').forEach(input => {
+          const key = input.dataset.pluginEmulatorField;
+          if (input.type === 'checkbox') values[key] = input.checked;
+          else if (input.type === 'number') values[key] = Number(input.value);
+          else values[key] = input.value;
+        });
+        try {
+          await api('/api/v2/emulators/settings', { method: 'POST', body: JSON.stringify({
+            plugin_id: pluginId,
+            emulator_id: emulatorId,
+            platform: emulatorSettingsDraft.platform === 'global' ? '' : emulatorSettingsDraft.platform,
+            values,
+            managed: fieldset.querySelector('[data-plugin-emulator-managed]').checked,
+          }) });
+          notify(t('notify.emulators.settings_saved'));
+        } catch (error) { notify(error.message); }
+      });
+      $('resetEmulatorPlatform')?.addEventListener('click', async event => {
+        const name = emulatorSettingsDraft.platform;
+        try {
+          await api('/api/v2/emulators/settings', {method: 'POST', body: JSON.stringify({
+            emulator_id: emulatorSettingsDraft.entry.emulator_id,
+            platform: name,
+            values: {},
+            reset: true,
+            managed: $('emulatorManaged').checked,
+            skip_update_check: $('emulatorSkipUpdates').checked,
+          })});
+          delete emulatorSettingsDraft.platforms[name];
+          emulatorSettingsDraft.platform = 'global';
+          renderEmulatorSettings();
+          notify(`${name} override removed`);
+        } catch (error) { notify(error.message); }
+      });
+    }
+    async function openEmulatorSettings(appId) {
+      try {
+        const result = await api('/api/v2/emulators/settings');
+        const entry = (result.emulators || []).find(item => item.app_id === appId);
+        if (!entry) return;
+        emulatorSettingsDraft = {
+          entry,
+          platform: 'global',
+          global: { ...entry.global },
+          platforms: Object.fromEntries(Object.entries(entry.platforms || {}).map(([name, values]) => [name, { ...values }])),
+          plugins: result.plugins || [],
+        };
+        renderEmulatorSettings();
+        const dialog = $('emulatorSettingsDialog');
+        const form = $('emulatorSettingsForm');
+        const close = () => closeDialog(dialog);
+        $('closeEmulatorSettings').onclick = close;
+        $('cancelEmulatorSettings').onclick = close;
+        form.onsubmit = async event => {
+          event.preventDefault();
+          const platform = emulatorSettingsDraft.platform;
+          const values = readEmulatorSettingsValues();
+          try {
+            await api('/api/v2/emulators/settings', {method: 'POST', body: JSON.stringify({
+              emulator_id: emulatorSettingsDraft.entry.emulator_id,
+              platform: platform === 'global' ? '' : platform,
+              values,
+              managed: $('emulatorManaged').checked,
+              skip_update_check: $('emulatorSkipUpdates').checked,
+            })});
+            notify(platform === 'global' ? 'Emulator defaults saved' : `${platform} overrides saved`);
+            close();
+          } catch (error) { notify(error.message); }
+        };
+        openDialog(dialog);
+      } catch (error) { notify(error.message); }
+    }
     function renderEmulators(emulators) {
       initDefs();
       $('emulatorCatalog').innerHTML = `<div class="extras"><button type="button" class="primary" id="installAllEmulators">Install all available emulators</button><button type="button" class="icon-button" id="updateAllEmulators">Update installed emulators</button></div>` + emulators.map(emulator => {
         const state = emulator.job.state || (emulator.installed ? 'installed' : 'available');
         const label = state === 'installing' ? 'Installing...' : emulator.installed ? 'Add profiles' : state === 'error' ? 'Retry' : 'Install';
         const openButton = emulator.installed ? `<button type="button" class="icon-button" data-open-emulator="${escapeHtml(emulator.app_id)}">Open</button>` : '';
+        const settingsButton = emulator.installed && EMULATOR_SETTINGS_IDS[emulator.app_id] ? `<button type="button" class="icon-button" data-emulator-settings="${escapeHtml(emulator.app_id)}">Settings</button>` : '';
         const updateButton = emulator.installed && emulator.mode === 'flatpak' ? `<button type="button" class="icon-button" data-update-emulator="${escapeHtml(emulator.app_id)}">Update</button>` : '';
-        return `<div class="emulator-item" title="${escapeHtml(emulator.job.error || '')}"><div><strong>${escapeHtml(emulator.name)}</strong><small>${escapeHtml(emulator.platforms.join(' · '))} · ${escapeHtml(state)}</small></div><div class="emulator-actions">${openButton}${updateButton}<button type="button" class="icon-button" ${state === 'installing' || (!emulator.installed && !emulator.can_install) ? 'disabled' : ''} data-emulator="${escapeHtml(emulator.app_id)}" data-installed="${emulator.installed}">${label}</button></div></div>`;
+        return `<div class="emulator-item" title="${escapeHtml(emulator.job.error || '')}"><div><strong>${escapeHtml(emulator.name)}</strong><small>${escapeHtml(emulator.platforms.join(' · '))} · ${escapeHtml(state)}${emulator.version ? ` · v${escapeHtml(emulator.version)}` : ''}${emulator.update_available ? ` · update ${escapeHtml(emulator.latest_version || 'available')}` : ''}${emulator.skip_update_check ? ' · update checks off' : ''}</small></div><div class="emulator-actions">${openButton}${settingsButton}${updateButton}<button type="button" class="icon-button" ${state === 'installing' || (!emulator.installed && !emulator.can_install) ? 'disabled' : ''} data-emulator="${escapeHtml(emulator.app_id)}" data-installed="${emulator.installed}">${label}</button></div></div>`;
       }).join('');
       $('installAllEmulators').onclick = async () => {
         try {
@@ -479,6 +969,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       document.querySelectorAll('[data-open-emulator]').forEach(button => button.onclick = async () => {
         try { await api('/api/emulators/open',{method:'POST',body:JSON.stringify({app_id:button.dataset.openEmulator})}); notify(t('notify.settings.emulator_launched')); } catch(error) { notify(error.message); }
       });
+      document.querySelectorAll('[data-emulator-settings]').forEach(button => button.onclick = () => openEmulatorSettings(button.dataset.emulatorSettings));
       document.querySelectorAll('[data-emulator]').forEach(button => button.onclick = async () => {
         const emulator = emulators.find(item => item.app_id === button.dataset.emulator);
         if (emulator.installed) {
@@ -532,6 +1023,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         result = await api(`/api/themes?platform=${encodeURIComponent(platform)}`);
         themeCache.set(platform, result);
       }
+      AppState.appSettings.theme = result.selected || '';
       const link = $('themeStylesheet');
       const href = result.selected ? `/api/theme.css?name=${encodeURIComponent(result.selected)}&token=${encodeURIComponent(token)}` : '';
       if (link.getAttribute('href') !== href) {
@@ -551,6 +1043,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
           setTimeout(() => root.classList.remove('theme-switching'), wait + 1500);
         }
         link.href = href;
+        window.dispatchEvent(new CustomEvent('openbox:theme-changed', { detail: { theme: result.selected || '' } }));
       }
       if (!platform) { try { localStorage.setItem('openbox.theme', result.selected || ''); } catch {} }
       return result;
@@ -608,7 +1101,17 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         const permUi = plugin.valid && (plugin.permissions || []).length
           ? `<small> · ${escapeHtml((plugin.permissions || []).join(', '))}</small>`
           : '';
-        return `<div class="emulator-item"><div><strong>${escapeHtml(plugin.name)} · ${escapeHtml(plugin.version)}</strong><small>${escapeHtml(plugin.id)} · ${escapeHtml((plugin.hooks || []).join(', ') || 'no hooks')}</small>${permUi}</div><span>${trustUi}${settingsUi}</span><button type="button" class="icon-button" data-toggle-plugin="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled}">${plugin.enabled ? 'Disable' : 'Enable'}</button><button type="button" class="playlist-delete" data-remove-plugin="${escapeHtml(plugin.id)}" aria-label="Remove ${escapeHtml(plugin.name)}">×</button></div>`;
+        const capabilities = plugin.capabilities && typeof plugin.capabilities === 'object'
+          ? Object.entries(plugin.capabilities).flatMap(([kind, capability]) => {
+            if (Array.isArray(capability)) return capability.map(item => `${kind}: ${item.label || item.emulator_id || ''}`);
+            return [capability && typeof capability === 'object' ? `${kind}: ${capability.name || capability.id || ''}` : kind];
+          }).filter(Boolean)
+          : [];
+        const capabilityUi = capabilities.length ? `<small> · ${escapeHtml(capabilities.join(' · '))}</small>` : '';
+        const metaUi = plugin.description ? `<small>${escapeHtml(plugin.description)}</small>` : '';
+        const authorUi = plugin.author ? `<small> · ${escapeHtml(plugin.author)}</small>` : '';
+        const homepageUi = plugin.homepage ? ` <a href="${escapeHtml(plugin.homepage)}" target="_blank" rel="noopener noreferrer">Homepage</a>` : '';
+        return `<div class="emulator-item"><div><strong>${escapeHtml(plugin.name)} · ${escapeHtml(plugin.version)}</strong><small>${escapeHtml(plugin.id)} · ${escapeHtml((plugin.hooks || []).join(', ') || 'no hooks')}${authorUi}${homepageUi}</small>${metaUi}${capabilityUi}${permUi}</div><span>${trustUi}${settingsUi}</span><button type="button" class="icon-button" data-toggle-plugin="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled}">${plugin.enabled ? 'Disable' : 'Enable'}</button><button type="button" class="playlist-delete" data-remove-plugin="${escapeHtml(plugin.id)}" aria-label="Remove ${escapeHtml(plugin.name)}">×</button></div>`;
       }).join('') : '<p class="description">No plugins installed.</p>';
       document.querySelectorAll('[data-toggle-plugin]').forEach(button => button.onclick = async () => {
         try {
@@ -680,41 +1183,38 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       // text / number / boolean / enum / password fields.
       try {
         const result = await api(`/api/v2/plugins/settings?id=${encodeURIComponent(pluginId)}`);
-        const properties = (result.schema && result.schema.properties) || {};
         const values = result.values || {};
-        const fields = Object.entries(properties).map(([name, field]) => {
-          const value = values[name] !== undefined ? values[name] : field.default;
-          const label = `<span>${escapeHtml(field.title || name)}${(result.schema.required || []).includes(name) ? ' *' : ''}</span>`;
-          const desc = field.description ? `<small>${escapeHtml(field.description)}</small>` : '';
-          const fieldName = escapeHtml(name);
-          let input;
-          if (field.enum) {
-            input = `<select name="${fieldName}">${field.enum.map(option => `<option value="${escapeHtml(String(option))}"${String(option) === String(value ?? '') ? ' selected' : ''}>${escapeHtml(String(option))}</option>`).join('')}</select>`;
-          } else if (field.type === 'boolean') {
-            input = `<input type="checkbox" name="${fieldName}"${value ? ' checked' : ''}>`;
-          } else if (field.type === 'integer' || field.type === 'number') {
-            input = `<input type="number" name="${fieldName}" value="${escapeHtml(String(value ?? ''))}"${field.minimum !== undefined ? ` min="${field.minimum}"` : ''}${field.maximum !== undefined ? ` max="${field.maximum}"` : ''}${field.type === 'integer' ? ' step="1"' : ' step="any"'}>`;
-          } else if (field.format === 'password') {
-            input = `<input type="password" name="${fieldName}" value="${escapeHtml(String(value ?? ''))}" autocomplete="new-password">`;
-          } else {
-            input = `<input type="text" name="${fieldName}" value="${escapeHtml(String(value ?? ''))}"${field.maxLength ? ` maxlength="${field.maxLength}"` : ''}>`;
-          }
-          return `<label class="field wide">${label}${input}${desc}</label>`;
-        }).join('');
-        $('pluginList').innerHTML = `<h3>${escapeHtml(t('plugins.settings_title'))}</h3><div class="form-grid">${fields || `<p class="description">${escapeHtml(t('plugins.browse_empty'))}</p>`}</div><div class="extras"><button type="button" class="primary" id="savePluginSettings">${escapeHtml(t('plugins.settings_save'))}</button><button type="button" class="icon-button" id="backPluginSettings">${escapeHtml(t('plugins.browse_back'))}</button></div>`;
+        const fields = pluginSettingsFields(result.schema, values, { pluginName: pluginId, idPrefix: pluginId });
+        const credentialKeys = (result.credentials && result.credentials.keys) || [];
+        const credentialClear = new Set();
+        const credentialRows = credentialKeys.map(key => `
+          <div class="emulator-item" data-credential-row data-credential-key="${escapeHtml(key)}">
+            <div><strong>${escapeHtml(key)}</strong><small>Stored credential · leave blank to keep</small></div>
+            <input type="password" data-credential-value autocomplete="new-password" aria-label="New value for ${escapeHtml(key)}">
+            <button type="button" class="icon-button" data-clear-credential>Remove</button>
+          </div>`).join('');
+        const credentialsUi = `<div class="wide"><div class="section-title">Capability credentials</div><p class="description">Values are injected only into capability hooks and are never returned to this page.</p>${credentialRows || '<p class="description">No credentials stored.</p>'}<div class="emulator-item" data-credential-new><div><strong>Add credential</strong><small>Name and secret value</small></div><input type="text" data-credential-key placeholder="name" aria-label="Credential name"><input type="password" data-credential-value placeholder="value" autocomplete="new-password" aria-label="Credential value"></div></div>`;
+        $('pluginList').innerHTML = `<h3>${escapeHtml(t('plugins.settings_title'))}</h3><div class="form-grid">${fields || `<p class="description">${escapeHtml(t('plugins.browse_empty'))}</p>`}${credentialsUi}</div><div class="extras"><button type="button" class="primary" id="savePluginSettings">${escapeHtml(t('plugins.settings_save'))}</button><button type="button" class="icon-button" id="backPluginSettings">${escapeHtml(t('plugins.browse_back'))}</button></div>`;
+        document.querySelectorAll('[data-clear-credential]').forEach(button => button.onclick = () => {
+          const row = button.closest('[data-credential-row]');
+          if (!row) return;
+          credentialClear.add(row.dataset.credentialKey);
+          row.remove();
+        });
         $('backPluginSettings').onclick = () => openPlugins();
         $('savePluginSettings').onclick = async () => {
-          const body = {};
-          document.querySelectorAll('#pluginList [name]').forEach(input => {
-            const field = properties[input.name];
-            if (!field) return;
-            if (field.type === 'boolean') body[input.name] = input.checked;
-            else if (field.type === 'integer') { if (input.value !== '') body[input.name] = parseInt(input.value, 10); }
-            else if (field.type === 'number') { if (input.value !== '') body[input.name] = parseFloat(input.value); }
-            else body[input.name] = input.value;
+          const body = collectPluginSettings($('pluginList'));
+          const credentialValues = {};
+          document.querySelectorAll('[data-credential-row], [data-credential-new]').forEach(row => {
+            const key = row.dataset.credentialKey || row.querySelector('[data-credential-key]')?.value.trim();
+            const value = row.querySelector('[data-credential-value]')?.value || '';
+            if (key && value) credentialValues[key] = value;
           });
           try {
-            await api('/api/v2/plugins/settings',{method:'POST',body:JSON.stringify({id:pluginId,values:body})});
+            await api('/api/v2/plugins/settings',{method:'POST',body:JSON.stringify({id:pluginId,values:body,clear_secrets:[...document.querySelectorAll('[data-plugin-clear-secret]:checked')].map(input => input.dataset.pluginClearSecret)})});
+            if (Object.keys(credentialValues).length || credentialClear.size) {
+              await api('/api/v2/plugins/credentials',{method:'POST',body:JSON.stringify({id:pluginId,values:credentialValues,clear:[...credentialClear]})});
+            }
             notify(t('plugins.settings_saved'));
             await openPlugins();
           } catch(error) { notify(error.message); }
@@ -738,8 +1238,21 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
             : '';
           const action = entry.local_only || (entry.installed && !entry.update_available) ? '' :
             `<button type="button" class="icon-button" data-install-catalog="${escapeHtml(entry.id)}" data-install-name="${escapeHtml(entry.name)}">${escapeHtml(t(entry.update_available ? 'plugins.browse_update' : 'plugins.browse_install'))}</button>`;
-          return `<div class="emulator-item"><div><strong>${escapeHtml(entry.name)} · ${escapeHtml(entry.version)}</strong><small>${escapeHtml(entry.description || '')}</small></div><span>${stateBadge}</span>${action}</div>`;
+          const repair = entry.installed && !entry.local_only
+            ? `<button type="button" class="icon-button" data-repair-plugin="${escapeHtml(entry.id)}" data-repair-name="${escapeHtml(entry.name)}">${escapeHtml(t('plugins.repair'))}</button>`
+            : '';
+          const byline = [escapeHtml(entry.author || ''), entry.homepage
+            ? `<a href="${escapeHtml(entry.homepage)}" target="_blank" rel="noopener noreferrer">Homepage</a>`
+            : ''].filter(Boolean).join(' · ');
+          return `<div class="emulator-item"><div><strong>${escapeHtml(entry.name)} · ${escapeHtml(entry.version)}</strong><small>${escapeHtml(entry.description || '')}${byline ? ` · ${byline}` : ''}</small></div><span>${stateBadge}</span>${action}${repair}</div>`;
         }).join('') : `<p class="description">${escapeHtml(t('plugins.browse_empty'))}</p>`;
+        document.querySelectorAll('[data-repair-plugin]').forEach(button => button.onclick = async () => {
+          try {
+            await api('/api/v2/plugins/repair',{method:'POST',body:JSON.stringify({id:button.dataset.repairPlugin})});
+            await openPlugins();
+            notify(t('plugins.repair_done', {name: button.dataset.repairName}));
+          } catch(error) { notify(error.message); }
+        });
         document.querySelectorAll('[data-install-catalog]').forEach(button => button.onclick = async () => {
           try {
             await api('/api/plugins/catalog/install',{method:'POST',body:JSON.stringify({id:button.dataset.installCatalog})});
@@ -781,6 +1294,8 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       repair.className = 'icon-button';
       repair.textContent = t('repair.open');
       repair.onclick = () => { dialog.close(); openRepairWizard(); };
+      const scanSaves = $('scanAllSaves');
+      if (scanSaves) scanSaves.hidden = AppState.appSettings.save_management_enabled === false;
       const duplicates = document.createElement('button');
       duplicates.type = 'button';
       duplicates.id = 'duplicatesButton';
@@ -792,6 +1307,38 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       actions.insertBefore(score, repair);
       initHealthSse();
     }
+    function auditSourceLabel(issue) {
+      const source = String(issue.source || 'Local');
+      return issue.source_label || AppState.sourceLabels?.[source] || source;
+    }
+    function renderAuditIssues() {
+      const all = Array.isArray(AppState.auditIssues) ? AppState.auditIssues : [];
+      const select = $('auditSourceFilter');
+      const tools = $('auditSourceTools');
+      if (!select || !tools) return;
+      const sources = [...new Set(all.map(issue => String(issue.source || 'Local')))].sort();
+      const selected = sources.includes(select.value) ? select.value : '';
+      select.innerHTML = '<option value="">All sources</option>' + sources.map(source => {
+        const label = all.find(issue => String(issue.source || 'Local') === source);
+        return `<option value="${escapeHtml(source)}">${escapeHtml(auditSourceLabel(label || {source}))}</option>`;
+      }).join('');
+      select.value = selected;
+      tools.hidden = !all.length;
+      const counts = new Map();
+      all.forEach(issue => {
+        const source = String(issue.source || 'Local');
+        const entry = counts.get(source) || {label: auditSourceLabel(issue), count: 0};
+        entry.count += 1;
+        counts.set(source, entry);
+      });
+      $('auditSourceChips').innerHTML = [...counts].map(([source, entry]) => `<button type="button" class="icon-button" data-audit-source="${escapeHtml(source)}">${escapeHtml(entry.label)} · ${entry.count}</button>`).join('');
+      const visible = selected ? all.filter(issue => String(issue.source || 'Local') === selected) : all;
+      $('healthIssues').innerHTML = visible.length
+        ? `<table><thead><tr><th>Game</th><th>Issue</th><th>Detail</th><th>Source</th></tr></thead><tbody>${visible.map(issue => `<tr><td><button type="button" class="icon-button" data-audit-game="${issue.id}">${escapeHtml(issue.game)}</button></td><td>${escapeHtml(issue.type || '')}</td><td>${escapeHtml(issue.detail || '')}</td><td>${escapeHtml(auditSourceLabel(issue))}</td></tr>`).join('')}</tbody></table>`
+        : `<p class="description">${all.length ? 'No issues from this source.' : 'No library issues found.'}</p>`;
+      document.querySelectorAll('[data-audit-game]').forEach(button => button.onclick = () => { AppState.selectedId = Number(button.dataset.auditGame); $('healthDialog').close(); render(); });
+      document.querySelectorAll('[data-audit-source]').forEach(button => button.onclick = () => { select.value = button.dataset.auditSource; renderAuditIssues(); });
+    }
     async function health() {
       try {
         const result = await api('/api/health',{method:'POST',body:'{}'});
@@ -799,14 +1346,31 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
           ? `Last statistics sync: ${AppState.appSettings.last_cloud_sync.replace('T', ' ')}`
           : (AppState.appSettings.last_cloud_sync_error ? `Last statistics sync failed: ${AppState.appSettings.last_cloud_sync_error}` : 'Statistics sync: not synced yet');
         $('healthSummary').innerHTML = `<h3>Audit summary</h3><div class="facts">${fact('Games',result.games)}${fact('Missing games',result.missing)}${fact('Duplicates',result.duplicates)}${fact('Missing box fronts',result.missing_media)}${fact('Statistics sync',cloudLine)}</div>`;
-        $('healthIssues').innerHTML = result.issues.length ? result.issues.map(issue => `<button type="button" class="metadata-result icon-button" data-audit-game="${issue.id}"><div><strong>${escapeHtml(issue.game)}</strong><small>${escapeHtml(issue.type)} · ${escapeHtml(issue.detail)}</small></div></button>`).join('') : '<p class="description">No library issues found.</p>';
-        document.querySelectorAll('[data-audit-game]').forEach(button => button.onclick = () => { AppState.selectedId = Number(button.dataset.auditGame); $('healthDialog').close(); render(); });
+        AppState.auditIssues = Array.isArray(result.issues) ? result.issues : [];
+        renderAuditIssues();
         $('dedupeButton').disabled = !result.duplicates;
         ensureHealthTools();
+        $('auditSourceFilter').onchange = renderAuditIssues;
         renderHealthScoreCard();
         renderJobsPanel();
         if (!$('healthDialog').open) $('healthDialog').showModal();
       } catch(error) { notify(error.message); }
+    }
+    function currentFilterRules() {
+      const rules = {
+        platform: AppState.platform,
+        platform_category: AppState.platformCategory,
+        view: $('view').value,
+        query: $('sidebarSearch').value.trim(),
+        esrb: $('esrbFilter')?.value || '',
+        progress: AppState.explorerRules.progress || ($('view').value === 'playing' ? 'Playing' : ''),
+        ...AppState.smartFilterRules,
+      };
+      const source = $('sourceFilter')?.value || '';
+      const excludedSources = new Set((AppState.filterExclusions?.source || []).map(value => String(value).toLowerCase()));
+      if (source && !excludedSources.has(source.toLowerCase())) rules.source = source;
+      if (Object.keys(AppState.filterExclusions || {}).length) rules.exclude = {...AppState.filterExclusions};
+      return rules;
     }
     async function savePreset() {
       const name = await promptInput('Filter preset name', AppState.activeFilterPreset || AppState.activePlaylist);
@@ -815,14 +1379,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         title: 'Pin to Big Box',
         message: 'Pin this preset to Big Box quick-switch?',
       });
-      const rules = {
-        platform: AppState.platform,
-        platform_category: AppState.platformCategory,
-        view: $('view').value,
-        query: $('sidebarSearch').value.trim(),
-        esrb: $('esrbFilter')?.value || '',
-        progress: AppState.explorerRules.progress || ($('view').value === 'playing' ? 'Playing' : ''),
-      };
+      const rules = currentFilterRules();
       try {
         await api('/api/filter-presets',{method:'POST',body:JSON.stringify({name:name.trim(),rules,bigbox_quick})});
         AppState.activeFilterPreset = name.trim();
@@ -834,7 +1391,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
     async function saveFilter() {
       const name = await promptInput('Playlist name', AppState.activePlaylist);
       if (!name?.trim()) return;
-      const rules = {platform: AppState.platform,platform_category:AppState.platformCategory,view:$('view').value,query:$('sidebarSearch').value.trim(),esrb:$('esrbFilter')?.value || '',progress:AppState.explorerRules.progress || ''};
+      const rules = currentFilterRules();
       try {
         await api('/api/playlists',{method:'POST',body:JSON.stringify({name:name.trim(),type:'filter',rules})});
         AppState.activePlaylist = name.trim();
@@ -1057,6 +1614,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       } else if (selectedIds.size) {
         $('bulkForm').reset();
         $('bulkCount').textContent = `${selectedIds.size} game${selectedIds.size === 1 ? '' : 's'} selected. Only supplied values will change.`;
+        if ($('bulkMigrateMediaLabel')) $('bulkMigrateMediaLabel').textContent = `Move media files for the ${selectedIds.size} selected game${selectedIds.size === 1 ? '' : 's'} when the platform changes`;
         $('bulkDialog').showModal();
       } else {
         AppState.bulkMode = false;
@@ -1071,6 +1629,31 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
       container.querySelector(`[data-preset-row="${container.querySelectorAll('[data-preset-row]').length - 1}"] .preset-delete`).onclick = event => event.target.closest('[data-preset-row]').remove();
     };
     // ── Library export (1.8.0) ─────────────────────────────────────────────
+    if ($('saveSteamCredentials')) $('saveSteamCredentials').onclick = async () => {
+      const status = $('steamStatus');
+      try {
+        const body = { steam_id: $('steamId').value.trim() };
+        if ($('steamApiKey').value.trim()) body.api_key = $('steamApiKey').value.trim();
+        await api('/api/v2/integrations/steam', { method: 'POST', body: JSON.stringify(body) });
+        $('steamApiKey').value = '';
+        await refreshSteamStatus();
+        notify(t('notify.steam.account_saved'));
+      } catch (error) { if (status) status.textContent = error.message; notify(error.message); }
+    };
+    if ($('testSteamCredentials')) $('testSteamCredentials').onclick = async () => {
+      const status = $('steamStatus');
+      try {
+        const result = await api('/api/v2/integrations/steam/test', { method: 'POST', body: '{}' });
+        if (status) status.textContent = `Connected · ${result.games} owned games`;
+      } catch (error) { if (status) status.textContent = error.message; notify(error.message); }
+    };
+    if ($('refreshSteamStats')) $('refreshSteamStats').onclick = async () => {
+      const status = $('steamStatus');
+      try {
+        await api('/api/v2/integrations/steam/refresh', { method: 'POST', body: '{}' });
+        if (status) status.textContent = 'Steam refresh queued';
+      } catch (error) { if (status) status.textContent = error.message; notify(error.message); }
+    };
     if ($('testScreenscraper')) $('testScreenscraper').onclick = async () => {
       const status = $('screenscraperStatus');
       try {
@@ -1266,6 +1849,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
     $('settingsForm').onsubmit = async event => {
       event.preventDefault();
       try {
+        if (!(await validateControllerMap()) || !validateKeyboardMap()) return;
         await saveEmumoviesSettings().catch(() => {});
         const settingsPayload = collectSettings();
         AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(settingsPayload)});
@@ -1280,6 +1864,7 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         stopControllerBench();
         notify(t('notify.settings.saved'));
         applyLibraryMusic();
+        syncPointerNavigator();
         applySidebarVisibility();
         renderGrid();
       } catch(error) { notify(error.message); }
@@ -1468,8 +2053,16 @@ import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.
         } else if (mode === 'notifications') {
           const result = await api('/api/notifications');
           content.innerHTML = `<div class="extras"><button type="button" class="primary" id="readNotifications">Mark all read</button><button type="button" class="icon-button" id="clearNotifications">Clear</button></div>${(result.notifications || []).map(item => { const notice = localizedNotification(item); return `<div class="detail-card"><strong>${escapeHtml(notice.title)}</strong><p class="description">${escapeHtml(notice.body)}<br>${escapeHtml(item.created_at)}</p></div>`; }).join('') || '<p class="description">No notifications.</p>'}`;
-          $('readNotifications').onclick = async () => { await api('/api/notifications',{method:'POST',body:JSON.stringify({action:'read'})}); openFeature('notifications'); };
-          $('clearNotifications').onclick = async () => { await api('/api/notifications',{method:'POST',body:JSON.stringify({action:'clear'})}); openFeature('notifications'); };
+          const updateUnreadBadge = unread => {
+            AppState.unreadNotifications = Number(unread) || 0;
+            const button = $('notificationsButton');
+            if (button) {
+              button.dataset.unread = String(AppState.unreadNotifications);
+              button.setAttribute('aria-label', AppState.unreadNotifications ? `${t('tools.notifications')} (${AppState.unreadNotifications})` : t('tools.notifications'));
+            }
+          };
+          $('readNotifications').onclick = async () => { const result = await api('/api/notifications',{method:'POST',body:JSON.stringify({action:'read'})}); updateUnreadBadge(result.unread); openFeature('notifications'); };
+          $('clearNotifications').onclick = async () => { const result = await api('/api/notifications',{method:'POST',body:JSON.stringify({action:'clear'})}); updateUnreadBadge(result.unread); openFeature('notifications'); };
         } else {
           const result = await api('/api/webhooks');
           const current = (result.webhooks || [])[0] || {};

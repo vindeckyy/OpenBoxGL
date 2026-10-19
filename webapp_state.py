@@ -168,6 +168,9 @@ from pkg.state.sse import (
 ROOT = Path(__file__).parent
 TOKEN = secrets.token_urlsafe(24)
 LOGGER = logging.getLogger("openbox")
+# Boot recovery messages are process-local and read by /api/library exactly once
+# so the UI can explain a recovered or unreadable library before normal use.
+STARTUP_ERRORS: list[str] = []
 
 
 def _installs_job_name(key: str) -> str:

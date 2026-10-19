@@ -874,7 +874,7 @@ def test_plugin_lifecycle_events():
     with TemporaryDirectory() as directory:
         root = Path(directory)
         _make_20_plugin(root, "events.plugin", "def events(p):\n    return p\n")
-        with mock.patch("plugins.run_plugins", side_effect=lambda directory, hook, payload: calls.append((hook, payload)) or payload):
+        with mock.patch("plugins.run_plugin_hooks", side_effect=lambda directory, hook, payload: calls.append((hook, payload)) or []):
             _plugins.emit_plugin_event(root, "app_startup", {})
             _plugins.emit_plugin_event(root, "scan_finished", {"folder": "/games", "added": 3, "scanned": 40})
             _plugins.emit_plugin_event(root, "playtime_milestone", {"game_id": "g1", "hours": 2})
@@ -900,7 +900,7 @@ def test_plugin_lifecycle_events():
             {"game_id": "g3", "name": "Changed", "favorite": True},
             {"game_id": "g4", "name": "New"},
         ]})
-        with mock.patch("plugins.run_plugins", side_effect=lambda directory, hook, payload: calls.append(payload) or payload):
+        with mock.patch("plugins.run_plugin_hooks", side_effect=lambda directory, hook, payload: calls.append(payload) or []):
             _plugins.emit_library_diff(root, before, after)
         by_event = {payload["event"]: payload for payload in calls}
         assert by_event["game_added"]["game_ids"] == ["g4"]
@@ -930,10 +930,13 @@ def test_plugin_v2_routes():
         root = Path(directory)
         plugins_dir = root / "plugins"
         plugins_dir.mkdir()
-        schema = {"type": "object", "properties": {"level": {"type": "integer", "default": 1}}}
+        schema = {"type": "object", "properties": {
+            "level": {"type": "integer", "default": 1},
+            "token": {"type": "string", "format": "password", "default": ""},
+        }}
         _make_20_plugin(
             plugins_dir, "route.plugin", "def events(p):\n    return p\n",
-            {"permissions": ["network"], "settings": schema},
+            {"permissions": ["network"], "settings": schema, "commands": [{"id": "run", "label": "Run"}]},
         )
         with mock.patch("handlers.extensions.DATA", root / "library.json"):
             trust = Dummy()
@@ -962,10 +965,36 @@ def test_plugin_v2_routes():
             settings = Dummy()
             settings._api_get_api_v2_plugins_settings(SimpleNamespace(query="id=route.plugin"))
             assert settings.responses[-1][1]["values"] == {"level": 1}
+            assert settings.responses[-1][1]["secret_set"]["token"] is False
             settings._api_post_api_v2_plugins_settings({"id": "route.plugin", "values": {"level": 3}})
             assert settings.responses[-1][1]["values"] == {"level": 3}
+            settings._api_post_api_v2_plugins_settings({"id": "route.plugin", "values": {"level": 4, "token": "sekret"}})
+            assert settings.responses[-1][1]["secret_set"]["token"] is True
+            assert "token" not in settings.responses[-1][1]["values"]
+            settings._api_post_api_v2_plugins_settings({"id": "route.plugin", "values": {"level": 4, "token": "••••"}})
+            assert settings.responses[-1][1]["secret_set"]["token"] is True
+            settings._api_post_api_v2_plugins_settings({"id": "route.plugin", "values": {"level": 4}, "clear_secrets": ["token"]})
+            assert settings.responses[-1][1]["secret_set"]["token"] is False
             with pytest_raises(ValueError):
                 settings._api_post_api_v2_plugins_settings({"id": "route.plugin", "values": {"level": "high"}})
+
+            commands = Dummy()
+            commands._api_get_api_v2_plugins_commands(SimpleNamespace(query=""))
+            assert isinstance(commands.responses[-1][1]["epoch"], int)
+            assert [item["id"] for item in commands.responses[-1][1]["commands"]] == ["run"]
+            _plugins.set_plugin_enabled(plugins_dir, "route.plugin", False)
+            try:
+                commands._api_post_api_v2_plugins_command({"plugin_id": "route.plugin", "command": "run"})
+                raise AssertionError("a disabled plugin must not run commands")
+            except ValueError as error:
+                assert "disabled" in str(error), str(error)
+            _plugins.set_plugin_enabled(plugins_dir, "route.plugin", True)
+            with mock.patch.dict(os.environ, {"OPENBOX_SAFE_MODE": "1"}):
+                try:
+                    commands._api_post_api_v2_plugins_command({"plugin_id": "route.plugin", "command": "run"})
+                    raise AssertionError("safe mode must not run plugin commands")
+                except ValueError as error:
+                    assert "disabled" in str(error), str(error)
 
             catalog = Dummy()
             local_entries = load_local_catalog()

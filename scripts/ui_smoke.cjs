@@ -854,7 +854,7 @@ const failures = [];
     AppState.bigBoxPlatform = 'all'; // the platform test above left a specific platform selected
     bigboxMod.openBigBox();
     const openVisible = !document.getElementById('bigBox').hidden;
-    bigboxMod.closeBigBox();
+    await bigboxMod.closeBigBox();
     const closedVisible = document.getElementById('bigBox').hidden;
     return openVisible && closedVisible;
   });
@@ -1502,6 +1502,7 @@ const failures = [];
     };
     await library.refresh();
     window.fetch = origFetch;
+    await new Promise(r => setTimeout(r, 100));
     results.firstRunOpensSetup = document.getElementById('setupCenter')?.open === true
       && Boolean(document.querySelector('.setup-stepper'))
       && !AppState.appSettings.welcome_completed && AppState.games.length === 0;
@@ -2475,8 +2476,8 @@ const failures = [];
   (!dropEmptyHonesty.noImport) && failures.push("dropEmptyHonesty.noImport");
   const expectedGroups = {
     library: ['metadataButton','mediaButton','healthButton','constellationButton','masteryButton','bulkButton','tagsButton','playlistsButton','backupButton','historyButton','timeMachineButton','achievementsButton','saveFilterButton','savePresetButton'],
-    sources: ['storefrontButton','emulatorsButton','steamButton','heroicButton','lutrisButton','gogButton','eaButton','ubisoftButton','arcadeButton','arcadeRoomButton','householdButton','discoveryButton'],
-    personalize: ['themesButton','pluginsButton','settingsButton','whatsNewButton','fullscreenButton'],
+    sources: ['storefrontButton','emulatorsButton','steamButton','heroicButton','lutrisButton','gogButton','eaButton','ubisoftButton','arcadeButton','pico8Button','msu1Button','whdloadButton','arcadeRoomButton','householdButton','discoveryButton','netplayButton'],
+    personalize: ['themesButton','pluginsButton','settingsButton','whatsNewButton','fullscreenButton','reportIssueButton'],
     automation: ['webhooksButton','notificationsButton'],
   };
   for (const [key, ids] of Object.entries(expectedGroups)) {

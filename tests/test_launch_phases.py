@@ -539,10 +539,12 @@ class TestLaunchModuleCoverage(unittest.TestCase):
     def test_start_game_success_path(self):
         with patch("webapp_state.apply_perf_profile") as mock_perf, patch(
             "webapp_state.load_state"
-        ) as mock_load, patch("webapp_state._resolve_start_game") as mock_resolve, patch(
+        ) as mock_load, patch(
+            "webapp_state._resolve_start_game"
+        ) as mock_resolve, patch(
             "webapp_state._start_launch_command", return_value=(["/bin/true"], "/tmp")
-        ), patch(
-            "webapp_state._apply_start_plugins", return_value=(["/bin/true"], "/tmp")
+        ) as mock_start, patch(
+            "webapp_state._apply_start_plugins", side_effect=lambda game, args, cwd: (args, cwd)
         ), patch(
             "webapp_state._validate_start_command"
         ), patch(
@@ -561,9 +563,18 @@ class TestLaunchModuleCoverage(unittest.TestCase):
             lease = PerfLease(applied=True, profile_name="test", restore=MagicMock())
             mock_perf.return_value = lease
             state = {
-                "games": [{"game_id": "g1", "name": "Game"}],
+                "games": [{"game_id": "g1", "name": "Game", "platform": "NES"}],
                 "profiles": {},
-                "settings": {"progress_on_first_play": "Playing"},
+                "settings": {
+                    "progress_on_first_play": "Playing",
+                    "emulator_platform_settings": {
+                        "NES": {
+                            "adapter_id": "mesen",
+                            "retroarch_core": "mesen_libretro.so",
+                            "extra_args": "--fullscreen",
+                        }
+                    },
+                },
                 "history": [],
                 "active_sessions": [],
             }
@@ -579,6 +590,10 @@ class TestLaunchModuleCoverage(unittest.TestCase):
             entry = webapp_state.start_game(index=0)
             self.assertIn("launch_id", entry)
             self.assertIn(entry["launch_id"], webapp_state.RUNNING)
+            launched_game = mock_start.call_args.args[0]
+            self.assertEqual(launched_game["emulator_adapter_id"], "mesen")
+            self.assertEqual(launched_game["retroarch_core"], "mesen_libretro.so")
+            self.assertEqual(mock_popen.call_args.args[0][-1], "--fullscreen")
 
     def test_finish_session_branches(self):
         import datetime

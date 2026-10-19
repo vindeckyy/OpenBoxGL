@@ -3,13 +3,14 @@ import { api, notify, AppState } from './state.js';
 import { refresh, render, renderDetails } from './library.js';
 import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
 import { t } from './i18n.js';
+import { renderPluginSettings } from './plugin_form.js';
 
 
 
     async function openDiscovery() {
       try {
         const result = await api('/api/discovery');
-        const labels = {recently_added:'Recently added',never_played:'Never played',continue_playing:'Continue playing',highly_rated:'Highly rated',random_picks:'Random picks',short_sessions:'Short sessions'};
+        const labels = {recently_added:'Recently added',never_played:'Never played',continue_playing:'Continue playing',highly_rated:'Highly rated',achievements:'Games with achievements',random_picks:'Random picks',short_sessions:'Short sessions', ...(result.discovery_names || {})};
         $('discoveryContent').innerHTML = Object.entries(labels).map(([key,label]) => {
           const ids = result[key] || [];
           const items = ids.map(id => AppState.games.find(game => game.id === id)).filter(Boolean);
@@ -29,24 +30,129 @@ import { t } from './i18n.js';
     async function importStorefrontCatalog(uninstalledOnly) {
       const source = $('storefrontSource').value;
       try {
-        const result = await api('/api/storefront/import',{method:'POST',body:JSON.stringify({source,uninstalled_only:uninstalledOnly,installed_only:!uninstalledOnly})});
+        const result = await api('/api/storefront/import',{method:'POST',body:JSON.stringify({source,uninstalled_only:uninstalledOnly,installed_only:!uninstalledOnly,only_new:Boolean($('storefrontOnlyNew')?.checked)})});
         await refresh();
         notify(`${result.added} ${uninstalledOnly ? 'uninstalled catalog' : 'installed'} entr${result.added === 1 ? 'y' : 'ies'} added`);
       } catch(error) { notify(error.message); }
     }
+    function storefrontConfig(settings, key) {
+      const value = settings?.[key];
+      if (typeof value === 'boolean') return { enabled: value, platform: '', include_uninstalled: false };
+      return value && typeof value === 'object' ? value : {};
+    }
+    function renderStorefrontStatus(sources = []) {
+      const target = $('storefrontStatusList');
+      if (!target) return;
+      target.innerHTML = sources.length ? sources.map(item => `<div class="storefront-row"><div><strong>${escapeHtml(item.name || item.id)}</strong><small>${item.status === 'ok' ? 'Scanned' : escapeHtml(item.status || '')}${item.games ? ` · ${item.games} game${item.games === 1 ? '' : 's'}` : ''}${item.last_scan ? ` · ${escapeHtml(item.last_scan.replace('T', ' '))}` : ''}</small></div><span>${item.error ? escapeHtml(item.error) : item.installed ? 'Available' : 'Not installed'}</span></div>`).join('') : '<p class="description">No storefront status recorded yet.</p>';
+    }
+    async function loadStorefrontStatus() {
+      try {
+        const result = await api('/api/v2/storefront/status');
+        renderStorefrontStatus(result.sources || []);
+      } catch (error) { renderStorefrontStatus([]); }
+    }
+    async function scanStorefronts() {
+      const button = $('scanStorefronts');
+      if (button) button.disabled = true;
+      if ($('storefrontScanStatus')) $('storefrontScanStatus').textContent = 'Scanning storefronts…';
+      try {
+        await api('/api/v2/storefront/scan', { method: 'POST', body: JSON.stringify({ include_uninstalled: true }) });
+        for (let attempt = 0; attempt < 35; attempt += 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          await loadStorefrontStatus();
+          const result = await api('/api/v2/storefront/status');
+          if ((result.sources || []).every(item => !['pending', 'running'].includes(item.status))) {
+            if ($('storefrontScanStatus')) $('storefrontScanStatus').textContent = 'Storefront scan finished.';
+            return;
+          }
+        }
+        if ($('storefrontScanStatus')) $('storefrontScanStatus').textContent = 'Storefront scan is still running.';
+      } catch (error) {
+        if ($('storefrontScanStatus')) $('storefrontScanStatus').textContent = error.message;
+        notify(error.message);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    async function loadPluginStorefronts() {
+      const target = $('storefrontPlugins');
+      if (!target) return;
+      try {
+        const result = await api('/api/v2/storefronts');
+        const plugins = (result.storefronts || []).filter(item => item.kind === 'plugin');
+        target.innerHTML = plugins.length ? plugins.map((item, index) => {
+          const key = `plugin:${item.plugin_id}`;
+          const config = AppState.appSettings.storefront_auto_import?.[key] || {};
+          return `<div class="storefront-row" data-plugin-store="${escapeHtml(item.plugin_id)}"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.platform || 'Plugin storefront')}${item.permission_granted ? '' : ' · Network access not granted'}</small></div><span><label class="check"><input type="checkbox" data-plugin-auto-import="${escapeHtml(item.plugin_id)}"${config.enabled ? ' checked' : ''}> Auto-import</label> <input class="plugin-store-platform" data-plugin-platform="${escapeHtml(item.plugin_id)}" value="${escapeHtml(config.platform || '')}" placeholder="Platform" aria-label="Import platform"> <label class="check"><input type="checkbox" data-plugin-uninstalled="${escapeHtml(item.plugin_id)}"${config.include_uninstalled ? ' checked' : ''}> Include uninstalled</label> <button type="button" class="icon-button" data-plugin-catalog="${escapeHtml(item.plugin_id)}">Browse</button> <button type="button" class="icon-button" data-plugin-import="${escapeHtml(item.plugin_id)}" data-plugin-import-installed="1">Import installed</button> <button type="button" class="icon-button" data-plugin-import="${escapeHtml(item.plugin_id)}">Import owned</button></span><details class="plugin-store-settings"><summary>Store settings</summary><div data-plugin-settings-host="${index}"></div></details></div>`;
+        }).join('') : '<p class="description">No storefront plugins are installed.</p>';
+        plugins.forEach((item, index) => {
+          const host = target.querySelector(`[data-plugin-settings-host="${index}"]`);
+          if (!host) return;
+          renderPluginSettings(host, item.settings_schema || {}, item.settings_values || {}, {
+            pluginName: item.name,
+            idPrefix: item.plugin_id,
+            saveLabel: t('plugins.settings_save'),
+            onSave: async (values, container) => {
+              try {
+                const clear_secrets = [...container.querySelectorAll('[data-plugin-clear-secret]:checked')].map(input => input.dataset.pluginClearSecret);
+                await api('/api/v2/plugins/settings', { method: 'POST', body: JSON.stringify({ id: item.plugin_id, values, clear_secrets }) });
+                notify(t('plugins.settings_saved'));
+                await loadPluginStorefronts();
+              } catch (error) { notify(error.message); }
+            },
+          });
+        });
+        target.querySelectorAll('[data-plugin-import]').forEach(button => button.onclick = async () => {
+          try {
+            const installedOnly = button.dataset.pluginImportInstalled === '1';
+            const imported = await api('/api/v2/storefronts/plugin/import', { method: 'POST', body: JSON.stringify({ plugin_id: button.dataset.pluginImport, installed_only: installedOnly }) });
+            await refresh();
+            notify(`${imported.added} plugin game${imported.added === 1 ? '' : 's'} added`);
+          } catch (error) { notify(error.message); }
+        });
+        target.querySelectorAll('[data-plugin-catalog]').forEach(button => button.onclick = async () => {
+          try {
+            const catalog = await api('/api/v2/storefronts/plugin/catalog', { method: 'POST', body: JSON.stringify({ plugin_id: button.dataset.pluginCatalog }) });
+            $('storefrontCatalog').innerHTML = (catalog.entries || []).slice(0, 200).map(item => `<div class="storefront-row"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.source || '')} · ${item.installed ? 'Installed' : 'Not installed'}</small></div><span>${escapeHtml(item.id)}</span></div>`).join('') || '<p class="description">No entries.</p>';
+          } catch (error) { notify(error.message); }
+        });
+      } catch (error) {
+        target.innerHTML = `<p class="description">${escapeHtml(error.message)}</p>`;
+      }
+    }
     function openStorefronts() {
       const settings = AppState.appSettings.storefront_auto_import || {};
-      $('storefrontAutoImportSteam').checked = Boolean(settings.steam);
-      $('storefrontAutoImportHeroic').checked = Boolean(settings.heroic);
-      if ($('storefrontAutoImportEpic')) $('storefrontAutoImportEpic').checked = Boolean(settings.epic);
-      $('storefrontAutoImportLutris').checked = Boolean(settings.lutris);
-      if ($('storefrontAutoImportGameyfin')) $('storefrontAutoImportGameyfin').checked = Boolean(settings.gameyfin);
+      const steam = storefrontConfig(settings, 'steam');
+      const heroic = storefrontConfig(settings, 'heroic');
+      const lutris = storefrontConfig(settings, 'lutris');
+      const gameyfin = storefrontConfig(settings, 'gameyfin');
+      $('storefrontAutoImportSteam').checked = Boolean(steam.enabled);
+      $('storefrontSteamPlatform').value = steam.platform || '';
+      $('storefrontSteamUninstalled').checked = Boolean(steam.include_uninstalled);
+      $('storefrontAutoImportHeroic').checked = Boolean(heroic.enabled);
+      $('storefrontHeroicPlatform').value = heroic.platform || '';
+      $('storefrontHeroicUninstalled').checked = Boolean(heroic.include_uninstalled);
+      if ($('storefrontAutoImportEpic')) $('storefrontAutoImportEpic').checked = Boolean(storefrontConfig(settings, 'epic').enabled);
+      if ($('storefrontAutoImportGog')) $('storefrontAutoImportGog').checked = Boolean(storefrontConfig(settings, 'gog').enabled);
+      if ($('storefrontAutoImportEa')) $('storefrontAutoImportEa').checked = Boolean(storefrontConfig(settings, 'ea').enabled);
+      if ($('storefrontAutoImportUbisoft')) $('storefrontAutoImportUbisoft').checked = Boolean(storefrontConfig(settings, 'ubisoft').enabled);
+      if ($('storefrontAutoImportEpic')) $('storefrontAutoImportEpic').checked = Boolean(storefrontConfig(settings, 'epic').enabled);
+      $('storefrontAutoImportLutris').checked = Boolean(lutris.enabled);
+      $('storefrontLutrisPlatform').value = lutris.platform || '';
+      $('storefrontLutrisUninstalled').checked = Boolean(lutris.include_uninstalled);
+      if ($('storefrontAutoImportGameyfin')) $('storefrontAutoImportGameyfin').checked = Boolean(gameyfin.enabled);
+      $('storefrontGameyfinPlatform').value = gameyfin.platform || '';
+      $('storefrontGameyfinUninstalled').checked = Boolean(gameyfin.include_uninstalled);
+      if ($('autoImportExcludedPlatforms')) $('autoImportExcludedPlatforms').value = (AppState.appSettings.auto_import_excluded_platforms || []).join(', ');
+      if ($('storefrontOnlyNew')) $('storefrontOnlyNew').checked = false;
       if ($('storefrontGameyfinUrl')) $('storefrontGameyfinUrl').value = AppState.appSettings.gameyfin_url || '';
       if ($('storefrontGameyfinUsername')) $('storefrontGameyfinUsername').value = AppState.appSettings.gameyfin_username || '';
       if ($('storefrontGameyfinPassword')) $('storefrontGameyfinPassword').value = '';
       if ($('storefrontGameyfinInstallDir')) $('storefrontGameyfinInstallDir').value = AppState.appSettings.gameyfin_install_dir || '';
       if ($('storefrontGameyfinStatus')) $('storefrontGameyfinStatus').textContent = AppState.appSettings.gameyfin_url ? `Configured · ${AppState.appSettings.gameyfin_url}` : '';
       $('storefrontCatalog').innerHTML = '';
+      loadPluginStorefronts();
+      loadStorefrontStatus();
       $('storefrontDialog').showModal();
     }
     async function saveStorefrontSettings() {
@@ -54,14 +160,24 @@ import { t } from './i18n.js';
       notify(t('notify.storefront.settings_saved'));
     }
     function collectStorefrontSettings() {
+      const autoImport = { ...(AppState.appSettings.storefront_auto_import || {}) };
+      autoImport.steam = { enabled:$('storefrontAutoImportSteam').checked, platform:$('storefrontSteamPlatform')?.value.trim() || '', include_uninstalled:Boolean($('storefrontSteamUninstalled')?.checked) };
+      autoImport.heroic = { enabled:$('storefrontAutoImportHeroic').checked, platform:$('storefrontHeroicPlatform')?.value.trim() || '', include_uninstalled:Boolean($('storefrontHeroicUninstalled')?.checked) };
+      autoImport.epic = { enabled:Boolean($('storefrontAutoImportEpic')?.checked), platform:'', include_uninstalled:false };
+      autoImport.lutris = { enabled:$('storefrontAutoImportLutris').checked, platform:$('storefrontLutrisPlatform')?.value.trim() || '', include_uninstalled:Boolean($('storefrontLutrisUninstalled')?.checked) };
+      autoImport.gameyfin = { enabled:Boolean($('storefrontAutoImportGameyfin')?.checked), platform:$('storefrontGameyfinPlatform')?.value.trim() || '', include_uninstalled:Boolean($('storefrontGameyfinUninstalled')?.checked) };
+      for (const [id, checkbox] of [['gog', 'storefrontAutoImportGog'], ['ea', 'storefrontAutoImportEa'], ['ubisoft', 'storefrontAutoImportUbisoft']]) {
+        if ($(checkbox)) autoImport[id] = { enabled:$(checkbox).checked, platform:'', include_uninstalled:false };
+      }
+      document.querySelectorAll('[data-plugin-auto-import]').forEach(input => {
+        const key = `plugin:${input.dataset.pluginAutoImport}`;
+        const platform = document.querySelector(`[data-plugin-platform="${input.dataset.pluginAutoImport}"]`)?.value.trim() || '';
+        const uninstalled = document.querySelector(`[data-plugin-uninstalled="${input.dataset.pluginAutoImport}"]`)?.checked || false;
+        autoImport[key] = { ...(autoImport[key] || {}), enabled: input.checked, platform, include_uninstalled: uninstalled };
+      });
       return {
-        storefront_auto_import:{
-          steam:$('storefrontAutoImportSteam').checked,
-          heroic:$('storefrontAutoImportHeroic').checked,
-          epic:Boolean($('storefrontAutoImportEpic')?.checked),
-          lutris:$('storefrontAutoImportLutris').checked,
-          gameyfin:Boolean($('storefrontAutoImportGameyfin')?.checked),
-        },
+        storefront_auto_import:autoImport,
+        auto_import_excluded_platforms:($('autoImportExcludedPlatforms')?.value || '').split(',').map(value => value.trim()).filter(Boolean),
         gameyfin_url:$('storefrontGameyfinUrl')?.value.trim() || '',
         gameyfin_username:$('storefrontGameyfinUsername')?.value.trim() || '',
         gameyfin_password:$('storefrontGameyfinPassword')?.value || '',
@@ -139,4 +255,4 @@ import { t } from './i18n.js';
       } catch(error) { notify(error.message); }
     }
 
-export { openDiscovery, loadStorefrontCatalog, importStorefrontCatalog, openStorefronts, saveStorefrontSettings, collectStorefrontSettings, watchGameyfinInstall, installGameyfin, uninstallGameyfin, ludusaviAction, hoardAction };
+export { openDiscovery, loadStorefrontCatalog, importStorefrontCatalog, openStorefronts, saveStorefrontSettings, collectStorefrontSettings, watchGameyfinInstall, installGameyfin, uninstallGameyfin, ludusaviAction, hoardAction, scanStorefronts, loadStorefrontStatus };

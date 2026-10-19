@@ -10,10 +10,13 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 
 | Method | Path | Handler |
 |---|---|---|
+| POST | `/api/v2/achievements/override` | `_api_post_api_v2_achievements_override` |
+| POST | `/api/v2/achievements/refresh` | `_api_post_api_v2_achievements_refresh` |
 | POST | `/api/v2/arcade/kiosk/pin` | `handlers.arcade.kiosk_pin` |
 | GET | `/api/v2/arcade/kiosk/status` | `handlers.arcade.kiosk_status` |
 | POST | `/api/v2/arcade/kiosk/verify` | `handlers.arcade.kiosk_verify` |
 | GET | `/api/v2/backup/diff` | `_api_get_api_v2_backup_diff` |
+| POST | `/api/v2/bulk/find-replace` | `_api_post_api_v2_bulk_find_replace` |
 | GET | `/api/v2/clips` | `handlers.clips.clips_list` |
 | POST | `/api/v2/clips/capture` | `handlers.clips.capture_clip` |
 | GET | `/api/v2/collections` | `handlers.collections.collections_list` |
@@ -24,6 +27,9 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | GET | `/api/v2/emulators/defs/update` | `handlers.defs._api_get_api_v2_emulators_defs_update` |
 | POST | `/api/v2/emulators/defs/update` | `handlers.defs._api_post_api_v2_emulators_defs_update` |
 | GET | `/api/v2/emulators/registry` | `_api_get_api_v2_emulators_registry` |
+| GET | `/api/v2/emulators/settings` | `_api_get_api_v2_emulators_settings` |
+| POST | `/api/v2/emulators/settings` | `_api_post_api_v2_emulators_settings` |
+| GET | `/api/v2/highscores/table` | `_api_get_api_v2_highscores_table` |
 | GET | `/api/v2/history/timeline` | `_api_get_api_v2_history_timeline` |
 | GET | `/api/v2/household` | `handlers.household.household_status` |
 | POST | `/api/v2/household/challenge` | `handlers.household.household_challenge` |
@@ -41,7 +47,10 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/import/gog` | `_api_post_api_v2_import_gog` |
 | POST | `/api/v2/import/launchbox/apply` | `_api_post_api_v2_import_launchbox_apply` |
 | POST | `/api/v2/import/launchbox/preview` | `_api_post_api_v2_import_launchbox_preview` |
+| POST | `/api/v2/import/msu1` | `_api_post_api_v2_import_msu1` |
+| POST | `/api/v2/import/pico8` | `_api_post_api_v2_import_pico8` |
 | POST | `/api/v2/import/ubisoft` | `_api_post_api_v2_import_ubisoft` |
+| POST | `/api/v2/import/whdload` | `_api_post_api_v2_import_whdload` |
 | GET | `/api/v2/insights/heatmap` | `_api_get_api_v2_insights_heatmap` |
 | GET | `/api/v2/insights/mastery` | `_api_get_api_v2_insights_mastery` |
 | GET | `/api/v2/insights/radar` | `_api_get_api_v2_insights_radar` |
@@ -52,6 +61,13 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | GET | `/api/v2/insights/trophies` | `_api_get_api_v2_insights_trophies` |
 | POST | `/api/v2/insights/trophies/evaluate` | `_api_post_api_v2_insights_trophies_evaluate` |
 | GET | `/api/v2/insights/wrapped` | `_api_get_api_v2_insights_wrapped` |
+| GET | `/api/v2/integration-tokens` | `_api_get_api_v2_integration_tokens` |
+| POST | `/api/v2/integration-tokens` | `_api_post_api_v2_integration_tokens` |
+| POST | `/api/v2/integration-tokens/remove` | `_api_post_api_v2_integration_tokens_remove` |
+| GET | `/api/v2/integrations/steam` | `_api_get_api_v2_integrations_steam` |
+| POST | `/api/v2/integrations/steam` | `_api_post_api_v2_integrations_steam` |
+| POST | `/api/v2/integrations/steam/refresh` | `_api_post_api_v2_integrations_steam_refresh` |
+| POST | `/api/v2/integrations/steam/test` | `_api_post_api_v2_integrations_steam_test` |
 | GET | `/api/v2/jobs` | `_api_get_api_v2_jobs` |
 | POST | `/api/v2/jobs/cancel` | `_api_post_api_v2_jobs_cancel` |
 | GET | `/api/v2/jobs/items` | `_api_get_api_v2_jobs_items` |
@@ -116,6 +132,7 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | GET | `/api/v2/memories/media` | `_api_get_api_v2_memories_media` |
 | GET | `/api/v2/memories/status` | `_api_get_api_v2_memories_status` |
 | POST | `/api/v2/metadata/auto-scrape` | `handlers.metadata.metadata_auto_scrape` |
+| POST | `/api/v2/metadata/candidates/apply` | `_api_post_api_v2_metadata_candidates_apply` |
 | POST | `/api/v2/metadata/matches/apply` | `_api_post_api_v2_metadata_matches_apply` |
 | POST | `/api/v2/metadata/matches/decisions` | `_api_post_api_v2_metadata_matches_decisions` |
 | GET | `/api/v2/metadata/matches/items` | `_api_get_api_v2_metadata_matches_items` |
@@ -129,16 +146,26 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/moments/delete` | `handlers.moments.moments_delete` |
 | POST | `/api/v2/moments/resume` | `handlers.moments.moments_resume` |
 | POST | `/api/v2/moments/update` | `handlers.moments.moments_update` |
+| GET | `/api/v2/netplay/lobby` | `_api_get_api_v2_netplay_lobby` |
 | GET | `/api/v2/party/decks` | `_api_get_api_v2_party_decks` |
 | POST | `/api/v2/party/decks` | `_api_post_api_v2_party_decks` |
 | POST | `/api/v2/party/decks/delete` | `_api_post_api_v2_party_decks_delete` |
 | POST | `/api/v2/party/next` | `_api_post_api_v2_party_next` |
 | GET | `/api/v2/party/queue` | `_api_get_api_v2_party_queue` |
 | POST | `/api/v2/party/queue` | `_api_post_api_v2_party_queue` |
+| POST | `/api/v2/platform/delete` | `_api_post_api_v2_platform_delete` |
+| POST | `/api/v2/platform/rename` | `_api_post_api_v2_platform_rename` |
+| GET | `/api/v2/plugin-stats` | `_api_get_api_v2_plugin_stats` |
+| POST | `/api/v2/plugin-stats/refresh` | `_api_post_api_v2_plugin_stats_refresh` |
 | GET | `/api/v2/plugins/catalog` | `_api_get_api_v2_plugins_catalog` |
 | POST | `/api/v2/plugins/command` | `_api_post_api_v2_plugins_command` |
 | GET | `/api/v2/plugins/commands` | `_api_get_api_v2_plugins_commands` |
+| GET | `/api/v2/plugins/credentials` | `_api_get_api_v2_plugins_credentials` |
+| POST | `/api/v2/plugins/credentials` | `_api_post_api_v2_plugins_credentials` |
+| GET | `/api/v2/plugins/data` | `_api_get_api_v2_plugins_data` |
+| POST | `/api/v2/plugins/data` | `_api_post_api_v2_plugins_data` |
 | POST | `/api/v2/plugins/permissions` | `_api_post_api_v2_plugins_permissions` |
+| POST | `/api/v2/plugins/repair` | `_api_post_api_v2_plugins_repair` |
 | GET | `/api/v2/plugins/settings` | `_api_get_api_v2_plugins_settings` |
 | POST | `/api/v2/plugins/settings` | `_api_post_api_v2_plugins_settings` |
 | GET | `/api/v2/plugins/trust` | `_api_get_api_v2_plugins_trust` |
@@ -147,6 +174,7 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | POST | `/api/v2/reels/create` | `handlers.clips.create_reel_job` |
 | POST | `/api/v2/resume` | `handlers.resume.resume_launch` |
 | POST | `/api/v2/resume/discard` | `handlers.resume.resume_discard` |
+| POST | `/api/v2/resume/slot` | `handlers.resume.resume_slot` |
 | GET | `/api/v2/resume/status` | `handlers.resume.resume_status` |
 | POST | `/api/v2/screenscraper/apply` | `_api_post_api_v2_screenscraper_apply` |
 | POST | `/api/v2/screenscraper/info` | `_api_post_api_v2_screenscraper_info` |
@@ -162,6 +190,7 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | GET | `/api/v2/setup/preview/items` | `_api_get_api_v2_setup_preview_items` |
 | POST | `/api/v2/setup/preview/revalidate` | `_api_post_api_v2_setup_preview_revalidate` |
 | GET | `/api/v2/setup/summary` | `_api_get_api_v2_setup_summary` |
+| POST | `/api/v2/steam/action` | `_api_post_api_v2_steam_action` |
 | POST | `/api/v2/steambridge/apply` | `handlers.steambridge.steambridge_apply` |
 | POST | `/api/v2/steambridge/preview` | `handlers.steambridge.steambridge_preview` |
 | POST | `/api/v2/steambridge/remove` | `handlers.steambridge.steambridge_remove` |
@@ -176,9 +205,14 @@ The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes li
 | GET | `/api/v2/steamgrid/search` | `handlers.steamgrid.steamgrid_search` |
 | GET | `/api/v2/steamgrid/status` | `handlers.steamgrid.steamgrid_status` |
 | POST | `/api/v2/steamgrid/test` | `handlers.steamgrid.steamgrid_test` |
+| POST | `/api/v2/storefront/scan` | `_api_post_api_v2_storefront_scan` |
+| GET | `/api/v2/storefront/status` | `_api_get_api_v2_storefront_status` |
+| GET | `/api/v2/storefronts` | `_api_get_api_v2_storefronts` |
+| POST | `/api/v2/storefronts/plugin/catalog` | `_api_post_api_v2_storefronts_plugin_catalog` |
+| POST | `/api/v2/storefronts/plugin/import` | `_api_post_api_v2_storefronts_plugin_import` |
 | GET | `/api/v2/story` | `_api_get_api_v2_story` |
 
-_167 routes._
+_201 routes._
 
 ## API v1 (frozen)
 

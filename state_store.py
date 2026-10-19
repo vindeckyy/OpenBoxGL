@@ -91,6 +91,8 @@ def default_state() -> dict[str, Any]:
         "active_sessions": [],
         "trash": [],
         "party_decks": [],
+        "emulator_settings": {},
+        "achievement_overrides": {},
     }
 
 
@@ -252,6 +254,11 @@ def _normalize_feature_fields(state: dict[str, Any]) -> bool:
         if len(valid_sessions) != len(sessions):
             state["active_sessions"] = valid_sessions
             changed = True
+    for key in ("emulator_settings", "achievement_overrides"):
+        value = state.get(key)
+        if not isinstance(value, dict):
+            state[key] = {}
+            changed = True
     from pkg.parity.parity_party import normalize_decks
 
     if normalize_decks(state):
@@ -352,6 +359,9 @@ def normalize_state(raw: Any) -> tuple[dict[str, Any], bool]:
         raise StateCorruptError("OpenBox library.json has an invalid games collection.")
     changed |= _apply_migrations(state, version)
     changed |= _ensure_defaults(state)
+    from settings_schema import prune_unknown_settings
+    if prune_unknown_settings(state):
+        changed = True
     state["schema_version"] = STATE_SCHEMA_VERSION
     if not isinstance(state.get("games"), list):
         raise StateCorruptError("OpenBox library.json has an invalid games collection.")

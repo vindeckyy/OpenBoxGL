@@ -145,6 +145,13 @@ def normalize_base_url(url):
     return value
 
 
+def _storefront_enabled(value):
+    """Read a storefront config that may be a legacy boolean or an options object."""
+    if isinstance(value, dict):
+        return bool(value.get("enabled"))
+    return bool(value)
+
+
 def gameyfin_settings(settings):
     settings = settings or {}
     return {
@@ -153,7 +160,7 @@ def gameyfin_settings(settings):
         "password": str(settings.get("gameyfin_password", "")),
         "install_dir": str(settings.get("gameyfin_install_dir", "")).strip(),
         "provider": str(settings.get("gameyfin_provider", "")).strip() or DEFAULT_PROVIDER,
-        "auto_import": bool(settings.get("storefront_auto_import", {}).get("gameyfin")),
+        "auto_import": _storefront_enabled(settings.get("storefront_auto_import", {}).get("gameyfin")),
     }
 
 

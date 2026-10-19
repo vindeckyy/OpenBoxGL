@@ -82,6 +82,7 @@ static gboolean window_maximized = FALSE;
 static gboolean tray_enabled = FALSE;
 static gboolean minimize_to_tray = FALSE;
 static GtkStatusIcon *tray_icon = NULL;
+static GtkWidget *tray_menu = NULL;
 static char *application_icon_path = NULL;
 static NativeRequest pending_request = { NATIVE_REQUEST_NONE, NULL };
 static gboolean pending_focus = FALSE;
@@ -1173,6 +1174,97 @@ on_tray_activate(GtkStatusIcon *icon, gpointer user_data)
 }
 
 static void
+on_tray_recent(GtkMenuItem *item, gpointer user_data)
+{
+    (void)user_data;
+    const char *game_id = g_object_get_data(G_OBJECT(item), "openbox-game-id");
+    if (!game_id || !origin || !token) {
+        return;
+    }
+    char *escaped = g_uri_escape_string(game_id, NULL, FALSE);
+    char *uri = g_strdup_printf("%s/?token=%s&deeplink=launch&id=%s", origin, token, escaped);
+    if (main_view) {
+        webkit_web_view_load_uri(main_view, uri);
+    }
+    g_free(uri);
+    g_free(escaped);
+    if (main_window) {
+        gtk_widget_show(main_window);
+        gtk_window_present(GTK_WINDOW(main_window));
+    }
+}
+
+static void
+on_tray_show_menu(GtkMenuItem *item, gpointer user_data)
+{
+    (void)item;
+    (void)user_data;
+    on_tray_activate(NULL, NULL);
+}
+
+static void
+rebuild_tray_menu(void)
+{
+    if (tray_menu) {
+        gtk_widget_destroy(tray_menu);
+        tray_menu = NULL;
+    }
+    tray_menu = gtk_menu_new();
+    GtkWidget *show = gtk_menu_item_new_with_label("Show OpenBox");
+    g_signal_connect(show, "activate", G_CALLBACK(on_tray_show_menu), NULL);
+    gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu), show);
+    gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu), gtk_separator_menu_item_new());
+    GtkWidget *header = gtk_menu_item_new_with_label("Recent games");
+    gtk_widget_set_sensitive(header, FALSE);
+    gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu), header);
+    char *recent_path = g_build_filename(data_dir, "native-host-recent", NULL);
+    GError *error = NULL;
+    char *contents = NULL;
+    int added = 0;
+    if (g_file_get_contents(recent_path, &contents, NULL, &error) && contents) {
+        char **lines = g_strsplit(contents, "\n", -1);
+        for (int index = 0; lines[index] && added < 8; index++) {
+            char *line = lines[index];
+            if (!*line) {
+                continue;
+            }
+            char *tab = strchr(line, '\t');
+            if (!tab) {
+                continue;
+            }
+            *tab = '\0';
+            GtkWidget *item = gtk_menu_item_new_with_label(line);
+            g_object_set_data_full(G_OBJECT(item), "openbox-game-id", g_strdup(tab + 1), g_free);
+            g_signal_connect(item, "activate", G_CALLBACK(on_tray_recent), NULL);
+            gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu), item);
+            added++;
+        }
+        g_strfreev(lines);
+        g_free(contents);
+    }
+    if (error) {
+        g_error_free(error);
+    }
+    if (!added) {
+        GtkWidget *empty = gtk_menu_item_new_with_label("No recent games");
+        gtk_widget_set_sensitive(empty, FALSE);
+        gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu), empty);
+    }
+    g_free(recent_path);
+    gtk_widget_show_all(tray_menu);
+}
+
+static void
+on_tray_popup(GtkStatusIcon *icon, guint button, guint activate_time, gpointer user_data)
+{
+    (void)user_data;
+    rebuild_tray_menu();
+    G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+    gtk_menu_popup(GTK_MENU(tray_menu), NULL, NULL, gtk_status_icon_position_menu, icon, button, activate_time);
+    G_GNUC_END_IGNORE_DEPRECATIONS
+}
+
+static void
 setup_tray(void)
 {
     if (!tray_enabled) {
@@ -1191,6 +1283,7 @@ setup_tray(void)
     gtk_status_icon_set_title(tray_icon, "OpenBox Game Launcher");
     gtk_status_icon_set_tooltip_text(tray_icon, "OpenBox Game Launcher");
     g_signal_connect(tray_icon, "activate", G_CALLBACK(on_tray_activate), NULL);
+    g_signal_connect(tray_icon, "popup-menu", G_CALLBACK(on_tray_popup), NULL);
     G_GNUC_END_IGNORE_DEPRECATIONS
 }
 
@@ -1264,7 +1357,7 @@ resolve_bridge(WebKitWebView *view, const char *id, const char *result_json)
 static void
 handle_dialog(WebKitWebView *view, const char *id, JSCValue *args)
 {
-    /* args: {kind, title, filters, default} */
+    /* args: {kind, title, filters, start_path} */
     GtkFileChooserAction action = GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER;
     JSCValue *kind = jsc_value_object_get_property(args, "kind");
     if (kind && jsc_value_is_string(kind)) {
@@ -1280,6 +1373,20 @@ handle_dialog(WebKitWebView *view, const char *id, JSCValue *args)
 
     GtkFileChooserNative *dialog = gtk_file_chooser_native_new(
         "OpenBox", GTK_WINDOW(main_window), action, "Select", "Cancel");
+
+    JSCValue *start_value = jsc_value_object_get_property(args, "start_path");
+    if (start_value && jsc_value_is_string(start_value)) {
+        char *start_text = jsc_value_to_string(start_value);
+        if (start_text && g_path_is_absolute(start_text)) {
+            char *start_filename = g_filename_from_utf8(start_text, -1, NULL, NULL, NULL);
+            if (start_filename) {
+                gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(dialog), start_filename);
+                g_free(start_filename);
+            }
+        }
+        g_free(start_text);
+    }
+    g_clear_object(&start_value);
 
     GtkFileFilter *filter = gtk_file_filter_new();
     gtk_file_filter_add_pattern(filter, "*");
@@ -1298,6 +1405,30 @@ handle_dialog(WebKitWebView *view, const char *id, JSCValue *args)
     gtk_native_dialog_destroy(GTK_NATIVE_DIALOG(dialog));
     resolve_bridge(view, id, result_json);
     g_free(result_json);
+}
+
+static gboolean
+local_file_uri_allowed(const char *uri)
+{
+    GUri *parsed = g_uri_parse(uri, G_URI_FLAGS_NONE, NULL);
+    if (!parsed) {
+        return FALSE;
+    }
+    const char *scheme = g_uri_get_scheme(parsed);
+    const char *host = g_uri_get_host(parsed);
+    const char *userinfo = g_uri_get_userinfo(parsed);
+    gboolean ok = FALSE;
+    if (scheme && g_ascii_strcasecmp(scheme, "file") == 0 && !userinfo &&
+        (!host || host[0] == '\0' || g_ascii_strcasecmp(host, "localhost") == 0)) {
+        char *filename = g_filename_from_uri(uri, NULL, NULL);
+        if (filename) {
+            /* Only hand existing regular files to the desktop viewer. */
+            ok = g_path_is_absolute(filename) && g_file_test(filename, G_FILE_TEST_IS_REGULAR);
+            g_free(filename);
+        }
+    }
+    g_uri_unref(parsed);
+    return ok;
 }
 
 static gboolean
@@ -1323,7 +1454,7 @@ uri_scheme_allowed(const char *uri)
                   (g_ascii_strcasecmp(scheme, "http") == 0 ||
                    g_ascii_strcasecmp(scheme, "https") == 0);
     g_uri_unref(parsed);
-    return ok;
+    return ok || local_file_uri_allowed(uri);
 }
 
 static void
