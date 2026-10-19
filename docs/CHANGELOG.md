@@ -4,7 +4,13 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.18.0] - 2026-10-19
+
+A release that makes OpenBox a clearer and deeper library manager. The first-run pass consolidates actions, adds
+guided setup and help, and surfaces the most recently played game; the rest of the release adds platform
+administration, durable media automation, plugin capability services, save manifests with selective restore, richer
+emulator and Big Box controls, and a broad LaunchBox parity pass. No v1 route is removed or changed.
+Upgrade from any 1.17.x release.
 
 ### Added
 - **Big Box input parity.** Pointer drag, mouse wheel, trackball, and spinner input navigate Big Box with configurable

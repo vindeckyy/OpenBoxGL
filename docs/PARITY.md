@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.17.0**, the "Every Launcher" release: native Windows GOG/EA/Ubisoft imports, Game Night decks, price paid and cost per hour, translated server notices, and the ScreenScraper fix. The previous line was **v1.16.0** / **v1.16.1** ("Make it true" and its fix release), and 1.15.0 was "Finish the surface".
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.18.0**, the "Clearer, deeper library" release: platform rename/delete with media moves, durable media queues, plugin capability services, save manifests and selective restore, deeper emulator and Big Box controls, and a clearer first-run interface. The previous line was **v1.17.0** ("Every Launcher"), and 1.16.0/1.16.1 were "Make it true" and its fix release.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
