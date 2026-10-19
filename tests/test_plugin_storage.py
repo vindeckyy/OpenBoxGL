@@ -53,7 +53,8 @@ def test():
             "seen": 2, "nested": {"a": 1},
         }
         data_file = root / "data" / "store.plugin.json"
-        assert _mode(data_file) == 0o600
+        if os.name != "nt":
+            assert _mode(data_file) == 0o600
         assert len(plugins.plugin_data_values(root, "store.plugin")) == 2
         assert plugins.set_plugin_data(root, "store.plugin", {"seen": 3})["seen"] == 3
         for bad in (
@@ -76,7 +77,8 @@ def test():
         # Credentials: merge, delete, clear, redacted summary, 0600.
         assert plugins.set_plugin_credentials(root, "store.plugin", {"token": "abc", "user": "me"}) == ["token", "user"]
         credentials_file = root / "credentials" / "store.plugin.json"
-        assert _mode(credentials_file) == 0o600
+        if os.name != "nt":
+            assert _mode(credentials_file) == 0o600
         assert plugins.plugin_credentials_values(root, "store.plugin") == {"token": "abc", "user": "me"}
         plugins.set_plugin_credentials(root, "store.plugin", {"token": ""})
         assert plugins.plugin_credentials_values(root, "store.plugin") == {"user": "me"}

@@ -87,11 +87,15 @@ def _move_file(source: Path, dest: Path) -> None:
         shutil.copy2(source, dest)
         # The cross-device fallback must reach disk before the source is
         # removed, otherwise a crash can lose both names.
-        descriptor = os.open(dest, os.O_RDONLY)
         try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
+            # Windows can only flush a handle opened for writing.
+            descriptor = os.open(dest, os.O_RDWR)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        except OSError:
+            pass
         source.unlink()
 
 

@@ -191,7 +191,7 @@ class TableTests(unittest.TestCase):
             runner = Runner(ok())
             result = hs.table({"rom_name": "pacman"}, home=home, which=lambda _name: "hi2txt", run=runner)
         self.assertTrue(result["parsed"])
-        self.assertEqual(result["path"], str(path))
+        self.assertEqual(result["path"], str(path.resolve()))
         self.assertEqual(result["scores"][0]["score"], 100000)
 
     def test_table_uses_path_stem(self):

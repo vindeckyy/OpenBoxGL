@@ -114,7 +114,8 @@ class CredentialsTests(unittest.TestCase):
             self.assertNotIn("secret-key", json.dumps(status))
             path = Path(directory) / "steam.json"
             self.assertTrue(path.is_file())
-            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
             values = steam.load_steam_credentials(directory)
             self.assertEqual(values, {"api_key": "secret-key", "steam_id": "76561198000000000"})
 
@@ -278,7 +279,8 @@ class CacheTests(unittest.TestCase):
             steam.save_cache(directory, 440, {"achievement": {"source": "steam"}})
             path = Path(directory) / "cache" / "steam" / "440.json"
             self.assertTrue(path.is_file())
-            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
             self.assertEqual(steam.load_cache(directory, 440), {"achievement": {"source": "steam"}})
 
     def test_ttl_expiry(self):

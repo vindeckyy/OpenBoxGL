@@ -24,7 +24,7 @@ python3 -B - <<'EOF'
 import os
 from openbox import save_state
 save_state({"games": [
-    {"name": "Quake", "platform": "PC", "genre": "FPS", "year": "1996", "developer": "id Software", "path": "/bin/true", "favorite": True, "rating": 5, "progress": "Beaten", "play_count": 12, "playtime_seconds": 5400},
+    {"name": "Quake", "platform": "PC", "genre": "FPS", "year": "1996", "developer": "id Software", "path": "/bin/true", "favorite": True, "rating": 5, "progress": "Beaten", "play_count": 12, "playtime_seconds": 5400, "last_played": "2026-10-18T20:15:00"},
     {"name": "Chrono Trigger", "platform": "SNES", "genre": "RPG", "year": "1995", "path": "/bin/true"},
 ], "profiles": {}, "history": [], "settings": {}, "playlists": []})
 print("seeded")

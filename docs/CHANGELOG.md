@@ -120,6 +120,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   quality. Native copy for these blocks will follow in a translation pass.
 
 ### Fixed
+- Cross-device platform media moves flush the copied file through a writable handle and tolerate platforms that
+  cannot `fsync` it, so Windows migrations no longer fail with a bad file descriptor.
+  `pkg/parity/parity_platform_admin.py`, `tests/test_parity_platform_admin.py`.
 - Manage Emulators shows the probed emulator version string and an explicit update-checks-off note instead of
   rendering nothing for an installed emulator. `handlers/emulators.py`, `static/settings.js`.
 - Saving settings no longer rejects an older sidebar order that still contains section ids from an earlier build.
