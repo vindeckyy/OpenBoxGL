@@ -1,70 +1,83 @@
 # OpenBox release notes
 
-OpenBox 1.18.0 makes the library easier to understand and much deeper to manage. The first run now has one Add games menu, a guided Setup Center, built-in help, and a Jump back in hero; behind it, platforms can be renamed or deleted with their media, media downloads queue durably, plugins gain host services, saves can be verified and selectively restored, and emulator, Big Box, and metadata controls go further. Upgrade from any 1.17.x release. The full list is in [CHANGELOG.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md), and the code changes are in [v1.17.0...v1.18.0](https://github.com/vindeckyy/OpenBoxGL/compare/v1.17.0...v1.18.0).
+OpenBox 1.18.0 is a large release, and most of it is about what happens after the games are already in the library: fixing a platform name once instead of editing every game, moving artwork with the games, keeping a long download queue alive across restarts, restoring only the saves you choose, and getting more useful work out of plugins and emulators. The first-run screens were also rewritten so the next person who opens OpenBox has a clearer path from "no games" to "playing". Upgrade from any 1.17.x release. The complete list is in [CHANGELOG.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md), and the code changes are in [v1.17.0...v1.18.0](https://github.com/vindeckyy/OpenBoxGL/compare/v1.17.0...v1.18.0).
 
-## A clearer first run
+## The first run explains itself
 
-The top bar now has one **Add games** menu instead of four separate buttons. It holds adding one game, scanning a folder, adding a shelf entry, opening guided setup, and importing from a store. **Setup Center** opens on a six-step quick path; advanced steps stay behind a toggle. Press **F1** or **?** for Help & shortcuts, including a glossary and the real keyboard/controller table.
+- **One Add games menu.** Adding a single game, scanning a folder, adding a shelf entry, opening guided setup, and importing from a store now live under one top-bar menu instead of four separate buttons. The old buttons moved into that menu; nothing was removed.
+- **Setup Center is shorter by default.** The guided path is six steps, with the longer, optional steps behind an expandable "advanced" section. The goal is to get a first game into the library before asking about the rest of the setup.
+- **Help is one key away.** Press **F1** or **?** anywhere outside a text field to open Help & shortcuts. It includes a glossary of OpenBox terms and the actual keyboard and controller shortcuts, not a generic key list.
+- **The empty library is one card.** It offers three clear starts: **Scan a folder**, **Connect a store**, and **Add one game**. The previous row of six buttons is gone.
+- **The details pane teaches by doing.** A new three-step checklist marks what is done and what is left. The library also gets a **Jump back in** card for the most recently played game, with **Play** and **View details**, so the first screen has a way back into a session.
+- **Themes are visible before you apply them.** The Themes dialog now shows a swatch gallery for each theme. The default theme now uses an orange action colour with a teal focus colour, separating the thing you can click from the thing the keyboard is focused on.
+- **Play insights moved below the grid.** The panels no longer push the games off the first screen.
+- **The Tools menu is grouped and renamed.** Entries are grouped under Start here, Library, Sources, and More. Launch Doctor, Netplay, Museum, and Library Audit now read as Launch check, Online play, Kiosk mode, and Library check.
 
-An empty library is one illustrated card with Scan a folder, Connect a store, and Add one game. Once games are present, the details pane shows a three-step checklist and the library adds a **Jump back in** hero for the most recently played game, with Play and View details. The Themes dialog gains a swatch gallery, the default palette uses an orange action ramp with teal focus, and Play insights now follows the grid so games are visible on the first screen. Tools are grouped Start here / Library / Sources / More, and Launch Doctor, Netplay, Museum, and Library Audit now read as Launch check, Online play, Kiosk mode, and Library check.
+## Fix the library, not every game
 
-## Platforms, media, and metadata
+- **Rename or delete a platform in one place.** The platform view can rename a platform across its games, launch profiles, filter playlists, platform settings, and platform media. Delete asks you to type the platform name, then moves its games to Trash. Before this, changing "SNES" to "Super Nintendo" meant editing every game and every saved filter separately.
+- **Move the artwork with the games.** A bulk platform change can move each selected game's cover, screenshots, videos, and other media into the new platform folder. If one move fails, the field change is kept and the error is listed so the move can be retried; the library does not silently point at a file that never arrived.
+- **A download queue that survives a restart.** Large imports can queue artwork and media, and the queue is saved to disk. Closing OpenBox does not lose it. From the queue you can pause, resume, cancel, retry, and see per-item errors instead of one generic failure.
+- **Automatic imports feed the queue.** When an import recognizes a game, its poster, square art, video, music, manual, and other media can be queued automatically. Global and per-platform limits keep one large platform from consuming every download slot.
+- **EmuMovies joins the media sources.** It can fill covers, box backs, spines, 3D boxes, screenshots, title screens, marquees, cart fronts and backs, discs, clear logos, theme and snap videos, manuals, and music. Existing files are kept unless overwrite is requested.
+- **Choose the order of metadata sources.** You can place built-in and plugin providers in a preferred order. Every search result shows which source it came from, and a bulk download can prefer plugin results. Partial-word searches now favour exact title matches and filter by platform.
+- **LaunchBox downloads are checked before they reach the library.** A file is written only after the HTTP status, content type, and payload have been validated. Local database imports keep retry and progress reporting.
+- **Library Audit tells you where a problem came from.** A new Source column, per-source counts, and a source filter separate a missing file from a bad emulator setting or a plugin problem. Plugin sources use their display names.
+- **Filters can exclude as well as include.** Filters cycle through include, exclude, and clear for platforms, categories, source, and smart collections. Presets and playlists can also match or exclude source, achievement source, region, text operators, and specific platforms. Exclusions survive a refresh.
+- **Bulk Edit does literal find and replace.** You can preview a replacement in one field across the selected games, then apply it. Bulk Edit can also move those games' media during a platform change.
+- **Progress labels are configurable.** The game editor and progress automation only offer the labels you enabled in Settings; a label that is turned off is rejected instead of being written.
+- **Settings are easier to find and change.** Options search scans every category and focuses the matching field. The sidebar can be reordered and the Explorer section hidden. There is a font-family picker, editable custom-field dropdown options, platform-document ordering, a Report issue link, a save-management toggle, a startup-error surface, and Big Box shutdown-on-exit. A shared placeholder cover replaces repeated missing-art text, and media cache cleanup removes stale generated files.
 
-A platform view can **rename or delete** a platform across games, launch profiles, filter playlists, platform settings, and platform media. Deletion moves games to Trash and asks for the platform name first. Media moves are crash-safe: the field update is kept if a move fails, and `media_errors` reports what needs a retry.
+## Imports, plugins, and achievements
 
-**Media automation** adds a durable queue that survives restarts and supports pause, resume, cancel, retry, and per-item errors. Automatic imports queue poster, square, video, music, and manual downloads with global and per-platform limits; folder and storefront imports enqueue matched LaunchBox or provider games. EmuMovies joins the media providers, covering covers, box backs/spines/3D boxes, screenshots, title screens, marquees, cart fronts and backs, discs, clear logos, theme and snap videos, manuals, and music. The queue reports its items, pending queue, and per-state counts, and existing files are preserved unless overwrite is requested.
+- **Steam tells you when a game is gone.** Imported Steam games now record whether their install folder still exists. A missing game gets a Missing badge and an Install handoff; an installed game gets **Verify files**, which opens Steam's own validation for that app.
+- **Optional service keys are stored privately.** Keys for IGDB, ScreenScraper, SteamGridDB, Gameyfin, and RetroAchievements are kept out of the public settings view and shown masked. They are no longer part of the settings JSON a browser can request.
+- **Storefront scans show their work.** A scan reports progress per source, skips sources with no library games, stops after 30 seconds, and keeps whatever it found if it runs out of time. Per-source auto-import can set the target platform, include owned-but-uninstalled games, and limit the import to games that are not already in the library.
+- **More places to import from.** PICO-8, MSU-1, and WHDLoad join the source list. RPCS3 imports external folders and ISOs from its `games.yml`.
+- **Plugins can ask for specific access instead of a copy of the library.** A plugin declares what it provides and what it needs. OpenBox can answer read-only requests for the library, achievements, profiles, activity, leaderboards, catalog, metadata, and media, and gives each hook a bounded data bag, settings, and credential store.
+- **Plugins can act like built-in sources.** A plugin storefront uses the normal catalog and import screens; plugin stats merge into the library; plugin discovery lists appear in the Discovery Center; plugin notifications use translated messages. The catalog browser shows each entry's author and homepage. Metadata results remember their source so bulk media can prefer them.
+- **Plugins are safer to remove and reinstall.** Reinstalling from the catalog keeps settings, stats, and trust. Disabling or removing a plugin deletes its imported games, stops its cached stats from merging, and clears its settings, trust, permissions, data, credentials, and stats cache. Plugin settings have their own page under Settings > Plugins, and palette commands never run for a disabled plugin.
+- **Discovery has a games-with-achievements shelf.** It recognizes totals from each achievement source, so a game with Steam or plugin achievements can be found without opening each game.
+- **Steam achievements and playtime import with sane updates.** Totals only go up, so importing again cannot lower playtime or last-played dates. Achievement tabs show provider totals and source filters, manual overrides persist, and Steam and plugin sources refresh independently of RetroAchievements.
+- **Automatic RetroAchievements matching covers more formats.** It now reads WiiWare WADs, M3U playlists, PlayStation CHD, and GameCube/Wii RVZ through `chdman` or `dolphin-tool`.
+- **MAME high scores are readable in OpenBox.** Files in hi2txt's JSON format or its pipe-delimited table can be imported, exported, and shown in a searchable table. The Big Box running-game panel can show, export, and import them too.
+- **The public RetroArch netplay lobby is available from OpenBox.** Open it from Tools or the Big Box menu and copy a room address without leaving the library.
+- **Notifications and audit history catch up on their own.** The notification bell fetches its unread count at startup without opening the center. The launch audit keeps a compact rolling history in the cache folder for trend checks.
 
-Metadata and media searches can mix built-in and plugin providers in a configured order; candidates carry their source, and bulk downloads can prioritize plugin results. LaunchBox media downloads verify status, content type, and payload before writing. Partial-word metadata search prefers exact matches and filters by platform, and local database imports keep retry and progress reporting. Library Audit gains a Source column, per-source counts, and a source filter; plugin sources use their display names.
+## Emulators, controllers, and Big Box
 
-Imported Steam games now record whether their install folder still exists. Missing games show a Missing badge and an Install handoff; installed games offer Verify files through `steam://validate/<id>`. Optional IGDB, ScreenScraper, SteamGridDB, Gameyfin, and RetroAchievements tokens stay outside the public settings projection and are shown masked.
+- **Manage Emulators is an editor now.** The dialog records a managed flag, per-platform overrides, and install/version status. A platform can override the emulator adapter, the RetroArch core, and extra launch arguments without changing the global choice.
+- **MAME and RetroArch settings reach the launch command.** Display, fullscreen, effects, run-ahead, rewind, and upscaling can be written into launch arguments or a generated RetroArch configuration file. Update-all probes the installed versions, and an emulator can opt out of update checks.
+- **MAME imports can be narrowed.** Filter by player count, skip CHD-dependent sets, and generate vertical playlists.
+- **The main controls can be reassigned.** Settings > Controller records keyboard shortcuts for play, back, menu, pause, paging, search, settings, and the reader. Controller buttons can be cleared, and a duplicate assignment is swapped only after you confirm it. Controller types are shown as chips in the game editor and as badges on library cards.
+- **File pickers start in the useful place.** Path pickers open at the current file's folder, or at the first game on the same platform, instead of at the last folder used for something unrelated.
+- **Big Box accepts more input.** Pointer drag, mouse wheel, trackball, and spinner navigation work, with configurable sensitivity and wheel speed. Holding Back opens the menu. A battery indicator shows the charge reported by Linux on handhelds. Platforms, categories, and playlists can be hidden from Big Box.
+- **Big Box video and sound are controllable.** Videos have controls and an audio mix. A startup video plays once, themes can add background music and a sound pack, and the details window remembers its position and size.
+- **The reader remembers where you were.** Reader controls are remappable, and the reader keeps its theme and two-page spread. Image cells and Ctrl+I open a full-screen lightbox with labels and integer scaling.
+- **Box art can be a 3D object.** Cassette and jewel-case models can use straight or angled backs and clear or solid cases, and each choice can be set per platform. The rotation lock can be free, horizontal, or vertical. The selected CoverFlow card uses the same model instead of a flat image.
 
-## Plugins, sources, and achievements
+## Saves and restore
 
-Plugins can declare storefront, metadata, media, stats, emulator-settings, and discovery capabilities. Capability hooks get a bounded data bag, settings, and credential store, and may request read-only library, achievement, profile, activity, leaderboard, catalog, metadata, and media services. Plugin storefronts use the shared catalog/import UI; plugin stats merge monotonically; plugin discovery lists join the Discovery Center; plugin notifications resolve localized messages. The Discovery Center adds a "Games with achievements" shelf that recognizes per-provider achievement totals, and the catalog browser shows each entry's author and homepage. Metadata results persist their provider so bulk media can prioritize it.
-
-Installed plugins can be reinstalled from their catalog entry without losing settings, stats, or trust. Disabling or removing a plugin deletes its imported games, stops cached stats from merging, and clears its settings, trust, permissions, data, credentials, and stats cache.
-
-Storefront scanning now reports per-source progress, skips sources with no library games, stops after a 30-second budget, and preserves partial state. Per-source auto-import stores the target platform and can include owned-but-uninstalled games; imports can be limited to new games. PICO-8, MSU-1, and WHDLoad join the source list, and RPCS3 imports external folders and ISOs from `games.yml`.
-
-Steam achievements and playtime import through the Steam Web API with monotonic merges. Achievement tabs show provider totals and source filters, manual overrides persist, and Steam and plugin sources refresh independently of RetroAchievements. Automatic matching also reads WiiWare WADs with the rcheevos TMD/content layout. MAME high scores parse hi2txt JSON or pipe-delimited tables, import/export, and render in a searchable table; the Big Box pause panel can show, export, and import them too. RetroArch's public HTTPS netplay lobby is available from Tools and Big Box.
-
-## Emulators, Big Box, and saves
-
-**Manage Emulators** gains an Edit Emulator dialog with a managed flag, per-platform overrides (emulator adapter, RetroArch core, and extra launch arguments), and install/version status. MAME and RetroArch settings cover display, fullscreen, effects, run-ahead, rewind, and upscaling, and render into launch arguments or `--appendconfig`. Update-all probes installed versions and honours a per-emulator opt-out. MAME imports can filter by player count, skip CHD-dependent sets, and generate vertical playlists.
-
-Settings > Controller records keyboard shortcuts for play, back, menu, pause, paging, search, settings, and the reader; controller buttons can be cleared, and duplicate assignments are swapped only after confirmation. Settings define controller types shown as chips in the game editor and as badges on library cards. Path pickers open at the current file's folder or the first game on the same platform.
-
-Big Box input now accepts pointer drag, mouse wheel, trackball, and spinner with configurable sensitivity and wheel speed; holding Back opens the menu, and a battery indicator reads Linux's sysfs battery. Platforms, categories, and playlists can be hidden in Big Box.
-
-Big Box adds video controls and audio mix, a startup video that plays once, theme music and a sound pack, and a details window that remembers its position and size. Reader controls are remappable and persist theme and spread; image cells and Ctrl+I open a fullscreen lightbox with labels and integer scaling. 3D cassette and jewel-case models render box art, with straight/angled backs and clear/solid cases selectable per platform; the rotation lock can be free, horizontal, or vertical, and the selected CoverFlow card uses the same model.
-
-Save backups now record each file's size, mode, mtime, and SHA-256. A version-history dialog lists older backups with add/overwrite/unchanged counts; restore lists archive contents, supports a dry run, and restores only checked files after a safety backup. A game can store a RetroArch save-state slot from its Save management card, and automatic RetroAchievements matching expands to M3U playlists, PlayStation CHD, and GameCube/Wii RVZ through `chdman` or `dolphin-tool`.
-
-## Also in this release
-
-- Filter presets and playlists can exclude values and match source, achievement source, region, text operators, and platforms. Filters cycle include → exclude → clear for platforms, categories, source, and smart collections, and exclusions survive a refresh.
-- Bulk Edit can preview and apply a literal find/replace in one field, and can move selected games' media during a platform change.
-- Progress labels are configurable; the game editor and automation only offer the enabled values.
-- Settings can reorder the sidebar and hide Explorer. Options search scans every category and focuses the field; a font-family picker, custom-field dropdown options, platform-document ordering, report-issue link, save-management toggle, startup error surface, and Big Box shutdown-on-exit complete the settings surface. A shared placeholder cover replaces repeated missing-art text, and media cache cleanup removes stale generated files.
-- Enabled plugin settings render under Settings > Plugins with the shared schema form; palette commands refresh per open and never run for a disabled plugin.
-- Notifications fetch their unread count on boot without opening the center, and the launch audit appends a compact rolling history to `cache/launch_audit.jsonl` for trend checks.
-- Tray menus on Linux and Windows launch the eight most recent games; `?deeplink=launch&id=<id>` starts a game directly.
+- **Backups describe every file.** Each archived file now records its size, mode, modification time, and SHA-256. A version-history dialog lists older backups with add, overwrite, and unchanged counts.
+- **Restore shows its work and restores only what you check.** The restore dialog lists the archive contents, supports a dry run, and restores the selected files after taking a safety backup. You no longer have to choose between "everything" and "nothing".
+- **A game can remember a save-state slot.** The Save management card stores a RetroArch save-state slot for that game.
+- **More save formats are recognized.** Automatic RetroAchievements matching can expand M3U playlists and hash PlayStation CHD and GameCube/Wii RVZ images through `chdman` or `dolphin-tool`.
 
 ## Fixed
 
-- Cross-device platform media moves now flush the copied file through a writable handle and tolerate platforms that cannot `fsync`, so Windows migrations no longer fail with a bad file descriptor.
-- Manage Emulators shows the probed version and an update-checks-off note instead of rendering nothing.
-- Saving settings no longer rejects an older sidebar order that still contains retired section ids.
-- Gameyfin auto-import honors excluded platforms and the include-owned-but-uninstalled option.
-- Legacy boolean `storefront_auto_import` entries migrate to the per-source shape on the next settings save.
+- **Cross-device media moves on Windows.** Moving platform media to another drive now flushes the copied file through a writable handle and tolerates a filesystem that cannot `fsync` it, instead of failing with a bad file descriptor.
+- **Manage Emulators no longer renders an empty version line.** It shows the probed version and an explicit note when update checks are off.
+- **An older sidebar order no longer blocks a settings save.** Section ids from an earlier build are tolerated instead of rejecting the whole save.
+- **Gameyfin auto-import follows the same exclusion and owned-uninstalled rules as the other stores.**
+- **Old automatic-import settings migrate.** A legacy boolean `storefront_auto_import` entry becomes the per-source shape on the next settings save; readers keep accepting the old shape until then.
 
-## Upgrade notes
+## Upgrading
 
-`storefront_auto_import` values are now `{enabled, platform, include_uninstalled}` objects; readers accept the old boolean shape until the next save. No v1 route is removed or changed.
+`storefront_auto_import` values are now `{enabled, platform, include_uninstalled}` objects. The old boolean form is still read until the next save. No existing v1 API route was removed or changed.
 
 ## Known limits
 
-- The new Tools, Add games, help, setup, onboarding, and Jump back in copy is English in Spanish, German, French, and Portuguese for this release; existing translations remain, and a translation pass will follow.
-- Plugin capability credentials and blank password-format plugin settings are excluded from backups.
+- The new Tools, Add games, help, setup, onboarding, and Jump back in text is English in Spanish, German, French, and Portuguese for this release. Existing translations remain, and a translation pass will follow.
+- Plugin service credentials and blank password-format plugin settings are excluded from backups.
 
 The [changelog](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md) lists the main areas, not every change.
