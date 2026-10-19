@@ -28,7 +28,8 @@ import { initWhatsNew } from './whatsnew.js';
 import { applyHash } from './router.js';
 import { initMood } from './mood.js';
 import { dnaMoreLikeThis } from './dna.js';
-import { openSetupCenter } from './setup.js';
+import { openSetupCenter, markSetupDismissed } from './setup.js';
+import { openHelp } from './help.js';
 import { init as i18nInit, setLocale, getSupportedLocales, t } from './i18n.js';
 import './activity.js';
 import './netplay.js';
@@ -78,7 +79,7 @@ function initI18n() {
 }
 
 async function verifyMuseumPin() {
-  const pin = await promptInput({ title: 'Museum PIN', label: 'PIN', defaultValue: '' });
+  const pin = await promptInput({ title: 'Kiosk PIN', label: 'PIN', defaultValue: '' });
   if (pin === null) return false;
   try {
     const result = await api('/api/v2/arcade/kiosk/verify', {
@@ -134,11 +135,10 @@ window.addEventListener('DOMContentLoaded', () => {
       // The legacy welcomeDialog is a shim over the setup wizard: route
       // through the single open entry point so it never shows stale content.
       welcomeShim.showModal = () => openSetupCenter();
-      welcomeShim.close = () => $('setupCenter').close();
+      welcomeShim.close = () => { markSetupDismissed(); $('setupCenter').close(); };
     }
-    if ($('setupLibraryButton')) $('setupLibraryButton').onclick = openSetupCenter;
-    if ($('reopenWelcome')) $('reopenWelcome').onclick = openSetupCenter;
-    if ($('closeSetupCenter')) $('closeSetupCenter').onclick = () => { AppState.setupDismissed = true; $('setupCenter').close(); };
+    if ($('setupLibraryButton')) $('setupLibraryButton').onclick = () => openSetupCenter();
+    if ($('reopenWelcome')) $('reopenWelcome').onclick = () => openSetupCenter();
 
     document.querySelectorAll('.game-editor-nav-item').forEach(button => {
       button.onclick = () => {
@@ -352,6 +352,8 @@ window.addEventListener('DOMContentLoaded', () => {
     const getToolItems = () => [...toolMenu.querySelectorAll('[role="menuitem"]:not(:disabled)')];
     const toolsMenuOpen = () => toolsWrap.classList.contains('open');
     function openToolsMenu() {
+      $('addMenuWrap')?.classList.remove('open');
+      $('addMenuButton')?.setAttribute('aria-expanded', 'false');
       toolsWrap.classList.add('open');
       toolsButton.setAttribute('aria-expanded', 'true');
       const first = getToolItems()[0];
@@ -374,6 +376,54 @@ window.addEventListener('DOMContentLoaded', () => {
       else if (event.key === 'Tab') { closeToolsMenu(false); }
     });
     toolMenu.addEventListener('click', event => { if (event.target.closest('[role="menuitem"]')) closeToolsMenu(false); });
+    function bindAddMenu() {
+      const wrap = $('addMenuWrap'), button = $('addMenuButton'), menu = $('addMenu');
+      if (!wrap || !button || !menu) return;
+      const open = () => {
+        $('toolsWrap')?.classList.remove('open');
+        $('toolsButton')?.setAttribute('aria-expanded', 'false');
+        wrap.classList.add('open');
+        button.setAttribute('aria-expanded', 'true');
+        requestAnimationFrame(() => menu.querySelector('.menu-button')?.focus());
+      };
+      const close = (focusButton = false) => {
+        wrap.classList.remove('open');
+        button.setAttribute('aria-expanded', 'false');
+        if (focusButton) button.focus();
+      };
+      button.addEventListener('click', () => wrap.classList.contains('open') ? close(false) : open());
+      document.addEventListener('click', event => { if (!wrap.contains(event.target)) close(false); });
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && wrap.classList.contains('open') && !document.querySelector('dialog[open]')) {
+          event.preventDefault();
+          close(true);
+        }
+      });
+      menu.addEventListener('click', () => button.focus(), { capture: true });
+      menu.querySelectorAll('.menu-button').forEach(item => item.addEventListener('click', () => close(false)));
+      menu.addEventListener('keydown', event => {
+        const items = [...menu.querySelectorAll('.menu-button')];
+        const index = items.indexOf(document.activeElement);
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          const delta = event.key === 'ArrowDown' ? 1 : -1;
+          items[(index + delta + items.length) % items.length]?.focus();
+        } else if (event.key === 'Home' || event.key === 'End') {
+          event.preventDefault();
+          items[event.key === 'Home' ? 0 : items.length - 1]?.focus();
+        }
+      });
+      menu.querySelectorAll('[data-add-action]').forEach(item => {
+        item.addEventListener('click', () => {
+          const action = item.dataset.addAction;
+          close(false);
+          if (action === 'steam') importSteam();
+          else if (action === 'heroic') importHeroic();
+          else if (action === 'lutris') importLutris();
+          else if (action === 'store') openStorefronts();
+        });
+      });
+    }
     $('closePlaylists').onclick = $('donePlaylists').onclick = () => $('playlistsDialog').close();
     $('newManualPlaylist').onclick = () => createManualPlaylist();
     $('newFilterPlaylist').onclick = createFilterPlaylist;
@@ -430,6 +480,7 @@ window.addEventListener('DOMContentLoaded', () => {
       } catch(error) { notify(error.message); }
     };
     $('fullscreenButton').onclick = () => nativeFullscreen().catch(() => {});
+    $('helpButton').onclick = () => openHelp();
     $('surpriseButton').onclick = openPicker;
     $('imageGroup').onchange = async () => {
       const scope = AppState.activePlaylist ? 'playlist' : AppState.platform !== 'all' ? 'platform' : 'global';
@@ -463,6 +514,13 @@ window.addEventListener('DOMContentLoaded', () => {
         }
       }
       if (event.key === 'F11') { event.preventDefault(); nativeFullscreen().catch(() => {}); }
+      if (event.key === 'F1' && !event.target.closest?.('input,textarea,select,[contenteditable]') && !document.querySelector('dialog[open]')) {
+        event.preventDefault(); openHelp();
+      }
+      if (event.key === '?' && !event.ctrlKey && !event.metaKey && !event.altKey
+          && !event.target.closest?.('input,textarea,select,[contenteditable]') && !document.querySelector('dialog[open]')) {
+        event.preventDefault(); openHelp();
+      }
       if (event.key === 'Escape') {
         if (toolsMenuOpen()) closeToolsMenu(true);
       }
@@ -584,6 +642,7 @@ window.addEventListener('DOMContentLoaded', () => {
     applyHash();
     window.addEventListener('hashchange', () => { if (applyHash()) render(); });
     initNavigation();
+    bindAddMenu();
     async function primeNotifications() {
       try {
         const result = await api('/api/notifications');

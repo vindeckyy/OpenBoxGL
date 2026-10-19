@@ -23,8 +23,8 @@ BASELINES = {
     # per-toast `z-index:20` was the only one a top-layer element never needed.
     # Ratcheted in the same commit that earned it (ADR 0060).
     "raw z-index": 24,
-    "raw border-radius": 68,
-    "raw box-shadow": 28,
+    "raw border-radius": 63,
+    "raw box-shadow": 17,
     "raw showModal": 35,
 }
 BASELINE = BASELINES["raw hex"]

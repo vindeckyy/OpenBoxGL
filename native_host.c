@@ -2017,7 +2017,7 @@ main(int argc, char **argv)
 
     WebKitWebView *view = WEBKIT_WEB_VIEW(
         webkit_web_view_new_with_user_content_manager(mgr));
-    /* Match app theme (#11100e) and enable smooth scrolling/GPU acceleration. */
+    /* Match app theme (#0F0E0C) and enable smooth scrolling/GPU acceleration. */
     WebKitSettings *settings = webkit_web_view_get_settings(view);
     webkit_settings_set_enable_smooth_scrolling(settings, TRUE);
 
@@ -2030,7 +2030,7 @@ main(int argc, char **argv)
     G_GNUC_BEGIN_IGNORE_DEPRECATIONS
     webkit_settings_set_enable_accelerated_2d_canvas(settings, TRUE);
     G_GNUC_END_IGNORE_DEPRECATIONS
-    GdkRGBA bg = {0.067, 0.063, 0.055, 1.0};
+    GdkRGBA bg = {0.059, 0.055, 0.047, 1.0};
     apply_saved_background(&bg);
     webkit_web_view_set_background_color(view, &bg);
     g_signal_connect(mgr, "script-message-received::openbox",

@@ -134,7 +134,7 @@ class StockThemesTests(unittest.TestCase):
             installed = ensure_stock_themes(destination, ROOT)
             self.assertIn("Cinema Marquee", installed)
             refreshed = stale.read_text(encoding="utf-8")
-            self.assertIn("v4", refreshed)
+            self.assertIn("v5", refreshed)
             self.assertNotIn("backdrop-filter: blur(8px)", refreshed)
             # A second run with the current version is a no-op.
             self.assertEqual(ensure_stock_themes(destination, ROOT), [])
@@ -211,6 +211,13 @@ CONTRAST_PAIRS = [
     ("text-health-fail", "surface-health-fail", 4.5, "health fail"),
     ("border-input", "surface-field", 3.0, "input boundary (WCAG 1.4.11)"),
     ("focus", "surface-card", 3.0, "focus ring"),
+    ("badge-danger-fg", "surface-card", 4.5, "danger text"),
+    ("section-muted", "surface-deep", 4.5, "ratio count"),
+    ("badge-progress-fg", "lifecycle-bg", 4.5, "progress badge"),
+    ("gold", "surface-deep", 4.5, "achievement text"),
+    ("bigbox-copy", "bigbox-bg", 4.5, "Big Box copy"),
+    ("bigbox-head-muted", "bigbox-bg", 4.5, "Big Box header"),
+    ("lifecycle-kicker", "lifecycle-bg", 4.5, "lifecycle kicker"),
 ]
 
 

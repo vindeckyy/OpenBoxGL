@@ -3,7 +3,7 @@ import { AppState, api, notify, token, nativeCaps, selectedIds, playlistFor, app
 import { refresh, render, renderGrid, openRepairWizard, openDuplicatesDialog } from './library.js';
 import { applyLibraryMusic, syncPointerNavigator } from './bigbox.js';
 import { confirmAction, promptInput, closeDialog, openDialog } from './dialogs.js';
-import { openSetupCenter } from './setup.js';
+import { openSetupCenter, markSetupDismissed, setupDismissedPersisted } from './setup.js';
 import { t } from './i18n.js';
 import { emulatorFieldLabel, readEmulatorSettingsValues } from './emulators.js';
 import { initDefs } from './defs.js';
@@ -13,6 +13,20 @@ import { pluginSettingsFields, collectPluginSettings, renderPluginSettings } fro
 
 
     let settingsCategory = 'library';
+    const SETTINGS_HELP = {
+      library: 'settings.help_library',
+      imports: 'settings.help_imports',
+      metadata: 'settings.help_metadata',
+      launching: 'settings.help_launching',
+      sessions: 'settings.help_sessions',
+      bigbox: 'settings.help_bigbox',
+      integrations: 'settings.help_integrations',
+      appearance: 'settings.help_appearance',
+      controller: 'settings.help_controller',
+      plugins: 'settings.help_plugins',
+      advanced: 'settings.help_advanced',
+      about: 'settings.help_about',
+    };
 
     const SIDEBAR_SECTION_LABELS = {
       search: () => t('sidebar.search'),
@@ -327,6 +341,8 @@ import { pluginSettingsFields, collectPluginSettings, renderPluginSettings } fro
 
     function showSettingsCategory(category) {
       settingsCategory = category;
+      const help = $('settingsCategoryHelp');
+      if (help) help.textContent = t(SETTINGS_HELP[category] || 'settings.help_default');
       document.querySelectorAll('.settings-nav-item').forEach(button => {
         button.classList.toggle('active', button.dataset.settingsCategory === category);
       });
@@ -361,11 +377,12 @@ import { pluginSettingsFields, collectPluginSettings, renderPluginSettings } fro
     async function completeWelcome() {
       try {
         AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify({...collectSettings(),welcome_completed:true})});
+        markSetupDismissed();
         $('setupCenter').close();
       } catch(error) { notify(error.message); }
     }
     function maybeShowWelcome() {
-      if (!AppState.appSettings.welcome_completed && !AppState.games.length && !AppState.setupDismissed) openSetupCenter();
+      if (!AppState.appSettings.welcome_completed && !AppState.games.length && !AppState.setupDismissed && !setupDismissedPersisted()) openSetupCenter();
     }
     function collectSettings() {
       return {
@@ -1048,17 +1065,62 @@ import { pluginSettingsFields, collectPluginSettings, renderPluginSettings } fro
       if (!platform) { try { localStorage.setItem('openbox.theme', result.selected || ''); } catch {} }
       return result;
     }
+    const THEME_SWATCH_KEYS = ['bg','surface-card','brand','text','muted'];
+    function themeSwatch(css, key) {
+      const match = css.match(new RegExp(`--${key}\\s*:\\s*(#[0-9a-fA-F]{3,8})`));
+      return match ? match[1] : '';
+    }
+    async function loadThemePalettes(names) {
+      const palettes = {};
+      await Promise.all(['', ...names].map(async name => {
+        const url = name ? `/api/theme.css?name=${encodeURIComponent(name)}&token=${encodeURIComponent(token)}` : '/static/app.css';
+        try {
+          const response = await fetch(url);
+          const css = response.ok ? await response.text() : '';
+          palettes[name] = THEME_SWATCH_KEYS.map(key => themeSwatch(css, key));
+        } catch { palettes[name] = []; }
+      }));
+      return palettes;
+    }
+    function renderThemeGallery(result, palettes) {
+      const gallery = $('themeGallery');
+      if (!gallery) return;
+      const names = ['', ...result.themes];
+      gallery.innerHTML = names.map((name, index) => `<button type="button" class="theme-card${name === result.selected ? ' selected' : ''}" data-theme-index="${index}" aria-pressed="${name === result.selected}"><span class="theme-swatches" aria-hidden="true"></span><span class="theme-name">${escapeHtml(name || t('themes.default_theme'))}</span><span class="theme-current">${name === result.selected ? escapeHtml(t('themes.current')) : ''}</span></button>`).join('');
+      gallery.querySelectorAll('.theme-card').forEach(button => {
+        const palette = palettes[names[Number(button.dataset.themeIndex)]] || [];
+        const swatches = button.querySelector('.theme-swatches');
+        THEME_SWATCH_KEYS.forEach((key, index) => {
+          const swatch = document.createElement('span');
+          swatch.className = 'theme-swatch';
+          swatch.dataset.key = key;
+          if (/^#[0-9a-fA-F]{3,8}$/.test(palette[index] || '')) swatch.style.setProperty('--swatch', palette[index]);
+          swatches.appendChild(swatch);
+        });
+        button.onclick = () => {
+          $('themeSelect').value = names[Number(button.dataset.themeIndex)];
+          gallery.querySelectorAll('.theme-card').forEach(item => {
+            item.classList.toggle('selected', item === button);
+            item.setAttribute('aria-pressed', String(item === button));
+          });
+        };
+      });
+    }
     async function openThemes() {
       try {
         const result = await loadTheme(true);
         const platforms = [...new Set(AppState.games.map(game => game.platform).filter(Boolean))].sort();
         $('themeScope').innerHTML = '<option value="">All platforms</option>' + platforms.map(name => `<option>${escapeHtml(name)}</option>`).join('');
         $('themeScope').value = AppState.platform === 'all' ? '' : AppState.platform;
-        $('themeSelect').innerHTML = '<option value="">Default</option>' + result.themes.map(name => `<option>${escapeHtml(name)}</option>`).join('');
+        $('themeSelect').innerHTML = `<option value="">${escapeHtml(t('themes.default_theme'))}</option>` + result.themes.map(name => `<option>${escapeHtml(name)}</option>`).join('');
         $('themeSelect').value = result.selected;
+        const palettes = await loadThemePalettes(result.themes);
+        renderThemeGallery(result, palettes);
+        $('themeGallery').hidden = Boolean($('themeScope').value);
         $('themeScope').onchange = async () => {
           const scoped = await api(`/api/themes?platform=${encodeURIComponent($('themeScope').value)}`);
           $('themeSelect').value = scoped.selected;
+          $('themeGallery').hidden = Boolean($('themeScope').value);
         };
         if (!$('themesDialog').open) $('themesDialog').showModal();
       } catch(error) { notify(error.message); }

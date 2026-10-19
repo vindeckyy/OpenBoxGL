@@ -961,4 +961,10 @@ function releaseBigBoxBack() {
       });
     }
 
+if (typeof document !== 'undefined') {
+  document.addEventListener('localechange', () => {
+    if ($('bigBox') && !$('bigBox').hidden) renderBigBox();
+  });
+}
+
 export { openBigBox, closeBigBox, filteredBigBoxGames, openBigBoxMenu, closeBigBoxMenu, applyBigBoxMenu, moveBigBox, renderBigBox, applyLibraryMusic, openBigBoxPause, closeBigBoxPause, bigBoxPauseOpen, startScreenSaver, stopScreenSaver, favoriteBigBox, activateCurrentGame, bigBoxTypingActive, startBigBoxBack, releaseBigBoxBack, syncPointerNavigator };

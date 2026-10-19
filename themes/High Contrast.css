@@ -1,13 +1,4 @@
-/* OpenBox Stock Theme v4: High Contrast
-
-   The sixth stock theme, and the proof that the token contract (ADR 0004)
-   holds: it overrides `:root` tokens only, uses no raw color outside :root,
-   and puts body text at 21:1 against pure black (WCAG AAA needs 7:1).
-
-   Only the base palette is redefined. Every other token is inherited from
-   Nordic Mist and resolves through `var(--...)` to these values, so a
-   component that needed a hardcoded color to stay legible would show up
-   here as an unreadable panel rather than a passing gate. */
+/* OpenBox Stock Theme v5: High Contrast */
 
 :root {
   --font-body-family: system-ui, sans-serif;
@@ -102,10 +93,10 @@
   --shell-group-label: var(--section-muted);
   --topbar: #000000;
   --topbar-min-height: 3rem;
-  --accent: #6eb5c9;
-  --accent-ghost: #f0600055;
-  --accent-ghost-faint: #f060002e;
-  --accent-ghost-soft: #f0600044;
+  --accent: #FFB000;
+  --accent-ghost: #FFB00055;
+  --accent-ghost-faint: #FFB0002E;
+  --accent-ghost-soft: #FFB00044;
   --achievement: #ffd75f;
   --action: #ffb000;
   --action-ink: #000000;
@@ -178,20 +169,29 @@
   --shadow-dialog: #000c;
   --shadow-elevated: #0009;
   --shadow-empty: #0005;
+  --elevation-card: 0 8px 20px var(--shadow-cover-strong);
+  --elevation-card-hover: 0 14px 34px var(--shadow-cover-selected), 0 0 0 1px var(--accent-ghost-soft);
+  --elevation-menu: 0 18px 44px var(--shadow-elevated);
+  --elevation-dialog: 0 30px 80px var(--shadow-dialog);
+  --elevation-inset-active: inset 3px 0 0 var(--active);
+  --elevation-toast: 0 12px 30px var(--shadow-elevated);
+  --elevation-hero: 0 24px 60px var(--shadow-cover-selected);
+  --hero-art: none;
+  --swatch: var(--surface-field);
   --shutdown-text: #8b9aab;
   --surface-card: #0a0a0a;
   --surface-deep: #000000;
   --surface-field: #141414;
   --surface-hover: #1f1f1f;
   --surface-sheet: #171513dd;
-  --overlay-insight-cell-0: #1b1916;
-  --overlay-insight-cell-1: #3d2b1f;
-  --overlay-insight-cell-2: #7a4a1f;
-  --overlay-insight-cell-3: #c46a1f;
-  --overlay-insight-cell-4: #f06000;
-  --border-insight: #4b4338;
+  --overlay-insight-cell-0: #000000;
+  --overlay-insight-cell-1: #333333;
+  --overlay-insight-cell-2: #666666;
+  --overlay-insight-cell-3: #999999;
+  --overlay-insight-cell-4: #FFB000;
+  --border-insight: #FFFFFF;
   --shadow-insight: #0007;
-  --surface-insight-card: #211e1a;
+  --surface-insight-card: #0A0A0A;
   --radio-chip-bg: var(--surface-field);
   --radio-chip-fg: var(--muted);
   --radio-chip-border: var(--border-card);
@@ -199,11 +199,11 @@
   --radio-badge-fg: var(--badge-progress-fg);
   --radio-badge-border: var(--badge-pending-border);
   --radio-sub-fg: var(--muted);
-  --focus-ring: #ffb000;
+  --focus-ring: #000000;
   --surface-gamepad-body: #2a2722;
   --surface-gamepad-stick: #4a4438;
   --surface-gamepad-btn: #6b6354;
-  --surface-gamepad-btn-active: #f06000;
+  --surface-gamepad-btn-active: #FFB000;
   --border-gamepad: #3a3530;
   --text-controller-status: #8a8270;
   --surface-health-ok: #2d4a2d;
@@ -256,7 +256,7 @@
   --mastery-played: #6c91b6;
   --mastery-beaten: #d6b36a;
   --mastery-completed: #5e8c6a;
-  --mastery-mastered: #f06000;
+  --mastery-mastered: #FFB000;
   --recap-badge-bg: var(--lifecycle-bg);
   --recap-badge-fg: var(--badge-progress-fg);
   --recap-badge-border: var(--badge-pending-border);

@@ -2505,7 +2505,7 @@ controller_handler_invoke(ICoreWebView2CreateCoreWebView2ControllerCompletedHand
     ICoreWebView2Controller2 *controller2 = NULL;
     if (SUCCEEDED(ICoreWebView2Controller_QueryInterface(
             g_controller, &IID_ICoreWebView2Controller2, (void **)&controller2)) && controller2) {
-        COREWEBVIEW2_COLOR background = { 255, 17, 16, 14 }; /* #11100e, A R G B */
+        COREWEBVIEW2_COLOR background = { 255, 15, 14, 12 }; /* #0F0E0C, A R G B */
         apply_saved_background(&background);
         ICoreWebView2Controller2_put_DefaultBackgroundColor(controller2, background);
         ICoreWebView2Controller2_Release(controller2);

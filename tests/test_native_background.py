@@ -105,7 +105,7 @@ class NativeHostFirstPaintTests(unittest.TestCase):
         )
         driver = (
             "\nint main(int argc, char **argv) { (void)argc;\n"
-            "  GdkRGBA bg = {0.067, 0.063, 0.055, 1.0};\n"
+            "  GdkRGBA bg = {0.059, 0.055, 0.047, 1.0};\n"
             "  data_dir = argv[1];\n  apply_saved_background(&bg);\n"
             "  printf(\"%d %d %d\\n\", (int)(bg.red * 255 + 0.5), (int)(bg.green * 255 + 0.5), (int)(bg.blue * 255 + 0.5));\n"
             "  return 0;\n}\n"
@@ -115,7 +115,7 @@ class NativeHostFirstPaintTests(unittest.TestCase):
             (Path(data) / "native-background").write_text("#f5f1e8\n", encoding="utf-8")
             self.assertEqual(self._compile_and_run("linux_helper", source, prelude, driver, data), ["245", "241", "232"])
         with tempfile.TemporaryDirectory() as empty:
-            self.assertEqual(self._compile_and_run("linux_helper", source, prelude, driver, empty), ["17", "16", "14"])
+            self.assertEqual(self._compile_and_run("linux_helper", source, prelude, driver, empty), ["15", "14", "12"])
 
     def test_windows_host_paints_the_saved_background_and_keeps_the_default_otherwise(self):
         prelude = (
@@ -132,7 +132,7 @@ class NativeHostFirstPaintTests(unittest.TestCase):
         )
         driver = (
             "\nint main(int argc, char **argv) { (void)argc;\n"
-            "  COREWEBVIEW2_COLOR c = { 255, 17, 16, 14 };\n"
+            "  COREWEBVIEW2_COLOR c = { 255, 15, 14, 12 };\n"
             "  static wchar_t dir[512];\n  mbstowcs(dir, argv[1], 512);\n  g_data_dir_wide = dir;\n"
             "  apply_saved_background(&c);\n"
             "  printf(\"%u %u %u\\n\", c.R, c.G, c.B);\n  return 0;\n}\n"
@@ -142,7 +142,7 @@ class NativeHostFirstPaintTests(unittest.TestCase):
             (Path(data) / "native-background").write_text("#f5f1e8\n", encoding="utf-8")
             self.assertEqual(self._compile_and_run("win_helper", source, prelude, driver, data), ["245", "241", "232"])
         with tempfile.TemporaryDirectory() as empty:
-            self.assertEqual(self._compile_and_run("win_helper", source, prelude, driver, empty), ["17", "16", "14"])
+            self.assertEqual(self._compile_and_run("win_helper", source, prelude, driver, empty), ["15", "14", "12"])
 
 
 if __name__ == "__main__":

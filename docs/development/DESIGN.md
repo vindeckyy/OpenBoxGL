@@ -2,49 +2,49 @@
 name: OpenBox
 description: Local-first game library and launcher for Linux and Windows
 colors:
-  bg: "#11100e"
-  topbar: "#171513"
-  panel: "#1b1916"
-  panel2: "#24211d"
-  line: "#3d3932"
-  text: "#f4efe6"
-  muted: "#aaa094"
-  cyan: "#72c9d4"
-  green: "#8fbd8d"
-  surface-deep: "#141311"
-  surface-card: "#211e1a"
-  surface-field: "#27231e"
-  surface-hover: "#342d23"
-  border-control: "#4b4338"
-  border-card: "#534a3d"
-  brand: "#f06000"
-  focus: "#f06000"
-  active: "#f06000"
-  action: "#e08a3c"
-  action-ink: "#1c160d"
+  bg: "#0F0E0C"
+  topbar: "#151310"
+  panel: "#1A1815"
+  panel2: "#322C24"
+  line: "#3A342C"
+  text: "#F6F0E7"
+  muted: "#B4A897"
+  cyan: "#5FD3C4"
+  green: "#74D08A"
+  surface-deep: "#0B0A09"
+  surface-card: "#1F1C18"
+  surface-field: "#26221D"
+  surface-hover: "#322C24"
+  border-control: "#786B58"
+  border-card: "#5E5345"
+  brand: "#FF7A1A"
+  focus: "#5FD3C4"
+  active: "#FF7A1A"
+  action: "#F58A2E"
+  action-ink: "#1A120A"
   white: "#ffffff"
-  gold: "#e5b65c"
-  rating: "#ef8c38"
-  launch-shadow: "#e08a3c44"
-  danger: "#743f3f"
+  gold: "#F2C14E"
+  rating: "#F2A65A"
+  launch-shadow: "#FF7A1A44"
+  danger: "#B8473F"
   mark-start: "#f0c36a"
   mark-end: "#ba593d"
   mark-ink: "#1c160d"
-  cover-title-start: "#51412d"
-  empty-action: "#e08a3c"
-  achievement: "#eaa54f"
-  lifecycle-bg: "#45351d"
-  bigbox-bg: "#30261a"
-  bigbox-copy: "#d0c0a5"
-  overlay-insight-cell-0: "#1b1916"
-  overlay-insight-cell-1: "#3d2b1f"
-  overlay-insight-cell-2: "#7a4a1f"
-  overlay-insight-cell-3: "#c46a1f"
-  overlay-insight-cell-4: "#f06000"
+  cover-title-start: "#3A2A1C"
+  empty-action: "#F58A2E"
+  achievement: "#F2B55C"
+  lifecycle-bg: "#3A2A18"
+  bigbox-bg: "#241A10"
+  bigbox-copy: "#D8C7AF"
+  overlay-insight-cell-0: "#1B1916"
+  overlay-insight-cell-1: "#4A2E1C"
+  overlay-insight-cell-2: "#8A451A"
+  overlay-insight-cell-3: "#CC5F17"
+  overlay-insight-cell-4: "#FF7A1A"
   border-insight: "#4b4338"
   shadow-insight: "#0007"
   surface-insight-card: "#211e1a"
-  focus-ring: "#f06000"
+  focus-ring: "#000000"
 typography:
   display:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
@@ -179,28 +179,29 @@ components:
 
 **Creative North Star: "The Digital Game Room"**
 
-OpenBox is a dense, dark library interface built for moving between a large collection and the next launch. The default surface uses warm dark brown-tan panels, brand-orange focus signals, and an action-orange launch action. A horizontal command rail sits above a three-column workspace: filters on the left, a cover grid in the center, and selected-game detail on the right.
+OpenBox is a dense, dark library interface built for moving between a large collection and the next launch. The default surface uses warm neutral panels, brand-orange selection, teal focus signals, and an action-orange launch action. A horizontal command rail sits above a three-column workspace: filters on the left, a cover grid in the center, and selected-game detail on the right.
 
 The visual voice is focused and technical with game-room energy. Covers, jewel-case treatments, fullscreen Big Box layouts, and cinematic backdrops give the catalog a playful edge without turning the management UI into generic enterprise software. The base system is the default reference; stock CSS themes intentionally override palette, type stacks, and surface treatment while preserving the shared interaction structure.
 
 **Key Characteristics:**
 - Dense three-column workspace with a sticky library header.
 - Warm dark tonal layering with small, legible controls.
-- Brand-orange focus and selection signals; the same warm ramp drives the launch action.
+- Brand-orange selection and teal focus signals; the same warm ramp drives the launch action.
 - Cover art is the main browsing surface and detail metadata stays close.
 - Big Box is a fullscreen extension of the same system, not a separate brand.
 
 ## Colors
 
-The palette is a unified warm ramp built from the OpenBox logo orange (`#f06000`): one hue family — espresso darks, cream text, and the logo ramp — carries focus, action, rating, and achievement accents. Neutral surfaces cover most of the screen; the warm ramp and its cyan complement identify state and action.
+The palette is a warm neutral ramp with brand-orange action signals and a split-complementary teal focus/info accent. Espresso neutrals and cream text carry most of the screen; orange marks action and selection, while teal keeps keyboard focus distinct from selection. The brand orange is the OpenBox logo hue (`#FF7A1A`, 24deg).
 
 ### Primary
-- **Brand Orange** (`{colors.brand}` / `{colors.focus}` / `{colors.active}`): The logo orange (`#f06000`, 24deg) marks focused fields, active platform markers, selected covers, and navigation feedback.
-- **Action Orange** (`{colors.action}`): Primary buttons and the Play/launch action, with other explicit confirmation actions.
+- **Brand Orange** (`{colors.brand}` / `{colors.active}`): The logo orange (`#FF7A1A`, 24deg) marks selected covers, active platform markers, and navigation feedback.
+- **Focus Teal** (`{colors.focus}`): Split-complement focus rings and informational accents. Deliberately distinct from selection orange.
+- **Action Orange** (`{colors.action}`, `{colors.action-ink}`): Primary buttons and the Play/launch action, with `#1A120A` ink.
 - **Rating** (`{colors.rating}`): Star and rating signals.
 - **Achievement** (`{colors.achievement}`): Achievement and unlock accents.
 - **Gold Accent** (`{colors.gold}`): Decorative gold for status badges and celebratory details.
-- **Cyan Complement** (`{colors.cyan}`): Cool counterpoint to the warm ramp for informational accents.
+- **Success Green** (`{colors.green}`): Completed states and positive counts.
 
 ### Neutral
 - **Night Ink** (`{colors.bg}`): Page canvas and deepest fullscreen surfaces.
@@ -215,9 +216,9 @@ The palette is a unified warm ramp built from the OpenBox logo orange (`#f06000`
 - **Muted Text** (`{colors.muted}`): Metadata, labels, helper copy, and inactive navigation.
 
 ### Named Rules
-**The State-Color Rule.** Brand orange identifies where the user is focused or selected; action orange identifies where the user can launch or confirm. Do not swap those roles.
+**The State-Color Rule.** Brand orange identifies where the user is selected; focus teal identifies where the keyboard is. Action orange identifies where the user can launch or confirm. Do not swap those roles.
 
-**The Dark-Stage Rule.** Keep the neutral surfaces dark enough for cover art, brand-orange focus rings, and action-orange launch actions to remain the first readable signals.
+**The Dark-Stage Rule.** Keep the neutral surfaces dark enough for cover art, teal focus rings, and action-orange launch actions to remain the first readable signals.
 
 ## Typography
 
@@ -249,14 +250,16 @@ Dialogs use a constrained centered surface with a two-column form grid; wide fie
 
 ## Elevation & Depth
 
-The system is layered and ambient. Depth comes first from dark tonal surfaces and gradients, then from backdrop blur on the sidebar, detail pane, sticky header, topbar, and dialogs. Shadows are strongest under covers, fullscreen panels, and dialogs. Amber rings and borders appear on focus and active states rather than as permanent decoration.
+The system is layered and ambient. Depth comes first from dark tonal surfaces and gradients, then from the `--elevation-*` token vocabulary. Shadows are strongest under covers, fullscreen panels, and dialogs. Teal rings and borders appear on focus; amber rings and borders mark active states rather than permanent decoration.
 
 ### Shadow Vocabulary
-- **Topbar ambient** (`0 2px 12px #0008`): Separates the command rail from the workspace.
-- **Cover lift** (`0 8px 18px #0007`): Keeps cover cards readable against the library field.
-- **Selected cover lift** (`0 0 0 2px #f0600044, 0 10px 23px #000a`): Combines a brand-orange halo with stronger separation.
-- **Detail pane separation** (`border-left:1px solid var(--line)`): Keeps the right pane distinct from the grid.
-- **Dialog depth** (`0 30px 80px #000c`): Anchors modal work above the dimmed workspace.
+- **Card lift** (`--elevation-card`): Resting cover cards, detail cards, help topics, and setup source cards.
+- **Card hover** (`--elevation-card-hover`): Hovered and selected covers, including the accent halo.
+- **Menu** (`--elevation-menu`): Tool menus, context menus, and search results.
+- **Dialog** (`--elevation-dialog`): Modal surfaces above the dimmed workspace.
+- **Hero** (`--elevation-hero`): The empty-library welcome card and the Jump back in hero.
+- **Toast** (`--elevation-toast`): Toasts and the error banner in the top layer.
+- **Active rail** (`--elevation-inset-active`): The inset marker on the active Settings category.
 
 ### Named Rules
 **The Ambient-By-Default Rule.** Use tonal layering and restrained shadows at rest; reserve bright glow and stronger lift for focus, selection, and launch states.
@@ -272,7 +275,7 @@ Game covers keep the aspect ratio of each image: portrait, square, and landscape
 ### Buttons
 - **Shape:** Secondary controls use compact `4px` corners; launch controls use a pill silhouette (`18px` in the base library).
 - **Primary:** The action-orange Play button is full-width in the detail pane, bold, dark-ink text, and shadowed. Dialog confirmation buttons use the same action-orange surface with dark text.
-- **Hover / Focus:** Secondary controls shift to a lighter raised panel. Focused fields use the brand-orange border plus a one-pixel ring; selected library controls use a brand-orange border and lift.
+- **Hover / Focus:** Secondary controls shift to a lighter raised panel. Focused fields use the teal border plus a one-pixel ring; selected library controls use a brand-orange border and lift.
 - **Secondary / Ghost / Tertiary:** Topbar menu buttons are borderless and transparent at rest, gaining a raised background on hover.
 
 ### Chips
@@ -288,7 +291,7 @@ Game covers keep the aspect ratio of each image: portrait, square, and landscape
 
 ### Inputs / Fields
 - **Style:** Fields use a dark raised surface, one-pixel border, `3px` radius, and `7px 8px` padding.
-- **Focus:** The border changes to brand orange and gains a one-pixel focus ring.
+- **Focus:** The border changes to teal and gains a one-pixel focus ring.
 - **Error / Disabled:** Disabled actions reduce opacity and use a not-allowed cursor; the base system defines a muted danger surface for destructive rows.
 
 ### Navigation
@@ -302,7 +305,7 @@ Big Box is the signature fullscreen component. It enlarges the same cover, title
 ## Do's and Don'ts
 
 ### Do:
-- **Do** keep the base surface dark and let brand-orange focus or action-orange launch states carry the strongest chroma.
+- **Do** keep the base surface dark and let teal focus or action-orange launch states carry the strongest chroma.
 - **Do** keep labels compact, uppercase, and tracked when they identify sections or navigation categories.
 - **Do** use cover art as the browsing anchor and keep metadata close to the selected game.
 - **Do** preserve the three-pane workspace and fullscreen Big Box relationship when adding a surface.

@@ -1299,7 +1299,7 @@ class ArcadeRoom {
     const game = this.currentGame;
     if (this.detailsButton) this.detailsButton.disabled = this.museum;
     this.titleElement.textContent = this.museum
-      ? arcadeText('arcade.museum_title', 'Museum')
+      ? arcadeText('arcade.museum_title', 'Kiosk mode')
       : arcadeText('arcade.room_title', 'Arcade Room');
     this.statusElement.textContent = zone
       ? `${zone.name} · ${game ? gameTitle(game) : arcadeText('arcade.empty_zone', 'Empty zone')}`

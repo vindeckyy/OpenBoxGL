@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SEED_MAIN = [
     {"name": "Quake", "platform": "PC", "genre": "FPS", "year": "1996", "developer": "id Software",
      "path": "/bin/true", "favorite": True, "rating": 5, "progress": "Beaten", "play_count": 12,
-     "playtime_seconds": 5400},
+     "playtime_seconds": 5400, "last_played": "2026-10-18T20:15:00"},
     {"name": "Chrono Trigger", "platform": "SNES", "genre": "RPG", "year": "1995", "path": "/bin/true"},
 ]
 SEED_BB = [

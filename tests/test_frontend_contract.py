@@ -10,19 +10,16 @@ INDEX = ROOT / "index.html"
 THEMES = sorted((ROOT / "themes").glob("*.css"))
 
 TOOL_GROUPS = {
-    "library": [
-        "metadataButton", "mediaButton", "healthButton", "constellationButton", "masteryButton", "bulkButton", "tagsButton",
-        "playlistsButton", "backupButton", "historyButton", "timeMachineButton", "achievementsButton",
-        "saveFilterButton", "savePresetButton",
-    ],
-    "sources": [
-        "storefrontButton", "emulatorsButton", "steamButton", "heroicButton",
-        "lutrisButton", "gogButton", "eaButton", "ubisoftButton",
-        "arcadeButton", "pico8Button", "msu1Button", "whdloadButton",
-        "arcadeRoomButton", "householdButton", "discoveryButton", "netplayButton",
-    ],
-    "personalize": ["themesButton", "pluginsButton", "settingsButton", "whatsNewButton", "fullscreenButton", "reportIssueButton"],
-    "automation": ["webhooksButton", "notificationsButton"],
+    "start": ["metadataButton", "mediaButton", "healthButton", "emulatorsButton",
+              "themesButton", "settingsButton", "helpButton"],
+    "library": ["constellationButton", "masteryButton", "bulkButton", "tagsButton",
+                "playlistsButton", "backupButton", "historyButton", "timeMachineButton",
+                "achievementsButton", "saveFilterButton", "savePresetButton"],
+    "sources": ["storefrontButton", "steamButton", "heroicButton", "lutrisButton",
+                "gogButton", "eaButton", "ubisoftButton", "arcadeButton", "pico8Button",
+                "msu1Button", "whdloadButton", "arcadeRoomButton", "householdButton"],
+    "more": ["discoveryButton", "netplayButton", "pluginsButton", "whatsNewButton",
+             "fullscreenButton", "reportIssueButton", "webhooksButton", "notificationsButton"],
 }
 
 DIALOGS = ROOT / "static" / "dialogs.js"
@@ -1328,6 +1325,43 @@ def test_tool_menu_group_membership():
         assert key in groups, f"missing data-tool-group={key!r}"
         assert groups[key] == expected, f"{key} group ids {groups[key]!r} != {expected!r}"
 
+def test_help_surface():
+    html = INDEX.read_text(encoding="utf-8")
+    app = APP_JS.read_text(encoding="utf-8")
+    help_js = (ROOT / "static" / "help.js").read_text(encoding="utf-8")
+    palette = (ROOT / "static" / "palette.js").read_text(encoding="utf-8")
+    assert 'id="helpDialog"' in html
+    assert "import { openHelp } from './help.js';" in app
+    assert "export function openHelp" in help_js
+    assert "open-help" in palette
+
+def test_add_menu_surface():
+    html = INDEX.read_text(encoding="utf-8")
+    assert 'id="addMenuButton"' in html
+    assert 'id="addMenu"' in html
+    assert 'data-add-action="steam"' in html
+
+def test_empty_state_is_translated():
+    library = LIBRARY_JS.read_text(encoding="utf-8")
+    assert "t('library.empty_title')" in library
+    assert "Start your library" not in library
+
+def test_home_hero_surface():
+    html = INDEX.read_text(encoding="utf-8")
+    library = LIBRARY_JS.read_text(encoding="utf-8")
+    assert 'id="homeHero"' in html
+    assert html.index('id="grid"') < html.index('id="insightsPanel"'), (
+        "Play insights must follow the grid so games lead the first screen"
+    )
+    body = _function_body(library, "renderHomeHero")
+    assert "renderHomeHero()" in _function_body(library, "renderGrid")
+    assert "!game.hidden" in body, "a hidden game must never be the Jump back in hero"
+
+def test_setup_steps_are_keyed():
+    setup = (ROOT / "static" / "setup.js").read_text(encoding="utf-8")
+    assert "labelKey:'setup.step_sources'" in setup
+    assert setup.count("advanced:true") == 2
+
 def test_time_machine_ui_surface():
     html = INDEX.read_text(encoding="utf-8")
     js = (ROOT / "static" / "timemachine.js").read_text(encoding="utf-8")
@@ -1555,12 +1589,13 @@ def test_checkbox_radio_width_exclusion():
 
 def test_confirm_panel_has_no_preview_hash():
     # Row 4h (a461edd): the raw preview id hash was rendered on Confirm.
-    # Pin: renderConfirm shows the human-readable revision only.
+    # Current copy is plain-language: no raw id, no revision hash.
     setup = (ROOT / "static" / "setup.js").read_text(encoding="utf-8")
     body = _function_body(setup, "renderConfirm")
     assert body, "missing renderConfirm"
     assert "state.previewId" not in body, "renderConfirm still renders the raw preview id"
-    assert "Preview revision" in body
+    assert "Preview revision" not in body
+    assert "setup.confirm_body" in body
 
 def test_setup_dismissed_write_and_gate_sites():
     # Row 5 (b583d5b): the wizard must not re-open after a user-initiated
@@ -1568,14 +1603,16 @@ def test_setup_dismissed_write_and_gate_sites():
     setup = (ROOT / "static" / "setup.js").read_text(encoding="utf-8")
     dialogs = DIALOGS.read_text(encoding="utf-8")
     app = APP_JS.read_text(encoding="utf-8")
-    assert "AppState.setupDismissed = true" in _function_body(setup, "saveAndClose")
+    assert "markSetupDismissed()" in _function_body(setup, "saveAndClose")
+    assert "AppState.setupDismissed = true" in _function_body(setup, "markSetupDismissed")
     assert "dialog.addEventListener('cancel', () => { AppState.setupDismissed = true; });" in setup
     assert "AppState.setupDismissed = true" in _mousedown_handler_body(dialogs)
-    assert "AppState.setupDismissed = true" in app
+    assert "markSetupDismissed()" in app
     gate = "!AppState.appSettings.welcome_completed && !AppState.games.length && !AppState.setupDismissed"
     for name in ("library.js", "settings.js"):
         src = (ROOT / "static" / name).read_text(encoding="utf-8")
         assert gate in src, f"{name} lost the setupDismissed auto-open gate"
+        assert "!setupDismissedPersisted()" in src, f"{name} lost the persisted setup dismissal gate"
 
 def test_setup_wizard_single_open_path():
     # §2.3: every wizard open must route through openSetupCenter() (the

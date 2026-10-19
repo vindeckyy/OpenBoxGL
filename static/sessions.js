@@ -161,7 +161,7 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
           showSessionRecapForStopped().catch(() => {});
           await refresh();
         }
-        $('sessionsButton').textContent = result.running.length ? `Running (${result.running.length})` : 'Running';
+        $('sessionsButton').textContent = result.running.length ? `${t('nav.running')} (${result.running.length})` : t('nav.running');
         $('sessionsButton').disabled = !result.running.length;
         if (result.running.length) $('status').textContent = `${result.running.length} game${result.running.length === 1 ? '' : 's'} running`;
         if ($('sessionsDialog').open) renderSessions();

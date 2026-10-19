@@ -50,7 +50,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Backups and restore | done | The web UI lists archives, shows manifests, restores selected archives, and creates a pre-restore safety copy. Backup diff API (`GET /api/v2/backup/diff`) compares current library against archives (1.7.2) |
 | Library audit and missing-file checks | done | Files, provider-aware duplicates, media, extras, saves, and emulator configuration are audited |
 | Linux packaging and updates | done | AppImage build, Flatpak manifest, Makefile install/uninstall, desktop entry, and verified update mechanism |
-| Welcome wizard and first-run setup | done | Setup Center eight-step stepper with preview-before-commit imports, emulator readiness, metadata match review, and Launch Doctor batch preflight |
+| Welcome wizard and first-run setup | done | Setup Center stepper with a six-step quick path and optional advanced steps, preview-before-commit imports, emulator readiness, metadata match review, and Launch check batch preflight |
 | Durable background operations | done | Activity drawer with SSE progress, cancellation, retry/resume, and `operations.json` persistence |
 | Launch readiness preflight | done | Launch Doctor validates paths, adapters, Flatpak/native executables, BIOS/firmware, and tokenized arguments before launch. BIOS SHA1 drift detection reports `BIOS_SHA1_DRIFT` when a BIOS file exists but its hash doesn't match the expected value (1.7.2) |
 | Play Insights local analytics | done | Local 366-day playtime heatmap (levels 0–4), streaks, momentum, top platforms/genres with zero telemetry |

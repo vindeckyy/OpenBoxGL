@@ -5,7 +5,7 @@ import { openDetailsPopup } from './details.js';
 import { $, escapeHtml, duration, fact, gameLinks, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds, trigramsOf, expandTrigrams } from './util.js';
 import { token, AppState, gameIdOf, selectedIds, media, coverSource, badgeVisibility, renderBadges, api, nativePickFolder, nativeReveal, nativeOpenExternal, notify, showToast, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
 import { loadTheme, deletePlaylist } from './settings.js';
-import { importFolder, importSteam, importHeroic, importLutris, importDroppedFolder } from './imports.js';
+import { importFolder, importDroppedFolder } from './imports.js';
 import { openGameDialog, convertShelfEntry, confirmAction, promptInput, openDialog, closeDialog } from './dialogs.js';
 import { syncHash } from './router.js';
 import { openMetadata, steamMetadata, loadAchievements, renderAchievementTabs } from './metadata.js';
@@ -16,7 +16,7 @@ import { openReader } from './reader.js';
 import { applyMoodForGame, clearMood } from './mood.js';
 import { t } from './i18n.js';
 import { mountMomentsPanel, mountResumeAffordance } from './moments.js';
-import { openSetupCenter } from './setup.js';
+import { openSetupCenter, setupDismissedPersisted } from './setup.js';
 import { initDnaSearch, dnaMoreLikeThis, dnaSearchMode } from './dna.js';
 
 const DETAILS_WIDTH_KEY = 'openbox-details-width';
@@ -53,7 +53,7 @@ const STORY_INK = '#1a1614';
 const STORY_MUTED = '#6b6259';
 const STORY_RULE = '#d8d0c6';
 const STORY_BG = '#fbf7f2';
-const STORY_ACCENT = '#f06000';
+const STORY_ACCENT = '#FF7A1A';
 
 // Export the already-fetched story as a PNG (1.15). This is deliberately
 // client-side: the server already returns every field the card needs, so a PNG
@@ -312,9 +312,10 @@ async function verifyWorkerParity(query, games) {
 
 // IntersectionObserver for virtual spacer windowing
 let _virtualObserver = null;
-// The pane scrolls more than the grid: library-head, the drop zone, and the
-// insights panel all sit above it. Virtual-window math works in grid-relative
-// space, so convert pane.scrollTop by the grid's offset inside the pane.
+// The pane scrolls more than the grid: the library head, the Jump back in
+// hero, and the drop zone sit above it; Play insights follows the grid.
+// Virtual-window math works in grid-relative space, so convert pane.scrollTop
+// by the grid's offset inside the pane.
 function gridTopInPane() {
   const pane = document.querySelector('main.library');
   const grid = $('grid');
@@ -861,7 +862,7 @@ function markFilterAria() {
       if ($('insightsPanel')) $('insightsPanel').hidden = !AppState.games.length;
       // Let the boot turn paint the startup-error banner before a modal
       // setup dialog takes the top layer.
-      if (!AppState.appSettings.welcome_completed && !AppState.games.length && !AppState.setupDismissed) {
+      if (!AppState.appSettings.welcome_completed && !AppState.games.length && !AppState.setupDismissed && !setupDismissedPersisted()) {
         setTimeout(() => openSetupCenter(), 0);
       }
       setTimeout(() => { try { warmSearchIndex(); } catch(error) { AppState.searchIndexError = error.message; } }, 0);
@@ -1314,6 +1315,7 @@ function markFilterAria() {
       grid.focus({ preventScroll: true });
     }
     function renderGrid({fromScroll} = {}) {
+      renderHomeHero();
       if (isTrashView()) { renderTrashView({fromScroll}); return; }
       const pane = gridPane();
       if (pane) gridScrollTop = Math.max(0, pane.scrollTop - gridTopInPane());
@@ -1338,14 +1340,29 @@ function markFilterAria() {
         $('grid').removeAttribute('role');
         $('grid').innerHTML = AppState.games.length
           ? `<div class="empty"><div><h2>${escapeHtml(t('library.no_match_title'))}</h2><p>${escapeHtml(t('library.no_match_hint'))}</p><div class="empty-actions"><button type="button" id="emptyClearFilters">${escapeHtml(t('library.clear_filters'))}</button></div></div></div>`
-          : `<div class="empty"><div><h2>Start your library</h2><p>Bring your games into OpenBox, then search, filter, and launch them from one collection.</p><div class="empty-actions"><button id="emptySetupLibrary">Set up library</button><button id="emptyAdd">Add game</button><button class="empty-secondary" id="emptyImport">Import folder</button><button class="empty-secondary" id="emptySteam">Import Steam</button><button class="empty-secondary" id="emptyHeroic">Import Heroic</button><button class="empty-secondary" id="emptyLutris">Import Lutris</button></div></div></div>`;
+          : `<div class="empty"><div class="empty-hero">
+  <svg class="empty-art" viewBox="0 0 160 120" aria-hidden="true">
+    <rect class="empty-art-case" x="14" y="28" width="34" height="72" rx="4"/>
+    <rect class="empty-art-case" x="58" y="18" width="44" height="88" rx="4"/>
+    <rect class="empty-art-case" x="112" y="34" width="32" height="66" rx="4"/>
+    <path class="empty-art-spark" d="M78 6l3 8 8 3-8 3-3 8-3-8-8-3 8-3z"/>
+  </svg>
+  <p class="empty-kicker">${escapeHtml(t('library.empty_kicker'))}</p>
+  <h2>${escapeHtml(t('library.empty_title'))}</h2>
+  <p>${escapeHtml(t('library.empty_body'))}</p>
+  <div class="empty-actions">
+    <button type="button" id="emptyScanFolder">${escapeHtml(t('library.empty_scan_folder'))}</button>
+    <button type="button" class="empty-secondary" id="emptyConnectStore">${escapeHtml(t('library.empty_connect_store'))}</button>
+    <button type="button" class="empty-secondary" id="emptyAddOne">${escapeHtml(t('library.empty_add_one'))}</button>
+  </div>
+  <button type="button" class="empty-link" id="emptySetupLibrary">${escapeHtml(t('library.empty_setup_link'))}</button>
+  <p class="empty-hint">${escapeHtml(t('library.empty_drag_hint'))}</p>
+</div></div>`;
         if ($('emptyClearFilters')) $('emptyClearFilters').onclick = () => { AppState.smartFilterRules = {}; resetQuery(); render(); };
         if ($('emptySetupLibrary')) $('emptySetupLibrary').onclick = () => openSetupCenter();
-        if ($('emptyAdd')) $('emptyAdd').onclick = () => openGameDialog();
-        if ($('emptyImport')) $('emptyImport').onclick = () => importFolder();
-        if ($('emptySteam')) $('emptySteam').onclick = () => importSteam();
-        if ($('emptyHeroic')) $('emptyHeroic').onclick = () => importHeroic();
-        if ($('emptyLutris')) $('emptyLutris').onclick = () => importLutris();
+        if ($('emptyScanFolder')) $('emptyScanFolder').onclick = () => importFolder();
+        if ($('emptyConnectStore')) $('emptyConnectStore').onclick = () => $('storefrontButton')?.click();
+        if ($('emptyAddOne')) $('emptyAddOne').onclick = () => openGameDialog();
         gridRowHeight = 0;
         renderArrangeBar(visible);
         return;
@@ -1479,6 +1496,78 @@ function markFilterAria() {
       if (!measuredBefore && gridRowHeight && total) renderGrid({fromScroll});
       syncHash();
     }
+    function renderHomeHero() {
+      const host = $('homeHero');
+      if (!host) return;
+      const recent = [...AppState.games].filter(game => game.last_played && !game.hidden)
+        .sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)))[0];
+      const query = $('sidebarSearch')?.value?.trim();
+      const show = Boolean(recent) && AppState.platform === 'all' && AppState.platformCategory === 'all'
+        && !AppState.activePlaylist && !AppState.activeFilterPreset && !AppState.bulkMode && !query && !isTrashView();
+      host.hidden = !show;
+      if (!show) { host.innerHTML = ''; return; }
+      host.innerHTML = `<article class="home-hero-card">
+    <div class="home-hero-copy">
+      <p class="home-hero-kicker">${escapeHtml(t('library.jump_back_in'))}</p>
+      <h2>${escapeHtml(recent.name)}</h2>
+      <p>${escapeHtml(recent.platform || '')} · ${escapeHtml(t('library.jump_back_last_played',{date:String(recent.last_played).replace('T',' ').slice(0,16)}))}${recent.total_playtime_seconds || recent.playtime_seconds ? ` · ${escapeHtml(t('library.jump_back_playtime',{time:duration(recent.total_playtime_seconds || recent.playtime_seconds)}))}` : ''}</p>
+    </div>
+    <div class="home-hero-actions">
+      <button type="button" class="play" id="homeHeroPlay">${escapeHtml(t('library.jump_back_play'))}</button>
+      <button type="button" class="icon-button" id="homeHeroDetails">${escapeHtml(t('library.jump_back_details'))}</button>
+    </div>
+  </article>`;
+      if (recent.has_background) host.querySelector('.home-hero-card').style.setProperty('--hero-art', `url('${media(recent,'background')}')`);
+      $('homeHeroPlay').onclick = () => launch(recent.id);
+      $('homeHeroDetails').onclick = () => selectGame(recent.id);
+    }
+    const ONBOARDING_DISMISSED_KEY = 'openbox.onboarding.dismissed';
+    function onboardingDismissed() {
+      if (AppState.onboardingDismissed) return true;
+      try { return localStorage.getItem(ONBOARDING_DISMISSED_KEY) === '1'; } catch { return false; }
+    }
+    function renderOnboardingCard() {
+      const hasGames = AppState.games.length > 0;
+      const hasArtwork = AppState.games.some(game => game.has_cover || game.cover);
+      const hasPlayed = AppState.games.some(game => Number(game.play_count) > 0 || game.last_played);
+      if (!hasGames) {
+        return `<div class="detail-empty onboarding-empty">
+      <p class="onboarding-kicker">${escapeHtml(t('onboarding.kicker'))}</p>
+      <h2>${escapeHtml(t('onboarding.empty_title'))}</h2>
+      <p>${escapeHtml(t('onboarding.empty_body'))}</p>
+      <div class="extras"><button type="button" class="primary" id="onboardingAdd">${escapeHtml(t('onboarding.add_cta'))}</button>
+      <button type="button" class="icon-button" id="onboardingSetup">${escapeHtml(t('onboarding.setup_cta'))}</button></div>
+    </div>`;
+      }
+      const done = [hasGames, hasArtwork, hasPlayed].filter(Boolean).length;
+      if (onboardingDismissed() || done === 3) return `<div class="detail-empty">${escapeHtml(t('library.select_game_prompt'))}<span class="detail-empty-hint">${escapeHtml(t('library.select_game_hint'))}</span></div>`;
+      return `<div class="detail-empty onboarding-card">
+    <p class="onboarding-kicker">${escapeHtml(t('onboarding.kicker'))}</p>
+    <h2>${escapeHtml(t('onboarding.title'))}</h2>
+    <p>${escapeHtml(t('onboarding.body'))}</p>
+    <p class="onboarding-progress">${escapeHtml(t('onboarding.progress',{done,total:3}))}</p>
+    <ol class="onboarding-list">
+      <li class="${hasGames?'done':''}"><span class="onboarding-check">${hasGames?'✓':'1'}</span>${escapeHtml(t(hasGames?'onboarding.add_games_done':'onboarding.add_games'))}</li>
+      <li class="${hasArtwork?'done':''}"><span class="onboarding-check">${hasArtwork?'✓':'2'}</span>${escapeHtml(t(hasArtwork?'onboarding.artwork_done':'onboarding.artwork'))}</li>
+      <li class="${hasPlayed?'done':''}"><span class="onboarding-check">${hasPlayed?'✓':'3'}</span>${escapeHtml(t(hasPlayed?'onboarding.play_done':'onboarding.play'))}</li>
+    </ol>
+    <div class="extras"><button type="button" class="primary" id="onboardingAdd">${escapeHtml(t('onboarding.add_cta'))}</button>
+    <button type="button" class="icon-button" id="onboardingSetup">${escapeHtml(t('onboarding.setup_cta'))}</button></div>
+    <button type="button" class="onboarding-dismiss" id="onboardingDismiss">${escapeHtml(t('onboarding.dismiss'))}</button>
+  </div>`;
+    }
+    function bindOnboarding() {
+      const add = $('onboardingAdd');
+      if (add) add.onclick = () => openGameDialog();
+      const setup = $('onboardingSetup');
+      if (setup) setup.onclick = () => openSetupCenter();
+      const dismiss = $('onboardingDismiss');
+      if (dismiss) dismiss.onclick = () => {
+        AppState.onboardingDismissed = true;
+        try { localStorage.setItem(ONBOARDING_DISMISSED_KEY, '1'); } catch {}
+        renderDetails();
+      };
+    }
     function renderDetails() {
       const game = AppState.games.find(item => item.id === AppState.selectedId);
       applyMoodForGame(game).catch(() => {});
@@ -1491,7 +1580,8 @@ function markFilterAria() {
       if (!game) {
         const pane = gridPane();
         if (pane && detailSheetScrollTop) pane.scrollTop = detailSheetScrollTop;
-        $('details').innerHTML = '<div class="detail-empty">Select a game to inspect its real metadata and artwork.</div>';
+        $('details').innerHTML = renderOnboardingCard();
+        bindOnboarding();
         applyDetailsLayout();
         return;
       }
@@ -1548,7 +1638,7 @@ function markFilterAria() {
           <div class="detail-card"><h3>Achievements</h3><div id="achievementContent"></div><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}${AppState.raConfigured || game.ra_game_id ? '<button class="icon-button" id="loadAchievements">Match ROM / load RetroAchievements</button>' : ''}</div></div>
           ${game.platform === 'Arcade' || game.rom_name ? `<div class="detail-card"><h3>High scores</h3><div class="extras"><button class="icon-button" id="loadHighscores">Show table</button><button class="icon-button" id="exportHighscores">Export high scores</button><button class="icon-button" id="importHighscores">Import high scores</button></div><div class="description" id="highscoreTable">Parse MAME .hi files with hi2txt.</div></div>` : ''}
           <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${savePaths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="saveHistory">Version history</button><button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${AppState.appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}</div><label class="field"><span>State slot</span><input id="resumeSlot" maxlength="32" pattern="[A-Za-z0-9_-]{1,32}" placeholder="Default slot" value="${escapeHtml(game.resume_slot || '')}"></label><div class="description" id="saveDiscovery">${savePaths.length ? `${savePaths.length} configured location${savePaths.length === 1 ? '' : 's'}` : 'No save location configured.'}${AppState.appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
-          <div class="detail-card doctor-card" id="doctorCard" style="border:1px solid var(--border-card)"><h3>Launch Doctor</h3><div id="doctorChecks" class="description">Checking launch readiness…</div></div>
+          <div class="detail-card doctor-card" id="doctorCard" style="border:1px solid var(--border-card)"><h3>Launch check</h3><div id="doctorChecks" class="description">Checking whether this game can launch…</div></div>
           </section><section class="detail-tab-panel" id="detailsMoments" role="tabpanel" aria-labelledby="momentsTab" hidden><div id="momentsPanel"></div></section><section class="detail-tab-panel" id="detailsStory" role="tabpanel" aria-labelledby="storyTab" hidden><div id="storyPanel"></div></section>
         </div>`;
       bindCoverModel($('details'));
@@ -1724,7 +1814,7 @@ function markFilterAria() {
         } else {
           fixBtn = `<span class="description">${escapeHtml(fix.label || '')}</span>`;
         }
-        const severityColor = check.severity === 'error' ? 'var(--danger)' : 'var(--gold)';
+        const severityColor = check.severity === 'error' ? 'var(--badge-danger-fg)' : 'var(--gold)';
         return `<div class="doctor-row" style="border-left:3px solid ${severityColor};padding:var(--space-sm);margin:var(--space-sm) 0;background:var(--surface-card)"><div><strong>${escapeHtml(check.code)}</strong>: ${escapeHtml(check.message)}</div><div style="margin-top:var(--space-xs)">${fixBtn}</div></div>`;
       }).join('') + grantRowHtml(game);
       // Bind fix actions
@@ -2309,7 +2399,7 @@ function markFilterAria() {
       });
     }
     ensureTrashViewOption();
-    document.addEventListener('localechange', ensureTrashViewOption);
+    document.addEventListener('localechange', () => { ensureTrashViewOption(); render(); });
     $('sidebarSearch').oninput = () => {
       if (dnaSearchMode() === 'smart') return; // Smart mode is handled by dna.js
       leaveActivePreset();

@@ -11,15 +11,16 @@ const SUMMARY_KEYS = [
   'duplicate_count', 'missing_paths', 'emulator_readiness', 'active_operations', 'next_action',
 ];
 const STEPS = [
-  {id: 1, label: 'Overview', help: 'Review library health and the recommended next step.'},
-  {id: 2, label: 'Sources', help: 'Add folders, storefronts, and specialized sources to scan.'},
-  {id: 3, label: 'Scan', help: 'Run a side-effect-free preview scan via the v2 setup API.'},
-  {id: 4, label: 'Decisions', help: 'Resolve ambiguities, merges, and skips before import.'},
-  {id: 5, label: 'Readiness', help: 'Launch Doctor preflight for emulator and path readiness.'},
-  {id: 6, label: 'Options', help: 'Metadata, media, region, and import behavior.'},
-  {id: 7, label: 'Confirm', help: 'Revalidate the preview and commit to your library.'},
-  {id: 8, label: 'Finish', help: 'Enrich imported games and review completion counts.'},
+  { id:1, labelKey:'setup.step_overview', helpKey:'setup.help_overview', advanced:true },
+  { id:2, labelKey:'setup.step_sources', helpKey:'setup.help_sources' },
+  { id:3, labelKey:'setup.step_scan', helpKey:'setup.help_scan' },
+  { id:4, labelKey:'setup.step_decisions', helpKey:'setup.help_decisions' },
+  { id:5, labelKey:'setup.step_readiness', helpKey:'setup.help_readiness' },
+  { id:6, labelKey:'setup.step_options', helpKey:'setup.help_options', advanced:true },
+  { id:7, labelKey:'setup.step_confirm', helpKey:'setup.help_confirm' },
+  { id:8, labelKey:'setup.step_finish', helpKey:'setup.help_finish' },
 ];
+function visibleSteps() { return state.advanced ? STEPS : STEPS.filter(step => !step.advanced); }
 // Monogram glyphs instead of emoji — stock systems without emoji fonts render tofu.
 const PRIMARY_SOURCES = [
   {type: 'folder', label: 'Folder', icon: 'F'},
@@ -48,6 +49,8 @@ let initialized = false;
 function blankState() {
   return {
     step: 1,
+    advanced: false,
+    summaryError: '',
     summary: null,
     sources: [],
     moreSourcesOpen: false,
@@ -89,6 +92,10 @@ function ensureSetupShell() {
     body.innerHTML = `
       <nav class="setup-stepper" aria-label="Setup steps">
         <ol class="setup-step-list" id="setupStepList"></ol>
+        <div class="setup-progress" id="setupProgress" role="progressbar" aria-valuemin="1">
+          <span></span>
+        </div>
+        <button type="button" class="setup-advanced-toggle" id="setupAdvancedToggle" aria-expanded="false"></button>
       </nav>
       <p class="setup-help description" id="setupHelp"></p>
       <div class="setup-panel" id="setupPanel" role="region" aria-live="polite"></div>
@@ -109,27 +116,32 @@ function ensureSetupShell() {
 function renderStepList() {
   const list = $('setupStepList');
   if (!list) return;
-  const progressByStep = {
-    3: state.previewDoc?.scanned_entries ? `Found ${state.previewDoc.scanned_entries} games` : (state.previewDoc ? 'Scanned' : ''),
-    4: state.previewItems.length ? `${state.previewItems.filter(i => (state.decisions.get(i.candidate_id)?.action || i.intended_action) === 'review').length} need review` : '',
-    5: state.preflight?.totals ? `Ready ${state.preflight.totals.ready ?? 0} · Blocked ${state.preflight.totals.blocked ?? 0}` : '',
-    7: state.previewDoc ? `Rev ${state.previewDoc.revision ?? state.revision}` : '',
-  };
-  list.innerHTML = STEPS.map(step => {
-    const progress = progressByStep[step.id] || '';
-    return `
+  const visible = visibleSteps();
+  const index = Math.max(1, visible.findIndex(step => step.id === state.step) + 1);
+  list.innerHTML = visible.map(step => `
     <li class="setup-step-item${step.id === state.step ? ' active' : ''}${step.id < state.step ? ' done' : ''}" data-setup-step="${step.id}">
       <span class="setup-step-num">${step.id}</span>
-      <span class="setup-step-label">${escapeHtml(step.label)}</span>
-      ${progress ? `<span class="setup-step-progress">${escapeHtml(progress)}</span>` : ''}
+      <span class="setup-step-label">${escapeHtml(t(step.labelKey))}</span>
     </li>
-  `;
-  }).join('');
+  `).join('');
   list.querySelectorAll('.setup-step-item.done').forEach(item => {
     item.onclick = () => { state.step = Number(item.dataset.setupStep); renderPanel(); };
   });
   const help = $('setupHelp');
-  if (help) help.textContent = STEPS.find(s => s.id === state.step)?.help || '';
+  if (help) help.textContent = t(STEPS.find(s => s.id === state.step)?.helpKey || 'setup.help_sources');
+  const progress = $('setupProgress');
+  if (progress) {
+    progress.setAttribute('aria-valuemax', String(visible.length));
+    progress.setAttribute('aria-valuenow', String(index));
+    progress.setAttribute('aria-label', t('setup.progress', { current: index, total: visible.length }));
+    progress.querySelector('span').style.width = `${(index / visible.length) * 100}%`;
+  }
+  const toggle = $('setupAdvancedToggle');
+  if (toggle) {
+    toggle.textContent = t(state.advanced ? 'setup.advanced_hide' : 'setup.advanced_show');
+    toggle.setAttribute('aria-expanded', String(state.advanced));
+    toggle.onclick = () => { state.advanced = !state.advanced; state.step = state.advanced ? 1 : 2; renderPanel(); };
+  }
 }
 
 async function waitForJob(jobId, {timeoutMs = 120000} = {}) {
@@ -202,8 +214,14 @@ function decisionPayload(batch = state.previewItems) {
 }
 
 async function loadSummary() {
-  state.summary = await api('/api/v2/setup/summary');
-  return state.summary;
+  try {
+    state.summary = await api('/api/v2/setup/summary');
+    state.summaryError = '';
+    return state.summary;
+  } catch (error) {
+    state.summaryError = error.message || t('setup.summary_error');
+    return null;
+  }
 }
 
 async function loadPreviewDocument() {
@@ -272,26 +290,32 @@ function renderOverview() {
   const next = summary.next_action || {};
   const readiness = summary.emulator_readiness || {};
   const coverage = (summary.source_coverage || []).map(row => `${escapeHtml(row.label || row.source_id)}: ${row.game_count ?? 0}`).join(' · ') || 'None';
+  const error = state.summaryError ? `
+      <div class="setup-error" role="status">
+        <p>${escapeHtml(state.summaryError)}</p>
+        <button type="button" class="icon-button" id="setupSummaryRetry">${escapeHtml(t('setup.summary_retry'))}</button>
+      </div>` : '';
   return `
     <div class="setup-overview" data-setup-panel="overview">
+      ${error}
       <div class="setup-summary-grid">
-        <div class="setup-stat" data-summary-key="library_count"><span class="setup-stat-label">Library games</span><strong>${summary.library_count ?? 0}</strong></div>
-        <div class="setup-stat" data-summary-key="metadata_match_percent"><span class="setup-stat-label">Metadata matched</span><strong>${summary.metadata_match_percent ?? 0}%</strong></div>
-        <div class="setup-stat" data-summary-key="media_gaps"><span class="setup-stat-label">Media gaps</span><strong>${summary.media_gaps ?? 0}</strong></div>
-        <div class="setup-stat" data-summary-key="duplicate_count"><span class="setup-stat-label">Duplicates</span><strong>${summary.duplicate_count ?? 0}</strong></div>
-        <div class="setup-stat" data-summary-key="missing_paths"><span class="setup-stat-label">Missing paths</span><strong>${summary.missing_paths ?? 0}</strong></div>
-        <div class="setup-stat" data-summary-key="active_operations"><span class="setup-stat-label">Active operations</span><strong>${summary.active_operations ?? 0}</strong></div>
+        <div class="setup-stat" data-summary-key="library_count"><span class="setup-stat-label">${escapeHtml(t('setup.metric_games'))}</span><strong>${summary.library_count ?? 0}</strong></div>
+        <div class="setup-stat" data-summary-key="metadata_match_percent"><span class="setup-stat-label">${escapeHtml(t('setup.metric_details'))}</span><strong>${summary.metadata_match_percent ?? 0}%</strong></div>
+        <div class="setup-stat" data-summary-key="media_gaps"><span class="setup-stat-label">${escapeHtml(t('setup.metric_artwork'))}</span><strong>${summary.media_gaps ?? 0}</strong></div>
+        <div class="setup-stat" data-summary-key="duplicate_count"><span class="setup-stat-label">${escapeHtml(t('setup.metric_duplicates'))}</span><strong>${summary.duplicate_count ?? 0}</strong></div>
+        <div class="setup-stat" data-summary-key="missing_paths"><span class="setup-stat-label">${escapeHtml(t('setup.metric_missing'))}</span><strong>${summary.missing_paths ?? 0}</strong></div>
+        <div class="setup-stat" data-summary-key="active_operations"><span class="setup-stat-label">${escapeHtml(t('setup.metric_operations'))}</span><strong>${summary.active_operations ?? 0}</strong></div>
       </div>
       <div class="setup-stat wide" data-summary-key="source_coverage">
-        <span class="setup-stat-label">Source coverage</span><strong>${coverage}</strong>
+        <span class="setup-stat-label">${escapeHtml(t('setup.metric_sources'))}</span><strong>${coverage}</strong>
       </div>
       <div class="setup-stat wide" data-summary-key="emulator_readiness">
-        <span class="setup-stat-label">Emulator readiness</span>
+        <span class="setup-stat-label">${escapeHtml(t('setup.metric_emulators'))}</span>
         <strong>Ready ${readiness.ready ?? 0} · Warning ${readiness.warning ?? 0} · Blocked ${readiness.blocked ?? 0}</strong>
       </div>
       <div class="setup-next-action" data-summary-key="next_action">
-        <p class="description">Recommended next step</p>
-        <button type="button" class="primary setup-next-action-btn" data-next-step="${next.step || 2}">${escapeHtml(next.label || 'Continue setup')}</button>
+        <p class="description">${escapeHtml(t('setup.recommended_next'))}</p>
+        <button type="button" class="primary setup-next-action-btn" data-next-step="${next.step || 2}">${escapeHtml(next.label || t('setup.advanced_show'))}</button>
       </div>
     </div>
   `;
@@ -310,6 +334,11 @@ function renderSources() {
     : '<p class="description setup-empty">No sources selected yet.</p>';
   return `
     <div class="setup-sources" data-setup-panel="sources">
+      ${state.sources.length === 0 ? `<div class="setup-welcome">
+        <p class="setup-kicker">${escapeHtml(t('setup.welcome_kicker'))}</p>
+        <h3 class="setup-section-title">${escapeHtml(t('setup.welcome_sources_title'))}</h3>
+        <p class="description">${escapeHtml(t('setup.welcome_sources_body'))}</p>
+      </div>` : ''}
       <h3 class="setup-section-title">Detected &amp; common sources</h3>
       <div class="setup-source-grid">${PRIMARY_SOURCES.map(renderCard).join('')}</div>
       <details class="setup-more-sources"${state.moreSourcesOpen ? ' open' : ''}>
@@ -452,7 +481,7 @@ function renderReadiness() {
         </div>
         <ul class="setup-check-list">${checks || '<li>No checks</li>'}</ul>
         ${recommendChips ? `<div class="setup-recommend-chips">${recommendChips}</div>` : ''}
-        <label class="field">Emulator choice
+        <label class="field">${escapeHtml(t('setup.emulator_choice'))}
           <select class="setup-emulator-choice" data-candidate-id="${escapeHtml(result.candidate_id || '')}">
             <option value="">—</option>
             ${choiceOptions}
@@ -473,8 +502,8 @@ function renderReadiness() {
         <span>Blocked ${totals.blocked ?? 0}</span>
       </div>
       <p class="setup-by-platform">${byPlatform || 'No platform breakdown yet.'}</p>
-      <div class="setup-readiness-list">${results || '<p class="description setup-empty">Run preflight after selecting import candidates.</p>'}</div>
-      <button type="button" class="setup-run-preflight" id="setupRunPreflight">Run preflight</button>
+      <div class="setup-readiness-list">${results || `<p class="description setup-empty">${escapeHtml(t('setup.launch_check_failed'))}</p>`}</div>
+      <button type="button" class="setup-run-preflight" id="setupRunPreflight">${escapeHtml(t('setup.run_launch_check'))}</button>
     </div>
   `;
 }
@@ -514,23 +543,20 @@ function renderOptions() {
 }
 
 function renderConfirm() {
-  const doc = state.previewDoc || {};
-  const humanMessage = doc.message ? `<p class="setup-confirm-message">${escapeHtml(doc.message)}</p>` : '';
+  const humanMessage = state.previewDoc?.message ? `<p class="setup-confirm-message">${escapeHtml(state.previewDoc.message)}</p>` : '';
   const staleNudge = state.stale
-    ? '<p class="setup-stale" role="alert">Preview is stale — sources or library changed since scan. Revalidate to sync before committing.</p><p class="description setup-revalidate-nudge">Revalidating re-scans your sources and checks the library fingerprint. It takes a moment but prevents surprises.</p>'
-    : '<p class="description setup-revalidate-hint">Tip: revalidate if you added files or changed your library since scanning.</p>';
+    ? `<p class="setup-stale" role="alert">${escapeHtml(t('setup.stale'))}</p><p class="description setup-revalidate-nudge">${escapeHtml(t('setup.stale_body'))}</p>`
+    : `<p class="description setup-revalidate-hint">${escapeHtml(t('setup.confirm_body'))}</p>`;
   return `
     <div class="setup-confirm" data-setup-panel="confirm">
       ${humanMessage}
       ${staleNudge}
-      <p class="description">Revalidate scans sources again, then commit writes imported games to your library.</p>
       <div class="setup-confirm-summary">
-        <p>Preview revision <strong>${doc.revision ?? state.revision}</strong></p>
         <p>Candidates: <strong>${state.previewItems.length}</strong></p>
         <p>Import actions: <strong>${selectedImportCandidates().length}</strong></p>
         ${reviewCandidates().length ? `<p>Still need a decision (not imported): <strong>${reviewCandidates().length}</strong></p>` : ''}
       </div>
-      ${state.stale ? '<button type="button" class="primary setup-revalidate" id="setupRevalidate">Revalidate preview</button>' : '<button type="button" class="icon-button setup-revalidate" id="setupRevalidate">Revalidate preview</button>'}
+      ${state.stale ? `<button type="button" class="primary setup-revalidate" id="setupRevalidate">${escapeHtml(t('setup.rescan'))}</button>` : `<button type="button" class="icon-button setup-revalidate" id="setupRevalidate">${escapeHtml(t('setup.rescan'))}</button>`}
       ${state.busy ? '<p class="setup-status">Operation in progress…</p>' : ''}
     </div>
   `;
@@ -578,7 +604,7 @@ function renderPanel() {
   bindPanelEvents();
   const back = $('setupBack');
   const cont = $('setupContinue');
-  if (back) back.disabled = state.step <= 1 || state.busy;
+  if (back) back.disabled = visibleSteps().findIndex(step => step.id === state.step) <= 0 || state.busy;
   if (cont) {
     cont.disabled = state.busy;
     cont.textContent = state.step >= 8 ? 'Done' : 'Continue';
@@ -586,6 +612,13 @@ function renderPanel() {
 }
 
 function bindPanelEvents() {
+  const retry = $('setupSummaryRetry');
+  if (retry) retry.onclick = async () => {
+    state.busy = true;
+    await loadSummary();
+    state.busy = false;
+    renderPanel();
+  };
   document.querySelectorAll('.setup-next-action-btn').forEach(btn => {
     btn.onclick = () => {
       const step = Number(btn.dataset.nextStep || 2);
@@ -1034,6 +1067,10 @@ function viewImportedGames() {
   saveAndClose();
 }
 
+function nextVisibleId(id) {
+  return visibleSteps().map(step => step.id).find(next => next > id) ?? 8;
+}
+
 async function continueStep() {
   if (state.busy) return;
   try {
@@ -1048,12 +1085,12 @@ async function continueStep() {
       state.step = 4;
     } else if (state.step === 4) {
       await saveDecisions();
-      state.step = 5;
+      state.step = nextVisibleId(4);
       await runReadinessStep();
     } else if (state.step === 5) {
-      state.step = 6;
+      state.step = nextVisibleId(5);
     } else if (state.step === 6) {
-      state.step = 7;
+      state.step = nextVisibleId(6);
     } else if (state.step === 7) {
       if (state.stale) {
         await revalidatePreview();
@@ -1078,20 +1115,33 @@ async function continueStep() {
 }
 
 function goBack() {
-  if (state.step > 1 && !state.busy) {
-    state.step -= 1;
+  const ids = visibleSteps().map(step => step.id);
+  const index = ids.indexOf(state.step);
+  if (index > 0 && !state.busy) {
+    state.step = ids[index - 1];
     renderPanel();
   }
 }
 
-function saveAndClose() {
+export function setupDismissedPersisted() {
+  try { return localStorage.getItem('openbox.setup.dismissed') === '1'; } catch { return false; }
+}
+
+export function markSetupDismissed() {
   AppState.setupDismissed = true;
+  try { localStorage.setItem('openbox.setup.dismissed', '1'); } catch {}
+}
+
+function saveAndClose() {
+  markSetupDismissed();
   const dialog = $('setupCenter');
   if (dialog?.open) dialog.close();
 }
 
-export async function openSetupCenter({step = 1} = {}) {
+export async function openSetupCenter({step = 2, advanced = null} = {}) {
   ensureSetupShell();
+  state.advanced = advanced === null ? step !== 2 : advanced;
+  if (!visibleSteps().some(item => item.id === step)) step = 2;
   state.step = step;
   renderPanel();
   const dialog = $('setupCenter');
@@ -1111,6 +1161,7 @@ function initSetupCenter() {
   const dialog = $('setupCenter');
   if (dialog) {
     dialog.addEventListener('cancel', () => { AppState.setupDismissed = true; });
+    dialog.addEventListener('cancel', markSetupDismissed);
   }
   renderPanel();
 }
