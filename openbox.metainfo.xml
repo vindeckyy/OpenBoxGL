@@ -40,6 +40,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.18.0" date="2026-10-19">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.18.0</url>
+      <description>
+        <p>A clearer, deeper library: rename or delete a platform with its media, queue media downloads durably, extend plugins with capability services, verify and selectively restore save backups, and use deeper emulator and Big Box controls. The first run now has one Add games menu, a guided Setup Center, F1 help, and a Jump back in hero.</p>
+      </description>
+    </release>
     <release version="1.17.0" date="2026-10-18">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.17.0</url>
       <description>

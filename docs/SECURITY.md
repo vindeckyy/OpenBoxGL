@@ -32,7 +32,8 @@ backported, so upgrading is the fix.
 
 | Version | Supported |
 | --- | --- |
-| 1.17.x | Yes (current) |
+| 1.18.x | Yes (current) |
+| 1.17.x | No — upgrade required |
 | 1.16.x | No — upgrade required (see above) |
 | 1.15.x | No — upgrade required |
 | 1.14.x | No — upgrade required |
@@ -58,7 +59,7 @@ backported, so upgrading is the fix.
 | 0.4.x | Best effort |
 | < 0.4.0 | No |
 
-Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. The 1.17.x line is the current maintained release; the older rows document the historical support policy and should not be read as promises of backported fixes.
+Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. The 1.18.x line is the current maintained release; the older rows document the historical support policy and should not be read as promises of backported fixes.
 
 ## Reporting a vulnerability
 
