@@ -169,7 +169,8 @@ class RetroArchCommandTests(unittest.TestCase):
             self.assertIn('run_ahead_frames = "2"', text)
             self.assertIn('rewind_enable = "true"', text)
             self.assertIn('video_scale = "3"', text)
-            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            if sys.platform != "win32":
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
 
     def test_borderless_and_defaults(self):
         with tempfile.TemporaryDirectory() as temporary:

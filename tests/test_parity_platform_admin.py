@@ -61,7 +61,7 @@ class BulkMediaMigrationTests(unittest.TestCase):
                     {"game_id": "g3", "name": "Gamma", "platform": "SNES", "cover": ""},
                 ],
             }
-            with patch.object(admin, "approved_media_path", side_effect=lambda path, must_exist=False: Path(path)):
+            with patch.object(admin, "approved_media_path", side_effect=lambda path, must_exist=False: Path(path).resolve()):
                 changed, moved, errors = _bulk_update_with_media(
                     value, ["g1"], {"platform": "Famicom"}, True, media_root=media_root,
                 )
@@ -69,7 +69,7 @@ class BulkMediaMigrationTests(unittest.TestCase):
             self.assertEqual(moved, 1)
             self.assertEqual(errors, [])
             self.assertEqual(value["games"][0]["platform"], "Famicom")
-            self.assertEqual(value["games"][0]["cover"], str(media_root / "Famicom" / "g1" / "cover.png"))
+            self.assertEqual(value["games"][0]["cover"], str((media_root / "Famicom" / "g1" / "cover.png").resolve()))
             self.assertTrue((media_root / "Famicom" / "g1" / "cover.png").is_file())
             self.assertEqual(value["games"][1]["platform"], "NES")
             self.assertEqual(value["games"][1]["cover"], str(second))
@@ -141,6 +141,14 @@ class RenameTests(unittest.TestCase):
             self.assertFalse(source.exists())
             self.assertEqual(cross.read_bytes(), b"new")
 
+            source.write_bytes(b"fallback")
+            unsupported = root / "four.png"
+            with patch.object(Path, "replace", side_effect=OSError("cross-device")), \
+                 patch.object(admin.os, "fsync", side_effect=OSError("unsupported")):
+                admin._move_file(source, unsupported)
+            self.assertFalse(source.exists())
+            self.assertEqual(unsupported.read_bytes(), b"fallback")
+
     def test_media_migration_skips_unapproved_and_outside_paths(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -181,7 +189,7 @@ class RenameTests(unittest.TestCase):
                     raise OSError("disk full")
                 return original(source, dest)
 
-            with patch.object(admin, "approved_media_path", side_effect=lambda path, must_exist=False: Path(path)), patch.object(admin, "_move_file", side_effect=flaky):
+            with patch.object(admin, "approved_media_path", side_effect=lambda path, must_exist=False: Path(path).resolve()), patch.object(admin, "_move_file", side_effect=flaky):
                 with self.assertRaises(OSError):
                     admin._migrate_paths(value, "NES", "Famicom", root / "media")
             self.assertTrue(first.exists())
@@ -199,7 +207,7 @@ class RenameTests(unittest.TestCase):
             value = state()
             value["games"][0]["cover"] = str(source)
             original = admin.approved_media_path
-            admin.approved_media_path = lambda path, must_exist=False: Path(path)
+            admin.approved_media_path = lambda path, must_exist=False: Path(path).resolve()
             try:
                 result = admin.rename_platform(value, "NES", "Famicom", migrate_media=True, media_root=root / "media")
             finally:
@@ -208,7 +216,7 @@ class RenameTests(unittest.TestCase):
             self.assertFalse(source.exists())
             self.assertTrue((root / "media" / "Famicom" / "cover.png").is_file())
             self.assertTrue(outside.is_file())
-            self.assertEqual(value["games"][0]["cover"], str(root / "media" / "Famicom" / "cover.png"))
+            self.assertEqual(value["games"][0]["cover"], str((root / "media" / "Famicom" / "cover.png").resolve()))
 
 
 class DeleteTests(unittest.TestCase):

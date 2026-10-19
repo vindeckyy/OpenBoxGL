@@ -15,6 +15,7 @@ PUBLIC_KEY = ROOT / "openbox-release.pub"
 
 
 class InstallerTests(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "the POSIX installer needs bash and symlinks")
     def test_posix_installer_replaces_an_existing_install_in_place(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -62,6 +63,7 @@ class InstallerTests(unittest.TestCase):
                 "PATH": f"{binaries}{os.pathsep}{os.environ.get('PATH', '')}",
                 "OPENBOX_INSTALL_DIR": str(install_dir),
                 "OPENBOX_RELEASE_TAG": f"v{version}",
+                "OPENBOX_ARCH": "x86_64",
                 "OPENBOX_TEST_FIXTURES": str(fixtures),
             }
             for _ in range(2):

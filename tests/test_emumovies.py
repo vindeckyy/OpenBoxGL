@@ -162,7 +162,7 @@ class EmuMoviesTests(unittest.TestCase):
             }
             destination = destination_for(candidate, root)
             resolved_root = root.resolve()
-            self.assertEqual(destination.parent.parent.parent, resolved_root / "emumovies")
+            self.assertEqual(destination.resolve().parent.parent.parent, resolved_root / "emumovies")
             self.assertNotIn("..", destination.parts)
             self.assertTrue(str(destination).endswith("cover.png"))
 

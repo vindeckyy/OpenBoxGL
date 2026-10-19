@@ -91,7 +91,8 @@ def test_refresh_caches_and_loads():
         }]
         cache = stats.cache_path("vendor.stats", data_root)
         assert cache.is_file()
-        assert stat.S_IMODE(os.stat(cache).st_mode) == 0o600
+        if os.name != "nt":
+            assert stat.S_IMODE(os.stat(cache).st_mode) == 0o600
         raw = json.loads(cache.read_text(encoding="utf-8"))
         assert raw["plugin_id"] == "vendor.stats"
         assert "unknown" not in raw["games"]

@@ -347,7 +347,7 @@ class ApiSweep(unittest.TestCase):
 
         self.save_state({
             "games": [],
-            "settings": {"bigbox_shutdown_commands": ["/bin/true"]},
+            "settings": {"bigbox_shutdown_commands": ["openbox-test-command"]},
             "playlists": [],
         })
         with mock.patch.object(sessions.subprocess, "Popen") as popen:
@@ -363,7 +363,7 @@ class ApiSweep(unittest.TestCase):
             status, payload = self.request("/api/bigbox/mode", {"entering": False})
             self.assertEqual(status, 200)
             self.assertEqual(payload.get("commands"), 1)
-            popen.assert_called_once_with(["/bin/true"], **sessions.launch_kwargs())
+            popen.assert_called_once_with(["openbox-test-command"], **sessions.launch_kwargs())
 
     def test_related_rich_by_game_id(self):
         status, library = self.request("/api/library")

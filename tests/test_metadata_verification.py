@@ -4,15 +4,26 @@
 import hashlib
 import io
 import sys
-import tempfile
 import unittest
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import metadata
+
+
+@contextmanager
+def _temp_dir():
+    """TemporaryDirectory that drops cached SQLite handles before cleanup."""
+    with TemporaryDirectory() as folder:
+        try:
+            yield Path(folder)
+        finally:
+            metadata.close_db_connections()
 
 
 def _package_bytes(title="Verified Game"):
@@ -41,7 +52,7 @@ class SyncVerificationTests(unittest.TestCase):
         def opener(request, timeout=0):
             return Response(payload)
 
-        with tempfile.TemporaryDirectory() as folder, \
+        with _temp_dir() as folder, \
              mock.patch.object(metadata, "DATABASE_SHA256", digest):
             destination = Path(folder) / "metadata.db"
             phases = []
@@ -64,7 +75,7 @@ class SyncVerificationTests(unittest.TestCase):
             calls.append(request.full_url)
             return Response(payload)
 
-        with tempfile.TemporaryDirectory() as folder, \
+        with _temp_dir() as folder, \
              mock.patch.object(metadata, "DATABASE_SHA256", "0" * 64):
             destination = Path(folder) / "metadata.db"
             with self.assertRaises(ValueError) as caught:
@@ -82,7 +93,7 @@ class SyncVerificationTests(unittest.TestCase):
         def good_opener(request, timeout=0):
             return Response(payload)
 
-        with tempfile.TemporaryDirectory() as folder, \
+        with _temp_dir() as folder, \
              mock.patch.object(metadata, "DATABASE_SHA256", ""):
             destination = Path(folder) / "metadata.db"
             checksum = Path(folder) / metadata.METADATA_SHA_FILE
@@ -103,7 +114,7 @@ class SyncVerificationTests(unittest.TestCase):
         def opener(request, timeout=0):
             raise URLError("Name or service not known")
 
-        with tempfile.TemporaryDirectory() as folder:
+        with _temp_dir() as folder:
             with self.assertRaises(ValueError) as caught:
                 metadata.sync_database(Path(folder) / "metadata.db", opener=opener)
             self.assertIn("connection", str(caught.exception).casefold())
@@ -117,7 +128,7 @@ class SyncVerificationTests(unittest.TestCase):
         def broken(_event):
             raise RuntimeError("ui gone")
 
-        with tempfile.TemporaryDirectory() as folder, \
+        with _temp_dir() as folder, \
              mock.patch.object(metadata, "DATABASE_SHA256", hashlib.sha256(payload).hexdigest()):
             destination = Path(folder) / "metadata.db"
             metadata.sync_database(destination, opener=opener, progress=broken)
