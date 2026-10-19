@@ -17,6 +17,7 @@
     "events.js",
     "gamepad.js",
     "health.js",
+    "help.js",
     "household.js",
     "i18n.js",
     "imports.js",

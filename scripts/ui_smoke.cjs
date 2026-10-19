@@ -35,8 +35,11 @@ const failures = [];
     gamesLen: AppState.games.length,
     cardCount: document.querySelectorAll('.card').length,
     filtered: filteredGames().map(g => g.name),
+    hero: document.getElementById('homeHero')?.hidden === false
+      ? document.getElementById('homeHero').innerText : '',
     status: document.getElementById('status').textContent,
   }));
+  if (!before.hero.includes('Quake')) failures.push(`initial Jump back in hero (${JSON.stringify(before.hero)})`);
   const clicked = await page.evaluate(() => {
     const c = document.querySelector('.card-main');
     if (!c) return false;
@@ -59,7 +62,7 @@ const failures = [];
     await page.click('#toolsButton');
     await new Promise(r => setTimeout(r, 300));
     const ok = await page.evaluate(() => {
-      const menu = document.querySelector('.topbar-tools .tool-menu');
+      const menu = document.querySelector('#toolMenu');
       if (!menu) return false;
       const rect = menu.getBoundingClientRect();
       const topEl = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
@@ -655,6 +658,9 @@ const failures = [];
     const savedBigBoxGames = AppState.bigBoxGames;
     AppState.appSettings.welcome_completed = false;
     AppState.setupDismissed = false;
+    AppState.onboardingDismissed = false;
+    localStorage.removeItem('openbox.setup.dismissed');
+    localStorage.removeItem('openbox.onboarding.dismissed');
 
     // --- sources (step 2) ---
     await mod.openSetupCenter({step: 2});
@@ -695,6 +701,13 @@ const failures = [];
     await tick();
     results.dismissNoReopen = document.getElementById('setupCenter').open !== true;
     results.insightsHiddenOnEmpty = document.getElementById('insightsPanel')?.hidden === true;
+    const { setLocale } = await import('/static/i18n.js');
+    await setLocale('de');
+    await tick(300);
+    const localizedDetails = document.getElementById('details').innerText;
+    results.localeDetailsNoRawKeys = !/\bonboarding\.[a-z_]+\b|\blibrary\.[a-z_]+\b/.test(localizedDetails);
+    await setLocale('en');
+    await tick(300);
 
     // --- zero-import finish (drive steps 3 -> 8) ---
     AppState.setupDismissed = true; // keep refresh() inside the finish pipeline from reopening the wizard
@@ -767,8 +780,11 @@ const failures = [];
       focusCalls.push(this.id || this.tagName || '?');
       return RealFocus.apply(this, args);
     };
+    const trigger = document.getElementById('addMenuButton');
+    trigger.focus();
+    trigger.click();
+    await new Promise(r => setTimeout(r, 100));
     const addBtn = document.getElementById('addButton');
-    addBtn.focus();
     addBtn.click();
     const gameDialog = document.getElementById('gameDialog');
     // opening awaits ensureProfiles() (an API call); a fixed 300ms is too short on a slow loopback
@@ -782,8 +798,8 @@ const failures = [];
     const nested = [...document.querySelectorAll('dialog[open]')].map(d => d.id);
     HTMLElement.prototype.focus = RealFocus;
     return {
-      ok: active === addBtn,
-      why: active === addBtn ? '' : `focus on ${active?.id || active?.tagName || 'nothing'}`,
+      ok: active === trigger,
+      why: active === trigger ? '' : `focus on ${active?.id || active?.tagName || 'nothing'}`,
       stillOpen: !!gameDialog.open,
       nested,
       activeId: active?.id || '',
@@ -802,9 +818,11 @@ const failures = [];
   // (routed through closeDialog) and restores focus to a connected element.
   const nestedDialogOk = await page.evaluate(async () => {
     const dialogsMod = await import('/static/dialogs.js');
-    const opener = document.getElementById('addButton');
+    const opener = document.getElementById('addMenuButton');
     opener.focus();
     opener.click();
+    await new Promise(r => setTimeout(r, 100));
+    document.getElementById('addButton').click();
     await new Promise(r => setTimeout(r, 400));
     const gameDialog = document.getElementById('gameDialog');
     if (!gameDialog?.open) return {gameOpen: false};
@@ -1319,13 +1337,58 @@ const failures = [];
     results.reopenOpensCenter = document.getElementById('setupCenter')?.open === true;
     document.getElementById('setupCenter')?.close();
     document.getElementById('settingsDialog')?.close();
-    results.queueStillQueue = document.getElementById('queueButton')?.textContent.trim() === 'Queue';
+    results.queueStillQueue = document.getElementById('queueButton')?.textContent.trim() === 'Play queue';
     results.activityDistinct = Boolean(document.getElementById('activityButton')) && document.getElementById('activityButton')?.id !== 'queueButton';
     const groups = {};
     document.querySelectorAll('#toolMenu [data-tool-group]').forEach(group => {
       groups[group.dataset.toolGroup] = [...group.querySelectorAll('[role="menuitem"]')].map(el => el.id);
     });
     results.toolGroups = groups;
+    const addTrigger = document.getElementById('addMenuButton');
+    addTrigger.click();
+    await new Promise(r => setTimeout(r, 100));
+    results.addMenuOpens = document.getElementById('addMenuWrap')?.classList.contains('open') === true
+      && addTrigger.getAttribute('aria-expanded') === 'true'
+      && document.activeElement?.id === 'addButton';
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await new Promise(r => setTimeout(r, 100));
+    results.addMenuEscape = document.getElementById('addMenuWrap')?.classList.contains('open') !== true
+      && document.activeElement === addTrigger;
+    document.getElementById('helpButton')?.click();
+    await new Promise(r => setTimeout(r, 150));
+    results.helpOpens = document.getElementById('helpDialog')?.open === true
+      && document.getElementById('helpTabStart')?.getAttribute('aria-selected') === 'true';
+    document.getElementById('helpTabGlossary')?.click();
+    await new Promise(r => setTimeout(r, 50));
+    results.helpGlossary = document.querySelectorAll('#helpBody .help-glossary dt').length >= 10;
+    document.getElementById('helpTabShortcuts')?.click();
+    await new Promise(r => setTimeout(r, 50));
+    results.helpShortcuts = document.querySelectorAll('#helpBody .help-shortcuts tbody tr').length >= 8;
+    document.getElementById('closeHelp')?.click();
+    await new Promise(r => setTimeout(r, 100));
+    results.helpCloses = document.getElementById('helpDialog')?.open !== true;
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F1', bubbles: true }));
+    await new Promise(r => setTimeout(r, 100));
+    results.helpF1 = document.getElementById('helpDialog')?.open === true;
+    document.getElementById('closeHelp')?.click();
+    await new Promise(r => setTimeout(r, 100));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+    await new Promise(r => setTimeout(r, 100));
+    results.helpQuestion = document.getElementById('helpDialog')?.open === true;
+    document.getElementById('closeHelp')?.click();
+    await new Promise(r => setTimeout(r, 100));
+    document.getElementById('themesButton')?.click();
+    await new Promise(r => setTimeout(r, 500));
+    results.themeGalleryCards = document.querySelectorAll('#themeGallery .theme-card').length;
+    results.themeGallerySwatches = [...document.querySelectorAll('#themeGallery .theme-swatch')]
+      .filter(swatch => swatch.style.getPropertyValue('--swatch')).length;
+    document.getElementById('themesDialog')?.close();
+    document.getElementById('settingsButton')?.click();
+    await new Promise(r => setTimeout(r, 250));
+    document.querySelector('[data-settings-category="imports"]')?.click();
+    await new Promise(r => setTimeout(r, 50));
+    results.settingsCategoryHelp = (document.getElementById('settingsCategoryHelp')?.textContent || '').trim().length > 0;
+    document.getElementById('settingsDialog')?.close();
     const pathFields = ['path','cover','background','video','music','video_snap','video_theme','video_trailer','video_recording','clear_logo','fanart','banner','icon','box_back','box_spine','box_3d','title_screen','cart_front','cart_back','disc','advertisement','manual','screenshots','documents','save_paths','applications','versions'];
     results.pathBrowseHosts = pathFields.every(name => {
       const field = document.querySelector(`#gameDialog [name="${name}"]`);
@@ -1491,6 +1554,9 @@ const failures = [];
     AppState.games = [];
     AppState.appSettings.welcome_completed = false;
     AppState.setupDismissed = false; // reset: the dismiss test above left this true
+    AppState.onboardingDismissed = false;
+    localStorage.removeItem('openbox.setup.dismissed');
+    localStorage.removeItem('openbox.onboarding.dismissed');
     AppState._refreshCounter = (AppState._refreshCounter || 0) + 1;
     state.invalidateFilterCache();
     const origFetch = window.fetch;
@@ -2025,7 +2091,7 @@ const failures = [];
     // Control measurement: if this probe cannot take focus even before Big Box
     // opens, the element is wrong for this point in the run and asserting on it
     // would report a failure that is not about inert.
-    const probe = document.getElementById('addButton');
+    const probe = document.getElementById('addMenuButton');
     probe.focus();
     const focusBefore = document.activeElement === probe;
     // openBigBox() defers to the wizard when the library is empty, and returns
@@ -2367,6 +2433,7 @@ const failures = [];
   (!setupBehavior.dismissedFlag) && failures.push("setupBehavior.dismissedFlag");
   (!setupBehavior.dismissNoReopen) && failures.push("setupBehavior.dismissNoReopen");
   (!setupBehavior.insightsHiddenOnEmpty) && failures.push("setupBehavior.insightsHiddenOnEmpty");
+  (!setupBehavior.localeDetailsNoRawKeys) && failures.push("setupBehavior.localeDetailsNoRawKeys");
   (!setupBehavior.zeroImportHidesViewImported) && failures.push("setupBehavior.zeroImportHidesViewImported");
   (!setupBehavior.zeroImportMessage) && failures.push("setupBehavior.zeroImportMessage");
   (!setupBehavior.reopenRefreshesStep) && failures.push("setupBehavior.reopenRefreshesStep");
@@ -2410,6 +2477,17 @@ const failures = [];
   (!appShell.reopenOpensCenter) && failures.push("appShell.reopenOpensCenter");
   (!appShell.queueStillQueue) && failures.push("appShell.queueStillQueue");
   (!appShell.activityDistinct) && failures.push("appShell.activityDistinct");
+  (!appShell.addMenuOpens) && failures.push("appShell.addMenuOpens");
+  (!appShell.addMenuEscape) && failures.push("appShell.addMenuEscape");
+  (!appShell.helpOpens) && failures.push("appShell.helpOpens");
+  (!appShell.helpGlossary) && failures.push("appShell.helpGlossary");
+  (!appShell.helpShortcuts) && failures.push("appShell.helpShortcuts");
+  (!appShell.helpCloses) && failures.push("appShell.helpCloses");
+  (!appShell.helpF1) && failures.push("appShell.helpF1");
+  (!appShell.helpQuestion) && failures.push("appShell.helpQuestion");
+  (appShell.themeGalleryCards < 7) && failures.push(`appShell.themeGalleryCards (${appShell.themeGalleryCards})`);
+  (appShell.themeGallerySwatches < 35) && failures.push(`appShell.themeGallerySwatches (${appShell.themeGallerySwatches})`);
+  (!appShell.settingsCategoryHelp) && failures.push("appShell.settingsCategoryHelp");
   (!appShell.pathBrowseHosts) && failures.push("appShell.pathBrowseHosts");
   (!appShell.noWelcomeImport) && failures.push("appShell.noWelcomeImport");
   (!appShell.noCompleteWelcome) && failures.push("appShell.noCompleteWelcome");
@@ -2475,10 +2553,10 @@ const failures = [];
   (!dropEmptyHonesty.libraryUnchanged) && failures.push("dropEmptyHonesty.libraryUnchanged");
   (!dropEmptyHonesty.noImport) && failures.push("dropEmptyHonesty.noImport");
   const expectedGroups = {
-    library: ['metadataButton','mediaButton','healthButton','constellationButton','masteryButton','bulkButton','tagsButton','playlistsButton','backupButton','historyButton','timeMachineButton','achievementsButton','saveFilterButton','savePresetButton'],
-    sources: ['storefrontButton','emulatorsButton','steamButton','heroicButton','lutrisButton','gogButton','eaButton','ubisoftButton','arcadeButton','pico8Button','msu1Button','whdloadButton','arcadeRoomButton','householdButton','discoveryButton','netplayButton'],
-    personalize: ['themesButton','pluginsButton','settingsButton','whatsNewButton','fullscreenButton','reportIssueButton'],
-    automation: ['webhooksButton','notificationsButton'],
+    start: ['metadataButton','mediaButton','healthButton','emulatorsButton','themesButton','settingsButton','helpButton'],
+    library: ['constellationButton','masteryButton','bulkButton','tagsButton','playlistsButton','backupButton','historyButton','timeMachineButton','achievementsButton','saveFilterButton','savePresetButton'],
+    sources: ['storefrontButton','steamButton','heroicButton','lutrisButton','gogButton','eaButton','ubisoftButton','arcadeButton','pico8Button','msu1Button','whdloadButton','arcadeRoomButton','householdButton'],
+    more: ['discoveryButton','netplayButton','pluginsButton','whatsNewButton','fullscreenButton','reportIssueButton','webhooksButton','notificationsButton'],
   };
   for (const [key, ids] of Object.entries(expectedGroups)) {
     const got = appShell.toolGroups[key] || [];

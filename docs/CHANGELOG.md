@@ -104,6 +104,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   startup error surface, and Big Box shutdown-on-exit complete the settings surface. A shared
   placeholder cover replaces repeated missing-art text, and the media cache cleanup route removes stale generated
   files. `static/settings.js`, `handlers/settings.py`, `assets/placeholder-cover.svg`.
+- **Newcomer GUI pass.** The top bar collapses four add actions into one Add games menu; Setup Center opens on a
+  six-step quick path with advanced steps behind a toggle; Help & shortcuts (`F1` / `?`) adds a glossary and the real
+  shortcut table; the empty library shows one illustrated card; the details pane adds a dismissible three-step
+  onboarding checklist; a Jump back in hero surfaces the most recently played game with Play and View details; the
+  Themes dialog gains a swatch gallery; and the default palette uses a brand-orange action ramp with teal focus.
+  Play insights now follows the grid so games are visible on the first screen. Tool actions are grouped Start here /
+  Library / Sources / More, and "Launch Doctor", "Netplay", "Museum", and "Library Audit" read as Launch check,
+  Online play, Kiosk mode, and Library check. `static/help.js`, `static/setup.js`, `static/library.js`,
+  `static/palette.js`, `static/app.js`, `themes/*.css`.
+- **Localization note.** In `es`, `de`, `fr`, and `pt`, the renamed and newly added Tools entries (including the four
+  group headings and all 17 hints), the Add games menu, the new top-bar labels, and the new setup, help, onboarding,
+  and Jump back in copy are English (about 40 Tools/nav keys per locale; untouched entries such as Massenbearbeitung
+  and Verlauf keep their existing translations). The i18n gate verifies key and placeholder parity, not translation
+  quality. Native copy for these blocks will follow in a translation pass.
 
 ### Fixed
 - Manage Emulators shows the probed emulator version string and an explicit update-checks-off note instead of

@@ -514,7 +514,10 @@ document.addEventListener('mousedown', event => {
       const rect = topDialog.getBoundingClientRect();
       const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
       if (!inside) {
-        if (topDialog.id === 'setupCenter') AppState.setupDismissed = true;
+        if (topDialog.id === 'setupCenter') {
+          AppState.setupDismissed = true;
+          try { localStorage.setItem('openbox.setup.dismissed', '1'); } catch {}
+        }
         // G-D2: always route through closeDialog() so focus restoration
         // and the recorded-trigger contract match every other close path.
         closeDialog(topDialog);

@@ -447,4 +447,12 @@ async function nextRound() {
   }
 }
 
+if (typeof document !== 'undefined') {
+  document.addEventListener('localechange', () => {
+    if (!partyOverlayOpen() || spinning) return;
+    if (isSetupView()) renderSetup();
+    else { renderHub(); renderWheel(); renderUpNext(); }
+  });
+}
+
 export { openParty, closeParty, partyOverlayOpen, partyGamepad };

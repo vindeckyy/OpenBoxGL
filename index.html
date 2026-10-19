@@ -13,15 +13,29 @@
     <div class="brand"><img class="mark" src="/static/logo.png" alt="OpenBox">OpenBox</div>
     <nav class="topbar-zone" aria-label="Library">
       <button class="menu-button primary-nav" id="libraryButton" data-i18n="nav.library">Library</button>
-      <button class="menu-button primary-nav" id="setupLibraryButton" data-i18n="nav.setup_library">Set up library</button>
-      <button class="menu-button primary-nav" id="addButton" data-i18n="nav.add_game">Add game</button>
-      <button class="menu-button primary-nav" id="addShelfButton" data-i18n="nav.add_shelf">Add shelf entry</button>
-      <button class="menu-button primary-nav" id="importButton" data-i18n="nav.import_folder">Import folder</button>
+      <div class="topbar-tools add-menu-wrap" id="addMenuWrap">
+        <button class="menu-button primary-nav" id="addMenuButton" aria-haspopup="menu"
+                aria-expanded="false" aria-controls="addMenu" data-i18n="nav.add_games">Add games</button>
+        <div class="tool-menu add-menu" id="addMenu" role="menu">
+          <div role="group" aria-label="Add games" data-tool-group="add" data-i18n-aria-label="nav.add_group_add">
+            <button class="menu-button" id="addButton" role="menuitem" data-i18n="nav.add_menu_game">Add one game…</button>
+            <button class="menu-button" id="importButton" role="menuitem" data-i18n="nav.add_menu_folder">Scan a folder…</button>
+            <button class="menu-button" id="addShelfButton" role="menuitem" data-i18n="nav.add_menu_shelf">Add a game without files…</button>
+            <button class="menu-button" id="setupLibraryButton" role="menuitem" data-i18n="nav.add_menu_setup">Guided setup…</button>
+          </div>
+          <div role="group" aria-label="Import from a game store" data-tool-group="stores" data-i18n-aria-label="nav.add_group_stores">
+            <button class="menu-button" role="menuitem" data-add-action="steam" data-i18n="nav.add_menu_steam">Steam</button>
+            <button class="menu-button" role="menuitem" data-add-action="heroic" data-i18n="nav.add_menu_heroic">Heroic</button>
+            <button class="menu-button" role="menuitem" data-add-action="lutris" data-i18n="nav.add_menu_lutris">Lutris</button>
+            <button class="menu-button" role="menuitem" data-add-action="store" data-i18n="nav.add_menu_store">More game stores…</button>
+          </div>
+        </div>
+      </div>
     </nav>
     <nav class="topbar-zone" aria-label="Actions">
-      <button class="menu-button" id="bigBoxButton" data-i18n="nav.big_box">Big Box</button>
-      <button class="menu-button" id="sessionsButton" data-i18n="nav.running">Running</button>
-      <button class="menu-button" id="queueButton" data-i18n="nav.queue">Queue</button>
+      <button class="menu-button" id="bigBoxButton" data-i18n="nav.big_box" data-i18n-title="nav.big_box_hint" title="Fullscreen, controller-friendly mode">Big Box</button>
+      <button class="menu-button" id="sessionsButton" data-i18n="nav.running">Running now</button>
+      <button class="menu-button" id="queueButton" data-i18n="nav.queue">Play queue</button>
       <button class="menu-button activity-button" id="activityButton" aria-label="Activity" data-i18n-aria-label="nav.activity"><span class="activity-label" data-i18n="nav.activity">Activity</span><span class="activity-count" id="activityCount" aria-live="polite" hidden>0</span></button>
     </nav>
     <nav class="topbar-zone topbar-zone-tools" aria-label="Tools">
@@ -29,25 +43,30 @@
       <div class="topbar-tools" id="toolsWrap">
         <button class="menu-button" id="toolsButton" aria-haspopup="menu" aria-expanded="false" aria-controls="toolMenu" data-i18n="nav.tools">Tools</button>
         <div class="tool-menu" id="toolMenu" role="menu">
-          <div role="group" aria-label="Library" data-tool-group="library">
-            <button class="menu-button" id="metadataButton" role="menuitem" tabindex="-1" data-i18n="tools.metadata">Metadata</button>
-            <button class="menu-button" id="mediaButton" role="menuitem" tabindex="-1" data-i18n="tools.media">Media</button>
-            <button class="menu-button" id="healthButton" role="menuitem" tabindex="-1" data-i18n="tools.health">Health</button>
-            <button class="menu-button" id="constellationButton" role="menuitem" tabindex="-1" data-i18n="tools.constellation">Constellation</button>
-            <button class="menu-button" id="masteryButton" role="menuitem" tabindex="-1" data-i18n="tools.mastery">Mastery</button>
+          <div role="group" aria-label="Start here" data-tool-group="start" data-i18n-aria-label="tools.group_start">
+            <button class="menu-button" id="metadataButton" role="menuitem" tabindex="-1"><span data-i18n="tools.metadata">Artwork &amp; details</span><small class="menu-hint" data-i18n="tools.hint_metadata">Artwork and game details</small></button>
+            <button class="menu-button" id="mediaButton" role="menuitem" tabindex="-1"><span data-i18n="tools.media">Media files</span><small class="menu-hint" data-i18n="tools.hint_media">Images, video, and music</small></button>
+            <button class="menu-button" id="healthButton" role="menuitem" tabindex="-1"><span data-i18n="tools.health">Library checkup</span><small class="menu-hint" data-i18n="tools.hint_health">Find and fix library problems</small></button>
+            <button class="menu-button" id="emulatorsButton" role="menuitem" tabindex="-1"><span data-i18n="tools.emulators">Emulators &amp; controllers</span><small class="menu-hint" data-i18n="tools.hint_emulators">Install and configure</small></button>
+            <button class="menu-button" id="themesButton" role="menuitem" tabindex="-1"><span data-i18n="tools.themes">Themes</span><small class="menu-hint" data-i18n="tools.hint_themes">Change the look</small></button>
+            <button class="menu-button" id="settingsButton" role="menuitem" tabindex="-1"><span data-i18n="tools.settings">Settings</span><small class="menu-hint" data-i18n="tools.hint_settings">All options</small></button>
+            <button class="menu-button" id="helpButton" role="menuitem" tabindex="-1"><span data-i18n="tools.help">Help &amp; shortcuts</span><small class="menu-hint" data-i18n="tools.hint_help">Start here, glossary, shortcuts</small></button>
+          </div>
+          <div role="group" aria-label="Library" data-tool-group="library" data-i18n-aria-label="tools.group_library">
+            <button class="menu-button" id="constellationButton" role="menuitem" tabindex="-1"><span data-i18n="tools.constellation">Game connections</span><small class="menu-hint" data-i18n="tools.hint_constellation">See how games connect</small></button>
+            <button class="menu-button" id="masteryButton" role="menuitem" tabindex="-1"><span data-i18n="tools.mastery">Completion ranking</span><small class="menu-hint" data-i18n="tools.hint_mastery">Completion ranking</small></button>
             <button class="menu-button" id="bulkButton" role="menuitem" tabindex="-1" data-i18n="tools.bulk_edit">Bulk edit</button>
             <button class="menu-button" id="tagsButton" role="menuitem" tabindex="-1" data-i18n="tools.tags">Tags</button>
             <button class="menu-button" id="playlistsButton" role="menuitem" tabindex="-1" data-i18n="tools.playlists">Playlists</button>
             <button class="menu-button" id="backupButton" role="menuitem" tabindex="-1" data-i18n="tools.backup">Backup</button>
             <button class="menu-button" id="historyButton" role="menuitem" tabindex="-1" data-i18n="tools.history">History</button>
-            <button class="menu-button" id="timeMachineButton" role="menuitem" tabindex="-1" data-i18n="tools.time_machine">Time Machine</button>
-            <button class="menu-button" id="achievementsButton" role="menuitem" tabindex="-1" data-i18n="tools.achievements">Achievements</button>
-            <button class="menu-button" id="saveFilterButton" role="menuitem" tabindex="-1" data-i18n="tools.save_filter">Save filter</button>
-            <button class="menu-button" id="savePresetButton" role="menuitem" tabindex="-1" data-i18n="tools.save_preset">Save preset</button>
+            <button class="menu-button" id="timeMachineButton" role="menuitem" tabindex="-1"><span data-i18n="tools.time_machine">Library history</span><small class="menu-hint" data-i18n="tools.hint_time_machine">Review and undo changes</small></button>
+            <button class="menu-button" id="achievementsButton" role="menuitem" tabindex="-1"><span data-i18n="tools.achievements">RetroAchievements account</span><small class="menu-hint" data-i18n="tools.hint_achievements">Connect RetroAchievements</small></button>
+            <button class="menu-button" id="saveFilterButton" role="menuitem" tabindex="-1"><span data-i18n="tools.save_filter">Save current search</span></button>
+            <button class="menu-button" id="savePresetButton" role="menuitem" tabindex="-1"><span data-i18n="tools.save_preset">Save current view</span></button>
           </div>
-          <div role="group" aria-label="Sources" data-tool-group="sources">
-            <button class="menu-button" id="storefrontButton" role="menuitem" tabindex="-1" data-i18n="tools.storefronts">Storefronts</button>
-            <button class="menu-button" id="emulatorsButton" role="menuitem" tabindex="-1" data-i18n="tools.emulators">Emulators</button>
+          <div role="group" aria-label="Imports &amp; extras" data-tool-group="sources" data-i18n-aria-label="tools.group_sources">
+            <button class="menu-button" id="storefrontButton" role="menuitem" tabindex="-1"><span data-i18n="tools.storefronts">Game stores</span><small class="menu-hint" data-i18n="tools.hint_storefronts">Steam, Heroic, Lutris, and more</small></button>
             <button class="menu-button" id="steamButton" role="menuitem" tabindex="-1" data-i18n="tools.import_steam">Import Steam</button>
             <button class="menu-button" id="heroicButton" role="menuitem" tabindex="-1" data-i18n="tools.import_heroic">Import Heroic</button>
             <button class="menu-button" id="lutrisButton" role="menuitem" tabindex="-1" data-i18n="tools.import_lutris">Import Lutris</button>
@@ -58,20 +77,16 @@
             <button class="menu-button" id="pico8Button" role="menuitem" tabindex="-1" data-i18n="tools.import_pico8">Import PICO-8</button>
             <button class="menu-button" id="msu1Button" role="menuitem" tabindex="-1" data-i18n="tools.import_msu1">Import MSU-1</button>
             <button class="menu-button" id="whdloadButton" role="menuitem" tabindex="-1" data-i18n="tools.import_whdload">Import WHDLoad</button>
-            <button class="menu-button" id="arcadeRoomButton" role="menuitem" tabindex="-1" data-i18n="tools.arcade_room">Arcade Room</button>
-            <button class="menu-button" id="householdButton" role="menuitem" tabindex="-1" data-i18n="tools.household">Household</button>
-            <button class="menu-button" id="discoveryButton" role="menuitem" tabindex="-1" data-i18n="tools.discovery">Discovery</button>
-            <button class="menu-button" id="netplayButton" role="menuitem" tabindex="-1">Netplay lobby</button>
+            <button class="menu-button" id="arcadeRoomButton" role="menuitem" tabindex="-1"><span data-i18n="tools.arcade_room">3D arcade room</span><small class="menu-hint" data-i18n="tools.hint_arcade_room">Walk around a 3D arcade</small></button>
+            <button class="menu-button" id="householdButton" role="menuitem" tabindex="-1"><span data-i18n="tools.household">Family sharing</span><small class="menu-hint" data-i18n="tools.hint_household">Share stats with family</small></button>
           </div>
-          <div role="group" aria-label="Personalize" data-tool-group="personalize">
-            <button class="menu-button" id="themesButton" role="menuitem" tabindex="-1" data-i18n="tools.themes">Themes</button>
-            <button class="menu-button" id="pluginsButton" role="menuitem" tabindex="-1" data-i18n="tools.plugins">Plugins</button>
-            <button class="menu-button" id="settingsButton" role="menuitem" tabindex="-1" data-i18n="tools.settings">Settings</button>
+          <div role="group" aria-label="More" data-tool-group="more" data-i18n-aria-label="tools.group_more">
+            <button class="menu-button" id="discoveryButton" role="menuitem" tabindex="-1"><span data-i18n="tools.discovery">Find something to play</span><small class="menu-hint" data-i18n="tools.hint_discovery">Find something to play</small></button>
+            <button class="menu-button" id="netplayButton" role="menuitem" tabindex="-1"><span data-i18n="tools.netplay">Online play</span><small class="menu-hint" data-i18n="tools.hint_netplay">Play online with friends</small></button>
+            <button class="menu-button" id="pluginsButton" role="menuitem" tabindex="-1"><span data-i18n="tools.plugins">Plugins</span><small class="menu-hint" data-i18n="tools.hint_plugins">Extend OpenBox</small></button>
             <button class="menu-button" id="whatsNewButton" role="menuitem" tabindex="-1" data-i18n="common.whats_new">What's New</button>
             <button class="menu-button" id="fullscreenButton" role="menuitem" tabindex="-1" data-i18n="nav.fullscreen">Fullscreen</button>
-            <button class="menu-button" id="reportIssueButton" role="menuitem" tabindex="-1">Report issue</button>
-          </div>
-          <div role="group" aria-label="Automation" data-tool-group="automation">
+            <button class="menu-button" id="reportIssueButton" role="menuitem" tabindex="-1" data-i18n="help.report_issue">Report a problem</button>
             <button class="menu-button" id="webhooksButton" role="menuitem" tabindex="-1" data-i18n="tools.webhooks">Webhooks</button>
             <button class="menu-button" id="notificationsButton" role="menuitem" tabindex="-1" data-i18n="tools.notifications">Notifications</button>
           </div>
@@ -117,15 +132,16 @@
         <button class="icon-button" id="viewToggleButton" data-i18n="library.list_view">List view</button>
         <button class="icon-button" id="surpriseButton" data-i18n="library.surprise_me">Surprise me</button>
       </div>
+      <section id="homeHero" class="home-hero" hidden aria-label="Jump back in" data-i18n-aria-label="library.jump_back_in"></section>
       <button type="button" class="drop-zone" id="dropZone" data-i18n="library.drop_zone">Drop ROM folders or game files here to import</button>
-      <section id="insightsPanel" class="insights-panel" aria-label="Play insights" data-i18n-aria-label="library.play_insights"></section>
       <div class="arrange-wrap">
         <section class="grid" id="grid"><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div></section>
         <div class="arrange-bar" id="arrangeBar" hidden role="button" tabindex="0" aria-label="Jump through the current view" data-i18n-aria-label="library.jump_view"></div>
       </div>
+      <section id="insightsPanel" class="insights-panel" aria-label="Play insights" data-i18n-aria-label="library.play_insights"></section>
     </main>
 
-    <aside class="details" id="details" aria-label="Game details" data-i18n-aria-label="library.game_details" data-moments-host="detail"><div class="details-resize-handle" id="detailsResizeHandle" role="separator" aria-orientation="vertical" aria-label="Resize details pane" tabindex="0" data-i18n-aria-label="library.resize_details"></div><div class="detail-empty" data-i18n="library.select_game_prompt">Select a game to inspect its real metadata and artwork.</div></aside>
+    <aside class="details" id="details" aria-label="Game details" data-i18n-aria-label="library.game_details" data-moments-host="detail"><div class="details-resize-handle" id="detailsResizeHandle" role="separator" aria-orientation="vertical" aria-label="Resize details pane" tabindex="0" data-i18n-aria-label="library.resize_details"></div><div class="detail-empty" id="detailEmptyInitial"><span data-i18n="library.select_game_prompt">Select a game to see its details.</span><span class="detail-empty-hint" data-i18n="library.select_game_hint">Use the arrow keys to browse and Enter to open.</span></div></aside>
   </div>
 
   <dialog id="filterDrawer" aria-modal="true" aria-labelledby="filterDrawerTitle">
@@ -273,7 +289,9 @@
       <div class="form-grid">
         <p class="wide description">Stock themes ship with OpenBox. Import your own CSS to restyle the library, detail pane, dialogs, and Big Box.</p>
         <label class="field wide"><span>Apply to</span><select id="themeScope"><option value="">All platforms</option></select></label>
-        <label class="field wide"><span>Active theme</span><select id="themeSelect"><option value="">Default</option></select></label>
+        <p class="wide description" data-i18n="themes.gallery_hint">Pick a theme below, then choose Apply. Themes change colors, not layout.</p>
+        <div class="theme-gallery" id="themeGallery"></div>
+        <label class="field wide"><span data-i18n="themes.active_theme">Active theme</span><select id="themeSelect"><option value="">Default</option></select></label>
         <button type="button" class="icon-button" id="importTheme">Import CSS theme</button>
         <button type="button" class="icon-button" id="openThemeFolder">Open themes folder</button>
       </div>
@@ -412,7 +430,7 @@
     <div class="dialog-actions"><button type="button" class="primary" id="doneMediaManager">Done</button></div>
   </dialog>
   <dialog id="healthDialog" aria-modal="true" aria-labelledby="healthDialogTitle">
-    <div class="dialog-head"><h2 id="healthDialogTitle">Library Audit</h2><button type="button" id="closeHealth" aria-label="Close Library Audit dialog">×</button></div>
+    <div class="dialog-head"><h2 id="healthDialogTitle" data-i18n="health.title">Library checkup</h2><button type="button" id="closeHealth" aria-label="Close library checkup" data-i18n-aria-label="health.close">×</button></div>
     <div class="form-grid">
       <div class="wide detail-card" id="healthSummary"></div>
       <div class="wide extras" id="auditSourceTools" hidden>
@@ -525,7 +543,7 @@
   </dialog>
   <dialog id="welcomeDialog" hidden aria-hidden="true"></dialog>
   <dialog id="setupCenter" aria-modal="true" aria-labelledby="setupCenterTitle" class="setup-center-dialog">
-    <div class="dialog-head setup-center-head"><h2 id="setupCenterTitle">Library Setup Center</h2><button type="button" id="closeSetupCenter" aria-label="Close Library Setup Center">×</button></div>
+    <div class="dialog-head setup-center-head"><h2 id="setupCenterTitle" data-i18n="setup.title">Set up your library</h2><button type="button" id="closeSetupCenter" aria-label="Close setup" data-i18n-aria-label="setup.close">×</button></div>
     <div class="setup-center-body" id="setupCenterBody" role="region" aria-label="Setup workflow">
       <p class="description">Guided library setup loads here.</p>
     </div>
@@ -542,6 +560,12 @@
       <div class="dialog-actions"><button type="button" class="icon-button" id="forceShutdown">Force close</button></div>
     </div>
   </div>
+  <dialog id="helpDialog" aria-modal="true" aria-labelledby="helpTitle" class="help-dialog">
+    <div class="dialog-head"><h2 id="helpTitle" data-i18n="help.title">Help &amp; shortcuts</h2>
+      <button type="button" id="closeHelp" aria-label="Close Help" data-i18n-aria-label="help.close">×</button></div>
+    <div class="dialog-tabs" role="tablist" id="helpTabs"></div>
+    <div class="help-body" id="helpBody"></div>
+  </dialog>
   <dialog id="settingsDialog" aria-modal="true" aria-labelledby="settingsDialogTitle">
     <form id="settingsForm">
       <div class="dialog-head"><h2 id="settingsDialogTitle">OpenBox Settings</h2><button type="button" id="closeSettings" aria-label="Close OpenBox Settings dialog">×</button></div>
@@ -561,6 +585,7 @@
           <button type="button" class="settings-nav-item" data-settings-category="about" data-i18n="settings.about">About</button>
         </nav>
       <div class="form-grid settings-panels">
+        <p class="wide settings-category-help" id="settingsCategoryHelp" data-settings-exempt="true"></p>
         <div class="wide settings-field settings-panel detail-card" data-settings-panel="about" data-setting="about version platform data folder native window browser webview">
           <dl class="about-facts">
             <dt data-i18n="settings.about_version">Version</dt><dd id="aboutVersion"></dd>
@@ -637,8 +662,8 @@
         <label class="field wide settings-field settings-panel" data-settings-panel="integrations" data-setting="obs websocket endpoint"><span>OBS WebSocket endpoint (optional)</span><input id="obsWebsocketUrl" placeholder="ws://127.0.0.1:4455"></label>
         <label class="field wide settings-field settings-panel" data-settings-panel="integrations sessions" data-setting="obs websocket password"><span>OBS WebSocket password (optional)</span><input id="obsWebsocketPassword" type="password" autocomplete="off"></label>
         <label class="check settings-field settings-panel" data-settings-panel="integrations" data-setting="household family stats sharing local"><input type="checkbox" id="householdStatsSharing"> Share household play statistics with explicitly linked local devices</label>
-        <label class="check settings-field settings-panel" data-settings-panel="bigbox sessions" data-setting="museum arcade kiosk pin lock"><input type="checkbox" id="museumKioskEnabled"> Require a PIN before entering Museum mode (convenience boundary)</label>
-        <label class="field settings-field settings-panel" data-settings-panel="bigbox sessions" data-setting="museum arcade kiosk pin"><span>Museum PIN, 4–12 digits</span><span class="path-input-row"><input id="museumKioskPin" type="password" inputmode="numeric" autocomplete="new-password" placeholder="Leave blank to keep the current PIN"><button type="button" class="path-browse" id="clearMuseumKioskPin">Clear PIN</button></span></label>
+        <label class="check settings-field settings-panel" data-settings-panel="bigbox sessions" data-setting="museum arcade kiosk pin lock"><input type="checkbox" id="museumKioskEnabled"> Require a PIN before entering Kiosk mode (convenience boundary)</label>
+        <label class="field settings-field settings-panel" data-settings-panel="bigbox sessions" data-setting="museum arcade kiosk pin"><span>Kiosk PIN, 4–12 digits</span><span class="path-input-row"><input id="museumKioskPin" type="password" inputmode="numeric" autocomplete="new-password" placeholder="Leave blank to keep the current PIN"><button type="button" class="path-browse" id="clearMuseumKioskPin">Clear PIN</button></span></label>
         <label class="field wide settings-field settings-panel" data-settings-panel="sessions bigbox" data-setting="obs recording folder path"><span>OBS recording folder, optional override</span><span class="path-input-row"><input id="obsRecordingPath" placeholder="~/Videos"><button type="button" class="path-browse" data-browse-for="obsRecordingPath" data-browse-kind="folder">Browse</button></span></label>
         <label class="field settings-field settings-panel" data-settings-panel="sessions" data-setting="save backup limit retention"><span data-i18n="settings.save_backup_limit">Save backup retention limit, 0 keeps all</span><input id="saveBackupLimit" type="number" min="0" max="500"></label>
         <label class="field settings-field settings-panel" data-settings-panel="metadata" data-setting="media download limit queue welcome wizard"><span data-i18n="settings.media_download_limit">Media download limit during imports, 0 unlimited</span><input id="mediaDownloadLimit" type="number" min="0" max="10000"></label>
@@ -698,7 +723,7 @@
         <label class="check settings-field settings-panel" data-settings-panel="bigbox appearance" data-setting="theme sounds music sound effects"><input type="checkbox" id="bigboxSoundsEnabled" checked> Play theme music and navigation sounds in Big Box</label>
         <label class="field wide settings-field settings-panel" data-settings-panel="bigbox appearance" data-setting="big box startup video attract"><span>Big Box startup video path</span><span class="path-input-row"><input id="bigboxStartupVideo"><button type="button" class="path-browse" data-browse-for="bigboxStartupVideo" data-browse-kind="file">Browse</button></span></label>
         <label class="field wide settings-field settings-panel" data-settings-panel="bigbox" data-setting="big box shutdown applications exit leave"><span data-i18n="settings.bigbox_shutdown_apps">Applications to run when leaving Big Box, one command per line</span><textarea id="bigboxShutdownCommands"></textarea></label>
-        <label class="field settings-field settings-panel" data-settings-panel="bigbox" data-setting="attract mode screensaver big box"><span data-i18n="settings.attract_delay">Attract mode delay in seconds</span><input id="attractModeSeconds" type="number" min="0" max="3600"></label>
+        <label class="field settings-field settings-panel" data-settings-panel="bigbox" data-setting="attract mode screensaver big box"><span data-i18n="settings.attract_delay">Demo mode delay in seconds</span><input id="attractModeSeconds" type="number" min="0" max="3600"></label>
         <label class="check settings-field settings-panel" data-settings-panel="advanced" data-setting="system tray minimize close"><input type="checkbox" id="trayEnabled"> <span data-i18n="settings.tray_enabled">Enable desktop tray integration</span></label>
         <label class="check settings-field settings-panel" data-settings-panel="advanced" data-setting="system tray minimize close"><input type="checkbox" id="minimizeToTray"> <span data-i18n="settings.minimize_to_tray">Minimize to tray when window closes</span></label>
         <label class="field wide settings-field settings-panel" data-settings-panel="sessions advanced" data-setting="ludusavi hoard saves backup"><span>Ludusavi backup path, optional</span><span class="path-input-row"><input id="ludusaviBackupPath" placeholder="Leave blank for Ludusavi default"><button type="button" class="path-browse" data-browse-for="ludusaviBackupPath" data-browse-kind="folder">Browse</button></span></label>
@@ -827,7 +852,7 @@
         <label class="field"><span>Quick preset</span><select id="bigBoxQuickPreset"><option value="">None</option></select></label>
         <label class="field"><span>Achievements</span><select id="bigBoxRaFilter"><option value="all">All games</option><option value="matched">RetroAchievements matched</option><option value="unmatched">Not matched</option></select></label>
         <div class="dialog-actions"><button class="icon-button" id="closeBigBoxMenu" type="button">Cancel</button><button class="primary" id="applyBigBoxMenu" type="button">Apply</button></div>
-        <div class="dialog-actions"><button class="icon-button" id="partyMenuButton" type="button" data-i18n="party.open">Game Night</button><button class="icon-button" id="bigBoxNetplay" type="button">Netplay lobby</button></div>
+        <div class="dialog-actions"><button class="icon-button" id="partyMenuButton" type="button" data-i18n="party.open">Game Night</button><button class="icon-button" id="bigBoxNetplay" type="button" data-i18n="tools.netplay">Online play</button></div>
       </div>
     </div>
     <div class="screensaver" id="screenSaver" role="dialog" aria-modal="true" aria-label="Screensaver" hidden><video id="screenSaverVideo" muted autoplay loop></video><div class="screensaver-copy"><div class="hero-kicker" id="screenSaverPlatform"></div><h2 id="screenSaverTitle"></h2><p class="screensaver-stats" id="screenSaverStats" aria-live="polite"></p><p>Press Play to launch, or any other control to return.</p></div></div>

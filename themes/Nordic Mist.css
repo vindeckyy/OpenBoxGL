@@ -1,4 +1,4 @@
-/* OpenBox Stock Theme v4: Nordic Mist */
+/* OpenBox Stock Theme v5: Nordic Mist */
 
 :root {
   --font-body-family: system-ui, sans-serif;
@@ -94,24 +94,24 @@
   --topbar: #121820;
   --topbar-min-height: 3rem;
   --accent: #6eb5c9;
-  --accent-ghost: #f0600055;
-  --accent-ghost-faint: #f060002e;
-  --accent-ghost-soft: #f0600044;
+  --accent-ghost: #6EB5C955;
+  --accent-ghost-faint: #6EB5C92E;
+  --accent-ghost-soft: #6EB5C944;
   --achievement: #e2c36b;
   --action: #6eb5c9;
   --action-ink: #061018;
   --active: #6eb5c9;
   --badge-danger-border: #d66b6b;
-  --badge-danger-fg: #d66b6b;
+  --badge-danger-fg: #E08888;
   --badge-pending-bg: #1e2731;
   --badge-pending-border: #344354;
   --badge-pending-fg: #b8c5d4;
   --badge-progress-fg: #e2c36b;
   --bg: #0f1419;
   --bigbox-bg: #2a4a5e;
-  --bigbox-copy: #a3b2c2;
+  --bigbox-copy: #BDCCD9;
   --bigbox-foot: #a3b2c2;
-  --bigbox-head-muted: #8b9aab;
+  --bigbox-head-muted: #BDCCD9;
   --black: #000;
   --border-card: #344354;
   --border-control: #344354;
@@ -122,7 +122,7 @@
   --cover-title-end: #121820;
   --cover-title-start: #243140;
   --cyan: #6eb5c9;
-  --danger: #d66b6b;
+  --danger: #E08888;
   --detail-head: #6eb5c9;
   --details-resize-bg: var(--line);
   --dialog-close: #e8eef4;
@@ -169,6 +169,15 @@
   --shadow-dialog: #000c;
   --shadow-elevated: #0009;
   --shadow-empty: #0005;
+  --elevation-card: 0 8px 20px var(--shadow-cover-strong);
+  --elevation-card-hover: 0 14px 34px var(--shadow-cover-selected), 0 0 0 1px var(--accent-ghost-soft);
+  --elevation-menu: 0 18px 44px var(--shadow-elevated);
+  --elevation-dialog: 0 30px 80px var(--shadow-dialog);
+  --elevation-inset-active: inset 3px 0 0 var(--active);
+  --elevation-toast: 0 12px 30px var(--shadow-elevated);
+  --elevation-hero: 0 24px 60px var(--shadow-cover-selected);
+  --hero-art: none;
+  --swatch: var(--surface-field);
   --shutdown-text: #8b9aab;
   --surface-card: #1e2731;
   --surface-deep: #0c1116;
@@ -190,11 +199,11 @@
   --radio-badge-fg: var(--badge-progress-fg);
   --radio-badge-border: var(--badge-pending-border);
   --radio-sub-fg: var(--muted);
-  --focus-ring: #f06000;
+  --focus-ring: #000000;
   --surface-gamepad-body: #2a2722;
   --surface-gamepad-stick: #4a4438;
   --surface-gamepad-btn: #6b6354;
-  --surface-gamepad-btn-active: #f06000;
+  --surface-gamepad-btn-active: #6EB5C9;
   --border-gamepad: #3a3530;
   --text-controller-status: #8a8270;
   --surface-health-ok: #2d4a2d;
@@ -247,7 +256,7 @@
   --mastery-played: #6c91b6;
   --mastery-beaten: #d6b36a;
   --mastery-completed: #5e8c6a;
-  --mastery-mastered: #f06000;
+  --mastery-mastered: #6EB5C9;
   --recap-badge-bg: var(--lifecycle-bg);
   --recap-badge-fg: var(--badge-progress-fg);
   --recap-badge-border: var(--badge-pending-border);

@@ -1,4 +1,4 @@
-/* OpenBox Stock Theme v4: Phosphor Terminal */
+/* OpenBox Stock Theme v5: Phosphor Terminal */
 
 :root {
   --font-body-family: system-ui, sans-serif;
@@ -94,9 +94,9 @@
   --topbar: #040a06;
   --topbar-min-height: 3rem;
   --accent: #49ff7a;
-  --accent-ghost: #f0600055;
-  --accent-ghost-faint: #f060002e;
-  --accent-ghost-soft: #f0600044;
+  --accent-ghost: #49FF7A55;
+  --accent-ghost-faint: #49FF7A2E;
+  --accent-ghost-soft: #49FF7A44;
   --achievement: #49ff7a;
   --action: #49ff7a;
   --action-ink: #021006;
@@ -169,6 +169,15 @@
   --shadow-dialog: #000c;
   --shadow-elevated: #0009;
   --shadow-empty: #0005;
+  --elevation-card: 0 8px 20px var(--shadow-cover-strong);
+  --elevation-card-hover: 0 14px 34px var(--shadow-cover-selected), 0 0 0 1px var(--accent-ghost-soft);
+  --elevation-menu: 0 18px 44px var(--shadow-elevated);
+  --elevation-dialog: 0 30px 80px var(--shadow-dialog);
+  --elevation-inset-active: inset 3px 0 0 var(--active);
+  --elevation-toast: 0 12px 30px var(--shadow-elevated);
+  --elevation-hero: 0 24px 60px var(--shadow-cover-selected);
+  --hero-art: none;
+  --swatch: var(--surface-field);
   --shutdown-text: #5d9a68;
   --surface-card: #061008;
   --surface-deep: #020402;
@@ -190,11 +199,11 @@
   --radio-badge-fg: var(--badge-progress-fg);
   --radio-badge-border: var(--badge-pending-border);
   --radio-sub-fg: var(--muted);
-  --focus-ring: #f06000;
+  --focus-ring: #000000;
   --surface-gamepad-body: #2a2722;
   --surface-gamepad-stick: #4a4438;
   --surface-gamepad-btn: #6b6354;
-  --surface-gamepad-btn-active: #f06000;
+  --surface-gamepad-btn-active: #49FF7A;
   --border-gamepad: #3a3530;
   --text-controller-status: #8a8270;
   --surface-health-ok: #2d4a2d;
@@ -247,7 +256,7 @@
   --mastery-played: #6c91b6;
   --mastery-beaten: #d6b36a;
   --mastery-completed: #5e8c6a;
-  --mastery-mastered: #f06000;
+  --mastery-mastered: #49FF7A;
   --recap-badge-bg: var(--lifecycle-bg);
   --recap-badge-fg: var(--badge-progress-fg);
   --recap-badge-border: var(--badge-pending-border);

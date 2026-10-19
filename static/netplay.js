@@ -15,7 +15,7 @@ async function openNetplay() {
   try {
     const result = await api('/api/v2/netplay/lobby');
     if (!result.available) {
-      target.innerHTML = `<p class="description">${escapeHtml(result.error || 'Netplay lobby is unavailable.')}</p>`;
+      target.innerHTML = `<p class="description">${escapeHtml(result.error || 'Online play is unavailable.')}</p>`;
       return;
     }
     target.innerHTML = result.rows.length ? result.rows.map(row => `<div class="storefront-row"><div><strong>${escapeHtml(row.game || 'Netplay room')}</strong><small>${escapeHtml(row.nick || '')} · ${escapeHtml(row.core || '')} · ${Number(row.players) || 0} player(s)</small></div><span><code>${escapeHtml(address(row))}</code> <button type="button" class="icon-button" data-netplay-copy="${escapeHtml(address(row))}">Copy</button></span></div>`).join('') : '<p class="description">No netplay rooms are listed right now.</p>';

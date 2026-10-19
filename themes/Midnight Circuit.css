@@ -1,4 +1,4 @@
-/* OpenBox Stock Theme v4: Midnight Circuit */
+/* OpenBox Stock Theme v5: Midnight Circuit */
 
 :root {
   --font-body-family: system-ui, sans-serif;
@@ -94,9 +94,9 @@
   --topbar: #10182a;
   --topbar-min-height: 3rem;
   --accent: #3de0ff;
-  --accent-ghost: #f0600055;
-  --accent-ghost-faint: #f060002e;
-  --accent-ghost-soft: #f0600044;
+  --accent-ghost: #3DE0FF55;
+  --accent-ghost-faint: #3DE0FF2E;
+  --accent-ghost-soft: #3DE0FF44;
   --achievement: #6b8cff;
   --action: #2dff9a;
   --action-ink: #041510;
@@ -169,6 +169,15 @@
   --shadow-dialog: #000c;
   --shadow-elevated: #0009;
   --shadow-empty: #0005;
+  --elevation-card: 0 8px 20px var(--shadow-cover-strong);
+  --elevation-card-hover: 0 14px 34px var(--shadow-cover-selected), 0 0 0 1px var(--accent-ghost-soft);
+  --elevation-menu: 0 18px 44px var(--shadow-elevated);
+  --elevation-dialog: 0 30px 80px var(--shadow-dialog);
+  --elevation-inset-active: inset 3px 0 0 var(--active);
+  --elevation-toast: 0 12px 30px var(--shadow-elevated);
+  --elevation-hero: 0 24px 60px var(--shadow-cover-selected);
+  --hero-art: none;
+  --swatch: var(--surface-field);
   --shutdown-text: #8490ab;
   --surface-card: #121c30;
   --surface-deep: #05080f;
@@ -190,11 +199,11 @@
   --radio-badge-fg: var(--badge-progress-fg);
   --radio-badge-border: var(--badge-pending-border);
   --radio-sub-fg: var(--muted);
-  --focus-ring: #f06000;
+  --focus-ring: #000000;
   --surface-gamepad-body: #2a2722;
   --surface-gamepad-stick: #4a4438;
   --surface-gamepad-btn: #6b6354;
-  --surface-gamepad-btn-active: #f06000;
+  --surface-gamepad-btn-active: #3DE0FF;
   --border-gamepad: #3a3530;
   --text-controller-status: #8a8270;
   --surface-health-ok: #2d4a2d;
@@ -247,7 +256,7 @@
   --mastery-played: #6c91b6;
   --mastery-beaten: #d6b36a;
   --mastery-completed: #5e8c6a;
-  --mastery-mastered: #f06000;
+  --mastery-mastered: #3DE0FF;
   --recap-badge-bg: var(--lifecycle-bg);
   --recap-badge-fg: var(--badge-progress-fg);
   --recap-badge-border: var(--badge-pending-border);

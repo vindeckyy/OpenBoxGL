@@ -8,6 +8,7 @@ import { searchWithFallback } from './library.js';
 import { SHORTCUTS } from './navigation.js';
 
 const ACTIONS = [
+  { id: 'help', label: () => t('help.title'), event: 'open-help' },
   { id: 'settings', label: () => t('tools.settings'), event: 'open-settings' },
   { id: 'time-machine', label: () => t('tools.time_machine'), event: 'open-time-machine' },
   { id: 'bigbox', label: () => t('nav.big_box'), event: 'open-bigbox' },

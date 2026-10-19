@@ -27,6 +27,7 @@ export const SHORTCUTS = Object.freeze([
   { key: 'Shift+M', labelKey: 'shortcuts.capture_moment' },
   { key: 'F', labelKey: 'shortcuts.favorite_focused' },
   { key: 'Esc', labelKey: 'shortcuts.close_selection' },
+  { key: 'F1', labelKey: 'shortcuts.show_shortcuts' },
 ]);
 
 function navigationBlocked() {
