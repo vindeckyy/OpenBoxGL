@@ -179,8 +179,8 @@ cost, and translates server notices. No v1 route is removed or changed. Six rout
   `perf_bench.py --browser` known-limit bullet is removed.
 
 ### Known limits in 1.17.0
-- Xbox PC package scanning and owned-but-uninstalled GOG/EA/Ubisoft catalogs are not imported. Native storefront
-  imports are manual; there is no startup auto-import for them.
+- Xbox PC package scanning and owned-but-uninstalled GOG/EA/Ubisoft catalogs are not imported. In 1.17.0 native
+  storefront imports are manual; the unreleased 1.18 build adds opt-in per-source startup auto-import for them.
 - Provider ids, price paid, and decks stay local. They do not cross the library-sync protocol, and Time Machine does
   not journal price changes; adding them would make a mixed-version peer reject the whole event.
 - Cost totals are grouped by currency and are not converted. A rate is shown only for a priced game with at least
@@ -2027,7 +2027,10 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.15.0...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.17.0...HEAD
+[1.17.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.16.1...v1.17.0
+[1.16.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.16.0...v1.16.1
+[1.16.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.13.0...v1.13.1
