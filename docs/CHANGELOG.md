@@ -4,6 +4,32 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Backups no longer carry provider tokens or the OBS WebSocket password.** The redaction
+  list covered the Gameyfin password and webhook secrets but not the per-provider
+  integration tokens (IGDB, ScreenScraper, SteamGridDB, Gameyfin, RetroAchievements) or
+  `obs_websocket_password`, so a default backup wrote both into `settings.json` and
+  `library.json` in cleartext. Both are now redacted like every other credential, and a
+  restore still preserves the local copy. `pkg/parity/parity_redact.py`,
+  `tests/test_backup_redaction.py`.
+- **The Windows installer explains itself when the release verifier is missing.** The
+  standalone `install.ps1` asset is shipped next to the verifier it trusts, so running it
+  on its own now fails with the supported flow (extract the release archive and run
+  `OpenBox\scripts\install.ps1`) instead of "run this script from a checkout".
+  `scripts/install.ps1`, `tests/test_install_scripts.py`.
+- **A native `openbox://resume/<id>` deeplink is no longer ignored.** The host resumes the
+  session server-side and then loaded the window at `?deeplink=resume&id=`, which the page
+  did not handle; the page now selects the game and scrolls it into view, and
+  `?deeplink=showgame&id=` scrolls as the contract describes. `static/app.js`,
+  `tests/test_frontend_contract.py`.
+
+### Changed
+- The version gate now reads the release version the bug-report template advertises instead
+  of looking for the version string anywhere in the file, so a stale "current release is
+  v1.16.0" line fails `make version-check` again. `scripts/check_version_sync.py`.
+
 ## [1.18.0] - 2026-10-19
 
 A release that makes OpenBox a clearer and deeper library manager. The first-run pass consolidates actions, adds
@@ -21,8 +47,9 @@ Upgrade from any 1.17.x release.
 - **Keyboard and controller remapping.** Settings > Controller records keyboard shortcuts for play, back, menu, pause,
   paging, search, settings, and the reader; controller buttons can be cleared, and duplicate assignments are swapped
   only after confirmation. `static/settings.js`, `handlers/settings.py`, `tests/test_settings_schema.py`.
-- **Filter exclusions and richer rules.** Filters cycle include → exclude → clear for platforms, categories, source,
-  and smart collections; presets and playlists accept source, achievement-source, region, text operators, and
+- **Filter exclusions and richer rules.** Platform and category filters cycle include → exclude → clear on repeated
+  clicks, and the Source filter has a matching **Exclude** toggle; presets and playlists accept source,
+  achievement-source, region, text operators, and
   exclusions. Exclusions survive a refresh through the hash route. `pkg/parity/parity_filter_presets.py`,
   `static/state.js`, `static/library.js`, `static/router.js`, `tests/test_parity_features.py`.
 - **Configurable progress values.** Progress automation and the game editor only offer the labels enabled in Settings;
@@ -86,7 +113,7 @@ Upgrade from any 1.17.x release.
   monotonic playtime/last-played merges; achievement tabs show provider totals and source filters, and manual
   overrides persist. MAME high scores parse hi2txt's JSON or pipe-delimited score table, import/export, and render in
   a searchable table.
-  Automatic matching also reads WiiWare WADs with the rcheevos TMD/content layout. RetroArch's public HTTPS netplay lobby is available from Tools > Netplay lobby and the Big Box menu.
+  Automatic matching also reads WiiWare WADs with the rcheevos TMD/content layout. RetroArch's public HTTPS netplay lobby is available from Tools > Online play and the Big Box menu.
   `pkg/parity/parity_steam_achievements.py`, `pkg/parity/parity_highscores.py`, `pkg/parity/parity_netplay.py`.
 - **Resume slots, disc hashing, and plugin settings.** A game can store a RetroArch save-state slot from its Save
   management card, and automatic RetroAchievements matching expands to M3U playlists, PlayStation CHD, and
@@ -99,7 +126,7 @@ Upgrade from any 1.17.x release.
   independently of RetroAchievements. The launch audit also appends a compact rolling history to
   `cache/launch_audit.jsonl` for trend checks. `handlers/extensions.py`, `handlers/metadata.py`,
   `pkg/parity/parity_launch_audit.py`, `tests/test_parity_admin_http.py`, `tests/test_launch_audit.py`.
-- **Audit source filtering and bulk media moves.** Library Audit now shows a Source column, per-source counts, and a
+- **Audit source filtering and bulk media moves.** Library checkup now shows a Source column, per-source counts, and a
   source filter; plugin sources use their display names. Bulk platform edits can move selected games' media with the
   field update committed even when a move fails, reporting `media_errors` for retry. `static/settings.js`,
   `handlers/library.py`, `pkg/parity/parity_platform_admin.py`.
@@ -116,14 +143,15 @@ Upgrade from any 1.17.x release.
   onboarding checklist; a Jump back in hero surfaces the most recently played game with Play and View details; the
   Themes dialog gains a swatch gallery; and the default palette uses a brand-orange action ramp with teal focus.
   Play insights now follows the grid so games are visible on the first screen. Tool actions are grouped Start here /
-  Library / Sources / More, and "Launch Doctor", "Netplay", "Museum", and "Library Audit" read as Launch check,
-  Online play, Kiosk mode, and Library check. `static/help.js`, `static/setup.js`, `static/library.js`,
-  `static/palette.js`, `static/app.js`, `themes/*.css`.
-- **Localization note.** In `es`, `de`, `fr`, and `pt`, the renamed and newly added Tools entries (including the four
-  group headings and all 17 hints), the Add games menu, the new top-bar labels, and the new setup, help, onboarding,
-  and Jump back in copy are English (about 40 Tools/nav keys per locale; untouched entries such as Massenbearbeitung
-  and Verlauf keep their existing translations). The i18n gate verifies key and placeholder parity, not translation
-  quality. Native copy for these blocks will follow in a translation pass.
+  Library / Imports & extras / More, the details-pane Launch Doctor card reads Launch check, the Health tool and its
+  dialog read Library checkup (previously Health and Library Audit), Online play is a new Tools entry for the netplay
+  lobby, and the arcade kiosk overlay is titled Kiosk mode (previously Museum). `index.html`, `static/help.js`,
+  `static/setup.js`, `static/library.js`, `static/palette.js`, `static/app.js`, `static/app.css`, `static/settings.js`, `themes/*.css`, `locales/*.json`.
+- **Localization note.** In `es`, `de`, `fr`, and `pt`, the renamed and newly added Tools and top-bar entries (including the
+  four group headings and all 17 hints), the Add games menu, and the new setup, help, onboarding, and Jump back in copy are
+  English: 52 of the 55 renamed or new `tools.*` and `nav.*` keys. The PICO-8, MSU-1, and WHDLoad import labels are
+  translated. Untouched entries such as Massenbearbeitung and Verlauf keep their existing translations. The i18n gate verifies
+  key and placeholder parity, not translation quality. Native copy for these blocks will follow in a translation pass.
 
 ### Fixed
 - Cross-device platform media moves flush the copied file through a writable handle and tolerate platforms that
@@ -139,6 +167,13 @@ Upgrade from any 1.17.x release.
 ### Changed
 - `storefront_auto_import` values are now `{enabled, platform, include_uninstalled}` objects; readers accept the old
   boolean shape until it is migrated.
+
+### Documentation and gates
+- ADRs 0077-0084: plugin capability services, the emulator-settings contract, the GUI clarity and colour system,
+  the durable media queue, save manifests with selective restore, platform rename/delete with scoped media
+  migration, native tray recents with the launch deeplink and battery route, and per-source storefront auto-import.
+- `docs/reliability.md` rows 98-122, each naming a real test or a written manual procedure.
+- The route and settings contracts are regenerated; no v1 route is removed or changed.
 
 ## [1.17.0] - 2026-10-18
 
@@ -189,7 +224,7 @@ cost, and translates server notices. No v1 route is removed or changed. Six rout
 
 ### Known limits in 1.17.0
 - Xbox PC package scanning and owned-but-uninstalled GOG/EA/Ubisoft catalogs are not imported. In 1.17.0 native
-  storefront imports are manual; the unreleased 1.18 build adds opt-in per-source startup auto-import for them.
+  storefront imports are manual; 1.18.0 adds opt-in per-source startup auto-import for them.
 - Provider ids, price paid, and decks stay local. They do not cross the library-sync protocol, and Time Machine does
   not journal price changes; adding them would make a mixed-version peer reject the whole event.
 - Cost totals are grouped by currency and are not converted. A rate is shown only for a priced game with at least
@@ -2036,7 +2071,8 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.17.0...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.18.0...HEAD
+[1.18.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.16.1...v1.17.0
 [1.16.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.15.0...v1.16.0

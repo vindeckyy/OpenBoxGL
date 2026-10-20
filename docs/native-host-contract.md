@@ -19,6 +19,8 @@ mechanism, the WebView2 host uses the equivalent Windows mechanism:
 | Force-kill backstop | `SIGKILL` to the process group | job object (`TerminateJobObject`), which also kills children |
 | Geometry persistence | `window-geometry`, `"<w> <h> <maximized>"` | same file, same format |
 | Tray flags | `native-host-flags` | same file |
+| Tray recent games | `native-host-recent`, eight most recent | same file, same limit |
+| Startup background | `native-background` (`#rrggbb`) painted before page load | same file, same format |
 | `gamepad` capability | `"webkit"` (fixed; the page always uses the Web Gamepad API) | same |
 
 The bridge object, the HTTP native surface, the capability shapes, and the
@@ -81,6 +83,7 @@ All native routes are authenticated like every other route: unauthenticated call
 | POST | `/api/native/reveal` | reveal a file in the file manager |
 | POST | `/api/native/window` | window chrome actions |
 | GET | `/api/native/capabilities` | report host capabilities |
+| GET | `/api/native/battery` | battery presence, percentage, and charging state |
 
 `GET /api/native/capabilities` returns:
 
@@ -92,14 +95,68 @@ All native routes are authenticated like every other route: unauthenticated call
   "single_instance": true,
   "gamepad": "webkit",
   "fullscreen": true,
-  "clipboard": true
+  "clipboard": true,
+  "version": "1.18.0",
+  "platform": "linux",
+  "data_dir": "/home/user/.local/share/openbox-game-launcher"
 }
 ```
+
+`version` is the running OpenBox version, `platform` is `sys.platform`, and
+`data_dir` is the application directory; Settings > About reads all three.
+`webview`, `dialogs`, `tray`, and `single_instance` are true only when the
+Python child was started by a native host (`OPENBOX_NATIVE_HOST`). `fullscreen`
+and `clipboard` are always true.
+
+`GET /api/native/battery` reads the first `BAT*` entry under
+`/sys/class/power_supply` on Linux and returns
+`{"present": bool, "percent": 0-100, "charging": bool}`; `charging` is true for
+`Charging` and `Full`. On other platforms, or with no battery, it returns
+`{"present": false, "percent": 0, "charging": false}`. The response never
+includes the sysfs path. Big Box reads it for its battery indicator.
 
 When no host is connected, the native endpoints return a capability-absent
 result (never an error that blocks the browser fallback): `dialog` returns
 `{ "cancelled": true }`, `open-external` and `reveal` return `{ "ok": false }`,
 and `window` returns `{ "ok": false }`.
+
+## Deeplinks
+
+The host loads the page with `?token=<token>` plus an optional `deeplink`
+action. The page reads these from `location.search` and dispatches them on the
+first render:
+
+| Query | Behavior |
+|---|---|
+| `?deeplink=showgame&id=<game id>` | Selects the game and scrolls its card into view |
+| `?deeplink=resume&id=<game id>` | Selects the game and scrolls its card into view, after the host has resumed the session server-side |
+| `?deeplink=launch&id=<game id>` | Starts the game through the normal launch path (the tray's recent-games items use this) |
+| `?deeplink=search&q=<text>` | Seeds the library search box |
+| `?deeplink=bigbox` | Opens Big Box |
+| `?deeplink=settings` | Opens Settings |
+| `?deeplink=moment&id=<game id>` | Opens that game's moment |
+| `?deeplink=clip&id=<game id>` | Opens the clip for that game |
+| `?deeplink=recap` | Opens the session recap |
+
+The host builds these URLs itself and accepts the actions below from its
+command line and from the `openbox://` URI scheme (`recap` is page-only; the
+host does not emit it):
+
+- `--play <game id>` starts a game directly.
+- `--uri openbox://<action>[/<value>]` maps to the table above, e.g.
+  `openbox://showgame/42`, `openbox://search/half%20life`,
+  `openbox://settings/audio`, `openbox://fullscreen` (Big Box).
+- `openbox://launch/<game id>` and `openbox://resume/<game id>` call
+  `POST /api/launch` and `POST /api/v2/resume` on the authenticated server,
+  then load the window at `?deeplink=showgame&id=` or `?deeplink=resume&id=`.
+- A second instance forwards its request to the running instance through the
+  single-instance channel and exits; the window is raised and the deeplink
+  dispatched there. Invalid or hostile URIs (another scheme or host) are
+  rejected and never forwarded.
+
+Game ids are escaped as one URI component and again when the page parses
+them, so an id with spaces, `&`, apostrophes, or accents survives the round
+trip. The host never interpolates a raw game id into JavaScript.
 
 ## Browser-tab assumptions and their native mapping
 
@@ -114,7 +171,7 @@ through the capability resolver with a browser fallback.
 | `localStorage` (UI prefs) | server-persisted `ui_state` when native; `localStorage` in browser |
 | `navigator.clipboard` | host clipboard; browser fallback |
 | `document.fullscreenElement` / request/exit | `windowAction("set-fullscreen"/"unset-fullscreen")` |
-| `navigator.getBattery` | optional; hide status when absent |
+| `navigator.getBattery` | `GET /api/native/battery` (Linux sysfs; absent on other platforms); hide status when absent |
 | `navigator.getGamepads` | Web Gamepad API always (host `onGamepad` is a no-op stub; capabilities report `"webkit"`) |
 | `location.search` (token, deeplink) | unchanged; the host loads the same URL |
 | `beforeunload` (shutdown) | page requests `/api/shutdown` when tracked games remain; the native host signals the Python child on window close — `SIGTERM` on Linux, `CTRL_BREAK` on Windows (see Server lifecycle) |
@@ -146,3 +203,20 @@ persisted. `state_store.py` owns the `ui_state` schema default (`{}`), which car
 UI prefs such as the last session (`view`, `selected_id`, `platform`, `playlist`),
 never the native window frame. `single_instance` is a capability reported by
 `GET /api/native/capabilities` (`handlers/native.py`), not stored state.
+
+Two more host-owned files sit beside the geometry file:
+
+- `native-background` holds the active theme's page background as `#rrggbb`
+  (default `#0F0E0C`). The app rewrites it when the theme changes; both hosts
+  paint it as the window background before the page loads so a light theme
+  does not flash dark.
+- `native-host-recent` holds at most eight lines of `display name<TAB>game id`,
+  most recent first. `web_app.py` writes it at boot from play history, with the
+  most recently played games first and `last_played` filling any remaining
+  slots. The Linux tray and the Windows tray menu both read it and launch a
+  listed game through `?deeplink=launch&id=<id>`. The file is owner-only; names
+  have tabs and line breaks removed because the host splits on one tab.
+
+`native-host-flags` carries the tray settings written at boot:
+`"<tray_enabled> <minimize_to_tray>"`. When `minimize_to_tray` is on, the
+window's close button hides the window instead of exiting.

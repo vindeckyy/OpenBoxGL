@@ -102,11 +102,12 @@ The following are generally out of scope:
 - Run OpenBox on trusted local networks. The web UI uses a session token; do not expose it directly to the public internet without a reverse proxy and additional hardening.
 - Do not commit `.env`, API tokens, RetroAchievements credentials, or EmuMovies credentials to the repository.
 - Keep OpenBox updated to the latest release.
-- Plugins run with an OS sandbox when bubblewrap is available. If the sandbox cannot start, OpenBox skips enabled plugins unless `OPENBOX_ALLOW_UNSANDBOXED_PLUGINS=1` is set explicitly. Setting `OPENBOX_ALLOW_UNSANDBOXED_PLUGINS=1` disables the sandbox entirely, even when bubblewrap is available. Only use that override for plugins you trust.
+- Plugins run with an OS sandbox when bubblewrap is available. If bubblewrap is unavailable, OpenBox skips enabled plugins unless you trust that exact package in the Plugins manager (which runs it unsandboxed) or `OPENBOX_ALLOW_UNSANDBOXED_PLUGINS=1` is set. Setting `OPENBOX_ALLOW_UNSANDBOXED_PLUGINS=1` disables the sandbox entirely, even when bubblewrap is available. Only use that override or trust for plugins you trust.
+- Integration tokens for IGDB, ScreenScraper, SteamGridDB, Gameyfin, and RetroAchievements are stored outside the public settings projection and returned only masked. Plugin capability credentials live in a separate store that backups exclude, and password-format plugin settings are blanked in backups.
 
 ## Release signing
 
-Release publication is fail-closed. The workflow requires `OPENBOX_SIGNING_KEY`, derives an Ed25519 public key in a mode-`0600` temporary file, compares it with the committed `openbox-release.pub`, signs the AppImage, and verifies the signature before upload. The updater and `scripts/install.sh` reject checksum-only releases.
+Release publication is fail-closed. The workflow requires `OPENBOX_SIGNING_KEY`, derives an Ed25519 public key in a mode-`0600` temporary file, compares it with the committed `openbox-release.pub`, signs every published binary — the x86_64 and aarch64 AppImages, the Windows portable zip, the standalone Windows native-host executable, and the emulator definition pack — and verifies each signature before upload. The updater and `scripts/install.sh` reject checksum-only releases.
 
 The committed `openbox-release.pub` pins the production release key. Maintainers must preserve these external release controls:
 
