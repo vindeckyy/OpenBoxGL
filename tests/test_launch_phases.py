@@ -593,13 +593,13 @@ class TestLaunchModuleCoverage(unittest.TestCase):
             launched_game = mock_start.call_args.args[0]
             self.assertEqual(launched_game["emulator_adapter_id"], "mesen")
             self.assertEqual(launched_game["retroarch_core"], "mesen_libretro.so")
-            # The per-platform extra args reach the command, and the
-            # RetroArch-family session config is appended after them, so the
-            # argument list is checked by membership rather than by position.
+            # The per-platform extra args reach the command. Resume
+            # capture args (--appendconfig ...) are only appended when a
+            # state-capable adapter binary is detected on the host PATH,
+            # which a mocked launch cannot rely on; that injection is
+            # covered by test_parity_resume.py and test_resume_http.py.
             argv = mock_popen.call_args.args[0]
             self.assertIn("--fullscreen", argv)
-            self.assertIn("--appendconfig", argv)
-            self.assertTrue(argv[-1].endswith("openbox-session.cfg"), argv)
 
     def test_finish_session_branches(self):
         import datetime
