@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report an issue. Please search [existing issues](https://github.com/vindeckyy/OpenBoxGL/issues) first. The current release is [v1.16.0](https://github.com/vindeckyy/OpenBoxGL/releases/latest).
+        Thanks for taking the time to report an issue. Please search [existing issues](https://github.com/vindeckyy/OpenBoxGL/issues) first. The current release is [v1.18.0](https://github.com/vindeckyy/OpenBoxGL/releases/latest).
 
   - type: input
     id: version
@@ -70,7 +70,7 @@ body:
     id: diagnostic
     attributes:
       label: Diagnostic report
-      description: Paste the output of Settings -> Library Audit -> the diagnostic log, or the "Copy details" output from an error banner. It is redacted automatically.
+      description: Paste the output of Settings -> Advanced -> Copy diagnostic log, or the "Copy details" output from an error banner. It is redacted automatically.
     validations:
       required: false
 
