@@ -86,6 +86,14 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("$previous", source)
         self.assertIn("Restored the previous install", source)
 
+    def test_powershell_installer_points_at_the_extracted_archive_when_the_verifier_is_missing(self):
+        """The standalone asset cannot bootstrap its own trust anchor, so it must say so."""
+        source = (ROOT / "scripts" / "install.ps1").read_text(encoding="utf-8")
+        self.assertIn("OpenBox-x86_64-windows.zip", source)
+        self.assertIn("OpenBox\\scripts\\install.ps1", source)
+        # It must never download the verifier: that file is the trust anchor.
+        self.assertNotIn("Invoke-WebRequest -Uri \"$base/$tag/updates.py\"", source)
+
 
 if __name__ == "__main__":
     unittest.main()

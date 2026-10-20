@@ -593,7 +593,13 @@ class TestLaunchModuleCoverage(unittest.TestCase):
             launched_game = mock_start.call_args.args[0]
             self.assertEqual(launched_game["emulator_adapter_id"], "mesen")
             self.assertEqual(launched_game["retroarch_core"], "mesen_libretro.so")
-            self.assertEqual(mock_popen.call_args.args[0][-1], "--fullscreen")
+            # The per-platform extra args reach the command, and the
+            # RetroArch-family session config is appended after them, so the
+            # argument list is checked by membership rather than by position.
+            argv = mock_popen.call_args.args[0]
+            self.assertIn("--fullscreen", argv)
+            self.assertIn("--appendconfig", argv)
+            self.assertTrue(argv[-1].endswith("openbox-session.cfg"), argv)
 
     def test_finish_session_branches(self):
         import datetime

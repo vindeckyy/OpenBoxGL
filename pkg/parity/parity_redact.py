@@ -8,6 +8,12 @@ import types
 
 REDACTED_KEYS = frozenset({
     "gameyfin_password",
+    "obs_websocket_password",
+    # Per-provider API tokens (IGDB, ScreenScraper, SteamGridDB, Gameyfin,
+    # RetroAchievements). The whole map is dropped rather than masked: a
+    # partial mask would still leak enough to be worth replaying, and the
+    # local copy is preserved and re-merged on restore.
+    "integration_tokens",
     "secret",       # webhook secret
     "api_key",
     "access_token",

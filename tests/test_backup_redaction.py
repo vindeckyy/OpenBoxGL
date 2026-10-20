@@ -28,6 +28,29 @@ class TestBackupRedaction(unittest.TestCase):
         self.assertNotIn("gameyfin_password", redacted)
         self.assertEqual(redacted["theme"], "dark")
 
+    def test_redact_settings_removes_obs_password_and_integration_tokens(self):
+        settings = {
+            "obs_websocket_password": "obs-secret",
+            "integration_tokens": {"igdb": "igdb-secret", "steamgriddb": "sgdb-secret"},
+            "theme": "dark",
+        }
+        redacted = redact_settings(settings)
+        self.assertNotIn("obs_websocket_password", redacted)
+        self.assertNotIn("integration_tokens", redacted)
+        self.assertEqual(redacted["theme"], "dark")
+        # The caller's dict is not mutated.
+        self.assertEqual(settings["integration_tokens"]["igdb"], "igdb-secret")
+
+    def test_merge_preserved_credentials_preserves_obs_password_and_tokens(self):
+        existing = {
+            "obs_websocket_password": "local-obs",
+            "integration_tokens": {"igdb": "local-igdb"},
+        }
+        merged = merge_preserved_credentials({"theme": "dark"}, existing)
+        self.assertEqual(merged["obs_websocket_password"], "local-obs")
+        self.assertEqual(merged["integration_tokens"], {"igdb": "local-igdb"})
+        self.assertEqual(merged["theme"], "dark")
+
     def test_redact_settings_strips_webhook_secrets(self):
         settings = {
             "webhooks": [
@@ -211,6 +234,49 @@ class TestBackupRedaction(unittest.TestCase):
                 restored_library = json.load(f)
             self.assertEqual(restored_library["settings"]["gameyfin_password"], "local_password")
             self.assertEqual(restored_library["settings"]["webhooks"][0]["secret"], "local_wh_secret")
+
+
+    def test_archive_members_never_carry_provider_tokens_or_obs_password(self):
+        """The archive is inspected member by member, not through the manifest flag."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            state = {
+                "games": [{"id": "g1"}],
+                "settings": {
+                    "obs_websocket_password": "obs-secret-value",
+                    "integration_tokens": {
+                        "igdb": "igdb-secret-value",
+                        "steamgriddb": "sgdb-secret-value",
+                    },
+                    "theme": "dark",
+                },
+            }
+
+            archive_path = create_backup(temp_dir, state, items=["settings", "library"])
+
+            with zipfile.ZipFile(archive_path) as package:
+                for name in ("settings.json", "library.json"):
+                    body = package.read(name).decode("utf-8")
+                    self.assertNotIn("obs-secret-value", body, name)
+                    self.assertNotIn("igdb-secret-value", body, name)
+                    self.assertNotIn("sgdb-secret-value", body, name)
+                settings_json = json.loads(package.read("settings.json"))
+                self.assertNotIn("obs_websocket_password", settings_json)
+                self.assertNotIn("integration_tokens", settings_json)
+                self.assertEqual(settings_json["theme"], "dark")
+
+            # Restoring over an install that has its own secrets keeps them.
+            (temp_path / "settings.json").write_text(json.dumps({
+                "obs_websocket_password": "local-obs-value",
+                "integration_tokens": {"igdb": "local-igdb-value"},
+            }), encoding="utf-8")
+            (temp_path / "library.json").write_text(json.dumps({"games": []}), encoding="utf-8")
+
+            restore_backup(archive_path, temp_dir, force=True)
+
+            restored = json.loads((temp_path / "settings.json").read_text(encoding="utf-8"))
+            self.assertEqual(restored["obs_websocket_password"], "local-obs-value")
+            self.assertEqual(restored["integration_tokens"], {"igdb": "local-igdb-value"})
 
 
 class BackupExportRouteTests(unittest.TestCase):

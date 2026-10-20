@@ -607,15 +607,26 @@ window.addEventListener('DOMContentLoaded', () => {
     // ?deeplink= dispatch map (S2 owns the shape). 'search' stays above — it
     // seeds the input before the
     // first render, so it must run before refresh().
+    // A deeplink that names a game also scrolls its card into view, so the
+    // window lands on the game instead of the top of the grid.
+    function revealDeeplinkGame(gameId) {
+      AppState.selectedId = gameId;
+      render();
+      document.querySelector('[data-game="' + gameId + '"]')?.scrollIntoView({ block: 'nearest' });
+    }
     const DEEPLINK_ACTIONS = new Map([
       ['bigbox', () => openBigBox()],
       ['settings', () => openSettings()],
       ['showgame', params => {
         const resolved = resolveDeeplinkGameId(params.get('id'));
-        if (resolved !== null) {
-          AppState.selectedId = resolved;
-          render();
-        }
+        if (resolved !== null) revealDeeplinkGame(resolved);
+      }],
+      // The native host resumes a session server-side and then loads the
+      // window at ?deeplink=resume&id=; the page selects the game so the
+      // window lands on the session it just resumed.
+      ['resume', params => {
+        const resolved = resolveDeeplinkGameId(params.get('id'));
+        if (resolved !== null) revealDeeplinkGame(resolved);
       }],
       ['launch', params => {
         const resolved = resolveDeeplinkGameId(params.get('id'));

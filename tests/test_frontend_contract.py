@@ -1393,12 +1393,44 @@ def test_deeplink_dispatch_uses_explicit_allowlist():
     )
     assert actions, "deeplink actions must use an explicit Map"
     action_names = set(re.findall(r"^\s*\['([^']+)',", actions.group(1), re.MULTILINE))
-    assert action_names == {"bigbox", "settings", "showgame", "launch", "recap", "moment", "clip"}
+    assert action_names == {"bigbox", "settings", "showgame", "launch", "recap", "moment", "clip", "resume"}
 
     dispatch = _function_body(app, "dispatchDeeplink")
     assert "DEEPLINK_ACTIONS.get(params.get('deeplink'))" in dispatch
     assert "DEEPLINK_ACTIONS[" not in dispatch
     assert "if (typeof action === 'function') action(params);" in dispatch
+
+def test_native_host_deeplink_actions_are_handled_by_the_page():
+    """The host loads the window at ?deeplink=<action>; the page must act on it.
+
+    The host used to emit "resume", which the page ignored, so a native
+    resume landed on an unchanged library view.
+    """
+    host = (ROOT / "native_host.c").read_text(encoding="utf-8")
+    app = APP_JS.read_text(encoding="utf-8")
+    host_actions = set(re.findall(r'return "([a-z]+)";', host))
+    assert host_actions, "the host must map requests to deeplink actions"
+    actions = re.search(
+        r"const DEEPLINK_ACTIONS = new Map\(\[(.*?)\n    \]\);",
+        app,
+        re.DOTALL,
+    )
+    assert actions, "deeplink actions must use an explicit Map"
+    page_actions = set(re.findall(r"^\s*\['([^']+)',", actions.group(1), re.MULTILINE))
+    # "search" is handled before the first render: it seeds the search field
+    # instead of going through the dispatch map.
+    page_actions.add("search")
+    missing = host_actions - page_actions
+    assert not missing, f"the page ignores host deeplink actions: {sorted(missing)}"
+
+def test_deeplink_game_selection_scrolls_the_card_into_view():
+    app = APP_JS.read_text(encoding="utf-8")
+    body = _function_body(app, "revealDeeplinkGame")
+    assert "AppState.selectedId = gameId;" in body
+    assert "scrollIntoView" in body
+    for action in ("showgame", "resume"):
+        assert f"['{action}', params =>" in app
+        assert "revealDeeplinkGame(resolved)" in app
 
 def test_game_dialog_path_browse_hosts():
     html = INDEX.read_text(encoding="utf-8")
