@@ -22,6 +22,17 @@ export function dnaSearchMode() {
   return saved === 'smart' ? 'smart' : 'title';
 }
 
+// The placeholder is only set when the translation actually resolved. The
+// locale file is fetched asynchronously, so the first render can happen
+// before the strings exist; writing the raw key then left the search box
+// showing "sidebar.search" until the page was reloaded.
+function applyDnaSearchPlaceholder(input) {
+  if (!input) return;
+  const key = dnaSearchMode() === 'smart' ? 'dna.search_placeholder_smart' : 'sidebar.search';
+  const label = t(key);
+  input.placeholder = label && label !== key ? label : '';
+}
+
 export function setDnaSearchMode(next, { search = true, persist = true } = {}) {
   const prev = dnaSearchMode();
   if (AppState.appSettings) AppState.appSettings.dna_search_mode = next;
@@ -35,7 +46,7 @@ export function setDnaSearchMode(next, { search = true, persist = true } = {}) {
     }
   });
   const input = $('sidebarSearch');
-  if (input) input.placeholder = next === 'smart' ? t('dna.search_placeholder_smart') : t('sidebar.search');
+  if (input) applyDnaSearchPlaceholder(input);
   if (persist) {
     // S48: a swallowed failure left the toggle looking applied, then it
     // reverted on restart. Roll the UI back and say why.
@@ -260,6 +271,10 @@ export function initDnaSearch() {
   const input = $('sidebarSearch');
   if (!input || input.dataset.dnaBound) return;
   input.dataset.dnaBound = '1';
+  applyDnaSearchPlaceholder(input);
+  // The locale file arrives after the first render, so the placeholder is
+  // refreshed when the strings land.
+  document.addEventListener('localechange', () => applyDnaSearchPlaceholder(input));
   input.addEventListener('input', () => {
     if (dnaSearchMode() !== 'smart') { hidePanel(); return; }
     const q = input.value.trim();

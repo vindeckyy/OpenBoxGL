@@ -78,6 +78,17 @@ def main() -> int:
         failures.append("PARITY lead")
 
     bug_template = (ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml").read_text(encoding="utf-8")
+    # The template used to carry v1.16.0 in its "current release is" sentence
+    # while the placeholder below said v1.18.0, and the substring check below
+    # was satisfied by the placeholder. The advertised release is now parsed
+    # out of the sentence itself, so a stale claim fails the gate.
+    advertised = re.search(r"current release is \[v([0-9.]+)\]", bug_template)
+    if not advertised:
+        print("bug_report.yml: no 'current release is [vX.Y.Z]' statement to verify")
+        failures.append("bug report template")
+    elif advertised.group(1) != version:
+        print(f"bug_report.yml: advertises v{advertised.group(1)}, expected v{version}")
+        failures.append("bug report template")
     if f"v{version}" not in bug_template:
         print(f"bug_report.yml: does not mention v{version}")
         failures.append("bug report template")

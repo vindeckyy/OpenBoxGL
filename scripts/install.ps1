@@ -13,6 +13,10 @@
 # the .sha256 sidecar plus the signature check still gate the archive.
 #
 # Windows PowerShell 5.1 compatible (no PowerShell 7-only syntax).
+#
+# This script must run from the extracted release (OpenBox\scripts\install.ps1)
+# or from a source checkout: the Ed25519 verifier (updates.py) is the trust
+# anchor for the signature check and is never fetched from the network.
 
 [CmdletBinding()]
 param(
@@ -115,7 +119,16 @@ function Get-Sha256 {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $verifier = Join-Path $repoRoot 'updates.py'
 if (-not (Test-Path -LiteralPath $verifier -PathType Leaf)) {
-    Die "The release verifier was not found at $verifier. Run this script from a checkout."
+    # The verifier is the trust anchor for the signature check, so it is never
+    # downloaded on its own: a fetched verifier could be replaced by whoever
+    # served it. It must sit next to this script, which means the script has to
+    # run from the extracted release (OpenBox\scripts\install.ps1) or from a
+    # checkout. The standalone release asset therefore needs the archive.
+    Die ("The release verifier was not found at $verifier. Download the release " +
+         "archive OpenBox-x86_64-windows.zip, extract it, and run this script from " +
+         "the extracted folder (OpenBox\scripts\install.ps1), or run it from a " +
+         "source checkout. The verifier cannot be downloaded on its own because it " +
+         "is the trust anchor for the signature check.")
 }
 
 $python = Resolve-Python

@@ -129,6 +129,26 @@ def preferred_box_front(database_id: int, database: Path) -> dict | None:
     return images[0] if images else None
 
 
+def preferred_background(database_id: int, database: Path) -> dict | None:
+    """Best fanart background for a title, used when no local copy exists."""
+    import sqlite3
+
+    from parity_media import REGION_PRIORITY_DEFAULT, sort_images_by_region
+
+    conn = sqlite3.connect(database)
+    conn.row_factory = sqlite3.Row
+    rows = [
+        dict(row)
+        for row in conn.execute(
+            "SELECT * FROM images WHERE database_id = ? AND type = 'Fanart - Background'",
+            (database_id,),
+        )
+    ]
+    conn.close()
+    images = sort_images_by_region(rows, REGION_PRIORITY_DEFAULT)
+    return images[0] if images else None
+
+
 def download_cdn_image(filename: str, destination: Path) -> Path:
     name = Path(filename).name
     request = Request(LAUNCHBOX_CDN_URL + name, headers={"User-Agent": "OpenBox/1"})
@@ -168,14 +188,39 @@ def resolve_cover(database_id: int, cover_rel: str | None, destination: Path, da
 
 
 def copy_media(source_relative: str | None, destination: Path) -> str | None:
+    """Copy a local media file, or fetch the title's fanart from the CDN.
+
+    The capture has to run on a machine that never imported these titles, so a
+    missing local background is fetched from the LaunchBox CDN instead of
+    aborting the run. A title with neither is left without a background.
+    """
     if not source_relative:
         return None
     source = EXISTING_MEDIA / source_relative
-    if not source.is_file():
-        raise SystemExit(f"Missing real media file: {source}")
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, destination)
-    return str(destination)
+    if source.is_file():
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+        return str(destination)
+    return None
+
+
+def resolve_background(
+    database_id: int,
+    source_relative: str | None,
+    destination: Path,
+    database: Path,
+) -> str | None:
+    local = copy_media(source_relative, destination)
+    if local:
+        return local
+    image = preferred_background(database_id, database)
+    if not image:
+        return None
+    try:
+        return str(download_cdn_image(image["filename"], destination))
+    except (OSError, ValueError) as error:
+        print(f"No background available for database_id={database_id}: {error}")
+        return None
 
 
 def build_library() -> None:
@@ -187,7 +232,7 @@ def build_library() -> None:
         rom_path.touch(exist_ok=True)
         media_dir = media_root / str(database_id)
         cover = resolve_cover(database_id, cover_rel, media_dir / Path(cover_rel).name, database)
-        background = copy_media(background_rel, media_dir / Path(background_rel).name) if background_rel else None
+        background = resolve_background(database_id, background_rel, media_dir / Path(background_rel).name, database) if background_rel else None
         play_count = (index + 1) * 3
         entry = {
             "name": name,
