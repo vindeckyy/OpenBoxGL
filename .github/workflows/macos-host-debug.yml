@@ -32,6 +32,20 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Probe loopback reverse lookup
+        run: |
+          python - <<'PY'
+          import socket
+          import time
+          start = time.perf_counter()
+          try:
+              name = socket.getfqdn("127.0.0.1")
+          except OSError as error:
+              name = f"error: {error}"
+          elapsed = (time.perf_counter() - start) * 1000.0
+          print(f"getfqdn(127.0.0.1) = {name!r} in {elapsed:.1f} ms")
+          PY
+
       - name: Build the macOS native host
         run: scripts/build_native_host_macos.sh
 
