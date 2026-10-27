@@ -47,6 +47,11 @@ WEB_APP_FLOOR = 58.0
 CHANGED_LINE_FLOOR = 95.0
 NEW_MODULE_FLOOR = 85.0
 
+# Longest a single suite may run before the gate names it and moves on. The
+# slowest honest suite (coverage-instrumented, on a loaded shared runner) lands
+# well under this; scripts/run_windows_tests.py uses 120s for the same reason.
+SUITE_TIMEOUT_SECONDS = 300
+
 
 def run(command):
     print(f"$ {' '.join(str(part) for part in command)}")
@@ -323,11 +328,22 @@ def main() -> int:
             attempts_used = 0
             for _attempt in range(3):
                 attempts_used = _attempt + 1
-                result = subprocess.run(
-                    command,
-                    cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                    check=False, env=env,
-                )
+                try:
+                    result = subprocess.run(
+                        command,
+                        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                        check=False, env=env, timeout=SUITE_TIMEOUT_SECONDS,
+                    )
+                except subprocess.TimeoutExpired:
+                    # A suite that wedges names itself and the run continues.
+                    # Without this bound one hanging suite silently ate the
+                    # whole job budget: the gate has no output to lose, and a
+                    # job timeout says nothing about which suite caused it.
+                    # Retrying cannot help a hang, so it does not.
+                    code = 124
+                    last_output = f"TIMEOUT after {SUITE_TIMEOUT_SECONDS}s"
+                    first_failure_output = first_failure_output or last_output
+                    break
                 code = result.returncode
                 last_output = (result.stdout or "") + (result.stderr or "")
                 if code != 0 and not first_failure_output:
