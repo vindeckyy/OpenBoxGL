@@ -432,7 +432,13 @@ if ! mv "$staged" "$bundle"; then
 fi
 rm -rf "$staging"
 # The relaunch is a convenience: a failed open must not undo the update.
-/usr/bin/open "$bundle" || true
+# A headless or test run sets OPENBOX_DISABLE_EXTERNAL_OPEN, the same guard
+# pkg/platform_compat.py honors: off macOS, /usr/bin/open is the desktop
+# browser launcher, so handing it the bundle makes the applier wait on a
+# browser that never exits.
+if [ -z "${OPENBOX_DISABLE_EXTERNAL_OPEN:-}" ]; then
+  /usr/bin/open "$bundle" || true
+fi
 exit 0
 """
 
