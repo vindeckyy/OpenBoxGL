@@ -33,13 +33,12 @@ if [ "$(uname -s)" = "Darwin" ]; then
   export PATH
 fi
 
-if ! "${OPENBOX_PYTHON:-python3}" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
-  echo "OpenBox needs Python 3.10 or newer (Homebrew: brew install python@3.12), or the OpenBox.app bundle." >&2
-  exit 1
-fi
-
 run_web_app()
 {
+  if ! "${OPENBOX_PYTHON:-python3}" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+    echo "OpenBox needs Python 3.10 or newer (Homebrew: brew install python@3.12), or the OpenBox.app bundle." >&2
+    exit 1
+  fi
   if [ -n "${OPENBOX_BUNDLED_LIB_PATH:-}" ]; then
     exec env LD_LIBRARY_PATH="$OPENBOX_BUNDLED_LIB_PATH" "${OPENBOX_PYTHON:-python3}" "$SHARE/web_app.py" "$@"
   else
