@@ -10,6 +10,7 @@ import queue as queue_module
 import secrets
 import signal
 import socket
+import socketserver
 import subprocess
 import sys
 import threading
@@ -151,6 +152,16 @@ class OpenBoxServer(ThreadingHTTPServer):
     """
 
     request_queue_size = 128
+
+    def server_bind(self):
+        # HTTPServer.server_bind() reverse-resolves the bind address with
+        # socket.getfqdn(). On macOS that goes through mDNSResponder and can
+        # stall startup past the native host's boot timeout -- the server then
+        # never publishes its port. Nothing here reads server_name, so bind
+        # directly and keep the loopback address.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name = "127.0.0.1"
+        self.server_port = self.server_address[1]
 
 
 class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, TimeMachineHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, ExportHandlers, LaunchHandlers, SetupHandlers, DataHandlers, DiscoveryHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, ScreenScraperHandlers, PickerHandlers, ConstellationHandlers, PartyHandlers, BaseHTTPRequestHandler):
