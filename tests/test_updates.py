@@ -541,13 +541,15 @@ def _macos_update_channel():
 
         # The applier swaps the bundle once the server is gone, and keeps
         # the previous bundle.
-        subprocess.run(
-            ["/bin/sh", spawned["applier"], "999999", str(bundle), str(spawned["staged"])],
-            check=False,
-            capture_output=True,
-        )
-        assert (bundle / "Contents/MacOS/OpenBox").read_text(encoding="utf-8") == "new"
-        assert (root / "OpenBox.app.previous/Contents/MacOS/OpenBox").read_text(encoding="utf-8") == "old"
+        # The applier is a POSIX shell script, so the swap only runs on POSIX.
+        if os.name != "nt":
+            subprocess.run(
+                ["/bin/sh", spawned["applier"], "999999", str(bundle), str(spawned["staged"])],
+                check=False,
+                capture_output=True,
+            )
+            assert (bundle / "Contents/MacOS/OpenBox").read_text(encoding="utf-8") == "new"
+            assert (root / "OpenBox.app.previous/Contents/MacOS/OpenBox").read_text(encoding="utf-8") == "old"
 
     # The desktop entry is a Linux and Windows concept; macOS integrates
     # through the app bundle.

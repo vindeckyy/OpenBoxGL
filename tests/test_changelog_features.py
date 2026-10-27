@@ -86,7 +86,7 @@ def main():
             with mock.patch("emulators.subprocess.Popen") as popen:
                 popen.return_value = mock.Mock()
                 def fake_which(name):
-                    return "/usr/bin/mame" if name == "mame" else None
+                    return {"mame": "/usr/bin/mame", "mame.exe": "C:/tools/mame.exe"}.get(name)
                 result = launch_emulator("org.mamedev.MAME", which=fake_which)
                 assert result["mode"] == "native"
 
