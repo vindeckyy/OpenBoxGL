@@ -105,6 +105,7 @@
     "101:a-stats-plugin-is-disabled-after-writing-a-cache",
     "102:a-plugin-emulator-section-is-asked-for-a-scope-it-did-not-de",
     "103:a-startup-video-setting-points-at-a-missing-file-or-outside-",
-    "104:a-backup-contains-plugin-credentials-or-password-format-plug"
+    "104:a-backup-contains-plugin-credentials-or-password-format-plug",
+    "105:the-posix-ci-suite-runner-gives-a-suite-a-single-chance"
   ]
 }
