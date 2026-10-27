@@ -889,14 +889,21 @@ class JsonStateStore:
                 self._write_unlocked(state, adopt=True)
 
     def flush_coalesced(self) -> None:
-        """For testing: immediately flush any pending coalesced write."""
-        if self._coalesce_pending_state is not None:
-            if self._coalesce_timer is not None:
-                try:
-                    self._coalesce_timer.cancel()
-                except Exception:
-                    pass
-            self._flush_coalesced()
+        """For testing: immediately flush any pending coalesced write.
+
+        Takes the store lock so a timer-driven flush already in progress is
+        waited out. Without it the caller returns while that write is still
+        between its fsync and its directory fsync, and assertions about what
+        reached the disk race the timer.
+        """
+        with self._thread_lock:
+            if self._coalesce_pending_state is not None:
+                if self._coalesce_timer is not None:
+                    try:
+                        self._coalesce_timer.cancel()
+                    except Exception:
+                        pass
+                self._flush_coalesced()
 
     def coalesced_update(self, mutator: Callable[[dict[str, Any]], Any]) -> Any:
         """Apply mutation via 50ms micro-batch coalesce; single fsync per batch."""
