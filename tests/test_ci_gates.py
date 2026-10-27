@@ -5,7 +5,10 @@ import ast
 import contextlib
 import io
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -220,6 +223,90 @@ class CiGatesTests(unittest.TestCase):
                       "dedupe must be timed the same way as grouping")
         self.assertIn("max_allowed = 0.50 if sys.gettrace() is not None else 0.25", body,
                       "the 250ms budget is the contract and must not be relaxed")
+
+
+class SuiteRunnerRetryTests(unittest.TestCase):
+    """run_all_tests.sh backs the Linux, macOS and release CI jobs, and it ran
+    every suite exactly once while scripts/check_tests.py gives each one three
+    attempts. A wall-clock budget that only misses on a loaded shared runner
+    therefore failed CI and stayed green on every developer machine -- the same
+    defect catalog row 48 records for the Windows runner.
+
+    Proven by running the real script against fixture suites, not by grepping
+    its text, so a rewrite of the loop cannot silently drop the tolerance.
+    """
+
+    ATTEMPTS = 3
+
+    @staticmethod
+    def _counting_suite(marker: Path, fail_first: int) -> str:
+        """A suite that exits 1 for its first ``fail_first`` runs, else 0."""
+        return (
+            "import pathlib\n"
+            f"p = pathlib.Path({str(marker)!r})\n"
+            "seen = int(p.read_text()) if p.exists() else 0\n"
+            "p.write_text(str(seen + 1))\n"
+            "print('AssertionError: budget missed on this runner')\n"
+            f"raise SystemExit(0 if seen >= {fail_first} else 1)\n"
+        )
+
+    def _run(self, root: Path) -> subprocess.CompletedProcess:
+        shutil.copy(ROOT / "run_all_tests.sh", root / "run_all_tests.sh")
+        return subprocess.run(
+            ["bash", str(root / "run_all_tests.sh")],
+            capture_output=True, text=True, timeout=300, check=False,
+        )
+
+    def test_transient_suite_failure_is_retried_and_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tests = root / "tests"
+            tests.mkdir()
+            (tests / "test_ok.py").write_text("raise SystemExit(0)\n", encoding="utf-8")
+            (tests / "test_flaky.py").write_text(
+                self._counting_suite(root / "flaky", 1), encoding="utf-8")
+
+            proc = self._run(root)
+
+            self.assertEqual(0, proc.returncode, proc.stdout + proc.stderr)
+            self.assertEqual(2, int((root / "flaky").read_text()), "a failing suite must get a second attempt")
+            self.assertIn("RETRY", proc.stdout, "a retried suite must be labelled, not shown as a clean PASS")
+            self.assertIn("=== 2 test files, 0 failed ===", proc.stdout)
+            self.assertIn(
+                "budget missed on this runner", proc.stdout,
+                "the first attempt's failure must be printed so a real intermittent bug still surfaces",
+            )
+
+    def test_persistent_failure_still_fails_after_every_attempt(self):
+        """The retry must not launder a real defect into a green job."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tests = root / "tests"
+            tests.mkdir()
+            (tests / "test_ok.py").write_text("raise SystemExit(0)\n", encoding="utf-8")
+            (tests / "test_broken.py").write_text(
+                self._counting_suite(root / "broken", self.ATTEMPTS + 99), encoding="utf-8")
+
+            proc = self._run(root)
+
+            self.assertEqual(1, proc.returncode, "a suite that never passes must fail the run")
+            self.assertEqual(
+                self.ATTEMPTS, int((root / "broken").read_text()),
+                "it must stop at ATTEMPTS, not loop forever",
+            )
+            self.assertIn("FAIL  tests/test_broken.py", proc.stdout)
+            self.assertIn("=== 2 test files, 1 failed ===", proc.stdout)
+
+    def test_retry_budget_matches_the_local_gate(self):
+        """Two runners with different tolerances report different verdicts on
+        the same commit, which is the gap this closes."""
+        gate = (ROOT / "scripts" / "check_tests.py").read_text(encoding="utf-8")
+        self.assertIn("range(3)", gate, "check_tests.py must still allow 3 attempts")
+        runner = (ROOT / "run_all_tests.sh").read_text(encoding="utf-8")
+        self.assertIn(
+            f"ATTEMPTS={self.ATTEMPTS}", runner,
+            "the CI suite runner must keep the same tolerance as the local gate",
+        )
 
 
 if __name__ == "__main__":
