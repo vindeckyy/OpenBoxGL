@@ -443,7 +443,7 @@ def main():
 
 def _macos_update_channel():
     """The macOS channel: one universal bundle, swapped in place."""
-    with mock.patch.object(updates, "IS_MACOS", True):
+    with mock.patch.object(updates, "IS_MACOS", True), mock.patch.object(updates, "IS_WINDOWS", False):
         assert updates._arch_asset("x86_64") == "OpenBox-macos.zip"
         assert updates._arch_asset("aarch64") == "OpenBox-macos.zip"
 
