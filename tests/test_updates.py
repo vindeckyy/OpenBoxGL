@@ -553,7 +553,7 @@ def _macos_update_channel():
 
     # The desktop entry is a Linux and Windows concept; macOS integrates
     # through the app bundle.
-    with mock.patch.object(updates, "IS_MACOS", True):
+    with mock.patch.object(updates, "IS_MACOS", True), mock.patch.object(updates, "IS_WINDOWS", False):
         try:
             updates.install_desktop_entry()
             raise AssertionError("a macOS desktop entry must be refused")
@@ -707,7 +707,7 @@ def _macos_install_refusals():
         assert updates._macos_running_sessions() == 0
 
     # The channel dispatches a macOS update to the bundle installer.
-    with mock.patch.object(updates, "IS_MACOS", True), mock.patch.object(
+    with mock.patch.object(updates, "IS_MACOS", True), mock.patch.object(updates, "IS_WINDOWS", False), mock.patch.object(
         updates, "_install_update_macos", return_value={"installed": "9.9.9"}
     ) as install:
         update = {"available": True}
