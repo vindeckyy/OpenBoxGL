@@ -209,7 +209,7 @@ jobs:
         run: scripts/build_native_host_macos.sh
 
       - name: Native host self test
-        run: OPENBOX_PYTHON=python3 ./native_host --selftest
+        run: OPENBOX_PYTHON="$(command -v python)" ./native_host --selftest
 
       # The bundle build merges the two interpreter builds, signs the
       # result, and runs the smoke test. It is the slow job, so it runs

@@ -434,6 +434,9 @@ static NSString *BridgeScript(void)
                               withIntermediateDirectories:YES
                                                attributes:nil
                                                     error:NULL];
+    /* The child resolves its data directory from the environment, so the
+     * host has to export the one it is about to read the boot files from. */
+    setenv("OPENBOX_DATA_DIR", [self dataDirectory].fileSystemRepresentation, 1);
     if (!remove_boot_file(port_file) || !remove_boot_file(token_file)) {
         return NO;
     }
@@ -1638,6 +1641,76 @@ static BOOL selftest_escaping(void)
     return YES;
 }
 
+static void print_log_tail(NSString *path)
+{
+    NSString *log = [NSString stringWithContentsOfFile:path
+                                             encoding:NSUTF8StringEncoding
+                                                error:NULL];
+    if (log.length == 0) {
+        return;
+    }
+    NSArray<NSString *> *lines = [log componentsSeparatedByString:@"\n"];
+    NSUInteger start = lines.count > 20 ? lines.count - 20 : 0;
+    NSString *tail = [[lines subarrayWithRange:NSMakeRange(start, lines.count - start)]
+                        componentsJoinedByString:@"\n"];
+    fprintf(stderr, "native_host: server log:\n%s\n", tail.UTF8String);
+}
+
+static int selftest_server(OpenBoxHost *host)
+{
+    /* The self test drives the same boot path, but without a window. */
+    if (![host bootServer]) {
+        print_log_tail([[host dataDirectory] stringByAppendingPathComponent:@"native-host.log"]);
+        fprintf(stderr, "native_host: selftest could not boot the server\n");
+        return 1;
+    }
+    /* The capabilities response proves the child, the token, and the
+     * loopback API all work together. */
+    NSString *origin = [host serverOrigin];
+    NSString *token = [host serverToken];
+    if (origin == nil || token == nil) {
+        fprintf(stderr, "native_host: selftest could not read the server identity\n");
+        return 1;
+    }
+    NSURL *url = [NSURL URLWithString:
+        [NSString stringWithFormat:@"%@/api/native/capabilities", origin]];
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    [request setValue:token forHTTPHeaderField:@"X-OpenBox-Token"];
+    [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
+    __block NSString *payload = nil;
+    __block NSError *failure = nil;
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    [[[NSURLSession sharedSession] dataTaskWithRequest:request
+                                     completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (data != nil) {
+            payload = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        }
+        failure = error;
+        dispatch_semaphore_signal(done);
+    }] resume];
+    dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC));
+    if (payload == nil) {
+        fprintf(stderr, "native_host: selftest could not read the capabilities: %s\n",
+                failure ? failure.localizedDescription.UTF8String : "no response");
+        return 1;
+    }
+    NSData *json = [payload dataUsingEncoding:NSUTF8StringEncoding];
+    NSDictionary *parsed = [NSJSONSerialization JSONObjectWithData:json options:0 error:NULL];
+    if (![parsed isKindOfClass:[NSDictionary class]]) {
+        fprintf(stderr, "native_host: selftest got an unreadable capabilities response\n");
+        return 1;
+    }
+    NSString *platform = parsed[@"platform"];
+    BOOL webview = [parsed[@"webview"] boolValue];
+    if (![platform isEqualToString:@"darwin"] || !webview) {
+        fprintf(stderr, "native_host: selftest saw platform=%s webview=%d\n",
+                platform.UTF8String, webview ? 1 : 0);
+        return 1;
+    }
+    printf("selftest ok platform=%s\n", platform.UTF8String);
+    return 0;
+}
+
 static int run_selftest(void)
 {
     @autoreleasepool {
@@ -1645,58 +1718,15 @@ static int run_selftest(void)
             return 1;
         }
         OpenBoxHost *host = [OpenBoxHost new];
-        /* The self test drives the same boot path, but without a window. */
-        if (![host bootServer]) {
-            fprintf(stderr, "native_host: selftest could not boot the server\n");
-            return 1;
-        }
-        /* The capabilities response proves the child, the token, and the
-         * loopback API all work together. */
-        NSString *origin = [host serverOrigin];
-        NSString *token = [host serverToken];
-        if (origin == nil || token == nil) {
-            fprintf(stderr, "native_host: selftest could not read the server identity\n");
-            [host stopServer];
-            return 1;
-        }
-        NSURL *url = [NSURL URLWithString:
-            [NSString stringWithFormat:@"%@/api/native/capabilities", origin]];
-        NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
-        [request setValue:token forHTTPHeaderField:@"X-OpenBox-Token"];
-        [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
-        __block NSString *payload = nil;
-        __block NSError *failure = nil;
-        dispatch_semaphore_t done = dispatch_semaphore_create(0);
-        [[[NSURLSession sharedSession] dataTaskWithRequest:request
-                                         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-            if (data != nil) {
-                payload = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-            }
-            failure = error;
-            dispatch_semaphore_signal(done);
-        }] resume];
-        dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC));
+        /* The self test must not touch the data directory of a running app,
+         * so it boots against a scratch one. */
+        NSString *data_dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+            [NSString stringWithFormat:@"openbox-selftest-%@", [[NSUUID UUID] UUIDString]]];
+        [host setDataDirectory:data_dir];
+        int status = selftest_server(host);
         [host stopServer];
-        if (payload == nil) {
-            fprintf(stderr, "native_host: selftest could not read the capabilities: %s\n",
-                    failure ? failure.localizedDescription.UTF8String : "no response");
-            return 1;
-        }
-        NSData *json = [payload dataUsingEncoding:NSUTF8StringEncoding];
-        NSDictionary *parsed = [NSJSONSerialization JSONObjectWithData:json options:0 error:NULL];
-        if (![parsed isKindOfClass:[NSDictionary class]]) {
-            fprintf(stderr, "native_host: selftest got an unreadable capabilities response\n");
-            return 1;
-        }
-        NSString *platform = parsed[@"platform"];
-        BOOL webview = [parsed[@"webview"] boolValue];
-        if (![platform isEqualToString:@"darwin"] || !webview) {
-            fprintf(stderr, "native_host: selftest saw platform=%s webview=%d\n",
-                    platform.UTF8String, webview ? 1 : 0);
-            return 1;
-        }
-        printf("selftest ok platform=%s\n", platform.UTF8String);
-        return 0;
+        [[NSFileManager defaultManager] removeItemAtPath:data_dir error:NULL];
+        return status;
     }
 }
 
