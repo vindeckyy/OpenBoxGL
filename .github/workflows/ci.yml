@@ -230,7 +230,9 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 25
+    # The coverage pass over the suite alone needs ~26 minutes on a shared
+    # runner; the 25-minute budget was timing the job out, not the code.
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
