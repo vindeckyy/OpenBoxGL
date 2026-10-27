@@ -4,6 +4,7 @@
 import ast
 import contextlib
 import io
+import os
 import re
 import shutil
 import subprocess
@@ -224,6 +225,26 @@ class CiGatesTests(unittest.TestCase):
         self.assertIn("max_allowed = 0.50 if sys.gettrace() is not None else 0.25", body,
                       "the 250ms budget is the contract and must not be relaxed")
 
+    def test_gate_bounds_every_suite_attempt(self):
+        """A suite that wedges must name itself, not eat the whole job budget.
+
+        The gate ran each suite with an unbounded subprocess.run, so one hang
+        (the macOS update applier handing the bundle to /usr/bin/open off
+        macOS) produced a job cancelled at the runner timeout with no clue
+        which suite caused it.
+        """
+        from scripts import check_tests
+
+        self.assertGreaterEqual(check_tests.SUITE_TIMEOUT_SECONDS, 60,
+                                "a bound tighter than this fails slow but honest suites")
+        self.assertLessEqual(check_tests.SUITE_TIMEOUT_SECONDS, 600,
+                             "a looser bound leaves a hang too close to the job timeout to name it")
+        gate = (ROOT / "scripts" / "check_tests.py").read_text(encoding="utf-8")
+        self.assertIn("timeout=SUITE_TIMEOUT_SECONDS", gate,
+                      "every suite attempt must carry the bound")
+        self.assertIn("except subprocess.TimeoutExpired:", gate,
+                      "the bound must be reported, not raised out of the gate")
+
 
 class SuiteRunnerRetryTests(unittest.TestCase):
     """run_all_tests.sh backs the Linux, macOS and release CI jobs, and it ran
@@ -257,6 +278,7 @@ class SuiteRunnerRetryTests(unittest.TestCase):
             capture_output=True, text=True, timeout=300, check=False,
         )
 
+    @unittest.skipIf(os.name == "nt", "run_all_tests.sh is a POSIX shell script")
     def test_transient_suite_failure_is_retried_and_reported(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -277,6 +299,7 @@ class SuiteRunnerRetryTests(unittest.TestCase):
                 "the first attempt's failure must be printed so a real intermittent bug still surfaces",
             )
 
+    @unittest.skipIf(os.name == "nt", "run_all_tests.sh is a POSIX shell script")
     def test_persistent_failure_still_fails_after_every_attempt(self):
         """The retry must not launder a real defect into a green job."""
         with tempfile.TemporaryDirectory() as directory:
