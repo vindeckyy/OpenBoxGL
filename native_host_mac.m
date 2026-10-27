@@ -490,14 +490,32 @@ static NSString *BridgeScript(void)
     _server_pid = pid;
 
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:BOOT_TIMEOUT_SECONDS];
+    int child_status = 0;
+    BOOL child_exited = NO;
     while ([deadline timeIntervalSinceNow] > 0) {
         if (secure_file_ready(port_file) && secure_file_ready(token_file)) {
+            break;
+        }
+        pid_t reaped = waitpid(_server_pid, &child_status, WNOHANG);
+        if (reaped == _server_pid || (reaped < 0 && errno == ECHILD)) {
+            child_exited = YES;
             break;
         }
         usleep(50000);
     }
     if (!secure_file_ready(port_file) || !secure_file_ready(token_file)) {
-        fprintf(stderr, "native_host: server did not boot within %d seconds\n", BOOT_TIMEOUT_SECONDS);
+        if (child_exited && WIFEXITED(child_status)) {
+            fprintf(stderr, "native_host: server exited during boot (status %d)\n",
+                    WEXITSTATUS(child_status));
+        } else if (child_exited && WIFSIGNALED(child_status)) {
+            fprintf(stderr, "native_host: server was killed during boot (signal %d)\n",
+                    WTERMSIG(child_status));
+        } else if (child_exited) {
+            fprintf(stderr, "native_host: server exited during boot\n");
+        } else {
+            fprintf(stderr, "native_host: server did not boot within %d seconds\n",
+                    BOOT_TIMEOUT_SECONDS);
+        }
         [self stopServer];
         return NO;
     }
@@ -1641,7 +1659,7 @@ static BOOL selftest_escaping(void)
     return YES;
 }
 
-static void print_log_tail(NSString *path)
+static void print_log_tail(NSString *label, NSString *path)
 {
     NSString *log = [NSString stringWithContentsOfFile:path
                                              encoding:NSUTF8StringEncoding
@@ -1653,14 +1671,19 @@ static void print_log_tail(NSString *path)
     NSUInteger start = lines.count > 20 ? lines.count - 20 : 0;
     NSString *tail = [[lines subarrayWithRange:NSMakeRange(start, lines.count - start)]
                         componentsJoinedByString:@"\n"];
-    fprintf(stderr, "native_host: server log:\n%s\n", tail.UTF8String);
+    fprintf(stderr, "native_host: %s:\n%s\n", label.UTF8String, tail.UTF8String);
 }
 
 static int selftest_server(OpenBoxHost *host)
 {
     /* The self test drives the same boot path, but without a window. */
     if (![host bootServer]) {
-        print_log_tail([[host dataDirectory] stringByAppendingPathComponent:@"native-host.log"]);
+        NSString *data_dir = [host dataDirectory];
+        fprintf(stderr, "native_host: selftest data dir: %s\n", data_dir.UTF8String);
+        fprintf(stderr, "native_host: selftest python: %s\n",
+                [[host resolvedPythonPath] UTF8String]);
+        print_log_tail(@"server log", [data_dir stringByAppendingPathComponent:@"native-host.log"]);
+        print_log_tail(@"diagnostic log", [data_dir stringByAppendingPathComponent:@"openbox.log"]);
         fprintf(stderr, "native_host: selftest could not boot the server\n");
         return 1;
     }
@@ -1725,7 +1748,11 @@ static int run_selftest(void)
         [host setDataDirectory:data_dir];
         int status = selftest_server(host);
         [host stopServer];
-        [[NSFileManager defaultManager] removeItemAtPath:data_dir error:NULL];
+        if (getenv("OPENBOX_SELFTEST_KEEP") != NULL) {
+            fprintf(stderr, "native_host: selftest data kept at %s\n", data_dir.UTF8String);
+        } else {
+            [[NSFileManager defaultManager] removeItemAtPath:data_dir error:NULL];
+        }
         return status;
     }
 }
