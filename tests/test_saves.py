@@ -284,7 +284,9 @@ def test_macos_save_discovery_uses_only_documented_folders():
             ps2 = saves._discover_save_paths_darwin({"name": "Game", "platform": "PlayStation 2"}, home)
             steam = [c["path"] for c in saves._discover_save_paths_darwin({"name": "Game", "steam_app_id": "42"}, home)]
             saturn = [c["path"] for c in saves._discover_save_paths_darwin({"name": "Sonic", "platform": "Sega Saturn"}, home)]
-            with mock.patch.object(saves, "IS_MACOS", True), mock.patch.object(saves.Path, "home", return_value=home):
+            with mock.patch.object(saves, "IS_MACOS", True), mock.patch.object(
+                saves, "IS_WINDOWS", False
+            ), mock.patch.object(saves.Path, "home", return_value=home):
                 dispatched = [c["path"] for c in saves.discover_save_paths({"name": "Game", "platform": "PSP"})]
     assert psp == [str(ppsspp)]
     assert gamecube == [str(dolphin)]

@@ -93,7 +93,7 @@ class DirectoryTests(unittest.TestCase):
         self.assertTrue(data_dir.is_absolute())
         self.assertEqual(data_dir.name, "openbox-game-launcher")
         if pc.IS_WINDOWS:
-            self.assertEqual(data_dir.parent.parent.name, "Local")
+            self.assertEqual(data_dir.parent.name, "Local")
         elif pc.IS_MACOS:
             self.assertEqual(data_dir, Path.home() / "Library" / "Application Support" / "openbox-game-launcher")
         else:
@@ -585,7 +585,9 @@ class OpenerTests(unittest.TestCase):
 
     @unittest.skipIf(pc.IS_WINDOWS or pc.IS_MACOS, "macOS always has /usr/bin/open")
     def test_open_path_without_xdg_open_raises(self):
-        with mock.patch.object(pc.shutil, "which", return_value=None):
+        with mock.patch.object(pc.shutil, "which", return_value=None), mock.patch.object(
+            pc, "external_open_disabled", return_value=False
+        ):
             with self.assertRaises(FileNotFoundError):
                 pc.open_path("/tmp/game.rom")
 
@@ -597,7 +599,9 @@ class OpenerTests(unittest.TestCase):
 
     @unittest.skipUnless(pc.IS_WINDOWS, "Windows hands the URI to os.startfile")
     def test_open_path_hands_the_target_to_the_shell(self):
-        with mock.patch.object(pc.os, "startfile", create=True) as startfile:
+        with mock.patch.object(pc.os, "startfile", create=True) as startfile, mock.patch.object(
+            pc, "external_open_disabled", return_value=False
+        ):
             pc.open_path("C:/games/game.rom")
         startfile.assert_called_once_with("C:/games/game.rom")
 
@@ -623,7 +627,7 @@ class OpenerTests(unittest.TestCase):
     def test_open_url_falls_back_to_webbrowser(self):
         with mock.patch.object(pc.shutil, "which", return_value=None), mock.patch(
             "webbrowser.open", return_value=True
-        ) as opened:
+        ) as opened, mock.patch.object(pc, "external_open_disabled", return_value=False):
             pc.open_url("http://127.0.0.1:1/")
         opened.assert_called_once_with("http://127.0.0.1:1/")
 
@@ -631,13 +635,15 @@ class OpenerTests(unittest.TestCase):
     def test_open_url_raises_when_nothing_can_open_links(self):
         with mock.patch.object(pc.shutil, "which", return_value=None), mock.patch(
             "webbrowser.open", return_value=False
-        ):
+        ), mock.patch.object(pc, "external_open_disabled", return_value=False):
             with self.assertRaises(OSError):
                 pc.open_url("http://127.0.0.1:1/")
 
     @unittest.skipUnless(pc.IS_WINDOWS, "Windows hands the URI to os.startfile")
     def test_open_url_hands_the_uri_to_the_shell(self):
-        with mock.patch.object(pc.os, "startfile", create=True) as startfile:
+        with mock.patch.object(pc.os, "startfile", create=True) as startfile, mock.patch.object(
+            pc, "external_open_disabled", return_value=False
+        ):
             pc.open_url("http://127.0.0.1:1/")
         startfile.assert_called_once_with("http://127.0.0.1:1/")
 
@@ -824,15 +830,15 @@ class MacOSSeamTests(unittest.TestCase):
 
     def test_the_data_directory_follows_the_platform_convention(self):
         with mock.patch.object(pc, "IS_MACOS", True), mock.patch.object(
-            pc, "home_dir", return_value=Path("/Users/tester")
-        ):
+            pc, "IS_WINDOWS", False
+        ), mock.patch.object(pc, "home_dir", return_value=Path("/Users/tester")):
             self.assertEqual(
                 pc.default_data_dir(),
                 Path("/Users/tester/Library/Application Support/openbox-game-launcher"),
             )
         with mock.patch.object(pc, "IS_MACOS", False), mock.patch.object(
-            pc, "home_dir", return_value=Path("/home/tester")
-        ):
+            pc, "IS_WINDOWS", False
+        ), mock.patch.object(pc, "home_dir", return_value=Path("/home/tester")):
             self.assertEqual(
                 pc.default_data_dir(),
                 Path("/home/tester/.local/share/openbox-game-launcher"),
@@ -840,30 +846,30 @@ class MacOSSeamTests(unittest.TestCase):
 
     def test_the_env_roots_follow_the_platform_convention(self):
         with mock.patch.object(pc, "IS_MACOS", True), mock.patch.object(
-            pc, "home_dir", return_value=Path("/Users/tester")
-        ):
+            pc, "IS_WINDOWS", False
+        ), mock.patch.object(pc, "home_dir", return_value=Path("/Users/tester")):
             roots = pc.env_file_roots()
         self.assertEqual(roots[0], Path("/Users/tester"))
         self.assertIn(Path("/Users/tester/Library/Application Support/openbox-game-launcher"), roots)
 
     def test_the_steam_roots_follow_the_platform_convention(self):
         home = Path("/Users/tester")
-        with mock.patch.object(pc, "IS_MACOS", True):
+        with mock.patch.object(pc, "IS_MACOS", True), mock.patch.object(pc, "IS_WINDOWS", False):
             self.assertEqual(
                 pc.steam_candidate_roots(home),
                 [home / "Library" / "Application Support" / "Steam"],
             )
-        with mock.patch.object(pc, "IS_MACOS", False):
+        with mock.patch.object(pc, "IS_MACOS", False), mock.patch.object(pc, "IS_WINDOWS", False):
             self.assertIn(home / ".local" / "share" / "Steam", pc.steam_candidate_roots(home))
 
     def test_the_url_opener_is_the_platform_one(self):
         with mock.patch.object(pc, "IS_MACOS", True), mock.patch.object(
-            pc.shutil, "which", return_value="/usr/bin/xdg-open"
-        ):
+            pc, "IS_WINDOWS", False
+        ), mock.patch.object(pc.shutil, "which", return_value="/usr/bin/xdg-open"):
             self.assertEqual(pc.url_opener_command(), "/usr/bin/open")
         with mock.patch.object(pc, "IS_MACOS", False), mock.patch.object(
-            pc.shutil, "which", return_value="/usr/bin/xdg-open"
-        ):
+            pc, "IS_WINDOWS", False
+        ), mock.patch.object(pc.shutil, "which", return_value="/usr/bin/xdg-open"):
             self.assertEqual(pc.url_opener_command(), "/usr/bin/xdg-open")
 
     def test_the_battery_parser_reads_the_pmset_report(self):
@@ -933,13 +939,13 @@ class MacOSSeamTests(unittest.TestCase):
 
     def test_the_libretro_core_directory_follows_the_platform(self):
         with mock.patch.object(pc, "IS_MACOS", True), mock.patch.object(
-            pc, "home_dir", return_value=Path("/Users/tester")
-        ):
+            pc, "IS_WINDOWS", False
+        ), mock.patch.object(pc, "home_dir", return_value=Path("/Users/tester")):
             self.assertEqual(
-                pc.libretro_system_core_dir(),
-                "/Users/tester/Library/Application Support/RetroArch/cores/",
+                Path(pc.libretro_system_core_dir()),
+                Path("/Users/tester/Library/Application Support/RetroArch/cores"),
             )
-        with mock.patch.object(pc, "IS_MACOS", False):
+        with mock.patch.object(pc, "IS_MACOS", False), mock.patch.object(pc, "IS_WINDOWS", False):
             self.assertEqual(pc.libretro_system_core_dir(), "/usr/lib/libretro/")
 
     def _bundle(self, root, executable="OpenBox", name="OpenBox.app"):
@@ -991,13 +997,15 @@ class MacOSSeamTests(unittest.TestCase):
             root = Path(directory)
             applications = root / "Applications"
             applications.mkdir()
-            self._bundle(applications, executable="PCSX2", name="PCSX2-v2.8.2.app")
+            bundle = self._bundle(applications, executable="PCSX2", name="PCSX2-v2.8.2.app")
             with mock.patch.object(pc, "IS_MACOS", True), mock.patch.object(
-                pc, "home_dir", return_value=root
-            ), mock.patch.object(pc.Path, "home", return_value=root):
+                pc, "IS_WINDOWS", False
+            ), mock.patch.object(pc, "home_dir", return_value=root), mock.patch.object(
+                pc.Path, "home", return_value=root
+            ):
                 resolved = pc.resolve_native_executable("PCSX2*.app")
             self.assertIsNotNone(resolved, "the versioned bundle was not found")
-            self.assertTrue(resolved.endswith("PCSX2-v2.8.2.app/Contents/MacOS/PCSX2"), resolved)
+            self.assertEqual(Path(resolved), bundle / "Contents/MacOS/PCSX2")
 
     def test_a_plain_name_still_resolves_through_which(self):
         with mock.patch.object(pc, "IS_MACOS", True):
@@ -1174,7 +1182,9 @@ class FallbackBranchTests(unittest.TestCase):
         # Bundle paths run past 100 characters, and the executable's name is at the end.
         long_path = "/Users/example/Desktop/Projects/Some Long Folder/build/macos/OpenBox.app/Contents/Resources/python/bin/python3.12"
         self.assertGreater(len(long_path), 100)
-        with mock.patch.object(pc, "IS_MACOS", True), mock.patch.object(pc, "_darwin_pid_path", return_value=long_path):
+        with mock.patch.object(pc, "IS_MACOS", True), mock.patch.object(
+            pc, "IS_WINDOWS", False
+        ), mock.patch.object(pc, "_darwin_pid_path", return_value=long_path):
             self.assertEqual(pc.process_command_line(1234), long_path)
 
     def test_macos_folder_matching_folds_case_and_checks_the_image_path(self):
@@ -1189,6 +1199,8 @@ class FallbackBranchTests(unittest.TestCase):
             sibling = Path(directory) / "Games-old"
             sibling.mkdir()
             with mock.patch.object(pc, "IS_MACOS", True), mock.patch.object(
+                pc, "IS_WINDOWS", False
+            ), mock.patch.object(
                 pc, "_darwin_pid_list", return_value=[10, 11, 12]
             ), mock.patch.object(
                 pc,
