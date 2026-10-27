@@ -542,12 +542,33 @@ def _macos_update_channel():
         # The applier swaps the bundle once the server is gone, and keeps
         # the previous bundle.
         # The applier is a POSIX shell script, so the swap only runs on POSIX.
+        #
+        # The shipped script must refuse its own relaunch when the headless
+        # guard is set: /usr/bin/open is only macOS's launcher, and off macOS it
+        # is the desktop browser, which took the bundle and never returned --
+        # that hung suite then wedged the whole coverage gate. The bound is the
+        # belt: a wedged applier fails here instead of eating the job budget.
         if os.name != "nt":
-            subprocess.run(
-                ["/bin/sh", spawned["applier"], "999999", str(bundle), str(spawned["staged"])],
-                check=False,
-                capture_output=True,
+            script = "\n".join(
+                line
+                for line in updates.MACOS_APPLIER.splitlines()
+                if not line.lstrip().startswith("#")
             )
+            assert "OPENBOX_DISABLE_EXTERNAL_OPEN" in script.split("/usr/bin/open")[0], (
+                "the applier must check the headless guard before it opens the bundle"
+            )
+            applier_env = os.environ.copy()
+            applier_env["OPENBOX_DISABLE_EXTERNAL_OPEN"] = "1"
+            try:
+                subprocess.run(
+                    ["/bin/sh", spawned["applier"], "999999", str(bundle), str(spawned["staged"])],
+                    check=False,
+                    capture_output=True,
+                    env=applier_env,
+                    timeout=60,
+                )
+            except subprocess.TimeoutExpired as error:
+                raise AssertionError("the applier never returned") from error
             assert (bundle / "Contents/MacOS/OpenBox").read_text(encoding="utf-8") == "new"
             assert (root / "OpenBox.app.previous/Contents/MacOS/OpenBox").read_text(encoding="utf-8") == "old"
 
