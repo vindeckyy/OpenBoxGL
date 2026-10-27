@@ -305,6 +305,8 @@ def main() -> int:
         env = os.environ.copy()
         env["PYTHONPATH"] = str(ROOT) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["COVERAGE_RUN"] = "1"
+        # A gate run must never open a browser window or a file manager.
+        env["OPENBOX_DISABLE_EXTERNAL_OPEN"] = "1"
         # Isolate state: openbox.py binds DATA at import time per test
         # process. Without a suite-wide temp dir, any test importing state
         # modules before setting its own writes fixtures into the real

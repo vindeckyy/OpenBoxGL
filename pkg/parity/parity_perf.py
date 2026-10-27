@@ -6,12 +6,12 @@ Dependency-free and never raises: failures degrade to a logged no-op.
 from __future__ import annotations
 
 from collections import namedtuple
-import glob
 import logging
 import shutil
 import subprocess
 
 from parity_gamescope import is_gamescope_guest
+from pkg.platform_compat import IS_LINUX, battery_status
 
 LOGGER = logging.getLogger("openbox")
 
@@ -29,11 +29,15 @@ def effective_profile_name(game, profiles):
 
 def _has_battery():
     """True when the host exposes a battery (handheld or laptop)."""
-    return bool(glob.glob("/sys/class/power_supply/BAT*"))
+    return bool(battery_status()["present"])
 
 
 def perf_should_apply(state, environ=None):
     """Decide whether limits apply: ``off``/``auto``/``always``; ``auto`` only on gamescope guests or battery power."""
+    if not IS_LINUX:
+        # The TDP limits come from ryzenadj, an AMD Linux tool. No other
+        # platform can apply them, so the battery probe never runs here.
+        return False
     mode = str(state.get("settings", {}).get("apply_perf", "auto")).strip().casefold()
     if mode == "off":
         return False

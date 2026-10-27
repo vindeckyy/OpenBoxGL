@@ -8,6 +8,8 @@ extensions:
   - iso
 native_exe: xenia
 native_exe_windows: xenia_canary.exe
+# Xenia is a Windows program.
+native_exe_macos: ""
 flatpak_app_id: org.xenia.Xenia
 startup_args:
   - "{path}"

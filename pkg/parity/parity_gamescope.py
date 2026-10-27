@@ -16,8 +16,11 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pkg.platform_compat import (
+    IS_MACOS,
     IS_WINDOWS,
     browser_application_commands,
+    child_pids as _platform_child_pids,
+    external_open_disabled,
     launch_kwargs,
     open_path,
     resolve_browser_application,
@@ -165,6 +168,11 @@ def open_ui(url, *, guest=False, force_game_mode=False, native_window=False, wid
     opener = popen or subprocess.Popen
     browse = browser_open or webbrowser.open
     helper_env = host_helper_env(environ)
+    # A headless run (a gate, a test, a server) must not touch the desktop.
+    # An injected launcher is the caller's own choice, so the switch only
+    # blocks the real one.
+    desktop_blocked = external_open_disabled() and popen is None
+    browser_blocked = external_open_disabled() and browser_open is None
     if guest or force_game_mode or native_window:
         if guest or force_game_mode:
             browser = resolve_kiosk_browser(which=which)
@@ -172,7 +180,7 @@ def open_ui(url, *, guest=False, force_game_mode=False, native_window=False, wid
         else:
             browser = resolve_app_window_browser(which=which)
             mode = "app"
-        if browser:
+        if browser and not desktop_blocked:
             try:
                 process = opener(
                     kiosk_command(browser, target, width=width, height=height),
@@ -185,7 +193,22 @@ def open_ui(url, *, guest=False, force_game_mode=False, native_window=False, wid
                 pid = getattr(process, "pid", None)
                 return {"url": target, "mode": mode, "browser": browser[0], "pid": pid}
     finder = which or shutil.which
-    if IS_WINDOWS:
+    if IS_MACOS and not desktop_blocked:
+        # The system opener is the injected launcher, so a caller (and a
+        # test) decides what actually happens instead of a browser window
+        # opening behind the user's back.
+        try:
+            process = opener(["/usr/bin/open", target], env=helper_env, **launch_kwargs())
+        except OSError:
+            process = None
+        else:
+            return {
+                "url": target,
+                "mode": "default",
+                "browser": "",
+                "pid": getattr(process, "pid", None),
+            }
+    if IS_WINDOWS and not desktop_blocked:
         try:
             open_path(target)
         except OSError:
@@ -193,7 +216,7 @@ def open_ui(url, *, guest=False, force_game_mode=False, native_window=False, wid
         else:
             return {"url": target, "mode": "default", "browser": "", "pid": None}
     xdg = finder("xdg-open")
-    if xdg:
+    if xdg and not desktop_blocked:
         try:
             process = opener([xdg, target], env=helper_env, **launch_kwargs())
         except OSError:
@@ -205,9 +228,12 @@ def open_ui(url, *, guest=False, force_game_mode=False, native_window=False, wid
                 "browser": xdg,
                 "pid": getattr(process, "pid", None),
             }
-    if not browse(target):
+    if not browser_blocked and not browse(target):
         # webbrowser could not open anything either; fail loud so a
         # double-click launch is not a black hole.
+        print(f"OpenBox server running at {target} — no window opener available; open this URL manually.",
+              file=sys.stderr)
+    elif browser_blocked:
         print(f"OpenBox server running at {target} — no window opener available; open this URL manually.",
               file=sys.stderr)
     return {"url": target, "mode": "webbrowser", "browser": "", "pid": None}
@@ -283,6 +309,8 @@ def _child_pids(pid):
         return []
     if IS_WINDOWS:
         return _windows_child_pids(root)
+    if IS_MACOS:
+        return _macos_child_pids(root)
     try:
         entries = os.listdir("/proc")
     except OSError:
@@ -327,6 +355,19 @@ def _windows_child_pids(pid):
             if child and parent in found and child not in found:
                 found.add(child)
                 changed = True
+    return sorted(found)
+
+
+def _macos_child_pids(pid):
+    """Return pid plus descendants using the macOS process table."""
+    found = {pid}
+    frontier = {pid}
+    while frontier:
+        current = frontier.pop()
+        for child in _platform_child_pids(current):
+            if child not in found:
+                found.add(child)
+                frontier.add(child)
     return sorted(found)
 
 

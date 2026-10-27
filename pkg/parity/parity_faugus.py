@@ -17,6 +17,8 @@ import json
 import os
 from pathlib import Path
 
+from pkg.platform_compat import IS_MACOS
+
 
 FAUGUS_CONFIG_DIRS = [
     "~/.config/faugus-launcher",
@@ -32,6 +34,9 @@ FAUGUS_GAMES_DIRS = [
 
 def find_faugus_data_dirs():
     """Return existing Faugus data directories."""
+    if IS_MACOS:
+        # Faugus is a Linux launcher; there is nothing to read on macOS.
+        return []
     found = []
     for raw in FAUGUS_CONFIG_DIRS + FAUGUS_GAMES_DIRS:
         p = Path(raw).expanduser()

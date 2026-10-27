@@ -11,7 +11,7 @@ from pathlib import Path
 from backend_io import atomic_copy_stream, atomic_write_text, fsync_directory
 from state_store import default_state
 from pkg.parity.parity_redact import redact_settings, redact_state_for_export, merge_preserved_credentials
-from pkg.platform_compat import parse_timestamp
+from pkg.platform_compat import parse_timestamp, user_symlink_component
 
 
 BACKUP_ITEMS = {
@@ -83,10 +83,9 @@ def backup_path(data_dir, prefix="OpenBoxBackup"):
 
 
 def _reject_symlink_components(path):
-    path = Path(os.path.abspath(os.fspath(path)))
-    for component in (path, *path.parents):
-        if component.is_symlink():
-            raise ValueError(f"Backup path may not contain symlinks: {component}")
+    component = user_symlink_component(path)
+    if component is not None:
+        raise ValueError(f"Backup path may not contain symlinks: {component}")
 
 
 def _restrict_archive_permissions(folder, pattern):

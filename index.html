@@ -25,8 +25,8 @@
           </div>
           <div role="group" aria-label="Import from a game store" data-tool-group="stores" data-i18n-aria-label="nav.add_group_stores">
             <button class="menu-button" role="menuitem" data-add-action="steam" data-i18n="nav.add_menu_steam">Steam</button>
-            <button class="menu-button" role="menuitem" data-add-action="heroic" data-i18n="nav.add_menu_heroic">Heroic</button>
-            <button class="menu-button" role="menuitem" data-add-action="lutris" data-i18n="nav.add_menu_lutris">Lutris</button>
+            <button class="menu-button" role="menuitem" data-add-action="heroic" data-macos-hidden data-i18n="nav.add_menu_heroic">Heroic</button>
+            <button class="menu-button" role="menuitem" data-add-action="lutris" data-macos-hidden data-i18n="nav.add_menu_lutris">Lutris</button>
             <button class="menu-button" role="menuitem" data-add-action="store" data-i18n="nav.add_menu_store">More game stores…</button>
           </div>
         </div>
@@ -68,8 +68,8 @@
           <div role="group" aria-label="Imports &amp; extras" data-tool-group="sources" data-i18n-aria-label="tools.group_sources">
             <button class="menu-button" id="storefrontButton" role="menuitem" tabindex="-1"><span data-i18n="tools.storefronts">Game stores</span><small class="menu-hint" data-i18n="tools.hint_storefronts">Steam, Heroic, Lutris, and more</small></button>
             <button class="menu-button" id="steamButton" role="menuitem" tabindex="-1" data-i18n="tools.import_steam">Import Steam</button>
-            <button class="menu-button" id="heroicButton" role="menuitem" tabindex="-1" data-i18n="tools.import_heroic">Import Heroic</button>
-            <button class="menu-button" id="lutrisButton" role="menuitem" tabindex="-1" data-i18n="tools.import_lutris">Import Lutris</button>
+            <button class="menu-button" id="heroicButton" role="menuitem" tabindex="-1" data-macos-hidden data-i18n="tools.import_heroic">Import Heroic</button>
+            <button class="menu-button" id="lutrisButton" role="menuitem" tabindex="-1" data-macos-hidden data-i18n="tools.import_lutris">Import Lutris</button>
             <button class="menu-button" id="gogButton" role="menuitem" tabindex="-1" data-windows-only hidden data-i18n="tools.import_gog">Import GOG</button>
             <button class="menu-button" id="eaButton" role="menuitem" tabindex="-1" data-windows-only hidden data-i18n="tools.import_ea">Import EA app</button>
             <button class="menu-button" id="ubisoftButton" role="menuitem" tabindex="-1" data-windows-only hidden data-i18n="tools.import_ubisoft">Import Ubisoft Connect</button>
@@ -194,7 +194,7 @@
         <label class="field"><span>Disc count</span><input name="disc_count" type="number" min="0" max="99"></label>
         <label class="field wide"><span>Launch command, optional override</span><input name="launch"></label>
         <label class="field wide"><span>Launch profile override</span><select name="launch_profile"><option value="">Default platform profile</option></select></label>
-        <label class="field wide"><span>Gamescope preset override</span><select name="gamescope_preset"><option value="">Global setting</option></select></label>
+        <label class="field wide" data-macos-hidden><span>Gamescope preset override</span><select name="gamescope_preset"><option value="">Global setting</option></select></label>
         <label class="field wide"><span>Environment overrides, one per line: KEY=value</span><textarea name="launch_env" rows="3" placeholder="PROTON_NO_ESYNC=1"></textarea></label>
         <label class="check"><input type="checkbox" name="extract_archive">Extract archive before launch</label>
         <label class="check"><input type="checkbox" name="launch_confirm">Always confirm before launch</label>
@@ -267,7 +267,7 @@
       <div class="form-grid">
         <label class="field wide"><span>One profile per line: Platform = command. Use {path} for the ROM.</span><textarea id="profilesText"></textarea></label>
         <div class="wide" id="detectedProfiles"></div>
-        <div class="wide"><div class="section-title">Handheld performance</div><p class="description">Set a TDP limit (watts) applied via ryzenadj when a game from this profile launches, and an optional restore limit when the session ends. Requires ryzenadj on PATH.</p><div class="form-grid" id="perfProfiles"></div></div>
+        <div class="wide" data-macos-hidden><div class="section-title">Handheld performance</div><p class="description">Set a TDP limit (watts) applied via ryzenadj when a game from this profile launches, and an optional restore limit when the session ends. Requires ryzenadj on PATH.</p><div class="form-grid" id="perfProfiles"></div></div>
         <div class="wide detail-card" id="defsPanel">
           <div class="section-title" data-i18n="defs.title">Emulator definitions</div>
           <p class="description" id="defsStatus"></p>
@@ -700,7 +700,7 @@
         <label class="field settings-field settings-panel" data-settings-panel="sessions" data-setting="progress first play completion status"><span data-i18n="settings.progress_first_play">Progress status on first play</span><select id="progressOnFirstPlay"><option value="">None</option><option value="Playing">Playing</option><option value="Paused">Paused</option><option value="Beaten">Beaten</option><option value="Completed">Completed</option><option value="Mastered">Mastered</option></select></label>
         <label class="check settings-field settings-panel" data-settings-panel="sessions" data-setting="progress suggest backlog playing"><input type="checkbox" id="backlogProgressSuggest"> <span data-i18n="settings.backlog_progress_suggest">Suggest marking games as Playing on first play</span></label>
         <label class="field settings-field settings-panel" data-settings-panel="launching" data-setting="tracking mode process folder wine proton"><span data-i18n="settings.tracking_mode">Default session tracking mode</span><select id="trackingMode"><option value="default">Default</option><option value="process">Process</option><option value="original_process">Original process</option><option value="folder">Install folder</option><option value="process_name">Process name</option></select></label>
-        <label class="field settings-field settings-panel" data-settings-panel="launching" data-setting="handheld performance tdp ryzenadj apply limits"><span data-i18n="settings.apply_perf">Apply handheld performance limits</span><select id="applyPerf"><option value="auto">Auto (handheld only)</option><option value="always">Always</option><option value="off">Off</option></select></label>
+        <label class="field settings-field settings-panel" data-settings-panel="launching" data-setting="handheld performance tdp ryzenadj apply limits" data-macos-hidden><span data-i18n="settings.apply_perf">Apply handheld performance limits</span><select id="applyPerf"><option value="auto">Auto (handheld only)</option><option value="always">Always</option><option value="off">Off</option></select></label>
         <label class="field settings-field settings-panel" data-settings-panel="launching" data-setting="tracking delay seconds launch"><span data-i18n="settings.tracking_delay">Tracking start delay in seconds</span><input id="trackingDelay" type="number" min="0" max="600"></label>
         <label class="field settings-field settings-panel" data-settings-panel="launching" data-setting="tracking frequency poll seconds"><span data-i18n="settings.tracking_frequency">Tracking poll frequency in seconds</span><input id="trackingFrequency" type="number" min="0.5" max="60" step="0.5"></label>
         <label class="check settings-field settings-panel" data-settings-panel="launching" data-setting="auto close steam heroic lutris storefront"><input type="checkbox" id="autoCloseStoreClients"> <span data-i18n="settings.auto_close_clients">Close storefront clients after a session ends</span></label>
@@ -747,18 +747,18 @@
         <label class="field wide settings-field settings-panel" data-settings-panel="controller" data-setting="controller types gamepad arcade stick racing wheel light gun"><span>Controller types, one per line: id|name|kind</span><textarea id="controllerTypesSetting" placeholder="gamepad|Gamepad|gamepad"></textarea></label>
         <fieldset class="field wide settings-field settings-panel" data-settings-panel="controller" data-setting="keyboard mapping shortcuts"><legend>Keyboard shortcuts</legend><div id="keyboardMapInputs" class="extras"></div><p class="description" id="keyboardMapError" role="alert" hidden></p></fieldset>
         <label class="field wide settings-field settings-panel" data-settings-panel="bigbox" data-setting="hide platforms categories playlists big box"><span>Hide from Big Box: platforms, categories, playlists (comma separated)</span><input id="bigBoxHiddenPlatforms" placeholder="Platforms"><input id="bigBoxHiddenCategories" placeholder="Categories"><input id="bigBoxHiddenPlaylists" placeholder="Playlists"></label>
-        <div class="wide section-title settings-panel" data-settings-panel="controller" data-setting="gamescope preset steam deck">Gamescope Presets</div>
-        <label class="field wide settings-field settings-panel" data-settings-panel="controller" data-setting="gamescope preset steam deck"><span>Gamescope preset</span><select id="gamescopePreset"><option value="">None</option></select></label>
-        <div class="wide settings-field settings-panel" data-settings-panel="controller" data-setting="gamescope custom presets editor">
+        <div class="wide section-title settings-panel" data-macos-hidden data-settings-panel="controller" data-setting="gamescope preset steam deck">Gamescope Presets</div>
+        <label class="field wide settings-field settings-panel" data-macos-hidden data-settings-panel="controller" data-setting="gamescope preset steam deck"><span>Gamescope preset</span><select id="gamescopePreset"><option value="">None</option></select></label>
+        <div class="wide settings-field settings-panel" data-macos-hidden data-settings-panel="controller" data-setting="gamescope custom presets editor">
           <span>Custom gamescope presets</span>
           <div id="gamescopeCustomPresets" class="gamescope-preset-list"></div>
           <button type="button" class="icon-button" id="addGamescopePreset">Add custom preset</button>
         </div>
-        <label class="check settings-field settings-panel" data-settings-panel="controller" data-setting="mangohud overlay performance fps"><input type="checkbox" id="mangohudEnabled"> Enable MangoHud performance overlay</label>
+        <label class="check settings-field settings-panel" data-settings-panel="controller" data-setting="mangohud overlay performance fps" data-macos-hidden><input type="checkbox" id="mangohudEnabled"> Enable MangoHud performance overlay</label>
         <div class="wide settings-field settings-panel" data-settings-panel="controller" data-setting="controller gamepad test"><div class="controller-bench" id="controllerBench"><svg class="gamepad-svg" viewBox="0 0 200 120" aria-label="Gamepad test"><rect x="10" y="30" width="180" height="60" rx="30" class="gamepad-body"/><circle cx="50" cy="60" r="12" class="gamepad-stick"/><circle cx="150" cy="60" r="12" class="gamepad-stick"/><circle cx="80" cy="50" r="5" class="gamepad-btn"/><circle cx="120" cy="50" r="5" class="gamepad-btn"/><circle cx="100" cy="65" r="5" class="gamepad-btn"/><circle cx="100" cy="40" r="5" class="gamepad-btn"/></svg><p class="description" id="controllerBenchStatus">Connect a controller to test inputs.</p></div></div>
         <button type="button" class="icon-button settings-field settings-panel" data-settings-panel="imports" data-setting="watched folders import scan" id="scanWatched" data-i18n="settings.scan_watched">Scan watched folders now</button>
         <button type="button" class="icon-button settings-field settings-panel" data-settings-panel="advanced" data-setting="welcome wizard setup" id="reopenWelcome" data-i18n="settings.reopen_setup">Reopen setup</button>
-        <div class="wide detail-card settings-field settings-panel" data-settings-panel="advanced" data-setting="application updates desktop shortcut"><h3 data-i18n="settings.application">Application</h3><p class="description" id="updateStatus"></p><div class="extras"><button type="button" class="icon-button" id="checkUpdate">Check for updates</button><button type="button" class="primary" id="installUpdate" hidden>Install verified update</button><button type="button" class="icon-button" id="installDesktop">Install desktop shortcut</button></div></div>
+        <div class="wide detail-card settings-field settings-panel" data-settings-panel="advanced" data-setting="application updates desktop shortcut"><h3 data-i18n="settings.application">Application</h3><p class="description" id="updateStatus"></p><div class="extras"><button type="button" class="icon-button" id="checkUpdate">Check for updates</button><button type="button" class="primary" id="installUpdate" hidden>Install verified update</button><button type="button" class="icon-button" id="installDesktop" data-macos-hidden>Install desktop shortcut</button></div></div>
         <div class="wide detail-card settings-field settings-panel" data-settings-panel="advanced" data-setting="export library json csv games"><h3>Export library</h3><p class="description">Export game rows as JSON or CSV. Exports contain game data only — never settings or credentials.</p><div class="extras"><select id="exportFormat" aria-label="Export format"><option value="json">JSON</option><option value="csv">CSV</option></select><select id="exportScope" aria-label="Export scope"><option value="all">Whole library</option><option value="platform">One platform</option><option value="playlist">One playlist</option></select><input id="exportScopeName" placeholder="Scope name" hidden><label class="check"><input type="checkbox" id="exportMediaPaths"> Include media paths</label><button type="button" class="primary" id="exportLibrary">Export…</button></div><p class="description" id="exportStatus"></p></div>
       </div>
       </div>
@@ -774,21 +774,20 @@
     <div class="dialog-head"><h2 id="storefrontDialogTitle">Storefront Manager</h2><button type="button" id="closeStorefront" aria-label="Close Storefront Manager dialog">×</button></div>
     <div class="form-grid">
       <p class="wide description">Import owned and installed games from Steam, Heroic, Epic, Lutris, Gameyfin, GOG, EA app, and Ubisoft Connect. Install or uninstall Gameyfin titles on demand from the library or Big Box. Epic, GOG, EA app, and Ubisoft Connect read the launchers installed on Windows.</p>
-      <div class="wide extras"><button type="button" class="primary" id="importSteamStore">Import Steam</button><button type="button" class="icon-button" id="importHeroicStore">Import Heroic</button><button type="button" class="icon-button" id="importEpicStore" data-i18n="storefront.import_epic">Import Epic</button><button type="button" class="icon-button" id="importLutrisStore">Import Lutris</button><button type="button" class="icon-button" id="importGameyfinStore">Import Gameyfin</button><button type="button" class="icon-button" id="importGogStore" data-windows-only hidden data-i18n="storefront.import_gog">Import GOG</button><button type="button" class="icon-button" id="importEaStore" data-windows-only hidden data-i18n="storefront.import_ea">Import EA app</button><button type="button" class="icon-button" id="importUbisoftStore" data-windows-only hidden data-i18n="storefront.import_ubisoft">Import Ubisoft Connect</button><button type="button" class="icon-button" id="importScummvmStore">Import ScummVM</button><button type="button" class="icon-button" id="importRpcs3Store">Import RPCS3</button><button type="button" class="icon-button" id="importVita3kStore">Import Vita3K</button></div>
+      <div class="wide extras"><button type="button" class="primary" id="importSteamStore">Import Steam</button><button type="button" class="icon-button" id="importHeroicStore" data-macos-hidden>Import Heroic</button><button type="button" class="icon-button" id="importEpicStore" data-macos-hidden data-i18n="storefront.import_epic">Import Epic</button><button type="button" class="icon-button" id="importLutrisStore" data-macos-hidden>Import Lutris</button><button type="button" class="icon-button" id="importGameyfinStore">Import Gameyfin</button><button type="button" class="icon-button" id="importGogStore" data-windows-only hidden data-i18n="storefront.import_gog">Import GOG</button><button type="button" class="icon-button" id="importEaStore" data-windows-only hidden data-i18n="storefront.import_ea">Import EA app</button><button type="button" class="icon-button" id="importUbisoftStore" data-windows-only hidden data-i18n="storefront.import_ubisoft">Import Ubisoft Connect</button><button type="button" class="icon-button" id="importScummvmStore">Import ScummVM</button><button type="button" class="icon-button" id="importRpcs3Store">Import RPCS3</button><button type="button" class="icon-button" id="importVita3kStore">Import Vita3K</button></div>
       <label class="check"><input type="checkbox" id="storefrontAutoImportSteam"> Auto-import Steam on startup</label>
       <label class="field"><span>Steam platform</span><input id="storefrontSteamPlatform" placeholder="PC"></label>
       <label class="check"><input type="checkbox" id="storefrontSteamUninstalled"> Include owned but uninstalled Steam games</label>
-      <label class="check"><input type="checkbox" id="storefrontAutoImportHeroic"> Auto-import Heroic on startup</label>
-      <label class="field"><span>Heroic platform</span><input id="storefrontHeroicPlatform" placeholder="PC"></label>
-      <label class="check"><input type="checkbox" id="storefrontHeroicUninstalled"> Include owned but uninstalled Heroic games</label>
-      <label class="check"><input type="checkbox" id="storefrontAutoImportEpic" data-i18n="storefront.auto_epic"> Auto-import Epic on startup</label>
+      <label class="check" data-macos-hidden><input type="checkbox" id="storefrontAutoImportHeroic"> Auto-import Heroic on startup</label>
+      <label class="field" data-macos-hidden><span>Heroic platform</span><input id="storefrontHeroicPlatform" placeholder="PC"></label>
+      <label class="check" data-macos-hidden><input type="checkbox" id="storefrontHeroicUninstalled"> Include owned but uninstalled Heroic games</label>
       <label class="check" data-windows-only hidden><input type="checkbox" id="storefrontAutoImportGog"> Auto-import GOG on startup</label>
       <label class="check" data-windows-only hidden><input type="checkbox" id="storefrontAutoImportEa"> Auto-import EA app on startup</label>
       <label class="check" data-windows-only hidden><input type="checkbox" id="storefrontAutoImportUbisoft"> Auto-import Ubisoft Connect on startup</label>
-      <label class="check"><input type="checkbox" id="storefrontAutoImportEpic" data-i18n="storefront.auto_epic"> Auto-import Epic on startup</label>
-      <label class="check"><input type="checkbox" id="storefrontAutoImportLutris"> Auto-import Lutris on startup</label>
-      <label class="field"><span>Lutris platform</span><input id="storefrontLutrisPlatform" placeholder="PC"></label>
-      <label class="check"><input type="checkbox" id="storefrontLutrisUninstalled"> Include owned but uninstalled Lutris games</label>
+      <label class="check" data-macos-hidden><input type="checkbox" id="storefrontAutoImportEpic" data-i18n="storefront.auto_epic"> Auto-import Epic on startup</label>
+      <label class="check" data-macos-hidden><input type="checkbox" id="storefrontAutoImportLutris"> Auto-import Lutris on startup</label>
+      <label class="field" data-macos-hidden><span>Lutris platform</span><input id="storefrontLutrisPlatform" placeholder="PC"></label>
+      <label class="check" data-macos-hidden><input type="checkbox" id="storefrontLutrisUninstalled"> Include owned but uninstalled Lutris games</label>
       <label class="check"><input type="checkbox" id="storefrontAutoImportGameyfin"> Auto-import Gameyfin on startup</label>
       <label class="field"><span>Gameyfin platform</span><input id="storefrontGameyfinPlatform" placeholder="PC"></label>
       <label class="check"><input type="checkbox" id="storefrontGameyfinUninstalled"> Include owned but uninstalled Gameyfin games</label>
@@ -805,7 +804,7 @@
       <div class="wide section-title">Plugin storefronts</div>
       <div class="wide storefront-status" id="storefrontPlugins"></div>
       <div class="wide section-title">Browse storefront catalogs</div>
-      <label class="field"><span>Source</span><select id="storefrontSource"><option value="steam">Steam</option><option value="heroic">Heroic</option><option value="lutris">Lutris</option><option value="gameyfin">Gameyfin</option></select></label>
+      <label class="field"><span>Source</span><select id="storefrontSource"><option value="steam">Steam</option><option value="heroic" data-macos-hidden>Heroic</option><option value="lutris" data-macos-hidden>Lutris</option><option value="gameyfin">Gameyfin</option></select></label>
       <div class="wide extras"><button type="button" class="icon-button" id="loadStorefrontCatalog">Load catalog</button><button type="button" class="icon-button" id="importStorefrontInstalled">Import installed</button><button type="button" class="primary" id="importStorefrontUninstalled">Import owned / uninstalled</button></div>
       <div class="wide storefront-catalog" id="storefrontCatalog"></div>
     </div>

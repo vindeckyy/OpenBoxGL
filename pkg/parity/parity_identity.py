@@ -6,6 +6,8 @@ import os
 import re
 from pathlib import Path
 
+from pkg.platform_compat import path_identity_fold
+
 PC_STORE_SOURCES = {
     "steam", "epic", "gog", "amazon", "ea", "ubisoft", "xbox", "lutris",
     "gameyfin", "faugus",
@@ -27,11 +29,11 @@ def normalize_path_identity(path: str) -> str:
         return ""
     try:
         p = Path(path).expanduser().resolve()
-        norm = os.path.normcase(str(p))
+        norm = path_identity_fold(str(p))
     except Exception:
         # Fallback if resolve fails
-        norm = os.path.normcase(os.path.normpath(os.path.expanduser(path)))
-    
+        norm = path_identity_fold(os.path.normpath(os.path.expanduser(path)))
+
     return norm.rstrip(os.sep)
 
 

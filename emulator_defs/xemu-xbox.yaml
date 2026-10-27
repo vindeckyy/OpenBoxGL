@@ -8,6 +8,7 @@ extensions:
   - xiso
 native_exe: xemu
 native_exe_windows: xemu.exe
+native_exe_macos: xemu.app
 flatpak_app_id: app.xemu.xemu
 startup_args:
   - -dvd_path

@@ -10,6 +10,8 @@ extensions:
   - nro
 native_exe: eden
 native_exe_windows: eden.exe
+# Eden ships for Linux and Windows only.
+native_exe_macos: ""
 flatpak_app_id: io.github.eden-emu.eden
 startup_args:
   - "{path}"

@@ -18,7 +18,7 @@ STATIC_FILES = $(wildcard static/*.js) $(wildcard static/*.css) $(wildcard stati
 LOCALE_FILES = $(wildcard locales/*.json)
 NATIVE_HOST = native_host
 
-.PHONY: install uninstall appimage check version-check dev-venv test-one native-host contracts ratchets
+.PHONY: install uninstall appimage check version-check dev-venv test-one native-host native-host-macos macos-app contracts ratchets
 
 # Feature-regression ratchets (ADR 0060). Regenerates the frozen contracts in
 # scripts/contracts/ after an intentional surface change. Run this only when a
@@ -44,6 +44,13 @@ ratchets:
 
 native-host:
 	gcc -O2 native_host.c -o $(NATIVE_HOST) $$(pkg-config --cflags --libs webkit2gtk-4.1)
+
+# The macOS native host (WKWebView) and the app bundle that ships it.
+native-host-macos:
+	bash scripts/build_native_host_macos.sh
+
+macos-app:
+	bash scripts/build_macos_app.sh
 
 dev-venv:
 	python3 -m venv .venv-dev

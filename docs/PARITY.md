@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.18.0**, the "Clearer, deeper library" release: platform rename/delete with media moves, durable media queues, plugin capability services, save manifests and selective restore, deeper emulator and Big Box controls, and a clearer first-run interface. The previous line was **v1.17.0** ("Every Launcher"), and 1.16.0/1.16.1 were "Make it true" and its fix release.
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.19.0**, the "Now on macOS" release: a signed universal app bundle for Apple Silicon and Intel with a native WKWebView window, tray, dialogs, deeplinks, and verified updater; macOS path and process handling; macOS values for every bundled emulator definition; and Linux-only controls hidden instead of failing. The previous line was **v1.18.0** ("Clearer, deeper library"), 1.17.0 was "Every Launcher", and 1.16.0/1.16.1 were "Make it true" and its fix release.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -8,7 +8,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 
 `done` means the workflow is usable end to end on Linux. `partial` means a deliberate Linux equivalent exists but LaunchBox’s Windows/premium surface is broader or unavailable. `missing` means no usable equivalent yet.
 
-> **Platform note:** since [ADR 0048](adr/0048-windows-port.md) OpenBox also runs on Windows (signed portable install, WebView2 window). The rows below describe **Linux** behavior; the Windows channel has its own section below. Rows that name Linux-only machinery — AppImage/Flatpak packaging, gamescope/Game Mode, XDG desktop entries, Flathub emulator management — remain Linux-only and are marked so in the Windows section.
+> **Platform note:** since [ADR 0048](adr/0048-windows-port.md) OpenBox also runs on Windows (signed portable install, WebView2 window), and since [ADR 0085](adr/0085-macos-support.md) on macOS 11+ (signed universal app bundle, WKWebView window). The rows below describe **Linux** behavior; the Windows and macOS channels have their own sections below. Rows that name Linux-only machinery — AppImage/Flatpak packaging, gamescope/Game Mode, XDG desktop entries, Flathub emulator management — remain Linux-only and are marked so in the Windows and macOS sections.
 
 ## Capability matrix
 
@@ -217,6 +217,27 @@ build has a deliberate, documented narrower surface.
 | Flathub emulator management | not applicable | Flathub is a Linux store; Windows emulators are installed by the user |
 | ARM64 Windows build | missing | Only x86_64 is released, while Linux ships an aarch64 AppImage (ADR 0024) |
 | Cross-platform launch-command round-trip | partial | Stored commands use platform quoting rules (`shlex` on POSIX, MSVCRT on Windows), so a command written on one platform may not round-trip byte-for-byte to the other. Documented limitation, not a bug (ADR 0048) |
+
+
+## macOS channel (macOS 11+, arm64 and x86_64)
+
+Since [ADR 0085](adr/0085-macos-support.md) the same source tree, tests, and
+gates run on macOS. These rows record what is true on that channel
+specifically; the matrix above is Linux behavior.
+
+| Capability | Status | Acceptance check |
+|---|---|---|
+| Native window | done | `native_host_mac.m` (WKWebView) renders the same UI in a real window, with remembered geometry, `NSStatusItem` tray/minimize-to-tray, `openbox://` deeplinks, and one instance per data directory via an `AF_UNIX` socket with the 104-byte `sun_path` limit checked before binding (1.19.0) |
+| Universal install and verified update | done | `OpenBox-macos.zip` carries arm64 and x86_64 hosts and one merged interpreter; `scripts/install-macos.sh` verifies the release key anchor, SHA-256 sidecar, and Ed25519 signature before installing `OpenBox.app`; the in-app updater swaps the bundle after the server exits and keeps `OpenBox.app.previous` (1.19.0) |
+| No-install bundle | done | The bundle ships a pinned universal CPython 3.12 and the CA bundle, so a Mac needs no Python or WebKit installation; a source checkout still needs Python 3.10+ (1.19.0) |
+| Emulator detection and launch | done | Every bundled definition carries `native_exe_macos`; an app bundle resolves through `Contents/Info.plist`, and an explicit empty value means "no verified macOS build" and is reported as not installed (1.19.0) |
+| Library data location | done | `~/Library/Application Support/openbox-game-launcher`; `OPENBOX_DATA_DIR` overrides everything, and stored references keep POSIX separators so a library moves between platforms (1.19.0) |
+| macOS saves | done | Save discovery covers Steam Cloud plus the documented macOS folders for PPSSPP, RPCS3, Dolphin, and RetroArch (1.19.0) |
+| Notarization | missing | The bundle is ad-hoc signed; the first launch needs System Settings > Privacy & Security > Open Anyway. The release signature is verified by the installer and updater (1.19.0, ADR 0085) |
+| AppImage / Flatpak packaging | not applicable | Linux-only channels; the macOS artifact is the signed universal zip (ADR 0013) |
+| gamescope / Steam Game Mode presets | not applicable | Linux-only; `web_app.py --game-mode` exits with a clear message on macOS |
+| Flathub emulator management | not applicable | Flathub is a Linux store; macOS emulators are installed by the user |
+| Plugin sandbox | not applicable | macOS has no bubblewrap; the documented no-bwrap rule applies |
 
 
 ## Intentionally not replicated on Linux

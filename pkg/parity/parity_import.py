@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from backend_io import atomic_write_text
+from pkg.platform_compat import IS_MACOS, display_name_for_file
 
 
 EXTENSIONS_EXTRA = {
@@ -42,6 +43,17 @@ PLATFORM_EMULATORS = _PLATFORM_EMULATORS
 def _get_bios_hints():
     """Return BIOS hints with runtime Path.home() calls (not frozen at import)."""
     home = Path.home()
+    if IS_MACOS:
+        # Only folders upstream documents for macOS (ADR 0085). PCSX2 has no verified macOS folder, so it has no hint.
+        library = home / "Library" / "Application Support"
+        return {
+            # github.com/stenzek/duckstation README: macOS user directory ~/Library/Application Support/DuckStation.
+            "DuckStation": [("PSX BIOS (scph1001.bin)", library / "DuckStation" / "bios")],
+            # rpcs3.net/faq: macOS RPCS3 data lives in ~/Library/Application Support/rpcs3; dev_flash sits beside dev_hdd0.
+            "RPCS3": [("PS3 firmware (dev_flash)", library / "rpcs3" / "dev_flash")],
+            # github.com/libretro/RetroArch/issues/14561: RetroArch keeps its files under ~/Documents/RetroArch.
+            "RetroArch": [("System/BIOS directory", home / "Documents" / "RetroArch" / "system")],
+        }
     return {
         "DuckStation": [
             ("PSX BIOS (scph1001.bin)", home / ".local/share/duckstation/bios"),
@@ -182,7 +194,7 @@ def _disc_base(path: Path | str) -> str:
     p = path if isinstance(path, Path) else Path(path)
     stem = p.stem
     cleaned = DISC_RE.sub("", stem).strip(" ._-\t")
-    return cleaned or stem
+    return display_name_for_file(cleaned or stem)
 
 
 DISC_TOKENS = ("disc", "disk", "cd", "dvd", "side")
@@ -436,7 +448,7 @@ def import_multi_platform(
             name = base
         else:
             path = group[0]
-            name = path.stem
+            name = display_name_for_file(path.stem)
         platform = platform_map.get(path.suffix.lower(), "Imported")
         # A sheet names a disc, but the emulator that matters is the one for
         # a file it points at: "Disc image" recommends nothing, so a sheet left

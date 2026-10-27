@@ -10,34 +10,10 @@ from __future__ import annotations
 
 import os
 import sys
-from pathlib import Path
 
 from api_errors import BadRequest
+from pkg.platform_compat import IS_LINUX, IS_MACOS, battery_status
 from routes.registry import route
-
-
-def _battery_from(root=None):
-    """Read the first battery under sysfs. Returns no path in the response."""
-    root = Path(root) if root is not None else Path("/sys/class/power_supply")
-    try:
-        candidates = sorted(root.glob("BAT*"))
-    except OSError:
-        return {"present": False, "percent": 0, "charging": False}
-    for candidate in candidates:
-        try:
-            percent = int((candidate / "capacity").read_text(encoding="utf-8").strip())
-        except (OSError, ValueError):
-            continue
-        try:
-            state = (candidate / "status").read_text(encoding="utf-8").strip().casefold()
-        except OSError:
-            state = ""
-        return {
-            "present": True,
-            "percent": max(0, min(100, percent)),
-            "charging": state in {"charging", "full"},
-        }
-    return {"present": False, "percent": 0, "charging": False}
 
 
 def _handle_unauthorized(handler):
@@ -92,8 +68,8 @@ def battery(handler, parsed):
     if not handler.authorized():
         _handle_unauthorized(handler)
         return
-    if sys.platform == "linux":
-        handler.send_json(200, _battery_from())
+    if IS_LINUX or IS_MACOS:
+        handler.send_json(200, battery_status())
     else:
         handler.send_json(200, {"present": False, "percent": 0, "charging": False})
 

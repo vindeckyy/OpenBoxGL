@@ -9,6 +9,7 @@ extensions:
   - hdf
 native_exe: fs-uae
 native_exe_windows: fs-uae.exe
+native_exe_macos: FS-UAE.app
 flatpak_app_id: net.fsuae.FS-UAE
 startup_args:
   - "{path}"

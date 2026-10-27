@@ -11,6 +11,8 @@ import shlex
 import shutil
 from pathlib import Path
 
+from pkg.platform_compat import IS_MACOS
+
 
 # Common Wine prefix roots users actually use (including Lutris, Bottles, Faugus, Steam).
 DEFAULT_PREFIX_ROOTS = [
@@ -109,9 +111,9 @@ def list_proton_versions(search_roots=None):
             key = which
             if key not in seen_paths:
                 seen_paths.add(key)
-                versions.append({"name": exe, "path": which, "source": "PATH"})
+                versions.append({"name": which, "path": which, "source": "path"})
     # Check flatpak runners
-    if shutil.which("flatpak"):
+    if not IS_MACOS and shutil.which("flatpak"):
         try:
             import subprocess
             result = subprocess.run(
@@ -126,7 +128,9 @@ def list_proton_versions(search_roots=None):
         except Exception:
             pass
     # Scan known Proton roots for version directories containing proton or wine binary
-    roots = search_roots if search_roots is not None else DEFAULT_PROTON_ROOTS
+    roots = search_roots if search_roots is not None else (
+        [] if IS_MACOS else DEFAULT_PROTON_ROOTS
+    )
     for base in _expand_roots(roots):
         try:
             for child in base.iterdir():

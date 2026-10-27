@@ -9,17 +9,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
 from parity_storefront import catalog_entries_to_games, catalog_steam, storefront_catalog
+from pkg.platform_compat import steam_candidate_roots
 
 
 class StorefrontTests(unittest.TestCase):
     def test_catalog_steam_marks_installed(self):
         with TemporaryDirectory() as directory:
             home = Path(directory)
-            steamapps = home / ".local/share/Steam/steamapps"
+            steam_root = steam_candidate_roots(home)[0]
+            steamapps = steam_root / "steamapps"
             steamapps.mkdir(parents=True)
             (steamapps / "appmanifest_42.acf").write_text('"AppState"\n{\n"appid" "42"\n"name" "Real Game"\n"installdir" "RealGame"\n}', encoding="utf-8")
             (steamapps / "common" / "RealGame").mkdir(parents=True)
-            userdata = home / ".local/share/Steam/userdata/1/config"
+            userdata = steam_root / "userdata/1/config"
             userdata.mkdir(parents=True)
             (userdata / "localconfig.vdf").write_text('"Apps"\n{\n"42"\n{\n}\n"99"\n{\n}\n}', encoding="utf-8")
             catalog = catalog_steam(home)

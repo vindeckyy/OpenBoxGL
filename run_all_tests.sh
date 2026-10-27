@@ -5,6 +5,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 export PYTHONPATH="$ROOT:${PYTHONPATH:-}"
 
+# A test run must never hand a path or a URL to the desktop: that opens a
+# browser window or a file manager behind the user's back.
+export OPENBOX_DISABLE_EXTERNAL_OPEN=1
+
 TEMP_LOG_DIR="$(mktemp -d /tmp/openbox-test-logs.XXXXXX)"
 trap 'rm -rf "$TEMP_LOG_DIR"' EXIT
 

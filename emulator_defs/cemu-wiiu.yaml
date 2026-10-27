@@ -10,6 +10,7 @@ extensions:
   - elf
 native_exe: cemu
 native_exe_windows: Cemu.exe
+native_exe_macos: ""
 flatpak_app_id: info.cemu.Cemu
 startup_args:
   - -g

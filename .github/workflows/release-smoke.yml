@@ -10,7 +10,7 @@ on:
       tag:
         description: Release tag to smoke-test
         required: true
-        default: v1.16.1
+        default: v1.19.0
 
 permissions:
   contents: read
@@ -240,3 +240,97 @@ jobs:
             ${{ runner.temp }}\host-data\**
             ${{ runner.temp }}\data-web\**
             ${{ runner.temp }}\data-native\**
+
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Download and verify the published macOS bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p smoke
+          cd smoke
+          name="OpenBox-macos.zip"
+          gh release download "${{ inputs.tag }}" -R "$GITHUB_REPOSITORY" -p "$name" -p "$name.sha256" -p "$name.sig"
+          shasum -a 256 -c "$name.sha256"
+          python3 -m pip install --disable-pip-version-check cryptography==50.0.0
+          python3 -B ../scripts/verify_release.py --key ../openbox-release.pub "$name" "$name.sig"
+          ditto -x -k "$name" extracted
+          test -x "extracted/OpenBox.app/Contents/MacOS/OpenBox" || {
+            echo "the bundle has no native host" >&2
+            exit 1
+          }
+
+      - name: Serve the web app headless
+        env:
+          OPENBOX_DATA_DIR: ${{ runner.temp }}/data-web
+        run: |
+          set -euo pipefail
+          mkdir -p "$OPENBOX_DATA_DIR"
+          python3 -B "smoke/extracted/OpenBox.app/Contents/Resources/openbox/web_app.py" --no-browser \
+            > "$RUNNER_TEMP/web.out" 2> "$RUNNER_TEMP/web.err" &
+          web_pid=$!
+          url=""
+          for _ in $(seq 1 90); do
+            sleep 1
+            if [ -f "$RUNNER_TEMP/web.out" ]; then
+              url="$(grep -o 'http://127\.0\.0\.1:[0-9]\+/' "$RUNNER_TEMP/web.out" | head -1 || true)"
+            fi
+            [ -n "$url" ] && break
+          done
+          if [ -z "$url" ]; then
+            echo "the web server printed no URL" >&2
+            cat "$RUNNER_TEMP/web.err" >&2 || true
+            exit 1
+          fi
+          code="$(curl -s -o /dev/null -w '%{http_code}' "$url")"
+          kill "$web_pid" 2>/dev/null || true
+          echo "GET / -> $code"
+          [ "$code" = "200" ] || exit 1
+
+      - name: Open the native window and capture the desktop
+        env:
+          OPENBOX_DATA_DIR: ${{ runner.temp }}/data-native
+        run: |
+          set -euo pipefail
+          mkdir -p "$OPENBOX_DATA_DIR"
+          "smoke/extracted/OpenBox.app/Contents/MacOS/OpenBox" \
+            > "$RUNNER_TEMP/host.out" 2> "$RUNNER_TEMP/host.err" &
+          host_pid=$!
+          sleep 25
+          screencapture -x "$RUNNER_TEMP/macos-window.png" || true
+          if ! kill -0 "$host_pid" 2>/dev/null; then
+            echo "the native host exited within 25s" >&2
+            cat "$RUNNER_TEMP/host.err" >&2 || true
+            exit 1
+          fi
+          kill "$host_pid" 2>/dev/null || true
+
+      - name: Upload the screenshot and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # actions/upload-artifact@v7.0.2
+        with:
+          name: smoke-macos
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}/macos-window.png
+            ${{ runner.temp }}/web.out
+            ${{ runner.temp }}/web.err
+            ${{ runner.temp }}/host.out
+            ${{ runner.temp }}/host.err
+            ${{ runner.temp }}/data-web/**
+            ${{ runner.temp }}/data-native/**

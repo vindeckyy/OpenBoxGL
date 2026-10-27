@@ -15,7 +15,14 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from pkg.parity.launch_tokens import apply_tokens, build_launch_args, path_parent  # noqa: E402
-from pkg.platform_compat import IS_WINDOWS, join_command  # noqa: E402
+from pkg.platform_compat import (  # noqa: E402
+    IS_MACOS,
+    IS_WINDOWS,
+    join_command,
+    libretro_core_filename,
+    libretro_system_core_dir,
+    resolve_native_executable,
+)
 
 try:
     import yaml
@@ -179,7 +186,7 @@ RETROARCH_CORE_CHOICE_KEY = "retroarch_core"
 # A definition names its core once, in ``retroarch_core``, and puts this token where the
 # core's path goes. The builder fills in the path for the install mode (system or Flatpak).
 RETROARCH_CORE_TOKEN = "{retroarch_core}"
-_CORE_FILE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.+-]*_libretro\.so")
+_CORE_FILE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.+-]*_libretro\.(?:so|dylib)")
 
 
 def valid_core_name(name) -> bool:
@@ -192,7 +199,7 @@ def _core_choice(value) -> str:
     return text if valid_core_name(text) else ""
 
 
-RETROARCH_SYSTEM_CORE_DIR = "/usr/lib/libretro/"
+RETROARCH_SYSTEM_CORE_DIR = libretro_system_core_dir()
 RETROARCH_FLATPAK_APP_ID = "org.libretro.RetroArch"
 
 def resolved_startup_args(adapter) -> list:
@@ -200,7 +207,7 @@ def resolved_startup_args(adapter) -> list:
     startup = list(adapter.get("startup_args") or [])
     core = _core_choice(adapter.get("retroarch_core"))
     if core and RETROARCH_CORE_TOKEN in startup:
-        startup = [RETROARCH_SYSTEM_CORE_DIR + core if str(arg) == RETROARCH_CORE_TOKEN else arg for arg in startup]
+        startup = [RETROARCH_SYSTEM_CORE_DIR + libretro_core_filename(core) if str(arg) == RETROARCH_CORE_TOKEN else arg for arg in startup]
     return startup
 
 
@@ -217,7 +224,10 @@ def _normalize_adapter(raw):
         extensions = [extensions]
     native_exe = raw.get("native_exe", raw.get("native"))
     native_exe_windows = raw.get("native_exe_windows", raw.get("native_windows"))
-    flatpak_app_id = raw.get("flatpak_app_id", raw.get("flatpak"))
+    native_exe_macos = raw.get("native_exe_macos", raw.get("native_macos"))
+    macos_exe_declared = "native_exe_macos" in raw or "native_macos" in raw
+    # Flatpak is not an install path on macOS, so a definition's Flatpak id is dropped there.
+    flatpak_app_id = None if IS_MACOS else raw.get("flatpak_app_id", raw.get("flatpak"))
     startup_args = _compile_startup_args(raw)
     if IS_WINDOWS and raw.get("startup_args_windows"):
         # Windows builds live in different places than the POSIX ones (RetroArch
@@ -258,6 +268,9 @@ def _normalize_adapter(raw):
         "extensions": [ext.lower().lstrip(".") for ext in extensions],
         "native_exe": str(native_exe).strip() if native_exe else None,
         "native_exe_windows": str(native_exe_windows).strip() if native_exe_windows else None,
+        # An explicitly empty value means "no verified macOS build" (ADR 0085),
+        # which is not the same as a definition that predates the key.
+        "native_exe_macos": (str(native_exe_macos).strip() if native_exe_macos else "") if macos_exe_declared else None,
         "flatpak_app_id": str(flatpak_app_id).strip() if flatpak_app_id else None,
         "startup_args": startup_args,
         "recommended": _as_bool(raw.get("recommended"), default=True),
@@ -590,6 +603,25 @@ def _reset_registry_cache():
         _refresh_import_snapshots()
 
 
+def adapter_executable(adapter):
+    """Binary name for an adapter on this host.
+
+    Windows defs ship a separate binary name (``retroarch.exe``) and macOS
+    defs ship an app bundle name (``RetroArch.app``); the POSIX name is
+    only a fallback when the platform key is absent. An explicitly empty
+    macOS value means no verified build (ADR 0085), so it stays empty
+    instead of resolving to the Linux binary.
+    """
+    native = adapter.get("native_exe") or ""
+    if IS_WINDOWS and adapter.get("native_exe_windows"):
+        return adapter["native_exe_windows"]
+    if IS_MACOS:
+        macos = adapter.get("native_exe_macos")
+        if macos is not None:
+            return macos
+    return native
+
+
 def load_definitions(defs_dir=None):
     if defs_dir is not None:
         adapters = load_adapters(defs_dir)
@@ -606,7 +638,7 @@ def load_definitions(defs_dir=None):
             "startup_args": resolved_startup_args(adapter),
             "executable_patterns": list(adapter["executable_patterns"]),
             "flatpak": adapter["flatpak_app_id"] or "",
-            "native": adapter["native_exe"] or "",
+            "native": adapter_executable(adapter) or "",
             "emulator_id": adapter["emulator_id"],
             "emulator_def": adapter["adapter_id"],
             "state": dict(adapter["state"]),
@@ -621,11 +653,11 @@ def build_emulators_dict(adapters=None):
         app_id = adapter["emulator_id"]
         entry = emulators.setdefault(app_id, {
             "name": adapter["label"].split(" (")[0],
-            "native": adapter["native_exe"] or "",
+            "native": adapter_executable(adapter) or "",
             "profiles": {},
         })
-        if not entry["native"] and adapter["native_exe"]:
-            entry["native"] = adapter["native_exe"]
+        if not entry["native"]:
+            entry["native"] = adapter_executable(adapter) or ""
         entry["profiles"][adapter["platform"]] = join_command(resolved_startup_args(adapter))
     return emulators
 
@@ -706,23 +738,17 @@ def find_adapter(adapter_id="", emulator_id=""):
     return None
 
 
-def adapter_executable(adapter):
-    """Binary name for an adapter on this host.
-
-    Windows defs ship a separate binary name (``retroarch.exe``); the POSIX name
-    is only a fallback there.
-    """
-    native = adapter.get("native_exe") or ""
-    if IS_WINDOWS and adapter.get("native_exe_windows"):
-        return adapter["native_exe_windows"]
-    return native
-
-
 def detect_adapter_prefix(adapter, which=None):
     which = which or shutil.which
+    if IS_MACOS and adapter.get("native_exe_macos") == "":
+        # ADR 0085: no verified macOS build. A same-named Linux tool or a
+        # matching executable pattern must not make it look installable.
+        return []
     native = adapter_executable(adapter)
-    if native and which(native):
-        return [which(native)]
+    if native:
+        resolved = resolve_native_executable(native, which=which)
+        if resolved:
+            return [resolved]
     flatpak = adapter.get("flatpak_app_id") or ""
     if not IS_WINDOWS and flatpak and which("flatpak"):
         return ["flatpak", "run", flatpak]
@@ -790,7 +816,7 @@ def apply_core_override(adapter, game):
             continue
         path = str(startup[index + 1])
         if path.startswith(RETROARCH_SYSTEM_CORE_DIR):
-            startup[index + 1] = RETROARCH_SYSTEM_CORE_DIR + choice
+            startup[index + 1] = RETROARCH_SYSTEM_CORE_DIR + libretro_core_filename(choice)
         elif path.endswith(".dll") and "\\cores\\" in path:
             # Windows builds keep the same core names with a .dll suffix, beside the executable.
             startup[index + 1] = path.rsplit("\\", 1)[0] + "\\" + Path(choice).stem + ".dll"

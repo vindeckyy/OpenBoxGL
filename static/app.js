@@ -641,9 +641,17 @@ window.addEventListener('DOMContentLoaded', () => {
       if (typeof action === 'function') action(params);
     }
 
-    function applyWindowsOnly() {
+    function applyPlatformVisibility() {
       const windows = nativeCaps.platform === 'win32';
+      const macos = nativeCaps.platform === 'darwin';
       document.querySelectorAll('[data-windows-only]').forEach(element => { element.hidden = !windows; });
+      // Controls whose feature does not exist on macOS (Flatpak, Heroic,
+      // Lutris, gamescope) are hidden there instead of failing on click.
+      // Select options are removed rather than hidden: WebKit's select menu ignores `hidden`.
+      document.querySelectorAll('[data-macos-hidden]').forEach(element => {
+        if (element.tagName === 'OPTION') { if (macos) element.remove(); return; }
+        element.hidden = macos;
+      });
     }
 
     const deeplink = new URLSearchParams(location.search);
@@ -691,7 +699,7 @@ window.addEventListener('DOMContentLoaded', () => {
     $('webhooksButton').onclick = () => openFeature('webhooks');
     $('closeFeature').onclick = $('doneFeature').onclick = () => $('featureDialog').close();
       await detectNative().catch(() => {});
-      applyWindowsOnly();
+      applyPlatformVisibility();
       connectSessionEvents();
       pollSessions();
       await runStartupStorefrontImports().catch(() => {});

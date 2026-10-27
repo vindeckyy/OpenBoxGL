@@ -13,7 +13,7 @@ from urllib.request import urlopen
 
 from archives import safe_zip_extract
 from backend_io import atomic_copy_stream, atomic_write_text, download_file
-from pkg.platform_compat import contained_path, safe_filename_component
+from pkg.platform_compat import contained_path, macos_screenshot_command, safe_filename_component
 from state_store import secure_text_write
 
 
@@ -179,6 +179,8 @@ def capture_screenshot(dest_path, window_hint=""):
     # back to their full-screen mode below.
     window = bool(window_hint)
     commands = []
+    if macos := macos_screenshot_command(dest):
+        commands.append(macos)
     if shutil.which("gnome-screenshot"):
         commands.append(["gnome-screenshot"] + (["-w", "-f", str(dest)] if window else ["-f", str(dest)]))
     if shutil.which("spectacle"):

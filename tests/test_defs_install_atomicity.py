@@ -47,6 +47,7 @@ extensions:
   - nes
 native_exe: testemu
 native_exe_windows: TestEmu.exe
+native_exe_macos: TestEmu.app
 flatpak_app_id: org.test.TestEmu
 startup_args:
   - "{path}"

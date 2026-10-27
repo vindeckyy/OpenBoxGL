@@ -5,7 +5,12 @@ import shutil
 import subprocess
 
 from pkg.parity.parity_emulator_defs import EMULATORS, PLATFORM_EMULATORS
-from pkg.platform_compat import flatpak_app_installed, join_command, launch_kwargs
+from pkg.platform_compat import (
+    flatpak_app_installed,
+    join_command,
+    launch_kwargs,
+    resolve_native_executable,
+)
 from parity_import import recommend_emulators
 
 
@@ -20,7 +25,7 @@ def emulator_status(run=subprocess.run, which=shutil.which):
     flatpak = which("flatpak")
     result = []
     for app_id, emulator in EMULATORS.items():
-        native = which(emulator["native"])
+        native = resolve_native_executable(emulator["native"], which=which)
         # Native wins the mode below, so the Flatpak probe only runs without one.
         flatpak_installed = bool(flatpak) and not native and flatpak_app_installed(app_id, run=run, flatpak=flatpak)
         mode = "native" if native else "flatpak" if flatpak_installed else ""
@@ -46,7 +51,7 @@ def launch_emulator(app_id, which=shutil.which):
     if app_id not in EMULATORS:
         raise ValueError("Unknown emulator.")
     emulator = EMULATORS[app_id]
-    native = which(emulator["native"])
+    native = resolve_native_executable(emulator["native"], which=which)
     flatpak = which("flatpak")
     if native:
         subprocess.Popen([native], **launch_kwargs())

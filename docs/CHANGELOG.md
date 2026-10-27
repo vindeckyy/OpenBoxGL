@@ -4,7 +4,48 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.19.0] - 2026-10-27
+
+OpenBox now runs natively on macOS. The release adds a universal app bundle for Apple Silicon and Intel,
+a WKWebView host with the same window, tray, dialogs, deeplinks, and verified updater as the other
+platforms, macOS path and process handling, and macOS values for every bundled emulator definition.
+Linux-only features are hidden there rather than broken. The Linux and Windows behavior is unchanged.
+Upgrade from any 1.18.x release.
+
+### Added
+- **OpenBox runs on macOS 11 or newer.** `OpenBox-macos.zip` is one universal app bundle carrying arm64
+  and x86_64 builds of the WKWebView host and one merged CPython 3.12, so a Mac needs nothing installed.
+  It has the same native bridge, `NSStatusItem` tray, native dialogs, `openbox://` deeplinks, window
+  geometry, and verified in-app updater; the updater replaces the bundle after the server exits and keeps
+  the previous one as `OpenBox.app.previous`. `native_host_mac.m`, `scripts/build_macos_app.sh`,
+  `scripts/install-macos.sh`, `docs/adr/0085-macos-support.md`.
+- **macOS uses native paths and process identity.** Library data lives in
+  `~/Library/Application Support/openbox-game-launcher`, process identity comes from libproc, path
+  comparison folds Unicode (NFC) and case, symlinked save targets are refused, and app bundles resolve
+  through `Contents/Info.plist`. `pkg/platform_compat.py`, `tests/test_platform_compat_darwin.py`,
+  `tests/test_symlink_refusals.py`.
+- **Every emulator definition says whether it ships a macOS build.** `native_exe_macos` accepts an app
+  bundle (`RetroArch.app`), a bare program (`mame`), or an explicit empty value when no macOS build is
+  verified; an empty value is reported as not installed instead of launching a Linux binary, and the
+  Flatpak install controls are hidden. `emulator_defs/*.yaml`,
+  `pkg/parity/parity_emulator_defs.py`, `pkg/parity/parity_launch_doctor.py`, `static/settings.js`.
+- **macOS saves and desktop features.** Save discovery covers Steam Cloud plus the documented macOS
+  folders for PPSSPP, RPCS3, Dolphin, and RetroArch; the Big Box battery indicator reads `pmset`;
+  screenshots use `screencapture`; the tray and recent-games menu behave as on the other hosts.
+  `saves.py`, `pkg/platform_compat.py`, `handlers/native.py`.
+- **macOS is a CI and release target.** CI runs the suite and the portable gates on `macos-15` and
+  `macos-15-intel`, and the release workflow builds, smoke-tests, signs, and attaches the bundle next to
+  the Linux and Windows artifacts. `.github/workflows/ci.yml`, `.github/workflows/release.yml`,
+  `.github/workflows/release-smoke.yml`.
+
+### Changed
+- **Linux-only features are hidden on macOS instead of failing.** Heroic, Lutris, Epic, Faugus, Proton
+  scanning, Flatpak emulator installs, and the plugin sandbox are not offered there, and Game Mode exits
+  with "Game Mode needs gamescope and is only available on Linux." The Linux and Windows paths are
+  unchanged. `static/settings.js`, `web_app.py`, `handlers/native.py`.
+- The version gate now reads the release version the bug-report template advertises instead
+  of looking for the version string anywhere in the file, so a stale "current release is
+  v1.16.0" line fails `make version-check` again. `scripts/check_version_sync.py`.
 
 ### Fixed
 - **Backups no longer carry provider tokens or the OBS WebSocket password.** The redaction
@@ -24,11 +65,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   did not handle; the page now selects the game and scrolls it into view, and
   `?deeplink=showgame&id=` scrolls as the contract describes. `static/app.js`,
   `tests/test_frontend_contract.py`.
-
-### Changed
-- The version gate now reads the release version the bug-report template advertises instead
-  of looking for the version string anywhere in the file, so a stale "current release is
-  v1.16.0" line fails `make version-check` again. `scripts/check_version_sync.py`.
 
 ## [1.18.0] - 2026-10-19
 
@@ -2071,7 +2107,8 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.18.0...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.19.0...HEAD
+[1.19.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.18.0...v1.19.0
 [1.18.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.16.1...v1.17.0
 [1.16.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.16.0...v1.16.1

@@ -10,6 +10,7 @@ extensions:
   - dosz
 native_exe: dosbox
 native_exe_windows: dosbox.exe
+native_exe_macos: "DOSBox Staging.app"
 flatpak_app_id: io.github.dosbox-staging
 startup_args:
   - "{path}"

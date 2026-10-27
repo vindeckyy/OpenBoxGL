@@ -16,7 +16,7 @@ Participation in this project is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUC
 
 ### Requirements
 
-- Linux or Windows (both are supported targets; macOS is not)
+- Linux, Windows, or macOS 11 or newer (all three are supported targets)
 - Python 3.10 or newer
 - Git
 
@@ -28,7 +28,7 @@ cd OpenBoxGL
 python3 web_app.py
 ```
 
-On Windows use `python web_app.py`; `python3` there is a Microsoft Store alias that does not run scripts.
+On Windows use `python web_app.py`; `python3` there is a Microsoft Store alias that does not run scripts. On macOS, install a current Python (Homebrew: `brew install python@3.12`); the system `python3` is older than the 3.10 floor. Build the native window with `scripts/build_native_host_macos.sh`, or the whole app bundle with `scripts/build_macos_app.sh`.
 
 Optional local configuration can be loaded from an explicit `OPENBOX_ENV_FILE`, the data directory (or its parent), `~/.env`, or `~/.config/openbox-game-launcher/.env`. See `.env.example`. Never commit secrets, tokens, or personal credentials.
 

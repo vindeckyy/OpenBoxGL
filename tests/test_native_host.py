@@ -1,6 +1,7 @@
 import os
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -32,8 +33,9 @@ def _decode_single_quoted_js(literal):
 
 
 @unittest.skipIf(
-    os.name == "nt",
-    "native_host.c is WebKitGTK/GTK3; Windows uses the WebView2 host instead",
+    sys.platform != "linux",
+    "native_host.c is WebKitGTK/GTK3 and needs the GTK development files; "
+    "Windows uses the WebView2 host and macOS the WKWebView host",
 )
 class TestNativeHost(unittest.TestCase):
     def _compile_argument_harness(self, directory):

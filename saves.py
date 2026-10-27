@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from backend_io import atomic_copy_stream, fsync_directory
-from pkg.platform_compat import IS_WINDOWS, steam_install_roots
+from pkg.platform_compat import IS_MACOS, IS_WINDOWS, steam_candidate_roots, steam_install_roots, user_symlink_component
 
 
 MAX_SAVE_ARCHIVE_MEMBER_BYTES = 4 * 1024 * 1024 * 1024
@@ -27,10 +27,9 @@ SAVE_SYNC_LOCK = threading.RLock()
 
 
 def _reject_symlink_components(path):
-    path = Path(os.path.abspath(os.fspath(path)))
-    for component in (path, *path.parents):
-        if component.is_symlink():
-            raise ValueError(f"Save path may not contain symlinks: {component}")
+    component = user_symlink_component(path)
+    if component is not None:
+        raise ValueError(f"Save path may not contain symlinks: {component}")
 
 
 def _manifest_entries(roots):
@@ -167,6 +166,8 @@ def _source_entry(path, label, shared, *, emulator_id="", core="", slot=""):
 def discover_save_paths(game, home=None):
     if home is None and IS_WINDOWS:
         return _discover_save_paths_windows(game)
+    if home is None and IS_MACOS:
+        return _discover_save_paths_darwin(game, Path.home())
     home = Path(home or Path.home())
     candidates = []
     app_id = str(game.get("steam_app_id", ""))
@@ -181,7 +182,6 @@ def discover_save_paths(game, home=None):
                 for path in (steam / "userdata").glob(f"*/{app_id}/remote")
                 if path.is_dir()
             )
-    platform = str(game.get("platform", ""))
     shared = {
         "PlayStation 2": [
             home / ".config/PCSX2/memcards",
@@ -224,6 +224,20 @@ def discover_save_paths(game, home=None):
         "Sega Saturn": "retroarch",
         "Wii U": "cemu",
     }
+    retro_roots = (
+        home / ".config/retroarch/saves",
+        home / ".config/retroarch/states",
+        home / ".var/app/org.libretro.RetroArch/config/retroarch/saves",
+        home / ".var/app/org.libretro.RetroArch/config/retroarch/states",
+    )
+    candidates.extend(_shared_and_retro_candidates(game, shared, shared_emulators, retro_roots))
+    return _unique_candidates(candidates)
+
+
+def _shared_and_retro_candidates(game, shared, shared_emulators, retro_roots):
+    """Candidates from a platform's shared save folders and the RetroArch saves that match the title."""
+    platform = str(game.get("platform", ""))
+    candidates = []
     for path in shared.get(platform, []):
         if not path.exists():
             continue
@@ -232,25 +246,66 @@ def discover_save_paths(game, home=None):
             emulator_id = "mednafen"
         candidates.append(_source_entry(path, f"{platform} shared saves", True, emulator_id=emulator_id))
     title = re.sub(r"[^a-z0-9]+", "", str(game.get("name") or Path(game.get("path", "")).stem).casefold())
-    retro_roots = (
-        home / ".config/retroarch/saves",
-        home / ".config/retroarch/states",
-        home / ".var/app/org.libretro.RetroArch/config/retroarch/saves",
-        home / ".var/app/org.libretro.RetroArch/config/retroarch/states",
-    )
     for root in retro_roots:
         if not root.is_dir() or not title:
             continue
         for path in root.rglob("*"):
             if path.is_file() and re.sub(r"[^a-z0-9]+", "", path.stem.casefold()) == title:
                 core = path.parent.name if path.parent != root else ""
-                candidates.append(
-                    _source_entry(path, "RetroArch save", False, emulator_id="retroarch", core=core)
-                )
+                candidates.append(_source_entry(path, "RetroArch save", False, emulator_id="retroarch", core=core))
+    return candidates
+
+
+def _unique_candidates(candidates):
     unique = {}
     for candidate in candidates:
         unique[candidate["path"]] = candidate
     return list(unique.values())
+
+
+def _discover_save_paths_darwin(game, home):
+    """Discover Steam Cloud and the macOS save folders that upstream documents.
+
+    A folder is listed only when an upstream source names it for macOS. Emulators
+    without such a source (PCSX2, Cemu) are left out rather than guessed.
+    """
+    candidates = []
+    app_id = str(game.get("steam_app_id", ""))
+    if app_id.isdigit():
+        for steam in steam_candidate_roots(home):
+            if not steam.is_dir():
+                continue
+            candidates.extend(
+                _source_entry(path, "Steam Cloud", False, emulator_id="steam")
+                for path in (steam / "userdata").glob(f"*/{app_id}/remote")
+                if path.is_dir()
+            )
+    library = home / "Library" / "Application Support"
+    retroarch = home / "Documents" / "RetroArch"
+    shared = {
+        # ppsspp.org/docs/reference/mac: the Mac build keeps its memory stick in ~/.config/ppsspp.
+        "PSP": [home / ".config" / "ppsspp" / "PSP" / "SAVEDATA"],
+        # rpcs3.net/faq: macOS save data lives under ~/Library/Application Support/rpcs3.
+        "PlayStation 3": [library / "rpcs3" / "dev_hdd0" / "home" / "00000001" / "savedata"],
+        # dolphin-emu.org/docs/guides/controlling-global-user-directory: ~/Library/Application Support/Dolphin.
+        "GameCube": [library / "Dolphin" / "GC"],
+        "Wii": [library / "Dolphin" / "Wii" / "title"],
+        "WiiWare": [library / "Dolphin" / "Wii" / "title"],
+        # github.com/libretro/RetroArch/issues/14561: RetroArch saves default to ~/Documents/RetroArch.
+        "Sega Saturn": [retroarch / "saves"],
+    }
+    shared_emulators = {
+        "PSP": "ppsspp",
+        "PlayStation 3": "rpcs3",
+        "GameCube": "dolphin",
+        "Wii": "dolphin",
+        "WiiWare": "dolphin",
+        "Sega Saturn": "retroarch",
+    }
+    candidates.extend(
+        _shared_and_retro_candidates(game, shared, shared_emulators, (retroarch / "saves", retroarch / "states"))
+    )
+    return _unique_candidates(candidates)
 
 
 def _windows_documents() -> Path:

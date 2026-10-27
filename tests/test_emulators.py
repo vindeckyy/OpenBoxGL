@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import contextlib
 import json
 import os
 import re
@@ -8,6 +9,21 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+
+
+@contextlib.contextmanager
+def linux_flatpak_registry():
+    """Flatpak ids are an install path on Linux only (ADR 0085): pin Linux and rebuild the registry."""
+    import pkg.parity.parity_emulator_defs as defs
+
+    patcher = mock.patch.object(defs, "IS_MACOS", False)
+    patcher.start()
+    defs._reset_registry_cache()
+    try:
+        yield
+    finally:
+        patcher.stop()
+        defs._reset_registry_cache()
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -124,12 +140,14 @@ class TestEmulatorCli(unittest.TestCase):
             calls.append(args)
             return Result()
 
-        statuses = emulator_status(
-            run=run,
-            which=lambda name: f"/usr/bin/{name}" if name in {"flatpak", "dolphin-emu"} else None,
-        )
+        dolphin_exe = EMULATORS["org.DolphinEmu.dolphin-emu"]["native"]
+        with mock.patch("pkg.platform_compat.IS_MACOS", False):
+            statuses = emulator_status(
+                run=run,
+                which=lambda name: f"/usr/bin/{name}" if name in {"flatpak", dolphin_exe} else None,
+            )
         dolphin = next(item for item in statuses if item["name"] == "Dolphin")
-        self.assertTrue(dolphin["mode"] == "native" and dolphin["profiles"]["Wii"].startswith("/usr/bin/dolphin-emu"))
+        self.assertTrue(dolphin["mode"] == "native" and dolphin["profiles"]["Wii"].startswith(f"/usr/bin/{dolphin_exe}"))
         profiles = install_emulator(
             "org.ppsspp.PPSSPP",
             run=run,
@@ -147,10 +165,12 @@ class TestEmulatorCli(unittest.TestCase):
         self.assertTrue(any(item["app_id"] == "org.libretro.RetroArch" for item in recs))
 
     def test_launch_emulator_native(self):
-        with mock.patch("emulators.subprocess.Popen") as popen:
+        native = EMULATORS["org.ppsspp.PPSSPP"]["native"]
+        with mock.patch("emulators.subprocess.Popen") as popen, \
+             mock.patch("pkg.platform_compat.IS_MACOS", False):
             result = launch_emulator(
                 "org.ppsspp.PPSSPP",
-                which=lambda name: "/usr/bin/ppsspp" if name == "ppsspp" else None,
+                which=lambda name: f"/usr/bin/{name}" if name == native else None,
             )
         self.assertEqual(result["mode"], "native")
         popen.assert_called_once()
@@ -442,7 +462,8 @@ class TestRegistryHelpers(unittest.TestCase):
             rom.write(b"nes")
             path = rom.name
         self.addCleanup(lambda: os.path.exists(path) and os.unlink(path))
-        with mock.patch("pkg.parity.parity_emulator_defs.shutil.which", return_value=None):
+        with mock.patch("pkg.parity.parity_emulator_defs.shutil.which", return_value=None), \
+             mock.patch("pkg.platform_compat.IS_MACOS", False):
             resolved = resolve_launch(
                 {"name": "Game", "path": path, "platform": "NES", "emulator_adapter_id": "retroarch-nes"},
                 {},
@@ -685,6 +706,7 @@ class TestEmulatorsHandlers(unittest.TestCase):
         self.assertEqual(h.status, 200)
         self.assertEqual(h.payload, {"config": fake_entry})
 
+    @linux_flatpak_registry()
     def test_get_emulators_registry(self):
         h = DummyEmulatorHandler()
         h._api_get_api_v2_emulators_registry(mock.Mock())
@@ -752,7 +774,8 @@ class TestBuildLaunchPrecedence(unittest.TestCase):
             "emulator_adapter_id": "retroarch-nes",
         }
         profiles = {"NES": "profile-launch {path}"}
-        with mock.patch("shutil.which", return_value="/usr/bin/retroarch"):
+        with mock.patch("shutil.which", return_value="/usr/bin/retroarch"), \
+             mock.patch("pkg.platform_compat.IS_MACOS", False):
             args, _cwd = build_launch(game, profiles)
         self.assertEqual(args[0], "/usr/bin/retroarch")
         self.assertIn("-L", args)
@@ -765,7 +788,8 @@ class TestBuildLaunchPrecedence(unittest.TestCase):
 
     def test_registry_adapter_when_no_profile(self):
         game = {"name": "Game", "path": self.rom.name, "platform": "NES", "launch": ""}
-        with mock.patch("shutil.which", return_value="/usr/bin/retroarch"):
+        with mock.patch("shutil.which", return_value="/usr/bin/retroarch"), \
+             mock.patch("pkg.platform_compat.IS_MACOS", False):
             args, _cwd = build_launch(game, {})
         self.assertEqual(args[0], "/usr/bin/retroarch")
 
@@ -818,7 +842,8 @@ class TestStartLaunchCommandAdapter(unittest.TestCase):
             "platform": "NES",
             "emulator_adapter_id": "retroarch-nes",
         }
-        with mock.patch("shutil.which", return_value="/usr/bin/retroarch"):
+        with mock.patch("shutil.which", return_value="/usr/bin/retroarch"), \
+             mock.patch("pkg.platform_compat.IS_MACOS", False):
             args, cwd = _start_launch_command(game, {"NES": "ignored {path}"})
         self.assertEqual(args[0], "/usr/bin/retroarch")
         self.assertTrue(cwd)
@@ -829,7 +854,8 @@ class TestStartLaunchCommandAdapter(unittest.TestCase):
         rom.close()
         self.addCleanup(lambda: os.path.exists(rom.name) and os.unlink(rom.name))
         game = {"name": "Game", "path": rom.name, "platform": "NES"}
-        with mock.patch("pkg.parity.parity_emulator_defs.shutil.which", return_value=None):
+        with mock.patch("pkg.parity.parity_emulator_defs.shutil.which", return_value=None), \
+             mock.patch("pkg.platform_compat.IS_MACOS", False):
             with self.assertRaises(ValueError):
                 _start_launch_command(game, {})
 
@@ -858,12 +884,57 @@ class WindowsDefinitionTests(unittest.TestCase):
         for adapter in load_adapters():
             self.assertFalse(adapter["native_exe"].casefold().endswith(".exe"), adapter["adapter_id"])
 
+
+class MacOSDefinitionTests(unittest.TestCase):
+    """Every adapter declares what macOS runs (ADR 0085)."""
+
+    def test_flatpak_ids_are_not_an_install_path_on_macos(self):
+        from pkg.parity import parity_emulator_defs as defs
+
+        root = Path(__file__).resolve().parent.parent / "emulator_defs"
+        with mock.patch.object(defs, "IS_MACOS", True):
+            on_macos = defs.load_adapters(root)
+        with mock.patch.object(defs, "IS_MACOS", False):
+            elsewhere = defs.load_adapters(root)
+        self.assertTrue(all(adapter["flatpak_app_id"] is None for adapter in on_macos))
+        self.assertTrue(any(adapter["flatpak_app_id"] for adapter in elsewhere))
+
+    def test_every_adapter_declares_a_macos_executable(self):
+        from parity_emulator_defs import load_adapters
+
+        for adapter in load_adapters():
+            self.assertIn("native_exe_macos", adapter, adapter["adapter_id"])
+
+    def test_the_macos_executable_is_a_bundle_or_a_program(self):
+        from parity_emulator_defs import load_adapters
+
+        for adapter in load_adapters():
+            value = adapter.get("native_exe_macos") or ""
+            if not value:
+                # No verified macOS build: the emulator is reported missing.
+                continue
+            self.assertNotIn("/", value, adapter["adapter_id"])
+            if value.endswith(".app"):
+                self.assertTrue(value.endswith(".app"), adapter["adapter_id"])
+            else:
+                self.assertFalse(value.casefold().endswith(".exe"), adapter["adapter_id"])
+
+    def test_the_macos_bundle_is_preferred_on_macos(self):
+        from parity_emulator_defs import adapter_executable, find_adapter
+
+        adapter = find_adapter("retroarch-snes")
+        with mock.patch("pkg.parity.parity_emulator_defs.IS_MACOS", True):
+            self.assertEqual(adapter_executable(adapter), "RetroArch.app")
+        with mock.patch("pkg.parity.parity_emulator_defs.IS_MACOS", False):
+            self.assertEqual(adapter_executable(adapter), adapter["native_exe"])
+
     @unittest.skipIf(os.name == "nt", "POSIX defs keep the libretro directory layout")
     def test_posix_retroarch_uses_the_libretro_directory(self):
         adapter = find_adapter("retroarch-snes")
         from pkg.parity.parity_emulator_defs import resolved_startup_args
+        from pkg.platform_compat import libretro_core_filename, libretro_system_core_dir
 
-        self.assertIn("/usr/lib/libretro/snes9x_libretro.so", resolved_startup_args(adapter))
+        self.assertIn(libretro_system_core_dir() + libretro_core_filename("snes9x_libretro.so"), resolved_startup_args(adapter))
 
     @unittest.skipUnless(os.name == "nt", "Windows defs keep cores beside the executable")
     def test_windows_retroarch_uses_cores_beside_the_executable(self):
@@ -917,6 +988,7 @@ class SystemCoverageDefinitionTests(unittest.TestCase):
                 argv = build_adapter_argv(adapter, {"name": "G"}, "/roms/game.bin", prefix=prefix)
                 self.assertEqual(argv[-1], "/roms/game.bin")
 
+    @linux_flatpak_registry()
     def test_standalone_definitions_use_the_verified_flathub_ids(self):
         from pkg.parity.parity_emulator_defs import find_adapter
 
@@ -927,6 +999,7 @@ class SystemCoverageDefinitionTests(unittest.TestCase):
     @unittest.skipIf(sys.platform == "win32", "the system core path is /usr/lib/libretro; Windows uses cores\\ beside the emulator")
     def test_retroarch_cores_use_the_buildbot_names(self):
         from pkg.parity.parity_emulator_defs import find_adapter, resolved_startup_args
+        from pkg.platform_compat import libretro_core_filename, libretro_system_core_dir
 
         expected = {
             "retroarch-genesis": "genesis_plus_gx", "retroarch-sms": "genesis_plus_gx",
@@ -938,7 +1011,7 @@ class SystemCoverageDefinitionTests(unittest.TestCase):
         for adapter_id, core in expected.items():
             with self.subTest(adapter=adapter_id):
                 startup = resolved_startup_args(find_adapter(adapter_id))
-                self.assertIn(f"/usr/lib/libretro/{core}_libretro.so", startup)
+                self.assertIn(f"{libretro_system_core_dir()}{libretro_core_filename(core + '_libretro.so')}", startup)
 
 
 @unittest.skipIf(sys.platform == "win32", "the Flatpak sandbox and the system core folder are Linux-only")
@@ -958,30 +1031,34 @@ class FlatpakRetroArchCoreTests(unittest.TestCase):
 
     def test_flatpak_launch_uses_the_sandboxs_user_cores_directory(self):
         from pkg.parity.parity_emulator_defs import build_adapter_argv
+        from pkg.platform_compat import libretro_core_filename, libretro_system_core_dir
 
         argv = build_adapter_argv(
             self.adapter, {"name": "G"}, "/roms/g.sfc",
             prefix=["flatpak", "run", "org.libretro.RetroArch"],
         )
         core_index = argv.index("-L") + 1
-        self.assertTrue(argv[core_index].endswith("/.var/app/org.libretro.RetroArch/config/retroarch/cores/snes9x_libretro.so"), argv)
-        self.assertNotIn("/usr/lib/libretro/", " ".join(argv))
+        self.assertTrue(argv[core_index].endswith("/.var/app/org.libretro.RetroArch/config/retroarch/cores/" + libretro_core_filename("snes9x_libretro.so")), argv)
+        self.assertNotIn(libretro_system_core_dir(), " ".join(argv))
         self.assertEqual(argv[-1], "/roms/g.sfc")
 
     def test_native_launch_keeps_the_system_core_path(self):
         from pkg.parity.parity_emulator_defs import build_adapter_argv
+        from pkg.platform_compat import libretro_core_filename, libretro_system_core_dir
 
         argv = build_adapter_argv(self.adapter, {"name": "G"}, "/roms/g.sfc", prefix=["/usr/bin/retroarch"])
-        self.assertIn("/usr/lib/libretro/snes9x_libretro.so", argv)
+        self.assertIn(libretro_system_core_dir() + libretro_core_filename("snes9x_libretro.so"), argv)
 
     def test_only_a_system_core_under_a_flatpak_prefix_is_rewritten(self):
         from pkg.parity.parity_emulator_defs import flatpak_core_path
+        from pkg.platform_compat import libretro_system_core_dir
 
-        self.assertEqual(flatpak_core_path("/usr/lib/libretro/x_libretro.so", ["/usr/bin/retroarch"]),
-                         "/usr/lib/libretro/x_libretro.so")
+        system = libretro_system_core_dir()
+        self.assertEqual(flatpak_core_path(system + "x_libretro.so", ["/usr/bin/retroarch"]),
+                         system + "x_libretro.so")
         self.assertEqual(flatpak_core_path("/opt/cores/y_libretro.so", ["flatpak", "run", "org.libretro.RetroArch"]),
                          "/opt/cores/y_libretro.so")
-        self.assertTrue(flatpak_core_path("/usr/lib/libretro/z_libretro.so", ["flatpak", "run", "x"], home="/home/u")
+        self.assertTrue(flatpak_core_path(system + "z_libretro.so", ["flatpak", "run", "x"], home="/home/u")
                         .startswith("/home/u/.var/app/org.libretro.RetroArch/config/retroarch/cores/"))
 
 class CoreChoiceTests(unittest.TestCase):
@@ -989,19 +1066,23 @@ class CoreChoiceTests(unittest.TestCase):
 
     def setUp(self):
         from pkg.parity import parity_emulator_defs as defs
+        from pkg.platform_compat import libretro_system_core_dir
 
         self.defs = defs
-        self.adapter = {"adapter_id": "retroarch-snes", "startup_args": ["-L", "/usr/lib/libretro/snes9x_libretro.so", "{path}"]}
+        self.system_core_dir = libretro_system_core_dir()
+        self.adapter = {"adapter_id": "retroarch-snes", "startup_args": ["-L", self.system_core_dir + "snes9x_libretro.so", "{path}"]}
 
     def test_only_a_plain_core_file_name_is_accepted(self):
         self.assertTrue(self.defs.valid_core_name("bsnes_libretro.so"))
+        self.assertTrue(self.defs.valid_core_name("bsnes_libretro.dylib"))
         for bad in ("", "../x_libretro.so", "a/b_libretro.so", "snes9x.so", "x_libretro.so; rm"):
             with self.subTest(bad=bad):
                 self.assertFalse(self.defs.valid_core_name(bad))
 
     def test_the_choice_replaces_the_system_core_and_nothing_else(self):
+        from pkg.platform_compat import libretro_core_filename
         chosen = self.defs.apply_core_override(self.adapter, {"retroarch_core": "bsnes_libretro.so"})
-        self.assertEqual(chosen["startup_args"], ["-L", "/usr/lib/libretro/bsnes_libretro.so", "{path}"])
+        self.assertEqual(chosen["startup_args"], ["-L", self.system_core_dir + libretro_core_filename("bsnes_libretro.so"), "{path}"])
         self.assertIs(self.defs.apply_core_override(self.adapter, {}), self.adapter)
         self.assertIs(self.defs.apply_core_override(self.adapter, {"retroarch_core": "../evil_libretro.so"}), self.adapter)
         other = {"adapter_id": "dolphin", "startup_args": ["--batch", "{path}"]}
@@ -1026,23 +1107,25 @@ class CoreChoiceTests(unittest.TestCase):
                 self.assertEqual(adapter["startup_args"].count("{retroarch_core}"), 1)
                 self.assertEqual(
                     defs_module.resolved_startup_args(adapter)[:2],
-                    ["-L", "/usr/lib/libretro/" + adapter["retroarch_core"]],
+                    ["-L", defs_module.RETROARCH_SYSTEM_CORE_DIR + defs_module.libretro_core_filename(adapter["retroarch_core"])],
                 )
 
     def test_the_argv_uses_the_chosen_core_on_a_native_install(self):
+        from pkg.platform_compat import libretro_core_filename
         argv = self.defs.build_adapter_argv(
             self.adapter, {"name": "G", "retroarch_core": "bsnes_libretro.so"}, "/roms/g.sfc", prefix=["/usr/bin/retroarch"],
         )
-        self.assertEqual(argv, ["/usr/bin/retroarch", "-L", "/usr/lib/libretro/bsnes_libretro.so", "/roms/g.sfc"])
+        self.assertEqual(argv, ["/usr/bin/retroarch", "-L", self.system_core_dir + libretro_core_filename("bsnes_libretro.so"), "/roms/g.sfc"])
 
     @unittest.skipIf(sys.platform == "win32", "the Flatpak sandbox is Linux-only")
     def test_the_argv_maps_the_chosen_core_into_the_flatpak_sandbox(self):
+        from pkg.platform_compat import libretro_core_filename
         argv = self.defs.build_adapter_argv(
             self.adapter, {"name": "G", "retroarch_core": "bsnes_libretro.so"}, "/roms/g.sfc",
             prefix=["flatpak", "run", "org.libretro.RetroArch"],
         )
         self.assertEqual(argv[3], "-L")
-        self.assertTrue(argv[4].endswith("/retroarch/cores/bsnes_libretro.so"), argv)
+        self.assertTrue(argv[4].endswith("/retroarch/cores/" + libretro_core_filename("bsnes_libretro.so")), argv)
 
     @unittest.skipIf(sys.platform == "win32", "the system and Flatpak core folders are Linux paths")
     def test_installed_cores_are_listed_once_with_where_they_are(self):
@@ -1064,7 +1147,7 @@ class CoreChoiceTests(unittest.TestCase):
         from pkg.parity import parity_emulator_defs as defs_module
 
         self.assertNotIn("{retroarch_core}", json.dumps(defs_module.EMULATORS))
-        self.assertIn("/usr/lib/libretro/snes9x_libretro.so", json.dumps(defs_module.EMULATORS))
+        self.assertIn(defs_module.RETROARCH_SYSTEM_CORE_DIR + defs_module.libretro_core_filename("snes9x_libretro.so"), json.dumps(defs_module.EMULATORS))
         _platform, info = defs_module.platform_for_extension("sfc")
         self.assertNotIn("{retroarch_core}", info["startup_args"])
 

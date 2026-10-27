@@ -19,7 +19,7 @@ from http.cookiejar import CookieJar
 from pathlib import Path
 
 from backend_io import fsync_directory, read_limited
-from pkg.platform_compat import is_group_or_world_writable, owned_by_current_user
+from pkg.platform_compat import is_group_or_world_writable, owned_by_current_user, user_symlink_component
 
 DEFAULT_PROVIDER = "org.gameyfin.plugins.download.direct.DirectDownloadPlugin$DirectDownloadProvider"
 GAMEYFIN_ID_RE = re.compile(r"[0-9]{1,20}\Z")
@@ -323,16 +323,12 @@ def platform_from_gameyfin(platforms):
 
 
 def _reject_symlink_components(path):
-    cursor = Path(path)
-    while True:
-        try:
-            if cursor.is_symlink():
-                raise GameyfinError(f"Gameyfin paths may not contain symlinks: {cursor}")
-        except OSError as error:
-            raise GameyfinError(f"Could not inspect Gameyfin path: {cursor}") from error
-        if cursor.parent == cursor:
-            return
-        cursor = cursor.parent
+    try:
+        component = user_symlink_component(path)
+    except OSError as error:
+        raise GameyfinError(f"Could not inspect Gameyfin path: {path}") from error
+    if component is not None:
+        raise GameyfinError(f"Gameyfin paths may not contain symlinks: {component}")
 
 
 def _canonical_install_root(install_root):

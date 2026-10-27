@@ -8,10 +8,13 @@ without that key ships, and then that emulator launches on Linux and silently
 fails on Windows -- the exact regression class 1.13 was written to eliminate,
 one YAML file away.
 
+ADR 0085 added ``native_exe_macos`` for the same reason: a macOS build
+ships as an app bundle, and the definition has to name it.
+
 This gate makes the per-definition contract explicit and enforced:
 
-1. Every definition carries the required keys, including the Windows
-   executable name, so cross-platform launch cannot silently regress.
+1. Every definition carries the required keys, including the Windows and
+   macOS executable names, so cross-platform launch cannot silently regress.
 2. Every definition declares a ``schema_version``, so a definition update
    channel can reason about compatibility later.
 3. The *set* of definitions is ratcheted: dropping a definition removes an
@@ -51,6 +54,7 @@ REQUIRED_KEYS = (
     "executable_patterns",
     "native_exe",
     "native_exe_windows",
+    "native_exe_macos",
     "flatpak_app_id",
     "priority",
     "startup_args",
@@ -187,8 +191,9 @@ def main() -> int:
         for line in failures:
             print(f"  {line}")
         print("")
-        print("Every definition must carry native_exe_windows (ADR 0048) plus the other")
-        print("required keys, or that emulator launches on Linux and fails on Windows.")
+        print("Every definition must carry native_exe_windows (ADR 0048) and")
+        print("native_exe_macos (ADR 0085) plus the other required keys, or that")
+        print("emulator launches on Linux and fails on Windows or macOS.")
         return 1
 
     print(

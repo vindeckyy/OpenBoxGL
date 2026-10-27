@@ -11,6 +11,7 @@ extensions:
   - cxi
 native_exe: azahar
 native_exe_windows: azahar.exe
+native_exe_macos: ""
 flatpak_app_id: org.azahar_emu.Azahar
 startup_args:
   - "{path}"

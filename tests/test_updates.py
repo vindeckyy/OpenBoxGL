@@ -9,6 +9,8 @@ import tempfile
 from pathlib import Path
 from unittest import mock
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import updates
 from updates import (
     ASSET,
@@ -82,7 +84,9 @@ def main():
     assert update["sig"] is True
     if os.name != "nt":
         # The AppImage channel replaces the running file in place.
-        with mock.patch("updates._release_public_key", return_value=public_key):
+        with mock.patch.object(updates, "IS_MACOS", False), mock.patch(
+            "updates._release_public_key", return_value=public_key
+        ):
             with tempfile.TemporaryDirectory() as directory:
                 destination = Path(directory) / ASSET
                 destination.write_bytes(b"old appimage")
@@ -158,7 +162,13 @@ def main():
     # Architecture-aware updater: ASSET follows the host arch, and a release
     # without the matching-arch artifact is refused (ADR 0024).
     from updates import _arch_asset, _current_arch
-    asset_pattern = "OpenBox-{}-windows.zip" if os.name == "nt" else "OpenBox-{}.AppImage"
+    if os.name == "nt":
+        asset_pattern = "OpenBox-{}-windows.zip"
+    elif sys.platform == "darwin":
+        # One universal bundle serves both architectures.
+        asset_pattern = "OpenBox-macos.zip"
+    else:
+        asset_pattern = "OpenBox-{}.AppImage"
     assert _arch_asset("x86_64") == asset_pattern.format("x86_64")
     assert _arch_asset("aarch64") == asset_pattern.format("aarch64")
     assert _current_arch("x86_64") == "x86_64"
@@ -214,7 +224,9 @@ def main():
 
     if os.name != "nt":
         # A symlinked destination must update the real AppImage, not the link.
-        with mock.patch("updates._release_public_key", return_value=public_key):
+        with mock.patch.object(updates, "IS_MACOS", False), mock.patch(
+            "updates._release_public_key", return_value=public_key
+        ):
             with tempfile.TemporaryDirectory() as directory:
                 real = Path(directory) / "real.AppImage"
                 real.write_bytes(b"old appimage")
@@ -229,7 +241,9 @@ def main():
         with tempfile.TemporaryDirectory() as directory:
             app = Path(directory) / "Open Box%25.AppImage"
             app.write_bytes(b"x")
-            with mock.patch("updates.Path.home", return_value=Path(directory)):
+            with mock.patch.object(updates, "IS_MACOS", False), mock.patch(
+                "updates.Path.home", return_value=Path(directory)
+            ):
                 desktop = Path(install_desktop_entry(app))
             exec_line = next(line for line in desktop.read_text(encoding="utf-8").splitlines() if line.startswith("Exec="))
             assert "%%25" in exec_line and '\\"' not in exec_line
@@ -422,7 +436,281 @@ def main():
         assert "TEST-UPDATE-FAIL" not in output
 
     print("trust-chain tamper refusal: ok")
+    _macos_update_channel()
+    _macos_install_refusals()
     print("update self-test: ok")
+
+
+def _macos_update_channel():
+    """The macOS channel: one universal bundle, swapped in place."""
+    with mock.patch.object(updates, "IS_MACOS", True):
+        assert updates._arch_asset("x86_64") == "OpenBox-macos.zip"
+        assert updates._arch_asset("aarch64") == "OpenBox-macos.zip"
+
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        bundle = root / "OpenBox.app"
+        (bundle / "Contents/MacOS").mkdir(parents=True)
+        (bundle / "Contents/MacOS/OpenBox").write_text("old", encoding="utf-8")
+        data_dir = root / "data"
+        data_dir.mkdir()
+
+        update = {
+            "available": True,
+            "latest": "9.9.9",
+            "artifact": f"{TRUSTED_RELEASE_PREFIX}v9.9.9/OpenBox-macos.zip",
+            "checksum": "",
+            "data_dir": str(data_dir),
+        }
+
+        # Without a bundle there is nothing to update. The lookup is stubbed because
+        # sys.executable can sit inside OpenBox.app (the bundled interpreter).
+        with mock.patch.object(updates, "macos_app_bundle_for", return_value=None):
+            try:
+                updates._install_update_macos(update, bundle=None)
+                raise AssertionError("an update without a bundle must be refused")
+            except ValueError as error:
+                assert "bundle" in str(error).casefold()
+
+        # A .app that hosts the interpreter but carries no OpenBox runtime
+        # (a Python framework, another launcher) must never be replaced.
+        (root / "Other.app" / "Contents" / "MacOS").mkdir(parents=True)
+        with mock.patch.object(
+            updates, "macos_app_bundle_for", return_value=root / "Other.app"
+        ):
+            try:
+                updates._install_update_macos(update, bundle=None)
+                raise AssertionError("an app bundle without the runtime must be refused")
+            except ValueError as error:
+                assert "bundle" in str(error).casefold()
+
+        # A checksum that does not match the artifact leaves the installed
+        # bundle untouched.
+        with mock.patch.object(updates, "IS_MACOS", True), mock.patch.object(
+            updates, "resolve_update_checksum", return_value="0" * 64
+        ), mock.patch.object(updates, "verify_release_signature", return_value=True), mock.patch.object(
+            updates, "download_file", side_effect=ValueError("checksum mismatch")
+        ):
+            try:
+                updates._install_update_macos(update, bundle=bundle)
+                raise AssertionError("a checksum mismatch must be refused")
+            except ValueError as error:
+                assert "checksum" in str(error).casefold()
+        assert (bundle / "Contents/MacOS/OpenBox").read_text(encoding="utf-8") == "old"
+
+        # A verified update stages the bundle and hands the swap to the
+        # applier, which waits for the server to exit.
+        staged = {}
+
+        def fake_extract(archive, destination):
+            staged["archive"] = archive
+            target = Path(destination) / "OpenBox.app"
+            (target / "Contents/MacOS").mkdir(parents=True)
+            (target / "Contents/MacOS/OpenBox").write_text("new", encoding="utf-8")
+            import plistlib
+
+            with (target / "Contents/Info.plist").open("wb") as handle:
+                plistlib.dump({"CFBundleShortVersionString": "9.9.9"}, handle)
+
+        spawned = {}
+
+        def fake_spawn(applier, server_pid, target_bundle, staged):
+            spawned["applier"] = applier
+            spawned["pid"] = server_pid
+            spawned["bundle"] = target_bundle
+            spawned["staged"] = staged
+
+        with mock.patch.object(updates, "IS_MACOS", True), mock.patch.object(
+            updates, "resolve_update_checksum", return_value="a" * 64
+        ), mock.patch.object(updates, "verify_release_signature", return_value=True), mock.patch.object(
+            updates, "download_file", lambda *args, **kwargs: Path(args[1]).write_bytes(b"zip")
+        ), mock.patch.object(
+            updates, "_macos_running_sessions", return_value=0
+        ):
+            result = updates._install_update_macos(
+                update,
+                bundle=bundle,
+                extract=fake_extract,
+                verify_bundle=lambda path: None,
+                spawn=fake_spawn,
+            )
+        assert result["restart_required"] is True
+        assert result["backup"].endswith("OpenBox.app.previous")
+        assert spawned["pid"] == os.getpid()
+        assert Path(spawned["applier"]).is_file()
+
+        # The applier swaps the bundle once the server is gone, and keeps
+        # the previous bundle.
+        subprocess.run(
+            ["/bin/sh", spawned["applier"], "999999", str(bundle), str(spawned["staged"])],
+            check=False,
+            capture_output=True,
+        )
+        assert (bundle / "Contents/MacOS/OpenBox").read_text(encoding="utf-8") == "new"
+        assert (root / "OpenBox.app.previous/Contents/MacOS/OpenBox").read_text(encoding="utf-8") == "old"
+
+    # The desktop entry is a Linux and Windows concept; macOS integrates
+    # through the app bundle.
+    with mock.patch.object(updates, "IS_MACOS", True):
+        try:
+            updates.install_desktop_entry()
+            raise AssertionError("a macOS desktop entry must be refused")
+        except ValueError as error:
+            assert "bundle" in str(error).casefold()
+
+
+def _macos_install_refusals():
+    """Every macOS install refusal and failure raises a clear error and leaves the installed bundle as it was."""
+    import contextlib
+    import plistlib
+
+    def expect_error(fragment, call):
+        try:
+            call()
+        except ValueError as error:
+            assert fragment in str(error), str(error)
+            return
+        raise AssertionError(f"expected a ValueError containing {fragment!r}")
+
+    def installed_text(bundle):
+        return (bundle / "Contents/MacOS/OpenBox").read_text(encoding="utf-8")
+
+    def write_bundle(target, version):
+        (target / "Contents/MacOS").mkdir(parents=True)
+        (target / "Contents/MacOS/OpenBox").write_text("new", encoding="utf-8")
+        with (target / "Contents/Info.plist").open("wb") as handle:
+            plistlib.dump({"CFBundleShortVersionString": version}, handle)
+
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        bundle = root / "OpenBox.app"
+        (bundle / "Contents/MacOS").mkdir(parents=True)
+        (bundle / "Contents/MacOS/OpenBox").write_text("old", encoding="utf-8")
+        data_dir = root / "data"
+        data_dir.mkdir()
+        base = {
+            "available": True,
+            "latest": "9.9.9",
+            "artifact": f"{TRUSTED_RELEASE_PREFIX}v9.9.9/OpenBox-macos.zip",
+            "checksum": "a" * 64,
+            "data_dir": str(data_dir),
+        }
+        with mock.patch.object(updates, "IS_MACOS", True):
+            expect_error("up to date", lambda: updates._install_update_macos(dict(base, available=False), bundle=bundle))
+            expect_error(
+                "not trusted",
+                lambda: updates._install_update_macos(dict(base, artifact="https://example.com/OpenBox.zip"), bundle=bundle),
+            )
+            with mock.patch.object(updates.os, "access", return_value=False):
+                expect_error("not writable", lambda: updates._install_update_macos(base, bundle=bundle))
+            with mock.patch.object(updates, "_macos_running_sessions", return_value=2):
+                expect_error("Close running games", lambda: updates._install_update_macos(base, bundle=bundle))
+            with mock.patch.object(updates, "try_file_lock", return_value=contextlib.nullcontext(False)):
+                expect_error("already in progress", lambda: updates._install_update_macos(base, bundle=bundle))
+        assert installed_text(bundle) == "old"
+
+        # A download that fails leaves the bundle, and any leftovers of an earlier attempt, cleaned up.
+        archive = root / ".OpenBox.app.update.zip"
+        staging = root / ".OpenBox.app.staging"
+        archive.write_bytes(b"stale")
+        (staging / "junk").mkdir(parents=True)
+
+        def failing_extract(archive_path, destination):
+            raise ValueError("bad archive")
+
+        with mock.patch.object(updates, "IS_MACOS", True), mock.patch.object(
+            updates, "resolve_update_checksum", return_value="a" * 64
+        ), mock.patch.object(updates, "verify_release_signature", return_value=True), mock.patch.object(
+            updates, "download_file", lambda *args, **kwargs: Path(args[1]).write_bytes(b"zip")
+        ), mock.patch.object(updates, "_macos_running_sessions", return_value=0), mock.patch.object(
+            updates, "_ditto_extract", failing_extract
+        ):
+            expect_error("bad archive", lambda: updates._install_update_macos(base, bundle=bundle))
+        assert not archive.exists() and not staging.exists()
+        assert installed_text(bundle) == "old"
+
+        def empty_extract(archive_path, destination):
+            Path(destination).mkdir(parents=True)
+
+        def wrong_version_extract(archive_path, destination):
+            write_bundle(Path(destination) / "OpenBox.app", "1.0.0")
+
+        def right_version_extract(archive_path, destination):
+            write_bundle(Path(destination) / "OpenBox.app", "9.9.9")
+
+        def download_zip(*args, **kwargs):
+            Path(args[1]).write_bytes(b"zip")
+
+        common = [
+            mock.patch.object(updates, "IS_MACOS", True),
+            mock.patch.object(updates, "resolve_update_checksum", return_value="a" * 64),
+            mock.patch.object(updates, "verify_release_signature", return_value=True),
+            mock.patch.object(updates, "download_file", download_zip),
+            mock.patch.object(updates, "_macos_running_sessions", return_value=0),
+            mock.patch.object(updates, "_verify_macos_bundle", lambda path: None),
+        ]
+        with contextlib.ExitStack() as stack:
+            for patcher in common:
+                stack.enter_context(patcher)
+            stack.enter_context(mock.patch.object(updates, "_ditto_extract", empty_extract))
+            expect_error("not an OpenBox app bundle", lambda: updates._install_update_macos(base, bundle=bundle))
+        with contextlib.ExitStack() as stack:
+            for patcher in common:
+                stack.enter_context(patcher)
+            stack.enter_context(mock.patch.object(updates, "_ditto_extract", wrong_version_extract))
+            expect_error("holds version 1.0.0", lambda: updates._install_update_macos(base, bundle=bundle))
+        assert installed_text(bundle) == "old"
+
+        # The default bundle check is the codesign verifier; a failure there refuses the update.
+        with contextlib.ExitStack() as stack:
+            for patcher in common:
+                stack.enter_context(patcher)
+            stack.enter_context(mock.patch.object(updates, "_ditto_extract", right_version_extract))
+            stack.enter_context(mock.patch.object(updates, "_verify_macos_bundle", side_effect=ValueError("not signed")))
+            expect_error("not signed", lambda: updates._install_update_macos(base, bundle=bundle))
+        assert installed_text(bundle) == "old"
+
+        # The default extractor, verifier, and applier spawn carry a verified update through and remove the archive.
+        spawned = []
+        with contextlib.ExitStack() as stack:
+            for patcher in common:
+                stack.enter_context(patcher)
+            stack.enter_context(mock.patch.object(updates, "_ditto_extract", right_version_extract))
+            stack.enter_context(mock.patch.object(updates, "_verify_macos_bundle", lambda path: None))
+            stack.enter_context(mock.patch.object(updates, "_spawn_macos_applier", lambda *args: spawned.append(args)))
+            result = updates._install_update_macos(base, bundle=bundle)
+        assert result["installed"] == "9.9.9" and len(spawned) == 1
+        assert not (root / ".OpenBox.app.update.zip").exists()
+
+        # The real extractor and verifier report their failures as refusals.
+        with mock.patch.object(updates.subprocess, "run") as run:
+            run.return_value = subprocess.CompletedProcess([], 1, stdout="", stderr="corrupt")
+            expect_error("could not be extracted", lambda: updates._ditto_extract(root / "x.zip", root / "out"))
+            expect_error("not a signed app bundle", lambda: updates._verify_macos_bundle(bundle))
+        with mock.patch.object(updates.subprocess, "run") as run:
+            run.return_value = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+            updates._ditto_extract(root / "x.zip", root / "extracted")
+            assert (root / "extracted").is_dir()
+            updates._verify_macos_bundle(bundle)
+
+        # An unreadable Info.plist has no version; the applier spawn runs the detached shell.
+        (bundle / "Contents/Info.plist").write_bytes(b"not a plist")
+        assert updates._macos_bundle_version(bundle) == ""
+        with mock.patch.object(updates.subprocess, "Popen") as popen:
+            updates._spawn_macos_applier(root / "apply.sh", 123, bundle, root / "staged")
+        assert popen.call_args.args[0][:3] == ["/bin/sh", str(root / "apply.sh"), "123"]
+
+    # Without the webapp state module, no game can be running.
+    with mock.patch.dict(sys.modules, {"webapp_state": None}):
+        assert updates._macos_running_sessions() == 0
+
+    # The channel dispatches a macOS update to the bundle installer.
+    with mock.patch.object(updates, "IS_MACOS", True), mock.patch.object(
+        updates, "_install_update_macos", return_value={"installed": "9.9.9"}
+    ) as install:
+        update = {"available": True}
+        assert updates.install_update(update, opener=None)["installed"] == "9.9.9"
+        assert install.call_args.args[0] is update
 
 
 if __name__ == "__main__":

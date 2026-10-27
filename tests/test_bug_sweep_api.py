@@ -11,7 +11,6 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
-from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
@@ -50,7 +49,7 @@ class ApiSweep(unittest.TestCase):
         cls.web_app = _web_app
         cls.save_state = staticmethod(save_state)
         _web_app.TOKEN = "sweep-token"
-        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), _web_app.Handler)
+        cls.server = _web_app.OpenBoxServer(("127.0.0.1", 0), _web_app.Handler)
         cls.port = cls.server.server_address[1]
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()

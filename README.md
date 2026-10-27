@@ -11,17 +11,17 @@
 </h1>
 
 <p align="center">
-  Local-first game library and launcher for Linux and Windows
+  Local-first game library and launcher for Linux, Windows, and macOS
 </p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.18.0"><img src="https://img.shields.io/badge/Release-v1.18.0-0052CC?style=for-the-badge" alt="Release v1.18.0"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.19.0"><img src="https://img.shields.io/badge/Release-v1.19.0-0052CC?style=for-the-badge" alt="Release v1.19.0"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/vindeckyy/OpenBoxGL/ci.yml?style=for-the-badge&label=CI" alt="CI"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-lightgrey?style=for-the-badge" alt="Linux and Windows"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey?style=for-the-badge" alt="Linux, Windows, and macOS"></a>
   <br>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.18.0</strong></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.19.0</strong></a>
 </p>
 
 <p align="center">
@@ -61,8 +61,8 @@
 
 ## Quick Start
 
-1. **Install.** On Linux grab the [latest AppImage](https://github.com/vindeckyy/OpenBoxGL/releases/latest); on Windows download `OpenBox-x86_64-windows.zip` from the same release, extract it, and run `OpenBox\scripts\install.ps1` (the installer verifies the signed release before installing; requires Python 3.10+). You can also run from source with `python3 web_app.py` on Linux/macOS (`python web_app.py` on Windows, Python 3.10+).
-2. **Open the UI.** `openbox` opens a native window (WebKitGTK on Linux, WebView2 on Windows) and falls back to a chrome-less app window, then your default browser, when the host runtime is missing. `openbox --web` skips the native host and opens the loopback UI in a browser app window (plain tab fallback); from source, `python3 web_app.py` also opens the browser automatically with the token in the URL. Steam Deck / gamescope kiosk: `python3 web_app.py --game-mode` or `openbox --web --game-mode`. To open the UI manually, append the token from the data directory, e.g. open `http://127.0.0.1:PORT/?token=$(cat ~/.local/share/openbox-game-launcher/server.token)`. Treat token-bearing URLs as secrets; prefer the `X-OpenBox-Token` header for scripts and never paste or share the URL.
+1. **Install.** On Linux grab the [latest AppImage](https://github.com/vindeckyy/OpenBoxGL/releases/latest); on Windows download `OpenBox-x86_64-windows.zip` from the same release, extract it, and run `OpenBox\scripts\install.ps1` (the installer verifies the signed release before installing; requires Python 3.10+); on macOS download `install-macos.sh` from the same release and run it (it verifies the signed `OpenBox-macos.zip` and installs `OpenBox.app` into `~/Applications`). The macOS bundle carries its own Python, and the first launch asks you to allow it in System Settings > Privacy & Security > Open Anyway. You can also run from source with `python3 web_app.py` on Linux/macOS (`python web_app.py` on Windows, Python 3.10+).
+2. **Open the UI.** `openbox` opens a native window (WebKitGTK on Linux, WebView2 on Windows, WKWebView on macOS) and falls back to a chrome-less app window, then your default browser, when the host runtime is missing. `openbox --web` skips the native host and opens the loopback UI in a browser app window (plain tab fallback); from source, `python3 web_app.py` also opens the browser automatically with the token in the URL. Steam Deck / gamescope kiosk: `python3 web_app.py --game-mode` or `openbox --web --game-mode` (Linux only). To open the UI manually, append the token from the data directory, e.g. open `http://127.0.0.1:PORT/?token=$(cat ~/.local/share/openbox-game-launcher/server.token)`. Treat token-bearing URLs as secrets; prefer the `X-OpenBox-Token` header for scripts and never paste or share the URL.
 3. **Import games.** Click **Import folder** and point at a directory of `.sh` files, or **Import Steam** to scan your installed games.
 4. **Press PLAY.** Sessions, play time, and history are tracked automatically.
 
@@ -110,13 +110,25 @@ Consider OpenBox if you:
 - Need Flathub-aware emulator install/update flows
 - Want RetroAchievements, save backups, session history, and Big Box in one app
 
-OpenBox also runs on Windows, installed from a signed portable zip and rendered in a WebView2 window. The Linux-specific machinery — AppImage and Flatpak packaging, gamescope/Game Mode, XDG desktop entries, and Flatpak-aware emulator installs — stays Linux-only.
+OpenBox also runs on Windows, installed from a signed portable zip and rendered in a WebView2 window, and on macOS 11 or newer, installed from a signed universal app bundle and rendered in a WKWebView window. The Linux-specific machinery — AppImage and Flatpak packaging, gamescope/Game Mode, XDG desktop entries, and Flatpak-aware emulator installs — stays Linux-only; the macOS bundle hides those controls and reports emulators without a verified macOS build as not installed.
 
 The full capability matrix with acceptance checks lives in [PARITY.md](docs/PARITY.md).
 
 ---
 
 ## Features
+
+### Now on macOS (1.19.0)
+
+**OpenBox runs natively on Apple Silicon and Intel Macs.** `OpenBox-macos.zip` is
+one universal app bundle with its own Python, a WKWebView window, the tray,
+native dialogs, `openbox://` deeplinks, and the same verified updater as Linux
+and Windows. Your library lives in
+`~/Library/Application Support/openbox-game-launcher`, process tracking comes
+from libproc, and emulator definitions now say which of them actually publish a
+macOS build. The bundle is ad-hoc signed rather than notarized, so the first
+launch asks you to allow it in **System Settings > Privacy & Security**. Linux
+and Windows behavior is unchanged.
 
 ### A Clearer, Deeper Library (1.18.0)
 
@@ -359,6 +371,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 | --- | --- | --- |
 | AppImage (installer) | Linux desktop, Steam Deck, handhelds, immutable systems | Architecture-matched installer that verifies the signed release and built-in verified updater; installs to `~/.local/bin` |
 | Windows (installer) | Windows 10/11 (x86_64) | Signed portable zip, verified updater, WebView2 window; installs to `%LOCALAPPDATA%\OpenBox` |
+| macOS (installer) | macOS 11+ (Apple Silicon and Intel) | Signed universal app bundle with its own Python, verified updater, WKWebView window; installs to `~/Applications` |
 | AppImage (manual) | Offline or custom path | `chmod +x` and run, no install step |
 | Flatpak | Sandboxed installs | `flatpak-builder` from manifest |
 | Source | Development, patching | `git clone` and `python3 web_app.py` |
@@ -369,7 +382,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 Download the installer from a specific signed release, inspect it, then run it. The installer detects `uname -m` (override with `OPENBOX_ARCH=x86_64` or `OPENBOX_ARCH=aarch64`), selects the matching AppImage, and verifies the release public-key pin, SHA-256 checksum, and Ed25519 signature before installing to `~/.local/bin`:
 
 ```bash
-VERSION=1.18.0
+VERSION=1.19.0
 curl --proto '=https' --tlsv1.2 --fail --location \
   --output install.sh \
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install.sh"
@@ -394,7 +407,7 @@ bundled installer from Windows PowerShell 5.1. Requires Python 3.10+ on `PATH`
 uses the same `updates.py` Ed25519 code path as the in-app updater:
 
 ```powershell
-$Version = '1.18.0'
+$Version = '1.19.0'
 Invoke-WebRequest -UseBasicParsing -OutFile OpenBox-x86_64-windows.zip `
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v$Version/OpenBox-x86_64-windows.zip"
 Expand-Archive OpenBox-x86_64-windows.zip -DestinationPath .
@@ -458,6 +471,31 @@ powershell -ExecutionPolicy Bypass `
   -File "D:\Apps\OpenBox\share\openbox\scripts\uninstall.ps1" -InstallDir "D:\Apps\OpenBox"
 ```
 
+### macOS (installer)
+
+macOS 11 or newer on Apple Silicon or Intel installs from the signed universal
+app bundle. The installer checks the release public-key pin, the bundle's
+SHA-256 sidecar, and its Ed25519 signature, then installs `OpenBox.app` into
+`~/Applications` and links `openbox` into `~/.local/bin`:
+
+```bash
+VERSION=1.19.0
+curl --proto '=https' --tlsv1.2 --fail --location \
+  --output install-macos.sh \
+  "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install-macos.sh"
+less install-macos.sh
+OPENBOX_RELEASE_TAG="v${VERSION}" bash install-macos.sh
+```
+
+Re-run with `--replace` to update an existing install, or set
+`OPENBOX_INSTALL_DIR` to install somewhere else. The bundle carries its own
+universal CPython, so nothing else has to be installed. It is ad-hoc signed,
+not notarized: the first launch asks you to allow it in **System Settings >
+Privacy & Security > Open Anyway**, and a newly installed build may ask again
+for the folders and permissions you granted before. The in-app updater verifies
+and swaps the bundle the same way and keeps the previous one as
+`OpenBox.app.previous`.
+
 ### AppImage (manual)
 
 Download the latest release from [GitHub Releases](https://github.com/vindeckyy/OpenBoxGL/releases/latest). Release artifacts are built for both **x86_64** and **aarch64**; pick the one matching your CPU (`uname -m`).
@@ -502,7 +540,9 @@ python3 web_app.py
 
 On Windows use `python web_app.py` (`python3` is a Microsoft Store alias that does not run scripts), or `.\openbox.cmd` with the WebView2 host: either build it with `scripts\build_native_host_windows.ps1` or download `OpenBox-x86_64-windows-native-host.exe` from a release and save it beside `web_app.py` as `native_host.exe`.
 
-Requirements: Python 3.10 or newer. The native window additionally needs WebKitGTK 4.1 on Linux (`make native-host` builds `native_host`) or the WebView2 runtime on Windows (present on Windows 11 and most Windows 10 systems); `python3 web_app.py` runs without either.
+On macOS, install a current Python (for example `brew install python@3.12`) and run `python3 web_app.py`, or build the native window with `scripts/build_native_host_macos.sh`; `scripts/build_macos_app.sh` builds the whole universal bundle. The system `python3` is older than the 3.10 floor.
+
+Requirements: Python 3.10 or newer. The native window additionally needs WebKitGTK 4.1 on Linux (`make native-host`), the WebView2 runtime on Windows (present on Windows 11 and most Windows 10 systems), or WKWebView on macOS (present on every supported release); `python3 web_app.py` runs without any of them.
 
 Optional local configuration can be loaded from an explicit `OPENBOX_ENV_FILE`, the data directory (or its parent), `~/.env`, or `~/.config/openbox-game-launcher/.env`. See `.env.example`. Never commit secrets.
 

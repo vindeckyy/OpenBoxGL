@@ -75,6 +75,8 @@ class CrashReportTests(unittest.TestCase):
     def test_install_channel_and_package_integrity_branches(self):
         with mock.patch.dict(os.environ, {"FLATPAK_ID": "io.openbox.GameLauncher"}, clear=False):
             self.assertEqual(install_channel(), "flatpak")
+        with mock.patch("crash_report.IS_MACOS", True):
+            self.assertEqual(install_channel(), "macos")
         with tempfile.TemporaryDirectory() as directory:
             appimage = os.path.join(directory, "OpenBox.AppImage")
             with open(appimage, "w", encoding="utf-8") as handle:

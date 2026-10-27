@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 
 from backend_io import contained_path, download_file, read_limited
 from openbox import DATA
+from pkg.platform_compat import user_symlink_component
 from pkg.state.cache import (
     FILE_PROBE_CACHE,
     FILE_PROBE_LOCK,
@@ -163,16 +164,12 @@ def media_probe_paths_batch(values):
 
 
 def _reject_media_symlink_components(path):
-    cursor = Path(path)
-    while True:
-        try:
-            if cursor.is_symlink():
-                raise ValueError(f"Media paths may not contain symlinks: {cursor}")
-        except OSError as error:
-            raise ValueError(f"Could not inspect media path: {cursor}") from error
-        if cursor.parent == cursor:
-            return
-        cursor = cursor.parent
+    try:
+        component = user_symlink_component(path)
+    except OSError as error:
+        raise ValueError(f"Could not inspect media path: {path}") from error
+    if component is not None:
+        raise ValueError(f"Media paths may not contain symlinks: {component}")
 
 
 def _media_roots():

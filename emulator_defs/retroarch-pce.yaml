@@ -8,6 +8,7 @@ extensions:
   - sgx
 native_exe: retroarch
 native_exe_windows: retroarch.exe
+native_exe_macos: RetroArch.app
 flatpak_app_id: org.libretro.RetroArch
 retroarch_core: mednafen_pce_fast_libretro.so
 startup_args:

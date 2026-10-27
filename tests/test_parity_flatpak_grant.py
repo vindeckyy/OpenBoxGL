@@ -21,6 +21,17 @@ from api_errors import BadRequest  # noqa: E402
 from pkg.parity import parity_flatpak_grant as grant  # noqa: E402
 
 
+def setUpModule():
+    """Flatpak is a Linux install path (ADR 0085): this module runs as Linux with a fresh emulator registry."""
+    import pkg.parity.parity_emulator_defs as defs
+
+    patcher = mock.patch.object(defs, "IS_MACOS", False)
+    patcher.start()
+    unittest.addModuleCleanup(defs._reset_registry_cache)
+    unittest.addModuleCleanup(patcher.stop)
+    defs._reset_registry_cache()
+
+
 class GrantGuardTests(unittest.TestCase):
     def setUp(self):
         self.home = Path(tempfile.mkdtemp(prefix="obx-grant-home-"))

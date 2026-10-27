@@ -25,6 +25,23 @@ if [ "${1:-}" = "--web" ]; then
   exec python3 "$SHARE/web_app.py" "$@"
 fi
 
+# An app started from the Finder inherits a minimal PATH, so the Homebrew
+# and MacPorts bins would be invisible to the launcher and the emulators.
+if [ "$(uname -s)" = "Darwin" ]; then
+  for tool_dir in /opt/homebrew/bin /opt/homebrew/sbin /usr/local/bin /usr/local/sbin /opt/local/bin; do
+    case ":$PATH:" in
+      *":$tool_dir:"*) ;;
+      *) PATH="$tool_dir:$PATH" ;;
+    esac
+  done
+  export PATH
+fi
+
+if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+  echo "OpenBox needs Python 3.10 or newer (Homebrew: brew install python@3.12), or the OpenBox.app bundle." >&2
+  exit 1
+fi
+
 # Locate the native launcher: the repo keeps openbox-native.sh beside this
 # script; a Makefile/Flatpak install renames it to openbox-native in the same
 # $BINDIR. Fall back to PATH for custom prefixes, then to the web app.

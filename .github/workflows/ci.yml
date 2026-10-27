@@ -127,6 +127,97 @@ jobs:
       - name: Exec bit on shebang files
         run: python -B scripts/check_exec_modes.py
 
+  macos:
+    name: macOS (${{ matrix.runner }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          # The feature-regression ratchets compare each contract against a
+          # reference commit that predates the change. A depth-1 checkout has
+          # no such commit, so layer 2 would silently degrade to layer 1.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # actions/setup-python@v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # The suite is standalone scripts. The runner's system python3 is
+      # older than the 3.10 floor, so the setup-python interpreter is put
+      # first on the PATH.
+      - name: Run test suite
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          ln -sf "$(command -v python)" "$RUNNER_TEMP/bin/python3"
+          PATH="$RUNNER_TEMP/bin:$PATH" ./run_all_tests.sh
+
+      - name: Runtime module manifest
+        run: python -B scripts/check_runtime_modules.py
+
+      - name: v1 route contract
+        run: python -B scripts/check_v1_contract.py
+
+      - name: Version sync
+        run: python -B scripts/check_version_sync.py
+
+      - name: i18n keys
+        run: python -B scripts/check_i18n.py
+
+      - name: CSP framing contract
+        run: python -B scripts/check_csp.py
+
+      - name: Design tokens
+        run: python -B scripts/check_tokens.py
+
+      - name: Runtime dependencies are stdlib-only
+        run: python -B scripts/check_dependencies.py
+
+      - name: HTTP route surface ratchet
+        run: python -B scripts/check_routes_contract.py
+
+      - name: Settings schema ratchet
+        run: python -B scripts/check_settings_contract.py
+
+      - name: Emulator definition contract
+        run: python -B scripts/check_emulator_defs.py
+
+      - name: Frontend module graph
+        run: python -B scripts/check_frontend_modules.py
+
+      - name: Reliability catalog
+        run: python -B scripts/check_reliability_catalog.py
+
+      - name: Clock-coupled tests
+        run: python -B scripts/check_clock_coupling.py
+
+      - name: Exec bit on shebang files
+        run: python -B scripts/check_exec_modes.py
+
+      # native_host_mac.m is Objective-C and macOS-only, so this is the only
+      # automated proof that it still compiles (ADR 0085).
+      - name: Build the macOS native host
+        run: scripts/build_native_host_macos.sh
+
+      - name: Native host self test
+        run: OPENBOX_PYTHON=python3 ./native_host --selftest
+
+      # The bundle build merges the two interpreter builds, signs the
+      # result, and runs the smoke test. It is the slow job, so it runs
+      # once.
+      - name: Build the app bundle
+        if: matrix.runner == 'macos-15' && matrix.python-version == '3.12'
+        run: scripts/build_macos_app.sh "$RUNNER_TEMP/OpenBox-macos.zip"
+
   gate:
     strategy:
       fail-fast: false
