@@ -295,6 +295,82 @@ jobs:
             OpenBox-x86_64-windows-native-host.exe
             OpenBox-x86_64-windows-native-host.exe.sha256
 
+  build-macos:
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "invalid release tag: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          expected="$(python3 -c 'import updates; print(updates.VERSION)')"
+          if [ "$GITHUB_REF_NAME" != "v$expected" ]; then
+            echo "tag $GITHUB_REF_NAME does not match updates.py version $expected" >&2
+            exit 1
+          fi
+
+      - name: Run test suite
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          ln -sf "$(command -v python)" "$RUNNER_TEMP/bin/python3"
+          PATH="$RUNNER_TEMP/bin:$PATH" ./run_all_tests.sh
+
+      # The bundle carries the universal native host and the bundled
+      # interpreter, and the build signs it and runs the smoke test.
+      - name: Build the macOS app bundle
+        run: scripts/build_macos_app.sh "$PWD/OpenBox-macos.zip"
+
+      - name: Upload unsigned build outputs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # actions/upload-artifact@v7.0.2
+        with:
+          name: openbox-release-assets-macos
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            OpenBox-macos.zip
+            OpenBox-macos.zip.sha256
+            OpenBox-*-macos-sbom.json
+
+  attest-macos:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build-macos
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Download build output
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # actions/download-artifact@v8.0.2
+        with:
+          name: openbox-release-assets-macos
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # actions/attest-build-provenance@v4.2.2
+        with:
+          subject-name: OpenBox-macos.zip
+          subject-path: OpenBox-macos.zip
+
   attest-windows:
     if: startsWith(github.ref, 'refs/tags/')
     needs: build-windows
@@ -326,7 +402,7 @@ jobs:
 
   publish:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [build, attest, build-windows, attest-windows]
+    needs: [build, attest, build-windows, attest-windows, build-macos, attest-macos]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # AppImage, Windows and Flatpak publish jobs share one GitHub Release. Keep
@@ -445,8 +521,31 @@ jobs:
             --key openbox-release.pub \
             "$host_asset" \
             "$host_asset.sig"
+          # The macOS bundle follows the same ladder: sign, confirm the
+          # signing key is the committed release key, then verify.
+          macos_asset="OpenBox-macos.zip"
+          [ -f "$macos_asset" ] || {
+            echo "missing build artifact: $macos_asset" >&2
+            exit 1
+          }
+          python3 scripts/sign_release.py \
+            --key "$key_file" \
+            --public-key-out "$public_key_file" \
+            --out "$macos_asset.sig" \
+            "$macos_asset"
+          cmp -s "$public_key_file" openbox-release.pub || {
+            echo "OPENBOX_SIGNING_KEY does not match the committed release public key" >&2
+            exit 1
+          }
+          sha256sum --check --strict "$macos_asset.sha256"
+          python3 scripts/verify_release.py \
+            --key openbox-release.pub \
+            "$macos_asset" \
+            "$macos_asset.sig"
           cp scripts/install.sh install.sh
           cp scripts/install.ps1 install.ps1
+          cp scripts/install-macos.sh install-macos.sh
+          cp scripts/verify_release.py verify_release.py
 
       - name: Build, sign, and verify the emulator definition pack
         env:
@@ -511,7 +610,12 @@ jobs:
             OpenBox-x86_64-windows-native-host.exe
             OpenBox-x86_64-windows-native-host.exe.sha256
             OpenBox-x86_64-windows-native-host.exe.sig
+            OpenBox-macos.zip
+            OpenBox-macos.zip.sha256
+            OpenBox-macos.zip.sig
             openbox-release.pub
             install.sh
             install.ps1
+            install-macos.sh
+            verify_release.py
             OpenBox-*-sbom.json

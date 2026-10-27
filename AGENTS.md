@@ -3,7 +3,7 @@
 Read this before writing code. A convention that lives only in a human's head is one prompt away from being ignored.
 
 ## Where things go
-- `openbox.py` is the shared core library for data paths, state, and launch helpers, and stays at root. Launch paths are `openbox.sh`, `openbox-native.sh`, and `web_app.py` on Linux; `openbox.cmd`, `openbox.ps1`, and `openbox-native.ps1` on Windows. macOS is not a supported target. Platform seams live in `pkg/platform_compat.py` (ADR 0048).
+- `openbox.py` is the shared core library for data paths, state, and launch helpers, and stays at root. Launch paths are `openbox.sh`, `openbox-native.sh`, and `web_app.py` on Linux; `openbox.cmd`, `openbox.ps1`, and `openbox-native.ps1` on Windows; `OpenBox.app` (built by `scripts/build_macos_app.sh`), `openbox.sh`, and `openbox-native.sh` on macOS, with the native window in `native_host_mac.m`. Platform seams live in `pkg/platform_compat.py` (ADR 0048, ADR 0085).
 - `handlers/` - HTTP handlers, one module per domain or feature surface (library, imports, media, party, picker, etc.). Shared helpers live in `_shared.py`.
 - `pkg/parity/` - parity_* modules (clear names, cohesive cluster) plus the shared `launch_tokens.py` helper. New parity code goes there. Flat `import parity_x` still resolves via the MetaPathFinder in `pkg/parity/__init__.py`; entry points (`openbox.py`, `web_app.py`) must `import pkg.parity` before any flat `parity_*` import.
 - `static/` - Frontend JavaScript modules, the search worker, and app.css.

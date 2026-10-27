@@ -15,6 +15,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -115,7 +116,8 @@ class FlatpakProbeTests(unittest.TestCase):
         def which(name):
             return f"/usr/bin/{name}" if name in {"flatpak", native_exe} else None
 
-        emulator_status(run=recorder, which=which)
+        with mock.patch("pkg.platform_compat.IS_MACOS", False):
+            emulator_status(run=recorder, which=which)
         self.assertNotIn(["/usr/bin/flatpak", "info", native_app], probed)
         self.assertTrue(all(args[:2] == ["/usr/bin/flatpak", "info"] for args in probed), probed)
 

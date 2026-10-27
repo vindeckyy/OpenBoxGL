@@ -1968,7 +1968,7 @@ class WebAppMainTests(unittest.TestCase):
              ), \
              mock.patch.object(web_app, "ensure_stock_themes"), \
              mock.patch.object(web_app, "threading"), \
-             mock.patch.object(web_app, "ThreadingHTTPServer", return_value=server), \
+             mock.patch.object(web_app, "OpenBoxServer", return_value=server), \
              mock.patch.object(web_app, "run_configured_commands"), \
              mock.patch.object(web_app, "emit_plugin_event") as emit, \
              mock.patch.object(web_app, "secure_text_write"), \
@@ -2000,7 +2000,7 @@ class WebAppMainTests(unittest.TestCase):
              ), \
              mock.patch.object(web_app, "ensure_stock_themes"), \
              mock.patch.object(web_app, "threading"), \
-             mock.patch.object(web_app, "ThreadingHTTPServer", return_value=server), \
+             mock.patch.object(web_app, "OpenBoxServer", return_value=server), \
              mock.patch.object(web_app, "run_configured_commands"), \
              mock.patch.object(web_app, "emit_plugin_event"), \
              mock.patch.object(web_app, "secure_text_write"), \

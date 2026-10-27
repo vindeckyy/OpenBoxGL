@@ -1,14 +1,14 @@
-"""Cross-platform shims for the Linux-first OpenBox runtime (ADR 0013).
+"""Cross-platform shims for the OpenBox runtime (ADR 0013, ADR 0048, ADR 0085).
 
 The runtime stays dependency-free: every helper here is standard library
-only, including the Windows ctypes bindings.  Modules import this shim
-instead of using POSIX-only primitives directly so the same code runs on
-Linux (its primary target) and Windows (the port target).
+only, including the Windows ctypes bindings and the macOS libproc bindings.
+Modules import this shim instead of using POSIX-only primitives directly so
+the same code runs on Linux, Windows, and macOS.
 
-Coverage note: branches guarded by ``if IS_WINDOWS`` carry a
-``# pragma: no cover`` marker because the Linux coverage gate cannot
-execute them.  The Windows CI job runs the same tests against the same
-source, so those branches are exercised even though they are excluded
+Coverage note: branches guarded by ``if IS_WINDOWS`` or ``if IS_MACOS`` carry
+a ``# pragma: no cover`` marker because the Linux coverage gate cannot
+execute them.  The Windows and macOS CI jobs run the same tests against the
+same source, so those branches are exercised even though they are excluded
 from the Linux coverage report.
 """
 
@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import plistlib
 import re
 import shlex
 import shutil
@@ -23,12 +24,14 @@ import signal
 import subprocess
 import sys
 import time
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
 IS_WINDOWS = os.name == "nt"
 IS_POSIX = os.name == "posix"
 IS_MACOS = sys.platform == "darwin"
+IS_LINUX = sys.platform.startswith("linux")
 
 WINDOWS_EXECUTABLE_SUFFIXES = frozenset({".exe", ".bat", ".cmd", ".com", ".lnk", ".ps1"})
 
@@ -155,6 +158,11 @@ def default_data_dir() -> Path:
         if home is not None:
             return home / "AppData" / "Local" / "openbox-game-launcher"
         return Path(os.getcwd()) / "openbox-game-launcher"
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        home = home_dir()
+        if home is not None:
+            return home / "Library" / "Application Support" / "openbox-game-launcher"
+        return Path(os.getcwd()) / "openbox-game-launcher"
     else:  # pragma: no cover if IS_WINDOWS
         home = home_dir()
         if home is not None:
@@ -238,6 +246,11 @@ def env_file_roots() -> list[Path]:
             if base:
                 roots.append(Path(base) / "openbox-game-launcher")
         return roots
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        home = home_dir()
+        if home is None:
+            return []
+        return [home, default_data_dir()]
     else:  # pragma: no cover if IS_WINDOWS
         home = home_dir()
         roots = []
@@ -326,6 +339,52 @@ def file_lock(path, *, exclusive: bool = True, timeout: float = DEFAULT_LOCK_TIM
     with path.open("a+", encoding="utf-8") as handle:
         with lock_handle(handle, exclusive=exclusive, timeout=timeout):
             yield
+
+
+@contextlib.contextmanager
+def try_file_lock(path):
+    """Take *path* only when it is free, and never wait for it.
+
+    Yields True when the lock was taken and False when another process
+    already holds it. The lock is released when the context exits. This is
+    the non-blocking counterpart of :func:`file_lock`, whose POSIX branch
+    blocks for as long as the lock is held.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+", encoding="utf-8") as handle:
+        if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
+            import msvcrt
+
+            try:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError:
+                yield False
+                return
+            try:
+                yield True
+            finally:
+                try:
+                    handle.seek(0)
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                except OSError:
+                    pass
+            return
+        import fcntl
+
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
 
 
 # ---------------------------------------------------------------------------
@@ -553,6 +612,8 @@ def process_start_token(pid) -> str | None:
         return None
     if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
         return _windows_start_token(pid)
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        return _darwin_start_token(pid)
     else:  # pragma: no cover if IS_WINDOWS
         try:
             with open(f"/proc/{pid}/stat", encoding="utf-8") as handle:
@@ -577,6 +638,10 @@ def process_command_line(pid) -> str:
         return ""
     if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
         return _windows_image_path(pid)[:100]
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        # The full executable path: proc_pidpath is bounded by MAXPATHLEN, and a cap
+        # would drop the executable's own name from the end of a long app-bundle path.
+        return _darwin_pid_path(pid)
     else:  # pragma: no cover if IS_WINDOWS
         try:
             with open(f"/proc/{pid}/cmdline", encoding="utf-8") as handle:
@@ -596,6 +661,9 @@ def process_name(pid) -> str:
     if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
         path = _windows_image_path(pid)
         return Path(path).name if path else ""
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        path = _darwin_pid_path(pid)
+        return Path(path).name if path else ""
     else:  # pragma: no cover if IS_WINDOWS
         try:
             return Path(f"/proc/{pid}/comm").read_text(encoding="utf-8").strip()
@@ -613,6 +681,8 @@ def process_cwd(pid) -> str:
         return ""
     if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
         return ""
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        return _darwin_process_cwd(pid)
     else:  # pragma: no cover if IS_WINDOWS
         try:
             return os.readlink(f"/proc/{pid}/cwd")
@@ -630,6 +700,14 @@ def child_pids(pid) -> list[int]:
         return []
     if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
         return [entry["pid"] for entry in _windows_process_table() if entry["parent"] == pid]
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        children = []
+        for candidate in _darwin_pid_list():
+            if candidate == pid:
+                continue
+            if _darwin_parent_pid(candidate) == pid:
+                children.append(candidate)
+        return children
     else:  # pragma: no cover if IS_WINDOWS
         children = []
         try:
@@ -661,6 +739,15 @@ def find_pids_by_name(pattern: str) -> list[int]:
             image = entry.get("image", "").casefold()
             if needle in name or needle in image:
                 matches.append(entry["pid"])
+        return matches
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        matches = []
+        for candidate in _darwin_pid_list():
+            path = _darwin_pid_path(candidate)
+            if not path:
+                continue
+            if needle in Path(path).name.casefold() or needle in path.casefold():
+                matches.append(candidate)
         return matches
     else:  # pragma: no cover if IS_WINDOWS
         matches = []
@@ -696,6 +783,29 @@ def find_pids_in_folder(folder) -> list[int]:
             except (OSError, ValueError):
                 continue
         return matches
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        matches = []
+        folder_fold = path_identity_fold(str(resolved))
+        folder_prefix = folder_fold.rstrip(os.sep) + os.sep
+        for candidate in _darwin_pid_list():
+            cwd = _darwin_process_cwd(candidate)
+            if cwd:
+                cwd_fold = path_identity_fold(cwd)
+                if cwd_fold == folder_fold or cwd_fold.startswith(folder_prefix):
+                    matches.append(candidate)
+                    continue
+            # A game launched from an app bundle keeps its working directory
+            # elsewhere, so the image path is checked as well.
+            path = _darwin_pid_path(candidate)
+            if not path:
+                continue
+            try:
+                image_fold = path_identity_fold(str(Path(path).resolve(strict=False)))
+            except OSError:
+                continue
+            if image_fold.startswith(folder_prefix):
+                matches.append(candidate)
+        return matches
     else:  # pragma: no cover if IS_WINDOWS
         matches = []
         try:
@@ -711,6 +821,161 @@ def find_pids_in_folder(folder) -> list[int]:
             if cwd == folder_str or cwd.startswith(folder_str + os.sep):
                 matches.append(pid)
         return matches
+
+
+# ---------------------------------------------------------------------------
+# macOS process introspection (libproc)
+# ---------------------------------------------------------------------------
+
+# macOS has no /proc. The libproc API answers the same questions through
+# ctypes: the process table, the executable path, the parent pid, the
+# process start time, and the working directory. The field offsets below
+# mirror ``struct proc_bsdinfo`` and ``struct vnode_info_path`` from
+# <sys/proc_info.h>; the sizes are asserted on every call, so a layout
+# change on a future macOS release degrades to "unavailable" instead of
+# returning wrong data.
+_PROC_PIDTBSDINFO = 3
+_PROC_PIDVNODEPATHINFO = 9
+_PROC_BSDINFO_SIZE = 136
+_PROC_VNODEPATHINFO_SIZE = 2352
+_PROC_PIDPATHINFO_MAXSIZE = 4096
+_PROC_BSDINFO_PID_OFFSET = 12
+_PROC_BSDINFO_PPID_OFFSET = 16
+_PROC_BSDINFO_COMM_OFFSET = 48
+_PROC_BSDINFO_START_SEC_OFFSET = 120
+_PROC_BSDINFO_START_USEC_OFFSET = 128
+_PROC_VNODE_CWD_OFFSET = 152
+_PROC_VNODE_PATH_MAX = 1024
+
+_libproc_handle = None
+_libproc_unavailable = False
+
+
+def _libproc():
+    """Return the libproc handle, or None when the API is unavailable."""
+    global _libproc_handle, _libproc_unavailable
+    if _libproc_handle is not None or _libproc_unavailable:
+        return _libproc_handle
+    try:
+        import ctypes
+
+        lib = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
+        lib.proc_listallpids.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        lib.proc_listallpids.restype = ctypes.c_int
+        lib.proc_pidpath.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
+        lib.proc_pidpath.restype = ctypes.c_int
+        lib.proc_pidinfo.argtypes = [
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_uint64,
+            ctypes.c_void_p,
+            ctypes.c_int,
+        ]
+        lib.proc_pidinfo.restype = ctypes.c_int
+    except (OSError, AttributeError, ImportError):  # pragma: no cover - macOS only
+        _libproc_unavailable = True
+        return None
+    _libproc_handle = lib
+    return lib
+
+
+def _darwin_bsd_info(pid):
+    """Return the raw ``proc_bsdinfo`` bytes for *pid*, or None."""
+    lib = _libproc()
+    if lib is None:
+        return None
+    import ctypes
+
+    buffer = ctypes.create_string_buffer(_PROC_BSDINFO_SIZE)
+    written = lib.proc_pidinfo(int(pid), _PROC_PIDTBSDINFO, 0, buffer, _PROC_BSDINFO_SIZE)
+    if written != _PROC_BSDINFO_SIZE:
+        return None
+    return buffer.raw
+
+
+def _darwin_parent_pid(pid):
+    """Return the parent pid of *pid*, or 0 when it cannot be read."""
+    raw = _darwin_bsd_info(pid)
+    if raw is None:
+        return 0
+    import struct
+
+    return int(struct.unpack_from("<I", raw, _PROC_BSDINFO_PPID_OFFSET)[0])
+
+
+def _darwin_start_token(pid):
+    """Return the process start marker for *pid*, or None."""
+    raw = _darwin_bsd_info(pid)
+    if raw is None:
+        return None
+    import struct
+
+    seconds = int(struct.unpack_from("<Q", raw, _PROC_BSDINFO_START_SEC_OFFSET)[0])
+    micros = int(struct.unpack_from("<Q", raw, _PROC_BSDINFO_START_USEC_OFFSET)[0])
+    return f"{seconds}.{micros:06d}"
+
+
+def _darwin_comm(pid):
+    """Return the short process name of *pid*, or an empty string."""
+    raw = _darwin_bsd_info(pid)
+    if raw is None:
+        return ""
+    chunk = raw[_PROC_BSDINFO_COMM_OFFSET:_PROC_BSDINFO_COMM_OFFSET + 16]
+    return chunk.split(b"\x00")[0].decode("utf-8", errors="replace")
+
+
+def _darwin_pid_path(pid):
+    """Return the executable path of *pid*, or an empty string."""
+    lib = _libproc()
+    if lib is None:
+        return ""
+    import ctypes
+
+    buffer = ctypes.create_string_buffer(_PROC_PIDPATHINFO_MAXSIZE)
+    written = lib.proc_pidpath(int(pid), buffer, _PROC_PIDPATHINFO_MAXSIZE)
+    if written <= 0:
+        return ""
+    return buffer.value.decode("utf-8", errors="replace")
+
+
+def _darwin_pid_list():
+    """Return every process id the host can see."""
+    lib = _libproc()
+    if lib is None:
+        return []
+    import ctypes
+
+    capacity = 65536
+    for _attempt in range(4):
+        buffer = (ctypes.c_int * capacity)()
+        count = lib.proc_listallpids(buffer, ctypes.sizeof(buffer))
+        if count <= 0:
+            return []
+        if count < capacity:
+            return [int(value) for value in buffer[:count]]
+        capacity *= 8
+    return []
+
+
+def _darwin_process_cwd(pid):
+    """Return the working directory of *pid*, or an empty string."""
+    lib = _libproc()
+    if lib is None:
+        return ""
+    import ctypes
+
+    buffer = ctypes.create_string_buffer(_PROC_VNODEPATHINFO_SIZE)
+    written = lib.proc_pidinfo(
+        int(pid), _PROC_PIDVNODEPATHINFO, 0, buffer, _PROC_VNODEPATHINFO_SIZE
+    )
+    if written != _PROC_VNODEPATHINFO_SIZE:
+        return ""
+    raw = buffer.raw
+    chunk = raw[_PROC_VNODE_CWD_OFFSET:_PROC_VNODE_CWD_OFFSET + _PROC_VNODE_PATH_MAX]
+    text = chunk.split(b"\x00")[0].decode("utf-8", errors="replace")
+    if text.startswith("/") and all(character.isprintable() for character in text):
+        return text
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -821,14 +1086,42 @@ def _split_windows_command(command: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+EXTERNAL_OPEN_DISABLED_ENV = "OPENBOX_DISABLE_EXTERNAL_OPEN"
+
+
+def external_open_disabled() -> bool:
+    """True when this process must not hand paths or URLs to the desktop.
+
+    A headless or test run sets ``OPENBOX_DISABLE_EXTERNAL_OPEN`` so no
+    browser window or file manager is spawned behind the user's back.
+    """
+    value = str(os.environ.get(EXTERNAL_OPEN_DISABLED_ENV, "")).strip().casefold()
+    return value in {"1", "true", "yes", "on"}
+
+
+def url_opener_command() -> str | None:
+    """Return the command that opens a URL with the default handler."""
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        return "/usr/bin/open"
+    if opener := shutil.which("xdg-open"):
+        return opener
+    if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
+        return os.environ.get("SYSTEMROOT", r"C:\Windows") + r"\explorer.exe"
+    return None
+
+
 def open_path(target) -> None:
     """Open a file, folder, or URI with the platform's default handler."""
+    if external_open_disabled():
+        raise FileNotFoundError(
+            f"External opening is disabled ({EXTERNAL_OPEN_DISABLED_ENV} is set)."
+        )
     text = str(target)
     if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
         os.startfile(text)
         return
-    if IS_MACOS:  # pragma: no cover - macOS is not a covered target
-        subprocess.Popen(["open", text], **launch_kwargs())
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        subprocess.Popen(["/usr/bin/open", text], **launch_kwargs())
         return
     else:  # pragma: no cover if IS_WINDOWS
         opener = shutil.which("xdg-open")
@@ -849,6 +1142,12 @@ def reveal_path(target) -> None:
         else:
             os.startfile(os.path.normpath(str(path)))
         return
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        if path.exists():
+            subprocess.Popen(["/usr/bin/open", "-R", str(path)], **launch_kwargs())
+            return
+        open_path(path if path.is_dir() else path.parent)
+        return
     else:  # pragma: no cover if IS_WINDOWS
         # xdg-open has no select-this-file verb: opening the folder is the whole
         # reveal. The check is "is this a folder", not "is this an existing
@@ -859,12 +1158,16 @@ def reveal_path(target) -> None:
 
 def open_url(url) -> None:
     """Open *url* in the user's browser, raising when no handler exists."""
+    if external_open_disabled():
+        raise FileNotFoundError(
+            f"External opening is disabled ({EXTERNAL_OPEN_DISABLED_ENV} is set)."
+        )
     text = str(url)
     if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
         os.startfile(text)
         return
-    if IS_MACOS:  # pragma: no cover - macOS is not a covered target
-        subprocess.Popen(["open", text], **launch_kwargs())
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        subprocess.Popen(["/usr/bin/open", text], **launch_kwargs())
         return
     else:  # pragma: no cover if IS_WINDOWS
         opener = shutil.which("xdg-open")
@@ -1002,8 +1305,285 @@ def owned_by_current_user(info) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Battery
+# ---------------------------------------------------------------------------
+
+BATTERY_ABSENT = {"present": False, "percent": 0, "charging": False}
+BATTERY_CACHE_SECONDS = 30.0
+_battery_cache: tuple[float, dict] | None = None
+
+
+def _linux_battery_status(root=None) -> dict:
+    """Read the first battery under sysfs. Returns no path in the response."""
+    base = Path(root) if root is not None else Path("/sys/class/power_supply")
+    try:
+        candidates = sorted(base.glob("BAT*"))
+    except OSError:
+        return dict(BATTERY_ABSENT)
+    for candidate in candidates:
+        try:
+            percent = int((candidate / "capacity").read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            continue
+        try:
+            state = (candidate / "status").read_text(encoding="utf-8").strip().casefold()
+        except OSError:
+            state = ""
+        return {
+            "present": True,
+            "percent": max(0, min(100, percent)),
+            "charging": state in {"charging", "full"},
+        }
+    return dict(BATTERY_ABSENT)
+
+
+def parse_pmset_battery(text: str) -> dict:
+    """Parse ``pmset -g batt`` output into a battery status dict."""
+    for line in str(text or "").splitlines():
+        if "InternalBattery" not in line:
+            continue
+        match = re.search(r"(\d{1,3})%", line)
+        percent = int(match.group(1)) if match else 0
+        charging = bool(re.search(r";\s*(charging|charged)\b", line))
+        return {"present": True, "percent": percent, "charging": charging}
+    return dict(BATTERY_ABSENT)
+
+
+def battery_status(root=None, *, clock=time.monotonic) -> dict:
+    """Return battery presence, percentage, and charging state.
+
+    The macOS reading is cached for :data:`BATTERY_CACHE_SECONDS` so a
+    polling UI does not spawn ``pmset`` on every frame.
+    """
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        global _battery_cache
+        now = clock()
+        if _battery_cache is not None and now - _battery_cache[0] < BATTERY_CACHE_SECONDS:
+            return dict(_battery_cache[1])
+        try:
+            result = subprocess.run(
+                ["/usr/bin/pmset", "-g", "batt"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            status = dict(BATTERY_ABSENT)
+        else:
+            status = parse_pmset_battery(result.stdout or "")
+        _battery_cache = (now, status)
+        return dict(status)
+    return _linux_battery_status(root)
+
+
+# ---------------------------------------------------------------------------
+# Path identity and display names
+# ---------------------------------------------------------------------------
+
+
+def path_identity_fold(text: str) -> str:
+    """Return the canonical identity form of a path on this platform.
+
+    macOS volumes are case-insensitive by default and the file system hands
+    back decomposed Unicode, so an identity key that keeps either would let
+    the same game be imported twice. Everywhere else this is exactly
+    ``os.path.normcase``.
+    """
+    value = str(text)
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        return unicodedata.normalize("NFC", value).casefold()
+    return os.path.normcase(value)
+
+
+def display_name_for_file(name: str) -> str:
+    """Return the display form of a file name on this platform."""
+    value = str(name)
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        return unicodedata.normalize("NFC", value)
+    return value
+
+
+# ---------------------------------------------------------------------------
+# Bundled applications and native executables
+# ---------------------------------------------------------------------------
+
+
+def macos_app_bundle_for(path) -> Path | None:
+    """Return the ``.app`` bundle that contains *path*, or None."""
+    try:
+        candidate = Path(path).expanduser().resolve(strict=False)
+    except OSError:
+        return None
+    for parent in candidate.parents:
+        if parent.suffix == ".app" and (parent / "Contents" / "Info.plist").is_file():
+            return parent
+    return None
+
+
+def macos_app_executable(bundle) -> Path | None:
+    """Return the executable inside a macOS app bundle, or None."""
+    root = Path(bundle)
+    try:
+        with (root / "Contents" / "Info.plist").open("rb") as handle:
+            payload = plistlib.load(handle)
+    except (OSError, ValueError, plistlib.InvalidFileException):
+        return None
+    name = str(payload.get("CFBundleExecutable") or "").strip()
+    if not name or name in {".", ".."} or "/" in name or "\\" in name:
+        return None
+    executable = root / "Contents" / "MacOS" / name
+    if not executable.is_file() or not os.access(executable, os.X_OK):
+        return None
+    return executable
+
+
+def resolve_native_executable(name, which=None) -> str | None:
+    """Return the executable for a native emulator name, or None.
+
+    A macOS ``.app`` bundle is not on PATH, so the bundle is looked up in
+    the system and user application folders and its real executable is
+    returned. Launching that executable (not ``open -a``) keeps the
+    emulator's own pid, which the session tracker needs. A name with a
+    ``*`` matches the bundles whose name starts that way, which is how a
+    build that names its bundle after the release is found.
+    """
+    text = str(name or "").strip()
+    if not text:
+        return None
+    if text.endswith(".app") and IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        home = home_dir()
+        folders = [Path("/Applications")]
+        if home is not None:
+            folders.append(home / "Applications")
+        search: list[Path] = []
+        for folder in folders:
+            if "*" in text:
+                search.extend(sorted(folder.glob(text)))
+            else:
+                search.append(folder / text)
+        for bundle in search:
+            executable = macos_app_executable(bundle)
+            if executable is not None:
+                return str(executable)
+        return None
+    finder = which or shutil.which
+    return finder(text)
+
+
+def libretro_system_core_dir() -> str:
+    """Return the directory that holds the libretro cores on this platform."""
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        home = home_dir()
+        base = home / "Library" / "Application Support" / "RetroArch" / "cores" if home else None
+        # RetroArch's own default: libretro_directory in its first-run retroarch.cfg (plan A6, confirmed).
+        return f"{base}/" if base else ""
+    return "/usr/lib/libretro/"
+
+
+def libretro_core_filename(name) -> str:
+    """Return the core file name RetroArch loads on this platform: macOS cores are ``.dylib``."""
+    text = str(name or "")
+    if IS_MACOS and text.endswith(".so"):  # pragma: no cover - macOS branch exercised on the macOS CI job
+        return text[: -len(".so")] + ".dylib"
+    return text
+
+
+# ---------------------------------------------------------------------------
+# Host tool paths and screenshot tools
+# ---------------------------------------------------------------------------
+
+MACOS_TOOL_PATHS = (
+    "/opt/homebrew/bin",
+    "/opt/homebrew/sbin",
+    "/usr/local/bin",
+    "/usr/local/sbin",
+    "/opt/local/bin",
+)
+
+
+def ensure_macos_tool_path(environ=None) -> str:
+    """Return a PATH that also contains the usual Homebrew and MacPorts bins.
+
+    An app started from Finder inherits a minimal PATH, so tools the user
+    installed with Homebrew would otherwise be invisible.
+    """
+    value = str(environ if environ is not None else os.environ.get("PATH", ""))
+    if not IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        return value
+    entries = value.split(os.pathsep) if value else []
+    missing = [entry for entry in MACOS_TOOL_PATHS if entry not in entries]
+    if not missing:
+        return value
+    return os.pathsep.join([*missing, *entries])
+
+
+def macos_screenshot_command(dest) -> list[str] | None:
+    """Return the macOS screenshot command for *dest*, or None elsewhere."""
+    if not IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        return None
+    return ["/usr/sbin/screencapture", "-x", str(dest)]
+
+
+# ---------------------------------------------------------------------------
+# Symlink inspection
+# ---------------------------------------------------------------------------
+
+# macOS keeps /var, /tmp, /etc, and /home behind symlinks into the data
+# volume, so every path under one of them contains a link the user never
+# made. Those root-level system links are allowed; every other symlink
+# component is reported.
+MACOS_SYSTEM_LINK_ROOTS = ("/private/", "/System/Volumes/Data/")
+
+
+def _macos_system_link(component) -> bool:
+    """True when *component* is a macOS system symlink at the filesystem root."""
+    if not IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        return False
+    try:
+        target = os.readlink(component)
+    except OSError:
+        return False
+    resolved = os.path.normpath(os.path.join(str(component.parent), target))
+    return resolved.startswith(MACOS_SYSTEM_LINK_ROOTS)
+
+
+def user_symlink_component(path) -> Path | None:
+    """Return the first symlink component of *path* a user could have made.
+
+    Returns None when the path holds no user-created symlink. System
+    symlinks that the operating system itself installs (macOS: /var, /tmp,
+    /etc, /home) do not count.
+    """
+    candidate = Path(os.path.abspath(os.fspath(path)))
+    parts = candidate.parts
+    for index in range(1, len(parts)):
+        component = Path(*parts[: index + 1])
+        try:
+            if not component.is_symlink():
+                continue
+        except OSError:
+            continue
+        if index == 1 and _macos_system_link(component):
+            continue
+        return component
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Steam discovery (shared by importers, saves, and storefront helpers)
 # ---------------------------------------------------------------------------
+
+
+def steam_candidate_roots(home: Path) -> list[Path]:
+    """Return the Steam install locations for *home* on this platform."""
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        return [home / "Library" / "Application Support" / "Steam"]
+    return [
+        home / ".local" / "share" / "Steam",
+        home / ".steam" / "steam",
+        home / ".var" / "app" / "com.valvesoftware.Steam" / ".local" / "share" / "Steam",
+    ]
 
 
 def steam_install_roots() -> list[Path]:
@@ -1044,11 +1624,7 @@ def steam_install_roots() -> list[Path]:
         home = home_dir()
         if home is None:
             return []
-        candidates = [
-            home / ".local" / "share" / "Steam",
-            home / ".steam" / "steam",
-            home / ".var" / "app" / "com.valvesoftware.Steam" / ".local" / "share" / "Steam",
-        ]
+        candidates = steam_candidate_roots(home)
         return [candidate for candidate in candidates if candidate.is_dir()]
 
 

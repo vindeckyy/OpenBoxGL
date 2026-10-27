@@ -98,7 +98,8 @@ class StateSchemaTests(unittest.TestCase):
         default, precedence = parity_resume.adapter_for_launch(game, {}, which=which)
         chosen, _ = parity_resume.adapter_for_launch({**game, "retroarch_core": "bsnes_libretro.so"}, {}, which=which)
         self.assertEqual(precedence, "game_adapter")
-        core_file = "bsnes_libretro.dll" if sys.platform == "win32" else "bsnes_libretro.so"
+        from pkg.platform_compat import libretro_core_filename
+        core_file = "bsnes_libretro.dll" if sys.platform == "win32" else libretro_core_filename("bsnes_libretro.so")
         self.assertIn(core_file, " ".join(resolved_startup_args(chosen)))
         self.assertNotEqual(
             parity_resume.emulator_fingerprint(default, which=which),

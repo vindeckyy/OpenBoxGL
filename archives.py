@@ -11,6 +11,8 @@ import time
 import zipfile
 from pathlib import Path
 
+from pkg.platform_compat import user_symlink_component
+
 
 MAX_ARCHIVE_MEMBERS = 25_000
 MAX_ARCHIVE_MEMBER_BYTES = 2 * 1024 * 1024 * 1024
@@ -103,7 +105,7 @@ def safe_zip_extract(
     max_total_bytes=MAX_ARCHIVE_TOTAL_BYTES,
 ):
     destination = Path(destination)
-    if destination.is_symlink() or any(parent.is_symlink() for parent in destination.parents):
+    if user_symlink_component(destination) is not None:
         raise ValueError("Archive destination contains a symlink.")
     root = destination.resolve()
     with zipfile.ZipFile(archive) as package:
@@ -139,7 +141,7 @@ def safe_zip_extract(
             if info.is_dir():
                 target.mkdir(parents=True, exist_ok=True)
                 continue
-            if any(parent.is_symlink() for parent in [target, *target.parents] if parent != root and parent.exists()):
+            if user_symlink_component(target) is not None:
                 raise ValueError(f"Archive destination contains a symlink: {info.filename}")
             target.parent.mkdir(parents=True, exist_ok=True)
             with package.open(info) as source, target.open("xb") as output:

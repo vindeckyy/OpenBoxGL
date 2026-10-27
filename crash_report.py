@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 from openbox_logging import read_diagnostic_log
+from pkg.platform_compat import IS_MACOS
 
 _HOME_PATH_RE = re.compile(r"/(?:home|Users)/[^/\s'\"]+")
 # Windows profiles appear as C:\Users\x, C:/Users/x, and repr/JSON-escaped
@@ -65,6 +66,8 @@ def install_channel() -> str:
         return "appimage"
     if os.name == "nt":  # pragma: no cover - Windows branch exercised on windows CI
         return "windows"
+    if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
+        return "macos"
     return "source"
 
 

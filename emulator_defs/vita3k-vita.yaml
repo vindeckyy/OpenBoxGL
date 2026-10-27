@@ -7,6 +7,7 @@ extensions:
   - vpk
 native_exe: Vita3K
 native_exe_windows: Vita3K.exe
+native_exe_macos: ""
 flatpak_app_id: org.vita3k.Vita3K
 startup_args:
   - "{path}"

@@ -563,7 +563,7 @@ def _apply_plugin_emulator_launch(args, game):
     if "mame" in command_text:
         emulator_id = "mame"
     elif "retroarch" in command_text or any(
-        str(part).lower().endswith((".so", ".dll")) for part in args
+        str(part).lower().endswith((".so", ".dylib", ".dll")) for part in args
     ):
         emulator_id = "retroarch"
     if not emulator_id:

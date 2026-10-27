@@ -29,6 +29,17 @@ from pkg.parity.parity_emulator_defs import _registry  # noqa: E402
 from pkg.parity.parity_launch_doctor import run_preflight_checks  # noqa: E402
 
 
+def setUpModule():
+    """Flatpak is a Linux install path (ADR 0085): this module runs as Linux with a fresh emulator registry."""
+    import pkg.parity.parity_emulator_defs as defs
+
+    patcher = mock.patch.object(defs, "IS_MACOS", False)
+    patcher.start()
+    unittest.addModuleCleanup(defs._reset_registry_cache)
+    unittest.addModuleCleanup(patcher.stop)
+    defs._reset_registry_cache()
+
+
 class CountingRun:
     """A fake ``subprocess.run`` that counts real calls per argv."""
 

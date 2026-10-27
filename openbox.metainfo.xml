@@ -40,6 +40,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.19.0" date="2026-10-27">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.19.0</url>
+      <description>
+        <p>OpenBox now runs natively on macOS 11 or newer: the signed universal app bundle carries its own Python, a WKWebView window, the tray, native dialogs, openbox:// deeplinks, and the verified updater. macOS gets its own data folder, libproc process tracking, save discovery, and emulator values for every bundled definition; Linux-only controls are hidden instead of failing. Linux and Windows behavior is unchanged.</p>
+      </description>
+    </release>
     <release version="1.18.0" date="2026-10-19">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.18.0</url>
       <description>

@@ -10,6 +10,7 @@ extensions:
   - cue
 native_exe: flycast
 native_exe_windows: flycast.exe
+native_exe_macos: Flycast.app
 flatpak_app_id: org.flycast.Flycast
 startup_args:
   - "{path}"

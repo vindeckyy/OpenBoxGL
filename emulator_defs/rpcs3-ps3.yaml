@@ -7,6 +7,7 @@ extensions:
   - iso
 native_exe: rpcs3
 native_exe_windows: rpcs3.exe
+native_exe_macos: RPCS3.app
 flatpak_app_id: net.rpcs3.RPCS3
 startup_args:
   - "{path}"

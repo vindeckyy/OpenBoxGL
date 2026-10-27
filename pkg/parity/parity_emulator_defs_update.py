@@ -66,6 +66,7 @@ REQUIRED_KEYS = (
     "executable_patterns",
     "native_exe",
     "native_exe_windows",
+    "native_exe_macos",
     "flatpak_app_id",
     "priority",
     "startup_args",

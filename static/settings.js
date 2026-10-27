@@ -958,13 +958,16 @@ import { pluginSettingsFields, collectPluginSettings, renderPluginSettings } fro
     }
     function renderEmulators(emulators) {
       initDefs();
-      $('emulatorCatalog').innerHTML = `<div class="extras"><button type="button" class="primary" id="installAllEmulators">Install all available emulators</button><button type="button" class="icon-button" id="updateAllEmulators">Update installed emulators</button></div>` + emulators.map(emulator => {
+      // Automatic installation is a Flatpak channel, which macOS does not have (ADR 0085).
+      const macos = nativeCaps.platform === 'darwin';
+      $('emulatorCatalog').innerHTML = `<div class="extras"><button type="button" class="primary" id="installAllEmulators"${macos ? ' hidden' : ''}>Install all available emulators</button><button type="button" class="icon-button" id="updateAllEmulators">Update installed emulators</button></div>` + emulators.map(emulator => {
         const state = emulator.job.state || (emulator.installed ? 'installed' : 'available');
         const label = state === 'installing' ? 'Installing...' : emulator.installed ? 'Add profiles' : state === 'error' ? 'Retry' : 'Install';
         const openButton = emulator.installed ? `<button type="button" class="icon-button" data-open-emulator="${escapeHtml(emulator.app_id)}">Open</button>` : '';
         const settingsButton = emulator.installed && EMULATOR_SETTINGS_IDS[emulator.app_id] ? `<button type="button" class="icon-button" data-emulator-settings="${escapeHtml(emulator.app_id)}">Settings</button>` : '';
         const updateButton = emulator.installed && emulator.mode === 'flatpak' ? `<button type="button" class="icon-button" data-update-emulator="${escapeHtml(emulator.app_id)}">Update</button>` : '';
-        return `<div class="emulator-item" title="${escapeHtml(emulator.job.error || '')}"><div><strong>${escapeHtml(emulator.name)}</strong><small>${escapeHtml(emulator.platforms.join(' · '))} · ${escapeHtml(state)}${emulator.version ? ` · v${escapeHtml(emulator.version)}` : ''}${emulator.update_available ? ` · update ${escapeHtml(emulator.latest_version || 'available')}` : ''}${emulator.skip_update_check ? ' · update checks off' : ''}</small></div><div class="emulator-actions">${openButton}${settingsButton}${updateButton}<button type="button" class="icon-button" ${state === 'installing' || (!emulator.installed && !emulator.can_install) ? 'disabled' : ''} data-emulator="${escapeHtml(emulator.app_id)}" data-installed="${emulator.installed}">${label}</button></div></div>`;
+        const installButton = `<button type="button" class="icon-button" ${state === 'installing' || (!emulator.installed && !emulator.can_install) ? 'disabled' : ''}${macos && !emulator.installed ? ' hidden' : ''} data-emulator="${escapeHtml(emulator.app_id)}" data-installed="${emulator.installed}">${label}</button>`;
+        return `<div class="emulator-item" title="${escapeHtml(emulator.job.error || '')}"><div><strong>${escapeHtml(emulator.name)}</strong><small>${escapeHtml(emulator.platforms.join(' · '))} · ${escapeHtml(state)}${emulator.version ? ` · v${escapeHtml(emulator.version)}` : ''}${emulator.update_available ? ` · update ${escapeHtml(emulator.latest_version || 'available')}` : ''}${emulator.skip_update_check ? ' · update checks off' : ''}</small></div><div class="emulator-actions">${openButton}${settingsButton}${updateButton}${installButton}</div></div>`;
       }).join('');
       $('installAllEmulators').onclick = async () => {
         try {

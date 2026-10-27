@@ -11,6 +11,7 @@ from urllib.parse import parse_qs
 from api_errors import BadRequest, GameNotFound
 from catalog import PROGRESS, bulk_update, canon_progress, clean_currency, clean_price_cents, clean_user_rating, game_media_paths, normalize_manual_sessions, normalize_notes, related_game_ids, tag_counts
 from pkg.parity.parity_platform_admin import migrate_game_media
+from pkg.platform_compat import user_symlink_component
 from handlers._shared import clean_extras as _clean_extras_shared
 from notifications import clear as clear_notifications, mark_read as mark_notifications_read, unread_count
 from openbox import load_state, load_state_readonly, local_only_mutation
@@ -682,16 +683,12 @@ class LibraryHandlers:
             raise ValueError("Game path must be an absolute path.")
         # Reject symlinked components to avoid TOCTOU and path confusion;
         # resolve without strict to check the would-be target.
-        cursor = candidate
-        while True:
-            try:
-                if cursor.is_symlink():
-                    raise ValueError("Game path may not contain symlinks.")
-            except OSError as error:
-                raise ValueError("Could not inspect game path.") from error
-            if cursor.parent == cursor:
-                break
-            cursor = cursor.parent
+        try:
+            component = user_symlink_component(candidate)
+        except OSError as error:
+            raise ValueError("Could not inspect game path.") from error
+        if component is not None:
+            raise ValueError("Game path may not contain symlinks.")
         if not candidate.exists():
             raise ValueError("Path must point to an existing local file.")
         if not candidate.is_file():

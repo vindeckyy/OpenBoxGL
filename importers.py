@@ -7,7 +7,15 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from pkg.platform_compat import IS_WINDOWS, epic_manifest_paths, join_command, steam_install_roots
+from pkg.platform_compat import (
+    IS_MACOS,
+    IS_WINDOWS,
+    epic_manifest_paths,
+    join_command,
+    steam_candidate_roots,
+    steam_install_roots,
+    url_opener_command,
+)
 
 
 def vdf_values(text):
@@ -17,12 +25,7 @@ def vdf_values(text):
 def steam_roots(home=None):
     if home is None:
         return [root for root in steam_install_roots() if (root / "steamapps").is_dir()]
-    home = Path(home)
-    candidates = (
-        home / ".local/share/Steam",
-        home / ".steam/steam",
-        home / ".var/app/com.valvesoftware.Steam/.local/share/Steam",
-    )
+    candidates = steam_candidate_roots(Path(home))
     return [path for path in candidates if (path / "steamapps").is_dir()]
 
 
@@ -38,24 +41,28 @@ def _flatpak_installed(app_id, run=subprocess.run):
     return result.returncode == 0
 
 
-def _url_opener() -> str | None:
-    """Return a command that opens a URL with the platform default handler."""
-    if opener := shutil.which("xdg-open"):
-        return opener
-    if IS_WINDOWS:
-        return os.environ.get("SYSTEMROOT", r"C:\Windows") + r"\explorer.exe"
-    return None
-
-
-def url_open_command(url) -> list[str]:
+def url_open_command(url, opener=None) -> list[str]:
     """Return argv that opens *url* with the platform default handler."""
-    opener = _url_opener()
-    if opener:
-        return [opener, str(url)]
+    handler = opener or url_opener_command()
+    if handler:
+        return [handler, str(url)]
     return []
 
 
-def steam_command(home=None):
+def steam_command(home=None, roots=None, opener=None):
+    """Return the (binary, command) pair that launches a Steam game."""
+    if IS_MACOS:
+        # Steam for macOS registers the steam:// URL scheme instead of a
+        # command on PATH, so the URL is the only reliable launch path.
+        found = roots if roots is not None else (
+            steam_roots(home) if home is not None else steam_install_roots()
+        )
+        if not found:
+            raise FileNotFoundError("The Steam installation could not be found.")
+        handler = opener or url_opener_command()
+        if not handler:
+            raise FileNotFoundError("No application is available to open Steam links.")
+        return handler, join_command(url_open_command("steam://rungameid/{app_id}", opener=handler))
     if IS_WINDOWS:
         roots = steam_roots(home) if home is not None else steam_install_roots()
         for root in roots:
@@ -68,9 +75,9 @@ def steam_command(home=None):
             return shutil.which("flatpak"), "flatpak run com.valvesoftware.Steam -applaunch {app_id}"
         if binary := shutil.which("xdg-open"):
             return binary, "xdg-open steam://rungameid/{app_id}"
-        opener = _url_opener()
-        if opener:
-            return opener, join_command(url_open_command("steam://rungameid/{app_id}"))
+        handler = url_opener_command()
+        if handler:
+            return handler, join_command(url_open_command("steam://rungameid/{app_id}"))
         raise FileNotFoundError("The Steam installation could not be found.")
     if binary := shutil.which("steam"):
         return binary, "steam -applaunch {app_id}"
@@ -94,7 +101,14 @@ def steam_libraries(root):
 
 def import_steam(home=None, errors=None):
     home = home or Path.home()
-    executable, command = steam_command()
+    try:
+        executable, command = steam_command()
+    except FileNotFoundError:
+        # Steam is not installed on this host. The library is still worth
+        # importing; the launch command is the URL form, which works as soon
+        # as Steam is installed.
+        executable = ""
+        command = join_command(url_open_command("steam://rungameid/{app_id}"))
     games = []
     seen = set()
     for root in steam_roots(home):
@@ -156,6 +170,9 @@ def json_records(path):
 
 
 def heroic_bases(home=None):
+    if IS_MACOS:
+        # Heroic has no macOS build, so there is no store to read.
+        return []
     if home is not None:
         home = Path(home)
         candidates = (
@@ -189,12 +206,14 @@ def _heroic_windows_executable(record, install_dir):
 
 
 def import_heroic(home=None):
+    if IS_MACOS:
+        raise FileNotFoundError("Heroic import is not available on macOS.")
     if IS_WINDOWS and home is None:
         return _import_heroic_windows(home)
     home = home or Path.home()
-    opener = _url_opener()
+    opener = url_opener_command()
     if not opener:
-        raise FileNotFoundError("xdg-open is required to launch imported Heroic games.")
+        raise FileNotFoundError("No application is available to open Heroic links.")
     manifests = []
     for base in heroic_bases(home):
         manifests.extend((

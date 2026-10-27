@@ -8,7 +8,6 @@ import threading
 import time
 import unittest
 import urllib.request
-from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
@@ -32,7 +31,7 @@ class SseTests(unittest.TestCase):
 
         cls.web_app = web_app
         web_app.TOKEN = "sse-test-token"
-        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), web_app.Handler)
+        cls.server = web_app.OpenBoxServer(("127.0.0.1", 0), web_app.Handler)
         cls.port = cls.server.server_address[1]
         cls.origin = f"http://127.0.0.1:{cls.port}"
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)

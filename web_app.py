@@ -29,7 +29,7 @@ from parity_deeplinks import handle_cli
 from parity_emulator_defs import merge_profiles_from_definitions
 from parity_gameyfin import GameyfinError
 from parity_gamescope import OPENBOX_STEAM_GAME_ID, is_gamescope_guest, mark_process_windows, open_ui
-from pkg.platform_compat import process_alive, terminate_process_tree
+from pkg.platform_compat import IS_MACOS, ensure_macos_tool_path, process_alive, terminate_process_tree
 from routes import dispatch_get, dispatch_post
 from routes.registry import route
 from state_store import StateCorruptError, secure_text_write
@@ -140,6 +140,17 @@ CSP_DEFAULT = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsaf
 # only the framing directives; every other policy stays identical.
 CSP_FRAMEABLE = CSP_DEFAULT.replace("frame-ancestors 'none'", "frame-ancestors 'self'")
 
+
+
+class OpenBoxServer(ThreadingHTTPServer):
+    """The loopback server.
+
+    The default accept backlog of five connections is too small for a page
+    that fires several requests at once: macOS resets the connection when
+    the queue overflows instead of queueing it.
+    """
+
+    request_queue_size = 128
 
 
 class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers, SessionHandlers, SettingsHandlers, TimeMachineHandlers, ExtensionsHandlers, HealthHandlers, JobsHandlers, EmulatorsHandlers, ExportHandlers, LaunchHandlers, SetupHandlers, DataHandlers, DiscoveryHandlers, WineHandlers, FaugusHandlers, InsightsHandlers, ScreenScraperHandlers, PickerHandlers, ConstellationHandlers, PartyHandlers, BaseHTTPRequestHandler):
@@ -721,7 +732,15 @@ def main():
     bootstrap_env(DATA.parent)
     configure_logging(DATA.parent)
     LOGGER.info("OpenBox web UI starting")
+    # An app started from Finder inherits a minimal PATH, so tools the user
+    # installed with Homebrew would be invisible to the launcher and to the
+    # emulators it probes.
+    os.environ["PATH"] = ensure_macos_tool_path(os.environ.get("PATH", ""))
     args = sys.argv[1:]
+    if "--game-mode" in args and IS_MACOS:
+        # Game Mode is a gamescope feature and gamescope is Linux only.
+        print("Game Mode needs gamescope and is only available on Linux.", file=sys.stderr)
+        raise SystemExit(2)
     if "--backup" in args:
         items = []
         keep = 0
@@ -804,7 +823,7 @@ def main():
             _queue_scheduled_scans()
     except Exception:
         LOGGER.exception("On-startup health rescan failed")
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server = OpenBoxServer(("127.0.0.1", 0), Handler)
     run_configured_commands("startup_commands")
     # Lifecycle event (F1e): the app finished starting. Best-effort.
     emit_plugin_event(DATA.parent / "plugins", "app_startup", {})

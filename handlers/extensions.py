@@ -15,7 +15,7 @@ from urllib.parse import parse_qs
 from automation import DEFAULT_ATTEMPTS, DEFAULT_TIMEOUT, EVENT_TYPES, MAX_WEBHOOKS, test_ping, validate_webhook
 from backend_io import atomic_write_text
 from openbox import DATA, load_state
-from pkg.platform_compat import contained_path, open_path
+from pkg.platform_compat import contained_path, open_path, user_symlink_component
 from plugins import (
     MAX_LIBRARY_ENTRIES,
     get_plugin_settings,
@@ -661,7 +661,7 @@ class ExtensionsHandlers:
         source = Path(str(payload.get("path", ""))).expanduser()
         if not source.is_file() or source.suffix.lower() != ".css":
             raise ValueError("Theme path must point to a CSS file.")
-        if source.is_symlink() or any(parent.is_symlink() for parent in source.parents):
+        if user_symlink_component(source) is not None:
             raise ValueError("Theme path may not contain symlinks.")
         try:
             size = source.stat().st_size

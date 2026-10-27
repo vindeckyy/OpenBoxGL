@@ -1,5 +1,6 @@
 """Tests for Launch Doctor preflight checks and v2 routes."""
 
+import contextlib
 import json
 import os
 import shutil
@@ -21,6 +22,21 @@ from pkg.parity.parity_launch_doctor import (  # noqa: E402
     preflight_single,
     run_preflight_checks,
 )
+
+
+@contextlib.contextmanager
+def linux_flatpak_registry():
+    """Flatpak is a Linux install path (ADR 0085): pin Linux and rebuild the emulator registry."""
+    import pkg.parity.parity_emulator_defs as defs
+
+    patcher = mock.patch.object(defs, "IS_MACOS", False)
+    patcher.start()
+    defs._reset_registry_cache()
+    try:
+        yield
+    finally:
+        patcher.stop()
+        defs._reset_registry_cache()
 
 
 class DummyLaunchHandler(LaunchHandlers):
@@ -50,6 +66,17 @@ class LaunchDoctorCoreTests(unittest.TestCase):
         os.environ["OPENBOX_DATA_DIR"] = str(self.data_dir)
         self.rom = self.data_dir / "game.nes"
         self.rom.write_bytes(b"NES")
+        # The Doctor resolves the executable the registry names for this
+        # platform. The tests exercise the flow with the POSIX name, so the
+        # platform naming is pinned here.
+        for target in (
+            "pkg.parity.parity_emulator_defs.IS_MACOS",
+            "pkg.parity.parity_launch_doctor.IS_MACOS",
+            "pkg.platform_compat.IS_MACOS",
+        ):
+            patcher = mock.patch(target, False)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def tearDown(self):
         self.tempdir.cleanup()
@@ -301,6 +328,16 @@ class LaunchDoctorHandlerTests(unittest.TestCase):
             "playlists": [],
         })
         self.handler = DummyLaunchHandler()
+        # The Doctor resolves the executable the registry names for this
+        # platform; these tests exercise the flow with the POSIX name.
+        for target in (
+            "pkg.parity.parity_emulator_defs.IS_MACOS",
+            "pkg.parity.parity_launch_doctor.IS_MACOS",
+            "pkg.platform_compat.IS_MACOS",
+        ):
+            patcher = mock.patch(target, False)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def tearDown(self):
         self.tempdir.cleanup()
@@ -458,6 +495,7 @@ class LaunchDoctorCoverageTests(unittest.TestCase):
         checks = run_preflight_checks({"path": str(rom), "platform": ""}, {}, str(self.data_dir))
         self.assertIn("PLATFORM_UNKNOWN", [item["code"] for item in checks])
 
+    @mock.patch("pkg.platform_compat.IS_MACOS", False)
     def test_install_and_bios_checks(self):
         from pkg.parity.parity_launch_doctor import run_preflight_checks
 
@@ -495,6 +533,7 @@ class LaunchDoctorCoverageTests(unittest.TestCase):
         checks = run_preflight_checks({"path": str(empty), "platform": "NES"}, {}, str(self.data_dir))
         self.assertIn("ARCHIVE_INVALID", [item["code"] for item in checks])
 
+    @linux_flatpak_registry()
     def test_flatpak_denied_and_batch_identity(self):
         from openbox import save_state
         from pkg.parity.parity_launch_doctor import preflight_batch, preflight_single
@@ -811,6 +850,7 @@ class TestFixActionCoverage(unittest.TestCase):
         for plat in payload["platforms"]:
             self.assertIsInstance(plat, str)
 
+    @mock.patch("pkg.platform_compat.IS_MACOS", False)
     def test_emulator_required_with_pick_core(self):
         from pkg.parity.parity_launch_doctor import run_preflight_checks
 
@@ -823,6 +863,26 @@ class TestFixActionCoverage(unittest.TestCase):
         for c in checks:
             if c["code"] in ("EMULATOR_REQUIRED", "NATIVE_EXE_MISSING", "FLATPAK_NOT_INSTALLED"):
                 self.assertEqual(c["fix_action"]["kind"], "pick_core" if c["code"] == "EMULATOR_REQUIRED" else "flatpak_install")
+
+    def test_a_definition_without_a_macos_build_is_reported_not_installed(self):
+        from pkg.parity.parity_launch_doctor import run_preflight_checks
+
+        rom = self.data_dir / "game.3ds"
+        rom.write_bytes(b"3DS")
+        game = {
+            "path": str(rom),
+            "platform": "Nintendo 3DS",
+            "emulator_adapter_id": "azahar-3ds",
+        }
+        with mock.patch("pkg.parity.parity_launch_doctor.IS_MACOS", True), \
+             mock.patch("pkg.parity.parity_emulator_defs.IS_MACOS", True), \
+             mock.patch("pkg.platform_compat.IS_MACOS", True):
+            # Even a same-named Linux binary must not turn into a launch attempt.
+            checks = run_preflight_checks(game, {}, str(self.data_dir), which=fake_which("azahar"))
+        missing = [c for c in checks if c["code"] == "NATIVE_EXE_MISSING"]
+        self.assertTrue(missing, [c["code"] for c in checks])
+        self.assertEqual(missing[0]["message"], "This emulator has no macOS build.")
+        self.assertEqual(missing[0]["fix_action"]["kind"], "pick_core")
 
     def test_bios_missing_reveal_path(self):
         from pkg.parity.parity_launch_doctor import run_preflight_checks
@@ -894,18 +954,19 @@ class TestFixActionCoverage(unittest.TestCase):
             self.assertEqual(fix["kind"], kind)
 
 
-@unittest.skipIf(sys.platform == "win32", "Flatpak and the /usr/lib/libretro system path are Linux-only")
+@unittest.skipIf(sys.platform != "linux", "Flatpak and the system core path are Linux-only")
 class FlatpakCoreMissingTests(unittest.TestCase):
     def test_a_flatpak_core_is_looked_up_in_the_sandbox_cores_directory(self):
         from pkg.parity import parity_launch_doctor as doctor
         from pkg.parity.parity_emulator_defs import find_adapter
+        from pkg.platform_compat import libretro_system_core_dir
 
         adapter = find_adapter("retroarch-snes")
         with tempfile.TemporaryDirectory() as home:
             with mock.patch("pkg.parity.parity_emulator_defs.Path.home", return_value=Path(home)):
                 # Missing: the Doctor names the core.
                 self.assertEqual(doctor._retroarch_core_missing(adapter, flatpak=True),
-                                 "/usr/lib/libretro/snes9x_libretro.so")
+                                 libretro_system_core_dir() + "snes9x_libretro.so")
                 cores = Path(home) / ".var/app/org.libretro.RetroArch/config/retroarch/cores"
                 cores.mkdir(parents=True)
                 (cores / "snes9x_libretro.so").write_bytes(b"core")
@@ -915,10 +976,11 @@ class FlatpakCoreMissingTests(unittest.TestCase):
     def test_a_native_core_is_still_checked_at_the_system_path(self):
         from pkg.parity import parity_launch_doctor as doctor
         from pkg.parity.parity_emulator_defs import find_adapter
+        from pkg.platform_compat import libretro_core_filename, libretro_system_core_dir
 
         adapter = find_adapter("retroarch-snes")
         # The native check reads the system path: missing exactly when that file is absent here.
-        system_core = Path("/usr/lib/libretro/snes9x_libretro.so")
+        system_core = Path(libretro_system_core_dir() + libretro_core_filename("snes9x_libretro.so"))
         missing = doctor._retroarch_core_missing(adapter, flatpak=False)
         self.assertEqual(missing is None, system_core.is_file())
 

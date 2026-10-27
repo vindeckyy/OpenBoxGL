@@ -1,5 +1,5 @@
 import { $, escapeHtml } from './util.js';
-import { api, notify, AppState, nativePickFolder, nativePickFile, resetQuery } from './state.js';
+import { api, notify, AppState, nativeCaps, nativePickFolder, nativePickFile, resetQuery } from './state.js';
 import { promptChoice, promptInput } from './dialogs.js';
 import { openMatchReview } from './metadata.js';
 import { openActivity } from './activity.js';
@@ -37,6 +37,11 @@ const MORE_SOURCES = [
   {type: 'rpcs3', label: 'RPCS3', icon: 'R3'},
   {type: 'vita3k', label: 'Vita3K', icon: 'V3'},
 ];
+// Launchers that do not exist on macOS are not offered there (ADR 0085).
+const MACOS_UNAVAILABLE_SOURCES = new Set(['heroic', 'lutris', 'faugus']);
+function offeredSources(list) {
+  return nativeCaps.platform === 'darwin' ? list.filter(source => !MACOS_UNAVAILABLE_SOURCES.has(source.type)) : list;
+}
 const MEDIA_TYPES = [
   'cover', 'background', 'screenshots', 'box_back', 'box_spine', 'box_3d',
   'clear_logo', 'fanart', 'banner', 'icon', 'title_screen', 'manual',
@@ -340,10 +345,10 @@ function renderSources() {
         <p class="description">${escapeHtml(t('setup.welcome_sources_body'))}</p>
       </div>` : ''}
       <h3 class="setup-section-title">Detected &amp; common sources</h3>
-      <div class="setup-source-grid">${PRIMARY_SOURCES.map(renderCard).join('')}</div>
+      <div class="setup-source-grid">${offeredSources(PRIMARY_SOURCES).map(renderCard).join('')}</div>
       <details class="setup-more-sources"${state.moreSourcesOpen ? ' open' : ''}>
         <summary>More sources</summary>
-        <div class="setup-source-grid">${MORE_SOURCES.map(renderCard).join('')}</div>
+        <div class="setup-source-grid">${offeredSources(MORE_SOURCES).map(renderCard).join('')}</div>
       </details>
       <h3 class="setup-section-title">Selected sources</h3>
       ${selectedList}

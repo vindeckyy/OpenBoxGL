@@ -25,6 +25,20 @@ def _posix_only(function):
     return wrapper
 
 
+def _linux_only(function):
+    """Skip packaging checks that need the GNU/Linux install flow.
+
+    macOS installs through the app bundle that ``scripts/build_macos_app.sh``
+    produces; the Makefile install recipe uses GNU ``install -D``.
+    """
+    def wrapper():
+        if sys.platform != "linux":
+            print(f"  {function.__name__}: skipped off Linux (GNU install flow only)")
+            return
+        return function()
+    return wrapper
+
+
 def _repo_root() -> Path:
     candidate = Path(__file__).resolve().parent
     if (candidate / "runtime_modules.txt").is_file():
@@ -120,6 +134,7 @@ def test_makefile_install():
 
 
 @_posix_only
+@_linux_only
 def test_staged_install_locale_endpoints():
     """A staged Makefile install must serve every public locale endpoint."""
     locales = sorted((ROOT / "locales").glob("*.json"))
@@ -699,6 +714,7 @@ def test_appimage_update_info():
 
 
 @_posix_only
+@_linux_only
 def test_appimage_library_scope():
     build_script = (ROOT / "build_appimage.sh").read_text(encoding="utf-8")
     app_run = build_script.split('install -m 755 /dev/stdin "$appdir/AppRun" <<\'EOF\'', 1)[1].split("\nEOF\n", 1)[0]

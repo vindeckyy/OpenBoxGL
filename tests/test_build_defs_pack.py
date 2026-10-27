@@ -25,6 +25,11 @@ class BuildDefsPackTests(unittest.TestCase):
         for name, text in definitions.items():
             validate_definition(name, text)  # the channel would accept every one
 
+    def test_every_packed_definition_carries_the_macos_executable(self):
+        archive = build_defs_pack.build_archive(ROOT / "emulator_defs")
+        for name, text in read_pack(archive).items():
+            self.assertIn("native_exe_macos:", text, name)
+
     def test_build_is_byte_deterministic(self):
         first = build_defs_pack.build_archive(ROOT / "emulator_defs")
         second = build_defs_pack.build_archive(ROOT / "emulator_defs")

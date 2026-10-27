@@ -9,6 +9,7 @@ extensions:
   - v64
 native_exe: retroarch
 native_exe_windows: retroarch.exe
+native_exe_macos: RetroArch.app
 flatpak_app_id: org.libretro.RetroArch
 retroarch_core: mupen64plus_next_libretro.so
 startup_args:

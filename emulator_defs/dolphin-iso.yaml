@@ -8,6 +8,7 @@ extensions:
   - ciso
 native_exe: dolphin-emu
 native_exe_windows: Dolphin.exe
+native_exe_macos: Dolphin.app
 flatpak_app_id: org.DolphinEmu.dolphin-emu
 startup_args:
   - -b

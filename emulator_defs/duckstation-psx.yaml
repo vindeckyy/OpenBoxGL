@@ -12,6 +12,8 @@ extensions:
   - chd
 native_exe: duckstation-qt
 native_exe_windows: duckstation-qt-x64-ReleaseLTCG.exe
+# DuckStation is discontinued and has no maintained macOS build.
+native_exe_macos: ""
 flatpak_app_id: org.duckstation.DuckStation
 startup_args:
   - -batch

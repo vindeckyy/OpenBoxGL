@@ -27,7 +27,7 @@ from pkg.parity.parity_emulator_defs import _registry, detect_adapter_prefix, fi
 from pkg.parity.parity_identity import cross_source_identity, normalize_path_identity, source_identities
 from pkg.parity.parity_import import generated_m3u_dir, import_multi_platform
 from pkg.parity.parity_import_policy import exclusion_set, filter_imported
-from pkg.platform_compat import contained_path, safe_identifier
+from pkg.platform_compat import contained_path, resolve_native_executable, safe_identifier
 from pkg.state.imports import _index_existing_games, _merge_imported_game
 from pkg.state.operations import ACTIVE_STATES, get_operation_service
 from state_store import JsonStateStore
@@ -167,7 +167,7 @@ def _adapter_installed(adapter: dict | None, which=None) -> bool:
     which = which or shutil.which
     if detect_adapter_prefix(adapter, which=which):
         native = adapter.get("native_exe") or ""
-        if native and which(native):
+        if native and resolve_native_executable(native, which=which):
             return True
         for pattern in adapter.get("executable_patterns", []):
             if which(pattern):

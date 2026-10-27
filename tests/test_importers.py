@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
 import pkg.parity  # noqa: F401,E402  # register flat-import finder
+from pkg.platform_compat import steam_candidate_roots  # noqa: E402
 
 import importers
 from arcade import import_arcade, parse_catalog, zip_members
@@ -47,6 +48,23 @@ class ImportersUnitTests(unittest.TestCase):
         self.assertEqual(vdf_values('"appid" "42"\n"name" "Real Game"'), {"appid": "42", "name": "Real Game"})
         self.assertEqual(vdf_values(""), {})
 
+    @unittest.skipUnless(sys.platform == "darwin", "macOS launches Steam through the steam:// URL scheme")
+    def test_steam_launches_through_the_url_scheme(self):
+        binary, command = steam_command(roots=[Path("/Applications/Steam.app")], opener="/usr/bin/open")
+        self.assertEqual(binary, "/usr/bin/open")
+        self.assertIn("steam://rungameid/{app_id}", command)
+
+    @unittest.skipUnless(sys.platform == "darwin", "macOS launches Steam through the steam:// URL scheme")
+    def test_steam_without_an_installation_is_refused(self):
+        with self.assertRaises(FileNotFoundError):
+            steam_command(roots=[], opener="/usr/bin/open")
+
+    @unittest.skipUnless(sys.platform == "darwin", "Heroic has no macOS build")
+    def test_heroic_import_is_refused_on_macos(self):
+        with self.assertRaises(FileNotFoundError):
+            import_heroic(Path("/tmp"))
+
+    @unittest.skipIf(sys.platform != "linux", "the Flatpak and xdg-open fallbacks are Linux-only")
     def test_steam_flatpak_fallback(self):
         failed = type("Result", (), {"returncode": 1, "stdout": "", "stderr": ""})()
 
@@ -76,6 +94,7 @@ class ImportersUnitTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 import_lutris(Path("/tmp"), run=lambda *args, **kwargs: failed, which=which)
 
+    @unittest.skipIf(sys.platform != "linux", "the Steam, Heroic, and Lutris layouts here are the Linux ones")
     def test_steam_heroic_lutris_import_e2e(self):
         with tempfile.TemporaryDirectory() as directory:
             dir_path = Path(directory)
@@ -113,7 +132,7 @@ class ImportersUnitTests(unittest.TestCase):
     def test_steam_libraries_and_json_records(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            steam_root = root / ".local/share/Steam"
+            steam_root = steam_candidate_roots(root)[0]
             (steam_root / "steamapps").mkdir(parents=True)
             (steam_root / "steamapps/libraryfolders.vdf").write_text(f'"libraryfolders"\n{{\n"0"\n{{\n"path" "{steam_root}"\n}}\n}}', encoding="utf-8")
             roots = steam_roots(root)
@@ -184,6 +203,8 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
             (root / "normal.chd").write_bytes(b"CHD")
             if os.name == "nt":
                 self.skipTest("NTFS rejects invalid-UTF-8 byte names")
+            if sys.platform == "darwin":
+                self.skipTest("the macOS file system only accepts valid UTF-8 names")
             # A filename that is not valid UTF-8 arrives via surrogateescape.
             fd = os.open(os.fsencode(root) + b"/bad\xff\xfe name.chd", os.O_WRONLY | os.O_CREAT, 0o644)
             os.write(fd, b"CHD")
@@ -522,7 +543,7 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
             self.assertEqual(libs, [root])
 
             # Corrupt manifest in steam
-            steamapps = root / ".local/share/Steam/steamapps"
+            steamapps = steam_candidate_roots(root)[0] / "steamapps"
             steamapps.mkdir(parents=True)
             (steamapps / "appmanifest_bad.acf").write_bytes(b"\x00\xff")
             games = import_steam(root)
@@ -532,7 +553,7 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
         # (Mocked: chmod semantics for stat-vs-read differ across filesystems.)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            steamapps = root / ".local/share/Steam/steamapps"
+            steamapps = steam_candidate_roots(root)[0] / "steamapps"
             steamapps.mkdir(parents=True)
             real_scandir = os.scandir
 
@@ -551,7 +572,7 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
         # A stat-able but unreadable libraryfolders.vdf reports the root too.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            steamapps = root / ".local/share/Steam/steamapps"
+            steamapps = steam_candidate_roots(root)[0] / "steamapps"
             steamapps.mkdir(parents=True)
             (steamapps / "libraryfolders.vdf").write_text('"path" "x"', encoding="utf-8")
             errors = []
@@ -576,6 +597,33 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
 
             with self.assertRaises(FileNotFoundError):
                 import_arcade(root / "nonexistent")
+
+
+class MacOSImportNameTests(unittest.TestCase):
+    """macOS shows NFC names and hints only the folders upstream documents (ADR 0085)."""
+
+    def test_a_disc_base_name_is_nfc_on_macos(self):
+        import unicodedata
+
+        from pkg.parity import parity_import
+        import pkg.platform_compat as platform_compat
+
+        decomposed = unicodedata.normalize("NFD", "Café (Disc 1).iso")
+        with mock.patch.object(platform_compat, "IS_MACOS", True):
+            base = parity_import._disc_base(Path(decomposed))
+        self.assertEqual(base, unicodedata.normalize("NFC", "Café"))
+
+    def test_bios_hints_on_macos_name_only_documented_folders(self):
+        from pkg.parity import parity_import
+
+        with mock.patch.object(parity_import, "IS_MACOS", True), \
+             mock.patch("pathlib.Path.home", return_value=Path("/Users/example")):
+            hints = parity_import._get_bios_hints()
+        self.assertEqual(
+            str(hints["DuckStation"][0][1]),
+            str(Path("/Users/example/Library/Application Support/DuckStation/bios")),
+        )
+        self.assertNotIn("PCSX2", hints)
 
 
 if __name__ == "__main__":

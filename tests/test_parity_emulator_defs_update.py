@@ -33,6 +33,7 @@ executable_patterns:
   - testemu
 native_exe: testemu
 native_exe_windows: testemu.exe
+native_exe_macos: testemu.app
 flatpak_app_id: org.test.TestEmulator
 priority: 10
 startup_args:

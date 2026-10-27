@@ -14,7 +14,13 @@ from pathlib import Path
 from api_errors import BadRequest, GameNotFound
 from pkg.parity.parity_emulator_defs import apply_core_override, find_adapter, flatpak_core_path, resolve_launch, resolved_startup_args
 from pkg.parity.parity_import import detect_dependencies
-from pkg.platform_compat import UnsafeIdentifier, contained_path, safe_identifier
+from pkg.platform_compat import (
+    IS_MACOS,
+    UnsafeIdentifier,
+    contained_path,
+    resolve_native_executable,
+    safe_identifier,
+)
 from pkg.state.launch import game_from_payload
 
 PRECEDENCE_NUMBERS = {
@@ -555,11 +561,23 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None, deep
         from pkg.parity.parity_emulator_defs import adapter_executable
 
         native_exe = adapter_executable(active_adapter)
-        if native_exe and which(native_exe):
+        resolved_native = resolve_native_executable(native_exe, which=which) if native_exe else None
+        macos_build_missing = IS_MACOS and active_adapter.get("native_exe_macos") == ""
+        if resolved_native:
             install_mode = "native"
-            emulator_path = which(native_exe)
+            emulator_path = resolved_native
         elif _flatpak_installed(active_adapter.get("flatpak_app_id"), which, run):
             install_mode = "flatpak"
+        elif macos_build_missing:
+            # ADR 0085: an empty native_exe_macos means no verified macOS build,
+            # so report it as missing instead of attempting a Linux binary.
+            checks.append(_check(
+                "NATIVE_EXE_MISSING",
+                "error",
+                "This emulator has no macOS build.",
+                [REMEDIATION_CHOOSE_ADAPTER],
+                _fix_pick_core(platforms=[platform] if platform else []),
+            ))
         elif native_exe or active_adapter.get("flatpak_app_id"):
             remediations = [REMEDIATION_INSTALL_FLATPAK] if active_adapter.get("flatpak_app_id") else [REMEDIATION_INSTALL_NATIVE]
             code = "FLATPAK_NOT_INSTALLED" if active_adapter.get("flatpak_app_id") and not native_exe else "NATIVE_EXE_MISSING"

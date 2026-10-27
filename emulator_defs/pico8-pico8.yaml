@@ -8,6 +8,8 @@ extensions:
   - png
 native_exe: pico8
 native_exe_windows: pico8.exe
+# PICO-8 has no native macOS program; the fantasy console runs in a browser.
+native_exe_macos: ""
 flatpak_app_id: ""
 startup_args:
   - "-run"

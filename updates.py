@@ -23,11 +23,19 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from backend_io import atomic_write_bytes, atomic_write_text, download_file, fsync_directory, read_limited
-from pkg.platform_compat import IS_WINDOWS, start_menu_programs_dir, windows_install_dir
+from pkg.platform_compat import (
+    IS_MACOS,
+    IS_WINDOWS,
+    macos_app_bundle_for,
+    resolved_data_dir,
+    start_menu_programs_dir,
+    try_file_lock,
+    windows_install_dir,
+)
 
 logger = logging.getLogger("openbox")
 
-VERSION = "1.18.0"
+VERSION = "1.19.0"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
 TRUSTED_RELEASE_PREFIX = "https://github.com/vindeckyy/OpenBoxGL/releases/download/"
 
@@ -46,6 +54,9 @@ def _arch_asset(arch):
     """The release asset name for a given architecture on this platform."""
     if IS_WINDOWS:
         return f"OpenBox-{arch}-windows.zip"
+    if IS_MACOS:
+        # One universal bundle serves Apple Silicon and Intel.
+        return "OpenBox-macos.zip"
     return f"OpenBox-{arch}.AppImage"
 
 
@@ -381,7 +392,236 @@ def install_update(update, destination=None, opener=urlopen):
     """Install a verified update through this platform's channel."""
     if IS_WINDOWS:
         return _install_update_windows(update, opener=opener)
+    if IS_MACOS:
+        return _install_update_macos(update, opener=opener)
     return _install_update_appimage(update, destination, opener=opener)
+
+
+MACOS_APPLIER = """#!/bin/sh
+# Swap the OpenBox.app bundle for the verified update.
+set -eu
+server_pid="$1"
+bundle="$2"
+staged="$3"
+previous="$bundle.previous"
+staging="$(dirname "$staged")"
+
+# Wait for the server to exit; the applier owns the bundle from then on.
+waited=0
+while [ "$waited" -lt 600 ]; do
+  if ! kill -0 "$server_pid" 2>/dev/null; then
+    break
+  fi
+  sleep 0.1
+  waited=$((waited + 1))
+done
+if kill -0 "$server_pid" 2>/dev/null; then
+  rm -rf "$staging"
+  exit 1
+fi
+
+rm -rf "$previous"
+if ! mv "$bundle" "$previous"; then
+  rm -rf "$staging"
+  exit 1
+fi
+if ! mv "$staged" "$bundle"; then
+  mv "$previous" "$bundle" || true
+  rm -rf "$staging"
+  exit 1
+fi
+rm -rf "$staging"
+# The relaunch is a convenience: a failed open must not undo the update.
+/usr/bin/open "$bundle" || true
+exit 0
+"""
+
+
+def _macos_running_sessions():
+    """Return the number of game sessions the server is tracking."""
+    try:
+        from webapp_state import RUNNING
+
+        return len(RUNNING)
+    except Exception:
+        return 0
+
+
+def _install_update_macos(
+    update,
+    *,
+    opener=urlopen,
+    bundle=None,
+    extract=None,
+    verify_bundle=None,
+    spawn=None,
+):
+    """Install a verified update by replacing the app bundle.
+
+    The bundle cannot be replaced while it runs, so the verified archive is
+    staged next to it and a detached applier swaps it once the server has
+    exited. The previous bundle is kept as ``OpenBox.app.previous``.
+    """
+    if bundle:
+        bundle = Path(bundle)
+    else:
+        bundle = macos_app_bundle_for(sys.executable)
+        # A Python framework (or any other app hosting the interpreter) is a
+        # valid .app ancestor but not the launcher. Only the bundle that
+        # carries the runtime payload may be replaced.
+        if bundle is not None and not (bundle / "Contents" / "Resources" / "openbox" / "web_app.py").is_file():
+            bundle = None
+    if bundle is None:
+        raise ValueError("Automatic updates require the OpenBox.app bundle.")
+    if not update.get("available"):
+        raise ValueError("OpenBox is already up to date.")
+    artifact = str(update.get("artifact", "")).strip()
+    if not artifact.startswith(TRUSTED_RELEASE_PREFIX):
+        raise ValueError("The update URLs are not trusted OpenBox release assets.")
+    parent = bundle.parent
+    if not os.access(parent, os.W_OK):
+        raise ValueError(
+            f"{parent} is not writable; move OpenBox to a writable folder to update it."
+        )
+    if _macos_running_sessions():
+        raise ValueError("Close running games before installing an update.")
+
+    data_dir = Path(update.get("data_dir") or resolved_data_dir())
+    lock_path = data_dir / "updates" / "update.lock"
+    with try_file_lock(lock_path) as held:
+        if not held:
+            raise ValueError("An update is already in progress.")
+        return _install_update_macos_locked(
+            update,
+            bundle=bundle,
+            data_dir=data_dir,
+            opener=opener,
+            extract=extract,
+            verify_bundle=verify_bundle,
+            spawn=spawn,
+        )
+
+
+def _install_update_macos_locked(
+    update,
+    *,
+    bundle,
+    data_dir,
+    opener,
+    extract,
+    verify_bundle,
+    spawn,
+):
+    expected = resolve_update_checksum(update, opener=opener)
+    # The signature is verified before anything is downloaded.
+    verify_release_signature(update, expected, opener=opener)
+
+    archive = bundle.with_name(f".{bundle.name}.update.zip")
+    staging = bundle.with_name(f".{bundle.name}.staging")
+    for path in (archive, staging):
+        if path.is_dir():
+            shutil.rmtree(path, ignore_errors=True)
+        elif path.exists():
+            path.unlink()
+
+    try:
+        download_file(
+            update["artifact"],
+            archive,
+            max_bytes=2 * 1024 * 1024 * 1024,
+            timeout=60,
+            opener=opener,
+            sha256=expected,
+        )
+        if extract is None:
+            extract = _ditto_extract
+        extract(archive, staging)
+        # The verified archive is spent once extracted; only the staged bundle moves.
+        archive.unlink(missing_ok=True)
+        staged_bundle = staging / bundle.name
+        if not staged_bundle.is_dir():
+            raise ValueError("The update archive is not an OpenBox app bundle.")
+        if verify_bundle is None:
+            verify_bundle = _verify_macos_bundle
+        verify_bundle(staged_bundle)
+        version = _macos_bundle_version(staged_bundle)
+        if version and str(update.get("latest") or "") != version:
+            raise ValueError(
+                f"The update archive holds version {version}, not {update.get('latest')}."
+            )
+
+        applier = data_dir / "updates" / "apply-update.sh"
+        applier.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(applier, MACOS_APPLIER, mode=0o700)
+        previous = bundle.with_name(f"{bundle.name}.previous")
+        if spawn is None:
+            spawn = _spawn_macos_applier
+        spawn(applier, os.getpid(), bundle, staged_bundle)
+        return {
+            "installed": update["latest"],
+            "backup": str(previous),
+            "restart_required": True,
+        }
+    except Exception:
+        for path in (archive, staging):
+            if path.is_dir():
+                shutil.rmtree(path, ignore_errors=True)
+            elif path.exists():
+                path.unlink()
+        raise
+
+
+def _ditto_extract(archive, destination):
+    """Extract the update archive with ditto, which keeps symlinks and modes."""
+    destination.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        ["/usr/bin/ditto", "-x", "-k", str(archive), str(destination)],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(
+            f"The update archive could not be extracted: {(result.stderr or '').strip()}"
+        )
+
+
+def _verify_macos_bundle(bundle):
+    """Fail when the staged bundle does not carry a valid signature."""
+    result = subprocess.run(
+        ["/usr/bin/codesign", "--verify", "--strict", str(bundle)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(
+            f"The update archive is not a signed app bundle: {(result.stderr or '').strip()}"
+        )
+
+
+def _macos_bundle_version(bundle):
+    """Return the version string in a bundle's Info.plist."""
+    try:
+        import plistlib
+
+        with (bundle / "Contents" / "Info.plist").open("rb") as handle:
+            payload = plistlib.load(handle)
+    except (OSError, ValueError, ImportError):
+        return ""
+    return str(payload.get("CFBundleShortVersionString") or "")
+
+
+def _spawn_macos_applier(applier, server_pid, bundle, staging):
+    """Start the applier, detached from the server that is about to exit."""
+    subprocess.Popen(
+        ["/bin/sh", str(applier), str(server_pid), str(bundle), str(staging)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
 
 
 def _install_update_appimage(update, destination=None, opener=urlopen):
@@ -424,6 +664,10 @@ def install_desktop_entry(appimage=None):
     """Install the platform's desktop integration for this copy of OpenBox."""
     if IS_WINDOWS:
         return _install_windows_entry(appimage)
+    if IS_MACOS:
+        raise ValueError(
+            "macOS integrates through the app bundle; no desktop entry is needed."
+        )
     appimage = Path(appimage or os.environ.get("APPIMAGE", "")).expanduser()
     if not appimage.is_file():
         raise ValueError("Desktop integration requires the OpenBox AppImage.")

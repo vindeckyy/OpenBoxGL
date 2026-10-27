@@ -10,7 +10,9 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from api_errors import BadRequest  # noqa: E402
-from handlers.native import _battery_from, battery, capabilities, dialog, open_external, reveal, window  # noqa: E402
+from handlers.native import battery, capabilities, dialog, open_external, reveal, window  # noqa: E402
+from pkg import platform_compat as pc  # noqa: E402
+from pkg.platform_compat import battery_status  # noqa: E402
 
 class DummyHandler:
     def __init__(self, authorized=True):
@@ -37,20 +39,22 @@ class DummyHandler:
 
 class TestNativeHandlers(unittest.TestCase):
     def test_battery_from_sysfs(self):
+        if pc.IS_MACOS:
+            self.skipTest("the sysfs battery reader is Linux-only; macOS reads pmset")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "BAT0").mkdir()
             (root / "BAT0" / "capacity").write_text("77\n", encoding="utf-8")
             (root / "BAT0" / "status").write_text("Charging\n", encoding="utf-8")
-            self.assertEqual(_battery_from(root), {"present": True, "percent": 77, "charging": True})
+            self.assertEqual(battery_status(root), {"present": True, "percent": 77, "charging": True})
             (root / "BAT0" / "capacity").write_text("150", encoding="utf-8")
             (root / "BAT0" / "status").write_text("Discharging", encoding="utf-8")
-            self.assertEqual(_battery_from(root), {"present": True, "percent": 100, "charging": False})
-        self.assertFalse(_battery_from(Path("/nonexistent-openbox-battery"))["present"])
+            self.assertEqual(battery_status(root), {"present": True, "percent": 100, "charging": False})
+        self.assertFalse(battery_status(Path("/nonexistent-openbox-battery"))["present"])
 
     def test_battery_route_authorized_and_unauthorized(self):
         h = DummyHandler(authorized=True)
-        with mock.patch("handlers.native.sys.platform", "linux"), mock.patch("handlers.native._battery_from", return_value={"present": False, "percent": 0, "charging": False}):
+        with mock.patch("handlers.native.IS_LINUX", True), mock.patch("handlers.native.IS_MACOS", False), mock.patch("handlers.native.battery_status", return_value={"present": False, "percent": 0, "charging": False}):
             battery(h, mock.Mock())
         self.assertEqual(h.status, 200)
         self.assertEqual(h.payload, {"present": False, "percent": 0, "charging": False})

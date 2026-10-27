@@ -32,8 +32,8 @@ backported, so upgrading is the fix.
 
 | Version | Supported |
 | --- | --- |
-| 1.18.x | Yes (current) |
-| 1.17.x | No — upgrade required |
+| 1.19.x | Yes (current) |
+| 1.18.x | No — upgrade required |
 | 1.16.x | No — upgrade required (see above) |
 | 1.15.x | No — upgrade required |
 | 1.14.x | No — upgrade required |
@@ -59,7 +59,7 @@ backported, so upgrading is the fix.
 | 0.4.x | Best effort |
 | < 0.4.0 | No |
 
-Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. The 1.18.x line is the current maintained release; the older rows document the historical support policy and should not be read as promises of backported fixes.
+Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. The 1.19.x line is the current maintained release; the older rows document the historical support policy and should not be read as promises of backported fixes.
 
 ## Reporting a vulnerability
 
@@ -102,12 +102,14 @@ The following are generally out of scope:
 - Run OpenBox on trusted local networks. The web UI uses a session token; do not expose it directly to the public internet without a reverse proxy and additional hardening.
 - Do not commit `.env`, API tokens, RetroAchievements credentials, or EmuMovies credentials to the repository.
 - Keep OpenBox updated to the latest release.
-- Plugins run with an OS sandbox when bubblewrap is available. If bubblewrap is unavailable, OpenBox skips enabled plugins unless you trust that exact package in the Plugins manager (which runs it unsandboxed) or `OPENBOX_ALLOW_UNSANDBOXED_PLUGINS=1` is set. Setting `OPENBOX_ALLOW_UNSANDBOXED_PLUGINS=1` disables the sandbox entirely, even when bubblewrap is available. Only use that override or trust for plugins you trust.
+- Plugins run with an OS sandbox when bubblewrap is available. If bubblewrap is unavailable, OpenBox skips enabled plugins unless you trust that exact package in the Plugins manager (which then runs it unsandboxed) or `OPENBOX_ALLOW_UNSANDBOXED_PLUGINS=1` is set. Setting `OPENBOX_ALLOW_UNSANDBOXED_PLUGINS=1` disables the sandbox entirely, even when bubblewrap is available. Only use that override or trust for plugins you trust. macOS has no bubblewrap, so enabled plugins are skipped there unless the exact package is trusted.
 - Integration tokens for IGDB, ScreenScraper, SteamGridDB, Gameyfin, and RetroAchievements are stored outside the public settings projection and returned only masked. Plugin capability credentials live in a separate store that backups exclude, and password-format plugin settings are blanked in backups.
 
 ## Release signing
 
-Release publication is fail-closed. The workflow requires `OPENBOX_SIGNING_KEY`, derives an Ed25519 public key in a mode-`0600` temporary file, compares it with the committed `openbox-release.pub`, signs every published binary — the x86_64 and aarch64 AppImages, the Windows portable zip, the standalone Windows native-host executable, and the emulator definition pack — and verifies each signature before upload. The updater and `scripts/install.sh` reject checksum-only releases.
+Release publication is fail-closed. The workflow requires `OPENBOX_SIGNING_KEY`, derives an Ed25519 public key in a mode-`0600` temporary file, compares it with the committed `openbox-release.pub`, signs every published binary — the x86_64 and aarch64 AppImages, the Windows portable zip, the standalone Windows native-host executable, the macOS app bundle, and the emulator definition pack — and verifies each signature before upload. The updater and `scripts/install.sh` reject checksum-only releases.
+
+The macOS bundle is ad-hoc signed rather than notarized: it carries no Developer ID signature, so macOS asks the user to allow it the first time it is opened. The release signature above is what the installer (`scripts/install-macos.sh`) and the in-app updater verify; the ad-hoc code signature only proves the bundle was not modified after it was built.
 
 The committed `openbox-release.pub` pins the production release key. Maintainers must preserve these external release controls:
 

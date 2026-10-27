@@ -25,6 +25,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from backend_io import atomic_write_text  # noqa: E402
+from pkg.platform_compat import resolve_native_executable  # noqa: E402
 
 APP_ROOT = Path(__file__).resolve().parents[2]
 
@@ -568,7 +569,7 @@ def _probe_version(emulator_id, definition, *, timeout, which, run):
     ).strip()
     native_name = str(definition.get("native") or definition.get("native_exe") or "").strip()
     flatpak = which("flatpak") if which else None
-    native_binary = which(native_name) if (which and native_name) else None
+    native_binary = resolve_native_executable(native_name, which=which) if (which and native_name) else None
 
     version = ""
     latest_version = ""

@@ -27,6 +27,13 @@ from parity_gamescope import (
 )
 
 
+def desktop_opener():
+    """Return the command this platform opens URLs with, and the mode it reports."""
+    if sys.platform == "darwin":
+        return ["/usr/bin/open"], "default"
+    return ["/usr/bin/xdg-open"], "xdg-open"
+
+
 class DetectionTests(unittest.TestCase):
     def test_empty_env_is_not_guest(self):
         self.assertFalse(is_gamescope_guest({}))
@@ -132,7 +139,7 @@ class UrlAndBrowserTests(unittest.TestCase):
         self.assertIn("deeplink=bigbox", browsed[0])
 
     @unittest.skipIf(os.name == "nt", "Windows opens the default browser instead of xdg-open")
-    def test_open_ui_desktop_uses_xdg_open_with_clean_env(self):
+    def test_open_ui_desktop_uses_the_platform_opener_with_clean_env(self):
         calls = []
 
         def fake_popen(args, **kwargs):
@@ -152,19 +159,24 @@ class UrlAndBrowserTests(unittest.TestCase):
                 "PATH": "/usr/bin",
             },
         )
-        self.assertEqual(result["mode"], "xdg-open")
-        self.assertEqual(calls[0][0], ["/usr/bin/xdg-open", "http://127.0.0.1:1/?token=t"])
+        opener, mode = desktop_opener()
+        self.assertEqual(result["mode"], mode)
+        self.assertEqual(calls[0][0], opener + ["http://127.0.0.1:1/?token=t"])
         self.assertNotIn("LD_LIBRARY_PATH", calls[0][1])
         self.assertNotIn("PYTHONHOME", calls[0][1])
 
     def test_open_ui_desktop_falls_back_to_webbrowser(self):
         browsed = []
-        # No system opener either: Windows must reach the same webbrowser path.
+        # No system opener either: every platform must reach the same
+        # webbrowser path.
+        def failing_popen(*args, **kwargs):
+            raise OSError("spawn failed")
+
         with mock.patch.object(parity_gamescope, "open_path", side_effect=OSError("no shell")):
             result = open_ui(
                 "http://127.0.0.1:1/?token=t",
                 guest=False,
-                popen=lambda *a, **k: self.fail("popen should not run"),
+                popen=failing_popen,
                 browser_open=lambda url: browsed.append(url),
                 which=lambda name: None,
             )
@@ -209,7 +221,7 @@ class UrlAndBrowserTests(unittest.TestCase):
         self.assertEqual(result["pid"], 77)
 
     @unittest.skipIf(os.name == "nt", "Windows opens the default browser instead of xdg-open")
-    def test_open_ui_native_window_falls_back_to_xdg_open(self):
+    def test_open_ui_native_window_falls_back_to_the_platform_opener(self):
         calls = []
 
         def fake_which(name):
@@ -227,8 +239,9 @@ class UrlAndBrowserTests(unittest.TestCase):
             browser_open=lambda url: self.fail("webbrowser should not run"),
             which=fake_which,
         )
-        self.assertEqual(result["mode"], "xdg-open")
-        self.assertEqual(calls[0], ["/usr/bin/xdg-open", "http://127.0.0.1:1/?token=t"])
+        opener, mode = desktop_opener()
+        self.assertEqual(result["mode"], mode)
+        self.assertEqual(calls[0], opener + ["http://127.0.0.1:1/?token=t"])
 
     def test_open_ui_native_window_firefox_fallback(self):
         calls = []

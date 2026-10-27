@@ -20,6 +20,7 @@ def main():
         prev_data_dir = os.environ.get("OPENBOX_DATA_DIR")
         os.environ["OPENBOX_DATA_DIR"] = directory
         is_windows = os.name == "nt"
+        is_macos = sys.platform == "darwin"
         hold_script = os.path.join(directory, "hold.py")
         with open(hold_script, "w", encoding="utf-8") as script_file:
             script_file.write("import time\ntime.sleep(30)\n")
@@ -42,6 +43,21 @@ def main():
 
                 assert process_alive(session["pid"])
                 assert RUNNING[session["launch_id"]]["paused"]
+            elif is_macos:
+                # macOS has no /proc either: ask ps for the process state.
+                import subprocess
+
+                state = ""
+                for _ in range(200):
+                    state = subprocess.run(
+                        ["ps", "-o", "state=", "-p", str(session["pid"])],
+                        capture_output=True, text=True, check=False,
+                    ).stdout.strip()
+                    if state.startswith("T"):
+                        break
+                    time.sleep(.01)
+                else:
+                    assert state.startswith("T"), state
             else:
                 for _ in range(200):
                     with open(f"/proc/{session['pid']}/status", encoding="utf-8") as status_file:

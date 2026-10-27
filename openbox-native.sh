@@ -21,6 +21,23 @@ fi
 
 HOST_BIN="${OPENBOX_NATIVE_HOST:-$SHARE/native_host}"
 
+# An app started from the Finder inherits a minimal PATH, so the Homebrew
+# and MacPorts bins would be invisible to the launcher and the emulators.
+if [ "$(uname -s)" = "Darwin" ]; then
+  for tool_dir in /opt/homebrew/bin /opt/homebrew/sbin /usr/local/bin /usr/local/sbin /opt/local/bin; do
+    case ":$PATH:" in
+      *":$tool_dir:"*) ;;
+      *) PATH="$tool_dir:$PATH" ;;
+    esac
+  done
+  export PATH
+fi
+
+if ! "${OPENBOX_PYTHON:-python3}" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+  echo "OpenBox needs Python 3.10 or newer (Homebrew: brew install python@3.12), or the OpenBox.app bundle." >&2
+  exit 1
+fi
+
 run_web_app()
 {
   if [ -n "${OPENBOX_BUNDLED_LIB_PATH:-}" ]; then
@@ -43,6 +60,10 @@ else
   "$HOST_BIN" "$@" && exit 0
 fi
 code=$?
-echo "native_host failed (exit $code). Install webkit2gtk: libwebkit2gtk-4.1-dev on Debian/Ubuntu, webkit2gtk-4.1 on Fedora." >&2
+if [ "$(uname -s)" = "Darwin" ]; then
+  echo "native_host failed (exit $code). Build the macOS host with scripts/build_native_host_macos.sh." >&2
+else
+  echo "native_host failed (exit $code). Install webkit2gtk: libwebkit2gtk-4.1-dev on Debian/Ubuntu, webkit2gtk-4.1 on Fedora." >&2
+fi
 echo "Falling back to the system-browser app window." >&2
 run_web_app "$@"

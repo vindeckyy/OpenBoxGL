@@ -39,6 +39,8 @@ def _env() -> dict:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
     env["PYTHONIOENCODING"] = "utf-8"
+    # A test run must never hand a path or a URL to the desktop.
+    env["OPENBOX_DISABLE_EXTERNAL_OPEN"] = "1"
     # Isolate state: modules bind the data dir at import time, so a shared temp
     # dir keeps the suite out of a developer's real library.
     env.setdefault("OPENBOX_DATA_DIR", tempfile.mkdtemp(prefix="openbox-windows-data."))

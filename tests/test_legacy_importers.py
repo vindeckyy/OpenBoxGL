@@ -1,22 +1,38 @@
 #!/usr/bin/env python3
 """Tests for the PICO-8, MSU-1, WHDLoad, and RPCS3 external-folder importers."""
 
+import contextlib
 import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
 import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
-from parity_emulator_defs import load_adapters
 from parity_import import import_rpcs3_hdd
 from parity_legacy_import import import_msu1, import_pico8, import_whdload
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+@contextlib.contextmanager
+def linux_flatpak_registry():
+    """Flatpak is a Linux install path (ADR 0085): pin Linux and rebuild the emulator registry."""
+    import pkg.parity.parity_emulator_defs as defs
+
+    patcher = mock.patch.object(defs, "IS_MACOS", False)
+    patcher.start()
+    defs._reset_registry_cache()
+    try:
+        yield
+    finally:
+        patcher.stop()
+        defs._reset_registry_cache()
 
 
 class LegacyImporterTests(unittest.TestCase):
@@ -180,7 +196,10 @@ class LegacyImporterTests(unittest.TestCase):
             self.assertEqual(import_rpcs3_hdd(home, errors=errors), [])
             self.assertLessEqual(len(errors), 2)
 
+    @linux_flatpak_registry()
     def test_new_emulator_definitions_launch_correctly(self):
+        from pkg.parity.parity_emulator_defs import load_adapters
+
         adapters = {adapter["adapter_id"]: adapter for adapter in load_adapters(ROOT / "emulator_defs")}
         pico8 = adapters["pico8-pico8"]
         self.assertEqual(pico8["platform"], "PICO-8")

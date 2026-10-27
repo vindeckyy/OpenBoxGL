@@ -9,6 +9,7 @@ extensions:
   - cso
 native_exe: ppsspp
 native_exe_windows: PPSSPPSDL.exe
+native_exe_macos: PPSSPPSDL.app
 flatpak_app_id: org.ppsspp.PPSSPP
 startup_args:
   - "{path}"

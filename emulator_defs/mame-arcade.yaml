@@ -8,6 +8,8 @@ extensions:
   - 7z
 native_exe: mame
 native_exe_windows: mame.exe
+# MAME ships as a command line program on macOS (brew install mame).
+native_exe_macos: mame
 flatpak_app_id: org.mamedev.MAME
 startup_args:
   - "{path}"

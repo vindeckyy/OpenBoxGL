@@ -261,5 +261,40 @@ def test_shared_memory_card_isolation():
         assert save_source_for(game_b, str(card_b))["emulator_id"] == "pcsx2"
 
 
+def test_macos_save_discovery_uses_only_documented_folders():
+    from unittest import mock
+
+    import saves
+
+    with TemporaryDirectory() as directory:
+        home = Path(directory)
+        library = home / "Library" / "Application Support"
+        ppsspp = home / ".config" / "ppsspp" / "PSP" / "SAVEDATA"
+        dolphin = library / "Dolphin" / "GC"
+        linux_pcsx2 = home / ".config" / "PCSX2" / "memcards"
+        steam_remote = library / "Steam" / "userdata" / "1" / "42" / "remote"
+        for folder in (ppsspp, dolphin, linux_pcsx2, steam_remote):
+            folder.mkdir(parents=True)
+        retroarch = home / "Documents" / "RetroArch" / "saves"
+        retroarch.mkdir(parents=True)
+        (retroarch / "Sonic.srm").write_bytes(b"save")
+        with mock.patch.object(saves, "steam_candidate_roots", return_value=[library / "Steam"]):
+            psp = [c["path"] for c in saves._discover_save_paths_darwin({"name": "Game", "platform": "PSP"}, home)]
+            gamecube = [c["path"] for c in saves._discover_save_paths_darwin({"name": "Game", "platform": "GameCube"}, home)]
+            ps2 = saves._discover_save_paths_darwin({"name": "Game", "platform": "PlayStation 2"}, home)
+            steam = [c["path"] for c in saves._discover_save_paths_darwin({"name": "Game", "steam_app_id": "42"}, home)]
+            saturn = [c["path"] for c in saves._discover_save_paths_darwin({"name": "Sonic", "platform": "Sega Saturn"}, home)]
+            with mock.patch.object(saves, "IS_MACOS", True), mock.patch.object(saves.Path, "home", return_value=home):
+                dispatched = [c["path"] for c in saves.discover_save_paths({"name": "Game", "platform": "PSP"})]
+    assert psp == [str(ppsspp)]
+    assert gamecube == [str(dolphin)]
+    # PCSX2 has no verified macOS folder, so its Linux folder is not searched on macOS.
+    assert ps2 == []
+    assert steam == [str(steam_remote)]
+    assert str(retroarch / "Sonic.srm") in saturn
+    assert dispatched == [str(ppsspp)]
+
+
 if __name__ == "__main__":
     test()
+    test_macos_save_discovery_uses_only_documented_folders()

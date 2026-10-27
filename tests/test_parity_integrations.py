@@ -87,7 +87,12 @@ class IntegrationTests(unittest.TestCase):
                 result = capture_screenshot(str(dest), window_hint="Game Window")
             self.assertEqual(result, str(dest))
             self.assertTrue(commands, "a screenshot tool must be attempted")
-            self.assertEqual(commands[0], ["gnome-screenshot", "-w", "-f", str(dest)])
+            if sys.platform == "darwin":
+                # screencapture has no window mode, so the capture is the
+                # whole screen.
+                self.assertEqual(commands[0], ["/usr/sbin/screencapture", "-x", str(dest)])
+            else:
+                self.assertEqual(commands[0], ["gnome-screenshot", "-w", "-f", str(dest)])
 
     def test_highscore_export_and_import(self):
         with TemporaryDirectory() as directory:

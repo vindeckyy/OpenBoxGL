@@ -57,6 +57,17 @@ class EffectiveProfileNameTest(unittest.TestCase):
 
 
 class PerfShouldApplyTest(unittest.TestCase):
+    def setUp(self):
+        # The TDP limits come from ryzenadj, a Linux tool. The logic is
+        # tested everywhere; the tool is only there on Linux.
+        patcher = mock.patch.object(parity_perf, "IS_LINUX", True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_the_profile_is_inert_off_linux(self):
+        with mock.patch.object(parity_perf, "IS_LINUX", False):
+            self.assertFalse(parity_perf.perf_should_apply({"settings": {"apply_perf": "always"}}))
+
     def test_off_never_applies(self):
         state = {"settings": {"apply_perf": "off"}}
         self.assertFalse(parity_perf.perf_should_apply(state))
@@ -104,6 +115,13 @@ class RunRyzenadjTest(unittest.TestCase):
 
 
 class ApplyRestorePerfTest(unittest.TestCase):
+    def setUp(self):
+        # The TDP limits come from ryzenadj, a Linux tool. The logic is
+        # tested everywhere; the tool is only there on Linux.
+        patcher = mock.patch.object(parity_perf, "IS_LINUX", True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def state(self, perf=None, apply_perf="always"):
         return {
             "settings": {"apply_perf": apply_perf},
@@ -120,7 +138,9 @@ class ApplyRestorePerfTest(unittest.TestCase):
     def test_apply_enabled_profile(self):
         runner = RecordingRun()
         state = self.state({"Linux": {"enabled": True, "tdp_w": 12, "restore_tdp_w": 15}})
-        with mock.patch.object(parity_perf, "_run_ryzenadj", side_effect=self.fake_run_ryzenadj(runner)):
+        with mock.patch.object(parity_perf, "IS_LINUX", True), mock.patch.object(
+            parity_perf, "_run_ryzenadj", side_effect=self.fake_run_ryzenadj(runner)
+        ):
             result = parity_perf.apply_perf_profile("Linux", state)
         self.assertTrue(result.applied)
         self.assertEqual(runner.calls, [["/fake/bin/ryzenadj", "-stapm-limit=12000"]])

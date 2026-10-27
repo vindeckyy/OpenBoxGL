@@ -9,19 +9,21 @@ is absent, so the web UI remains usable in a plain browser for development.
 
 Two hosts implement this contract: `native_host.c` (WebKitGTK, Linux, built by
 `make native-host`) and `native_host_win.c` (WebView2, Windows, built by
-`scripts\build_native_host_windows.ps1`). Where a clause below names a POSIX
-mechanism, the WebView2 host uses the equivalent Windows mechanism:
+`scripts\build_native_host_windows.ps1`). A third one, `native_host_mac.m`
+(WKWebView, macOS, built by `scripts/build_native_host_macos.sh`), implements
+it the same way. Where a clause below names a POSIX mechanism, the WebView2
+host uses the equivalent Windows mechanism:
 
-| Clause | Linux (WebKitGTK) | Windows (WebView2) |
-|---|---|---|
-| Single instance | `AF_UNIX` socket in the data directory | named pipe opened with `FILE_FLAG_FIRST_PIPE_INSTANCE` (the atomic guard), same `focus`/`deeplink` forwarding |
-| Graceful stop of the Python child | `SIGTERM` to the child process group | `CTRL_BREAK` to the `CREATE_NEW_PROCESS_GROUP` child |
-| Force-kill backstop | `SIGKILL` to the process group | job object (`TerminateJobObject`), which also kills children |
-| Geometry persistence | `window-geometry`, `"<w> <h> <maximized>"` | same file, same format |
-| Tray flags | `native-host-flags` | same file |
-| Tray recent games | `native-host-recent`, eight most recent | same file, same limit |
-| Startup background | `native-background` (`#rrggbb`) painted before page load | same file, same format |
-| `gamepad` capability | `"webkit"` (fixed; the page always uses the Web Gamepad API) | same |
+| Clause | Linux (WebKitGTK) | Windows (WebView2) | macOS (WKWebView) |
+|---|---|---|---|
+| Single instance | `AF_UNIX` socket in the data directory | named pipe opened with `FILE_FLAG_FIRST_PIPE_INSTANCE` (the atomic guard), same `focus`/`deeplink` forwarding | `AF_UNIX` socket in the data directory, with the 104-byte `sun_path` limit checked before it binds |
+| Graceful stop of the Python child | `SIGTERM` to the child process group | `CTRL_BREAK` to the `CREATE_NEW_PROCESS_GROUP` child | `SIGTERM` to the child process group (the child is started with `posix_spawn` and `POSIX_SPAWN_SETPGROUP`) |
+| Force-kill backstop | `SIGKILL` to the process group | job object (`TerminateJobObject`), which also kills children | `SIGKILL` to the process group |
+| Geometry persistence | `window-geometry`, `"<w> <h> <maximized>"` | same file, same format | same file, same format |
+| Tray flags | `native-host-flags` | same file | same file |
+| Tray recent games | `native-host-recent`, eight most recent | same file, same limit | same file, same limit |
+| Startup background | `native-background` (`#rrggbb`) painted before page load | same file, same format | same file, same format |
+| `gamepad` capability | `"webkit"` (fixed; the page always uses the Web Gamepad API) | same | same |
 
 The bridge object, the HTTP native surface, the capability shapes, and the
 browser fallbacks are identical on both hosts; `handlers/native.py` produces the
@@ -96,7 +98,7 @@ All native routes are authenticated like every other route: unauthenticated call
   "gamepad": "webkit",
   "fullscreen": true,
   "clipboard": true,
-  "version": "1.18.0",
+  "version": "1.19.0",
   "platform": "linux",
   "data_dir": "/home/user/.local/share/openbox-game-launcher"
 }
@@ -109,11 +111,11 @@ Python child was started by a native host (`OPENBOX_NATIVE_HOST`). `fullscreen`
 and `clipboard` are always true.
 
 `GET /api/native/battery` reads the first `BAT*` entry under
-`/sys/class/power_supply` on Linux and returns
-`{"present": bool, "percent": 0-100, "charging": bool}`; `charging` is true for
-`Charging` and `Full`. On other platforms, or with no battery, it returns
-`{"present": false, "percent": 0, "charging": false}`. The response never
-includes the sysfs path. Big Box reads it for its battery indicator.
+`/sys/class/power_supply` on Linux, reads `pmset -g batt` on macOS, and
+returns `{"present": bool, "percent": 0-100, "charging": bool}`; `charging`
+is true for `Charging` and `Full`. On other platforms, or with no battery, it
+returns `{"present": false, "percent": 0, "charging": false}`. The response
+never includes the sysfs path. Big Box reads it for its battery indicator.
 
 When no host is connected, the native endpoints return a capability-absent
 result (never an error that blocks the browser fallback): `dialog` returns
@@ -171,7 +173,7 @@ through the capability resolver with a browser fallback.
 | `localStorage` (UI prefs) | server-persisted `ui_state` when native; `localStorage` in browser |
 | `navigator.clipboard` | host clipboard; browser fallback |
 | `document.fullscreenElement` / request/exit | `windowAction("set-fullscreen"/"unset-fullscreen")` |
-| `navigator.getBattery` | `GET /api/native/battery` (Linux sysfs; absent on other platforms); hide status when absent |
+| `navigator.getBattery` | `GET /api/native/battery` (Linux sysfs, macOS `pmset`; absent on other platforms); hide status when absent |
 | `navigator.getGamepads` | Web Gamepad API always (host `onGamepad` is a no-op stub; capabilities report `"webkit"`) |
 | `location.search` (token, deeplink) | unchanged; the host loads the same URL |
 | `beforeunload` (shutdown) | page requests `/api/shutdown` when tracked games remain; the native host signals the Python child on window close — `SIGTERM` on Linux, `CTRL_BREAK` on Windows (see Server lifecycle) |
@@ -181,15 +183,15 @@ through the capability resolver with a browser fallback.
 - The host is the parent; it owns the Python child.
 - On window close, the page requests `POST /api/shutdown` when tracked games
   remain, while the native host signals the Python child as the lifecycle
-  owner: on Linux it sends `SIGTERM` to the child process group; on Windows
-  (`native_host_win.c`) it sends `CTRL_BREAK` to the `CREATE_NEW_PROCESS_GROUP`
-  child.
+  owner: on Linux and macOS it sends `SIGTERM` to the child process group; on
+  Windows (`native_host_win.c`) it sends `CTRL_BREAK` to the
+  `CREATE_NEW_PROCESS_GROUP` child.
 - `web_app.py` performs graceful teardown by stopping tracked sessions, waiting
   up to two seconds, force-killing known game process groups (or their PIDs),
   persisting final cleanup, and draining webhooks. The native host also waits
-  for the child and, on Linux, sends `SIGKILL` to its process group if it remains
-  alive; on Windows (`native_host_win.c`) the backstop is `TerminateJobObject`
-  on the child's job object, which also kills children.
+  for the child and, on Linux and macOS, sends `SIGKILL` to its process group
+  if it remains alive; on Windows (`native_host_win.c`) the backstop is
+  `TerminateJobObject` on the child's job object, which also kills children.
 - The host holds no credentials. The token stays in the URL and the
   owner-readable `server.token` file, unchanged from the current threat model.
 
