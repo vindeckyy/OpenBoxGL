@@ -923,9 +923,13 @@ class MacOSDefinitionTests(unittest.TestCase):
         from parity_emulator_defs import adapter_executable, find_adapter
 
         adapter = find_adapter("retroarch-snes")
-        with mock.patch("pkg.parity.parity_emulator_defs.IS_MACOS", True):
+        with mock.patch("pkg.parity.parity_emulator_defs.IS_MACOS", True), mock.patch(
+            "pkg.parity.parity_emulator_defs.IS_WINDOWS", False
+        ):
             self.assertEqual(adapter_executable(adapter), "RetroArch.app")
-        with mock.patch("pkg.parity.parity_emulator_defs.IS_MACOS", False):
+        with mock.patch("pkg.parity.parity_emulator_defs.IS_MACOS", False), mock.patch(
+            "pkg.parity.parity_emulator_defs.IS_WINDOWS", False
+        ):
             self.assertEqual(adapter_executable(adapter), adapter["native_exe"])
 
     @unittest.skipIf(os.name == "nt", "POSIX defs keep the libretro directory layout")
