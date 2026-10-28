@@ -113,6 +113,8 @@
     "109:a-stale-client-calls-the-flatpak-folder-grant-on-windows-or-",
     "110:the-steam-or-heroic-catalog-has-no-url-opener-on-the-host",
     "111:the-wine-proton-manager-is-reached-on-a-host-without-wine",
-    "112:a-windows-client-offers-lutris-or-a-linux-client-offers-gog-"
+    "112:a-windows-client-offers-lutris-or-a-linux-client-offers-gog-",
+    "113:settings-about-offers-the-buy-me-a-coffee-button",
+    "114:the-buy-me-a-coffee-funding-link-or-the-appstream-donation-u"
   ]
 }
