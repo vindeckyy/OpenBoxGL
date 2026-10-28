@@ -107,6 +107,12 @@
     "103:a-startup-video-setting-points-at-a-missing-file-or-outside-",
     "104:a-backup-contains-plugin-credentials-or-password-format-plug",
     "105:the-posix-ci-suite-runner-gives-a-suite-a-single-chance",
-    "106:the-macos-update-applier-reaches-its-relaunch-step-off-macos"
+    "106:the-macos-update-applier-reaches-its-relaunch-step-off-macos",
+    "107:a-stored-gamescope-preset-reaches-a-windows-or-macos-launch",
+    "108:the-battery-indicator-asks-a-windows-laptop-or-desktop",
+    "109:a-stale-client-calls-the-flatpak-folder-grant-on-windows-or-",
+    "110:the-steam-or-heroic-catalog-has-no-url-opener-on-the-host",
+    "111:the-wine-proton-manager-is-reached-on-a-host-without-wine",
+    "112:a-windows-client-offers-lutris-or-a-linux-client-offers-gog-"
   ]
 }
