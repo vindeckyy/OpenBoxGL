@@ -1073,6 +1073,8 @@
     "about_host": "Ventana",
     "about_host_native": "Ventana nativa (WebView)",
     "about_host_browser": "Pestaña del navegador. La ventana nativa no está en ejecución, un modo de uso compatible.",
+    "about_support": "OpenBox es software libre y de código abierto. Si te ahorra tiempo, un café ayuda a cubrir el alojamiento y el desarrollo.",
+    "about_support_button": "Invítame a un café",
     "steam_trash_title": "Mover juegos de Steam a la papelera",
     "steam_trash_message": "¿Mover todos los juegos importados de Steam a la papelera?",
     "steam_trash_consequence": "Puedes restaurarlos desde la papelera. Los archivos de juego y los medios permanecen en el disco.",

@@ -1,5 +1,5 @@
 import { $, escapeHtml, formatBytes, defaultBadges, defaultControllerMap, fact, motionMs, applyFontFamily } from './util.js';
-import { AppState, api, notify, token, nativeCaps, selectedIds, playlistFor, applySidebarVisibility, nativePickFile, nativePickFolder, nativeReveal } from './state.js';
+import { AppState, api, notify, token, nativeCaps, selectedIds, playlistFor, applySidebarVisibility, nativePickFile, nativePickFolder, nativeReveal, nativeOpenExternal } from './state.js';
 import { refresh, render, renderGrid, openRepairWizard, openDuplicatesDialog } from './library.js';
 import { applyLibraryMusic, syncPointerNavigator } from './bigbox.js';
 import { confirmAction, promptInput, closeDialog, openDialog } from './dialogs.js';
@@ -1952,6 +1952,7 @@ import { pluginSettingsFields, collectPluginSettings, renderPluginSettings } fro
         notify(`${result.added} games imported from watched folders${result.errors.length ? ` · ${result.errors.length} errors` : ''}`);
       } catch(error) { notify(error.message); }
     };
+    if ($('aboutSupport')) $('aboutSupport').onclick = () => nativeOpenExternal('https://www.buymeacoffee.com/haydenopenbox');
     if ($('memoriesImportNow')) $('memoriesImportNow').onclick = async () => {
       try {
         AppState.appSettings = await api('/api/settings',{method:'POST',body:JSON.stringify(collectSettings())});
