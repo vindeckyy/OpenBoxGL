@@ -10,7 +10,7 @@ on:
       tag:
         description: Release tag to smoke-test
         required: true
-        default: v1.19.0
+        default: v1.19.1
 
 permissions:
   contents: read

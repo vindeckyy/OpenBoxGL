@@ -40,6 +40,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.19.1" date="2026-10-28">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.19.1</url>
+      <description>
+        <p>A platform-parity bug sweep: one server-computed capability contract now hides Linux-only controls on Windows and macOS instead of failing at click time. A stored gamescope preset no longer breaks Windows and macOS launches, Windows reports its real battery, Wine/Faugus/Flatpak management answers only on Linux, and storefront browsing uses each platform's own URL opener. Linux behavior is unchanged.</p>
+      </description>
+    </release>
     <release version="1.19.0" date="2026-10-27">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.19.0</url>
       <description>
