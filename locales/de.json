@@ -1073,6 +1073,8 @@
     "about_host": "Fenster",
     "about_host_native": "Natives Fenster (WebView)",
     "about_host_browser": "Browser-Tab. Das native Fenster läuft nicht, das ist eine unterstützte Nutzungsart.",
+    "about_support": "OpenBox ist freie Open-Source-Software. Wenn es dir Zeit spart, hilft ein Kaffee dabei, Hosting und Entwicklung zu finanzieren.",
+    "about_support_button": "Spendier mir einen Kaffee",
     "steam_trash_title": "Steam-Spiele in den Papierkorb verschieben",
     "steam_trash_message": "Alle importierten Steam-Spiele in den Papierkorb verschieben?",
     "steam_trash_consequence": "Du kannst sie im Papierkorb wiederherstellen. Spieldateien und Medien bleiben auf der Festplatte.",

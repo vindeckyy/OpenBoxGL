@@ -1073,6 +1073,8 @@
     "about_host": "Window",
     "about_host_native": "Native window (WebView)",
     "about_host_browser": "Browser tab. The native window is not running, which is a supported way to use OpenBox.",
+    "about_support": "OpenBox is free and open source. If it saves you time, a coffee helps cover hosting and development.",
+    "about_support_button": "Buy me a coffee",
     "steam_trash_title": "Move Steam games to the Trash",
     "steam_trash_message": "Move every imported Steam game to the Trash?",
     "steam_trash_consequence": "You can restore them from the Trash. Game files and media stay on disk.",

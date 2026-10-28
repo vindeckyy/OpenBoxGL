@@ -1073,6 +1073,8 @@
     "about_host": "Janela",
     "about_host_native": "Janela nativa (WebView)",
     "about_host_browser": "Aba do navegador. A janela nativa não está em execução, uma forma de uso compatível.",
+    "about_support": "O OpenBox é livre e de código aberto. Se ele economiza seu tempo, um café ajuda a cobrir a hospedagem e o desenvolvimento.",
+    "about_support_button": "Me pague um café",
     "steam_trash_title": "Mover jogos da Steam para a lixeira",
     "steam_trash_message": "Mover todos os jogos importados da Steam para a lixeira?",
     "steam_trash_consequence": "Você pode restaurá-los da lixeira. Os arquivos dos jogos e a mídia permanecem no disco.",

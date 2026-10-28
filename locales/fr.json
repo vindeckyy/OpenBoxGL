@@ -1073,6 +1073,8 @@
     "about_host": "Fenêtre",
     "about_host_native": "Fenêtre native (WebView)",
     "about_host_browser": "Onglet du navigateur. La fenêtre native n'est pas lancée, ce qui est un mode d'utilisation pris en charge.",
+    "about_support": "OpenBox est un logiciel libre et open source. S'il vous fait gagner du temps, un café aide à financer l'hébergement et le développement.",
+    "about_support_button": "Offrez-moi un café",
     "steam_trash_title": "Déplacer les jeux Steam vers la corbeille",
     "steam_trash_message": "Déplacer tous les jeux Steam importés vers la corbeille ?",
     "steam_trash_consequence": "Vous pouvez les restaurer depuis la corbeille. Les fichiers de jeu et les médias restent sur le disque.",

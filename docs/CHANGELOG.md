@@ -4,6 +4,11 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Settings > About has a short line and a Buy me a coffee button. The repository shows a Sponsor button, and the AppStream metadata lists a donation link that software centers can display.
+
 ## [1.19.1] - 2026-10-28
 
 A cross-platform bug sweep. Every platform-specific control is now decided by one server-computed
@@ -2157,7 +2162,7 @@ If you jumped from an older build and skipped the last two releases:
 - Session tracking and plugin hooks
 - AppImage, Flatpak manifest, and Makefile install targets
 
-[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.19.0...HEAD
+[Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.19.1...HEAD
 [1.19.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.18.0...v1.19.0
 [1.18.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.16.1...v1.17.0
