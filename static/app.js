@@ -642,15 +642,14 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     function applyPlatformVisibility() {
-      const windows = nativeCaps.platform === 'win32';
-      const macos = nativeCaps.platform === 'darwin';
-      document.querySelectorAll('[data-windows-only]').forEach(element => { element.hidden = !windows; });
-      // Controls whose feature does not exist on macOS (Flatpak, Heroic,
-      // Lutris, gamescope) are hidden there instead of failing on click.
-      // Select options are removed rather than hidden: WebKit's select menu ignores `hidden`.
-      document.querySelectorAll('[data-macos-hidden]').forEach(element => {
-        if (element.tagName === 'OPTION') { if (macos) element.remove(); return; }
-        element.hidden = macos;
+      // One contract for every platform-specific control (ADR 0086). A missing
+      // features object means every key is false, so controls stay hidden.
+      const features = nativeCaps.features || {};
+      document.querySelectorAll('[data-feature]').forEach(element => {
+        const enabled = features[element.dataset.feature] === true;
+        // Select options are removed rather than hidden: WebKit's select menu ignores `hidden`.
+        if (element.tagName === 'OPTION') { if (!enabled) element.remove(); return; }
+        element.hidden = !enabled;
       });
     }
 

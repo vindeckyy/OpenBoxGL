@@ -98,9 +98,22 @@ All native routes are authenticated like every other route: unauthenticated call
   "gamepad": "webkit",
   "fullscreen": true,
   "clipboard": true,
-  "version": "1.19.0",
+  "version": "1.19.1",
   "platform": "linux",
-  "data_dir": "/home/user/.local/share/openbox-game-launcher"
+  "data_dir": "/home/user/.local/share/openbox-game-launcher",
+  "features": {
+    "gamescope": true,
+    "mangohud": true,
+    "handheld_perf": true,
+    "flatpak": true,
+    "wine": true,
+    "faugus": true,
+    "lutris": true,
+    "heroic": true,
+    "epic": true,
+    "native_storefronts": false,
+    "desktop_entry": true
+  }
 }
 ```
 
@@ -109,6 +122,13 @@ All native routes are authenticated like every other route: unauthenticated call
 `webview`, `dialogs`, `tray`, and `single_instance` are true only when the
 Python child was started by a native host (`OPENBOX_NATIVE_HOST`). `fullscreen`
 and `clipboard` are always true.
+
+`features` is the platform capability contract (ADR 0086). The server computes
+it from the platform flags in `pkg/platform_compat.py`; the frontend shows each
+platform-specific control only when its key is `true`. A missing `features`
+object (an older server, or a failed fetch) means every key is false and every
+gated control stays hidden. Feature keys and the controls they gate are listed
+in [ADR 0086](adr/0086-platform-capability-contract.md).
 
 `GET /api/native/battery` reads the first `BAT*` entry under
 `/sys/class/power_supply` on Linux, reads `pmset -g batt` on macOS, and

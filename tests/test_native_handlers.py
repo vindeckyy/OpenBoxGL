@@ -54,13 +54,26 @@ class TestNativeHandlers(unittest.TestCase):
 
     def test_battery_route_authorized_and_unauthorized(self):
         h = DummyHandler(authorized=True)
-        with mock.patch("handlers.native.IS_LINUX", True), mock.patch("handlers.native.IS_MACOS", False), mock.patch("handlers.native.battery_status", return_value={"present": False, "percent": 0, "charging": False}):
+        with mock.patch("handlers.native.battery_status", return_value={"present": False, "percent": 0, "charging": False}):
             battery(h, mock.Mock())
         self.assertEqual(h.status, 200)
         self.assertEqual(h.payload, {"present": False, "percent": 0, "charging": False})
         h = DummyHandler(authorized=False)
         battery(h, mock.Mock())
         self.assertEqual(h.status, 403)
+
+    def test_battery_route_serves_the_windows_reader(self):
+        h = DummyHandler(authorized=True)
+        with mock.patch.object(pc, "IS_WINDOWS", True), \
+             mock.patch.object(pc, "IS_MACOS", False), \
+             mock.patch.object(pc, "_battery_cache", None), \
+             mock.patch.object(
+                 pc, "_windows_battery_status",
+                 return_value={"present": True, "percent": 55, "charging": False},
+             ):
+            battery(h, mock.Mock())
+        self.assertEqual(h.status, 200)
+        self.assertEqual(h.payload, {"present": True, "percent": 55, "charging": False})
 
     def test_dialog_start_path_must_be_absolute(self):
         h = DummyHandler()
@@ -85,6 +98,16 @@ class TestNativeHandlers(unittest.TestCase):
         self.assertEqual(h.payload["gamepad"], "webkit")
         self.assertTrue(h.payload["fullscreen"])
         self.assertFalse(h.payload["webview"])
+        self.assertEqual(h.payload["features"], pc.platform_features())
+
+    def test_capabilities_features_are_false_without_a_payload(self):
+        # An old or failing host must hide every gated control, not show a
+        # control that fails on click (ADR 0086).
+        h = DummyHandler(authorized=True)
+        with mock.patch("handlers.native.platform_features", return_value={}):
+            capabilities(h, mock.Mock())
+        self.assertEqual(h.status, 200)
+        self.assertEqual(h.payload["features"], {})
 
     def test_capabilities_host_attached(self):
         h = DummyHandler(authorized=True)

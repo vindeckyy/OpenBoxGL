@@ -15,6 +15,7 @@ from the Linux coverage report.
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import os
 import plistlib
 import re
@@ -32,6 +33,38 @@ IS_WINDOWS = os.name == "nt"
 IS_POSIX = os.name == "posix"
 IS_MACOS = sys.platform == "darwin"
 IS_LINUX = sys.platform.startswith("linux")
+
+
+def platform_features() -> dict:
+    """Return the platform capability contract (ADR 0086).
+
+    The server computes this once per capabilities call, and the frontend
+    hides or shows every platform-specific control from it. A feature that is
+    false means its controls are hidden, and its backend routes reject the
+    request with a clear error. Absent keys must behave like false.
+    """
+    return {
+        # Launch wrappers: gamescope preset, Game Mode, window marking.
+        "gamescope": IS_LINUX,
+        # MangoHud overlay.
+        "mangohud": IS_LINUX,
+        # ryzenadj handheld TDP controls.
+        "handheld_perf": IS_LINUX,
+        # Flatpak emulator install, update-all, and folder grants.
+        "flatpak": IS_LINUX,
+        # Wine/Proton prefix and runner manager.
+        "wine": IS_LINUX,
+        # Linux launcher import sources.
+        "faugus": IS_LINUX,
+        "lutris": IS_LINUX,
+        # Heroic ships on Linux and Windows.
+        "heroic": IS_LINUX or IS_WINDOWS,
+        "epic": IS_LINUX or IS_WINDOWS,
+        # Direct GOG/EA/Ubisoft imports read Windows launchers.
+        "native_storefronts": IS_WINDOWS,
+        # Desktop shortcut installer (XDG .desktop).
+        "desktop_entry": IS_LINUX,
+    }
 
 WINDOWS_EXECUTABLE_SUFFIXES = frozenset({".exe", ".bat", ".cmd", ".com", ".lnk", ".ps1"})
 
@@ -1101,12 +1134,13 @@ def external_open_disabled() -> bool:
 
 def url_opener_command() -> str | None:
     """Return the command that opens a URL with the default handler."""
+    # Platform-first: a Git/MSYS `xdg-open` on PATH must not win on Windows.
     if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
         return "/usr/bin/open"
-    if opener := shutil.which("xdg-open"):
-        return opener
     if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
         return os.environ.get("SYSTEMROOT", r"C:\Windows") + r"\explorer.exe"
+    if opener := shutil.which("xdg-open"):
+        return opener
     return None
 
 
@@ -1349,31 +1383,85 @@ def parse_pmset_battery(text: str) -> dict:
     return dict(BATTERY_ABSENT)
 
 
+# GetSystemPowerStatus sentinel values.
+WINDOWS_POWER_STATUS_UNKNOWN = 255
+WINDOWS_BATTERY_FLAG_CHARGING = 8
+WINDOWS_BATTERY_FLAG_NO_BATTERY = 128
+
+
+def parse_windows_power_status(ac_line, percent, battery_flag) -> dict:
+    """Parse ``GetSystemPowerStatus`` fields into a battery status dict."""
+    flag = int(battery_flag)
+    if flag & WINDOWS_BATTERY_FLAG_NO_BATTERY:
+        return dict(BATTERY_ABSENT)
+    level = int(percent)
+    return {
+        "present": True,
+        "percent": 0 if level == WINDOWS_POWER_STATUS_UNKNOWN else max(0, min(100, level)),
+        "charging": int(ac_line) == 1 or bool(flag & WINDOWS_BATTERY_FLAG_CHARGING),
+    }
+
+
+class _SystemPowerStatus(ctypes.Structure):
+    _fields_ = [
+        ("ACLineStatus", ctypes.c_ubyte),
+        ("BatteryFlag", ctypes.c_ubyte),
+        ("BatteryLifePercent", ctypes.c_ubyte),
+        ("SystemStatusFlag", ctypes.c_ubyte),
+        ("BatteryLifeTime", ctypes.c_ulong),
+        ("BatteryFullLifeTime", ctypes.c_ulong),
+    ]
+
+
+def _windows_battery_status() -> dict:
+    """Read the battery through ``GetSystemPowerStatus``."""
+    status = _SystemPowerStatus()
+    try:
+        if not ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(status)):
+            return dict(BATTERY_ABSENT)
+    except (AttributeError, OSError):  # pragma: no cover - defensive
+        return dict(BATTERY_ABSENT)
+    return parse_windows_power_status(
+        status.ACLineStatus, status.BatteryLifePercent, status.BatteryFlag
+    )
+
+
+def _read_macos_battery() -> dict:
+    """Read the battery through ``pmset``."""
+    try:
+        result = subprocess.run(
+            ["/usr/bin/pmset", "-g", "batt"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return dict(BATTERY_ABSENT)
+    return parse_pmset_battery(result.stdout or "")
+
+
+def _cached_battery(reader, clock) -> dict:
+    global _battery_cache
+    now = clock()
+    if _battery_cache is not None and now - _battery_cache[0] < BATTERY_CACHE_SECONDS:
+        return dict(_battery_cache[1])
+    status = reader()
+    _battery_cache = (now, status)
+    return dict(status)
+
+
 def battery_status(root=None, *, clock=time.monotonic) -> dict:
     """Return battery presence, percentage, and charging state.
 
-    The macOS reading is cached for :data:`BATTERY_CACHE_SECONDS` so a
-    polling UI does not spawn ``pmset`` on every frame.
+    The macOS and Windows readings are cached for
+    :data:`BATTERY_CACHE_SECONDS` so a polling UI does not ask the OS on
+    every frame.
     """
+    if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
+        return _cached_battery(_windows_battery_status, clock)
     if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
-        global _battery_cache
-        now = clock()
-        if _battery_cache is not None and now - _battery_cache[0] < BATTERY_CACHE_SECONDS:
-            return dict(_battery_cache[1])
-        try:
-            result = subprocess.run(
-                ["/usr/bin/pmset", "-g", "batt"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=False,
-            )
-        except (OSError, subprocess.SubprocessError):
-            status = dict(BATTERY_ABSENT)
-        else:
-            status = parse_pmset_battery(result.stdout or "")
-        _battery_cache = (now, status)
-        return dict(status)
+        return _cached_battery(_read_macos_battery, clock)
     return _linux_battery_status(root)
 
 

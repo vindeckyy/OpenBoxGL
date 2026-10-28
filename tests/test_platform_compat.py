@@ -872,6 +872,14 @@ class MacOSSeamTests(unittest.TestCase):
         ), mock.patch.object(pc.shutil, "which", return_value="/usr/bin/xdg-open"):
             self.assertEqual(pc.url_opener_command(), "/usr/bin/xdg-open")
 
+    def test_a_stray_xdg_open_never_wins_on_windows(self):
+        # A Git/MSYS xdg-open on PATH is not the Windows shell; Explorer is.
+        with mock.patch.object(pc, "IS_MACOS", False), \
+             mock.patch.object(pc, "IS_WINDOWS", True), \
+             mock.patch.object(pc.shutil, "which", return_value=r"C:\msys64\usr\bin\xdg-open.exe"), \
+             mock.patch.dict(pc.os.environ, {"SYSTEMROOT": r"C:\Windows"}):
+            self.assertEqual(pc.url_opener_command(), r"C:\Windows\explorer.exe")
+
     def test_the_battery_parser_reads_the_pmset_report(self):
         discharging = "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=12345)\t87%; discharging; 2:34 remaining\n"
         status = pc.parse_pmset_battery(discharging)
@@ -896,6 +904,45 @@ class MacOSSeamTests(unittest.TestCase):
             pc, "_battery_cache", None
         ), mock.patch.object(pc.subprocess, "run", side_effect=fake_run), mock.patch.object(
             pc, "external_open_disabled", return_value=False
+        ):
+            first = pc.battery_status(clock=lambda: clock[0])
+            second = pc.battery_status(clock=lambda: clock[0])
+            clock[0] += 60
+            pc.battery_status(clock=lambda: clock[0])
+        self.assertEqual(first, second)
+        self.assertEqual(len(calls), 2)
+
+    def test_the_windows_battery_parser_covers_desktop_and_laptop_states(self):
+        self.assertEqual(
+            pc.parse_windows_power_status(1, 255, 128),
+            {"present": False, "percent": 0, "charging": False},
+        )
+        self.assertEqual(
+            pc.parse_windows_power_status(1, 100, 1),
+            {"present": True, "percent": 100, "charging": True},
+        )
+        self.assertEqual(
+            pc.parse_windows_power_status(0, 55, 2),
+            {"present": True, "percent": 55, "charging": False},
+        )
+        self.assertEqual(
+            pc.parse_windows_power_status(0, 255, 1),
+            {"present": True, "percent": 0, "charging": False},
+        )
+        self.assertTrue(pc.parse_windows_power_status(0, 80, 8)["charging"])
+
+    def test_the_windows_battery_reading_is_cached(self):
+        calls = []
+
+        def fake_reader():
+            calls.append(True)
+            return {"present": True, "percent": 40, "charging": False}
+
+        clock = [1000.0]
+        with mock.patch.object(pc, "IS_WINDOWS", True), mock.patch.object(
+            pc, "IS_MACOS", False
+        ), mock.patch.object(pc, "_battery_cache", None), mock.patch.object(
+            pc, "_windows_battery_status", side_effect=fake_reader
         ):
             first = pc.battery_status(clock=lambda: clock[0])
             second = pc.battery_status(clock=lambda: clock[0])
