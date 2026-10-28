@@ -30,7 +30,7 @@ from parity_deeplinks import handle_cli
 from parity_emulator_defs import merge_profiles_from_definitions
 from parity_gameyfin import GameyfinError
 from parity_gamescope import OPENBOX_STEAM_GAME_ID, is_gamescope_guest, mark_process_windows, open_ui
-from pkg.platform_compat import IS_MACOS, ensure_macos_tool_path, process_alive, terminate_process_tree
+from pkg.platform_compat import IS_LINUX, ensure_macos_tool_path, process_alive, terminate_process_tree
 from routes import dispatch_get, dispatch_post
 from routes.registry import route
 from state_store import StateCorruptError, secure_text_write
@@ -748,7 +748,7 @@ def main():
     # emulators it probes.
     os.environ["PATH"] = ensure_macos_tool_path(os.environ.get("PATH", ""))
     args = sys.argv[1:]
-    if "--game-mode" in args and IS_MACOS:
+    if "--game-mode" in args and not IS_LINUX:
         # Game Mode is a gamescope feature and gamescope is Linux only.
         print("Game Mode needs gamescope and is only available on Linux.", file=sys.stderr)
         raise SystemExit(2)

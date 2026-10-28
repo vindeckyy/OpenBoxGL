@@ -16,6 +16,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pkg.platform_compat import (
+    IS_LINUX,
     IS_MACOS,
     IS_WINDOWS,
     browser_application_commands,
@@ -24,6 +25,7 @@ from pkg.platform_compat import (
     launch_kwargs,
     open_path,
     resolve_browser_application,
+    url_opener_command,
     windows_process_table as _platform_process_table,
 )
 
@@ -102,7 +104,7 @@ def resolve_kiosk_browser(which=None, run=None):
         if resolved:
             return [resolved]
     flatpak = finder("flatpak")
-    if flatpak and not IS_WINDOWS:
+    if flatpak and IS_LINUX:
         for app_id in FLATPAK_BROWSERS:
             try:
                 result = runner(
@@ -198,7 +200,7 @@ def open_ui(url, *, guest=False, force_game_mode=False, native_window=False, wid
         # test) decides what actually happens instead of a browser window
         # opening behind the user's back.
         try:
-            process = opener(["/usr/bin/open", target], env=helper_env, **launch_kwargs())
+            process = opener([url_opener_command(), target], env=helper_env, **launch_kwargs())
         except OSError:
             process = None
         else:
@@ -215,7 +217,7 @@ def open_ui(url, *, guest=False, force_game_mode=False, native_window=False, wid
             pass
         else:
             return {"url": target, "mode": "default", "browser": "", "pid": None}
-    xdg = finder("xdg-open")
+    xdg = finder("xdg-open") if IS_LINUX else None
     if xdg and not desktop_blocked:
         try:
             process = opener([xdg, target], env=helper_env, **launch_kwargs())
