@@ -30,13 +30,17 @@ from pkg.parity.parity_launch_doctor import run_preflight_checks  # noqa: E402
 
 
 def setUpModule():
-    """Flatpak is a Linux install path (ADR 0085): this module runs as Linux with a fresh emulator registry."""
+    """Flatpak is a Linux install path (ADR 0086): this module runs as Linux with a fresh emulator registry."""
     import pkg.parity.parity_emulator_defs as defs
 
-    patcher = mock.patch.object(defs, "IS_MACOS", False)
-    patcher.start()
+    patchers = [
+        mock.patch.object(defs, "IS_LINUX", True),
+        mock.patch("pkg.parity.parity_launch_doctor.IS_LINUX", True),
+    ]
+    for patcher in patchers:
+        patcher.start()
+        unittest.addModuleCleanup(patcher.stop)
     unittest.addModuleCleanup(defs._reset_registry_cache)
-    unittest.addModuleCleanup(patcher.stop)
     defs._reset_registry_cache()
 
 

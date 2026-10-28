@@ -16,6 +16,7 @@ if str(_ROOT) not in sys.path:
 
 from pkg.parity.launch_tokens import apply_tokens, build_launch_args, path_parent  # noqa: E402
 from pkg.platform_compat import (  # noqa: E402
+    IS_LINUX,
     IS_MACOS,
     IS_WINDOWS,
     join_command,
@@ -226,8 +227,9 @@ def _normalize_adapter(raw):
     native_exe_windows = raw.get("native_exe_windows", raw.get("native_windows"))
     native_exe_macos = raw.get("native_exe_macos", raw.get("native_macos"))
     macos_exe_declared = "native_exe_macos" in raw or "native_macos" in raw
-    # Flatpak is not an install path on macOS, so a definition's Flatpak id is dropped there.
-    flatpak_app_id = None if IS_MACOS else raw.get("flatpak_app_id", raw.get("flatpak"))
+    # Flatpak is a Linux install path, so a definition's Flatpak id is dropped
+    # on every other platform (ADR 0086).
+    flatpak_app_id = raw.get("flatpak_app_id", raw.get("flatpak")) if IS_LINUX else None
     startup_args = _compile_startup_args(raw)
     if IS_WINDOWS and raw.get("startup_args_windows"):
         # Windows builds live in different places than the POSIX ones (RetroArch
@@ -750,7 +752,7 @@ def detect_adapter_prefix(adapter, which=None):
         if resolved:
             return [resolved]
     flatpak = adapter.get("flatpak_app_id") or ""
-    if not IS_WINDOWS and flatpak and which("flatpak"):
+    if IS_LINUX and flatpak and which("flatpak"):
         return ["flatpak", "run", flatpak]
     patterns = list(adapter.get("executable_patterns", []))
     if IS_WINDOWS and adapter.get("native_exe_windows"):

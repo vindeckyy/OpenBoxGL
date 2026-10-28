@@ -7,7 +7,16 @@ import re
 import shutil
 from pathlib import Path
 
-from importers import heroic_bases, import_heroic, import_lutris, import_steam, steam_command, steam_roots
+from importers import heroic_bases, import_heroic, import_lutris, import_steam, steam_roots
+from pkg.platform_compat import join_command, url_opener_command
+
+
+def storefront_opener():
+    """Return the platform URL opener, or raise when the host has none."""
+    opener = url_opener_command()
+    if not opener:
+        raise FileNotFoundError("A browser or URL handler is required to browse storefront entries.")
+    return opener
 
 
 def steam_owned_app_ids(home=None):
@@ -63,11 +72,7 @@ def catalog_steam(home=None):
         if game.get("store_installed")
     }
     owned = steam_owned_app_ids(home) or set(discovered)
-    try:
-        executable, _launch = steam_command()
-    except FileNotFoundError:
-        executable, _launch = shutil.which("xdg-open") or "xdg-open", "xdg-open steam://rungameid/{app_id}"
-    opener = shutil.which("xdg-open") or executable
+    opener = storefront_opener()
     catalog = []
     for app_id in sorted(owned, key=lambda value: int(value)):
         game = installed.get(app_id)
@@ -80,7 +85,7 @@ def catalog_steam(home=None):
             "install_uri": f"steam://store/{app_id}" if game else f"steam://install/{app_id}",
             "repair_uri": f"steam://validate/{app_id}",
             "path": game["path"] if game else opener,
-            "launch": game["launch"] if game else f"xdg-open steam://store/{app_id}",
+            "launch": game["launch"] if game else join_command([opener, f"steam://store/{app_id}"]),
             "steam_app_id": app_id,
             "install_dir": record.get("install_dir", "") if record else "",
         })
@@ -93,9 +98,7 @@ def catalog_heroic(home=None):
         (game.get("source"), game.get("heroic_app_id")): game
         for game in import_heroic(home)
     }
-    opener = shutil.which("xdg-open")
-    if not opener:
-        raise FileNotFoundError("xdg-open is required to browse Heroic storefront entries.")
+    opener = storefront_opener()
     catalog = []
     seen = set()
     for base in heroic_bases(home):
@@ -126,7 +129,7 @@ def catalog_heroic(home=None):
                 "installed": installed_game is not None,
                 "install_uri": f"heroic://install/{runner}/{app_id}",
                 "path": installed_game["path"] if installed_game else opener,
-                "launch": installed_game["launch"] if installed_game else f"xdg-open heroic://install/{runner}/{app_id}",
+                "launch": installed_game["launch"] if installed_game else join_command([opener, f"heroic://install/{runner}/{app_id}"]),
                 "heroic_app_id": app_id,
                 "install_dir": installed_game.get("install_dir", "") if installed_game else "",
             })

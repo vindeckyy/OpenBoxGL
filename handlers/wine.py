@@ -3,11 +3,14 @@
 from urllib.parse import parse_qs
 
 from api_errors import GameNotFound
+from pkg.platform_compat import platform_features
 from routes.registry import route
 from webapp_state import game_from_query, load_state_view
 try:
     from pkg.parity.parity_wine import list_proton_versions, list_wine_prefixes, get_prefix_for_game
-    HAS_WINE = True
+    # `available` follows the capability contract (ADR 0086), not whether the
+    # module imported: Wine management is a Linux-only surface.
+    HAS_WINE = platform_features()["wine"]
 except ImportError:
     HAS_WINE = False
 

@@ -952,13 +952,14 @@ class ParitySetupPreviewTests(unittest.TestCase):
         with mock.patch("shutil.which", return_value="/usr/bin/flatpak"), mock.patch(
             "pkg.parity.parity_setup_preview._flatpak_installed",
             return_value=True,
-        ):
-            if os.name == "nt":
-                # Flatpak does not exist on Windows, so an adapter that is only
-                # available through Flatpak can never count as installed there.
-                self.assertFalse(_adapter_installed(adapter))
-            else:
-                self.assertTrue(_adapter_installed(adapter))
+        ), mock.patch("pkg.parity.parity_emulator_defs.IS_LINUX", True):
+            # The Flatpak prefix is a Linux capability (ADR 0086); outside
+            # Linux an adapter with only a Flatpak id is never installed.
+            self.assertTrue(_adapter_installed(adapter))
+        with mock.patch("shutil.which", return_value="/usr/bin/flatpak"), mock.patch(
+            "pkg.parity.parity_emulator_defs.IS_LINUX", False,
+        ), mock.patch("pkg.parity.parity_setup_preview._flatpak_installed", return_value=True):
+            self.assertFalse(_adapter_installed(adapter))
         with mock.patch("pkg.parity.parity_setup_preview._registry", return_value={"by_platform": {"MysteryNoAdapters": []}}):
             self.assertEqual(
                 classify_emulator_readiness({"platform": "MysteryNoAdapters", "path": "/x.bin"}),

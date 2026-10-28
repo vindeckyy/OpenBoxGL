@@ -15,6 +15,7 @@ from api_errors import BadRequest, GameNotFound
 from pkg.parity.parity_emulator_defs import apply_core_override, find_adapter, flatpak_core_path, resolve_launch, resolved_startup_args
 from pkg.parity.parity_import import detect_dependencies
 from pkg.platform_compat import (
+    IS_LINUX,
     IS_MACOS,
     UnsafeIdentifier,
     contained_path,
@@ -193,6 +194,8 @@ FLATPAK_TIMEOUT_SECONDS = 5
 
 
 def _flatpak_installed(app_id, which, run):
+    if not IS_LINUX:
+        return False
     flatpak = which("flatpak") if which else shutil.which("flatpak")
     if not flatpak or not app_id:
         return False
@@ -211,6 +214,8 @@ def _flatpak_installed(app_id, which, run):
 
 
 def _flatpak_fs_allowed(app_id, rom_path, which, run):
+    if not IS_LINUX:
+        return True
     flatpak = which("flatpak") if which else shutil.which("flatpak")
     if not flatpak or not app_id:
         return True
@@ -563,10 +568,13 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None, deep
         native_exe = adapter_executable(active_adapter)
         resolved_native = resolve_native_executable(native_exe, which=which) if native_exe else None
         macos_build_missing = IS_MACOS and active_adapter.get("native_exe_macos") == ""
+        # The Flatpak lane exists only on Linux (ADR 0086); elsewhere the
+        # adapter is judged on its native executable alone.
+        flatpak_app_id = active_adapter.get("flatpak_app_id") if IS_LINUX else ""
         if resolved_native:
             install_mode = "native"
             emulator_path = resolved_native
-        elif _flatpak_installed(active_adapter.get("flatpak_app_id"), which, run):
+        elif _flatpak_installed(flatpak_app_id, which, run):
             install_mode = "flatpak"
         elif macos_build_missing:
             # ADR 0085: an empty native_exe_macos means no verified macOS build,
@@ -578,16 +586,15 @@ def run_preflight_checks(game, profiles, data_dir, *, which=None, run=None, deep
                 [REMEDIATION_CHOOSE_ADAPTER],
                 _fix_pick_core(platforms=[platform] if platform else []),
             ))
-        elif native_exe or active_adapter.get("flatpak_app_id"):
-            remediations = [REMEDIATION_INSTALL_FLATPAK] if active_adapter.get("flatpak_app_id") else [REMEDIATION_INSTALL_NATIVE]
-            code = "FLATPAK_NOT_INSTALLED" if active_adapter.get("flatpak_app_id") and not native_exe else "NATIVE_EXE_MISSING"
-            if active_adapter.get("flatpak_app_id") and native_exe:
+        elif native_exe or flatpak_app_id:
+            remediations = [REMEDIATION_INSTALL_FLATPAK] if flatpak_app_id else [REMEDIATION_INSTALL_NATIVE]
+            code = "FLATPAK_NOT_INSTALLED" if flatpak_app_id and not native_exe else "NATIVE_EXE_MISSING"
+            if flatpak_app_id and native_exe:
                 code = "NATIVE_EXE_MISSING"
-            app_id = active_adapter.get("flatpak_app_id") or ""
-            checks.append(_check(code, "error", "Emulator is not installed.", remediations, _fix_flatpak(app_id, native_exe)))
+            checks.append(_check(code, "error", "Emulator is not installed.", remediations, _fix_flatpak(flatpak_app_id, native_exe)))
 
         if install_mode == "flatpak":
-            app_id = active_adapter.get("flatpak_app_id")
+            app_id = flatpak_app_id
             if app_id and not _flatpak_fs_allowed(app_id, path_value, which, run):
                 # The emulator is installed; its sandbox lacks a filesystem grant.
                 # Reinstalling cannot fix that, so the fix is the grant command.

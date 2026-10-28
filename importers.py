@@ -73,8 +73,6 @@ def steam_command(home=None, roots=None, opener=None):
             return binary, "steam -applaunch {app_id}"
         if _flatpak_installed("com.valvesoftware.Steam"):
             return shutil.which("flatpak"), "flatpak run com.valvesoftware.Steam -applaunch {app_id}"
-        if binary := shutil.which("xdg-open"):
-            return binary, "xdg-open steam://rungameid/{app_id}"
         handler = url_opener_command()
         if handler:
             return handler, join_command(url_open_command("steam://rungameid/{app_id}"))
@@ -83,9 +81,9 @@ def steam_command(home=None, roots=None, opener=None):
         return binary, "steam -applaunch {app_id}"
     if _flatpak_installed("com.valvesoftware.Steam"):
         return shutil.which("flatpak"), "flatpak run com.valvesoftware.Steam -applaunch {app_id}"
-    if binary := shutil.which("xdg-open"):
-        return binary, "xdg-open steam://rungameid/{app_id}"
-    raise FileNotFoundError("Steam, the Steam Flatpak, or xdg-open is required to launch imported Steam games.")
+    if handler := url_opener_command():
+        return handler, join_command([handler, "steam://rungameid/{app_id}"])
+    raise FileNotFoundError("Steam, the Steam Flatpak, or a URL opener is required to launch imported Steam games.")
 
 
 def steam_libraries(root):

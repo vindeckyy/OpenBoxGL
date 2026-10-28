@@ -40,6 +40,11 @@ class WindowsStoreHttpTests(unittest.TestCase):
         self.update_patch = mock.patch("pkg.state.imports.update_state", side_effect=fake_update)
         self.update_patch.start()
         self.addCleanup(self.update_patch.stop)
+        self.features_patch = mock.patch.object(
+            imports_handler, "platform_features", return_value={"native_storefronts": True}
+        )
+        self.features_patch.start()
+        self.addCleanup(self.features_patch.stop)
 
     def game(self):
         return {
@@ -101,6 +106,38 @@ class WindowsStoreHttpTests(unittest.TestCase):
             with mock.patch.object(imports_handler, patch_name, return_value=[]):
                 getattr(imports_handler.ImportsHandlers, method)(handler)
             self.assertEqual(handler.responses[-1][1]["added"], 0)
+
+    def test_the_windows_importers_refuse_other_hosts(self):
+        discover = mock.Mock(return_value=[])
+        handler = Handler()
+        with mock.patch.object(
+            imports_handler, "platform_features", return_value={"native_storefronts": False}
+        ):
+            for method, patch_name in (
+                ("import_gog_games", "import_gog_windows"),
+                ("import_ea_games", "import_ea_windows"),
+                ("import_ubisoft_games", "import_ubisoft_windows"),
+            ):
+                with self.subTest(method=method), mock.patch.object(imports_handler, patch_name, discover):
+                    with self.assertRaises(BadRequest):
+                        getattr(imports_handler.ImportsHandlers, method)(handler)
+        discover.assert_not_called()
+
+    def test_the_storefront_list_follows_the_capability_contract(self):
+        instance = imports_handler.ImportsHandlers()
+        sent = []
+        instance.send_json = lambda status, payload: sent.append(payload)
+        with mock.patch.object(imports_handler, "list_storefront_plugins", return_value=[]):
+            for features, expected in (
+                ({"heroic": False, "lutris": False, "native_storefronts": False}, ["steam", "gameyfin"]),
+                ({"heroic": True, "lutris": True, "native_storefronts": False}, ["steam", "gameyfin", "heroic", "lutris"]),
+                ({"heroic": True, "lutris": False, "native_storefronts": True}, ["steam", "gameyfin", "heroic", "gog", "ea", "ubisoft"]),
+            ):
+                with self.subTest(features=features), mock.patch.object(
+                    imports_handler, "platform_features", return_value=features
+                ):
+                    instance._api_get_api_v2_storefronts({})
+                self.assertEqual([item["id"] for item in sent[-1]["storefronts"]], expected)
 
 
 if __name__ == "__main__":

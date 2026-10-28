@@ -64,6 +64,19 @@ class StorefrontFallbackTests(unittest.TestCase):
         self.assertEqual(binary, "C:\\Windows\\explorer.exe")
         self.assertIn("steam://rungameid/{app_id}", command)
 
+    def test_steam_on_windows_ignores_a_git_xdg_open(self):
+        def which(name):
+            return r"C:\msys64\usr\bin\xdg-open.exe" if name == "xdg-open" else None
+
+        with mock.patch.object(importers, "IS_MACOS", False), \
+             mock.patch.object(importers, "IS_WINDOWS", True), \
+             mock.patch.object(importers, "steam_install_roots", return_value=[]), \
+             mock.patch.object(importers.shutil, "which", side_effect=which), \
+             mock.patch.object(importers, "_flatpak_installed", return_value=False), \
+             mock.patch.object(importers, "url_opener_command", return_value="C:\\Windows\\explorer.exe"):
+            binary, _command = importers.steam_command()
+        self.assertEqual(binary, "C:\\Windows\\explorer.exe")
+
     def test_heroic_has_no_store_on_macos(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
@@ -174,7 +187,8 @@ class HostFallbackTests(unittest.TestCase):
         def which(name):
             return "/usr/bin/wine" if name == "wine" else None
 
-        with mock.patch.object(parity_wine.shutil, "which", side_effect=which):
+        with mock.patch.object(parity_wine, "IS_LINUX", True), \
+             mock.patch.object(parity_wine.shutil, "which", side_effect=which):
             versions = parity_wine.list_proton_versions(search_roots=[])
         self.assertIn({"name": "/usr/bin/wine", "path": "/usr/bin/wine", "source": "path"}, versions)
 
@@ -195,11 +209,11 @@ class HostFallbackTests(unittest.TestCase):
 
 
 class GameModeTests(unittest.TestCase):
-    def test_game_mode_is_refused_on_macos_in_process(self):
+    def test_game_mode_is_refused_off_linux_in_process(self):
         import web_app
 
         stderr = io.StringIO()
-        with mock.patch.object(web_app, "IS_MACOS", True), \
+        with mock.patch.object(web_app, "IS_LINUX", False), \
              mock.patch.object(web_app, "bootstrap_env"), \
              mock.patch.object(web_app, "configure_logging"), \
              mock.patch.object(web_app, "ensure_macos_tool_path", side_effect=lambda value: value), \
@@ -210,13 +224,13 @@ class GameModeTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 2)
         self.assertIn("only available on Linux", stderr.getvalue())
 
-    def test_game_mode_is_refused_on_macos_with_exit_status_two(self):
+    def test_game_mode_is_refused_off_linux_with_exit_status_two(self):
         # web_app reads the platform flag when it is imported, so set it first.
         script = (
             "import sys\n"
             "sys.argv = ['web_app.py', '--game-mode']\n"
             "import pkg.platform_compat as pc\n"
-            "pc.IS_MACOS = True\n"
+            "pc.IS_LINUX = False\n"
             "import web_app\n"
             "web_app.main()\n"
         )

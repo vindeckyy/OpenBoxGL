@@ -13,10 +13,10 @@ from unittest import mock
 
 @contextlib.contextmanager
 def linux_flatpak_registry():
-    """Flatpak ids are an install path on Linux only (ADR 0085): pin Linux and rebuild the registry."""
+    """Flatpak ids are an install path on Linux only (ADR 0086): pin Linux and rebuild the registry."""
     import pkg.parity.parity_emulator_defs as defs
 
-    patcher = mock.patch.object(defs, "IS_MACOS", False)
+    patcher = mock.patch.object(defs, "IS_LINUX", True)
     patcher.start()
     defs._reset_registry_cache()
     try:
@@ -888,16 +888,16 @@ class WindowsDefinitionTests(unittest.TestCase):
 class MacOSDefinitionTests(unittest.TestCase):
     """Every adapter declares what macOS runs (ADR 0085)."""
 
-    def test_flatpak_ids_are_not_an_install_path_on_macos(self):
+    def test_flatpak_ids_are_an_install_path_on_linux_only(self):
         from pkg.parity import parity_emulator_defs as defs
 
         root = Path(__file__).resolve().parent.parent / "emulator_defs"
-        with mock.patch.object(defs, "IS_MACOS", True):
-            on_macos = defs.load_adapters(root)
-        with mock.patch.object(defs, "IS_MACOS", False):
-            elsewhere = defs.load_adapters(root)
-        self.assertTrue(all(adapter["flatpak_app_id"] is None for adapter in on_macos))
-        self.assertTrue(any(adapter["flatpak_app_id"] for adapter in elsewhere))
+        with mock.patch.object(defs, "IS_LINUX", False):
+            off_linux = defs.load_adapters(root)
+        with mock.patch.object(defs, "IS_LINUX", True):
+            on_linux = defs.load_adapters(root)
+        self.assertTrue(all(adapter["flatpak_app_id"] is None for adapter in off_linux))
+        self.assertTrue(any(adapter["flatpak_app_id"] for adapter in on_linux))
 
     def test_every_adapter_declares_a_macos_executable(self):
         from parity_emulator_defs import load_adapters
