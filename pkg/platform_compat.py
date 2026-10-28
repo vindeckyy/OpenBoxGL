@@ -1413,7 +1413,7 @@ class _SystemPowerStatus(ctypes.Structure):
     ]
 
 
-def _windows_battery_status() -> dict:
+def _windows_battery_status() -> dict:  # pragma: no cover - ctypes call, exercised on Windows CI
     """Read the battery through ``GetSystemPowerStatus``."""
     status = _SystemPowerStatus()
     try:
