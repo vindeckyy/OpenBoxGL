@@ -12,7 +12,7 @@ import os
 import sys
 
 from api_errors import BadRequest
-from pkg.platform_compat import IS_LINUX, IS_MACOS, battery_status
+from pkg.platform_compat import battery_status, platform_features
 from routes.registry import route
 
 
@@ -59,6 +59,9 @@ def capabilities(handler, parsed):
         "version": _version(),
         "platform": sys.platform,
         "data_dir": _data_dir(),
+        # One contract for every platform-specific control (ADR 0086). A
+        # missing object means every key is false: hidden is the safe default.
+        "features": platform_features(),
     })
 
 
@@ -68,10 +71,7 @@ def battery(handler, parsed):
     if not handler.authorized():
         _handle_unauthorized(handler)
         return
-    if IS_LINUX or IS_MACOS:
-        handler.send_json(200, battery_status())
-    else:
-        handler.send_json(200, {"present": False, "percent": 0, "charging": False})
+    handler.send_json(200, battery_status())
 
 
 @route("POST", "/api/native/dialog")

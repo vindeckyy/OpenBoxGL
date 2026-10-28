@@ -37,10 +37,14 @@ const MORE_SOURCES = [
   {type: 'rpcs3', label: 'RPCS3', icon: 'R3'},
   {type: 'vita3k', label: 'Vita3K', icon: 'V3'},
 ];
-// Launchers that do not exist on macOS are not offered there (ADR 0085).
-const MACOS_UNAVAILABLE_SOURCES = new Set(['heroic', 'lutris', 'faugus']);
+// Import sources a platform lacks are not offered there. The source -> feature
+// map mirrors the server's capability contract (ADR 0086).
+const SOURCE_FEATURE = { heroic: 'heroic', lutris: 'lutris', faugus: 'faugus' };
 function offeredSources(list) {
-  return nativeCaps.platform === 'darwin' ? list.filter(source => !MACOS_UNAVAILABLE_SOURCES.has(source.type)) : list;
+  return list.filter(source => {
+    const feature = SOURCE_FEATURE[source.type];
+    return !feature || nativeCaps.features?.[feature] === true;
+  });
 }
 const MEDIA_TYPES = [
   'cover', 'background', 'screenshots', 'box_back', 'box_spine', 'box_3d',

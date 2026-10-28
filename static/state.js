@@ -189,7 +189,7 @@ try {
     window.addEventListener('pagehide', markPageHidden);
     window.addEventListener('pageshow', markPageVisible);
     const nativeBridge = typeof window.openboxNative === 'object' ? window.openboxNative : null;
-    const nativeCaps = { webview:false, dialogs:false, tray:false, single_instance:false, gamepad:'webkit', fullscreen:true, clipboard:true };
+    const nativeCaps = { webview:false, dialogs:false, tray:false, single_instance:false, gamepad:'webkit', fullscreen:true, clipboard:true, features:{} };
     async function detectNative() {
       try {
         Object.assign(nativeCaps, await api('/api/native/capabilities'));
