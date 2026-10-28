@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.19.0**, the "Now on macOS" release: a signed universal app bundle for Apple Silicon and Intel with a native WKWebView window, tray, dialogs, deeplinks, and verified updater; macOS path and process handling; macOS values for every bundled emulator definition; and Linux-only controls hidden instead of failing. The previous line was **v1.18.0** ("Clearer, deeper library"), 1.17.0 was "Every Launcher", and 1.16.0/1.16.1 were "Make it true" and its fix release.
+OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.19.1**, the platform-parity bug sweep: one server-computed capability contract now decides which platform-specific controls each host shows, so a stored gamescope preset no longer breaks Windows and macOS launches, Windows reports its real battery, Wine/Faugus/Flatpak management answers only on Linux, and storefront browsing uses each platform's own URL opener. The previous line was **v1.19.0** ("Now on macOS"), 1.18.0 was "Clearer, deeper library", 1.17.0 was "Every Launcher", and 1.16.0/1.16.1 were "Make it true" and its fix release.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -8,7 +8,7 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 
 `done` means the workflow is usable end to end on Linux. `partial` means a deliberate Linux equivalent exists but LaunchBox’s Windows/premium surface is broader or unavailable. `missing` means no usable equivalent yet.
 
-> **Platform note:** since [ADR 0048](adr/0048-windows-port.md) OpenBox also runs on Windows (signed portable install, WebView2 window), and since [ADR 0085](adr/0085-macos-support.md) on macOS 11+ (signed universal app bundle, WKWebView window). The rows below describe **Linux** behavior; the Windows and macOS channels have their own sections below. Rows that name Linux-only machinery — AppImage/Flatpak packaging, gamescope/Game Mode, XDG desktop entries, Flathub emulator management — remain Linux-only and are marked so in the Windows and macOS sections.
+> **Platform note:** since [ADR 0048](adr/0048-windows-port.md) OpenBox also runs on Windows (signed portable install, WebView2 window), and since [ADR 0085](adr/0085-macos-support.md) on macOS 11+ (signed universal app bundle, WKWebView window). The rows below describe **Linux** behavior; the Windows and macOS channels have their own sections below. Rows that name Linux-only machinery — AppImage/Flatpak packaging, gamescope/Game Mode, XDG desktop entries, Flathub emulator management — remain Linux-only and are marked so in the Windows and macOS sections. Since 1.19.1 one server-computed capability contract ([ADR 0086](adr/0086-platform-capability-contract.md)) decides which of those controls each host shows, so a control cannot appear on a platform that cannot run it.
 
 ## Capability matrix
 
@@ -211,10 +211,14 @@ build has a deliberate, documented narrower surface.
 | Reliability catalog | done | Windows-specific failure modes are catalogued in `docs/reliability.md` with the same Tested/Manual discipline as the shared rows (1.15, ADR 0062) |
 | Windows uninstall | done | `scripts/uninstall.ps1` removes exactly what `install.ps1` creates — the install tree and its `share\openbox.previous` rollback copy, the user PATH entry, the Start Menu shortcut, and the `openbox://` registration — and never touches the library or settings in the data folder; `-WhatIf` previews it (1.15.0, ADR 0062) |
 | Native storefront imports | done | GOG Galaxy, EA app, and Ubisoft Connect games installed on Windows import from the registry and launcher manifests, with provider ids for re-import matching (1.17.0, ADR 0073) |
+| Epic and Heroic imports | done | Heroic ships on Windows, so its Epic, GOG, and Amazon entries import and open the same way they do on Linux (1.19.1, ADR 0086) |
+| Battery status | done | `/api/native/battery` reads `GetSystemPowerStatus`: a desktop reports no battery, a laptop reports percentage and charging state, and the reading is cached for 30 seconds (1.19.1) |
+| Lutris and Faugus imports | not applicable | Both launchers are Linux-only; their import sources are hidden on Windows, while Epic and Heroic still import through Heroic (1.19.1, ADR 0086) |
+| Wine/Proton prefix manager | not applicable | Wine management is a Linux surface; the panel is hidden on Windows and `/api/wine/*` reports `available: false` (1.19.1, ADR 0086) |
 | AppImage / Flatpak packaging | not applicable | Linux-only channels; the Windows artifact is the signed portable zip (ADR 0013) |
-| gamescope / Steam Game Mode presets | not applicable | Linux-only; the gamescope preset setting persists but has no effect on Windows |
+| gamescope / Steam Game Mode presets | not applicable | Linux-only; the gamescope preset, MangoHud, and handheld-performance controls are hidden on Windows, a stored preset is ignored at launch, and `--game-mode` exits with the Linux-only message (1.19.1, ADR 0086) |
 | XDG desktop entry | not applicable | Replaced by the Start Menu shortcut and `HKCU` protocol registration |
-| Flathub emulator management | not applicable | Flathub is a Linux store; Windows emulators are installed by the user |
+| Flathub emulator management | not applicable | Flathub is a Linux store; Windows emulators are installed by the user, the install and folder-grant controls are hidden, and the grant route refuses the request (1.19.1, ADR 0086) |
 | ARM64 Windows build | missing | Only x86_64 is released, while Linux ships an aarch64 AppImage (ADR 0024) |
 | Cross-platform launch-command round-trip | partial | Stored commands use platform quoting rules (`shlex` on POSIX, MSVCRT on Windows), so a command written on one platform may not round-trip byte-for-byte to the other. Documented limitation, not a bug (ADR 0048) |
 
@@ -235,8 +239,9 @@ specifically; the matrix above is Linux behavior.
 | macOS saves | done | Save discovery covers Steam Cloud plus the documented macOS folders for PPSSPP, RPCS3, Dolphin, and RetroArch (1.19.0) |
 | Notarization | missing | The bundle is ad-hoc signed; the first launch needs System Settings > Privacy & Security > Open Anyway. The release signature is verified by the installer and updater (1.19.0, ADR 0085) |
 | AppImage / Flatpak packaging | not applicable | Linux-only channels; the macOS artifact is the signed universal zip (ADR 0013) |
-| gamescope / Steam Game Mode presets | not applicable | Linux-only; `web_app.py --game-mode` exits with a clear message on macOS |
-| Flathub emulator management | not applicable | Flathub is a Linux store; macOS emulators are installed by the user |
+| gamescope / Steam Game Mode presets | not applicable | Linux-only; the preset, MangoHud, and handheld-performance controls are hidden on macOS and `web_app.py --game-mode` exits with a clear message (1.19.0, capability-gated by ADR 0086) |
+| Wine/Proton prefix manager | not applicable | Wine management is a Linux surface; the panel is hidden on macOS and `/api/wine/*` reports `available: false` (1.19.1, ADR 0086) |
+| Flathub emulator management | not applicable | Flathub is a Linux store; macOS emulators are installed by the user, and the install and folder-grant controls are hidden (1.19.1, ADR 0086) |
 | Plugin sandbox | not applicable | macOS has no bubblewrap; the documented no-bwrap rule applies |
 
 

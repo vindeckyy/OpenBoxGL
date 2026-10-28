@@ -4,6 +4,56 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.1] - 2026-10-28
+
+A cross-platform bug sweep. Every platform-specific control is now decided by one server-computed
+capability contract, so a Linux-only control is hidden on Windows and macOS instead of failing at
+click time, and the controls those platforms do have use their own tools. Linux behavior is the
+reference and is unchanged. Upgrade from 1.19.0.
+
+### Fixed
+- **A stored gamescope preset no longer breaks Windows and macOS launches.** The preset is applied
+  only on Linux, so it can no longer be prepended to a Windows or macOS command line; the preset,
+  MangoHud, and handheld-performance controls are hidden on those hosts, and `web_app.py --game-mode`
+  refuses to start there with the Linux-only message instead of entering a broken guest mode.
+  `pkg/state/launch.py`, `web_app.py`, `pkg/parity/parity_gamescope.py`,
+  `tests/test_launch_gamescope_preset.py`, `tests/test_macos_platform_fallbacks.py`.
+- **Windows reports its real battery.** `/api/native/battery` reads `GetSystemPowerStatus` instead of
+  answering "no battery" everywhere: a desktop reports absent, a laptop reports its percentage and
+  charging state, and the reading is cached for 30 seconds like the macOS one. `pkg/platform_compat.py`,
+  `handlers/native.py`, `tests/test_platform_compat.py`, `tests/test_native_handlers.py`.
+- **Wine, Faugus, and Flatpak management answer only on Linux.** The Wine/Proton manager reports
+  `available: false` and never scans the disk on Windows and macOS, the Faugus scanner returns
+  nothing, the Flatpak folder grant refuses the request before any subprocess runs, and the Launch
+  Doctor no longer offers a Flatpak install on a platform without Flatpak. `pkg/parity/parity_wine.py`,
+  `pkg/parity/parity_faugus.py`, `handlers/wine.py`, `pkg/parity/parity_flatpak_grant.py`,
+  `pkg/parity/parity_launch_doctor.py`, `pkg/parity/parity_emulator_defs.py`,
+  `tests/test_wine_faugus.py`, `tests/test_parity_flatpak_grant.py`, `tests/test_launch_doctor.py`,
+  `tests/test_emulators.py`, `tests/test_platform_route_guards.py`.
+- **Storefront browsing uses the platform URL opener.** The Steam and Heroic catalogs no longer assume
+  `xdg-open`; they use the same opener as the rest of the app, say clearly when a host has none, and a
+  Git/MSYS `xdg-open` no longer wins over Explorer on Windows. `pkg/parity/parity_storefront.py`,
+  `importers.py`, `pkg/platform_compat.py`, `tests/test_parity_storefront.py`,
+  `tests/test_platform_compat.py`, `tests/test_macos_platform_fallbacks.py`.
+- **The storefront list and its import routes match the host.** `/api/v2/storefronts` lists Heroic on
+  Linux and Windows, Lutris only on Linux, and GOG/EA/Ubisoft only on Windows; the native Windows
+  import POSTs refuse other hosts with a clear 400 and never run their discoverer.
+  `handlers/imports.py`, `tests/test_windows_storefront_http.py`.
+
+### Changed
+- **One capability contract drives every platform-specific control.** `GET /api/native/capabilities`
+  now carries a `features` object (gamescope, mangohud, handheld_perf, flatpak, wine, faugus, lutris,
+  heroic, epic, native_storefronts, desktop_entry), and the UI gates every one of those controls from
+  `data-feature` instead of per-OS markup markers. A missing object means every feature is false, so
+  the failure mode is a hidden control, never a broken one. `pkg/platform_compat.py`,
+  `handlers/native.py`, `static/state.js`, `static/app.js`, `static/setup.js`, `static/settings.js`,
+  `index.html`, `docs/adr/0086-platform-capability-contract.md`, `docs/native-host-contract.md`,
+  `tests/test_capability_contract.py`.
+- **PARITY and the reliability catalog state the gated behavior.** The Windows and macOS channels now
+  name the battery, Wine, Flatpak, Lutris/Faugus, and gamescope rows as capability-gated, and six new
+  reliability rows cover the mismatches. `docs/PARITY.md`, `docs/reliability.md`,
+  `scripts/contracts/reliability.json`.
+
 ## [1.19.0] - 2026-10-27
 
 OpenBox now runs natively on macOS. The release adds a universal app bundle for Apple Silicon and Intel,
