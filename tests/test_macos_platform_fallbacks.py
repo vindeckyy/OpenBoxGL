@@ -77,6 +77,25 @@ class StorefrontFallbackTests(unittest.TestCase):
             binary, _command = importers.steam_command()
         self.assertEqual(binary, "C:\\Windows\\explorer.exe")
 
+    def test_steam_on_linux_falls_back_to_the_url_opener(self):
+        with mock.patch.object(importers, "IS_MACOS", False), \
+             mock.patch.object(importers, "IS_WINDOWS", False), \
+             mock.patch.object(importers.shutil, "which", return_value=None), \
+             mock.patch.object(importers, "_flatpak_installed", return_value=False), \
+             mock.patch.object(importers, "url_opener_command", return_value="/usr/bin/xdg-open"):
+            binary, command = importers.steam_command()
+        self.assertEqual(binary, "/usr/bin/xdg-open")
+        self.assertIn("steam://rungameid/{app_id}", command)
+
+    def test_steam_on_linux_without_any_opener_is_refused(self):
+        with mock.patch.object(importers, "IS_MACOS", False), \
+             mock.patch.object(importers, "IS_WINDOWS", False), \
+             mock.patch.object(importers.shutil, "which", return_value=None), \
+             mock.patch.object(importers, "_flatpak_installed", return_value=False), \
+             mock.patch.object(importers, "url_opener_command", return_value=None):
+            with self.assertRaisesRegex(FileNotFoundError, "Steam, the Steam Flatpak"):
+                importers.steam_command()
+
     def test_heroic_has_no_store_on_macos(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)

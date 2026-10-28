@@ -892,6 +892,13 @@ class MacOSSeamTests(unittest.TestCase):
             {"present": False, "percent": 0, "charging": False},
         )
 
+    def test_an_unreadable_pmset_reports_no_battery(self):
+        with mock.patch.object(pc.subprocess, "run", side_effect=OSError("pmset is missing")):
+            self.assertEqual(
+                pc._read_macos_battery(),
+                {"present": False, "percent": 0, "charging": False},
+            )
+
     def test_the_macos_battery_reading_is_cached(self):
         calls = []
 
