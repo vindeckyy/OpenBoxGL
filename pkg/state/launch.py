@@ -15,6 +15,7 @@ from automation import build_event
 from api_errors import Conflict
 from pkg.state.registry import EVENT_SEQUENCE, PENDING_LAUNCHES, PROCESS_LOCK, PROCESSES, RUNNING, SESSION_EVENTS  # noqa: F401
 from pkg.platform_compat import (
+    IS_LINUX,
     is_executable,
     launch_kwargs,
     process_alive,
@@ -78,6 +79,8 @@ def _apply_gamescope_preset_from_state(state, game, args):
     session the preset is skipped to avoid nested gamescope.
     """
     if not args:
+        return args
+    if not IS_LINUX:
         return args
     settings = state.get("settings", {}) if isinstance(state, dict) else {}
     custom_presets = settings.get("gamescope_custom_presets") or []
@@ -724,6 +727,8 @@ def _make_start_mutator(stable_game_id, index, started, process, entry, missing,
 
 def _annotate_gamescope_start(args, game, process):
     """Tag the spawned process for gamescope guest mode when not a Steam launch."""
+    if not IS_LINUX:
+        return
     if is_gamescope_guest(force="--game-mode" in sys.argv) and not is_steam_launch(args):
         window_class = Path(str(args[0])).name if args else None
         threading.Thread(

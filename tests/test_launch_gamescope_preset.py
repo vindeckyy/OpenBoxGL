@@ -10,12 +10,36 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from pkg.state.launch import _apply_gamescope_preset_from_state  # noqa: E402
+from pkg.state.launch import _annotate_gamescope_start, _apply_gamescope_preset_from_state  # noqa: E402
 
 
 class GamescopePresetWrapTest(unittest.TestCase):
+    def setUp(self):
+        # The wrap is Linux-only; pin the flag so these tests read the same on
+        # every CI host. The non-Linux tests below override it locally.
+        patcher = patch("pkg.state.launch.IS_LINUX", True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_empty_args_returned_unchanged(self):
         self.assertEqual(_apply_gamescope_preset_from_state({"settings": {}}, {}, []), [])
+
+    def test_non_linux_never_wraps(self):
+        # 1.19.0 shipped this defect: a stored preset on Windows prepended
+        # `gamescope`, which does not exist there, to every launch.
+        args = ["run", "game"]
+        state = {"settings": {"gamescope_preset": "1080p"}}
+        with patch("pkg.state.launch.IS_LINUX", False), \
+             patch("pkg.state.launch.should_nest_gamescope", return_value=True):
+            self.assertEqual(_apply_gamescope_preset_from_state(state, {}, args), args)
+
+    def test_non_linux_does_not_mark_the_window(self):
+        process = type("Process", (), {"pid": 123})()
+        with patch("pkg.state.launch.IS_LINUX", False), \
+             patch("pkg.state.launch.is_gamescope_guest", return_value=True), \
+             patch("pkg.state.launch.mark_process_windows") as mark:
+            _annotate_gamescope_start(["game"], {"name": "Game"}, process)
+        mark.assert_not_called()
 
     def test_no_preset_returns_args_unchanged(self):
         args = ["emulator", "{path}"]
