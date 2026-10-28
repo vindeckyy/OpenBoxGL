@@ -4,10 +4,10 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## Unreleased
 
 ### Added
-- Settings > About has a short line and a Buy me a coffee button. The repository shows a Sponsor button, and the AppStream metadata lists a donation link that software centers can display.
+- Settings > About has a short support line and a Buy me a coffee button. The repository shows a Sponsor button, and the AppStream metadata includes a donation URL.
 
 ## [1.19.1] - 2026-10-28
 
