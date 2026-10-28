@@ -907,7 +907,9 @@ class MacOSSeamTests(unittest.TestCase):
             return mock.Mock(stdout=" -InternalBattery-0 (id=1)\t50%; discharging\n", returncode=0)
 
         clock = [1000.0]
-        with mock.patch.object(pc, "IS_MACOS", True), mock.patch.object(
+        with mock.patch.object(pc, "IS_WINDOWS", False), mock.patch.object(
+            pc, "IS_MACOS", True
+        ), mock.patch.object(
             pc, "_battery_cache", None
         ), mock.patch.object(pc.subprocess, "run", side_effect=fake_run), mock.patch.object(
             pc, "external_open_disabled", return_value=False
@@ -1291,13 +1293,13 @@ class FallbackBranchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             self.assertEqual(pc._linux_battery_status(Path(directory)), dict(pc.BATTERY_ABSENT))
 
-    def test_battery_status_reads_the_given_sysfs_root_off_macos(self):
+    def test_battery_status_reads_the_given_sysfs_root_off_macos_and_windows(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "BAT0").mkdir()
             (root / "BAT0" / "capacity").write_text("64\n", encoding="utf-8")
             (root / "BAT0" / "status").write_text("Charging\n", encoding="utf-8")
-            with mock.patch.object(pc, "IS_MACOS", False):
+            with mock.patch.object(pc, "IS_MACOS", False), mock.patch.object(pc, "IS_WINDOWS", False):
                 status = pc.battery_status(root, clock=lambda: 0.0)
         self.assertEqual(status, {"present": True, "percent": 64, "charging": True})
 
