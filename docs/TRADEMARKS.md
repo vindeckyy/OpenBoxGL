@@ -1,6 +1,6 @@
 # Trademark and branding policy
 
-OpenBox Game Launcher is an independent open-source Linux game library manager and launcher.
+OpenBox Game Launcher is an independent open-source game library manager and launcher for Linux, Windows, and macOS.
 
 ## Project identity
 
@@ -19,6 +19,8 @@ Third-party names, logos, and marks belong to their respective owners. OpenBox u
 - a factual feature comparison against a named product on a named platform.
 
 When a third-party name appears, use it in plain text with correct capitalization and without altering its logo or trade dress. Do not place a third-party logo next to the OpenBox logo in a way that implies co-branding. When space allows, include the attribution line from [DISCLAIMER.md](DISCLAIMER.md) that marks are property of their owners.
+
+Platform names are trademarks of their owners: macOS, Apple, and WebKit are trademarks of Apple Inc., and Windows, Microsoft, and WebView2 are trademarks of Microsoft Corporation. They are named only to describe the platforms OpenBox runs on and the host runtimes it uses.
 
 ## Third-party assets
 

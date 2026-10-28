@@ -122,7 +122,7 @@ they do not automatically wait for an unrelated master run.
 
 ### Repository and release authority
 
-- Git tags and [GitHub Releases](https://github.com/vindeckyy/OpenBoxGL/releases) on this repository are the canonical publication channel for AppImage, Flatpak bundle, SBOM, and install scripts.
+- Git tags and [GitHub Releases](https://github.com/vindeckyy/OpenBoxGL/releases) on this repository are the canonical publication channel for the AppImages, Flatpak bundle, Windows portable zip, macOS app bundle, SBOMs, and install scripts.
 - Version strings are declared once in `updates.py`; `make version-check` (`scripts/check_version_sync.py`) must pass before tagging.
 - Changelog, `openbox.metainfo.xml`, README release badge/latest/installer text,
   PARITY lead, release-note compare link, SBOM fallback metadata, and issue

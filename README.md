@@ -72,7 +72,7 @@ For ROMs, emulators, Big Box, RetroAchievements, and everything else, see [Getti
 
 ## Overview
 
-OpenBox Game Launcher is an open-source game library manager and launcher for Linux and Windows. It puts Steam, Heroic (Epic/GOG/Amazon), Lutris, Faugus, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and Eden Switch collections, and local executables in one searchable catalog with advanced search, ordered playlists, artwork galleries, session tracking, save and library backups, launch profiles, and controller-ready Big Box mode. On Windows it also imports installed GOG, EA app, and Ubisoft Connect games natively. No account, no vendor cloud lock-in, and no telemetry; optional mounted-folder sync stays under your control.
+OpenBox Game Launcher is an open-source game library manager and launcher for Linux, Windows, and macOS. It puts Steam, Heroic (Epic/GOG/Amazon), Lutris, Faugus, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and Eden Switch collections, and local executables in one searchable catalog with advanced search, ordered playlists, artwork galleries, session tracking, save and library backups, launch profiles, and controller-ready Big Box mode. On Windows it also imports installed GOG, EA app, and Ubisoft Connect games natively. No account, no vendor cloud lock-in, and no telemetry; optional mounted-folder sync stays under your control.
 
 OpenBox Game Launcher is unrelated to [Openbox](https://openbox.org/), the open-source Linux window manager. The projects have different maintainers, codebases, and purposes.
 
@@ -83,7 +83,7 @@ OpenBox provides one UI over two use-case entry points (the native host renders 
 | `openbox` or `openbox-native` | Default desktop use; one native window (WebKitGTK on Linux, WebView2 on Windows) renders the full UI |
 | `openbox --web` or `python3 web_app.py` | Development and debugging; full feature set, REST API, Big Box mode |
 
-Library data is stored locally at `~/.local/share/openbox-game-launcher/library.json` (`%LOCALAPPDATA%\openbox-game-launcher\library.json` on Windows). Set the `OPENBOX_DATA_DIR` environment variable to use a different data directory.
+Library data is stored locally at `~/.local/share/openbox-game-launcher/library.json` (`%LOCALAPPDATA%\openbox-game-launcher\library.json` on Windows, `~/Library/Application Support/openbox-game-launcher/library.json` on macOS). Set the `OPENBOX_DATA_DIR` environment variable to use a different data directory.
 
 > **Independence notice:** OpenBox Game Launcher is an independent open-source project. It is not affiliated with LaunchBox, Unbroken Software, LLC, or the Openbox window manager project. LaunchBox and Big Box are trademarks of Unbroken Software, LLC. See [DISCLAIMER.md](docs/DISCLAIMER.md).
 
@@ -275,7 +275,7 @@ Local-first playtime analytics with a 366-day activity heatmap (levels 0–4), c
 
 ### Big Box & Handhelds
 
-Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attract mode, optional startup video, library BGM, **video snaps** (looping gameplay videos in Stage mode with debounce and BGM ducking), **Game Night party mode** (couch-multiplayer queue, spinning wheel, up-next strip, persistent rounds), Steam Game Mode guest (`--game-mode`), gamescope presets (Steam Deck, Steam Deck (HD), 1080p, 1440p, 4K, integer scale, stretch, borderless) plus **custom user-defined presets with per-game override**, MangoHud performance overlay toggle, controller bench with live gamepad SVG visualization, localization (English, Spanish, German, French, Portuguese).
+Fullscreen Stage/Hybrid/CoverFlow layouts, gamepad navigation, screensaver/attract mode, optional startup video, library BGM, **video snaps** (looping gameplay videos in Stage mode with debounce and BGM ducking), **Game Night party mode** (couch-multiplayer queue, spinning wheel, up-next strip, persistent rounds), Steam Game Mode guest (`--game-mode`, Linux only), gamescope presets (Steam Deck, Steam Deck (HD), 1080p, 1440p, 4K, integer scale, stretch, borderless) plus **custom user-defined presets with per-game override** (Linux only), MangoHud performance overlay toggle (Linux only), controller bench with live gamepad SVG visualization, localization (English, Spanish, German, French, Portuguese).
 
 ### Scale & Backups
 
@@ -580,6 +580,7 @@ The Web UI exposes a local REST API for automation. Authenticate with `X-OpenBox
 
 ```bash
 # Find your token and port (only while the Web UI is running)
+# On macOS the data directory is ~/Library/Application Support/openbox-game-launcher; on Windows it is %LOCALAPPDATA%\openbox-game-launcher.
 cat ~/.local/share/openbox-game-launcher/server.token
 cat ~/.local/share/openbox-game-launcher/server.port
 
@@ -612,6 +613,10 @@ No OpenBox account is required. Optional integrations (RetroAchievements, EmuMov
 ### Is Windows supported?
 
 Yes. OpenBox runs on Windows 10/11 (x86_64) from a signed portable install: the same UI in a WebView2 window, the same library, imports, sessions, saves, Big Box mode, and REST API, with Windows binary names for every bundled emulator definition. Extract `OpenBox-x86_64-windows.zip` from a release and run `OpenBox\scripts\install.ps1` (requires Python 3.10+), or `python web_app.py` from a checkout. Linux remains the primary target for the distro-integration surfaces — AppImage, Flatpak, gamescope/Game Mode, XDG desktop entries, and Flathub-aware emulator management are Linux-only, and the capability matrix in [PARITY.md](docs/PARITY.md) is written from the Linux side. See [ADR 0048](docs/adr/0048-windows-port.md) for the port's boundaries.
+
+### Is macOS supported?
+
+Yes, since 1.19.0. OpenBox runs on macOS 11 or newer, on Apple Silicon and Intel, from a signed universal app bundle that carries its own Python. Install it with the published `install-macos.sh`, which verifies the release key, the bundle's SHA-256 checksum, and its Ed25519 signature before it installs `OpenBox.app` into `~/Applications`. The bundle is not notarized, so the first launch needs **System Settings > Privacy & Security > Open Anyway**. Linux-only features (gamescope and Game Mode, MangoHud, Flatpak, Wine, Lutris, Heroic, and Epic) are hidden there, and the plugin sandbox is unavailable. Seven bundled emulator definitions have no verified macOS build and are reported as not installed. See the [macOS guide](https://openboxgl.github.io/macos/).
 
 ---
 

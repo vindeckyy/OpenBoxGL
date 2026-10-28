@@ -25,9 +25,19 @@ body:
       options:
         - Web UI
         - Native window
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install method
+      options:
         - AppImage
         - Flatpak
         - Source install
+        - Windows portable install
+        - macOS app bundle
     validations:
       required: true
 
@@ -35,8 +45,8 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Distro, desktop environment, and Python version if running from source
-      placeholder: Fedora <version>, KDE Plasma, Python 3.12
+      description: Operating system and version (Linux distro and desktop, Windows build, or macOS version), and Python version if running from source
+      placeholder: Fedora 41, KDE Plasma, Python 3.12; or macOS 15 on Apple Silicon; or Windows 11 x86_64
     validations:
       required: true
 

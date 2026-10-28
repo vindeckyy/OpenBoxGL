@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.19.1**, the platform-parity bug sweep: one server-computed capability contract now decides which platform-specific controls each host shows, so a stored gamescope preset no longer breaks Windows and macOS launches, Windows reports its real battery, Wine/Faugus/Flatpak management answers only on Linux, and storefront browsing uses each platform's own URL opener. The previous line was **v1.19.0** ("Now on macOS"), 1.18.0 was "Clearer, deeper library", 1.17.0 was "Every Launcher", and 1.16.0/1.16.1 were "Make it true" and its fix release.
+OpenBox tracks LaunchBox feature parity for Linux, Windows, and macOS environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.19.1**, the platform-parity bug sweep: one server-computed capability contract now decides which platform-specific controls each host shows, so a stored gamescope preset no longer breaks Windows and macOS launches, Windows reports its real battery, Wine/Faugus/Flatpak management answers only on Linux, and storefront browsing uses each platform's own URL opener. The previous line was **v1.19.0** ("Now on macOS"), 1.18.0 was "Clearer, deeper library", 1.17.0 was "Every Launcher", and 1.16.0/1.16.1 were "Make it true" and its fix release.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -187,9 +187,9 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 | Storefront missing and repair | done | Steam imports record install-folder presence, show Missing instead of a play button, and hand Install/Verify to Steam (1.18 unreleased) |
 | Per-provider integration tokens | done | Five optional providers store tokens locally; the settings API returns only masked values (1.18 unreleased) |
 | Save manifests and selective restore | done | Backups carry file hashes and metadata; a version-history dialog previews every older backup, restore previews contents, supports dry run, and restores selected files (1.18 unreleased) |
-| Bulk find and replace | done | Literal preview-and-apply over one metadata field for selected games (1.18 unreleased) |
-| Controller types and per-platform emulator overrides | done | Controller types are user-defined; platforms can override adapter, RetroArch core, and extra arguments (1.18 unreleased) |
-| Tray recent games | done | Linux and Windows tray menus launch one of the eight most recent games (1.18 unreleased) |
+| Bulk find and replace | done | Literal preview-and-apply over one metadata field for selected games (1.18.0) |
+| Controller types and per-platform emulator overrides | done | Controller types are user-defined; platforms can override adapter, RetroArch core, and extra arguments (1.18.0) |
+| Tray recent games | done | Linux, Windows, and macOS tray menus launch one of the eight most recent games (1.18.0; macOS from 1.19.0) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 
@@ -233,7 +233,7 @@ specifically; the matrix above is Linux behavior.
 |---|---|---|
 | Native window | done | `native_host_mac.m` (WKWebView) renders the same UI in a real window, with remembered geometry, `NSStatusItem` tray/minimize-to-tray, `openbox://` deeplinks, and one instance per data directory via an `AF_UNIX` socket with the 104-byte `sun_path` limit checked before binding (1.19.0) |
 | Universal install and verified update | done | `OpenBox-macos.zip` carries arm64 and x86_64 hosts and one merged interpreter; `scripts/install-macos.sh` verifies the release key anchor, SHA-256 sidecar, and Ed25519 signature before installing `OpenBox.app`; the in-app updater swaps the bundle after the server exits and keeps `OpenBox.app.previous` (1.19.0) |
-| No-install bundle | done | The bundle ships a pinned universal CPython 3.12 and the CA bundle, so a Mac needs no Python or WebKit installation; a source checkout still needs Python 3.10+ (1.19.0) |
+| No-install app | done | The bundle ships a pinned universal CPython 3.12 and the CA bundle, so the app runs without Python or WebKit installed. `scripts/install-macos.sh` still runs the release verifier with `python3`, and a source checkout needs Python 3.10+ (1.19.0) |
 | Emulator detection and launch | done | Every bundled definition carries `native_exe_macos`; an app bundle resolves through `Contents/Info.plist`, and an explicit empty value means "no verified macOS build" and is reported as not installed (1.19.0) |
 | Library data location | done | `~/Library/Application Support/openbox-game-launcher`; `OPENBOX_DATA_DIR` overrides everything, and stored references keep POSIX separators so a library moves between platforms (1.19.0) |
 | macOS saves | done | Save discovery covers Steam Cloud plus the documented macOS folders for PPSSPP, RPCS3, Dolphin, and RetroArch (1.19.0) |

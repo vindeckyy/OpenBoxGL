@@ -29,7 +29,7 @@ less install-macos.sh
 OPENBOX_RELEASE_TAG="v${VERSION}" bash install-macos.sh
 ```
 
-On Windows, extract the release archive and run `OpenBox\scripts\install.ps1`; on Linux, use the AppImage, the Flatpak, or `scripts/install.sh` as before. Every artifact ships with its SHA-256 sidecar and Ed25519 signature.
+On Windows, extract the release archive and run `OpenBox\scripts\install.ps1`; on macOS, download `install-macos.sh` and run it with the tag pinned; on Linux, use the AppImage, the Flatpak, or `scripts/install.sh` as before. Each binary artifact (the AppImages, the Windows archive and native host, and the macOS bundle) ships with its SHA-256 sidecar and Ed25519 signature. The installer scripts are not signed; they pin the release key and verify the artifacts against it.
 
 ## Known limits
 
