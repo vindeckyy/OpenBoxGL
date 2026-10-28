@@ -39,18 +39,18 @@ class DummyHandler:
 
 class TestNativeHandlers(unittest.TestCase):
     def test_battery_from_sysfs(self):
-        if pc.IS_MACOS:
-            self.skipTest("the sysfs battery reader is Linux-only; macOS reads pmset")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "BAT0").mkdir()
             (root / "BAT0" / "capacity").write_text("77\n", encoding="utf-8")
             (root / "BAT0" / "status").write_text("Charging\n", encoding="utf-8")
-            self.assertEqual(battery_status(root), {"present": True, "percent": 77, "charging": True})
-            (root / "BAT0" / "capacity").write_text("150", encoding="utf-8")
-            (root / "BAT0" / "status").write_text("Discharging", encoding="utf-8")
-            self.assertEqual(battery_status(root), {"present": True, "percent": 100, "charging": False})
-        self.assertFalse(battery_status(Path("/nonexistent-openbox-battery"))["present"])
+            # The sysfs reader is the off-Windows/off-macOS seam (ADR 0086).
+            with mock.patch.object(pc, "IS_WINDOWS", False), mock.patch.object(pc, "IS_MACOS", False):
+                self.assertEqual(battery_status(root), {"present": True, "percent": 77, "charging": True})
+                (root / "BAT0" / "capacity").write_text("150", encoding="utf-8")
+                (root / "BAT0" / "status").write_text("Discharging", encoding="utf-8")
+                self.assertEqual(battery_status(root), {"present": True, "percent": 100, "charging": False})
+                self.assertFalse(battery_status(Path("/nonexistent-openbox-battery"))["present"])
 
     def test_battery_route_authorized_and_unauthorized(self):
         h = DummyHandler(authorized=True)
