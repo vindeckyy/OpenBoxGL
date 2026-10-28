@@ -29,4 +29,4 @@ steps that remain when that decision is made.
 ## Explicitly out of scope
 
 - Flathub **store submission** (ADR 0013:52) — producing the bundle is separate from publishing to Flathub.
-- Themes marketplace, Premium cloud library, Windows/macOS — ruled out in `docs/PARITY.md`.
+- Themes marketplace and Premium cloud library — ruled out in `docs/PARITY.md`. Windows and macOS builds are not Flatpak packages; they ship as their own signed release artifacts.

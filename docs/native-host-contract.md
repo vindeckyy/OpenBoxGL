@@ -132,10 +132,12 @@ in [ADR 0086](adr/0086-platform-capability-contract.md).
 
 `GET /api/native/battery` reads the first `BAT*` entry under
 `/sys/class/power_supply` on Linux, reads `pmset -g batt` on macOS, and
-returns `{"present": bool, "percent": 0-100, "charging": bool}`; `charging`
-is true for `Charging` and `Full`. On other platforms, or with no battery, it
-returns `{"present": false, "percent": 0, "charging": false}`. The response
-never includes the sysfs path. Big Box reads it for its battery indicator.
+reads `GetSystemPowerStatus` on Windows. It returns
+`{"present": bool, "percent": 0-100, "charging": bool}`, where `charging`
+reports the charging state on each platform. A host with no battery, such as a
+desktop, returns `{"present": false, "percent": 0, "charging": false}`. The
+Windows and macOS readings are cached for 30 seconds. The response never
+includes the sysfs path. Big Box reads it for its battery indicator.
 
 When no host is connected, the native endpoints return a capability-absent
 result (never an error that blocks the browser fallback): `dialog` returns
@@ -193,7 +195,7 @@ through the capability resolver with a browser fallback.
 | `localStorage` (UI prefs) | server-persisted `ui_state` when native; `localStorage` in browser |
 | `navigator.clipboard` | host clipboard; browser fallback |
 | `document.fullscreenElement` / request/exit | `windowAction("set-fullscreen"/"unset-fullscreen")` |
-| `navigator.getBattery` | `GET /api/native/battery` (Linux sysfs, macOS `pmset`; absent on other platforms); hide status when absent |
+| `navigator.getBattery` | `GET /api/native/battery` (Linux sysfs, macOS `pmset`, Windows `GetSystemPowerStatus`); hide status when `present` is false |
 | `navigator.getGamepads` | Web Gamepad API always (host `onGamepad` is a no-op stub; capabilities report `"webkit"`) |
 | `location.search` (token, deeplink) | unchanged; the host loads the same URL |
 | `beforeunload` (shutdown) | page requests `/api/shutdown` when tracked games remain; the native host signals the Python child on window close — `SIGTERM` on Linux, `CTRL_BREAK` on Windows (see Server lifecycle) |
