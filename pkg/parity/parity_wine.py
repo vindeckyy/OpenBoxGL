@@ -11,7 +11,7 @@ import shlex
 import shutil
 from pathlib import Path
 
-from pkg.platform_compat import IS_MACOS
+from pkg.platform_compat import IS_LINUX
 
 
 # Common Wine prefix roots users actually use (including Lutris, Bottles, Faugus, Steam).
@@ -48,6 +48,8 @@ def _expand_roots(roots):
 
 def list_wine_prefixes(search_roots=None):
     """Scan for Wine prefixes. Returns list of {path, has_drive_c, size_mb}."""
+    if not IS_LINUX:
+        return []
     roots = search_roots if search_roots is not None else DEFAULT_PREFIX_ROOTS
     prefixes = []
     seen = set()
@@ -102,6 +104,8 @@ def list_wine_prefixes(search_roots=None):
 
 def list_proton_versions(search_roots=None):
     """List available Proton/Wine runners. Returns list of {name, path, source}."""
+    if not IS_LINUX:
+        return []
     versions = []
     seen_paths = set()
     # Check executables on PATH
@@ -113,7 +117,7 @@ def list_proton_versions(search_roots=None):
                 seen_paths.add(key)
                 versions.append({"name": which, "path": which, "source": "path"})
     # Check flatpak runners
-    if not IS_MACOS and shutil.which("flatpak"):
+    if shutil.which("flatpak"):
         try:
             import subprocess
             result = subprocess.run(
@@ -128,9 +132,7 @@ def list_proton_versions(search_roots=None):
         except Exception:
             pass
     # Scan known Proton roots for version directories containing proton or wine binary
-    roots = search_roots if search_roots is not None else (
-        [] if IS_MACOS else DEFAULT_PROTON_ROOTS
-    )
+    roots = search_roots if search_roots is not None else DEFAULT_PROTON_ROOTS
     for base in _expand_roots(roots):
         try:
             for child in base.iterdir():
@@ -157,6 +159,8 @@ def list_proton_versions(search_roots=None):
 
 def get_prefix_for_game(game):
     """Return the Wine prefix configured for a game, if any."""
+    if not IS_LINUX:
+        return ""
     # Games can store prefix in launch_profile, wine_prefix, or WINEPREFIX in launch command
     for key in ("wine_prefix", "prefix", "WINEPREFIX"):
         val = game.get(key, "")

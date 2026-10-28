@@ -7,6 +7,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from api_errors import GameNotFound
 from handlers.wine import WineHandlers
+from pkg.parity import parity_faugus as faugus_module
+from pkg.parity import parity_wine as wine_module
 from pkg.parity.parity_faugus import find_faugus_data_dirs, scan_faugus_games
 from pkg.parity.parity_wine import get_prefix_for_game, list_proton_versions, list_wine_prefixes
 
@@ -22,6 +24,13 @@ def _reset_openbox_modules():
 
 
 class TestWine(unittest.TestCase):
+    def setUp(self):
+        # Wine management is Linux-only; pin the flag so the parsing cases read
+        # the same on every CI host (the off-Linux case overrides it).
+        patcher = mock.patch.object(wine_module, "IS_LINUX", True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_list_prefixes_returns_list(self):
         prefixes = list_wine_prefixes(search_roots=[])
         self.assertIsInstance(prefixes, list)
@@ -58,6 +67,12 @@ class TestWine(unittest.TestCase):
     def test_get_prefix_from_env_command(self):
         game = {"launch": "env WINEPREFIX=\"/tmp/foo bar\" wine game.exe"}
         self.assertEqual(get_prefix_for_game(game), "/tmp/foo bar")
+
+    def test_off_linux_scanners_report_nothing(self):
+        with mock.patch.object(wine_module, "IS_LINUX", False):
+            self.assertEqual(list_wine_prefixes(search_roots=["/tmp"]), [])
+            self.assertEqual(list_proton_versions(search_roots=["/tmp"]), [])
+            self.assertEqual(get_prefix_for_game({"wine_prefix": "/tmp"}), "")
 
 
 
@@ -151,9 +166,18 @@ class TestWineHandlers(unittest.TestCase):
         self.assertEqual(h.payload, {"prefix": "", "available": False})
 
 class TestFaugus(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(faugus_module, "IS_LINUX", True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_find_dirs_returns_list(self):
         dirs = find_faugus_data_dirs()
         self.assertIsInstance(dirs, list)
+
+    def test_faugus_is_not_offered_off_linux(self):
+        with mock.patch.object(faugus_module, "IS_LINUX", False):
+            self.assertEqual(find_faugus_data_dirs(), [])
 
     def test_scan_empty(self):
         games = scan_faugus_games(data_dirs=["/tmp/nonexistent_faugus_test_dir"])

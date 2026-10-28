@@ -22,10 +22,10 @@ ROOT = Path(__file__).resolve().parent.parent
 
 @contextlib.contextmanager
 def linux_flatpak_registry():
-    """Flatpak is a Linux install path (ADR 0085): pin Linux and rebuild the emulator registry."""
+    """Flatpak is a Linux install path (ADR 0086): pin Linux and rebuild the emulator registry."""
     import pkg.parity.parity_emulator_defs as defs
 
-    patcher = mock.patch.object(defs, "IS_MACOS", False)
+    patcher = mock.patch.object(defs, "IS_LINUX", True)
     patcher.start()
     defs._reset_registry_cache()
     try:

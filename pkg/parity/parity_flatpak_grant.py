@@ -16,6 +16,7 @@ from pathlib import Path
 
 from api_errors import BadRequest
 from pkg.parity.parity_emulator_defs import _registry
+from pkg.platform_compat import IS_LINUX
 
 GRANT_TIMEOUT_SECONDS = 30
 
@@ -48,6 +49,8 @@ def grant_command(app: str, folder: str, *, undo: bool = False) -> list[str]:
 
 
 def apply_grant(app_id, folder, *, undo: bool = False, run=subprocess.run) -> dict:
+    if not IS_LINUX:
+        raise BadRequest("Flatpak grants are only available on Linux.")
     app, path = validate_grant(app_id, folder)
     command = grant_command(app, path, undo=undo)
     try:

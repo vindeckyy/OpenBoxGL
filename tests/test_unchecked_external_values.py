@@ -24,12 +24,19 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import retroachievements
 from pkg.parity import parity_launch_doctor as doctor
 
 
 class FlatpakTimeoutTests(unittest.TestCase):
+    def setUp(self):
+        # The Flatpak probe is a Linux lane (ADR 0086); these tests simulate it.
+        patcher = mock.patch.object(doctor, "IS_LINUX", True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_timeout_is_bounded(self):
         self.assertGreater(doctor.FLATPAK_TIMEOUT_SECONDS, 0)
         self.assertLessEqual(doctor.FLATPAK_TIMEOUT_SECONDS, 30, "a preflight must not block for long")

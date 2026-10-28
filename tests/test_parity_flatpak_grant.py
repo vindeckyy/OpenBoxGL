@@ -22,13 +22,18 @@ from pkg.parity import parity_flatpak_grant as grant  # noqa: E402
 
 
 def setUpModule():
-    """Flatpak is a Linux install path (ADR 0085): this module runs as Linux with a fresh emulator registry."""
+    """Flatpak is a Linux install path (ADR 0086): this module runs as Linux with a fresh emulator registry."""
     import pkg.parity.parity_emulator_defs as defs
 
-    patcher = mock.patch.object(defs, "IS_MACOS", False)
-    patcher.start()
+    patchers = [
+        mock.patch.object(defs, "IS_LINUX", True),
+        mock.patch.object(defs, "IS_MACOS", False),
+        mock.patch.object(grant, "IS_LINUX", True),
+    ]
+    for patcher in patchers:
+        patcher.start()
+        unittest.addModuleCleanup(patcher.stop)
     unittest.addModuleCleanup(defs._reset_registry_cache)
-    unittest.addModuleCleanup(patcher.stop)
     defs._reset_registry_cache()
 
 
@@ -125,6 +130,14 @@ class ApplyGrantTests(unittest.TestCase):
 
         with self.assertRaises(BadRequest):
             grant.apply_grant("org.libretro.RetroArch", str(self.games), run=run)
+
+    def test_off_linux_the_grant_is_refused_before_any_subprocess(self):
+        run = mock.Mock()
+        with mock.patch.object(grant, "IS_LINUX", False):
+            with self.assertRaises(BadRequest) as raised:
+                grant.apply_grant("org.libretro.RetroArch", str(self.games), run=run)
+        self.assertIn("only available on Linux", str(raised.exception))
+        run.assert_not_called()
 
 
 class GrantRouteTests(unittest.TestCase):

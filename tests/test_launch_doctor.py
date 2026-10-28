@@ -26,16 +26,22 @@ from pkg.parity.parity_launch_doctor import (  # noqa: E402
 
 @contextlib.contextmanager
 def linux_flatpak_registry():
-    """Flatpak is a Linux install path (ADR 0085): pin Linux and rebuild the emulator registry."""
+    """Flatpak is a Linux install path (ADR 0086): pin Linux and rebuild the emulator registry."""
     import pkg.parity.parity_emulator_defs as defs
 
-    patcher = mock.patch.object(defs, "IS_MACOS", False)
-    patcher.start()
+    patchers = [
+        mock.patch.object(defs, "IS_LINUX", True),
+        mock.patch.object(defs, "IS_MACOS", False),
+        mock.patch("pkg.parity.parity_launch_doctor.IS_LINUX", True),
+    ]
+    for patcher in patchers:
+        patcher.start()
     defs._reset_registry_cache()
     try:
         yield
     finally:
-        patcher.stop()
+        for patcher in reversed(patchers):
+            patcher.stop()
         defs._reset_registry_cache()
 
 
@@ -438,14 +444,24 @@ class LaunchDoctorCoverageTests(unittest.TestCase):
         core.write_bytes(b"core")
         self.assertIsNone(doctor._retroarch_core_missing({"startup_args": ["-L", str(core)]}))
         self.assertEqual(doctor._retroarch_core_missing({"startup_args": ["-L", "/no/such/core.so"]}), "/no/such/core.so")
-        self.assertTrue(doctor._flatpak_fs_allowed("org.test.App", str(self.data_dir / "game.nes"), lambda _: "/usr/bin/flatpak", lambda *a, **k: type("R", (), {"returncode": 0, "stdout": "filesystem=home"})()))
-        self.assertFalse(doctor._flatpak_fs_allowed(
-            "org.test.App",
-            "/srv/outside/game.nes",
-            lambda _: "/usr/bin/flatpak",
-            lambda *a, **k: type("R", (), {"returncode": 0, "stdout": "filesystem=/srv/allowed"})(),
-        ))
-        self.assertTrue(doctor._flatpak_installed("org.test.App", lambda _: "/usr/bin/flatpak", lambda *a, **k: type("R", (), {"returncode": 0})()))
+        with mock.patch("pkg.parity.parity_launch_doctor.IS_LINUX", True):
+            self.assertTrue(doctor._flatpak_fs_allowed("org.test.App", str(self.data_dir / "game.nes"), lambda _: "/usr/bin/flatpak", lambda *a, **k: type("R", (), {"returncode": 0, "stdout": "filesystem=home"})()))
+            self.assertFalse(doctor._flatpak_fs_allowed(
+                "org.test.App",
+                "/srv/outside/game.nes",
+                lambda _: "/usr/bin/flatpak",
+                lambda *a, **k: type("R", (), {"returncode": 0, "stdout": "filesystem=/srv/allowed"})(),
+            ))
+            self.assertTrue(doctor._flatpak_installed("org.test.App", lambda _: "/usr/bin/flatpak", lambda *a, **k: type("R", (), {"returncode": 0})()))
+
+    def test_the_flatpak_probe_is_linux_only(self):
+        from pkg.parity import parity_launch_doctor as doctor
+
+        run = mock.Mock()
+        with mock.patch.object(doctor, "IS_LINUX", False):
+            self.assertFalse(doctor._flatpak_installed("org.test.App", lambda _: "/usr/bin/flatpak", run))
+            self.assertTrue(doctor._flatpak_fs_allowed("org.test.App", "/any/path", lambda _: "/usr/bin/flatpak", run))
+        run.assert_not_called()
 
     def test_preview_not_found_and_invalid_payload(self):
         from pkg.parity.parity_launch_doctor import preflight_batch, preflight_single, validate_preview
@@ -634,19 +650,20 @@ class LaunchDoctorEdgeCaseTests(unittest.TestCase):
         def run_ok(*_args, **_kwargs):
             return type("R", (), {"returncode": 0, "stdout": "filesystem=host"})()
 
-        self.assertTrue(doctor._flatpak_fs_allowed("app", "/any/path", lambda _: "flatpak", run_ok))
+        with mock.patch.object(doctor, "IS_LINUX", True):
+            self.assertTrue(doctor._flatpak_fs_allowed("app", "/any/path", lambda _: "flatpak", run_ok))
 
-        def run_fail(*_args, **_kwargs):
-            return type("R", (), {"returncode": 1, "stdout": ""})()
+            def run_fail(*_args, **_kwargs):
+                return type("R", (), {"returncode": 1, "stdout": ""})()
 
-        self.assertTrue(doctor._flatpak_fs_allowed("app", "/any/path", lambda _: None, run_fail))
-        allowed = str(self.data_dir)
+            self.assertTrue(doctor._flatpak_fs_allowed("app", "/any/path", lambda _: None, run_fail))
+            allowed = str(self.data_dir)
 
-        def run_allowed(*_args, **_kwargs):
-            return type("R", (), {"returncode": 0, "stdout": f"filesystem={allowed}"})()
-        rom = self.data_dir / "game.nes"
-        rom.write_bytes(b"NES")
-        self.assertTrue(doctor._flatpak_fs_allowed("app", str(rom), lambda _: "flatpak", run_allowed))
+            def run_allowed(*_args, **_kwargs):
+                return type("R", (), {"returncode": 0, "stdout": f"filesystem={allowed}"})()
+            rom = self.data_dir / "game.nes"
+            rom.write_bytes(b"NES")
+            self.assertTrue(doctor._flatpak_fs_allowed("app", str(rom), lambda _: "flatpak", run_allowed))
 
     def test_archive_member_listing_and_cwd_invalid(self):
         import zipfile
@@ -731,19 +748,19 @@ class LaunchDoctorEdgeCaseTests(unittest.TestCase):
             def run_shared(*_args, **_kwargs):
                 return type("R", (), {"returncode": 0, "stdout": "shared=ipc"})()
 
-            self.assertFalse(doctor._flatpak_fs_allowed("app", str(home_rom), lambda _: "flatpak", run_shared))
-
             def run_ro(*_args, **_kwargs):
                 return type("R", (), {"returncode": 0, "stdout": f"filesystem={self.data_dir}:ro"})()
 
             rom = self.data_dir / "inside.nes"
             rom.write_bytes(b"NES")
-            self.assertTrue(doctor._flatpak_fs_allowed("app", str(rom), lambda _: "flatpak", run_ro))
 
             def run_broken(*_args, **_kwargs):
                 return type("R", (), {"returncode": 0, "stdout": "filesystem=::broken"})()
 
-            self.assertFalse(doctor._flatpak_fs_allowed("app", str(rom), lambda _: "flatpak", run_broken))
+            with mock.patch.object(doctor, "IS_LINUX", True):
+                self.assertFalse(doctor._flatpak_fs_allowed("app", str(home_rom), lambda _: "flatpak", run_shared))
+                self.assertTrue(doctor._flatpak_fs_allowed("app", str(rom), lambda _: "flatpak", run_ro))
+                self.assertFalse(doctor._flatpak_fs_allowed("app", str(rom), lambda _: "flatpak", run_broken))
         finally:
             shutil.rmtree(outside_dir, ignore_errors=True)
 

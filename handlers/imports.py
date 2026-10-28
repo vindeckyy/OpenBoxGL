@@ -37,10 +37,16 @@ from pkg.state.imports import (
     storefront_scan_worker,
     storefront_source_ids,
 )
+from pkg.platform_compat import platform_features
 
 LOGGER = logging.getLogger("openbox")
 
 SUPPORTED_STOREFRONT_IMPORT_SOURCES = {"steam", "heroic", "lutris", "gameyfin"}
+
+def _require_native_storefronts(source):
+    # GOG, EA, and Ubisoft importers read Windows registry/PATH state (ADR 0086).
+    if not platform_features()["native_storefronts"]:
+        raise BadRequest(f"{source.upper()} import is only available on Windows.")
 
 def _required_folder_path(payload):
     value = payload.get("folder", "")
@@ -61,9 +67,18 @@ class ImportsHandlers:
     @route("GET", "/api/v2/storefronts")
     def _api_get_api_v2_storefronts(self, parsed):
         """Built-in and plugin storefronts with redacted plugin settings."""
+        features = platform_features()
+        # Only list built-ins this host can import from (ADR 0086).
+        builtin_sources = ["steam", "gameyfin"]
+        if features["heroic"]:
+            builtin_sources.append("heroic")
+        if features["lutris"]:
+            builtin_sources.append("lutris")
+        if features["native_storefronts"]:
+            builtin_sources.extend(("gog", "ea", "ubisoft"))
         builtins = [
             {"id": source, "name": source.title(), "kind": "builtin", "installed": True}
-            for source in ("steam", "heroic", "lutris", "gameyfin", "gog", "ea", "ubisoft")
+            for source in builtin_sources
         ]
         plugins = [
             {**item, "kind": "plugin", "installed": None}
@@ -478,6 +493,7 @@ class ImportsHandlers:
         _send_import_result(self, added, found)
 
     def _import_windows_store(self, discover, source, id_field):
+        _require_native_storefronts(source)
         errors = []
         imported = discover(errors=errors)
         added, found = merge_imported_games(

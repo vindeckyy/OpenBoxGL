@@ -1,15 +1,18 @@
 """Tests for storefront catalog helpers."""
 
+import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
-from parity_storefront import catalog_entries_to_games, catalog_steam, storefront_catalog
-from pkg.platform_compat import steam_candidate_roots
+import parity_storefront as storefront_module
+from parity_storefront import catalog_entries_to_games, catalog_heroic, catalog_steam, storefront_catalog
+from pkg.platform_compat import steam_candidate_roots, url_opener_command
 
 
 class StorefrontTests(unittest.TestCase):
@@ -60,6 +63,45 @@ class StorefrontTests(unittest.TestCase):
             )
             self.assertEqual(catalog[0]["source"], "EA")
             self.assertFalse(catalog[0]["installed"])
+
+    def test_uninstalled_steam_entries_use_the_platform_opener(self):
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            steam_root = steam_candidate_roots(home)[0]
+            (steam_root / "steamapps").mkdir(parents=True)
+            userdata = steam_root / "userdata/1/config"
+            userdata.mkdir(parents=True)
+            (userdata / "localconfig.vdf").write_text('"Apps"\n{\n"99"\n{\n}\n}', encoding="utf-8")
+            catalog = catalog_steam(home)
+        opener = url_opener_command()
+        self.assertEqual(catalog[0]["path"], opener)
+        self.assertTrue(catalog[0]["launch"].startswith(opener))
+
+    def test_uninstalled_heroic_entries_use_the_platform_opener(self):
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            base = home / "heroic"
+            cache = base / "store_cache"
+            cache.mkdir(parents=True)
+            (cache / "legendaryLibrary.json").write_text(
+                json.dumps({"abc": {"title": "Celeste", "store": "Epic"}}), encoding="utf-8"
+            )
+            with mock.patch.object(storefront_module, "heroic_bases", return_value=[base]), \
+                 mock.patch.object(storefront_module, "import_heroic", return_value=[]):
+                catalog = catalog_heroic(home)
+        opener = url_opener_command()
+        self.assertEqual(catalog[0]["source"], "Epic")
+        self.assertFalse(catalog[0]["installed"])
+        self.assertEqual(catalog[0]["path"], opener)
+        self.assertTrue(catalog[0]["launch"].startswith(opener))
+
+    def test_a_host_without_a_url_opener_says_so(self):
+        with TemporaryDirectory() as directory:
+            with mock.patch.object(storefront_module, "url_opener_command", return_value=None):
+                with self.assertRaises(FileNotFoundError):
+                    catalog_steam(Path(directory))
+                with self.assertRaises(FileNotFoundError):
+                    catalog_heroic(Path(directory))
 
 
 if __name__ == "__main__":
