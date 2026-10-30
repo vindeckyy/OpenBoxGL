@@ -70,6 +70,12 @@ $script:ShareDir = Resolve-ShareDirectory
 $script:Python = Resolve-Python
 
 # ``--web`` skips the native host entirely and forwards the remaining flags.
+# Library maintenance runs headless: no native host, no window.
+$libraryCommands = @('--check-library', '--repair-library', '--migrate-library', '--rollback-library')
+if (@($Arguments | Where-Object { $libraryCommands -contains $_ }).Count -gt 0) {
+    Invoke-WebApp -Forwarded $Arguments
+    exit $LASTEXITCODE
+}
 if ($Arguments.Count -gt 0 -and $Arguments[0] -eq '--web') {
     $forwarded = @()
     if ($Arguments.Count -gt 1) { $forwarded = $Arguments[1..($Arguments.Count - 1)] }

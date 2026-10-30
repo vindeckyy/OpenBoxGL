@@ -62,7 +62,7 @@ class SyncTransactionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             os.environ["OPENBOX_DATA_DIR"] = directory
             import openbox
-            import parity_library_sync
+            import pkg.parity.parity_library_sync as parity_library_sync
 
             openbox.STATE_STORE.save({
                 "games": [{"game_id": "g1", "name": "Quake", "favorite": False}],

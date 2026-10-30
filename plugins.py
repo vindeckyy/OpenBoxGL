@@ -57,9 +57,25 @@ PERMISSIONS = frozenset({"network"})
 PLUGIN_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 COMMAND_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 PLUGIN_API_VERSION = 1
+# Plugin API v2 is additive (ADR 0092). A v1 manifest keeps the v1 runner and the v1
+# payload shapes; a v2 manifest is served by the JSON Lines runner.
+PLUGIN_API_VERSIONS = (1, 2)
+# The version the host advertises: the newest one it serves.
+PLUGIN_API_VERSION_SUPPORTED = PLUGIN_API_VERSIONS[-1]
 RUNNER = Path(__file__).with_name("plugin_runner.py")
+RUNNER_V2 = Path(__file__).with_name("plugin_runner_v2.py")
+# Events a v2 plugin may subscribe to. A manifest naming anything else is refused.
+SUBSCRIPTIONS = frozenset({
+    "library.changed",
+    "library.progress",
+    "session.started",
+    "session.ended",
+    "game.launched",
+})
 LOGGER = logging.getLogger("openbox.plugins")
 MAX_PLUGIN_PAYLOAD = 2 * 1024 * 1024
+# A v2 plugin may return more than a v1 plugin, but the output is still capped (ADR 0092).
+MAX_PLUGIN_OUTPUT_V2 = 4 * 1024 * 1024
 MAX_COMMANDS = 32
 MAX_LIBRARY_ENTRIES = 500
 MAX_PLUGIN_DATA = 1024 * 1024
@@ -161,7 +177,8 @@ def _needs_data_dir_mask(data_posix: str) -> bool:
     )
 
 
-def _sandboxed_command(package_root, entry, hook, *, share_net=False):
+def _sandboxed_command(package_root, entry, hook, *, share_net=False, api_version=1):
+    runner_name = "plugin_runner_v2.py" if api_version >= 2 else "plugin_runner.py"
     """Build a bubblewrap command with no user-home or network access.
 
     ``share_net`` re-shares the host network namespace and is only passed for
@@ -222,9 +239,9 @@ def _sandboxed_command(package_root, entry, hook, *, share_net=False):
         "--chdir", "/tmp",
         sys.executable,
         "-B",
-        "/opt/openbox/runner/plugin_runner.py",
+        f"/opt/openbox/runner/{runner_name}",
         f"/opt/openbox/plugin/{relative_entry}",
-        hook,
+        *([] if api_version >= 2 else [hook]),
     ])
     return command
 
@@ -244,15 +261,17 @@ def _sandbox_available():
     return probe.returncode == 0
 
 
-def _plugin_command(package_root, entry, hook, *, trusted=False, share_net=False):
+def _plugin_command(package_root, entry, hook, *, trusted=False, share_net=False, api_version=1):
+    runner = RUNNER_V2 if api_version >= 2 else RUNNER
+    tail = [str(entry)] if api_version >= 2 else [str(entry), hook]
     if os.environ.get(UNSANDBOXED_PLUGINS_ENV) == "1":
         LOGGER.warning(
             "Running plugin %s without an OS sandbox because %s=1",
             package_root.name,
             UNSANDBOXED_PLUGINS_ENV,
         )
-        return [sys.executable, "-B", str(RUNNER), str(entry), hook]
-    command = _sandboxed_command(package_root, entry, hook, share_net=share_net)
+        return [sys.executable, "-B", str(runner), *tail]
+    command = _sandboxed_command(package_root, entry, hook, share_net=share_net, api_version=api_version)
     if command and _sandbox_available():
         return command
     if trusted:
@@ -262,7 +281,7 @@ def _plugin_command(package_root, entry, hook, *, trusted=False, share_net=False
             "Running plugin %s without an OS sandbox: user-trusted package",
             package_root.name,
         )
-        return [sys.executable, "-B", str(RUNNER), str(entry), hook]
+        return [sys.executable, "-B", str(runner), *tail]
     LOGGER.warning(
         "Skipping plugin %s because bubblewrap is unavailable; trust it in the Plugins manager to run it unsandboxed",
         package_root.name,
@@ -1203,6 +1222,47 @@ def merge_library_source_games(games, data_parent):
     return games + merged
 
 
+def _version_tuple(value):
+    parts = re.findall(r"\d+", str(value or ""))
+    return tuple(int(part) for part in parts[:3]) or (0,)
+
+
+def _clean_min_openbox(raw, api_version):
+    """The oldest OpenBox that serves this plugin (ADR 0092). A v2 manifest only."""
+    if raw in (None, ""):
+        return ""
+    if api_version < 2:
+        raise ValueError("min_openbox needs plugin api_version 2.")
+    text = str(raw).strip()
+    if not re.fullmatch(r"\d+(\.\d+){0,2}([-+][0-9A-Za-z.-]+)?", text):
+        raise ValueError("Plugin min_openbox must be a version number.")
+    try:
+        from updates import VERSION
+    except Exception:
+        return text
+    if _version_tuple(text) > _version_tuple(VERSION):
+        raise ValueError(f"Plugin needs OpenBox {text} or newer; this build is {VERSION}.")
+    return text
+
+
+def _clean_subscriptions(raw, api_version):
+    """The events a v2 plugin subscribes to (ADR 0092)."""
+    if raw in (None, []):
+        return []
+    if api_version < 2:
+        raise ValueError("subscriptions need plugin api_version 2.")
+    if not isinstance(raw, list) or len(raw) > 8:
+        raise ValueError("Plugin subscriptions must be a list of at most 8 names.")
+    names = []
+    for item in raw:
+        name = str(item).strip()
+        if name not in SUBSCRIPTIONS:
+            raise ValueError(f"Plugin subscribes to an unknown event: {name}")
+        if name not in names:
+            names.append(name)
+    return names
+
+
 def read_manifest(path):
     try:
         manifest = json.loads((path / "plugin.json").read_text(encoding="utf-8"))
@@ -1218,8 +1278,9 @@ def read_manifest(path):
     api_version = manifest.get("api_version", PLUGIN_API_VERSION)
     if isinstance(api_version, bool) or not isinstance(api_version, int) or api_version < 1:
         raise ValueError("Plugin api_version must be a positive integer.")
-    if api_version > PLUGIN_API_VERSION:
-        raise ValueError(f"Plugin requires API v{api_version}; this build supports v{PLUGIN_API_VERSION}.")
+    if api_version not in PLUGIN_API_VERSIONS:
+        supported = ", ".join(f"v{version}" for version in PLUGIN_API_VERSIONS)
+        raise ValueError(f"Plugin requires API v{api_version}; this build supports {supported}.")
     entry_path = (path / entry).resolve()
     if path.resolve() not in entry_path.parents or not entry_path.is_file() or entry_path.suffix != ".py":
         raise ValueError("Plugin entry must be a Python file inside the package.")
@@ -1234,6 +1295,8 @@ def read_manifest(path):
         "entry": entry,
         "hooks": hooks,
         "api_version": api_version,
+        "min_openbox": _clean_min_openbox(manifest.get("min_openbox"), api_version),
+        "subscriptions": _clean_subscriptions(manifest.get("subscriptions"), api_version),
         "commands": commands,
         "permissions": permissions,
         "settings": settings,
@@ -1354,6 +1417,8 @@ def _run_manifest_hook(root, manifest, hook, payload, *, timeout=None):
 
 
 def _invoke_hook(root, manifest, hook, payload, *, timeout=None):
+    if manifest.get("api_version", PLUGIN_API_VERSION) >= 2:
+        return _invoke_hook_v2(root, manifest, hook, payload, timeout=timeout)
     package_root = root / manifest["id"]
     entry = package_root / manifest["entry"]
     # Per-plugin settings travel in the stdin JSON payload — the sanctioned
@@ -1401,6 +1466,81 @@ def _invoke_hook(root, manifest, hook, payload, *, timeout=None):
     # Legacy plugins often echo their input payload. The host-added data bag
     # is new; drop it when it comes back unchanged so v1 result shapes stay
     # exactly what they were (capability hooks keep it).
+    if (
+        hook not in PRIVILEGED_HOOK_NAMES
+        and "plugin_data" in candidate
+        and candidate.get("plugin_data") == injected_data
+    ):
+        candidate.pop("plugin_data", None)
+    return candidate, ""
+
+
+def _parse_v2_response(output):
+    """Read the JSON Lines response of one v2 hook call."""
+    for line in output.splitlines():
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            message = json.loads(text)
+        except json.JSONDecodeError:
+            return None, "Plugin returned invalid JSON."
+        if not isinstance(message, dict):
+            return None, "Plugin output must be a JSON object."
+        kind = message.get("type")
+        if kind == "error":
+            return None, str(message.get("error") or "Plugin failed.")
+        if kind == "cancelled":
+            return None, "Plugin call was cancelled."
+        if kind == "result":
+            result = message.get("result")
+            if not isinstance(result, dict):
+                return None, "Plugin result must be an object."
+            return result, ""
+    return None, "Plugin returned no response."
+
+
+def _invoke_hook_v2(root, manifest, hook, payload, *, timeout=None):
+    """Run a v2 hook through the JSON Lines runner (ADR 0092).
+
+    The host sends one invoke request and reads the matching result. The hook's wall-clock
+    budget still applies, so a hung plugin is killed, and the output is capped.
+    """
+    package_root = root / manifest["id"]
+    entry = package_root / manifest["entry"]
+    payload = _hook_payload(root, manifest, hook, payload)
+    injected_data = payload.get("plugin_data") if isinstance(payload, dict) else None
+    request = json.dumps({"id": "1", "type": "invoke", "hook": hook, "payload": payload})
+    if len(request.encode("utf-8")) > MAX_PLUGIN_PAYLOAD:
+        return None, "Payload is too large for plugin execution."
+    trust = plugin_trust_status(root, manifest["id"])["trusted"]
+    share_net = "network" in plugin_permission_grants(root, manifest["id"])
+    command = _plugin_command(package_root, entry, hook, trusted=trust, share_net=share_net, api_version=2)
+    if command is None:
+        return None, "bubblewrap is unavailable; trust this plugin in the Plugins manager to run it unsandboxed."
+    try:
+        plugin_env = _plugin_environment()
+        with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+            completed = subprocess.run(
+                command,
+                input=request.encode("utf-8"), stdout=stdout_file, stderr=stderr_file,
+                timeout=_resolve_hook_timeout(hook, timeout), env=plugin_env, start_new_session=True,
+                check=False,
+            )
+            stdout_file.seek(0)
+            stdout = stdout_file.read(MAX_PLUGIN_OUTPUT_V2 + 1)
+            stderr_file.seek(0, 2)
+            stderr_file.seek(max(0, stderr_file.tell() - 400))
+            stderr = stderr_file.read().decode("utf-8", errors="replace")
+    except (OSError, subprocess.SubprocessError) as error:
+        return None, str(error)
+    if len(stdout) > MAX_PLUGIN_OUTPUT_V2:
+        return None, "Plugin output exceeded the payload limit."
+    if completed.returncode:
+        return None, f"Plugin exited with status {completed.returncode}: {stderr}"
+    candidate, error = _parse_v2_response(stdout.decode("utf-8", errors="replace"))
+    if error:
+        return None, error
     if (
         hook not in PRIVILEGED_HOOK_NAMES
         and "plugin_data" in candidate

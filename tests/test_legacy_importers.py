@@ -12,10 +12,9 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
-from parity_import import import_rpcs3_hdd
-from parity_legacy_import import import_msu1, import_pico8, import_whdload
+from pkg.parity.parity_import import import_rpcs3_hdd
+from pkg.parity.parity_legacy_import import import_msu1, import_pico8, import_whdload
 
 ROOT = Path(__file__).resolve().parent.parent
 

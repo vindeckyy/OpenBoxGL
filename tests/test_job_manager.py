@@ -1031,7 +1031,7 @@ class JobsAdapterTests(unittest.TestCase):
         self.assertEqual(payload["resume_of"], created["job_id"])
 
     def test_v1_jobs_route_matches_legacy_shape(self):
-        status, payload = self.request("GET", "/api/v1/jobs")
+        status, payload = self.request("GET", "/api/jobs")
         self.assertEqual(status, 200)
         self.assertIn("jobs", payload)
         self.assertIn("history", payload)
@@ -1263,7 +1263,7 @@ class JobsAdapterTests(unittest.TestCase):
         archive = DATA.parent / "backups" / "OpenBoxBackup-media.zip"
         archive.parent.mkdir(parents=True, exist_ok=True)
         archive.write_bytes(b"PK")
-        with mock.patch("handlers.health.restore_backup", return_value={"library": True, "media": True}), \
+        with mock.patch("handlers.health.restore_backup", return_value={"items": ["library", "media"], "files": []}), \
              mock.patch("handlers.health.bump_media_epoch") as bump:
             status, payload = self.request("POST", "/api/backup/restore", {"path": str(archive)})
             self.assertEqual(status, 202)

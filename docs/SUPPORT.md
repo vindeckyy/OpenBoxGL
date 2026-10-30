@@ -3,16 +3,16 @@
 ## Scale and architecture
 
 - **Formal library scale:** 20,000 games (blocking performance gates cover 10k and 20k scenarios). The optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) provides indexed search and facets for larger libraries while JSON remains canonical.
-- **CPU architecture:** OpenBox 1.19.1 publishes signed **x86_64 and aarch64 AppImages**, a signed **x86_64 Windows portable zip**, and a signed **universal macOS app bundle** (arm64 and x86_64 in one archive). The Flatpak bundle is **x86_64 only**. The in-app updater and the release installers select the artifact that matches the running architecture and refuse a mismatched or unsigned artifact.
+- **CPU architecture:** OpenBox 2.0.0 publishes signed **x86_64 and aarch64 AppImages**, signed **x86_64 and arm64 Windows portable zips**, and a signed **universal macOS app bundle** (arm64 and x86_64 in one archive). The Flatpak bundle is **x86_64 only**. The in-app updater and the release installers select the artifact that matches the running architecture and refuse a mismatched or unsigned artifact.
 
-  The Windows native host is **x86_64 only** and is built against the WebView2 SDK pinned in `scripts/build_native_host_windows.ps1`: after downloading the SDK NuGet package the script verifies its SHA-256 against a committed hash (`$WEBVIEW2_SDK_SHA256`, overridable with the `WEBVIEW2_SDK_SHA256` environment variable when trying a new SDK version) and refuses to build when the hash does not match. To rotate the SDK, bump the script's default version, download the new package, and replace the pinned hash with the new package's SHA-256.
+  The Windows native host is built per architecture against the WebView2 SDK pinned in `scripts/build_native_host_windows.ps1`: after downloading the SDK NuGet package the script verifies its SHA-256 against a committed hash (`$WEBVIEW2_SDK_SHA256`, overridable with the `WEBVIEW2_SDK_SHA256` environment variable when trying a new SDK version) and refuses to build when the hash does not match. To rotate the SDK, bump the script's default version, download the new package, and replace the pinned hash with the new package's SHA-256.
 
   The macOS bundle carries a pinned CPython build (python-build-standalone). `scripts/build_macos_app.sh` verifies the SHA-256 of every download, merges the arm64 and x86_64 interpreters into one universal tree, signs the bundle ad-hoc, and refuses to package it when the signature does not verify.
 - **Interface language:** English, Spanish, German, French, and Portuguese (v1.7.2+).
 
 ## Supported platforms
 
-OpenBox targets Linux on **x86_64 and aarch64**, Windows 10/11 on **x86_64**, and macOS 11 or newer on **arm64 and x86_64**. Release CI validates the packaged paths and native host builds; hardware and distro coverage below describes the strength of the evidence rather than a promise that every combination is physically tested:
+OpenBox targets Linux on **x86_64 and aarch64**, Windows 10/11 on **x86_64 and arm64**, and macOS 11 or newer on **arm64 and x86_64**. Release CI validates the packaged paths and native host builds; hardware and distro coverage below describes the strength of the evidence rather than a promise that every combination is physically tested:
 
 | Environment | Status |
 |---|---|
@@ -45,15 +45,19 @@ prints what it removed and what it left behind; pass `-WhatIf` to preview withou
 
 On macOS, remove `OpenBox.app` from `~/Applications` (or wherever you installed it) and the
 `~/.local/bin/openbox` link. Your data stays in `~/Library/Application Support/openbox-game-launcher`;
-delete that directory yourself to remove it as well. The bundle is not notarized, so macOS asks you
-to allow it the first time you open it, and every new build asks again because the ad-hoc signature
-changes.
+delete that directory yourself to remove it as well. A release is notarized only when its release notes
+say so. Any other macOS bundle is ad-hoc signed, so macOS asks you to allow it the first time you open
+it, and each new ad-hoc build asks again.
 
 ## Reporting problems
 
 Open **Settings -> Library Audit** and use the diagnostic log, or paste the error banner's "Copy details" output (it includes a request id maintainers can correlate with the log).
 
 Bug reports should include: OpenBox version, distro and desktop, Python version when running from source, the diagnostic report from `/api/diagnostic` (Settings), and steps to reproduce.
+
+## Portable library
+
+If games show as missing after you moved your library folder, open **Settings > Library > Check integrity**. It names missing, unreadable, and outside-folder paths with counts. OpenBox never copies or deletes game files during a move. A move is a preview followed by an apply, and you can move the folder back the same way. Your data folder (saves, media, settings) does not move with the library folder.
 
 ## Known behavior
 

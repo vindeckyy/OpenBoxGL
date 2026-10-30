@@ -11,7 +11,7 @@ from pkg.platform_compat import (
     launch_kwargs,
     resolve_native_executable,
 )
-from parity_import import recommend_emulators
+from pkg.parity.parity_import import recommend_emulators
 
 
 def commands_for(app_id, prefix):

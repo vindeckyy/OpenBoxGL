@@ -416,6 +416,24 @@ jobs:
           OPENBOX_PERF_CI_MULT: "2.5"
         run: python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5
 
+      # The no-regression gate compares against the 1.19.1 baseline measured in this
+      # same job, so the ratio is measured on one machine (plan W7-04).
+      - name: Checkout the 1.19.1 baseline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          repository: vindeckyy/OpenBoxGL
+          ref: release/1.19
+          path: .baseline
+          persist-credentials: false
+
+      - name: Compare against the 1.19.1 baseline
+        env:
+          OPENBOX_PERF_CI_MULT: "2.5"
+        run: |
+          python3 -B .baseline/scripts/perf_bench.py --base-dir "$RUNNER_TEMP/perf-base" --sizes 10000,20000 --runs 5 --no-gate --out "$RUNNER_TEMP/perf-baseline.json"
+          python3 -B scripts/perf_bench.py --base-dir "$RUNNER_TEMP/perf-cur" --sizes 10000,20000 --runs 5 --no-gate --out "$RUNNER_TEMP/perf-current.json"
+          python3 -B scripts/check_perf_regression.py --baseline "$RUNNER_TEMP/perf-baseline.json" --current "$RUNNER_TEMP/perf-current.json"
+
   ui-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -445,3 +463,31 @@ jobs:
 
       - name: Frontend smoke test
         run: ./scripts/ui_smoke.sh
+
+  # Conditional ARM64 job (ADR 0095). The artifact ships only after this job has built the
+  # native host for ARM64 and the suite has passed on windows-11-arm, so the job is
+  # informational until then: it reports, it does not block.
+  windows-arm64:
+    runs-on: windows-11-arm
+    timeout-minutes: 60
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Build the ARM64 WebView2 native host
+        shell: pwsh
+        run: |
+          scripts/build_native_host_windows.ps1 -Architecture arm64
+
+      - name: Run test suite
+        run: python -B scripts/run_windows_tests.py

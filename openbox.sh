@@ -20,6 +20,13 @@ else
   done
 fi
 
+# Library maintenance runs headless: no server, no window.
+for arg in "$@"; do
+  case "$arg" in
+    --check-library|--repair-library|--migrate-library|--rollback-library)
+      exec python3 "$SHARE/web_app.py" "$@" ;;
+  esac
+done
 if [ "${1:-}" = "--web" ]; then
   shift
   exec python3 "$SHARE/web_app.py" "$@"

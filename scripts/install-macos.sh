@@ -86,5 +86,10 @@ case ":$PATH:" in
 esac
 
 say "Done. Launch OpenBox from the Applications folder."
-say "The bundle is not notarized: the first launch asks you to allow it in"
-say "System Settings > Privacy & Security > Open Anyway."
+# NOTARIZED_BUILD is rewritten to 1 in the installer shipped with a notarized release
+# (ADR 0094). The caveat is printed only for ad-hoc builds.
+NOTARIZED_BUILD=0
+if [ "$NOTARIZED_BUILD" != "1" ]; then
+  say "The bundle is not notarized: the first launch asks you to allow it in"
+  say "System Settings > Privacy & Security > Open Anyway."
+fi

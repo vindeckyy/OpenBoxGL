@@ -1499,6 +1499,7 @@ api_post_json(const char *path, const char *body)
                "POST %s HTTP/1.1\r\n"
                "Host: 127.0.0.1:%u\r\n"
                "X-OpenBox-Token: %s\r\n"
+               "X-OpenBox-API-Version: 2\r\n"
                "Content-Type: application/json\r\n"
                "Content-Length: %zu\r\n"
                "Connection: close\r\n\r\n%s",
@@ -1578,8 +1579,8 @@ dispatch_native_api_request(const NativeRequest *request)
         return 0;
     }
     const char *path = request->kind == NATIVE_REQUEST_RESUME
-        ? "/api/v2/resume"
-        : "/api/launch";
+        ? "/api/host/resume"
+        : "/api/host/launch";
     char *body = native_request_api_body(request->value);
     int ok = api_post_json(path, body);
     free(body);
@@ -1587,7 +1588,7 @@ dispatch_native_api_request(const NativeRequest *request)
 }
 
 /*
- * Ask the server to stop. /api/shutdown stops running game sessions through
+ * Ask the server to stop. /api/host/shutdown stops running game sessions through
  * the same code path the web UI uses; CTRL_BREAK_EVENT then raises
  * KeyboardInterrupt in the child's main thread so web_app.py's finally block
  * runs its full teardown (web_app.py registers only SIGTERM and SIGINT
@@ -1601,7 +1602,7 @@ stop_server(void)
     if (!g_server_process) {
         return;
     }
-    api_post_json("/api/shutdown", "{\"force\":false}");
+    api_post_json("/api/host/shutdown", "{\"force\":false}");
 
     int signalled = 0;
     if (AttachConsole(g_server_pid)) {
@@ -3430,7 +3431,7 @@ wWinMain(HINSTANCE instance, HINSTANCE previous, LPWSTR command_line, int show_c
     /*
      * The loopback API calls in api_post_json() fail with WSANOTINITIALISED
      * unless Winsock is started first, which would silently drop deeplink
-     * dispatch and the graceful /api/shutdown POST.
+     * dispatch and the graceful /api/host/shutdown POST.
      */
     WSADATA wsa_data;
     if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {

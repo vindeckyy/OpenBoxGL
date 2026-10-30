@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened-runtime entitlements for OpenBox.app (ADR 0094). Deliberately empty: the
+  2026-10-29 dry run ran the bundled server under the hardened runtime with none. Add a key
+  only after a hardened-runtime failure is reproduced, and record it in ADR 0094's table
+  and in scripts/check_macos_release.py ENTITLEMENT_REASONS.
+-->
+<plist version="1.0">
+<dict/>
+</plist>

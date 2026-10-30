@@ -805,7 +805,20 @@ def test_release_workflow():
     # attested asset for source checkouts.
     assert "OpenBox-x86_64-windows-native-host.exe" in content
     assert "OpenBox-x86_64-windows-native-host.exe.sha256" in content
-    assert "OpenBox-x86_64-windows-native-host.exe.sig" in content
+    # The ARM64 lane mirrors x86_64: windows-11-arm builds the same zip and
+    # host under arm64 names, attests both, and the publish job signs and
+    # uploads them (ADR 0095, W5-03/W5-07).
+    assert "windows-11-arm" in content
+    assert "build-windows-arm64" in content
+    assert "attest-windows-arm64" in content
+    assert "openbox-release-assets-windows-arm64" in content
+    assert "OpenBox-arm64-windows.zip" in content
+    assert "OpenBox-arm64-windows.zip.sha256" in content
+    assert "OpenBox-arm64-windows.zip.sig" in content
+    assert "OpenBox-arm64-windows-native-host.exe" in content
+    assert "OpenBox-arm64-windows-native-host.exe.sha256" in content
+    assert "OpenBox-arm64-windows-native-host.exe.sig" in content
+    assert "arm64-windows-sbom" in content
     assert "scripts/install.ps1" in content
     print("  Release workflow: ok")
 def test_markdown_locations():

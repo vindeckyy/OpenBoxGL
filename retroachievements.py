@@ -94,7 +94,7 @@ MAX_ROM_BYTES = 512 * 1024 * 1024
 
 
 def rom_data(path):
-    from parity_premium import archive_rom_bytes
+    from pkg.parity.parity_premium import archive_rom_bytes
 
     path = Path(path)
     if path.suffix.casefold() in {".zip", ".7z"}:

@@ -30,12 +30,12 @@ from pkg.platform_compat import (
 from backend_io import contained_path
 from catalog import apply_progress_automation, progress_suggest_due
 from openbox import DATA, build_launch, load_state, update_state
-from parity_gamescope import is_gamescope_guest, is_steam_launch, mark_process_windows, steam_game_id_for, apply_mangohud_env, merge_gamescope_preset, should_nest_gamescope
-from parity_integrations import auto_attach_obs_recording
-from parity_perf import apply_perf_profile, effective_profile_name, restore_perf_profile
-from parity_resume import collect_resume_state, inject_resume_args
-from parity_saves import enforce_backup_limit
-from parity_tracking import close_store_client, wait_for_exit
+from pkg.parity.parity_gamescope import is_gamescope_guest, is_steam_launch, mark_process_windows, steam_game_id_for, apply_mangohud_env, merge_gamescope_preset, should_nest_gamescope
+from pkg.parity.parity_integrations import auto_attach_obs_recording
+from pkg.parity.parity_perf import apply_perf_profile, effective_profile_name, restore_perf_profile
+from pkg.parity.parity_resume import collect_resume_state, inject_resume_args
+from pkg.parity.parity_saves import enforce_backup_limit
+from pkg.parity.parity_tracking import close_store_client, wait_for_exit
 from plugins import emit_plugin_event, run_plugins
 from saves import backup_saves
 

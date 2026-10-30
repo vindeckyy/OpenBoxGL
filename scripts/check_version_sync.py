@@ -9,6 +9,7 @@ stale version claims. CI runs this on every push and release.
 Run directly: python3 scripts/check_version_sync.py
 """
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -148,6 +149,33 @@ def main() -> int:
                 f"read the live version from the server payload instead"
             )
             failures.append(f"{locale_path.name} hardcoded version")
+
+    # 2.0 (plan 16.3): the generated documents carry the version as well. They
+    # are derived from the declared version, so a stale file means the release
+    # was generated before the bump.
+    generated = (
+        ("docs/openapi.json", ("info", "version")),
+        ("api_contracts.json", ("app_version",)),
+        ("scripts/contracts/state.json", ("app_version",)),
+    )
+    for name, pointer in generated:
+        path = ROOT / name
+        if not path.is_file():
+            print(f"{name}: missing")
+            failures.append(name)
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            print(f"{name}: not valid JSON ({error})")
+            failures.append(name)
+            continue
+        value = payload
+        for key in pointer:
+            value = value.get(key) if isinstance(value, dict) else None
+        if value != version:
+            print(f"{name}: version is {value}, expected {version}")
+            failures.append(name)
 
     if failures:
         print(f"version sync failed: {', '.join(failures)}")

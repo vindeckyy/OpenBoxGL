@@ -265,25 +265,55 @@ with open(path, "wb") as handle:
 PY
 
 # --- 7. Signing -----------------------------------------------------------
-say "== 7/8 Ad-hoc signature =="
+# Ad-hoc by default: that is the shipped behavior until a release runs with secrets.
+# With OPENBOX_DEVELOPER_ID set, every Mach-O file and the bundle are signed with that
+# Developer ID identity, the hardened runtime, a secure timestamp, and the entitlements in
+# scripts/macos/OpenBox.entitlements (ADR 0094). Notarization runs only when
+# OPENBOX_NOTARY_PROFILE names a notarytool keychain profile (below).
+identity="${OPENBOX_DEVELOPER_ID:-}"
+if [ -n "$identity" ]; then
+  say "== 7/8 Developer ID signature (hardened runtime) =="
+  sign_flags=(--force --options runtime --timestamp --sign "$identity")
+  sign_entitlements=(--entitlements "$source_root/scripts/macos/OpenBox.entitlements")
+else
+  say "== 7/8 Ad-hoc signature =="
+  sign_flags=(--force --sign - --timestamp=none)
+  sign_entitlements=()
+fi
 find "$bundle/Contents/Resources/python" -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
 find "$bundle" -name "*.pyc" -delete 2>/dev/null || true
 while IFS= read -r file; do
-  codesign --force --sign - --timestamp=none "$file" >/dev/null 2>&1 \
+  codesign "${sign_flags[@]}" ${sign_entitlements[@]+"${sign_entitlements[@]}"} "$file" >/dev/null 2>&1 \
     || die "codesign failed for $file"
 done <<EOF
 $(find "$bundle/Contents/Resources/python" -type f | while read -r f; do
   if file -b "$f" | grep -q "Mach-O"; then echo "$f"; fi
 done)
 EOF
-codesign --force --sign - --timestamp=none --identifier "$BUNDLE_ID" "$bundle/Contents/MacOS/OpenBox" >/dev/null
-codesign --force --sign - --timestamp=none --identifier "$BUNDLE_ID" "$bundle" >/dev/null
+codesign "${sign_flags[@]}" ${sign_entitlements[@]+"${sign_entitlements[@]}"} --identifier "$BUNDLE_ID" "$bundle/Contents/MacOS/OpenBox" >/dev/null
+codesign "${sign_flags[@]}" ${sign_entitlements[@]+"${sign_entitlements[@]}"} --identifier "$BUNDLE_ID" "$bundle" >/dev/null
 codesign --verify --strict --verbose=2 "$bundle" >/dev/null 2>&1 || die "the bundle signature does not verify."
 
 # --- 8. Smoke test and packaging -----------------------------------------
 say "== 8/8 Smoke test =="
 python3 -B "$source_root/scripts/macos_bundle_smoke.py" "$bundle" || die "the bundle smoke test failed."
 
+# Notarization contacts Apple and needs a keychain profile made with `xcrun notarytool
+# store-credentials`. The stapled ticket is attached to the bundle before the archive is
+# built, so the shipped archive carries it.
+if [ -n "$identity" ] && [ -n "${OPENBOX_NOTARY_PROFILE:-}" ]; then
+  say "== Notarizing with notarytool (profile $OPENBOX_NOTARY_PROFILE) =="
+  mkdir -p "$work_root"
+  notary_archive="$work_root/notarize-$(basename "$output")"
+  rm -f "$notary_archive"
+  ditto -c -k --sequesterRsrc --keepParent "$bundle" "$notary_archive"
+  xcrun notarytool submit "$notary_archive" --keychain-profile "$OPENBOX_NOTARY_PROFILE" --wait \
+    || die "notarization was not accepted; see the notarytool log."
+  xcrun stapler staple "$bundle" || die "stapling the notarization ticket failed."
+  xcrun stapler validate "$bundle" || die "stapler validation failed."
+  spctl --assess --type execute --verbose=2 "$bundle" || die "Gatekeeper rejects the notarized bundle."
+  say "Notarized and stapled."
+fi
 mkdir -p "$(dirname "$output")"
 rm -f "$output"
 ditto -c -k --sequesterRsrc --keepParent "$bundle" "$output"

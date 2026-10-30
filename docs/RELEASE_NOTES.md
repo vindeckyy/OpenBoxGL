@@ -1,8 +1,72 @@
 # OpenBox release notes
 
-OpenBox 1.19.1 is a platform-parity bug sweep. 1.19.0 made macOS a first-class channel, which exposed a class of defects where a Linux-only feature was offered on Windows or macOS and failed at click time. This release closes that class on all three platforms: one server-computed capability contract now decides which platform-specific controls exist, and the controls Windows and macOS keep use their own tools instead of Linux ones. Linux behavior is the reference and is unchanged. The complete list is in [CHANGELOG.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md), and the code changes are in [v1.19.0...v1.19.1](https://github.com/vindeckyy/OpenBoxGL/compare/v1.19.0...v1.19.1).
+OpenBox v2.0.0 turns the 1.x compatibility scaffolding into stable contracts: the library can move, the integrations stop moving, and every supported platform gets a clean install. 1.19.1 was a platform-parity bug sweep; 1.19.0 made macOS a first-class channel, which exposed a class of defects where a Linux-only feature was offered on Windows or macOS and failed at click time. This release closes that class on all three platforms: one server-computed capability contract now decides which platform-specific controls exist, and the controls Windows and macOS keep use their own tools instead of Linux ones. Linux behavior is the reference and is unchanged. The complete list is in [CHANGELOG.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md), and the code changes are in [v1.19.0...v1.19.1](https://github.com/vindeckyy/OpenBoxGL/compare/v1.19.0...v1.19.1).
 
-## What 1.19.1 fixes
+## OpenBox v2.0.0 (unreleased)
+
+OpenBox 2.0 turns the 1.x compatibility scaffolding into stable contracts. The three promises:
+your library can move, your integrations stop moving, and every supported platform gets a clean
+install.
+
+### Your library can move
+
+- **Portable library.** Game paths under one library folder are stored as `@library/...` tokens.
+  Move the folder to another drive or machine, point OpenBox at it, and the games resolve
+  without rewriting each game. **Settings > Library > Move library** previews the move and
+  refuses a stale preview. Extra apps, versions, and documents under the folder move with it.
+- **Library format 7.** Libraries upgrade on first start. The old file is kept as
+  `library.v6.backup.json`, and `openbox --rollback-library` restores it byte-for-byte.
+- **Integrity check and media manifest.** **Settings > Library > Check integrity** reports
+  missing, unreadable, and outside-folder game paths, and media files that were changed,
+  deleted, or added behind the app's back. Nothing is changed by a check.
+- **Compatibility report.** **Settings > About > Show compatibility report** lists the library
+  format, each theme's token fallbacks, which backups restore on which version, unknown settings
+  keys, the public API and host channel, and the sync folder.
+
+### Your integrations stop moving
+
+- **The public API is `/api/v2`.** The retired `/api/v1` and unversioned routes are off by
+  default; `OPENBOX_ENABLE_V1_API=1` restores them through 2.0.x, and they are removed in 2.1.
+  `GET /api/v2/version` reports every contract version, and the OpenAPI document lists every
+  public route.
+- **The native host has its own channel.** Windows, Linux, and macOS windows talk to
+  `/api/host/*` and send `X-OpenBox-API-Version: 2`. A window from another major version is
+  refused before the route runs.
+- **Backup format 2.** Every backup records a SHA-256 for each file; a restore checks them all
+  before writing anything and reports what it wrote. A **1.19-compatible** export is available
+  when an older install must read a backup.
+
+### Platform installs
+
+- **macOS stays ad-hoc signed.** The 2.0 bundle is not notarized: the Privacy & Security
+  confirmation on first launch and after each update still applies, and the install docs
+  keep the caveat. The notarization machinery (entitlements, `notarytool`, stapling) stays
+  in the tree for a later release.
+- **Windows ARM64.** The release publishes `OpenBox-arm64-windows.zip` and `OpenBox-arm64-windows-native-host.exe` from the `windows-11-arm` lane: the host is built for ARM64, attested, signed, and verified like the x86_64 assets, and the installer and updater select it on ARM64 machines by architecture.
+- **Flatpak** stays submission-ready; the submission itself remains a maintainer decision.
+
+### Breaking changes
+
+| Change | What it means | How to keep working |
+|---|---|---|
+| Public API is `/api/v2` only | Scripts on `/api/v1` or unversioned paths stop working | Move to `/api/v2`, or set `OPENBOX_ENABLE_V1_API=1` through 2.0.x |
+| Library format 7 | A 1.x build cannot read the library after the upgrade | Automatic on first start; `openbox --rollback-library` restores the v6 copy |
+| Backup format 2 | A 1.x build cannot read a new backup | Use the 1.19-compatible export for archives a 1.x install must read |
+| Host channel | New hosts use `/api/host/*` | Update the host; the old paths stay as internal aliases through 2.0.x |
+| Retired `/api/v1` routes | Off by default | `OPENBOX_ENABLE_V1_API=1` |
+
+### Not in 2.0
+
+- JSON stays the canonical store. SQLite remains a read model; the storage decision is recorded
+  in ADR 0088 with its measurements.
+- The formal library scale stays at 20,000 games. 50,000 was measured and reported as
+  exploratory.
+- Python 3.10 is still supported.
+- Plugin API v2 is additive; v1 plugins keep working.
+
+## 1.19.1 (previous release)
+
+### What 1.19.1 fixes
 
 - **A stored gamescope preset no longer breaks Windows and macOS launches.** The preset is applied only on Linux, so it is never prepended to a Windows or macOS command line. The gamescope preset, MangoHud, and handheld-performance controls are hidden on those hosts, and `--game-mode` exits with the Linux-only message instead of starting a broken guest mode.
 - **Windows reports its real battery.** The battery indicator reads `GetSystemPowerStatus`: a desktop reports no battery, a laptop reports its percentage and charging state, and the reading is cached for 30 seconds. Windows no longer gets a hard-coded "no battery" answer.

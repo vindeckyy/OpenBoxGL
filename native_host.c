@@ -684,6 +684,7 @@ api_post_json(const char *path, const char *body)
         "POST %s HTTP/1.1\r\n"
         "Host: 127.0.0.1:%u\r\n"
         "X-OpenBox-Token: %s\r\n"
+        "X-OpenBox-API-Version: 2\r\n"
         "Content-Type: application/json\r\n"
         "Content-Length: %zu\r\n"
         "Connection: close\r\n\r\n%s",
@@ -761,8 +762,8 @@ dispatch_native_api_request(const NativeRequest *request)
         return FALSE;
     }
     const char *path = request->kind == NATIVE_REQUEST_RESUME
-        ? "/api/v2/resume"
-        : "/api/launch";
+        ? "/api/host/resume"
+        : "/api/host/launch";
     char *body = native_request_api_body(request->value);
     gboolean ok = api_post_json(path, body);
     g_free(body);

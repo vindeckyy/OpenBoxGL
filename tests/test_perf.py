@@ -15,8 +15,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
-import parity_perf
+import pkg.parity.parity_perf as parity_perf
 
 
 def fake_which(binary):

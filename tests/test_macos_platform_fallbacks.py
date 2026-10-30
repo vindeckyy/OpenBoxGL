@@ -19,7 +19,6 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import pkg.parity  # noqa: E402,F401  (flat-import finder for parity modules)
 import importers  # noqa: E402
 import saves  # noqa: E402
 from pkg import platform_compat as pc  # noqa: E402

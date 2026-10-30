@@ -33,6 +33,10 @@ EOF
 TOKEN="$TOKEN" PORT="$PORT" node scripts/ui_smoke.cjs
 MAIN_STATUS=$?
 
+# Accessibility smoke (plan W7-08): the keyboard contract for the Settings surfaces.
+TOKEN="$TOKEN" PORT="$PORT" node scripts/ui_smoke_a11y.cjs
+A11Y_STATUS=$?
+
 # --- Flagship 5 pass: boot with --bigbox, land in Big Box, OSK filters ---
 BB_DIR=$(mktemp -d /tmp/obx-ui-smoke-bb.XXXXXX)
 export OPENBOX_DATA_DIR="$BB_DIR"
@@ -62,8 +66,8 @@ EOF
 TOKEN="$BB_TOKEN" PORT="$BB_PORT" SMOKE_DEEPLINK=bigbox node scripts/ui_smoke_bigbox.cjs
 BB_STATUS=$?
 
-if [ "$MAIN_STATUS" -ne 0 ] || [ "$BB_STATUS" -ne 0 ]; then
-  echo "UI SMOKE FAILED (main=$MAIN_STATUS bigbox=$BB_STATUS)" >&2
+if [ "$MAIN_STATUS" -ne 0 ] || [ "$BB_STATUS" -ne 0 ] || [ "$A11Y_STATUS" -ne 0 ]; then
+  echo "UI SMOKE FAILED (main=$MAIN_STATUS bigbox=$BB_STATUS a11y=$A11Y_STATUS)" >&2
   exit 1
 fi
-echo "UI SMOKE PASSED (including Big Box boot + OSK)"
+echo "UI SMOKE PASSED (including Big Box boot + OSK + accessibility)"

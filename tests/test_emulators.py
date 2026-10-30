@@ -38,7 +38,7 @@ from emulators import (  # noqa: E402
     update_emulator,
 )
 from handlers.emulators import EmulatorsHandlers  # noqa: E402
-from parity_emulator_defs import (  # noqa: E402
+from pkg.parity.parity_emulator_defs import (  # noqa: E402
     build_launch_command,
     find_adapter,
     load_definitions,
@@ -414,7 +414,7 @@ class TestRegistryHelpers(unittest.TestCase):
             resolve_launch({"name": "Game", "path": path}, {})
 
     def test_save_scan_config_validation(self):
-        from parity_emulator_defs import list_scan_configs, save_scan_config
+        from pkg.parity.parity_emulator_defs import list_scan_configs, save_scan_config
 
         with self.assertRaises(ValueError):
             save_scan_config({}, "", "emu")
@@ -479,7 +479,7 @@ class TestRegistryHelpers(unittest.TestCase):
         self.assertEqual(command, ["duckstation-qt", "-batch", "/tmp/game.bin"])
 
     def test_save_scan_config_success(self):
-        from parity_emulator_defs import save_scan_config
+        from pkg.parity.parity_emulator_defs import save_scan_config
 
         state = {"settings": {}}
         entry = save_scan_config(state, "/roms", "org.DolphinEmu.dolphin-emu", auto_update=True)
@@ -864,13 +864,13 @@ class WindowsDefinitionTests(unittest.TestCase):
     """Every adapter ships a Windows executable and core layout."""
 
     def test_every_adapter_declares_a_windows_executable(self):
-        from parity_emulator_defs import load_adapters
+        from pkg.parity.parity_emulator_defs import load_adapters
 
         missing = [a["adapter_id"] for a in load_adapters() if not a["native_exe_windows"]]
         self.assertEqual(missing, [])
 
     def test_windows_executables_are_windows_programs(self):
-        from parity_emulator_defs import load_adapters
+        from pkg.parity.parity_emulator_defs import load_adapters
 
         for adapter in load_adapters():
             self.assertTrue(
@@ -879,7 +879,7 @@ class WindowsDefinitionTests(unittest.TestCase):
             )
 
     def test_posix_executables_stay_posix(self):
-        from parity_emulator_defs import load_adapters
+        from pkg.parity.parity_emulator_defs import load_adapters
 
         for adapter in load_adapters():
             self.assertFalse(adapter["native_exe"].casefold().endswith(".exe"), adapter["adapter_id"])
@@ -900,13 +900,13 @@ class MacOSDefinitionTests(unittest.TestCase):
         self.assertTrue(any(adapter["flatpak_app_id"] for adapter in on_linux))
 
     def test_every_adapter_declares_a_macos_executable(self):
-        from parity_emulator_defs import load_adapters
+        from pkg.parity.parity_emulator_defs import load_adapters
 
         for adapter in load_adapters():
             self.assertIn("native_exe_macos", adapter, adapter["adapter_id"])
 
     def test_the_macos_executable_is_a_bundle_or_a_program(self):
-        from parity_emulator_defs import load_adapters
+        from pkg.parity.parity_emulator_defs import load_adapters
 
         for adapter in load_adapters():
             value = adapter.get("native_exe_macos") or ""
@@ -920,7 +920,7 @@ class MacOSDefinitionTests(unittest.TestCase):
                 self.assertFalse(value.casefold().endswith(".exe"), adapter["adapter_id"])
 
     def test_the_macos_bundle_is_preferred_on_macos(self):
-        from parity_emulator_defs import adapter_executable, find_adapter
+        from pkg.parity.parity_emulator_defs import adapter_executable, find_adapter
 
         adapter = find_adapter("retroarch-snes")
         with mock.patch("pkg.parity.parity_emulator_defs.IS_MACOS", True), mock.patch(
@@ -948,7 +948,7 @@ class MacOSDefinitionTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == "nt", "the Windows binary is only preferred there")
     def test_windows_prefix_prefers_the_windows_binary(self):
-        from parity_emulator_defs import detect_adapter_prefix
+        from pkg.parity.parity_emulator_defs import detect_adapter_prefix
 
         adapter = find_adapter("retroarch-snes")
         probed = []

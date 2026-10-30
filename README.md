@@ -17,11 +17,11 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v1.19.1"><img src="https://img.shields.io/badge/Release-v1.19.1-0052CC?style=for-the-badge" alt="Release v1.19.1"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v2.0.0"><img src="https://img.shields.io/badge/Release-v2.0.0-0052CC?style=for-the-badge" alt="Release v1.19.1"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/vindeckyy/OpenBoxGL/ci.yml?style=for-the-badge&label=CI" alt="CI"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey?style=for-the-badge" alt="Linux, Windows, and macOS"></a>
   <br>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v1.19.1</strong></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v2.0.0</strong></a>
 </p>
 
 <p align="center">
@@ -382,7 +382,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 Download the installer from a specific signed release, inspect it, then run it. The installer detects `uname -m` (override with `OPENBOX_ARCH=x86_64` or `OPENBOX_ARCH=aarch64`), selects the matching AppImage, and verifies the release public-key pin, SHA-256 checksum, and Ed25519 signature before installing to `~/.local/bin`:
 
 ```bash
-VERSION=1.19.1
+VERSION=2.0.0
 curl --proto '=https' --tlsv1.2 --fail --location \
   --output install.sh \
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install.sh"
@@ -407,7 +407,7 @@ bundled installer from Windows PowerShell 5.1. Requires Python 3.10+ on `PATH`
 uses the same `updates.py` Ed25519 code path as the in-app updater:
 
 ```powershell
-$Version = '1.19.1'
+$Version = '2.0.0'
 Invoke-WebRequest -UseBasicParsing -OutFile OpenBox-x86_64-windows.zip `
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v$Version/OpenBox-x86_64-windows.zip"
 Expand-Archive OpenBox-x86_64-windows.zip -DestinationPath .
@@ -479,7 +479,7 @@ SHA-256 sidecar, and its Ed25519 signature, then installs `OpenBox.app` into
 `~/Applications` and links `openbox` into `~/.local/bin`:
 
 ```bash
-VERSION=1.19.1
+VERSION=2.0.0
 curl --proto '=https' --tlsv1.2 --fail --location \
   --output install-macos.sh \
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install-macos.sh"
@@ -489,9 +489,8 @@ OPENBOX_RELEASE_TAG="v${VERSION}" bash install-macos.sh
 
 Re-run with `--replace` to update an existing install, or set
 `OPENBOX_INSTALL_DIR` to install somewhere else. The bundle carries its own
-universal CPython, so nothing else has to be installed. It is ad-hoc signed,
-not notarized: the first launch asks you to allow it in **System Settings >
-Privacy & Security > Open Anyway**, and a newly installed build may ask again
+universal CPython, so nothing else has to be installed. Notarization depends on the release: its release notes say whether the bundle is notarized. An ad-hoc bundle asks you to allow it in **System Settings >
+Privacy & Security > Open Anyway** on first launch, and a newly installed build may ask again
 for the folders and permissions you granted before. The in-app updater verifies
 and swaps the bundle the same way and keeps the previous one as
 `OpenBox.app.previous`.
@@ -574,6 +573,12 @@ The full user documentation is at [openboxgl.github.io](https://openboxgl.github
 
 ---
 
+## Backups and portable libraries
+
+OpenBox writes backups as ZIP archives with a SHA-256 manifest (format 2). A restore checks every file against that manifest before anything is written. Choose **1.19-compatible** in **Settings > Sessions > Backup format** when an older install must read a backup. [docs/backups.md](docs/backups.md) lists what restores where and what stays local.
+
+A portable library keeps its game paths relative to one folder, so the folder can move to another drive or machine. **Settings > Library > Move library** previews the move before it changes anything. [docs/portable-library.md](docs/portable-library.md) explains what moves.
+
 ## REST API
 
 The Web UI exposes a local REST API for automation. Authenticate with `X-OpenBox-Token`:
@@ -587,13 +592,13 @@ cat ~/.local/share/openbox-game-launcher/server.port
 # List your library
 TOKEN=$(cat ~/.local/share/openbox-game-launcher/server.token)
 PORT=$(cat ~/.local/share/openbox-game-launcher/server.port)
-curl -H "X-OpenBox-Token: $TOKEN" http://127.0.0.1:$PORT/api/library | jq '.games | length'
+curl -H "X-OpenBox-Token: $TOKEN" http://127.0.0.1:$PORT/api/v2/library | jq '.games | length'
 
 # Launch a game by stable ID
 curl -X POST -H "X-OpenBox-Token: $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"game_id": "GAME_ID"}' \
-  http://127.0.0.1:$PORT/api/launch
+  http://127.0.0.1:$PORT/api/v2/launch
 ```
 
 Full endpoint documentation: [REST API](https://openboxgl.github.io/reference/api/).

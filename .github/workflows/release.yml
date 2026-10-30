@@ -295,6 +295,102 @@ jobs:
             OpenBox-x86_64-windows-native-host.exe
             OpenBox-x86_64-windows-native-host.exe.sha256
 
+  # The ARM64 lane (ADR 0095, W5-03/W5-07). It runs only on windows-11-arm
+  # runners, which the repository gets on tagged releases; on other runners
+  # the artifacts it would have built simply do not exist. The lane mirrors
+  # the x86_64 lane exactly: build the host for the architecture, package,
+  # name, hash, upload, attest, sign, verify, and publish under OpenBox-*-arm64
+  # file names.
+  build-windows-arm64:
+    runs-on: windows-11-arm
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$') {
+            throw "invalid release tag: $tag"
+          }
+          $expected = (python -B -c "import updates; print(updates.VERSION)").Trim()
+          if ($tag -ne "v$expected") {
+            throw "tag $tag does not match updates.py version $expected"
+          }
+
+      - name: Run test suite
+        run: python -B scripts/run_windows_tests.py
+
+      - name: Build the ARM64 WebView2 native host
+        shell: pwsh
+        run: |
+          scripts/build_native_host_windows.ps1 -Architecture arm64
+          if (-not (Test-Path -LiteralPath native_host.exe)) {
+            throw "native_host.exe was not produced; refusing to package a release without the ARM64 Windows host"
+          }
+
+      - name: Generate the ARM64 SBOM
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          python -B scripts/gen_sbom.py --version $version --out "OpenBox-$version-arm64-windows-sbom.json"
+
+      - name: Package the portable release
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'OpenBox-windows/OpenBox'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          $skip = @('.git', '.github', '.venv-dev', 'build', 'node_modules', '__pycache__', '.coverage')
+          Get-ChildItem -Force -LiteralPath . |
+            Where-Object { $skip -notcontains $_.Name } |
+            ForEach-Object { Copy-Item -Recurse -Force -LiteralPath $_.FullName -Destination $root }
+          Get-ChildItem -Recurse -Force -Directory -LiteralPath $root |
+            Where-Object { $_.Name -eq '__pycache__' } |
+            Remove-Item -Recurse -Force
+          $asset = 'OpenBox-arm64-windows.zip'
+          Compress-Archive -Path $root -DestinationPath $asset -CompressionLevel Optimal
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $asset))
+          try {
+            $hasHost = @($zip.Entries | Where-Object { ($_.FullName -replace '\\', '/') -eq 'OpenBox/native_host.exe' }).Count -eq 1
+          } finally {
+            $zip.Dispose()
+          }
+          if (-not $hasHost) {
+            throw "the release archive is missing OpenBox/native_host.exe"
+          }
+          $digest = (Get-FileHash -Algorithm SHA256 -LiteralPath $asset).Hash.ToLower()
+          "$digest  $asset" | Set-Content -LiteralPath "$asset.sha256" -Encoding ascii -NoNewline
+          $hostAsset = 'OpenBox-arm64-windows-native-host.exe'
+          Copy-Item -LiteralPath 'native_host.exe' -Destination $hostAsset -Force
+          $hostDigest = (Get-FileHash -Algorithm SHA256 -LiteralPath $hostAsset).Hash.ToLower()
+          "$hostDigest  $hostAsset" | Set-Content -LiteralPath "$hostAsset.sha256" -Encoding ascii -NoNewline
+
+      - name: Upload unsigned build outputs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # actions/upload-artifact@v7.0.2
+        with:
+          name: openbox-release-assets-windows-arm64
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            OpenBox-arm64-windows.zip
+            OpenBox-arm64-windows.zip.sha256
+            OpenBox-arm64-windows-native-host.exe
+            OpenBox-arm64-windows-native-host.exe.sha256
+            OpenBox-*-arm64-windows-sbom.json
   build-macos:
     runs-on: macos-15
     timeout-minutes: 45
@@ -334,10 +430,33 @@ jobs:
 
       # The bundle carries the universal native host and the bundled
       # interpreter, and the build signs it and runs the smoke test.
+      # With the Developer ID secrets set, the build signs with that identity under the
+      # hardened runtime and notarizes and staples the bundle (ADR 0094). Without them it
+      # stays ad-hoc, and the release notes say the bundle is not notarized.
       - name: Build the macOS app bundle
+        env:
+          OPENBOX_DEVELOPER_ID: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
+          OPENBOX_NOTARY_PROFILE: ${{ secrets.MACOS_NOTARY_PROFILE }}
         run: scripts/build_macos_app.sh "$PWD/OpenBox-macos.zip"
 
-      - name: Upload unsigned build outputs
+      # A notarized bundle is only claimed with Gatekeeper's own verdict (ADR 0094).
+      - name: Verify the notarized bundle
+        if: ${{ secrets.MACOS_CODESIGN_IDENTITY != '' }}
+        run: |
+          set -euo pipefail
+          xcrun stapler validate build/macos/OpenBox.app
+          spctl --assess --type execute --verbose=2 build/macos/OpenBox.app
+
+      # The installer prints the "not notarized" caveat unless this marker says otherwise.
+      - name: Mark the installer as notarized
+        if: ${{ secrets.MACOS_CODESIGN_IDENTITY != '' }}
+        run: |
+          set -euo pipefail
+          sed -i.bak 's/^NOTARIZED_BUILD=0$/NOTARIZED_BUILD=1/' scripts/install-macos.sh
+          rm -f scripts/install-macos.sh.bak
+          grep -q '^NOTARIZED_BUILD=1$' scripts/install-macos.sh
+
+      - name: Upload build outputs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # actions/upload-artifact@v7.0.2
         with:
           name: openbox-release-assets-macos
@@ -399,10 +518,38 @@ jobs:
         with:
           subject-name: OpenBox-x86_64-windows-native-host.exe
           subject-path: OpenBox-x86_64-windows-native-host.exe
+  attest-windows-arm64:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build-windows-arm64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Download build output
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # actions/download-artifact@v8.0.2
+        with:
+          name: openbox-release-assets-windows-arm64
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # actions/attest-build-provenance@v4.2.2
+        with:
+          subject-name: OpenBox-arm64-windows.zip
+          subject-path: OpenBox-arm64-windows.zip
+
+      - name: Attest the native host provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # actions/attest-build-provenance@v4.2.2
+        with:
+          subject-name: OpenBox-arm64-windows-native-host.exe
+          subject-path: OpenBox-arm64-windows-native-host.exe
 
   publish:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [build, attest, build-windows, attest-windows, build-macos, attest-macos]
+    needs: [build, attest, build-windows, attest-windows, build-windows-arm64, attest-windows-arm64, build-macos, attest-macos]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # AppImage, Windows and Flatpak publish jobs share one GitHub Release. Keep
@@ -521,6 +668,53 @@ jobs:
             --key openbox-release.pub \
             "$host_asset" \
             "$host_asset.sig"
+          # The ARM64 lane adds the second architecture without touching the
+          # x86_64 ladder above. It signs, confirms the key, and verifies the
+          # same way, and it refuses to ship half a channel: the archive, the
+          # standalone host, and the SBOM travel together.
+          windows_arm64_asset="OpenBox-arm64-windows.zip"
+          windows_arm64_host="OpenBox-arm64-windows-native-host.exe"
+          windows_arm64_sbom="OpenBox-${GITHUB_REF_NAME#v}-arm64-windows-sbom.json"
+          [ -f "$windows_arm64_asset" ] || {
+            echo "missing build artifact: $windows_arm64_asset" >&2
+            exit 1
+          }
+          [ -f "$windows_arm64_host" ] || {
+            echo "missing build artifact: $windows_arm64_host" >&2
+            exit 1
+          }
+          [ -f "$windows_arm64_sbom" ] || {
+            echo "missing build artifact: $windows_arm64_sbom" >&2
+            exit 1
+          }
+          python3 scripts/sign_release.py \
+            --key "$key_file" \
+            --public-key-out "$public_key_file" \
+            --out "$windows_arm64_asset.sig" \
+            "$windows_arm64_asset"
+          cmp -s "$public_key_file" openbox-release.pub || {
+            echo "OPENBOX_SIGNING_KEY does not match the committed release public key" >&2
+            exit 1
+          }
+          sha256sum --check --strict "$windows_arm64_asset.sha256"
+          python3 scripts/verify_release.py \
+            --key openbox-release.pub \
+            "$windows_arm64_asset" \
+            "$windows_arm64_asset.sig"
+          python3 scripts/sign_release.py \
+            --key "$key_file" \
+            --public-key-out "$public_key_file" \
+            --out "$windows_arm64_host.sig" \
+            "$windows_arm64_host"
+          cmp -s "$public_key_file" openbox-release.pub || {
+            echo "OPENBOX_SIGNING_KEY does not match the committed release public key" >&2
+            exit 1
+          }
+          sha256sum --check --strict "$windows_arm64_host.sha256"
+          python3 scripts/verify_release.py \
+            --key openbox-release.pub \
+            "$windows_arm64_host" \
+            "$windows_arm64_host.sig"
           # The macOS bundle follows the same ladder: sign, confirm the
           # signing key is the committed release key, then verify.
           macos_asset="OpenBox-macos.zip"
@@ -608,8 +802,13 @@ jobs:
             OpenBox-x86_64-windows.zip.sha256
             OpenBox-x86_64-windows.zip.sig
             OpenBox-x86_64-windows-native-host.exe
-            OpenBox-x86_64-windows-native-host.exe.sha256
             OpenBox-x86_64-windows-native-host.exe.sig
+            OpenBox-arm64-windows.zip
+            OpenBox-arm64-windows.zip.sha256
+            OpenBox-arm64-windows.zip.sig
+            OpenBox-arm64-windows-native-host.exe
+            OpenBox-arm64-windows-native-host.exe.sha256
+            OpenBox-arm64-windows-native-host.exe.sig
             OpenBox-macos.zip
             OpenBox-macos.zip.sha256
             OpenBox-macos.zip.sig

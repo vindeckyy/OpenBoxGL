@@ -83,16 +83,27 @@ function Resolve-Python {
 }
 
 function Resolve-Arch {
+    # The ARM64 lane builds, attests, signs, and publishes OpenBox-arm64-windows.zip
+    # on every release (ADR 0095, W5-03). Architecture selection is by runner CPU,
+    # never by a fixed name; a missing ARM64 asset fails the download like any
+    # other missing artifact.
     $candidate = $Arch
     if (-not $candidate) { $candidate = $env:OPENBOX_ARCH }
     if (-not $candidate) { $candidate = $env:PROCESSOR_ARCHITECTURE }
-    switch ("$candidate".ToLowerInvariant()) {
-        'x86_64' { return 'x86_64' }
-        'amd64' { return 'x86_64' }
-        'aarch64' { Die "OpenBox publishes Windows builds for x86_64 only; there is no aarch64 Windows zip (got '$candidate')." }
-        'arm64' { Die "OpenBox publishes Windows builds for x86_64 only; there is no ARM64 Windows zip (got '$candidate')." }
-        default { Die "Unsupported architecture: '$candidate' (expected x86_64)." }
+    $requested = switch ("$candidate".ToLowerInvariant()) {
+        { $_ -in 'x86_64', 'amd64', 'x64' } { 'x86_64' }
+        { $_ -in 'arm64', 'aarch64' } { 'arm64' }
+        default { Die "Unsupported architecture: '$candidate' (expected x86_64 or arm64)." }
     }
+    $machine = switch ("$env:PROCESSOR_ARCHITECTURE".ToLowerInvariant()) {
+        { $_ -in 'amd64', 'x64', 'x86_64' } { 'x86_64' }
+        { $_ -in 'arm64', 'aarch64' } { 'arm64' }
+        default { '' }
+    }
+    if ($machine -and $machine -ne $requested) {
+        Die "This machine is $machine; the $requested build does not match it. Use the $machine build."
+    }
+    return $requested
 }
 
 function Resolve-Tag {

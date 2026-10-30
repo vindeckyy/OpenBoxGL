@@ -8,8 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
-import parity_constellation  # noqa: E402
+import pkg.parity.parity_constellation as parity_constellation  # noqa: E402
 
 
 class ParityConstellationShimTest(unittest.TestCase):

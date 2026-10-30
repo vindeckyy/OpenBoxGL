@@ -8,10 +8,9 @@ import os
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
-import parity_gamescope
-from parity_gamescope import (
+import pkg.parity.parity_gamescope as parity_gamescope
+from pkg.parity.parity_gamescope import (
     OPENBOX_STEAM_GAME_ID,
     game_mode_url,
     is_gamescope_guest,

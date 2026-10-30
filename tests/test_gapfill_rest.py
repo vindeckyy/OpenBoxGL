@@ -28,7 +28,6 @@ sys.path.insert(0, str(ROOT))
 _DATA_DIR = tempfile.mkdtemp(prefix="openbox-gapfill-rest-")
 os.environ["OPENBOX_DATA_DIR"] = _DATA_DIR
 
-import pkg.parity  # noqa: F401,E402  # register flat-import finder first
 import plugins  # noqa: E402
 import catalog  # noqa: E402
 import openbox  # noqa: E402

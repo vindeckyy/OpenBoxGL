@@ -2,7 +2,7 @@
 // fixed. Run with: node --test tests/js/   (CI runs this in the gate job).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { progressScore, importedCount, formatHours, formatMoney, nextRetryDelay, stableIdFor, cycleFilterState, sourceFilterMatches, firstEdge, wheelStepAllowed, matchesKey, integerScale, screenSaverStats, clampAngle } from '../../static/pure.js';
+import { progressScore, importedCount, formatHours, formatMoney, nextRetryDelay, stableIdFor, cycleFilterState, sourceFilterMatches, firstEdge, wheelStepAllowed, matchesKey, integerScale, screenSaverStats, clampAngle, facetCounts } from '../../static/pure.js';
 
 test('formatMoney formats cents and falls back for an invalid currency', () => {
   assert.equal(formatMoney(1999, 'USD', 'en-US'), '$19.99');
@@ -138,4 +138,23 @@ test('clampAngle locks axes and bounds vertical rotation', () => {
   assert.equal(clampAngle(45, 'horizontal', 'y'), 45);
   assert.equal(clampAngle(45, 'vertical', 'y'), 0);
   assert.equal(clampAngle(45, 'vertical', 'x'), 45);
+});
+
+test('facetCounts counts platforms and platform categories', () => {
+  const games = [
+    { name: 'Alpha', platform: 'NES' },
+    { name: 'Beta', platform: 'NES' },
+    { name: 'Gamma', platform: 'SNES' },
+    { name: 'Delta', platform: '' },
+    { name: 'Epsilon' },
+  ];
+  const counts = facetCounts(games, { NES: 'Console', SNES: 'Console' });
+  assert.deepEqual(counts.platform, { NES: 2, SNES: 1, Unspecified: 2 });
+  assert.deepEqual(counts.platform_category, { Console: 3, Other: 2 });
+});
+
+test('facetCounts survives an empty or malformed library', () => {
+  assert.deepEqual(facetCounts([], {}), { platform: {}, platform_category: {} });
+  assert.deepEqual(facetCounts(null, {}), { platform: {}, platform_category: {} });
+  assert.deepEqual(facetCounts([null, 'nonsense'], {}), { platform: {}, platform_category: {} });
 });

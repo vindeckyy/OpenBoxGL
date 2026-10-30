@@ -16,6 +16,7 @@ class Route:
     func: Any = None
     public: bool = False
     v1: bool = False
+    visibility: str = "internal"
 
     def __getitem__(self, key: str) -> Any:
         return getattr(self, key)
@@ -37,6 +38,29 @@ class Route:
 _REGISTRY: dict[tuple[str, str], Route] = {}
 
 
+VISIBILITIES = ("public", "host", "internal")
+
+
+def default_visibility(path: str) -> str:
+    """Public operations live under /api/v2/, the native host channel under /api/host/, the rest is internal."""
+    if path == "/api/v2" or path.startswith("/api/v2/"):
+        return "public"
+    if path.startswith("/api/host/"):
+        return "host"
+    return "internal"
+
+
+def _check_visibility(path: str, visibility: str, *, v1: bool) -> None:
+    if visibility not in VISIBILITIES:
+        raise ValueError(f"Unknown route visibility {visibility!r} for {path}.")
+    if visibility == "public" and not path.startswith("/api/v2/"):
+        raise ValueError(f"Public route {path} must live under /api/v2/.")
+    if visibility == "public" and v1:
+        raise ValueError(f"Public route {path} cannot be a v1 alias.")
+    if visibility == "host" and not path.startswith("/api/host/"):
+        raise ValueError(f"Host route {path} must live under /api/host/.")
+
+
 def register(
     method: str,
     path: str,
@@ -44,6 +68,7 @@ def register(
     func: Any = None,
     public: bool = False,
     v1: bool = False,
+    visibility: str | None = None,
 ) -> Route:
     """Register a route in the central _REGISTRY."""
     method_upper = method.upper()
@@ -55,6 +80,8 @@ def register(
                 spec = func.__name__
         else:
             raise ValueError("Either spec or func must be provided.")
+    resolved_visibility = visibility or default_visibility(path)
+    _check_visibility(path, resolved_visibility, v1=v1)
     route_obj = Route(
         method=method_upper,
         path=path,
@@ -62,6 +89,7 @@ def register(
         func=func,
         public=public,
         v1=v1,
+        visibility=resolved_visibility,
     )
     key = (method_upper, path)
     if key in _REGISTRY:
@@ -76,6 +104,7 @@ def route(
     spec: str | None = None,
     public: bool = False,
     v1: bool = False,
+    visibility: str | None = None,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator to register a handler method or function for an HTTP route."""
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -95,6 +124,7 @@ def route(
                 func=func,
                 public=public,
                 v1=v1,
+                visibility=visibility,
             )
         return func
 
@@ -105,6 +135,7 @@ def _ensure_handlers_loaded() -> None:
     """Load all handler modules and web_app to trigger @route registrations."""
     modules = (
         "handlers.library",
+        "handlers.library_storage",
         "handlers.imports",
         "handlers.media",
         "handlers.metadata",

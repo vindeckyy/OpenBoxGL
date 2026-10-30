@@ -9,7 +9,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.environ.setdefault("OPENBOX_DATA_DIR", tempfile.mkdtemp())
 
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 from pkg.state import launch as launch_mod  # noqa: E402
 
 

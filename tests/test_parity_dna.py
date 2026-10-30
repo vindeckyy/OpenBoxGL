@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pkg", "parity"))
 import pkg.parity  # noqa: E402,F401  (registers the flat parity_* MetaPathFinder)
 
-import parity_dna as dna  # noqa: E402
+import pkg.parity.parity_dna as dna  # noqa: E402
 
 
 STARDEW = {

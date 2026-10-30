@@ -29,9 +29,8 @@ os.environ["OPENBOX_DATA_DIR"] = str(Path(_DATA_ROOT.name).resolve())
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "pkg" / "parity"))
 
-import pkg.parity  # noqa: E402,F401  # registers the flat parity_* import finder
-import parity_memories as memories  # noqa: E402  # flat import == the module handlers use
-from parity_memories import (  # noqa: E402
+import pkg.parity.parity_memories as memories  # noqa: E402  # flat import == the module handlers use
+from pkg.parity.parity_memories import (  # noqa: E402
     MemoryCandidate,
     apply_import_plan,
     configured_roots,

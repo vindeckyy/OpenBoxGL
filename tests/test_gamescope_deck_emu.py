@@ -242,7 +242,6 @@ def spawn_steam_owner_window():
 def main():
     os.chdir(ROOT)
     sys.path.insert(0, str(ROOT))
-    import pkg.parity  # noqa: F401  # register flat-import finder
 
     emu_log = os.environ.get("OPENBOX_DECK_EMU_LOG")
     if emu_log:
@@ -250,7 +249,7 @@ def main():
         sys.stdout = open(emu_log, "w", encoding="utf-8", buffering=1)
         sys.stderr = sys.stdout
 
-    from parity_gamescope import (
+    from pkg.parity.parity_gamescope import (
         OPENBOX_STEAM_GAME_ID,
         game_mode_url,
         is_gamescope_guest,
@@ -405,7 +404,7 @@ def main():
                         env=env,
                     )
                     time.sleep(0.8)
-                    from parity_gamescope import mark_process_windows
+                    from pkg.parity.parity_gamescope import mark_process_windows
 
                     windows = mark_process_windows(
                         helper.pid,

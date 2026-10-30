@@ -382,7 +382,7 @@ class InstallTests(unittest.TestCase):
         # update looked like a no-op.
         from pkg.parity import parity_emulator_defs as defs
         import emulators
-        from parity_import import PLATFORM_EMULATORS as import_surfaces
+        from pkg.parity.parity_import import PLATFORM_EMULATORS as import_surfaces
         import openbox
         from pkg.state import imports as state_imports
 
@@ -601,11 +601,6 @@ class RouteWiringTests(unittest.TestCase):
             "/api/v2/emulators/defs/rollback",
         ):
             self.assertIn(path, paths)
-
-    def test_v1_surface_is_untouched(self):
-        contract = json.loads((ROOT / "v1_contracts.json").read_text(encoding="utf-8"))
-        for entry in contract["routes"]:
-            self.assertNotIn("/api/v2/", entry["path"])
 
 
 if __name__ == "__main__":

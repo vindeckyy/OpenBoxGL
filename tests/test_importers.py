@@ -12,7 +12,6 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 from pkg.platform_compat import steam_candidate_roots  # noqa: E402
 
 import importers
@@ -27,7 +26,7 @@ from importers import (
     steam_roots,
     vdf_values,
 )
-from parity_import import (
+from pkg.parity.parity_import import (
     _disc_base,
     _parallel_scandir,
     dedupe_ranked_imports,
@@ -448,7 +447,7 @@ class ParallelScannerAndDiscTests(unittest.TestCase):
             {"name": "Chrono Trigger (Japan)", "platform": "SNES", "path": "/roms/ct_jap.smc"},
             {"name": "Super Mario World", "platform": "SNES", "path": "/roms/smw.smc"},
         ]
-        with mock.patch("parity_premium.rank_rom_group", side_effect=lambda paths: paths):
+        with mock.patch("pkg.parity.parity_premium.rank_rom_group", side_effect=lambda paths: paths):
             deduped = dedupe_ranked_imports(additions)
         self.assertEqual(len(deduped), 2)
         ct = next(item for item in deduped if "chrono" in item["name"].casefold())

@@ -896,7 +896,7 @@ static NSString *BridgeScript(void)
      * with non-ASCII text would otherwise truncate the body. */
     NSUInteger body_length = [body lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
     NSString *request = [NSString stringWithFormat:
-        @"POST %@ HTTP/1.1\r\nHost: 127.0.0.1\r\nX-OpenBox-Token: %@\r\n"
+        @"POST %@ HTTP/1.1\r\nHost: 127.0.0.1\r\nX-OpenBox-Token: %@\r\nX-OpenBox-API-Version: 2\r\n"
          "Content-Type: application/json\r\nContent-Length: %lu\r\nConnection: close\r\n\r\n%@",
         path, _token, (unsigned long)body_length, body];
     const char *bytes = request.UTF8String;
@@ -947,9 +947,9 @@ static NSString *BridgeScript(void)
             body = [NSString stringWithFormat:@"{\"game_id\":\"%@\"}", json_escape(value)];
         }
         if (_native_request_kind == NativeRequestLaunch) {
-            [self postApi:@"/api/launch" body:body];
+            [self postApi:@"/api/host/launch" body:body];
         } else {
-            [self postApi:@"/api/v2/resume" body:body];
+            [self postApi:@"/api/host/resume" body:body];
         }
     }
     NSString *url = [self authenticatedUrl];
@@ -1696,9 +1696,10 @@ static int selftest_server(OpenBoxHost *host)
         return 1;
     }
     NSURL *url = [NSURL URLWithString:
-        [NSString stringWithFormat:@"%@/api/native/capabilities", origin]];
+        [NSString stringWithFormat:@"%@/api/host/capabilities", origin]];
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
     [request setValue:token forHTTPHeaderField:@"X-OpenBox-Token"];
+    [request setValue:@"2" forHTTPHeaderField:@"X-OpenBox-API-Version"];
     [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
     __block NSString *payload = nil;
     __block NSError *failure = nil;

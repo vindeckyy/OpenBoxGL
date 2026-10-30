@@ -12,9 +12,8 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
-from parity_emumovies import (
+from pkg.parity.parity_emumovies import (
     KIND_MAP,
     destination_for,
     download,
@@ -186,7 +185,7 @@ class EmuMoviesTests(unittest.TestCase):
             "headers": {"Authorization": "Basic dXNlcjpwYXNz"},
         }
         with tempfile.TemporaryDirectory() as folder, \
-             mock.patch("parity_emumovies.download_file", side_effect=fake_download):
+             mock.patch("pkg.parity.parity_emumovies.download_file", side_effect=fake_download):
             result = download(candidate, folder)
             self.assertEqual(Path(result), captured["destination"])
             self.assertTrue(result.endswith("video_snap.mp4"))
@@ -208,8 +207,8 @@ class EmuMoviesTests(unittest.TestCase):
     def test_compatibility_entry_accepts_route_media_types(self):
         candidate = {"kind": "screenshots", "url": "https://x/y.png", "content_type": "image/png"}
         with tempfile.TemporaryDirectory() as folder, \
-             mock.patch("parity_emumovies.search", return_value=candidate) as search_mock, \
-             mock.patch("parity_emumovies.download", return_value="/media/out.png") as download_mock:
+             mock.patch("pkg.parity.parity_emumovies.search", return_value=candidate) as search_mock, \
+             mock.patch("pkg.parity.parity_emumovies.download", return_value="/media/out.png") as download_mock:
             result = download_emumovies_media({"name": "Game"}, CREDENTIALS, folder, "snap")
         self.assertEqual(result, "/media/out.png")
         self.assertEqual(search_mock.call_args.args[1], "screenshots")

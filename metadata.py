@@ -1058,7 +1058,7 @@ def _apply_metadata_fields(game, record, database_id, overwrite):
         value = _year_from_record(record) if target == "year" else record[source]
         if value and (overwrite or not game.get(target)):
             game[target] = value
-    from parity_premium import apply_esrb_from_record
+    from pkg.parity.parity_premium import apply_esrb_from_record
     if overwrite or not game.get("esrb"):
         apply_esrb_from_record(game, record)
     if record.get("max_players") and (overwrite or not game.get("max_players")):
@@ -1068,7 +1068,7 @@ def _apply_metadata_fields(game, record, database_id, overwrite):
 
 def _load_media_images(database, database_id, region_priority):
     """Load the game's images, region-sorted."""
-    from parity_media import REGION_PRIORITY_DEFAULT, sort_images_by_region
+    from pkg.parity.parity_media import REGION_PRIORITY_DEFAULT, sort_images_by_region
 
     return sort_images_by_region(
         [dict(row) for row in database.execute("SELECT * FROM images WHERE database_id = ?", (int(database_id),))],

@@ -144,6 +144,19 @@ result (never an error that blocks the browser fallback): `dialog` returns
 `{ "cancelled": true }`, `open-external` and `reveal` return `{ "ok": false }`,
 and `window` returns `{ "ok": false }`.
 
+## Host channel (ADR 0091)
+
+The native window talks to the server on the host channel, separate from the public API:
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/host/launch` | launch a game in its own window |
+| POST | `/api/host/resume` | resume a stored session |
+| POST | `/api/host/shutdown` | stop running sessions and the server |
+| GET | `/api/host/capabilities` | report host capabilities |
+
+Every host request carries `X-OpenBox-Token` and `X-OpenBox-API-Version: 2`. The server refuses a host that advertises another major version with `HOST_API_UNSUPPORTED` (HTTP 409) before any route runs. The unversioned `/api/launch`, `/api/shutdown`, and `/api/v2/resume` paths remain as internal aliases for hosts built before 2.0, until 2.1.
+
 ## Deeplinks
 
 The host loads the page with `?token=<token>` plus an optional `deeplink`

@@ -87,7 +87,7 @@ class TestSessionPersistence(unittest.TestCase):
         }
         normalized, changed = normalize_state(v5_state)
         self.assertTrue(changed)
-        self.assertEqual(normalized["schema_version"], 6)
+        self.assertEqual(normalized["schema_version"], 7)
         self.assertIn("active_sessions", normalized)
         self.assertEqual(normalized["active_sessions"], [])
 
