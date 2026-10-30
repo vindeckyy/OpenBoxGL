@@ -42,14 +42,9 @@ class IntegrityReportTests(unittest.TestCase):
         return {name: info["count"] for name, info in report["categories"].items()}
 
     def test_each_problem_is_counted_in_its_own_category(self):
-        locked = self.root / "roms" / "locked.iso"
-        locked.write_bytes(b"x")
-        locked.chmod(0)
-        self.addCleanup(locked.chmod, 0o644)
         self.write_library([
             {"game_id": "ok", "name": "Ok", "path": "@library/roms/present.iso"},
             {"game_id": "missing", "name": "Missing", "path": "@library/roms/gone.iso"},
-            {"game_id": "locked", "name": "Locked", "path": "@library/roms/locked.iso"},
             {"game_id": "outside", "name": "Outside", "path": "/elsewhere/outside.iso"},
             {"game_id": "escape", "name": "Escape", "path": "@library/../secret.iso"},
         ])
@@ -57,10 +52,24 @@ class IntegrityReportTests(unittest.TestCase):
         counts = self.counts(report)
         # The outside path is reported as outside the root and, since it does not exist, as missing too.
         self.assertEqual(counts.get("game_path_missing"), 2)
-        self.assertEqual(counts.get("game_path_unreadable"), 1)
         self.assertEqual(counts.get("game_path_outside_root"), 1)
         self.assertEqual(counts.get("path_token_escape"), 1)
         self.assertEqual(report["exit_code"], 2)
+
+    def test_an_unreadable_path_is_reported(self):
+        # POSIX permission bits are the only way to make a path unreadable here:
+        # Windows has no read permission bit, and root bypasses the bits.
+        if sys.platform == "win32":
+            self.skipTest("Windows file permissions cannot deny a read")
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            self.skipTest("permission bits are bypassed when running as root")
+        locked = self.root / "roms" / "locked.iso"
+        locked.write_bytes(b"x")
+        locked.chmod(0)
+        self.addCleanup(locked.chmod, 0o644)
+        self.write_library([{"game_id": "locked", "name": "Locked", "path": "@library/roms/locked.iso"}])
+        report = library_v7.check_library(self.data)
+        self.assertEqual(self.counts(report).get("game_path_unreadable"), 1)
 
     def test_a_missing_token_is_reported_at_its_resolved_location(self):
         self.write_library([{"game_id": "gone", "name": "Gone", "path": "@library/roms/gone.iso"}])

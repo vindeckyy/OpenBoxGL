@@ -396,6 +396,12 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+    # The secrets context is not available in a step condition, so the
+    # Developer ID and the notary profile arrive as job env vars and the
+    # notarization steps gate on them.
+    env:
+      MACOS_CODESIGN_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
+      MACOS_NOTARY_PROFILE: ${{ secrets.MACOS_NOTARY_PROFILE }}
 
     steps:
       - name: Checkout
@@ -435,13 +441,13 @@ jobs:
       # stays ad-hoc, and the release notes say the bundle is not notarized.
       - name: Build the macOS app bundle
         env:
-          OPENBOX_DEVELOPER_ID: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
-          OPENBOX_NOTARY_PROFILE: ${{ secrets.MACOS_NOTARY_PROFILE }}
+          OPENBOX_DEVELOPER_ID: ${{ env.MACOS_CODESIGN_IDENTITY }}
+          OPENBOX_NOTARY_PROFILE: ${{ env.MACOS_NOTARY_PROFILE }}
         run: scripts/build_macos_app.sh "$PWD/OpenBox-macos.zip"
 
       # A notarized bundle is only claimed with Gatekeeper's own verdict (ADR 0094).
       - name: Verify the notarized bundle
-        if: ${{ secrets.MACOS_CODESIGN_IDENTITY != '' }}
+        if: ${{ env.MACOS_CODESIGN_IDENTITY != '' }}
         run: |
           set -euo pipefail
           xcrun stapler validate build/macos/OpenBox.app
@@ -449,7 +455,7 @@ jobs:
 
       # The installer prints the "not notarized" caveat unless this marker says otherwise.
       - name: Mark the installer as notarized
-        if: ${{ secrets.MACOS_CODESIGN_IDENTITY != '' }}
+        if: ${{ env.MACOS_CODESIGN_IDENTITY != '' }}
         run: |
           set -euo pipefail
           sed -i.bak 's/^NOTARIZED_BUILD=0$/NOTARIZED_BUILD=1/' scripts/install-macos.sh

@@ -11,7 +11,8 @@ import os
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from unittest import mock
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -243,6 +244,36 @@ class TrashRouteTest(unittest.TestCase):
         entry = {"trash_id": "trash-no-ts", "game_id": "game-z1", "trashed_at": 7}
         state, _ = normalize_state({"schema_version": 6, "games": [], "trash": [entry]})
         self.assertEqual(state["trash"], [entry])
+
+    def test_a_utc_timestamp_entry_expires_like_a_local_one(self):
+        """A "Z" stamp is what a restored backup carries, and it must still expire."""
+        from state_store import _parse_trash_timestamp, prune_trash
+
+        class _Py310Datetime(datetime):
+            """datetime.fromisoformat only learned the "Z" suffix in Python 3.11."""
+
+            @classmethod
+            def fromisoformat(cls, text):
+                if text.endswith(("Z", "z")):
+                    raise ValueError("Invalid isoformat string")
+                return datetime.fromisoformat(text)
+
+        stamp = "2026-01-02T03:04:05Z"
+        with mock.patch("state_store.datetime", _Py310Datetime):
+            self.assertEqual(
+                _parse_trash_timestamp(stamp),
+                datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc).timestamp(),
+            )
+        old = datetime.now() - timedelta(days=45)
+        utc_stamp = old.isoformat(timespec="seconds") + "Z"
+        local_stamp = old.isoformat(timespec="seconds")
+        entries = [
+            {"trash_id": "trash-utc", "trashed_at": utc_stamp},
+            {"trash_id": "trash-local", "trashed_at": local_stamp},
+            {"trash_id": "trash-fresh", "trashed_at": datetime.now().isoformat(timespec="seconds")},
+        ]
+        kept = [entry["trash_id"] for entry in prune_trash(entries)]
+        self.assertEqual(kept, ["trash-fresh"])
 
     def test_journal_event_emitted_when_sync_on(self):
         self._save(games=[_game("game-k1", "Logged")],

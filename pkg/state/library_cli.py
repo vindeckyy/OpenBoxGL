@@ -38,6 +38,22 @@ def is_library_command(argv: list[str]) -> bool:
     return any(arg in LIBRARY_COMMANDS for arg in argv)
 
 
+def _stdin_is_interactive() -> bool:
+    """True when stdin can carry a typed answer to a prompt.
+
+    A child started without a console (Windows hands one a NUL device) and a
+    closed stdin cannot answer: reading them raises EOFError, so asking there
+    would abort the command with a traceback instead of refusing cleanly.
+    """
+    stream = getattr(sys, "stdin", None)
+    if stream is None:
+        return False
+    try:
+        return bool(stream.isatty())
+    except (OSError, ValueError):
+        return False
+
+
 def _print(payload: dict[str, Any]) -> None:
     print(json.dumps(payload, indent=2, ensure_ascii=False))
 
@@ -74,13 +90,21 @@ def main(
             _print({"migrated": state is not None, "report": report})
             return EXIT_OK
         confirmed = "--yes" in argv
-        if not confirmed and sys.stdin.isatty():
+        if not confirmed and _stdin_is_interactive():
             preview = library_v7.rollback(directory, confirmed=False)
             _print(preview)
-            confirmed = input_fn("Type ROLLBACK to restore the v6 copy: ").strip() == "ROLLBACK"
-            if not confirmed:
+            try:
+                answer = input_fn("Type ROLLBACK to restore the v6 copy: ").strip()
+            except (EOFError, OSError):
+                # stdin ended without an answer: a console-less child (Windows
+                # hands one a NUL device) or a closed pipe. The confirmation
+                # cannot be given here, so refuse and say how to proceed.
+                print("Re-run with --yes to roll back. Nothing was changed.", file=sys.stderr)
+                return EXIT_REFUSED
+            if answer != "ROLLBACK":
                 print("Rollback cancelled; nothing was changed.", file=sys.stderr)
                 return EXIT_REFUSED
+            confirmed = True
         if not confirmed:
             _print(library_v7.rollback(directory, confirmed=False))
             print("Re-run with --yes to roll back. Nothing was changed.", file=sys.stderr)

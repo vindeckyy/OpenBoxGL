@@ -346,7 +346,7 @@ int main(int argc, char **argv) {
         self.assertEqual(values['bad_result'], '2')
 
     def test_launch_request_posts_authenticated_api_payload(self):
-        """The launch request uses parity_deeplinks' authenticated API path."""
+        """The launch request posts to the host-channel launch path (ADR 0091)."""
         result = subprocess.run(
             ['pkg-config', '--exists', 'webkit2gtk-4.1'],
             capture_output=True,
@@ -389,7 +389,7 @@ int main(int argc, char **argv) {
             thread.join(timeout=2)
 
         self.assertEqual(len(captured), 1)
-        self.assertEqual(captured[0][0], '/api/launch')
+        self.assertEqual(captured[0][0], '/api/host/launch')
         self.assertEqual(captured[0][1], 'token-1234567890')
         self.assertEqual(captured[0][2], b'{"game_id":"game/id"}')
 

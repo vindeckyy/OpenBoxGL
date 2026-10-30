@@ -636,6 +636,13 @@ def test_desktop_entry():
 def test_metainfo():
     xml = ROOT / "openbox.metainfo.xml"
     content = xml.read_text(encoding="utf-8")
+    # The file must parse. appstreamcli and flatpak-builder are the CI gates
+    # that catch malformed markup, but they only run on Linux runners, so the
+    # well-formedness check lives here too.
+    try:
+        ElementTree.fromstring(content)
+    except ElementTree.ParseError as exc:
+        raise AssertionError(f"openbox.metainfo.xml is not well-formed XML: {exc}") from exc
     assert "io.openbox.GameLauncher" in content
     assert '<launchable type="desktop-id">io.openbox.GameLauncher.desktop</launchable>' in content
     assert "<name>OpenBox Game Launcher</name>" in content

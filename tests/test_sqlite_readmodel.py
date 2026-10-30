@@ -16,11 +16,13 @@ Verifies:
   - A parity mismatch drops the model back to the JSON read path.
 """
 
+import sqlite3
 import sys
 import tempfile
 import threading
 import time
 from pathlib import Path
+from unittest import mock
 
 def _repo_root() -> Path:
     candidate = Path(__file__).resolve().parent
@@ -447,6 +449,49 @@ def test_a_corrupt_database_is_discarded_and_rebuilt():
         rm.close()
 
 
+def test_a_corrupt_database_is_released_before_it_is_discarded():
+    """The failed connection must be closed before the file is removed.
+
+    Windows refuses to unlink a file that is still open, so a projection that
+    keeps the handle would never be discarded and the read model would stay
+    broken for the life of the process. The check runs while the discard
+    happens, because that is the moment the file is unlinked.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / "test.db"
+        db_path.write_bytes(b"definitely not a sqlite database" * 20)
+        rm = SqliteReadModel(db_path)
+        rm._enabled = True
+        opened = []
+        real_connect = sqlite3.connect
+
+        def spy_connect(*args, **kwargs):
+            conn = real_connect(*args, **kwargs)
+            opened.append(conn)
+            return conn
+
+        def check_then_discard(self):
+            for conn in opened:
+                try:
+                    conn.execute("SELECT 1")
+                except sqlite3.ProgrammingError:
+                    continue  # closed, which is what the discard needs
+                except sqlite3.Error as error:
+                    raise AssertionError(
+                        f"a connection to the corrupt database was left open: {error}"
+                    ) from error
+                raise AssertionError("a connection to the corrupt database was left open")
+            real_discard(self)
+
+        real_discard = SqliteReadModel._discard_database
+        with mock.patch("pkg.state.sqlite_readmodel.sqlite3.connect", spy_connect), \
+             mock.patch.object(SqliteReadModel, "_discard_database", check_then_discard):
+            rm.rebuild(_make_state(4))
+        assert opened, "expected the read model to open a connection"
+        assert rm.count() == 4
+        rm.close()
+
+
 def test_a_parity_mismatch_drops_the_model_back_to_the_json_path():
     """A projection that disagrees with the canonical state is not trusted."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -505,6 +550,7 @@ def run_all_tests():
         test_a_scheduled_rebuild_takes_its_state_from_the_provider,
         test_a_disabled_model_schedules_nothing,
         test_a_corrupt_database_is_discarded_and_rebuilt,
+        test_a_corrupt_database_is_released_before_it_is_discarded,
         test_a_parity_mismatch_drops_the_model_back_to_the_json_path,
         test_close_cancels_a_pending_rebuild,
     ]

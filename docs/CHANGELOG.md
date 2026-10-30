@@ -31,6 +31,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Flat `parity_*` imports are gone.** Parity modules are imported as `pkg.parity.*`; `scripts/check_flat_imports.py` keeps it that way.
 - **Sessions are written to `sessions.json`** for crash recovery and are no longer stored in `library.json`.
 
+### Fixed
+- **The library commands work on Windows.** `openbox --rollback-library` refuses cleanly instead of failing when the terminal cannot answer the confirmation, and a corrupt search projection is released before it is deleted, so it is rebuilt rather than left broken. `pkg/state/library_cli.py`, `pkg/state/sqlite_readmodel.py`.
+- **A restored trash entry expires on every platform.** A `trashed_at` stamp written in UTC (`Z`) is read like any other, so an entry from a backup is pruned once it is old instead of being kept for ever. `state_store.py`.
+
 ## [1.19.1] - 2026-10-28
 
 A cross-platform bug sweep. Every platform-specific control is now decided by one server-computed
