@@ -7,7 +7,7 @@ from urllib.parse import parse_qs
 import openbox
 from api_errors import BadRequest
 from openbox import load_state
-from parity_launch_doctor import preflight_batch, preflight_single
+from pkg.parity.parity_launch_doctor import preflight_batch, preflight_single
 from pkg.parity import parity_launch_audit as audit
 from routes.registry import route
 

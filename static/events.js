@@ -62,7 +62,7 @@ function open() {
   if (source || !hasSubscribers()) return;
   let next;
   try {
-    next = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
+    next = new EventSource(`/api/v2/events?token=${encodeURIComponent(token)}`);
   } catch {
     scheduleRetry();
     return;

@@ -11,7 +11,7 @@ from cloud_sync import LibrarySyncUnavailable
 from openbox import DATA, load_state
 from routes.registry import route
 from openbox_logging import read_diagnostic_log
-from parity_backup import BACKUP_ITEMS, create_backup, restore_backup, diff_manifests
+from pkg.parity.parity_backup import BACKUP_ITEMS, create_backup, restore_backup, diff_manifests
 from pkg.parity.parity_redact import detach_state_view, redact_state_for_export
 from updates import check_update, install_desktop_entry, install_update
 from webapp_state import JOB_MANAGER, RUNNING, approved_backup_file, bump_media_epoch, load_state_view, sync_cloud, transact_state
@@ -142,10 +142,11 @@ class HealthHandlers:
     def create_library_backup(self, payload):
         items = payload.get("items", ["library", "settings"])
         keep = int(payload.get("keep", 0))
+        format_version = int(payload.get("format", 2))
 
         def worker(_cancel_event):
             state = load_state()
-            archive = create_backup(DATA.parent, state, items, keep=keep, running_map=RUNNING)
+            archive = create_backup(DATA.parent, state, items, keep=keep, running_map=RUNNING, format_version=format_version)
             return {"archive": str(archive), "name": archive.name}
 
         job = JOB_MANAGER.submit("library-backup", worker)
@@ -163,10 +164,11 @@ class HealthHandlers:
         force = bool(payload.get("force"))
 
         def worker(_cancel_event):
-            restored = restore_backup(archive, DATA.parent, items=items, running_map=RUNNING, force=force)
+            result = restore_backup(archive, DATA.parent, items=items, running_map=RUNNING, force=force)
+            restored = result["items"]
             if "media" in restored:
                 bump_media_epoch()
-            return {"restored": restored}
+            return {"restored": restored, "files": result["files"]}
 
         job = JOB_MANAGER.submit("library-restore", worker)
         self.send_json(202, {"state": "queued", "job_id": job["job_id"]})

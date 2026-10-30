@@ -10,10 +10,9 @@ import shutil
 import sys
 from pathlib import Path
 
-import pkg.parity  # noqa: F401  # register flat-import finder before parity_* imports
 from archives import extract_game
-from parity_import import EXTENSIONS_EXTRA, PLATFORM_BY_EXTENSION_EXTRA
-from parity_emulator_defs import build_platform_by_extension, register_import_snapshot as _register_import_snapshot, resolve_launch
+from pkg.parity.parity_import import EXTENSIONS_EXTRA, PLATFORM_BY_EXTENSION_EXTRA
+from pkg.parity.parity_emulator_defs import build_platform_by_extension, register_import_snapshot as _register_import_snapshot, resolve_launch
 from pkg.platform_compat import IS_WINDOWS, join_command, python_command, resolved_data_dir, split_command
 from state_store import JsonStateStore
 
@@ -224,7 +223,7 @@ def recover_state():
 
 
 def discover_profiles(which=shutil.which):
-    from parity_emulator_defs import _registry, build_adapter_argv, detect_adapter_prefix
+    from pkg.parity.parity_emulator_defs import _registry, build_adapter_argv, detect_adapter_prefix
 
     profiles = {}
     for platform, adapters in _registry()["by_platform"].items():

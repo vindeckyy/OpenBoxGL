@@ -16,10 +16,10 @@ import threading
 from backend_io import download_file
 from job_manager import JobManager
 from openbox import DATA, STATE_STORE, build_launch, load_state, load_state_readonly, local_only_mutation, update_state, update_state_with_result
-from parity_emulator_defs import scan_folder as scan_emulator_folder
-from parity_perf import apply_perf_profile
-from parity_premium import category_for_platform
-from parity_tracking import wait_for_exit
+from pkg.parity.parity_emulator_defs import scan_folder as scan_emulator_folder
+from pkg.parity.parity_perf import apply_perf_profile
+from pkg.parity.parity_premium import category_for_platform
+from pkg.parity.parity_tracking import wait_for_exit
 from plugins import run_plugins
 
 from pkg.state.cache import (

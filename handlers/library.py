@@ -16,11 +16,11 @@ from handlers._shared import clean_extras as _clean_extras_shared
 from notifications import clear as clear_notifications, mark_read as mark_notifications_read, unread_count
 from openbox import load_state, load_state_readonly, local_only_mutation
 from routes.registry import route
-from parity_deeplinks import launcher_menu_items
-from parity_discovery import discovery_lists, related_with_reasons
-from parity_filter_presets import bigbox_quick_presets, delete_preset, explorer_facets, list_presets, save_preset
-from parity_media import normalize_video_fields
-from parity_premium import bulk_wizard_changes, custom_field_defs, normalize_custom_fields
+from pkg.parity.parity_deeplinks import launcher_menu_items
+from pkg.parity.parity_discovery import discovery_lists, related_with_reasons
+from pkg.parity.parity_filter_presets import bigbox_quick_presets, delete_preset, explorer_facets, list_presets, save_preset
+from pkg.parity.parity_media import normalize_video_fields
+from pkg.parity.parity_premium import bulk_wizard_changes, custom_field_defs, normalize_custom_fields
 from pkg.parity.parity_duplicates import apply_merge, find_duplicates, merge_plan
 from pkg.parity.parity_repair import apply_repair, plan_repair, scan_candidates as scan_repair_candidates, scan_missing_paths
 from pkg.parity.parity_repair import resolve_folder as resolve_repair_folder
@@ -1238,12 +1238,15 @@ class LibraryHandlers:
         # (1.12.0); the explicit env opt-out is still honored.
         readonly = load_state_readonly()
         if SQLITE_READ_MODEL.enabled or SQLITE_READ_MODEL.should_auto_enable(len(readonly.get("games", []) or [])):
-            state = load_state_view()
             import openbox
-            SQLITE_READ_MODEL.ensure_fresh(state, openbox.STATE_STORE.signature())
-            results = SQLITE_READ_MODEL.search(query, limit=limit)
-            self.send_json(200, {"results": results[:limit], "source": "sqlite", "count": len(results)})
-            return
+            signature = openbox.STATE_STORE.signature()
+            if SQLITE_READ_MODEL.is_fresh(signature):
+                results = SQLITE_READ_MODEL.search(query, limit=limit)
+                self.send_json(200, {"results": results[:limit], "source": "sqlite", "count": len(results)})
+                return
+            # The projection is stale: queue the debounced rebuild and answer
+            # from the canonical JSON state. The request never waits for it.
+            SQLITE_READ_MODEL.schedule_rebuild(signature=signature)
         # JSON fallback: canonical name substring match, preserving library
         # order and the existing policy of returning hidden games as well.
         state = readonly

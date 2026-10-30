@@ -4,8 +4,8 @@ import subprocess
 from urllib.parse import parse_qs
 
 from emulators import emulator_status, install_all_emulators, install_emulator, launch_emulator, recommendations_for_platform, update_all_emulators, update_emulator
-from parity_emulator_defs import EMULATORS, list_scan_configs, load_definitions, load_registry, save_scan_config, scan_folder as scan_emulator_folder
-from parity_import import detect_dependencies
+from pkg.parity.parity_emulator_defs import EMULATORS, list_scan_configs, load_definitions, load_registry, save_scan_config, scan_folder as scan_emulator_folder
+from pkg.parity.parity_import import detect_dependencies
 from pkg.parity.parity_emulator_settings import (
     SETTINGS_SCHEMAS,
     canonical_emulator_id,

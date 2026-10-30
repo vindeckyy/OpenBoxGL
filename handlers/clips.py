@@ -10,7 +10,7 @@ from urllib.parse import parse_qs
 
 import openbox
 from api_errors import BadRequest
-from parity_integrations import capture_screenshot, obs_recording_directory
+from pkg.parity.parity_integrations import capture_screenshot, obs_recording_directory
 from pkg.parity.parity_obs_bridge import replay_enabled, save_replay_buffer
 from pkg.parity.parity_reels import build_reel_manifest, create_reel
 from pkg.state.media_probe import approved_media_path

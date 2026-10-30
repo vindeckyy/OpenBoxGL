@@ -10,10 +10,10 @@ from api_errors import BadRequest, DocumentNotFound, GameNotFound, PlatformDocum
 from handlers._shared import clean_extras
 from openbox import DATA, load_state, local_only_mutation
 from routes.registry import route
-from parity_gameyfin import GameyfinError, catalog_gameyfin, gameyfin_settings, install_gameyfin_game, test_gameyfin_connection, uninstall_gameyfin_game, validate_gameyfin_id
-from parity_integrations import export_highscores, import_highscores, read_local_highscores
-from parity_save_tools import run_hoard, run_ludusavi, save_tool_status
-from parity_saves import enforce_backup_limit, extra_save_candidates, scan_all_saves
+from pkg.parity.parity_gameyfin import GameyfinError, catalog_gameyfin, gameyfin_settings, install_gameyfin_game, test_gameyfin_connection, uninstall_gameyfin_game, validate_gameyfin_id
+from pkg.parity.parity_integrations import export_highscores, import_highscores, read_local_highscores
+from pkg.parity.parity_save_tools import run_hoard, run_ludusavi, save_tool_status
+from pkg.parity.parity_saves import enforce_backup_limit, extra_save_candidates, scan_all_saves
 from pkg.parity.parity_highscores import table as highscore_table
 from pkg.parity.parity_netplay import lobby as netplay_lobby
 from pkg.platform_compat import open_path
@@ -229,7 +229,7 @@ class DataHandlers:
 
     @route("POST", "/api/v2/bulk/find-replace")
     def _api_post_api_v2_bulk_find_replace(self, payload):
-        from parity_bulk_edit import find_replace
+        from pkg.parity.parity_bulk_edit import find_replace
         dry_run = payload.get("dry_run", True) is not False
         if dry_run:
             result = find_replace(load_state_view().get("games", []), payload.get("ids", []), payload.get("field"), payload.get("find"), payload.get("replace", ""), dry_run=True)
@@ -241,14 +241,14 @@ class DataHandlers:
 
     @route("GET", "/api/v2/integration-tokens")
     def _api_get_api_v2_integration_tokens(self, parsed):
-        from parity_integration_tokens import masked_tokens, PROVIDERS
+        from pkg.parity.parity_integration_tokens import masked_tokens, PROVIDERS
         settings = load_state_view().get("settings", {})
         tokens = settings.get("integration_tokens", {})
         self.send_json(200, {"providers": list(PROVIDERS), "tokens": masked_tokens(tokens)})
 
     @route("POST", "/api/v2/integration-tokens")
     def _api_post_api_v2_integration_tokens(self, payload):
-        from parity_integration_tokens import validate_provider, validate_token
+        from pkg.parity.parity_integration_tokens import validate_provider, validate_token
         provider = validate_provider(payload.get("provider", ""))
         token = validate_token(payload.get("token", ""))
         def mutate(state):
@@ -258,7 +258,7 @@ class DataHandlers:
 
     @route("POST", "/api/v2/integration-tokens/remove")
     def _api_post_api_v2_integration_tokens_remove(self, payload):
-        from parity_integration_tokens import validate_provider
+        from pkg.parity.parity_integration_tokens import validate_provider
         provider = validate_provider(payload.get("provider", ""))
         def mutate(state):
             state.setdefault("settings", {}).setdefault("integration_tokens", {}).pop(provider, None)

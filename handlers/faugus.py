@@ -4,10 +4,7 @@ from api_errors import BadRequest
 from openbox import load_state
 from routes.registry import route
 from webapp_state import clear_file_probe_cache, merge_imported_games
-try:
-    from pkg.parity.parity_faugus import find_faugus_data_dirs, scan_faugus_games
-except ImportError:
-    from parity_faugus import find_faugus_data_dirs, scan_faugus_games
+from pkg.parity.parity_faugus import find_faugus_data_dirs, scan_faugus_games
 
 class FaugusHandlers:
     @route("GET", "/api/faugus/status")

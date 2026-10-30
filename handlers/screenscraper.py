@@ -14,7 +14,7 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 from openbox import DATA, load_state
-from parity_premium import download_bytes
+from pkg.parity.parity_premium import download_bytes
 from pkg.parity.parity_screenscraper import (
     HASH_TIER_DUAL,
     HASH_TIER_NONE,

@@ -9,6 +9,8 @@ import { emulatorFieldLabel, readEmulatorSettingsValues } from './emulators.js';
 import { initDefs } from './defs.js';
 import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.js';
 import { pluginSettingsFields, collectPluginSettings, renderPluginSettings } from './plugin_form.js';
+import { initLibraryStorage } from './library_storage.js';
+import { initCompatReport } from './compat.js';
 
 
 
@@ -549,7 +551,21 @@ import { pluginSettingsFields, collectPluginSettings, renderPluginSettings } fro
       set('aboutPlatform', { win32: 'Windows', linux: 'Linux', darwin: 'macOS' }[nativeCaps.platform] || nativeCaps.platform || '');
       set('aboutDataDir', nativeCaps.data_dir || '');
       set('aboutHost', nativeCaps.webview ? t('settings.about_host_native') : t('settings.about_host_browser'));
+      renderAboutVersion();
     }
+    async function renderAboutVersion() {
+      const set = (id, value) => { const el = $(id); if (el) el.textContent = value; };
+      try {
+        const version = await api('/api/v2/version');
+        set('aboutStateSchema', String(version.state_schema));
+        set('aboutApiVersion', String(version.api_version));
+        set('aboutPluginApi', String(version.plugin_api_version));
+        set('aboutBackupFormat', String(version.backup_format));
+      } catch (error) {
+        set('aboutStateSchema', error.message);
+      }
+    }
+
     async function renderSettingsPlugins() {
       const container = $('settingsPluginForms');
       if (!container) return;
@@ -1649,8 +1665,12 @@ import { pluginSettingsFields, collectPluginSettings, renderPluginSettings } fro
         if (!$('backupDialog').open) $('backupDialog').showModal();
       } catch(error) { notify(error.message); }
     }
+    // Format 1 is the 1.19-compatible export (no per-file hash manifest); 2 is the default.
+    function backupFormatChoice() {
+      return Number($('backupFormat')?.value) === 1 ? 1 : 2;
+    }
     async function createNamedBackup() {
-      try { const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7})}); notify(t('notify.settings.backup_saved', {name: result.name})); openBackups(); } catch(error) { notify(error.message); }
+      try { const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7,format:backupFormatChoice()})}); notify(t('notify.settings.backup_saved', {name: result.name})); openBackups(); } catch(error) { notify(error.message); }
     }
     async function deletePlaylist(name) {
       const ok = await confirmAction({
@@ -1667,7 +1687,7 @@ import { pluginSettingsFields, collectPluginSettings, renderPluginSettings } fro
     }
     async function backup() {
       try {
-        const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7})});
+        const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7,format:backupFormatChoice()})});
         notify(t('notify.settings.backup_saved', {name: result.name}));
       } catch(error) { notify(error.message); }
     }
@@ -1975,6 +1995,8 @@ import { pluginSettingsFields, collectPluginSettings, renderPluginSettings } fro
         notify(t('settings.memories_import_running'));
       } catch(error) { notify(error.message); }
     };
+    initLibraryStorage();
+    initCompatReport();
     $('removeSteamGames').onclick = async () => {
       const ok = await confirmAction({
         title: t('settings.steam_trash_title'),

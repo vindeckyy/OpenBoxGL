@@ -9,6 +9,28 @@
   <link id="themeStylesheet" rel="stylesheet">
 </head>
 <body>
+  <section id="migrationGate" class="migration-gate" hidden aria-labelledby="migrationGateTitle">
+    <div class="migration-gate-card">
+      <h2 id="migrationGateTitle" data-i18n="migration.title">Your library was upgraded</h2>
+      <p data-i18n="migration.intro">OpenBox upgraded the library file to the new format. Nothing was lost: a copy of the old file is kept.</p>
+      <dl class="migration-gate-facts">
+        <dt data-i18n="migration.from">Before</dt><dd id="migrationFrom"></dd>
+        <dt data-i18n="migration.to">After</dt><dd id="migrationTo"></dd>
+        <dt data-i18n="migration.games">Games</dt><dd id="migrationGames"></dd>
+        <dt data-i18n="migration.backup">Copy of the old library</dt><dd id="migrationBackup"></dd>
+      </dl>
+      <section id="migrationReadiness" class="migration-gate-readiness" hidden>
+        <h3 data-i18n="migration.readiness_title">Before you continue</h3>
+        <ul id="migrationReadinessList"></ul>
+      </section>
+      <div class="extras">
+        <button type="button" class="icon-button" id="migrationBackupButton" data-i18n="migration.backup_first">Back up first</button>
+        <button type="button" class="icon-button" id="migrationOpen" data-i18n="migration.open">Open the library</button>
+        <button type="button" class="icon-button" id="migrationRollback" data-i18n="migration.rollback">Roll back</button>
+      </div>
+      <p class="description" id="migrationStatus" aria-live="polite"></p>
+    </div>
+  </section>
   <header class="topbar">
     <div class="brand"><img class="mark" src="/static/logo.png" alt="OpenBox">OpenBox</div>
     <nav class="topbar-zone" aria-label="Library">
@@ -592,7 +614,13 @@
             <dt data-i18n="settings.about_platform">Platform</dt><dd id="aboutPlatform"></dd>
             <dt data-i18n="settings.about_data_dir">Data folder</dt><dd id="aboutDataDir"></dd>
             <dt data-i18n="settings.about_host">Window</dt><dd id="aboutHost"></dd>
+            <dt data-i18n="settings.about_state_schema">Library format</dt><dd id="aboutStateSchema"></dd>
+            <dt data-i18n="settings.about_api_version">API version</dt><dd id="aboutApiVersion"></dd>
+            <dt data-i18n="settings.about_plugin_api">Plugin API</dt><dd id="aboutPluginApi"></dd>
+            <dt data-i18n="settings.about_backup_format">Backup format</dt><dd id="aboutBackupFormat"></dd>
           </dl>
+          <div class="extras"><button type="button" class="icon-button" id="compatReportButton" data-i18n="settings.compat_button">Show compatibility report</button></div>
+          <div id="compatReport" class="description" hidden></div>
           <p class="description" data-i18n="settings.about_support">OpenBox is free and open source. If it saves you time, a coffee helps cover hosting and development.</p>
           <div class="extras"><button type="button" class="icon-button" id="aboutSupport" data-i18n="settings.about_support_button">Buy me a coffee</button></div>
         </div>
@@ -604,6 +632,8 @@
           <div class="extras"><button type="button" class="icon-button" id="memoriesImportNow" data-i18n="settings.memories_import_now">Scan for screenshots now</button><span class="description" id="memoriesImportStatus"></span></div>
         </div>
         <div class="wide settings-field settings-panel" data-settings-panel="library" data-setting="library cleanup remove steam imports"><button type="button" class="icon-button" id="removeSteamGames" data-i18n="settings.remove_steam">Remove all imported Steam games</button><span class="description" data-i18n="settings.remove_steam_desc">Removes library entries only. Game files and media stay on disk.</span></div>
+        <div class="wide settings-field settings-panel" data-settings-panel="library" data-setting="library integrity check missing unreadable paths"><strong data-i18n="library_storage.integrity_title">Library integrity</strong> <span class="description" data-i18n="library_storage.integrity_help">Reads the library file and every game path. Nothing is changed.</span><div class="extras"><button type="button" class="icon-button" id="libraryIntegrityCheck" data-i18n="library_storage.integrity_check">Check integrity</button></div><div id="libraryIntegrityResult" class="description" hidden></div></div>
+        <div class="wide settings-field settings-panel" data-settings-panel="library" data-setting="library move folder portable paths relocate"><strong data-i18n="library_storage.move_title">Move library</strong> <span class="description" data-i18n="library_storage.move_help">Preview shows what a move changes. Apply runs exactly the previewed plan and refuses if the library changed since the preview. Games inside the new folder get portable paths.</span><label class="field"><span data-i18n="library_storage.move_folder">New library folder</span><span class="path-input-row"><input id="libraryMoveFolder" autocomplete="off"><button type="button" class="path-browse" id="libraryMoveBrowse" data-i18n="library_storage.move_browse">Browse</button></span></label><div class="extras"><button type="button" class="icon-button" id="libraryMovePreview" data-i18n="library_storage.move_preview">Preview move</button><button type="button" class="icon-button" id="libraryMoveApply" data-i18n="library_storage.move_apply" disabled>Apply move</button></div><div id="libraryMoveResult" class="description" aria-live="polite" hidden></div></div>
         <div class="wide settings-field settings-panel" data-settings-panel="advanced" data-setting="diagnostic support troubleshooting logs"><button type="button" class="icon-button" id="copyDiagnosticLog" data-i18n="settings.copy_diagnostic">Copy diagnostic log</button><span class="description" data-i18n="settings.copy_diagnostic_desc">Review it before sharing because it can include game names and local file paths.</span></div>
         <label class="field wide settings-field settings-panel" data-settings-panel="integrations" data-setting="cloud sync syncthing dropbox nextcloud"><span data-i18n="settings.cloud_folder">Mounted Nextcloud, Syncthing, Dropbox, or other cloud folder for game-stat syncing</span><span class="path-input-row"><input id="cloudFolder"><button type="button" class="path-browse" data-browse-for="cloudFolder" data-browse-kind="folder">Browse</button></span></label>
         <div class="wide settings-field settings-panel" data-settings-panel="integrations" data-setting="cloud sync"><button type="button" class="icon-button" id="syncCloud" data-i18n="settings.sync_now">Sync statistics now</button><span class="description" id="cloudStatus"></span></div>
@@ -657,6 +687,7 @@
         <label class="check settings-field settings-panel" data-settings-panel="sessions" data-setting="automatic backup weekly library"><input type="checkbox" id="backupAutoEnabled"> Back up the library automatically each week</label>
         <label class="field settings-field settings-panel" data-settings-panel="sessions" data-setting="library health rescan cadence"><span data-i18n="settings.health_rescan">Library health rescan</span><select id="healthRescanCadence"><option value="daily" data-i18n="settings.health_rescan_daily">Daily</option><option value="weekly" data-i18n="settings.health_rescan_weekly" selected>Weekly</option><option value="on_startup" data-i18n="settings.health_rescan_on_startup">On startup</option><option value="off" data-i18n="settings.health_rescan_off">Off</option></select></label>
         <label class="field settings-field settings-panel" data-settings-panel="sessions" data-setting="automatic backup retention keep"><span>Automatic backups kept</span><input id="backupAutoKeep" type="number" min="1" max="52"></label>
+        <label class="field settings-field settings-panel" data-settings-panel="sessions" data-setting="backup format 1.19 compatible restore"><span data-i18n="backup.format_label">Backup format</span><select id="backupFormat"><option value="2" data-i18n="backup.format_v2" selected>OpenBox 2.0 format (default)</option><option value="1" data-i18n="backup.format_compat">1.19-compatible (restores on 1.19 installs)</option></select><span class="description" data-i18n="backup.format_help">Choose 1.19-compatible only when a 1.19 install must restore this backup. That format has no per-file hash manifest.</span></label>
         <p class="wide description settings-field settings-panel" data-settings-panel="sessions" data-setting="automatic backup last" id="lastAutoBackupLine" hidden></p>
         <label class="check settings-field settings-panel" data-settings-panel="sessions" data-setting="obs recording attach auto"><input type="checkbox" id="obsAutoAttach" checked> <span data-i18n="settings.obs_auto_attach">Auto-attach latest OBS recording when a session ends</span></label>
         <label class="check settings-field settings-panel" data-settings-panel="integrations sessions" data-setting="obs replay buffer clips"><input type="checkbox" id="obsReplayEnabled"> Enable OBS replay-buffer clips</label>
