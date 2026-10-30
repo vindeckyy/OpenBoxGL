@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.parse
@@ -170,6 +171,37 @@ class SearchHttpTests(unittest.TestCase):
             assert status == 200
             assert payload["results"] == []
             assert payload["count"] == 0
+
+
+    def test_a_stale_read_model_answers_from_json_and_rebuilds_in_the_background(self):
+        """A stale projection falls back to the JSON path without blocking."""
+        self._set_enabled(True)
+        status, payload = self.request("/api/v2/library/search?q=alpha")
+        assert status == 200
+        assert payload["source"] == "json", "a stale model must not answer the read"
+        assert [game["name"] for game in payload["results"]] == ["Zeta Alpha", "alpha: beta"]
+
+        # The rebuild lands in the background; the next read uses the model and
+        # answers the same way.
+        deadline = time.monotonic() + 15.0
+        source = payload["source"]
+        while time.monotonic() < deadline:
+            status, payload = self.request("/api/v2/library/search?q=alpha")
+            source = payload["source"]
+            if source == "sqlite":
+                break
+            time.sleep(0.2)
+        assert source == "sqlite", "the background rebuild never landed"
+        assert [game["name"] for game in payload["results"]] == ["Zeta Alpha", "alpha: beta"]
+
+    def test_a_disabled_read_model_always_answers_from_json(self):
+        """The explicit opt-out keeps the JSON path for every read."""
+        self._set_enabled(False)
+        for _ in range(2):
+            status, payload = self.request("/api/v2/library/search?q=alpha")
+            assert status == 200
+            assert payload["source"] == "json"
+            assert [game["name"] for game in payload["results"]] == ["Zeta Alpha", "alpha: beta"]
 
 
 def run_all_tests():

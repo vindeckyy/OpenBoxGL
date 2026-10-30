@@ -1,0 +1,819 @@
+{
+  "achievement_overrides": {},
+  "active_sessions": [],
+  "emulator_settings": {},
+  "games": [
+    {
+      "game_id": "game-00000",
+      "name": "Game 0",
+      "path": "/roms/ps1/game-0.iso",
+      "platform": "PS1",
+      "playtime_seconds": 0,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00001",
+      "name": "Game 1",
+      "path": "/roms/ps2/game-1.iso",
+      "platform": "PS2",
+      "playtime_seconds": 7,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00002",
+      "name": "Game 2",
+      "path": "/roms/pc/game-2.iso",
+      "platform": "PC",
+      "playtime_seconds": 14,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00003",
+      "name": "Game 3",
+      "path": "/roms/gba/game-3.iso",
+      "platform": "GBA",
+      "playtime_seconds": 21,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00004",
+      "name": "Game 4",
+      "path": "/roms/snes/game-4.iso",
+      "platform": "SNES",
+      "playtime_seconds": 28,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00005",
+      "name": "Game 5",
+      "path": "/roms/ps1/game-5.iso",
+      "platform": "PS1",
+      "playtime_seconds": 35,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00006",
+      "name": "Game 6",
+      "path": "/roms/ps2/game-6.iso",
+      "platform": "PS2",
+      "playtime_seconds": 42,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00007",
+      "name": "Game 7",
+      "path": "/roms/pc/game-7.iso",
+      "platform": "PC",
+      "playtime_seconds": 49,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00008",
+      "name": "Game 8",
+      "path": "/roms/gba/game-8.iso",
+      "platform": "GBA",
+      "playtime_seconds": 56,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00009",
+      "name": "Game 9",
+      "path": "/roms/snes/game-9.iso",
+      "platform": "SNES",
+      "playtime_seconds": 63,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00010",
+      "name": "Game 10",
+      "path": "/roms/ps1/game-10.iso",
+      "platform": "PS1",
+      "playtime_seconds": 70,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00011",
+      "name": "Game 11",
+      "path": "/roms/ps2/game-11.iso",
+      "platform": "PS2",
+      "playtime_seconds": 77,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00012",
+      "name": "Game 12",
+      "path": "/roms/pc/game-12.iso",
+      "platform": "PC",
+      "playtime_seconds": 84,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00013",
+      "name": "Game 13",
+      "path": "/roms/gba/game-13.iso",
+      "platform": "GBA",
+      "playtime_seconds": 91,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00014",
+      "name": "Game 14",
+      "path": "/roms/snes/game-14.iso",
+      "platform": "SNES",
+      "playtime_seconds": 98,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00015",
+      "name": "Game 15",
+      "path": "/roms/ps1/game-15.iso",
+      "platform": "PS1",
+      "playtime_seconds": 105,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00016",
+      "name": "Game 16",
+      "path": "/roms/ps2/game-16.iso",
+      "platform": "PS2",
+      "playtime_seconds": 112,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00017",
+      "name": "Game 17",
+      "path": "/roms/pc/game-17.iso",
+      "platform": "PC",
+      "playtime_seconds": 119,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00018",
+      "name": "Game 18",
+      "path": "/roms/gba/game-18.iso",
+      "platform": "GBA",
+      "playtime_seconds": 126,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00019",
+      "name": "Game 19",
+      "path": "/roms/snes/game-19.iso",
+      "platform": "SNES",
+      "playtime_seconds": 133,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00020",
+      "name": "Game 20",
+      "path": "/roms/ps1/game-20.iso",
+      "platform": "PS1",
+      "playtime_seconds": 140,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00021",
+      "name": "Game 21",
+      "path": "/roms/ps2/game-21.iso",
+      "platform": "PS2",
+      "playtime_seconds": 147,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00022",
+      "name": "Game 22",
+      "path": "/roms/pc/game-22.iso",
+      "platform": "PC",
+      "playtime_seconds": 154,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00023",
+      "name": "Game 23",
+      "path": "/roms/gba/game-23.iso",
+      "platform": "GBA",
+      "playtime_seconds": 161,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00024",
+      "name": "Game 24",
+      "path": "/roms/snes/game-24.iso",
+      "platform": "SNES",
+      "playtime_seconds": 168,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00025",
+      "name": "Game 25",
+      "path": "/roms/ps1/game-25.iso",
+      "platform": "PS1",
+      "playtime_seconds": 175,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00026",
+      "name": "Game 26",
+      "path": "/roms/ps2/game-26.iso",
+      "platform": "PS2",
+      "playtime_seconds": 182,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00027",
+      "name": "Game 27",
+      "path": "/roms/pc/game-27.iso",
+      "platform": "PC",
+      "playtime_seconds": 189,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00028",
+      "name": "Game 28",
+      "path": "/roms/gba/game-28.iso",
+      "platform": "GBA",
+      "playtime_seconds": 196,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00029",
+      "name": "Game 29",
+      "path": "/roms/snes/game-29.iso",
+      "platform": "SNES",
+      "playtime_seconds": 203,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00030",
+      "name": "Game 30",
+      "path": "/roms/ps1/game-30.iso",
+      "platform": "PS1",
+      "playtime_seconds": 210,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00031",
+      "name": "Game 31",
+      "path": "/roms/ps2/game-31.iso",
+      "platform": "PS2",
+      "playtime_seconds": 217,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00032",
+      "name": "Game 32",
+      "path": "/roms/pc/game-32.iso",
+      "platform": "PC",
+      "playtime_seconds": 224,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00033",
+      "name": "Game 33",
+      "path": "/roms/gba/game-33.iso",
+      "platform": "GBA",
+      "playtime_seconds": 231,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00034",
+      "name": "Game 34",
+      "path": "/roms/snes/game-34.iso",
+      "platform": "SNES",
+      "playtime_seconds": 238,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00035",
+      "name": "Game 35",
+      "path": "/roms/ps1/game-35.iso",
+      "platform": "PS1",
+      "playtime_seconds": 245,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00036",
+      "name": "Game 36",
+      "path": "/roms/ps2/game-36.iso",
+      "platform": "PS2",
+      "playtime_seconds": 252,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00037",
+      "name": "Game 37",
+      "path": "/roms/pc/game-37.iso",
+      "platform": "PC",
+      "playtime_seconds": 259,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00038",
+      "name": "Game 38",
+      "path": "/roms/gba/game-38.iso",
+      "platform": "GBA",
+      "playtime_seconds": 266,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00039",
+      "name": "Game 39",
+      "path": "/roms/snes/game-39.iso",
+      "platform": "SNES",
+      "playtime_seconds": 273,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00040",
+      "name": "Game 40",
+      "path": "/roms/ps1/game-40.iso",
+      "platform": "PS1",
+      "playtime_seconds": 280,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00041",
+      "name": "Game 41",
+      "path": "/roms/ps2/game-41.iso",
+      "platform": "PS2",
+      "playtime_seconds": 287,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00042",
+      "name": "Game 42",
+      "path": "/roms/pc/game-42.iso",
+      "platform": "PC",
+      "playtime_seconds": 294,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00043",
+      "name": "Game 43",
+      "path": "/roms/gba/game-43.iso",
+      "platform": "GBA",
+      "playtime_seconds": 301,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00044",
+      "name": "Game 44",
+      "path": "/roms/snes/game-44.iso",
+      "platform": "SNES",
+      "playtime_seconds": 308,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00045",
+      "name": "Game 45",
+      "path": "/roms/ps1/game-45.iso",
+      "platform": "PS1",
+      "playtime_seconds": 315,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00046",
+      "name": "Game 46",
+      "path": "/roms/ps2/game-46.iso",
+      "platform": "PS2",
+      "playtime_seconds": 322,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00047",
+      "name": "Game 47",
+      "path": "/roms/pc/game-47.iso",
+      "platform": "PC",
+      "playtime_seconds": 329,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00048",
+      "name": "Game 48",
+      "path": "/roms/gba/game-48.iso",
+      "platform": "GBA",
+      "playtime_seconds": 336,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00049",
+      "name": "Game 49",
+      "path": "/roms/snes/game-49.iso",
+      "platform": "SNES",
+      "playtime_seconds": 343,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00050",
+      "name": "Game 50",
+      "path": "/roms/ps1/game-50.iso",
+      "platform": "PS1",
+      "playtime_seconds": 350,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00051",
+      "name": "Game 51",
+      "path": "/roms/ps2/game-51.iso",
+      "platform": "PS2",
+      "playtime_seconds": 357,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00052",
+      "name": "Game 52",
+      "path": "/roms/pc/game-52.iso",
+      "platform": "PC",
+      "playtime_seconds": 364,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00053",
+      "name": "Game 53",
+      "path": "/roms/gba/game-53.iso",
+      "platform": "GBA",
+      "playtime_seconds": 371,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00054",
+      "name": "Game 54",
+      "path": "/roms/snes/game-54.iso",
+      "platform": "SNES",
+      "playtime_seconds": 378,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00055",
+      "name": "Game 55",
+      "path": "/roms/ps1/game-55.iso",
+      "platform": "PS1",
+      "playtime_seconds": 385,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00056",
+      "name": "Game 56",
+      "path": "/roms/ps2/game-56.iso",
+      "platform": "PS2",
+      "playtime_seconds": 392,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00057",
+      "name": "Game 57",
+      "path": "/roms/pc/game-57.iso",
+      "platform": "PC",
+      "playtime_seconds": 399,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00058",
+      "name": "Game 58",
+      "path": "/roms/gba/game-58.iso",
+      "platform": "GBA",
+      "playtime_seconds": 406,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00059",
+      "name": "Game 59",
+      "path": "/roms/snes/game-59.iso",
+      "platform": "SNES",
+      "playtime_seconds": 413,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00060",
+      "name": "Game 60",
+      "path": "/roms/ps1/game-60.iso",
+      "platform": "PS1",
+      "playtime_seconds": 420,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00061",
+      "name": "Game 61",
+      "path": "/roms/ps2/game-61.iso",
+      "platform": "PS2",
+      "playtime_seconds": 427,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00062",
+      "name": "Game 62",
+      "path": "/roms/pc/game-62.iso",
+      "platform": "PC",
+      "playtime_seconds": 434,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00063",
+      "name": "Game 63",
+      "path": "/roms/gba/game-63.iso",
+      "platform": "GBA",
+      "playtime_seconds": 441,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00064",
+      "name": "Game 64",
+      "path": "/roms/snes/game-64.iso",
+      "platform": "SNES",
+      "playtime_seconds": 448,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00065",
+      "name": "Game 65",
+      "path": "/roms/ps1/game-65.iso",
+      "platform": "PS1",
+      "playtime_seconds": 455,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00066",
+      "name": "Game 66",
+      "path": "/roms/ps2/game-66.iso",
+      "platform": "PS2",
+      "playtime_seconds": 462,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00067",
+      "name": "Game 67",
+      "path": "/roms/pc/game-67.iso",
+      "platform": "PC",
+      "playtime_seconds": 469,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00068",
+      "name": "Game 68",
+      "path": "/roms/gba/game-68.iso",
+      "platform": "GBA",
+      "playtime_seconds": 476,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00069",
+      "name": "Game 69",
+      "path": "/roms/snes/game-69.iso",
+      "platform": "SNES",
+      "playtime_seconds": 483,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00070",
+      "name": "Game 70",
+      "path": "/roms/ps1/game-70.iso",
+      "platform": "PS1",
+      "playtime_seconds": 490,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00071",
+      "name": "Game 71",
+      "path": "/roms/ps2/game-71.iso",
+      "platform": "PS2",
+      "playtime_seconds": 497,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00072",
+      "name": "Game 72",
+      "path": "/roms/pc/game-72.iso",
+      "platform": "PC",
+      "playtime_seconds": 504,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00073",
+      "name": "Game 73",
+      "path": "/roms/gba/game-73.iso",
+      "platform": "GBA",
+      "playtime_seconds": 511,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00074",
+      "name": "Game 74",
+      "path": "/roms/snes/game-74.iso",
+      "platform": "SNES",
+      "playtime_seconds": 518,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00075",
+      "name": "Game 75",
+      "path": "/roms/ps1/game-75.iso",
+      "platform": "PS1",
+      "playtime_seconds": 525,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00076",
+      "name": "Game 76",
+      "path": "/roms/ps2/game-76.iso",
+      "platform": "PS2",
+      "playtime_seconds": 532,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00077",
+      "name": "Game 77",
+      "path": "/roms/pc/game-77.iso",
+      "platform": "PC",
+      "playtime_seconds": 539,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00078",
+      "name": "Game 78",
+      "path": "/roms/gba/game-78.iso",
+      "platform": "GBA",
+      "playtime_seconds": 546,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00079",
+      "name": "Game 79",
+      "path": "/roms/snes/game-79.iso",
+      "platform": "SNES",
+      "playtime_seconds": 553,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00080",
+      "name": "Game 80",
+      "path": "/roms/ps1/game-80.iso",
+      "platform": "PS1",
+      "playtime_seconds": 560,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00081",
+      "name": "Game 81",
+      "path": "/roms/ps2/game-81.iso",
+      "platform": "PS2",
+      "playtime_seconds": 567,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00082",
+      "name": "Game 82",
+      "path": "/roms/pc/game-82.iso",
+      "platform": "PC",
+      "playtime_seconds": 574,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00083",
+      "name": "Game 83",
+      "path": "/roms/gba/game-83.iso",
+      "platform": "GBA",
+      "playtime_seconds": 581,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00084",
+      "name": "Game 84",
+      "path": "/roms/snes/game-84.iso",
+      "platform": "SNES",
+      "playtime_seconds": 588,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00085",
+      "name": "Game 85",
+      "path": "/roms/ps1/game-85.iso",
+      "platform": "PS1",
+      "playtime_seconds": 595,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00086",
+      "name": "Game 86",
+      "path": "/roms/ps2/game-86.iso",
+      "platform": "PS2",
+      "playtime_seconds": 602,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00087",
+      "name": "Game 87",
+      "path": "/roms/pc/game-87.iso",
+      "platform": "PC",
+      "playtime_seconds": 609,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00088",
+      "name": "Game 88",
+      "path": "/roms/gba/game-88.iso",
+      "platform": "GBA",
+      "playtime_seconds": 616,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00089",
+      "name": "Game 89",
+      "path": "/roms/snes/game-89.iso",
+      "platform": "SNES",
+      "playtime_seconds": 623,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00090",
+      "name": "Game 90",
+      "path": "/roms/ps1/game-90.iso",
+      "platform": "PS1",
+      "playtime_seconds": 630,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00091",
+      "name": "Game 91",
+      "path": "/roms/ps2/game-91.iso",
+      "platform": "PS2",
+      "playtime_seconds": 637,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00092",
+      "name": "Game 92",
+      "path": "/roms/pc/game-92.iso",
+      "platform": "PC",
+      "playtime_seconds": 644,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00093",
+      "name": "Game 93",
+      "path": "/roms/gba/game-93.iso",
+      "platform": "GBA",
+      "playtime_seconds": 651,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00094",
+      "name": "Game 94",
+      "path": "/roms/snes/game-94.iso",
+      "platform": "SNES",
+      "playtime_seconds": 658,
+      "rating": 4
+    },
+    {
+      "game_id": "game-00095",
+      "name": "Game 95",
+      "path": "/roms/ps1/game-95.iso",
+      "platform": "PS1",
+      "playtime_seconds": 665,
+      "rating": 0
+    },
+    {
+      "game_id": "game-00096",
+      "name": "Game 96",
+      "path": "/roms/ps2/game-96.iso",
+      "platform": "PS2",
+      "playtime_seconds": 672,
+      "rating": 1
+    },
+    {
+      "game_id": "game-00097",
+      "name": "Game 97",
+      "path": "/roms/pc/game-97.iso",
+      "platform": "PC",
+      "playtime_seconds": 679,
+      "rating": 2
+    },
+    {
+      "game_id": "game-00098",
+      "name": "Game 98",
+      "path": "/roms/gba/game-98.iso",
+      "platform": "GBA",
+      "playtime_seconds": 686,
+      "rating": 3
+    },
+    {
+      "game_id": "game-00099",
+      "name": "Game 99",
+      "path": "/roms/snes/game-99.iso",
+      "platform": "SNES",
+      "playtime_seconds": 693,
+      "rating": 4
+    }
+  ],
+  "history": [],
+  "notifications": [],
+  "party_decks": [],
+  "playlists": [],
+  "profiles": {},
+  "queue": [],
+  "schema_version": 6,
+  "settings": {
+    "theme": "dark"
+  },
+  "trash": [],
+  "ui_state": {}
+}
