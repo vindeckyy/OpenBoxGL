@@ -11,9 +11,8 @@ from unittest import mock
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
-from parity_integrations import (
+from pkg.parity.parity_integrations import (
     auto_attach_obs_recording,
     capture_screenshot,
     download_bezel,
@@ -58,9 +57,9 @@ class IntegrationTests(unittest.TestCase):
         # OBS running with no recent recording must report recording=False.
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            with mock.patch("parity_integrations.obs_recording_directory", return_value=root), \
-                 mock.patch("parity_integrations._pgrep", return_value=True), \
-                 mock.patch("parity_integrations.shutil.which", return_value="/usr/bin/obs"):
+            with mock.patch("pkg.parity.parity_integrations.obs_recording_directory", return_value=root), \
+                 mock.patch("pkg.parity.parity_integrations._pgrep", return_value=True), \
+                 mock.patch("pkg.parity.parity_integrations.shutil.which", return_value="/usr/bin/obs"):
                 status = obs_recording_status()
             self.assertTrue(status["running"])
             self.assertFalse(status["recording"])
@@ -68,9 +67,9 @@ class IntegrationTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "session.mp4").write_bytes(b"video")
-            with mock.patch("parity_integrations.obs_recording_directory", return_value=root), \
-                 mock.patch("parity_integrations._pgrep", return_value=True), \
-                 mock.patch("parity_integrations.shutil.which", return_value="/usr/bin/obs"):
+            with mock.patch("pkg.parity.parity_integrations.obs_recording_directory", return_value=root), \
+                 mock.patch("pkg.parity.parity_integrations._pgrep", return_value=True), \
+                 mock.patch("pkg.parity.parity_integrations.shutil.which", return_value="/usr/bin/obs"):
                 status = obs_recording_status()
             self.assertTrue(status["recording"])
 
@@ -82,8 +81,8 @@ class IntegrationTests(unittest.TestCase):
                 commands.append(command)
                 dest.write_bytes(b"png")
                 return mock.Mock(returncode=0)
-            with mock.patch("parity_integrations.shutil.which", return_value="/fake/tool"), \
-                 mock.patch("parity_integrations.subprocess.run", side_effect=fake_run):
+            with mock.patch("pkg.parity.parity_integrations.shutil.which", return_value="/fake/tool"), \
+                 mock.patch("pkg.parity.parity_integrations.subprocess.run", side_effect=fake_run):
                 result = capture_screenshot(str(dest), window_hint="Game Window")
             self.assertEqual(result, str(dest))
             self.assertTrue(commands, "a screenshot tool must be attempted")
@@ -135,7 +134,7 @@ class IntegrationTests(unittest.TestCase):
             first = download_bezel("NES", root, opener=good_opener)
             self.assertTrue(Path(first, "bezels", "bezel.png").is_file())
             # A corrupt second download must not destroy the existing bezels.
-            with mock.patch("parity_integrations.safe_zip_extract", side_effect=ValueError("corrupt zip")):
+            with mock.patch("pkg.parity.parity_integrations.safe_zip_extract", side_effect=ValueError("corrupt zip")):
                 with self.assertRaises(ValueError):
                     download_bezel("NES", root, opener=good_opener)
             self.assertTrue(Path(first, "bezels", "bezel.png").is_file())

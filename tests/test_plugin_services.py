@@ -266,6 +266,26 @@ def test_service_state_does_not_recurse_during_build():
     assert state["games"][0]["name"] == "Zelda"
 
 
+def test_service_descriptors():
+    # Every service is described, versioned, and read-only (ADR 0092).
+    catalog = services.describe_services()
+    assert set(catalog) == set(services.SERVICES)
+    for name, descriptor in catalog.items():
+        assert descriptor["read_only"] is True, name
+        assert descriptor["version"] == 1, name
+        assert descriptor["max_results"] >= 1, name
+    # A plugin asking for a version the host does not serve is refused.
+    try:
+        services.handle_service("library.query", {}, _state(), version=2)
+    except ValueError as error:
+        assert "no version 2" in str(error), error
+    else:
+        raise AssertionError("a wrong service version was accepted")
+    # The version the host serves works, and the service still cannot write.
+    result = services.handle_service("library.query", {"query": "zelda"}, _state(), version=1)
+    assert result["games"][0]["game_id"] == "g1"
+
+
 def test():
     test_rejections()
     test_library_query()
@@ -275,6 +295,7 @@ def test():
     test_metadata_search()
     test_media_search_and_url_safety()
     test_service_state_does_not_recurse_during_build()
+    test_service_descriptors()
     print("plugin services: ok")
 
 

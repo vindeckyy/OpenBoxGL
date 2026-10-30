@@ -12,7 +12,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
 from pkg.parity import parity_highscores as hs  # noqa: E402
 

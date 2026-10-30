@@ -17,22 +17,22 @@ from cloud_sync import apply_synced_stats, sync_statistics
 from importers import heroic_bases, import_heroic, import_lutris, import_steam, steam_roots
 from openbox import DATA, EXTENSIONS, PLATFORM_BY_EXTENSION, load_state, update_state
 from plugins import emit_plugin_event
-from parity_emulator_defs import list_scan_configs, scan_folder as scan_emulator_folder
+from pkg.parity.parity_emulator_defs import list_scan_configs, scan_folder as scan_emulator_folder
 from pkg.parity.launch_tokens import build_launch_args
 from pkg.platform_compat import IS_WINDOWS, join_command
-from parity_gameyfin import GameyfinError, catalog_gameyfin
-from parity_identity import cross_source_identity, source_family, source_identities
-from parity_import import import_multi_platform, recommend_emulators
-from parity_import_policy import filter_imported
-from parity_media import (
+from pkg.parity.parity_gameyfin import GameyfinError, catalog_gameyfin
+from pkg.parity.parity_identity import cross_source_identity, source_family, source_identities
+from pkg.parity.parity_import import import_multi_platform, recommend_emulators
+from pkg.parity.parity_import_policy import filter_imported
+from pkg.parity.parity_media import (
     MEDIA_QUEUE_BUILTIN_SOURCES,
     enqueue_media_job,
     media_queue_worker,
     media_types_from_settings,
     normalize_video_fields,
 )
-from parity_premium import import_with_emulator_choice
-from parity_storefront import catalog_entries_to_games, storefront_catalog
+from pkg.parity.parity_premium import import_with_emulator_choice
+from pkg.parity.parity_storefront import catalog_entries_to_games, storefront_catalog
 
 LOGGER = logging.getLogger("openbox")
 

@@ -16,7 +16,6 @@ from unittest import mock
 from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
 from pkg.parity import parity_steam_achievements as steam  # noqa: E402
 

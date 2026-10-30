@@ -197,10 +197,10 @@ class CiGatesTests(unittest.TestCase):
     def test_check_tests_floor_constants(self):
         from scripts import check_tests
 
-        self.assertEqual(check_tests.COVERAGE_FLOOR, 83.0)
-        self.assertEqual(check_tests.WEB_APP_FLOOR, 58.0)
+        self.assertEqual(check_tests.COVERAGE_FLOOR, 85.0)
+        self.assertEqual(check_tests.WEB_APP_FLOOR, 62.0)
         self.assertEqual(check_tests.CHANGED_LINE_FLOOR, 95.0)
-        self.assertEqual(check_tests.NEW_MODULE_FLOOR, 85.0)
+        self.assertEqual(check_tests.NEW_MODULE_FLOOR, 88.0)
 
     def test_import_benchmark_is_warmed_and_best_of_n(self):
         """Row 47 of the reliability catalog: a wall-clock budget must not be

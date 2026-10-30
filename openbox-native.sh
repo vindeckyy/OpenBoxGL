@@ -19,6 +19,13 @@ else
   done
 fi
 
+# Library maintenance runs headless: no native host, no window.
+for arg in "$@"; do
+  case "$arg" in
+    --check-library|--repair-library|--migrate-library|--rollback-library)
+      exec "${OPENBOX_PYTHON:-python3}" "$SHARE/web_app.py" "$@" ;;
+  esac
+done
 HOST_BIN="${OPENBOX_NATIVE_HOST:-$SHARE/native_host}"
 
 # An app started from the Finder inherits a minimal PATH, so the Homebrew

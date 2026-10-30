@@ -14,7 +14,6 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import pkg.parity  # noqa: F401,E402  (flat-import finder)
 from handlers import extensions as ext  # noqa: E402
 
 

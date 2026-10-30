@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux, Windows, and macOS environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v1.19.1**, the platform-parity bug sweep: one server-computed capability contract now decides which platform-specific controls each host shows, so a stored gamescope preset no longer breaks Windows and macOS launches, Windows reports its real battery, Wine/Faugus/Flatpak management answers only on Linux, and storefront browsing uses each platform's own URL opener. The previous line was **v1.19.0** ("Now on macOS"), 1.18.0 was "Clearer, deeper library", 1.17.0 was "Every Launcher", and 1.16.0/1.16.1 were "Make it true" and its fix release.
+OpenBox tracks LaunchBox feature parity for Linux, Windows, and macOS environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v2.0.0**, the release that turns the 1.x compatibility scaffolding into stable contracts: one server-computed capability contract now decides which platform-specific controls each host shows, so a stored gamescope preset no longer breaks Windows and macOS launches, Windows reports its real battery, Wine/Faugus/Flatpak management answers only on Linux, and storefront browsing uses each platform's own URL opener. The previous line was **v1.19.0** ("Now on macOS"), 1.18.0 was "Clearer, deeper library", 1.17.0 was "Every Launcher", and 1.16.0/1.16.1 were "Make it true" and its fix release.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -9,6 +9,24 @@ Acceptance source: [LaunchBox product overview](https://www.launchbox-app.com/ab
 `done` means the workflow is usable end to end on Linux. `partial` means a deliberate Linux equivalent exists but LaunchBox’s Windows/premium surface is broader or unavailable. `missing` means no usable equivalent yet.
 
 > **Platform note:** since [ADR 0048](adr/0048-windows-port.md) OpenBox also runs on Windows (signed portable install, WebView2 window), and since [ADR 0085](adr/0085-macos-support.md) on macOS 11+ (signed universal app bundle, WKWebView window). The rows below describe **Linux** behavior; the Windows and macOS channels have their own sections below. Rows that name Linux-only machinery — AppImage/Flatpak packaging, gamescope/Game Mode, XDG desktop entries, Flathub emulator management — remain Linux-only and are marked so in the Windows and macOS sections. Since 1.19.1 one server-computed capability contract ([ADR 0086](adr/0086-platform-capability-contract.md)) decides which of those controls each host shows, so a control cannot appear on a platform that cannot run it.
+
+## 2.0 platform changes
+
+These are the capabilities 2.0 adds on top of the matrix below. They are listed here because
+they change what a user can do on every platform, not because LaunchBox has them.
+
+| Capability | Linux | Windows | macOS | Notes |
+|---|---|---|---|---|
+| Portable library | done | done | done | Game paths under one folder are stored as tokens, so the folder can move between drives and machines (ADR 0090) |
+| Library format 7 with rollback | done | done | done | The library upgrades on first start, keeps a byte-identical copy of the old file, and rolls back on request (ADR 0089) |
+| Integrity check and media manifest | done | done | done | Missing, unreadable, and outside-folder paths, plus media changed behind the app's back (ADR 0090) |
+| Compatibility report | done | done | done | Themes, backups, settings keys, plugins, API, and sync folder, each with a disposition |
+| Versioned public API and host channel | done | done | done | `/api/v2` for clients, `/api/host` for the native window, with an OpenAPI document (ADR 0091) |
+| Plugin API v2 | done | done | done | Versioned manifests, the JSON Lines runner, and versioned read-only host services (ADR 0092) |
+| Backup format 2 | done | done | done | Per-file SHA-256 manifest, a per-member restore report, and a 1.19-compatible export (ADR 0093) |
+| macOS notarization | n/a | n/a | conditional | A notarized bundle ships when the Developer ID secrets are available; otherwise the bundle stays ad-hoc (ADR 0094) |
+| Windows ARM64 artifact | n/a | conditional | n/a | Ships after the `windows-11-arm` job builds and launches it; until then the installer refuses ARM64 (ADR 0095) |
+| Flatpak submission | conditional | n/a | n/a | Submission-ready; the submission itself is a maintainer decision (ADR 0013) |
 
 ## Capability matrix
 

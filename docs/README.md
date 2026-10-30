@@ -11,8 +11,24 @@ The files under this `docs/` folder are engineering, process, and release docume
 - `PARITY.md` — feature parity tracker against LaunchBox
 - `api-v2.md` — v2 REST API reference, generated from `routes.py`, `contracts.py`, and `routes/registry.py`; regenerate with `python3 scripts/gen_api_docs.py --v2`, do not edit by hand
 - `plugin-api.md` — plugin API v1 reference: manifest, hooks, sandbox, trust, catalog (frozen per ADR 0050)
+- `plugin-api-v2.md` — plugin API v2 reference: manifest fields, the JSON Lines runner, versioned host services, and how to port a v1 plugin (ADR 0092)
+- `state-format.md` — the library state format, its envelope, migration, and rollback rules
+- `portable-library.md` — portable paths: what moves, the move flow, and the integrity check
+- `backups.md` — backup formats, the restore report, and which archive restores where
+- `api-deprecations.md` — the deprecation ledger: what is retired, when, and in which version
+- `flathub-checklist.md` — Flatpak submission readiness and the steps that stay with the maintainer
+- `upgrade-2.0.md` — what changes for a user upgrading from 1.19, and how to roll back
+- `development/2.0-LEDGER.md` — the 2.0 task ledger: every plan task with its status and evidence
+- `development/REPRODUCIBILITY.md` — the reproducible-build report for the macOS bundle
+- `development/SETTINGS-AUDIT.md` — the settings retirement audit for 2.0
 - `development/` — development conventions: `DESIGN.md` (design system: colors, typography, components), `HANDLER_CONVENTIONS.md`, `PERF.md` (performance budgets and measurements)
-- `adr/` — Architectural Decision Records (ADR 0001 through 0086) covering native host, repository layout, parity shims, theme tokens, cache hierarchy, gate completion, lock ordering, state decomposition, namespace migration, setup preview, durable operations, emulator registry, artifact gates, SQLite read model, i18n system, gamescope presets, controller settings UI, BIOS SHA1 drift detection, backup diff API, smart collection chips, hash routing, ScreenScraper, library export, aarch64 artifacts, changed-line coverage, mood-match theming, library constellation, picker, wrapped timeline, mastery map, game night, SQLite read-model graduation, LaunchBox XML migration, Big Box video snaps, mounted-folder library sync, manual shelf entries, plugin capabilities and bounded services, managed emulator settings, causal sync safety, reviewable LaunchBox source identity, the docs archive layout, perf-gate warm-up with trimmed p95, the Library Time Machine journal contract, the deterministic query grammar contract, the Every Second Counts local-first surfaces, the Living Library additions (smart collections, Game Story, per-game launch options, scheduled backups, SQLite auto-enable, CSP framing gate), the Windows port, Windows installer rollback, the plugin API freeze, library repair and duplicate-merge contracts, Game DNA search, the library health score, the backlog progress enum, artwork hygiene, the plugin trust model, the plugin events hook, dated-notes migration, ROM-hash match auto-scrape, the feature-regression ratchets, the emulator-definition update channel, the Windows reliability contract, the motion and reduced-motion contract, the changelog-truth contract, Windows native storefront imports, Game Night decks, price paid/cost per hour, translated server notices, the GUI clarity and colour system, the durable media queue, save manifests and selective restore, platform rename and delete, native tray, deeplink, and battery, storefront auto-import policy, macOS support, and the platform capability contract.
+- `adr/` — Architectural Decision Records (ADR 0001 through 0100) covering native host, repository layout, parity shims, theme tokens, cache hierarchy, gate completion, lock ordering, state decomposition, namespace migration, setup preview, durable operations, emulator registry, artifact gates, SQLite read model, i18n system, gamescope presets, controller settings UI, BIOS SHA1 drift detection, backup diff API, smart collection chips, hash routing, ScreenScraper, library export, aarch64 artifacts, changed-line coverage, mood-match theming, library constellation, picker, wrapped timeline, mastery map, game night, SQLite read-model graduation, LaunchBox XML migration, Big Box video snaps, mounted-folder library sync, manual shelf entries, plugin capabilities and bounded services, managed emulator settings, causal sync safety, reviewable LaunchBox source identity, the docs archive layout, perf-gate warm-up with trimmed p95, the Library Time Machine journal contract, the deterministic query grammar contract, the Every Second Counts local-first surfaces, the Living Library additions (smart collections, Game Story, per-game launch options, scheduled backups, SQLite auto-enable, CSP framing gate), the Windows port, Windows installer rollback, the plugin API freeze, library repair and duplicate-merge contracts, Game DNA search, the library health score, the backlog progress enum, artwork hygiene, the plugin trust model, the plugin events hook, dated-notes migration, ROM-hash match auto-scrape, the feature-regression ratchets, the emulator-definition update channel, the Windows reliability contract, the motion and reduced-motion contract, the changelog-truth contract, Windows native storefront imports, Game Night decks, price paid/cost per hour, translated server notices, the GUI clarity and colour system, the durable media queue, save manifests and selective restore, platform rename and delete, native tray, deeplink, and battery, storefront auto-import policy, macOS support, and the platform capability contract.
+
+The 2.0 records follow: 0087 the 2.0 compatibility policy, 0088 the storage direction, 0089 the
+library format v7, 0090 the portable library, 0091 the API v2 and host channel, 0092 the plugin
+API v2, 0093 the backup format v2, 0094 macOS notarization, 0095 the Windows ARM64 channel, 0096
+Flathub submission readiness, 0097 reproducible builds, 0098 the scale policy, 0099 the
+deprecation ledger, and 0100 the maintenance and 2.1 plan.
 
 ## Gates
 
@@ -43,7 +59,7 @@ regenerated with `make contracts` after an intentional surface change.
 - `RELEASE_NOTES.md` — release notes for the current version
 - `flathub-checklist.md` — remaining steps toward Flathub store submission
 
-The current shipped release is **v1.19.1**. The planning and execution records
+The current shipped release is **v2.0.0**. The planning and execution records
 below are historical archives, not an unfinished active roadmap.
 
 ## Process and policies

@@ -102,11 +102,11 @@ const failures = [];
     await fetch('/api/settings', {method: 'POST', headers: {'X-OpenBox-Token': t, 'Content-Type': 'application/json'}, body: JSON.stringify({...AppState.appSettings, bigbox_mode: 'stage'})});
   }, process.env.TOKEN);
 
-  // 4. IGDB search platform parameter forwarding & API_V1 route mapping
+  // 4. IGDB search platform parameter forwarding & API route mapping
   const interceptedRequests = [];
   await page.setRequestInterception(true);
   page.on('request', request => {
-    if (request.url().includes('/api/metadata/igdb/search') || request.url().includes('/api/v1/metadata/match') || request.url().includes('/api/metadata/match')) {
+    if (request.url().includes('/metadata/igdb/search')) {
       interceptedRequests.push(request.url());
       request.respond({status: 200, contentType: 'application/json', body: '{"results":[],"ok":true,"state":"running"}'});
     } else {
@@ -127,22 +127,13 @@ const failures = [];
     return true;
   });
   await new Promise(r => setTimeout(r, 2000));
-  const igdbReq = interceptedRequests.find(u => u.includes('/api/metadata/igdb/search'));
+  const igdbReq = interceptedRequests.find(u => u.includes('/metadata/igdb/search'));
   const igdbPlatformParam = Boolean(igdbReq && /[?&]platform=/.test(igdbReq));
+  // The legacy /api/* call sites are rewritten onto the v2 surface (ADR 0091).
+  const igdbRouteMapped = Boolean(igdbReq && igdbReq.includes('/api/v2/metadata/igdb/search'));
   await page.evaluate(() => document.getElementById('closeMetadata')?.click());
   await new Promise(r => setTimeout(r, 300));
-  // 5. Test API_V1 metadata_match resolution
-  const v1MatchChecked = await page.evaluate(async () => {
-    const stateMod = await import('/static/state.js');
-    try {
-      await stateMod.api('/api/metadata/match', {method: 'POST', body: '{}'});
-      return true;
-    } catch (e) {
-      return false;
-    }
-  });
-  const v1MatchMapped = interceptedRequests.some(u => u.includes('/api/v1/metadata/match'));
-  console.log('v1 match mapping:', {v1MatchChecked, v1MatchMapped});
+  console.log('metadata route mapping:', {igdbRouteMapped});
 
   // F29 Match Review UI
   const matchFixture = {
@@ -531,7 +522,7 @@ const failures = [];
         const all = [...jobs.values()].map(j => ({...j, state: 'done', can_cancel: false, can_retry: false, can_resume: false}));
         return jsonResponse({jobs: all, next_cursor: null});
       }
-      if (href.includes('/api/library') || href.includes('/api/v1/library')) {
+      if (href.includes('/api/v2/library')) {
         return jsonResponse({games: [{game_id: 'g-new', name: 'Demo Game', platform: 'NES', import_batch_id: fixture.import_batch_id}], playlists: [], settings: {welcome_completed: true}, filter_presets: []});
       }
       return origFetch(url, opts);
@@ -546,7 +537,11 @@ const failures = [];
     results.nextActionOne = document.querySelectorAll('.setup-next-action-btn').length === 1;
     await mod.openSetupCenter({step: 2});
     await new Promise(r => setTimeout(r, 100));
+    const stateMod = await import('/static/state.js');
+    results.faugusOffered = Boolean(stateMod.nativeCaps?.features?.faugus);
     results.faugusVisible = Boolean([...document.querySelectorAll('.setup-source-card')].find(btn => btn.dataset.sourceKey === 'faugus'));
+    // The Faugus source is offered only where the platform advertises it.
+    results.faugusGate = results.faugusVisible === results.faugusOffered;
     results.xbox360Visible = Boolean([...document.querySelectorAll('.setup-source-card')].find(btn => btn.dataset.sourceKey === 'xbox360'));
     results.noFileInput = !document.querySelector('#setupCenter input[type="file"]');
     const importsJs = await fetch('/static/imports.js').then(r => r.text());
@@ -554,7 +549,8 @@ const failures = [];
     results.importsNoPrompt = !/\bprompt\(/.test(importsJs);
     await mod.openSetupCenter({step: 2});
     await new Promise(r => setTimeout(r, 100));
-    document.querySelector('[data-source-key="faugus"]')?.click();
+    const sourceKey = results.faugusOffered ? 'faugus' : 'steam';
+    document.querySelector(`[data-source-key="${sourceKey}"]`)?.click();
     await new Promise(r => setTimeout(r, 100));
     results.sourceSelected = Boolean(document.querySelector('.setup-source-selected li'));
     document.getElementById('setupContinue')?.click();
@@ -623,23 +619,32 @@ const failures = [];
       emulator_readiness: {ready: 0, warning: 0, blocked: 0, unknown: 0},
       active_operations: 0, next_action: {id: 'add_sources', label: 'Add game sources', step: 2},
     };
+    const calls = {previewPost: 0, previewGet: 0, itemsGet: 0, commit: 0};
     window.fetch = async (url, opts = {}) => {
       const href = String(url);
       const method = (opts.method || 'GET').toUpperCase();
       if (href.includes('/api/v2/setup/summary') && method === 'GET') return jsonResponse(summaryFixture);
       if (href.includes('/api/v2/setup/preview/revalidate') && method === 'POST')
         return jsonResponse({preview_id: 'p-empty', revision: 2, job_id: null, state: 'queued'});
-      if (href.includes('/api/v2/setup/preview') && method === 'POST' && !href.includes('/preview/'))
+      if (href.includes('/api/v2/setup/preview') && method === 'POST' && !href.includes('/preview/')) {
+        calls.previewPost += 1;
         return jsonResponse({preview_id: 'p-empty', revision: 1, job_id: null, state: 'queued'}, 202);
-      if (href.includes('/api/v2/setup/preview?') && method === 'GET')
+      }
+      if (href.includes('/api/v2/setup/preview?') && method === 'GET') {
+        calls.previewGet += 1;
         return jsonResponse({preview_id: 'p-empty', revision: 1, state: 'ready', revalidated: true, scanned_entries: 0, counts: {additions: 0, merges: 0}});
-      if (href.includes('/api/v2/setup/preview/items') && method === 'GET')
+      }
+      if (href.includes('/api/v2/setup/preview/items') && method === 'GET') {
+        calls.itemsGet += 1;
         return jsonResponse({preview_id: 'p-empty', revision: 1, items: [], next_cursor: null});
-      if (href.includes('/api/v2/setup/commit') && method === 'POST')
+      }
+      if (href.includes('/api/v2/setup/commit') && method === 'POST') {
+        calls.commit += 1;
         return jsonResponse({preview_id: 'p-empty', revision: 2, job_id: 'job-commit-empty', import_batch_id: ''}, 202);
+      }
       if (href.includes('/api/v2/jobs'))
         return jsonResponse({jobs: [{job_id: 'job-commit-empty', state: 'done', type: 'setup.commit', result: {added: 0, merged: 0, skipped: 4}, can_cancel: false, can_retry: false, can_resume: false}], next_cursor: null});
-      if (href.includes('/api/library') || href.includes('/api/v1/library'))
+      if (href.includes('/api/v2/library'))
         return jsonResponse({games: [], playlists: [], settings: {locale: 'en'}, filter_presets: [], media_epoch: 0});
       if (href.includes('/api/settings') && method === 'POST') {
         const body = opts.body ? JSON.parse(opts.body) : {};
@@ -683,15 +688,25 @@ const failures = [];
     const details = document.querySelector('.setup-more-sources');
     details.open = true;
     details.dispatchEvent(new Event('toggle'));
-    document.querySelector('[data-source-key="faugus"]')?.click();
+    // Only a more-source that asks for no folder may be clicked here: the
+    // others open a native picker, and the browser fallback leaves a modal
+    // dialog open that would block every check after this one.
+    const pickerFree = [...document.querySelectorAll('.setup-more-sources .setup-source-card')]
+      .map(card => card.dataset.sourceKey).find(key => key === 'faugus');
+    if (pickerFree) document.querySelector(`[data-source-key="${pickerFree}"]`)?.click();
+    await tick();
+    // The scan needs a source that asks for no folder.
+    document.querySelector('[data-source-key="steam"]')?.click();
     await tick();
     results.moreSourcesSurvivesRerender = document.querySelector('.setup-more-sources')?.open === true;
+    results.sourceAfterMore = document.querySelectorAll('.setup-source-selected li').length;
 
     // --- empty scan (step 2 -> 3) ---
     document.getElementById('setupContinue')?.click();
     await tick(900);
     const emptyMsg = document.querySelector('.setup-preview-list .setup-empty');
     results.emptyScanMessage = Boolean(emptyMsg) && /no importable games/i.test(emptyMsg.textContent);
+    results.calls = calls;
 
     // --- dismiss via close button, then library refresh: no reopen ---
     document.getElementById('closeSetupCenter')?.click();
@@ -1561,7 +1576,7 @@ const failures = [];
     state.invalidateFilterCache();
     const origFetch = window.fetch;
     window.fetch = async (url, opts) => {
-      if (String(url).includes('/api/library') || String(url).includes('/api/v1/library')) {
+      if (String(url).includes('/api/v2/library')) {
         return {ok: true, text: async () => JSON.stringify({games: [], playlists: [], settings: {...AppState.appSettings, welcome_completed: false}, filter_presets: []})};
       }
       return origFetch(url, opts);
@@ -1956,9 +1971,9 @@ const failures = [];
     };
     window.fetch = async (input, init) => {
       const url = typeof input === 'string' ? input : (input?.url || '');
-      // api() rewrites /api/* to the frozen v1 surface, so match the rewritten
+      // api() rewrites /api/* onto the v2 surface, so match the rewritten
       // paths, not the call-site spelling.
-      if (/\/api\/v1\/backups?(\?|$)/.test(url)) { calls.lists += 1; return json(list); }
+      if (/\/api\/v2\/backups?(\?|$)/.test(url)) { calls.lists += 1; return json(list); }
       if (url.includes('/backup/diff')) {
         calls.diffs += 1;
         return failNext ? json({error: 'archive unreadable'}, 500) : json(diff);
@@ -2223,19 +2238,43 @@ const failures = [];
     document.getElementById('emptyClearFilters')?.click();
     await new Promise(r => setTimeout(r, 800));
     const afterClear = document.querySelectorAll('#grid .list-row').length;
+    // The facet counts: what the chips used to do on the UI thread on every
+    // render, against the worker path that replaced it.
+    const pure = await import('/static/pure.js');
+    const categories = state.AppState.appSettings.platform_categories || {};
+    const uiStart = performance.now();
+    const uiCounts = pure.facetCounts(state.AppState.games, categories);
+    const uiThreadMs = performance.now() - uiStart;
+    const platforms = state.AppState.games.map(game => game?.platform);
+    const facetWorker = new Worker('/static/worker.search.js');
+    const workerCounts = await new Promise((resolve, reject) => {
+      facetWorker.onmessage = event => { if (event.data?.type === 'facets') resolve(event.data.counts); };
+      facetWorker.onerror = reject;
+      const postStart = performance.now();
+      facetWorker.postMessage({type: 'facets', generation: 1, platforms, platform_categories: categories});
+      // The clone of the payload is the only work the UI thread still does.
+      facetWorker.postMs = performance.now() - postStart;
+    });
+    facetWorker.terminate();
+    const facetCounts = {
+      uiThreadMs,
+      workerPostMs: facetWorker.postMs,
+      sameCounts: JSON.stringify(uiCounts) === JSON.stringify(workerCounts),
+    };
     state.AppState.games = savedGames;
     state.AppState._refreshCounter = (state.AppState._refreshCounter || 0) + 1;
     state.AppState.appSettings.library_view = savedView;
     document.getElementById('sidebarSearch').value = savedSearch;
     document.getElementById('sidebarSearch').dispatchEvent(new Event('input', {bubbles: true}));
     state.invalidateFilterCache();
-    return {total, steady, afterResize, afterClear};
+    return {total, steady, afterResize, afterClear, facetCounts};
   });
   console.log('motion list resize budget:', JSON.stringify(motion.listResizeBudget));
   (motion.listResizeBudget.total < 1000) && failures.push(`motion.listResizeBudget: only ${motion.listResizeBudget.total} games in the fixture, so the budget case is vacuous`);
   (motion.listResizeBudget.afterResize > 300) && failures.push(`motion.listResizeBudget: a resize rendered ${motion.listResizeBudget.afterResize} list rows; the 20k budget requires a virtual window (F3)`);
   (motion.listResizeBudget.afterClear > 300) && failures.push(`motion.listResizeBudget: clearing a 0-result search rendered ${motion.listResizeBudget.afterClear} list rows (F3)`);
   (motion.listResizeBudget.afterResize < 1) && failures.push("motion.listResizeBudget: the virtual window rendered nothing after a resize; the library blanked instead");
+  (motion.listResizeBudget.facetCounts && !motion.listResizeBudget.facetCounts.sameCounts) && failures.push("motion.listResizeBudget.facetCounts: the worker and the UI thread counted the facets differently");
 
   console.log('motion inert released:', JSON.stringify(motion.inertReleased));
   (!motion.inertReleased.focusBefore) && failures.push("motion.inertReleased: the focus probe never worked, so this case cannot measure anything");
@@ -2371,7 +2410,7 @@ const failures = [];
   (themeResults.some(r => !r.ok)) && failures.push("every stock theme renders its menus above the content");
   (!platformAfter || !platformAfter.ok) && failures.push("platformAfter && platformAfter.ok");
   (!igdbPlatformParam) && failures.push("igdbPlatformParam");
-  (!v1MatchMapped) && failures.push("v1MatchMapped");
+  (!igdbRouteMapped) && failures.push("igdbRouteMapped");
   (!matchReview.exported) && failures.push("matchReview.exported");
   (!matchReview.rowKeys) && failures.push("matchReview.rowKeys");
   (!matchReview.scoreComponents) && failures.push("matchReview.scoreComponents");
@@ -2409,7 +2448,7 @@ const failures = [];
   (!setupUi.stepperPresent) && failures.push("setupUi.stepperPresent");
   (!setupUi.summaryKeys) && failures.push("setupUi.summaryKeys");
   (!setupUi.nextActionOne) && failures.push("setupUi.nextActionOne");
-  (!setupUi.faugusVisible) && failures.push("setupUi.faugusVisible");
+  (!setupUi.faugusGate) && failures.push("setupUi.faugusGate");
   (!setupUi.xbox360Visible) && failures.push("setupUi.xbox360Visible");
   (!setupUi.noFileInput) && failures.push("setupUi.noFileInput");
   (!setupUi.importsHasSetup) && failures.push("setupUi.importsHasSetup");
@@ -2429,6 +2468,7 @@ const failures = [];
   (!setupBehavior.removeSelectedSource) && failures.push("setupBehavior.removeSelectedSource");
   (!setupBehavior.onlyCompletedStepsClickable) && failures.push("setupBehavior.onlyCompletedStepsClickable");
   (!setupBehavior.moreSourcesSurvivesRerender) && failures.push("setupBehavior.moreSourcesSurvivesRerender");
+  (!setupBehavior.sourceAfterMore) && failures.push("setupBehavior.sourceAfterMore");
   (!setupBehavior.emptyScanMessage) && failures.push("setupBehavior.emptyScanMessage");
   (!setupBehavior.dismissedFlag) && failures.push("setupBehavior.dismissedFlag");
   (!setupBehavior.dismissNoReopen) && failures.push("setupBehavior.dismissNoReopen");

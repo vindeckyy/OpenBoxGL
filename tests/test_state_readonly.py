@@ -90,7 +90,7 @@ class ReadonlyStateTests(unittest.TestCase):
             store = self._make_store(d)
             self._seed_state(store)
             view = store.load_readonly()
-            self.assertEqual(view["schema_version"], 6)
+            self.assertEqual(view["schema_version"], 7)
 
     def test_get_returns_value(self):
         with tempfile.TemporaryDirectory() as d:
@@ -202,7 +202,7 @@ class ReadonlyStateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             store = self._make_store(d)
             view = store.load_readonly()
-            self.assertEqual(view["schema_version"], 6)
+            self.assertEqual(view["schema_version"], 7)
             self.assertEqual(view["games"], [])
 
 

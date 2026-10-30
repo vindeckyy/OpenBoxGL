@@ -54,7 +54,15 @@ _json_decode_error = _stdlib_json.JSONDecodeError
 LOGGER = logging.getLogger("openbox.state")
 
 
-STATE_SCHEMA_VERSION = 6
+STATE_SCHEMA_VERSION = 7
+#: Envelope marker: every v7 library.json carries format "openbox-library".
+STATE_FORMAT = "openbox-library"
+#: Runtime-only sessions are mirrored here for crash recovery, never written into library.json.
+SESSIONS_FILE_NAME = "sessions.json"
+SESSIONS_FORMAT = 1
+PATH_MODES = ("absolute", "portable")
+#: ULID-style library identifiers: 26 Crockford base32 characters.
+LIBRARY_ID_RE = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 
 #: Snapshot filenames: <UTC timestamp>-<8-digit sequence>-<random>.json, where
 #: the timestamp is %Y%m%dT%H%M%S%fZ -- 8 digits, T, 12 digits, Z. The
@@ -76,10 +84,52 @@ WRITE_COALESCE_MS = 50
 class StateCorruptError(RuntimeError):
     """Raised when the primary state file cannot be decoded safely."""
 
+    code = "STATE_CORRUPT"
+
+
+class LibraryFrozenError(RuntimeError):
+    """A write was refused because the library was rolled back and this process must exit."""
+
+    code = "LIBRARY_FROZEN"
+
+
+#: Set when the library is rolled back from inside the running app. The file on disk is then
+#: the old library, and this process must not write over it (ADR 0089).
+LIBRARY_FROZEN = False
+
+
+def freeze_library_writes() -> None:
+    """Refuse further library writes in this process. Used after an in-app rollback."""
+    global LIBRARY_FROZEN
+    LIBRARY_FROZEN = True
+
+
+class StateFutureVersionError(StateCorruptError):
+    """The library was written by a newer OpenBox. Refused without rewriting anything."""
+
+    code = "STATE_FUTURE_VERSION"
+
+
+class StateMigrationError(StateCorruptError):
+    """A library migration failed; the original primary was not replaced."""
+
+    code = "STATE_MIGRATION_FAILED"
+
+
+class StateBackupError(StateMigrationError):
+    """The v6 copy could not be written, so the migration did not start."""
+
+    code = "STATE_BACKUP_MISSING"
+
 
 def default_state() -> dict[str, Any]:
     return {
+        "format": STATE_FORMAT,
         "schema_version": STATE_SCHEMA_VERSION,
+        "library_id": new_library_id(),
+        "created_with": app_version(),
+        "path_mode": "absolute",
+        "library_root": "",
         "games": [],
         "profiles": {},
         "history": [],
@@ -94,6 +144,117 @@ def default_state() -> dict[str, Any]:
         "emulator_settings": {},
         "achievement_overrides": {},
     }
+
+
+_CROCKFORD_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def new_library_id() -> str:
+    """Return a ULID-style identifier: 48 bits of milliseconds, then 80 random bits."""
+    value = ((time.time_ns() // 1_000_000) << 80) | secrets.randbits(80)
+    chars = []
+    for _ in range(26):
+        chars.append(_CROCKFORD_ALPHABET[value & 31])
+        value >>= 5
+    return "".join(reversed(chars))
+
+
+def app_version() -> str:
+    """The running OpenBox version. Imported lazily so state_store stays cheap to import."""
+    from updates import VERSION
+
+    return VERSION
+
+
+def raw_schema_version(raw: Any) -> int:
+    """Schema version of a decoded library.json. Legacy lists are v1; unreadable roots are 0."""
+    if isinstance(raw, list):
+        return 1
+    if not isinstance(raw, dict):
+        return 0
+    try:
+        return int(raw.get("schema_version", 1))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _path_settings(state: dict[str, Any]) -> tuple[str, str]:
+    settings = state.get("settings") if isinstance(state.get("settings"), dict) else {}
+    mode = settings.get("path_mode")
+    root = settings.get("library_root")
+    return (
+        mode if mode in PATH_MODES else "absolute",
+        root if isinstance(root, str) and os.path.isabs(root) else "",
+    )
+
+
+def _sync_envelope(state: dict[str, Any]) -> bool:
+    """Make the v7 envelope agree with the state it describes. Returns True when a field changed.
+
+    ``path_mode`` and ``library_root`` mirror the settings of the same name. The
+    settings stay authoritative; the mirror lets offline tools read them
+    without parsing settings.
+    """
+    changed = False
+    if state.get("format") != STATE_FORMAT:
+        state["format"] = STATE_FORMAT
+        changed = True
+    if not LIBRARY_ID_RE.match(str(state.get("library_id") or "")):
+        state["library_id"] = new_library_id()
+        changed = True
+    if not str(state.get("created_with") or "").strip():
+        state["created_with"] = app_version()
+        changed = True
+    mode, root = _path_settings(state)
+    if state.get("path_mode") != mode:
+        state["path_mode"] = mode
+        changed = True
+    if state.get("library_root") != root:
+        state["library_root"] = root
+        changed = True
+    return changed
+
+
+def _resolve_portable_paths(state: dict[str, Any]) -> None:
+    """Expand @library tokens so consumers only ever see absolute paths (ADR 0090). Portable mode only."""
+    if state.get("path_mode") != "portable" or not state.get("library_root"):
+        return
+    from pkg.state import library_v7
+
+    games, problems = library_v7.expand_games(state.get("games"), str(state["library_root"]))
+    if problems:
+        LOGGER.warning("Some library paths could not be resolved: %s", "; ".join(problems[:5]))
+    state["games"] = games
+
+
+def _persistable(state: dict[str, Any]) -> dict[str, Any]:
+    """The shape written to library.json: sessions excluded, portable paths stored as tokens."""
+    result = state
+    if "active_sessions" in state:
+        result = {key: value for key, value in state.items() if key != "active_sessions"}
+    if state.get("path_mode") == "portable" and state.get("library_root"):
+        from pkg.state import library_v7
+
+        games = library_v7.encode_games(state.get("games"), str(state["library_root"]))
+        if games is not state.get("games"):
+            result = {**result, "games": games}
+    return result
+
+
+def read_sessions_file(data_dir: Path) -> list[dict[str, Any]]:
+    """Sessions recorded for crash recovery. A missing or unreadable file means none."""
+    path = Path(data_dir) / SESSIONS_FILE_NAME
+    try:
+        payload = _stdlib_json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return []
+    except (OSError, UnicodeDecodeError, ValueError):
+        LOGGER.warning("sessions.json could not be read; no sessions are restored from it.")
+        return []
+    sessions = payload.get("sessions") if isinstance(payload, dict) else None
+    if not isinstance(sessions, list):
+        return []
+    return [session for session in sessions if isinstance(session, dict)]
 
 
 def _identity_payload(game: dict[str, Any]) -> dict[str, str]:
@@ -196,12 +357,20 @@ def _migrate_v5_to_v6(state: dict[str, Any]) -> None:
     state["schema_version"] = 6
 
 
+def _migrate_v6_to_v7(state: dict[str, Any]) -> None:
+    """Add the v7 envelope. Game paths, unknown fields and active sessions carry over unchanged."""
+    state["format"] = STATE_FORMAT
+    _sync_envelope(state)
+    state["schema_version"] = 7
+
+
 MIGRATIONS: dict[int, Callable[[dict[str, Any]], None]] = {
     1: _migrate_v1_to_v2,
     2: _migrate_v2_to_v3,
     3: _migrate_v3_to_v4,
     4: _migrate_v4_to_v5,
     5: _migrate_v5_to_v6,
+    6: _migrate_v6_to_v7,
 }
 
 
@@ -353,7 +522,11 @@ def normalize_state(raw: Any) -> tuple[dict[str, Any], bool]:
     except (TypeError, ValueError):
         version = 1
         changed = True
-    if version > STATE_SCHEMA_VERSION or version < 1:
+    if version > STATE_SCHEMA_VERSION:
+        raise StateFutureVersionError(
+            f"This library uses schema {version}; this build supports {STATE_SCHEMA_VERSION}. Install a newer OpenBox."
+        )
+    if version < 1:
         raise StateCorruptError(f"OpenBox library.json uses unsupported schema version {version}.")
     if "games" in state and not isinstance(state.get("games"), list):
         raise StateCorruptError("OpenBox library.json has an invalid games collection.")
@@ -363,6 +536,8 @@ def normalize_state(raw: Any) -> tuple[dict[str, Any], bool]:
     if prune_unknown_settings(state):
         changed = True
     state["schema_version"] = STATE_SCHEMA_VERSION
+    if _sync_envelope(state):
+        changed = True
     if not isinstance(state.get("games"), list):
         raise StateCorruptError("OpenBox library.json has an invalid games collection.")
     if _normalize_feature_fields(state):
@@ -645,9 +820,18 @@ class JsonStateStore:
             raise StateCorruptError(
                 f"Unable to read {self.path}. The original file was preserved; restore or inspect it before continuing."
             ) from error
+        if raw_schema_version(raw) < STATE_SCHEMA_VERSION:
+            # Pre-v7 libraries migrate under this lock: the v6 copy, the v7
+            # primary and the report are all written before the load returns.
+            from pkg.state import library_v7
+
+            state, _report = library_v7.migrate_locked(self)
+            return state, False
         if (
             isinstance(raw, dict)
             and raw.get("schema_version") == STATE_SCHEMA_VERSION
+            and raw.get("format") == STATE_FORMAT
+            and LIBRARY_ID_RE.match(str(raw.get("library_id") or ""))
             and all(key in raw for key in ("games", "profiles", "history", "settings", "playlists", "ui_state"))
             and isinstance(raw.get("games"), list)
             and isinstance(raw.get("queue"), list)
@@ -655,8 +839,6 @@ class JsonStateStore:
             and isinstance(raw.get("notifications"), list)
             and len(raw["notifications"]) <= NOTIFICATIONS_CAP
             and isinstance(raw.get("ui_state"), dict)
-            and isinstance(raw.get("active_sessions"), list)
-            and all(isinstance(session, dict) for session in raw["active_sessions"])
             and all(
                 isinstance(game, dict)
                 and str(game.get("game_id") or "").strip()
@@ -665,8 +847,15 @@ class JsonStateStore:
                 for game in raw["games"]
             )
         ):
-            return raw, False
-        return normalize_state(raw)
+            if "active_sessions" not in raw:
+                # Runtime sessions are never stored in library.json; they come back from sessions.json.
+                raw["active_sessions"] = read_sessions_file(self.path.parent)
+                _resolve_portable_paths(raw)
+                return raw, False
+        state, changed = normalize_state(raw)
+        # A v7 file that still carries active_sessions is rewritten without them.
+        _resolve_portable_paths(state)
+        return state, changed or (isinstance(raw, dict) and "active_sessions" in raw)
 
     def load(self) -> dict[str, Any]:
         with self._thread_lock:
@@ -704,6 +893,32 @@ class JsonStateStore:
             self._write_unlocked(state, adopt=True)
             return state
 
+    def migrate_primary_to_v7(self, progress: Callable[[str, dict[str, Any]], None] | None = None):
+        """Upgrade the primary file to schema v7 under the store locks.
+
+        Returns ``(state, report)``. Both are None when there was nothing to
+        migrate; ``state`` is None when the library was already current.
+        """
+        from pkg.state import library_v7
+
+        with self._thread_lock, self._file_lock(True):
+            return library_v7.migrate_locked(self, progress)
+
+    def _write_sessions_unlocked(self, sessions: Any) -> None:
+        """Mirror active sessions to sessions.json for crash recovery; remove the file when none remain."""
+        path = self.path.parent / SESSIONS_FILE_NAME
+        if not sessions:
+            path.unlink(missing_ok=True)
+            return
+        from backend_io import atomic_write_text
+
+        payload = {
+            "format": SESSIONS_FORMAT,
+            "written_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "sessions": list(sessions),
+        }
+        atomic_write_text(path, _stdlib_json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+
     def _write_unlocked(
         self,
         state: dict[str, Any],
@@ -711,20 +926,26 @@ class JsonStateStore:
         *,
         reuse_cache: bool = False,
     ) -> None:
+        if LIBRARY_FROZEN:
+            raise LibraryFrozenError(
+                "The library was rolled back; restart OpenBox before it is written again."
+            )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, temporary_name = tempfile.mkstemp(
             prefix=f".{self.path.name}.", suffix=".tmp", dir=self.path.parent
         )
         temporary = Path(temporary_name)
         try:
+            _sync_envelope(state)
+            persisted = _persistable(state)
             games = state.get("games")
             games_count = len(games) if isinstance(games, list) else 0
             if games_count > 500:
-                raw_bytes = _stdlib_json.dumps(state, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+                raw_bytes = _stdlib_json.dumps(persisted, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
             else:
-                pretty = _stdlib_json.dumps(state, indent=2, ensure_ascii=False).encode("utf-8")
+                pretty = _stdlib_json.dumps(persisted, indent=2, ensure_ascii=False).encode("utf-8")
                 if len(pretty) > COMPACT_JSON_THRESHOLD:
-                    raw_bytes = _stdlib_json.dumps(state, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+                    raw_bytes = _stdlib_json.dumps(persisted, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
                 else:
                     raw_bytes = pretty
 
@@ -746,6 +967,7 @@ class JsonStateStore:
                 if backup_tmp.exists():
                     backup_tmp.unlink(missing_ok=True)
 
+            self._write_sessions_unlocked(state.get("active_sessions"))
             os.replace(temporary, self.path)
             # Every full write starts from the in-memory state, which already
             # carries any coalesced mutation, so a pending coalesced snapshot is

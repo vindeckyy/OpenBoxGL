@@ -24,8 +24,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import pkg.parity  # noqa: F401,E402  # registers the flat parity_* import finder
-import parity_time_machine as tm  # noqa: E402
+import pkg.parity.parity_time_machine as tm  # noqa: E402
 from pkg.parity import parity_library_sync as sync_mod  # noqa: E402
 from pkg.parity.parity_library_sync import (  # noqa: E402
     SyncStaleError,

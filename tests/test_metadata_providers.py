@@ -10,9 +10,8 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
-from parity_metadata_providers import (
+from pkg.parity.parity_metadata_providers import (
     APPLY_FIELDS,
     BUILTIN_PROVIDER_ORDER,
     BUILTIN_PROVIDERS,
@@ -33,7 +32,7 @@ from parity_metadata_providers import (
 class PriorityTests(unittest.TestCase):
     def setUp(self):
         patcher = mock.patch(
-            "parity_metadata_providers._enabled_plugin_provider_ids", return_value=[]
+            "pkg.parity.parity_metadata_providers._enabled_plugin_provider_ids", return_value=[]
         )
         self.addCleanup(patcher.stop)
         patcher.start()
@@ -52,7 +51,7 @@ class PriorityTests(unittest.TestCase):
 
     def test_enabled_plugin_providers_append_after_builtins(self):
         with mock.patch(
-            "parity_metadata_providers._enabled_plugin_provider_ids",
+            "pkg.parity.parity_metadata_providers._enabled_plugin_provider_ids",
             return_value=["plugin:extra"],
         ):
             priority = provider_priority({"settings": {}})
@@ -61,7 +60,7 @@ class PriorityTests(unittest.TestCase):
 
     def test_plugin_priority_moves_plugins_first(self):
         with mock.patch(
-            "parity_metadata_providers._enabled_plugin_provider_ids",
+            "pkg.parity.parity_metadata_providers._enabled_plugin_provider_ids",
             return_value=["plugin:extra"],
         ):
             priority = provider_priority({"settings": {"plugin_metadata_priority": True}})
@@ -80,7 +79,7 @@ class NormalizationTests(unittest.TestCase):
         self.assertEqual(normalize_title("Sonic: The Hedgehog!"), "sonic the hedgehog")
 
     def test_title_query_variants(self):
-        from parity_metadata_providers import title_query_variants
+        from pkg.parity.parity_metadata_providers import title_query_variants
 
         variants = title_query_variants("Legend of Zelda, The")
         self.assertIn("The Legend of Zelda", variants)
@@ -91,7 +90,7 @@ class NormalizationTests(unittest.TestCase):
         import zipfile
 
         import metadata as metadata_module
-        from parity_metadata_providers import LaunchBoxProvider
+        from pkg.parity.parity_metadata_providers import LaunchBoxProvider
 
         xml = (
             "<LaunchBox><Game><DatabaseID>9</DatabaseID><Name>The Legend of Zelda</Name>"
@@ -239,7 +238,7 @@ class UrlTests(unittest.TestCase):
             return destination
 
         with tempfile.TemporaryDirectory() as folder, \
-             mock.patch("parity_metadata_providers.download_file", side_effect=fake_download):
+             mock.patch("pkg.parity.parity_metadata_providers.download_file", side_effect=fake_download):
             result = download_candidate_media(
                 "https://example.com/art.png", "poster", folder, filename="../../escape.png", resolver=False,
             )

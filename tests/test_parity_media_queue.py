@@ -10,9 +10,8 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
-from parity_media import (
+from pkg.parity.parity_media import (
     MEDIA_QUEUE_BACKOFF,
     enqueue_media_job,
     load_media_queue,
@@ -94,7 +93,7 @@ class EnqueueTests(unittest.TestCase):
     def test_cap_enforced(self):
         with tempfile.TemporaryDirectory() as folder:
             queue = Path(folder) / "media-queue.json"
-            with mock.patch("parity_media.MEDIA_QUEUE_MAX", 2):
+            with mock.patch("pkg.parity.parity_media.MEDIA_QUEUE_MAX", 2):
                 enqueue_media_job(queue, {"game_id": "g1", "kind": "cover"})
                 enqueue_media_job(queue, {"game_id": "g2", "kind": "cover"})
                 with self.assertRaises(ValueError):

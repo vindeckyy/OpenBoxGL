@@ -10,7 +10,6 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import pkg.parity  # noqa: F401,E402  # register flat-import finder first
 import handlers.library_health as health  # noqa: F401,E402
 from pkg.parity import parity_library_health as engine  # noqa: F401,E402
 from api_errors import BadRequest  # noqa: F401,E402

@@ -16,7 +16,6 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import pkg.parity  # noqa: E402,F401  (flat-import finder for parity modules)
 from api_errors import BadRequest  # noqa: E402
 from pkg.parity import parity_flatpak_grant as grant  # noqa: E402
 

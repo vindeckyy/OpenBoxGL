@@ -245,7 +245,7 @@ class TestStateImports(unittest.TestCase):
 
     def test_auto_import_worker_warns_on_import_errors(self):
         from pkg.state.imports import auto_import_worker
-        from parity_gameyfin import GameyfinError
+        from pkg.parity.parity_gameyfin import GameyfinError
 
         state = {
             "settings": {

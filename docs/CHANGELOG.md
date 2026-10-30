@@ -6,8 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [2.0.0] - unreleased
+
 ### Added
 - Settings > About has a short support line and a Buy me a coffee button. The repository shows a Sponsor button, and the AppStream metadata includes a donation URL.
+- **Portable library (ADR 0090).** Game paths can live under one library folder and be stored as `@library/...` tokens. Settings > Library > Move library previews a move, rebases the paths after you move the folder, and refuses a stale preview (`MOVE_PLAN_STALE`). Changing the folder or the path mode outside that flow is refused.
+- **Library maintenance commands.** `openbox --check-library`, `--repair-library`, `--migrate-library`, and `--rollback-library` run without starting a window. `GET /api/v2/library/integrity` serves the same report.
+- **Version endpoint.** `GET /api/v2/version` reports the app, API, state schema, plugin API, backup format, and sync format versions.
+- **Backup format 2 (ADR 0093).** New backups record a SHA-256 for every file, and restore refuses a corrupt or unlisted file before writing anything. A 1.19-compatible export is available.
+- **Problem-details errors.** API errors are `application/problem+json` with `type`, `title`, `status`, `detail`, `code`, `retryable`, and `request_id`. The `error` field is kept.
+- **Library integrity check.** Settings > Library > Check integrity reports missing, unreadable, and outside-folder game paths, plus media files that were changed, deleted, or added behind the app's back. Nothing is changed by a check; the repair command rebuilds the media manifest.
+- **Media manifest.** Downloads and captures are recorded in `media/manifest.json` with their size, mtime, and SHA-256, so the integrity check can tell a changed file from an untouched one.
+- **Compatibility report.** Settings > About > Show compatibility report lists the library format, each theme's token fallbacks, which backups restore on which version, unknown settings keys, the public API and host channel, and the sync folder. The report is the same on every run.
+- **Restore results.** A restore reports every archive member: whether its hash was checked and whether this restore wrote it.
+- **Extra-app paths move with the library.** Extra apps, versions, and documents under the library folder are stored as tokens and are rebased by a move, like the game path.
+- **Plugin API v2 (ADR 0092).** A plugin may declare `"api_version": 2`, the oldest OpenBox that serves it (`min_openbox`), and the events it subscribes to. A v2 plugin is served by a JSON Lines runner with a 4 MiB output cap, and the host services it can ask for are versioned and read-only. A v1 plugin keeps the v1 runner and the v1 payloads unchanged; the v1 runner goes in 3.0. `docs/plugin-api-v2.md` is the reference, and `plugins/openbox.sample-v2/` is a working sample.
+
+### Changed
+- **2.0 readiness on the first launch.** The migration gate lists what needs a look before the upgraded library is used: a theme with a token the app does not know, a plugin with an API version this build does not serve, a missing sync folder, an archive with no format, a library over the formal scale, or a custom data directory. A backup can be written from the gate before the library is opened. The 1.19.2 preflight release was dropped, so these checks run here instead.
+- **Search projection rebuilds in the background (ADR 0101).** A write queues a debounced rebuild of the SQLite read model instead of rebuilding it on the request. A search that arrives before the rebuild lands answers from the canonical library and reports `source: "json"`; the next one is served from the projection. A corrupt projection is deleted and rebuilt, and a projection that disagrees with the library drops back to the JSON path.
+- **The library filter chips count off the UI thread.** The platform and platform-category counts come from the search worker, so a large library no longer spends the UI thread counting chips on every render. A reply for an older request is ignored, and without a worker the counts are computed on the UI thread as before.
+- **Library format 7 (ADR 0089).** Libraries upgrade on first start. A copy of the old file is kept as `library.v6.backup.json`, and `openbox --rollback-library --yes` restores it. Changes made after the upgrade are listed before a rollback discards them. 1.19.x cannot read a format 7 library.
+- **Public API is `/api/v2` (ADR 0091).** The frontend and the native windows use `/api/v2` and `/api/host`. `/api/v1` is off by default; `OPENBOX_ENABLE_V1_API=1` restores it through 2.0.x and returns 410 otherwise. Native windows from a different major API version are refused with `HOST_API_UNSUPPORTED`.
+- **Flat `parity_*` imports are gone.** Parity modules are imported as `pkg.parity.*`; `scripts/check_flat_imports.py` keeps it that way.
+- **Sessions are written to `sessions.json`** for crash recovery and are no longer stored in `library.json`.
 
 ## [1.19.1] - 2026-10-28
 

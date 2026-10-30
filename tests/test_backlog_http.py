@@ -10,7 +10,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 import openbox  # noqa: E402
 from api_errors import BadRequest  # noqa: E402
 from handlers.library import LibraryHandlers  # noqa: E402

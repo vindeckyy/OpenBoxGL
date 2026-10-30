@@ -60,6 +60,10 @@ KNOWN_SETTINGS = {
     "platform_videos",
     "custom_field_defs",
     "filter_presets",
+    # library storage: portable paths and the media manifest
+    "library_root",
+    "path_mode",
+    "media_manifest_enabled",
     # media and metadata
     "media_download_limit",
     "media_download_limit_per_group",

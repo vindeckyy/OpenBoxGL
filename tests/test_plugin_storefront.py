@@ -8,7 +8,6 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
 from plugins import set_plugin_enabled, set_plugin_permissions, set_plugin_settings  # noqa: E402
 from pkg.parity import parity_plugin_storefront as store  # noqa: E402

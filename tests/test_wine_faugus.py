@@ -331,23 +331,5 @@ class TestFaugus(unittest.TestCase):
                     os.environ["OPENBOX_DATA_DIR"] = prev
                 _reset_openbox_modules()
 
-    def test_z_faugus_handler_import_fallback(self):
-        import builtins
-        import importlib
-
-        _reset_openbox_modules()
-        real_import = builtins.__import__
-
-        def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
-            if name == "pkg.parity.parity_faugus":
-                raise ImportError("forced for coverage")
-            return real_import(name, globals, locals, fromlist, level)
-
-        with mock.patch("builtins.__import__", fake_import):
-            module = importlib.import_module("handlers.faugus")
-        self.assertTrue(callable(module.find_faugus_data_dirs))
-        self.assertTrue(callable(module.scan_faugus_games))
-        _reset_openbox_modules()
-
 if __name__ == "__main__":
     unittest.main()

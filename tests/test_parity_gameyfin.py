@@ -11,9 +11,8 @@ from unittest import mock
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
-from parity_gameyfin import (
+from pkg.parity.parity_gameyfin import (
     DEFAULT_PROVIDER,
     GameyfinClient,
     GameyfinError,
@@ -25,8 +24,8 @@ from parity_gameyfin import (
     uninstall_gameyfin_game,
     validate_gameyfin_id,
 )
-from parity_save_tools import run_ludusavi, save_tool_status
-from parity_storefront import catalog_entries_to_games, storefront_catalog
+from pkg.parity.parity_save_tools import run_ludusavi, save_tool_status
+from pkg.parity.parity_storefront import catalog_entries_to_games, storefront_catalog
 
 
 class FakeResponse(io.BytesIO):

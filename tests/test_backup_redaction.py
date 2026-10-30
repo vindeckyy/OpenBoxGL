@@ -338,7 +338,7 @@ class BackupExportRouteTests(unittest.TestCase):
         self.assertIn("portable", headers.get("Content-Disposition", "").lower())
 
     def test_get_api_v1_backup_matches_redacted_export(self):
-        status, _, body = self.request("/api/v1/backup")
+        status, _, body = self.request("/api/v2/backup")
         self.assertEqual(status, 200)
         payload = json.loads(body)
         self.assertNotIn("gameyfin_password", payload.get("settings", {}))

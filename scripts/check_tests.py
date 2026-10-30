@@ -40,12 +40,12 @@ def _venv_bin(name: str) -> Path:
 RUFF = _venv_bin("ruff")
 COVERAGE = _venv_bin("coverage")
 
-# Coverage floors. Ratcheted baseline: 83% total, 58% web_app.py.
+# Coverage floors. Ratcheted for 2.0: 85% total, 62% web_app.py, 88% new modules.
 # Raise the floors as phases land; never lower them silently.
-COVERAGE_FLOOR = 83.0
-WEB_APP_FLOOR = 58.0
+COVERAGE_FLOOR = 85.0
+WEB_APP_FLOOR = 62.0
 CHANGED_LINE_FLOOR = 95.0
-NEW_MODULE_FLOOR = 85.0
+NEW_MODULE_FLOOR = 88.0
 
 # Longest a single suite may run before the gate names it and moves on. The
 # slowest honest suite (coverage-instrumented, on a loaded shared runner) lands
@@ -103,6 +103,13 @@ def _check_new_module_coverage(coverage_bin: Path, failures: list[str]) -> None:
     }
     previous = _runtime_modules_at(base)
     new_modules = sorted(module for module in current - previous if module.endswith(".py"))
+    # The plugin runners are separate processes: the suite drives them as subprocesses,
+    # so coverage never sees their lines. plugin_runner.py has always been measured this
+    # way, and the v2 runner is held to the same rule.
+    runner_modules = [module for module in new_modules if Path(module).name.startswith("plugin_runner")]
+    new_modules = [module for module in new_modules if module not in runner_modules]
+    if runner_modules:
+        print(f"new runtime modules excluded from the coverage floor (separate processes): {', '.join(runner_modules)}")
     if not new_modules:
         print("new runtime modules: none since diff base")
         return
@@ -179,13 +186,13 @@ def main() -> int:
 
     # Stage 2.4: v1 route surface must match the frozen contract. The v1
     # surface is the native host's only contract; drift fails the gate.
-    v1_contract = run([sys.executable, "-B", str(ROOT / "scripts" / "check_v1_contract.py")])
-    if v1_contract.returncode != 0:
-        if v1_contract.stdout.strip():
-            print(v1_contract.stdout.strip())
-        if v1_contract.stderr.strip():
-            print(v1_contract.stderr.strip())
-        failures.append("v1_contract")
+    api_contract = run([sys.executable, "-B", str(ROOT / "scripts" / "check_api_contract.py")])
+    if api_contract.returncode != 0:
+        if api_contract.stdout.strip():
+            print(api_contract.stdout.strip())
+        if api_contract.stderr.strip():
+            print(api_contract.stderr.strip())
+        failures.append("api_contract")
 
     # Stage 2.5: version strings must stay in sync across published spots.
     version_sync = run([sys.executable, "-B", str(ROOT / "scripts" / "check_version_sync.py")])
@@ -251,6 +258,16 @@ def main() -> int:
         ("reliability_catalog", "check_reliability_catalog.py"),
         ("clock_coupling", "check_clock_coupling.py"),
         ("exec_modes", "check_exec_modes.py"),
+        ("state_schema", "check_state_schema.py"),
+        ("api_contract", "check_api_contract.py"),
+        ("backup_format", "check_backup_format.py"),
+        ("openapi", "gen_openapi.py"),
+        ("openapi_contract", "check_openapi.py"),
+        ("deprecations", "check_deprecations.py"),
+        ("api_paths", "check_api_paths.py"),
+        ("native_paths", "check_native_paths.py"),
+        ("flat_imports", "check_flat_imports.py"),
+        ("macos_release", "check_macos_release.py"),
     )
     for label, script in ratchet_gates:
         result = run([sys.executable, "-B", str(ROOT / "scripts" / script)])

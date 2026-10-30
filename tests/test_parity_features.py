@@ -9,12 +9,11 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
-from parity_discovery import discovery_lists, item_rating
-from parity_import import generate_m3u, group_multi_disc, recommend_emulators
-from parity_media import load_media_queue, media_types_from_settings, normalize_video_fields, save_media_queue, sort_images_by_region
-from parity_saves import enforce_backup_limit
+from pkg.parity.parity_discovery import discovery_lists, item_rating
+from pkg.parity.parity_import import generate_m3u, group_multi_disc, recommend_emulators
+from pkg.parity.parity_media import load_media_queue, media_types_from_settings, normalize_video_fields, save_media_queue, sort_images_by_region
+from pkg.parity.parity_saves import enforce_backup_limit
 
 
 class ParityFeatureTests(unittest.TestCase):
@@ -161,7 +160,7 @@ class ParityFeatureTests(unittest.TestCase):
             popen.assert_called_once()
 
     def test_filter_presets_capabilities(self):
-        from parity_filter_presets import filter_games, normalize_rules
+        from pkg.parity.parity_filter_presets import filter_games, normalize_rules
         rules = normalize_rules({"has_saves": True, "has_achievements": True})
         self.assertEqual(rules, {"has_saves": True, "has_achievements": True})
 
@@ -183,7 +182,7 @@ class ParityFeatureTests(unittest.TestCase):
         self.assertEqual([g["name"] for g in matched_missing_media], ["Game B", "Game C"])
 
     def test_filter_presets_exclusions_and_list_operators(self):
-        from parity_filter_presets import filter_games, game_matches_exclusions, normalize_rules
+        from pkg.parity.parity_filter_presets import filter_games, game_matches_exclusions, normalize_rules
 
         rules = normalize_rules({
             "source": ["Steam", "gog", "Steam"],
@@ -237,7 +236,7 @@ class ParityFeatureTests(unittest.TestCase):
 
     def test_bulk_update_reset_stats(self):
         from catalog import bulk_update
-        from parity_premium import bulk_wizard_changes
+        from pkg.parity.parity_premium import bulk_wizard_changes
         games = [
             {"game_id": "g1", "name": "Game 1", "play_count": 10, "playtime_seconds": 3600, "last_played": "2026-08-01T12:00:00"},
             {"game_id": "g2", "name": "Game 2", "play_count": 5, "playtime_seconds": 1800, "last_played": "2026-08-02T12:00:00"},

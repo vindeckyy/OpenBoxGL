@@ -12,11 +12,13 @@
 [CmdletBinding()]
 param(
     [string] $OutputPath,
+    [ValidateSet('x64', 'arm64')] [string] $Architecture = 'x64',
     [string] $SdkVersion = '1.0.2651.64'
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$archDir = if ($Architecture -eq 'arm64') { 'arm64' } else { 'x64' }
 
 # Pinned SHA-256 of the WebView2 SDK .nupkg for the default $SdkVersion,
 # verified after every download (fail closed, like every other artifact gate
@@ -38,30 +40,33 @@ if (-not (Test-Path -LiteralPath $source)) {
 }
 
 function Find-VcVars {
+    $vcvarsName = if ($Architecture -eq 'arm64') {
+        if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'vcvarsarm64.bat' } else { 'vcvarsamd64_arm64.bat' }
+    } else { 'vcvars64.bat' }
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     if (Test-Path -LiteralPath $vswhere) {
         $install = & $vswhere -latest -products * `
             -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
             -property installationPath
         if ($install) {
-            $candidate = Join-Path $install 'VC\Auxiliary\Build\vcvars64.bat'
+            $candidate = Join-Path $install (Join-Path 'VC\Auxiliary\Build' $vcvarsName)
             if (Test-Path -LiteralPath $candidate) { return $candidate }
         }
     }
     foreach ($base in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
-        $pattern = Join-Path $base 'Microsoft Visual Studio\*\*\VC\Auxiliary\Build\vcvars64.bat'
+        $pattern = Join-Path $base (Join-Path 'Microsoft Visual Studio\*\*\VC\Auxiliary\Build' $vcvarsName)
         $found = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue |
             Select-Object -First 1
         if ($found) { return $found.FullName }
     }
-    throw 'vcvars64.bat not found. Install Visual Studio Build Tools with the "Desktop development with C++" workload.'
+    throw "$vcvarsName not found. Install Visual Studio Build Tools with the `"Desktop development with C++`" workload."
 }
 
 function Find-WebView2Sdk {
     $packages = Join-Path $env:USERPROFILE '.nuget\packages\microsoft.web.webview2'
     $native = Join-Path $packages "$SdkVersion\build\native"
     if ((Test-Path -LiteralPath (Join-Path $native 'include\WebView2.h')) -and
-        (Test-Path -LiteralPath (Join-Path $native 'x64\WebView2LoaderStatic.lib'))) {
+        (Test-Path -LiteralPath (Join-Path $native "$archDir\WebView2LoaderStatic.lib"))) {
         return $native
     }
 
@@ -126,7 +131,7 @@ if ($compileResource) { $steps += $compileResource }
 # _CRT_SECURE_NO_WARNINGS: the host uses the portable C string functions
 # (wcscpy, sscanf, _snwprintf) that the Linux host uses too, so MSVC's
 # deprecation notes are noise rather than a finding.
-$steps += "cl /nologo /O2 /W3 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS `"$source`" $linkResource /Fo:`"$objects\\`" /Fe:`"$OutputPath`" /I`"$sdk\include`" `"$sdk\x64\WebView2LoaderStatic.lib`" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib shell32.lib shlwapi.lib advapi32.lib ws2_32.lib oleacc.lib /link /SUBSYSTEM:WINDOWS"
+$steps += "cl /nologo /O2 /W3 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS `"$source`" $linkResource /Fo:`"$objects\\`" /Fe:`"$OutputPath`" /I`"$sdk\include`" `"$sdk\$archDir\WebView2LoaderStatic.lib`" ole32.lib oleaut32.lib uuid.lib user32.lib gdi32.lib shell32.lib shlwapi.lib advapi32.lib ws2_32.lib oleacc.lib /link /SUBSYSTEM:WINDOWS"
 $command = $steps -join ' && '
 
 Write-Host "Building native_host.exe..."

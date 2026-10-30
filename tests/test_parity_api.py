@@ -296,7 +296,7 @@ class ParityApiTests(unittest.TestCase):
         self.assertIn("error", payload)
 
     def test_gameyfin_providers_route_returns_json_error(self):
-        from parity_gameyfin import GameyfinError
+        from pkg.parity.parity_gameyfin import GameyfinError
         from web_app import Handler
 
         handler = object.__new__(Handler)

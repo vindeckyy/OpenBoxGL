@@ -26,7 +26,6 @@ sys.path.insert(0, str(ROOT))
 _DATA_DIR = tempfile.mkdtemp(prefix="openbox-gapfill-f2-")
 os.environ["OPENBOX_DATA_DIR"] = _DATA_DIR
 
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 import handlers.metadata as hm  # noqa: E402
 import handlers.media as media_module  # noqa: E402
 from api_errors import BadRequest, Conflict  # noqa: E402

@@ -11,9 +11,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-import pkg.parity  # noqa: E402,F401  (installs the flat parity_* import finder)
 import build_defs_pack  # noqa: E402
-from parity_emulator_defs_update import read_pack, validate_definition  # noqa: E402
+from pkg.parity.parity_emulator_defs_update import read_pack, validate_definition  # noqa: E402
 
 
 class BuildDefsPackTests(unittest.TestCase):

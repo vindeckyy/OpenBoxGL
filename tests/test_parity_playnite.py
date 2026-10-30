@@ -14,11 +14,10 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pkg" / "parity"))
 
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
-from parity_backup import create_backup, restore_backup, rotate_backups
-from parity_deeplinks import build_launch_url, handle_cli, parse_uri
-from parity_emulator_defs import (
+from pkg.parity.parity_backup import create_backup, restore_backup, rotate_backups
+from pkg.parity.parity_deeplinks import build_launch_url, handle_cli, parse_uri
+from pkg.parity.parity_emulator_defs import (
     build_launch_command,
     candidates_for_extension,
     load_definitions,
@@ -27,17 +26,17 @@ from parity_emulator_defs import (
     platform_for_extension,
     scan_folder,
 )
-from parity_filter_presets import (
+from pkg.parity.parity_filter_presets import (
     bigbox_quick_presets,
     explorer_facets,
     filter_games,
     game_matches_rules,
     save_preset,
 )
-from parity_gamescope import kiosk_command
-from parity_import_policy import add_exclusion, exclusion_key, filter_imported
-from parity_igdb import apply_to_game, search_games
-from parity_tracking import TRACKING_MODES, resolve_mode
+from pkg.parity.parity_gamescope import kiosk_command
+from pkg.parity.parity_import_policy import add_exclusion, exclusion_key, filter_imported
+from pkg.parity.parity_igdb import apply_to_game, search_games
+from pkg.parity.parity_tracking import TRACKING_MODES, resolve_mode
 
 
 class FilterPresetTests(unittest.TestCase):
@@ -100,7 +99,7 @@ class DeeplinkTests(unittest.TestCase):
         self.assertEqual(parse_uri("openbox://localhost")["action"], "start")
 
     def test_dispatch_uri_requires_port_file(self):
-        from parity_deeplinks import dispatch_uri
+        from pkg.parity.parity_deeplinks import dispatch_uri
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
             code = dispatch_uri("openbox://showgame/42", data_dir)
@@ -108,18 +107,18 @@ class DeeplinkTests(unittest.TestCase):
             # A real port makes it through to the API call.
             (data_dir / "server.port").write_text("12345", encoding="utf-8")
             (data_dir / "server.token").write_text("tok", encoding="utf-8")
-            with mock.patch("parity_deeplinks.api_request", return_value={}):
+            with mock.patch("pkg.parity.parity_deeplinks.api_request", return_value={}):
                 code = dispatch_uri("openbox://showgame/42", data_dir, token="tok")
             self.assertEqual(code, 0)
 
     def test_dispatch_launch_accepts_stable_game_id(self):
-        from parity_deeplinks import dispatch_uri
+        from pkg.parity.parity_deeplinks import dispatch_uri
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
             (data_dir / "server.port").write_text("12345", encoding="utf-8")
             (data_dir / "server.token").write_text("tok", encoding="utf-8")
-            with mock.patch("parity_deeplinks.api_request", return_value={}) as api_request:
+            with mock.patch("pkg.parity.parity_deeplinks.api_request", return_value={}) as api_request:
                 code = dispatch_uri(
                     "openbox://launch/game-0123456789abcdef01234567-1",
                     data_dir,
@@ -136,13 +135,13 @@ class DeeplinkTests(unittest.TestCase):
             )
 
     def test_dispatch_launch_legacy_numeric_index(self):
-        from parity_deeplinks import dispatch_uri
+        from pkg.parity.parity_deeplinks import dispatch_uri
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
             (data_dir / "server.port").write_text("12345", encoding="utf-8")
             (data_dir / "server.token").write_text("tok", encoding="utf-8")
-            with mock.patch("parity_deeplinks.api_request", return_value={}) as api_request:
+            with mock.patch("pkg.parity.parity_deeplinks.api_request", return_value={}) as api_request:
                 code = dispatch_uri("openbox://launch/3", data_dir, token="tok")
             self.assertEqual(code, 0)
             api_request.assert_called_once_with(
@@ -155,7 +154,7 @@ class DeeplinkTests(unittest.TestCase):
             )
 
     def test_dispatch_showgame_accepts_stable_game_id(self):
-        from parity_deeplinks import dispatch_uri
+        from pkg.parity.parity_deeplinks import dispatch_uri
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
@@ -174,7 +173,7 @@ class DeeplinkTests(unittest.TestCase):
             )
 
     def test_dispatch_launch_requires_game_id(self):
-        from parity_deeplinks import dispatch_uri
+        from pkg.parity.parity_deeplinks import dispatch_uri
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
@@ -183,7 +182,7 @@ class DeeplinkTests(unittest.TestCase):
             self.assertEqual(code, 1)
 
     def test_dispatch_search_builds_url(self):
-        from parity_deeplinks import dispatch_uri
+        from pkg.parity.parity_deeplinks import dispatch_uri
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
@@ -199,7 +198,7 @@ class DeeplinkTests(unittest.TestCase):
             self.assertIn("half", open_browser.call_args[0][0])
 
     def test_dispatch_bigbox_and_settings(self):
-        from parity_deeplinks import dispatch_uri
+        from pkg.parity.parity_deeplinks import dispatch_uri
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
@@ -212,25 +211,25 @@ class DeeplinkTests(unittest.TestCase):
             self.assertTrue(any("deeplink=settings" in url for url in urls))
 
     def test_launcher_menu_items(self):
-        from parity_deeplinks import launcher_menu_items
+        from pkg.parity.parity_deeplinks import launcher_menu_items
 
         items = launcher_menu_items([{"name": "Doom", "id": 7}])
         self.assertEqual(items[0]["id"], "bigbox")
         self.assertEqual(items[-1]["label"], "Doom")
 
     def test_api_request_posts_json(self):
-        from parity_deeplinks import api_request
+        from pkg.parity.parity_deeplinks import api_request
 
         response = mock.Mock()
         response.__enter__ = mock.Mock(return_value=response)
         response.__exit__ = mock.Mock(return_value=False)
-        with mock.patch("parity_deeplinks.urllib.request.urlopen", return_value=response), \
-             mock.patch("parity_deeplinks.read_limited", return_value=b'{"ok": true}'):
+        with mock.patch("pkg.parity.parity_deeplinks.urllib.request.urlopen", return_value=response), \
+             mock.patch("pkg.parity.parity_deeplinks.read_limited", return_value=b'{"ok": true}'):
             payload = api_request("127.0.0.1", 8787, "tok", "/api/launch", "POST", {"game_id": "g1"})
         self.assertTrue(payload["ok"])
 
     def test_read_port_file(self):
-        from parity_deeplinks import read_port_file
+        from pkg.parity.parity_deeplinks import read_port_file
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
@@ -241,19 +240,19 @@ class DeeplinkTests(unittest.TestCase):
             self.assertEqual(read_port_file(data_dir), 0)
 
     def test_handle_cli_openbox_scheme_arg(self):
-        with mock.patch("parity_deeplinks.dispatch_uri", return_value=0) as dispatch:
+        with mock.patch("pkg.parity.parity_deeplinks.dispatch_uri", return_value=0) as dispatch:
             code = handle_cli(["openbox://bigbox"], "/tmp")
         self.assertEqual(code, 0)
         dispatch.assert_called_once()
 
     def test_handle_cli_launcher_flag(self):
-        with mock.patch("parity_deeplinks.run_keyboard_launcher", return_value=0) as launcher:
+        with mock.patch("pkg.parity.parity_deeplinks.run_keyboard_launcher", return_value=0) as launcher:
             code = handle_cli(["--launcher"], "/tmp")
         self.assertEqual(code, 0)
         launcher.assert_called_once()
 
     def test_dispatch_start_with_running_server(self):
-        from parity_deeplinks import dispatch_uri
+        from pkg.parity.parity_deeplinks import dispatch_uri
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
@@ -264,7 +263,7 @@ class DeeplinkTests(unittest.TestCase):
             self.assertEqual(code, 0)
 
     def test_dispatch_unknown_action(self):
-        from parity_deeplinks import dispatch_uri
+        from pkg.parity.parity_deeplinks import dispatch_uri
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
@@ -273,7 +272,7 @@ class DeeplinkTests(unittest.TestCase):
             self.assertEqual(code, 1)
 
     def test_run_keyboard_launcher_without_picker(self):
-        from parity_deeplinks import run_keyboard_launcher
+        from pkg.parity.parity_deeplinks import run_keyboard_launcher
 
         with mock.patch("pathlib.Path.exists", return_value=False), \
              mock.patch("shutil.which", return_value=None):
@@ -291,7 +290,7 @@ class DeeplinkTests(unittest.TestCase):
         self.assertEqual(build_launch_url("http://127.0.0.1:8787", "unknown"), "http://127.0.0.1:8787")
 
     def test_handle_cli_uri_flag(self):
-        with mock.patch("parity_deeplinks.dispatch_uri", return_value=0) as dispatch:
+        with mock.patch("pkg.parity.parity_deeplinks.dispatch_uri", return_value=0) as dispatch:
             code = handle_cli(["--uri", "openbox://bigbox"], "/tmp")
         self.assertEqual(code, 0)
         dispatch.assert_called_once()
@@ -302,7 +301,7 @@ class DeeplinkTests(unittest.TestCase):
         self.assertEqual(code, 2)
 
     def test_handle_cli_play_dispatches_launch_deeplink(self):
-        with mock.patch("parity_deeplinks.dispatch_uri", return_value=0) as dispatch:
+        with mock.patch("pkg.parity.parity_deeplinks.dispatch_uri", return_value=0) as dispatch:
             code = handle_cli(["--play", "game/id"], "/tmp")
         self.assertEqual(code, 0)
         dispatch.assert_called_once_with("openbox://launch/game%2Fid", "/tmp")
@@ -313,7 +312,7 @@ class DeeplinkTests(unittest.TestCase):
         self.assertEqual(code, 2)
 
     def test_dispatch_showgame_prints_url(self):
-        from parity_deeplinks import dispatch_uri
+        from pkg.parity.parity_deeplinks import dispatch_uri
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
@@ -337,14 +336,14 @@ class DeeplinkTests(unittest.TestCase):
         self.assertIsNone(handle_cli(["--web"], "/tmp"))
 
     def test_dispatch_start_without_server_returns_none(self):
-        from parity_deeplinks import dispatch_uri
+        from pkg.parity.parity_deeplinks import dispatch_uri
 
         with tempfile.TemporaryDirectory() as temporary:
             code = dispatch_uri("openbox://start", Path(temporary))
         self.assertIsNone(code)
 
     def test_dispatch_start_webbrowser_failure_still_ok(self):
-        from parity_deeplinks import dispatch_uri
+        from pkg.parity.parity_deeplinks import dispatch_uri
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
@@ -355,7 +354,7 @@ class DeeplinkTests(unittest.TestCase):
             self.assertEqual(code, 0)
 
     def test_dispatch_prints_urls_without_browser(self):
-        from parity_deeplinks import dispatch_uri
+        from pkg.parity.parity_deeplinks import dispatch_uri
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
@@ -370,21 +369,21 @@ class DeeplinkTests(unittest.TestCase):
             self.assertIn("deeplink=settings", printed)
 
     def test_dispatch_api_error_returns_one(self):
-        from parity_deeplinks import dispatch_uri
+        from pkg.parity.parity_deeplinks import dispatch_uri
         import urllib.error
 
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
             (data_dir / "server.port").write_text("12345", encoding="utf-8")
             with mock.patch(
-                "parity_deeplinks.api_request",
+                "pkg.parity.parity_deeplinks.api_request",
                 side_effect=urllib.error.URLError("down"),
             ):
                 code = dispatch_uri("openbox://launch/1", data_dir, token="tok")
             self.assertEqual(code, 1)
 
     def _run_keyboard_launcher_menu(self, picker, selection):
-        from parity_deeplinks import run_keyboard_launcher
+        from pkg.parity.parity_deeplinks import run_keyboard_launcher
 
         with mock.patch("pathlib.Path.exists", return_value=False), \
              mock.patch("shutil.which", return_value=f"/usr/bin/{picker}"), \
@@ -421,7 +420,7 @@ class DeeplinkTests(unittest.TestCase):
         printer.assert_not_called()
 
     def test_run_keyboard_launcher_script_path(self):
-        from parity_deeplinks import run_keyboard_launcher
+        from pkg.parity.parity_deeplinks import run_keyboard_launcher
 
         with mock.patch("pathlib.Path.exists", return_value=False), \
              mock.patch("shutil.which", return_value="/usr/bin/rofi"), \
@@ -434,8 +433,8 @@ class DeeplinkTests(unittest.TestCase):
     def test_run_keyboard_launcher_finds_shipped_script(self):
         # Regression: the helper resolved scripts/ relative to pkg/parity, so
         # the shipped scripts/openbox-launcher.sh was never found.
-        import parity_deeplinks
-        from parity_deeplinks import run_keyboard_launcher
+        import pkg.parity.parity_deeplinks as parity_deeplinks
+        from pkg.parity.parity_deeplinks import run_keyboard_launcher
 
         repo_root = Path(parity_deeplinks.__file__).resolve().parents[2]
         expected = repo_root / "scripts" / "openbox-launcher.sh"
@@ -447,7 +446,7 @@ class DeeplinkTests(unittest.TestCase):
         self.assertEqual(call_script.call_args[0][0], [str(expected), "rofi"])
 
     def test_run_keyboard_launcher_subprocess_errors(self):
-        from parity_deeplinks import run_keyboard_launcher
+        from pkg.parity.parity_deeplinks import run_keyboard_launcher
         import subprocess
 
         with mock.patch("pathlib.Path.exists", return_value=False), \
@@ -558,7 +557,7 @@ class ImportExclusionTests(unittest.TestCase):
 class IgdbTests(unittest.TestCase):
     def test_search_games_mocked(self):
         payload = [{"id": 1, "name": "Hollow Knight", "summary": "Metroidvania", "genres": [{"name": "Platform"}], "platforms": [{"name": "Linux"}]}]
-        with mock.patch("parity_igdb.igdb_request", return_value=payload):
+        with mock.patch("pkg.parity.parity_igdb.igdb_request", return_value=payload):
             results = search_games("Hollow Knight", platform="Linux")
         self.assertEqual(results[0]["name"], "Hollow Knight")
 

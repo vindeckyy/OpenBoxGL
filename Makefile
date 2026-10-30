@@ -29,6 +29,8 @@ contracts:
 	$(PYTHON) -B scripts/check_emulator_defs.py --update
 	$(PYTHON) -B scripts/check_frontend_modules.py --update
 	$(PYTHON) -B scripts/check_reliability_catalog.py --update
+	$(PYTHON) -B scripts/check_state_schema.py --update
+	$(PYTHON) -B scripts/check_api_contract.py --update
 	@echo "Contracts regenerated. Review the diff, then commit it with the change."
 
 # Run only the feature-regression ratchets, without the coverage stage.
@@ -40,6 +42,8 @@ ratchets:
 	$(PYTHON) -B scripts/check_reliability_catalog.py
 	$(PYTHON) -B scripts/check_clock_coupling.py
 	$(PYTHON) -B scripts/check_exec_modes.py
+	$(PYTHON) -B scripts/check_state_schema.py
+	$(PYTHON) -B scripts/check_api_contract.py
 
 
 native-host:

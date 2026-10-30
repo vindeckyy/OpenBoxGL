@@ -447,5 +447,25 @@ class SettingsSchemaTests(unittest.TestCase):
         self.assertIn("bogus_sidebar_key", dropped)
 
 
+class LibraryPathSettingsTests(unittest.TestCase):
+    def test_path_mode_must_be_absolute_or_portable(self):
+        with self.assertRaisesRegex(ValueError, "absolute or portable"):
+            clean_settings({"path_mode": "relative"})
+        self.assertEqual(clean_settings({"path_mode": "portable"})["path_mode"], "portable")
+
+    def test_library_root_must_be_an_absolute_existing_folder(self):
+        with tempfile.TemporaryDirectory() as root:
+            with self.assertRaisesRegex(ValueError, "absolute local path"):
+                clean_settings({"library_root": "games"})
+            with self.assertRaisesRegex(ValueError, "does not exist"):
+                clean_settings({"library_root": str(Path(root) / "missing")})
+            clean = clean_settings({"path_mode": "portable", "library_root": root})
+            self.assertEqual(Path(clean["library_root"]).resolve(), Path(root).resolve())
+
+    def test_default_path_settings_are_absolute_with_no_root(self):
+        clean = clean_settings({})
+        self.assertEqual((clean["path_mode"], clean["library_root"]), ("absolute", ""))
+
+
 if __name__ == "__main__":
     unittest.main()

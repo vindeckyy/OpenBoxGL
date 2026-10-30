@@ -27,7 +27,6 @@ os.environ["OPENBOX_DATA_DIR"] = _DATA_ROOT.name
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "pkg" / "parity"))
 
-import pkg.parity  # noqa: E402,F401  # registers the flat parity_* import finder
 import saves  # noqa: E402
 import cloud_sync  # noqa: E402
 import pkg.parity.parity_import as parity_import  # noqa: E402

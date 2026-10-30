@@ -217,13 +217,13 @@ class ApiSweep(unittest.TestCase):
         self.assert_alive()
 
     def test_v1_live_routes(self):
-        status, payload = self.request("/api/v1/library")
+        status, payload = self.request("/api/v2/library")
         self.assertEqual(status, 200)
         self.assertEqual(payload["games"][0]["name"], "Fixture")
-        status, payload = self.request("/api/v1/health", {})
+        status, payload = self.request("/api/v2/health", {})
         self.assertEqual(status, 200)
         self.assertIn("issues", payload)
-        status, payload = self.request("/api/v1/import", {"folder": ""})
+        status, payload = self.request("/api/v2/import", {"folder": ""})
         self.assertEqual(status, 400)
         self.assertEqual(payload.get("code"), "BAD_REQUEST")
         self.assertEqual(payload.get("error"), "Folder path is required.")

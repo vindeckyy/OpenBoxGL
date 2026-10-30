@@ -470,7 +470,7 @@ class PerfWriteTests(unittest.TestCase):
         }
         normalized, changed = normalize_state(v1_state)
         self.assertTrue(changed)
-        self.assertEqual(normalized["schema_version"], 6)
+        self.assertEqual(normalized["schema_version"], STATE_SCHEMA_VERSION)
         self.assertEqual(len(normalized["games"]), 5)
         self.assertEqual(normalized["queue"], [])
         self.assertEqual(normalized["notifications"], [])
@@ -486,13 +486,13 @@ class PerfWriteTests(unittest.TestCase):
 
             # load() auto-migrates and writes to disk
             loaded = store.load()
-            self.assertEqual(loaded["schema_version"], 6)
+            self.assertEqual(loaded["schema_version"], STATE_SCHEMA_VERSION)
 
             # Write another unmigrated state to disk
             store.path.write_text(json.dumps(legacy), encoding="utf-8")
             store._clear_cache()
             readonly = store.load_readonly()
-            self.assertEqual(readonly["schema_version"], 6)
+            self.assertEqual(readonly["schema_version"], STATE_SCHEMA_VERSION)
 
     def test_recover_when_backup_corrupt(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -519,7 +519,7 @@ class PerfWriteTests(unittest.TestCase):
             self.assertEqual(game["name"], "Legacy")
             # Verify file was migrated on disk
             raw = json.loads(store.path.read_text(encoding="utf-8"))
-            self.assertEqual(raw["schema_version"], 6)
+            self.assertEqual(raw["schema_version"], STATE_SCHEMA_VERSION)
 
     def test_medium_library_above_compact_threshold_compacts(self):
         with tempfile.TemporaryDirectory() as directory:

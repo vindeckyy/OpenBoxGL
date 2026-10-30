@@ -32,7 +32,8 @@ backported, so upgrading is the fix.
 
 | Version | Supported |
 | --- | --- |
-| 1.19.x | Yes (current) |
+| 2.0.x | Yes (current) |
+| 1.19.x | No — upgrade required |
 | 1.18.x | No — upgrade required |
 | 1.16.x | No — upgrade required (see above) |
 | 1.15.x | No — upgrade required |
@@ -121,3 +122,34 @@ The committed `openbox-release.pub` pins the production release key. Maintainers
 ## Disclosure
 
 We prefer coordinated disclosure. Reporters will be credited in release notes when fixes ship, unless they request anonymity.
+
+## 2.0 threat-model addendum (W0-09, W7-07)
+
+This addendum lists what 2.0 adds to the attack surface, the control for each item, and the test that exercises it. Gaps are listed separately and are not claimed as controls.
+
+| Surface added or changed in 2.0 | Threat | Control | Test |
+|---|---|---|---|
+| Portable library tokens (`@library/...`) | A stored token escapes the library folder (`..`, drive prefix, leading separator, NUL, alternate data stream) | Tokens are refused at decode; containment is checked after normalization | `tests/test_portable_paths.py` |
+| Portable library symlinks | A symlink inside the folder points outside it and is tokenized | A path that resolves outside the folder is not tokenized and is reported as `game_path_outside_root` | `tests/test_portable_library.py`, `tests/test_symlink_refusals.py` |
+| Extra-app paths (`applications`, `versions`, `documents`) | The same escape and rebase risks as game paths | The same token rules; a move rebases each path slot by its own key | `tests/test_portable_library.py` (`ExtraAppPathTests`) |
+| Move wizard | A stale preview applies to a library that has changed | Apply recomputes the plan under the store lock and refuses with `MOVE_PLAN_STALE` | `tests/test_library_move_http.py` |
+| Library migration v6 to v7 | A crash or full disk leaves a truncated library | Backup written and fsynced first; primary replaced atomically; a failed step leaves the original file | `tests/test_state_migration_rollback.py` |
+| Rollback | Rollback writes under a running server | Rollback refuses while a server answers on the recorded port | `tests/test_state_migration_rollback.py` |
+| Library format newer than this build | An older build rewrites a newer library | Refused with `STATE_FUTURE_VERSION` without rewriting the file | `tests/test_state_v7.py` |
+| Backup restore (format 2) | A tampered or unlisted member is written | Every member's size and SHA-256 are checked before any write; unlisted and missing members refuse the archive | `tests/test_backup_format_v2.py` |
+| Backup archives | Path traversal and symlink members | Entries are validated before extraction; symlinks are refused | `tests/test_path_traversal.py`, `tests/test_symlink_refusals.py` |
+| Backup format above this build | Silent misread of a newer archive | Refused with `BACKUP_FORMAT_UNSUPPORTED`; nothing is written | `tests/test_backup_format_v2.py` |
+| Media manifest | A changed or substituted media file goes unnoticed | Size and mtime are checked on demand; a change triggers a hash comparison; untracked files are reported | `tests/test_media_manifest.py` |
+| Host channel | A host built for another major API drives the server | `X-OpenBox-API-Version` is checked; a mismatch is refused with `HOST_API_UNSUPPORTED` before routing | `tests/test_api_v2_contract.py` |
+| v1 API bridge | Retired unversioned routes return to the public surface | Off by default; `OPENBOX_ENABLE_V1_API=1` re-enables it | `tests/test_api_v2_contract.py` |
+| Frontend requests | A request reaches an unversioned or unknown endpoint | Every `api()` call site must resolve to a live route; `/api/v1` may not appear in the frontend | `tests/test_frontend_endpoint_contract.py` |
+| Failure messages | A code is shown raw or not at all | Five codes map to explanations; a test requires an English explanation for each | `tests/test_api_problem_details.py` |
+| macOS bundle | An ad-hoc build is described as notarized | Notarization is claimed only with `spctl` evidence; the entitlements file is empty by default; the gate checks the pipeline | `tests/test_macos_release.py`, `docs/archive/HANDOFF-MACOS-NOTARY.md` |
+
+Gaps (not controls):
+
+- The Linux and Windows native hosts send `X-OpenBox-API-Version`, but they are compiled only in CI. Compilation was not run on this workstation.
+- The macOS bundle is ad-hoc signed, not notarized. The maintainer decided 2.0 ships that way, so the Privacy & Security confirmation on first launch still applies (ADR 0094)ed.
+- Plugin API v2 is implemented (ADR 0092). A v1 plugin keeps the v1 runner and the v1 payloads; a v2 plugin runs under the JSON Lines runner with an output cap.
+- The pre-app migration page (W1-12) is implemented: the upgrade is reported before the library is used, and the rollback restores the copy of the old file.
+

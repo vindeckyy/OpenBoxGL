@@ -212,7 +212,7 @@ class MediaPathTests(unittest.TestCase):
         self.assertNotIn("video_snap", state["games"][0])
 
     def test_find_duplicate_media_fast_path(self):
-        from parity_media import cleanup_duplicates, find_duplicate_media
+        from pkg.parity.parity_media import cleanup_duplicates, find_duplicate_media
         media_dir = self.data_path.parent / "media"
         media_dir.mkdir(parents=True, exist_ok=True)
         f1 = media_dir / "cover1.png"
@@ -575,7 +575,7 @@ class MediaPathTests(unittest.TestCase):
             handler_media.bulk_media({"media": ["cover"]})
 
     def test_active_video_legacy_and_edge_cases(self):
-        from parity_media import active_video, find_duplicate_media
+        from pkg.parity.parity_media import active_video, find_duplicate_media
         # Legacy video field
         media = self.data_path.parent / "media" / "legacy.mp4"
         media.parent.mkdir(parents=True, exist_ok=True)

@@ -181,7 +181,11 @@ class FastPathTests(unittest.TestCase):
         raw = v3_state()
         first = normalize_state(copy.deepcopy(raw))
         second = normalize_state(copy.deepcopy(raw))
-        self.assertEqual(first[0], second[0])
+        # library_id is minted per normalization by design; everything else must match.
+        self.assertEqual(
+            {k: v for k, v in first[0].items() if k != "library_id"},
+            {k: v for k, v in second[0].items() if k != "library_id"},
+        )
         self.assertEqual(first[1], second[1])
         # Re-normalizing a normalized state is a stable no-op.
         third = normalize_state(copy.deepcopy(first[0]))
@@ -200,16 +204,16 @@ class TransactionValidationTests(unittest.TestCase):
                 store.update(lambda state: state.__setitem__("games", "not-a-list"))
             self.assertEqual(path.read_text(encoding="utf-8"), before)
 
-    def test_schema_remains_6_after_round_trip(self):
+    def test_schema_remains_7_after_round_trip(self):
         with tempfile.TemporaryDirectory() as directory:
             store = JsonStateStore(Path(directory) / "library.json")
             saved = store.save(default_state())
-            self.assertEqual(saved["schema_version"], 6)
+            self.assertEqual(saved["schema_version"], 7)
             loaded = store.load()
-            self.assertEqual(loaded["schema_version"], 6)
+            self.assertEqual(loaded["schema_version"], 7)
             store.update(lambda state: state["settings"].update({"locale": "fr"}))
             reloaded = store.load()
-            self.assertEqual(reloaded["schema_version"], 6)
+            self.assertEqual(reloaded["schema_version"], 7)
 
 
 class StoreIndexTests(unittest.TestCase):

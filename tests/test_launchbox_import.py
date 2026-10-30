@@ -10,7 +10,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 from pkg.parity.parity_launchbox_import import (  # noqa: E402
     LaunchBoxImportError,
     StaleImportPlan,

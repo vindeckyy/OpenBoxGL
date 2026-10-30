@@ -8,10 +8,9 @@ from unittest import mock
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
-import parity_storefront as storefront_module
-from parity_storefront import catalog_entries_to_games, catalog_heroic, catalog_steam, storefront_catalog
+import pkg.parity.parity_storefront as storefront_module
+from pkg.parity.parity_storefront import catalog_entries_to_games, catalog_heroic, catalog_steam, storefront_catalog
 from pkg.platform_compat import steam_candidate_roots, url_opener_command
 
 

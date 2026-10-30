@@ -596,10 +596,10 @@ class ParitySetupPreviewTests(unittest.TestCase):
             "steam": ("importers.import_steam", game),
             "heroic": ("importers.import_heroic", {**game, "heroic_app_id": "h1", "source": "heroic"}),
             "lutris": ("importers.import_lutris", {**game, "lutris_id": "l1"}),
-            "faugus": ("parity_faugus.scan_faugus_games", game),
-            "scummvm": ("parity_import.import_scummvm", {**game, "scummvm_id": "sc1"}),
-            "rpcs3": ("parity_import.import_rpcs3_hdd", game),
-            "vita3k": ("parity_import.import_vita3k", game),
+            "faugus": ("pkg.parity.parity_faugus.scan_faugus_games", game),
+            "scummvm": ("pkg.parity.parity_import.import_scummvm", {**game, "scummvm_id": "sc1"}),
+            "rpcs3": ("pkg.parity.parity_import.import_rpcs3_hdd", game),
+            "vita3k": ("pkg.parity.parity_import.import_vita3k", game),
         }
         for source_type, (module_path, row) in patches.items():
             with mock.patch(module_path, return_value=[row]):
@@ -611,7 +611,7 @@ class ParitySetupPreviewTests(unittest.TestCase):
         folder = self.data_dir / "xbox"
         folder.mkdir()
         game = {"name": "360", "platform": "Xbox 360", "path": str(folder / "g.iso")}
-        with mock.patch("parity_premium.import_xbox360_folder", return_value=[game]):
+        with mock.patch("pkg.parity.parity_premium.import_xbox360_folder", return_value=[game]):
             scanned, fps = scan_sources([{"type": "xbox360", "path": str(folder)}])
             self.assertEqual(len(scanned), 1)
         arcade_dir = self.data_dir / "arcade"
@@ -623,8 +623,8 @@ class ParitySetupPreviewTests(unittest.TestCase):
             )
             self.assertEqual(len(scanned), 1)
         catalog = [{"name": "Catalog", "platform": "Windows", "steam_app_id": "9", "installed": True}]
-        with mock.patch("parity_storefront.storefront_catalog", return_value=catalog), mock.patch(
-            "parity_storefront.catalog_entries_to_games",
+        with mock.patch("pkg.parity.parity_storefront.storefront_catalog", return_value=catalog), mock.patch(
+            "pkg.parity.parity_storefront.catalog_entries_to_games",
             return_value=[{"name": "Catalog", "platform": "Windows", "gameyfin_id": "9", "path": "/p"}],
         ):
             scanned, fps = scan_sources(
@@ -1016,8 +1016,8 @@ class ParitySetupPreviewTests(unittest.TestCase):
         scanned, _fps = scan_sources([{"type": "files", "paths": ["/missing/file.nes", str(self.data_dir / "ok.nes")]}])
         self.assertEqual(len(scanned), 1)
         catalog = [{"name": "Installed", "platform": "Windows", "gameyfin_id": "1", "installed": True}]
-        with mock.patch("parity_storefront.storefront_catalog", return_value=catalog), mock.patch(
-            "parity_storefront.catalog_entries_to_games",
+        with mock.patch("pkg.parity.parity_storefront.storefront_catalog", return_value=catalog), mock.patch(
+            "pkg.parity.parity_storefront.catalog_entries_to_games",
             return_value=[{"name": "Installed", "platform": "Windows", "gameyfin_id": "1", "path": "/p"}],
         ):
             scanned, _fps = scan_sources([{"type": "gameyfin"}], {})

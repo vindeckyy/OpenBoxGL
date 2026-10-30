@@ -28,7 +28,6 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pkg.parity  # noqa: F401, E402  # register flat-import finder before parity_* imports
 
 FIXTURE_ROOT = Path("/tmp/openbox-readme-fixtures")
 DATA_DIR = FIXTURE_ROOT / "data"
@@ -113,7 +112,7 @@ def file_fingerprint(path: Path) -> str:
 def preferred_box_front(database_id: int, database: Path) -> dict | None:
     import sqlite3
 
-    from parity_media import REGION_PRIORITY_DEFAULT, sort_images_by_region
+    from pkg.parity.parity_media import REGION_PRIORITY_DEFAULT, sort_images_by_region
 
     conn = sqlite3.connect(database)
     conn.row_factory = sqlite3.Row
@@ -133,7 +132,7 @@ def preferred_background(database_id: int, database: Path) -> dict | None:
     """Best fanart background for a title, used when no local copy exists."""
     import sqlite3
 
-    from parity_media import REGION_PRIORITY_DEFAULT, sort_images_by_region
+    from pkg.parity.parity_media import REGION_PRIORITY_DEFAULT, sort_images_by_region
 
     conn = sqlite3.connect(database)
     conn.row_factory = sqlite3.Row

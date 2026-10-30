@@ -2,6 +2,56 @@
 
 Measured by `scripts/perf_bench.py` against a synthetic library served by the real server (loopback, gzip enabled). Reference machine: this workstation.
 
+## 2.0 program baseline: 1.19.1 and the 2.0 snapshot (2026-10-29)
+
+Machine: Apple M4, macOS 27.2 (arm64), Python 3.12.15 from `.venv-dev`, loopback. The 1.19.1 side is the `release/1.19` worktree at `b3c4cec`; the 2.0 side is a copy of the working tree taken for this run. Command: `python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5 --no-gate` (p95 milliseconds). Raw JSON is under `/tmp/openbox-2.0` and is not committed.
+
+| Gate key | 10k 1.19.1 | 10k 2.0 | Δ | 20k 1.19.1 | 20k 2.0 | Δ |
+|---|---:|---:|---:|---:|---:|---:|
+| library | 7.9 | 7.8 | -1.3% | 15.4 | 16.6 | +7.8% |
+| library_gzip | 0.7 | 0.7 | +0.0% | 0.9 | 0.9 | +0.0% |
+| favorite_mutation | 175.7 | 184.6 | +5.1% | 370.4 | 368.7 | -0.5% |
+| filtered_query | 4.8 | 5.1 | +6.2% | 4.9 | 5.1 | +4.1% |
+| facet | 159.7 | 162.3 | +1.6% | 353.7 | 352.1 | -0.5% |
+| write (`10k_write` / `20k_write`) | 186.1 | 185.2 | -0.5% | 369.5 | 371.0 | +0.4% |
+| picker_score | 10.4 | 10.4 | +0.0% | 22.1 | 21.6 | -2.3% |
+| constellation_build | 89.4 | 88.6 | -0.9% | 94.9 | 95.0 | +0.1% |
+
+The largest gate change is +7.8% (20k `library`), inside the 10% limit. This snapshot predates the final 2.0 changes; W7-04 re-runs the comparison on the release candidate.
+
+Packaging baseline (1.19.1, `scripts/build_macos_app.sh` in the release worktree, exit 0): `OpenBox-macos.zip` is 44,292,946 bytes with sha256 `2d2479a6179fbc3c9d6ad9d94e32db9a90b6de3784f81de0cd3c628681d6c6a1`; SBOM `OpenBox-1.19.1-macos-sbom.json`. The bundle is ad-hoc signed.
+
+Full gate on the baseline (`scripts/check_tests.py` in the release worktree): 223 test files pass, total coverage 86.0% (floor 83), web_app 74.0% (floor 58), token hygiene clean.
+
+## 2.0 exploratory: 50k (W7-01, 2026-10-29)
+
+Same machine and 2.0 snapshot, `--sizes 50000 --runs 3 --no-gate`, p95 milliseconds:
+
+| Operation | 50k p95 | Budget (ADR 0098) |
+|---|---:|---|
+| favorite mutation (full save) | 927.8 | write p95 ≤ 1500 ms: met |
+| bulk mutation | 1087.4 | write p95 ≤ 1500 ms: met |
+| library | 31.2 | not gated |
+| library_gzip | 1.4 | not gated |
+| facet | 955.2 | not gated |
+| constellation_build | 112.5 | not gated |
+| picker_score | 61.0 | not gated |
+| import_apply | 2424.0 | not gated |
+| archive_inspection | 3380.5 | not gated |
+
+Memory was not measured in this run, so the 1.5 GB budget in ADR 0098 is unverified at 50k. The 50k figures are exploratory: the formal promise stays at 20,000 games.
+
+## SQLite feasibility spike (W0-04, 2026-10-29)
+
+Harness: `/tmp/openbox-2.0/sqlite-spike/spike.py` (throwaway, not committed), run against the 1.19.1 production `JsonStateStore`, single process, p95 milliseconds.
+
+| Games | JSON full single-field update | SQLite full-state commit | JSON full-state digest |
+|---|---:|---:|---:|
+| 10,000 | 75.1 | 17.6 | 10.5 |
+| 50,000 | 415.9 | 89.0 | 52.5 |
+
+The spike's single-row SQLite commit (0.1 ms) is not a fair cost: it writes a two-key stub body. The full-state commit is the fair comparison. Neither store uses `F_FULLFSYNC` on macOS (SQLite's `fullfsync` pragma is off by default), so both durability costs are understated by the same mechanism. See ADR 0088.
+
 ## 1.15.0 measurements (2026-09-29, release tree)
 
 Five-run strict local sampling on the 1.15.0 tree passed all performance gates
@@ -257,12 +307,41 @@ CI job `perf-20k` is blocking on pull requests and pushes to master.
 
 > Historical note: this section describes the original 1.7.2 opt-in behavior.
 > Since 1.12.0 (ADR 0047) the read model self-enables at 5,000+ games unless
-> opted out with `OPENBOX_ENABLE_SQLITE_READ=0`.
+> opted out with `OPENBOX_ENABLE_SQLITE_READ=0`. Since 2.0 (ADR 0101) a read
+> never rebuilds: a write queues a debounced rebuild on a background thread and
+> a stale projection answers from the JSON path.
 
-- **Optional Acceleration**: `pkg/state/sqlite_readmodel.py` provides an alternative read path using stdlib `sqlite3`, enabled via `OPENBOX_ENABLE_SQLITE_READ=1` env flag.
+- **Optional Acceleration**: `pkg/state/sqlite_readmodel.py` provides an alternative read path using stdlib `sqlite3`, self-enabling at 5,000+ games and opt-out with `OPENBOX_ENABLE_SQLITE_READ=0`.
 - **FTS5 Search**: Full-text search via SQLite FTS5 virtual tables with automatic LIKE fallback for builds without FTS5 support.
 - **Indexed Queries**: Filtered lookups on platform, genre, favorite, hidden, installed with limit/offset pagination via SQL WHERE clauses.
 - **GROUP BY Facets**: Facet computation via SQL `GROUP BY` instead of in-memory iteration.
 - **Signature-Based Rebuild**: `ensure_fresh(state, signature)` rebuilds only when the state signature changes, avoiding unnecessary rebuilds.
-- **Zero Impact When Off**: Disabled by default; all methods are no-ops returning empty results.
-- **Parity Verification**: `query_parity_check()` verifies SQLite results match the JSON read path.
+- **Background Rebuild**: Since 2.0 the rebuild runs on a debounced background thread, so no request waits for it; a stale projection answers `source: "json"` and the next read uses the projection.
+- **Zero Impact When Off**: Opted out with `OPENBOX_ENABLE_SQLITE_READ=0`; all methods are no-ops returning empty results.
+- **Parity Verification**: `query_parity_check()` verifies SQLite results match the JSON read path, and a mismatch drops the model back to the JSON path.
+
+## 2.0.0: Facet counts off the UI thread
+
+The library filter chips counted every game on the UI thread on each render. The
+counts now come from the search worker (`static/worker.search.js`), which mirrors
+`static/pure.js::facetCounts` so both paths produce the same numbers:
+
+- Protocol: `{type: "facets", query, generation}` -> `{type: "facets", generation, counts}`.
+- The generation number discards a reply that a newer request has superseded.
+- While the worker computes, the chips keep the previous counts and dim.
+- Without a worker the counts are computed on the UI thread, as before.
+
+`tests/js/pure.test.mjs` and `tests/js/worker.facets.test.mjs` pin the two copies
+against each other.
+
+Measured in the browser smoke on the reference workstation (Apple M4, macOS 27.2) with
+20,000 games in the library:
+
+| Path | UI thread time |
+|---|---:|
+| Counting on the UI thread (what the chips did on every render) | 4.8 ms per render |
+| Posting the platform values to the worker (once per library change) | 0.7 ms |
+
+The counting no longer runs on the UI thread at all; what is left there is the copy of
+the platform values, and only when the library changed. The smoke also asserts that the
+worker and the UI thread count identically (`sameCounts`).

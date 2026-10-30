@@ -14,7 +14,6 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import pkg.parity  # noqa: E402,F401  (flat-import finder for parity modules)
 from handlers.extensions import ExtensionsHandlers  # noqa: E402
 from handlers.library import LibraryHandlers  # noqa: E402
 from pkg.parity import parity_backup, parity_gameyfin  # noqa: E402

@@ -12,11 +12,10 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import pkg.parity  # noqa: F401,E402  # register flat-import finder
 
 from backend_io import download_file, read_limited
 from catalog import bulk_update
-from parity_gameyfin import GameyfinError, uninstall_gameyfin_game
+from pkg.parity.parity_gameyfin import GameyfinError, uninstall_gameyfin_game
 from state_store import JsonStateStore, StateCorruptError, STATE_SCHEMA_VERSION
 
 
