@@ -35,14 +35,14 @@ from pkg.platform_compat import (
 
 logger = logging.getLogger("openbox")
 
-VERSION = "1.19.1"
+VERSION = "2.0.0"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
 TRUSTED_RELEASE_PREFIX = "https://github.com/vindeckyy/OpenBoxGL/releases/download/"
 
 
 def _current_arch(machine=None):
     """Map the host CPU to the OpenBox artifact architecture tag."""
-    machine = machine or platform.machine().lower()
+    machine = (machine or platform.machine()).lower()
     if machine in ("x86_64", "amd64", "x64"):
         return "x86_64"
     if machine in ("aarch64", "arm64"):
@@ -53,7 +53,8 @@ def _current_arch(machine=None):
 def _arch_asset(arch):
     """The release asset name for a given architecture on this platform."""
     if IS_WINDOWS:
-        return f"OpenBox-{arch}-windows.zip"
+        windows_tag = "arm64" if arch == "aarch64" else arch
+        return f"OpenBox-{windows_tag}-windows.zip"
     if IS_MACOS:
         # One universal bundle serves Apple Silicon and Intel.
         return "OpenBox-macos.zip"

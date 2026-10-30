@@ -11,9 +11,10 @@ from api_errors import BadgeNotFound, MediaNotFound, RangeParseError
 from metadata import apply_game_metadata
 from openbox import load_state
 from routes.registry import route
-from parity_integrations import attach_recording, capture_screenshot, download_bezel, load_emumovies_credentials, obs_recording_status, save_emumovies_credentials
-from parity_media import active_video, cleanup_duplicates, cleanup_generated_cache, enqueue_media_job, find_duplicate_media, media_queue_snapshot, retry_media_queue_item
-from parity_emumovies import download_emumovies_media
+from pkg.parity.parity_integrations import attach_recording, capture_screenshot, download_bezel, load_emumovies_credentials, obs_recording_status, save_emumovies_credentials
+from pkg.parity.parity_media import active_video, cleanup_duplicates, cleanup_generated_cache, enqueue_media_job, find_duplicate_media, media_queue_snapshot, retry_media_queue_item
+from pkg.parity.parity_emumovies import download_emumovies_media
+from pkg.state import media_manifest
 from pkg.state.imports import (
     cancel_media_queue_worker,
     media_queue_worker_state,
@@ -21,8 +22,8 @@ from pkg.state.imports import (
     resume_media_queue_worker,
     start_media_queue_worker,
 )
-from parity_memories import IMPORT_JOB_NAME, MEMORIES_FIELD, UNASSIGNED_FIELD, apply_import_plan, collect_imports, configured_roots, memories_import_enabled
-from parity_premium import apply_media_pack, download_gog_media, download_steam_trailer, list_media_packs, platform_categories, strings_for
+from pkg.parity.parity_memories import IMPORT_JOB_NAME, MEMORIES_FIELD, UNASSIGNED_FIELD, apply_import_plan, collect_imports, configured_roots, memories_import_enabled
+from pkg.parity.parity_premium import apply_media_pack, download_gog_media, download_steam_trailer, list_media_packs, platform_categories, strings_for
 from webapp_state import DATA, JOB_MANAGER, MEDIA_JOB, MEDIA_TYPES_ALL, METADATA_DATABASE, PROCESS_LOCK, approved_media_path, bump_media_epoch, download_image, game_from_payload, game_from_query, load_state_view, public_settings, transact_state
 
 
@@ -512,6 +513,8 @@ class MediaHandlers:
         state = load_state()
         target = copy.deepcopy(game_from_payload(state, payload))
         path = download_steam_trailer(target, DATA.parent / "media")
+        if path:
+            media_manifest.record(DATA.parent / "media", Path(path), "steam-trailer")
         def mutate(state):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)
@@ -554,6 +557,8 @@ class MediaHandlers:
         path = download_emumovies_media(
             target, credentials, DATA.parent / "media", media_type,
         )
+        if path:
+            media_manifest.record(DATA.parent / "media", Path(path), f"emumovies-{field}")
         def mutate(state):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)
@@ -596,6 +601,8 @@ class MediaHandlers:
         stable_game_id = game.get("game_id")
         destination = DATA.parent / "media" / "captures" / f"{Path(game.get('path', 'game')).stem}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
         path = capture_screenshot(destination)
+        if path:
+            media_manifest.record(DATA.parent / "media", Path(path), "capture")
         def mutate(state):
             screenshots = game_from_payload(state, {"game_id": stable_game_id}).setdefault("screenshots", [])
             if path not in screenshots:

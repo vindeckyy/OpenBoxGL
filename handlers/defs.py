@@ -23,9 +23,8 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-import pkg.parity  # noqa: F401,E402  # installs the flat parity_* import finder
 import openbox  # noqa: E402
-from parity_emulator_defs_update import (  # noqa: E402
+from pkg.parity.parity_emulator_defs_update import (  # noqa: E402
     DefinitionError,
     SignatureError,
     check as _check,

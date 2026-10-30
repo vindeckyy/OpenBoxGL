@@ -7,15 +7,18 @@ from pathlib import Path
 
 from catalog import PROGRESS, clean_currency
 from openbox import discover_profiles, load_state, update_state_with_result
-from parity_backup import AUTO_BACKUP_KEEP
-from parity_integrations import inject_retroachievements
-from parity_integration_tokens import clean_tokens
-from parity_media import REGION_PRIORITY_DEFAULT
-from parity_premium import LIST_COLUMNS_DEFAULT, custom_field_defs, enhanced_ra_profile, platform_categories
-from parity_tracking import TRACKING_MODES
+from pkg.parity.parity_backup import AUTO_BACKUP_KEEP
+from pkg.parity.parity_integrations import inject_retroachievements
+from pkg.parity.parity_integration_tokens import clean_tokens
+from pkg.parity.parity_media import REGION_PRIORITY_DEFAULT
+from pkg.parity.parity_premium import LIST_COLUMNS_DEFAULT, custom_field_defs, enhanced_ra_profile, platform_categories
+from pkg.parity.parity_tracking import TRACKING_MODES
 from retroachievements import api_get as ra_api_get, game_progress as ra_game_progress, load_credentials as load_ra_credentials, match_game as match_ra_game, save_credentials as save_ra_credentials
 from routes.registry import route
 from settings_schema import KNOWN_SETTINGS, sanitize_settings
+from pkg.platform_compat import IS_WINDOWS
+from pkg.state.paths import PathTokenError, normalize_root
+from state_store import PATH_MODES
 from pkg.parity.parity_steam_achievements import (
     credential_status as steam_credential_status,
     fetch_owned_games,
@@ -809,6 +812,16 @@ def clean_settings(merged):
     bigbox_sounds_enabled = _clean_bool(merged, "bigbox_sounds_enabled", True)
     auto_import_excluded_platforms = _clean_str_list(merged, "auto_import_excluded_platforms", 100, 80)
     emulator_update_checks = _clean_str_list(merged, "emulator_update_checks", 100, 100)
+    path_mode = str(merged.get("path_mode") or "absolute")
+    if path_mode not in PATH_MODES:
+        raise ValueError("Library path mode must be absolute or portable.")
+    try:
+        library_root = normalize_root(str(merged.get("library_root") or ""), windows=IS_WINDOWS)
+    except PathTokenError as error:
+        raise ValueError(str(error)) from error
+    if library_root and not Path(library_root).is_dir():
+        raise ValueError(f"Library root folder does not exist: {library_root}")
+    media_manifest_enabled = _clean_bool(merged, "media_manifest_enabled", True)
     return {
             "watch_folders": clean_folders,
             "screensaver_seconds": seconds,
@@ -858,6 +871,9 @@ def clean_settings(merged):
             "storefront_auto_import": clean_storefront,
             "auto_import_excluded_platforms": auto_import_excluded_platforms,
             "emulator_update_checks": emulator_update_checks,
+            "path_mode": path_mode,
+            "library_root": library_root,
+            "media_manifest_enabled": media_manifest_enabled,
             "obs_auto_attach": obs_auto_attach,
             "obs_recording_path": obs_recording_path,
             "obs_replay_enabled": bool(merged.get("obs_replay_enabled", False)),
@@ -1099,6 +1115,10 @@ class SettingsHandlers:
                 continue
             merged[key] = value
         normalized_settings = clean_settings(merged)
+        existing_path_settings = (existing_settings.get("path_mode", "absolute"), existing_settings.get("library_root", ""))
+        if (normalized_settings.get("path_mode", "absolute"), normalized_settings.get("library_root", "")) != existing_path_settings:
+            # Changing the folder or the path mode rebases stored paths; Move library previews that first (ADR 0090).
+            raise ValueError("Use Move library to change the library folder or path mode; it previews the change first.")
         enabling_library_sync = (
             bool(normalized_settings.get("library_sync_enabled"))
             and not bool(existing_settings.get("library_sync_enabled"))

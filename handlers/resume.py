@@ -17,10 +17,9 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-import pkg.parity  # noqa: F401,E402  # installs the flat parity_* import finder
 from api_errors import BadRequest, Conflict, NotFound  # noqa: E402
 import openbox  # noqa: E402
-from parity_resume import discard_resume_state, resume_status as _resume_status, validate_resume_slot  # noqa: E402
+from pkg.parity.parity_resume import discard_resume_state, resume_status as _resume_status, validate_resume_slot  # noqa: E402
 from pkg.state.launch import game_from_payload, game_from_query, start_game  # noqa: E402
 from routes.registry import route  # noqa: E402
 
@@ -55,7 +54,7 @@ def resume_status(handler, parsed):
     handler.send_json(200, status)
 
 
-@route("POST", "/api/v2/resume", spec="handlers.resume.resume_launch")
+@route("POST", ["/api/v2/resume", "/api/host/resume"], spec="handlers.resume.resume_launch")
 def resume_launch(handler, payload):
     """Relaunch a game into its stored state via the atomic reservation path."""
     if not handler.authorized():

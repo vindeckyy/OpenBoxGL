@@ -19,21 +19,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-import pkg.parity  # noqa: F401  # register flat-import finder before parity_* imports
 from api_errors import ApiError, BadRequest, RangeParseError, RouteNotFound
 from env_config import bootstrap_env
 from openbox_logging import configure_logging
 from openbox import DATA, STATE_STORE, load_state, purge_demo_games, update_state
 from plugins import emit_plugin_event
-from parity_backup import AUTO_BACKUP_ITEMS, AUTO_BACKUP_KEEP, auto_backup_due, create_backup, restore_backup
-from parity_deeplinks import handle_cli
-from parity_emulator_defs import merge_profiles_from_definitions
-from parity_gameyfin import GameyfinError
-from parity_gamescope import OPENBOX_STEAM_GAME_ID, is_gamescope_guest, mark_process_windows, open_ui
+from pkg.parity.parity_backup import AUTO_BACKUP_ITEMS, AUTO_BACKUP_KEEP, auto_backup_due, create_backup, restore_backup
+from pkg.parity.parity_deeplinks import handle_cli
+from pkg.parity.parity_emulator_defs import merge_profiles_from_definitions
+from pkg.parity.parity_gameyfin import GameyfinError
+from pkg.parity.parity_gamescope import OPENBOX_STEAM_GAME_ID, is_gamescope_guest, mark_process_windows, open_ui
 from pkg.platform_compat import IS_LINUX, ensure_macos_tool_path, process_alive, terminate_process_tree
 from routes import dispatch_get, dispatch_post
 from routes.registry import route
-from state_store import StateCorruptError, secure_text_write
+from state_store import StateCorruptError, StateFutureVersionError, StateMigrationError, secure_text_write
+from api_errors import problem_payload
 from stock_themes import ensure_stock_themes
 from webapp_state import (
     JOB_MANAGER,
@@ -207,7 +207,7 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
             self.send_header("ETag", etag)
         if last_modified:
             self.send_header("Last-Modified", last_modified)
-        for name, value in (extra_headers or {}).items():
+        for name, value in {**getattr(self, "route_headers", {}), **(extra_headers or {})}.items():
             self.send_header(name, value)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
@@ -338,6 +338,11 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
                 pass
 
     def send_json(self, status, payload, extra_headers=None):
+        if status >= 400 and isinstance(payload, dict):
+            # Errors are RFC 9457-shaped problem documents; `error` stays for one major cycle.
+            body = problem_payload(status, payload, request_id=str(payload.get("request_id") or ""), instance=self.path)
+            self.send_bytes(status, json.dumps(body).encode(), "application/problem+json; charset=utf-8", extra_headers=extra_headers)
+            return
         data = json.dumps(payload).encode()
         self.send_bytes(status, data, "application/json; charset=utf-8", extra_headers=extra_headers)
 
@@ -651,6 +656,9 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         except ApiError as error:
             LOGGER.info("HTTP %s %s [%s] %s: %s", method, path, request_id, error.code, error.message)
             self.send_json(error.status, error.to_payload(request_id))
+        except StateFutureVersionError as error:
+            LOGGER.error("OpenBox library format is newer than this build: %s", error)
+            self.send_json(409, {"error": str(error), "code": "STATE_FUTURE_VERSION", "request_id": request_id})
         except StateCorruptError as error:
             LOGGER.error("OpenBox state is unavailable: %s", error)
             self.send_json(503, {"error": "OpenBox library data needs recovery before this operation can continue.", "code": "STATE_UNAVAILABLE", "request_id": request_id})
@@ -740,6 +748,10 @@ def _health_rescan_worker():
 
 
 def main():
+    from pkg.state import library_cli
+
+    if library_cli.is_library_command(sys.argv[1:]):
+        raise SystemExit(library_cli.main(sys.argv[1:]))
     bootstrap_env(DATA.parent)
     configure_logging(DATA.parent)
     LOGGER.info("OpenBox web UI starting")
@@ -765,7 +777,7 @@ def main():
         return
     if "--restore-backup" in args:
         archive = approved_backup_file(args[args.index("--restore-backup") + 1])
-        restored = restore_backup(archive, DATA.parent, running_map=RUNNING)
+        restored = restore_backup(archive, DATA.parent, running_map=RUNNING)["items"]
         print(",".join(restored))
         return
     cli_code = handle_cli(args, DATA.parent)
@@ -785,6 +797,10 @@ def main():
         profiles.update(merge_profiles_from_definitions(profiles))
     try:
         update_state(bootstrap_state)
+    except (StateFutureVersionError, StateMigrationError) as error:
+        # Never recover automatically from these: the primary is a newer format or a
+        # failed upgrade, and the copy in library.json.bak may be older.
+        STARTUP_ERRORS.append(str(error))
     except StateCorruptError as error:
         STARTUP_ERRORS.append(f"Library data could not be read: {error}")
         try:

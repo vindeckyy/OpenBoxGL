@@ -309,7 +309,12 @@ function closeContextMenu(restoreFocus = false) {
   if (restoreFocus) {
     let trigger = contextMenuTrigger;
     contextMenuTrigger = null;
-    if (!trigger?.isConnected && gameId !== null && gameId !== undefined) {
+    // Opening the menu re-renders the grid, so the element that had the focus
+    // is gone by the time the menu closes. The keyboard path never had a card
+    // as the trigger either, because the focus was already on the body after
+    // the re-render. Fall back to the card that carries the same game id.
+    const stale = !trigger?.isConnected || !trigger.closest?.('[data-game]');
+    if (stale && gameId !== null && gameId !== undefined) {
       trigger = document.querySelector(`[data-game="${gameId}"]`);
     }
     try {
@@ -330,6 +335,9 @@ function closeContextMenu(restoreFocus = false) {
 function openContextMenu(event, id) {
   event.preventDefault();
   AppState.contextGameId = id;
+  // The card that had the focus is captured before the grid is re-rendered
+  // below, because the re-render replaces it.
+  contextMenuTrigger = event.target?.closest?.('[data-game]') || document.activeElement?.closest?.('[data-game]') || document.activeElement;
   // F14: this set selectedId without re-rendering, so the card the user
   // right-clicked was never highlighted and the details pane still described a
   // different game. The menu's own actions read contextGameId and were correct,
@@ -345,7 +353,6 @@ function openContextMenu(event, id) {
   menu.hidden = false;
   menu.style.left = `${Math.min(event.clientX, window.innerWidth - menu.offsetWidth - 8)}px`;
   menu.style.top = `${Math.min(event.clientY, window.innerHeight - menu.offsetHeight - 8)}px`;
-  contextMenuTrigger = event.target?.closest?.('[data-game]') || document.activeElement;
   const items = contextMenuItems();
   items.forEach((item, index) => item.tabIndex = index === 0 ? 0 : -1);
   items[0]?.focus();

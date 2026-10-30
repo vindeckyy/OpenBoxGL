@@ -12,6 +12,7 @@ import os
 import sys
 
 from api_errors import BadRequest
+import plugins
 from pkg.platform_compat import battery_status, platform_features
 from routes.registry import route
 
@@ -123,3 +124,37 @@ def window(handler, payload):
     if action not in ("minimize", "toggle-maximize", "close", "set-fullscreen", "unset-fullscreen"):
         raise BadRequest("Native window action is not supported.")
     handler.send_json(200, {"ok": False})
+
+
+API_VERSION = 2
+# The newest plugin API this build serves. A v1 plugin still runs unchanged (ADR 0092).
+PLUGIN_API_VERSION = plugins.PLUGIN_API_VERSION_SUPPORTED
+BACKUP_FORMAT_VERSION = 2
+SYNC_FORMAT_VERSION = 3
+
+
+@route("GET", "/api/v2/version")
+def version_info(handler, parsed):
+    """Advertise every contract version so a client can refuse a shape it cannot read (ADR 0087)."""
+    import platform
+    import sys
+
+    from state_store import STATE_SCHEMA_VERSION
+    from updates import VERSION
+
+    if sys.platform.startswith("win"):
+        host_platform = "windows"
+    elif sys.platform == "darwin":
+        host_platform = "macos"
+    else:
+        host_platform = "linux"
+    handler.send_json(200, {
+        "version": VERSION,
+        "api_version": API_VERSION,
+        "state_schema": STATE_SCHEMA_VERSION,
+        "plugin_api_version": PLUGIN_API_VERSION,
+        "backup_format": BACKUP_FORMAT_VERSION,
+        "sync_format": SYNC_FORMAT_VERSION,
+        "platform": host_platform,
+        "python": platform.python_version(),
+    })

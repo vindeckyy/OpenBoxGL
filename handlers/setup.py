@@ -1,6 +1,7 @@
 """SetupHandlers capability handlers. Setup Center preview/commit v2 routes."""
 
 from __future__ import annotations
+from pathlib import Path
 
 from urllib.parse import parse_qs
 
@@ -20,9 +21,58 @@ from pkg.parity.parity_setup_preview import (
     run_scan_job,
     save_preview,
 )
+from pkg.parity.parity_compat import build_report, readiness_checks
+from pkg.parity.parity_backup import create_backup
 from pkg.state.operations import get_operation_service
+from pkg.state import library_v7
 from routes.registry import route
-from webapp_state import JOB_MANAGER
+from state_store import freeze_library_writes
+from webapp_state import DATA, JOB_MANAGER
+
+
+def migration_status_payload(data_dir: Path) -> dict:
+    """The migration report, the acknowledgement state, and the readiness items."""
+    status = library_v7.migration_status(data_dir)
+    status["readiness"] = readiness_checks(data_dir, root=Path(__file__).resolve().parents[1])
+    return status
+
+
+@route("GET", "/api/v2/setup/migration/status", spec="handlers.setup.migration_status")
+def migration_status(handler, parsed):
+    """What the last migration did, whether the user has acknowledged it, and what to look at."""
+    handler.send_json(200, migration_status_payload(DATA.parent))
+
+
+@route("POST", "/api/v2/setup/migration/backup", spec="handlers.setup.migration_backup")
+def migration_backup(handler, payload):
+    """Write a backup before the user opens the migrated library (plan 14.1)."""
+    state = load_state()
+    archive = create_backup(DATA.parent, state, ["library", "settings"])
+    handler.send_json(200, {"archive": str(archive), "name": archive.name})
+
+
+@route("POST", "/api/v2/setup/migration/acknowledge", spec="handlers.setup.migration_acknowledge")
+def migration_acknowledge(handler, payload):
+    """Record that the user has seen the migration report."""
+    handler.send_json(200, library_v7.acknowledge_migration(DATA.parent))
+
+
+@route("POST", "/api/v2/setup/migration/rollback", spec="handlers.setup.migration_rollback")
+def migration_rollback(handler, payload):
+    """Restore the copy of the old library. The server freezes its writes and stops after."""
+    if not bool(payload.get("confirmed")):
+        handler.send_json(200, library_v7.rollback(DATA.parent, confirmed=False))
+        return
+    result = library_v7.rollback(DATA.parent, confirmed=True, allow_running=True)
+    freeze_library_writes()
+    handler.send_json(200, result)
+    handler.shutdown({"force": False})
+
+
+@route("GET", "/api/v2/compat/report", spec="handlers.setup.compat_report")
+def compat_report(handler, parsed):
+    """Deterministic compatibility report: library, themes, backups, settings, API, and sync folder (W6-02)."""
+    handler.send_json(200, build_report(DATA.parent, root=Path(__file__).resolve().parents[1]))
 
 
 def _parse_limit(raw, *, default: int, maximum: int) -> int:

@@ -3,6 +3,7 @@ import { matchesKey } from './pure.js';
 import { token, AppState, api, notify, showErrorBanner, nativeCaps, nativeFullscreen, nativeOpenExternal, detectNative, filteredGames, nativePickFile, selectedIds, resetQuery, resolveDeeplinkGameId } from './state.js';
 import { refresh, render, renderGrid, favorite, updateGameStatus, removeGame, focusSelectedGame } from './library.js';
 import { setupDetailsPopup } from './details.js';
+import { initMigrationGate } from './migrate.js';
 import { openSettings, openProfiles, openThemes, openAchievements, openPlugins, health, openBackups, openFeature, bulkAction, saveFilter, savePreset, openPlaylists, createManualPlaylist, createFilterPlaylist, createNamedBackup, filterSettings, gracefulShutdown, loadTheme, addGamesToPlaylist } from './settings.js';
 import { importFolder, importSteam, importHeroic, importEpic, importLutris, importGog, importEa, importUbisoft, importArcade, importPico8, importMsu1, importWhdload, runStartupStorefrontImports, bindLaunchBoxMigration, bindEsdeImport } from './imports.js';
 import { watchMetadata } from './metadata.js';
@@ -94,6 +95,7 @@ async function verifyMuseumPin() {
   }
 }
 window.addEventListener('DOMContentLoaded', () => setTimeout(initI18n, 0));
+window.addEventListener('DOMContentLoaded', () => { initMigrationGate(); });
 window.addEventListener('DOMContentLoaded', () => initPalette());
 window.addEventListener('DOMContentLoaded', () => initHousehold());
 window.addEventListener('DOMContentLoaded', () => initWhatsNew());

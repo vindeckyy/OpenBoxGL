@@ -167,3 +167,27 @@ export function matchesKey(event, spec) {
     ? actual.toLowerCase() === target.toLowerCase()
     : actual === target;
 }
+
+// Facet counts for the library filter chips. The worker mirrors this in
+// static/worker.search.js so the numbers match wherever they are computed.
+export function facetCountsFromPlatforms(platforms, platformCategories = {}) {
+  const platform = {};
+  const platformCategory = {};
+  const categories = platformCategories || {};
+  for (const value of Array.isArray(platforms) ? platforms : []) {
+    const name = value || 'Unspecified';
+    platform[name] = (platform[name] || 0) + 1;
+    const category = categories[value] || 'Other';
+    platformCategory[category] = (platformCategory[category] || 0) + 1;
+  }
+  return { platform, platform_category: platformCategory };
+}
+
+export function facetCounts(games, platformCategories = {}) {
+  const platforms = [];
+  for (const game of Array.isArray(games) ? games : []) {
+    if (!game || typeof game !== 'object') continue;
+    platforms.push(game.platform);
+  }
+  return facetCountsFromPlatforms(platforms, platformCategories);
+}

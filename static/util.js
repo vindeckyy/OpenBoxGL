@@ -135,47 +135,17 @@
      */
     function badge(label, value, kind = '') { return value ? `<span class="badge ${kind}" title="${escapeHtml(label)}">${escapeHtml(label)}</span>` : ''; }
     const artworkKinds = [['clear_logo','Clear logo','has_clear_logo'],['fanart','Fanart','has_fanart'],['banner','Banner','has_banner'],['icon','Icon','has_icon'],['poster','Poster','has_poster'],['square','Square art','has_square'],['box_back','Box back','has_box_back'],['box_spine','Box spine','has_box_spine'],['box_3d','3D box','has_box_3d'],['title_screen','Title screen','has_title_screen'],['cart_front','Cart front','has_cart_front'],['cart_back','Cart back','has_cart_back'],['disc','Disc','has_disc'],['advertisement','Advertisement / flyer','has_advertisement'],['manual','Manual','has_manual']];
-    const API_V1 = {
-      library: '/api/v1/library', settings: '/api/v1/settings', health: '/api/v1/health',
-      health_dedupe: '/api/v1/health/dedupe', launch: '/api/v1/launch',
-      game: '/api/v1/game', game_delete: '/api/v1/game/delete',
-      games_bulk: '/api/v1/games/bulk',
-      'games_bulk-wizard': '/api/v1/games/bulk-wizard',
-      queue: '/api/v1/queue', tags: '/api/v1/tags',
-      notifications: '/api/v1/notifications', webhooks: '/api/v1/webhooks',
-      playlists: '/api/v1/playlists',
-      running: '/api/v1/running', history: '/api/v1/history',
-      saves: '/api/v1/saves', saves_scan_apply: '/api/v1/saves/scan/apply',
-      favorite: '/api/v1/favorite', shutdown: '/api/v1/shutdown',
-      log: '/api/v1/log', diagnostic: '/api/v1/diagnostic',
-      jobs: '/api/v1/jobs', state_recover: '/api/v1/state/recover',
-      media: '/api/v1/media', media_bulk: '/api/v1/media/bulk',
-      media_audit: '/api/v1/media/audit', media_cleanup: '/api/v1/media/cleanup',
-      metadata_status: '/api/v1/metadata/status',
-      metadata_apply: '/api/v1/metadata/apply', metadata_match: '/api/v1/metadata/match',
-      metadata_search: '/api/v1/metadata/search',
-      import: '/api/v1/import', import_steam: '/api/v1/import/steam',
-      import_heroic: '/api/v1/import/heroic', import_lutris: '/api/v1/import/lutris',
-      import_epic: '/api/v1/import/epic',
-      import_arcade: '/api/v1/import/arcade', import_scummvm: '/api/v1/import/scummvm',
-      import_rpcs3: '/api/v1/import/rpcs3', import_vita3k: '/api/v1/import/vita3k',
-      emulators: '/api/v1/emulators', emulators_install: '/api/v1/emulators/install',
-      profiles: '/api/v1/profiles',
-      themes: '/api/v1/themes',
-      'themes_open-folder': '/api/v1/themes/open-folder',
-      update: '/api/v1/update', update_install: '/api/v1/update/install',
-      backup: '/api/v1/backup', backup_create: '/api/v1/backup/create',
-      backup_restore: '/api/v1/backup/restore', backups: '/api/v1/backups',
-      plugins: '/api/v1/plugins',
-      'filter-presets': '/api/v1/filter-presets',
-      'premium_media-packs': '/api/v1/premium/media-packs',
-      'premium_media-packs_apply': '/api/v1/premium/media-packs/apply',
-      storefront_import: '/api/v1/storefront/import',
-      gameyfin_test: '/api/v1/gameyfin/test',
-      ra_inject: '/api/v1/ra/inject',
-      bigbox_mode: '/api/v1/bigbox/mode',
-      extra_launch: '/api/v1/extra/launch',
-    };
+    /**
+     * Map a legacy /api/<x> call site to its public /api/v2/<x> operation (ADR 0091).
+     * Already-versioned paths (/api/v2, /api/host) and non-API paths pass through.
+     * @param {string} path
+     * @returns {string}
+     */
+    function apiPath(path) {
+      // /api/jobs keeps the 1.19 job-map shape the jobs panel reads; /api/v2/jobs is a list. See api-deprecations.md.
+      if (!path.startsWith('/api/') || path.startsWith('/api/v2/') || path.startsWith('/api/host/') || path === '/api/jobs') return path;
+      return '/api/v2' + path.slice('/api'.length);
+    }
     /**
      * Compute the most recent timestamp for a game (last played or added).
      * @param {Record<string, any>} game
@@ -323,4 +293,4 @@ function prefersReducedMotion() {
       document.documentElement.style.setProperty('--font-heading-family', heading);
     }
 
-export { $, escapeHtml, motionMs, prefersReducedMotion, reducedMotionQuery, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, gameLinks, HTTP_URL_RE, badge, API_V1, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches, trigramsOf, expandTrigrams, trigramScore, applyFontFamily };
+export { $, escapeHtml, motionMs, prefersReducedMotion, reducedMotionQuery, duration, formatBytes, defaultControllerMap, defaultBadges, artworkKinds, RATIO_BUCKETS, RATIO_REP, coverBucketOf, fact, gameLinks, HTTP_URL_RE, badge, apiPath, gameInstalled, recentActivityValue, sortGames, parseQueryTokens, advancedQueryMatches, trigramsOf, expandTrigrams, trigramScore, applyFontFamily };

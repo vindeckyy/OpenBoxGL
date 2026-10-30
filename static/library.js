@@ -1,5 +1,5 @@
 import { subscribe } from './events.js';
-import { formatMoney, cycleFilterState, integerScale } from './pure.js';
+import { formatMoney, cycleFilterState, integerScale, facetCounts } from './pure.js';
 import { renderCoverModel, bindCoverModel } from './model3d.js';
 import { openDetailsPopup } from './details.js';
 import { $, escapeHtml, duration, fact, gameLinks, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds, trigramsOf, expandTrigrams } from './util.js';
@@ -232,6 +232,7 @@ function getSearchWorker() {
     const w = new Worker('./static/worker.search.js');
     w.onmessage = e => {
       const data = e.data || {};
+      if (data.type === 'facets') { applyFacetCounts(data); return; }
       const pending = _workerPending.get(data.id);
       if (pending) {
         _workerPending.delete(data.id);
@@ -243,6 +244,7 @@ function getSearchWorker() {
       // Worker failed: clear pending with fallback
       for (const [, pending] of _workerPending) pending.reject(new Error(e.message || 'Worker error'));
       _workerPending.clear();
+      setFacetBusy(false);
     };
     _searchWorker = w;
     return w;
@@ -292,6 +294,74 @@ async function searchWithFallback(query, games) {
     return false;
   });
 }
+// Facet counts for the filter chips. Counting every game on the UI thread
+// costs a long task on each render, so the counts come from the search
+// worker. The generation number discards a reply that a newer request has
+// already superseded.
+let _facetGeneration = 0;
+let _facetCounts = null;
+let _facetGamesRef = null;
+let _facetCategoriesRef = null;
+
+function facetCountsForRender() {
+  // Worker counts while they are current; the same helper on the UI thread
+  // when no worker answered or none could start.
+  if (_facetCounts) return _facetCounts;
+  return facetCounts(AppState.games, AppState.appSettings.platform_categories || {});
+}
+
+function setFacetBusy(busy) {
+  [$('platforms'), $('platformCategories')].forEach(element => {
+    if (!element) return;
+    element.classList.toggle('is-busy', Boolean(busy));
+    element.setAttribute('aria-busy', busy ? 'true' : 'false');
+  });
+}
+
+function requestFacetCounts() {
+  const games = AppState.games;
+  const categories = AppState.appSettings.platform_categories || {};
+  if (_facetCounts && games === _facetGamesRef && categories === _facetCategoriesRef) return;
+  const worker = getSearchWorker();
+  if (!worker) {
+    // No worker: the counts come from the UI thread, as they always did.
+    _facetCounts = facetCounts(games, categories);
+    _facetGamesRef = games;
+    _facetCategoriesRef = categories;
+    return;
+  }
+  const generation = ++_facetGeneration;
+  _facetGamesRef = games;
+  _facetCategoriesRef = categories;
+  setFacetBusy(true);
+  try {
+    // Only the platform values travel: the worker counts them, and cloning
+    // 20,000 game records would cost more than the counting it replaces.
+    const platforms = games.map(game => game?.platform);
+    worker.postMessage({
+      id: String(++_workerSeq),
+      type: 'facets',
+      query: ($('sidebarSearch')?.value || '').trim(),
+      generation,
+      platforms,
+      platform_categories: categories,
+    });
+  } catch {
+    _facetCounts = facetCounts(games, categories);
+    setFacetBusy(false);
+  }
+}
+
+function applyFacetCounts(data) {
+  // A reply for an older generation is stale: a newer request is in flight.
+  if (!data || data.generation !== _facetGeneration) return;
+  if (!data.counts) return;
+  _facetCounts = data.counts;
+  setFacetBusy(false);
+  renderPlatforms();
+  renderPlatformCategories();
+}
+
 // Expose for testing that worker and main produce identical results (F1 acceptance)
 async function verifyWorkerParity(query, games) {
   const main = await searchWithFallback(query, games);
@@ -932,11 +1002,8 @@ function markFilterAria() {
       };
     }
     function renderPlatformCategories() {
-      const counts = new Map();
-      AppState.games.forEach(game => {
-        const name = platformCategoryFor(game);
-        counts.set(name, (counts.get(name) || 0) + 1);
-      });
+      requestFacetCounts();
+      const counts = new Map(Object.entries(facetCountsForRender().platform_category));
       const items = [['all',`All (${AppState.games.length})`], ...[...counts].sort((a,b) => a[0].localeCompare(b[0])).map(([name,count]) => [name,`${name} (${count})`])];
       if (!$('platformCategories')) return;
       const excluded = new Set(AppState.filterExclusions.platform_category || []);
@@ -960,8 +1027,8 @@ function markFilterAria() {
       });
     }
     function renderPlatforms() {
-      const counts = new Map();
-      AppState.games.forEach(game => counts.set(game.platform || 'Unspecified', (counts.get(game.platform || 'Unspecified') || 0) + 1));
+      requestFacetCounts();
+      const counts = new Map(Object.entries(facetCountsForRender().platform));
       const items = [['all',`All (${AppState.games.length})`], ...[...counts].sort((a,b) => a[0].localeCompare(b[0])).map(([name,count]) => [name,`${name} (${count})`])];
       const excluded = new Set(AppState.filterExclusions.platform || []);
       $('platforms').innerHTML = items.map(([value,label]) => {

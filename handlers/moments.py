@@ -22,11 +22,10 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-import pkg.parity  # noqa: F401,E402  # installs the flat parity_* import finder
 from api_errors import BadRequest, NotFound  # noqa: E402
 import openbox  # noqa: E402
-from parity_integrations import capture_screenshot  # noqa: E402
-from parity_resume import (  # noqa: E402
+from pkg.parity.parity_integrations import capture_screenshot  # noqa: E402
+from pkg.parity.parity_resume import (  # noqa: E402
     adapter_for_launch,
     emulator_fingerprint,
     resume_status,

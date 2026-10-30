@@ -126,8 +126,39 @@ function searchGames(games, query) {
   });
 }
 
+// Facet counts for the library filter chips. Mirrors
+// static/pure.js::facetCountsFromPlatforms: the worker and the UI thread
+// must produce the same numbers, because the chips show one or the other
+// depending on whether the worker answered.
+function facetCountsFromPlatforms(platforms, platformCategories) {
+  const platform = {};
+  const platformCategory = {};
+  const categories = platformCategories || {};
+  for (const value of Array.isArray(platforms) ? platforms : []) {
+    const name = value || 'Unspecified';
+    platform[name] = (platform[name] || 0) + 1;
+    const category = categories[value] || 'Other';
+    platformCategory[category] = (platformCategory[category] || 0) + 1;
+  }
+  return { platform: platform, platform_category: platformCategory };
+}
+
+function facetCounts(games, platformCategories) {
+  const platforms = [];
+  for (const game of Array.isArray(games) ? games : []) {
+    if (!game || typeof game !== 'object') continue;
+    platforms.push(game.platform);
+  }
+  return facetCountsFromPlatforms(platforms, platformCategories);
+}
+
+// The last library payload the main thread sent. Facet requests are small and
+// arrive often (every render), so the platforms travel only when they change.
+let cachedPlatforms = [];
+let cachedCategories = {};
+
 // Worker message protocol
-self.onmessage = function(e) {
+function handleWorkerMessage(e) {
   const data = e.data || {};
   const id = data.id;
   try {
@@ -143,15 +174,30 @@ self.onmessage = function(e) {
       const games = Array.isArray(data.games) ? data.games : [];
       buildWorkerIndex(games);
       self.postMessage({ id, type: 'warm', ok: true });
+    } else if (data.type === 'facets') {
+      // The main thread sends the platform values only when they changed;
+      // the counts are always computed from the freshest payload it has seen.
+      if (Array.isArray(data.platforms)) cachedPlatforms = data.platforms;
+      if (data.platform_categories && typeof data.platform_categories === 'object') {
+        cachedCategories = data.platform_categories;
+      }
+      const counts = facetCountsFromPlatforms(cachedPlatforms, cachedCategories);
+      self.postMessage({ id: id, type: 'facets', generation: data.generation, counts: counts });
     } else {
       self.postMessage({ id, error: 'unknown type' });
     }
   } catch (err) {
     self.postMessage({ id, error: String(err && err.message || err) });
   }
-};
+}
+
+// The worker scope only exists in a browser worker. The guard keeps the file
+// importable from node --test, which exercises the shared helpers directly.
+if (typeof self !== 'undefined') {
+  self.onmessage = handleWorkerMessage;
+}
 
 // Export for main-thread fallback testing (when imported as module)
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { trigramsOf, expandTrigrams, searchGames, buildWorkerIndex, workerIndexedCandidates, indexTerms, indexValues };
+  module.exports = { trigramsOf, expandTrigrams, searchGames, buildWorkerIndex, workerIndexedCandidates, indexTerms, indexValues, facetCounts, facetCountsFromPlatforms };
 }

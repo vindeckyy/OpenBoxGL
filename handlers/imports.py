@@ -12,12 +12,12 @@ from emulators import install_emulator
 from routes.registry import route
 from importers import import_epic, import_heroic, import_lutris, import_steam
 from openbox import DATA, load_state
-from parity_import import import_rpcs3_hdd, import_scummvm, import_vita3k
-from parity_import_policy import add_exclusion, list_exclusions, remove_exclusion
+from pkg.parity.parity_import import import_rpcs3_hdd, import_scummvm, import_vita3k
+from pkg.parity.parity_import_policy import add_exclusion, list_exclusions, remove_exclusion
 from pkg.parity.parity_legacy_import import import_msu1, import_pico8, import_whdload
 from pkg.parity.parity_plugin_storefront import list_storefront_plugins, plugin_storefront_catalog, plugin_storefront_import
-from parity_premium import import_loose_arcade, import_xbox360_folder
-from parity_storefront import catalog_entries_to_games, storefront_catalog
+from pkg.parity.parity_premium import import_loose_arcade, import_xbox360_folder
+from pkg.parity.parity_storefront import catalog_entries_to_games, storefront_catalog
 from pkg.parity.parity_storefront_windows import (
     import_ea as import_ea_windows,
     import_gog as import_gog_windows,

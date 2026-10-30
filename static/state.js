@@ -1,6 +1,13 @@
 import { stableIdFor, sourceFilterMatches } from './pure.js';
-import { escapeHtml, API_V1, badge, defaultBadges, sortGames, advancedQueryMatches, parseQueryTokens, gameInstalled, $, motionMs, HTTP_URL_RE } from './util.js';
+import { escapeHtml, apiPath, badge, defaultBadges, sortGames, advancedQueryMatches, parseQueryTokens, gameInstalled, $, motionMs, HTTP_URL_RE } from './util.js';
 const tr = key => (window.OpenBoxI18n?.t ? window.OpenBoxI18n.t(key) : key);
+const CODE_MESSAGE_KEYS = {
+  STATE_FUTURE_VERSION: 'errors.state_future_version',
+  STATE_MIGRATION_FAILED: 'errors.state_migration_failed',
+  MOVE_PLAN_STALE: 'errors.move_plan_stale',
+  BACKUP_FORMAT_UNSUPPORTED: 'errors.backup_format_unsupported',
+  PLUGIN_API_UNSUPPORTED: 'errors.plugin_api_unsupported',
+};
 
 
 
@@ -111,9 +118,8 @@ try {
     // can be superseded pass their own `signal` (F5's details pane does).
     const API_TIMEOUT_MS = 60000;
     async function api(path, options = {}) {
-      // The v1 surface is the stable contract; unmapped call sites keep the
-      // legacy paths until they are migrated one by one.
-      const target = API_V1[path.replace(/^\/api\//, '').replace(/\//g, '_')] || path;
+      // Every call site speaks the public /api/v2 surface; the native host channel is /api/host.
+      const target = apiPath(path);
       const method = String(options.method || 'GET').toUpperCase();
       if (pageHidden && method !== 'GET' && method !== 'HEAD' && path !== '/api/shutdown') {
         // A hidden tab holds stale AppState; never let it save over newer
@@ -133,7 +139,7 @@ try {
       const timer = timeout > 0 && Number.isFinite(timeout) ? setTimeout(abort, timeout) : null;
       let response;
       try {
-        response = await fetch(target, { ...rest, signal: controller.signal, headers:{'X-OpenBox-Token':token,'Content-Type':'application/json',...(rest.headers || {})} });
+        response = await fetch(target, { ...rest, signal: controller.signal, headers:{'X-OpenBox-Token':token,'Content-Type':'application/json','Accept':'application/json, application/problem+json','X-OpenBox-API-Version':'2',...(rest.headers || {})} });
       } catch (error) {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         if (controller.signal.aborted) throw new Error(`The server did not respond within ${Math.round(timeout / 1000)}s.`);
@@ -148,7 +154,8 @@ try {
         try { payload = JSON.parse(text); } catch { throw new Error('The server returned an invalid response.'); }
       }
       if (!response.ok) {
-        const error = new Error(payload.error || 'Request failed');
+        const explained = CODE_MESSAGE_KEYS[payload.code];
+        const error = new Error(explained ? tr(explained) : (payload.error || 'Request failed'));
         error.code = payload.code;
         error.requestId = payload.request_id;
         error.detail = payload.detail;

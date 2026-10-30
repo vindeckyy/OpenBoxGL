@@ -29,8 +29,8 @@ from metadata import (
     sync_database,
 )
 from openbox import load_state
-from parity_backup import create_backup
-from parity_igdb import apply_to_game as apply_igdb_metadata, credentials as igdb_credentials, fetch_game as fetch_igdb_game, search_games as search_igdb_games
+from pkg.parity.parity_backup import create_backup
+from pkg.parity.parity_igdb import apply_to_game as apply_igdb_metadata, credentials as igdb_credentials, fetch_game as fetch_igdb_game, search_games as search_igdb_games
 from pkg.parity.parity_screenscraper import (
     HASH_TIER_DUAL,
     apply_to_game as apply_screenscraper_metadata,
@@ -46,7 +46,7 @@ from pkg.parity.parity_steamgrid import (
     search_games as search_steamgrid_games,
 )
 from pkg.parity.parity_metadata_providers import APPLY_FIELDS, apply_candidate, search_all
-from parity_premium import download_bytes
+from pkg.parity.parity_premium import download_bytes
 from pkg.state.operations import get_operation_service
 from routes.registry import route
 from webapp_state import DATA, JOB_MANAGER, METADATA_DATABASE, METADATA_JOB, MEDIA_TYPES_ALL, PROCESS_LOCK, RUNNING, bump_media_epoch, game_from_payload, game_from_query, load_state_view, transact_state, update_steam_metadata

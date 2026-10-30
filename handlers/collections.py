@@ -9,10 +9,9 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-import pkg.parity  # noqa: F401,E402  # installs the flat parity_* import finder
 from api_errors import BadRequest, NotFound  # noqa: E402
 import openbox  # noqa: E402
-from parity_collections import (  # noqa: E402
+from pkg.parity.parity_collections import (  # noqa: E402
     collections_with_counts,
     delete_collection,
     save_collection,
