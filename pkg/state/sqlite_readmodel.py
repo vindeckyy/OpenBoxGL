@@ -197,21 +197,28 @@ class SqliteReadModel:
 
     def _open_database(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        conn.executescript(_SCHEMA)
-        # Read-model databases created before the canonical-name projection
-        # lack these columns.  Keep the optional projection readable and let
-        # the next rebuild populate them from JSON state.
-        columns = {row[1] for row in conn.execute("PRAGMA table_info(games)")}
-        if "name" not in columns:
-            conn.execute("ALTER TABLE games ADD COLUMN name TEXT")
-        if "library_order" not in columns:
-            conn.execute("ALTER TABLE games ADD COLUMN library_order INTEGER DEFAULT 0")
-        if _check_fts5():
-            conn.executescript(_FTS_SCHEMA)
-            conn.executescript(_FTS_TRIGGERS)
-        conn.commit()
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.executescript(_SCHEMA)
+            # Read-model databases created before the canonical-name projection
+            # lack these columns.  Keep the optional projection readable and let
+            # the next rebuild populate them from JSON state.
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(games)")}
+            if "name" not in columns:
+                conn.execute("ALTER TABLE games ADD COLUMN name TEXT")
+            if "library_order" not in columns:
+                conn.execute("ALTER TABLE games ADD COLUMN library_order INTEGER DEFAULT 0")
+            if _check_fts5():
+                conn.executescript(_FTS_SCHEMA)
+                conn.executescript(_FTS_TRIGGERS)
+            conn.commit()
+        except sqlite3.DatabaseError:
+            # A corrupt file keeps the handle open, and Windows refuses to
+            # unlink a file that is still open.  Release it before the caller
+            # discards the database.
+            conn.close()
+            raise
         return conn
 
     def _discard_database(self) -> None:

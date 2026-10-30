@@ -163,14 +163,18 @@ def main():
     # without the matching-arch artifact is refused (ADR 0024).
     from updates import _arch_asset, _current_arch
     if os.name == "nt":
+        # The Windows ARM64 artifact is published under the "arm64" tag.
         asset_pattern = "OpenBox-{}-windows.zip"
+        arm64_asset = "OpenBox-arm64-windows.zip"
     elif sys.platform == "darwin":
         # One universal bundle serves both architectures.
         asset_pattern = "OpenBox-macos.zip"
+        arm64_asset = asset_pattern
     else:
         asset_pattern = "OpenBox-{}.AppImage"
+        arm64_asset = asset_pattern.format("aarch64")
     assert _arch_asset("x86_64") == asset_pattern.format("x86_64")
-    assert _arch_asset("aarch64") == asset_pattern.format("aarch64")
+    assert _arch_asset("aarch64") == arm64_asset
     assert _current_arch("x86_64") == "x86_64"
     assert _current_arch("amd64") == "x86_64"
     assert _current_arch("aarch64") == "aarch64"

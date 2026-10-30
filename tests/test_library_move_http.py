@@ -164,9 +164,28 @@ class CliBranchTests(unittest.TestCase):
 
     def test_rollback_without_yes_and_without_a_tty_refuses(self):
         self._run("--migrate-library")
-        code, _out, err = self._run("--rollback-library")
+        not_a_tty = mock.Mock()
+        not_a_tty.isatty.return_value = False
+        with mock.patch("sys.stdin", not_a_tty):
+            code, _out, err = self._run("--rollback-library")
         self.assertEqual(code, library_cli.EXIT_REFUSED)
         self.assertIn("--yes", err)
+
+    def test_rollback_refuses_when_the_prompt_gets_no_answer(self):
+        """A console-less child (Windows hands one a NUL stdin) must refuse, not crash."""
+        self._run("--migrate-library")
+        migrated = self.primary.read_bytes()
+        fake_tty = mock.Mock()
+        fake_tty.isatty.return_value = True
+
+        def no_answer(_prompt):
+            raise EOFError
+
+        with mock.patch("sys.stdin", fake_tty):
+            code, _out, err = self._run("--rollback-library", input_fn=no_answer)
+        self.assertEqual(code, library_cli.EXIT_REFUSED)
+        self.assertIn("--yes", err)
+        self.assertEqual(self.primary.read_bytes(), migrated)
 
 
 if __name__ == "__main__":

@@ -374,15 +374,34 @@ MIGRATIONS: dict[int, Callable[[dict[str, Any]], None]] = {
 }
 
 
+def _parse_trash_timestamp(raw: str) -> float | None:
+    """Parse a trash entry's ``trashed_at`` into a POSIX timestamp.
+
+    The app writes a naive local ISO stamp, but a library restored from a
+    backup or written by another tool may carry a ``Z`` suffix.
+    ``datetime.fromisoformat`` rejects that suffix before Python 3.11, so the
+    entry would never expire. Normalize it to an explicit UTC offset first.
+    """
+    text = raw.strip()
+    if not text:
+        return None
+    if text[-1] in ("Z", "z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(text).timestamp()
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
 def _trash_entry_expired(entry: dict[str, Any], cutoff: float) -> bool:
     """Return True when a trash entry's ``trashed_at`` is older than the retention window."""
     raw = entry.get("trashed_at")
     if not isinstance(raw, str):
         return False
-    try:
-        return datetime.fromisoformat(raw).timestamp() < cutoff
-    except (ValueError, OverflowError, OSError):
+    stamp = _parse_trash_timestamp(raw)
+    if stamp is None:
         return False
+    return stamp < cutoff
 
 
 def prune_trash(trash: list[Any], *, now: float | None = None) -> list[Any]:

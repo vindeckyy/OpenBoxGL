@@ -46,7 +46,10 @@ class PortableLibraryTests(unittest.TestCase):
         self.assertEqual(result["moved"], 1)
         on_disk = json.loads(self.primary.read_text(encoding="utf-8"))
         self.assertEqual(on_disk["games"][0]["path"], "@library/roms/fixture.iso")
-        self.assertEqual((on_disk["path_mode"], on_disk["library_root"]), ("portable", str(self.new_root)))
+        self.assertEqual(on_disk["path_mode"], "portable")
+        # The stored root is normalized (forward slashes on Windows), so the
+        # folders are compared as paths rather than as raw strings.
+        self.assertEqual(Path(on_disk["library_root"]), self.new_root)
         loaded = JsonStateStore(self.primary).load()
         self.assertEqual(loaded["games"][0]["path"], str(self.new_root / "roms" / "fixture.iso"))
 
@@ -115,7 +118,8 @@ class ExtraAppPathTests(unittest.TestCase):
             self.assertEqual(encoded[0]["versions"][0]["path"], "/elsewhere/v2.iso")
             expanded, problems = library_v7.expand_games(encoded, root)
             self.assertEqual(problems, [])
-            self.assertEqual(expanded[0]["applications"][0]["path"], f"{root}/tools/setup.exe")
+            # The expanded path comes back with the platform separator.
+            self.assertEqual(expanded[0]["applications"][0]["path"], str(Path(root) / "tools" / "setup.exe"))
             self.assertEqual(games[0]["applications"][0]["path"], f"{root}/tools/setup.exe")
 
     def test_a_move_rebases_extra_app_paths_with_the_game_path(self):
