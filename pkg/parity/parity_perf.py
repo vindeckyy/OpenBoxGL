@@ -10,7 +10,7 @@ import logging
 import shutil
 import subprocess
 
-from parity_gamescope import is_gamescope_guest
+from pkg.parity.parity_gamescope import is_gamescope_guest
 from pkg.platform_compat import IS_LINUX, battery_status
 
 LOGGER = logging.getLogger("openbox")

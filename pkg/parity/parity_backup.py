@@ -1,15 +1,18 @@
 """Granular library backups with rotation."""
 
+import hashlib
 import json
 import os
+import re
 import stat
 import tempfile
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from api_errors import BackupFormatUnsupported
 from backend_io import atomic_copy_stream, atomic_write_text, fsync_directory
-from state_store import default_state
+from state_store import STATE_SCHEMA_VERSION, app_version, default_state
 from pkg.parity.parity_redact import redact_settings, redact_state_for_export, merge_preserved_credentials
 from pkg.platform_compat import parse_timestamp, user_symlink_component
 
@@ -25,6 +28,9 @@ BACKUP_ITEMS = {
 MAX_BACKUP_MEMBERS = 50_000
 MAX_BACKUP_MEMBER_BYTES = 4 * 1024 * 1024 * 1024
 MAX_BACKUP_TOTAL_BYTES = 32 * 1024 * 1024 * 1024
+# Format 2 writes a manifest that lists every member with its SHA-256 (ADR 0093). Format 1 is the 1.19 layout.
+BACKUP_FORMAT_VERSION = 2
+SUPPORTED_BACKUP_FORMATS = (1, 2)
 AUTO_BACKUP_DAYS = 7
 AUTO_BACKUP_KEEP = 4
 AUTO_BACKUP_ITEMS = ["library", "settings", "media", "plugins", "themes"]
@@ -96,11 +102,14 @@ def _restrict_archive_permissions(folder, pattern):
 
 
 def _write_archive_file(package, source, archive_name):
+    """Copy one regular file into the archive. Returns (sha256, size) of the bytes actually written."""
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
         descriptor = os.open(source, flags)
     except OSError as error:
         raise ValueError(f"Backup source could not be opened safely: {source}") from error
+    digest = hashlib.sha256()
+    size = 0
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise ValueError(f"Backup source is not a regular file: {source}")
@@ -111,10 +120,13 @@ def _write_archive_file(package, source, archive_name):
                     chunk = input_file.read(1024 * 1024)
                     if not chunk:
                         break
+                    digest.update(chunk)
+                    size += len(chunk)
                     output.write(chunk)
     finally:
         if descriptor >= 0:
             os.close(descriptor)
+    return digest.hexdigest(), size
 
 
 def _write_private_archive(archive, populate):
@@ -217,7 +229,23 @@ def merge_preserved_plugin_settings(restored, existing, plugins_root):
     return restored
 
 
-def create_backup(data_dir, state, items, keep=0, running_map=None):
+def _library_snapshot_for_v1(state):
+    """The 1.19 library layout: v7 envelope removed, schema 6, unknown fields kept, sessions kept."""
+    envelope = ("format", "library_id", "created_with", "path_mode", "library_root")
+    snapshot = {key: value for key, value in state.items() if key not in envelope}
+    snapshot["schema_version"] = 6
+    snapshot.setdefault("active_sessions", [])
+    return snapshot
+
+
+def create_backup(data_dir, state, items, keep=0, running_map=None, format_version=BACKUP_FORMAT_VERSION):
+    """Write a backup archive. Format 2 (default) manifests every member's size, mode, and SHA-256.
+
+    The manifest is written last so it can describe the bytes actually archived.
+    Format 1 writes the 1.19 layout for a 1.19-compatible export.
+    """
+    if format_version not in SUPPORTED_BACKUP_FORMATS:
+        raise BackupFormatUnsupported(f"Backup format {format_version} cannot be written.")
     if running_map is not None and games_running(running_map):
         raise ValueError("Close running games before creating a backup.")
     selected = normalize_items(items)
@@ -229,13 +257,33 @@ def create_backup(data_dir, state, items, keep=0, running_map=None):
         "created": datetime.now().isoformat(timespec="seconds"),
         "redacted_secrets": True,
     }
+    if format_version == 2:
+        manifest.update({
+            "format": BACKUP_FORMAT_VERSION,
+            "app_version": app_version(),
+            "state_schema": STATE_SCHEMA_VERSION,
+            "library_id": str(state.get("library_id") or ""),
+            "created_by": "openbox",
+            "encryption": "none",
+        })
+    listed = []
+
+    def add_json(package, name, payload):
+        data = json.dumps(payload, indent=2).encode("utf-8")
+        package.writestr(name, data)
+        listed.append({"name": name, "size": len(data), "mode": "0600", "sha256": hashlib.sha256(data).hexdigest()})
+
+    def add_file(package, source, name):
+        digest, size = _write_archive_file(package, source, name)
+        mode = format(stat.S_IMODE(os.stat(source).st_mode), "04o")
+        listed.append({"name": name, "size": size, "mode": mode, "sha256": digest})
 
     def populate(package):
-        package.writestr("manifest.json", json.dumps(manifest, indent=2))
         if "settings" in selected:
-            package.writestr("settings.json", json.dumps(redact_settings(settings_snapshot(state)), indent=2))
+            add_json(package, "settings.json", redact_settings(settings_snapshot(state)))
         if "library" in selected:
-            package.writestr("library.json", json.dumps(redact_state_for_export(state), indent=2))
+            library = redact_state_for_export(state)
+            add_json(package, "library.json", _library_snapshot_for_v1(library) if format_version == 1 else library)
         for key in ("media", "plugins", "themes", "extension_data"):
             if key not in selected:
                 continue
@@ -255,21 +303,18 @@ def create_backup(data_dir, state, items, keep=0, running_map=None):
                     raise ValueError(f"Backup source contains a symlink: {path}")
                 if not path.is_file():
                     continue
+                member = f"{BACKUP_ITEMS[key]}/{relative.as_posix()}"
                 if key == "plugins" and relative.as_posix() == "plugins-state.json":
                     try:
                         plugin_state = json.loads(path.read_text(encoding="utf-8"))
                     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
                         plugin_state = {}
-                    package.writestr(
-                        f"{BACKUP_ITEMS[key]}/{relative.as_posix()}",
-                        json.dumps(redact_plugin_state(plugin_state, folder), indent=2),
-                    )
+                    add_json(package, member, redact_plugin_state(plugin_state, folder))
                     continue
-                _write_archive_file(
-                    package,
-                    path,
-                    f"{BACKUP_ITEMS[key]}/{relative.as_posix()}",
-                )
+                add_file(package, path, member)
+        if format_version == 2:
+            manifest["files"] = listed
+        package.writestr("manifest.json", json.dumps(manifest, indent=2))
 
     _write_private_archive(archive, populate)
     if keep and keep > 0:
@@ -330,6 +375,53 @@ def _load_backup_manifest(package):
         if not isinstance(manifest, dict):
             raise ValueError("Backup manifest is invalid.")
     return manifest
+
+
+def _verify_manifest_files(package, manifest):
+    """Format 2: check every archived member against the manifest before anything is written.
+
+    A manifest with no ``format`` is format 1 (no hashes) and is accepted as written.
+    A format above this build's is refused with BACKUP_FORMAT_UNSUPPORTED.
+    """
+    declared = manifest.get("format", 1)
+    if isinstance(declared, bool) or not isinstance(declared, int) or declared < 1:
+        raise ValueError("Backup manifest format is invalid.")
+    if declared > BACKUP_FORMAT_VERSION:
+        raise BackupFormatUnsupported(
+            f"This backup uses format {declared}; this build reads formats 1 and {BACKUP_FORMAT_VERSION}. "
+            "Install a newer OpenBox."
+        )
+    if declared < 2:
+        return {}
+    listed = manifest.get("files")
+    if not isinstance(listed, list):
+        raise ValueError("Backup manifest lists no files.")
+    entries = {}
+    for entry in listed:
+        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+            raise ValueError("Backup manifest file entries are invalid.")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(entry.get("sha256", ""))) or not isinstance(entry.get("size"), int):
+            raise ValueError(f"Backup manifest has no valid hash for {entry['name']}.")
+        entries[entry["name"]] = entry
+    members = {name for name in package.namelist() if name != "manifest.json" and not name.endswith("/")}
+    unlisted = sorted(members - set(entries))
+    if unlisted:
+        raise ValueError(f"Backup contains files its manifest does not list: {unlisted[0]}")
+    missing = sorted(set(entries) - members)
+    if missing:
+        raise ValueError(f"Backup manifest lists a file missing from the archive: {missing[0]}")
+    verified = {}
+    for name, entry in entries.items():
+        if package.getinfo(name).file_size != entry["size"]:
+            raise ValueError(f"Backup file {name} failed its size check; nothing was restored.")
+        digest = hashlib.sha256()
+        with package.open(name) as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != entry["sha256"]:
+            raise ValueError(f"Backup file {name} failed its SHA-256 check; nothing was restored.")
+        verified[name] = entry
+    return verified
 
 
 def _resolve_restore_items(manifest, selected):
@@ -447,6 +539,39 @@ def _restore_media_tree(package, root, restore_items, redacted_secrets=False):
                 atomic_copy_stream(source, target, mode=0o600, max_bytes=MAX_BACKUP_MEMBER_BYTES)
 
 
+def _member_item(name):
+    """The backup item a member belongs to: its BACKUP_ITEMS key, or ``other``."""
+    for key, relative in BACKUP_ITEMS.items():
+        prefix = relative.rstrip("/")
+        if name == prefix or name.startswith(prefix + "/"):
+            return key
+    return "other"
+
+
+def _restore_report(package, verified, restore_items):
+    """One row per archive member: whether its hash was checked, and whether this restore writes it."""
+    report = []
+    for name in sorted(package.namelist()):
+        if name.endswith("/"):
+            continue
+        item = _member_item(name)
+        if name == "manifest.json":
+            status = "manifest"
+        elif item in restore_items:
+            status = "restored"
+        else:
+            status = "skipped"
+        report.append({
+            "name": name,
+            "item": item,
+            "size": package.getinfo(name).file_size,
+            "verified": name in verified,
+            "status": status,
+        })
+    return report
+
+
+
 def restore_backup(archive_path, data_dir, items=None, running_map=None, force=False):
     if running_map is not None and games_running(running_map):
         raise ValueError("Close running games before restoring a backup.")
@@ -459,6 +584,7 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None, force=F
         with zipfile.ZipFile(archive_path) as package:
             _validate_backup_entries(package)
             manifest = _load_backup_manifest(package)
+            verified = _verify_manifest_files(package, manifest)
             restore_items = _resolve_restore_items(manifest, selected)
             _check_restore_age(manifest, root, restore_items, force, package)
             restored_state, library_file = _restore_library(package, root, restore_items)
@@ -511,9 +637,10 @@ def restore_backup(archive_path, data_dir, items=None, running_map=None, force=F
                 else:
                     _restore_settings_from_package(package, root)
             _restore_media_tree(package, root, restore_items, bool(manifest.get("redacted_secrets")))
+            files = _restore_report(package, verified, restore_items)
     except zipfile.BadZipFile as error:
         raise ValueError("Backup archive is invalid.") from error
-    return restore_items
+    return {"items": restore_items, "files": files}
 
 
 # ---------------------------------------------------------------------------

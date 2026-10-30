@@ -212,7 +212,7 @@ def storefront_catalog(source, home=None, run=None, which=shutil.which, settings
     if source == "lutris":
         return catalog_lutris(home, run=run, which=which)
     if source == "gameyfin":
-        from parity_gameyfin import catalog_gameyfin
+        from pkg.parity.parity_gameyfin import catalog_gameyfin
         catalog, _providers = catalog_gameyfin(settings or {})
         return catalog
     raise ValueError("Storefront source must be steam, heroic, lutris, or gameyfin.")

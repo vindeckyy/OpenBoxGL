@@ -1,8 +1,9 @@
 """Route tables mapping HTTP paths to Handler method names."""
 
+import os
 from pathlib import Path
 
-from api_errors import RouteNotFound
+from api_errors import HostApiUnsupported, RouteNotFound, V1ApiDisabled
 
 __path__ = [str(Path(__file__).resolve().parent / "routes")]
 
@@ -125,6 +126,9 @@ GET_TABLE = {
     "/api/v2/steamgrid/status": "handlers.steamgrid.steamgrid_status",
     "/api/v2/steamgrid/hygiene/report": "handlers.steamgrid.steamgrid_hygiene_report",
     "/api/v2/library/health": "handlers.library_health.health_snapshot",
+    "/api/v2/library/integrity": "handlers.library_storage.integrity",
+    "/api/v2/compat/report": "handlers.setup.compat_report",
+    "/api/v2/setup/migration/status": "handlers.setup.migration_status",
     "/api/v2/library/health/issues": "handlers.library_health.health_issues",
     "/api/v2/steambridge/status": "handlers.steambridge.steambridge_status",
     "/api/v2/library/export/exports": "_api_get_api_v2_library_export_exports",
@@ -321,6 +325,11 @@ POST_TABLE = {
     "/api/v2/insights/radar/park": "_api_post_api_v2_insights_radar_park",
     "/api/v2/library/pick": "_api_post_api_v2_library_pick",
     "/api/v2/library/repair/preview": "_api_post_api_v2_library_repair_preview",
+    "/api/v2/library/move/preview": "handlers.library_storage.move_preview",
+    "/api/v2/library/move/apply": "handlers.library_storage.move_apply",
+    "/api/v2/setup/migration/acknowledge": "handlers.setup.migration_acknowledge",
+    "/api/v2/setup/migration/backup": "handlers.setup.migration_backup",
+    "/api/v2/setup/migration/rollback": "handlers.setup.migration_rollback",
     "/api/v2/library/repair/apply": "_api_post_api_v2_library_repair_apply",
     "/api/v2/library/duplicates/preview": "_api_post_api_v2_library_duplicates_preview",
     "/api/v2/library/duplicates/merge": "_api_post_api_v2_library_duplicates_merge",
@@ -494,7 +503,7 @@ POST_TABLE = {
 }
 
 
-# Paths also served under /api/v1/<path> for legacy clients.
+# The frozen 1.19 surface. Served under /api/v1 only when OPENBOX_ENABLE_V1_API=1 (ADR 0091).
 V1_ALIASED_PREFIXES = (
     "/api/library",
     "/api/settings",
@@ -560,7 +569,41 @@ V1_ALIASED_PREFIXES = (
 )
 
 
-def _apply_v1_aliases(table, dispatcher_name):
+# Legacy host-channel names and their /api/host replacements. Old hosts keep the legacy names until 2.1.
+HOST_CHANNEL_ALIASES = {
+    "/api/launch": "/api/host/launch",
+    "/api/shutdown": "/api/host/shutdown",
+    "/api/native/capabilities": "/api/host/capabilities",
+}
+HOST_ONLY_BASES = frozenset(HOST_CHANNEL_ALIASES)
+V1_BRIDGE_ENV = "OPENBOX_ENABLE_V1_API"
+# Sunset date advertised on every /api/v1 response; removal is planned for 2.1.0 (docs/api-deprecations.md).
+V1_SUNSET = "Mon, 19 Sep 2027 00:00:00 GMT"
+
+
+def v1_bridge_enabled() -> bool:
+    return os.environ.get(V1_BRIDGE_ENV, "").strip() == "1"
+
+
+def _apply_host_aliases(table):
+    for legacy, host_path in HOST_CHANNEL_ALIASES.items():
+        if legacy in table:
+            table.setdefault(host_path, table[legacy])
+    return table
+
+
+def _apply_v2_aliases(table):
+    """Give every unversioned public /api/ path a /api/v2 alias that shares its spec."""
+    for path in list(table):
+        if not path.startswith("/api/") or path.startswith(("/api/v1/", "/api/v2/", "/api/host/")):
+            continue
+        table.setdefault("/api/v2" + path[len("/api"):], table[path])
+    return table
+
+
+def _apply_v1_bridge(table):
+    if not v1_bridge_enabled():
+        return table
     for path in V1_ALIASED_PREFIXES:
         if path in table:
             table[f"/api/v1{path[len('/api'):]}"] = table[path]
@@ -568,11 +611,10 @@ def _apply_v1_aliases(table, dispatcher_name):
 
 
 def _build_tables():
-    # Base tables plus v1 aliases only; @route registry is consulted at dispatch time
-    # so decorator-only routes do not need a build-time merge (which would run
-    # before handlers are imported and appear empty).
-    get_tbl = _apply_v1_aliases(dict(GET_TABLE), "GET")
-    post_tbl = _apply_v1_aliases(dict(POST_TABLE), "POST")
+    # Base tables plus host, v2, and opt-in v1 aliases. Decorator-registered routes
+    # are consulted at dispatch time, so they need no build-time merge.
+    get_tbl = _apply_v1_bridge(_apply_v2_aliases(_apply_host_aliases(dict(GET_TABLE))))
+    post_tbl = _apply_v1_bridge(_apply_v2_aliases(_apply_host_aliases(dict(POST_TABLE))))
     return get_tbl, post_tbl
 
 
@@ -613,8 +655,12 @@ def _lookup_registry(method, path):
         entry = _REGISTRY.get((method, path))
         if entry is not None:
             return entry.spec
-        # v1 alias fallback for registry entries
-        if path.startswith("/api/v1/"):
+        if path.startswith("/api/v2/"):
+            base = "/api" + path[len("/api/v2"):]
+            entry = _REGISTRY.get((method, base))
+            if entry is not None and entry.visibility != "host":
+                return entry.spec
+        if path.startswith("/api/v1/") and v1_bridge_enabled():
             base = "/api" + path[len("/api/v1"):]
             entry = _REGISTRY.get((method, base))
             if entry is not None and base in V1_ALIASED_PREFIXES:
@@ -624,7 +670,33 @@ def _lookup_registry(method, path):
     return None
 
 
+def _route_headers(path):
+    if path.startswith("/api/v1/"):
+        return {"Deprecation": "true", "Sunset": V1_SUNSET}
+    return {}
+
+
+def _guard_v1(path):
+    if path.startswith("/api/v1/") and not v1_bridge_enabled():
+        raise V1ApiDisabled("The /api/v1 surface is off. Use /api/v2, or set OPENBOX_ENABLE_V1_API=1 through 2.0.x.")
+
+
+def _guard_host(handler, path):
+    """Refuse a native host that speaks a different major API than this server (ADR 0091)."""
+    if not path.startswith("/api/host/"):
+        return
+    requested = str((getattr(handler, "headers", None) or {}).get("X-OpenBox-API-Version", "")).strip()
+    if requested and requested.split(".", 1)[0] != "2":
+        raise HostApiUnsupported(
+            "This OpenBox window is from a different version. Restart OpenBox and the window together.",
+            detail={"requested": requested, "supported": "2"},
+        )
+
+
 def dispatch_get(handler, parsed):
+    _guard_host(handler, parsed.path)
+    _guard_v1(parsed.path)
+    handler.route_headers = _route_headers(parsed.path)
     spec = GET_TABLE.get(parsed.path)
     if spec is None:
         spec = _lookup_registry("GET", parsed.path)
@@ -642,7 +714,11 @@ def dispatch_get(handler, parsed):
     else:
         callable_(handler, parsed)
 
+
 def dispatch_post(handler, route, payload):
+    _guard_host(handler, route)
+    _guard_v1(route)
+    handler.route_headers = _route_headers(route)
     spec = POST_TABLE.get(route)
     if spec is None:
         spec = _lookup_registry("POST", route)

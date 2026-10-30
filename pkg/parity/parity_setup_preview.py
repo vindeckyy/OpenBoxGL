@@ -542,23 +542,23 @@ def scan_sources(sources: list[dict], options: dict | None = None) -> tuple[list
 
             games, fingerprint = _scan_list_source(source, import_lutris, source_type="lutris", label="Lutris")
         elif source_type == "faugus":
-            from parity_faugus import scan_faugus_games
+            from pkg.parity.parity_faugus import scan_faugus_games
 
             games, fingerprint = _scan_list_source(source, scan_faugus_games, source_type="faugus", label="Faugus")
         elif source_type == "scummvm":
-            from parity_import import import_scummvm
+            from pkg.parity.parity_import import import_scummvm
 
             games, fingerprint = _scan_list_source(source, import_scummvm, source_type="scummvm", label="ScummVM")
         elif source_type == "rpcs3":
-            from parity_import import import_rpcs3_hdd
+            from pkg.parity.parity_import import import_rpcs3_hdd
 
             games, fingerprint = _scan_list_source(source, import_rpcs3_hdd, source_type="rpcs3", label="RPCS3")
         elif source_type == "vita3k":
-            from parity_import import import_vita3k
+            from pkg.parity.parity_import import import_vita3k
 
             games, fingerprint = _scan_list_source(source, import_vita3k, source_type="vita3k", label="Vita3K")
         elif source_type == "xbox360":
-            from parity_premium import import_xbox360_folder
+            from pkg.parity.parity_premium import import_xbox360_folder
 
             folder = str(source.get("path") or "").strip()
             if not folder:
@@ -599,7 +599,7 @@ def scan_sources(sources: list[dict], options: dict | None = None) -> tuple[list
             fingerprints[key] = fingerprint
             continue
         elif source_type in {"steam", "heroic", "lutris", "gameyfin"}:
-            from parity_storefront import catalog_entries_to_games, storefront_catalog
+            from pkg.parity.parity_storefront import catalog_entries_to_games, storefront_catalog
 
             settings = load_state().get("settings", {})
             catalog = storefront_catalog(source_type, settings=settings)
