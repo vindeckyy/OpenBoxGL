@@ -10,10 +10,16 @@ Verifies:
   - Flag-off behavior: all methods are no-ops when disabled.
   - Query parity: SQLite results match JSON path game IDs.
   - FTS5 unavailable: LIKE fallback works.
+  - The debounced background rebuild: it runs off the caller's thread, takes
+    its state from the provider, and publishes the signature it rebuilt from.
+  - A corrupt database is discarded and rebuilt.
+  - A parity mismatch drops the model back to the JSON read path.
 """
 
 import sys
 import tempfile
+import threading
+import time
 from pathlib import Path
 
 def _repo_root() -> Path:
@@ -373,6 +379,104 @@ def test_search_route_registered():
     assert "/api/v2/library/search" in GET_TABLE, "search route not registered"
 
 
+def test_a_scheduled_rebuild_runs_off_the_caller_thread():
+    """The rebuild lands shortly after scheduling, without blocking the caller."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rm = SqliteReadModel(Path(tmp) / "test.db")
+        rm._enabled = True
+        state = _make_state(20)
+        signature = (1, 2, 3)
+        assert rm.is_fresh(signature) is False
+        caller = threading.current_thread().name
+        assert rm.schedule_rebuild(state, signature, delay=0.05) is True
+        for _ in range(100):
+            if rm.is_fresh(signature):
+                break
+            time.sleep(0.05)
+        assert rm.is_fresh(signature) is True
+        assert rm.count() == 20
+        # The rebuild ran on its own thread, not on the one that asked for it.
+        assert rm._rebuild_thread_name != caller
+        rm.close()
+
+
+def test_a_scheduled_rebuild_takes_its_state_from_the_provider():
+    """With no state supplied, the provider hands over the current snapshot."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rm = SqliteReadModel(Path(tmp) / "test.db")
+        rm._enabled = True
+        state = _make_state(5)
+        calls = []
+
+        def provider():
+            calls.append(threading.current_thread().name)
+            return state, (9, 9, 9)
+
+        rm.set_state_provider(provider)
+        rm.schedule_rebuild(delay=0.05)
+        for _ in range(100):
+            if rm.is_fresh((9, 9, 9)):
+                break
+            time.sleep(0.05)
+        assert rm.is_fresh((9, 9, 9)) is True
+        assert rm.count() == 5
+        assert calls, "the state provider was never called"
+        rm.close()
+
+
+def test_a_disabled_model_schedules_nothing():
+    """A disabled model stays a no-op, including the background rebuild."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rm = SqliteReadModel(Path(tmp) / "test.db")
+        rm._enabled = False
+        assert rm.schedule_rebuild(_make_state(3), (1, 1, 1)) is False
+        time.sleep(0.2)
+        assert rm.count() == 0
+        rm.close()
+
+
+def test_a_corrupt_database_is_discarded_and_rebuilt():
+    """A corrupt projection is not data loss: it is dropped and rebuilt."""
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / "test.db"
+        db_path.write_bytes(b"definitely not a sqlite database" * 20)
+        rm = SqliteReadModel(db_path)
+        rm._enabled = True
+        rm.rebuild(_make_state(4))
+        assert rm.count() == 4
+        rm.close()
+
+
+def test_a_parity_mismatch_drops_the_model_back_to_the_json_path():
+    """A projection that disagrees with the canonical state is not trusted."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rm = SqliteReadModel(Path(tmp) / "test.db")
+        rm._enabled = True
+        state = _make_state(6)
+        signature = (7, 7, 7)
+        rm.query_parity_check = lambda games: False
+        rm.schedule_rebuild(state, signature, delay=0.05)
+        for _ in range(100):
+            if rm._signature == signature:
+                break
+            time.sleep(0.05)
+        # The rebuild landed, but the parity check failed, so reads must fall
+        # back to the JSON path.
+        assert rm.is_fresh(signature) is False
+        rm.close()
+
+
+def test_close_cancels_a_pending_rebuild():
+    """Closing the model stops the pending rebuild instead of leaking a timer."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rm = SqliteReadModel(Path(tmp) / "test.db")
+        rm._enabled = True
+        rm.schedule_rebuild(_make_state(3), (1, 1, 1), delay=5.0)
+        rm.close()
+        assert rm._timer is None
+        assert rm._pending_state is None
+
+
 def run_all_tests():
     tests = [
         test_rebuild_and_count,
@@ -397,6 +501,12 @@ def run_all_tests():
         test_search_route_registered,
         test_auto_enable_threshold,
         test_auto_enable_rejects_garbage,
+        test_a_scheduled_rebuild_runs_off_the_caller_thread,
+        test_a_scheduled_rebuild_takes_its_state_from_the_provider,
+        test_a_disabled_model_schedules_nothing,
+        test_a_corrupt_database_is_discarded_and_rebuilt,
+        test_a_parity_mismatch_drops_the_model_back_to_the_json_path,
+        test_close_cancels_a_pending_rebuild,
     ]
     failures = 0
     for test in tests:

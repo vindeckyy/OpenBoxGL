@@ -1,18 +1,20 @@
-"""SQLite read model for OpenBox (1.7.2).
+"""SQLite read model for OpenBox.
 
-Optional alternative read path for large libraries. Enabled via
-OPENBOX_ENABLE_SQLITE_READ=1 environment variable. When disabled, all
-methods are no-ops and the JSON read path is used exclusively.
+An optional read path for large libraries. The model is on by default for
+libraries above SQLITE_AUTO_THRESHOLD games and stays opt-out with
+OPENBOX_ENABLE_SQLITE_READ=0. When it is off, every method is a no-op and
+the JSON read path is used exclusively.
 
-The SQLite database is rebuilt from the canonical JSON state on demand.
-It provides:
+The SQLite database is a projection of the canonical JSON state. It provides:
   - Canonical-name substring search with Unicode casefolding and library order.
   - Filtered queries with indexed lookups on platform, genre, favorite, etc.
   - Facet computation via GROUP BY.
 
-The database file lives alongside library.json in the data directory.
-It is a read-only projection — all writes go through the canonical JSON
-state store, then invalidate() is called to trigger a rebuild on next read.
+Since 2.0 a rebuild never runs on a request thread. A write invalidates the
+model, a debounced background thread rebuilds it, and a read that finds the
+model stale answers from the JSON path instead of waiting for the rebuild.
+The database file lives alongside library.json in the data directory; it is
+excluded from backups, and deleting it costs nothing but a rebuild.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ import logging
 import os
 import sqlite3
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +35,12 @@ _DISABLED = os.environ.get("OPENBOX_ENABLE_SQLITE_READ", "").strip().casefold() 
 # Libraries at or above this size self-enable the read model (1.12.0); the
 # env var still forces the feature on (any truthy value) or off.
 SQLITE_AUTO_THRESHOLD = 5000
+# A write schedules the rebuild this many seconds later. Bursts of writes
+# collapse into one rebuild, and the request that triggered them never waits.
+REBUILD_DEBOUNCE_SECONDS = 0.75
+# A burst of requests keeps pushing the rebuild back. This is the longest a
+# pending rebuild may wait before it runs anyway.
+REBUILD_MAX_WAIT_SECONDS = 5.0
 _FTS5_AVAILABLE: bool | None = None
 
 _SCHEMA = """
@@ -133,6 +142,20 @@ class SqliteReadModel:
         # newer one overtook it and decline to publish its older signature.
         self._generation = 0
         self._enabled = _ENABLED
+        # Background rebuild state: the pending snapshot, the timer that will
+        # rebuild it, and the callable that hands over the current state when
+        # the caller does not have one to hand.
+        self._pending_state: dict[str, Any] | None = None
+        self._pending_signature: tuple[int, int, int] | None = None
+        self._pending_since: float | None = None
+        self._timer: threading.Timer | None = None
+        self._state_provider = None
+        # The thread the last background rebuild ran on, so a caller can tell
+        # the rebuild happened off its own thread.
+        self._rebuild_thread_name = None
+        # A parity failure drops the model back to the JSON path until a later
+        # rebuild proves the projection matches again.
+        self._trusted = True
 
     @property
     def enabled(self) -> bool:
@@ -161,6 +184,18 @@ class SqliteReadModel:
         if self._conn is not None:
             return self._conn
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            conn = self._open_database()
+        except sqlite3.DatabaseError:
+            # A corrupt projection is not data loss: the canonical state is
+            # the JSON file. Drop the database and build it again.
+            LOGGER.warning("Discarding the corrupt read-model database at %s", self._db_path)
+            self._discard_database()
+            conn = self._open_database()
+        self._conn = conn
+        return conn
+
+    def _open_database(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
@@ -177,8 +212,12 @@ class SqliteReadModel:
             conn.executescript(_FTS_SCHEMA)
             conn.executescript(_FTS_TRIGGERS)
         conn.commit()
-        self._conn = conn
         return conn
+
+    def _discard_database(self) -> None:
+        """Remove the read-model database and its write-ahead log."""
+        for suffix in ("", "-wal", "-shm"):
+            Path(f"{self._db_path}{suffix}").unlink(missing_ok=True)
 
     def rebuild(self, state: dict[str, Any], generation: int | None = None) -> None:
         """Rebuild the SQLite database from a canonical state dict.
@@ -278,6 +317,106 @@ class SqliteReadModel:
             # something else happens to carry a newer signature.
             if self._generation == mine:
                 self._signature = signature
+
+    def set_state_provider(self, provider) -> None:
+        """Register the callable that hands over the current state.
+
+        The provider runs on the background thread, so it may read the
+        canonical state without making the request that scheduled the rebuild
+        wait for it.
+        """
+        self._state_provider = provider
+
+    def is_fresh(self, signature) -> bool:
+        """True when the model holds this snapshot and passed the parity check."""
+        with self._lock:
+            return self._trusted and self._signature == signature
+
+    def schedule_rebuild(self, state=None, signature=None, delay=None) -> bool:
+        """Queue a debounced rebuild on a background thread.
+
+        The caller never waits for the rebuild. When no state is supplied the
+        registered provider is asked for the current one on the background
+        thread, so scheduling stays cheap for the request that triggered it.
+        """
+        if not self._enabled:
+            return False
+        now = time.monotonic()
+        with self._lock:
+            self._pending_state = state
+            self._pending_signature = signature
+            if self._pending_since is None:
+                self._pending_since = now
+            # A steady stream of requests must not postpone the rebuild for
+            # ever: past the max wait it runs on the next request.
+            if now - self._pending_since >= REBUILD_MAX_WAIT_SECONDS:
+                wait = 0.0
+            else:
+                wait = delay if delay is not None else REBUILD_DEBOUNCE_SECONDS
+            if self._timer is not None:
+                self._timer.cancel()
+            timer = threading.Timer(wait, self._run_pending_rebuild)
+            timer.daemon = True
+            self._timer = timer
+            timer.start()
+        return True
+
+    def _run_pending_rebuild(self) -> None:
+        self._rebuild_thread_name = threading.current_thread().name
+        with self._lock:
+            state = self._pending_state
+            signature = self._pending_signature
+            self._pending_state = None
+            self._pending_signature = None
+            self._pending_since = None
+            self._timer = None
+        if state is None:
+            provider = self._state_provider
+            if provider is None:
+                return
+            try:
+                state, signature = provider()
+            except Exception:
+                LOGGER.exception("The read-model state provider failed")
+                return
+        if not isinstance(state, dict):
+            return
+        try:
+            self.ensure_fresh(state, signature)
+        except Exception:
+            LOGGER.exception("The background read-model rebuild failed")
+            return
+        if signature is None or not self.is_fresh(signature):
+            return
+        # The parity check is the safety net: a projection that disagrees with
+        # the canonical state must not answer a read.
+        games = state.get("games")
+        if not isinstance(games, list):
+            return
+        if self.query_parity_check(games):
+            with self._lock:
+                self._trusted = True
+        else:
+            LOGGER.warning("The read-model parity check failed; reads fall back to the JSON path")
+            with self._lock:
+                self._trusted = False
+
+    def status(self) -> dict[str, Any]:
+        """Diagnostics: is the model on, fresh, trusted, or rebuilding?"""
+        with self._lock:
+            enabled = self._enabled
+            trusted = self._trusted
+            fresh = self._signature is not None
+            pending = self._pending_state is not None
+            rebuilding = self._timer is not None
+        return {
+            "enabled": enabled,
+            "trusted": trusted,
+            "fresh": fresh,
+            "pending": pending,
+            "rebuilding": rebuilding,
+            "games": self.count(),
+        }
 
     def query(
         self,
@@ -379,6 +518,11 @@ class SqliteReadModel:
     def close(self) -> None:
         """Close the database connection."""
         with self._lock:
+            if self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
+            self._pending_state = None
+            self._pending_signature = None
             if self._conn is not None:
                 self._conn.close()
                 self._conn = None

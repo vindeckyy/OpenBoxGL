@@ -17,20 +17,20 @@ import time
 
 import openbox
 from openbox import DATA, load_state, load_state_readonly, update_state_with_result
-from parity_backup import AUTO_BACKUP_KEEP
-from parity_collections import list_collections
-from parity_discovery import clear_discovery_cache, discovery_lists
-from parity_emulator_defs import list_scan_configs
-from parity_filter_presets import list_presets
-from parity_gamescope import is_gamescope_guest, list_gamescope_presets, is_mangohud_available
-from parity_import_policy import list_exclusions
-from parity_integrations import load_emumovies_credentials
-from parity_integration_tokens import public_tokens
-from parity_media import REGION_PRIORITY_DEFAULT, active_video, media_types_from_settings
-from parity_premium import LIST_COLUMNS_DEFAULT, category_for_platform, custom_field_defs, list_media_packs, platform_categories, strings_for
-from parity_saves import games_with_saves
-from parity_save_tools import save_tool_status
-from parity_steamgrid import is_configured as steamgrid_is_configured
+from pkg.parity.parity_backup import AUTO_BACKUP_KEEP
+from pkg.parity.parity_collections import list_collections
+from pkg.parity.parity_discovery import clear_discovery_cache, discovery_lists
+from pkg.parity.parity_emulator_defs import list_scan_configs
+from pkg.parity.parity_filter_presets import list_presets
+from pkg.parity.parity_gamescope import is_gamescope_guest, list_gamescope_presets, is_mangohud_available
+from pkg.parity.parity_import_policy import list_exclusions
+from pkg.parity.parity_integrations import load_emumovies_credentials
+from pkg.parity.parity_integration_tokens import public_tokens
+from pkg.parity.parity_media import REGION_PRIORITY_DEFAULT, active_video, media_types_from_settings
+from pkg.parity.parity_premium import LIST_COLUMNS_DEFAULT, category_for_platform, custom_field_defs, list_media_packs, platform_categories, strings_for
+from pkg.parity.parity_saves import games_with_saves
+from pkg.parity.parity_save_tools import save_tool_status
+from pkg.parity.parity_steamgrid import is_configured as steamgrid_is_configured
 from plugins import merge_library_source_games, run_plugins
 from retroachievements import load_credentials as load_ra_credentials
 from updates import VERSION
@@ -39,6 +39,18 @@ from pkg.state.sqlite_readmodel import SqliteReadModel
 
 # Singleton read model; no-op when OPENBOX_ENABLE_SQLITE_READ is unset.
 SQLITE_READ_MODEL = SqliteReadModel(DATA.parent / "sqlite_readmodel.db")
+
+
+def _read_model_snapshot():
+    """The current state and signature for a background read-model rebuild.
+
+    The read model calls this on its own thread, so scheduling a rebuild
+    never makes the request that asked for it read the library.
+    """
+    return load_state_view(), openbox.STATE_STORE.signature()
+
+
+SQLITE_READ_MODEL.set_state_provider(_read_model_snapshot)
 
 GZIP_THRESHOLD = 1024
 LOGGER = logging.getLogger("openbox")
@@ -1352,5 +1364,9 @@ def transact_state(mutator):
         result = upd_res(mutator)
     CACHE_EPOCH._invalidate_all()
     clear_discovery_cache()
+    # The write invalidates the projection and queues a debounced rebuild on
+    # a background thread. Reads that arrive before it lands answer from the
+    # canonical JSON state instead of waiting.
     SQLITE_READ_MODEL.invalidate()
+    SQLITE_READ_MODEL.schedule_rebuild()
     return result

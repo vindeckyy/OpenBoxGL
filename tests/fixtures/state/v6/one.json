@@ -1,0 +1,25 @@
+{
+  "schema_version": 6,
+  "games": [
+    {
+      "game_id": "game-0000",
+      "name": "Fixture Game",
+      "path": "/roms/psx/fixture.bin",
+      "platform": "PS1",
+      "vendor_field": "kept across migration"
+    }
+  ],
+  "profiles": {},
+  "history": [],
+  "settings": {"theme": "dark"},
+  "playlists": [],
+  "queue": [],
+  "notifications": [],
+  "ui_state": {},
+  "active_sessions": [],
+  "trash": [],
+  "party_decks": [],
+  "emulator_settings": {},
+  "achievement_overrides": {},
+  "unknown_top_level": {"preserved": true}
+}
