@@ -45,11 +45,34 @@ SERVICES = (
     "media.search",
 )
 
+# Versioned service descriptors (ADR 0092). Every service is read-only and bounded, and a
+# plugin that asks for a version the host does not serve is refused. A v1 plugin never asks
+# for a version, so its service calls are unchanged.
+SERVICE_DESCRIPTORS = {
+    "library.query": {"version": 1, "max_results": MAX_LIBRARY_GAMES, "read_only": True},
+    "achievements": {"version": 1, "max_results": MAX_ACHIEVEMENT_ITEMS, "read_only": True},
+    "profile": {"version": 1, "max_results": 1, "read_only": True},
+    "activity": {"version": 1, "max_results": MAX_ACTIVITY, "read_only": True},
+    "leaderboards": {"version": 1, "max_results": MAX_LEADERBOARD, "read_only": True},
+    "catalog.search": {"version": 1, "max_results": MAX_CATALOG, "read_only": True},
+    "metadata.search": {"version": 1, "max_results": MAX_METADATA, "read_only": True},
+    "media.search": {"version": 1, "max_results": MAX_MEDIA, "read_only": True},
+}
 
-def handle_service(service, params, state):
+
+def describe_services():
+    """The service catalog a v2 plugin may rely on: name -> version, bound, read-only flag."""
+    return {name: dict(spec) for name, spec in SERVICE_DESCRIPTORS.items()}
+
+
+def handle_service(service, params, state, *, version=None):
     """Run one allowlisted service and return a bounded JSON object."""
     if service not in SERVICES:
         raise ValueError(f"Unknown plugin service: {service!r}.")
+    if version is not None:
+        descriptor = SERVICE_DESCRIPTORS.get(service)
+        if descriptor is None or str(version) != str(descriptor["version"]):
+            raise ValueError(f"Plugin service {service!r} has no version {version}.")
     if params is None:
         params = {}
     if not isinstance(params, dict):

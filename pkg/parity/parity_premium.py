@@ -458,7 +458,7 @@ def list_media_packs(settings):
 
 def import_with_emulator_choice(folder, extensions_set, platform_map, chosen_emulators=None):
     from datetime import datetime
-    from parity_import import import_multi_platform
+    from pkg.parity.parity_import import import_multi_platform
 
     candidates = import_multi_platform(folder, extensions_set, platform_map)
     chosen = chosen_emulators or {}
@@ -480,7 +480,7 @@ def import_with_emulator_choice(folder, extensions_set, platform_map, chosen_emu
 
 
 def recommend_emulators(platform):
-    from parity_import import recommend_emulators as base
+    from pkg.parity.parity_import import recommend_emulators as base
     return base(platform)
 
 

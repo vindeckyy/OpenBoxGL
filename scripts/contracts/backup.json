@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "format": 2,
+  "supported_formats": [
+    1,
+    2
+  ],
+  "manifest_fields_v2": [
+    "format",
+    "app_version",
+    "state_schema",
+    "library_id",
+    "created_by",
+    "encryption",
+    "items",
+    "created",
+    "redacted_secrets",
+    "files"
+  ],
+  "file_entry_fields": [
+    "name",
+    "size",
+    "mode",
+    "sha256"
+  ],
+  "encryption": "none",
+  "member_limits": {
+    "max_members": 50000,
+    "max_member_bytes": 4294967296,
+    "max_total_bytes": 34359738368
+  }
+}

@@ -487,7 +487,7 @@ def _clean_rom_title(name: str) -> str:
 
 
 def dedupe_ranked_imports(additions: list[dict]) -> list[dict]:
-    from parity_premium import rank_rom_group
+    from pkg.parity.parity_premium import rank_rom_group
 
     buckets: dict[tuple[str, str], list[dict]] = {}
     title_cache: dict[str, str] = {}
@@ -756,7 +756,7 @@ def import_vita3k(home=None):
                 "title_id": folder.name,
                 "metadata": {"Title": _read_sfo_title(sfo) if sfo.is_file() else folder.name},
             }
-            from parity_premium import resolve_vita_title
+            from pkg.parity.parity_premium import resolve_vita_title
             title = resolve_vita_title(entry)
             games.append({
                 "name": title,

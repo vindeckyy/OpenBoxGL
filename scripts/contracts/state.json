@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "app_version": "2.0.0",
+  "schema_version": 7,
+  "format": "openbox-library",
+  "envelope_fields": [
+    "format",
+    "schema_version",
+    "library_id",
+    "created_with",
+    "path_mode",
+    "library_root"
+  ],
+  "path_modes": [
+    "absolute",
+    "portable"
+  ],
+  "sessions_file": {
+    "name": "sessions.json",
+    "format": 1
+  }
+}

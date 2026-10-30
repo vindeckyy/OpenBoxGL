@@ -24,7 +24,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from parity_integrations import mame_highscore_path  # noqa: E402
+from pkg.parity.parity_integrations import mame_highscore_path  # noqa: E402
 from pkg.platform_compat import contained_path  # noqa: E402
 
 PARSE_TIMEOUT = 10

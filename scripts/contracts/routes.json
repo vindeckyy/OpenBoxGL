@@ -326,6 +326,12 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/host/resume"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/image-group"
     },
     {
@@ -1061,6 +1067,12 @@
     },
     {
       "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/compat/report"
+    },
+    {
+      "methods": [
         "POST"
       ],
       "path": "/api/v2/emulators/defs/rollback"
@@ -1497,6 +1509,12 @@
     },
     {
       "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/library/integrity"
+    },
+    {
+      "methods": [
         "POST"
       ],
       "path": "/api/v2/library/manual-entry"
@@ -1512,6 +1530,18 @@
         "POST"
       ],
       "path": "/api/v2/library/manual-entry/update"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/library/move/apply"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/library/move/preview"
     },
     {
       "methods": [
@@ -1963,6 +1993,30 @@
     },
     {
       "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/setup/migration/acknowledge"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/setup/migration/backup"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/setup/migration/rollback"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/setup/migration/status"
+    },
+    {
+      "methods": [
         "GET",
         "POST"
       ],
@@ -2117,6 +2171,12 @@
         "GET"
       ],
       "path": "/api/v2/story"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/version"
     },
     {
       "methods": [

@@ -1,0 +1,20 @@
+{
+  "id": "openbox.sample-v2",
+  "name": "Sample v2 Plugin",
+  "version": "2.0.0",
+  "entry": "plugin.py",
+  "hooks": ["after_session", "command"],
+  "api_version": 2,
+  "min_openbox": "1.19.0",
+  "subscriptions": ["session.ended"],
+  "description": "Example plugin that speaks plugin API v2: one palette command and one event subscription.",
+  "author": "OpenBox",
+  "homepage": "https://github.com/vindeckyy/OpenBoxGL",
+  "commands": [
+    {
+      "id": "hello-v2",
+      "label": "Hello from a v2 plugin",
+      "description": "Answers from the v2 JSON Lines runner."
+    }
+  ]
+}

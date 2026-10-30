@@ -37,7 +37,7 @@ from pkg.parity.parity_plugin_storefront import (
 from plugins import run_plugin_hook
 
 try:  # the shared downloader; parity_media re-exports it when available
-    from parity_media import download_file  # type: ignore[attr-defined]
+    from pkg.parity.parity_media import download_file  # type: ignore[attr-defined]
 except ImportError:  # pragma: no cover - current parity_media has no re-export
     from backend_io import download_file
 

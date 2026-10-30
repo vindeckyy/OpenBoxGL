@@ -1024,7 +1024,7 @@ def parse_dna_query(
     3. Free text → concept expansion → BM25 branch.
     4. Predicates filter, BM25/similarity ranks.
     """
-    from parity_query import filter_games_by_query, parse_query
+    from pkg.parity.parity_query import filter_games_by_query, parse_query
 
     text = str(query or "").strip()
     why: dict[str, list[str]] = {}

@@ -30,6 +30,13 @@ class BadRequest(ApiError):
     code = "BAD_REQUEST"
 
 
+class V1ApiDisabled(ApiError):
+    """The /api/v1 surface is off unless OPENBOX_ENABLE_V1_API=1 (ADR 0091)."""
+
+    status = 410
+    code = "V1_API_DISABLED"
+
+
 class NotFound(ApiError):
     status = 404
     code = "NOT_FOUND"
@@ -111,3 +118,66 @@ class RangeParseError(ValueError):
     working; byte-serving routes catch this exact type to answer 416 without
     also swallowing unrelated validation errors.
     """
+
+
+PROBLEM_TYPE_BASE = "https://openbox.local/problems/"
+_RETRYABLE_STATUSES = frozenset({408, 425, 429, 500, 502, 503, 504})
+_STATUS_TITLES = {
+    400: "Bad request",
+    401: "Unauthorized",
+    403: "Forbidden",
+    404: "Not found",
+    405: "Method not allowed",
+    409: "Conflict",
+    410: "Gone",
+    413: "Payload too large",
+    415: "Unsupported media type",
+    422: "Unprocessable content",
+    429: "Too many requests",
+    500: "Internal error",
+    503: "Service unavailable",
+}
+
+
+def problem_payload(status, payload, *, request_id="", instance=""):
+    """Return an RFC 9457-style problem document built from a legacy error payload.
+
+    ``code`` is the stable machine-readable key and ``type`` is derived from it,
+    so both survive rewording. ``error`` duplicates ``detail`` for one major cycle.
+    """
+    title = _STATUS_TITLES.get(status, "Request failed")
+    message = str(payload.get("error") or payload.get("detail") or title)
+    code = str(payload.get("code") or f"HTTP_{status}")
+    body = dict(payload)
+    body.update({
+        "type": PROBLEM_TYPE_BASE + code.lower().replace("_", "-"),
+        "title": title,
+        "status": status,
+        "detail": message,
+        "code": code,
+        "error": message,
+        "retryable": status in _RETRYABLE_STATUSES or "retry_after" in payload,
+    })
+    if request_id:
+        body["request_id"] = request_id
+    if instance:
+        body["instance"] = instance
+    return body
+
+
+class HostApiUnsupported(Conflict):
+    """A native host sent a major API version this server does not speak."""
+
+    code = "HOST_API_UNSUPPORTED"
+
+
+class BackupFormatUnsupported(BadRequest):
+    """A backup manifest declares a format this build cannot read or write (ADR 0093)."""
+
+    code = "BACKUP_FORMAT_UNSUPPORTED"
+
+
+class MovePlanStale(Conflict):
+    """The library changed after a move preview; the preview must be run again (ADR 0090)."""
+
+    code = "MOVE_PLAN_STALE"
