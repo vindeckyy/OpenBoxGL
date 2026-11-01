@@ -3,7 +3,8 @@
 
 Stages:
   1. ruff lint (gate rule set from pyproject.toml)
-  2. runtime_modules drift, v1 contract, version sync, frontend lint, i18n keys,
+  2. runtime_modules drift, the public API contract, version sync, frontend
+     lint, i18n keys,
      CSP framing, and the ADR 0060 feature-regression ratchets (HTTP routes,
      settings schema, emulator defs, frontend module graph, reliability
      catalog, clock-coupled tests)
@@ -184,8 +185,8 @@ def main() -> int:
     if dependencies.returncode != 0:
         failures.append("dependencies")
 
-    # Stage 2.4: v1 route surface must match the frozen contract. The v1
-    # surface is the native host's only contract; drift fails the gate.
+    # Stage 2.4: the public API surface must match api_contracts.json
+    # (/api/v2 + /api/host + the opt-in v1 bridge); drift fails the gate.
     api_contract = run([sys.executable, "-B", str(ROOT / "scripts" / "check_api_contract.py")])
     if api_contract.returncode != 0:
         if api_contract.stdout.strip():

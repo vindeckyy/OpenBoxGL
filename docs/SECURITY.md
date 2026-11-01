@@ -60,7 +60,7 @@ backported, so upgrading is the fix.
 | 0.4.x | Best effort |
 | < 0.4.0 | No |
 
-Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. The 1.19.x line is the current maintained release; the older rows document the historical support policy and should not be read as promises of backported fixes.
+Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. Until v2.0.0 is tagged, the 1.19.x line remains the latest released line; the older rows document the historical support policy and should not be read as promises of backported fixes.
 
 ## Reporting a vulnerability
 
@@ -108,7 +108,7 @@ The following are generally out of scope:
 
 ## Release signing
 
-Release publication is fail-closed. The workflow requires `OPENBOX_SIGNING_KEY`, derives an Ed25519 public key in a mode-`0600` temporary file, compares it with the committed `openbox-release.pub`, signs every published binary — the x86_64 and aarch64 AppImages, the Windows portable zip, the standalone Windows native-host executable, the macOS app bundle, and the emulator definition pack — and verifies each signature before upload. The updater and `scripts/install.sh` reject checksum-only releases.
+Release publication is fail-closed. The workflow requires `OPENBOX_SIGNING_KEY`, derives an Ed25519 public key in a mode-`0600` temporary file, compares it with the committed `openbox-release.pub`, signs every published binary — the x86_64 and aarch64 AppImages, the x86_64 and arm64 Windows portable zips, the standalone x86_64 and arm64 Windows native-host executables, the macOS app bundle, and the emulator definition pack — and verifies each signature before upload. The updater and `scripts/install.sh` reject checksum-only releases.
 
 The macOS bundle is ad-hoc signed rather than notarized: it carries no Developer ID signature, so macOS asks the user to allow it the first time it is opened. The release signature above is what the installer (`scripts/install-macos.sh`) and the in-app updater verify; the ad-hoc code signature only proves the bundle was not modified after it was built.
 
@@ -130,7 +130,7 @@ This addendum lists what 2.0 adds to the attack surface, the control for each it
 | Surface added or changed in 2.0 | Threat | Control | Test |
 |---|---|---|---|
 | Portable library tokens (`@library/...`) | A stored token escapes the library folder (`..`, drive prefix, leading separator, NUL, alternate data stream) | Tokens are refused at decode; containment is checked after normalization | `tests/test_portable_paths.py` |
-| Portable library symlinks | A symlink inside the folder points outside it and is tokenized | A path that resolves outside the folder is not tokenized and is reported as `game_path_outside_root` | `tests/test_portable_library.py`, `tests/test_symlink_refusals.py` |
+| Portable library symlinks | A symlink inside the folder points outside it and a stored token escapes through it | Tokenization is lexical and never resolves links, so a token always decodes inside the folder; `..`, drive prefixes, and separators are refused at decode. A symlink that targets outside the folder is a filesystem-level indirection the user created, not a token escape | `tests/test_portable_library.py`, `tests/test_portable_paths.py` |
 | Extra-app paths (`applications`, `versions`, `documents`) | The same escape and rebase risks as game paths | The same token rules; a move rebases each path slot by its own key | `tests/test_portable_library.py` (`ExtraAppPathTests`) |
 | Move wizard | A stale preview applies to a library that has changed | Apply recomputes the plan under the store lock and refuses with `MOVE_PLAN_STALE` | `tests/test_library_move_http.py` |
 | Library migration v6 to v7 | A crash or full disk leaves a truncated library | Backup written and fsynced first; primary replaced atomically; a failed step leaves the original file | `tests/test_state_migration_rollback.py` |
@@ -149,7 +149,7 @@ This addendum lists what 2.0 adds to the attack surface, the control for each it
 Gaps (not controls):
 
 - The Linux and Windows native hosts send `X-OpenBox-API-Version`, but they are compiled only in CI. Compilation was not run on this workstation.
-- The macOS bundle is ad-hoc signed, not notarized. The maintainer decided 2.0 ships that way, so the Privacy & Security confirmation on first launch still applies (ADR 0094)ed.
+- The macOS bundle is ad-hoc signed, not notarized. The maintainer decided 2.0 ships that way, so the Privacy & Security confirmation on first launch still applies (ADR 0094).
 - Plugin API v2 is implemented (ADR 0092). A v1 plugin keeps the v1 runner and the v1 payloads; a v2 plugin runs under the JSON Lines runner with an output cap.
 - The pre-app migration page (W1-12) is implemented: the upgrade is reported before the library is used, and the rollback restores the copy of the old file.
 

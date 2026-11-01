@@ -17,7 +17,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v2.0.0"><img src="https://img.shields.io/badge/Release-v2.0.0-0052CC?style=for-the-badge" alt="Release v1.19.1"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v2.0.0"><img src="https://img.shields.io/badge/Release-v2.0.0-0052CC?style=for-the-badge" alt="Release v2.0.0"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/vindeckyy/OpenBoxGL/ci.yml?style=for-the-badge&label=CI" alt="CI"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey?style=for-the-badge" alt="Linux, Windows, and macOS"></a>
   <br>
@@ -80,7 +80,7 @@ OpenBox provides one UI over two use-case entry points (the native host renders 
 
 | Entry point | Use when |
 | --- | --- |
-| `openbox` or `openbox-native` | Default desktop use; one native window (WebKitGTK on Linux, WebView2 on Windows) renders the full UI |
+| `openbox` or `openbox-native` | Default desktop use; one native window (WebKitGTK on Linux, WebView2 on Windows, WKWebView on macOS) renders the full UI |
 | `openbox --web` or `python3 web_app.py` | Development and debugging; full feature set, REST API, Big Box mode |
 
 Library data is stored locally at `~/.local/share/openbox-game-launcher/library.json` (`%LOCALAPPDATA%\openbox-game-launcher\library.json` on Windows, `~/Library/Application Support/openbox-game-launcher/library.json` on macOS). Set the `OPENBOX_DATA_DIR` environment variable to use a different data directory.
@@ -117,6 +117,21 @@ The full capability matrix with acceptance checks lives in [PARITY.md](docs/PARI
 ---
 
 ## Features
+
+### Stable contracts (2.0.0)
+
+**Your library can move, your integrations stop moving.** Game paths under one
+library folder are stored as `@library/...` tokens, so the folder can move to
+another drive or machine without rewriting each game — **Settings > Library >
+Move library** previews the move and refuses a stale preview. The library
+upgrades to format 7 on first start with `library.v6.backup.json` kept and
+`openbox --rollback-library` to restore it, and **Settings > Library > Check
+integrity** reports missing, unreadable, or moved-behind-your-back files. The
+public API is `/api/v2` (retired `/api/v1` is an opt-in bridge through 2.0.x),
+errors are RFC 9457 problem documents, backups record a SHA-256 for every file
+as format 2 with a 1.19-compatible export, and plugins can declare API v2 with
+a JSON Lines runner and versioned host services. The Windows release now ships
+an ARM64 build next to x86_64; the macOS bundle stays ad-hoc signed.
 
 ### Now on macOS (1.19.0)
 
@@ -370,7 +385,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 | Method | Best for | Notes |
 | --- | --- | --- |
 | AppImage (installer) | Linux desktop, Steam Deck, handhelds, immutable systems | Architecture-matched installer that verifies the signed release and built-in verified updater; installs to `~/.local/bin` |
-| Windows (installer) | Windows 10/11 (x86_64) | Signed portable zip, verified updater, WebView2 window; installs to `%LOCALAPPDATA%\OpenBox` |
+| Windows (installer) | Windows 10/11 (x86_64 and ARM64) | Signed portable zip, verified updater, WebView2 window; installs to `%LOCALAPPDATA%\OpenBox` |
 | macOS (installer) | macOS 11+ (Apple Silicon and Intel) | Signed universal app bundle with its own Python, verified updater, WKWebView window; installs to `~/Applications` |
 | AppImage (manual) | Offline or custom path | `chmod +x` and run, no install step |
 | Flatpak | Sandboxed installs | `flatpak-builder` from manifest |
@@ -400,8 +415,9 @@ Omit `OPENBOX_RELEASE_TAG` only when you intentionally want the latest stable re
 
 ### Windows (installer)
 
-Windows 10/11 on x86_64 installs from the signed portable zip. Download
-`OpenBox-x86_64-windows.zip` from a specific release, extract it, then run the
+Windows 10/11 installs from the signed portable zip, published for x86_64 and
+ARM64. Download `OpenBox-x86_64-windows.zip` (or `OpenBox-arm64-windows.zip`)
+from a specific release, extract it, then run the
 bundled installer from Windows PowerShell 5.1. Requires Python 3.10+ on `PATH`
 (or set `OPENBOX_PYTHON`); verification needs no `curl` and no OpenSSL — it
 uses the same `updates.py` Ed25519 code path as the in-app updater:
@@ -418,8 +434,8 @@ powershell -ExecutionPolicy Bypass -File .\OpenBox\scripts\install.ps1 -Tag "v$V
 (The `-ExecutionPolicy Bypass` flag scopes the bypass to that one invocation,
 in case your execution policy blocks downloaded scripts.)
 
-The installer checks your CPU architecture (Windows builds are x86_64-only; on
-ARM64 it exits with a clear message instead of downloading), then verifies the
+The installer checks your CPU architecture and downloads the matching build
+(x86_64 or ARM64), then verifies the
 release public key against the pinned trust anchor, the archive's SHA-256
 sidecar, and the Ed25519 signature — nothing is extracted until all three
 pass. It installs to `%LOCALAPPDATA%\OpenBox\share\openbox`, keeps the previous
@@ -435,7 +451,7 @@ instead of leaving a half-registered install.
 | `-InstallDir <path>` | Install somewhere else (or set `OPENBOX_INSTALL_DIR`) |
 | `-NoPathUpdate` | Leave the user `PATH` alone |
 | `-Tag vX.Y.Z` | Install a specific release instead of the latest |
-| `-Arch x86_64` | Override the detected architecture |
+| `-Arch x86_64` / `-Arch arm64` | Override the detected architecture |
 | `-ReleaseBase <url>` / `-Repo <owner/name>` | Use a mirror (or set `OPENBOX_RELEASE_BASE`) |
 | `-PublicKeyPath <path>` | Trust a supplied release key (mirror/offline escape hatch) |
 
@@ -445,9 +461,10 @@ forces the browser. The in-app updater verifies and swaps the installed tree the
 same way, and refuses to overwrite anything that is not an installed copy — a
 `git clone` updates with `git pull`.
 
-Each release also carries `OpenBox-x86_64-windows-native-host.exe` (with
-`.sha256` and `.sig`): the compiled WebView2 host the zip ships, published on
-its own so a source checkout gets a native window without the MSVC toolchain.
+Each release also carries `OpenBox-x86_64-windows-native-host.exe` and
+`OpenBox-arm64-windows-native-host.exe` (with `.sha256` and `.sig`): the
+compiled WebView2 host the zips ship, published on their own so a source
+checkout gets a native window without the MSVC toolchain.
 Save it beside `web_app.py` as `native_host.exe`, or point `OPENBOX_NATIVE_HOST`
 at it.
 
@@ -617,7 +634,7 @@ No OpenBox account is required. Optional integrations (RetroAchievements, EmuMov
 
 ### Is Windows supported?
 
-Yes. OpenBox runs on Windows 10/11 (x86_64) from a signed portable install: the same UI in a WebView2 window, the same library, imports, sessions, saves, Big Box mode, and REST API, with Windows binary names for every bundled emulator definition. Extract `OpenBox-x86_64-windows.zip` from a release and run `OpenBox\scripts\install.ps1` (requires Python 3.10+), or `python web_app.py` from a checkout. Linux remains the primary target for the distro-integration surfaces — AppImage, Flatpak, gamescope/Game Mode, XDG desktop entries, and Flathub-aware emulator management are Linux-only, and the capability matrix in [PARITY.md](docs/PARITY.md) is written from the Linux side. See [ADR 0048](docs/adr/0048-windows-port.md) for the port's boundaries.
+Yes. OpenBox runs on Windows 10/11 (x86_64 and ARM64) from a signed portable install: the same UI in a WebView2 window, the same library, imports, sessions, saves, Big Box mode, and REST API, with Windows binary names for every bundled emulator definition. Extract `OpenBox-x86_64-windows.zip` from a release and run `OpenBox\scripts\install.ps1` (requires Python 3.10+), or `python web_app.py` from a checkout. Linux remains the primary target for the distro-integration surfaces — AppImage, Flatpak, gamescope/Game Mode, XDG desktop entries, and Flathub-aware emulator management are Linux-only, and the capability matrix in [PARITY.md](docs/PARITY.md) is written from the Linux side. See [ADR 0048](docs/adr/0048-windows-port.md) for the port's boundaries.
 
 ### Is macOS supported?
 
@@ -637,9 +654,9 @@ OpenBox/
 ├── handlers/               Route handler mixins (library, media, imports, settings, ...)
 ├── web_app.py              Loopback server + REST API (shared core)
 ├── webapp_state.py         SSE/event bus facade over the canonical state owner
-├── routes.py               GET/POST route tables (v2 aliases + opt-in v1 bridge)
+├── routes.py               GET/POST route tables (public `/api/v2` surface, `/api/host` channel, retired `/api/v1` opt-in bridge)
 ├── routes/                 `@route` decorator registry only (handlers are imported by web_app.py)
-├── contracts.py            Documented v1 response shapes for the generated API reference
+├── contracts.py            Public API contract (`api_contracts.json`); the frozen v1 route list lives in `docs/archive/v1_contracts.json` behind `OPENBOX_ENABLE_V1_API`
 ├── openbox.py              Shared core helpers (data paths, launch, profiles)
 ├── static/                 Frontend JavaScript modules, search worker, and app.css
 ├── state_store.py          Schema-versioned state, atomic writes, snapshots
@@ -657,7 +674,7 @@ OpenBox/
 ├── archives.py             Safe, cached archive extraction
 ├── arcade.py               MAME and FinalBurn full-set import
 ├── pkg/state/              Modularized state, caches, launch, and operations
-├── pkg/parity/              Parity modules (flat `import parity_*` via MetaPathFinder bridge)
+├── pkg/parity/              Parity modules, imported as `pkg.parity.*`
 ├── emulators.py            Emulator profiles + Flathub management
 ├── metadata.py             LaunchBox DB sync + media scraping
 ├── retroachievements.py    RA matching + badge injection

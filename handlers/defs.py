@@ -9,7 +9,7 @@ rather than a routine error, because that is what it is.
 ``POST /api/v2/emulators/defs/rollback`` remove definitions this channel
 installed, restoring the bundled set.
 
-Additive v2 surface; the frozen v1 route table is untouched. Verification is
+Public v2 surface; the archived v1 route table is untouched. Verification is
 delegated to ``updates.verify_artifact`` -- this handler never reimplements
 signature checking.
 """

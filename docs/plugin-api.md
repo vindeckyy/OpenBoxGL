@@ -78,14 +78,16 @@ message: "..."}`.
 
 ## Installing
 
-- Local directory or ZIP: `POST /api/plugins/install` with `{path}` (also
+- Local directory or ZIP: `POST /api/v2/plugins/install` with `{path}` (also
   available from the Plugins manager). Directories may not contain symlinks.
+  The unversioned `/api/plugins/install` is the deprecated internal layer,
+  off in 2.1 (docs/api-deprecations.md).
 - Remote catalog: bundled `plugins/catalog.json` entries with a `url` must be
   HTTPS and carry a `sha256`; the archive is checksummed before extraction.
   Entries marked `local_only` are documentation-only and must be installed
   from a local package. Optional `author` (80 chars) and `homepage` (HTTPS)
   fields are shown in the catalog browser.
-- Enabling/disabling: `POST /api/plugins/toggle` with `{id, enabled}`.
+- Enabling/disabling: `POST /api/v2/plugins/toggle` with `{id, enabled}`.
   Removing keeps a recoverable copy under `<data>/plugins/.removed/`.
 
 ## Plugins 2.0 additions (1.14.0)

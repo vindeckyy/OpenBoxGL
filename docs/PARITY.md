@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux, Windows, and macOS environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v2.0.0**, the release that turns the 1.x compatibility scaffolding into stable contracts: one server-computed capability contract now decides which platform-specific controls each host shows, so a stored gamescope preset no longer breaks Windows and macOS launches, Windows reports its real battery, Wine/Faugus/Flatpak management answers only on Linux, and storefront browsing uses each platform's own URL opener. The previous line was **v1.19.0** ("Now on macOS"), 1.18.0 was "Clearer, deeper library", 1.17.0 was "Every Launcher", and 1.16.0/1.16.1 were "Make it true" and its fix release.
+OpenBox tracks LaunchBox feature parity for Linux, Windows, and macOS environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v2.0.0**, the release that turns the 1.x compatibility scaffolding into stable contracts: the portable library stores game paths as `@library/...` tokens so the folder can move, the library upgrades to format 7 with a kept v6 copy and a rollback command, the public API is `/api/v2` with a `/api/host` channel for the native windows, backups record a per-file SHA-256 manifest as format 2, and plugins can declare API v2. The previous line was **v1.19.1** ("Platform parity"), 1.19.0 was "Now on macOS", 1.18.0 was "Clearer, deeper library", 1.17.0 was "Every Launcher", and 1.16.0/1.16.1 were "Make it true" and its fix release.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -25,7 +25,7 @@ they change what a user can do on every platform, not because LaunchBox has them
 | Plugin API v2 | done | done | done | Versioned manifests, the JSON Lines runner, and versioned read-only host services (ADR 0092) |
 | Backup format 2 | done | done | done | Per-file SHA-256 manifest, a per-member restore report, and a 1.19-compatible export (ADR 0093) |
 | macOS notarization | n/a | n/a | conditional | A notarized bundle ships when the Developer ID secrets are available; otherwise the bundle stays ad-hoc (ADR 0094) |
-| Windows ARM64 artifact | n/a | conditional | n/a | Ships after the `windows-11-arm` job builds and launches it; until then the installer refuses ARM64 (ADR 0095) |
+| Windows ARM64 artifact | n/a | done | n/a | The `windows-11-arm` release lane publishes `OpenBox-arm64-windows.zip` and `OpenBox-arm64-windows-native-host.exe`, signed and attested like x86_64; the installer and updater select the artifact by CPU (ADR 0095) |
 | Flatpak submission | conditional | n/a | n/a | Submission-ready; the submission itself is a maintainer decision (ADR 0013) |
 
 ## Capability matrix
@@ -201,17 +201,17 @@ they change what a user can do on every platform, not because LaunchBox has them
 | Configurable progress whitelist | done | Progress automation and the game editor use the enabled labels from Settings; the API rejects labels outside the whitelist |
 | Sidebar section ordering | done | Settings can reorder search, view, filters, platforms, playlists, and Explorer, and hide Explorer like the other sections; legacy section ids are preserved on save |
 | Discovery achievements shelf | done | The Discovery Center lists games with RetroAchievements or provider achievement totals, sorted by completion percentage then title |
-| Platform rename and delete | done | Renaming migrates games, profiles, playlists, settings, and opt-in platform media; deleting requires the platform name and moves games to Trash (1.18 unreleased) |
-| Storefront missing and repair | done | Steam imports record install-folder presence, show Missing instead of a play button, and hand Install/Verify to Steam (1.18 unreleased) |
-| Per-provider integration tokens | done | Five optional providers store tokens locally; the settings API returns only masked values (1.18 unreleased) |
-| Save manifests and selective restore | done | Backups carry file hashes and metadata; a version-history dialog previews every older backup, restore previews contents, supports dry run, and restores selected files (1.18 unreleased) |
+| Platform rename and delete | done | Renaming migrates games, profiles, playlists, settings, and opt-in platform media; deleting requires the platform name and moves games to Trash (1.18.0) |
+| Storefront missing and repair | done | Steam imports record install-folder presence, show Missing instead of a play button, and hand Install/Verify to Steam (1.18.0) |
+| Per-provider integration tokens | done | Five optional providers store tokens locally; the settings API returns only masked values (1.18.0) |
+| Save manifests and selective restore | done | Backups carry file hashes and metadata; a version-history dialog previews every older backup, restore previews contents, supports dry run, and restores selected files (1.18.0) |
 | Bulk find and replace | done | Literal preview-and-apply over one metadata field for selected games (1.18.0) |
 | Controller types and per-platform emulator overrides | done | Controller types are user-defined; platforms can override adapter, RetroArch core, and extra arguments (1.18.0) |
 | Tray recent games | done | Linux, Windows, and macOS tray menus launch one of the eight most recent games (1.18.0; macOS from 1.19.0) |
 
 All LaunchBox Premium-equivalent workflows above are included in OpenBox without a subscription. OpenBox sets `premium_features_free: true` in settings and ships bundled media packs without a license gate.
 
-## Windows channel (x86_64)
+## Windows channel (x86_64 and ARM64)
 
 Since [ADR 0048](adr/0048-windows-port.md) the same source tree, the same tests, and
 the same gates run on Windows. These rows record what is true on that channel
@@ -237,7 +237,7 @@ build has a deliberate, documented narrower surface.
 | gamescope / Steam Game Mode presets | not applicable | Linux-only; the gamescope preset, MangoHud, and handheld-performance controls are hidden on Windows, a stored preset is ignored at launch, and `--game-mode` exits with the Linux-only message (1.19.1, ADR 0086) |
 | XDG desktop entry | not applicable | Replaced by the Start Menu shortcut and `HKCU` protocol registration |
 | Flathub emulator management | not applicable | Flathub is a Linux store; Windows emulators are installed by the user, the install and folder-grant controls are hidden, and the grant route refuses the request (1.19.1, ADR 0086) |
-| ARM64 Windows build | missing | Only x86_64 is released, while Linux ships an aarch64 AppImage (ADR 0024) |
+| ARM64 Windows build | done | The `windows-11-arm` release lane publishes `OpenBox-arm64-windows.zip` and `OpenBox-arm64-windows-native-host.exe`, signed and attested like x86_64; the installer and updater select by CPU (2.0.0, ADR 0095). Linux also ships an aarch64 AppImage (ADR 0024) |
 | Cross-platform launch-command round-trip | partial | Stored commands use platform quoting rules (`shlex` on POSIX, MSVCRT on Windows), so a command written on one platform may not round-trip byte-for-byte to the other. Documented limitation, not a bug (ADR 0048) |
 
 
@@ -255,7 +255,7 @@ specifically; the matrix above is Linux behavior.
 | Emulator detection and launch | done | Every bundled definition carries `native_exe_macos`; an app bundle resolves through `Contents/Info.plist`, and an explicit empty value means "no verified macOS build" and is reported as not installed (1.19.0) |
 | Library data location | done | `~/Library/Application Support/openbox-game-launcher`; `OPENBOX_DATA_DIR` overrides everything, and stored references keep POSIX separators so a library moves between platforms (1.19.0) |
 | macOS saves | done | Save discovery covers Steam Cloud plus the documented macOS folders for PPSSPP, RPCS3, Dolphin, and RetroArch (1.19.0) |
-| Notarization | missing | The bundle is ad-hoc signed; the first launch needs System Settings > Privacy & Security > Open Anyway. The release signature is verified by the installer and updater (1.19.0, ADR 0085) |
+| Notarization | missing | The bundle is ad-hoc signed in 2.0; the first launch needs System Settings > Privacy & Security > Open Anyway. Notarization ships when Developer ID secrets are available; the machinery (entitlements, `notarytool`, stapling) is in the tree (1.19.0, ADR 0085; decision ADR 0094). The release signature is verified by the installer and updater |
 | AppImage / Flatpak packaging | not applicable | Linux-only channels; the macOS artifact is the signed universal zip (ADR 0013) |
 | gamescope / Steam Game Mode presets | not applicable | Linux-only; the preset, MangoHud, and handheld-performance controls are hidden on macOS and `web_app.py --game-mode` exits with a clear message (1.19.0, capability-gated by ADR 0086) |
 | Wine/Proton prefix manager | not applicable | Wine management is a Linux surface; the panel is hidden on macOS and `/api/wine/*` reports `available: false` (1.19.1, ADR 0086) |
@@ -278,7 +278,7 @@ These LaunchBox features have no practical Linux equivalent and are documented r
 | LaunchBox online theme storefront | Replaced by local CSS theme import and open-folder workflow |
 | Unbroken account sign-in, vendor cloud stats, online MAME leaderboards, media-store likes | No vendor account. Local library sync, local high-score tables, and the household leaderboard are the equivalents |
 | XAML marquee screens, wall-view templates, theme option files, theme demos | OpenBox themes are CSS token overrides. Theme music and navigation sounds cover the sidecar-audio part; marquee and wall templates have no matching surface |
-| Android export, 32-bit builds, Windows .NET runtime changes | No Android target. x86_64/aarch64 Linux and x86_64 Windows are the supported channels |
+| Android export, 32-bit builds, Windows .NET runtime changes | No Android target. x86_64/aarch64 Linux, x86_64/ARM64 Windows, and universal macOS are the supported channels |
 | Paid trial, Beta Spotlight, saved-theme trial behavior | No paywall or beta channel. What's New covers release notes |
 | Keyboard automation that injects keystrokes into emulators | Windows input injection. Use launch arguments, environment variables, and emulator configuration instead |
 | Scraping Steam media for non-Steam Windows games | Requires a Steam app id. SteamGridDB covers artwork for non-Steam games |

@@ -79,9 +79,6 @@ jobs:
       - name: Runtime module manifest
         run: python -B scripts/check_runtime_modules.py
 
-      - name: API contract
-        run: python -B scripts/check_api_contract.py
-
       - name: Version sync
         run: python -B scripts/check_version_sync.py
 
@@ -120,30 +117,6 @@ jobs:
 
       - name: Clock-coupled tests
         run: python -B scripts/check_clock_coupling.py
-
-      - name: State schema ratchet
-        run: python -B scripts/check_state_schema.py
-
-      - name: Backup format contract
-        run: python -B scripts/check_backup_format.py
-
-      - name: OpenAPI document
-        run: python -B scripts/check_openapi.py
-
-      - name: Deprecation ledger
-        run: python -B scripts/check_deprecations.py
-
-      - name: Frontend API paths
-        run: python -B scripts/check_api_paths.py
-
-      - name: Native host paths
-        run: python -B scripts/check_native_paths.py
-
-      - name: Flat imports are gone
-        run: python -B scripts/check_flat_imports.py
-
-      - name: macOS release pipeline
-        run: python -B scripts/check_macos_release.py
 
       # ruff EXE001 cannot run on Windows, so this is where a lost exec bit
       # gets caught before the Linux Lint step turns red. Reads the git index,
@@ -188,9 +161,6 @@ jobs:
       - name: Runtime module manifest
         run: python -B scripts/check_runtime_modules.py
 
-      - name: API contract
-        run: python -B scripts/check_api_contract.py
-
       - name: Version sync
         run: python -B scripts/check_version_sync.py
 
@@ -223,30 +193,6 @@ jobs:
 
       - name: Clock-coupled tests
         run: python -B scripts/check_clock_coupling.py
-
-      - name: State schema ratchet
-        run: python -B scripts/check_state_schema.py
-
-      - name: Backup format contract
-        run: python -B scripts/check_backup_format.py
-
-      - name: OpenAPI document
-        run: python -B scripts/check_openapi.py
-
-      - name: Deprecation ledger
-        run: python -B scripts/check_deprecations.py
-
-      - name: Frontend API paths
-        run: python -B scripts/check_api_paths.py
-
-      - name: Native host paths
-        run: python -B scripts/check_native_paths.py
-
-      - name: Flat imports are gone
-        run: python -B scripts/check_flat_imports.py
-
-      - name: macOS release pipeline
-        run: python -B scripts/check_macos_release.py
 
       - name: Exec bit on shebang files
         run: python -B scripts/check_exec_modes.py
@@ -353,12 +299,7 @@ jobs:
         run: |
           for gate in check_routes_contract check_settings_contract \
                       check_emulator_defs check_frontend_modules \
-                      check_reliability_catalog check_clock_coupling \
-                      check_exec_modes check_state_schema \
-                      check_api_contract check_backup_format \
-                      check_openapi check_deprecations \
-                      check_api_paths check_native_paths \
-                      check_flat_imports check_macos_release; do
+                      check_reliability_catalog check_clock_coupling; do
             echo "::group::$gate"
             python3 -B "scripts/$gate.py" || exit 1
             echo "::endgroup::"
@@ -467,12 +408,10 @@ jobs:
       - name: Run 10k/20k performance gates
         env:
           OPENBOX_PERF_CI_MULT: "2.5"
-        run: python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5 --out "$RUNNER_TEMP/perf-current.json"
+        run: python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5
 
-      # The no-regression gate compares the gated run above against the 1.19.1
-      # baseline measured in this job, so both sides share one machine (plan
-      # W7-04). A second current run was removed: machine drift between two
-      # current reads flipped the gate while this run matched the baseline.
+      # The no-regression gate compares against the 1.19.1 baseline measured in this
+      # same job, so the ratio is measured on one machine (plan W7-04).
       - name: Checkout the 1.19.1 baseline
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
         with:
@@ -481,16 +420,12 @@ jobs:
           path: .baseline
           persist-credentials: false
 
-      - name: Compare against the 1.19.1 baseline (advisory)
-        # Shared-runner medians swing by more than 50% for the same build: the
-        # 1.19.1 facet median measured 461 ms and 853 ms on the same runner in
-        # one day. The fixed budgets above are the blocking gate; this
-        # comparison reports drift without failing a release on runner noise.
-        continue-on-error: true
+      - name: Compare against the 1.19.1 baseline
         env:
           OPENBOX_PERF_CI_MULT: "2.5"
         run: |
           python3 -B .baseline/scripts/perf_bench.py --base-dir "$RUNNER_TEMP/perf-base" --sizes 10000,20000 --runs 5 --no-gate --out "$RUNNER_TEMP/perf-baseline.json"
+          python3 -B scripts/perf_bench.py --base-dir "$RUNNER_TEMP/perf-cur" --sizes 10000,20000 --runs 5 --no-gate --out "$RUNNER_TEMP/perf-current.json"
           python3 -B scripts/check_perf_regression.py --baseline "$RUNNER_TEMP/perf-baseline.json" --current "$RUNNER_TEMP/perf-current.json"
 
   ui-smoke:

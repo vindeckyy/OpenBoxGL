@@ -4,7 +4,7 @@
 stale-state flags. ``POST /api/v2/resume`` relaunches with the stored state
 through the same atomic reservation path as ``/api/launch`` (conflicts stay
 ``LAUNCH_ALREADY_ACTIVE`` 409s). ``POST /api/v2/resume/discard`` clears a
-stored state. All routes are additive v2 surface — v1 is untouched.
+stored state. All routes are public v2 surface — the v1 bridge is untouched.
 """
 
 from __future__ import annotations

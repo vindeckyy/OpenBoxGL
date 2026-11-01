@@ -27,7 +27,7 @@ The nine low-reference keys are live. Each has a reader or writer in the files l
 | `webhook_attempts` | 2 | `handlers/extensions.py` |
 | `webhook_timeout` | 2 | `handlers/extensions.py` |
 
-`media_manifest_enabled` is the one new key without a consumer yet. The settings handler validates and stores it, but the media manifest that reads it is W3-07, which is not implemented. Until W3-07 lands, the key has no effect.
+`media_manifest_enabled` is the one new key without a consumer. The media manifest itself is implemented (`pkg/state/media_manifest.py`, wired into the integrity report and media writes) and runs unconditionally — the settings handler validates and stores the flag (`handlers/settings.py`), but nothing reads it yet, so the toggle has no effect in 2.0.
 
 ## Decision
 

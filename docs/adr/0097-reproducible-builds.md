@@ -1,6 +1,6 @@
 # ADR 0097: Reproducible builds and provenance
 
-Status: Accepted as policy. The double-build report has not been run for 2.0.0.
+Status: Accepted as policy. The double-build report for 2.0.0 is recorded in `docs/development/REPRODUCIBILITY.md`.
 
 ## Context
 

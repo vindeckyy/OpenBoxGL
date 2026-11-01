@@ -63,6 +63,21 @@ def v2_routes():
     return [(method, path, rows[(method, path)]) for method, path in sorted(rows, key=lambda item: (item[1], item[0]))]
 
 
+def host_routes():
+    """Return sorted (method, path, spec) rows for the /api/host channel."""
+    rows = {}
+    for path, spec in GET_TABLE.items():
+        if path.startswith("/api/host/"):
+            rows[("GET", path)] = spec
+    for path, spec in POST_TABLE.items():
+        if path.startswith("/api/host/"):
+            rows[("POST", path)] = spec
+    for (method, path), spec in _registry_routes().items():
+        if path.startswith("/api/host/"):
+            rows.setdefault((method, path), spec)
+    return [(method, path, rows[(method, path)]) for method, path in sorted(rows, key=lambda item: (item[1], item[0]))]
+
+
 def v1_rows():
     """Return sorted (v1_path, [(method, handler), ...]) rows for v1 aliases."""
     rows = {}
@@ -76,7 +91,7 @@ def render_v1():
     lines = [
         "# API v1 contract",
         "",
-        "The v1 surface is the stable contract. Legacy `/api/*` paths stay available for older clients; additive feature work targets `/api/v2/*` so the frozen v1 contract does not drift.",
+        "The v1 surface is retired in 2.0: it is off by default, `OPENBOX_ENABLE_V1_API=1` bridges it through 2.0.x with `Deprecation` and `Sunset` headers, and it is removed in 2.1. The frozen route list is archived at `docs/archive/v1_contracts.json`; the live public contract is `api_contracts.json`.",
         "",
         "Authentication: this generated page covers authenticated v1 JSON aliases. Most requests use the `X-OpenBox-Token` header with the per-process token from `server.token`; the local UI may also use a query token during startup. Public assets and byte/stream endpoints follow their route-specific behavior, and not every legacy error has the full `error`, `code`, and `request_id` envelope.",
         "",
@@ -106,9 +121,11 @@ def render_v2():
         "",
         "Authentication: requests use the `X-OpenBox-Token` header with the per-process token from `server.token`; the local UI may also use a query token during startup. Public assets and byte/stream endpoints follow their route-specific behavior.",
         "",
+        "Errors: every response with status 400 or above is an RFC 9457 problem document served as `application/problem+json`, carrying `type` (derived from `code`), `title`, `status`, `detail`, `code`, `retryable`, `request_id`, and `instance`; `error` duplicates `detail` for one major cycle.",
+        "",
         "## API v2",
         "",
-        "The additive surface for 1.13+ features. New work targets `/api/v2/*`; routes listed here may evolve until they are explicitly frozen.",
+        "The public API since 2.0 (ADR 0091). New work targets `/api/v2/*`; the surface is pinned by `api_contracts.json` and `scripts/check_api_contract.py`.",
         "",
         "| Method | Path | Handler |",
         "|---|---|---|",
@@ -121,9 +138,25 @@ def render_v2():
             "",
             f"_{len(v2)} routes._",
             "",
-            "## API v1 (frozen)",
+            "## API host channel",
             "",
-            "The v1 surface is the stable contract. Legacy `/api/*` paths stay available for older clients; additive feature work targets `/api/v2/*` so the frozen v1 contract does not drift.",
+            "The native windows (WebKitGTK, WebView2, WKWebView) call `/api/host/*` and send `X-OpenBox-API-Version: 2`. A different major version is refused with `409 HOST_API_UNSUPPORTED` before the route runs (ADR 0091).",
+            "",
+            "| Method | Path | Handler |",
+            "|---|---|---|",
+        ]
+    )
+    host = host_routes()
+    for method, path, spec in host:
+        lines.append(f"| {method} | `{path}` | `{spec}` |")
+    lines.extend(
+        [
+            "",
+            f"_{len(host)} routes._",
+            "",
+            "## API v1 (retired bridge)",
+            "",
+            "The v1 surface is retired in 2.0: it is off by default, `OPENBOX_ENABLE_V1_API=1` bridges it through 2.0.x with `Deprecation` and `Sunset` headers, and it is removed in 2.1. The frozen route list is archived at `docs/archive/v1_contracts.json`.",
             "",
             "| Method | Path | Handler | Response |",
             "|---|---|---|---|",

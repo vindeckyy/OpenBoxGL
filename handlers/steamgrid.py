@@ -1,6 +1,6 @@
 """SteamGridDB v2 routes (S4).
 
-Additive v2 surface mirroring handlers/screenscraper.py: status, search,
+Public v2 surface mirroring handlers/screenscraper.py: status, search,
 info (media review), apply (per-game artwork job), match (bulk fill for
 games missing a cover), and test (credential probe). The API key lives in
 ~/.env (STEAMGRIDDB_API_KEY), never in settings JSON; ``steamgrid_enabled``

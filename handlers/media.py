@@ -624,7 +624,7 @@ class MediaHandlers:
         self.send_json(200, {"path": path, "obs": obs_recording_status()})
 
     # --- S5: memory roots auto-import -------------------------------------
-    # Additive v2 surface. All filesystem work happens in the background job;
+    # Public v2 surface. All filesystem work happens in the background job;
     # the status/list routes read state only and never scan roots themselves.
 
     @route("GET", "/api/v2/memories/status")
