@@ -317,19 +317,31 @@ function closeContextMenu(restoreFocus = false) {
     if (stale && gameId !== null && gameId !== undefined) {
       trigger = document.querySelector(`[data-game="${gameId}"]`);
     }
-    try {
-      if (trigger && typeof trigger.focus === 'function') {
-        if (!trigger.hasAttribute('tabindex') && trigger.tabIndex === -1) trigger.tabIndex = 0;
-        trigger.focus({ preventScroll: true });
-        if (document.activeElement !== trigger) {
-          const focusable = trigger.closest?.('[data-game]') || trigger;
-          if (focusable && focusable !== trigger && typeof focusable.focus === 'function') {
-            if (!focusable.hasAttribute('tabindex') && focusable.tabIndex === -1) focusable.tabIndex = 0;
-            focusable.focus({ preventScroll: true });
+    const focusTrigger = () => {
+      // Re-query on the frame pass: a render can replace the card between the
+      // close and the deferred focus, and this must land on the current node.
+      let target = trigger?.isConnected ? trigger : null;
+      if (!target && gameId !== null && gameId !== undefined) {
+        target = document.querySelector(`[data-game="${gameId}"]`);
+      }
+      try {
+        if (target && typeof target.focus === 'function') {
+          if (!target.hasAttribute('tabindex') && target.tabIndex === -1) target.tabIndex = 0;
+          target.focus({ preventScroll: true });
+          if (document.activeElement !== target) {
+            const focusable = target.closest?.('[data-game]') || target;
+            if (focusable && focusable !== target && typeof focusable.focus === 'function') {
+              if (!focusable.hasAttribute('tabindex') && focusable.tabIndex === -1) focusable.tabIndex = 0;
+              focusable.focus({ preventScroll: true });
+            }
           }
         }
-      }
-    } catch {}
+      } catch {}
+    };
+    focusTrigger();
+    // Hiding the focused menu item can hand focus to the body after this
+    // handler returns, so restore once more on the next frame.
+    requestAnimationFrame(focusTrigger);
   }
 }
 function openContextMenu(event, id) {
