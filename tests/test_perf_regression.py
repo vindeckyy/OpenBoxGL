@@ -52,17 +52,24 @@ class RegressionComparisonTests(unittest.TestCase):
 
     def test_a_p95_outlier_with_a_flat_median_is_not_a_regression(self):
         rows = gate.compare(
-            report(**{"20000": {"write": measure_both(800.0, 850.0)}}),
-            report(**{"20000": {"write": measure_both(802.0, 1200.0)}}),
+            report(**{"20000": {"20k_write": measure_both(800.0, 850.0)}}),
+            report(**{"20000": {"20k_write": measure_both(802.0, 1200.0)}}),
         )
         self.assertEqual(gate.regressions(rows, 10.0, 1.0), [])
 
     def test_a_median_regression_is_a_regression_even_when_p95_is_flat(self):
         rows = gate.compare(
-            report(**{"20000": {"write": measure_both(800.0, 1200.0)}}),
-            report(**{"20000": {"write": measure_both(900.0, 1205.0)}}),
+            report(**{"20000": {"20k_write": measure_both(800.0, 1200.0)}}),
+            report(**{"20000": {"20k_write": measure_both(900.0, 1205.0)}}),
         )
         self.assertEqual(len(gate.regressions(rows, 10.0, 1.0)), 1)
+
+    def test_an_unbudgeted_metric_is_informational_and_ignored(self):
+        rows = gate.compare(
+            report(**{"20000": {"coverflow": measure(10.0)}}),
+            report(**{"20000": {"coverflow": measure(26.0)}}),
+        )
+        self.assertEqual(rows, [])
 
     def test_measurements_missing_from_one_report_are_ignored(self):
         rows = gate.compare(report(**{"10000": {"facet": measure(100.0)}}), report(**{"10000": {"facet": measure(120.0), "other": measure(1.0)}}))

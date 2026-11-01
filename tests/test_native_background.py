@@ -5,6 +5,7 @@ Both native hosts read the file this writes before the page loads, so a light th
 not flash the dark default. These tests run against a temporary data folder only.
 """
 
+import platform
 import sys
 import tempfile
 import unittest
@@ -116,6 +117,10 @@ class NativeHostFirstPaintTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as empty:
             self.assertEqual(self._compile_and_run("linux_helper", source, prelude, driver, empty), ["15", "14", "12"])
 
+    @unittest.skipIf(
+        sys.platform == "win32" and platform.machine().lower() in ("arm64", "aarch64"),
+        "the Windows ARM64 runner blocks a freshly compiled helper",
+    )
     def test_windows_host_paints_the_saved_background_and_keeps_the_default_otherwise(self):
         prelude = (
             "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <wchar.h>\n"

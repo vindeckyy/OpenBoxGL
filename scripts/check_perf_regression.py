@@ -22,6 +22,22 @@ from pathlib import Path
 DEFAULT_MAX_REGRESSION = 10.0
 DEFAULT_MIN_DELTA_MS = 1.0
 SIZES = ("10000", "20000")
+# Mirrors the operations that carry a budget in scripts/perf_bench.py. The
+# unbudgeted ones (coverflow, search, media, import) are informational: on a
+# shared runner they move by tens of milliseconds run to run, so comparing
+# them fails on jitter rather than on a regression.
+GATED_KEYS = frozenset({
+    "library",
+    "library_gzip",
+    "favorite_mutation",
+    "single_mutation",
+    "filtered_query",
+    "facet",
+    "picker_score",
+    "constellation_build",
+    "10k_write",
+    "20k_write",
+})
 
 
 def load(path: Path) -> dict:
@@ -44,7 +60,7 @@ def measured(report: dict, size: str, key: str):
 def compare(baseline: dict, current: dict) -> list[dict]:
     rows = []
     for size in SIZES:
-        keys = set(baseline.get(size) or {}) & set(current.get(size) or {})
+        keys = set(baseline.get(size) or {}) & set(current.get(size) or {}) & GATED_KEYS
         for key in sorted(keys):
             before = measured(baseline, size, key)
             after = measured(current, size, key)
