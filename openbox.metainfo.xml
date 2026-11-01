@@ -41,7 +41,7 @@
     </screenshot>
   </screenshots>
   <releases>
-    <release version="2.0.0" date="2027-03-19">
+    <release version="2.0.0" date="2026-10-31">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v2.0.0</url>
       <description>
         <p>OpenBox 2.0 turns the 1.x compatibility scaffolding into stable contracts: the library can move, the public API is /api/v2, the plugin API has a version 2, and every supported platform gets a clean install.</p>

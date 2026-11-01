@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
-## [2.0.0] - unreleased
+## [2.0.0] - 2026-10-31
 
 ### Added
 - Settings > About has a short support line and a Buy me a coffee button. The repository shows a Sponsor button, and the AppStream metadata includes a donation URL.
