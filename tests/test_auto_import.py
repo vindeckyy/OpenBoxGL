@@ -126,9 +126,8 @@ class AutoImportTests(unittest.TestCase):
 
             total_alg_duration = group_duration + dedupe_duration
 
-            # Budget unchanged at 250ms -- it is the contract. What changed is
-            # what is measured: a warm, best-of-N sample instead of one cold
-            # reading. The reported median shows the load the runner carried.
+            # 250ms is the local contract. Shared CI runners and coverage get
+            # 500ms because the same best-of-N sample runs slower there.
             overhead = (
                 os.environ.get("GITHUB_ACTIONS") == "true"
                 or os.environ.get("COVERAGE_RUN") == "1"
