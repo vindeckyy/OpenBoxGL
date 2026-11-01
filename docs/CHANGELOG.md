@@ -21,13 +21,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Restore results.** A restore reports every archive member: whether its hash was checked and whether this restore wrote it.
 - **Extra-app paths move with the library.** Extra apps, versions, and documents under the library folder are stored as tokens and are rebased by a move, like the game path.
 - **Plugin API v2 (ADR 0092).** A plugin may declare `"api_version": 2`, the oldest OpenBox that serves it (`min_openbox`), and the events it subscribes to. A v2 plugin is served by a JSON Lines runner with a 4 MiB output cap, and the host services it can ask for are versioned and read-only. A v1 plugin keeps the v1 runner and the v1 payloads unchanged; the v1 runner goes in 3.0. `docs/plugin-api-v2.md` is the reference, and `plugins/openbox.sample-v2/` is a working sample.
+- **Windows ARM64 release lane (ADR 0095).** The release workflow builds `OpenBox-arm64-windows.zip` and `OpenBox-arm64-windows-native-host.exe` on `windows-11-arm`, and `scripts/install.ps1` resolves arm64 and selects that asset.
+- **macOS notarization machinery (ADR 0094).** `scripts/notarize_macos.sh` and the hardened-runtime entitlements are in the tree, so a maintainer with the secrets can notarize. The shipped `OpenBox.app` remains ad-hoc signed — the first-run Gatekeeper step is unchanged.
+- **OpenAPI document (W2-08).** `docs/openapi.json` is generated from the route registry and `scripts/api_schemas.py`, and `scripts/check_openapi.py` gates it in `make check`.
 
 ### Changed
 - **2.0 readiness on the first launch.** The migration gate lists what needs a look before the upgraded library is used: a theme with a token the app does not know, a plugin with an API version this build does not serve, a missing sync folder, an archive with no format, a library over the formal scale, or a custom data directory. A backup can be written from the gate before the library is opened. The 1.19.2 preflight release was dropped, so these checks run here instead.
 - **Search projection rebuilds in the background (ADR 0101).** A write queues a debounced rebuild of the SQLite read model instead of rebuilding it on the request. A search that arrives before the rebuild lands answers from the canonical library and reports `source: "json"`; the next one is served from the projection. A corrupt projection is deleted and rebuilt, and a projection that disagrees with the library drops back to the JSON path.
 - **The library filter chips count off the UI thread.** The platform and platform-category counts come from the search worker, so a large library no longer spends the UI thread counting chips on every render. A reply for an older request is ignored, and without a worker the counts are computed on the UI thread as before.
 - **Library format 7 (ADR 0089).** Libraries upgrade on first start. A copy of the old file is kept as `library.v6.backup.json`, and `openbox --rollback-library --yes` restores it. Changes made after the upgrade are listed before a rollback discards them. 1.19.x cannot read a format 7 library.
-- **Public API is `/api/v2` (ADR 0091).** The frontend and the native windows use `/api/v2` and `/api/host`. `/api/v1` is off by default; `OPENBOX_ENABLE_V1_API=1` restores it through 2.0.x and returns 410 otherwise. Native windows from a different major API version are refused with `HOST_API_UNSUPPORTED`.
+- **Public API is `/api/v2` (ADR 0091).** The frontend and the native windows use `/api/v2` and `/api/host`. `/api/v1` is off by default; `OPENBOX_ENABLE_V1_API=1` restores it through 2.0.x and returns 410 otherwise. Native windows from a different major API version are refused with `HOST_API_UNSUPPORTED`. The live route contract moved to `api_contracts.json` gated by `scripts/check_api_contract.py`; the frozen v1 route list is archived at `docs/archive/v1_contracts.json`.
 - **Flat `parity_*` imports are gone.** Parity modules are imported as `pkg.parity.*`; `scripts/check_flat_imports.py` keeps it that way.
 - **Sessions are written to `sessions.json`** for crash recovery and are no longer stored in `library.json`.
 
@@ -2189,6 +2192,8 @@ If you jumped from an older build and skipped the last two releases:
 - AppImage, Flatpak manifest, and Makefile install targets
 
 [Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.19.1...HEAD
+[2.0.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.19.1...v2.0.0
+[1.19.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.19.0...v1.19.1
 [1.19.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.18.0...v1.19.0
 [1.18.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.16.1...v1.17.0

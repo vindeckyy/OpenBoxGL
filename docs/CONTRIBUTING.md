@@ -46,7 +46,7 @@ Any platform-dependent behavior belongs in `pkg/platform_compat.py` — the sing
 
 ## Testing
 
-Run the full verification gate before submitting a pull request. This covers ruff lint, runtime-module drift, the frozen v1 contract, version sync, frontend lint, i18n key coverage (including the extra-keys rule), the CSP framing contract (`scripts/check_csp.py`), compile checks, the full test suite under coverage, coverage floors (83.0% total, 58.0% `web_app.py`, 95% changed-line, 85% new-module), and design-token hygiene. CI also enforces the same 95% changed-line floor (`check_changed_coverage.py --fail-under=95` in `ci.yml`):
+Run the full verification gate before submitting a pull request. This covers ruff lint, runtime-module drift, the public API contract (`scripts/check_api_contract.py`), version sync, frontend lint, i18n key coverage (including the extra-keys rule), the CSP framing contract (`scripts/check_csp.py`), the feature-regression ratchets (`make ratchets`), compile checks, the full test suite under coverage, coverage floors (85.0% total, 62.0% `web_app.py`, 95% changed-line, 88% new-module), and design-token hygiene. CI also enforces the same 95% changed-line floor (`check_changed_coverage.py --fail-under=95` in `ci.yml`):
 
 ```bash
 make check
@@ -73,7 +73,7 @@ python scripts\run_windows_tests.py
 python scripts\run_windows_tests.py test_platform_compat.py
 ```
 
-`make check` and `./run_all_tests.sh` stay Linux-only (coverage flooring, ruff, and the frontend/i18n/POSIX-packaging gates need the dev tooling and bash); `ci.yml` runs the same portable gates on `windows-latest`. A change that touches platform behavior must keep both jobs green.
+`make check` and `./run_all_tests.sh` stay POSIX-only — they run on the Linux and `macos-15`/`macos-15-intel` CI lanes (coverage flooring, ruff, and the frontend/i18n/POSIX-packaging gates need the dev tooling and bash); Windows uses `scripts\run_windows_tests.py` above, and `ci.yml` runs the same portable gates on `windows-latest`. A change that touches platform behavior must keep all lanes green.
 
 Check that the version in `updates.py` matches every published spot:
 
@@ -169,8 +169,10 @@ docs: update parity matrix for OBS attach workflow
 
 ## Plugins
 
-The canonical plugin reference is `docs/plugin-api.md` (frozen v1 surface,
-ADR 0050; Plugins 2.0 additions in 1.14.0). Summary of the essentials:
+The canonical plugin reference for new plugins is `docs/plugin-api-v2.md`
+(ADR 0092). `docs/plugin-api.md` documents the frozen v1 surface (ADR 0050;
+Plugins 2.0 additions in 1.14.0), which v1 plugins keep until the v1 runner
+is removed in 3.0. Summary of the essentials:
 
 - Plugins are Python packages under `<data>/plugins/<id>/` with a
   `plugin.json` manifest (`id`, `name`, `version` required; `entry` defaults
@@ -199,7 +201,7 @@ Update relevant docs when behavior changes:
 - [CHANGELOG.md](CHANGELOG.md) for release-visible changes
 - [openbox.metainfo.xml](../openbox.metainfo.xml) and [SECURITY.md](SECURITY.md) when releases or support policy change
 
-Parity-related modules live in `pkg/parity/` (e.g. `parity_import.py`, `parity_premium.py`, `parity_storefront.py`, `parity_discovery.py`, `parity_media.py`, `parity_saves.py`, `parity_integrations.py`, `parity_gamescope.py`, `parity_wine.py`, `parity_faugus.py`). Flat `import parity_*` keeps working through the `_ParityFlatFinder` bridge in `pkg/parity/__init__.py` (registered by `openbox.py`); there are no root shim files since 1.9.0 (ADR 0003).
+Parity-related modules live in `pkg/parity/` (e.g. `parity_import.py`, `parity_premium.py`, `parity_storefront.py`, `parity_discovery.py`, `parity_media.py`, `parity_saves.py`, `parity_integrations.py`, `parity_gamescope.py`, `parity_wine.py`, `parity_faugus.py`). They are imported as `pkg.parity.*`; the flat `parity_*` import bridge was removed in 2.0 and `scripts/check_flat_imports.py` fails on any flat import. There are no root shim files since 1.9.0 (ADR 0003).
 
 ## Documentation site
 

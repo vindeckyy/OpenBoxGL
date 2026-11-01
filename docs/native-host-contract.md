@@ -98,7 +98,7 @@ All native routes are authenticated like every other route: unauthenticated call
   "gamepad": "webkit",
   "fullscreen": true,
   "clipboard": true,
-  "version": "1.19.1",
+  "version": "2.0.0",
   "platform": "linux",
   "data_dir": "/home/user/.local/share/openbox-game-launcher",
   "features": {
@@ -155,7 +155,7 @@ The native window talks to the server on the host channel, separate from the pub
 | POST | `/api/host/shutdown` | stop running sessions and the server |
 | GET | `/api/host/capabilities` | report host capabilities |
 
-Every host request carries `X-OpenBox-Token` and `X-OpenBox-API-Version: 2`. The server refuses a host that advertises another major version with `HOST_API_UNSUPPORTED` (HTTP 409) before any route runs. The unversioned `/api/launch`, `/api/shutdown`, and `/api/v2/resume` paths remain as internal aliases for hosts built before 2.0, until 2.1.
+Every host request carries `X-OpenBox-Token` and `X-OpenBox-API-Version: 2`. The server refuses a host that advertises another major version with `HOST_API_UNSUPPORTED` (HTTP 409) before any route runs. The unversioned `/api/launch`, `/api/shutdown`, `/api/native/capabilities`, and `/api/v2/resume` paths remain as internal aliases for hosts built before 2.0, until 2.1.
 
 ## Deeplinks
 
@@ -184,7 +184,7 @@ host does not emit it):
   `openbox://showgame/42`, `openbox://search/half%20life`,
   `openbox://settings/audio`, `openbox://fullscreen` (Big Box).
 - `openbox://launch/<game id>` and `openbox://resume/<game id>` call
-  `POST /api/launch` and `POST /api/v2/resume` on the authenticated server,
+  `POST /api/host/launch` and `POST /api/host/resume` on the authenticated server,
   then load the window at `?deeplink=showgame&id=` or `?deeplink=resume&id=`.
 - A second instance forwards its request to the running instance through the
   single-instance channel and exits; the window is raised and the deeplink

@@ -1,50 +1,52 @@
 # OpenBox release notes
 
-**OpenBox 2.0.0 is the release where your library becomes portable, your integrations become contracts, and every supported platform gets its own install.**
+OpenBox v2.0.0 turns the 1.x compatibility scaffolding into stable contracts: the library can move, the integrations stop moving, and every supported platform gets a clean install. The complete list is in [CHANGELOG.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md), and the code changes are in [v1.19.1...master](https://github.com/vindeckyy/OpenBoxGL/compare/v1.19.1...master) until the release is tagged.
 
-This is the largest OpenBox release since the launcher became cross-platform. A library can now move to another drive or machine and keep working. The API, host channel, plugin API, backup format, and state format are versioned and gated, so the next release can change one without silently breaking another. Windows ARM64 joins the release, macOS keeps its universal bundle, and Linux keeps the AppImage and Flatpak channels.
+## OpenBox v2.0.0 (unreleased)
 
-The complete list is in [CHANGELOG.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md), and the code changes are in [v1.19.1...v2.0.0](https://github.com/vindeckyy/OpenBoxGL/compare/v1.19.1...v2.0.0).
+OpenBox 2.0 turns the 1.x compatibility scaffolding into stable contracts. The three promises:
+your library can move, your integrations stop moving, and every supported platform gets a clean
+install.
 
-## Three promises for 2.0
+### Your library can move
 
-### 1. Your library can move
+- **Portable library.** Game paths under one library folder are stored as `@library/...` tokens.
+  Move the folder to another drive or machine, point OpenBox at it, and the games resolve
+  without rewriting each game. **Settings > Library > Move library** previews the move and
+  refuses a stale preview. Extra apps, versions, and documents under the folder move with it.
+- **Library format 7.** Libraries upgrade on first start. The old file is kept as
+  `library.v6.backup.json`, and `openbox --rollback-library` restores it byte-for-byte.
+- **Integrity check and media manifest.** **Settings > Library > Check integrity** reports
+  missing, unreadable, and outside-folder game paths, and media files that were changed,
+  deleted, or added behind the app's back. Nothing is changed by a check.
+- **Compatibility report.** **Settings > About > Show compatibility report** lists the library
+  format, each theme's token fallbacks, which backups restore on which version, unknown settings
+  keys, the public API and host channel, and the sync folder.
 
-- **Portable library.** Game paths under one library folder are stored as `@library/...` tokens. Move the folder to another drive, another computer, or a network share, point OpenBox at it, and the games resolve without rewriting every entry. Extra apps, versions, and documents under the folder move with it.
-- **A move wizard that refuses stale plans.** **Settings > Library > Move library** previews the move, shows what will change, and applies it only when the preview still matches. Changing the folder or the path mode outside that flow is refused.
-- **Integrity checks without changes.** **Settings > Library > Check integrity** reports missing, unreadable, and outside-folder game paths, plus media files that were changed, deleted, or added behind the app's back. Nothing is touched by a check.
-- **A media manifest.** Downloads and captures are recorded in `media/manifest.json` with their size, mtime, and SHA-256, so the integrity check can tell a changed file from an untouched one.
-- **Maintenance without a window.** `openbox --check-library`, `--repair-library`, `--migrate-library`, and `--rollback-library` run from the command line. `GET /api/v2/library/integrity` serves the same report to a script.
-- **A compatibility report.** **Settings > About > Show compatibility report** lists the library format, each theme's token fallbacks, which backups restore on which version, unknown settings keys, the public API and host channel, and the sync folder.
+### Your integrations stop moving
 
-### 2. Your integrations stop moving
+- **The public API is `/api/v2`.** The retired `/api/v1` routes are off by
+  default; `OPENBOX_ENABLE_V1_API=1` restores them through 2.0.x, and they are removed in 2.1.
+  Unversioned `/api/*` paths stay routable as the internal layer through 2.0.x.
+  `GET /api/v2/version` reports every contract version, and the OpenAPI document lists every
+  public route.
+- **The native host has its own channel.** Windows, Linux, and macOS windows talk to
+  `/api/host/*` and send `X-OpenBox-API-Version: 2`. A window from another major version is
+  refused before the route runs.
+- **Backup format 2.** Every backup records a SHA-256 for each file; a restore checks them all
+  before writing anything and reports what it wrote. A **1.19-compatible** export is available
+  when an older install must read a backup.
 
-- **The public API is `/api/v2`.** The retired `/api/v1` and unversioned routes are off by default. `OPENBOX_ENABLE_V1_API=1` restores them through 2.0.x, and they are removed in 2.1. `GET /api/v2/version` reports the app, API, state schema, plugin API, backup format, and sync format versions.
-- **Errors have a stable shape.** API failures are `application/problem+json` with `type`, `title`, `status`, `detail`, `code`, `retryable`, and `request_id`. The old `error` field is still there, so existing clients keep working.
-- **The native host has its own channel.** The Windows, Linux, and macOS windows talk to `/api/host/*` and send `X-OpenBox-API-Version: 2`. A host from another major API version is refused before the route runs, instead of failing halfway through a launch.
-- **Backup format 2.** Every backup records a SHA-256 for each file. A restore checks every hash before writing anything and reports every member it wrote. A **1.19-compatible** export is available when an older install must read the archive.
-- **Plugin API v2.** A plugin can declare `api_version: 2`, the oldest OpenBox that serves it, and the events it subscribes to. A v2 plugin runs through a JSON Lines runner with a 4 MiB output cap and read-only host services. A v1 plugin keeps its v1 runner and payloads unchanged.
-- **OpenAPI and deprecation gates.** The generated OpenAPI document lists every public route, and a deprecation ledger pins sunset dates. The gates fail the build when the live surface drifts from either.
+### Platform installs
 
-### 3. Big libraries spend less time waiting
+- **macOS stays ad-hoc signed.** The 2.0 bundle is not notarized: the Privacy & Security
+  confirmation on first launch and after each update still applies, and the install docs
+  keep the caveat. The notarization machinery (entitlements, `notarytool`, stapling) stays
+  in the tree for a later release.
+- **Windows ARM64.** The release publishes `OpenBox-arm64-windows.zip` and `OpenBox-arm64-windows-native-host.exe` from the `windows-11-arm` lane: the host is built for ARM64, attested, signed, and verified like the x86_64 assets, and the installer and updater select it on ARM64 machines by architecture.
+- **Flatpak** stays submission-ready; the submission itself remains a maintainer decision.
 
-- **Search rebuilds leave the request path.** A write queues a debounced rebuild of the SQLite read model. A search that arrives before the rebuild answers from the canonical library and reports `source: "json"`, and the next search is served from the projection. A corrupt projection is deleted and rebuilt; a projection that disagrees with the library drops back to JSON.
-- **Filter chips count off the UI thread.** The platform and platform-category counts come from the search worker, so a large library no longer spends the UI thread counting chips on every render. Without a worker the counts fall back to the UI thread as before.
-
-## Every supported platform
-
-- **Windows ARM64 is a first-class download.** The release publishes `OpenBox-arm64-windows.zip` and `OpenBox-arm64-windows-native-host.exe` from the `windows-11-arm` lane. The host is built for ARM64, attested, signed, and verified like the x86_64 assets. The installer and updater select the right architecture on their own.
-- **macOS keeps the universal bundle.** `OpenBox-macos.zip` runs natively on Apple Silicon and Intel. The 2.0 bundle is ad-hoc signed, not notarized, so the Privacy & Security confirmation on first launch and after each update still applies. The notarization machinery stays in the tree for a later release.
-- **Linux keeps both artifact shapes.** The release publishes x86_64 and aarch64 AppImages with zsync metadata and a Flatpak. The AppImages keep the glibc 2.35 floor, so they run on the same distributions as 1.19.
-- **Every binary artifact is signed.** Both AppImages, both Windows archives and native hosts, and the macOS bundle ship with their SHA-256 sidecar and Ed25519 signature. SBOMs cover both AppImages, the Windows ARM64 build, and the macOS bundle. The installer scripts pin the release key and verify the artifacts against it.
-
-## The first start after an upgrade
-
-Libraries upgrade to format 7 on first start. The old file is kept as `library.v6.backup.json`, and `openbox --rollback-library --yes` restores it. A rollback lists the changes it would discard before it runs.
-
-A readiness report opens before the upgraded library is used. It lists what needs a look: a theme with a token the app does not know, a plugin with an API version this build does not serve, a missing sync folder, an archive with no format, a library over the formal scale, or a custom data directory. A backup can be written from the report before the library opens. The 1.19.2 preflight release was dropped, so these checks run here instead.
-
-## Breaking changes
+### Breaking changes
 
 | Change | What it means | How to keep working |
 |---|---|---|
@@ -54,18 +56,41 @@ A readiness report opens before the upgraded library is used. It lists what need
 | Host channel | New hosts use `/api/host/*` | Update the host; the old paths stay as internal aliases through 2.0.x |
 | Retired `/api/v1` routes | Off by default | `OPENBOX_ENABLE_V1_API=1` |
 
-## Get OpenBox 2.0.0
+### Not in 2.0
 
-| Platform | Download | Notes |
-|---|---|---|
-| Linux x86_64 | `OpenBox-x86_64.AppImage` | glibc 2.35 floor; zsync available |
-| Linux aarch64 | `OpenBox-aarch64.AppImage` | glibc 2.35 floor; zsync available |
-| Linux Flatpak | `OpenBox-x86_64.flatpak` | x86_64 |
-| Windows x86_64 | `OpenBox-x86_64-windows.zip` | Includes the native host |
-| Windows ARM64 | `OpenBox-arm64-windows.zip` | Includes the ARM64 native host |
-| macOS | `OpenBox-macos.zip` | Universal; ad-hoc signed |
+- JSON stays the canonical store. SQLite remains a read model; the storage decision is recorded
+  in ADR 0088 with its measurements.
+- The formal library scale stays at 20,000 games. 50,000 was measured and reported as
+  exploratory.
+- Python 3.10 is still supported.
+- Plugin API v2 is additive; v1 plugins keep working.
 
-The macOS installer pins the release tag:
+## 1.19.1 (previous release)
+
+### What 1.19.1 fixes
+
+- **A stored gamescope preset no longer breaks Windows and macOS launches.** The preset is applied only on Linux, so it is never prepended to a Windows or macOS command line. The gamescope preset, MangoHud, and handheld-performance controls are hidden on those hosts, and `--game-mode` exits with the Linux-only message instead of starting a broken guest mode.
+- **Windows reports its real battery.** The battery indicator reads `GetSystemPowerStatus`: a desktop reports no battery, a laptop reports its percentage and charging state, and the reading is cached for 30 seconds. Windows no longer gets a hard-coded "no battery" answer.
+- **Wine, Faugus, and Flatpak management answer only on Linux.** The Wine/Proton manager reports `available: false` and never scans the disk off Linux, the Faugus scanner returns nothing, the Flatpak folder grant refuses the request before running anything, and the Launch Doctor stops offering a Flatpak install where Flatpak does not exist.
+- **Storefront browsing uses the platform's own URL opener.** The Steam and Heroic catalogs no longer assume `xdg-open`, say clearly when a host has no opener, and a Git/MSYS `xdg-open` on `PATH` no longer wins over Explorer on Windows.
+- **The storefront list matches the host.** `/api/v2/storefronts` lists Heroic on Linux and Windows, Lutris only on Linux, and GOG/EA/Ubisoft only on Windows; a stale client calling a native Windows import on another host receives a clear 400 instead of a failing scan.
+
+### One capability contract
+
+`GET /api/native/capabilities` carries a `features` object: `gamescope`, `mangohud`, `handheld_perf`, `flatpak`, `wine`, `faugus`, `lutris`, `heroic`, `epic`, `native_storefronts`, and `desktop_entry`. The web UI gates every platform-specific control from that object through one `data-feature` marker, replacing the per-OS markup markers that made every new platform edit the page. A missing object means every feature is false, so a fetch that fails hides controls instead of exposing broken ones. The contract and its failure semantics are documented in [ADR 0086](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/adr/0086-platform-capability-contract.md).
+
+## Upgrading
+
+Upgrade from any 1.19.x release. On the first 2.0 start the library is upgraded from format 6 to format 7, a copy of the old file is kept as `library.v6.backup.json`, and `migration-report.json` records what changed. A readiness gate lists anything worth a look — a theme with an unknown token, a plugin with an API version this build does not serve, a missing sync folder, an archive with no format, a library over the formal scale, or a custom data directory — and a backup can be written from the gate before the library is opened. The full walkthrough is in [docs/upgrade-2.0.md](upgrade-2.0.md).
+
+Rolling back restores the 1.19 library byte-for-byte:
+
+```
+openbox --rollback-library          # shows what would be discarded
+openbox --rollback-library --yes    # restores the 1.19 library
+```
+
+The installer flows are unchanged; pin the new tag once the release is published:
 
 ```bash
 VERSION=2.0.0
@@ -76,18 +101,13 @@ less install-macos.sh
 OPENBOX_RELEASE_TAG="v${VERSION}" bash install-macos.sh
 ```
 
-On Windows, extract the release archive and run `OpenBox\scripts\install.ps1`. On Linux, use the AppImage, the Flatpak, or `scripts/install.sh` as before.
-
-## Also fixed in 2.0.0
-
-- **The library commands work on Windows.** `openbox --rollback-library` refuses cleanly when the terminal cannot answer the confirmation, and a corrupt search projection is released before it is deleted, so it is rebuilt instead of being left broken.
-- **A restored trash entry expires on every platform.** A `trashed_at` stamp written in UTC (`Z`) is read like any other, so an entry from a backup is pruned once it is old instead of being kept forever.
+On Windows, extract the release archive and run `OpenBox\scripts\install.ps1` — the installer and updater select the ARM64 or x86_64 build by machine architecture; on macOS, download `install-macos.sh` and run it with the tag pinned; on Linux, use the AppImage, the Flatpak, or `scripts/install.sh` as before. Each binary artifact (the AppImages, the Windows archives and native hosts, and the macOS bundle) ships with its SHA-256 sidecar and Ed25519 signature. The installer scripts are not signed; they pin the release key and verify the artifacts against it.
 
 ## Known limits
 
-- The macOS bundle is ad-hoc signed, not notarized, so the first launch and each new build need the Privacy & Security confirmation.
-- JSON remains the canonical store. SQLite is a read model and can be deleted and rebuilt at any time.
-- The formal library scale is 20,000 games. 50,000 was measured and reported as exploratory.
-- Python 3.10 is still supported.
+- The macOS bundle is still ad-hoc signed, not notarized, so the first launch and each new build need the Privacy & Security confirmation.
+- Linux-only features remain unavailable on Windows and macOS by design; they are hidden rather than broken.
+- 1.19.x cannot read a format 7 library; keep `library.v6.backup.json` until you are sure you do not need to roll back.
+- `/api/v1` is off by default; `OPENBOX_ENABLE_V1_API=1` bridges it through 2.0.x, and it is removed in 2.1.
 
 The [changelog](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md) lists the main areas, not every change.

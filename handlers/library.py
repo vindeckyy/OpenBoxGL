@@ -845,7 +845,7 @@ class LibraryHandlers:
     def health(self):
         # Detection lives in pkg.parity.parity_library_health so the v1 audit
         # and the health score can never disagree. The response shape below is
-        # pinned by scripts/check_api_contract.py: do not change it.
+        # pinned by api_contracts.json + scripts/check_api_contract.py: do not change it.
         from pkg.parity.parity_library_health import detect_issues
         state = load_state()
         detected = detect_issues(state["games"], state)

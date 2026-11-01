@@ -51,7 +51,7 @@ it, and each new ad-hoc build asks again.
 
 ## Reporting problems
 
-Open **Settings -> Library Audit** and use the diagnostic log, or paste the error banner's "Copy details" output (it includes a request id maintainers can correlate with the log).
+Open **Settings > Advanced > Copy diagnostic log** (it shows a redacted preview before copying), or paste the error banner's "Copy details" output (it includes a request id maintainers can correlate with the log).
 
 Bug reports should include: OpenBox version, distro and desktop, Python version when running from source, the diagnostic report from `/api/diagnostic` (Settings), and steps to reproduce.
 
@@ -64,7 +64,7 @@ If games show as missing after you moved your library folder, open **Settings > 
 See `docs/reliability.md` for the full edge case catalog. Highlights:
 
 - Graceful shutdown stops tracked sessions, persists cleanup, and drains shutdown work. If a tracked game remains alive after the two-second grace window, OpenBox force-kills its process tree (on Linux and macOS the process group, falling back to the PID; on Windows the tree via job object / `TerminateProcess`); the native hosts also force-kill their server process tree if the server does not exit in time.
-- OpenBox data lives in `~/.local/share/openbox-game-launcher/` on Linux, `%LOCALAPPDATA%\openbox-game-launcher\` on Windows, and `~/Library/Application Support/openbox-game-launcher/` on macOS (override with `OPENBOX_DATA_DIR` in the process environment before launch, read at import time per `openbox.py:20-21`); deleting `library.json` resets the library while media files stay.
-- The loopback server writes per-launch `server.token` and `server.port` into the data directory (`web_app.py:751-753`) and deletes both on exit; prefer the `X-OpenBox-Token` header over a `token` query parameter.
-- Optional `.env` discovery checks an explicit `OPENBOX_ENV_FILE` first, then the data directory and its parent, `~/.env`, and `~/.config/openbox-game-launcher/.env` (`env_config.py:116-140`). The data-directory choice itself must be exported before launch — a discovered `.env` is read too late for it.
+- OpenBox data lives in `~/.local/share/openbox-game-launcher/` on Linux, `%LOCALAPPDATA%\openbox-game-launcher\` on Windows, and `~/Library/Application Support/openbox-game-launcher/` on macOS (override with `OPENBOX_DATA_DIR` in the process environment before launch, read at import time per `openbox.py:19-21`); deleting `library.json` resets the library while media files stay.
+- The loopback server writes per-launch `server.token` and `server.port` into the data directory (`web_app.py:858-859`) and deletes both on exit (`web_app.py:1001-1002`); prefer the `X-OpenBox-Token` header over a `token` query parameter.
+- Optional `.env` discovery checks an explicit `OPENBOX_ENV_FILE` first, then the data directory and its parent, `~/.env`, and `~/.config/openbox-game-launcher/.env` (`env_config.py:118-143`). The data-directory choice itself must be exported before launch — a discovered `.env` is read too late for it.
 - The web UI is local-only. Sharing the token in the URL with another machine is equivalent to handing over control of the instance.

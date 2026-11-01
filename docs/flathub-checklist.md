@@ -32,7 +32,7 @@ The manifest, AppStream metadata, and the validation script are unchanged by 2.0
 `python3 -B scripts/validate_flatpak_manifest.py` reports `flatpak manifest validation: ok`.
 
 - [x] Manifest validator passes on the current tree (`scripts/validate_flatpak_manifest.py`), and `tests/test_packaging.py` covers the manifest.
-- [x] `openbox.metainfo.xml` release history still ends at 2.0.0. **A 2.0 release entry is owed** when the 2.0 tag is cut, in the same commit that bumps the version.
+- [x] `openbox.metainfo.xml` release history ends at 2.0.0 — the entry is already in place (added with the version bump) and its date is finalized at the tag.
 - [x] The Flatpak keeps the x86_64 bundle only. The Windows ARM64 artifact (plan W5-03) is not a Flatpak target, and the runtime re-verify below still covers the WebKit dependency.
 - [ ] **Runtime re-verify for the 2.0 tag.** Re-run the CI `flatpak-validate` job (`flatpak-builder --dry-run`) against runtime 49; the manifest is unchanged, but the release candidate is what the job must build.
 - [ ] **Submission steps stay with the maintainer.** Repo setup, the flathubbot PR, the AppStream review, and the release cadence are unchanged from the list above and remain open.

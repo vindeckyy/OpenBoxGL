@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Ratchet the full HTTP route surface so a feature cannot disappear silently.
 
-The API contract (``api_contracts.json``) freezes the public ``/api/v2`` and
-host ``/api/host`` routes the frontend and native hosts depend on. That leaves
-the rest of the surface unprotected: any other route can be deleted, renamed,
-or have its HTTP method changed in a single commit, and no gate notices. The
-frontend then calls a 404 at runtime, in a browser, on a user's machine, where
-nothing is watching.
+The v1 contract (now archived at ``docs/archive/v1_contracts.json``) froze the
+61 routes the native host depended on. That left the other routes unprotected:
+every ``/api/v2/*``
+feature added since 1.9 and every unversioned ``/api/*`` route can be deleted,
+renamed, or have its HTTP method changed in a single commit, and no gate
+notices. The frontend then calls a 404 at runtime, in a browser, on a user's
+machine, where nothing is watching.
 
 This gate closes that hole with a **ratchet** in two layers, because a
 one-layer ratchet is trivially bypassed by shrinking its own baseline:
@@ -52,7 +53,7 @@ def live_routes() -> dict[str, list[str]]:
 
     Imports the registry rather than parsing source, so the baseline reflects
     what the server actually dispatches, including multi-path decorators and
-    the v2 alias expansion.
+    the v1 alias expansion.
     """
     from routes.registry import all_routes
 
