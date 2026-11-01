@@ -481,7 +481,12 @@ jobs:
           path: .baseline
           persist-credentials: false
 
-      - name: Compare against the 1.19.1 baseline
+      - name: Compare against the 1.19.1 baseline (advisory)
+        # Shared-runner medians swing by more than 50% for the same build: the
+        # 1.19.1 facet median measured 461 ms and 853 ms on the same runner in
+        # one day. The fixed budgets above are the blocking gate; this
+        # comparison reports drift without failing a release on runner noise.
+        continue-on-error: true
         env:
           OPENBOX_PERF_CI_MULT: "2.5"
         run: |
